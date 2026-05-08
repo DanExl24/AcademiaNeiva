@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import HelloWorld from './components/HelloWorld.vue'
+import NotificationToast from './components/NotificationToast.vue'
 </script>
 
 <template>
-  <HelloWorld />
+  <NotificationToast />
+  <router-view />
 </template>

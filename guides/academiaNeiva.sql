@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict BNF4asQ77BgNhCRd8isHf2KvQctZwfWoQTzQpEPsZcY3JCgA6tXvsodiepwmDR3
+\restrict W3QSiDdwhqYdKUvatiBA1dqJxxozOj88mzIgT4HOeUFoOJfraaCqEmjTfGLEY02
 
 -- Dumped from database version 18.3
 -- Dumped by pg_dump version 18.3
@@ -499,7 +499,8 @@ CREATE TABLE public.docente (
     documento character varying(255) NOT NULL,
     id_tipodocumento integer NOT NULL,
     id_contratodocente integer,
-    id_colegio integer NOT NULL
+    id_colegio integer NOT NULL,
+    password character varying(100) NOT NULL
 );
 
 
@@ -654,7 +655,9 @@ CREATE TABLE public.grados (
     nivel character varying(50) NOT NULL,
     tipo_grado public.tipo_grado NOT NULL,
     id_jornada integer,
-    id_colegio integer NOT NULL
+    id_colegio integer NOT NULL,
+    cupos_totales integer DEFAULT 0 NOT NULL,
+    CONSTRAINT chk_cupos_positivos CHECK ((cupos_totales >= 0))
 );
 
 
@@ -762,7 +765,8 @@ CREATE TABLE public.matricula (
     id_nivel integer,
     id_colegio integer NOT NULL,
     "id_año" integer NOT NULL,
-    estado public.estado_matricula NOT NULL
+    estado public.estado_matricula NOT NULL,
+    id_grado integer NOT NULL
 );
 
 
@@ -1856,6 +1860,46 @@ ALTER TABLE ONLY public.estudiante
 
 
 --
+-- Name: grados fk_grados_colegio; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.grados
+    ADD CONSTRAINT fk_grados_colegio FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: grados fk_grados_jornada; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.grados
+    ADD CONSTRAINT fk_grados_jornada FOREIGN KEY (id_jornada) REFERENCES public.jornada(id_jornada) ON UPDATE CASCADE ON DELETE SET NULL;
+
+
+--
+-- Name: matricula fk_matricula_anio; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.matricula
+    ADD CONSTRAINT fk_matricula_anio FOREIGN KEY ("id_año") REFERENCES public."año_lectivo"("id_año") ON UPDATE CASCADE ON DELETE RESTRICT;
+
+
+--
+-- Name: matricula fk_matricula_estudiante; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.matricula
+    ADD CONSTRAINT fk_matricula_estudiante FOREIGN KEY (id_estudiante) REFERENCES public.estudiante(id_estudiante) ON UPDATE CASCADE ON DELETE RESTRICT;
+
+
+--
+-- Name: matricula fk_matricula_grado; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.matricula
+    ADD CONSTRAINT fk_matricula_grado FOREIGN KEY (id_grado) REFERENCES public.grados(id_grado) ON UPDATE CASCADE ON DELETE RESTRICT;
+
+
+--
 -- Name: grados grados_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -2075,5 +2119,5 @@ ALTER TABLE ONLY public.resultado_academico
 -- PostgreSQL database dump complete
 --
 
-\unrestrict BNF4asQ77BgNhCRd8isHf2KvQctZwfWoQTzQpEPsZcY3JCgA6tXvsodiepwmDR3
+\unrestrict W3QSiDdwhqYdKUvatiBA1dqJxxozOj88mzIgT4HOeUFoOJfraaCqEmjTfGLEY02
 

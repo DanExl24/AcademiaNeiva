@@ -142,6 +142,25 @@ a múltiples instituciones en el futuro.
 
 **Reglas de Negocio**
 
+## Sistema multi-colegio
+
+El sistema debe operar bajo arquitectura multi-colegio (multi-tenant)
+Toda matrícula debe estar asociada a un id_colegio
+El colegio puede ser:
+Determinado por landing page (preferido)
+Seleccionado manualmente en formulario (fallback)
+El sistema debe mostrar confirmación explícita antes de enviar la matrícula indicando la institución seleccionada
+No se permite enviar una matrícula sin asociación válida a un colegio activo
+
+El usuario siempre debe saber dónde está matriculando
+El sistema nunca debe asumir silenciosamente el colegio sin mostrarlo en UI
+
+Un colegio NO puede usar el sistema sin ser registrado/aprobado
+Cada colegio es una unidad independiente de datos (aislamiento total)
+Un usuario siempre pertenece a un colegio
+El sistema debe resolver datos por id_colegio
+La autenticación debe validar contexto de institución antes del login final
+
 **1. Acceso y seguridad**
 
 - El acceso a la información del sistema está restringido según el rol
@@ -326,6 +345,62 @@ a múltiples instituciones en el futuro.
 **Modelo de base de datos**
 
 **Arquitectura del sistema**
+
+🧱 Stack Tecnológico del Sistema
+
+El sistema de matrícula y seguimiento académico se desarrolla bajo una arquitectura desacoplada cliente-servidor, con separación clara entre frontend, backend y persistencia de datos, garantizando escalabilidad, mantenibilidad y modularidad.
+
+🎨 Frontend
+Vue.js (con Vite)
+
+Framework progresivo para la construcción de interfaces de usuario.
+
+Permite desarrollo basado en componentes reutilizables.
+Arquitectura reactiva para actualización eficiente de vistas.
+Integración sencilla con APIs REST.
+Compatible con TypeScript para mayor robustez.
+Tailwind CSS
+
+Framework de utilidades para estilos.
+
+Diseño rápido mediante clases utilitarias.
+Consistencia visual sin depender de CSS complejo.
+Facilita creación de interfaces responsivas.
+
+📌 Justificación:
+Se prioriza velocidad de desarrollo y claridad visual, manteniendo control total sobre la UI sin depender de frameworks pesados.
+
+⚙️ Backend
+Node.js + Express
+
+Entorno de ejecución y framework backend.
+
+Arquitectura basada en APIs REST.
+Manejo eficiente de solicitudes concurrentes.
+Alta flexibilidad para estructurar lógica de negocio.
+TypeScript
+
+Superset de JavaScript con tipado estático.
+
+Reduce errores en tiempo de desarrollo.
+Mejora la mantenibilidad del código.
+Facilita escalabilidad del sistema.
+
+📌 Justificación:
+Se selecciona TypeScript para garantizar robustez en un sistema con múltiples entidades y reglas de negocio complejas.
+
+🗄️ Base de Datos
+PostgreSQL
+
+Sistema de gestión de bases de datos relacional.
+
+Soporte avanzado para relaciones complejas.
+Integridad referencial mediante claves foráneas.
+Escalabilidad para grandes volúmenes de datos.
+Alta confiabilidad en entornos productivos.
+
+📌 Justificación:
+El sistema académico requiere consistencia de datos (notas, matrículas, periodos), por lo cual una base relacional es indispensable.
 
 **Diagramas**
 
