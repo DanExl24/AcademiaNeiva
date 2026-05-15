@@ -3,10 +3,16 @@ import { ref, computed } from 'vue'
 
 export interface User {
   id: string
-  name: string
+  name?: string
   email: string
-  role: 'admin' | 'directivo' | 'docente' | 'padre' | 'estudiante'
-  schoolId?: string
+  roles: string[]
+  schoolId: string
+  schoolName?: string
+  docenteId?: string
+  padreId?: string
+  studentId?: string
+  directivoId?: string
+  gradoId?: string
 }
 
 export const useAuthStore = defineStore('auth', () => {

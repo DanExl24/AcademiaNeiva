@@ -5,9 +5,7 @@ import { useNotificationStore } from '../stores/notifications'
 import { 
   School, 
   ArrowLeft, 
-  Upload, 
   Send, 
-  Info, 
   CheckCircle2, 
   FileText,
   Camera,

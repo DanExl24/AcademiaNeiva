@@ -9,6 +9,7 @@ import EnrollmentDetails from '../views/EnrollmentDetails.vue'
 import FinalRegistration from '../views/FinalRegistration.vue'
 import EnrollmentCorrection from '../views/EnrollmentCorrection.vue'
 import DashboardLayout from '../layouts/DashboardLayout.vue'
+import StudentParentDashboard from '../views/StudentParentDashboard.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -22,6 +23,17 @@ const router = createRouter({
       path: '/login',
       name: 'login',
       component: LoginView
+    },
+    {
+      path: '/estudiante/login',
+      name: 'student-login',
+      component: () => import('../views/StudentLoginView.vue')
+    },
+    {
+      path: '/panel-control',
+      name: 'panel-control',
+      component: StudentParentDashboard,
+      meta: { requiresAuth: true }
     },
     {
       path: '/matricula',
@@ -63,7 +75,7 @@ const router = createRouter({
   ]
 })
 
-router.beforeEach((to, from, next) => {
+router.beforeEach((to, _from, next) => {
   const auth = useAuthStore()
   
   if (to.meta.requiresAuth && !auth.isAuthenticated) {

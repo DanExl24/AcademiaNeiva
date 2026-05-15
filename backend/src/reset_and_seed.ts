@@ -1,4 +1,5 @@
 import { pool } from "./config/db";
+import bcrypt from "bcrypt";
 
 async function run() {
   const client = await pool.connect();
@@ -19,7 +20,10 @@ async function run() {
         tipo_documento, 
         grados,
         jornada,
-        "año_lectivo"
+        "año_lectivo",
+        usuario,
+        rol,
+        usuario_rol
       RESTART IDENTITY CASCADE;
     `);
 
@@ -41,24 +45,36 @@ async function run() {
       );
     }
 
-    console.log('Insertando año lectivo actual...');
-    await client.query(`
-      INSERT INTO "año_lectivo" ("id_año", calendario, id_colegio) VALUES 
-      (1, 'A', 1)
-    `);
+    console.log('Insertando año lectivo actual para todos los colegios...');
+    for (let cId = 1; cId <= colegios.length; cId++) {
+      await client.query(`
+        INSERT INTO "año_lectivo" ("id_año", calendario, id_colegio) VALUES 
+        ($1, 'A', $1)
+      `, [cId]);
+    }
 
     console.log('Insertando datos base obligatorios...');
+    
+    // Roles Básicos
+    await client.query(`
+      INSERT INTO rol (id_rol, nombre) VALUES 
+      (1, 'DIRECTIVO'), (2, 'DOCENTE'), (3, 'PADRE_FAMILIA'), (4, 'ESTUDIANTE'), (5, 'ADMIN')
+      ON CONFLICT DO NOTHING
+    `);
+
     // Tipos de documento
     await client.query(`
       INSERT INTO tipo_documento (id_tipodocumento, tipo) VALUES 
       (1, 'Registro Civil'), (2, 'Tarjeta de Identidad'), (3, 'Cédula de Ciudadanía'), (4, 'Cédula de Extranjería'), (5, 'PEP / PPT')
     `);
 
-    // Niveles Escolares (Asignados al primer colegio por defecto para pruebas)
-    await client.query(`
-      INSERT INTO nivel_escolar (id_nivel, nombre, id_colegio) VALUES 
-      (1, 'Primera Infancia', 1), (2, 'Primaria', 1), (3, 'Secundaria', 1), (4, 'Bachillerato', 1)
-    `);
+    // Niveles Escolares (Asignados a todos los colegios para pruebas)
+    for (let cId = 1; cId <= colegios.length; cId++) {
+      await client.query(`
+        INSERT INTO nivel_escolar (nombre, id_colegio) VALUES 
+        ('Primera Infancia', $1), ('Primaria', $1), ('Secundaria', $1), ('Bachillerato', $1)
+      `, [cId]);
+    }
 
     // Jornadas para todos los colegios
     for (let cId = 1; cId <= 5; cId++) {
@@ -98,6 +114,39 @@ async function run() {
           }
         }
       }
+    }
+
+    console.log('Creando usuarios de prueba (Directivos y Docentes)...');
+    const hashedAdmin = await bcrypt.hash('admin123', 10);
+    const hashedDocente = await bcrypt.hash('docente123', 10);
+
+    for (let i = 0; i < colegios.length; i++) {
+      const cId = i + 1;
+      const [nombre, tipo, sede, contacto, correoColegio, dane] = colegios[i];
+      const domain = (correoColegio as string).split('@')[1];
+
+      // 1. Directivo
+      const dirUserRes = await client.query(
+        `INSERT INTO usuario (correo, password, id_colegio) VALUES ($1, $2, $3) RETURNING id_usuario`,
+        [correoColegio, hashedAdmin, cId]
+      );
+      const idDirUser = dirUserRes.rows[0].id_usuario;
+      await client.query(`INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, 1)`, [idDirUser]);
+      await client.query(`INSERT INTO directivo (id_colegio, id_usuario) VALUES ($1, $2)`, [cId, idDirUser]);
+
+      // 2. Docente
+      const correoDocente = `docente@${domain}`;
+      const docUserRes = await client.query(
+        `INSERT INTO usuario (correo, password, id_colegio) VALUES ($1, $2, $3) RETURNING id_usuario`,
+        [correoDocente, hashedDocente, cId]
+      );
+      const idDocUser = docUserRes.rows[0].id_usuario;
+      await client.query(`INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, 2)`, [idDocUser]);
+      await client.query(
+        `INSERT INTO docente (nombre, apellido, documento, id_tipodocumento, id_colegio, id_usuario) 
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        ['Docente', `Prueba ${cId}`, `DOC-${cId}`, 3, cId, idDocUser]
+      );
     }
 
     await client.query('COMMIT');

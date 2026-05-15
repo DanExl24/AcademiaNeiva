@@ -142,6 +142,40 @@ a múltiples instituciones en el futuro.
 
 **Reglas de Negocio**
 
+❌ NO guardes password en docente/padre/etc → solo en usuario
+❌ NO repitas correos en otras tablas
+✅ El login SIEMPRE va contra usuario
+✅ Los roles controlan permisos, no las tablas
+
+Rol Login recomendado
+Directivo Correo
+Administrador Correo
+Docente Correo
+Padre de familia Documento
+Estudiante Documento / código estudiantil
+
+🧠 Cómo funciona en la vida real (sin humo)
+
+Ejemplo:
+
+Un docente que es padre:
+
+1 registro en usuario
+2 registros en usuario_rol:
+DOCENTE
+PADRE
+1 registro en docente
+1 registro en padre_familia
+
+Sin duplicar correo, sin duplicar password, sin perder la cabeza.
+
+## Sistema multi rol
+
+Un usuario puede tener múltiples roles en el sistema
+Un docente puede estar registrado también como padre de familia
+Los permisos se aplican según el rol activo en la sesión
+Un usuario no puede acceder a información fuera de su rol (ej: docente no ve datos de otros estudiantes como padre)
+
 ## Sistema multi-colegio
 
 El sistema debe operar bajo arquitectura multi-colegio (multi-tenant)

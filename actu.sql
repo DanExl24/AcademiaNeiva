@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict W3QSiDdwhqYdKUvatiBA1dqJxxozOj88mzIgT4HOeUFoOJfraaCqEmjTfGLEY02
+\restrict zdGV78429mQdFtJskSPWxQVoMvSNChFIUeR84LFuHnpc2TTQv1JPsFKq3zbZvGE
 
 -- Dumped from database version 18.3
 -- Dumped by pg_dump version 18.3
@@ -18,6 +18,20 @@ SET check_function_bodies = false;
 SET xmloption = content;
 SET client_min_messages = warning;
 SET row_security = off;
+
+--
+-- Name: uuid-ossp; Type: EXTENSION; Schema: -; Owner: -
+--
+
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA public;
+
+
+--
+-- Name: EXTENSION "uuid-ossp"; Type: COMMENT; Schema: -; Owner: 
+--
+
+COMMENT ON EXTENSION "uuid-ossp" IS 'generate universally unique identifiers (UUIDs)';
+
 
 --
 -- Name: estado_asistencia; Type: TYPE; Schema: public; Owner: postgres
@@ -132,10 +146,20 @@ ALTER TYPE public.tipo_documento_identidad OWNER TO postgres;
 --
 
 CREATE TYPE public.tipo_grado AS ENUM (
-    'PREESCOLAR',
-    'PRIMARIA',
-    'SECUNDARIA',
-    'MEDIA'
+    'PREJARDIN',
+    'JARDIN',
+    'TRANSICION',
+    'PRIMERO',
+    'SEGUNDO',
+    'TERCERO',
+    'CUARTO',
+    'QUINTO',
+    'SEXTO',
+    'SEPTIMO',
+    'OCTAVO',
+    'NOVENO',
+    'DECIMO',
+    'ONCE'
 );
 
 
@@ -458,9 +482,8 @@ ALTER SEQUENCE public.detalle_padrefamilia_id_detallepadrefamilia_seq OWNED BY p
 
 CREATE TABLE public.directivo (
     id integer NOT NULL,
-    correo character varying(100) NOT NULL,
-    password character varying(255) NOT NULL,
-    id_colegio integer NOT NULL
+    id_colegio integer NOT NULL,
+    id_usuario integer
 );
 
 
@@ -500,7 +523,7 @@ CREATE TABLE public.docente (
     id_tipodocumento integer NOT NULL,
     id_contratodocente integer,
     id_colegio integer NOT NULL,
-    password character varying(100) NOT NULL
+    id_usuario integer
 );
 
 
@@ -613,12 +636,12 @@ CREATE TABLE public.estudiante (
     nombre character varying(100) NOT NULL,
     apellido character varying(100) NOT NULL,
     documento character varying(12),
-    password character varying(255) NOT NULL,
     codigo character varying(20) NOT NULL,
     id_tipodocumento integer,
     id_grado integer,
     id_nivel integer,
-    id_colegio integer NOT NULL
+    id_colegio integer NOT NULL,
+    id_usuario integer
 );
 
 
@@ -653,10 +676,11 @@ ALTER SEQUENCE public.estudiante_id_estudiante_seq OWNED BY public.estudiante.id
 CREATE TABLE public.grados (
     id_grado integer NOT NULL,
     nivel character varying(50) NOT NULL,
-    tipo_grado public.tipo_grado NOT NULL,
     id_jornada integer,
     id_colegio integer NOT NULL,
     cupos_totales integer DEFAULT 0 NOT NULL,
+    tipo_grado public.tipo_grado DEFAULT 'TRANSICION'::public.tipo_grado NOT NULL,
+    seccion character varying(10) DEFAULT 'A'::character varying,
     CONSTRAINT chk_cupos_positivos CHECK ((cupos_totales >= 0))
 );
 
@@ -761,12 +785,16 @@ ALTER SEQUENCE public.materias_id_materia_seq OWNED BY public.materias.id_materi
 
 CREATE TABLE public.matricula (
     id_matricula integer NOT NULL,
-    id_estudiante integer NOT NULL,
+    id_estudiante integer,
     id_nivel integer,
     id_colegio integer NOT NULL,
     "id_año" integer NOT NULL,
     estado public.estado_matricula NOT NULL,
-    id_grado integer NOT NULL
+    id_grado integer NOT NULL,
+    correo_padre character varying(100),
+    tiene_discapacidad boolean DEFAULT false,
+    es_extranjero boolean DEFAULT false,
+    token_seguimiento uuid DEFAULT public.uuid_generate_v4() NOT NULL
 );
 
 
@@ -917,10 +945,9 @@ CREATE TABLE public.padre_familia (
     nombre character varying(50) NOT NULL,
     apellido character varying(50) NOT NULL,
     documeno character varying(10) NOT NULL,
-    corrreo character varying(255) NOT NULL,
-    password character varying(255) NOT NULL,
     id_tipodocumento integer NOT NULL,
-    id_colegio integer NOT NULL
+    id_colegio integer NOT NULL,
+    id_usuario integer
 );
 
 
@@ -1066,6 +1093,40 @@ ALTER SEQUENCE public.resultado_academico_id_resultado_seq OWNED BY public.resul
 
 
 --
+-- Name: rol; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.rol (
+    id_rol integer NOT NULL,
+    nombre character varying(50) NOT NULL
+);
+
+
+ALTER TABLE public.rol OWNER TO postgres;
+
+--
+-- Name: rol_id_rol_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.rol_id_rol_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.rol_id_rol_seq OWNER TO postgres;
+
+--
+-- Name: rol_id_rol_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.rol_id_rol_seq OWNED BY public.rol.id_rol;
+
+
+--
 -- Name: tipo_documento; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -1097,6 +1158,79 @@ ALTER SEQUENCE public.tipo_documento_id_tipodocumento_seq OWNER TO postgres;
 --
 
 ALTER SEQUENCE public.tipo_documento_id_tipodocumento_seq OWNED BY public.tipo_documento.id_tipodocumento;
+
+
+--
+-- Name: usuario; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.usuario (
+    id_usuario integer NOT NULL,
+    correo character varying(255) NOT NULL,
+    password character varying(255) NOT NULL,
+    estado character varying(20) DEFAULT 'activo'::character varying NOT NULL,
+    fecha_creacion timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+    id_colegio integer NOT NULL
+);
+
+
+ALTER TABLE public.usuario OWNER TO postgres;
+
+--
+-- Name: usuario_id_usuario_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.usuario_id_usuario_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.usuario_id_usuario_seq OWNER TO postgres;
+
+--
+-- Name: usuario_id_usuario_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.usuario_id_usuario_seq OWNED BY public.usuario.id_usuario;
+
+
+--
+-- Name: usuario_rol; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.usuario_rol (
+    id_usuario_rol integer NOT NULL,
+    id_usuario integer NOT NULL,
+    id_rol integer NOT NULL
+);
+
+
+ALTER TABLE public.usuario_rol OWNER TO postgres;
+
+--
+-- Name: usuario_rol_id_usuario_rol_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.usuario_rol_id_usuario_rol_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.usuario_rol_id_usuario_rol_seq OWNER TO postgres;
+
+--
+-- Name: usuario_rol_id_usuario_rol_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.usuario_rol_id_usuario_rol_seq OWNED BY public.usuario_rol.id_usuario_rol;
 
 
 --
@@ -1387,10 +1521,31 @@ ALTER TABLE ONLY public.resultado_academico ALTER COLUMN id_resultado SET DEFAUL
 
 
 --
+-- Name: rol id_rol; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.rol ALTER COLUMN id_rol SET DEFAULT nextval('public.rol_id_rol_seq'::regclass);
+
+
+--
 -- Name: tipo_documento id_tipodocumento; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.tipo_documento ALTER COLUMN id_tipodocumento SET DEFAULT nextval('public.tipo_documento_id_tipodocumento_seq'::regclass);
+
+
+--
+-- Name: usuario id_usuario; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.usuario ALTER COLUMN id_usuario SET DEFAULT nextval('public.usuario_id_usuario_seq'::regclass);
+
+
+--
+-- Name: usuario_rol id_usuario_rol; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.usuario_rol ALTER COLUMN id_usuario_rol SET DEFAULT nextval('public.usuario_rol_id_usuario_rol_seq'::regclass);
 
 
 --
@@ -1458,6 +1613,14 @@ ALTER TABLE ONLY public.detalle_padrefamilia
 
 
 --
+-- Name: directivo directivo_id_usuario_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.directivo
+    ADD CONSTRAINT directivo_id_usuario_key UNIQUE (id_usuario);
+
+
+--
 -- Name: directivo directivo_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -1471,6 +1634,14 @@ ALTER TABLE ONLY public.directivo
 
 ALTER TABLE ONLY public.docente
     ADD CONSTRAINT docente_documento_key UNIQUE (documento);
+
+
+--
+-- Name: docente docente_id_usuario_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.docente
+    ADD CONSTRAINT docente_id_usuario_key UNIQUE (id_usuario);
 
 
 --
@@ -1495,6 +1666,14 @@ ALTER TABLE ONLY public.documento_matriculas
 
 ALTER TABLE ONLY public.escala_valoracion
     ADD CONSTRAINT escala_valoracion_pkey PRIMARY KEY (id_escalavaloracion);
+
+
+--
+-- Name: estudiante estudiante_id_usuario_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.estudiante
+    ADD CONSTRAINT estudiante_id_usuario_key UNIQUE (id_usuario);
 
 
 --
@@ -1538,6 +1717,14 @@ ALTER TABLE ONLY public.matricula
 
 
 --
+-- Name: matricula matricula_token_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.matricula
+    ADD CONSTRAINT matricula_token_key UNIQUE (token_seguimiento);
+
+
+--
 -- Name: nivel_escolar nivel_escolar_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -1562,19 +1749,19 @@ ALTER TABLE ONLY public.observacion_estudiante
 
 
 --
--- Name: padre_familia padre_familia_corrreo_key; Type: CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.padre_familia
-    ADD CONSTRAINT padre_familia_corrreo_key UNIQUE (corrreo);
-
-
---
 -- Name: padre_familia padre_familia_documeno_key; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.padre_familia
     ADD CONSTRAINT padre_familia_documeno_key UNIQUE (documeno);
+
+
+--
+-- Name: padre_familia padre_familia_id_usuario_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.padre_familia
+    ADD CONSTRAINT padre_familia_id_usuario_key UNIQUE (id_usuario);
 
 
 --
@@ -1610,11 +1797,59 @@ ALTER TABLE ONLY public.resultado_academico
 
 
 --
+-- Name: rol rol_nombre_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.rol
+    ADD CONSTRAINT rol_nombre_key UNIQUE (nombre);
+
+
+--
+-- Name: rol rol_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.rol
+    ADD CONSTRAINT rol_pkey PRIMARY KEY (id_rol);
+
+
+--
 -- Name: tipo_documento tipo_documento_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.tipo_documento
     ADD CONSTRAINT tipo_documento_pkey PRIMARY KEY (id_tipodocumento);
+
+
+--
+-- Name: usuario usuario_correo_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.usuario
+    ADD CONSTRAINT usuario_correo_key UNIQUE (correo);
+
+
+--
+-- Name: usuario usuario_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.usuario
+    ADD CONSTRAINT usuario_pkey PRIMARY KEY (id_usuario);
+
+
+--
+-- Name: usuario_rol usuario_rol_id_usuario_id_rol_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.usuario_rol
+    ADD CONSTRAINT usuario_rol_id_usuario_id_rol_key UNIQUE (id_usuario, id_rol);
+
+
+--
+-- Name: usuario_rol usuario_rol_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.usuario_rol
+    ADD CONSTRAINT usuario_rol_pkey PRIMARY KEY (id_usuario_rol);
 
 
 --
@@ -1796,6 +2031,14 @@ ALTER TABLE ONLY public.directivo
 
 
 --
+-- Name: directivo directivo_id_usuario_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.directivo
+    ADD CONSTRAINT directivo_id_usuario_fkey FOREIGN KEY (id_usuario) REFERENCES public.usuario(id_usuario);
+
+
+--
 -- Name: docente docente_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -1817,6 +2060,14 @@ ALTER TABLE ONLY public.docente
 
 ALTER TABLE ONLY public.docente
     ADD CONSTRAINT docente_id_tipodocumento_fkey FOREIGN KEY (id_tipodocumento) REFERENCES public.tipo_documento(id_tipodocumento);
+
+
+--
+-- Name: docente docente_id_usuario_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.docente
+    ADD CONSTRAINT docente_id_usuario_fkey FOREIGN KEY (id_usuario) REFERENCES public.usuario(id_usuario);
 
 
 --
@@ -1857,6 +2108,14 @@ ALTER TABLE ONLY public.estudiante
 
 ALTER TABLE ONLY public.estudiante
     ADD CONSTRAINT estudiante_id_tipodocumento_fkey FOREIGN KEY (id_tipodocumento) REFERENCES public.tipo_documento(id_tipodocumento);
+
+
+--
+-- Name: estudiante estudiante_id_usuario_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.estudiante
+    ADD CONSTRAINT estudiante_id_usuario_fkey FOREIGN KEY (id_usuario) REFERENCES public.usuario(id_usuario);
 
 
 --
@@ -2044,6 +2303,14 @@ ALTER TABLE ONLY public.padre_familia
 
 
 --
+-- Name: padre_familia padre_familia_id_usuario_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.padre_familia
+    ADD CONSTRAINT padre_familia_id_usuario_fkey FOREIGN KEY (id_usuario) REFERENCES public.usuario(id_usuario);
+
+
+--
 -- Name: periodo_academico periodo_academico_id_año_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -2116,8 +2383,24 @@ ALTER TABLE ONLY public.resultado_academico
 
 
 --
+-- Name: usuario_rol usuario_rol_id_rol_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.usuario_rol
+    ADD CONSTRAINT usuario_rol_id_rol_fkey FOREIGN KEY (id_rol) REFERENCES public.rol(id_rol);
+
+
+--
+-- Name: usuario_rol usuario_rol_id_usuario_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.usuario_rol
+    ADD CONSTRAINT usuario_rol_id_usuario_fkey FOREIGN KEY (id_usuario) REFERENCES public.usuario(id_usuario);
+
+
+--
 -- PostgreSQL database dump complete
 --
 
-\unrestrict W3QSiDdwhqYdKUvatiBA1dqJxxozOj88mzIgT4HOeUFoOJfraaCqEmjTfGLEY02
+\unrestrict zdGV78429mQdFtJskSPWxQVoMvSNChFIUeR84LFuHnpc2TTQv1JPsFKq3zbZvGE
 

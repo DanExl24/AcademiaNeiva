@@ -1,5 +1,6 @@
 import { pool } from "../config/db";
 import { NotificationService } from "./notificationService";
+import bcrypt from "bcrypt";
 
 // Documentos siempre obligatorios
 const ALWAYS_REQUIRED = ['documentoPadre', 'salud', 'foto', 'reciboPublico'];
@@ -246,20 +247,31 @@ export class MatriculaService {
 
       const { id_colegio, correo_padre } = mat.rows[0];
 
-      // 1. Crear Estudiante
-      const studentRes = await client.query(
-        `INSERT INTO estudiante (nombre, apellido, documento, password, codigo, id_tipodocumento, id_grado, id_colegio)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-         RETURNING id_estudiante`,
-        [data.student.nombre, data.student.apellido, data.student.documento, 'estudiante123', 'MAT-' + Date.now(), data.student.id_tipodocumento, finalGradeId, id_colegio]
-      );
-      const idEstudiante = studentRes.rows[0].id_estudiante;
+      // 1. Crear o usar Usuario Padre existente
+      let idUsuarioPadre;
+      const existingUser = await client.query('SELECT id_usuario FROM usuario WHERE correo = $1', [correo_padre]);
+      
+      if (existingUser.rows.length > 0) {
+        idUsuarioPadre = existingUser.rows[0].id_usuario;
+      } else {
+        const hashedPassPadre = await bcrypt.hash('padre123', 10);
+        const userRes = await client.query(
+          `INSERT INTO usuario (correo, password, id_colegio) VALUES ($1, $2, $3) RETURNING id_usuario`,
+          [correo_padre, hashedPassPadre, id_colegio]
+        );
+        idUsuarioPadre = userRes.rows[0].id_usuario;
+        
+        await client.query(
+          `INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, 3)`, // 3 = PADRE_FAMILIA
+          [idUsuarioPadre]
+        );
+      }
 
-      // 2. Crear o usar Padre existente
+      // Buscar si ya existe el padre en padre_familia
       const existingParent = await client.query(
-        'SELECT id_padrefamilia FROM padre_familia WHERE corrreo = $1', [correo_padre]
+        'SELECT id_padrefamilia FROM padre_familia WHERE id_usuario = $1', [idUsuarioPadre]
       );
-
+      
       let idPadre;
       if (existingParent.rows.length > 0) {
         idPadre = existingParent.rows[0].id_padrefamilia;
@@ -271,13 +283,40 @@ export class MatriculaService {
         );
       } else {
         const parentRes = await client.query(
-          `INSERT INTO padre_familia (nombre, apellido, documeno, corrreo, password, id_tipodocumento, id_colegio)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)
+          `INSERT INTO padre_familia (nombre, apellido, documeno, id_tipodocumento, id_colegio, id_usuario)
+           VALUES ($1, $2, $3, $4, $5, $6)
            RETURNING id_padrefamilia`,
-          [data.parent.nombre, data.parent.apellido, data.parent.documento, correo_padre, 'padre123', data.parent.id_tipodocumento, id_colegio]
+          [data.parent.nombre, data.parent.apellido, data.parent.documento, data.parent.id_tipodocumento, id_colegio, idUsuarioPadre]
         );
         idPadre = parentRes.rows[0].id_padrefamilia;
       }
+
+      // 2. Crear Usuario Estudiante y Estudiante
+      // Generar código estudiantil solicitado: ACM-{documento}-{patron_coherente}
+      const randomPattern = Math.floor(1000 + Math.random() * 9000); // 4 dígitos coherentes
+      const studentCode = `ACM-${data.student.documento}-${randomPattern}`;
+
+      // Los estudiantes no tienen correo real, usamos su código como identificador único en la tabla usuario
+      const hashedPassEstudiante = await bcrypt.hash('estudiante123', 10);
+      const studentUserRes = await client.query(
+        `INSERT INTO usuario (correo, password, id_colegio) VALUES ($1, $2, $3) RETURNING id_usuario`,
+        [studentCode, hashedPassEstudiante, id_colegio]
+      );
+      const idUsuarioEstudiante = studentUserRes.rows[0].id_usuario;
+
+      await client.query(
+        `INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, 4)`, // 4 = ESTUDIANTE
+        [idUsuarioEstudiante]
+      );
+
+
+      const studentRes = await client.query(
+        `INSERT INTO estudiante (nombre, apellido, documento, codigo, id_tipodocumento, id_grado, id_colegio, id_usuario)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING id_estudiante`,
+        [data.student.nombre, data.student.apellido, data.student.documento, studentCode, data.student.id_tipodocumento, finalGradeId, id_colegio, idUsuarioEstudiante]
+      );
+      const idEstudiante = studentRes.rows[0].id_estudiante;
 
       // 3. Vincular
       await client.query(
@@ -293,10 +332,15 @@ export class MatriculaService {
 
       await client.query('COMMIT');
 
-      // 5. Notificar al padre (fuera de la transacción para no bloquear si falla el email)
-      NotificationService.sendApprovalEmail(correo_padre, data.parent.nombre, `${data.student.nombre} ${data.student.apellido}`);
+      // 5. Notificar al padre (ahora incluye el código estudiantil)
+      NotificationService.sendApprovalEmail(
+        correo_padre, 
+        data.parent.nombre, 
+        `${data.student.nombre} ${data.student.apellido}`,
+        studentCode
+      );
 
-      return { success: true, idEstudiante, idPadre };
+      return { success: true, idEstudiante, idPadre, studentCode };
     } catch (e) {
       await client.query('ROLLBACK');
       throw e;

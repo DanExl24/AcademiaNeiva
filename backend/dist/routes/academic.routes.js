@@ -1,0 +1,12 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const academicController_1 = require("../controllers/academicController");
+const router = (0, express_1.Router)();
+router.get("/parent/:padreId/students", academicController_1.AcademicController.getStudentsByParent);
+router.get("/student/:studentId/grades", academicController_1.AcademicController.getGrades);
+router.get("/student/:studentId/attendance", academicController_1.AcademicController.getAttendance);
+router.get("/student/:studentId/observations", academicController_1.AcademicController.getObservations);
+router.get("/periods/:schoolId", academicController_1.AcademicController.getActivePeriods);
+router.post("/update-email", academicController_1.AcademicController.updateEmail);
+exports.default = router;

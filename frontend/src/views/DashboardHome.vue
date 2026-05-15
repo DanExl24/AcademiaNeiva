@@ -24,7 +24,7 @@ const stats = [
       <div class="relative z-10">
         <h1 class="text-3xl font-bold">¡Bienvenido, {{ auth.user?.name || 'Usuario' }}!</h1>
         <p class="mt-2 text-indigo-100 max-w-md">
-          Tienes el rol de <span class="font-bold underline">{{ auth.user?.role }}</span>. Aquí tienes un resumen de lo que está sucediendo hoy en tu institución.
+          Tienes el rol de <span class="font-bold underline">{{ auth.user?.roles?.join(', ') }}</span>. Aquí tienes un resumen de lo que está sucediendo hoy en tu institución.
         </p>
       </div>
       <!-- Decoration -->

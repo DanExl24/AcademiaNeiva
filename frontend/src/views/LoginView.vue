@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { School, ArrowLeft } from 'lucide-vue-next'
-import { useAuthStore, type User } from '../stores/auth'
+import { useAuthStore } from '../stores/auth'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 
@@ -27,22 +27,35 @@ const loginData = ref({
   password: ''
 })
 
-const handleLogin = () => {
-  const college = colleges.value.find(c => String(c.id_colegio) === String(selectedCollege.value))
-  
-  const mockUser: User = {
-    id: '1',
-    name: 'Directivo Académico',
-    email: loginData.value.email,
-    role: 'directivo',
-    schoolId: selectedCollege.value,
-    schoolName: college?.nombre || 'Institución Educativa'
+const handleLogin = async () => {
+  try {
+    const response = await axios.post('http://localhost:3000/api/auth/login', {
+      email: loginData.value.email,
+      password: loginData.value.password,
+      schoolId: selectedCollege.value
+    })
+
+    const college = colleges.value.find(c => String(c.id_colegio) === String(selectedCollege.value))
+    const userData = {
+      ...response.data.user,
+      schoolName: college?.nombre || 'Institución Educativa'
+    }
+
+    auth.setUser(userData, response.data.token)
+    
+    // Redirección basada en el rol
+    if (userData.roles.includes('directivo')) {
+      router.push('/dashboard')
+    } else if (userData.roles.includes('padre_familia') || userData.roles.includes('estudiante')) {
+      router.push('/panel-control')
+    } else if (userData.roles.includes('docente')) {
+      router.push('/dashboard') // O una vista de docente específica si existe
+    } else {
+      router.push('/dashboard')
+    }
+  } catch (error: any) {
+    alert(error.response?.data?.message || 'Error al iniciar sesión')
   }
-  
-  auth.setUser(mockUser, 'fake-jwt-token')
-  setTimeout(() => {
-    router.push('/dashboard')
-  }, 1000)
 }
 </script>
 
@@ -92,6 +105,13 @@ const handleLogin = () => {
           <p class="text-xs text-indigo-700 text-center">
             Debes seleccionar una institución educativa para habilitar el inicio de sesión.
           </p>
+        </div>
+
+        <div class="mt-8 pt-6 border-t border-gray-100 text-center">
+          <p class="text-sm text-gray-500">¿Eres estudiante?</p>
+          <router-link to="/estudiante/login" class="mt-2 inline-flex items-center gap-1 text-sm font-bold text-indigo-600 hover:text-indigo-700 transition-colors">
+            Ingresa aquí con tu código estudiantil
+          </router-link>
         </div>
       </form>
     </div>

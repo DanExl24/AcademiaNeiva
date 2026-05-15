@@ -91,7 +91,7 @@ const handleLogout = () => {
         <div class="flex items-center gap-4">
           <div class="text-right hidden sm:block">
             <p class="text-sm font-bold text-gray-900">{{ auth.user?.name || 'Usuario' }}</p>
-            <p class="text-xs text-gray-500 capitalize">{{ auth.user?.role || 'Rol' }}</p>
+            <p class="text-xs text-gray-500 capitalize">{{ auth.user?.roles?.join(', ') || 'Rol' }}</p>
           </div>
           <div class="h-10 w-10 rounded-full bg-indigo-100 border-2 border-white shadow-sm flex items-center justify-center text-indigo-600 font-bold">
             {{ (auth.user?.name || 'U').charAt(0) }}

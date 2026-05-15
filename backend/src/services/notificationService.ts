@@ -25,7 +25,7 @@ transporter.verify((error, success) => {
 
 export class NotificationService {
   
-  static async sendApprovalEmail(to: string, parentName: string, studentName: string) {
+  static async sendApprovalEmail(to: string, parentName: string, studentName: string, studentCode: string) {
     if (!to) {
       console.error('❌ Error: No se puede enviar email de aprobación porque no hay destinatario (to)');
       return;
@@ -42,11 +42,27 @@ export class NotificationService {
           <p style="line-height: 1.6;">Nos complace informarte que la documentación de <strong>${studentName}</strong> ha sido validada y aprobada satisfactoriamente.</p>
           
           <div style="background-color: #f9fafb; border-radius: 16px; padding: 25px; margin: 30px 0; border: 1px solid #f3f4f6;">
-            <h2 style="font-size: 16px; color: #4b5563; margin-top: 0; text-transform: uppercase; letter-spacing: 0.05em;">Tus credenciales de acceso</h2>
-            <p style="margin-bottom: 10px;">Ya puedes ingresar a nuestra plataforma con los siguientes datos:</p>
-            <p style="margin: 5px 0;"><strong>Usuario:</strong> ${to}</p>
-            <p style="margin: 5px 0;"><strong>Contraseña temporal:</strong> padre123</p>
-            <div style="margin-top: 20px; font-size: 13px; color: #9ca3af;">* Te recomendamos cambiar tu contraseña al primer ingreso.</div>
+            <h2 style="font-size: 16px; color: #4b5563; margin-top: 0; text-transform: uppercase; letter-spacing: 0.05em;">Información del Estudiante</h2>
+            <p style="margin: 5px 0;"><strong>Código Estudiantil:</strong> <span style="color: #4f46e5; font-weight: 800; font-size: 18px;">${studentCode}</span></p>
+            
+            <hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+              <div>
+                <h3 style="font-size: 13px; color: #6b7280; margin-top: 0; text-transform: uppercase;">Para el Padre (Acceso General)</h3>
+                <p style="margin: 5px 0; font-size: 14px;"><strong>Usuario:</strong> ${to}</p>
+                <p style="margin: 5px 0; font-size: 14px;"><strong>Contraseña:</strong> padre123</p>
+              </div>
+              <div>
+                <h3 style="font-size: 13px; color: #6b7280; margin-top: 0; text-transform: uppercase;">Para el Estudiante (Portal Propio)</h3>
+                <p style="margin: 5px 0; font-size: 14px;"><strong>Código:</strong> ${studentCode}</p>
+                <p style="margin: 5px 0; font-size: 14px;"><strong>Contraseña:</strong> estudiante123</p>
+              </div>
+            </div>
+
+            <div style="margin-top: 20px; font-size: 12px; color: #9ca3af; line-height: 1.4;">
+              * El estudiante debe ingresar a través del <strong>Portal Estudiantil</strong> usando su código y la contraseña asignada. Te recomendamos cambiar estas credenciales tras el primer ingreso.
+            </div>
           </div>
 
           <div style="text-align: center; margin-top: 40px;">
