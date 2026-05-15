@@ -2,10 +2,7 @@
 import { ref, onMounted, computed } from 'vue'
 import axios from 'axios'
 import { 
-  ClipboardList, 
   Search, 
-  CheckCircle, 
-  XCircle, 
   Eye,
   Inbox,
   Clock,
@@ -13,7 +10,7 @@ import {
   AlertTriangle,
   AlertCircle
 } from 'lucide-vue-next'
-import { useAuthStore } from '../stores/auth'
+import { useAuthStore } from '../../stores/auth'
 
 const auth = useAuthStore()
 const enrollments = ref<any[]>([])

@@ -1,13 +1,11 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import axios from 'axios'
-import { useNotificationStore } from '../stores/notifications'
+import { useNotificationStore } from '../../stores/notifications'
 import { 
   School, 
   ArrowLeft, 
-  Upload, 
   Send, 
-  Info, 
   CheckCircle2, 
   FileText,
   Camera,

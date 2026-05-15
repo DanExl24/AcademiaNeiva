@@ -10,7 +10,7 @@ export interface User {
 }
 
 export const useAuthStore = defineStore('auth', () => {
-  const user = ref<User | null>(null)
+  const user = ref<User | null>(JSON.parse(localStorage.getItem('user') || 'null'))
   const token = ref<string | null>(localStorage.getItem('token'))
   const isAuthenticated = computed(() => !!token.value)
 
@@ -18,13 +18,14 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = userData
     token.value = userToken
     localStorage.setItem('token', userToken)
-    // También podríamos guardar el usuario en localStorage o recuperarlo vía API
+    localStorage.setItem('user', JSON.stringify(userData))
   }
 
   function logout() {
     user.value = null
     token.value = null
     localStorage.removeItem('token')
+    localStorage.removeItem('user')
   }
 
   return {

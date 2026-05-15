@@ -2,7 +2,7 @@
 import { ref, onMounted,computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
-import { useNotificationStore } from '../stores/notifications'
+import { useNotificationStore } from '../../stores/notifications'
 import { 
   ArrowLeft,
   FileText,

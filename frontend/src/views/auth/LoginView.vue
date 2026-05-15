@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { School, ArrowLeft } from 'lucide-vue-next'
-import { useAuthStore, type User } from '../stores/auth'
+import { useAuthStore, type User } from '../../stores/auth'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 
@@ -27,22 +27,30 @@ const loginData = ref({
   password: ''
 })
 
-const handleLogin = () => {
-  const college = colleges.value.find(c => String(c.id_colegio) === String(selectedCollege.value))
-  
-  const mockUser: User = {
-    id: '1',
-    name: 'Directivo Académico',
-    email: loginData.value.email,
-    role: 'directivo',
-    schoolId: selectedCollege.value,
-    schoolName: college?.nombre || 'Institución Educativa'
+const error = ref('')
+
+const handleLogin = async () => {
+  if (!selectedCollege.value) {
+    error.value = 'Por favor selecciona un colegio'
+    return
   }
-  
-  auth.setUser(mockUser, 'fake-jwt-token')
-  setTimeout(() => {
+
+  try {
+    error.value = ''
+    const response = await axios.post('http://localhost:3000/api/auth/login', {
+      email: loginData.value.email,
+      password: loginData.value.password,
+      id_colegio: selectedCollege.value
+    })
+
+    const { user, token } = response.data
+    auth.setUser(user, token)
+    
     router.push('/dashboard')
-  }, 1000)
+  } catch (err: any) {
+    console.error('Login error:', err)
+    error.value = err.response?.data?.error || 'Error al iniciar sesión. Verifica tus credenciales.'
+  }
 }
 </script>
 
@@ -59,6 +67,10 @@ const handleLogin = () => {
         </div>
         <h2 class="text-3xl font-extrabold text-gray-900">Ingreso al Sistema</h2>
         <p class="mt-2 text-sm text-gray-600">Selecciona tu institución para continuar</p>
+      </div>
+
+      <div v-if="error" class="mt-4 p-4 bg-red-50 border border-red-100 rounded-xl animate-in fade-in zoom-in duration-300">
+        <p class="text-xs text-red-600 text-center font-bold">{{ error }}</p>
       </div>
       
       <form class="mt-8 space-y-6" @submit.prevent="handleLogin">

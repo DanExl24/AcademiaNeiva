@@ -78,7 +78,7 @@ router.post("/update-documents/:token", upload.fields([
   { name: 'certificadosEscolaridad', maxCount: 1 }
 ]), async (req, res) => {
   try {
-    const result = await MatriculaService.updateDocumentsByToken(req.params.token, req.files);
+    const result = await MatriculaService.updateDocumentsByToken(req.params.token as string, req.files);
     res.json(result);
   } catch (e: any) {
     res.status(500).json({ error: e.message });

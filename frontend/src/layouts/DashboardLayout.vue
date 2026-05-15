@@ -9,22 +9,43 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
-  School
+  School,
+  GraduationCap,
+  CalendarCheck,
+  Eye,
+  UserCircle
 } from 'lucide-vue-next'
 import { useAuthStore } from '../stores/auth'
 import { useRouter } from 'vue-router'
+import { computed } from 'vue'
 
 const auth = useAuthStore()
 const router = useRouter()
 const isCollapsed = ref(false)
 
-const menuItems = [
-  { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
-  { name: 'Gestión Matrículas', icon: ClipboardList, path: '/dashboard/gestion-matriculas' },
-  { name: 'Docentes', icon: Users, path: '/dashboard/docentes' },
-  { name: 'Académico', icon: BookOpen, path: '/dashboard/academico' },
-  { name: 'Configuración', icon: Settings, path: '/dashboard/config' },
-]
+const menuItems = computed(() => {
+  const role = auth.user?.role?.toLowerCase()
+  
+  if (role === 'docente') {
+    return [
+      { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
+      { name: 'Mis Cursos', icon: GraduationCap, path: '/dashboard/mis-cursos' },
+      { name: 'Calificaciones', icon: ClipboardList, path: '/dashboard/calificaciones' },
+      { name: 'Asistencia', icon: CalendarCheck, path: '/dashboard/asistencia' },
+      { name: 'Observador', icon: Eye, path: '/dashboard/observador' },
+      { name: 'Modo Padre', icon: UserCircle, path: '/dashboard/modo-padre' },
+    ]
+  }
+  
+  // Default (Admin/Directivo)
+  return [
+    { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
+    { name: 'Gestión Matrículas', icon: ClipboardList, path: '/dashboard/gestion-matriculas' },
+    { name: 'Docentes', icon: Users, path: '/dashboard/docentes' },
+    { name: 'Académico', icon: BookOpen, path: '/dashboard/academico' },
+    { name: 'Configuración', icon: Settings, path: '/dashboard/config' },
+  ]
+})
 
 const handleLogout = () => {
   auth.logout()

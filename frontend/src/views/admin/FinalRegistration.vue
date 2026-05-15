@@ -2,17 +2,14 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
-import { useNotificationStore } from '../stores/notifications'
+import { useNotificationStore } from '../../stores/notifications'
 import { 
   ArrowLeft,
-  User,
-  Users,
   Save,
   CheckCircle,
   Eye,
   ChevronRight,
   ChevronLeft,
-  School,
   FileText
 } from 'lucide-vue-next'
 
@@ -262,7 +259,7 @@ const documentLabels: Record<string, string> = {
       <div class="p-4 bg-gray-900 border-t border-gray-800 overflow-x-auto">
         <div class="flex gap-2">
           <button v-for="(doc, idx) in matricula?.documentos" :key="doc.id_documento"
-            @click="currentDocIndex = idx"
+            @click="currentDocIndex = idx as number"
             :class="[currentDocIndex === idx ? 'border-indigo-500 bg-indigo-500/10 text-indigo-400' : 'border-gray-700 text-gray-500 hover:border-gray-500', 'px-3 py-1.5 rounded-lg border text-[10px] font-bold whitespace-nowrap transition-all']"
           >
             {{ documentLabels[doc.tipo_documento] || doc.tipo_documento }}

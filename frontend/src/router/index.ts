@@ -1,13 +1,13 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
-import LandingView from '../views/LandingView.vue'
-import LoginView from '../views/LoginView.vue'
-import EnrollmentView from '../views/EnrollmentView.vue'
-import DashboardHome from '../views/DashboardHome.vue'
-import EnrollmentManagement from '../views/EnrollmentManagement.vue'
-import EnrollmentDetails from '../views/EnrollmentDetails.vue'
-import FinalRegistration from '../views/FinalRegistration.vue'
-import EnrollmentCorrection from '../views/EnrollmentCorrection.vue'
+import LandingView from '../views/public/LandingView.vue'
+import LoginView from '../views/auth/LoginView.vue'
+import EnrollmentView from '../views/public/EnrollmentView.vue'
+import DashboardHomeDispatcher from '../views/shared/DashboardHomeDispatcher.vue'
+import EnrollmentManagement from '../views/admin/EnrollmentManagement.vue'
+import EnrollmentDetails from '../views/admin/EnrollmentDetails.vue'
+import FinalRegistration from '../views/admin/FinalRegistration.vue'
+import EnrollmentCorrection from '../views/public/EnrollmentCorrection.vue'
 import DashboardLayout from '../layouts/DashboardLayout.vue'
 
 const router = createRouter({
@@ -41,7 +41,7 @@ const router = createRouter({
         {
           path: '',
           name: 'Dashboard',
-          component: DashboardHome
+          component: DashboardHomeDispatcher
         },
         {
           path: 'gestion-matriculas',
@@ -57,13 +57,34 @@ const router = createRouter({
           path: 'gestion-matriculas/:id/registro',
           name: 'Finalizar Registro',
           component: FinalRegistration
+        },
+        // Rutas del Docente
+        {
+          path: 'mis-cursos',
+          name: 'Mis Cursos',
+          component: () => import('../views/teacher/TeacherCourses.vue')
+        },
+        {
+          path: 'calificaciones',
+          name: 'Calificaciones',
+          component: () => import('../views/teacher/TeacherGrades.vue')
+        },
+        {
+          path: 'asistencia',
+          name: 'Asistencia',
+          component: () => import('../views/teacher/TeacherAttendance.vue')
+        },
+        {
+          path: 'observador',
+          name: 'Observador del Estudiante',
+          component: () => import('../views/teacher/TeacherObservations.vue')
         }
       ]
     }
   ]
 })
 
-router.beforeEach((to, from, next) => {
+router.beforeEach((to, _from, next) => {
   const auth = useAuthStore()
   
   if (to.meta.requiresAuth && !auth.isAuthenticated) {
