@@ -22,14 +22,17 @@ export const getTeacherCourses = async (req: Request, res: Response): Promise<vo
     const result = await pool.query(
       `SELECT 
         dg.id_detallegrado,
-        g.id_grado, 
-        g.tipo_grado as grado_nombre, 
-        g.nivel, 
-        g.seccion,
+        g.id_grupo as id_grado, 
+        tg.nombre as grado_nombre, 
+        ne.nombre as nivel, 
+        s.nombre as seccion,
         m.id_materia, 
         m.nombre as materia_nombre
        FROM detalle_grados dg
-       JOIN grados g ON dg.id_grado = g.id_grado
+       JOIN grupos g ON dg.id_grupo = g.id_grupo
+       JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
+       JOIN nivel_escolar ne ON g.id_nivel = ne.id_nivel
+       JOIN secciones s ON g.id_seccion = s.id_seccion
        JOIN materias m ON dg.id_materia = m.id_materia
        WHERE dg.id_docente = $1`,
       [idDocente]
@@ -47,10 +50,11 @@ export const getStudentsByGrade = async (req: Request, res: Response): Promise<v
 
   try {
     const result = await pool.query(
-      `SELECT id_estudiante, nombre, apellido, documento, codigo 
-       FROM estudiante 
-       WHERE id_grado = $1
-       ORDER BY apellido, nombre`,
+      `SELECT e.id_estudiante, e.nombre, e.apellido, e.documento, e.codigo 
+       FROM estudiante e
+       JOIN matricula m ON e.id_estudiante = m.id_estudiante
+       WHERE m.id_grupo = $1 AND m.estado IN ('ACTIVA', 'TRASLADADA')
+       ORDER BY e.apellido, e.nombre`,
       [gradeId]
     );
     res.json(result.rows);

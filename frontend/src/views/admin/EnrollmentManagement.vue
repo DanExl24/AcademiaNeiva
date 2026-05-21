@@ -8,7 +8,9 @@ import {
   Clock,
   ShieldCheck,
   AlertTriangle,
-  AlertCircle
+  AlertCircle,
+  XCircle,
+  ArrowLeftRight
 } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 
@@ -37,15 +39,32 @@ onMounted(fetchEnrollments)
 
 const getStatusClass = (status: string) => {
   if (status === 'PENDIENTE') return 'bg-amber-100 text-amber-700'
+  if (status === 'RECHAZADA') return 'bg-orange-100 text-orange-700'
+  if (status === 'CORRECCION') return 'bg-purple-100 text-purple-700'
   if (status === 'ACTIVA') return 'bg-emerald-100 text-emerald-700'
-  return 'bg-red-100 text-red-700'
+  if (status === 'TRASLADADA') return 'bg-blue-100 text-blue-700'
+  if (status === 'CANCELADA') return 'bg-red-100 text-red-700'
+  return 'bg-gray-100 text-gray-600'
+}
+
+const getStatusLabel = (status: string) => {
+  if (status === 'PENDIENTE') return 'POR REVISAR'
+  if (status === 'RECHAZADA') return 'EN CORRECCIÓN'
+  if (status === 'CORRECCION') return 'DOCS CORREGIDOS'
+  if (status === 'ACTIVA') return 'APROBADA'
+  if (status === 'TRASLADADA') return 'TRASLADO'
+  if (status === 'CANCELADA') return 'CANCELADA'
+  return status
 }
 
 const stats = computed(() => {
   return {
     pending: enrollments.value.filter(e => e.estado === 'PENDIENTE').length,
     rejected: enrollments.value.filter(e => e.estado === 'RECHAZADA').length,
-    active: enrollments.value.filter(e => e.estado === 'ACTIVA').length
+    corrected: enrollments.value.filter(e => e.estado === 'CORRECCION').length,
+    active: enrollments.value.filter(e => e.estado === 'ACTIVA').length,
+    transferred: enrollments.value.filter(e => e.estado === 'TRASLADADA').length,
+    cancelled: enrollments.value.filter(e => e.estado === 'CANCELADA').length
   }
 })
 
@@ -71,50 +90,84 @@ const getFilteredEnrollments = () => {
       </div>
       
       <!-- Filter Tabs -->
-      <div class="bg-gray-100 p-1.5 rounded-2xl flex gap-1 self-start">
+      <div class="bg-gray-100 p-1.5 rounded-2xl flex gap-1 self-start flex-wrap">
         <button 
-          v-for="status in ['PENDIENTE', 'RECHAZADA', 'ACTIVA']" 
-          :key="status"
-          @click="filterStatus = status"
+          v-for="tab in [
+            { status: 'PENDIENTE', label: 'Por Revisar' },
+            { status: 'RECHAZADA', label: 'En Corrección' },
+            { status: 'CORRECCION', label: 'Docs Corregidos' },
+            { status: 'ACTIVA', label: 'Aprobadas' },
+            { status: 'TRASLADADA', label: 'Traslados' },
+            { status: 'CANCELADA', label: 'Canceladas' }
+          ]" 
+          :key="tab.status"
+          @click="filterStatus = tab.status"
           :class="[
-            filterStatus === status 
+            filterStatus === tab.status 
               ? 'bg-white text-indigo-600 shadow-sm' 
               : 'text-gray-500 hover:text-gray-700',
-            'px-6 py-2.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap'
+            'px-5 py-2.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap'
           ]"
         >
-          {{ status === 'PENDIENTE' ? 'Por Revisar' : status === 'RECHAZADA' ? 'En Corrección' : 'Aprobadas' }}
+          {{ tab.label }}
         </button>
       </div>
     </div>
 
     <!-- Stats -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-      <div class="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex items-center gap-4">
-        <div class="p-4 bg-amber-50 text-amber-600 rounded-2xl">
-          <Clock :size="24" />
+    <div class="grid grid-cols-2 md:grid-cols-6 gap-4">
+      <div class="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex items-center gap-3">
+        <div class="p-3 bg-amber-50 text-amber-600 rounded-2xl shrink-0">
+          <Clock :size="20" />
         </div>
         <div>
           <p class="text-gray-500 text-xs font-bold uppercase tracking-wider">Por Revisar</p>
           <p class="text-2xl font-bold text-gray-900 mt-0.5">{{ stats.pending }}</p>
         </div>
       </div>
-      <div class="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex items-center gap-4">
-        <div class="p-4 bg-red-50 text-red-600 rounded-2xl">
-          <AlertCircle :size="24" />
+      <div class="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex items-center gap-3">
+        <div class="p-3 bg-orange-50 text-orange-600 rounded-2xl shrink-0">
+          <AlertCircle :size="20" />
         </div>
         <div>
           <p class="text-gray-500 text-xs font-bold uppercase tracking-wider">En Corrección</p>
           <p class="text-2xl font-bold text-gray-900 mt-0.5">{{ stats.rejected }}</p>
         </div>
       </div>
-      <div class="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex items-center gap-4">
-        <div class="p-4 bg-emerald-50 text-emerald-600 rounded-2xl">
-          <ShieldCheck :size="24" />
+      <div class="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex items-center gap-3">
+        <div class="p-3 bg-purple-50 text-purple-600 rounded-2xl shrink-0">
+          <Eye :size="20" />
+        </div>
+        <div>
+          <p class="text-gray-500 text-xs font-bold uppercase tracking-wider">Corregidos</p>
+          <p class="text-2xl font-bold text-gray-900 mt-0.5">{{ stats.corrected }}</p>
+        </div>
+      </div>
+      <div class="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex items-center gap-3">
+        <div class="p-3 bg-emerald-50 text-emerald-600 rounded-2xl shrink-0">
+          <ShieldCheck :size="20" />
         </div>
         <div>
           <p class="text-gray-500 text-xs font-bold uppercase tracking-wider">Aprobadas</p>
           <p class="text-2xl font-bold text-gray-900 mt-0.5">{{ stats.active }}</p>
+        </div>
+      </div>
+      <div class="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex items-center gap-3">
+        <div class="p-3 bg-blue-50 text-blue-600 rounded-2xl shrink-0">
+          <ArrowLeftRight :size="20" />
+        </div>
+        <div>
+          <p class="text-gray-500 text-xs font-bold uppercase tracking-wider">Traslados</p>
+          <p class="text-2xl font-bold text-gray-900 mt-0.5">{{ stats.transferred }}</p>
+        </div>
+      </div>
+      <div class="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex items-center gap-3">
+        <div class="p-3 bg-red-50 text-red-600 rounded-2xl shrink-0">
+          <XCircle :size="20" />
+        </div>
+        <div>
+          <p class="text-gray-500 text-xs font-bold uppercase tracking-wider">Canceladas</p>
+          <p class="text-2xl font-bold text-gray-900 mt-0.5">{{ stats.cancelled }}</p>
         </div>
       </div>
     </div>
@@ -152,8 +205,13 @@ const getFilteredEnrollments = () => {
               <td class="px-8 py-5">
                 <div class="flex flex-col gap-1.5">
                   <span :class="[getStatusClass(en.estado), 'px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider w-fit']">
-                    {{ en.estado === 'PENDIENTE' ? 'POR REVISAR' : en.estado === 'RECHAZADA' ? 'EN CORRECCIÓN' : en.estado }}
+                    {{ getStatusLabel(en.estado) }}
                   </span>
+                  <div v-if="en.es_traslado && (en.estado === 'TRASLADADA' || en.estado === 'ACTIVA' || en.estado === 'PENDIENTE')" 
+                       class="flex items-center gap-1.5 text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-100 w-fit">
+                    <ArrowLeftRight :size="12" />
+                    <span class="text-[10px] font-bold">Matrícula por Traslado</span>
+                  </div>
                   <div v-if="en.has_pending_docs && en.estado === 'PENDIENTE'" 
                        class="flex items-center gap-1.5 text-amber-600 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-100 w-fit">
                     <AlertTriangle :size="12" />

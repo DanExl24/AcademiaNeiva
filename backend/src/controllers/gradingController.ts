@@ -27,7 +27,7 @@ export const getActivities = async (req: Request, res: Response): Promise<void> 
       `SELECT id_detallegrado 
        FROM detalle_grados dg
        JOIN docente d ON dg.id_docente = d.id_docente
-       WHERE dg.id_grado = $1 AND dg.id_materia = $2 AND d.id_usuario = $3`,
+       WHERE dg.id_grupo = $1 AND dg.id_materia = $2 AND d.id_usuario = $3`,
       [gradeId, subjectId, userId]
     );
 
@@ -149,7 +149,7 @@ export const getGrades = async (req: Request, res: Response): Promise<void> => {
     // 1. Obtener id_detallegrado
     const detalleRes = await pool.query(
       `SELECT id_detallegrado FROM detalle_grados dg 
-       WHERE id_grado = $1 AND id_materia = $2`,
+       WHERE id_grupo = $1 AND id_materia = $2`,
       [gradeId, subjectId]
     );
 

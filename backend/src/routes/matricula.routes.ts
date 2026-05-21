@@ -7,7 +7,9 @@ import {
   validateDocument,
   assignGrade,
   notifyInconsistencies,
-  finalizeEnrollment
+  finalizeEnrollment,
+  cancelEnrollment,
+  toggleTransfer
 } from "../controllers/matriculaController";
 import { upload } from "../config/multer";
 
@@ -85,5 +87,7 @@ router.post("/update-documents/:token", upload.fields([
   }
 });
 router.post("/finalize/:id", finalizeEnrollment);
+router.post("/cancel/:id", cancelEnrollment);
+router.patch("/transfer-status/:id", toggleTransfer);
 
 export default router;

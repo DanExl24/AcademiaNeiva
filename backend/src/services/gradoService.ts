@@ -3,12 +3,21 @@ import { pool } from "../config/db";
 export class GradoService {
   static async getAvailable(idColegio: number) {
     const query = `
-      SELECT g.id_grado, g.nivel, g.tipo_grado, j.nombre as jornada, g.cupos_totales,
+      SELECT 
+        g.id_grupo as id_grado, 
+        ne.nombre as nivel, 
+        tg.nombre as tipo_grado, 
+        s.nombre as seccion,
+        j.nombre as jornada, 
+        g.cupos_totales,
         (g.cupos_totales - (
           SELECT COUNT(*) FROM matricula m 
-          WHERE m.id_grado = g.id_grado AND m.estado = 'ACTIVA'
+          WHERE m.id_grupo = g.id_grupo AND m.estado IN ('ACTIVA', 'TRASLADADA')
         )) as cupos_restantes
-      FROM grados g
+      FROM grupos g
+      LEFT JOIN nivel_escolar ne ON g.id_nivel = ne.id_nivel
+      LEFT JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
+      LEFT JOIN secciones s ON g.id_seccion = s.id_seccion
       LEFT JOIN jornada j ON g.id_jornada = j.id_jornada
       WHERE g.id_colegio = $1
     `;

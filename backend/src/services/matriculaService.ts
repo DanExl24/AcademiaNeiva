@@ -1,5 +1,6 @@
 import { pool } from "../config/db";
 import { NotificationService } from "./notificationService";
+import bcrypt from "bcrypt";
 
 // Documentos siempre obligatorios
 const ALWAYS_REQUIRED = ['documentoPadre', 'salud', 'foto', 'reciboPublico'];
@@ -38,7 +39,7 @@ export class MatriculaService {
       // 1. Insertar en tabla matricula original (id_estudiante es NULL)
       const matRes = await client.query(
         `INSERT INTO matricula 
-           (id_estudiante, id_nivel, id_grado, id_colegio, "id_año", estado, correo_padre, tiene_discapacidad, es_extranjero)
+           (id_estudiante, id_nivel, id_grupo, id_colegio, "id_año", estado, correo_padre, tiene_discapacidad, es_extranjero)
          VALUES (NULL, NULL, $1, $2, 1, 'PENDIENTE', $3, $4, $5)
          RETURNING id_matricula`,
         [data.grade, id_colegio, parentEmail, hasDisability === 'true', isForeigner === 'true']
@@ -99,10 +100,13 @@ export class MatriculaService {
   /** MR02 – Detalles de una matrícula */
   static async getDetails(idMatricula: number) {
     const matRes = await pool.query(
-      `SELECT m.*, g.nivel as grado_nivel, g.tipo_grado, g.seccion, g.id_jornada, j.nombre as jornada,
-              (g.cupos_totales - (SELECT COUNT(*) FROM matricula WHERE id_grado = g.id_grado AND estado = 'ACTIVA')) as cupos_restantes
+      `SELECT m.*, ne.nombre as grado_nivel, tg.nombre as tipo_grado, s.nombre as seccion, g.id_jornada, j.nombre as jornada,
+              (g.cupos_totales - (SELECT COUNT(*) FROM matricula WHERE id_grupo = g.id_grupo AND estado IN ('ACTIVA', 'TRASLADADA'))) as cupos_restantes
        FROM matricula m
-       JOIN grados g ON m.id_grado = g.id_grado
+       JOIN grupos g ON m.id_grupo = g.id_grupo
+       LEFT JOIN nivel_escolar ne ON g.id_nivel = ne.id_nivel
+       LEFT JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
+       LEFT JOIN secciones s ON g.id_seccion = s.id_seccion
        LEFT JOIN jornada j ON g.id_jornada = j.id_jornada
        WHERE m.id_matricula = $1`, [idMatricula]
     );
@@ -119,10 +123,13 @@ export class MatriculaService {
 
     // Buscar otras secciones del mismo grado/jornada/colegio
     const sections = await pool.query(
-      `SELECT id_grado, seccion, 
-              (cupos_totales - (SELECT COUNT(*) FROM matricula WHERE id_grado = g.id_grado AND estado = 'ACTIVA')) as cupos_restantes
-       FROM grados g
-       WHERE id_colegio = $1 AND nivel = $2 AND tipo_grado = $3 AND id_jornada = $4`,
+      `SELECT g.id_grupo as id_grado, s.nombre as seccion, 
+              (g.cupos_totales - (SELECT COUNT(*) FROM matricula WHERE id_grupo = g.id_grupo AND estado IN ('ACTIVA', 'TRASLADADA'))) as cupos_restantes
+       FROM grupos g
+       JOIN secciones s ON g.id_seccion = s.id_seccion
+       JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
+       JOIN nivel_escolar ne ON g.id_nivel = ne.id_nivel
+       WHERE g.id_colegio = $1 AND ne.nombre = $2 AND tg.nombre = $3 AND g.id_jornada = $4`,
       [mat.id_colegio, mat.grado_nivel, mat.tipo_grado, mat.id_jornada]
     );
     console.log('Found sections count:', sections.rows.length);
@@ -144,7 +151,7 @@ export class MatriculaService {
     // Sin embargo, para que el sistema lo recuerde si refresca, 
     // lo guardaremos pero sin activar la matrícula.
     await pool.query(
-      `UPDATE matricula SET id_grado = $1 WHERE id_matricula = $2`,
+      `UPDATE matricula SET id_grupo = $1 WHERE id_matricula = $2`,
       [idGrado, idMatricula]
     );
     return { success: true };
@@ -168,7 +175,8 @@ export class MatriculaService {
 
     const reason = `Los siguientes documentos presentan inconsistencias: ${rejectedDocs.map((d: any) => d.tipo_documento).join(', ')}. Por favor revísalos y vuelve a subirlos.`;
     
-    await pool.query("UPDATE matricula SET estado = 'PENDIENTE' WHERE id_matricula = $1", [idMatricula]);
+    // Set to RECHAZADA so the UI shows it as "En Corrección" by parent
+    await pool.query("UPDATE matricula SET estado = 'RECHAZADA' WHERE id_matricula = $1", [idMatricula]);
 
     await NotificationService.sendRejectionEmail(details.correo_padre, 'Padre de Familia', reason, details.token_seguimiento);
     return { success: true };
@@ -177,9 +185,11 @@ export class MatriculaService {
   /** MR03 – Obtener detalles por token (Seguro para el padre) */
   static async getByToken(token: string) {
     const mat = await pool.query(
-      `SELECT m.*, g.nivel as grado_nivel, g.tipo_grado, j.nombre as jornada
+      `SELECT m.*, ne.nombre as grado_nivel, tg.nombre as tipo_grado, j.nombre as jornada
        FROM matricula m
-       JOIN grados g ON m.id_grado = g.id_grado
+       JOIN grupos g ON m.id_grupo = g.id_grupo
+       LEFT JOIN nivel_escolar ne ON g.id_nivel = ne.id_nivel
+       LEFT JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
        LEFT JOIN jornada j ON g.id_jornada = j.id_jornada
        WHERE m.token_seguimiento = $1`, [token]
     );
@@ -221,7 +231,8 @@ export class MatriculaService {
         );
       }
 
-      await client.query("UPDATE matricula SET estado = 'PENDIENTE' WHERE id_matricula = $1", [idMatricula]);
+      // Set to CORRECCION so the Admin can filter these quickly
+      await client.query("UPDATE matricula SET estado = 'CORRECCION' WHERE id_matricula = $1", [idMatricula]);
       await client.query('COMMIT');
       return { success: true };
     } catch (e) {
@@ -241,62 +252,136 @@ export class MatriculaService {
       const mat = await client.query('SELECT * FROM matricula WHERE id_matricula = $1', [idMatricula]);
       if (mat.rows.length === 0) throw new Error('Matrícula no encontrada');
       
-      // Si se envió un id_grado diferente en el registro final, lo actualizamos
-      const finalGradeId = data.id_grado || mat.rows[0].id_grado;
+      const finalGradeId = data.id_grado || mat.rows[0].id_grupo;
+      const { id_colegio, correo_padre, id_nivel } = mat.rows[0];
 
-      const { id_colegio, correo_padre } = mat.rows[0];
+      // --- CREACIÓN DEL ESTUDIANTE ---
+      const studentCode = 'MAT-' + Date.now();
+      
+      // Usuario estudiante
+      const hashedStudentPass = await bcrypt.hash(studentCode, 10);
+      const studentUserRes = await client.query(
+         `INSERT INTO usuario (email, password, nombre, apellido, id_colegio) VALUES ($1, $2, $3, $4, $5) RETURNING id_usuario`,
+         [studentCode, hashedStudentPass, data.student.nombre, data.student.apellido, id_colegio]
+      );
+      const idUsuarioEstudiante = studentUserRes.rows[0].id_usuario;
+      
+      // Rol estudiante
+      const rolEstudiante = await client.query("SELECT id_rol FROM rol WHERE nombre = 'estudiante'");
+      if(rolEstudiante.rows.length > 0) {
+          await client.query("INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2)", [idUsuarioEstudiante, rolEstudiante.rows[0].id_rol]);
+      }
 
-      // 1. Crear Estudiante
+      // Registro Estudiante
       const studentRes = await client.query(
-        `INSERT INTO estudiante (nombre, apellido, documento, codigo, id_tipodocumento, id_grado, id_colegio)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
+        `INSERT INTO estudiante (nombre, apellido, documento, codigo, id_tipodocumento, id_nivel, id_colegio, id_usuario)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          RETURNING id_estudiante`,
-        [data.student.nombre, data.student.apellido, data.student.documento, 'MAT-' + Date.now(), data.student.id_tipodocumento, finalGradeId, id_colegio]
+        [data.student.nombre, data.student.apellido, data.student.documento, studentCode, data.student.id_tipodocumento, id_nivel, id_colegio, idUsuarioEstudiante]
       );
       const idEstudiante = studentRes.rows[0].id_estudiante;
 
-      // 2. Crear o usar Padre existente
-      const existingParent = await client.query(
-        'SELECT id_padrefamilia FROM padre_familia WHERE corrreo = $1', [correo_padre]
-      );
-
-      let idPadre;
-      if (existingParent.rows.length > 0) {
-        idPadre = existingParent.rows[0].id_padrefamilia;
-        // Opcional: Actualizar datos del padre si vienen nuevos
-        await client.query(
-          `UPDATE padre_familia SET nombre = $1, apellido = $2, documeno = $3, id_tipodocumento = $4 
-           WHERE id_padrefamilia = $5`,
-          [data.parent.nombre, data.parent.apellido, data.parent.documento, data.parent.id_tipodocumento, idPadre]
-        );
+      // --- CREACIÓN DEL PADRE DE FAMILIA ---
+      let idUsuarioPadre;
+      const existingParentUser = await client.query('SELECT id_usuario FROM usuario WHERE email = $1', [correo_padre]);
+      if (existingParentUser.rows.length > 0) {
+          idUsuarioPadre = existingParentUser.rows[0].id_usuario;
       } else {
-        const parentRes = await client.query(
-          `INSERT INTO padre_familia (nombre, apellido, documeno, corrreo, password, id_tipodocumento, id_colegio)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)
-           RETURNING id_padrefamilia`,
-          [data.parent.nombre, data.parent.apellido, data.parent.documento, correo_padre, 'padre123', data.parent.id_tipodocumento, id_colegio]
-        );
-        idPadre = parentRes.rows[0].id_padrefamilia;
+          // Usuario padre
+          const hashedPadrePass = await bcrypt.hash('padre123', 10);
+          const parentUserRes = await client.query(
+             `INSERT INTO usuario (email, password, nombre, apellido, id_colegio) VALUES ($1, $2, $3, $4, $5) RETURNING id_usuario`,
+             [correo_padre, hashedPadrePass, data.parent.nombre, data.parent.apellido, id_colegio]
+          );
+          idUsuarioPadre = parentUserRes.rows[0].id_usuario;
+          
+          // Rol padre
+          const rolPadre = await client.query("SELECT id_rol FROM rol WHERE nombre = 'padre'");
+          if(rolPadre.rows.length > 0) {
+              await client.query("INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2)", [idUsuarioPadre, rolPadre.rows[0].id_rol]);
+          }
       }
 
-      // 3. Vincular
+      // Registro Padre
+      const existingParent = await client.query('SELECT id_padrefamilia FROM padre_familia WHERE documeno = $1', [data.parent.documento]);
+      let idPadre;
+      if (existingParent.rows.length > 0) {
+         idPadre = existingParent.rows[0].id_padrefamilia;
+         // Actualizar si es necesario
+         await client.query(
+            `UPDATE padre_familia SET nombre = $1, apellido = $2, id_tipodocumento = $3 WHERE id_padrefamilia = $4`,
+            [data.parent.nombre, data.parent.apellido, data.parent.id_tipodocumento, idPadre]
+         );
+      } else {
+         const parentRes = await client.query(
+            `INSERT INTO padre_familia (nombre, apellido, documeno, id_tipodocumento, id_colegio, id_usuario)
+             VALUES ($1, $2, $3, $4, $5, $6) RETURNING id_padrefamilia`,
+            [data.parent.nombre, data.parent.apellido, data.parent.documento, data.parent.id_tipodocumento, id_colegio, idUsuarioPadre]
+         );
+         idPadre = parentRes.rows[0].id_padrefamilia;
+      }
+
+      // 3. Vincular Estudiante y Padre
       await client.query(
         "INSERT INTO detalle_padrefamilia (id_padrefamilia, id_estudiante, id_colegio) VALUES ($1, $2, $3)",
         [idPadre, idEstudiante, id_colegio]
       );
 
       // 4. Actualizar Matrícula
+      const finalEstado = mat.rows[0].es_traslado ? 'TRASLADADA' : 'ACTIVA';
       await client.query(
-        "UPDATE matricula SET id_estudiante = $1, id_grado = $3, estado = 'ACTIVA' WHERE id_matricula = $2",
-        [idEstudiante, idMatricula, finalGradeId]
+        "UPDATE matricula SET id_estudiante = $1, id_grupo = $3, estado = $4 WHERE id_matricula = $2",
+        [idEstudiante, idMatricula, finalGradeId, finalEstado]
       );
 
       await client.query('COMMIT');
 
-      // 5. Notificar al padre (fuera de la transacción para no bloquear si falla el email)
-      NotificationService.sendApprovalEmail(correo_padre, data.parent.nombre, `${data.student.nombre} ${data.student.apellido}`);
+      // 5. Notificar al padre
+      NotificationService.sendApprovalEmail(correo_padre, data.parent.nombre, `${data.student.nombre} ${data.student.apellido}`, studentCode);
 
       return { success: true, idEstudiante, idPadre };
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
+  }
+
+  static async toggleTransferStatus(idMatricula: number, esTraslado: boolean) {
+    await pool.query(
+      'UPDATE matricula SET es_traslado = $1 WHERE id_matricula = $2',
+      [esTraslado, idMatricula]
+    );
+    return { success: true };
+  }
+
+  static async cancelEnrollment(idMatricula: number, data: { motivo: string, detalles: string }) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      
+      const matRes = await client.query('SELECT correo_padre, estado FROM matricula WHERE id_matricula = $1', [idMatricula]);
+      if (matRes.rows.length === 0) throw new Error('Matrícula no encontrada');
+      const mat = matRes.rows[0];
+      
+      if (mat.estado !== 'ACTIVA' && mat.estado !== 'TRASLADADA') {
+        throw new Error('Solo se pueden cancelar matrículas que estén aprobadas o trasladadas');
+      }
+
+      await client.query(
+        `UPDATE matricula 
+         SET estado = 'CANCELADA', motivo_cancelacion = $1, detalles_cancelacion = $2
+         WHERE id_matricula = $3`,
+        [data.motivo, data.detalles, idMatricula]
+      );
+
+      await client.query('COMMIT');
+
+      // Notificar al padre
+      await NotificationService.sendCancellationEmail(mat.correo_padre, 'Padre de Familia', data.motivo, data.detalles);
+
+      return { success: true };
     } catch (e) {
       await client.query('ROLLBACK');
       throw e;

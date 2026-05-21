@@ -82,3 +82,26 @@ export const finalizeEnrollment = async (req: Request, res: Response) => {
     res.status(500).json({ error: error.message });
   }
 };
+
+export const cancelEnrollment = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const data = req.body; // { motivo, detalles }
+    const result = await MatriculaService.cancelEnrollment(Number(id), data);
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const toggleTransfer = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { es_traslado } = req.body;
+    const result = await MatriculaService.toggleTransferStatus(Number(id), Boolean(es_traslado));
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
