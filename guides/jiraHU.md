@@ -53,6 +53,7 @@
 - El sistema debera mostrar un apartado para poder validar documento por documento adjunto y poder evaluarlo
 - El sistema debera mostrar si la validacion fue exitosa o hay errores en la carga de documentos
 - El sistema debera mandar un correo electronico al padre de familia informando sobre las inconsistencias en el formulario de matricula academica
+- El sistema debera mandar un correo electronico al padre de familia informando sobre la matricula aprobada, los datos de ingreso del padre de familia y el codigo estudiantil de su hijo.
 - El sistema debera registrar automaticamente al estudiante y al padre de familia en la base de datos en el momento que la validacion de todos los documentos sea exitosa y el directivo desee aprobar la matricula
 
 ---

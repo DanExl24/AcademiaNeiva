@@ -39,6 +39,7 @@ a múltiples instituciones en el futuro.
 
 **Requisitos Funcionales**
 
+- RF01: Formulario de matrícula en línea con validación de documentos.
 - RF02: Módulo de registro de calificaciones por periodo académico. •
 
   Calificación - Numero de Ausencias - Escala de Valoración -
