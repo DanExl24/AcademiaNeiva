@@ -248,10 +248,10 @@ export class MatriculaService {
 
       // 1. Crear Estudiante
       const studentRes = await client.query(
-        `INSERT INTO estudiante (nombre, apellido, documento, password, codigo, id_tipodocumento, id_grado, id_colegio)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        `INSERT INTO estudiante (nombre, apellido, documento, codigo, id_tipodocumento, id_grado, id_colegio)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
          RETURNING id_estudiante`,
-        [data.student.nombre, data.student.apellido, data.student.documento, 'estudiante123', 'MAT-' + Date.now(), data.student.id_tipodocumento, finalGradeId, id_colegio]
+        [data.student.nombre, data.student.apellido, data.student.documento, 'MAT-' + Date.now(), data.student.id_tipodocumento, finalGradeId, id_colegio]
       );
       const idEstudiante = studentRes.rows[0].id_estudiante;
 
