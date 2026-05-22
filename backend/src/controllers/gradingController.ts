@@ -1,5 +1,57 @@
 import { Request, Response } from "express";
 import { pool } from "../config/db";
+import {
+  ensureCompetencyForContext,
+  TeachingContext,
+} from "../config/competencyMigration";
+
+const ensurePeriodOpen = async (periodId: number): Promise<boolean> => {
+  const result = await pool.query(
+    `SELECT 1
+     FROM periodo_academico
+     WHERE id_periodo = $1
+       AND estado = 'ABIERTO'`,
+    [periodId]
+  );
+
+  return result.rows.length > 0;
+};
+
+const resolveTeachingContext = async (
+  gradeId: number,
+  subjectId: number,
+  periodId: number,
+  userId?: number
+): Promise<TeachingContext | null> => {
+  const params: Array<number> = [gradeId, subjectId, periodId];
+  let teacherFilter = "";
+
+  if (typeof userId === "number" && !Number.isNaN(userId)) {
+    teacherFilter = "AND d.id_usuario = $4";
+    params.push(userId);
+  }
+
+  const result = await pool.query<TeachingContext>(
+    `SELECT
+       dg.id_detallegrado AS "idDetalleGrado",
+       dg.id_grupo AS "idGrupo",
+       dg.id_materia AS "idMateria",
+       dg.id_colegio AS "idColegio",
+       p."id_año" AS "idAnio"
+     FROM detalle_grados dg
+     JOIN periodo_academico p
+       ON p.id_periodo = $3
+      AND p.id_colegio = dg.id_colegio
+     LEFT JOIN docente d ON dg.id_docente = d.id_docente
+     WHERE dg.id_grupo = $1
+       AND dg.id_materia = $2
+       ${teacherFilter}
+     LIMIT 1`,
+    params
+  );
+
+  return result.rows[0] ?? null;
+};
 
 // Obtener periodos del colegio
 export const getPeriods = async (req: Request, res: Response): Promise<void> => {
@@ -16,66 +68,139 @@ export const getPeriods = async (req: Request, res: Response): Promise<void> => 
   }
 };
 
-// Obtener actividades de un curso/materia/periodo
+// Obtener competencia y actividades de un curso/materia/periodo
 export const getActivities = async (req: Request, res: Response): Promise<void> => {
-  const { gradeId, subjectId, periodId } = req.params;
-  const { userId } = req.query; // ID del usuario docente para validar
+  const gradeId = Number(req.params.gradeId);
+  const subjectId = Number(req.params.subjectId);
+  const periodId = Number(req.params.periodId);
+  const userId = req.query.userId ? Number(req.query.userId) : undefined;
 
   try {
-    // 1. Encontrar id_detallegrado
-    const detalleRes = await pool.query(
-      `SELECT id_detallegrado 
-       FROM detalle_grados dg
-       JOIN docente d ON dg.id_docente = d.id_docente
-       WHERE dg.id_grupo = $1 AND dg.id_materia = $2 AND d.id_usuario = $3`,
-      [gradeId, subjectId, userId]
-    );
+    const context = await resolveTeachingContext(gradeId, subjectId, periodId, userId);
 
-    if (detalleRes.rows.length === 0) {
+    if (!context) {
       res.status(404).json({ error: "No se encontró la asignación académica" });
       return;
     }
 
-    const idDetalleGrado = detalleRes.rows[0].id_detallegrado;
+    const client = await pool.connect();
+    try {
+      const competencia = await ensureCompetencyForContext(client, context, periodId);
+      const activities = await client.query(
+        `SELECT *
+         FROM actividad_materia
+         WHERE id_competencia = $1
+         ORDER BY id_actividadmateria ASC`,
+        [competencia.id_competencia]
+      );
 
-    // 2. Obtener actividades
-    const activities = await pool.query(
-      `SELECT * FROM actividad_materia 
-       WHERE id_detallegrado = $1 AND id_periodo = $2
-       ORDER BY id_actividadmateria ASC`,
-      [idDetalleGrado, periodId]
-    );
-
-    res.json(activities.rows);
+      res.json({
+        competencia,
+        activities: activities.rows,
+      });
+    } finally {
+      client.release();
+    }
   } catch (error: any) {
     console.error("Error fetching activities:", error);
     res.status(500).json({ error: "Error en el servidor" });
   }
 };
 
-// Crear nueva actividad
-export const createActivity = async (req: Request, res: Response): Promise<void> => {
-  const { id_detallegrado, id_periodo, nombre, porcentaje, id_colegio } = req.body;
+export const updateCompetency = async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params;
+  const { descripcion } = req.body;
+
+  if (typeof descripcion !== "string" || !descripcion.trim()) {
+    res.status(400).json({ error: "La descripción de la competencia es obligatoria" });
+    return;
+  }
 
   try {
-    // 1. Validar suma de porcentajes (Regla de negocio: no debe exceder 100%)
+    const periodRes = await pool.query(
+      `SELECT id_periodo
+       FROM competencias
+       WHERE id_competencia = $1`,
+      [id]
+    );
+
+    if (periodRes.rows.length === 0) {
+      res.status(404).json({ error: "Competencia no encontrada" });
+      return;
+    }
+
+    const periodOpen = await ensurePeriodOpen(Number(periodRes.rows[0].id_periodo));
+    if (!periodOpen) {
+      res.status(409).json({ error: "No se puede modificar la competencia porque el periodo está cerrado" });
+      return;
+    }
+
+    const updated = await pool.query(
+      `UPDATE competencias
+       SET descripcion = $1
+       WHERE id_competencia = $2
+       RETURNING *`,
+      [descripcion.trim(), id]
+    );
+
+    if (updated.rows.length === 0) {
+      res.status(404).json({ error: "Competencia no encontrada" });
+      return;
+    }
+
+    res.json(updated.rows[0]);
+  } catch (error: any) {
+    console.error("Error updating competency:", error);
+    res.status(500).json({ error: "Error en el servidor" });
+  }
+};
+
+// Crear nueva actividad
+export const createActivity = async (req: Request, res: Response): Promise<void> => {
+  const { id_competencia, nombre, porcentaje, id_colegio } = req.body;
+
+  if (!id_competencia) {
+    res.status(400).json({ error: "La actividad debe estar asociada a una competencia" });
+    return;
+  }
+
+  try {
+    const competencyRes = await pool.query(
+      "SELECT id_competencia, id_periodo FROM competencias WHERE id_competencia = $1",
+      [id_competencia]
+    );
+
+    if (competencyRes.rows.length === 0) {
+      res.status(404).json({ error: "Competencia no encontrada" });
+      return;
+    }
+
+    const periodOpen = await ensurePeriodOpen(Number(competencyRes.rows[0].id_periodo));
+    if (!periodOpen) {
+      res.status(409).json({ error: "No se pueden crear actividades porque el periodo está cerrado" });
+      return;
+    }
+
     const sumRes = await pool.query(
-      `SELECT SUM(porcentaje) as total FROM actividad_materia 
-       WHERE id_detallegrado = $1 AND id_periodo = $2`,
-      [id_detallegrado, id_periodo]
+      `SELECT COALESCE(SUM(porcentaje), 0) AS total
+       FROM actividad_materia
+       WHERE id_competencia = $1`,
+      [id_competencia]
     );
 
     const currentTotal = parseFloat(sumRes.rows[0].total || "0");
     if (currentTotal + parseFloat(porcentaje) > 100) {
-      res.status(400).json({ error: `La suma de porcentajes no puede exceder el 100%. Actual: ${currentTotal}%` });
+      res.status(400).json({
+        error: `La suma de porcentajes no puede exceder el 100%. Actual: ${currentTotal}%`,
+      });
       return;
     }
 
-    // 2. Insertar actividad
     const newActivity = await pool.query(
-      `INSERT INTO actividad_materia (id_detallegrado, id_periodo, nombre, porcentaje, id_colegio)
-       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [id_detallegrado, id_periodo, nombre, porcentaje, id_colegio]
+      `INSERT INTO actividad_materia (id_competencia, nombre, porcentaje, id_colegio)
+       VALUES ($1, $2, $3, $4)
+       RETURNING *`,
+      [id_competencia, nombre, porcentaje, id_colegio]
     );
 
     res.status(201).json(newActivity.rows[0]);
@@ -85,37 +210,53 @@ export const createActivity = async (req: Request, res: Response): Promise<void>
   }
 };
 
-// Actualizar actividad (incluyendo porcentaje)
+// Actualizar actividad
 export const updateActivity = async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params;
   const { nombre, porcentaje } = req.body;
 
   try {
-    // 1. Obtener datos actuales para validación de suma
-    const currentActRes = await pool.query("SELECT id_detallegrado, id_periodo, porcentaje FROM actividad_materia WHERE id_actividadmateria = $1", [id]);
+    const currentActRes = await pool.query(
+      `SELECT a.id_competencia, c.id_periodo
+       FROM actividad_materia a
+       JOIN competencias c ON c.id_competencia = a.id_competencia
+       WHERE a.id_actividadmateria = $1`,
+      [id]
+    );
+
     if (currentActRes.rows.length === 0) {
       res.status(404).json({ error: "Actividad no encontrada" });
       return;
     }
 
-    const { id_detallegrado, id_periodo, porcentaje: oldPorcentaje } = currentActRes.rows[0];
+    const periodOpen = await ensurePeriodOpen(Number(currentActRes.rows[0].id_periodo));
+    if (!periodOpen) {
+      res.status(409).json({ error: "No se puede modificar la actividad porque el periodo está cerrado" });
+      return;
+    }
 
-    // 2. Validar nueva suma
+    const { id_competencia } = currentActRes.rows[0];
     const sumRes = await pool.query(
-      `SELECT SUM(porcentaje) as total FROM actividad_materia 
-       WHERE id_detallegrado = $1 AND id_periodo = $2 AND id_actividadmateria != $3`,
-      [id_detallegrado, id_periodo, id]
+      `SELECT COALESCE(SUM(porcentaje), 0) AS total
+       FROM actividad_materia
+       WHERE id_competencia = $1
+         AND id_actividadmateria != $2`,
+      [id_competencia, id]
     );
 
     const otherTotal = parseFloat(sumRes.rows[0].total || "0");
     if (otherTotal + parseFloat(porcentaje) > 100) {
-      res.status(400).json({ error: `La suma de porcentajes no puede exceder el 100%. Otros: ${otherTotal}%` });
+      res.status(400).json({
+        error: `La suma de porcentajes no puede exceder el 100%. Otros: ${otherTotal}%`,
+      });
       return;
     }
 
-    // 3. Actualizar
     const updated = await pool.query(
-      `UPDATE actividad_materia SET nombre = $1, porcentaje = $2 WHERE id_actividadmateria = $3 RETURNING *`,
+      `UPDATE actividad_materia
+       SET nombre = $1, porcentaje = $2
+       WHERE id_actividadmateria = $3
+       RETURNING *`,
       [nombre, porcentaje, id]
     );
 
@@ -131,8 +272,25 @@ export const deleteActivity = async (req: Request, res: Response): Promise<void>
   const { id } = req.params;
 
   try {
-    // Nota: El sistema debería validar si ya hay notas puestas antes de borrar, 
-    // pero por ahora permitimos borrado en cascada o simple.
+    const currentActRes = await pool.query(
+      `SELECT c.id_periodo
+       FROM actividad_materia a
+       JOIN competencias c ON c.id_competencia = a.id_competencia
+       WHERE a.id_actividadmateria = $1`,
+      [id]
+    );
+
+    if (currentActRes.rows.length === 0) {
+      res.status(404).json({ error: "Actividad no encontrada" });
+      return;
+    }
+
+    const periodOpen = await ensurePeriodOpen(Number(currentActRes.rows[0].id_periodo));
+    if (!periodOpen) {
+      res.status(409).json({ error: "No se puede eliminar la actividad porque el periodo está cerrado" });
+      return;
+    }
+
     await pool.query("DELETE FROM actividad_materia WHERE id_actividadmateria = $1", [id]);
     res.json({ message: "Actividad eliminada correctamente" });
   } catch (error: any) {
@@ -143,30 +301,20 @@ export const deleteActivity = async (req: Request, res: Response): Promise<void>
 
 // Obtener todas las notas de un curso/periodo
 export const getGrades = async (req: Request, res: Response): Promise<void> => {
-  const { gradeId, subjectId, periodId } = req.params;
+  const gradeId = Number(req.params.gradeId);
+  const subjectId = Number(req.params.subjectId);
+  const periodId = Number(req.params.periodId);
 
   try {
-    // 1. Obtener id_detallegrado
-    const detalleRes = await pool.query(
-      `SELECT id_detallegrado FROM detalle_grados dg 
-       WHERE id_grupo = $1 AND id_materia = $2`,
-      [gradeId, subjectId]
-    );
-
-    if (detalleRes.rows.length === 0) {
-      res.status(404).json({ error: "Configuración académica no encontrada" });
-      return;
-    }
-
-    const idDetalleGrado = detalleRes.rows[0].id_detallegrado;
-
-    // 2. Obtener todas las notas de las actividades de este detallegrado y periodo
     const grades = await pool.query(
-      `SELECT n.* 
+      `SELECT n.*
        FROM notas_actividad n
        JOIN actividad_materia a ON n.id_actividadmateria = a.id_actividadmateria
-       WHERE a.id_detallegrado = $1 AND a.id_periodo = $2`,
-      [idDetalleGrado, periodId]
+       JOIN competencias c ON a.id_competencia = c.id_competencia
+       WHERE c.id_grupo = $1
+         AND c.id_materia = $2
+         AND c.id_periodo = $3`,
+      [gradeId, subjectId, periodId]
     );
 
     res.json(grades.rows);
@@ -178,33 +326,84 @@ export const getGrades = async (req: Request, res: Response): Promise<void> => {
 
 // Guardar notas en lote (Upsert)
 export const saveGrades = async (req: Request, res: Response): Promise<void> => {
-  const { grades, schoolId } = req.body; // grades: [{id_estudiante, id_actividadmateria, nota}]
+  const { grades, schoolId } = req.body;
 
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
 
-    // 1. Obtener escala de valoración del colegio para asignar automáticamente
+    const activityIds = Array.from(
+      new Set(
+        (Array.isArray(grades) ? grades : [])
+          .map((item) => Number(item.id_actividadmateria))
+          .filter((value) => !Number.isNaN(value))
+      )
+    );
+
+    if (activityIds.length === 0) {
+      await client.query("ROLLBACK");
+      res.status(400).json({ error: "No hay actividades válidas para guardar notas" });
+      return;
+    }
+
+    const periodsRes = await client.query(
+      `SELECT DISTINCT c.id_periodo
+       FROM actividad_materia a
+       JOIN competencias c ON c.id_competencia = a.id_competencia
+       WHERE a.id_actividadmateria = ANY($1::int[])`,
+      [activityIds]
+    );
+
+    for (const row of periodsRes.rows) {
+      const periodOpen = await ensurePeriodOpen(Number(row.id_periodo));
+      if (!periodOpen) {
+        await client.query("ROLLBACK");
+        res.status(409).json({ error: "No se pueden guardar notas porque el periodo está cerrado" });
+        return;
+      }
+    }
+
     const escalaRes = await client.query(
       "SELECT id_escalavaloracion, valor_minimo, valor_maximo FROM escala_valoracion WHERE id_colegio = $1",
       [schoolId]
     );
     const escalas = escalaRes.rows;
 
-    for (const item of grades) {
-      const notaNum = parseFloat(item.nota);
-      
-      // Encontrar la escala que corresponde a esta nota
-      const escala = escalas.find(e => notaNum >= parseFloat(e.valor_minimo) && notaNum <= parseFloat(e.valor_maximo));
-      const idEscala = escala ? escala.id_escalavaloracion : escalas[escalas.length - 1]?.id_escalavaloracion;
+    const settingsRes = await client.query(
+      `SELECT nota_minima, nota_maxima
+       FROM configuracion_colegio
+       WHERE id_colegio = $1`,
+      [schoolId]
+    );
 
-      // UPSERT manual (PostgreSQL 9.5+)
+    const notaMinima = settingsRes.rows.length > 0 ? Number(settingsRes.rows[0].nota_minima) : 0;
+    const notaMaxima = settingsRes.rows.length > 0 ? Number(settingsRes.rows[0].nota_maxima) : 5;
+
+    for (const item of grades) {
+      const notaNum = Number(parseFloat(item.nota).toFixed(1));
+      if (Number.isNaN(notaNum) || notaNum < notaMinima || notaNum > notaMaxima) {
+        await client.query("ROLLBACK");
+        res.status(400).json({
+          error: `Todas las notas deben estar dentro del rango institucional ${notaMinima.toFixed(1)} - ${notaMaxima.toFixed(1)}`,
+        });
+        return;
+      }
+
+      const escala = escalas.find(
+        (entry) =>
+          notaNum >= parseFloat(entry.valor_minimo) &&
+          notaNum <= parseFloat(entry.valor_maximo)
+      );
+      const idEscala =
+        escala?.id_escalavaloracion ??
+        escalas[escalas.length - 1]?.id_escalavaloracion;
+
       await client.query(
         `INSERT INTO notas_actividad (id_actividadmateria, id_estudiante, nota, id_escalavaloracion, id_colegio)
          VALUES ($1, $2, $3, $4, $5)
-         ON CONFLICT (id_actividadmateria, id_estudiante) 
+         ON CONFLICT (id_actividadmateria, id_estudiante)
          DO UPDATE SET nota = EXCLUDED.nota, id_escalavaloracion = EXCLUDED.id_escalavaloracion`,
-        [item.id_actividadmateria, item.id_estudiante, item.nota, idEscala, schoolId]
+        [item.id_actividadmateria, item.id_estudiante, notaNum, idEscala, schoolId]
       );
     }
 

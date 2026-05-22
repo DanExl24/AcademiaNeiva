@@ -9,6 +9,11 @@ import EnrollmentDetails from '../views/admin/EnrollmentDetails.vue'
 import FinalRegistration from '../views/admin/FinalRegistration.vue'
 import EnrollmentCorrection from '../views/public/EnrollmentCorrection.vue'
 import DashboardLayout from '../layouts/DashboardLayout.vue'
+import GradeManagement from '../views/admin/GradeManagement.vue'
+import SubjectManagement from '../views/admin/SubjectManagement.vue'
+import TeacherManagement from '../views/admin/TeacherManagement.vue'
+import AcademicSettings from '../views/admin/AcademicSettings.vue'
+import AcademicCompetenciesView from '../views/admin/AcademicCompetenciesView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -57,6 +62,31 @@ const router = createRouter({
           path: 'gestion-matriculas/:id/registro',
           name: 'Finalizar Registro',
           component: FinalRegistration
+        },
+        {
+          path: 'gestion-grados',
+          name: 'Gestión de Grados',
+          component: GradeManagement
+        },
+        {
+          path: 'gestion-materias',
+          name: 'Gestión de Materias',
+          component: SubjectManagement
+        },
+        {
+          path: 'docentes',
+          name: 'Gestión de Docentes',
+          component: TeacherManagement
+        },
+        {
+          path: 'configuracion-academica',
+          name: 'Configuración Académica',
+          component: AcademicSettings
+        },
+        {
+          path: 'configuracion-academica/competencias',
+          name: 'Competencias Académicas',
+          component: AcademicCompetenciesView
         },
         // Rutas del Docente
         {

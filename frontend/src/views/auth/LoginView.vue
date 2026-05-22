@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { School, ArrowLeft } from 'lucide-vue-next'
-import { useAuthStore, type User } from '../../stores/auth'
+import { useAuthStore } from '../../stores/auth'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 

@@ -4,9 +4,7 @@ import {
   BookOpen, 
   Users, 
   ChevronRight, 
-  Search,
   LayoutGrid,
-  List,
   GraduationCap,
   ClipboardList
 } from 'lucide-vue-next'
@@ -17,7 +15,6 @@ import { useRouter } from 'vue-router'
 const auth = useAuthStore()
 const router = useRouter()
 const viewMode = ref('grades') // 'grades' o 'subjects'
-const searchQuery = ref('')
 const loading = ref(true)
 const rawData = ref([])
 

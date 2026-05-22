@@ -1,43 +1,39 @@
-import nodemailer from 'nodemailer';
-
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.NotificationService = void 0;
+const nodemailer_1 = __importDefault(require("nodemailer"));
 // Configuración de transporte (El usuario deberá completar esto en su .env)
 // Por ahora usamos una configuración de prueba o valores por defecto
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtp.ethereal.email',
-  port: Number(process.env.SMTP_PORT) || 587,
-  secure: Number(process.env.SMTP_PORT) === 465, // true para 465, false para otros
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS?.replace(/"/g, ''), // Eliminar comillas si las hay
-  },
-  logger: true,
-  debug: true
+const transporter = nodemailer_1.default.createTransport({
+    host: process.env.SMTP_HOST || 'smtp.ethereal.email',
+    port: Number(process.env.SMTP_PORT) || 587,
+    secure: Number(process.env.SMTP_PORT) === 465, // true para 465, false para otros
+    auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS?.replace(/"/g, ''), // Eliminar comillas si las hay
+    },
+    logger: true,
+    debug: true
 });
-
 // Verificar conexión al iniciar
 transporter.verify((error, success) => {
-  if (error) {
-    console.error('❌ Error de conexión SMTP:', error);
-  } else {
-    console.log('🚀 Servidor de correo listo para enviar mensajes');
-  }
-});
-
-export class NotificationService {
-  static async sendTeacherWelcomeEmail(
-    to: string,
-    teacherName: string,
-    schoolName: string,
-    documentType: string,
-    documentNumber: string,
-    temporaryPassword: string
-  ) {
-    if (!to) {
-      console.error('❌ Error: No se puede enviar email de bienvenida al docente porque no hay destinatario (to)');
-      return;
+    if (error) {
+        console.error('❌ Error de conexión SMTP:', error);
     }
-
-    const html = `
+    else {
+        console.log('🚀 Servidor de correo listo para enviar mensajes');
+    }
+});
+class NotificationService {
+    static async sendTeacherWelcomeEmail(to, teacherName, schoolName, documentType, documentNumber, temporaryPassword) {
+        if (!to) {
+            console.error('❌ Error: No se puede enviar email de bienvenida al docente porque no hay destinatario (to)');
+            return;
+        }
+        const html = `
       <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 640px; margin: 0 auto; padding: 20px; color: #1f2937;">
         <div style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); padding: 40px; border-radius: 24px; text-align: center; color: white; margin-bottom: 30px;">
           <h1 style="margin: 0; font-size: 28px; font-weight: 800;">Bienvenido al equipo docente</h1>
@@ -68,34 +64,25 @@ export class NotificationService {
         </div>
       </div>
     `;
-
-    try {
-      await transporter.sendMail({
-        from: `"Academia Neiva" <${process.env.SMTP_USER}>`,
-        to,
-        subject: 'Bienvenido como docente a la plataforma',
-        html,
-      });
-    } catch (error) {
-      console.error('Error enviando email de bienvenida al docente:', error);
+        try {
+            await transporter.sendMail({
+                from: `"Academia Neiva" <${process.env.SMTP_USER}>`,
+                to,
+                subject: 'Bienvenido como docente a la plataforma',
+                html,
+            });
+        }
+        catch (error) {
+            console.error('Error enviando email de bienvenida al docente:', error);
+        }
     }
-  }
-
-  static async sendTeacherAssignmentEmail(
-    to: string,
-    teacherName: string,
-    schoolName: string,
-    subjectName: string,
-    courseName: string,
-    action: 'assigned' | 'unassigned'
-  ) {
-    if (!to) {
-      console.error('❌ Error: No se puede enviar email de asignación al docente porque no hay destinatario (to)');
-      return;
-    }
-
-    const isAssigned = action === 'assigned';
-    const html = `
+    static async sendTeacherAssignmentEmail(to, teacherName, schoolName, subjectName, courseName, action) {
+        if (!to) {
+            console.error('❌ Error: No se puede enviar email de asignación al docente porque no hay destinatario (to)');
+            return;
+        }
+        const isAssigned = action === 'assigned';
+        const html = `
       <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 640px; margin: 0 auto; padding: 20px; color: #1f2937;">
         <div style="background: ${isAssigned ? 'linear-gradient(135deg, #059669 0%, #047857 100%)' : 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)'}; padding: 40px; border-radius: 24px; text-align: center; color: white; margin-bottom: 30px;">
           <h1 style="margin: 0; font-size: 28px; font-weight: 800;">${isAssigned ? 'Nueva asignación académica' : 'Cambio en tu asignación académica'}</h1>
@@ -112,36 +99,27 @@ export class NotificationService {
         </div>
       </div>
     `;
-
-    try {
-      await transporter.sendMail({
-        from: `"Academia Neiva" <${process.env.SMTP_USER}>`,
-        to,
-        subject: isAssigned ? 'Nueva asignación de curso y materia' : 'Desasignación de curso y materia',
-        html,
-      });
-    } catch (error) {
-      console.error('Error enviando email de asignación al docente:', error);
+        try {
+            await transporter.sendMail({
+                from: `"Academia Neiva" <${process.env.SMTP_USER}>`,
+                to,
+                subject: isAssigned ? 'Nueva asignación de curso y materia' : 'Desasignación de curso y materia',
+                html,
+            });
+        }
+        catch (error) {
+            console.error('Error enviando email de asignación al docente:', error);
+        }
     }
-  }
-
-  static async sendTeacherStatusEmail(
-    to: string,
-    teacherName: string,
-    schoolName: string,
-    status: 'ACTIVO' | 'INACTIVO' | 'DESVINCULADO' | string,
-    reason?: string
-  ) {
-    if (!to) {
-      console.error('❌ Error: No se puede enviar email de estado al docente porque no hay destinatario (to)');
-      return;
-    }
-
-    const isActive = status === 'ACTIVO';
-    const isInactive = status === 'INACTIVO';
-    const isUnlinked = status === 'DESVINCULADO';
-
-    const html = `
+    static async sendTeacherStatusEmail(to, teacherName, schoolName, status, reason) {
+        if (!to) {
+            console.error('❌ Error: No se puede enviar email de estado al docente porque no hay destinatario (to)');
+            return;
+        }
+        const isActive = status === 'ACTIVO';
+        const isInactive = status === 'INACTIVO';
+        const isUnlinked = status === 'DESVINCULADO';
+        const html = `
       <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 640px; margin: 0 auto; padding: 20px; color: #1f2937;">
         <div style="background: ${isActive ? 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)' : isInactive ? 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)' : 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)'}; padding: 40px; border-radius: 24px; text-align: center; color: white; margin-bottom: 30px;">
           <h1 style="margin: 0; font-size: 28px; font-weight: 800;">${isActive ? 'Cuenta docente reactivada' : isInactive ? 'Cuenta docente inactivada' : 'Docente desvinculado'}</h1>
@@ -158,26 +136,24 @@ export class NotificationService {
         ` : ''}
       </div>
     `;
-
-    try {
-      await transporter.sendMail({
-        from: `"Academia Neiva" <${process.env.SMTP_USER}>`,
-        to,
-        subject: isActive ? 'Tu cuenta docente fue reactivada' : isInactive ? 'Tu cuenta docente fue inactivada' : 'Tu vinculación docente fue finalizada',
-        html,
-      });
-    } catch (error) {
-      console.error('Error enviando email de estado al docente:', error);
+        try {
+            await transporter.sendMail({
+                from: `"Academia Neiva" <${process.env.SMTP_USER}>`,
+                to,
+                subject: isActive ? 'Tu cuenta docente fue reactivada' : isInactive ? 'Tu cuenta docente fue inactivada' : 'Tu vinculación docente fue finalizada',
+                html,
+            });
+        }
+        catch (error) {
+            console.error('Error enviando email de estado al docente:', error);
+        }
     }
-  }
-
-  
-  static async sendApprovalEmail(to: string, parentName: string, studentName: string, studentCode: string) {
-    if (!to) {
-      console.error('❌ Error: No se puede enviar email de aprobación porque no hay destinatario (to)');
-      return;
-    }
-    const html = `
+    static async sendApprovalEmail(to, parentName, studentName, studentCode) {
+        if (!to) {
+            console.error('❌ Error: No se puede enviar email de aprobación porque no hay destinatario (to)');
+            return;
+        }
+        const html = `
       <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #1f2937;">
         <div style="background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); padding: 40px; border-radius: 24px; text-align: center; color: white; margin-bottom: 30px; box-shadow: 0 10px 25px -5px rgba(79, 70, 229, 0.2);">
           <h1 style="margin: 0; font-size: 28px; font-weight: 800; letter-spacing: -0.025em;">¡Matrícula Aprobada!</h1>
@@ -214,26 +190,25 @@ export class NotificationService {
         </div>
       </div>
     `;
-
-    try {
-      await transporter.sendMail({
-        from: `"Academia Neiva" <${process.env.SMTP_USER}>`,
-        to,
-        subject: '¡Bienvenido! Matrícula Aprobada - Academia Neiva',
-        html,
-      });
-      console.log(`Email enviado con éxito a ${to}`);
-    } catch (error) {
-      console.error('Error enviando email:', error);
+        try {
+            await transporter.sendMail({
+                from: `"Academia Neiva" <${process.env.SMTP_USER}>`,
+                to,
+                subject: '¡Bienvenido! Matrícula Aprobada - Academia Neiva',
+                html,
+            });
+            console.log(`Email enviado con éxito a ${to}`);
+        }
+        catch (error) {
+            console.error('Error enviando email:', error);
+        }
     }
-  }
-
-  static async sendRejectionEmail(to: string, parentName: string, reason: string, token: string) {
-    if (!to) {
-      console.error('❌ Error: No se puede enviar email de rechazo porque no hay destinatario (to)');
-      return;
-    }
-    const html = `
+    static async sendRejectionEmail(to, parentName, reason, token) {
+        if (!to) {
+            console.error('❌ Error: No se puede enviar email de rechazo porque no hay destinatario (to)');
+            return;
+        }
+        const html = `
       <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #1f2937;">
         <div style="background-color: #ef4444; padding: 40px; border-radius: 24px; text-align: center; color: white; margin-bottom: 30px;">
           <h1 style="margin: 0; font-size: 28px; font-weight: 800;">Acción Requerida</h1>
@@ -260,25 +235,24 @@ export class NotificationService {
         </div>
       </div>
     `;
-
-    try {
-      await transporter.sendMail({
-        from: `"Academia Neiva" <${process.env.SMTP_USER}>`,
-        to,
-        subject: 'Acción Requerida: Inconsistencias en su Matrícula',
-        html,
-      });
-    } catch (error) {
-      console.error('Error enviando email:', error);
+        try {
+            await transporter.sendMail({
+                from: `"Academia Neiva" <${process.env.SMTP_USER}>`,
+                to,
+                subject: 'Acción Requerida: Inconsistencias en su Matrícula',
+                html,
+            });
+        }
+        catch (error) {
+            console.error('Error enviando email:', error);
+        }
     }
-  }
-
-  static async sendCancellationEmail(to: string, parentName: string, motivo: string, detalles: string) {
-    if (!to) {
-      console.error('❌ Error: No se puede enviar email de cancelación porque no hay destinatario (to)');
-      return;
-    }
-    const html = `
+    static async sendCancellationEmail(to, parentName, motivo, detalles) {
+        if (!to) {
+            console.error('❌ Error: No se puede enviar email de cancelación porque no hay destinatario (to)');
+            return;
+        }
+        const html = `
       <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #1f2937;">
         <div style="background-color: #ef4444; padding: 40px; border-radius: 24px; text-align: center; color: white; margin-bottom: 30px;">
           <h1 style="margin: 0; font-size: 28px; font-weight: 800;">Matrícula Cancelada</h1>
@@ -300,18 +274,18 @@ export class NotificationService {
         </div>
       </div>
     `;
-
-    try {
-      await transporter.sendMail({
-        from: `"Academia Neiva" <${process.env.SMTP_USER}>`,
-        to,
-        subject: 'Importante: Cancelación de Matrícula - Academia Neiva',
-        html,
-      });
-      console.log(`Email de cancelación enviado con éxito a ${to}`);
-    } catch (error) {
-      console.error('Error enviando email de cancelación:', error);
+        try {
+            await transporter.sendMail({
+                from: `"Academia Neiva" <${process.env.SMTP_USER}>`,
+                to,
+                subject: 'Importante: Cancelación de Matrícula - Academia Neiva',
+                html,
+            });
+            console.log(`Email de cancelación enviado con éxito a ${to}`);
+        }
+        catch (error) {
+            console.error('Error enviando email de cancelación:', error);
+        }
     }
-  }
 }
-
+exports.NotificationService = NotificationService;

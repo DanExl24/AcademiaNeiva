@@ -3,9 +3,7 @@ import { ref } from 'vue'
 import { 
   LayoutDashboard, 
   Users, 
-  BookOpen, 
   ClipboardList, 
-  Settings, 
   LogOut,
   ChevronLeft,
   ChevronRight,
@@ -13,7 +11,10 @@ import {
   GraduationCap,
   CalendarCheck,
   Eye,
-  UserCircle
+  UserCircle,
+  Layers3,
+  LibraryBig,
+  SlidersHorizontal
 } from 'lucide-vue-next'
 import { useAuthStore } from '../stores/auth'
 import { useRouter } from 'vue-router'
@@ -41,9 +42,10 @@ const menuItems = computed(() => {
   return [
     { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
     { name: 'Gestión Matrículas', icon: ClipboardList, path: '/dashboard/gestion-matriculas' },
+    { name: 'Gestión de Grados', icon: Layers3, path: '/dashboard/gestion-grados' },
+    { name: 'Gestión de Materias', icon: LibraryBig, path: '/dashboard/gestion-materias' },
     { name: 'Docentes', icon: Users, path: '/dashboard/docentes' },
-    { name: 'Académico', icon: BookOpen, path: '/dashboard/academico' },
-    { name: 'Configuración', icon: Settings, path: '/dashboard/config' },
+    { name: 'Configuración Académica', icon: SlidersHorizontal, path: '/dashboard/configuracion-academica' },
   ]
 })
 

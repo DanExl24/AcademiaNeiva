@@ -34,7 +34,12 @@ interface Activity {
   id_actividadmateria: number
   nombre: string
   porcentaje: string | number
-  id_detallegrado: number
+  id_competencia: number
+}
+
+interface Competency {
+  id_competencia: number
+  descripcion: string
   id_periodo: number
 }
 
@@ -57,10 +62,14 @@ const selectedPeriodId = ref<number | null>(null)
 const myCourses = ref<Course[]>([])
 const periods = ref<Period[]>([])
 const activities = ref<Activity[]>([])
+const competency = ref<Competency | null>(null)
+const competencyDraft = ref('')
 const students = ref<Student[]>([])
 const gradesMatrix = ref<Record<number, Record<number, any>>>({}) 
+const gradeRange = ref({ min: 0, max: 5, approval: 3 })
 const saving = ref(false)
 const activitiesLoading = ref(false)
+const competencySaving = ref(false)
 
 // Estado de nueva actividad
 const showAddActivity = ref(false)
@@ -95,10 +104,27 @@ const fetchPeriods = async () => {
   }
 }
 
+const fetchGradeRange = async () => {
+  if (!auth.user?.schoolId) return
+  try {
+    const response = await axios.get(`http://localhost:3000/api/academic-admin/settings/${auth.user.schoolId}`)
+    if (response.data?.defaultSettings) {
+      gradeRange.value = {
+        min: Number(response.data.defaultSettings.nota_minima),
+        max: Number(response.data.defaultSettings.nota_maxima),
+        approval: Number(response.data.defaultSettings.nota_aprobacion),
+      }
+    }
+  } catch (error) {
+    console.error('Error fetching grade range:', error)
+  }
+}
+
 // Cargar notas actuales
 const fetchGrades = async () => {
   if (!selectedGradeId.value || !selectedSubjectId.value || !selectedPeriodId.value) return
   try {
+    gradesMatrix.value = {}
     const response = await axios.get(`http://localhost:3000/api/teacher/grades/${selectedGradeId.value}/${selectedSubjectId.value}/${selectedPeriodId.value}`)
     
     response.data.forEach((n: any) => {
@@ -118,10 +144,15 @@ const fetchActivities = async () => {
     const response = await axios.get(`http://localhost:3000/api/teacher/activities/${selectedGradeId.value}/${selectedSubjectId.value}/${selectedPeriodId.value}`, {
       params: { userId: auth.user?.id }
     })
-    activities.value = response.data
+    competency.value = response.data.competencia
+    competencyDraft.value = response.data.competencia?.descripcion || ''
+    activities.value = response.data.activities || []
     await fetchGrades()
   } catch (error) {
     console.error('Error fetching activities:', error)
+    competency.value = null
+    competencyDraft.value = ''
+    activities.value = []
   } finally {
     activitiesLoading.value = false
   }
@@ -184,12 +215,10 @@ const saveAllGrades = async () => {
 const addActivity = async () => {
   if (!newActivity.value.nombre || newActivity.value.porcentaje <= 0) return
   try {
-    const course = myCourses.value.find(c => c.id_grado === selectedGradeId.value && c.id_materia === selectedSubjectId.value)
-    if (!course) return
+    if (!competency.value) return
 
     const response = await axios.post('http://localhost:3000/api/teacher/activities', {
-      id_detallegrado: course.id_detallegrado,
-      id_periodo: selectedPeriodId.value,
+      id_competencia: competency.value.id_competencia,
       nombre: newActivity.value.nombre,
       porcentaje: newActivity.value.porcentaje,
       id_colegio: auth.user?.schoolId
@@ -199,6 +228,23 @@ const addActivity = async () => {
     showAddActivity.value = false
   } catch (error: any) {
     alert(error.response?.data?.error || 'Error al crear actividad')
+  }
+}
+
+const saveCompetency = async () => {
+  if (!competency.value || !competencyDraft.value.trim() || competencySaving.value) return
+
+  try {
+    competencySaving.value = true
+    const response = await axios.put(`http://localhost:3000/api/teacher/competencies/${competency.value.id_competencia}`, {
+      descripcion: competencyDraft.value
+    })
+    competency.value = response.data
+    competencyDraft.value = response.data.descripcion
+  } catch (error: any) {
+    alert(error.response?.data?.error || 'Error al guardar la competencia')
+  } finally {
+    competencySaving.value = false
   }
 }
 
@@ -252,11 +298,13 @@ const subjectsOptions = computed(() => {
 
 // Watchers
 watch([selectedGradeId, selectedSubjectId, selectedPeriodId], () => {
+  gradesMatrix.value = {}
   fetchActivities()
   if (selectedGradeId.value) fetchStudents()
 })
 
 onMounted(() => {
+  fetchGradeRange()
   fetchMyCourses()
   fetchPeriods()
 })
@@ -322,6 +370,31 @@ onMounted(() => {
     <div v-else class="grid grid-cols-1 xl:grid-cols-4 gap-8">
       <!-- Activity Management -->
       <div class="xl:col-span-1 space-y-6">
+        <div class="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-black text-slate-900">Competencia</h3>
+            <button
+              @click="saveCompetency"
+              :disabled="competencySaving || !competency"
+              class="px-4 py-2 rounded-xl bg-slate-900 text-white text-[10px] font-black uppercase tracking-wider disabled:opacity-50"
+            >
+              {{ competencySaving ? 'Guardando' : 'Guardar' }}
+            </button>
+          </div>
+
+          <textarea
+            v-model="competencyDraft"
+            rows="5"
+            :disabled="!competency"
+            placeholder="Describe qué debe aprender el estudiante en este periodo."
+            class="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-sm font-medium text-slate-700 focus:ring-2 focus:ring-pink-500 focus:border-pink-500 outline-none disabled:opacity-50"
+          />
+
+          <p class="mt-3 text-[11px] text-slate-400 font-semibold">
+            La competencia aplica a la combinación de curso, materia y periodo seleccionados.
+          </p>
+        </div>
+
         <div class="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
           <div class="flex items-center justify-between mb-6">
             <h3 class="text-lg font-black text-slate-900 flex items-center gap-2">
@@ -431,8 +504,8 @@ onMounted(() => {
                       v-model="gradesMatrix[student.id_estudiante][act.id_actividadmateria]"
                       type="number" 
                       step="0.1" 
-                      min="0" 
-                      max="5"
+                      :min="gradeRange.min" 
+                      :max="gradeRange.max"
                       placeholder="0.0"
                       class="w-16 bg-white border border-slate-200 rounded-xl p-2.5 text-center text-sm font-black text-slate-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none"
                     />

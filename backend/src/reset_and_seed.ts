@@ -1,4 +1,5 @@
 import { pool } from "./config/db";
+import { ensureCompetencySchema } from "./config/competencyMigration";
 import bcrypt from "bcrypt";
 import fs from "fs";
 import path from "path";
@@ -12,6 +13,7 @@ async function run() {
     console.log('Asegurando estructura de autenticación...');
     const authSql = fs.readFileSync(path.join(__dirname, 'config/auth.migration.sql'), 'utf8');
     await client.query(authSql);
+    await ensureCompetencySchema();
 
     console.log('Vacunando base de datos...');
     // Truncar todas las tablas relevantes (CASCADE elimina dependencias)
@@ -33,6 +35,7 @@ async function run() {
         usuario_rol,
         materias,
         detalle_grados,
+        competencias,
         periodo_academico,
         escala_valoracion,
         actividad_materia,
@@ -207,6 +210,7 @@ async function run() {
     }
 
     await client.query('COMMIT');
+    await ensureCompetencySchema();
     console.log(`Base de datos reseteada. Se crearon 5 colegios con sus respectivos Directivos y Docentes.`);
   } catch (err) {
     await client.query('ROLLBACK');
