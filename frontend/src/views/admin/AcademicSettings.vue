@@ -21,6 +21,8 @@ interface AcademicPeriod {
   nombre: string
   estado: 'ABIERTO' | 'CERRADO'
   porcentaje: number
+  trimestre: number | null
+  meses_referencia?: string | null
   id_año: number
 }
 
@@ -78,10 +80,12 @@ const yearSaving = ref(false)
 const newPeriod = ref({
   nombre: '',
   porcentaje: '',
+  trimestre: '',
 })
 
 const periodEdit = ref({
   porcentaje: '',
+  trimestre: '',
 })
 
 const defaultsForm = ref({
@@ -136,8 +140,8 @@ const loadData = async () => {
 
 const createPeriod = async () => {
   if (savingPeriod.value) return
-  if (!newPeriod.value.nombre.trim() || !newPeriod.value.porcentaje) {
-    alert('Completa nombre y porcentaje del periodo.')
+  if (!newPeriod.value.nombre.trim() || !newPeriod.value.porcentaje || !newPeriod.value.trimestre) {
+    alert('Completa nombre, porcentaje y trimestre del periodo.')
     return
   }
 
@@ -147,8 +151,9 @@ const createPeriod = async () => {
       schoolId: schoolId.value,
       nombre: newPeriod.value.nombre,
       porcentaje: Number(newPeriod.value.porcentaje),
+      trimestre: Number(newPeriod.value.trimestre),
     })
-    newPeriod.value = { nombre: '', porcentaje: '' }
+    newPeriod.value = { nombre: '', porcentaje: '', trimestre: '' }
     periodModal.value = false
     await loadData()
   } catch (error: any) {
@@ -160,8 +165,8 @@ const createPeriod = async () => {
 
 const updatePeriodPercentage = async () => {
   if (!periodEditModal.value || savingPeriod.value) return
-  if (!periodEdit.value.porcentaje) {
-    alert('Ingresa el nuevo porcentaje del periodo.')
+  if (!periodEdit.value.porcentaje || !periodEdit.value.trimestre) {
+    alert('Ingresa el nuevo porcentaje y trimestre del periodo.')
     return
   }
 
@@ -170,12 +175,13 @@ const updatePeriodPercentage = async () => {
     await axios.patch(`http://localhost:3000/api/academic-admin/settings/periods/${periodEditModal.value.id_periodo}/percentage`, {
       schoolId: schoolId.value,
       porcentaje: Number(periodEdit.value.porcentaje),
+      trimestre: Number(periodEdit.value.trimestre),
     })
     periodEditModal.value = null
-    periodEdit.value = { porcentaje: '' }
+    periodEdit.value = { porcentaje: '', trimestre: '' }
     await loadData()
   } catch (error: any) {
-    alert(error.response?.data?.error || 'No fue posible actualizar el porcentaje del periodo')
+    alert(error.response?.data?.error || 'No fue posible actualizar la configuración del periodo')
   } finally {
     savingPeriod.value = false
   }
@@ -421,7 +427,7 @@ onMounted(loadData)
                 </div>
                 <div>
                   <h2 class="text-lg font-black text-slate-900">Periodos académicos</h2>
-                  <p class="text-sm text-slate-500">La suma global de porcentajes no debe superar 100%.</p>
+                  <p class="text-sm text-slate-500">La suma global de porcentajes no debe superar 100% y cada periodo debe pertenecer a un trimestre.</p>
                 </div>
               </div>
               <button
@@ -447,13 +453,14 @@ onMounted(loadData)
             <div v-for="period in periods" :key="period.id_periodo" class="flex flex-col gap-4 px-6 py-5 md:flex-row md:items-center md:justify-between">
               <div>
                 <p class="text-base font-black text-slate-900">{{ period.nombre }}</p>
-                <p class="mt-1 text-sm font-semibold text-slate-500">Estado: {{ period.estado }} · Año: {{ period.id_año }}</p>
+                <p class="mt-1 text-sm font-semibold text-slate-500">Estado: {{ period.estado }} · Año: {{ period.id_año }} · Trimestre: {{ period.trimestre ?? 'Sin definir' }}</p>
+                <p v-if="period.meses_referencia" class="mt-1 text-xs font-semibold text-orange-600">Meses de referencia: {{ period.meses_referencia }}</p>
               </div>
               <div class="flex items-center gap-3">
                 <span class="rounded-full bg-orange-50 px-3 py-1 text-sm font-black text-orange-700">{{ Number(period.porcentaje).toFixed(2) }}%</span>
                 <button
                   type="button"
-                  @click="periodEditModal = period; periodEdit.porcentaje = String(period.porcentaje)"
+                  @click="periodEditModal = period; periodEdit.porcentaje = String(period.porcentaje); periodEdit.trimestre = period.trimestre ? String(period.trimestre) : ''"
                   class="inline-flex items-center justify-center rounded-2xl bg-slate-100 p-3 text-slate-600 transition-all hover:bg-slate-200"
                 >
                   <PenSquare class="h-4 w-4" />
@@ -615,10 +622,10 @@ onMounted(loadData)
       <div class="w-full max-w-2xl rounded-[28px] bg-white shadow-2xl">
         <div class="border-b border-slate-100 px-6 py-5 md:px-8">
           <h2 class="text-2xl font-black text-slate-900">Crear periodo académico</h2>
-          <p class="mt-2 text-sm font-semibold text-slate-500">El porcentaje agregado no puede romper el total global del año.</p>
+          <p class="mt-2 text-sm font-semibold text-slate-500">El porcentaje agregado no puede romper el total global del año y debes asignar el trimestre correspondiente.</p>
         </div>
         <div class="px-6 py-6 md:px-8 md:py-8">
-          <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+          <div class="grid grid-cols-1 gap-6 md:grid-cols-3">
             <label class="space-y-2">
               <span class="block text-sm font-black text-slate-700">Nombre del periodo</span>
               <input v-model="newPeriod.nombre" type="text" placeholder="Ej. Primer Periodo" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-semibold outline-none" />
@@ -626,6 +633,15 @@ onMounted(loadData)
             <label class="space-y-2">
               <span class="block text-sm font-black text-slate-700">Porcentaje</span>
               <input v-model="newPeriod.porcentaje" type="number" min="0" step="0.01" placeholder="Ej. 25" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-semibold outline-none" />
+            </label>
+            <label class="space-y-2">
+              <span class="block text-sm font-black text-slate-700">Trimestre</span>
+              <select v-model="newPeriod.trimestre" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-semibold outline-none">
+                <option value="">Selecciona un trimestre</option>
+                <option value="1">Trimestre 1</option>
+                <option value="2">Trimestre 2</option>
+                <option value="3">Trimestre 3</option>
+              </select>
             </label>
           </div>
           <div class="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-end">
@@ -642,19 +658,30 @@ onMounted(loadData)
     <div v-if="periodEditModal" class="fixed inset-0 z-[100] flex min-h-screen w-screen items-center justify-center bg-slate-950/88 p-4 backdrop-blur-md">
       <div class="w-full max-w-xl rounded-[28px] bg-white shadow-2xl">
         <div class="border-b border-slate-100 px-6 py-5 md:px-8">
-          <h2 class="text-2xl font-black text-slate-900">Actualizar porcentaje</h2>
+          <h2 class="text-2xl font-black text-slate-900">Actualizar periodo</h2>
           <p class="mt-2 text-sm font-semibold text-slate-500">{{ periodEditModal.nombre }}</p>
         </div>
         <div class="px-6 py-6 md:px-8 md:py-8">
-          <label class="space-y-2">
-            <span class="block text-sm font-black text-slate-700">Nuevo porcentaje</span>
-            <input v-model="periodEdit.porcentaje" type="number" min="0" step="0.01" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-semibold outline-none" />
-          </label>
+          <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+            <label class="space-y-2">
+              <span class="block text-sm font-black text-slate-700">Nuevo porcentaje</span>
+              <input v-model="periodEdit.porcentaje" type="number" min="0" step="0.01" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-semibold outline-none" />
+            </label>
+            <label class="space-y-2">
+              <span class="block text-sm font-black text-slate-700">Trimestre</span>
+              <select v-model="periodEdit.trimestre" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-semibold outline-none">
+                <option value="">Selecciona un trimestre</option>
+                <option value="1">Trimestre 1</option>
+                <option value="2">Trimestre 2</option>
+                <option value="3">Trimestre 3</option>
+              </select>
+            </label>
+          </div>
           <div class="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-end">
             <button type="button" @click="periodEditModal = null" class="rounded-2xl border border-slate-200 px-6 py-4 text-sm font-black text-slate-700">Cancelar</button>
             <button type="button" @click="updatePeriodPercentage" :disabled="savingPeriod" class="inline-flex min-h-14 items-center justify-center gap-3 rounded-2xl bg-orange-500 px-8 py-4 text-base font-black text-white shadow-sm disabled:opacity-50">
               <PenSquare class="h-4 w-4" />
-              {{ savingPeriod ? 'Guardando...' : 'Actualizar porcentaje' }}
+              {{ savingPeriod ? 'Guardando...' : 'Actualizar periodo' }}
             </button>
           </div>
         </div>

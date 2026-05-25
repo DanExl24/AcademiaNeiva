@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ensureCompetencyForContext = exports.DEFAULT_COMPETENCY_TEXT = exports.ensureCompetencySchema = void 0;
+exports.ensureCompetencyForContext = exports.harmonizeCompetenciesForSchoolYear = exports.syncCompetencyAcrossGrade = exports.DEFAULT_COMPETENCY_TEXT = exports.ensureCompetencySchema = void 0;
 const db_1 = require("./db");
 const DEFAULT_COMPETENCY_DESCRIPTION = "Competencia pendiente por definir.";
 const migrationSql = `
@@ -165,19 +165,88 @@ const ensureCompetencySchema = async () => {
 };
 exports.ensureCompetencySchema = ensureCompetencySchema;
 exports.DEFAULT_COMPETENCY_TEXT = DEFAULT_COMPETENCY_DESCRIPTION;
+const getGradePeerGroups = async (client, schoolId, groupId) => {
+    const groupRes = await client.query(`SELECT id_nivel, id_tipo_grado
+     FROM grupos
+     WHERE id_grupo = $1
+       AND id_colegio = $2`, [groupId, schoolId]);
+    if (groupRes.rows.length === 0) {
+        return [];
+    }
+    const { id_nivel, id_tipo_grado } = groupRes.rows[0];
+    const peersRes = await client.query(`SELECT id_grupo
+     FROM grupos
+     WHERE id_colegio = $1
+       AND id_nivel = $2
+       AND id_tipo_grado = $3
+     ORDER BY id_grupo`, [schoolId, id_nivel, id_tipo_grado]);
+    return peersRes.rows.map((row) => Number(row.id_grupo));
+};
+const normalizeCompetencyDescription = (value) => value.trim().replace(/\s+/g, " ");
+const syncCompetencyAcrossGrade = async (client, context, periodId, descripcion) => {
+    const peerGroups = await getGradePeerGroups(client, context.idColegio, context.idGrupo);
+    if (peerGroups.length === 0) {
+        throw new Error("No se encontraron cursos para sincronizar la competencia del grado");
+    }
+    const chosenDescription = descripcion && normalizeCompetencyDescription(descripcion)
+        ? normalizeCompetencyDescription(descripcion)
+        : null;
+    const existingRes = await client.query(`SELECT *
+     FROM competencias
+     WHERE id_colegio = $1
+       AND id_año = $2
+       AND id_materia = $3
+       AND id_periodo = $4
+       AND id_grupo = ANY($5::int[])
+     ORDER BY
+       CASE
+         WHEN UPPER(TRIM(TRAILING '.' FROM descripcion)) <> UPPER(TRIM(TRAILING '.' FROM $6)) THEN 0
+         ELSE 1
+       END,
+       id_competencia ASC`, [context.idColegio, context.idAnio, context.idMateria, periodId, peerGroups, exports.DEFAULT_COMPETENCY_TEXT]);
+    const sharedDescription = chosenDescription ??
+        existingRes.rows.find((row) => normalizeCompetencyDescription(row.descripcion).replace(/\.+$/, "").toUpperCase() !==
+            normalizeCompetencyDescription(exports.DEFAULT_COMPETENCY_TEXT).replace(/\.+$/, "").toUpperCase())?.descripcion ??
+        DEFAULT_COMPETENCY_DESCRIPTION;
+    const syncedRows = [];
+    for (const peerGroupId of peerGroups) {
+        const syncedRes = await client.query(`INSERT INTO competencias (id_año, id_grupo, id_materia, id_periodo, descripcion, id_colegio)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (id_año, id_grupo, id_materia, id_periodo, id_colegio)
+       DO UPDATE SET descripcion = EXCLUDED.descripcion
+       RETURNING *`, [context.idAnio, peerGroupId, context.idMateria, periodId, sharedDescription, context.idColegio]);
+        syncedRows.push(syncedRes.rows[0]);
+    }
+    const currentGroupRow = syncedRows.find((row) => Number(row.id_grupo) === context.idGrupo);
+    if (!currentGroupRow) {
+        throw new Error("No se pudo resolver la competencia sincronizada para el curso actual");
+    }
+    return currentGroupRow;
+};
+exports.syncCompetencyAcrossGrade = syncCompetencyAcrossGrade;
+const harmonizeCompetenciesForSchoolYear = async (client, schoolId, yearId) => {
+    const contextsRes = await client.query(`SELECT
+       MIN(c.id_grupo)::int AS id_grupo,
+       c.id_materia,
+       c.id_periodo
+     FROM competencias c
+     JOIN grupos g ON g.id_grupo = c.id_grupo
+     WHERE c.id_colegio = $1
+       AND c.id_año = $2
+     GROUP BY g.id_nivel, g.id_tipo_grado, c.id_materia, c.id_periodo
+     ORDER BY MIN(c.id_grupo), c.id_materia, c.id_periodo`, [schoolId, yearId]);
+    for (const row of contextsRes.rows) {
+        await (0, exports.syncCompetencyAcrossGrade)(client, {
+            idDetalleGrado: 0,
+            idGrupo: Number(row.id_grupo),
+            idMateria: Number(row.id_materia),
+            idColegio: schoolId,
+            idAnio: yearId,
+        }, Number(row.id_periodo));
+    }
+};
+exports.harmonizeCompetenciesForSchoolYear = harmonizeCompetenciesForSchoolYear;
 const ensureCompetencyForContext = async (client, context, periodId) => {
-    const result = await client.query(`INSERT INTO competencias (id_año, id_grupo, id_materia, id_periodo, descripcion, id_colegio)
-     VALUES ($1, $2, $3, $4, $5, $6)
-     ON CONFLICT (id_año, id_grupo, id_materia, id_periodo, id_colegio)
-     DO UPDATE SET descripcion = competencias.descripcion
-     RETURNING *`, [
-        context.idAnio,
-        context.idGrupo,
-        context.idMateria,
-        periodId,
-        DEFAULT_COMPETENCY_DESCRIPTION,
-        context.idColegio,
-    ]);
-    return result.rows[0];
+    return (0, exports.syncCompetencyAcrossGrade)(client, context, periodId);
 };
 exports.ensureCompetencyForContext = ensureCompetencyForContext;

@@ -7,6 +7,7 @@ exports.deleteSubject = exports.createSubject = exports.updateTeacherStatus = ex
 const db_1 = require("../config/db");
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const notificationService_1 = require("../services/notificationService");
+const academicCalendarDefaults_1 = require("../config/academicCalendarDefaults");
 const competencyMigration_1 = require("../config/competencyMigration");
 const parseSchoolId = (value) => {
     const parsed = Number(value);
@@ -59,6 +60,12 @@ const ensureSchoolSettingsTable = async () => {
     await db_1.pool.query(`
     ALTER TABLE configuracion_colegio
     ADD COLUMN IF NOT EXISTS escala_modo varchar(20) NOT NULL DEFAULT 'AUTOMATICO'
+  `);
+};
+const ensureAcademicPeriodTrimesterColumn = async () => {
+    await db_1.pool.query(`
+    ALTER TABLE periodo_academico
+    ADD COLUMN IF NOT EXISTS trimestre integer
   `);
 };
 const ensureSchoolDefaultSettings = async (schoolId) => {
@@ -461,7 +468,21 @@ const getAcademicSettingsData = async (req, res) => {
     }
     try {
         await (0, competencyMigration_1.ensureCompetencySchema)();
+        await ensureAcademicPeriodTrimesterColumn();
         const currentYearId = await ensureAcademicYearForSchool(schoolId);
+        const competencyClient = await db_1.pool.connect();
+        try {
+            await competencyClient.query("BEGIN");
+            await (0, competencyMigration_1.harmonizeCompetenciesForSchoolYear)(competencyClient, schoolId, currentYearId);
+            await competencyClient.query("COMMIT");
+        }
+        catch (error) {
+            await competencyClient.query("ROLLBACK");
+            throw error;
+        }
+        finally {
+            competencyClient.release();
+        }
         const [yearRes, academicYearsRes, defaultSettingsRes, periodsRes, scalesRes, assignmentsRes, competenciesRes, closureSummaryRes] = await Promise.all([
             db_1.pool.query(`SELECT "id_año", calendario
          FROM "año_lectivo"
@@ -472,7 +493,7 @@ const getAcademicSettingsData = async (req, res) => {
          WHERE id_colegio = $1
          ORDER BY "id_año" DESC`, [schoolId]),
             ensureSchoolDefaultSettings(schoolId),
-            db_1.pool.query(`SELECT id_periodo, nombre, estado, porcentaje, "id_año"
+            db_1.pool.query(`SELECT id_periodo, nombre, estado, porcentaje, trimestre, "id_año"
          FROM periodo_academico
          WHERE id_colegio = $1
          ORDER BY id_periodo`, [schoolId]),
@@ -512,6 +533,20 @@ const getAcademicSettingsData = async (req, res) => {
            c.id_materia,
            c.id_periodo,
            c.descripcion,
+           CASE
+             WHEN EXISTS (
+               SELECT 1
+               FROM competencias c2
+               JOIN grupos g2 ON g2.id_grupo = c2.id_grupo
+               WHERE c2.id_colegio = c.id_colegio
+                 AND c2.id_materia = c.id_materia
+                 AND c2.id_periodo = c.id_periodo
+                 AND g2.id_nivel = g.id_nivel
+                 AND g2.id_tipo_grado = g.id_tipo_grado
+                 AND UPPER(TRIM(TRAILING '.' FROM c2.descripcion)) <> UPPER(TRIM(TRAILING '.' FROM $2))
+             ) THEN 'DEFINIDA'
+             ELSE 'PENDIENTE'
+           END AS estado,
            m.nombre AS materia_nombre,
            p.nombre AS periodo_nombre,
            ne.nombre AS nivel_nombre,
@@ -527,7 +562,7 @@ const getAcademicSettingsData = async (req, res) => {
          JOIN secciones s ON s.id_seccion = g.id_seccion
          JOIN jornada j ON j.id_jornada = g.id_jornada
          WHERE c.id_colegio = $1
-         ORDER BY p.id_periodo, ne.nombre, tg.nombre, m.nombre`, [schoolId]),
+         ORDER BY p.id_periodo, ne.nombre, tg.nombre, m.nombre`, [schoolId, competencyMigration_1.DEFAULT_COMPETENCY_TEXT]),
             db_1.pool.query(`SELECT
            p.id_periodo,
            p.nombre,
@@ -545,11 +580,15 @@ const getAcademicSettingsData = async (req, res) => {
          GROUP BY p.id_periodo
          ORDER BY p.id_periodo`, [schoolId]),
         ]);
+        const periodsWithDefaults = periodsRes.rows.map((period, index) => ({
+            ...period,
+            meses_referencia: (0, academicCalendarDefaults_1.getDefaultMonthsLabelForPeriodOrder)(index + 1),
+        }));
         res.json({
             currentYear: yearRes.rows[0] || null,
             academicYears: academicYearsRes.rows,
             defaultSettings: defaultSettingsRes,
-            periods: periodsRes.rows,
+            periods: periodsWithDefaults,
             scales: scalesRes.rows,
             assignments: assignmentsRes.rows,
             competencies: competenciesRes.rows,
@@ -566,11 +605,19 @@ const createAcademicPeriod = async (req, res) => {
     const schoolId = parseSchoolId(req.body.schoolId);
     const nombre = String(req.body.nombre || "").trim();
     const porcentaje = Number(req.body.porcentaje);
-    if (!schoolId || !nombre || Number.isNaN(porcentaje) || porcentaje <= 0) {
-        res.status(400).json({ error: "Nombre y porcentaje del periodo son obligatorios" });
+    const trimestre = Number(req.body.trimestre);
+    if (!schoolId ||
+        !nombre ||
+        Number.isNaN(porcentaje) ||
+        porcentaje <= 0 ||
+        !Number.isInteger(trimestre) ||
+        trimestre < 1 ||
+        trimestre > 3) {
+        res.status(400).json({ error: "Nombre, porcentaje y trimestre válido del periodo son obligatorios" });
         return;
     }
     try {
+        await ensureAcademicPeriodTrimesterColumn();
         const currentYearId = await ensureAcademicYearForSchool(schoolId);
         const totalsRes = await db_1.pool.query(`SELECT COALESCE(SUM(porcentaje), 0)::numeric AS total
        FROM periodo_academico
@@ -590,9 +637,9 @@ const createAcademicPeriod = async (req, res) => {
             res.status(409).json({ error: "Ya existe un periodo académico con ese nombre" });
             return;
         }
-        const created = await db_1.pool.query(`INSERT INTO periodo_academico (nombre, estado, porcentaje, "id_año", id_colegio)
-       VALUES ($1, 'ABIERTO', $2, $3, $4)
-       RETURNING id_periodo, nombre, estado, porcentaje, "id_año"`, [nombre, porcentaje, currentYearId, schoolId]);
+        const created = await db_1.pool.query(`INSERT INTO periodo_academico (nombre, estado, porcentaje, trimestre, "id_año", id_colegio)
+       VALUES ($1, 'ABIERTO', $2, $3, $4, $5)
+       RETURNING id_periodo, nombre, estado, porcentaje, trimestre, "id_año"`, [nombre, porcentaje, trimestre, currentYearId, schoolId]);
         res.status(201).json(created.rows[0]);
     }
     catch (error) {
@@ -770,12 +817,27 @@ const upsertCompetencyByAdmin = async (req, res) => {
             res.status(404).json({ error: "Periodo académico no encontrado" });
             return;
         }
-        const created = await db_1.pool.query(`INSERT INTO competencias (id_año, id_grupo, id_materia, id_periodo, descripcion, id_colegio)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       ON CONFLICT (id_año, id_grupo, id_materia, id_periodo, id_colegio)
-       DO UPDATE SET descripcion = EXCLUDED.descripcion
-       RETURNING *`, [contextRes.rows[0]["id_año"], groupId, subjectId, periodId, descripcion, schoolId]);
-        res.json(created.rows[0]);
+        const client = await db_1.pool.connect();
+        try {
+            const context = {
+                idDetalleGrado: 0,
+                idGrupo: groupId,
+                idMateria: subjectId,
+                idColegio: schoolId,
+                idAnio: Number(contextRes.rows[0]["id_año"]),
+            };
+            await client.query("BEGIN");
+            const created = await (0, competencyMigration_1.syncCompetencyAcrossGrade)(client, context, periodId, descripcion);
+            await client.query("COMMIT");
+            res.json(created);
+        }
+        catch (error) {
+            await client.query("ROLLBACK");
+            throw error;
+        }
+        finally {
+            client.release();
+        }
     }
     catch (error) {
         console.error("Error upserting competency by admin:", error);
@@ -869,12 +931,20 @@ const updateAcademicPeriodPercentage = async (req, res) => {
     const periodId = Number(req.params.id);
     const schoolId = parseSchoolId(req.body.schoolId);
     const porcentaje = Number(req.body.porcentaje);
-    if (!periodId || !schoolId || Number.isNaN(porcentaje) || porcentaje <= 0) {
+    const trimestre = Number(req.body.trimestre);
+    if (!periodId ||
+        !schoolId ||
+        Number.isNaN(porcentaje) ||
+        porcentaje <= 0 ||
+        !Number.isInteger(trimestre) ||
+        trimestre < 1 ||
+        trimestre > 3) {
         res.status(400).json({ error: "Parámetros inválidos" });
         return;
     }
     try {
-        const periodRes = await db_1.pool.query(`SELECT id_periodo, porcentaje
+        await ensureAcademicPeriodTrimesterColumn();
+        const periodRes = await db_1.pool.query(`SELECT id_periodo, porcentaje, trimestre
        FROM periodo_academico
        WHERE id_periodo = $1
          AND id_colegio = $2`, [periodId, schoolId]);
@@ -894,10 +964,11 @@ const updateAcademicPeriodPercentage = async (req, res) => {
             return;
         }
         const updated = await db_1.pool.query(`UPDATE periodo_academico
-       SET porcentaje = $1
-       WHERE id_periodo = $2
-         AND id_colegio = $3
-       RETURNING id_periodo, nombre, estado, porcentaje, "id_año"`, [porcentaje, periodId, schoolId]);
+       SET porcentaje = $1,
+           trimestre = $2
+       WHERE id_periodo = $3
+         AND id_colegio = $4
+       RETURNING id_periodo, nombre, estado, porcentaje, trimestre, "id_año"`, [porcentaje, trimestre, periodId, schoolId]);
         res.json(updated.rows[0]);
     }
     catch (error) {

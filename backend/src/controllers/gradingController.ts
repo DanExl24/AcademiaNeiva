@@ -1,7 +1,9 @@
 import { Request, Response } from "express";
 import { pool } from "../config/db";
+import { resolveCurrentAcademicPeriodOrder } from "../config/academicCalendarDefaults";
 import {
   ensureCompetencyForContext,
+  syncCompetencyAcrossGrade,
   TeachingContext,
 } from "../config/competencyMigration";
 
@@ -15,6 +17,71 @@ const ensurePeriodOpen = async (periodId: number): Promise<boolean> => {
   );
 
   return result.rows.length > 0;
+};
+
+const getCurrentAllowedPeriodForSchool = async (schoolId: number) => {
+  const currentOrder = resolveCurrentAcademicPeriodOrder();
+  if (!currentOrder) {
+    return null;
+  }
+
+  const currentYearRes = await pool.query<{ id_año: number }>(
+    `SELECT "id_año"
+     FROM "año_lectivo"
+     WHERE id_colegio = $1
+     ORDER BY "id_año" DESC
+     LIMIT 1`,
+    [schoolId]
+  );
+
+  if (currentYearRes.rows.length === 0) {
+    return null;
+  }
+
+  const periodsRes = await pool.query<{
+    id_periodo: number;
+    nombre: string;
+    estado: "ABIERTO" | "CERRADO";
+    porcentaje: number;
+    id_año: number;
+  }>(
+    `SELECT id_periodo, nombre, estado, porcentaje, "id_año"
+     FROM periodo_academico
+     WHERE id_colegio = $1
+       AND "id_año" = $2
+     ORDER BY id_periodo`,
+    [schoolId, Number(currentYearRes.rows[0].id_año)]
+  );
+
+  return periodsRes.rows[currentOrder - 1] ?? null;
+};
+
+const ensureCurrentPeriodForSchool = async (schoolId: number, periodId: number): Promise<boolean> => {
+  const currentPeriod = await getCurrentAllowedPeriodForSchool(schoolId);
+  return Boolean(currentPeriod && Number(currentPeriod.id_periodo) === periodId);
+};
+
+const ensureCurrentPeriodOrRespond = async (
+  res: Response,
+  schoolId: number,
+  periodId: number
+): Promise<boolean> => {
+  const currentPeriod = await getCurrentAllowedPeriodForSchool(schoolId);
+
+  if (!currentPeriod) {
+    res.status(409).json({ error: "No hay un periodo académico actual configurado para este colegio" });
+    return false;
+  }
+
+  if (Number(currentPeriod.id_periodo) !== periodId) {
+    res.status(409).json({
+      error: `Solo está habilitado el periodo actual: ${currentPeriod.nombre}`,
+      currentPeriod,
+    });
+    return false;
+  }
+
+  return true;
 };
 
 const resolveTeachingContext = async (
@@ -57,11 +124,8 @@ const resolveTeachingContext = async (
 export const getPeriods = async (req: Request, res: Response): Promise<void> => {
   const { schoolId } = req.params;
   try {
-    const result = await pool.query(
-      "SELECT id_periodo, nombre, estado, porcentaje FROM periodo_academico WHERE id_colegio = $1 ORDER BY id_periodo",
-      [schoolId]
-    );
-    res.json(result.rows);
+    const currentPeriod = await getCurrentAllowedPeriodForSchool(Number(schoolId));
+    res.json(currentPeriod ? [currentPeriod] : []);
   } catch (error: any) {
     console.error("Error fetching periods:", error);
     res.status(500).json({ error: "Error en el servidor" });
@@ -76,12 +140,17 @@ export const getActivities = async (req: Request, res: Response): Promise<void> 
   const userId = req.query.userId ? Number(req.query.userId) : undefined;
 
   try {
-    const context = await resolveTeachingContext(gradeId, subjectId, periodId, userId);
-
-    if (!context) {
+    const contextPreview = await resolveTeachingContext(gradeId, subjectId, periodId, userId);
+    if (!contextPreview) {
       res.status(404).json({ error: "No se encontró la asignación académica" });
       return;
     }
+
+    if (!(await ensureCurrentPeriodOrRespond(res, contextPreview.idColegio, periodId))) {
+      return;
+    }
+
+    const context = contextPreview;
 
     const client = await pool.connect();
     try {
@@ -116,9 +185,10 @@ export const updateCompetency = async (req: Request, res: Response): Promise<voi
     return;
   }
 
+  const client = await pool.connect();
   try {
-    const periodRes = await pool.query(
-      `SELECT id_periodo
+    const periodRes = await client.query(
+      `SELECT c.id_periodo, c.id_materia, c.id_grupo, c.id_año, c.id_colegio
        FROM competencias
        WHERE id_competencia = $1`,
       [id]
@@ -129,29 +199,40 @@ export const updateCompetency = async (req: Request, res: Response): Promise<voi
       return;
     }
 
+    if (!(await ensureCurrentPeriodOrRespond(res, Number(periodRes.rows[0].id_colegio), Number(periodRes.rows[0].id_periodo)))) {
+      return;
+    }
+
     const periodOpen = await ensurePeriodOpen(Number(periodRes.rows[0].id_periodo));
     if (!periodOpen) {
       res.status(409).json({ error: "No se puede modificar la competencia porque el periodo está cerrado" });
       return;
     }
 
-    const updated = await pool.query(
-      `UPDATE competencias
-       SET descripcion = $1
-       WHERE id_competencia = $2
-       RETURNING *`,
-      [descripcion.trim(), id]
+    const context: TeachingContext = {
+      idDetalleGrado: 0,
+      idGrupo: Number(periodRes.rows[0].id_grupo),
+      idMateria: Number(periodRes.rows[0].id_materia),
+      idColegio: Number(periodRes.rows[0].id_colegio),
+      idAnio: Number(periodRes.rows[0].id_año),
+    };
+
+    await client.query("BEGIN");
+    const updated = await syncCompetencyAcrossGrade(
+      client,
+      context,
+      Number(periodRes.rows[0].id_periodo),
+      descripcion.trim()
     );
+    await client.query("COMMIT");
 
-    if (updated.rows.length === 0) {
-      res.status(404).json({ error: "Competencia no encontrada" });
-      return;
-    }
-
-    res.json(updated.rows[0]);
+    res.json(updated);
   } catch (error: any) {
+    await client.query("ROLLBACK");
     console.error("Error updating competency:", error);
     res.status(500).json({ error: "Error en el servidor" });
+  } finally {
+    client.release();
   }
 };
 
@@ -166,12 +247,16 @@ export const createActivity = async (req: Request, res: Response): Promise<void>
 
   try {
     const competencyRes = await pool.query(
-      "SELECT id_competencia, id_periodo FROM competencias WHERE id_competencia = $1",
+      "SELECT id_competencia, id_periodo, id_colegio FROM competencias WHERE id_competencia = $1",
       [id_competencia]
     );
 
     if (competencyRes.rows.length === 0) {
       res.status(404).json({ error: "Competencia no encontrada" });
+      return;
+    }
+
+    if (!(await ensureCurrentPeriodOrRespond(res, Number(competencyRes.rows[0].id_colegio), Number(competencyRes.rows[0].id_periodo)))) {
       return;
     }
 
@@ -226,6 +311,18 @@ export const updateActivity = async (req: Request, res: Response): Promise<void>
 
     if (currentActRes.rows.length === 0) {
       res.status(404).json({ error: "Actividad no encontrada" });
+      return;
+    }
+
+    const schoolRes = await pool.query(
+      `SELECT c.id_colegio
+       FROM actividad_materia a
+       JOIN competencias c ON c.id_competencia = a.id_competencia
+       WHERE a.id_actividadmateria = $1`,
+      [id]
+    );
+
+    if (!(await ensureCurrentPeriodOrRespond(res, Number(schoolRes.rows[0].id_colegio), Number(currentActRes.rows[0].id_periodo)))) {
       return;
     }
 
@@ -285,6 +382,18 @@ export const deleteActivity = async (req: Request, res: Response): Promise<void>
       return;
     }
 
+    const schoolRes = await pool.query(
+      `SELECT c.id_colegio
+       FROM actividad_materia a
+       JOIN competencias c ON c.id_competencia = a.id_competencia
+       WHERE a.id_actividadmateria = $1`,
+      [id]
+    );
+
+    if (!(await ensureCurrentPeriodOrRespond(res, Number(schoolRes.rows[0].id_colegio), Number(currentActRes.rows[0].id_periodo)))) {
+      return;
+    }
+
     const periodOpen = await ensurePeriodOpen(Number(currentActRes.rows[0].id_periodo));
     if (!periodOpen) {
       res.status(409).json({ error: "No se puede eliminar la actividad porque el periodo está cerrado" });
@@ -306,6 +415,16 @@ export const getGrades = async (req: Request, res: Response): Promise<void> => {
   const periodId = Number(req.params.periodId);
 
   try {
+    const context = await resolveTeachingContext(gradeId, subjectId, periodId);
+    if (!context) {
+      res.status(404).json({ error: "No se encontró la asignación académica" });
+      return;
+    }
+
+    if (!(await ensureCurrentPeriodOrRespond(res, context.idColegio, periodId))) {
+      return;
+    }
+
     const grades = await pool.query(
       `SELECT n.*
        FROM notas_actividad n
@@ -347,7 +466,7 @@ export const saveGrades = async (req: Request, res: Response): Promise<void> => 
     }
 
     const periodsRes = await client.query(
-      `SELECT DISTINCT c.id_periodo
+      `SELECT DISTINCT c.id_periodo, c.id_colegio
        FROM actividad_materia a
        JOIN competencias c ON c.id_competencia = a.id_competencia
        WHERE a.id_actividadmateria = ANY($1::int[])`,
@@ -355,6 +474,12 @@ export const saveGrades = async (req: Request, res: Response): Promise<void> => 
     );
 
     for (const row of periodsRes.rows) {
+      if (!(await ensureCurrentPeriodForSchool(Number(row.id_colegio), Number(row.id_periodo)))) {
+        await client.query("ROLLBACK");
+        res.status(409).json({ error: "Solo se pueden guardar notas en el periodo académico actual" });
+        return;
+      }
+
       const periodOpen = await ensurePeriodOpen(Number(row.id_periodo));
       if (!periodOpen) {
         await client.query("ROLLBACK");

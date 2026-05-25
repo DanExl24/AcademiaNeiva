@@ -1,220 +1,559 @@
-import { pool } from "./config/db";
-import { ensureCompetencySchema } from "./config/competencyMigration";
 import bcrypt from "bcrypt";
 import fs from "fs";
 import path from "path";
+import { PoolClient } from "pg";
+import { ensureCompetencySchema } from "./config/competencyMigration";
+import { pool } from "./config/db";
 
-async function run() {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
+type SchoolSeed = {
+  id: number;
+  nombre: string;
+  tipo: string;
+  sede: string;
+  contacto: number;
+  correo: string;
+  dane: string;
+  domain: string;
+};
 
-    // 1. Asegurar estructura de autenticación primero
-    console.log('Asegurando estructura de autenticación...');
-    const authSql = fs.readFileSync(path.join(__dirname, 'config/auth.migration.sql'), 'utf8');
-    await client.query(authSql);
-    await ensureCompetencySchema();
+type TeacherSeed = {
+  firstName: string;
+  lastName: string;
+  subject: string;
+};
 
-    console.log('Vacunando base de datos...');
-    // Truncar todas las tablas relevantes (CASCADE elimina dependencias)
-    await client.query(`
-      TRUNCATE 
-        matricula, 
-        documento_matriculas, 
-        estudiante, 
-        padre_familia, 
-        detalle_padrefamilia, 
-        colegio, 
-        nivel_escolar, 
-        tipo_documento, 
-        grados,
-        jornada,
-        "año_lectivo",
-        usuario,
-        rol,
-        usuario_rol,
-        materias,
-        detalle_grados,
-        competencias,
-        periodo_academico,
-        escala_valoracion,
-        actividad_materia,
-        notas_actividad
-      RESTART IDENTITY CASCADE;
-    `);
+type CredentialEntry = {
+  colegio: string;
+  rol: "DIRECTIVO" | "DOCENTE";
+  nombre: string;
+  correo: string;
+  password: string;
+  materia?: string;
+};
 
-    console.log('Insertando roles...');
-    const roles = ['admin', 'directivo', 'docente', 'estudiante', 'padre'];
-    for (const role of roles) {
-      await client.query('INSERT INTO rol (nombre) VALUES ($1) ON CONFLICT DO NOTHING', [role]);
-    }
+const DOCUMENT_TYPE_CC = 3;
+const CURRENT_YEAR = "A";
+const DIRECTIVO_PASSWORD = "directivo123";
+const DOCENTE_PASSWORD = "docente123";
+const CUPOS_POR_CURSO = 30;
 
-    console.log('Insertando colegios solicitados...');
-    const colegios = [
-      ['CEA School Empresarial de los Andes', 'Privado', 'Sede Principal', 3183118044, 'rectoria@ceaschool.edu.co', '341001005652', 'ceaschool.edu.co'],
-      ['Institución Educativa El Caguán', 'Oficial', 'Sede Principal', 3180000000, 'iecaguan@alcaldianeiva.gov.co', '441001002747', 'iecaguan.edu.co'],
-      ['Colegio Heisenberg Neiva', 'Privado', 'Sede Principal', 3169100003, 'colegioheisenberg@hotmail.com', 'DANE-H-001', 'heisenberg.edu.co'],
-      ['Colegio Claretiano de Neiva', 'Privado', 'Sede Principal', 3161720175, 'admisiones@claretianoneiva.edu.co', 'DANE-C-002', 'claretianoneiva.edu.co'],
-      ['Colegio IDESA', 'Privado', 'Sede Principal', 3153077861, 'info@colegioidesa.com.co', 'DANE-I-003', 'colegioidesa.edu.co']
-    ];
+const schools: SchoolSeed[] = [
+  {
+    id: 1,
+    nombre: "CEA School Empresarial de los Andes",
+    tipo: "Privado",
+    sede: "Sede Principal",
+    contacto: 3183118044,
+    correo: "rectoria@ceaschool.edu.co",
+    dane: "341001005652",
+    domain: "ceaschool.edu.co",
+  },
+  {
+    id: 2,
+    nombre: "Institución Educativa El Caguán",
+    tipo: "Oficial",
+    sede: "Sede Principal",
+    contacto: 3180000000,
+    correo: "iecaguan@alcaldianeiva.gov.co",
+    dane: "441001002747",
+    domain: "iecaguan.edu.co",
+  },
+  {
+    id: 3,
+    nombre: "Colegio Heisenberg Neiva",
+    tipo: "Privado",
+    sede: "Sede Principal",
+    contacto: 3169100003,
+    correo: "colegioheisenberg@hotmail.com",
+    dane: "DANE-H-001",
+    domain: "heisenberg.edu.co",
+  },
+  {
+    id: 4,
+    nombre: "Colegio Claretiano de Neiva",
+    tipo: "Privado",
+    sede: "Sede Principal",
+    contacto: 3161720175,
+    correo: "admisiones@claretianoneiva.edu.co",
+    dane: "DANE-C-002",
+    domain: "claretianoneiva.edu.co",
+  },
+  {
+    id: 5,
+    nombre: "Colegio IDESA",
+    tipo: "Privado",
+    sede: "Sede Principal",
+    contacto: 3153077861,
+    correo: "info@colegioidesa.com.co",
+    dane: "DANE-I-003",
+    domain: "colegioidesa.edu.co",
+  },
+];
 
-    for (let i = 0; i < colegios.length; i++) {
-      const [nombre, tipo, sede, contacto, correo, dane, domain] = colegios[i];
-      await client.query(
-        `INSERT INTO colegio (id_colegio, nombre, tipo_colegio, sede, contacto, correo, dane) 
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [i + 1, nombre, tipo, sede, contacto, correo, dane]
+const sectionNames = ["A", "B"];
+const jornadaNames = ["MAÑANA", "TARDE", "UNICA"];
+const periodSeeds = [
+  { nombre: "Primer Periodo", estado: "ABIERTO", porcentaje: 25 },
+  { nombre: "Segundo Periodo", estado: "CERRADO", porcentaje: 25 },
+  { nombre: "Tercer Periodo", estado: "CERRADO", porcentaje: 25 },
+  { nombre: "Cuarto Periodo", estado: "CERRADO", porcentaje: 25 },
+];
+const scaleSeeds = [
+  { nivel: "SUPERIOR", min: 4.6, max: 5.0 },
+  { nivel: "ALTO", min: 4.0, max: 4.5 },
+  { nivel: "BASICO", min: 3.0, max: 3.9 },
+  { nivel: "BAJO", min: 0.0, max: 2.9 },
+];
+const levelSeeds = [
+  { nombre: "PREESCOLAR", grades: ["PREJARDIN", "JARDIN", "TRANSICION"] },
+  { nombre: "PRIMARIA", grades: ["PRIMERO", "SEGUNDO", "TERCERO", "CUARTO", "QUINTO"] },
+  { nombre: "SECUNDARIA", grades: ["SEXTO", "SEPTIMO", "OCTAVO", "NOVENO"] },
+  { nombre: "MEDIA", grades: ["DECIMO", "ONCE"] },
+];
+const teacherSeeds: TeacherSeed[] = [
+  { firstName: "Andrea", lastName: "Rojas", subject: "Matemáticas" },
+  { firstName: "Carlos", lastName: "Mendoza", subject: "Español" },
+  { firstName: "Laura", lastName: "Pineda", subject: "Inglés" },
+  { firstName: "Julián", lastName: "Perdomo", subject: "Ciencias Naturales" },
+  { firstName: "Diana", lastName: "Trujillo", subject: "Ciencias Sociales" },
+  { firstName: "Mateo", lastName: "Luna", subject: "Educación Física" },
+  { firstName: "Paula", lastName: "Bastidas", subject: "Tecnología e Informática" },
+  { firstName: "Santiago", lastName: "Sterling", subject: "Ética y Valores" },
+];
+
+async function createSchoolConfigTable(client: PoolClient): Promise<void> {
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS configuracion_colegio (
+      id_colegio integer PRIMARY KEY REFERENCES colegio(id_colegio) ON DELETE CASCADE,
+      nota_minima numeric(5,2) NOT NULL DEFAULT 0,
+      nota_maxima numeric(5,2) NOT NULL DEFAULT 5,
+      nota_aprobacion numeric(5,2) NOT NULL DEFAULT 3,
+      escala_modo varchar(20) NOT NULL DEFAULT 'AUTOMATICO'
+    );
+  `);
+}
+
+async function truncateExistingTables(client: PoolClient, tables: string[]): Promise<void> {
+  const existing = await client.query<{ table_name: string }>(
+    `
+      SELECT table_name
+      FROM information_schema.tables
+      WHERE table_schema = 'public'
+        AND table_name = ANY($1::text[])
+    `,
+    [tables]
+  );
+
+  if (existing.rows.length === 0) {
+    return;
+  }
+
+  const quotedTables = existing.rows
+    .map(({ table_name }) => `"${table_name.replace(/"/g, "\"\"")}"`)
+    .join(", ");
+
+  await client.query(`TRUNCATE ${quotedTables} RESTART IDENTITY CASCADE;`);
+}
+
+async function insertRoles(client: PoolClient): Promise<Record<string, number>> {
+  const roleIds: Record<string, number> = {};
+
+  for (const role of ["admin", "directivo", "docente", "estudiante", "padre"]) {
+    const result = await client.query<{ id_rol: number }>(
+      `INSERT INTO rol (nombre) VALUES ($1) RETURNING id_rol`,
+      [role]
+    );
+    roleIds[role] = result.rows[0].id_rol;
+  }
+
+  return roleIds;
+}
+
+async function insertDocumentTypes(client: PoolClient): Promise<void> {
+  const documentTypes = [
+    { id: 1, tipo: "Registro Civil" },
+    { id: 2, tipo: "Tarjeta de Identidad" },
+    { id: 3, tipo: "Cédula de Ciudadanía" },
+    { id: 4, tipo: "Cédula de Extranjería" },
+    { id: 5, tipo: "PEP / PPT" },
+  ];
+
+  for (const documentType of documentTypes) {
+    await client.query(
+      `INSERT INTO tipo_documento (id_tipodocumento, tipo) VALUES ($1, $2)`,
+      [documentType.id, documentType.tipo]
+    );
+  }
+}
+
+async function insertSections(client: PoolClient): Promise<Record<string, number>> {
+  const sectionIds: Record<string, number> = {};
+
+  for (const sectionName of sectionNames) {
+    const result = await client.query<{ id_seccion: number }>(
+      `INSERT INTO secciones (nombre) VALUES ($1) RETURNING id_seccion`,
+      [sectionName]
+    );
+    sectionIds[sectionName] = result.rows[0].id_seccion;
+  }
+
+  return sectionIds;
+}
+
+async function insertSchool(
+  client: PoolClient,
+  school: SchoolSeed,
+  roleIds: Record<string, number>,
+  directivoHash: string,
+  docenteHash: string,
+  credentials: CredentialEntry[]
+): Promise<void> {
+  await client.query(
+    `
+      INSERT INTO colegio (id_colegio, nombre, tipo_colegio, sede, contacto, correo, dane)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `,
+    [school.id, school.nombre, school.tipo, school.sede, school.contacto, school.correo, school.dane]
+  );
+
+  const directivoEmail = `directivo@${school.domain}`;
+  const directivoResult = await client.query<{ id_usuario: number }>(
+    `
+      INSERT INTO usuario (email, password, nombre, apellido, id_colegio, activo)
+      VALUES ($1, $2, $3, $4, $5, true)
+      RETURNING id_usuario
+    `,
+    [directivoEmail, directivoHash, "Directivo", school.nombre, school.id]
+  );
+  const directivoUserId = directivoResult.rows[0].id_usuario;
+
+  await client.query(`INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2)`, [
+    directivoUserId,
+    roleIds.directivo,
+  ]);
+  await client.query(
+    `INSERT INTO directivo (id_colegio, id_usuario) VALUES ($1, $2)`,
+    [school.id, directivoUserId]
+  );
+
+  credentials.push({
+    colegio: school.nombre,
+    rol: "DIRECTIVO",
+    nombre: `Directivo ${school.nombre}`,
+    correo: directivoEmail,
+    password: DIRECTIVO_PASSWORD,
+  });
+
+  for (let index = 0; index < teacherSeeds.length; index++) {
+    const teacher = teacherSeeds[index];
+    const alias = teacher.subject
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-zA-Z0-9]+/g, "")
+      .toLowerCase();
+    const email = `${alias}.${school.id}@${school.domain}`;
+    const fullLastName = `${teacher.lastName} ${school.id}`;
+    const userResult = await client.query<{ id_usuario: number }>(
+      `
+        INSERT INTO usuario (email, password, nombre, apellido, id_colegio, activo)
+        VALUES ($1, $2, $3, $4, $5, true)
+        RETURNING id_usuario
+      `,
+      [email, docenteHash, teacher.firstName, fullLastName, school.id]
+    );
+
+    const teacherUserId = userResult.rows[0].id_usuario;
+    await client.query(`INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2)`, [
+      teacherUserId,
+      roleIds.docente,
+    ]);
+    await client.query(
+      `
+        INSERT INTO docente (nombre, apellido, documento, id_tipodocumento, id_colegio, id_usuario)
+        VALUES ($1, $2, $3, $4, $5, $6)
+      `,
+      [
+        teacher.firstName,
+        fullLastName,
+        `DOC-${school.id}-${String(index + 1).padStart(2, "0")}`,
+        DOCUMENT_TYPE_CC,
+        school.id,
+        teacherUserId,
+      ]
+    );
+
+    credentials.push({
+      colegio: school.nombre,
+      rol: "DOCENTE",
+      nombre: `${teacher.firstName} ${fullLastName}`,
+      correo: email,
+      password: DOCENTE_PASSWORD,
+      materia: teacher.subject,
+    });
+  }
+}
+
+async function insertSchoolAcademicStructure(
+  client: PoolClient,
+  school: SchoolSeed,
+  sectionIds: Record<string, number>
+): Promise<void> {
+  const levelIdsByName: Record<string, number> = {};
+  const subjectIdsByName: Record<string, number> = {};
+  const teacherIdsBySubject: Record<string, number> = {};
+  const groupIds: number[] = [];
+
+  const academicYearResult = await client.query<{ id_año: number }>(
+    `
+      INSERT INTO "año_lectivo" (calendario, id_colegio)
+      VALUES ($1, $2)
+      RETURNING "id_año"
+    `,
+    [CURRENT_YEAR, school.id]
+  );
+  const academicYearId = academicYearResult.rows[0].id_año;
+
+  for (const levelSeed of levelSeeds) {
+    const levelResult = await client.query<{ id_nivel: number }>(
+      `
+        INSERT INTO nivel_escolar (nombre, id_colegio)
+        VALUES ($1, $2)
+        RETURNING id_nivel
+      `,
+      [levelSeed.nombre, school.id]
+    );
+    levelIdsByName[levelSeed.nombre] = levelResult.rows[0].id_nivel;
+  }
+
+  const jornadaIds: number[] = [];
+  for (const jornadaName of jornadaNames) {
+    const result = await client.query<{ id_jornada: number }>(
+      `
+        INSERT INTO jornada (nombre, id_colegio)
+        VALUES ($1, $2)
+        RETURNING id_jornada
+      `,
+      [jornadaName, school.id]
+    );
+    jornadaIds.push(result.rows[0].id_jornada);
+  }
+
+  for (const periodSeed of periodSeeds) {
+    await client.query(
+      `
+        INSERT INTO periodo_academico (nombre, estado, porcentaje, "id_año", id_colegio)
+        VALUES ($1, $2, $3, $4, $5)
+      `,
+      [periodSeed.nombre, periodSeed.estado, periodSeed.porcentaje, academicYearId, school.id]
+    );
+  }
+
+  for (const scaleSeed of scaleSeeds) {
+    await client.query(
+      `
+        INSERT INTO escala_valoracion (nivel, valor_minimo, valor_maximo, id_colegio)
+        VALUES ($1, $2, $3, $4)
+      `,
+      [scaleSeed.nivel, scaleSeed.min, scaleSeed.max, school.id]
+    );
+  }
+
+  await client.query(
+    `
+      INSERT INTO configuracion_colegio (id_colegio, nota_minima, nota_maxima, nota_aprobacion, escala_modo)
+      VALUES ($1, 0, 5, 3, 'AUTOMATICO')
+    `,
+    [school.id]
+  );
+
+  const teachersRes = await client.query<{ id_docente: number; nombre: string; apellido: string }>(
+    `
+      SELECT id_docente, nombre, apellido
+      FROM docente
+      WHERE id_colegio = $1
+      ORDER BY id_docente
+    `,
+    [school.id]
+  );
+
+  teacherSeeds.forEach((teacher, index) => {
+    teacherIdsBySubject[teacher.subject] = teachersRes.rows[index].id_docente;
+  });
+
+  for (const teacher of teacherSeeds) {
+    const subjectResult = await client.query<{ id_materia: number }>(
+      `
+        INSERT INTO materias (nombre, id_colegio)
+        VALUES ($1, $2)
+        RETURNING id_materia
+      `,
+      [teacher.subject, school.id]
+    );
+    subjectIdsByName[teacher.subject] = subjectResult.rows[0].id_materia;
+  }
+
+  for (const levelSeed of levelSeeds) {
+    const levelId = levelIdsByName[levelSeed.nombre];
+
+    for (const gradeName of levelSeed.grades) {
+      const gradeTypeResult = await client.query<{ id_tipo_grado: number }>(
+        `
+          INSERT INTO tipo_grado (nombre, id_nivel)
+          VALUES ($1, $2)
+          RETURNING id_tipo_grado
+        `,
+        [gradeName, levelId]
       );
-    }
+      const gradeTypeId = gradeTypeResult.rows[0].id_tipo_grado;
 
-    console.log('Insertando datos base obligatorios...');
-    // Tipos de documento
-    await client.query(`
-      INSERT INTO tipo_documento (id_tipodocumento, tipo) VALUES 
-      (1, 'Registro Civil'), (2, 'Tarjeta de Identidad'), (3, 'Cédula de Ciudadanía'), (4, 'Cédula de Extranjería'), (5, 'PEP / PPT')
-    `);
+      for (const jornadaId of jornadaIds) {
+        for (const sectionName of sectionNames) {
+          const sectionId = sectionIds[sectionName];
+          const groupResult = await client.query<{ id_grupo: number }>(
+            `
+              INSERT INTO grupos (id_nivel, id_jornada, id_colegio, id_seccion, cupos_totales, id_tipo_grado)
+              VALUES ($1, $2, $3, $4, $5, $6)
+              RETURNING id_grupo
+            `,
+            [levelId, jornadaId, school.id, sectionId, CUPOS_POR_CURSO, gradeTypeId]
+          );
+          groupIds.push(groupResult.rows[0].id_grupo);
 
-    // Niveles Escolares (Asignados al primer colegio por defecto para pruebas)
-    await client.query(`
-      INSERT INTO nivel_escolar (id_nivel, nombre, id_colegio) VALUES 
-      (1, 'Primera Infancia', 1), (2, 'Primaria', 1), (3, 'Secundaria', 1), (4, 'Bachillerato', 1)
-    `);
-
-    // Insertar año lectivo actual...
-    await client.query(`
-      INSERT INTO "año_lectivo" ("id_año", calendario, id_colegio) VALUES 
-      (1, 'A', 1)
-    `);
-
-    const passwordHash = await bcrypt.hash('docente123', 10);
-    const directivoHash = await bcrypt.hash('directivo123', 10);
-
-    for (let i = 0; i < colegios.length; i++) {
-      const [nombre, tipo, sede, contacto, correo, dane, domain] = colegios[i];
-      const cId = i + 1;
-
-      // Crear Directivo de prueba para este colegio
-      const dirEmail = `directivo@${domain}`;
-      const dirUser = await client.query(
-        `INSERT INTO usuario (email, password, nombre, id_colegio) VALUES ($1, $2, $3, $4) RETURNING id_usuario`,
-        [dirEmail, directivoHash, `Directivo ${nombre}`, cId]
-      );
-      await client.query(`INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, (SELECT id_rol FROM rol WHERE nombre = 'directivo'))`, [dirUser.rows[0].id_usuario]);
-
-      // Crear Docente de prueba para este colegio
-      const docEmail = `docente@${domain}`;
-      const docUser = await client.query(
-        `INSERT INTO usuario (email, password, nombre, id_colegio) VALUES ($1, $2, $3, $4) RETURNING id_usuario`,
-        [docEmail, passwordHash, `Docente ${nombre}`, cId]
-      );
-      const idUsuarioDocente = docUser.rows[0].id_usuario;
-      await client.query(`INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, (SELECT id_rol FROM rol WHERE nombre = 'docente'))`, [idUsuarioDocente]);
-
-      // Crear registro en tabla docente y vincular con usuario
-      await client.query(
-        `INSERT INTO docente (id_docente, nombre, apellido, documento, id_tipodocumento, id_colegio, id_usuario) 
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [i + 1, `Docente`, nombre, `DOC-${i+1}`, 3, cId, idUsuarioDocente]
-      );
-    }
-
-    // Jornadas para todos los colegios
-    for (let cId = 1; cId <= 5; cId++) {
-      await client.query(`
-        INSERT INTO jornada (id_jornada, nombre, id_colegio) VALUES 
-        ($1, 'MAÑANA', $4), ($2, 'TARDE', $4), ($3, 'UNICA', $4)
-      `, [(cId-1)*3 + 1, (cId-1)*3 + 2, (cId-1)*3 + 3, cId]);
-
-      // Insertar Periodos Académicos
-      await client.query(`
-        INSERT INTO periodo_academico (id_periodo, nombre, estado, porcentaje, "id_año", id_colegio) VALUES
-        ($1, 'Primer Periodo', 'ABIERTO', 25, 1, $5),
-        ($2, 'Segundo Periodo', 'CERRADO', 25, 1, $5),
-        ($3, 'Tercer Periodo', 'CERRADO', 25, 1, $5),
-        ($4, 'Cuarto Periodo', 'CERRADO', 25, 1, $5)
-      `, [(cId-1)*4 + 1, (cId-1)*4 + 2, (cId-1)*4 + 3, (cId-1)*4 + 4, cId]);
-
-      // Insertar Escala de Valoración Nacional (0.0 a 5.0)
-      await client.query(`
-        INSERT INTO escala_valoracion (id_escalavaloracion, nivel, valor_minimo, valor_maximo, id_colegio) VALUES
-        ($1, 'SUPERIOR', 4.6, 5.0, $5),
-        ($2, 'ALTO', 4.0, 4.5, $5),
-        ($3, 'BASICO', 3.0, 3.9, $5),
-        ($4, 'BAJO', 0.0, 2.9, $5)
-      `, [(cId-1)*4 + 1, (cId-1)*4 + 2, (cId-1)*4 + 3, (cId-1)*4 + 4, cId]);
-    }
-
-    console.log('Actualizando esquema de grados...');
-    await client.query(`
-      ALTER TABLE grados ADD COLUMN IF NOT EXISTS seccion VARCHAR(10) DEFAULT 'A';
-    `);
-
-    // Grados automáticos para todos los colegios y jornadas
-    const nivelesMap = [
-      { level: 'PREESCOLAR', grades: ['PREJARDIN', 'JARDIN', 'TRANSICION'] },
-      { level: 'PRIMARIA', grades: ['PRIMERO', 'SEGUNDO', 'TERCERO', 'CUARTO', 'QUINTO'] },
-      { level: 'SECUNDARIA', grades: ['SEXTO', 'SEPTIMO', 'OCTAVO', 'NOVENO'] },
-      { level: 'MEDIA', grades: ['DECIMO', 'ONCE'] }
-    ];
-
-    console.log('Generando estructura académica completa (Grados con Secciones A y B)...');
-    let gradoId = 1;
-    let gradosList = [];
-    for (let cId = 1; cId <= 5; cId++) {
-      for (let jIdx = 0; jIdx < 3; jIdx++) {
-        const idJornada = (cId - 1) * 3 + (jIdx + 1);
-        for (const nivel of nivelesMap) {
-          for (const gType of nivel.grades) {
-            for (const seccion of ['A', 'B']) {
-              await client.query(
-                `INSERT INTO grados (id_grado, nivel, tipo_grado, id_jornada, id_colegio, cupos_totales, seccion) 
-                 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-                [gradoId, nivel.level, gType, idJornada, cId, 30, seccion]
-              );
-              gradosList.push({ id: gradoId, cId });
-              gradoId++;
-            }
-          }
-        }
-      }
-    }
-
-    console.log('Insertando materias y asignaciones...');
-    const materiasNombres = ['Matemáticas', 'Español', 'Inglés', 'Ciencias Naturales', 'Ciencias Sociales', 'Educación Física'];
-    let materiaId = 1;
-    let detalleGradoId = 1;
-
-    for (let cId = 1; cId <= 5; cId++) {
-      // 1. Crear materias para este colegio
-      for (const mNombre of materiasNombres) {
-        await client.query(
-          `INSERT INTO materias (id_materia, nombre, id_colegio) VALUES ($1, $2, $3)`,
-          [materiaId, mNombre, cId]
-        );
-
-        // 2. Asignar esta materia a algunos grados del colegio para el docente de prueba
-        // Buscamos el docente de este colegio (creado previamente con id_docente = cId)
-        const idDocente = cId;
-        
-        // Asignar a los primeros 3 grados encontrados para este colegio
-        const gradosColegio = gradosList.filter(g => g.cId === cId).slice(0, 3);
-        for (const g of gradosColegio) {
           await client.query(
-            `INSERT INTO detalle_grados (id_detallegrado, id_grado, id_materia, id_docente, id_colegio) 
-             VALUES ($1, $2, $3, $4, $5)`,
-            [detalleGradoId++, g.id, materiaId, idDocente, cId]
+            `
+              INSERT INTO grados (nivel, tipo_grado, id_jornada, id_colegio, cupos_totales, seccion)
+              VALUES ($1, $2, $3, $4, $5, $6)
+            `,
+            [levelSeed.nombre, gradeName, jornadaId, school.id, CUPOS_POR_CURSO, sectionName]
           );
         }
-        materiaId++;
       }
     }
+  }
 
-    await client.query('COMMIT');
+  for (const groupId of groupIds) {
+    for (const teacher of teacherSeeds) {
+      await client.query(
+        `
+          INSERT INTO detalle_grados (id_materia, id_docente, id_colegio, id_grupo)
+          VALUES ($1, $2, $3, $4)
+        `,
+        [subjectIdsByName[teacher.subject], teacherIdsBySubject[teacher.subject], school.id, groupId]
+      );
+    }
+  }
+}
+
+function writeCredentialsFile(credentials: CredentialEntry[]): string {
+  const outputDir = path.resolve(process.cwd(), "backend", "generated");
+  const outputFile = path.join(outputDir, "seed-credentials.md");
+
+  fs.mkdirSync(outputDir, { recursive: true });
+
+  const generatedAt = new Date().toISOString();
+  const lines: string[] = [
+    "# Credenciales generadas por reset_and_seed.ts",
+    "",
+    `Fecha de generación: ${generatedAt}`,
+    "",
+    "Este archivo se regenera cada vez que ejecutes el seed de reseteo.",
+    "",
+  ];
+
+  for (const school of schools) {
+    lines.push(`## ${school.nombre}`);
+    lines.push("");
+    lines.push("| Rol | Nombre | Correo | Contraseña | Materia |");
+    lines.push("| --- | --- | --- | --- | --- |");
+
+    const schoolCredentials = credentials.filter((entry) => entry.colegio === school.nombre);
+    for (const credential of schoolCredentials) {
+      lines.push(
+        `| ${credential.rol} | ${credential.nombre} | ${credential.correo} | ${credential.password} | ${credential.materia ?? "-"} |`
+      );
+    }
+
+    lines.push("");
+  }
+
+  fs.writeFileSync(outputFile, `${lines.join("\n")}\n`, "utf8");
+  return outputFile;
+}
+
+async function run(): Promise<void> {
+  const client = await pool.connect();
+  const credentials: CredentialEntry[] = [];
+
+  try {
+    await client.query("BEGIN");
+
+    console.log("Asegurando estructura base...");
+    const authSql = fs.readFileSync(path.join(__dirname, "config/auth.migration.sql"), "utf8");
+    await client.query(authSql);
+    await createSchoolConfigTable(client);
+    await client.query(`ALTER TABLE grados ADD COLUMN IF NOT EXISTS seccion VARCHAR(10) DEFAULT 'A';`);
+
+    console.log("Reseteando tablas existentes...");
+    await truncateExistingTables(client, [
+      "actividad_materia",
+      "competencias",
+      "configuracion_colegio",
+      "contrato_docente",
+      "detalle_grados",
+      "detalle_padrefamilia",
+      "directivo",
+      "documento_matriculas",
+      "docente",
+      "escala_valoracion",
+      "estudiante",
+      "grados",
+      "grupos",
+      "jornada",
+      "materias",
+      "matricula",
+      "nivel_escolar",
+      "notas_actividad",
+      "padre_familia",
+      "periodo_academico",
+      "rol",
+      "secciones",
+      "tipo_documento",
+      "tipo_grado",
+      "usuario",
+      "usuario_rol",
+      "año_lectivo",
+      "colegio",
+    ]);
+
+    console.log("Insertando catálogos base...");
+    const roleIds = await insertRoles(client);
+    await insertDocumentTypes(client);
+    const sectionIds = await insertSections(client);
+
+    const directivoHash = await bcrypt.hash(DIRECTIVO_PASSWORD, 10);
+    const docenteHash = await bcrypt.hash(DOCENTE_PASSWORD, 10);
+
+    for (const school of schools) {
+      console.log(`Creando usuarios base para ${school.nombre}...`);
+      await insertSchool(client, school, roleIds, directivoHash, docenteHash, credentials);
+    }
+
+    for (const school of schools) {
+      console.log(`Creando estructura académica para ${school.nombre}...`);
+      await insertSchoolAcademicStructure(client, school, sectionIds);
+    }
+
+    await client.query("COMMIT");
+
     await ensureCompetencySchema();
-    console.log(`Base de datos reseteada. Se crearon 5 colegios con sus respectivos Directivos y Docentes.`);
-  } catch (err) {
-    await client.query('ROLLBACK');
-    console.error('Error durante el reseteo:', err);
+    const credentialsPath = writeCredentialsFile(credentials);
+
+    console.log(`Base de datos reseteada correctamente para ${schools.length} colegios.`);
+    console.log(`Credenciales guardadas en: ${credentialsPath}`);
+  } catch (error) {
+    await client.query("ROLLBACK");
+    console.error("Error durante el reseteo de la base de datos:", error);
+    process.exitCode = 1;
   } finally {
     client.release();
     await pool.end();

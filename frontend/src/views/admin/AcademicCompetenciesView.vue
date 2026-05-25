@@ -29,6 +29,7 @@ interface CompetencyItem {
   id_materia: number
   id_periodo: number
   descripcion: string
+  estado: 'PENDIENTE' | 'DEFINIDA'
   materia_nombre: string
   periodo_nombre: string
   nivel_nombre: string
@@ -51,15 +52,13 @@ const competencies = ref<CompetencyItem[]>([])
 const search = ref('')
 const selectedPeriod = ref('')
 const selectedGrade = ref('')
-const selectedCourse = ref('')
 const selectedSubject = ref('')
+const selectedStatus = ref('')
 
 const competencyForm = ref({
   id_periodo: '',
   gradeKey: '',
-  courseKey: '',
   subjectKey: '',
-  applyToWholeGrade: false,
   descripcion: '',
 })
 
@@ -90,52 +89,16 @@ const assignmentChoices = computed(() =>
   }))
 )
 
-const courseChoices = computed(() => {
-  const map = new Map<string, { key: string; gradeKey: string; label: string }>()
-
-  for (const item of assignmentChoices.value) {
-    if (selectedGrade.value && item.gradeKey !== selectedGrade.value) continue
-
-    if (!map.has(item.courseKey)) {
-      map.set(item.courseKey, {
-        key: item.courseKey,
-        gradeKey: item.gradeKey,
-        label: `${item.tipo_grado_nombre} ${item.seccion_nombre} · ${item.jornada_nombre}`,
-      })
-    }
-  }
-
-  return Array.from(map.values())
-})
-
 const subjectChoices = computed(() => {
   const map = new Map<string, { key: string; label: string }>()
 
   for (const item of assignmentChoices.value) {
     if (selectedGrade.value && item.gradeKey !== selectedGrade.value) continue
-    if (selectedCourse.value && item.courseKey !== selectedCourse.value) continue
 
     if (!map.has(item.subjectKey)) {
       map.set(item.subjectKey, {
         key: item.subjectKey,
         label: item.materia_nombre,
-      })
-    }
-  }
-
-  return Array.from(map.values())
-})
-
-const formCourseChoices = computed(() => {
-  const map = new Map<string, { key: string; label: string }>()
-
-  for (const item of assignmentChoices.value) {
-    if (competencyForm.value.gradeKey && item.gradeKey !== competencyForm.value.gradeKey) continue
-
-    if (!map.has(item.courseKey)) {
-      map.set(item.courseKey, {
-        key: item.courseKey,
-        label: `${item.tipo_grado_nombre} ${item.seccion_nombre} · ${item.jornada_nombre}`,
       })
     }
   }
@@ -148,7 +111,6 @@ const formSubjectChoices = computed(() => {
 
   for (const item of assignmentChoices.value) {
     if (competencyForm.value.gradeKey && item.gradeKey !== competencyForm.value.gradeKey) continue
-    if (competencyForm.value.courseKey && item.courseKey !== competencyForm.value.courseKey) continue
 
     if (!map.has(item.subjectKey)) {
       map.set(item.subjectKey, {
@@ -161,27 +123,29 @@ const formSubjectChoices = computed(() => {
   return Array.from(map.values())
 })
 
-const bulkTargetCount = computed(() => {
-  if (!competencyForm.value.gradeKey || !competencyForm.value.subjectKey) return 0
+const gradeScopedCompetencies = computed(() => {
+  const unique = new Map<string, CompetencyItem>()
 
-  return assignmentChoices.value.filter(
-    (item) =>
-      item.gradeKey === competencyForm.value.gradeKey &&
-      item.subjectKey === competencyForm.value.subjectKey
-  ).length
+  for (const item of competencies.value) {
+    const key = `${item.nivel_nombre}:${item.tipo_grado_nombre}:${item.id_materia}:${item.id_periodo}`
+    if (!unique.has(key)) {
+      unique.set(key, item)
+    }
+  }
+
+  return Array.from(unique.values())
 })
 
 const filteredCompetencies = computed(() => {
   const term = search.value.trim().toLowerCase()
 
-  return competencies.value.filter((item) => {
+  return gradeScopedCompetencies.value.filter((item) => {
     const gradeKey = `${item.nivel_nombre}:${item.tipo_grado_nombre}`
-    const courseKey = String(item.id_grupo)
     const subjectKey = String(item.id_materia)
     const matchesPeriod = !selectedPeriod.value || String(item.id_periodo) === selectedPeriod.value
     const matchesGrade = !selectedGrade.value || gradeKey === selectedGrade.value
-    const matchesCourse = !selectedCourse.value || courseKey === selectedCourse.value
     const matchesSubject = !selectedSubject.value || subjectKey === selectedSubject.value
+    const matchesStatus = !selectedStatus.value || item.estado === selectedStatus.value
     const matchesSearch =
       !term ||
       item.materia_nombre.toLowerCase().includes(term) ||
@@ -191,18 +155,22 @@ const filteredCompetencies = computed(() => {
       item.jornada_nombre.toLowerCase().includes(term) ||
       item.periodo_nombre.toLowerCase().includes(term)
 
-    return matchesPeriod && matchesGrade && matchesCourse && matchesSubject && matchesSearch
+    return matchesPeriod && matchesGrade && matchesSubject && matchesStatus && matchesSearch
   })
 })
 
 const competencyStats = computed(() => {
-  const uniqueSubjects = new Set(competencies.value.map((item) => item.id_materia)).size
-  const uniqueContexts = new Set(competencies.value.map((item) => `${item.id_grupo}:${item.id_materia}:${item.id_periodo}`)).size
+  const uniqueSubjects = new Set(gradeScopedCompetencies.value.map((item) => item.id_materia)).size
+  const uniqueContexts = new Set(gradeScopedCompetencies.value.map((item) => `${item.nivel_nombre}:${item.tipo_grado_nombre}:${item.id_materia}:${item.id_periodo}`)).size
+  const pending = gradeScopedCompetencies.value.filter((item) => item.estado === 'PENDIENTE').length
+  const defined = gradeScopedCompetencies.value.filter((item) => item.estado === 'DEFINIDA').length
 
   return {
-    total: competencies.value.length,
+    total: gradeScopedCompetencies.value.length,
     subjects: uniqueSubjects,
     contexts: uniqueContexts,
+    pending,
+    defined,
   }
 })
 
@@ -226,9 +194,7 @@ const resetForm = () => {
   competencyForm.value = {
     id_periodo: '',
     gradeKey: '',
-    courseKey: '',
     subjectKey: '',
-    applyToWholeGrade: false,
     descripcion: '',
   }
 }
@@ -242,9 +208,7 @@ const openEditModal = (item: CompetencyItem) => {
   competencyForm.value = {
     id_periodo: String(item.id_periodo),
     gradeKey: `${item.nivel_nombre}:${item.tipo_grado_nombre}`,
-    courseKey: String(item.id_grupo),
     subjectKey: String(item.id_materia),
-    applyToWholeGrade: false,
     descripcion: item.descripcion,
   }
   competencyModal.value = true
@@ -259,32 +223,24 @@ const saveCompetency = async () => {
   const targets = assignmentChoices.value.filter((item) => {
     if (item.gradeKey !== competencyForm.value.gradeKey) return false
     if (item.subjectKey !== competencyForm.value.subjectKey) return false
-    if (competencyForm.value.applyToWholeGrade) return true
-    return item.courseKey === competencyForm.value.courseKey
+    return true
   })
 
   if (!targets.length) {
-    alert(
-      competencyForm.value.applyToWholeGrade
-        ? 'No hay cursos disponibles para esa materia dentro del grado seleccionado.'
-        : 'Selecciona un curso válido para asignar la competencia.'
-    )
+    alert('No hay cursos disponibles para esa materia dentro del grado seleccionado.')
     return
   }
 
   try {
     saving.value = true
-    await Promise.all(
-      targets.map((assignment) =>
-        axios.post('http://localhost:3000/api/academic-admin/settings/competencies', {
-          schoolId: schoolId.value,
-          id_grupo: assignment.id_grupo,
-          id_materia: assignment.id_materia,
-          id_periodo: Number(competencyForm.value.id_periodo),
-          descripcion: competencyForm.value.descripcion.trim(),
-        })
-      )
-    )
+    const assignment = targets[0]
+    await axios.post('http://localhost:3000/api/academic-admin/settings/competencies', {
+      schoolId: schoolId.value,
+      id_grupo: assignment.id_grupo,
+      id_materia: assignment.id_materia,
+      id_periodo: Number(competencyForm.value.id_periodo),
+      descripcion: competencyForm.value.descripcion.trim(),
+    })
     competencyModal.value = false
     resetForm()
     await loadData()
@@ -296,28 +252,11 @@ const saveCompetency = async () => {
 }
 
 const handleGradeFilterChange = () => {
-  selectedCourse.value = ''
-  selectedSubject.value = ''
-}
-
-const handleCourseFilterChange = () => {
   selectedSubject.value = ''
 }
 
 const handleFormGradeChange = () => {
-  competencyForm.value.courseKey = ''
   competencyForm.value.subjectKey = ''
-  competencyForm.value.applyToWholeGrade = false
-}
-
-const handleFormCourseChange = () => {
-  competencyForm.value.subjectKey = ''
-}
-
-const handleFormScopeChange = () => {
-  if (competencyForm.value.applyToWholeGrade) {
-    competencyForm.value.courseKey = ''
-  }
 }
 
 onMounted(loadData)
@@ -351,7 +290,7 @@ onMounted(loadData)
         </button>
       </div>
 
-      <div class="mt-8 grid grid-cols-1 gap-4 md:grid-cols-3">
+      <div class="mt-8 grid grid-cols-1 gap-4 md:grid-cols-5">
         <div class="rounded-3xl border border-white/10 bg-white/10 p-5 backdrop-blur-sm">
           <p class="text-sm font-bold text-emerald-50/80">Competencias registradas</p>
           <p class="mt-3 text-3xl font-black">{{ competencyStats.total }}</p>
@@ -363,6 +302,14 @@ onMounted(loadData)
         <div class="rounded-3xl border border-white/10 bg-white/10 p-5 backdrop-blur-sm">
           <p class="text-sm font-bold text-emerald-50/80">Contextos configurados</p>
           <p class="mt-3 text-3xl font-black">{{ competencyStats.contexts }}</p>
+        </div>
+        <div class="rounded-3xl border border-white/10 bg-white/10 p-5 backdrop-blur-sm">
+          <p class="text-sm font-bold text-emerald-50/80">Pendientes</p>
+          <p class="mt-3 text-3xl font-black">{{ competencyStats.pending }}</p>
+        </div>
+        <div class="rounded-3xl border border-white/10 bg-white/10 p-5 backdrop-blur-sm">
+          <p class="text-sm font-bold text-emerald-50/80">Definidas</p>
+          <p class="mt-3 text-3xl font-black">{{ competencyStats.defined }}</p>
         </div>
       </div>
     </div>
@@ -396,21 +343,20 @@ onMounted(loadData)
               </select>
             </label>
             <label class="space-y-2">
-              <span class="text-sm font-black text-slate-700">Curso</span>
-              <select v-model="selectedCourse" @change="handleCourseFilterChange" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-3 font-semibold text-slate-700 outline-none">
-                <option value="">Todos los cursos</option>
-                <option v-for="item in courseChoices" :key="item.key" :value="item.key">
-                  {{ item.label }}
-                </option>
-              </select>
-            </label>
-            <label class="space-y-2">
               <span class="text-sm font-black text-slate-700">Materia</span>
               <select v-model="selectedSubject" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-3 font-semibold text-slate-700 outline-none">
                 <option value="">Todas las materias</option>
                 <option v-for="item in subjectChoices" :key="item.key" :value="item.key">
                   {{ item.label }}
                 </option>
+              </select>
+            </label>
+            <label class="space-y-2">
+              <span class="text-sm font-black text-slate-700">Estado</span>
+              <select v-model="selectedStatus" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-3 font-semibold text-slate-700 outline-none">
+                <option value="">Todos los estados</option>
+                <option value="PENDIENTE">Pendiente</option>
+                <option value="DEFINIDA">Definida</option>
               </select>
             </label>
             <label class="space-y-2">
@@ -464,15 +410,21 @@ onMounted(loadData)
                   <span class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black uppercase tracking-[0.18em] text-emerald-700">
                     {{ item.periodo_nombre }}
                   </span>
-                  <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">
-                    {{ item.tipo_grado_nombre }} {{ item.seccion_nombre }}
+                  <span
+                    :class="item.estado === 'DEFINIDA' ? 'bg-blue-50 text-blue-700' : 'bg-amber-50 text-amber-700'"
+                    class="rounded-full px-3 py-1 text-xs font-black uppercase tracking-[0.18em]"
+                  >
+                    {{ item.estado === 'DEFINIDA' ? 'Definida' : 'Pendiente' }}
                   </span>
                   <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">
-                    {{ item.jornada_nombre }}
+                    {{ item.tipo_grado_nombre }}
+                  </span>
+                  <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">
+                    {{ item.nivel_nombre }}
                   </span>
                 </div>
                 <h3 class="mt-4 text-xl font-black text-slate-900">{{ item.materia_nombre }}</h3>
-                <p class="mt-2 text-sm font-semibold text-slate-500">La competencia asignada a esta materia será la base operativa para el docente.</p>
+                <p class="mt-2 text-sm font-semibold text-slate-500">La competencia asignada a esta materia será la base operativa para todos los cursos de este grado durante el periodo.</p>
               </div>
 
               <button
@@ -497,20 +449,14 @@ onMounted(loadData)
       <div class="w-full max-w-3xl rounded-[28px] bg-white shadow-2xl">
         <div class="border-b border-slate-100 px-6 py-5 md:px-8">
           <h2 class="text-2xl font-black text-slate-900">Asignar competencia a materia</h2>
-          <p class="mt-2 text-sm font-semibold text-slate-500">Puedes asignarla a un curso puntual o replicarla de forma masiva en todos los cursos del mismo grado.</p>
+          <p class="mt-2 text-sm font-semibold text-slate-500">La competencia se define por grado, materia y periodo, y se aplica automáticamente a todos los cursos de ese grado.</p>
         </div>
         <div class="px-6 py-6 md:px-8 md:py-8">
           <div class="mb-6 rounded-3xl border border-emerald-100 bg-emerald-50 p-5">
-            <p class="text-sm font-black text-emerald-800">Modo de asignación</p>
-            <label class="mt-4 flex items-start gap-3">
-              <input v-model="competencyForm.applyToWholeGrade" @change="handleFormScopeChange" type="checkbox" class="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" />
-              <span class="text-sm font-semibold leading-6 text-emerald-900">
-                Aplicar esta misma competencia a todos los cursos del grado seleccionado para la materia elegida.
-                <span v-if="competencyForm.gradeKey && competencyForm.subjectKey" class="block text-emerald-700">
-                  Cursos impactados: {{ bulkTargetCount }}
-                </span>
-              </span>
-            </label>
+            <p class="text-sm font-black text-emerald-800">Regla aplicada</p>
+            <p class="mt-4 text-sm font-semibold leading-6 text-emerald-900">
+              No se permiten competencias distintas entre cursos del mismo grado para una misma materia y un mismo periodo.
+            </p>
           </div>
 
           <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
@@ -523,16 +469,7 @@ onMounted(loadData)
                 </option>
               </select>
             </label>
-            <label v-if="!competencyForm.applyToWholeGrade" class="space-y-2">
-              <span class="block text-sm font-black text-slate-700">Curso</span>
-              <select v-model="competencyForm.courseKey" @change="handleFormCourseChange" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-semibold outline-none">
-                <option value="">Selecciona un curso</option>
-                <option v-for="item in formCourseChoices" :key="item.key" :value="item.key">
-                  {{ item.label }}
-                </option>
-              </select>
-            </label>
-            <div v-else class="space-y-2">
+            <div class="space-y-2">
               <span class="block text-sm font-black text-slate-700">Cobertura</span>
               <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm font-semibold text-slate-700">
                 Se aplicará a todos los cursos disponibles del grado seleccionado.

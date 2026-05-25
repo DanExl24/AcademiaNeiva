@@ -339,10 +339,11 @@ onMounted(() => {
 
           <div class="space-y-2">
             <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-2">Periodo</label>
-            <select v-model="selectedPeriodId" class="w-full bg-slate-50 border-slate-200 rounded-2xl p-4 text-sm font-semibold focus:ring-2 focus:ring-pink-500 transition-all outline-none">
+            <select v-model="selectedPeriodId" disabled class="w-full bg-slate-50 border-slate-200 rounded-2xl p-4 text-sm font-semibold focus:ring-2 focus:ring-pink-500 transition-all outline-none disabled:opacity-70 disabled:cursor-not-allowed">
               <option :value="null">Selecciona Periodo</option>
               <option v-for="p in periods" :key="p.id_periodo" :value="p.id_periodo">{{ p.nombre }}</option>
             </select>
+            <p class="text-[11px] font-semibold text-slate-400">El sistema solo habilita el periodo académico actual para docentes.</p>
           </div>
         </div>
       </div>
