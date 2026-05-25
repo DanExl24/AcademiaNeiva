@@ -25,6 +25,9 @@ import {
   updateSchoolDefaultSettings,
   updateScale,
   updateTeacherStatus,
+  createEvidencia,
+  updateEvidencia,
+  deleteEvidencia,
 } from "../controllers/academicAdminController";
 
 const router = Router();
@@ -54,5 +57,10 @@ router.post("/settings/periods/:id/close", closeAcademicPeriod);
 router.post("/settings/scales", createScale);
 router.put("/settings/scales/:id", updateScale);
 router.delete("/settings/scales/:id", deleteScale);
+
+// Evidencias de aprendizaje
+router.post("/settings/competencies/:competenciaId/evidencias", createEvidencia);
+router.put("/settings/evidencias/:evidenciaId", updateEvidencia);
+router.delete("/settings/evidencias/:evidenciaId", deleteEvidencia);
 
 export default router;

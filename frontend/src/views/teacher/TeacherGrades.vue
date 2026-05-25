@@ -9,7 +9,8 @@ import {
   CheckCircle2,
   Settings,
   Users,
-  Loader2
+  Loader2,
+  BookOpen
 } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 import axios from 'axios'
@@ -30,17 +31,33 @@ interface Period {
   porcentaje: number
 }
 
+interface Criterion {
+  id_criterio: number
+  id_actividadmateria: number
+  id_evidencia: number | null
+  descripcion: string
+  porcentaje: number | string
+}
+
 interface Activity {
   id_actividadmateria: number
   nombre: string
   porcentaje: string | number
   id_competencia: number
+  id_evidencia: number | null
+  criterios?: Criterion[]
 }
 
 interface Competency {
   id_competencia: number
   descripcion: string
   id_periodo: number
+}
+
+interface Evidencia {
+  id_evidencia: number
+  descripcion: string
+  orden: number
 }
 
 interface Student {
@@ -64,8 +81,10 @@ const periods = ref<Period[]>([])
 const activities = ref<Activity[]>([])
 const competency = ref<Competency | null>(null)
 const competencyDraft = ref('')
+const evidencias = ref<Evidencia[]>([])
 const students = ref<Student[]>([])
 const gradesMatrix = ref<Record<number, Record<number, any>>>({}) 
+const criteriaGradesMatrix = ref<Record<number, Record<number, any>>>({})
 const gradeRange = ref({ min: 0, max: 5, approval: 3 })
 const saving = ref(false)
 const activitiesLoading = ref(false)
@@ -75,7 +94,8 @@ const competencySaving = ref(false)
 const showAddActivity = ref(false)
 const newActivity = ref({
   nombre: '',
-  porcentaje: 0
+  porcentaje: 0,
+  id_evidencia: null as number | null
 })
 
 // Cargar cursos asignados
@@ -125,11 +145,17 @@ const fetchGrades = async () => {
   if (!selectedGradeId.value || !selectedSubjectId.value || !selectedPeriodId.value) return
   try {
     gradesMatrix.value = {}
+    criteriaGradesMatrix.value = {}
     const response = await axios.get(`http://localhost:3000/api/teacher/grades/${selectedGradeId.value}/${selectedSubjectId.value}/${selectedPeriodId.value}`)
     
-    response.data.forEach((n: any) => {
+    response.data.activityGrades.forEach((n: any) => {
       if (!gradesMatrix.value[n.id_estudiante]) gradesMatrix.value[n.id_estudiante] = {}
       gradesMatrix.value[n.id_estudiante][n.id_actividadmateria] = n.nota
+    })
+
+    response.data.criteriaGrades.forEach((n: any) => {
+      if (!criteriaGradesMatrix.value[n.id_estudiante]) criteriaGradesMatrix.value[n.id_estudiante] = {}
+      criteriaGradesMatrix.value[n.id_estudiante][n.id_criterio] = n.nota
     })
   } catch (error) {
     console.error('Error fetching grades:', error)
@@ -146,12 +172,14 @@ const fetchActivities = async () => {
     })
     competency.value = response.data.competencia
     competencyDraft.value = response.data.competencia?.descripcion || ''
+    evidencias.value = response.data.evidencias || []
     activities.value = response.data.activities || []
     await fetchGrades()
   } catch (error) {
     console.error('Error fetching activities:', error)
     competency.value = null
     competencyDraft.value = ''
+    evidencias.value = []
     activities.value = []
   } finally {
     activitiesLoading.value = false
@@ -169,6 +197,9 @@ const fetchStudents = async () => {
       if (!gradesMatrix.value[s.id_estudiante]) {
         gradesMatrix.value[s.id_estudiante] = {}
       }
+      if (!criteriaGradesMatrix.value[s.id_estudiante]) {
+        criteriaGradesMatrix.value[s.id_estudiante] = {}
+      }
     })
   } catch (error) {
     console.error('Error fetching students:', error)
@@ -179,28 +210,51 @@ const fetchStudents = async () => {
 const saveAllGrades = async () => {
   if (saving.value) return
   
-  const gradesToSave: any[] = []
+  const activityGradesToSave: any[] = []
+  const criteriaGradesToSave: any[] = []
+
   Object.keys(gradesMatrix.value).forEach(studentId => {
     const sId = Number(studentId)
     Object.keys(gradesMatrix.value[sId]).forEach(activityId => {
       const aId = Number(activityId)
-      const nota = gradesMatrix.value[sId][aId]
+      // Solo enviamos nota de actividad si no tiene criterios.
+      // Si tiene criterios, se ignoran las notas a nivel de actividad porque es computado.
+      const act = activities.value.find(a => a.id_actividadmateria === aId)
+      if (act && (!act.criterios || act.criterios.length === 0)) {
+        const nota = gradesMatrix.value[sId][aId]
+        if (nota !== undefined && nota !== '') {
+          activityGradesToSave.push({
+            id_estudiante: sId,
+            id_actividadmateria: aId,
+            nota: nota
+          })
+        }
+      }
+    })
+  })
+
+  Object.keys(criteriaGradesMatrix.value).forEach(studentId => {
+    const sId = Number(studentId)
+    Object.keys(criteriaGradesMatrix.value[sId]).forEach(criterioId => {
+      const cId = Number(criterioId)
+      const nota = criteriaGradesMatrix.value[sId][cId]
       if (nota !== undefined && nota !== '') {
-        gradesToSave.push({
+        criteriaGradesToSave.push({
           id_estudiante: sId,
-          id_actividadmateria: aId,
+          id_criterio: cId,
           nota: nota
         })
       }
     })
   })
 
-  if (gradesToSave.length === 0) return
+  if (activityGradesToSave.length === 0 && criteriaGradesToSave.length === 0) return
 
   try {
     saving.value = true
     await axios.post('http://localhost:3000/api/teacher/grades', {
-      grades: gradesToSave,
+      activityGrades: activityGradesToSave,
+      criteriaGrades: criteriaGradesToSave,
       schoolId: auth.user?.schoolId
     })
     alert('Calificaciones guardadas exitosamente')
@@ -213,7 +267,10 @@ const saveAllGrades = async () => {
 
 // Agregar actividad
 const addActivity = async () => {
-  if (!newActivity.value.nombre || newActivity.value.porcentaje <= 0) return
+  if (!newActivity.value.nombre || newActivity.value.porcentaje <= 0 || !newActivity.value.id_evidencia) {
+    alert('Debes seleccionar una evidencia de aprendizaje, un nombre y un porcentaje.')
+    return
+  }
   try {
     if (!competency.value) return
 
@@ -221,10 +278,11 @@ const addActivity = async () => {
       id_competencia: competency.value.id_competencia,
       nombre: newActivity.value.nombre,
       porcentaje: newActivity.value.porcentaje,
+      id_evidencia: newActivity.value.id_evidencia,
       id_colegio: auth.user?.schoolId
     })
     activities.value.push(response.data)
-    newActivity.value = { nombre: '', porcentaje: 0 }
+    newActivity.value = { nombre: '', porcentaje: 0, id_evidencia: null }
     showAddActivity.value = false
   } catch (error: any) {
     alert(error.response?.data?.error || 'Error al crear actividad')
@@ -259,21 +317,110 @@ const removeActivity = async (id: number) => {
   }
 }
 
+// Calcular la nota computada de una actividad si tiene criterios
+const calculateActivityGrade = (studentId: number, act: Activity) => {
+  if (!act.criterios || act.criterios.length === 0) {
+    const studentGrades = gradesMatrix.value[studentId] || {}
+    return parseFloat(studentGrades[act.id_actividadmateria] || 0)
+  }
+
+  const cGrades = criteriaGradesMatrix.value[studentId] || {}
+  let total = 0
+  act.criterios.forEach(c => {
+    const nota = parseFloat(cGrades[c.id_criterio] || 0)
+    const peso = parseFloat(c.porcentaje.toString()) / 100
+    total += nota * peso
+  })
+  return total
+}
+
 // Calcular definitiva de un estudiante
 const calculateFinal = (studentId: number) => {
-  const studentGrades = gradesMatrix.value[studentId] || {}
   let total = 0
   
   activities.value.forEach(act => {
-    const nota = parseFloat(studentGrades[act.id_actividadmateria] || 0)
+    const notaActividad = calculateActivityGrade(studentId, act)
     const peso = parseFloat(act.porcentaje.toString()) / 100
-    total += nota * peso
+    total += notaActividad * peso
   })
   
   return total.toFixed(1)
 }
 
+// Criterios
+const newCriterion = ref<Record<number, { descripcion: string, porcentaje: number, id_evidencia: number | null }>>({})
+
+const toggleAddCriterion = (actId: number) => {
+  if (!newCriterion.value[actId]) {
+    newCriterion.value[actId] = { descripcion: '', porcentaje: 0, id_evidencia: null }
+  } else {
+    delete newCriterion.value[actId]
+  }
+}
+
+const addCriterion = async (act: Activity) => {
+  const form = newCriterion.value[act.id_actividadmateria]
+  if (!form || !form.descripcion || form.porcentaje <= 0) return
+
+  const currentTotal = (act.criterios || []).reduce((sum, c) => sum + parseFloat(c.porcentaje.toString()), 0)
+  if (currentTotal + form.porcentaje > 100) {
+    alert(`La suma de los porcentajes de los criterios no puede superar el 100%. Actual: ${currentTotal}%`)
+    return
+  }
+
+  try {
+    const response = await axios.post('http://localhost:3000/api/teacher/activities/criteria', {
+      id_actividadmateria: act.id_actividadmateria,
+      id_evidencia: form.id_evidencia,
+      descripcion: form.descripcion,
+      porcentaje: form.porcentaje,
+      id_colegio: auth.user?.schoolId
+    })
+    
+    if (!act.criterios) act.criterios = []
+    act.criterios.push(response.data)
+    
+    delete newCriterion.value[act.id_actividadmateria]
+  } catch (error: any) {
+    alert(error.response?.data?.error || 'Error al crear el criterio')
+  }
+}
+
+const removeCriterion = async (act: Activity, criterionId: number) => {
+  if (!confirm('¿Estás seguro de eliminar este criterio?')) return
+  try {
+    await axios.delete(`http://localhost:3000/api/teacher/activities/criteria/${criterionId}`)
+    if (act.criterios) {
+      act.criterios = act.criterios.filter(c => c.id_criterio !== criterionId)
+    }
+  } catch (error: any) {
+    alert(error.response?.data?.error || 'Error al eliminar el criterio')
+  }
+}
+
 // Computados
+interface TableColumn {
+  type: 'activity' | 'criterion' | 'activity_total'
+  activity: Activity
+  criterion?: Criterion
+  id: string
+}
+
+const tableColumns = computed<TableColumn[]>(() => {
+  const cols: TableColumn[] = []
+  activities.value.forEach(act => {
+    if (!act.criterios || act.criterios.length === 0) {
+      cols.push({ type: 'activity', activity: act, id: `act-${act.id_actividadmateria}` })
+    } else {
+      act.criterios.forEach(crit => {
+        cols.push({ type: 'criterion', activity: act, criterion: crit, id: `crit-${crit.id_criterio}` })
+      })
+      cols.push({ type: 'activity_total', activity: act, id: `act-${act.id_actividadmateria}-total` })
+    }
+  })
+  return cols
+})
+
 const totalPercentage = computed(() => {
   return activities.value.reduce((sum, act) => sum + parseFloat(act.porcentaje.toString()), 0)
 })
@@ -299,6 +446,8 @@ const subjectsOptions = computed(() => {
 // Watchers
 watch([selectedGradeId, selectedSubjectId, selectedPeriodId], () => {
   gradesMatrix.value = {}
+  criteriaGradesMatrix.value = {}
+  newCriterion.value = {}
   fetchActivities()
   if (selectedGradeId.value) fetchStudents()
 })
@@ -371,29 +520,56 @@ onMounted(() => {
     <div v-else class="grid grid-cols-1 xl:grid-cols-4 gap-8">
       <!-- Activity Management -->
       <div class="xl:col-span-1 space-y-6">
+        <!-- Competencia (solo lectura — definida por el directivo) -->
         <div class="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
-          <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center gap-2 mb-4">
+            <div class="w-7 h-7 bg-violet-50 rounded-lg flex items-center justify-center shrink-0">
+              <BookOpen class="w-4 h-4 text-violet-500" />
+            </div>
             <h3 class="text-lg font-black text-slate-900">Competencia</h3>
-            <button
-              @click="saveCompetency"
-              :disabled="competencySaving || !competency"
-              class="px-4 py-2 rounded-xl bg-slate-900 text-white text-[10px] font-black uppercase tracking-wider disabled:opacity-50"
-            >
-              {{ competencySaving ? 'Guardando' : 'Guardar' }}
-            </button>
           </div>
 
-          <textarea
-            v-model="competencyDraft"
-            rows="5"
-            :disabled="!competency"
-            placeholder="Describe qué debe aprender el estudiante en este periodo."
-            class="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-sm font-medium text-slate-700 focus:ring-2 focus:ring-pink-500 focus:border-pink-500 outline-none disabled:opacity-50"
-          />
+          <!-- Sin competencia definida -->
+          <div
+            v-if="!competency || !competencyDraft"
+            class="flex flex-col items-center justify-center py-8 text-center"
+          >
+            <div class="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center mb-3">
+              <AlertCircle class="w-6 h-6 text-slate-300" />
+            </div>
+            <p class="text-sm font-bold text-slate-400">Sin competencia definida</p>
+            <p class="text-[11px] text-slate-300 mt-1">El directivo aún no ha definido la competencia para este periodo.</p>
+          </div>
 
-          <p class="mt-3 text-[11px] text-slate-400 font-semibold">
-            La competencia aplica a la combinación de curso, materia y periodo seleccionados.
-          </p>
+          <!-- Competencia definida -->
+          <div v-else class="space-y-3">
+            <div class="bg-violet-50 border border-violet-100 rounded-2xl p-4">
+              <p class="text-sm font-semibold text-violet-900 leading-relaxed">
+                {{ competencyDraft }}
+              </p>
+              
+              <div v-if="evidencias.length" class="mt-4 pt-4 border-t border-violet-200/60">
+                <h4 class="text-xs font-black text-violet-900 uppercase tracking-wider mb-3">Evidencias de Aprendizaje</h4>
+                <ul class="space-y-2">
+                  <li v-for="ev in evidencias" :key="ev.id_evidencia" class="flex items-start gap-2">
+                    <div class="w-1.5 h-1.5 rounded-full bg-violet-400 shrink-0 mt-1.5"></div>
+                    <span class="text-xs font-medium text-violet-800 leading-relaxed">{{ ev.descripcion }}</span>
+                  </li>
+                </ul>
+              </div>
+            </div>
+            <div class="flex items-center gap-2 px-1">
+              <div class="w-3.5 h-3.5 text-slate-400 shrink-0">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                </svg>
+              </div>
+              <p class="text-[11px] text-slate-400 font-semibold">
+                Definida por la dirección académica · Solo lectura
+              </p>
+            </div>
+          </div>
         </div>
 
         <div class="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
@@ -407,15 +583,55 @@ onMounted(() => {
             </span>
           </div>
 
-          <div class="space-y-3">
-            <div v-for="act in activities" :key="act.id_actividadmateria" class="group flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:border-pink-200 transition-all">
-              <div>
-                <p class="text-sm font-bold text-slate-700">{{ act.nombre }}</p>
-                <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Peso: {{ act.porcentaje }}%</p>
+            <div v-for="act in activities" :key="act.id_actividadmateria" class="space-y-2">
+              <div class="group flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:border-pink-200 transition-all">
+                <div>
+                  <p class="text-sm font-bold text-slate-700">{{ act.nombre }}</p>
+                  <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Peso: {{ act.porcentaje }}%</p>
+                  <p v-if="act.id_evidencia" class="text-[10px] text-violet-500 font-semibold mt-0.5">
+                    📋 E{{ evidencias.find(e => e.id_evidencia === act.id_evidencia)?.orden }}: {{ evidencias.find(e => e.id_evidencia === act.id_evidencia)?.descripcion?.substring(0, 40) }}...
+                  </p>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button @click="toggleAddCriterion(act.id_actividadmateria)" class="text-slate-300 hover:text-pink-500 transition-all" title="Añadir criterio">
+                    <Plus class="w-4 h-4" />
+                  </button>
+                  <button @click="removeActivity(act.id_actividadmateria)" class="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all" title="Eliminar actividad">
+                    <Trash2 class="w-4 h-4" />
+                  </button>
+                </div>
               </div>
-              <button @click="removeActivity(act.id_actividadmateria)" class="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all">
-                <Trash2 class="w-4 h-4" />
-              </button>
+
+              <!-- Criterios List -->
+              <div v-if="act.criterios && act.criterios.length > 0" class="pl-4 pr-2 space-y-2">
+                <div v-for="crit in act.criterios" :key="crit.id_criterio" class="flex items-center justify-between bg-white border border-slate-100 rounded-xl p-3 shadow-sm group">
+                  <div class="flex-1 min-w-0 pr-4">
+                    <p class="text-xs font-semibold text-slate-600 truncate">{{ crit.descripcion }}</p>
+                    <p class="text-[9px] font-black text-pink-400 uppercase tracking-wider">{{ crit.porcentaje }}%</p>
+                  </div>
+                  <button @click="removeCriterion(act, crit.id_criterio)" class="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all p-1">
+                    <Trash2 class="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              <!-- Add Criterion Form -->
+              <div v-if="newCriterion[act.id_actividadmateria]" class="ml-4 p-3 bg-pink-50/50 rounded-xl border border-pink-100 space-y-3 animate-in zoom-in duration-200">
+                <input v-model="newCriterion[act.id_actividadmateria].descripcion" type="text" placeholder="Descripción del criterio" class="w-full bg-white border-0 rounded-lg p-2.5 text-xs font-medium focus:ring-2 focus:ring-pink-500 outline-none" />
+                <div class="flex gap-2">
+                  <input v-model.number="newCriterion[act.id_actividadmateria].porcentaje" type="number" placeholder="Peso %" class="w-20 bg-white border-0 rounded-lg p-2.5 text-xs font-medium focus:ring-2 focus:ring-pink-500 outline-none" />
+                  <select v-model="newCriterion[act.id_actividadmateria].id_evidencia" class="flex-1 bg-white border-0 rounded-lg p-2.5 text-xs text-slate-500 font-medium focus:ring-2 focus:ring-pink-500 outline-none">
+                    <option :value="null">Sin evidencia (Opcional)</option>
+                    <option v-for="ev in evidencias" :key="ev.id_evidencia" :value="ev.id_evidencia">
+                      Evidencia {{ ev.orden }}: {{ ev.descripcion.substring(0, 30) }}...
+                    </option>
+                  </select>
+                </div>
+                <div class="flex gap-2">
+                  <button @click="toggleAddCriterion(act.id_actividadmateria)" class="flex-1 py-1.5 text-[10px] font-bold uppercase text-slate-400 hover:text-slate-600">Cancelar</button>
+                  <button @click="addCriterion(act)" class="flex-1 bg-pink-500 text-white py-1.5 rounded-lg text-[10px] font-bold uppercase shadow-sm">Añadir Criterio</button>
+                </div>
+              </div>
             </div>
 
             <button 
@@ -428,7 +644,16 @@ onMounted(() => {
             </button>
 
             <div v-if="showAddActivity" class="p-4 bg-pink-50 rounded-2xl border border-pink-100 space-y-4 animate-in zoom-in-95 duration-300">
-              <input v-model="newActivity.nombre" type="text" placeholder="Nombre (ej: Examen)" class="w-full bg-white border-0 rounded-xl p-3 text-xs font-bold focus:ring-2 focus:ring-pink-500 outline-none" />
+              <div class="space-y-1">
+                <label class="text-[10px] font-black text-pink-400 uppercase tracking-wider ml-1">Evidencia de Aprendizaje *</label>
+                <select v-model="newActivity.id_evidencia" class="w-full bg-white border-0 rounded-xl p-3 text-xs font-semibold text-slate-600 focus:ring-2 focus:ring-pink-500 outline-none">
+                  <option :value="null" disabled>Selecciona una evidencia</option>
+                  <option v-for="ev in evidencias" :key="ev.id_evidencia" :value="ev.id_evidencia">
+                    E{{ ev.orden }}: {{ ev.descripcion }}
+                  </option>
+                </select>
+              </div>
+              <input v-model="newActivity.nombre" type="text" placeholder="Nombre de la actividad (ej: Examen, Taller, Quiz...)" class="w-full bg-white border-0 rounded-xl p-3 text-xs font-bold focus:ring-2 focus:ring-pink-500 outline-none" />
               <div class="flex items-center gap-2">
                 <input v-model.number="newActivity.porcentaje" type="number" placeholder="%" class="w-20 bg-white border-0 rounded-xl p-3 text-xs font-bold focus:ring-2 focus:ring-pink-500 outline-none" />
                 <span class="text-xs font-black text-slate-400">% de peso</span>
@@ -438,7 +663,6 @@ onMounted(() => {
                 <button @click="addActivity" class="flex-1 bg-pink-500 text-white py-2 rounded-xl text-[10px] font-black uppercase shadow-md shadow-pink-100">Crear</button>
               </div>
             </div>
-          </div>
         </div>
 
         <div class="p-6 bg-indigo-50 rounded-3xl border border-indigo-100">
@@ -478,10 +702,23 @@ onMounted(() => {
               <thead>
                 <tr class="bg-slate-50/50 border-b border-slate-100">
                   <th class="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest min-w-[250px]">Estudiante</th>
-                  <th v-for="act in activities" :key="act.id_actividadmateria" class="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">
-                    {{ act.nombre }}<br>
-                    <span class="text-indigo-400">{{ act.porcentaje }}%</span>
+                  
+                  <th v-for="col in tableColumns" :key="col.id" 
+                      :class="['px-4 py-5 text-[10px] font-black uppercase tracking-widest text-center', col.type === 'activity_total' ? 'bg-pink-50/50 text-pink-600' : 'text-slate-400']">
+                    <template v-if="col.type === 'activity'">
+                      {{ col.activity.nombre }}<br>
+                      <span class="text-indigo-400">{{ col.activity.porcentaje }}%</span>
+                    </template>
+                    <template v-else-if="col.type === 'criterion'">
+                      <span class="text-slate-600" :title="col.activity.nombre">{{ col.criterion?.descripcion }}</span><br>
+                      <span class="text-pink-400">{{ col.criterion?.porcentaje }}%</span>
+                    </template>
+                    <template v-else-if="col.type === 'activity_total'">
+                      Σ {{ col.activity.nombre }}<br>
+                      <span class="text-pink-400">{{ col.activity.porcentaje }}%</span>
+                    </template>
                   </th>
+
                   <th class="px-8 py-5 text-[10px] font-black text-indigo-600 uppercase tracking-widest text-center bg-indigo-50/30">Definitiva</th>
                 </tr>
               </thead>
@@ -500,16 +737,35 @@ onMounted(() => {
                   </td>
                   
                   <!-- Grade Inputs -->
-                  <td v-for="act in activities" :key="act.id_actividadmateria" class="px-6 py-5 text-center">
-                    <input 
-                      v-model="gradesMatrix[student.id_estudiante][act.id_actividadmateria]"
-                      type="number" 
-                      step="0.1" 
-                      :min="gradeRange.min" 
-                      :max="gradeRange.max"
-                      placeholder="0.0"
-                      class="w-16 bg-white border border-slate-200 rounded-xl p-2.5 text-center text-sm font-black text-slate-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none"
-                    />
+                  <td v-for="col in tableColumns" :key="col.id" class="px-4 py-5 text-center">
+                    <template v-if="col.type === 'activity'">
+                      <input 
+                        v-model="gradesMatrix[student.id_estudiante][col.activity.id_actividadmateria]"
+                        type="number" 
+                        step="0.1" 
+                        :min="gradeRange.min" 
+                        :max="gradeRange.max"
+                        placeholder="0.0"
+                        class="w-16 bg-white border border-slate-200 rounded-xl p-2.5 text-center text-sm font-black text-slate-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none"
+                      />
+                    </template>
+                    <template v-else-if="col.type === 'criterion'">
+                      <input 
+                        v-if="col.criterion"
+                        v-model="criteriaGradesMatrix[student.id_estudiante][col.criterion.id_criterio]"
+                        type="number" 
+                        step="0.1" 
+                        :min="gradeRange.min" 
+                        :max="gradeRange.max"
+                        placeholder="0.0"
+                        class="w-16 bg-white border border-slate-200 rounded-xl p-2.5 text-center text-sm font-black text-slate-700 focus:ring-2 focus:ring-pink-500 focus:border-pink-500 transition-all outline-none"
+                      />
+                    </template>
+                    <template v-else-if="col.type === 'activity_total'">
+                      <span class="w-16 inline-block bg-pink-50/50 border border-pink-100 rounded-xl p-2.5 text-center text-sm font-black text-pink-700">
+                        {{ calculateActivityGrade(student.id_estudiante, col.activity).toFixed(1) }}
+                      </span>
+                    </template>
                   </td>
 
                   <td class="px-8 py-5 text-center bg-indigo-50/10">

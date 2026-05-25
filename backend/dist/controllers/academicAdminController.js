@@ -68,6 +68,16 @@ const ensureAcademicPeriodTrimesterColumn = async () => {
     ADD COLUMN IF NOT EXISTS trimestre integer
   `);
 };
+const ensureAcademicPeriodDayColumns = async () => {
+    await db_1.pool.query(`
+    ALTER TABLE periodo_academico
+    ADD COLUMN IF NOT EXISTS dia_inicio integer
+  `);
+    await db_1.pool.query(`
+    ALTER TABLE periodo_academico
+    ADD COLUMN IF NOT EXISTS dia_fin integer
+  `);
+};
 const ensureSchoolDefaultSettings = async (schoolId) => {
     await ensureSchoolSettingsTable();
     const existing = await db_1.pool.query(`SELECT id_colegio, nota_minima, nota_maxima, nota_aprobacion, escala_modo
@@ -469,6 +479,7 @@ const getAcademicSettingsData = async (req, res) => {
     try {
         await (0, competencyMigration_1.ensureCompetencySchema)();
         await ensureAcademicPeriodTrimesterColumn();
+        await ensureAcademicPeriodDayColumns();
         const currentYearId = await ensureAcademicYearForSchool(schoolId);
         const competencyClient = await db_1.pool.connect();
         try {
@@ -493,7 +504,7 @@ const getAcademicSettingsData = async (req, res) => {
          WHERE id_colegio = $1
          ORDER BY "id_año" DESC`, [schoolId]),
             ensureSchoolDefaultSettings(schoolId),
-            db_1.pool.query(`SELECT id_periodo, nombre, estado, porcentaje, trimestre, "id_año"
+            db_1.pool.query(`SELECT id_periodo, nombre, estado, porcentaje, trimestre, dia_inicio, dia_fin, "id_año"
          FROM periodo_academico
          WHERE id_colegio = $1
          ORDER BY id_periodo`, [schoolId]),
@@ -606,6 +617,12 @@ const createAcademicPeriod = async (req, res) => {
     const nombre = String(req.body.nombre || "").trim();
     const porcentaje = Number(req.body.porcentaje);
     const trimestre = Number(req.body.trimestre);
+    const diaInicio = req.body.dia_inicio !== undefined && req.body.dia_inicio !== "" && req.body.dia_inicio !== null
+        ? Number(req.body.dia_inicio)
+        : null;
+    const diaFin = req.body.dia_fin !== undefined && req.body.dia_fin !== "" && req.body.dia_fin !== null
+        ? Number(req.body.dia_fin)
+        : null;
     if (!schoolId ||
         !nombre ||
         Number.isNaN(porcentaje) ||
@@ -616,8 +633,21 @@ const createAcademicPeriod = async (req, res) => {
         res.status(400).json({ error: "Nombre, porcentaje y trimestre válido del periodo son obligatorios" });
         return;
     }
+    if (diaInicio !== null && (!Number.isInteger(diaInicio) || diaInicio < 1 || diaInicio > 31)) {
+        res.status(400).json({ error: "El día de inicio debe ser un número entre 1 y 31" });
+        return;
+    }
+    if (diaFin !== null && (!Number.isInteger(diaFin) || diaFin < 1 || diaFin > 31)) {
+        res.status(400).json({ error: "El día de fin debe ser un número entre 1 y 31" });
+        return;
+    }
+    if (diaInicio !== null && diaFin !== null && diaFin < diaInicio) {
+        res.status(400).json({ error: "El día de fin no puede ser menor al día de inicio" });
+        return;
+    }
     try {
         await ensureAcademicPeriodTrimesterColumn();
+        await ensureAcademicPeriodDayColumns();
         const currentYearId = await ensureAcademicYearForSchool(schoolId);
         const totalsRes = await db_1.pool.query(`SELECT COALESCE(SUM(porcentaje), 0)::numeric AS total
        FROM periodo_academico
@@ -637,9 +667,9 @@ const createAcademicPeriod = async (req, res) => {
             res.status(409).json({ error: "Ya existe un periodo académico con ese nombre" });
             return;
         }
-        const created = await db_1.pool.query(`INSERT INTO periodo_academico (nombre, estado, porcentaje, trimestre, "id_año", id_colegio)
-       VALUES ($1, 'ABIERTO', $2, $3, $4, $5)
-       RETURNING id_periodo, nombre, estado, porcentaje, trimestre, "id_año"`, [nombre, porcentaje, trimestre, currentYearId, schoolId]);
+        const created = await db_1.pool.query(`INSERT INTO periodo_academico (nombre, estado, porcentaje, trimestre, dia_inicio, dia_fin, "id_año", id_colegio)
+       VALUES ($1, 'ABIERTO', $2, $3, $4, $5, $6, $7)
+       RETURNING id_periodo, nombre, estado, porcentaje, trimestre, dia_inicio, dia_fin, "id_año"`, [nombre, porcentaje, trimestre, diaInicio, diaFin, currentYearId, schoolId]);
         res.status(201).json(created.rows[0]);
     }
     catch (error) {
@@ -932,6 +962,12 @@ const updateAcademicPeriodPercentage = async (req, res) => {
     const schoolId = parseSchoolId(req.body.schoolId);
     const porcentaje = Number(req.body.porcentaje);
     const trimestre = Number(req.body.trimestre);
+    const diaInicio = req.body.dia_inicio !== undefined && req.body.dia_inicio !== "" && req.body.dia_inicio !== null
+        ? Number(req.body.dia_inicio)
+        : null;
+    const diaFin = req.body.dia_fin !== undefined && req.body.dia_fin !== "" && req.body.dia_fin !== null
+        ? Number(req.body.dia_fin)
+        : null;
     if (!periodId ||
         !schoolId ||
         Number.isNaN(porcentaje) ||
@@ -942,8 +978,21 @@ const updateAcademicPeriodPercentage = async (req, res) => {
         res.status(400).json({ error: "Parámetros inválidos" });
         return;
     }
+    if (diaInicio !== null && (!Number.isInteger(diaInicio) || diaInicio < 1 || diaInicio > 31)) {
+        res.status(400).json({ error: "El día de inicio debe ser un número entre 1 y 31" });
+        return;
+    }
+    if (diaFin !== null && (!Number.isInteger(diaFin) || diaFin < 1 || diaFin > 31)) {
+        res.status(400).json({ error: "El día de fin debe ser un número entre 1 y 31" });
+        return;
+    }
+    if (diaInicio !== null && diaFin !== null && diaFin < diaInicio) {
+        res.status(400).json({ error: "El día de fin no puede ser menor al día de inicio" });
+        return;
+    }
     try {
         await ensureAcademicPeriodTrimesterColumn();
+        await ensureAcademicPeriodDayColumns();
         const periodRes = await db_1.pool.query(`SELECT id_periodo, porcentaje, trimestre
        FROM periodo_academico
        WHERE id_periodo = $1
@@ -965,10 +1014,12 @@ const updateAcademicPeriodPercentage = async (req, res) => {
         }
         const updated = await db_1.pool.query(`UPDATE periodo_academico
        SET porcentaje = $1,
-           trimestre = $2
-       WHERE id_periodo = $3
-         AND id_colegio = $4
-       RETURNING id_periodo, nombre, estado, porcentaje, trimestre, "id_año"`, [porcentaje, trimestre, periodId, schoolId]);
+           trimestre = $2,
+           dia_inicio = $3,
+           dia_fin = $4
+       WHERE id_periodo = $5
+         AND id_colegio = $6
+       RETURNING id_periodo, nombre, estado, porcentaje, trimestre, dia_inicio, dia_fin, "id_año"`, [porcentaje, trimestre, diaInicio, diaFin, periodId, schoolId]);
         res.json(updated.rows[0]);
     }
     catch (error) {

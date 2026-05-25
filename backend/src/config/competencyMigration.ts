@@ -1,6 +1,47 @@
 import { PoolClient } from "pg";
 import { pool } from "./db";
 
+const evidenciaMigrationSql = `
+CREATE TABLE IF NOT EXISTS public.evidencia_aprendizaje (
+  id_evidencia    SERIAL PRIMARY KEY,
+  id_competencia  INTEGER NOT NULL REFERENCES public.competencias(id_competencia) ON DELETE CASCADE,
+  descripcion     TEXT NOT NULL,
+  orden           INTEGER NOT NULL DEFAULT 0,
+  id_colegio      INTEGER NOT NULL REFERENCES public.colegio(id_colegio) ON DELETE CASCADE
+);
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_indexes
+    WHERE schemaname = 'public'
+      AND tablename  = 'evidencia_aprendizaje'
+      AND indexname  = 'idx_evidencia_competencia'
+  ) THEN
+    CREATE INDEX idx_evidencia_competencia
+      ON public.evidencia_aprendizaje(id_competencia);
+  END IF;
+END $$;
+
+CREATE TABLE IF NOT EXISTS public.criterio_evaluacion (
+  id_criterio          SERIAL PRIMARY KEY,
+  id_actividadmateria  INTEGER NOT NULL REFERENCES public.actividad_materia(id_actividadmateria) ON DELETE CASCADE,
+  id_evidencia         INTEGER REFERENCES public.evidencia_aprendizaje(id_evidencia) ON DELETE SET NULL,
+  descripcion          TEXT NOT NULL,
+  porcentaje           NUMERIC(5,2) NOT NULL,
+  id_colegio           INTEGER NOT NULL REFERENCES public.colegio(id_colegio) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS public.nota_criterio (
+  id_nota_criterio  SERIAL PRIMARY KEY,
+  id_criterio       INTEGER NOT NULL REFERENCES public.criterio_evaluacion(id_criterio) ON DELETE CASCADE,
+  id_estudiante     INTEGER NOT NULL REFERENCES public.estudiante(id_estudiante) ON DELETE CASCADE,
+  nota              NUMERIC(5,2) NOT NULL,
+  id_colegio        INTEGER NOT NULL REFERENCES public.colegio(id_colegio) ON DELETE CASCADE,
+  UNIQUE(id_criterio, id_estudiante)
+);
+`;
+
 const DEFAULT_COMPETENCY_DESCRIPTION = "Competencia pendiente por definir.";
 
 const migrationSql = `
@@ -53,6 +94,15 @@ END $$;
 
 ALTER TABLE public.actividad_materia
   ADD COLUMN IF NOT EXISTS id_competencia integer;
+
+ALTER TABLE public.actividad_materia
+  ALTER COLUMN id_detallegrado DROP NOT NULL;
+
+ALTER TABLE public.actividad_materia
+  ALTER COLUMN id_periodo DROP NOT NULL;
+
+ALTER TABLE public.actividad_materia
+  ADD COLUMN IF NOT EXISTS id_evidencia integer REFERENCES public.evidencia_aprendizaje(id_evidencia) ON DELETE SET NULL;
 
 WITH aggregated_competencies AS (
   SELECT
@@ -154,6 +204,7 @@ export const ensureCompetencySchema = async (): Promise<void> => {
   try {
     await client.query("BEGIN");
     await client.query(migrationSql);
+    await client.query(evidenciaMigrationSql);
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK");

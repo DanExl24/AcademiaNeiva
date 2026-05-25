@@ -22,6 +22,8 @@ interface AcademicPeriod {
   estado: 'ABIERTO' | 'CERRADO'
   porcentaje: number
   trimestre: number | null
+  dia_inicio: number | null
+  dia_fin: number | null
   meses_referencia?: string | null
   id_año: number
 }
@@ -81,11 +83,15 @@ const newPeriod = ref({
   nombre: '',
   porcentaje: '',
   trimestre: '',
+  dia_inicio: '',
+  dia_fin: '',
 })
 
 const periodEdit = ref({
   porcentaje: '',
   trimestre: '',
+  dia_inicio: '',
+  dia_fin: '',
 })
 
 const defaultsForm = ref({
@@ -145,6 +151,14 @@ const createPeriod = async () => {
     return
   }
 
+  const diaInicio = newPeriod.value.dia_inicio !== '' ? Number(newPeriod.value.dia_inicio) : null
+  const diaFin = newPeriod.value.dia_fin !== '' ? Number(newPeriod.value.dia_fin) : null
+
+  if (diaInicio !== null && diaFin !== null && diaFin < diaInicio) {
+    alert('El día de fin no puede ser menor al día de inicio.')
+    return
+  }
+
   try {
     savingPeriod.value = true
     await axios.post('http://localhost:3000/api/academic-admin/settings/periods', {
@@ -152,8 +166,10 @@ const createPeriod = async () => {
       nombre: newPeriod.value.nombre,
       porcentaje: Number(newPeriod.value.porcentaje),
       trimestre: Number(newPeriod.value.trimestre),
+      dia_inicio: diaInicio,
+      dia_fin: diaFin,
     })
-    newPeriod.value = { nombre: '', porcentaje: '', trimestre: '' }
+    newPeriod.value = { nombre: '', porcentaje: '', trimestre: '', dia_inicio: '', dia_fin: '' }
     periodModal.value = false
     await loadData()
   } catch (error: any) {
@@ -170,15 +186,25 @@ const updatePeriodPercentage = async () => {
     return
   }
 
+  const diaInicio = periodEdit.value.dia_inicio !== '' ? Number(periodEdit.value.dia_inicio) : null
+  const diaFin = periodEdit.value.dia_fin !== '' ? Number(periodEdit.value.dia_fin) : null
+
+  if (diaInicio !== null && diaFin !== null && diaFin < diaInicio) {
+    alert('El día de fin no puede ser menor al día de inicio.')
+    return
+  }
+
   try {
     savingPeriod.value = true
     await axios.patch(`http://localhost:3000/api/academic-admin/settings/periods/${periodEditModal.value.id_periodo}/percentage`, {
       schoolId: schoolId.value,
       porcentaje: Number(periodEdit.value.porcentaje),
       trimestre: Number(periodEdit.value.trimestre),
+      dia_inicio: diaInicio,
+      dia_fin: diaFin,
     })
     periodEditModal.value = null
-    periodEdit.value = { porcentaje: '', trimestre: '' }
+    periodEdit.value = { porcentaje: '', trimestre: '', dia_inicio: '', dia_fin: '' }
     await loadData()
   } catch (error: any) {
     alert(error.response?.data?.error || 'No fue posible actualizar la configuración del periodo')
@@ -455,12 +481,20 @@ onMounted(loadData)
                 <p class="text-base font-black text-slate-900">{{ period.nombre }}</p>
                 <p class="mt-1 text-sm font-semibold text-slate-500">Estado: {{ period.estado }} · Año: {{ period.id_año }} · Trimestre: {{ period.trimestre ?? 'Sin definir' }}</p>
                 <p v-if="period.meses_referencia" class="mt-1 text-xs font-semibold text-orange-600">Meses de referencia: {{ period.meses_referencia }}</p>
+                <p class="mt-1 text-xs font-semibold text-slate-400">
+                  <span v-if="period.dia_inicio !== null && period.dia_fin !== null">
+                    📅 Día {{ period.dia_inicio }} al {{ period.dia_fin }}
+                  </span>
+                  <span v-else-if="period.dia_inicio !== null">📅 Inicio: día {{ period.dia_inicio }}</span>
+                  <span v-else-if="period.dia_fin !== null">📅 Fin: día {{ period.dia_fin }}</span>
+                  <span v-else class="text-slate-300">Sin días definidos</span>
+                </p>
               </div>
               <div class="flex items-center gap-3">
                 <span class="rounded-full bg-orange-50 px-3 py-1 text-sm font-black text-orange-700">{{ Number(period.porcentaje).toFixed(2) }}%</span>
                 <button
                   type="button"
-                  @click="periodEditModal = period; periodEdit.porcentaje = String(period.porcentaje); periodEdit.trimestre = period.trimestre ? String(period.trimestre) : ''"
+                  @click="periodEditModal = period; periodEdit.porcentaje = String(period.porcentaje); periodEdit.trimestre = period.trimestre ? String(period.trimestre) : ''; periodEdit.dia_inicio = period.dia_inicio !== null ? String(period.dia_inicio) : ''; periodEdit.dia_fin = period.dia_fin !== null ? String(period.dia_fin) : ''"
                   class="inline-flex items-center justify-center rounded-2xl bg-slate-100 p-3 text-slate-600 transition-all hover:bg-slate-200"
                 >
                   <PenSquare class="h-4 w-4" />
@@ -644,6 +678,36 @@ onMounted(loadData)
               </select>
             </label>
           </div>
+
+          <div class="mt-6 rounded-2xl border border-orange-100 bg-orange-50/60 px-5 py-4">
+            <p class="mb-4 text-sm font-black text-orange-700">Días del trimestre <span class="font-semibold text-orange-500">(opcional)</span></p>
+            <p class="mb-4 text-xs font-semibold text-slate-500">Define el día de inicio y de fin dentro de los meses que corresponden al trimestre seleccionado. Puedes dejarlo en blanco y definirlo después.</p>
+            <div class="grid grid-cols-2 gap-4">
+              <label class="space-y-2">
+                <span class="block text-sm font-black text-slate-700">Día de inicio</span>
+                <input
+                  v-model="newPeriod.dia_inicio"
+                  type="number"
+                  min="1"
+                  max="31"
+                  placeholder="Ej. 1"
+                  class="w-full rounded-2xl border border-orange-200 bg-white p-4 font-semibold outline-none focus:border-orange-400"
+                />
+              </label>
+              <label class="space-y-2">
+                <span class="block text-sm font-black text-slate-700">Día de fin</span>
+                <input
+                  v-model="newPeriod.dia_fin"
+                  type="number"
+                  min="1"
+                  max="31"
+                  placeholder="Ej. 31"
+                  class="w-full rounded-2xl border border-orange-200 bg-white p-4 font-semibold outline-none focus:border-orange-400"
+                />
+              </label>
+            </div>
+          </div>
+
           <div class="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-end">
             <button type="button" @click="periodModal = false" class="rounded-2xl border border-slate-200 px-6 py-4 text-sm font-black text-slate-700">Cancelar</button>
             <button type="button" @click="createPeriod" :disabled="savingPeriod" class="inline-flex min-h-14 items-center justify-center gap-3 rounded-2xl bg-orange-500 px-8 py-4 text-base font-black text-white shadow-sm disabled:opacity-50">
@@ -664,7 +728,7 @@ onMounted(loadData)
         <div class="px-6 py-6 md:px-8 md:py-8">
           <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
             <label class="space-y-2">
-              <span class="block text-sm font-black text-slate-700">Nuevo porcentaje</span>
+              <span class="block text-sm font-black text-slate-700">Porcentaje</span>
               <input v-model="periodEdit.porcentaje" type="number" min="0" step="0.01" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-semibold outline-none" />
             </label>
             <label class="space-y-2">
@@ -677,6 +741,36 @@ onMounted(loadData)
               </select>
             </label>
           </div>
+
+          <div class="mt-6 rounded-2xl border border-orange-100 bg-orange-50/60 px-5 py-4">
+            <p class="mb-4 text-sm font-black text-orange-700">Días del trimestre</p>
+            <p class="mb-4 text-xs font-semibold text-slate-500">Define o ajusta el día de inicio y el día de fin dentro de los meses que corresponden al trimestre. Deja en blanco para quitar el valor actual.</p>
+            <div class="grid grid-cols-2 gap-4">
+              <label class="space-y-2">
+                <span class="block text-sm font-black text-slate-700">Día de inicio</span>
+                <input
+                  v-model="periodEdit.dia_inicio"
+                  type="number"
+                  min="1"
+                  max="31"
+                  placeholder="Ej. 1"
+                  class="w-full rounded-2xl border border-orange-200 bg-white p-4 font-semibold outline-none focus:border-orange-400"
+                />
+              </label>
+              <label class="space-y-2">
+                <span class="block text-sm font-black text-slate-700">Día de fin</span>
+                <input
+                  v-model="periodEdit.dia_fin"
+                  type="number"
+                  min="1"
+                  max="31"
+                  placeholder="Ej. 31"
+                  class="w-full rounded-2xl border border-orange-200 bg-white p-4 font-semibold outline-none focus:border-orange-400"
+                />
+              </label>
+            </div>
+          </div>
+
           <div class="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-end">
             <button type="button" @click="periodEditModal = null" class="rounded-2xl border border-slate-200 px-6 py-4 text-sm font-black text-slate-700">Cancelar</button>
             <button type="button" @click="updatePeriodPercentage" :disabled="savingPeriod" class="inline-flex min-h-14 items-center justify-center gap-3 rounded-2xl bg-orange-500 px-8 py-4 text-base font-black text-white shadow-sm disabled:opacity-50">

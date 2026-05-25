@@ -5,6 +5,8 @@ import {
   createActivity,
   updateActivity,
   deleteActivity,
+  createCriterion,
+  deleteCriterion,
   getPeriods,
   getGrades,
   saveGrades,
@@ -21,6 +23,11 @@ router.get("/activities/:gradeId/:subjectId/:periodId", getActivities);
 router.post("/activities", createActivity);
 router.put("/activities/:id", updateActivity);
 router.delete("/activities/:id", deleteActivity);
+
+// Rutas de Calificaciones - Criterios
+router.post("/activities/criteria", createCriterion);
+router.delete("/activities/criteria/:id", deleteCriterion);
+
 router.put("/competencies/:id", updateCompetency);
 router.get("/periods/:schoolId", getPeriods);
 

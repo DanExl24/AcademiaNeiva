@@ -93,10 +93,10 @@ const schools: SchoolSeed[] = [
 const sectionNames = ["A", "B"];
 const jornadaNames = ["MAÑANA", "TARDE", "UNICA"];
 const periodSeeds = [
-  { nombre: "Primer Periodo", estado: "ABIERTO", porcentaje: 25 },
-  { nombre: "Segundo Periodo", estado: "CERRADO", porcentaje: 25 },
-  { nombre: "Tercer Periodo", estado: "CERRADO", porcentaje: 25 },
-  { nombre: "Cuarto Periodo", estado: "CERRADO", porcentaje: 25 },
+  { nombre: "Primer Periodo", estado: "ABIERTO", porcentaje: 25, trimestre: 1 },
+  { nombre: "Segundo Periodo", estado: "CERRADO", porcentaje: 25, trimestre: 2 },
+  { nombre: "Tercer Periodo", estado: "CERRADO", porcentaje: 25, trimestre: 3 },
+  { nombre: "Cuarto Periodo", estado: "CERRADO", porcentaje: 25, trimestre: 3 },
 ];
 const scaleSeeds = [
   { nivel: "SUPERIOR", min: 4.6, max: 5.0 },
@@ -341,10 +341,10 @@ async function insertSchoolAcademicStructure(
   for (const periodSeed of periodSeeds) {
     await client.query(
       `
-        INSERT INTO periodo_academico (nombre, estado, porcentaje, "id_año", id_colegio)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO periodo_academico (nombre, estado, porcentaje, trimestre, "id_año", id_colegio)
+        VALUES ($1, $2, $3, $4, $5, $6)
       `,
-      [periodSeed.nombre, periodSeed.estado, periodSeed.porcentaje, academicYearId, school.id]
+      [periodSeed.nombre, periodSeed.estado, periodSeed.porcentaje, periodSeed.trimestre, academicYearId, school.id]
     );
   }
 
@@ -492,6 +492,9 @@ async function run(): Promise<void> {
     await client.query(authSql);
     await createSchoolConfigTable(client);
     await client.query(`ALTER TABLE grados ADD COLUMN IF NOT EXISTS seccion VARCHAR(10) DEFAULT 'A';`);
+    await client.query(`ALTER TABLE periodo_academico ADD COLUMN IF NOT EXISTS trimestre integer;`);
+    await client.query(`ALTER TABLE periodo_academico ADD COLUMN IF NOT EXISTS dia_inicio integer;`);
+    await client.query(`ALTER TABLE periodo_academico ADD COLUMN IF NOT EXISTS dia_fin integer;`);
 
     console.log("Reseteando tablas existentes...");
     await truncateExistingTables(client, [
@@ -546,6 +549,24 @@ async function run(): Promise<void> {
     await client.query("COMMIT");
 
     await ensureCompetencySchema();
+    
+    console.log("Generando evidencias de aprendizaje de prueba...");
+    const compClient = await pool.connect();
+    try {
+      const compRes = await compClient.query('SELECT id_competencia, id_colegio FROM competencias');
+      for (const comp of compRes.rows) {
+        await compClient.query(`
+          INSERT INTO evidencia_aprendizaje (id_competencia, descripcion, orden, id_colegio)
+          VALUES 
+            ($1, 'Reconoce y aplica los conceptos fundamentales de la unidad temática.', 1, $2),
+            ($1, 'Demuestra capacidad analítica y pensamiento crítico en la resolución de problemas.', 2, $2),
+            ($1, 'Participa activamente y colabora con sus compañeros en el entorno de aprendizaje.', 3, $2)
+        `, [comp.id_competencia, comp.id_colegio]);
+      }
+    } finally {
+      compClient.release();
+    }
+
     const credentialsPath = writeCredentialsFile(credentials);
 
     console.log(`Base de datos reseteada correctamente para ${schools.length} colegios.`);

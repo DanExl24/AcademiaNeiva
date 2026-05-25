@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import axios from 'axios'
-import { ArrowLeft, BookOpenCheck, PenSquare, Plus, Search, Sparkles } from 'lucide-vue-next'
+import { ArrowLeft, BookOpenCheck, PenSquare, Plus, Search, Sparkles, Check, Trash2, X } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 
 interface AcademicPeriod {
@@ -36,6 +36,11 @@ interface CompetencyItem {
   tipo_grado_nombre: string
   seccion_nombre: string
   jornada_nombre: string
+  evidencias: {
+    id_evidencia: number
+    descripcion: string
+    orden: number
+  }[]
 }
 
 const auth = useAuthStore()
@@ -259,6 +264,73 @@ const handleFormGradeChange = () => {
   competencyForm.value.subjectKey = ''
 }
 
+const newEvidencia = ref<Record<number, string>>({})
+const editingEvidencia = ref<number | null>(null)
+const editEvidenciaText = ref('')
+
+const addEvidencia = async (competencia: CompetencyItem) => {
+  const desc = newEvidencia.value[competencia.id_competencia]?.trim()
+  if (!desc) return
+
+  try {
+    saving.value = true
+    const response = await axios.post(`http://localhost:3000/api/academic-admin/settings/competencies/${competencia.id_competencia}/evidencias`, {
+      schoolId: schoolId.value,
+      descripcion: desc
+    })
+    if (!competencia.evidencias) competencia.evidencias = []
+    competencia.evidencias.push(response.data)
+    newEvidencia.value[competencia.id_competencia] = ''
+  } catch (error: any) {
+    alert(error.response?.data?.error || 'Error al agregar evidencia')
+  } finally {
+    saving.value = false
+  }
+}
+
+const startEditEvidencia = (evidencia: any) => {
+  editingEvidencia.value = evidencia.id_evidencia
+  editEvidenciaText.value = evidencia.descripcion
+}
+
+const saveEditEvidencia = async (evidencia: any) => {
+  const desc = editEvidenciaText.value.trim()
+  if (!desc || desc === evidencia.descripcion) {
+    editingEvidencia.value = null
+    return
+  }
+
+  try {
+    saving.value = true
+    await axios.put(`http://localhost:3000/api/academic-admin/settings/evidencias/${evidencia.id_evidencia}`, {
+      schoolId: schoolId.value,
+      descripcion: desc
+    })
+    evidencia.descripcion = desc
+    editingEvidencia.value = null
+  } catch (error: any) {
+    alert(error.response?.data?.error || 'Error al actualizar evidencia')
+  } finally {
+    saving.value = false
+  }
+}
+
+const removeEvidencia = async (competencia: CompetencyItem, evidenciaId: number) => {
+  if (!confirm('¿Eliminar esta evidencia?')) return
+
+  try {
+    saving.value = true
+    await axios.delete(`http://localhost:3000/api/academic-admin/settings/evidencias/${evidenciaId}`, {
+      params: { schoolId: schoolId.value }
+    })
+    competencia.evidencias = competencia.evidencias.filter((e: any) => e.id_evidencia !== evidenciaId)
+  } catch (error: any) {
+    alert(error.response?.data?.error || 'Error al eliminar evidencia')
+  } finally {
+    saving.value = false
+  }
+}
+
 onMounted(loadData)
 </script>
 
@@ -439,6 +511,36 @@ onMounted(loadData)
 
             <div class="mt-5 rounded-3xl border border-slate-100 bg-slate-50 p-5">
               <p class="text-sm font-semibold leading-7 text-slate-700">{{ item.descripcion }}</p>
+
+              <div v-if="item.estado === 'DEFINIDA'" class="mt-6 border-t border-slate-200 pt-6">
+                <h4 class="text-sm font-black text-slate-900 mb-4">Evidencias de aprendizaje</h4>
+                
+                <ul v-if="item.evidencias?.length" class="space-y-3 mb-4">
+                  <li v-for="ev in item.evidencias" :key="ev.id_evidencia" class="flex items-start gap-3 group">
+                    <div class="mt-2 h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0"></div>
+                    <div v-if="editingEvidencia === ev.id_evidencia" class="flex-1 flex gap-2">
+                      <input type="text" v-model="editEvidenciaText" @keyup.enter="saveEditEvidencia(ev)" class="flex-1 rounded-xl border border-emerald-200 px-3 py-1.5 text-sm outline-none focus:border-emerald-500 bg-white" />
+                      <button @click="saveEditEvidencia(ev)" class="text-emerald-600 hover:text-emerald-700 p-1"><Check class="h-4 w-4" /></button>
+                      <button @click="editingEvidencia = null" class="text-slate-400 hover:text-slate-600 p-1"><X class="h-4 w-4" /></button>
+                    </div>
+                    <div v-else class="flex-1 flex justify-between items-start gap-4">
+                      <span class="text-sm font-medium text-slate-700">{{ ev.descripcion }}</span>
+                      <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button @click="startEditEvidencia(ev)" class="text-slate-400 hover:text-emerald-600"><PenSquare class="h-4 w-4" /></button>
+                        <button @click="removeEvidencia(item, ev.id_evidencia)" class="text-slate-400 hover:text-red-500"><Trash2 class="h-4 w-4" /></button>
+                      </div>
+                    </div>
+                  </li>
+                </ul>
+                <div v-else class="text-sm text-slate-500 italic mb-4">No hay evidencias definidas para esta competencia.</div>
+                
+                <div class="flex gap-2">
+                  <input type="text" v-model="newEvidencia[item.id_competencia]" @keyup.enter="addEvidencia(item)" placeholder="Agregar nueva evidencia..." class="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm outline-none transition focus:border-emerald-400" />
+                  <button @click="addEvidencia(item)" :disabled="!newEvidencia[item.id_competencia]?.trim() || saving" class="inline-flex items-center justify-center rounded-xl bg-slate-100 px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-200 disabled:opacity-50">
+                    <Plus class="h-4 w-4 mr-1" /> Agregar
+                  </button>
+                </div>
+              </div>
             </div>
           </article>
         </div>

@@ -96,7 +96,7 @@ const router = createRouter({
         },
         {
           path: 'calificaciones',
-          name: 'Calificaciones',
+          name: 'teacher-grades',
           component: () => import('../views/teacher/TeacherGrades.vue')
         },
         {

@@ -87,6 +87,17 @@ const ensureAcademicPeriodTrimesterColumn = async () => {
   `);
 };
 
+const ensureAcademicPeriodDayColumns = async () => {
+  await pool.query(`
+    ALTER TABLE periodo_academico
+    ADD COLUMN IF NOT EXISTS dia_inicio integer
+  `);
+  await pool.query(`
+    ALTER TABLE periodo_academico
+    ADD COLUMN IF NOT EXISTS dia_fin integer
+  `);
+};
+
 const ensureSchoolDefaultSettings = async (schoolId: number) => {
   await ensureSchoolSettingsTable();
 
@@ -621,6 +632,7 @@ export const getAcademicSettingsData = async (req: Request, res: Response): Prom
   try {
     await ensureCompetencySchema();
     await ensureAcademicPeriodTrimesterColumn();
+    await ensureAcademicPeriodDayColumns();
     const currentYearId = await ensureAcademicYearForSchool(schoolId);
     const competencyClient = await pool.connect();
     try {
@@ -651,7 +663,7 @@ export const getAcademicSettingsData = async (req: Request, res: Response): Prom
       ),
       ensureSchoolDefaultSettings(schoolId),
       pool.query(
-        `SELECT id_periodo, nombre, estado, porcentaje, trimestre, "id_año"
+        `SELECT id_periodo, nombre, estado, porcentaje, trimestre, dia_inicio, dia_fin, "id_año"
          FROM periodo_academico
          WHERE id_colegio = $1
          ORDER BY id_periodo`,
@@ -719,7 +731,22 @@ export const getAcademicSettingsData = async (req: Request, res: Response): Prom
            ne.nombre AS nivel_nombre,
            tg.nombre AS tipo_grado_nombre,
            s.nombre AS seccion_nombre,
-           j.nombre AS jornada_nombre
+           j.nombre AS jornada_nombre,
+           COALESCE(
+             (
+               SELECT json_agg(
+                 json_build_object(
+                   'id_evidencia', ev.id_evidencia,
+                   'descripcion',  ev.descripcion,
+                   'orden',        ev.orden
+                 )
+                 ORDER BY ev.orden, ev.id_evidencia
+               )
+               FROM evidencia_aprendizaje ev
+               WHERE ev.id_competencia = c.id_competencia
+             ),
+             '[]'::json
+           ) AS evidencias
          FROM competencias c
          JOIN materias m ON m.id_materia = c.id_materia
          JOIN periodo_academico p ON p.id_periodo = c.id_periodo
@@ -779,6 +806,12 @@ export const createAcademicPeriod = async (req: Request, res: Response): Promise
   const nombre = String(req.body.nombre || "").trim();
   const porcentaje = Number(req.body.porcentaje);
   const trimestre = Number(req.body.trimestre);
+  const diaInicio = req.body.dia_inicio !== undefined && req.body.dia_inicio !== "" && req.body.dia_inicio !== null
+    ? Number(req.body.dia_inicio)
+    : null;
+  const diaFin = req.body.dia_fin !== undefined && req.body.dia_fin !== "" && req.body.dia_fin !== null
+    ? Number(req.body.dia_fin)
+    : null;
 
   if (
     !schoolId ||
@@ -793,8 +826,24 @@ export const createAcademicPeriod = async (req: Request, res: Response): Promise
     return;
   }
 
+  if (diaInicio !== null && (!Number.isInteger(diaInicio) || diaInicio < 1 || diaInicio > 31)) {
+    res.status(400).json({ error: "El día de inicio debe ser un número entre 1 y 31" });
+    return;
+  }
+
+  if (diaFin !== null && (!Number.isInteger(diaFin) || diaFin < 1 || diaFin > 31)) {
+    res.status(400).json({ error: "El día de fin debe ser un número entre 1 y 31" });
+    return;
+  }
+
+  if (diaInicio !== null && diaFin !== null && diaFin < diaInicio) {
+    res.status(400).json({ error: "El día de fin no puede ser menor al día de inicio" });
+    return;
+  }
+
   try {
     await ensureAcademicPeriodTrimesterColumn();
+    await ensureAcademicPeriodDayColumns();
     const currentYearId = await ensureAcademicYearForSchool(schoolId);
 
     const totalsRes = await pool.query(
@@ -826,10 +875,10 @@ export const createAcademicPeriod = async (req: Request, res: Response): Promise
     }
 
     const created = await pool.query(
-      `INSERT INTO periodo_academico (nombre, estado, porcentaje, trimestre, "id_año", id_colegio)
-       VALUES ($1, 'ABIERTO', $2, $3, $4, $5)
-       RETURNING id_periodo, nombre, estado, porcentaje, trimestre, "id_año"`,
-      [nombre, porcentaje, trimestre, currentYearId, schoolId]
+      `INSERT INTO periodo_academico (nombre, estado, porcentaje, trimestre, dia_inicio, dia_fin, "id_año", id_colegio)
+       VALUES ($1, 'ABIERTO', $2, $3, $4, $5, $6, $7)
+       RETURNING id_periodo, nombre, estado, porcentaje, trimestre, dia_inicio, dia_fin, "id_año"`,
+      [nombre, porcentaje, trimestre, diaInicio, diaFin, currentYearId, schoolId]
     );
 
     res.status(201).json(created.rows[0]);
@@ -1216,6 +1265,12 @@ export const updateAcademicPeriodPercentage = async (req: Request, res: Response
   const schoolId = parseSchoolId(req.body.schoolId);
   const porcentaje = Number(req.body.porcentaje);
   const trimestre = Number(req.body.trimestre);
+  const diaInicio = req.body.dia_inicio !== undefined && req.body.dia_inicio !== "" && req.body.dia_inicio !== null
+    ? Number(req.body.dia_inicio)
+    : null;
+  const diaFin = req.body.dia_fin !== undefined && req.body.dia_fin !== "" && req.body.dia_fin !== null
+    ? Number(req.body.dia_fin)
+    : null;
 
   if (
     !periodId ||
@@ -1230,8 +1285,24 @@ export const updateAcademicPeriodPercentage = async (req: Request, res: Response
     return;
   }
 
+  if (diaInicio !== null && (!Number.isInteger(diaInicio) || diaInicio < 1 || diaInicio > 31)) {
+    res.status(400).json({ error: "El día de inicio debe ser un número entre 1 y 31" });
+    return;
+  }
+
+  if (diaFin !== null && (!Number.isInteger(diaFin) || diaFin < 1 || diaFin > 31)) {
+    res.status(400).json({ error: "El día de fin debe ser un número entre 1 y 31" });
+    return;
+  }
+
+  if (diaInicio !== null && diaFin !== null && diaFin < diaInicio) {
+    res.status(400).json({ error: "El día de fin no puede ser menor al día de inicio" });
+    return;
+  }
+
   try {
     await ensureAcademicPeriodTrimesterColumn();
+    await ensureAcademicPeriodDayColumns();
     const periodRes = await pool.query(
       `SELECT id_periodo, porcentaje, trimestre
        FROM periodo_academico
@@ -1264,11 +1335,13 @@ export const updateAcademicPeriodPercentage = async (req: Request, res: Response
     const updated = await pool.query(
       `UPDATE periodo_academico
        SET porcentaje = $1,
-           trimestre = $2
-       WHERE id_periodo = $3
-         AND id_colegio = $4
-       RETURNING id_periodo, nombre, estado, porcentaje, trimestre, "id_año"`,
-      [porcentaje, trimestre, periodId, schoolId]
+           trimestre = $2,
+           dia_inicio = $3,
+           dia_fin = $4
+       WHERE id_periodo = $5
+         AND id_colegio = $6
+       RETURNING id_periodo, nombre, estado, porcentaje, trimestre, dia_inicio, dia_fin, "id_año"`,
+      [porcentaje, trimestre, diaInicio, diaFin, periodId, schoolId]
     );
 
     res.json(updated.rows[0]);
@@ -1887,6 +1960,105 @@ export const deleteSubject = async (req: Request, res: Response): Promise<void> 
     res.json({ message: "Materia eliminada correctamente" });
   } catch (error: any) {
     console.error("Error deleting subject:", error);
+    res.status(500).json({ error: "Error en el servidor" });
+  }
+};
+
+// ─── Evidencias de Aprendizaje ────────────────────────────────────────────────
+
+export const createEvidencia = async (req: Request, res: Response): Promise<void> => {
+  const competenciaId = Number(req.params.competenciaId);
+  const descripcion = String(req.body.descripcion || "").trim();
+  const schoolId = parseSchoolId(req.body.schoolId);
+
+  if (!competenciaId || !descripcion || !schoolId) {
+    res.status(400).json({ error: "Competencia, descripción y colegio son obligatorios" });
+    return;
+  }
+
+  try {
+    // Verificar que la competencia pertenece a este colegio
+    const check = await pool.query(
+      `SELECT id_competencia FROM competencias WHERE id_competencia = $1 AND id_colegio = $2`,
+      [competenciaId, schoolId]
+    );
+    if (check.rows.length === 0) {
+      res.status(404).json({ error: "Competencia no encontrada" });
+      return;
+    }
+
+    // Calcular el siguiente orden
+    const ordenRes = await pool.query(
+      `SELECT COALESCE(MAX(orden), -1) + 1 AS next_orden FROM evidencia_aprendizaje WHERE id_competencia = $1`,
+      [competenciaId]
+    );
+    const orden = Number(ordenRes.rows[0].next_orden);
+
+    const result = await pool.query(
+      `INSERT INTO evidencia_aprendizaje (id_competencia, descripcion, orden, id_colegio)
+       VALUES ($1, $2, $3, $4)
+       RETURNING *`,
+      [competenciaId, descripcion, orden, schoolId]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error: any) {
+    console.error("Error creating evidencia:", error);
+    res.status(500).json({ error: "Error en el servidor" });
+  }
+};
+
+export const updateEvidencia = async (req: Request, res: Response): Promise<void> => {
+  const evidenciaId = Number(req.params.evidenciaId);
+  const descripcion = String(req.body.descripcion || "").trim();
+  const schoolId = parseSchoolId(req.body.schoolId);
+
+  if (!evidenciaId || !descripcion || !schoolId) {
+    res.status(400).json({ error: "ID, descripción y colegio son obligatorios" });
+    return;
+  }
+
+  try {
+    const result = await pool.query(
+      `UPDATE evidencia_aprendizaje
+       SET descripcion = $1
+       WHERE id_evidencia = $2 AND id_colegio = $3
+       RETURNING *`,
+      [descripcion, evidenciaId, schoolId]
+    );
+    if (result.rows.length === 0) {
+      res.status(404).json({ error: "Evidencia no encontrada" });
+      return;
+    }
+    res.json(result.rows[0]);
+  } catch (error: any) {
+    console.error("Error updating evidencia:", error);
+    res.status(500).json({ error: "Error en el servidor" });
+  }
+};
+
+export const deleteEvidencia = async (req: Request, res: Response): Promise<void> => {
+  const evidenciaId = Number(req.params.evidenciaId);
+  const schoolId = parseSchoolId(req.query.schoolId as string);
+
+  if (!evidenciaId || !schoolId) {
+    res.status(400).json({ error: "Parámetros inválidos" });
+    return;
+  }
+
+  try {
+    const result = await pool.query(
+      `DELETE FROM evidencia_aprendizaje
+       WHERE id_evidencia = $1 AND id_colegio = $2
+       RETURNING id_evidencia`,
+      [evidenciaId, schoolId]
+    );
+    if (result.rows.length === 0) {
+      res.status(404).json({ error: "Evidencia no encontrada" });
+      return;
+    }
+    res.json({ message: "Evidencia eliminada correctamente" });
+  } catch (error: any) {
+    console.error("Error deleting evidencia:", error);
     res.status(500).json({ error: "Error en el servidor" });
   }
 };

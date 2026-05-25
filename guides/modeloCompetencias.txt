@@ -1,0 +1,91 @@
+# Modelo Académico del Sistema Escolar
+
+## Contexto
+
+Inicialmente el sistema fue diseñado bajo una lógica simple:
+
+```txt
+Actividad
+- nombre
+- porcentaje
+- nota
+
+Este modelo funciona para sistemas básicos de registro de notas, pero no representa correctamente cómo funciona la evaluación académica real en colegios colombianos.
+
+En la práctica, los colegios trabajan mediante:
+
+Competencias
+Evidencias de aprendizaje
+Actividades evaluativas
+Indicadores o criterios
+Desempeños
+Notas parciales
+
+La nota final no suele salir de una única actividad aislada, sino de múltiples elementos relacionados con una competencia.
+
+Problema Real
+
+El problema del modelo antiguo es que:
+
+Una actividad solo tiene una nota.
+No se sabe qué se evaluó realmente.
+No se pueden generar reportes pedagógicos.
+No existe relación entre competencias y actividades.
+No se pueden manejar evidencias de aprendizaje.
+No se pueden evaluar varios aspectos dentro de una misma actividad.
+
+Ejemplo incorrecto:
+
+Actividad: "Laboratorio"
+Nota: 4.0
+
+Ese modelo no permite responder:
+
+¿Qué aprendió el estudiante?
+¿Qué parte falló?
+¿Qué evidencia cumplió?
+¿Qué debe recuperar?
+¿Qué competencia se trabajó?
+Cómo Funciona Realmente un Colegio
+Ejemplo pedagógico real
+Competencia
+
+Comprende que los sentidos permiten percibir características de los objetos.
+
+Evidencias de aprendizaje
+Describe sonidos
+Identifica texturas
+Compara temperaturas
+Usa instrumentos de observación
+Actividad evaluativa
+
+"Laboratorio de observación"
+
+Aspectos evaluados
+Aspecto	Nota
+Describe sonidos	4.0
+Reconoce texturas	5.0
+Usa la lupa correctamente	3.5
+
+La actividad es solamente el contenedor de evaluación.
+
+La evaluación real ocurre sobre evidencias, criterios o desempeños.
+
+Solución Real
+
+El sistema debe modelar:
+
+Competencia
+ └── Evidencia
+       └── Actividad
+             └── Criterios evaluados
+                    └── Nota
+
+Esto permite:
+
+Relacionar actividades con competencias
+Evaluar múltiples aspectos en una sola actividad
+Generar reportes pedagógicos
+Mostrar fortalezas y debilidades
+Tener trazabilidad académica
+Adaptarse a colegios reales

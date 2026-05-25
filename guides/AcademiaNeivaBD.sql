@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict 7KOkj9ETEF7ogvo5PcnQrjr3W7e22bF7gWkDgIcu8r2X1toXgR0fBupdMyqwa08
+\restrict hVkZcXsDqxx7fuk2tyzPpcys6DPGLRKNjO3yarppqnmYihOQ7c3oBLyX6Qy1tdF
 
 -- Dumped from database version 18.3
 -- Dumped by pg_dump version 18.3
@@ -111,7 +111,8 @@ CREATE TYPE public.estado_matricula AS ENUM (
     'ACTIVA',
     'CANCELADA',
     'TRASLADADA',
-    'RECHAZADA'
+    'RECHAZADA',
+    'CORRECCION'
 );
 
 
@@ -185,7 +186,8 @@ CREATE TABLE public.actividad_materia (
     id_periodo integer NOT NULL,
     nombre character varying(255) NOT NULL,
     porcentaje numeric(5,2) NOT NULL,
-    id_colegio integer NOT NULL
+    id_colegio integer NOT NULL,
+    id_competencia integer
 );
 
 
@@ -325,6 +327,45 @@ ALTER SEQUENCE public.colegio_id_colegio_seq OWNED BY public.colegio.id_colegio;
 
 
 --
+-- Name: competencias; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.competencias (
+    id_competencia integer NOT NULL,
+    "id_año" integer NOT NULL,
+    id_grupo integer NOT NULL,
+    id_materia integer NOT NULL,
+    id_periodo integer NOT NULL,
+    descripcion text DEFAULT 'Competencia pendiente por definir.'::text NOT NULL,
+    id_colegio integer NOT NULL
+);
+
+
+ALTER TABLE public.competencias OWNER TO postgres;
+
+--
+-- Name: competencias_id_competencia_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.competencias_id_competencia_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.competencias_id_competencia_seq OWNER TO postgres;
+
+--
+-- Name: competencias_id_competencia_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.competencias_id_competencia_seq OWNED BY public.competencias.id_competencia;
+
+
+--
 -- Name: configuracion_base; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -360,6 +401,21 @@ ALTER SEQUENCE public.configuracion_base_id_config_base_seq OWNER TO postgres;
 
 ALTER SEQUENCE public.configuracion_base_id_config_base_seq OWNED BY public.configuracion_base.id_config_base;
 
+
+--
+-- Name: configuracion_colegio; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.configuracion_colegio (
+    id_colegio integer NOT NULL,
+    nota_minima numeric(5,2) DEFAULT 0 NOT NULL,
+    nota_maxima numeric(5,2) DEFAULT 5 NOT NULL,
+    nota_aprobacion numeric(5,2) DEFAULT 3 NOT NULL,
+    escala_modo character varying(20) DEFAULT 'AUTOMATICO'::character varying NOT NULL
+);
+
+
+ALTER TABLE public.configuracion_colegio OWNER TO postgres;
 
 --
 -- Name: configuracion_sistema; Type: TABLE; Schema: public; Owner: postgres
@@ -589,7 +645,8 @@ CREATE TABLE public.docente (
     id_tipodocumento integer NOT NULL,
     id_contratodocente integer,
     id_colegio integer NOT NULL,
-    id_usuario integer
+    id_usuario integer,
+    estado character varying(20) DEFAULT 'ACTIVO'::character varying NOT NULL
 );
 
 
@@ -735,6 +792,45 @@ ALTER SEQUENCE public.estudiante_id_estudiante_seq OWNED BY public.estudiante.id
 
 
 --
+-- Name: grados; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.grados (
+    id_grado integer NOT NULL,
+    nivel character varying(50) NOT NULL,
+    tipo_grado character varying(50) NOT NULL,
+    id_jornada integer NOT NULL,
+    id_colegio integer NOT NULL,
+    cupos_totales integer DEFAULT 30 NOT NULL,
+    seccion character varying(10) DEFAULT 'A'::character varying
+);
+
+
+ALTER TABLE public.grados OWNER TO postgres;
+
+--
+-- Name: grados_id_grado_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.grados_id_grado_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.grados_id_grado_seq OWNER TO postgres;
+
+--
+-- Name: grados_id_grado_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.grados_id_grado_seq OWNED BY public.grados.id_grado;
+
+
+--
 -- Name: grupos; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -859,7 +955,10 @@ CREATE TABLE public.matricula (
     tiene_discapacidad boolean DEFAULT false,
     es_extranjero boolean DEFAULT false,
     token_seguimiento uuid DEFAULT public.uuid_generate_v4() NOT NULL,
-    id_grupo integer
+    id_grupo integer,
+    motivo_cancelacion character varying(100),
+    detalles_cancelacion text,
+    es_traslado boolean DEFAULT false
 );
 
 
@@ -1050,7 +1149,10 @@ CREATE TABLE public.periodo_academico (
     estado public.estado_periodo NOT NULL,
     porcentaje numeric(5,2) NOT NULL,
     "id_año" integer,
-    id_colegio integer NOT NULL
+    id_colegio integer NOT NULL,
+    trimestre integer,
+    dia_inicio integer,
+    dia_fin integer
 );
 
 
@@ -1494,6 +1596,13 @@ ALTER TABLE ONLY public.colegio ALTER COLUMN id_colegio SET DEFAULT nextval('pub
 
 
 --
+-- Name: competencias id_competencia; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.competencias ALTER COLUMN id_competencia SET DEFAULT nextval('public.competencias_id_competencia_seq'::regclass);
+
+
+--
 -- Name: configuracion_base id_config_base; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -1568,6 +1677,13 @@ ALTER TABLE ONLY public.escala_valoracion ALTER COLUMN id_escalavaloracion SET D
 --
 
 ALTER TABLE ONLY public.estudiante ALTER COLUMN id_estudiante SET DEFAULT nextval('public.estudiante_id_estudiante_seq'::regclass);
+
+
+--
+-- Name: grados id_grado; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.grados ALTER COLUMN id_grado SET DEFAULT nextval('public.grados_id_grado_seq'::regclass);
 
 
 --
@@ -1715,6 +1831,22 @@ ALTER TABLE ONLY public.colegio
 
 
 --
+-- Name: competencias competencias_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.competencias
+    ADD CONSTRAINT competencias_pkey PRIMARY KEY (id_competencia);
+
+
+--
+-- Name: competencias competencias_unique_context; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.competencias
+    ADD CONSTRAINT competencias_unique_context UNIQUE ("id_año", id_grupo, id_materia, id_periodo, id_colegio);
+
+
+--
 -- Name: configuracion_base configuracion_base_clave_key; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -1728,6 +1860,14 @@ ALTER TABLE ONLY public.configuracion_base
 
 ALTER TABLE ONLY public.configuracion_base
     ADD CONSTRAINT configuracion_base_pkey PRIMARY KEY (id_config_base);
+
+
+--
+-- Name: configuracion_colegio configuracion_colegio_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.configuracion_colegio
+    ADD CONSTRAINT configuracion_colegio_pkey PRIMARY KEY (id_colegio);
 
 
 --
@@ -1840,6 +1980,14 @@ ALTER TABLE ONLY public.estudiante
 
 ALTER TABLE ONLY public.estudiante
     ADD CONSTRAINT estudiante_pkey PRIMARY KEY (id_estudiante);
+
+
+--
+-- Name: grados grados_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.grados
+    ADD CONSTRAINT grados_pkey PRIMARY KEY (id_grado);
 
 
 --
@@ -2107,6 +2255,14 @@ ALTER TABLE ONLY public.actividad_materia
 
 
 --
+-- Name: actividad_materia actividad_materia_id_competencia_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.actividad_materia
+    ADD CONSTRAINT actividad_materia_id_competencia_fkey FOREIGN KEY (id_competencia) REFERENCES public.competencias(id_competencia) ON DELETE CASCADE;
+
+
+--
 -- Name: actividad_materia actividad_materia_id_detallegrado_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -2144,6 +2300,54 @@ ALTER TABLE ONLY public.cierre_materia
 
 ALTER TABLE ONLY public.cierre_materia
     ADD CONSTRAINT cierre_materia_id_periodo_fkey FOREIGN KEY (id_periodo) REFERENCES public.periodo_academico(id_periodo);
+
+
+--
+-- Name: competencias competencias_id_año_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.competencias
+    ADD CONSTRAINT "competencias_id_año_fkey" FOREIGN KEY ("id_año") REFERENCES public."año_lectivo"("id_año") ON DELETE CASCADE;
+
+
+--
+-- Name: competencias competencias_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.competencias
+    ADD CONSTRAINT competencias_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio) ON DELETE CASCADE;
+
+
+--
+-- Name: competencias competencias_id_grupo_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.competencias
+    ADD CONSTRAINT competencias_id_grupo_fkey FOREIGN KEY (id_grupo) REFERENCES public.grupos(id_grupo) ON DELETE CASCADE;
+
+
+--
+-- Name: competencias competencias_id_materia_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.competencias
+    ADD CONSTRAINT competencias_id_materia_fkey FOREIGN KEY (id_materia) REFERENCES public.materias(id_materia) ON DELETE CASCADE;
+
+
+--
+-- Name: competencias competencias_id_periodo_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.competencias
+    ADD CONSTRAINT competencias_id_periodo_fkey FOREIGN KEY (id_periodo) REFERENCES public.periodo_academico(id_periodo) ON DELETE CASCADE;
+
+
+--
+-- Name: configuracion_colegio configuracion_colegio_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.configuracion_colegio
+    ADD CONSTRAINT configuracion_colegio_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio) ON DELETE CASCADE;
 
 
 --
@@ -2613,5 +2817,5 @@ REVOKE USAGE ON SCHEMA public FROM PUBLIC;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 7KOkj9ETEF7ogvo5PcnQrjr3W7e22bF7gWkDgIcu8r2X1toXgR0fBupdMyqwa08
+\unrestrict hVkZcXsDqxx7fuk2tyzPpcys6DPGLRKNjO3yarppqnmYihOQ7c3oBLyX6Qy1tdF
 

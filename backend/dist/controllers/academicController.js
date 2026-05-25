@@ -19,6 +19,7 @@ const getTeacherCourses = async (req, res) => {
         tg.nombre as grado_nombre, 
         ne.nombre as nivel, 
         s.nombre as seccion,
+        j.nombre as jornada_nombre,
         m.id_materia, 
         m.nombre as materia_nombre
        FROM detalle_grados dg
@@ -26,6 +27,7 @@ const getTeacherCourses = async (req, res) => {
        JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
        JOIN nivel_escolar ne ON g.id_nivel = ne.id_nivel
        JOIN secciones s ON g.id_seccion = s.id_seccion
+       JOIN jornada j ON g.id_jornada = j.id_jornada
        JOIN materias m ON dg.id_materia = m.id_materia
        WHERE dg.id_docente = $1`, [idDocente]);
         res.json(result.rows);

@@ -68,10 +68,10 @@ const schools = [
 const sectionNames = ["A", "B"];
 const jornadaNames = ["MAÑANA", "TARDE", "UNICA"];
 const periodSeeds = [
-    { nombre: "Primer Periodo", estado: "ABIERTO", porcentaje: 25 },
-    { nombre: "Segundo Periodo", estado: "CERRADO", porcentaje: 25 },
-    { nombre: "Tercer Periodo", estado: "CERRADO", porcentaje: 25 },
-    { nombre: "Cuarto Periodo", estado: "CERRADO", porcentaje: 25 },
+    { nombre: "Primer Periodo", estado: "ABIERTO", porcentaje: 25, trimestre: 1 },
+    { nombre: "Segundo Periodo", estado: "CERRADO", porcentaje: 25, trimestre: 2 },
+    { nombre: "Tercer Periodo", estado: "CERRADO", porcentaje: 25, trimestre: 3 },
+    { nombre: "Cuarto Periodo", estado: "CERRADO", porcentaje: 25, trimestre: 3 },
 ];
 const scaleSeeds = [
     { nivel: "SUPERIOR", min: 4.6, max: 5.0 },
@@ -243,9 +243,9 @@ async function insertSchoolAcademicStructure(client, school, sectionIds) {
     }
     for (const periodSeed of periodSeeds) {
         await client.query(`
-        INSERT INTO periodo_academico (nombre, estado, porcentaje, "id_año", id_colegio)
-        VALUES ($1, $2, $3, $4, $5)
-      `, [periodSeed.nombre, periodSeed.estado, periodSeed.porcentaje, academicYearId, school.id]);
+        INSERT INTO periodo_academico (nombre, estado, porcentaje, trimestre, "id_año", id_colegio)
+        VALUES ($1, $2, $3, $4, $5, $6)
+      `, [periodSeed.nombre, periodSeed.estado, periodSeed.porcentaje, periodSeed.trimestre, academicYearId, school.id]);
     }
     for (const scaleSeed of scaleSeeds) {
         await client.query(`
@@ -346,6 +346,9 @@ async function run() {
         await client.query(authSql);
         await createSchoolConfigTable(client);
         await client.query(`ALTER TABLE grados ADD COLUMN IF NOT EXISTS seccion VARCHAR(10) DEFAULT 'A';`);
+        await client.query(`ALTER TABLE periodo_academico ADD COLUMN IF NOT EXISTS trimestre integer;`);
+        await client.query(`ALTER TABLE periodo_academico ADD COLUMN IF NOT EXISTS dia_inicio integer;`);
+        await client.query(`ALTER TABLE periodo_academico ADD COLUMN IF NOT EXISTS dia_fin integer;`);
         console.log("Reseteando tablas existentes...");
         await truncateExistingTables(client, [
             "actividad_materia",
