@@ -140,6 +140,17 @@ const fetchGradeRange = async () => {
   }
 }
 
+const initializeMatrixForStudents = () => {
+  students.value.forEach(s => {
+    if (!gradesMatrix.value[s.id_estudiante]) {
+      gradesMatrix.value[s.id_estudiante] = {}
+    }
+    if (!criteriaGradesMatrix.value[s.id_estudiante]) {
+      criteriaGradesMatrix.value[s.id_estudiante] = {}
+    }
+  })
+}
+
 // Cargar notas actuales
 const fetchGrades = async () => {
   if (!selectedGradeId.value || !selectedSubjectId.value || !selectedPeriodId.value) return
@@ -157,6 +168,9 @@ const fetchGrades = async () => {
       if (!criteriaGradesMatrix.value[n.id_estudiante]) criteriaGradesMatrix.value[n.id_estudiante] = {}
       criteriaGradesMatrix.value[n.id_estudiante][n.id_criterio] = n.nota
     })
+    
+    // Garantizar que todos los estudiantes cargados tengan una fila en la matriz
+    initializeMatrixForStudents()
   } catch (error) {
     console.error('Error fetching grades:', error)
   }
@@ -193,17 +207,39 @@ const fetchStudents = async () => {
     const response = await axios.get(`http://localhost:3000/api/teacher/students/${selectedGradeId.value}`)
     students.value = response.data
     
-    students.value.forEach(s => {
-      if (!gradesMatrix.value[s.id_estudiante]) {
-        gradesMatrix.value[s.id_estudiante] = {}
-      }
-      if (!criteriaGradesMatrix.value[s.id_estudiante]) {
-        criteriaGradesMatrix.value[s.id_estudiante] = {}
-      }
-    })
+    initializeMatrixForStudents()
   } catch (error) {
     console.error('Error fetching students:', error)
   }
+}
+
+const validateGradeInput = (studentId: number, id: number, type: 'activity' | 'criterion', event: Event) => {
+  const input = event.target as HTMLInputElement
+  let val = parseFloat(input.value)
+  if (isNaN(val)) {
+    if (type === 'activity') {
+      gradesMatrix.value[studentId][id] = ''
+    } else {
+      criteriaGradesMatrix.value[studentId][id] = ''
+    }
+    return
+  }
+  
+  if (val < gradeRange.value.min) {
+    val = gradeRange.value.min
+  } else if (val > gradeRange.value.max) {
+    val = gradeRange.value.max
+  }
+  
+  // Redondear a 1 decimal
+  val = parseFloat(val.toFixed(1))
+  
+  if (type === 'activity') {
+    gradesMatrix.value[studentId][id] = val
+  } else {
+    criteriaGradesMatrix.value[studentId][id] = val
+  }
+  input.value = val.toString()
 }
 
 // Guardar todas las notas
@@ -213,20 +249,26 @@ const saveAllGrades = async () => {
   const activityGradesToSave: any[] = []
   const criteriaGradesToSave: any[] = []
 
+  // Validaciones y armado local
+  let hasError = false
+
   Object.keys(gradesMatrix.value).forEach(studentId => {
     const sId = Number(studentId)
     Object.keys(gradesMatrix.value[sId]).forEach(activityId => {
       const aId = Number(activityId)
-      // Solo enviamos nota de actividad si no tiene criterios.
-      // Si tiene criterios, se ignoran las notas a nivel de actividad porque es computado.
       const act = activities.value.find(a => a.id_actividadmateria === aId)
       if (act && (!act.criterios || act.criterios.length === 0)) {
         const nota = gradesMatrix.value[sId][aId]
         if (nota !== undefined && nota !== '') {
+          const val = parseFloat(nota)
+          if (isNaN(val) || val < gradeRange.value.min || val > gradeRange.value.max) {
+            hasError = true
+            return
+          }
           activityGradesToSave.push({
             id_estudiante: sId,
             id_actividadmateria: aId,
-            nota: nota
+            nota: val
           })
         }
       }
@@ -239,14 +281,24 @@ const saveAllGrades = async () => {
       const cId = Number(criterioId)
       const nota = criteriaGradesMatrix.value[sId][cId]
       if (nota !== undefined && nota !== '') {
+        const val = parseFloat(nota)
+        if (isNaN(val) || val < gradeRange.value.min || val > gradeRange.value.max) {
+          hasError = true
+          return
+        }
         criteriaGradesToSave.push({
           id_estudiante: sId,
           id_criterio: cId,
-          nota: nota
+          nota: val
         })
       }
     })
   })
+
+  if (hasError) {
+    alert(`Todas las calificaciones deben estar dentro del rango institucional permitido: ${gradeRange.value.min} - ${gradeRange.value.max}`)
+    return
+  }
 
   if (activityGradesToSave.length === 0 && criteriaGradesToSave.length === 0) return
 
@@ -272,7 +324,10 @@ const addActivity = async () => {
     return
   }
   try {
-    if (!competency.value) return
+    if (!competency.value) {
+      alert('No se ha podido identificar la competencia asociada a este curso.')
+      return
+    }
 
     const response = await axios.post('http://localhost:3000/api/teacher/activities', {
       id_competencia: competency.value.id_competencia,
@@ -281,6 +336,7 @@ const addActivity = async () => {
       id_evidencia: newActivity.value.id_evidencia,
       id_colegio: auth.user?.schoolId
     })
+    initializeMatrixForStudents()
     activities.value.push(response.data)
     newActivity.value = { nombre: '', porcentaje: 0, id_evidencia: null }
     showAddActivity.value = false
@@ -706,16 +762,18 @@ onMounted(() => {
                   <th v-for="col in tableColumns" :key="col.id" 
                       :class="['px-4 py-5 text-[10px] font-black uppercase tracking-widest text-center', col.type === 'activity_total' ? 'bg-pink-50/50 text-pink-600' : 'text-slate-400']">
                     <template v-if="col.type === 'activity'">
-                      {{ col.activity.nombre }}<br>
-                      <span class="text-indigo-400">{{ col.activity.porcentaje }}%</span>
+                      <span class="text-slate-800 font-bold block">{{ col.activity.nombre }}</span>
+                      <span class="text-indigo-400 text-[9px] font-bold">{{ col.activity.porcentaje }}%</span>
                     </template>
                     <template v-else-if="col.type === 'criterion'">
-                      <span class="text-slate-600" :title="col.activity.nombre">{{ col.criterion?.descripcion }}</span><br>
-                      <span class="text-pink-400">{{ col.criterion?.porcentaje }}%</span>
+                      <span class="text-[9px] font-black text-indigo-500 block mb-1 tracking-normal truncate max-w-[120px] mx-auto">{{ col.activity.nombre }}</span>
+                      <span class="text-slate-700 font-bold text-[10px]" :title="col.activity.nombre">{{ col.criterion?.descripcion }}</span><br>
+                      <span class="text-pink-400 text-[9px] font-bold">{{ col.criterion?.porcentaje }}%</span>
                     </template>
                     <template v-else-if="col.type === 'activity_total'">
-                      Σ {{ col.activity.nombre }}<br>
-                      <span class="text-pink-400">{{ col.activity.porcentaje }}%</span>
+                      <span class="text-[9px] font-black text-pink-500 block mb-1 tracking-normal truncate max-w-[120px] mx-auto">{{ col.activity.nombre }}</span>
+                      <span class="font-bold text-pink-700 text-[10px]">Σ Total</span><br>
+                      <span class="text-pink-400 text-[9px] font-bold">{{ col.activity.porcentaje }}%</span>
                     </template>
                   </th>
 
@@ -745,6 +803,7 @@ onMounted(() => {
                         step="0.1" 
                         :min="gradeRange.min" 
                         :max="gradeRange.max"
+                        @blur="validateGradeInput(student.id_estudiante, col.activity.id_actividadmateria, 'activity', $event)"
                         placeholder="0.0"
                         class="w-16 bg-white border border-slate-200 rounded-xl p-2.5 text-center text-sm font-black text-slate-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none"
                       />
@@ -757,6 +816,7 @@ onMounted(() => {
                         step="0.1" 
                         :min="gradeRange.min" 
                         :max="gradeRange.max"
+                        @blur="validateGradeInput(student.id_estudiante, col.criterion.id_criterio, 'criterion', $event)"
                         placeholder="0.0"
                         class="w-16 bg-white border border-slate-200 rounded-xl p-2.5 text-center text-sm font-black text-slate-700 focus:ring-2 focus:ring-pink-500 focus:border-pink-500 transition-all outline-none"
                       />

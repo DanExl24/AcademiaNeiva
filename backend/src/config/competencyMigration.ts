@@ -197,6 +197,23 @@ BEGIN
       ALTER COLUMN id_competencia SET NOT NULL;
   END IF;
 END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'unique_actividad_estudiante'
+  ) THEN
+    DELETE FROM public.notas_actividad n1
+    USING public.notas_actividad n2
+    WHERE n1.id_notaactividad < n2.id_notaactividad
+      AND n1.id_actividadmateria = n2.id_actividadmateria
+      AND n1.id_estudiante = n2.id_estudiante;
+
+    ALTER TABLE public.notas_actividad
+      ADD CONSTRAINT unique_actividad_estudiante UNIQUE (id_actividadmateria, id_estudiante);
+  END IF;
+END $$;
+
 `;
 
 export const ensureCompetencySchema = async (): Promise<void> => {
@@ -268,6 +285,27 @@ const getGradePeerGroups = async (
 const normalizeCompetencyDescription = (value: string): string =>
   value.trim().replace(/\s+/g, " ");
 
+export const ensureDefaultEvidencias = async (
+  client: PoolClient,
+  competencyId: number,
+  schoolId: number
+): Promise<void> => {
+  const checkRes = await client.query(
+    "SELECT 1 FROM evidencia_aprendizaje WHERE id_competencia = $1 LIMIT 1",
+    [competencyId]
+  );
+  if (checkRes.rows.length === 0) {
+    await client.query(
+      `INSERT INTO evidencia_aprendizaje (id_competencia, descripcion, orden, id_colegio)
+       VALUES 
+         ($1, 'Reconoce y aplica los conceptos fundamentales de la unidad temática.', 1, $2),
+         ($1, 'Demuestra capacidad analítica y pensamiento crítico en la resolución de problemas.', 2, $2),
+         ($1, 'Participa activamente y colabora con sus compañeros en el entorno de aprendizaje.', 3, $2)`,
+      [competencyId, schoolId]
+    );
+  }
+};
+
 export const syncCompetencyAcrossGrade = async (
   client: PoolClient,
   context: TeachingContext,
@@ -320,7 +358,11 @@ export const syncCompetencyAcrossGrade = async (
        RETURNING *`,
       [context.idAnio, peerGroupId, context.idMateria, periodId, sharedDescription, context.idColegio]
     );
-    syncedRows.push(syncedRes.rows[0]);
+    const compRow = syncedRes.rows[0];
+    syncedRows.push(compRow);
+    
+    // Ensure default evidences for each synced competency
+    await ensureDefaultEvidencias(client, compRow.id_competencia, compRow.id_colegio);
   }
 
   const currentGroupRow = syncedRows.find((row) => Number(row.id_grupo) === context.idGrupo);

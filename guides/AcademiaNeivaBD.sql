@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict hVkZcXsDqxx7fuk2tyzPpcys6DPGLRKNjO3yarppqnmYihOQ7c3oBLyX6Qy1tdF
+\restrict UjcQjPq0hAftpHCTsbSlMVvA2cXbI6yxe617ojjWHaFhtmtSG8v19jh1Ggxovl9
 
 -- Dumped from database version 18.3
 -- Dumped by pg_dump version 18.3
@@ -182,12 +182,13 @@ SET default_table_access_method = heap;
 
 CREATE TABLE public.actividad_materia (
     id_actividadmateria integer NOT NULL,
-    id_detallegrado integer NOT NULL,
-    id_periodo integer NOT NULL,
+    id_detallegrado integer,
+    id_periodo integer,
     nombre character varying(255) NOT NULL,
     porcentaje numeric(5,2) NOT NULL,
     id_colegio integer NOT NULL,
-    id_competencia integer
+    id_competencia integer NOT NULL,
+    id_evidencia integer
 );
 
 
@@ -487,6 +488,44 @@ ALTER SEQUENCE public.contrato_docente_id_contratodocente_seq OWNER TO postgres;
 --
 
 ALTER SEQUENCE public.contrato_docente_id_contratodocente_seq OWNED BY public.contrato_docente.id_contratodocente;
+
+
+--
+-- Name: criterio_evaluacion; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.criterio_evaluacion (
+    id_criterio integer NOT NULL,
+    id_actividadmateria integer NOT NULL,
+    id_evidencia integer,
+    descripcion text NOT NULL,
+    porcentaje numeric(5,2) NOT NULL,
+    id_colegio integer NOT NULL
+);
+
+
+ALTER TABLE public.criterio_evaluacion OWNER TO postgres;
+
+--
+-- Name: criterio_evaluacion_id_criterio_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.criterio_evaluacion_id_criterio_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.criterio_evaluacion_id_criterio_seq OWNER TO postgres;
+
+--
+-- Name: criterio_evaluacion_id_criterio_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.criterio_evaluacion_id_criterio_seq OWNED BY public.criterio_evaluacion.id_criterio;
 
 
 --
@@ -792,6 +831,43 @@ ALTER SEQUENCE public.estudiante_id_estudiante_seq OWNED BY public.estudiante.id
 
 
 --
+-- Name: evidencia_aprendizaje; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.evidencia_aprendizaje (
+    id_evidencia integer NOT NULL,
+    id_competencia integer NOT NULL,
+    descripcion text NOT NULL,
+    orden integer DEFAULT 0 NOT NULL,
+    id_colegio integer NOT NULL
+);
+
+
+ALTER TABLE public.evidencia_aprendizaje OWNER TO postgres;
+
+--
+-- Name: evidencia_aprendizaje_id_evidencia_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.evidencia_aprendizaje_id_evidencia_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.evidencia_aprendizaje_id_evidencia_seq OWNER TO postgres;
+
+--
+-- Name: evidencia_aprendizaje_id_evidencia_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.evidencia_aprendizaje_id_evidencia_seq OWNED BY public.evidencia_aprendizaje.id_evidencia;
+
+
+--
 -- Name: grados; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -1019,6 +1095,43 @@ ALTER SEQUENCE public.nivel_escolar_id_nivel_seq OWNER TO postgres;
 --
 
 ALTER SEQUENCE public.nivel_escolar_id_nivel_seq OWNED BY public.nivel_escolar.id_nivel;
+
+
+--
+-- Name: nota_criterio; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.nota_criterio (
+    id_nota_criterio integer NOT NULL,
+    id_criterio integer NOT NULL,
+    id_estudiante integer NOT NULL,
+    nota numeric(5,2) NOT NULL,
+    id_colegio integer NOT NULL
+);
+
+
+ALTER TABLE public.nota_criterio OWNER TO postgres;
+
+--
+-- Name: nota_criterio_id_nota_criterio_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.nota_criterio_id_nota_criterio_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.nota_criterio_id_nota_criterio_seq OWNER TO postgres;
+
+--
+-- Name: nota_criterio_id_nota_criterio_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.nota_criterio_id_nota_criterio_seq OWNED BY public.nota_criterio.id_nota_criterio;
 
 
 --
@@ -1624,6 +1737,13 @@ ALTER TABLE ONLY public.contrato_docente ALTER COLUMN id_contratodocente SET DEF
 
 
 --
+-- Name: criterio_evaluacion id_criterio; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.criterio_evaluacion ALTER COLUMN id_criterio SET DEFAULT nextval('public.criterio_evaluacion_id_criterio_seq'::regclass);
+
+
+--
 -- Name: desempeno id_desempeno; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -1680,6 +1800,13 @@ ALTER TABLE ONLY public.estudiante ALTER COLUMN id_estudiante SET DEFAULT nextva
 
 
 --
+-- Name: evidencia_aprendizaje id_evidencia; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.evidencia_aprendizaje ALTER COLUMN id_evidencia SET DEFAULT nextval('public.evidencia_aprendizaje_id_evidencia_seq'::regclass);
+
+
+--
 -- Name: grados id_grado; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -1719,6 +1846,13 @@ ALTER TABLE ONLY public.matricula ALTER COLUMN id_matricula SET DEFAULT nextval(
 --
 
 ALTER TABLE ONLY public.nivel_escolar ALTER COLUMN id_nivel SET DEFAULT nextval('public.nivel_escolar_id_nivel_seq'::regclass);
+
+
+--
+-- Name: nota_criterio id_nota_criterio; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.nota_criterio ALTER COLUMN id_nota_criterio SET DEFAULT nextval('public.nota_criterio_id_nota_criterio_seq'::regclass);
 
 
 --
@@ -1887,6 +2021,14 @@ ALTER TABLE ONLY public.contrato_docente
 
 
 --
+-- Name: criterio_evaluacion criterio_evaluacion_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.criterio_evaluacion
+    ADD CONSTRAINT criterio_evaluacion_pkey PRIMARY KEY (id_criterio);
+
+
+--
 -- Name: desempeno desempeno_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -1983,6 +2125,14 @@ ALTER TABLE ONLY public.estudiante
 
 
 --
+-- Name: evidencia_aprendizaje evidencia_aprendizaje_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.evidencia_aprendizaje
+    ADD CONSTRAINT evidencia_aprendizaje_pkey PRIMARY KEY (id_evidencia);
+
+
+--
 -- Name: grados grados_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -2036,6 +2186,22 @@ ALTER TABLE ONLY public.matricula
 
 ALTER TABLE ONLY public.nivel_escolar
     ADD CONSTRAINT nivel_escolar_pkey PRIMARY KEY (id_nivel);
+
+
+--
+-- Name: nota_criterio nota_criterio_id_criterio_id_estudiante_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.nota_criterio
+    ADD CONSTRAINT nota_criterio_id_criterio_id_estudiante_key UNIQUE (id_criterio, id_estudiante);
+
+
+--
+-- Name: nota_criterio nota_criterio_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.nota_criterio
+    ADD CONSTRAINT nota_criterio_pkey PRIMARY KEY (id_nota_criterio);
 
 
 --
@@ -2151,6 +2317,14 @@ ALTER TABLE ONLY public.tipo_grado
 
 
 --
+-- Name: notas_actividad unique_actividad_estudiante; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.notas_actividad
+    ADD CONSTRAINT unique_actividad_estudiante UNIQUE (id_actividadmateria, id_estudiante);
+
+
+--
 -- Name: configuracion_sistema unique_configuracion; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -2195,6 +2369,13 @@ ALTER TABLE ONLY public.usuario_rol
 --
 
 CREATE INDEX idx_asistencia_estudiante ON public.registro_asistencia USING btree (id_estudiante);
+
+
+--
+-- Name: idx_evidencia_competencia; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_evidencia_competencia ON public.evidencia_aprendizaje USING btree (id_competencia);
 
 
 --
@@ -2268,6 +2449,14 @@ ALTER TABLE ONLY public.actividad_materia
 
 ALTER TABLE ONLY public.actividad_materia
     ADD CONSTRAINT actividad_materia_id_detallegrado_fkey FOREIGN KEY (id_detallegrado) REFERENCES public.detalle_grados(id_detallegrado) ON DELETE CASCADE;
+
+
+--
+-- Name: actividad_materia actividad_materia_id_evidencia_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.actividad_materia
+    ADD CONSTRAINT actividad_materia_id_evidencia_fkey FOREIGN KEY (id_evidencia) REFERENCES public.evidencia_aprendizaje(id_evidencia) ON DELETE SET NULL;
 
 
 --
@@ -2356,6 +2545,30 @@ ALTER TABLE ONLY public.configuracion_colegio
 
 ALTER TABLE ONLY public.contrato_docente
     ADD CONSTRAINT contrato_docente_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio) ON DELETE CASCADE;
+
+
+--
+-- Name: criterio_evaluacion criterio_evaluacion_id_actividadmateria_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.criterio_evaluacion
+    ADD CONSTRAINT criterio_evaluacion_id_actividadmateria_fkey FOREIGN KEY (id_actividadmateria) REFERENCES public.actividad_materia(id_actividadmateria) ON DELETE CASCADE;
+
+
+--
+-- Name: criterio_evaluacion criterio_evaluacion_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.criterio_evaluacion
+    ADD CONSTRAINT criterio_evaluacion_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio) ON DELETE CASCADE;
+
+
+--
+-- Name: criterio_evaluacion criterio_evaluacion_id_evidencia_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.criterio_evaluacion
+    ADD CONSTRAINT criterio_evaluacion_id_evidencia_fkey FOREIGN KEY (id_evidencia) REFERENCES public.evidencia_aprendizaje(id_evidencia) ON DELETE SET NULL;
 
 
 --
@@ -2484,6 +2697,22 @@ ALTER TABLE ONLY public.estudiante
 
 ALTER TABLE ONLY public.estudiante
     ADD CONSTRAINT estudiante_id_tipodocumento_fkey FOREIGN KEY (id_tipodocumento) REFERENCES public.tipo_documento(id_tipodocumento);
+
+
+--
+-- Name: evidencia_aprendizaje evidencia_aprendizaje_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.evidencia_aprendizaje
+    ADD CONSTRAINT evidencia_aprendizaje_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio) ON DELETE CASCADE;
+
+
+--
+-- Name: evidencia_aprendizaje evidencia_aprendizaje_id_competencia_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.evidencia_aprendizaje
+    ADD CONSTRAINT evidencia_aprendizaje_id_competencia_fkey FOREIGN KEY (id_competencia) REFERENCES public.competencias(id_competencia) ON DELETE CASCADE;
 
 
 --
@@ -2636,6 +2865,30 @@ ALTER TABLE ONLY public.matricula
 
 ALTER TABLE ONLY public.nivel_escolar
     ADD CONSTRAINT nivel_escolar_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio) ON DELETE CASCADE;
+
+
+--
+-- Name: nota_criterio nota_criterio_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.nota_criterio
+    ADD CONSTRAINT nota_criterio_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio) ON DELETE CASCADE;
+
+
+--
+-- Name: nota_criterio nota_criterio_id_criterio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.nota_criterio
+    ADD CONSTRAINT nota_criterio_id_criterio_fkey FOREIGN KEY (id_criterio) REFERENCES public.criterio_evaluacion(id_criterio) ON DELETE CASCADE;
+
+
+--
+-- Name: nota_criterio nota_criterio_id_estudiante_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.nota_criterio
+    ADD CONSTRAINT nota_criterio_id_estudiante_fkey FOREIGN KEY (id_estudiante) REFERENCES public.estudiante(id_estudiante) ON DELETE CASCADE;
 
 
 --
@@ -2817,5 +3070,5 @@ REVOKE USAGE ON SCHEMA public FROM PUBLIC;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict hVkZcXsDqxx7fuk2tyzPpcys6DPGLRKNjO3yarppqnmYihOQ7c3oBLyX6Qy1tdF
+\unrestrict UjcQjPq0hAftpHCTsbSlMVvA2cXbI6yxe617ojjWHaFhtmtSG8v19jh1Ggxovl9
 
