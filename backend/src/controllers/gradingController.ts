@@ -38,8 +38,11 @@ const getCurrentAllowedPeriodForSchool = async (schoolId: number) => {
     estado: "ABIERTO" | "CERRADO";
     porcentaje: number;
     id_año: number;
+    trimestre: number | null;
+    dia_inicio: number | null;
+    dia_fin: number | null;
   }>(
-    `SELECT id_periodo, nombre, estado, porcentaje, "id_año"
+    `SELECT id_periodo, nombre, estado, porcentaje, "id_año", trimestre, dia_inicio, dia_fin
      FROM periodo_academico
      WHERE id_colegio = $1
        AND "id_año" = $2
