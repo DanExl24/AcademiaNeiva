@@ -47,7 +47,9 @@ const checkDateInPeriod = async (
   dateInput: string | Date
 ): Promise<{ valid: boolean; error?: string }> => {
   const periodRes = await pool.query(
-    `SELECT trimestre, dia_inicio, dia_fin, "id_año" FROM periodo_academico WHERE id_periodo = $1`,
+    `SELECT mes_inicio, dia_inicio, mes_fin, dia_fin, "id_año" 
+     FROM periodo_academico 
+     WHERE id_periodo = $1`,
     [periodId]
   );
 
@@ -55,37 +57,34 @@ const checkDateInPeriod = async (
     return { valid: false, error: "Periodo académico no encontrado." };
   }
 
-  const { trimestre, dia_inicio, dia_fin, id_año } = periodRes.rows[0];
-  const year = id_año ? Number(id_año) : new Date().getFullYear();
-
-  // Determine months based on trimestre
-  let startMonth = 0; // Jan
-  let endMonth = 2;   // Mar
-  if (trimestre === 2) {
-    startMonth = 3;   // Apr
-    endMonth = 5;     // Jun
-  } else if (trimestre === 3) {
-    startMonth = 6;   // Jul
-    endMonth = 11;    // Dec
+  const { mes_inicio, dia_inicio, mes_fin, dia_fin, id_año } = periodRes.rows[0];
+  let year = id_año ? Number(id_año) : new Date().getFullYear();
+  
+  if (year < 2000) {
+    year = new Date().getFullYear();
   }
 
-  const startDay = dia_inicio !== null ? Number(dia_inicio) : 1;
-  const startDate = new Date(Date.UTC(year, startMonth, startDay, 0, 0, 0, 0));
+  if (!mes_inicio || !dia_inicio || !mes_fin || !dia_fin) {
+    // Si no hay rango definido, permitimos cualquier fecha del año lectivo por defecto
+    // o podriamos ser mas estrictos. Por ahora, asumimos que deben estar definidos.
+    return { valid: true }; 
+  }
 
-  let endDate: Date;
-  if (dia_fin !== null) {
-    endDate = new Date(Date.UTC(year, endMonth, Number(dia_fin), 23, 59, 59, 999));
-  } else {
-    endDate = new Date(Date.UTC(year, endMonth + 1, 0, 23, 59, 59, 999));
+  const startDate = new Date(year, mes_inicio - 1, dia_inicio, 0, 0, 0);
+  let endDate = new Date(year, mes_fin - 1, dia_fin, 23, 59, 59);
+
+  // Si el fin es menor que el inicio, cruza el año
+  if (endDate < startDate) {
+    endDate.setFullYear(endDate.getFullYear() + 1);
   }
 
   const checkDate = new Date(dateInput);
 
   if (checkDate < startDate || checkDate > endDate) {
     const formatDateString = (d: Date) => {
-      const dd = String(d.getUTCDate()).padStart(2, "0");
-      const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
-      const yyyy = d.getUTCFullYear();
+      const dd = String(d.getDate()).padStart(2, "0");
+      const mm = String(d.getMonth() + 1).padStart(2, "0");
+      const yyyy = d.getFullYear();
       return `${dd}/${mm}/${yyyy}`;
     };
     return {

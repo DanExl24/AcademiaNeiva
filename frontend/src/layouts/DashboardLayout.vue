@@ -24,8 +24,13 @@ const auth = useAuthStore()
 const router = useRouter()
 const isCollapsed = ref(false)
 
+const switchRole = (newRole: string) => {
+  auth.setActiveRole(newRole)
+  router.push('/dashboard')
+}
+
 const menuItems = computed(() => {
-  const role = auth.user?.role?.toLowerCase()
+  const role = auth.activeRole?.toLowerCase()
   
   if (role === 'docente') {
     return [
@@ -34,7 +39,15 @@ const menuItems = computed(() => {
       { name: 'Calificaciones', icon: ClipboardList, path: '/dashboard/calificaciones' },
       { name: 'Asistencia', icon: CalendarCheck, path: '/dashboard/asistencia' },
       { name: 'Observador', icon: Eye, path: '/dashboard/observador' },
-      { name: 'Modo Padre', icon: UserCircle, path: '/dashboard/modo-padre' },
+    ]
+  }
+
+  if (role === 'padre') {
+    return [
+      { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
+      { name: 'Mis Hijos', icon: Users, path: '/dashboard/hijos' },
+      { name: 'Calificaciones', icon: ClipboardList, path: '/dashboard/calificaciones-hijos' },
+      { name: 'Asistencia', icon: CalendarCheck, path: '/dashboard/asistencia-hijos' },
     ]
   }
   
@@ -47,6 +60,12 @@ const menuItems = computed(() => {
     { name: 'Docentes', icon: Users, path: '/dashboard/docentes' },
     { name: 'Configuración Académica', icon: SlidersHorizontal, path: '/dashboard/configuracion-academica' },
   ]
+})
+
+const hasMultipleRoles = computed(() => (auth.user?.roles?.length || 0) > 1)
+const otherRole = computed(() => {
+  if (!hasMultipleRoles.value) return null
+  return auth.user?.roles.find(r => r !== auth.activeRole)
 })
 
 const handleLogout = () => {
@@ -114,7 +133,13 @@ const handleLogout = () => {
         <div class="flex items-center gap-4">
           <div class="text-right hidden sm:block">
             <p class="text-sm font-bold text-gray-900">{{ auth.user?.name || 'Usuario' }}</p>
-            <p class="text-xs text-gray-500 capitalize">{{ auth.user?.role || 'Rol' }}</p>
+            <p class="text-xs text-gray-500 capitalize flex items-center justify-end gap-1">
+              {{ auth.activeRole || 'Rol' }}
+              <button v-if="hasMultipleRoles" @click="switchRole(otherRole!)" 
+                class="ml-2 text-[10px] bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full font-bold hover:bg-indigo-600 hover:text-white transition-all">
+                Cambiar a {{ otherRole }}
+              </button>
+            </p>
           </div>
           <div class="h-10 w-10 rounded-full bg-indigo-100 border-2 border-white shadow-sm flex items-center justify-center text-indigo-600 font-bold">
             {{ (auth.user?.name || 'U').charAt(0) }}
@@ -131,3 +156,6 @@ const handleLogout = () => {
     </div>
   </div>
 </template>
+
+<style scoped>
+</style>

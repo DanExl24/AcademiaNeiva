@@ -21,8 +21,9 @@ interface AcademicPeriod {
   nombre: string
   estado: 'ABIERTO' | 'CERRADO'
   porcentaje: number
-  trimestre: number | null
+  mes_inicio: number | null
   dia_inicio: number | null
+  mes_fin: number | null
   dia_fin: number | null
   meses_referencia?: string | null
   id_año: number
@@ -82,15 +83,17 @@ const yearSaving = ref(false)
 const newPeriod = ref({
   nombre: '',
   porcentaje: '',
-  trimestre: '',
+  mes_inicio: '',
   dia_inicio: '',
+  mes_fin: '',
   dia_fin: '',
 })
 
 const periodEdit = ref({
   porcentaje: '',
-  trimestre: '',
+  mes_inicio: '',
   dia_inicio: '',
+  mes_fin: '',
   dia_fin: '',
 })
 
@@ -110,6 +113,21 @@ const manualScaleForm = ref({
   basico_max: '',
   alto_max: '',
 })
+
+const months = [
+  { id: 1, name: 'Enero' },
+  { id: 2, name: 'Febrero' },
+  { id: 3, name: 'Marzo' },
+  { id: 4, name: 'Abril' },
+  { id: 5, name: 'Mayo' },
+  { id: 6, name: 'Junio' },
+  { id: 7, name: 'Julio' },
+  { id: 8, name: 'Agosto' },
+  { id: 9, name: 'Septiembre' },
+  { id: 10, name: 'Octubre' },
+  { id: 11, name: 'Noviembre' },
+  { id: 12, name: 'Diciembre' },
+]
 
 const totalPeriodPercentage = computed(() =>
   periods.value.reduce((sum, item) => sum + Number(item.porcentaje), 0)
@@ -146,16 +164,13 @@ const loadData = async () => {
 
 const createPeriod = async () => {
   if (savingPeriod.value) return
-  if (!newPeriod.value.nombre.trim() || !newPeriod.value.porcentaje || !newPeriod.value.trimestre) {
-    alert('Completa nombre, porcentaje y trimestre del periodo.')
-    return
-  }
+  const mesInicio = Number(newPeriod.value.mes_inicio)
+  const diaInicio = Number(newPeriod.value.dia_inicio)
+  const mesFin = Number(newPeriod.value.mes_fin)
+  const diaFin = Number(newPeriod.value.dia_fin)
 
-  const diaInicio = newPeriod.value.dia_inicio !== '' ? Number(newPeriod.value.dia_inicio) : null
-  const diaFin = newPeriod.value.dia_fin !== '' ? Number(newPeriod.value.dia_fin) : null
-
-  if (diaInicio !== null && diaFin !== null && diaFin < diaInicio) {
-    alert('El día de fin no puede ser menor al día de inicio.')
+  if (!mesInicio || !diaInicio || !mesFin || !diaFin) {
+    alert('Debe definir el rango de fechas (Mes y Día de inicio y fin).')
     return
   }
 
@@ -165,11 +180,12 @@ const createPeriod = async () => {
       schoolId: schoolId.value,
       nombre: newPeriod.value.nombre,
       porcentaje: Number(newPeriod.value.porcentaje),
-      trimestre: Number(newPeriod.value.trimestre),
+      mes_inicio: mesInicio,
       dia_inicio: diaInicio,
+      mes_fin: mesFin,
       dia_fin: diaFin,
     })
-    newPeriod.value = { nombre: '', porcentaje: '', trimestre: '', dia_inicio: '', dia_fin: '' }
+    newPeriod.value = { nombre: '', porcentaje: '', mes_inicio: '', dia_inicio: '', mes_fin: '', dia_fin: '' }
     periodModal.value = false
     await loadData()
   } catch (error: any) {
@@ -181,16 +197,13 @@ const createPeriod = async () => {
 
 const updatePeriodPercentage = async () => {
   if (!periodEditModal.value || savingPeriod.value) return
-  if (!periodEdit.value.porcentaje || !periodEdit.value.trimestre) {
-    alert('Ingresa el nuevo porcentaje y trimestre del periodo.')
-    return
-  }
+  const mesInicio = Number(periodEdit.value.mes_inicio)
+  const diaInicio = Number(periodEdit.value.dia_inicio)
+  const mesFin = Number(periodEdit.value.mes_fin)
+  const diaFin = Number(periodEdit.value.dia_fin)
 
-  const diaInicio = periodEdit.value.dia_inicio !== '' ? Number(periodEdit.value.dia_inicio) : null
-  const diaFin = periodEdit.value.dia_fin !== '' ? Number(periodEdit.value.dia_fin) : null
-
-  if (diaInicio !== null && diaFin !== null && diaFin < diaInicio) {
-    alert('El día de fin no puede ser menor al día de inicio.')
+  if (!mesInicio || !diaInicio || !mesFin || !diaFin) {
+    alert('Debe definir el rango de fechas completo.')
     return
   }
 
@@ -199,12 +212,13 @@ const updatePeriodPercentage = async () => {
     await axios.patch(`http://localhost:3000/api/academic-admin/settings/periods/${periodEditModal.value.id_periodo}/percentage`, {
       schoolId: schoolId.value,
       porcentaje: Number(periodEdit.value.porcentaje),
-      trimestre: Number(periodEdit.value.trimestre),
+      mes_inicio: mesInicio,
       dia_inicio: diaInicio,
+      mes_fin: mesFin,
       dia_fin: diaFin,
     })
     periodEditModal.value = null
-    periodEdit.value = { porcentaje: '', trimestre: '', dia_inicio: '', dia_fin: '' }
+    periodEdit.value = { porcentaje: '', mes_inicio: '', dia_inicio: '', mes_fin: '', dia_fin: '' }
     await loadData()
   } catch (error: any) {
     alert(error.response?.data?.error || 'No fue posible actualizar la configuración del periodo')
@@ -453,7 +467,7 @@ onMounted(loadData)
                 </div>
                 <div>
                   <h2 class="text-lg font-black text-slate-900">Periodos académicos</h2>
-                  <p class="text-sm text-slate-500">La suma global de porcentajes no debe superar 100% y cada periodo debe pertenecer a un trimestre.</p>
+                  <p class="text-sm text-slate-500">Maneja los periodos académicos definiendo meses y días de duración. El sistema abrirá automáticamente el periodo actual.</p>
                 </div>
               </div>
               <button
@@ -479,22 +493,19 @@ onMounted(loadData)
             <div v-for="period in periods" :key="period.id_periodo" class="flex flex-col gap-4 px-6 py-5 md:flex-row md:items-center md:justify-between">
               <div>
                 <p class="text-base font-black text-slate-900">{{ period.nombre }}</p>
-                <p class="mt-1 text-sm font-semibold text-slate-500">Estado: {{ period.estado }} · Año: {{ period.id_año }} · Trimestre: {{ period.trimestre ?? 'Sin definir' }}</p>
-                <p v-if="period.meses_referencia" class="mt-1 text-xs font-semibold text-orange-600">Meses de referencia: {{ period.meses_referencia }}</p>
-                <p class="mt-1 text-xs font-semibold text-slate-400">
-                  <span v-if="period.dia_inicio !== null && period.dia_fin !== null">
-                    📅 Día {{ period.dia_inicio }} al {{ period.dia_fin }}
+                <p class="mt-1 text-sm font-semibold text-slate-500">Estado: {{ period.estado }} · Año: {{ period.id_año }}</p>
+                <p class="mt-1 text-xs font-semibold text-slate-400 italic">
+                  <span v-if="period.mes_inicio !== null">
+                    📅 Desde {{ months[period.mes_inicio - 1].name }} {{ period.dia_inicio }} hasta {{ months[period.mes_fin! - 1].name }} {{ period.dia_fin }}
                   </span>
-                  <span v-else-if="period.dia_inicio !== null">📅 Inicio: día {{ period.dia_inicio }}</span>
-                  <span v-else-if="period.dia_fin !== null">📅 Fin: día {{ period.dia_fin }}</span>
-                  <span v-else class="text-slate-300">Sin días definidos</span>
+                  <span v-else class="text-slate-300">Rango de fechas no definido</span>
                 </p>
               </div>
               <div class="flex items-center gap-3">
                 <span class="rounded-full bg-orange-50 px-3 py-1 text-sm font-black text-orange-700">{{ Number(period.porcentaje).toFixed(2) }}%</span>
                 <button
                   type="button"
-                  @click="periodEditModal = period; periodEdit.porcentaje = String(period.porcentaje); periodEdit.trimestre = period.trimestre ? String(period.trimestre) : ''; periodEdit.dia_inicio = period.dia_inicio !== null ? String(period.dia_inicio) : ''; periodEdit.dia_fin = period.dia_fin !== null ? String(period.dia_fin) : ''"
+                  @click="periodEditModal = period; periodEdit.porcentaje = String(period.porcentaje); periodEdit.mes_inicio = String(period.mes_inicio); periodEdit.dia_inicio = String(period.dia_inicio); periodEdit.mes_fin = String(period.mes_fin); periodEdit.dia_fin = String(period.dia_fin)"
                   class="inline-flex items-center justify-center rounded-2xl bg-slate-100 p-3 text-slate-600 transition-all hover:bg-slate-200"
                 >
                   <PenSquare class="h-4 w-4" />
@@ -659,7 +670,7 @@ onMounted(loadData)
           <p class="mt-2 text-sm font-semibold text-slate-500">El porcentaje agregado no puede romper el total global del año y debes asignar el trimestre correspondiente.</p>
         </div>
         <div class="px-6 py-6 md:px-8 md:py-8">
-          <div class="grid grid-cols-1 gap-6 md:grid-cols-3">
+          <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
             <label class="space-y-2">
               <span class="block text-sm font-black text-slate-700">Nombre del periodo</span>
               <input v-model="newPeriod.nombre" type="text" placeholder="Ej. Primer Periodo" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-semibold outline-none" />
@@ -668,43 +679,33 @@ onMounted(loadData)
               <span class="block text-sm font-black text-slate-700">Porcentaje</span>
               <input v-model="newPeriod.porcentaje" type="number" min="0" step="0.01" placeholder="Ej. 25" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-semibold outline-none" />
             </label>
-            <label class="space-y-2">
-              <span class="block text-sm font-black text-slate-700">Trimestre</span>
-              <select v-model="newPeriod.trimestre" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-semibold outline-none">
-                <option value="">Selecciona un trimestre</option>
-                <option value="1">Trimestre 1</option>
-                <option value="2">Trimestre 2</option>
-                <option value="3">Trimestre 3</option>
-              </select>
-            </label>
           </div>
 
-          <div class="mt-6 rounded-2xl border border-orange-100 bg-orange-50/60 px-5 py-4">
-            <p class="mb-4 text-sm font-black text-orange-700">Días del trimestre <span class="font-semibold text-orange-500">(opcional)</span></p>
-            <p class="mb-4 text-xs font-semibold text-slate-500">Define el día de inicio y de fin dentro de los meses que corresponden al trimestre seleccionado. Puedes dejarlo en blanco y definirlo después.</p>
-            <div class="grid grid-cols-2 gap-4">
-              <label class="space-y-2">
-                <span class="block text-sm font-black text-slate-700">Día de inicio</span>
-                <input
-                  v-model="newPeriod.dia_inicio"
-                  type="number"
-                  min="1"
-                  max="31"
-                  placeholder="Ej. 1"
-                  class="w-full rounded-2xl border border-orange-200 bg-white p-4 font-semibold outline-none focus:border-orange-400"
-                />
-              </label>
-              <label class="space-y-2">
-                <span class="block text-sm font-black text-slate-700">Día de fin</span>
-                <input
-                  v-model="newPeriod.dia_fin"
-                  type="number"
-                  min="1"
-                  max="31"
-                  placeholder="Ej. 31"
-                  class="w-full rounded-2xl border border-orange-200 bg-white p-4 font-semibold outline-none focus:border-orange-400"
-                />
-              </label>
+          <div class="mt-6 space-y-6 rounded-3xl border border-orange-100 bg-orange-50/50 p-6">
+            <h3 class="text-sm font-black text-orange-700">Vigencia del periodo</h3>
+            
+            <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+              <div class="space-y-4">
+                <p class="text-xs font-black text-slate-400 uppercase tracking-widest">Inicio del periodo</p>
+                <div class="flex gap-3">
+                  <select v-model="newPeriod.mes_inicio" class="flex-1 rounded-2xl border border-slate-200 bg-white p-4 font-semibold outline-none">
+                    <option value="">Mes</option>
+                    <option v-for="m in months" :key="m.id" :value="m.id">{{ m.name }}</option>
+                  </select>
+                  <input v-model="newPeriod.dia_inicio" type="number" min="1" max="31" placeholder="Día" class="w-24 rounded-2xl border border-slate-200 bg-white p-4 font-semibold outline-none" />
+                </div>
+              </div>
+
+              <div class="space-y-4">
+                <p class="text-xs font-black text-slate-400 uppercase tracking-widest">Fin del periodo</p>
+                <div class="flex gap-3">
+                  <select v-model="newPeriod.mes_fin" class="flex-1 rounded-2xl border border-slate-200 bg-white p-4 font-semibold outline-none">
+                    <option value="">Mes</option>
+                    <option v-for="m in months" :key="m.id" :value="m.id">{{ m.name }}</option>
+                  </select>
+                  <input v-model="newPeriod.dia_fin" type="number" min="1" max="31" placeholder="Día" class="w-24 rounded-2xl border border-slate-200 bg-white p-4 font-semibold outline-none" />
+                </div>
+              </div>
             </div>
           </div>
 
@@ -726,48 +727,36 @@ onMounted(loadData)
           <p class="mt-2 text-sm font-semibold text-slate-500">{{ periodEditModal.nombre }}</p>
         </div>
         <div class="px-6 py-6 md:px-8 md:py-8">
-          <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
-            <label class="space-y-2">
-              <span class="block text-sm font-black text-slate-700">Porcentaje</span>
-              <input v-model="periodEdit.porcentaje" type="number" min="0" step="0.01" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-semibold outline-none" />
-            </label>
-            <label class="space-y-2">
-              <span class="block text-sm font-black text-slate-700">Trimestre</span>
-              <select v-model="periodEdit.trimestre" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-semibold outline-none">
-                <option value="">Selecciona un trimestre</option>
-                <option value="1">Trimestre 1</option>
-                <option value="2">Trimestre 2</option>
-                <option value="3">Trimestre 3</option>
-              </select>
-            </label>
-          </div>
+          <label class="space-y-2">
+            <span class="block text-sm font-black text-slate-700">Porcentaje</span>
+            <input v-model="periodEdit.porcentaje" type="number" min="0" step="0.01" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-semibold outline-none" />
+          </label>
 
-          <div class="mt-6 rounded-2xl border border-orange-100 bg-orange-50/60 px-5 py-4">
-            <p class="mb-4 text-sm font-black text-orange-700">Días del trimestre</p>
-            <p class="mb-4 text-xs font-semibold text-slate-500">Define o ajusta el día de inicio y el día de fin dentro de los meses que corresponden al trimestre. Deja en blanco para quitar el valor actual.</p>
-            <div class="grid grid-cols-2 gap-4">
-              <label class="space-y-2">
-                <span class="block text-sm font-black text-slate-700">Día de inicio</span>
-                <input
-                  v-model="periodEdit.dia_inicio"
-                  type="number"
-                  min="1"
-                  max="31"
-                  placeholder="Ej. 1"
-                  class="w-full rounded-2xl border border-orange-200 bg-white p-4 font-semibold outline-none focus:border-orange-400"
-                />
-              </label>
-              <label class="space-y-2">
-                <span class="block text-sm font-black text-slate-700">Día de fin</span>
-                <input
-                  v-model="periodEdit.dia_fin"
-                  type="number"
-                  min="1"
-                  max="31"
-                  placeholder="Ej. 31"
-                  class="w-full rounded-2xl border border-orange-200 bg-white p-4 font-semibold outline-none focus:border-orange-400"
-                />
-              </label>
+          <div class="mt-6 space-y-6 rounded-3xl border border-orange-100 bg-orange-50/50 p-6">
+            <h3 class="text-sm font-black text-orange-700">Actualizar vigencia</h3>
+            
+            <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+              <div class="space-y-4">
+                <p class="text-xs font-black text-slate-400 uppercase tracking-widest">Inicio</p>
+                <div class="flex gap-3">
+                  <select v-model="periodEdit.mes_inicio" class="flex-1 rounded-2xl border border-slate-200 bg-white p-4 font-semibold outline-none">
+                    <option value="">Mes</option>
+                    <option v-for="m in months" :key="m.id" :value="m.id">{{ m.name }}</option>
+                  </select>
+                  <input v-model="periodEdit.dia_inicio" type="number" min="1" max="31" class="w-24 rounded-2xl border border-slate-200 bg-white p-4 font-semibold outline-none" />
+                </div>
+              </div>
+
+              <div class="space-y-4">
+                <p class="text-xs font-black text-slate-400 uppercase tracking-widest">Fin</p>
+                <div class="flex gap-3">
+                  <select v-model="periodEdit.mes_fin" class="flex-1 rounded-2xl border border-slate-200 bg-white p-4 font-semibold outline-none">
+                    <option value="">Mes</option>
+                    <option v-for="m in months" :key="m.id" :value="m.id">{{ m.name }}</option>
+                  </select>
+                  <input v-model="periodEdit.dia_fin" type="number" min="1" max="31" class="w-24 rounded-2xl border border-slate-200 bg-white p-4 font-semibold outline-none" />
+                </div>
+              </div>
             </div>
           </div>
 

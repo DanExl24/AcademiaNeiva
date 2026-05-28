@@ -86,6 +86,7 @@ const students = ref<Student[]>([])
 const gradesMatrix = ref<Record<number, Record<number, any>>>({}) 
 const criteriaGradesMatrix = ref<Record<number, Record<number, any>>>({})
 const gradeRange = ref({ min: 0, max: 5, approval: 3 })
+const scales = ref<any[]>([])
 const saving = ref(false)
 const activitiesLoading = ref(false)
 const competencySaving = ref(false)
@@ -134,6 +135,7 @@ const fetchGradeRange = async () => {
         max: Number(response.data.defaultSettings.nota_maxima),
         approval: Number(response.data.defaultSettings.nota_aprobacion),
       }
+      scales.value = response.data.scales || []
     }
   } catch (error) {
     console.error('Error fetching grade range:', error)
@@ -401,6 +403,30 @@ const calculateFinal = (studentId: number) => {
   })
   
   return total.toFixed(1)
+}
+
+const getScaleLevel = (grade: string | number) => {
+  const val = typeof grade === 'string' ? parseFloat(grade) : grade
+  if (isNaN(val)) return 'N/A'
+  
+  // Encontrar la escala que contiene la nota
+  const scale = scales.value.find(s => {
+    const min = parseFloat(s.valor_minimo)
+    const max = parseFloat(s.valor_maximo)
+    return val >= min && val <= max
+  })
+  
+  return scale ? scale.nivel : 'N/A'
+}
+
+const getScaleClass = (level: string) => {
+  switch (level.toUpperCase()) {
+    case 'SUPERIOR': return 'bg-emerald-100 text-emerald-700 border-emerald-200'
+    case 'ALTO': return 'bg-blue-100 text-blue-700 border-blue-200'
+    case 'BASICO': return 'bg-amber-100 text-amber-700 border-amber-200'
+    case 'BAJO': return 'bg-red-100 text-red-700 border-red-200'
+    default: return 'bg-slate-100 text-slate-700 border-slate-200'
+  }
 }
 
 // Criterios
@@ -828,12 +854,22 @@ onMounted(() => {
                     </template>
                   </td>
 
-                  <td class="px-8 py-5 text-center bg-indigo-50/10">
-                    <span 
-                      :class="[parseFloat(calculateFinal(student.id_estudiante)) >= 3 ? 'text-emerald-600 bg-emerald-50' : 'text-red-500 bg-red-50', 'px-4 py-2 rounded-xl font-black text-lg shadow-sm border border-indigo-100/50']"
-                    >
-                      {{ calculateFinal(student.id_estudiante) }}
-                    </span>
+                  <td class="px-8 py-5 text-center bg-indigo-50/20">
+                    <div class="space-y-1">
+                      <span :class="[
+                        parseFloat(calculateFinal(student.id_estudiante)) >= gradeRange.approval ? 'text-indigo-600' : 'text-red-500', 
+                        'text-lg font-black'
+                      ]">
+                        {{ calculateFinal(student.id_estudiante) }}
+                      </span>
+                      <div v-if="calculateFinal(student.id_estudiante) !== '0.0'"
+                           :class="[
+                             'text-[9px] font-black uppercase px-2 py-0.5 rounded-full border mx-auto w-fit',
+                             getScaleClass(getScaleLevel(calculateFinal(student.id_estudiante)))
+                           ]">
+                        {{ getScaleLevel(calculateFinal(student.id_estudiante)) }}
+                      </div>
+                    </div>
                   </td>
                 </tr>
               </tbody>

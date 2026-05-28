@@ -15,7 +15,6 @@ import {
   Trash2,
   Pencil,
   Calendar,
-  Users,
   MessageSquare,
   Filter
 } from 'lucide-vue-next'
@@ -37,8 +36,9 @@ interface Period {
   estado: 'ABIERTO' | 'CERRADO'
   porcentaje: number
   id_año: number
-  trimestre?: number | null
+  mes_inicio?: number | null
   dia_inicio?: number | null
+  mes_fin?: number | null
   dia_fin?: number | null
 }
 
@@ -225,30 +225,24 @@ const allowedDateRange = computed(() => {
   const period = periods.value.find(p => p.id_periodo === selectedPeriodId.value)
   if (!period) return { min: '', max: '' }
 
-  const year = period.id_año ? Number(period.id_año) : new Date().getFullYear()
-  const trimestre = period.trimestre ? Number(period.trimestre) : 1
-
-  let startMonth = 0 // Ene
-  let endMonth = 2   // Mar
-  if (trimestre === 2) {
-    startMonth = 3   // Abr
-    endMonth = 5     // Jun
-  } else if (trimestre === 3) {
-    startMonth = 6   // Jul
-    endMonth = 11    // Dic
+  if (!period.mes_inicio || !period.dia_inicio || !period.mes_fin || !period.dia_fin) {
+    return { min: '', max: '' }
   }
 
-  const startDay = period.dia_inicio !== null && period.dia_inicio !== undefined ? Number(period.dia_inicio) : 1
+  let year = period.id_año ? Number(period.id_año) : new Date().getFullYear()
+  if (year < 2000) {
+    year = new Date().getFullYear()
+  }
   const pad = (num: number) => String(num).padStart(2, '0')
-  const minStr = `${year}-${pad(startMonth + 1)}-${pad(startDay)}`
 
-  let maxStr = ''
-  if (period.dia_fin !== null && period.dia_fin !== undefined) {
-    maxStr = `${year}-${pad(endMonth + 1)}-${pad(period.dia_fin)}`
-  } else {
-    const lastDay = new Date(year, endMonth + 1, 0).getDate()
-    maxStr = `${year}-${pad(endMonth + 1)}-${pad(lastDay)}`
+  const minStr = `${year}-${pad(period.mes_inicio)}-${pad(period.dia_inicio)}`
+  
+  // Manejo de fin de periodo (podría cruzar el año aunque es raro en periodos académicos estándar)
+  let endYear = year
+  if (period.mes_fin < period.mes_inicio) {
+    endYear = year + 1
   }
+  const maxStr = `${endYear}-${pad(period.mes_fin)}-${pad(period.dia_fin)}`
 
   return { min: minStr, max: maxStr }
 })

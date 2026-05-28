@@ -98,6 +98,17 @@ const ensureAcademicPeriodDayColumns = async () => {
   `);
 };
 
+const ensureAcademicPeriodMonthColumns = async () => {
+  await pool.query(`
+    ALTER TABLE periodo_academico
+    ADD COLUMN IF NOT EXISTS mes_inicio integer
+  `);
+  await pool.query(`
+    ALTER TABLE periodo_academico
+    ADD COLUMN IF NOT EXISTS mes_fin integer
+  `);
+};
+
 const ensureSchoolDefaultSettings = async (schoolId: number) => {
   await ensureSchoolSettingsTable();
 
@@ -633,7 +644,41 @@ export const getAcademicSettingsData = async (req: Request, res: Response): Prom
     await ensureCompetencySchema();
     await ensureAcademicPeriodTrimesterColumn();
     await ensureAcademicPeriodDayColumns();
+    await ensureAcademicPeriodMonthColumns();
     const currentYearId = await ensureAcademicYearForSchool(schoolId);
+
+    // Auto-switch periods based on current date
+    const now = new Date();
+    const periodsCheck = await pool.query(
+      `SELECT id_periodo, mes_inicio, dia_inicio, mes_fin, dia_fin
+       FROM periodo_academico
+       WHERE id_colegio = $1 AND "id_año" = $2`,
+      [schoolId, currentYearId]
+    );
+
+    let periodIdToOpen: number | null = null;
+    for (const p of periodsCheck.rows) {
+      if (p.mes_inicio && p.dia_inicio && p.mes_fin && p.dia_fin) {
+        const start = new Date(now.getFullYear(), p.mes_inicio - 1, p.dia_inicio);
+        const end = new Date(now.getFullYear(), p.mes_fin - 1, p.dia_fin);
+        // Si el fin es menor que el inicio, asumimos que cruza el año
+        if (end < start) end.setFullYear(end.getFullYear() + 1);
+        
+        if (now >= start && now <= end) {
+          periodIdToOpen = p.id_periodo;
+          break;
+        }
+      }
+    }
+
+    // SIEMPRE ejecutamos el update para asegurar que si no hay match, todo esté CERRADO (o solo el correcto abierto)
+    await pool.query(
+      `UPDATE periodo_academico
+       SET estado = CASE WHEN id_periodo = $1 THEN 'ABIERTO'::estado_periodo ELSE 'CERRADO'::estado_periodo END
+       WHERE id_colegio = $2 AND "id_año" = $3`,
+      [periodIdToOpen || -1, schoolId, currentYearId]
+    );
+
     const competencyClient = await pool.connect();
     try {
       await competencyClient.query("BEGIN");
@@ -663,7 +708,7 @@ export const getAcademicSettingsData = async (req: Request, res: Response): Prom
       ),
       ensureSchoolDefaultSettings(schoolId),
       pool.query(
-        `SELECT id_periodo, nombre, estado, porcentaje, trimestre, dia_inicio, dia_fin, "id_año"
+        `SELECT id_periodo, nombre, estado, porcentaje, trimestre, dia_inicio, dia_fin, mes_inicio, mes_fin, "id_año"
          FROM periodo_academico
          WHERE id_colegio = $1
          ORDER BY id_periodo`,
@@ -805,24 +850,19 @@ export const createAcademicPeriod = async (req: Request, res: Response): Promise
   const schoolId = parseSchoolId(req.body.schoolId);
   const nombre = String(req.body.nombre || "").trim();
   const porcentaje = Number(req.body.porcentaje);
-  const trimestre = Number(req.body.trimestre);
-  const diaInicio = req.body.dia_inicio !== undefined && req.body.dia_inicio !== "" && req.body.dia_inicio !== null
-    ? Number(req.body.dia_inicio)
-    : null;
-  const diaFin = req.body.dia_fin !== undefined && req.body.dia_fin !== "" && req.body.dia_fin !== null
-    ? Number(req.body.dia_fin)
-    : null;
+  const mesInicio = Number(req.body.mes_inicio);
+  const diaInicio = Number(req.body.dia_inicio);
+  const mesFin = Number(req.body.mes_fin);
+  const diaFin = Number(req.body.dia_fin);
 
   if (
     !schoolId ||
     !nombre ||
     Number.isNaN(porcentaje) ||
     porcentaje <= 0 ||
-    !Number.isInteger(trimestre) ||
-    trimestre < 1 ||
-    trimestre > 3
+    !mesInicio || !diaInicio || !mesFin || !diaFin
   ) {
-    res.status(400).json({ error: "Nombre, porcentaje y trimestre válido del periodo son obligatorios" });
+    res.status(400).json({ error: "Nombre, porcentaje y rango de fechas (mes/día) son obligatorios" });
     return;
   }
 
@@ -875,10 +915,10 @@ export const createAcademicPeriod = async (req: Request, res: Response): Promise
     }
 
     const created = await pool.query(
-      `INSERT INTO periodo_academico (nombre, estado, porcentaje, trimestre, dia_inicio, dia_fin, "id_año", id_colegio)
-       VALUES ($1, 'ABIERTO', $2, $3, $4, $5, $6, $7)
-       RETURNING id_periodo, nombre, estado, porcentaje, trimestre, dia_inicio, dia_fin, "id_año"`,
-      [nombre, porcentaje, trimestre, diaInicio, diaFin, currentYearId, schoolId]
+      `INSERT INTO periodo_academico (nombre, estado, porcentaje, mes_inicio, dia_inicio, mes_fin, dia_fin, "id_año", id_colegio)
+       VALUES ($1, 'CERRADO', $2, $3, $4, $5, $6, $7, $8)
+       RETURNING id_periodo, nombre, estado, porcentaje, mes_inicio, dia_inicio, mes_fin, dia_fin, "id_año"`,
+      [nombre, porcentaje, mesInicio, diaInicio, mesFin, diaFin, currentYearId, schoolId]
     );
 
     res.status(201).json(created.rows[0]);
@@ -1264,84 +1304,28 @@ export const updateAcademicPeriodPercentage = async (req: Request, res: Response
   const periodId = Number(req.params.id);
   const schoolId = parseSchoolId(req.body.schoolId);
   const porcentaje = Number(req.body.porcentaje);
-  const trimestre = Number(req.body.trimestre);
-  const diaInicio = req.body.dia_inicio !== undefined && req.body.dia_inicio !== "" && req.body.dia_inicio !== null
-    ? Number(req.body.dia_inicio)
-    : null;
-  const diaFin = req.body.dia_fin !== undefined && req.body.dia_fin !== "" && req.body.dia_fin !== null
-    ? Number(req.body.dia_fin)
-    : null;
+  const mesInicio = Number(req.body.mes_inicio);
+  const diaInicio = Number(req.body.dia_inicio);
+  const mesFin = Number(req.body.mes_fin);
+  const diaFin = Number(req.body.dia_fin);
 
-  if (
-    !periodId ||
-    !schoolId ||
-    Number.isNaN(porcentaje) ||
-    porcentaje <= 0 ||
-    !Number.isInteger(trimestre) ||
-    trimestre < 1 ||
-    trimestre > 3
-  ) {
-    res.status(400).json({ error: "Parámetros inválidos" });
-    return;
-  }
-
-  if (diaInicio !== null && (!Number.isInteger(diaInicio) || diaInicio < 1 || diaInicio > 31)) {
-    res.status(400).json({ error: "El día de inicio debe ser un número entre 1 y 31" });
-    return;
-  }
-
-  if (diaFin !== null && (!Number.isInteger(diaFin) || diaFin < 1 || diaFin > 31)) {
-    res.status(400).json({ error: "El día de fin debe ser un número entre 1 y 31" });
-    return;
-  }
-
-  if (diaInicio !== null && diaFin !== null && diaFin < diaInicio) {
-    res.status(400).json({ error: "El día de fin no puede ser menor al día de inicio" });
+  if (!periodId || !schoolId || Number.isNaN(porcentaje) || porcentaje <= 0 || !mesInicio || !diaInicio || !mesFin || !diaFin) {
+    res.status(400).json({ error: "Todos los campos (porcentaje y rango de fechas) son obligatorios" });
     return;
   }
 
   try {
-    await ensureAcademicPeriodTrimesterColumn();
-    await ensureAcademicPeriodDayColumns();
-    const periodRes = await pool.query(
-      `SELECT id_periodo, porcentaje, trimestre
-       FROM periodo_academico
-       WHERE id_periodo = $1
-         AND id_colegio = $2`,
-      [periodId, schoolId]
-    );
-
-    if (periodRes.rows.length === 0) {
-      res.status(404).json({ error: "Periodo académico no encontrado" });
-      return;
-    }
-
-    const totalsRes = await pool.query(
-      `SELECT COALESCE(SUM(porcentaje), 0)::numeric AS total
-       FROM periodo_academico
-       WHERE id_colegio = $1
-         AND id_periodo <> $2`,
-      [schoolId, periodId]
-    );
-
-    const otherTotal = Number(totalsRes.rows[0].total);
-    if (otherTotal + porcentaje > 100) {
-      res.status(409).json({
-        error: `No es posible actualizar el porcentaje de este periodo. La suma total excede 100%. Otros periodos: ${otherTotal}%`,
-      });
-      return;
-    }
-
     const updated = await pool.query(
       `UPDATE periodo_academico
        SET porcentaje = $1,
-           trimestre = $2,
+           mes_inicio = $2,
            dia_inicio = $3,
-           dia_fin = $4
-       WHERE id_periodo = $5
-         AND id_colegio = $6
-       RETURNING id_periodo, nombre, estado, porcentaje, trimestre, dia_inicio, dia_fin, "id_año"`,
-      [porcentaje, trimestre, diaInicio, diaFin, periodId, schoolId]
+           mes_fin = $4,
+           dia_fin = $5
+       WHERE id_periodo = $6
+         AND id_colegio = $7
+       RETURNING id_periodo, nombre, estado, porcentaje, mes_inicio, dia_inicio, mes_fin, dia_fin, "id_año"`,
+      [porcentaje, mesInicio, diaInicio, mesFin, diaFin, periodId, schoolId]
     );
 
     res.json(updated.rows[0]);

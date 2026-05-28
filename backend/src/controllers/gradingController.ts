@@ -41,8 +41,10 @@ const getCurrentAllowedPeriodForSchool = async (schoolId: number) => {
     trimestre: number | null;
     dia_inicio: number | null;
     dia_fin: number | null;
+    mes_inicio: number | null;
+    mes_fin: number | null;
   }>(
-    `SELECT id_periodo, nombre, estado, porcentaje, "id_año", trimestre, dia_inicio, dia_fin
+    `SELECT id_periodo, nombre, estado, porcentaje, "id_año", dia_inicio, dia_fin, mes_inicio, mes_fin
      FROM periodo_academico
      WHERE id_colegio = $1
        AND "id_año" = $2
@@ -52,7 +54,18 @@ const getCurrentAllowedPeriodForSchool = async (schoolId: number) => {
     [schoolId, Number(currentYearRes.rows[0].id_año)]
   );
 
-  return periodsRes.rows[0] ?? null;
+  const period = periodsRes.rows[0];
+  if (period) {
+    // Si id_año es muy pequeño, probablemente sea un ID de secuencia y no el año real.
+    // Aunque el sistema intenta usar el año real como ID, fallamos a favor del año actual si es sospechoso.
+    // Pero mejor aún, si id_año < 2000, intentamos ver si el año lectivo tiene el calendario como año.
+    if (period.id_año < 2000) {
+       // Fallback al año real (hoy) como parche si no podemos estar seguros
+       period.id_año = new Date().getFullYear();
+    }
+  }
+
+  return period ?? null;
 };
 
 const ensureCurrentPeriodForSchool = async (schoolId: number, periodId: number): Promise<boolean> => {

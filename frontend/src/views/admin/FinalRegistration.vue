@@ -86,6 +86,32 @@ const handleFinalize = async () => {
   }
 }
 
+// Nueva lógica de validación de documento en tiempo real
+const checkingDocument = ref(false)
+const docMatchInfo = ref<any>(null)
+
+const verifyDocument = async () => {
+  if (parentData.value.documento.length < 5) {
+    docMatchInfo.value = null
+    return
+  }
+  
+  checkingDocument.value = true
+  try {
+    const response = await axios.get(`http://localhost:3000/api/auth/check-document/${parentData.value.documento}`)
+    if (response.data.exists) {
+      docMatchInfo.value = response.data
+      notify.addNotification(`Atención: Este documento pertenece a un ${response.data.role} (${response.data.user.nombre} ${response.data.user.apellido}). Se vinculará como padre.`, 'info')
+    } else {
+      docMatchInfo.value = null
+    }
+  } catch (e) {
+    console.error('Error al verificar documento')
+  } finally {
+    checkingDocument.value = false
+  }
+}
+
 const formatUrl = (url: string) => {
   const filename = url.split(/[\\/]/).pop()
   return `http://localhost:3000/uploads/${filename}`
@@ -195,8 +221,18 @@ const documentLabels: Record<string, string> = {
             </div>
             <div class="space-y-2">
               <label class="text-sm font-bold text-gray-700">Número de Documento</label>
-              <input v-model="parentData.documento" type="text" placeholder="Ej: 1214..."
-                class="w-full rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-4 transition-all">
+              <div class="relative">
+                <input v-model="parentData.documento" type="text" placeholder="Ej: 1214..." @blur="verifyDocument"
+                  class="w-full rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-4 transition-all"
+                  :class="{'border-indigo-300 bg-indigo-50': docMatchInfo}">
+                <div v-if="checkingDocument" class="absolute right-4 top-4">
+                  <div class="animate-spin rounded-full h-5 w-5 border-2 border-indigo-600 border-t-transparent"></div>
+                </div>
+                <CheckCircle v-if="docMatchInfo" class="absolute right-4 top-4 text-indigo-600" :size="20" />
+              </div>
+              <p v-if="docMatchInfo" class="text-xs text-indigo-600 font-bold">
+                Usuario detectado: {{ docMatchInfo.user.nombre }} {{ docMatchInfo.user.apellido }} ({{ docMatchInfo.role }})
+              </p>
             </div>
           </div>
           <div class="bg-indigo-50 p-6 rounded-2xl border border-indigo-100">

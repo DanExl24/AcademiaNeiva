@@ -108,6 +108,22 @@ const router = createRouter({
           path: 'observador',
           name: 'Observador del Estudiante',
           component: () => import('../views/teacher/TeacherObservations.vue')
+        },
+        // Rutas del Padre
+        {
+          path: 'hijos',
+          name: 'Mis Hijos',
+          component: () => import('../views/parent/ParentDashboard.vue')
+        },
+        {
+          path: 'calificaciones-hijos',
+          name: 'Calificaciones de Hijos',
+          component: () => import('../views/parent/ParentDashboard.vue')
+        },
+        {
+          path: 'asistencia-hijos',
+          name: 'Asistencia de Hijos',
+          component: () => import('../views/parent/ParentDashboard.vue')
         }
       ]
     }
