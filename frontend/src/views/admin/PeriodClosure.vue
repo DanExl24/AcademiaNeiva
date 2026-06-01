@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import axios from 'axios'
-import { ArrowLeft, CheckCircle2, Lock, FileX, SlidersHorizontal, AlertCircle, Search, ChevronDown } from 'lucide-vue-next'
+import { ArrowLeft, CheckCircle2, Lock, Unlock, FileX, SlidersHorizontal, AlertCircle, Search, ChevronDown } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 
 const auth = useAuthStore()
@@ -168,6 +168,52 @@ const attemptClosePeriod = async (force = false) => {
   }
 }
 
+const reopeningPeriod = ref(false)
+
+const attemptReopenPeriod = async () => {
+  if (!selectedPeriodId.value) return
+  if (!confirm('¿Estás seguro de que deseas REABRIR el periodo académico? Esto cambiará globalmente el periodo de nuevo a ABIERTO.')) return
+  
+  try {
+    reopeningPeriod.value = true
+    await axios.post(`http://localhost:3000/api/academic-admin/settings/periods/${selectedPeriodId.value}/reopen`, {
+      schoolId: schoolId.value
+    })
+    
+    if (periodDetails.value) {
+      periodDetails.value.estado = 'ABIERTO'
+    }
+    const targetPeriod = periods.value.find(p => p.id_periodo === selectedPeriodId.value)
+    if (targetPeriod) targetPeriod.estado = 'ABIERTO'
+    
+    await loadClosureDetails()
+  } catch (error: any) {
+    alert(error.response?.data?.error || 'No fue posible reabrir el periodo')
+  } finally {
+    reopeningPeriod.value = false
+  }
+}
+
+const reopeningSubject = ref<number | null>(null)
+
+const attemptReopenSubject = async (curso: any) => {
+  if (!selectedPeriodId.value) return
+  if (!confirm(`¿Estás seguro de que deseas DESHACER el cierre de ${curso.grado}? El docente podrá volver a modificar e ingresar notas.`)) return
+  
+  try {
+    reopeningSubject.value = curso.id_detallegrado
+    await axios.post(`http://localhost:3000/api/academic-admin/settings/periods/${selectedPeriodId.value}/reopen-subject/${curso.id_detallegrado}`, {
+      schoolId: schoolId.value
+    })
+    
+    await loadClosureDetails()
+  } catch (error: any) {
+    alert(error.response?.data?.error || 'No fue posible deshacer el cierre de esta materia.')
+  } finally {
+    reopeningSubject.value = null
+  }
+}
+
 onMounted(() => {
   loadInitialData()
 })
@@ -254,6 +300,16 @@ onMounted(() => {
                   <CheckCircle2 class="w-5 h-5" />
                   Cierre Completado
                 </div>
+                <button
+                  type="button"
+                  @click="attemptReopenPeriod"
+                  :disabled="reopeningPeriod"
+                  class="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-slate-100 text-slate-700 px-6 py-3 text-sm font-black transition-all hover:bg-amber-100 hover:text-amber-700 disabled:opacity-50 ring-1 ring-inset ring-slate-200 hover:ring-amber-200"
+                  title="Permite volver a recibir correcciones temporalmente"
+                >
+                  <Unlock class="h-4 w-4" />
+                  {{ reopeningPeriod ? 'Abriendo...' : 'Reabrir Periodo' }}
+                </button>
               </template>
             </div>
           </div>
@@ -373,12 +429,23 @@ onMounted(() => {
                             <p class="text-[12px] font-bold text-slate-600 truncate group-hover:text-slate-900 transition-colors">{{ curso.grado }}</p>
                           </div>
                         </div>
-                        <span 
-                          class="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-md shrink-0 ring-1 ring-inset"
-                          :class="curso.estado === 'CERRADO' ? 'text-emerald-700 bg-emerald-50 ring-emerald-500/20' : 'text-rose-600 bg-rose-50 ring-rose-500/20'"
-                        >
-                          {{ curso.estado }}
-                        </span>
+                        <div class="flex items-center gap-2">
+                          <span 
+                            class="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-md shrink-0 ring-1 ring-inset"
+                            :class="curso.estado === 'CERRADO' ? 'text-emerald-700 bg-emerald-50 ring-emerald-500/20' : 'text-rose-600 bg-rose-50 ring-rose-500/20'"
+                          >
+                            {{ curso.estado }}
+                          </span>
+                          <button
+                            v-if="curso.estado === 'CERRADO'"
+                            @click.stop="attemptReopenSubject(curso)"
+                            :disabled="reopeningSubject === curso.id_detallegrado"
+                            class="p-1 px-1.5 flex items-center justify-center rounded bg-slate-100 text-slate-500 hover:bg-amber-100 hover:text-amber-700 transition"
+                            title="Deshacer el cierre de esta materia para el profesor"
+                          >
+                            <Unlock class="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>

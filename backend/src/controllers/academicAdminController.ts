@@ -1300,6 +1300,82 @@ export const closeAcademicPeriod = async (req: Request, res: Response): Promise<
   }
 };
 
+export const reopenAcademicPeriod = async (req: Request, res: Response): Promise<void> => {
+  const periodId = Number(req.params.id);
+  const schoolId = parseSchoolId(req.body.schoolId);
+
+  if (!periodId || !schoolId) {
+    res.status(400).json({ error: "Parámetros inválidos" });
+    return;
+  }
+
+  try {
+    const updated = await pool.query(
+      `UPDATE periodo_academico
+       SET estado = 'ABIERTO'
+       WHERE id_periodo = $1
+         AND id_colegio = $2
+         AND estado = 'CERRADO'`,
+      [periodId, schoolId]
+    );
+
+    if (updated.rowCount === 0) {
+      res.status(404).json({ error: "Periodo no encontrado o no está cerrado" });
+      return;
+    }
+
+    res.json({ message: "Periodo reabierto con éxito" });
+  } catch (error: any) {
+    console.error("Error reopening academic period:", error);
+    res.status(500).json({ error: "Error en el servidor" });
+  }
+};
+
+export const reopenSubjectClosure = async (req: Request, res: Response): Promise<void> => {
+  const periodId = Number(req.params.periodId);
+  const detailGradeId = Number(req.params.detailGradeId);
+  const schoolId = parseSchoolId(req.body.schoolId);
+
+  if (!periodId || !detailGradeId || !schoolId) {
+    res.status(400).json({ error: "Parámetros inválidos" });
+    return;
+  }
+
+  try {
+    // 1. Verify period is from the same school
+    const periodCheck = await pool.query(
+      `SELECT id_periodo
+       FROM periodo_academico
+       WHERE id_periodo = $1
+         AND id_colegio = $2`,
+      [periodId, schoolId]
+    );
+
+    if (periodCheck.rows.length === 0) {
+      res.status(404).json({ error: "Periodo no encontrado o no es de tu colegio" });
+      return;
+    }
+
+    // 2. Erase teacher closure history for this period & detail
+    const deleted = await pool.query(
+      `DELETE FROM cierre_materia
+       WHERE id_detallegrado = $1
+         AND id_periodo = $2`,
+      [detailGradeId, periodId]
+    );
+
+    if (deleted.rowCount === 0) {
+      res.status(404).json({ error: "La materia no estaba cerrada para este periodo" });
+      return;
+    }
+
+    res.json({ message: "Desbloqueado con éxito de cierre" });
+  } catch (error: any) {
+    console.error("Error reopening subject closure:", error);
+    res.status(500).json({ error: "Error en el servidor al deshacer cierre de materia" });
+  }
+};
+
 export const updateAcademicPeriodPercentage = async (req: Request, res: Response): Promise<void> => {
   const periodId = Number(req.params.id);
   const schoolId = parseSchoolId(req.body.schoolId);

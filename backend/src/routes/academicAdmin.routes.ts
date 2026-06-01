@@ -19,6 +19,8 @@ import {
   getTeacherManagementData,
   assignTeacherCourseSubject,
   closeAcademicPeriod,
+  reopenAcademicPeriod,
+  reopenSubjectClosure,
   upsertCompetencyByAdmin,
   updateAcademicPeriodPercentage,
   getPeriodClosureDetails,
@@ -56,6 +58,8 @@ router.patch("/settings/periods/:id/percentage", updateAcademicPeriodPercentage)
 router.get("/settings/closure-details/:schoolId/:periodId", getPeriodClosureDetails);
 router.post("/settings/competencies", upsertCompetencyByAdmin);
 router.post("/settings/periods/:id/close", closeAcademicPeriod);
+router.post("/settings/periods/:id/reopen", reopenAcademicPeriod);
+router.post("/settings/periods/:periodId/reopen-subject/:detailGradeId", reopenSubjectClosure);
 router.post("/settings/scales", createScale);
 router.put("/settings/scales/:id", updateScale);
 router.delete("/settings/scales/:id", deleteScale);
