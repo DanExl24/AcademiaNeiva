@@ -109,6 +109,11 @@ const router = createRouter({
           name: 'Observador del Estudiante',
           component: () => import('../views/teacher/TeacherObservations.vue')
         },
+        {
+          path: 'cierre-periodo',
+          name: 'Cierre de Periodo',
+          component: () => import('../views/teacher/TeacherClosure.vue')
+        },
         // Rutas del Padre
         {
           path: 'hijos',

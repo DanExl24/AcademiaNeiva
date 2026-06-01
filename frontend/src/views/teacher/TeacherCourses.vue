@@ -176,17 +176,17 @@ const closeStudentsModal = () => {
 <template>
   <div class="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
     <!-- Header -->
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800 transition-colors">
       <div>
-        <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Mis Cursos y Materias</h1>
-        <p class="text-slate-500 mt-1">Gestiona tu carga académica y estudiantes</p>
+        <h1 class="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Mis Cursos y Materias</h1>
+        <p class="text-slate-500 dark:text-slate-400 mt-1">Gestiona tu carga académica y estudiantes</p>
       </div>
       
-      <div class="flex items-center gap-2 bg-slate-50 p-1.5 rounded-2xl border border-slate-200">
+      <div class="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/50 p-1.5 rounded-2xl border border-slate-200 dark:border-slate-700">
         <button 
           @click="viewMode = 'grades'"
           class="flex items-center gap-2 px-4 py-2 rounded-xl transition-all duration-300 font-medium"
-          :class="viewMode === 'grades' ? 'bg-white text-indigo-600 shadow-md ring-1 ring-slate-200' : 'text-slate-500 hover:text-slate-700'"
+          :class="viewMode === 'grades' ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-md ring-1 ring-slate-200 dark:ring-slate-700' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'"
         >
           <LayoutGrid class="w-4 h-4" />
           Por Grado
@@ -194,7 +194,7 @@ const closeStudentsModal = () => {
         <button 
           @click="viewMode = 'subjects'"
           class="flex items-center gap-2 px-4 py-2 rounded-xl transition-all duration-300 font-medium"
-          :class="viewMode === 'subjects' ? 'bg-white text-indigo-600 shadow-md ring-1 ring-slate-200' : 'text-slate-500 hover:text-slate-700'"
+          :class="viewMode === 'subjects' ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-md ring-1 ring-slate-200 dark:ring-slate-700' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'"
         >
           <BookOpen class="w-4 h-4" />
           Por Materia
@@ -203,7 +203,7 @@ const closeStudentsModal = () => {
     </div>
 
     <!-- Barra de Filtros -->
-    <div v-if="rawData.length > 0" class="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex flex-col md:flex-row gap-4 items-center justify-between">
+    <div v-if="rawData.length > 0" class="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col md:flex-row gap-4 items-center justify-between transition-colors">
       <div class="flex flex-col sm:flex-row flex-wrap gap-4 items-center w-full md:w-auto">
         <!-- Buscador -->
         <div class="relative w-full sm:w-64">
@@ -211,7 +211,7 @@ const closeStudentsModal = () => {
             v-model="searchQuery" 
             type="text" 
             placeholder="Buscar por grado o materia..." 
-            class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-700 placeholder-slate-400 outline-none focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 transition-all duration-300"
+            class="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-semibold text-slate-700 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all duration-300"
           />
           <svg class="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
@@ -222,7 +222,7 @@ const closeStudentsModal = () => {
         <div class="relative w-full sm:w-48">
           <select 
             v-model="selectedGrade"
-            class="w-full pl-4 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-700 outline-none appearance-none focus:bg-white focus:border-indigo-500 transition-all duration-300 cursor-pointer"
+            class="w-full pl-4 pr-10 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-semibold text-slate-700 dark:text-slate-200 outline-none appearance-none focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all duration-300 cursor-pointer"
           >
             <option value="">Todos los Grados</option>
             <option v-for="g in uniqueGrades" :key="g" :value="g">{{ g }}</option>
@@ -238,7 +238,7 @@ const closeStudentsModal = () => {
         <div class="relative w-full sm:w-48">
           <select 
             v-model="selectedJornada"
-            class="w-full pl-4 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-700 outline-none appearance-none focus:bg-white focus:border-indigo-500 transition-all duration-300 cursor-pointer"
+            class="w-full pl-4 pr-10 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-semibold text-slate-700 dark:text-slate-200 outline-none appearance-none focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all duration-300 cursor-pointer"
           >
             <option value="">Todas las Jornadas</option>
             <option v-for="j in uniqueJornadas" :key="j" :value="j">{{ j }}</option>
@@ -255,34 +255,34 @@ const closeStudentsModal = () => {
       <button 
         v-if="selectedGrade || selectedJornada || searchQuery"
         @click="clearFilters"
-        class="text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors flex items-center gap-1 shrink-0"
+        class="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 transition-colors flex items-center gap-1 shrink-0"
       >
         Limpiar Filtros
       </button>
     </div>
 
     <!-- Loading State -->
-    <div v-if="loading" class="flex flex-col items-center justify-center py-20 bg-white rounded-3xl border border-slate-100 shadow-sm">
+    <div v-if="loading" class="flex flex-col items-center justify-center py-20 bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm transition-colors">
       <div class="w-12 h-12 border-4 border-indigo-600/20 border-t-indigo-600 rounded-full animate-spin"></div>
-      <p class="mt-4 text-slate-500 font-medium italic">Cargando tu información académica...</p>
+      <p class="mt-4 text-slate-500 dark:text-slate-400 font-medium italic">Cargando tu información académica...</p>
     </div>
 
     <!-- Empty State -->
-    <div v-else-if="rawData.length === 0" class="bg-white p-12 rounded-3xl text-center border border-dashed border-slate-300">
-      <div class="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6">
-        <GraduationCap class="w-10 h-10 text-slate-300" />
+    <div v-else-if="rawData.length === 0" class="bg-white dark:bg-slate-900 p-12 rounded-3xl text-center border border-dashed border-slate-300 dark:border-slate-700 transition-colors">
+      <div class="w-20 h-20 bg-slate-50 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-6">
+        <GraduationCap class="w-10 h-10 text-slate-300 dark:text-slate-600" />
       </div>
-      <h3 class="text-xl font-bold text-slate-900">No tienes cursos asignados</h3>
-      <p class="text-slate-500 max-w-md mx-auto mt-2">Parece que aún no tienes carga académica registrada en este colegio. Contacta a coordinación.</p>
+      <h3 class="text-xl font-bold text-slate-900 dark:text-white">No tienes cursos asignados</h3>
+      <p class="text-slate-500 dark:text-slate-400 max-w-md mx-auto mt-2">Parece que aún no tienes carga académica registrada en este colegio. Contacta a coordinación.</p>
     </div>
 
     <!-- No results from search/filters -->
-    <div v-else-if="groupedByGrades.length === 0 && groupedBySubjects.length === 0" class="bg-white p-12 rounded-3xl text-center border border-slate-100 shadow-sm">
-      <div class="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6">
-        <SlidersHorizontal class="w-10 h-10 text-slate-300" />
+    <div v-else-if="groupedByGrades.length === 0 && groupedBySubjects.length === 0" class="bg-white dark:bg-slate-900 p-12 rounded-3xl text-center border border-slate-100 dark:border-slate-800 shadow-sm transition-colors">
+      <div class="w-20 h-20 bg-slate-50 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-6">
+        <SlidersHorizontal class="w-10 h-10 text-slate-300 dark:text-slate-600" />
       </div>
-      <h3 class="text-xl font-bold text-slate-900">Sin resultados</h3>
-      <p class="text-slate-500 max-w-md mx-auto mt-2">Prueba ajustando los filtros de búsqueda.</p>
+      <h3 class="text-xl font-bold text-slate-900 dark:text-white">Sin resultados</h3>
+      <p class="text-slate-500 dark:text-slate-400 max-w-md mx-auto mt-2">Prueba ajustando los filtros de búsqueda.</p>
     </div>
 
     <!-- Content: By Grade -->
@@ -290,18 +290,18 @@ const closeStudentsModal = () => {
       <div 
         v-for="group in groupedByGrades" 
         :key="group.id_grado"
-        class="group bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-500 overflow-hidden relative"
+        class="group bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-500 overflow-hidden relative"
       >
         <!-- Background Accent -->
-        <div class="absolute -right-8 -top-8 w-24 h-24 bg-indigo-50 rounded-full group-hover:scale-150 transition-transform duration-700 opacity-50"></div>
+        <div class="absolute -right-8 -top-8 w-24 h-24 bg-indigo-50 dark:bg-indigo-900/10 rounded-full group-hover:scale-150 transition-transform duration-700 opacity-50"></div>
         
         <div class="relative">
           <div class="flex items-start justify-between mb-6">
-            <div class="w-14 h-14 bg-indigo-600 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-200">
+            <div class="w-14 h-14 bg-indigo-600 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-200 dark:shadow-none">
               <span class="text-xl font-black">{{ group.nombre[0] }}</span>
             </div>
             <div class="flex flex-col items-end gap-1.5">
-              <span class="px-3 py-1 bg-indigo-50 text-indigo-600 text-[10px] font-extrabold tracking-wider rounded-full uppercase">{{ group.nivel }}</span>
+              <span class="px-3 py-1 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 text-[10px] font-extrabold tracking-wider rounded-full uppercase">{{ group.nivel }}</span>
               <span 
                 v-if="group.jornada" 
                 class="px-2.5 py-0.5 border text-[9px] font-black tracking-wider rounded-full uppercase transition-all duration-300"
@@ -312,29 +312,29 @@ const closeStudentsModal = () => {
             </div>
           </div>
 
-          <h3 class="text-2xl font-black text-slate-900 mb-1">{{ group.nombre }} {{ group.seccion }}</h3>
+          <h3 class="text-2xl font-black text-slate-900 dark:text-white mb-1">{{ group.nombre }} {{ group.seccion }}</h3>
           
           <div class="space-y-4 mt-6">
-            <div v-for="materia in group.materias" :key="materia.id" class="flex items-center justify-between p-3 bg-slate-50 rounded-2xl border border-slate-100 group/item hover:bg-indigo-50 hover:border-indigo-100 transition-colors duration-300">
+            <div v-for="materia in group.materias" :key="materia.id" class="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-700 group/item hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:border-indigo-100 dark:hover:border-indigo-800 transition-colors duration-300">
               <div class="flex items-center gap-3">
                 <div class="w-2 h-2 bg-indigo-400 rounded-full group-hover/item:scale-150 transition-transform"></div>
-                <span class="text-sm font-semibold text-slate-700">{{ materia.nombre }}</span>
+                <span class="text-sm font-semibold text-slate-700 dark:text-slate-300">{{ materia.nombre }}</span>
               </div>
-              <ChevronRight class="w-4 h-4 text-slate-300 group-hover/item:text-indigo-400 transition-colors" />
+              <ChevronRight class="w-4 h-4 text-slate-300 dark:text-slate-600 group-hover/item:text-indigo-400 transition-colors" />
             </div>
           </div>
 
-          <div class="mt-8 pt-6 border-t border-slate-100 flex items-center justify-between">
+          <div class="mt-8 pt-6 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
             <button 
               @click="openStudentsModal(group)"
-              class="text-xs font-bold text-slate-500 hover:text-indigo-600 flex items-center gap-1.5 transition-colors hover:bg-indigo-50 px-3 py-2 rounded-lg"
+              class="text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 flex items-center gap-1.5 transition-colors hover:bg-indigo-50 dark:hover:bg-indigo-900/20 px-3 py-2 rounded-lg"
             >
               <Users class="w-4 h-4" />
               Ver Alumnos
             </button>
             <button 
               @click="navigateToGrades(group.id_grado)"
-              class="flex items-center gap-2 bg-indigo-600 text-white px-5 py-2.5 rounded-xl font-bold text-xs hover:bg-indigo-700 shadow-md shadow-indigo-100 active:scale-95 transition-all"
+              class="flex items-center gap-2 bg-indigo-600 text-white px-5 py-2.5 rounded-xl font-bold text-xs hover:bg-indigo-700 shadow-md shadow-indigo-100 dark:shadow-none active:scale-95 transition-all"
             >
               <ClipboardList class="w-4 h-4" />
               Calificar
@@ -349,25 +349,25 @@ const closeStudentsModal = () => {
       <div 
         v-for="subject in groupedBySubjects" 
         :key="subject.nombre"
-        class="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm flex flex-col md:flex-row gap-8 hover:shadow-lg transition-all duration-500"
+        class="bg-white dark:bg-slate-900 p-8 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col md:flex-row gap-8 hover:shadow-lg transition-all duration-500"
       >
-        <div class="w-20 h-20 bg-teal-50 text-teal-600 rounded-3xl flex items-center justify-center shrink-0 shadow-inner">
+        <div class="w-20 h-20 bg-teal-50 dark:bg-teal-900/20 text-teal-600 dark:text-teal-400 rounded-3xl flex items-center justify-center shrink-0 shadow-inner">
           <BookOpen class="w-10 h-10" />
         </div>
         
         <div class="flex-1">
-          <h3 class="text-2xl font-black text-slate-900 mb-6">{{ subject.nombre }}</h3>
+          <h3 class="text-2xl font-black text-slate-900 dark:text-white mb-6">{{ subject.nombre }}</h3>
           
           <div class="grid grid-cols-2 gap-4">
             <div 
               v-for="curso in subject.cursos" 
               :key="curso.id_grado"
               @click="navigateToGrades(curso.id_grado)"
-              class="p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:bg-teal-50 hover:border-teal-100 transition-all duration-300 cursor-pointer group"
+              class="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-700 hover:bg-teal-50 dark:hover:bg-teal-900/20 hover:border-teal-100 dark:hover:border-teal-800 transition-all duration-300 cursor-pointer group"
             >
               <div class="flex items-center justify-between">
                 <div class="flex flex-col">
-                  <span class="text-sm font-bold text-slate-700">{{ curso.nombre }}</span>
+                  <span class="text-sm font-bold text-slate-700 dark:text-slate-300">{{ curso.nombre }}</span>
                   <span 
                     v-if="curso.jornada" 
                     class="text-[9px] font-black tracking-wider rounded-full uppercase mt-1.5 px-2 py-0.5 border w-fit"
@@ -376,7 +376,7 @@ const closeStudentsModal = () => {
                     {{ curso.jornada }}
                   </span>
                 </div>
-                <ChevronRight class="w-4 h-4 text-slate-300 group-hover:translate-x-1 group-hover:text-teal-500 transition-all" />
+                <ChevronRight class="w-4 h-4 text-slate-300 dark:text-slate-600 group-hover:translate-x-1 group-hover:text-teal-500 transition-all" />
               </div>
             </div>
           </div>
@@ -396,7 +396,7 @@ const closeStudentsModal = () => {
         <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"></div>
 
         <!-- Modal Panel -->
-        <div class="relative bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden">
+        <div class="relative bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden border dark:border-slate-800">
           <!-- Header -->
           <div class="bg-gradient-to-br from-indigo-600 to-violet-600 p-6 flex items-center justify-between shrink-0">
             <div class="flex items-center gap-3">
@@ -417,28 +417,28 @@ const closeStudentsModal = () => {
           </div>
 
           <!-- Content -->
-          <div class="flex-1 overflow-y-auto">
+          <div class="flex-1 overflow-y-auto dark:bg-slate-900">
             <!-- Loading -->
             <div v-if="studentsLoading" class="flex flex-col items-center justify-center py-16">
-              <div class="w-10 h-10 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin"></div>
-              <p class="mt-4 text-slate-400 text-sm font-medium">Cargando alumnos...</p>
+              <div class="w-10 h-10 border-4 border-indigo-100 dark:border-slate-800 border-t-indigo-600 rounded-full animate-spin"></div>
+              <p class="mt-4 text-slate-400 dark:text-slate-500 text-sm font-medium">Cargando alumnos...</p>
             </div>
 
             <!-- Empty -->
             <div v-else-if="studentsList.length === 0" class="flex flex-col items-center justify-center py-16">
-              <div class="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center mb-4">
-                <Users class="w-8 h-8 text-slate-300" />
+              <div class="w-16 h-16 bg-slate-50 dark:bg-slate-800 rounded-2xl flex items-center justify-center mb-4">
+                <Users class="w-8 h-8 text-slate-300 dark:text-slate-600" />
               </div>
-              <p class="text-slate-500 font-semibold">No hay alumnos matriculados</p>
-              <p class="text-slate-400 text-xs mt-1">Este curso no tiene estudiantes activos registrados.</p>
+              <p class="text-slate-500 dark:text-slate-400 font-semibold">No hay alumnos matriculados</p>
+              <p class="text-slate-400 dark:text-slate-500 text-xs mt-1">Este curso no tiene estudiantes activos registrados.</p>
             </div>
 
             <!-- Student List -->
             <div v-else class="p-4 space-y-2">
               <!-- Count badge -->
               <div class="flex items-center justify-between px-2 py-1 mb-4">
-                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Estudiantes</span>
-                <span class="px-3 py-1 bg-indigo-50 text-indigo-600 text-xs font-black rounded-full">
+                <span class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Estudiantes</span>
+                <span class="px-3 py-1 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 text-xs font-black rounded-full">
                   {{ studentsList.length }} alumno{{ studentsList.length !== 1 ? 's' : '' }}
                 </span>
               </div>
@@ -446,24 +446,24 @@ const closeStudentsModal = () => {
               <div
                 v-for="(student, index) in studentsList"
                 :key="student.id_estudiante"
-                class="flex items-center gap-4 p-3.5 rounded-2xl border border-slate-100 hover:bg-indigo-50 hover:border-indigo-100 transition-all duration-200 group"
+                class="flex items-center gap-4 p-3.5 rounded-2xl border border-slate-100 dark:border-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:border-indigo-100 dark:hover:border-indigo-800 transition-all duration-200 group"
               >
                 <!-- Avatar / Number -->
-                <div class="w-9 h-9 bg-gradient-to-br from-indigo-500 to-violet-500 rounded-xl flex items-center justify-center shrink-0 shadow-md shadow-indigo-100">
+                <div class="w-9 h-9 bg-gradient-to-br from-indigo-500 to-violet-500 rounded-xl flex items-center justify-center shrink-0 shadow-md shadow-indigo-100 dark:shadow-none">
                   <span class="text-xs font-black text-white">{{ index + 1 }}</span>
                 </div>
 
                 <!-- Name & details -->
                 <div class="flex-1 min-w-0">
-                  <p class="text-sm font-bold text-slate-900 truncate">
+                  <p class="text-sm font-bold text-slate-900 dark:text-slate-200 truncate">
                     {{ student.apellido }}, {{ student.nombre }}
                   </p>
                   <div class="flex items-center gap-3 mt-0.5">
-                    <span class="flex items-center gap-1 text-[10px] text-slate-400 font-semibold">
+                    <span class="flex items-center gap-1 text-[10px] text-slate-400 dark:text-slate-500 font-semibold">
                       <Hash class="w-3 h-3" />
                       {{ student.codigo || 'Sin código' }}
                     </span>
-                    <span class="flex items-center gap-1 text-[10px] text-slate-400 font-semibold">
+                    <span class="flex items-center gap-1 text-[10px] text-slate-400 dark:text-slate-500 font-semibold">
                       <FileText class="w-3 h-3" />
                       {{ student.documento || 'Sin doc.' }}
                     </span>
@@ -477,10 +477,10 @@ const closeStudentsModal = () => {
           </div>
 
           <!-- Footer -->
-          <div class="border-t border-slate-100 p-4 shrink-0 bg-slate-50/80">
+          <div class="border-t border-slate-100 dark:border-slate-800 p-4 shrink-0 bg-slate-50/80 dark:bg-slate-800/50">
             <button
               @click="closeStudentsModal"
-              class="w-full py-2.5 rounded-2xl bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-700 active:scale-95 transition-all shadow-md shadow-indigo-100"
+              class="w-full py-2.5 rounded-2xl bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-700 active:scale-95 transition-all shadow-md shadow-indigo-100 dark:shadow-none"
             >
               Cerrar
             </button>

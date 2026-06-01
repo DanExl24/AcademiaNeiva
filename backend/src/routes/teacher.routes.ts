@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getTeacherCourses, getStudentsByGrade } from "../controllers/academicController";
+import { getTeacherCourses, getStudentsByGrade, getTeacherDashboard } from "../controllers/academicController";
 import {
   getActivities,
   createActivity,
@@ -11,6 +11,8 @@ import {
   getGrades,
   saveGrades,
   updateCompetency,
+  getClosureStatus,
+  closePeriodForTeacher,
 } from "../controllers/gradingController";
 import {
   getAttendanceByDate,
@@ -26,6 +28,7 @@ import {
 
 const router = Router();
 
+router.get("/dashboard/:userId", getTeacherDashboard);
 router.get("/courses/:userId", getTeacherCourses);
 router.get("/students/:gradeId", getStudentsByGrade);
 
@@ -45,6 +48,10 @@ router.get("/periods/:schoolId", getPeriods);
 // Rutas de Calificaciones - Notas
 router.get("/grades/:gradeId/:subjectId/:periodId", getGrades);
 router.post("/grades", saveGrades);
+
+// Rutas de Cierre de Periodo
+router.get("/closure-status/:detailGradeId/:periodId", getClosureStatus);
+router.post("/close-period", closePeriodForTeacher);
 
 // Rutas de Asistencia
 router.get("/attendance/:detailGradeId/:date", getAttendanceByDate);

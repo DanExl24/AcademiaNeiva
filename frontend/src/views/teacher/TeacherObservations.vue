@@ -28,6 +28,7 @@ interface Course {
   id_materia: number
   materia_nombre: string
   id_detallegrado: number
+  jornada_nombre: string
 }
 
 interface Period {
@@ -65,7 +66,9 @@ const route = useRoute()
 const auth = useAuthStore()
 
 // Selectors
-const selectedGradeId = ref<number | null>(route.query.gradoId ? Number(route.query.gradoId) : null)
+const selectedGradeName = ref<string | null>(null)
+const selectedSection = ref<string | null>(null)
+const selectedJornada = ref<string | null>(null)
 const selectedSubjectId = ref<number | null>(null)
 const selectedPeriodId = ref<number | null>(null)
 
@@ -102,9 +105,19 @@ const fetchMyCourses = async () => {
   try {
     const response = await axios.get(`http://localhost:3000/api/teacher/courses/${auth.user?.id}`)
     myCourses.value = response.data
-    if (selectedGradeId.value) {
-      const course = myCourses.value.find(c => c.id_grado === selectedGradeId.value)
-      if (course) selectedSubjectId.value = course.id_materia
+    
+    // Si venimos con parámetros de consulta (ej. desde el cierre)
+    if (route.query.gradoId) {
+      const gId = Number(route.query.gradoId)
+      const sId = route.query.subjectId ? Number(route.query.subjectId) : null
+      
+      const course = myCourses.value.find(c => c.id_grado === gId)
+      if (course) {
+        selectedGradeName.value = course.grado_nombre
+        selectedSection.value = course.seccion
+        selectedJornada.value = course.jornada_nombre
+        if (sId) selectedSubjectId.value = sId
+      }
     }
   } catch (error) {
     console.error('Error fetching courses:', error)
@@ -139,7 +152,16 @@ const fetchStudents = async () => {
 
 // Computed: current course
 const selectedCourse = computed(() => {
-  return myCourses.value.find(c => c.id_grado === selectedGradeId.value && c.id_materia === selectedSubjectId.value)
+  return myCourses.value.find(c => 
+    c.grado_nombre === selectedGradeName.value && 
+    c.seccion === selectedSection.value && 
+    c.jornada_nombre === selectedJornada.value &&
+    c.id_materia === selectedSubjectId.value
+  )
+})
+
+const selectedGradeId = computed(() => {
+  return selectedCourse.value?.id_grado || null
 })
 
 // Load observations
@@ -164,21 +186,35 @@ const fetchObservations = async () => {
 }
 
 // Dropdown options
-const coursesOptions = computed(() => {
-  const uniqueGrades: { id: number; label: string }[] = []
-  const seen = new Set()
-  myCourses.value.forEach(c => {
-    if (!seen.has(c.id_grado)) {
-      seen.add(c.id_grado)
-      uniqueGrades.push({ id: c.id_grado, label: `${c.grado_nombre} ${c.seccion}` })
-    }
-  })
-  return uniqueGrades
+const gradeOptions = computed(() => {
+  const grades = myCourses.value.map(c => c.grado_nombre)
+  return [...new Set(grades)].sort()
+})
+
+const sectionOptions = computed(() => {
+  if (!selectedGradeName.value) return []
+  const sections = myCourses.value
+    .filter(c => c.grado_nombre === selectedGradeName.value)
+    .map(c => c.seccion)
+  return [...new Set(sections)].sort()
+})
+
+const jornadaOptions = computed(() => {
+  if (!selectedGradeName.value || !selectedSection.value) return []
+  const jornadas = myCourses.value
+    .filter(c => c.grado_nombre === selectedGradeName.value && c.seccion === selectedSection.value)
+    .map(c => c.jornada_nombre)
+  return [...new Set(jornadas)].sort()
 })
 
 const subjectsOptions = computed(() => {
+  if (!selectedGradeName.value || !selectedSection.value || !selectedJornada.value) return []
   return myCourses.value
-    .filter(c => c.id_grado === selectedGradeId.value)
+    .filter(c => 
+      c.grado_nombre === selectedGradeName.value && 
+      c.seccion === selectedSection.value && 
+      c.jornada_nombre === selectedJornada.value
+    )
     .map(c => ({ id: c.id_materia, label: c.materia_nombre }))
 })
 
@@ -375,7 +411,11 @@ const deleteObservation = async (id: number) => {
 }
 
 // Watchers
-watch([selectedGradeId, selectedSubjectId, selectedPeriodId], () => {
+watch([selectedGradeName, selectedSection, selectedJornada], () => {
+  selectedSubjectId.value = null
+})
+
+watch([selectedCourse, selectedPeriodId], () => {
   observations.value = []
   if (selectedCourse.value && selectedPeriodId.value) {
     fetchObservations()
@@ -393,44 +433,60 @@ onMounted(() => {
     <!-- Header with Actions -->
     <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
       <div>
-        <h1 class="text-3xl font-black text-slate-900 tracking-tight">Observador del Estudiante</h1>
-        <p class="text-slate-500 text-lg">Consulta y registra el seguimiento académico: fortalezas, debilidades y recomendaciones.</p>
+        <h1 class="text-3xl font-black text-slate-900 dark:text-white tracking-tight transition-colors">Observador del Estudiante</h1>
+        <p class="text-slate-500 dark:text-slate-400 text-lg transition-colors">Consulta y registra el seguimiento académico: fortalezas, debilidades y recomendaciones.</p>
       </div>
       <button
         v-if="selectedCourse && selectedPeriodId && isEditable"
         @click="openNewModal"
-        class="bg-amber-600 text-white px-8 py-3 rounded-2xl font-bold shadow-lg shadow-amber-200/50 hover:bg-amber-700 active:scale-95 transition-all flex items-center gap-2"
+        class="bg-amber-600 dark:bg-amber-500 text-white px-8 py-3 rounded-2xl font-bold shadow-lg shadow-amber-200/50 dark:shadow-none hover:bg-amber-700 dark:hover:bg-amber-600 active:scale-95 transition-all flex items-center gap-2"
       >
         <Plus :size="20" />
         Nueva Observación
       </button>
     </div>
 
-    <!-- Filter Panel -->
-    <div class="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm flex flex-col md:flex-row md:items-end gap-6">
-      <div class="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-6">
+    <!-- Filters in cascade -->
+    <div class="bg-white dark:bg-slate-900 p-8 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col md:flex-row md:items-end gap-4 transition-colors">
+      <div class="flex-1 grid grid-cols-1 sm:grid-cols-5 gap-4">
         <div class="space-y-2">
-          <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-2">Grado / Curso</label>
-          <select v-model="selectedGradeId" class="w-full bg-slate-50 border-slate-200 rounded-2xl p-4 text-sm font-semibold focus:ring-2 focus:ring-amber-500 transition-all outline-none">
-            <option :value="null">Seleccionar Grado</option>
-            <option v-for="g in coursesOptions" :key="g.id" :value="g.id">{{ g.label }}</option>
+          <label class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-2">Grado</label>
+          <select v-model="selectedGradeName" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 text-sm font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-600 transition-all outline-none">
+            <option :value="null">Selecciona</option>
+            <option v-for="g in gradeOptions" :key="g" :value="g">{{ g }}</option>
           </select>
         </div>
 
         <div class="space-y-2">
-          <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-2">Materia</label>
-          <select v-model="selectedSubjectId" :disabled="!selectedGradeId" class="w-full bg-slate-50 border-slate-200 rounded-2xl p-4 text-sm font-semibold focus:ring-2 focus:ring-amber-500 transition-all outline-none disabled:opacity-50">
-            <option :value="null">Seleccionar Materia</option>
+          <label class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-2">Sección</label>
+          <select v-model="selectedSection" :disabled="!selectedGradeName" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 text-sm font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-600 transition-all outline-none disabled:opacity-50">
+            <option :value="null">Selecciona</option>
+            <option v-for="s in sectionOptions" :key="s" :value="s">{{ s }}</option>
+          </select>
+        </div>
+
+        <div class="space-y-2">
+          <label class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-2">Jornada</label>
+          <select v-model="selectedJornada" :disabled="!selectedSection" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 text-sm font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-600 transition-all outline-none disabled:opacity-50">
+            <option :value="null">Selecciona</option>
+            <option v-for="j in jornadaOptions" :key="j" :value="j">{{ j }}</option>
+          </select>
+        </div>
+
+        <div class="space-y-2">
+          <label class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-2">Materia</label>
+          <select v-model="selectedSubjectId" :disabled="!selectedJornada" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 text-sm font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-600 transition-all outline-none disabled:opacity-50">
+            <option :value="null">Selecciona</option>
             <option v-for="s in subjectsOptions" :key="s.id" :value="s.id">{{ s.label }}</option>
           </select>
         </div>
 
         <div class="space-y-2">
-          <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-2">Periodo Académico</label>
-          <select v-model="selectedPeriodId" :disabled="periods.length === 0" class="w-full bg-slate-50 border-slate-200 rounded-2xl p-4 text-sm font-semibold focus:ring-2 focus:ring-amber-500 transition-all outline-none disabled:opacity-50">
-            <option :value="null">Seleccionar Periodo</option>
+          <label class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-2">Periodo Académico</label>
+          <select v-model="selectedPeriodId" :disabled="periods.length === 0" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 text-sm font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-600 transition-all outline-none disabled:opacity-50">
+            <option :value="null">Selecciona</option>
             <option v-for="p in periods" :key="p.id_periodo" :value="p.id_periodo">
-              {{ p.nombre }} {{ p.estado === 'CERRADO' ? '(Cerrado)' : '' }}
+              {{ p.nombre }}
             </option>
           </select>
         </div>
@@ -438,21 +494,21 @@ onMounted(() => {
     </div>
 
     <!-- Status warnings -->
-    <div v-if="selectedCourse && selectedPeriodId && !isEditable" class="bg-amber-50 border border-amber-200 rounded-3xl p-6 flex items-start gap-4 animate-in slide-in-from-top duration-300">
-      <AlertCircle class="w-6 h-6 text-amber-600 shrink-0 mt-0.5" />
+    <div v-if="selectedCourse && selectedPeriodId && !isEditable" class="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-3xl p-6 flex items-start gap-4 animate-in slide-in-from-top duration-300 transition-colors">
+      <AlertCircle class="w-6 h-6 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
       <div>
-        <h4 class="font-black text-amber-900">Observaciones en modo de solo lectura</h4>
-        <p class="text-sm text-amber-700 mt-1">{{ lockReason }}</p>
+        <h4 class="font-black text-amber-900 dark:text-amber-200">Observaciones en modo de solo lectura</h4>
+        <p class="text-sm text-amber-700 dark:text-amber-400 mt-1">{{ lockReason }}</p>
       </div>
     </div>
 
     <!-- Unselected course prompt -->
-    <div v-if="!selectedCourse || !selectedPeriodId" class="bg-slate-50 border-2 border-dashed border-slate-200 rounded-3xl p-20 text-center">
-      <div class="w-20 h-20 bg-white rounded-full shadow-sm flex items-center justify-center mx-auto mb-6">
-        <Eye class="w-10 h-10 text-slate-300" />
+    <div v-if="!selectedCourse || !selectedPeriodId" class="bg-slate-50 dark:bg-slate-800/50 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-3xl p-20 text-center transition-colors">
+      <div class="w-20 h-20 bg-white dark:bg-slate-800 rounded-full shadow-sm flex items-center justify-center mx-auto mb-6">
+        <Eye class="w-10 h-10 text-slate-300 dark:text-slate-600" />
       </div>
-      <h3 class="text-xl font-bold text-slate-400">Selecciona grado, materia y periodo para comenzar</h3>
-      <p class="text-slate-400 text-sm mt-2">Una vez seleccionado el contexto, podrás consultar y registrar observaciones académicas.</p>
+      <h3 class="text-xl font-bold text-slate-400 dark:text-slate-500">Selecciona grado, materia y periodo para comenzar</h3>
+      <p class="text-slate-400 dark:text-slate-500 text-sm mt-2">Una vez seleccionado el contexto, podrás consultar y registrar observaciones académicas.</p>
     </div>
 
     <!-- Main Content -->
@@ -460,78 +516,78 @@ onMounted(() => {
 
       <!-- Sidebar: Stats -->
       <div class="xl:col-span-1 space-y-6">
-        <div class="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-6">
-          <h3 class="text-lg font-black text-slate-900 flex items-center gap-2">
-            <MessageSquare :size="20" class="text-amber-600" />
+        <div class="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm space-y-6 transition-colors">
+          <h3 class="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
+            <MessageSquare :size="20" class="text-amber-600 dark:text-amber-500" />
             Resumen del Periodo
           </h3>
 
           <div class="space-y-4">
-            <div class="bg-emerald-50/50 border border-emerald-100 rounded-2xl p-4 flex items-center justify-between">
+            <div class="bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900 rounded-2xl p-4 flex items-center justify-between">
               <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center">
-                  <Award :size="20" class="text-emerald-600" />
+                <div class="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-900/50 flex items-center justify-center">
+                  <Award :size="20" class="text-emerald-600 dark:text-emerald-400" />
                 </div>
-                <span class="text-sm font-bold text-emerald-700">Fortalezas</span>
+                <span class="text-sm font-bold text-emerald-700 dark:text-emerald-400">Fortalezas</span>
               </div>
-              <span class="text-2xl font-black text-emerald-700">{{ stats.fortalezas }}</span>
+              <span class="text-2xl font-black text-emerald-700 dark:text-emerald-300">{{ stats.fortalezas }}</span>
             </div>
-            <div class="bg-rose-50/50 border border-rose-100 rounded-2xl p-4 flex items-center justify-between">
+            <div class="bg-rose-50/50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900 rounded-2xl p-4 flex items-center justify-between">
               <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-xl bg-rose-100 flex items-center justify-center">
-                  <ShieldAlert :size="20" class="text-rose-600" />
+                <div class="w-10 h-10 rounded-xl bg-rose-100 dark:bg-rose-900/50 flex items-center justify-center">
+                  <ShieldAlert :size="20" class="text-rose-600 dark:text-rose-400" />
                 </div>
-                <span class="text-sm font-bold text-rose-700">Debilidades</span>
+                <span class="text-sm font-bold text-rose-700 dark:text-rose-400">Debilidades</span>
               </div>
-              <span class="text-2xl font-black text-rose-700">{{ stats.debilidades }}</span>
+              <span class="text-2xl font-black text-rose-700 dark:text-rose-300">{{ stats.debilidades }}</span>
             </div>
-            <div class="bg-blue-50/50 border border-blue-100 rounded-2xl p-4 flex items-center justify-between">
+            <div class="bg-blue-50/50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900 rounded-2xl p-4 flex items-center justify-between">
               <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
-                  <Lightbulb :size="20" class="text-blue-600" />
+                <div class="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center">
+                  <Lightbulb :size="20" class="text-blue-600 dark:text-blue-400" />
                 </div>
-                <span class="text-sm font-bold text-blue-700">Recomendaciones</span>
+                <span class="text-sm font-bold text-blue-700 dark:text-blue-400">Recomendaciones</span>
               </div>
-              <span class="text-2xl font-black text-blue-700">{{ stats.recomendaciones }}</span>
+              <span class="text-2xl font-black text-blue-700 dark:text-blue-300">{{ stats.recomendaciones }}</span>
             </div>
           </div>
 
-          <div class="pt-4 border-t border-slate-100">
-            <div class="flex justify-between items-center text-xs font-semibold text-slate-500">
+          <div class="pt-4 border-t border-slate-100 dark:border-slate-800">
+            <div class="flex justify-between items-center text-xs font-semibold text-slate-500 dark:text-slate-400">
               <span>Total observaciones</span>
-              <span class="font-bold text-slate-700">{{ observations.length }}</span>
+              <span class="font-bold text-slate-700 dark:text-slate-200">{{ observations.length }}</span>
             </div>
           </div>
         </div>
 
         <!-- Filter by type -->
-        <div class="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-4">
-          <h3 class="text-sm font-black text-slate-700 flex items-center gap-2">
-            <Filter :size="16" class="text-slate-400" />
+        <div class="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm space-y-4 transition-colors">
+          <h3 class="text-sm font-black text-slate-700 dark:text-slate-300 flex items-center gap-2">
+            <Filter :size="16" class="text-slate-400 dark:text-slate-500" />
             Filtrar por tipo
           </h3>
           <div class="space-y-2">
             <button
               @click="filterType = 'all'"
-              :class="[filterType === 'all' ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-600 hover:bg-slate-100', 'w-full py-2.5 px-4 rounded-xl text-xs font-bold transition-all text-left']"
+              :class="[filterType === 'all' ? 'bg-slate-900 dark:bg-slate-700 text-white' : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700', 'w-full py-2.5 px-4 rounded-xl text-xs font-bold transition-all text-left']"
             >
               Todas
             </button>
             <button
               @click="filterType = 'fortaleza'"
-              :class="[filterType === 'fortaleza' ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100', 'w-full py-2.5 px-4 rounded-xl text-xs font-bold transition-all text-left']"
+              :class="[filterType === 'fortaleza' ? 'bg-emerald-600 dark:bg-emerald-500 text-white' : 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/40', 'w-full py-2.5 px-4 rounded-xl text-xs font-bold transition-all text-left']"
             >
               🏆 Solo Fortalezas
             </button>
             <button
               @click="filterType = 'debilidad'"
-              :class="[filterType === 'debilidad' ? 'bg-rose-600 text-white' : 'bg-rose-50 text-rose-700 hover:bg-rose-100', 'w-full py-2.5 px-4 rounded-xl text-xs font-bold transition-all text-left']"
+              :class="[filterType === 'debilidad' ? 'bg-rose-600 dark:bg-rose-500 text-white' : 'bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/40', 'w-full py-2.5 px-4 rounded-xl text-xs font-bold transition-all text-left']"
             >
               ⚠️ Solo Debilidades
             </button>
             <button
               @click="filterType = 'recomendacion'"
-              :class="[filterType === 'recomendacion' ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-700 hover:bg-blue-100', 'w-full py-2.5 px-4 rounded-xl text-xs font-bold transition-all text-left']"
+              :class="[filterType === 'recomendacion' ? 'bg-blue-600 dark:bg-blue-500 text-white' : 'bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/40', 'w-full py-2.5 px-4 rounded-xl text-xs font-bold transition-all text-left']"
             >
               💡 Solo Recomendaciones
             </button>
@@ -543,32 +599,32 @@ onMounted(() => {
       <div class="xl:col-span-3 space-y-6">
 
         <!-- Search bar -->
-        <div class="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
-          <Search class="text-slate-400 shrink-0 ml-2" :size="20" />
+        <div class="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center gap-4 transition-colors">
+          <Search class="text-slate-400 dark:text-slate-500 shrink-0 ml-2" :size="20" />
           <input
             v-model="searchQuery"
             type="text"
             placeholder="Buscar por nombre de estudiante o contenido de observación..."
-            class="w-full bg-transparent border-none text-slate-800 placeholder-slate-400 focus:outline-none text-sm font-semibold"
+            class="w-full bg-transparent border-none text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none text-sm font-semibold"
           />
         </div>
 
         <!-- Loading state -->
-        <div v-if="loading" class="flex flex-col items-center justify-center p-20 bg-white rounded-3xl border border-slate-100 shadow-sm">
-          <Loader2 class="w-10 h-10 text-amber-600 animate-spin mb-4" />
-          <p class="text-slate-500 font-bold text-sm">Cargando observaciones...</p>
+        <div v-if="loading" class="flex flex-col items-center justify-center p-20 bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm transition-colors">
+          <Loader2 class="w-10 h-10 text-amber-600 dark:text-amber-500 animate-spin mb-4" />
+          <p class="text-slate-500 dark:text-slate-400 font-bold text-sm">Cargando observaciones...</p>
         </div>
 
         <!-- Empty state -->
-        <div v-else-if="filteredObservations.length === 0" class="bg-white rounded-3xl border border-slate-100 p-20 text-center shadow-sm">
-          <div class="w-16 h-16 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Eye class="w-8 h-8 text-amber-300" />
+        <div v-else-if="filteredObservations.length === 0" class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 p-20 text-center shadow-sm transition-colors">
+          <div class="w-16 h-16 bg-amber-50 dark:bg-amber-950/30 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Eye class="w-8 h-8 text-amber-300 dark:text-amber-600" />
           </div>
-          <p class="text-slate-400 font-bold">{{ observations.length === 0 ? 'No hay observaciones registradas en este periodo.' : 'No se encontraron observaciones con el filtro actual.' }}</p>
+          <p class="text-slate-400 dark:text-slate-500 font-bold">{{ observations.length === 0 ? 'No hay observaciones registradas en este periodo.' : 'No se encontraron observaciones con el filtro actual.' }}</p>
           <button
             v-if="isEditable && observations.length === 0"
             @click="openNewModal"
-            class="mt-6 bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 px-6 py-3 rounded-2xl font-bold text-sm transition-all inline-flex items-center gap-2"
+            class="mt-6 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-900 hover:bg-amber-100 dark:hover:bg-amber-900/40 px-6 py-3 rounded-2xl font-bold text-sm transition-all inline-flex items-center gap-2"
           >
             <Plus :size="18" />
             Registrar primera observación
@@ -580,17 +636,17 @@ onMounted(() => {
           <div
             v-for="obs in filteredObservations"
             :key="obs.id_observacion"
-            class="bg-white rounded-3xl border border-slate-100 shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden group"
+            class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-lg dark:hover:shadow-none transition-all duration-300 overflow-hidden group"
           >
             <!-- Card Header -->
-            <div class="p-6 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-50">
+            <div class="p-6 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-50 dark:border-slate-800 transition-colors">
               <div class="flex items-center gap-4">
-                <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-white font-black text-lg shadow-lg shadow-amber-200/50">
+                <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-white font-black text-lg shadow-lg shadow-amber-200/50 dark:shadow-none">
                   {{ obs.nombre.charAt(0) }}
                 </div>
                 <div>
-                  <h4 class="font-black text-slate-900 text-lg">{{ obs.nombre }}</h4>
-                  <div class="flex items-center gap-2 text-xs text-slate-400 font-semibold mt-0.5">
+                  <h4 class="font-black text-slate-900 dark:text-white text-lg">{{ obs.nombre }}</h4>
+                  <div class="flex items-center gap-2 text-xs text-slate-400 dark:text-slate-500 font-semibold mt-0.5">
                     <Calendar :size="12" />
                     {{ formatDate(obs.fecha) }}
                   </div>
@@ -598,10 +654,10 @@ onMounted(() => {
               </div>
 
               <!-- Actions -->
-              <div v-if="isEditable" class="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+              <div v-if="isEditable" class="flex items-center gap-2 sm:opacity-0 group-hover:opacity-100 transition-opacity">
                 <button
                   @click="openEditModal(obs)"
-                  class="bg-slate-50 hover:bg-slate-100 text-slate-600 p-2.5 rounded-xl transition-all"
+                  class="bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 p-2.5 rounded-xl transition-all border border-transparent dark:border-slate-700"
                   title="Editar"
                 >
                   <Pencil :size="16" />
@@ -609,7 +665,7 @@ onMounted(() => {
                 <button
                   v-if="confirmDeleteId !== obs.id_observacion"
                   @click="confirmDeleteId = obs.id_observacion"
-                  class="bg-rose-50 hover:bg-rose-100 text-rose-500 p-2.5 rounded-xl transition-all"
+                  class="bg-rose-50 dark:bg-rose-950/30 hover:bg-rose-100 dark:hover:bg-rose-900/40 text-rose-500 dark:text-rose-400 p-2.5 rounded-xl transition-all border border-transparent dark:border-rose-900/50"
                   title="Eliminar"
                 >
                   <Trash2 :size="16" />
@@ -617,13 +673,13 @@ onMounted(() => {
                 <div v-else class="flex items-center gap-1.5">
                   <button
                     @click="deleteObservation(obs.id_observacion)"
-                    class="bg-rose-600 text-white px-3 py-2 rounded-xl text-xs font-bold hover:bg-rose-700 transition-all"
+                    class="bg-rose-600 dark:bg-rose-500 text-white px-3 py-2 rounded-xl text-xs font-bold hover:bg-rose-700 dark:hover:bg-rose-600 transition-all shadow-md dark:shadow-none"
                   >
                     Confirmar
                   </button>
                   <button
                     @click="confirmDeleteId = null"
-                    class="bg-slate-100 text-slate-600 px-3 py-2 rounded-xl text-xs font-bold hover:bg-slate-200 transition-all"
+                    class="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-3 py-2 rounded-xl text-xs font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-all border dark:border-slate-700"
                   >
                     Cancelar
                   </button>
@@ -636,14 +692,14 @@ onMounted(() => {
               <div
                 v-for="(t, idx) in getObservationTypes(obs)"
                 :key="idx"
-                :class="[t.bg, t.border, 'p-4 rounded-2xl border flex items-start gap-3']"
+                :class="[t.bg, t.border, 'dark:bg-slate-800/40 dark:border-slate-800 p-4 rounded-2xl border flex items-start gap-3 transition-colors']"
               >
-                <div :class="[t.bg, 'w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5']">
-                  <component :is="t.icon" :size="16" :class="t.color" />
+                <div :class="[t.bg, 'dark:bg-slate-900/50 w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 transition-colors']">
+                  <component :is="t.icon" :size="16" :class="[t.color, 'dark:text-current opacity-80 dark:opacity-100']" />
                 </div>
                 <div class="min-w-0 flex-1">
-                  <span :class="[t.color, 'text-[10px] font-bold uppercase tracking-widest block mb-1']">{{ t.type }}</span>
-                  <p class="text-sm text-slate-700 leading-relaxed">{{ t.text }}</p>
+                  <span :class="[t.color, 'dark:text-current opacity-70 dark:opacity-100 text-[10px] font-bold uppercase tracking-widest block mb-1 transition-colors']">{{ t.type }}</span>
+                  <p class="text-sm text-slate-700 dark:text-slate-300 leading-relaxed transition-colors">{{ t.text }}</p>
                 </div>
               </div>
             </div>
@@ -657,23 +713,23 @@ onMounted(() => {
       <Transition name="modal">
         <div v-if="showModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
           <!-- Backdrop -->
-          <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="closeModal"></div>
+          <div class="absolute inset-0 bg-black/60 dark:bg-black/80 backdrop-blur-sm" @click="closeModal"></div>
 
           <!-- Modal Content -->
-          <div class="relative bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200">
+          <div class="relative bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200 transition-colors">
             <!-- Modal Header -->
-            <div class="sticky top-0 bg-white/95 backdrop-blur-sm p-8 pb-6 border-b border-slate-100 rounded-t-3xl z-10">
+            <div class="sticky top-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm p-8 pb-6 border-b border-slate-100 dark:border-slate-800 rounded-t-3xl z-10 transition-colors">
               <div class="flex items-center justify-between">
                 <div>
-                  <h2 class="text-2xl font-black text-slate-900">
+                  <h2 class="text-2xl font-black text-slate-900 dark:text-white transition-colors">
                     {{ editingObservation ? 'Editar Observación' : 'Nueva Observación' }}
                   </h2>
-                  <p class="text-slate-500 text-sm mt-1">
+                  <p class="text-slate-500 dark:text-slate-400 text-sm mt-1 transition-colors">
                     {{ editingObservation ? 'Modifica los campos de esta observación.' : 'Registra una observación académica para un estudiante.' }}
                   </p>
                 </div>
-                <button @click="closeModal" class="bg-slate-100 hover:bg-slate-200 p-2.5 rounded-xl transition-all">
-                  <X :size="20" class="text-slate-500" />
+                <button @click="closeModal" class="bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 p-2.5 rounded-xl transition-all">
+                  <X :size="20" class="text-slate-500 dark:text-slate-400" />
                 </button>
               </div>
             </div>
@@ -682,10 +738,10 @@ onMounted(() => {
             <div class="p-8 space-y-6">
               <!-- Student selector (only for new) -->
               <div v-if="!editingObservation" class="space-y-2">
-                <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Estudiante *</label>
+                <label class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">Estudiante *</label>
                 <select
                   v-model="formData.studentId"
-                  class="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-sm font-semibold focus:ring-2 focus:ring-amber-500 transition-all outline-none"
+                  class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 text-sm font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-600 transition-all outline-none"
                 >
                   <option :value="null">Seleccionar estudiante</option>
                   <option v-for="s in students" :key="s.id_estudiante" :value="s.id_estudiante">
@@ -695,34 +751,34 @@ onMounted(() => {
               </div>
 
               <!-- Editing: show student name -->
-              <div v-else class="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center gap-3">
-                <div class="w-10 h-10 rounded-xl bg-amber-600 text-white flex items-center justify-center font-bold">
+              <div v-else class="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-2xl p-4 flex items-center gap-3 transition-colors">
+                <div class="w-10 h-10 rounded-xl bg-amber-600 dark:bg-amber-500 text-white flex items-center justify-center font-bold">
                   {{ editingObservation.nombre.charAt(0) }}
                 </div>
                 <div>
-                  <p class="font-bold text-amber-900 text-sm">{{ editingObservation.nombre }}</p>
-                  <p class="text-xs text-amber-700">Observación del {{ formatDate(editingObservation.fecha) }}</p>
+                  <p class="font-bold text-amber-900 dark:text-amber-200 text-sm transition-colors">{{ editingObservation.nombre }}</p>
+                  <p class="text-xs text-amber-700 dark:text-amber-400">Observación del {{ formatDate(editingObservation.fecha) }}</p>
                 </div>
               </div>
 
               <!-- Date selector (only for new) -->
               <div v-if="!editingObservation" class="space-y-2">
-                <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Fecha de registro *</label>
+                <label class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">Fecha de registro *</label>
                 <input
                   type="date"
                   v-model="formData.fecha"
                   :min="allowedDateRange.min"
                   :max="allowedDateRange.max"
-                  class="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-sm font-semibold focus:ring-2 focus:ring-amber-500 transition-all outline-none"
+                  class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 text-sm font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-600 transition-all outline-none"
                 />
-                <p v-if="allowedDateRange.min || allowedDateRange.max" class="text-[11px] text-amber-600 font-semibold ml-1">
+                <p v-if="allowedDateRange.min || allowedDateRange.max" class="text-[11px] text-amber-600 dark:text-amber-500 font-semibold ml-1">
                   Rango del periodo: {{ formatDate(allowedDateRange.min) }} al {{ formatDate(allowedDateRange.max) }}
                 </p>
               </div>
 
               <!-- Fortalezas -->
               <div class="space-y-2">
-                <label class="text-[10px] font-bold text-emerald-600 uppercase tracking-widest ml-1 flex items-center gap-1.5">
+                <label class="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest ml-1 flex items-center gap-1.5 transition-colors">
                   <Award :size="12" />
                   Fortalezas
                 </label>
@@ -730,13 +786,13 @@ onMounted(() => {
                   v-model="formData.fortalezas"
                   rows="3"
                   placeholder="Describe las fortalezas observadas en el estudiante..."
-                  class="w-full bg-emerald-50/50 border border-emerald-200 rounded-2xl p-4 text-sm focus:ring-2 focus:ring-emerald-500 transition-all outline-none resize-none placeholder-emerald-300"
+                  class="w-full bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/50 rounded-2xl p-4 text-sm text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-emerald-500 transition-all outline-none resize-none placeholder-emerald-300 dark:placeholder-emerald-800"
                 ></textarea>
               </div>
 
               <!-- Debilidades -->
               <div class="space-y-2">
-                <label class="text-[10px] font-bold text-rose-600 uppercase tracking-widest ml-1 flex items-center gap-1.5">
+                <label class="text-[10px] font-bold text-rose-600 dark:text-rose-400 uppercase tracking-widest ml-1 flex items-center gap-1.5 transition-colors">
                   <ShieldAlert :size="12" />
                   Debilidades
                 </label>
@@ -744,13 +800,13 @@ onMounted(() => {
                   v-model="formData.debilidades"
                   rows="3"
                   placeholder="Describe las debilidades observadas en el estudiante..."
-                  class="w-full bg-rose-50/50 border border-rose-200 rounded-2xl p-4 text-sm focus:ring-2 focus:ring-rose-500 transition-all outline-none resize-none placeholder-rose-300"
+                  class="w-full bg-rose-50/50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/50 rounded-2xl p-4 text-sm text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-rose-500 transition-all outline-none resize-none placeholder-rose-300 dark:placeholder-rose-800"
                 ></textarea>
               </div>
 
               <!-- Recomendaciones -->
               <div class="space-y-2">
-                <label class="text-[10px] font-bold text-blue-600 uppercase tracking-widest ml-1 flex items-center gap-1.5">
+                <label class="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-widest ml-1 flex items-center gap-1.5 transition-colors">
                   <Lightbulb :size="12" />
                   Recomendaciones
                 </label>
@@ -758,32 +814,32 @@ onMounted(() => {
                   v-model="formData.recomendaciones"
                   rows="3"
                   placeholder="Escribe recomendaciones para el estudiante..."
-                  class="w-full bg-blue-50/50 border border-blue-200 rounded-2xl p-4 text-sm focus:ring-2 focus:ring-blue-500 transition-all outline-none resize-none placeholder-blue-300"
+                  class="w-full bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900/50 rounded-2xl p-4 text-sm text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-blue-500 transition-all outline-none resize-none placeholder-blue-300 dark:placeholder-blue-800"
                 ></textarea>
               </div>
 
               <!-- Validation message -->
               <div
                 v-if="formData.fortalezas.trim() === '' && formData.debilidades.trim() === '' && formData.recomendaciones.trim() === ''"
-                class="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center gap-3"
+                class="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-2xl p-4 flex items-center gap-3 transition-colors"
               >
-                <AlertCircle :size="18" class="text-amber-600 shrink-0" />
-                <p class="text-sm text-amber-700 font-semibold">Rellene por lo menos un tipo de observación.</p>
+                <AlertCircle :size="18" class="text-amber-600 dark:text-amber-400 shrink-0" />
+                <p class="text-sm text-amber-700 dark:text-amber-300 font-semibold transition-colors">Rellene por lo menos un tipo de observación.</p>
               </div>
             </div>
 
             <!-- Modal Footer -->
-            <div class="sticky bottom-0 bg-white/95 backdrop-blur-sm p-8 pt-6 border-t border-slate-100 rounded-b-3xl flex items-center justify-end gap-3">
+            <div class="sticky bottom-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm p-8 pt-6 border-t border-slate-100 dark:border-slate-800 rounded-b-3xl flex items-center justify-end gap-3 transition-colors">
               <button
                 @click="closeModal"
-                class="px-6 py-3 rounded-2xl font-bold text-sm text-slate-600 bg-slate-100 hover:bg-slate-200 transition-all"
+                class="px-6 py-3 rounded-2xl font-bold text-sm text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all border dark:border-slate-800"
               >
                 Cancelar
               </button>
               <button
                 @click="saveObservation"
                 :disabled="!formValid || saving"
-                class="px-8 py-3 rounded-2xl font-bold text-sm text-white bg-amber-600 hover:bg-amber-700 active:scale-95 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-amber-200/50"
+                class="px-8 py-3 rounded-2xl font-bold text-sm text-white bg-amber-600 dark:bg-amber-500 hover:bg-amber-700 dark:hover:bg-amber-400 active:scale-95 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-amber-200/50 dark:shadow-none"
               >
                 <Loader2 v-if="saving" class="w-4 h-4 animate-spin" />
                 <Save v-else :size="18" />

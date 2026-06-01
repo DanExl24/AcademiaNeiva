@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { PoolClient } from "pg";
 import { pool } from "../config/db";
 import {
   ensureCompetencyForContext,
@@ -16,6 +17,19 @@ const ensurePeriodOpen = async (periodId: number): Promise<boolean> => {
   );
 
   return result.rows.length > 0;
+};
+
+const ensureSubjectOpen = async (detailGradeId: number, periodId: number): Promise<boolean> => {
+  const result = await pool.query(
+    `SELECT 1
+     FROM cierre_materia
+     WHERE id_detallegrado = $1
+       AND id_periodo = $2
+       AND estado = 'CERRADO'`,
+    [detailGradeId, periodId]
+  );
+
+  return result.rows.length === 0;
 };
 
 const getCurrentAllowedPeriodForSchool = async (schoolId: number) => {
@@ -240,7 +254,12 @@ export const updateCompetency = async (req: Request, res: Response): Promise<voi
 
     const periodOpen = await ensurePeriodOpen(Number(periodRes.rows[0].id_periodo));
     if (!periodOpen) {
-      res.status(409).json({ error: "No se puede modificar la competencia porque el periodo está cerrado" });
+      res.status(409).json({ error: "No se puede modificar la competencia porque el periodo está cerrado institucionalmente" });
+      return;
+    }
+
+    if (!(await ensureSubjectOpen(Number(periodRes.rows[0].id_detallegrado), Number(periodRes.rows[0].id_periodo)))) {
+      res.status(409).json({ error: "No se puede modificar la competencia porque ya has cerrado esta materia para este periodo" });
       return;
     }
 
@@ -317,6 +336,11 @@ export const createActivity = async (req: Request, res: Response): Promise<void>
     );
     const idDetalleGrado = dgRes.rows.length > 0 ? dgRes.rows[0].id_detallegrado : null;
 
+    if (idDetalleGrado && !(await ensureSubjectOpen(idDetalleGrado, Number(comp.id_periodo)))) {
+      res.status(409).json({ error: "No se pueden crear actividades porque ya has cerrado esta materia para este periodo" });
+      return;
+    }
+
     const sumRes = await pool.query(
       `SELECT COALESCE(SUM(porcentaje), 0) AS total
        FROM actividad_materia
@@ -379,7 +403,17 @@ export const updateActivity = async (req: Request, res: Response): Promise<void>
 
     const periodOpen = await ensurePeriodOpen(Number(currentActRes.rows[0].id_periodo));
     if (!periodOpen) {
-      res.status(409).json({ error: "No se puede modificar la actividad porque el periodo está cerrado" });
+      res.status(409).json({ error: "No se puede modificar la actividad porque el periodo está cerrado institucionalmente" });
+      return;
+    }
+
+    const dgRes = await pool.query(
+      `SELECT id_detallegrado FROM actividad_materia WHERE id_actividadmateria = $1`,
+      [id]
+    );
+
+    if (dgRes.rows.length > 0 && !(await ensureSubjectOpen(dgRes.rows[0].id_detallegrado, Number(currentActRes.rows[0].id_periodo)))) {
+      res.status(409).json({ error: "No se puede modificar la actividad porque ya has cerrado esta materia para este periodo" });
       return;
     }
 
@@ -447,7 +481,17 @@ export const deleteActivity = async (req: Request, res: Response): Promise<void>
 
     const periodOpen = await ensurePeriodOpen(Number(currentActRes.rows[0].id_periodo));
     if (!periodOpen) {
-      res.status(409).json({ error: "No se puede eliminar la actividad porque el periodo está cerrado" });
+      res.status(409).json({ error: "No se puede eliminar la actividad porque el periodo está cerrado institucionalmente" });
+      return;
+    }
+
+    const dgRes = await pool.query(
+      `SELECT id_detallegrado FROM actividad_materia WHERE id_actividadmateria = $1`,
+      [id]
+    );
+
+    if (dgRes.rows.length > 0 && !(await ensureSubjectOpen(dgRes.rows[0].id_detallegrado, Number(currentActRes.rows[0].id_periodo)))) {
+      res.status(409).json({ error: "No se puede eliminar la actividad porque ya has cerrado esta materia para este periodo" });
       return;
     }
 
@@ -488,7 +532,17 @@ export const createCriterion = async (req: Request, res: Response): Promise<void
 
     const periodOpen = await ensurePeriodOpen(Number(actRes.rows[0].id_periodo));
     if (!periodOpen) {
-      res.status(409).json({ error: "No se puede modificar la actividad porque el periodo está cerrado" });
+      res.status(409).json({ error: "No se puede modificar la actividad porque el periodo está cerrado institucionalmente" });
+      return;
+    }
+
+    const dgRes = await pool.query(
+      `SELECT id_detallegrado FROM actividad_materia WHERE id_actividadmateria = $1`,
+      [id_actividadmateria]
+    );
+
+    if (dgRes.rows.length > 0 && !(await ensureSubjectOpen(dgRes.rows[0].id_detallegrado, Number(actRes.rows[0].id_periodo)))) {
+      res.status(409).json({ error: "No se puede agregar criterios porque ya has cerrado esta materia para este periodo" });
       return;
     }
 
@@ -546,7 +600,20 @@ export const deleteCriterion = async (req: Request, res: Response): Promise<void
 
     const periodOpen = await ensurePeriodOpen(Number(critRes.rows[0].id_periodo));
     if (!periodOpen) {
-      res.status(409).json({ error: "No se puede eliminar el criterio porque el periodo está cerrado" });
+      res.status(409).json({ error: "No se puede eliminar el criterio porque el periodo está cerrado institucionalmente" });
+      return;
+    }
+
+    const dgRes = await pool.query(
+      `SELECT a.id_detallegrado 
+       FROM criterion_evaluacion ce 
+       JOIN actividad_materia a ON ce.id_actividadmateria = a.id_actividadmateria 
+       WHERE ce.id_criterio = $1`,
+      [id]
+    );
+
+    if (dgRes.rows.length > 0 && !(await ensureSubjectOpen(dgRes.rows[0].id_detallegrado, Number(critRes.rows[0].id_periodo)))) {
+      res.status(409).json({ error: "No se puede eliminar el criterio porque ya has cerrado esta materia para este periodo" });
       return;
     }
 
@@ -681,8 +748,25 @@ export const saveGrades = async (req: Request, res: Response): Promise<void> => 
       const periodOpen = await ensurePeriodOpen(pId);
       if (!periodOpen) {
         await client.query("ROLLBACK");
-        res.status(409).json({ error: "No se pueden guardar notas porque el periodo está cerrado" });
+        res.status(409).json({ error: "No se pueden guardar notas porque el periodo está cerrado institucionalmente" });
         return;
+      }
+
+      // Lock por cierre de docente
+      const assignments = await client.query(
+        `SELECT DISTINCT id_detallegrado FROM actividad_materia WHERE id_actividadmateria = ANY($1::int[])
+         UNION
+         SELECT DISTINCT ce.id_actividadmateria as id_detallegrado 
+         FROM criterio_evaluacion ce WHERE ce.id_criterio = ANY($2::int[])`,
+        [activityIds, criteriaIds]
+      );
+
+      for (const assig of assignments.rows) {
+        if (!(await ensureSubjectOpen(assig.id_detallegrado, pId))) {
+          await client.query("ROLLBACK");
+          res.status(409).json({ error: "No se pueden guardar notas porque ya has cerrado la materia para este periodo" });
+          return;
+        }
       }
     }
 
@@ -757,6 +841,222 @@ export const saveGrades = async (req: Request, res: Response): Promise<void> => 
     await client.query("ROLLBACK");
     console.error("Error saving grades:", error);
     res.status(500).json({ error: "Error al guardar notas" });
+  } finally {
+    client.release();
+  }
+};
+
+export const getClosureStatus = async (req: Request, res: Response): Promise<void> => {
+  const detailGradeId = Number(req.params.detailGradeId);
+  const periodId = Number(req.params.periodId);
+
+  try {
+    const closedRes = await pool.query(
+      `SELECT estado, fecha_cierre
+       FROM cierre_materia
+       WHERE id_detallegrado = $1 AND id_periodo = $2`,
+      [detailGradeId, periodId]
+    );
+
+    const isClosed = closedRes.rows.length > 0 && closedRes.rows[0].estado === 'CERRADO';
+
+    // También verificamos si faltan alumnos por calificar
+    const studentsRes = await pool.query(
+      `SELECT e.id_estudiante, e.nombre, e.apellido
+       FROM estudiante e
+       JOIN matricula m ON e.id_estudiante = m.id_estudiante
+       JOIN detalle_grados dg ON m.id_grupo = dg.id_grupo
+       WHERE dg.id_detallegrado = $1 AND m.estado = 'ACTIVA'`,
+      [detailGradeId]
+    );
+
+    const missingGrades = [];
+    for (const student of studentsRes.rows) {
+      // Un alumno tiene nota si tiene el promedio calculado en resultado_academico 
+      // o verificamos si tiene todas las actividades calificadas.
+      // Siguiendo la regla de negocio: todas las actividades deben tener nota.
+      const gradeCheck = await pool.query(
+        `SELECT COUNT(*) as count
+         FROM actividad_materia am
+         JOIN competencias c ON am.id_competencia = c.id_competencia
+         JOIN detalle_grados dg ON am.id_detallegrado = dg.id_detallegrado
+         WHERE dg.id_detallegrado = $1 AND c.id_periodo = $2
+           AND NOT EXISTS (
+             SELECT 1 FROM notas_actividad na 
+             WHERE na.id_actividadmateria = am.id_actividadmateria 
+             AND na.id_estudiante = $3
+           )`,
+        [detailGradeId, periodId, student.id_estudiante]
+      );
+
+      if (Number(gradeCheck.rows[0].count) > 0) {
+        missingGrades.push({
+          id_estudiante: student.id_estudiante,
+          nombre: `${student.nombre} ${student.apellido}`,
+          missing_count: Number(gradeCheck.rows[0].count)
+        });
+      }
+    }
+
+    // Calcular suma de porcentajes y conteo de actividades
+    const statsRes = await pool.query(
+      `SELECT COALESCE(SUM(am.porcentaje), 0) AS total_percentage, COUNT(am.id_actividadmateria) as activity_count
+       FROM actividad_materia am
+       JOIN competencias c ON am.id_competencia = c.id_competencia
+       WHERE am.id_detallegrado = $1 AND c.id_periodo = $2`,
+      [detailGradeId, periodId]
+    );
+
+    const totalPercentage = Number(statsRes.rows[0].total_percentage);
+    const activityCount = Number(statsRes.rows[0].activity_count);
+
+    // Calcular promedio grupal actual
+    let groupAverage = null;
+    if (activityCount > 0) {
+      const avgRes = await pool.query(
+        `SELECT AVG(promedio_estudiante) as group_avg 
+         FROM (
+           SELECT SUM(na.nota * (am.porcentaje / 100)) as promedio_estudiante
+           FROM notas_actividad na
+           JOIN actividad_materia am ON na.id_actividadmateria = am.id_actividadmateria
+           JOIN competencias c ON am.id_competencia = c.id_competencia
+           WHERE am.id_detallegrado = $1 AND c.id_periodo = $2
+           GROUP BY na.id_estudiante
+         ) as promedios`,
+        [detailGradeId, periodId]
+      );
+      groupAverage = avgRes.rows[0].group_avg ? Number(Number(avgRes.rows[0].group_avg).toFixed(2)) : null;
+    }
+
+    res.json({
+      isClosed,
+      closureData: closedRes.rows[0] || null,
+      missingGrades,
+      totalPercentage,
+      activityCount,
+      groupAverage
+    });
+  } catch (error: any) {
+    console.error("Error getting closure status:", error);
+    res.status(500).json({ error: "Error en el servidor" });
+  }
+};
+
+export const closePeriodForTeacher = async (req: Request, res: Response): Promise<void> => {
+  const { detailGradeId, periodId, userId } = req.body;
+
+  if (!detailGradeId || !periodId || !userId) {
+    res.status(400).json({ error: "Faltan parámetros descriptivos" });
+    return;
+  }
+
+  const client = await pool.connect();
+  try {
+    // 1. Validar que el docente es el dueño de la asignación
+    const ownershipRes = await client.query(
+      `SELECT dg.id_detallegrado, dg.id_docente, d.id_usuario, dg.id_colegio
+       FROM detalle_grados dg
+       JOIN docente d ON dg.id_docente = d.id_docente
+       WHERE dg.id_detallegrado = $1 AND d.id_usuario = $2`,
+      [detailGradeId, userId]
+    );
+
+    if (ownershipRes.rows.length === 0) {
+      res.status(403).json({ error: "No tienes permiso para cerrar este periodo" });
+      return;
+    }
+
+    const { id_colegio, id_docente } = ownershipRes.rows[0];
+
+    // 2. Validar que el periodo esté abierto institucionalmente
+    if (!(await ensureCurrentPeriodForSchool(id_colegio, periodId))) {
+      res.status(409).json({ error: "El periodo no es el actual o está cerrado institucionalmente" });
+      return;
+    }
+
+    // 3. Validar que no esté ya cerrado por el docente
+    const closedCheck = await client.query(
+      `SELECT estado FROM cierre_materia WHERE id_detallegrado = $1 AND id_periodo = $2`,
+      [detailGradeId, periodId]
+    );
+
+    if (closedCheck.rows.length > 0 && closedCheck.rows[0].estado === 'CERRADO') {
+      res.status(409).json({ error: "La materia ya se encuentra cerrada para este periodo" });
+      return;
+    }
+
+    // 4. Validar suma de porcentajes de actividades = 100%
+    const sumRes = await client.query(
+      `SELECT COALESCE(SUM(am.porcentaje), 0) AS total
+       FROM actividad_materia am
+       JOIN competencias c ON am.id_competencia = c.id_competencia
+       WHERE am.id_detallegrado = $1 AND c.id_periodo = $2`,
+      [detailGradeId, periodId]
+    );
+
+    if (Math.round(Number(sumRes.rows[0].total)) !== 100) {
+      res.status(400).json({ error: `La suma de los porcentajes de las actividades debe ser 100%. Actual: ${sumRes.rows[0].total}%` });
+      return;
+    }
+
+    // 5. Validar que todos los estudiantes activos tengan todas las notas
+    const studentsRes = await client.query(
+      `SELECT e.id_estudiante
+       FROM estudiante e
+       JOIN matricula m ON e.id_estudiante = m.id_estudiante
+       JOIN detalle_grados dg ON m.id_grupo = dg.id_grupo
+       WHERE dg.id_detallegrado = $1 AND m.estado = 'ACTIVA'`,
+      [detailGradeId]
+    );
+
+    for (const student of studentsRes.rows) {
+      const gradeCheck = await client.query(
+        `SELECT COUNT(*) as count
+         FROM actividad_materia am
+         JOIN competencias c ON am.id_competencia = c.id_competencia
+         WHERE am.id_detallegrado = $1 AND c.id_periodo = $2
+           AND NOT EXISTS (
+             SELECT 1 FROM notas_actividad na 
+             WHERE na.id_actividadmateria = am.id_actividadmateria 
+             AND na.id_estudiante = $3
+           )`,
+        [detailGradeId, periodId, student.id_estudiante]
+      );
+
+      if (Number(gradeCheck.rows[0].count) > 0) {
+        res.status(400).json({ error: `Existen estudiantes con actividades sin calificar` });
+        return;
+      }
+    }
+
+    await client.query("BEGIN");
+
+    // 6. Marcar como CERRADO — ya validamos que no existe un registro CERRADO
+    // Verificamos si hay un registro ABIERTO existente
+    const existingRes = await client.query(
+      `SELECT id_cierremateria FROM cierre_materia WHERE id_detallegrado = $1 AND id_periodo = $2`,
+      [detailGradeId, periodId]
+    );
+
+    if (existingRes.rows.length > 0) {
+      await client.query(
+        `UPDATE cierre_materia SET estado = 'CERRADO', fecha_cierre = NOW() WHERE id_cierremateria = $1`,
+        [existingRes.rows[0].id_cierremateria]
+      );
+    } else {
+      await client.query(
+        `INSERT INTO cierre_materia (id_detallegrado, id_periodo, estado, fecha_cierre)
+         VALUES ($1, $2, 'CERRADO', NOW())`,
+        [detailGradeId, periodId]
+      );
+    }
+
+    await client.query("COMMIT");
+    res.json({ message: "Periodo cerrado exitosamente para esta materia" });
+  } catch (error: any) {
+    await client.query("ROLLBACK");
+    console.error("Error closing period:", error);
+    res.status(500).json({ error: "Error al cerrar el periodo" });
   } finally {
     client.release();
   }
