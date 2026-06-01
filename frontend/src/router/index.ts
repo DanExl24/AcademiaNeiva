@@ -88,6 +88,21 @@ const router = createRouter({
           name: 'Competencias Académicas',
           component: AcademicCompetenciesView
         },
+        {
+          path: 'configuracion-academica/cierres',
+          name: 'Cierres de Periodo',
+          component: () => import('../views/admin/PeriodClosure.vue')
+        },
+        {
+          path: 'configuracion-academica/escalas',
+          name: 'Escalas de Valoración',
+          component: () => import('../views/admin/AcademicScalesView.vue')
+        },
+        {
+          path: 'configuracion-academica/periodos',
+          name: 'Periodos Académicos',
+          component: () => import('../views/admin/AcademicPeriodsView.vue')
+        },
         // Rutas del Docente
         {
           path: 'mis-cursos',

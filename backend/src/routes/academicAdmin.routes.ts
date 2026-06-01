@@ -21,6 +21,7 @@ import {
   closeAcademicPeriod,
   upsertCompetencyByAdmin,
   updateAcademicPeriodPercentage,
+  getPeriodClosureDetails,
   updateManualScaleConfiguration,
   updateSchoolDefaultSettings,
   updateScale,
@@ -52,6 +53,7 @@ router.put("/settings/defaults", updateSchoolDefaultSettings);
 router.put("/settings/scales/manual", updateManualScaleConfiguration);
 router.post("/settings/periods", createAcademicPeriod);
 router.patch("/settings/periods/:id/percentage", updateAcademicPeriodPercentage);
+router.get("/settings/closure-details/:schoolId/:periodId", getPeriodClosureDetails);
 router.post("/settings/competencies", upsertCompetencyByAdmin);
 router.post("/settings/periods/:id/close", closeAcademicPeriod);
 router.post("/settings/scales", createScale);

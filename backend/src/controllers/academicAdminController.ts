@@ -2046,3 +2046,88 @@ export const deleteEvidencia = async (req: Request, res: Response): Promise<void
     res.status(500).json({ error: "Error en el servidor" });
   }
 };
+
+export const getPeriodClosureDetails = async (req: Request, res: Response): Promise<void> => {
+  const periodId = Number(req.params.periodId);
+  const schoolId = parseSchoolId(req.params.schoolId);
+
+  if (!periodId || !schoolId) {
+    res.status(400).json({ error: "Parámetros inválidos" });
+    return;
+  }
+
+  const client = await pool.connect();
+  try {
+    const periodRes = await client.query(
+      `SELECT nombre, estado FROM periodo_academico WHERE id_periodo = $1 AND id_colegio = $2`,
+      [periodId, schoolId]
+    );
+
+    if (periodRes.rows.length === 0) {
+      res.status(404).json({ error: "Periodo académico no encontrado" });
+      return;
+    }
+
+    const query = `
+      SELECT
+        d.id_docente,
+        u.nombre AS docente_nombre,
+        u.email AS docente_email,
+        dg.id_detallegrado,
+        m.nombre AS materia_nombre,
+        tg.nombre AS grado_nombre,
+        s.nombre AS seccion_nombre,
+        j.nombre AS jornada_nombre,
+        COALESCE(cm.estado::VARCHAR, 'PENDIENTE') AS estado_cierre
+      FROM docente d
+      JOIN usuario u ON u.id_usuario = d.id_usuario
+      JOIN detalle_grados dg ON dg.id_docente = d.id_docente
+      JOIN materias m ON m.id_materia = dg.id_materia
+      JOIN grupos g ON g.id_grupo = dg.id_grupo
+      JOIN tipo_grado tg ON tg.id_tipo_grado = g.id_tipo_grado
+      JOIN secciones s ON s.id_seccion = g.id_seccion
+      JOIN jornada j ON j.id_jornada = g.id_jornada
+      LEFT JOIN cierre_materia cm ON cm.id_detallegrado = dg.id_detallegrado AND cm.id_periodo = $1
+      WHERE dg.id_colegio = $2
+      ORDER BY u.nombre, m.nombre, tg.nombre
+    `;
+    const detailsRes = await client.query(query, [periodId, schoolId]);
+
+    const teachersMap = new Map();
+    detailsRes.rows.forEach(row => {
+      if (!teachersMap.has(row.id_docente)) {
+        teachersMap.set(row.id_docente, {
+          id_docente: row.id_docente,
+          docente_nombre: row.docente_nombre,
+          docente_email: row.docente_email,
+          asignaciones: [],
+          total_asignaciones: 0,
+          cerradas: 0,
+        });
+      }
+      const teacher = teachersMap.get(row.id_docente);
+      teacher.asignaciones.push({
+        id_detallegrado: row.id_detallegrado,
+        materia_nombre: row.materia_nombre,
+        grado: `${row.grado_nombre} ${row.seccion_nombre} · ${row.jornada_nombre}`,
+        estado: row.estado_cierre
+      });
+      teacher.total_asignaciones++;
+      if (row.estado_cierre === 'CERRADO') {
+        teacher.cerradas++;
+      }
+    });
+
+    const teachers = Array.from(teachersMap.values());
+
+    res.json({
+      periodo: periodRes.rows[0],
+      teachers
+    });
+  } catch (error: any) {
+    console.error("Error fetching closure details:", error);
+    res.status(500).json({ error: "Error en el servidor" });
+  } finally {
+    client.release();
+  }
+};

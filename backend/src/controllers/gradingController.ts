@@ -7,108 +7,13 @@ import {
   TeachingContext,
 } from "../config/competencyMigration";
 
-const ensurePeriodOpen = async (periodId: number): Promise<boolean> => {
-  const result = await pool.query(
-    `SELECT 1
-     FROM periodo_academico
-     WHERE id_periodo = $1
-       AND estado = 'ABIERTO'`,
-    [periodId]
-  );
-
-  return result.rows.length > 0;
-};
-
-const ensureSubjectOpen = async (detailGradeId: number, periodId: number): Promise<boolean> => {
-  const result = await pool.query(
-    `SELECT 1
-     FROM cierre_materia
-     WHERE id_detallegrado = $1
-       AND id_periodo = $2
-       AND estado = 'CERRADO'`,
-    [detailGradeId, periodId]
-  );
-
-  return result.rows.length === 0;
-};
-
-const getCurrentAllowedPeriodForSchool = async (schoolId: number) => {
-  const currentYearRes = await pool.query<{ id_año: number }>(
-    `SELECT "id_año"
-     FROM "año_lectivo"
-     WHERE id_colegio = $1
-     ORDER BY "id_año" DESC
-     LIMIT 1`,
-    [schoolId]
-  );
-
-  if (currentYearRes.rows.length === 0) {
-    return null;
-  }
-
-  const periodsRes = await pool.query<{
-    id_periodo: number;
-    nombre: string;
-    estado: "ABIERTO" | "CERRADO";
-    porcentaje: number;
-    id_año: number;
-    trimestre: number | null;
-    dia_inicio: number | null;
-    dia_fin: number | null;
-    mes_inicio: number | null;
-    mes_fin: number | null;
-  }>(
-    `SELECT id_periodo, nombre, estado, porcentaje, "id_año", dia_inicio, dia_fin, mes_inicio, mes_fin
-     FROM periodo_academico
-     WHERE id_colegio = $1
-       AND "id_año" = $2
-       AND estado = 'ABIERTO'
-     ORDER BY id_periodo
-     LIMIT 1`,
-    [schoolId, Number(currentYearRes.rows[0].id_año)]
-  );
-
-  const period = periodsRes.rows[0];
-  if (period) {
-    // Si id_año es muy pequeño, probablemente sea un ID de secuencia y no el año real.
-    // Aunque el sistema intenta usar el año real como ID, fallamos a favor del año actual si es sospechoso.
-    // Pero mejor aún, si id_año < 2000, intentamos ver si el año lectivo tiene el calendario como año.
-    if (period.id_año < 2000) {
-       // Fallback al año real (hoy) como parche si no podemos estar seguros
-       period.id_año = new Date().getFullYear();
-    }
-  }
-
-  return period ?? null;
-};
-
-const ensureCurrentPeriodForSchool = async (schoolId: number, periodId: number): Promise<boolean> => {
-  const currentPeriod = await getCurrentAllowedPeriodForSchool(schoolId);
-  return Boolean(currentPeriod && Number(currentPeriod.id_periodo) === periodId);
-};
-
-const ensureCurrentPeriodOrRespond = async (
-  res: Response,
-  schoolId: number,
-  periodId: number
-): Promise<boolean> => {
-  const currentPeriod = await getCurrentAllowedPeriodForSchool(schoolId);
-
-  if (!currentPeriod) {
-    res.status(409).json({ error: "No hay un periodo académico actual configurado para este colegio" });
-    return false;
-  }
-
-  if (Number(currentPeriod.id_periodo) !== periodId) {
-    res.status(409).json({
-      error: `Solo está habilitado el periodo actual: ${currentPeriod.nombre}`,
-      currentPeriod,
-    });
-    return false;
-  }
-
-  return true;
-};
+import {
+  ensurePeriodOpen,
+  ensureSubjectOpen,
+  getCurrentAllowedPeriodForSchool,
+  ensureCurrentPeriodForSchool,
+  ensureCurrentPeriodOrRespond
+} from "../utils/periodHelpers";
 
 const resolveTeachingContext = async (
   gradeId: number,
@@ -258,7 +163,14 @@ export const updateCompetency = async (req: Request, res: Response): Promise<voi
       return;
     }
 
-    if (!(await ensureSubjectOpen(Number(periodRes.rows[0].id_detallegrado), Number(periodRes.rows[0].id_periodo)))) {
+    const dgRes = await client.query(
+      `SELECT id_detallegrado FROM detalle_grados
+       WHERE id_grupo = $1 AND id_materia = $2 AND id_colegio = $3
+       LIMIT 1`,
+      [periodRes.rows[0].id_grupo, periodRes.rows[0].id_materia, periodRes.rows[0].id_colegio]
+    );
+
+    if (dgRes.rows.length > 0 && !(await ensureSubjectOpen(dgRes.rows[0].id_detallegrado, Number(periodRes.rows[0].id_periodo)))) {
       res.status(409).json({ error: "No se puede modificar la competencia porque ya has cerrado esta materia para este periodo" });
       return;
     }
