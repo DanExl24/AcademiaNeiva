@@ -170,73 +170,90 @@
     </main>
 
     <!-- Parte Final -->
-    <!-- Parte Final: Resumen y Firmas -->
-    <footer class="mt-8">
-      <div class="grid grid-cols-12 gap-8">
-        <!-- Columna Izquierda: Estadísticas y Observaciones -->
-        <div class="col-span-12">
-          <div class="bg-indigo-50/40 rounded-2xl p-6 border border-indigo-100 flex flex-wrap gap-8 items-center justify-between shadow-sm">
-            <div class="flex items-center gap-6">
-              <div class="bg-white p-3 rounded-xl shadow-sm border border-indigo-100 flex flex-col items-center min-w-[100px]">
-                <span class="text-[9px] font-black uppercase text-indigo-400">Faltas Totales</span>
-                <span class="text-3xl font-black text-indigo-700">{{ data?.materias?.reduce((acc: number, m: any) => acc + (m.ausencias || 0), 0) }}</span>
-              </div>
-              <div class="space-y-1">
-                <h4 class="text-[10px] font-black uppercase text-indigo-400 tracking-widest leading-none">Estado Académico</h4>
-                <div class="flex items-center gap-3">
-                   <span class="px-3 py-1 rounded-full text-[10px] font-black bg-green-100 text-green-700 border border-green-200" v-if="data?.promedioGeneral >= 3.0">PROMOVIDO / EN NIVEL</span>
-                   <span class="px-3 py-1 rounded-full text-[10px] font-black bg-red-100 text-red-700 border border-red-200" v-else>REQUIERE NIVELACIÓN</span>
-                   <div class="flex flex-col">
-                     <span class="text-[9px] font-bold text-gray-400 uppercase leading-none">Promedio General</span>
-                     <span class="text-xl font-black text-gray-800 leading-tight">{{ data?.promedioGeneral }}</span>
-                   </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Observación General -->
-            <div class="flex-1 max-w-lg border-l border-indigo-100 pl-6 lg:block hidden">
-               <p class="text-[10px] italic text-gray-500 leading-relaxed font-medium">
-                 "El éxito es la suma de pequeños esfuerzos repetidos día tras día. Te animamos a seguir cultivando la excelencia en tu proceso formativo."
-               </p>
-            </div>
+    <!-- Parte Final: Resumen, Escala y Firmas (Estilo Premium) -->
+    <footer class="mt-12 space-y-8">
+      <!-- Tabla de Datos Finales (Modernizada) -->
+      <div class="grid grid-cols-3 gap-6">
+        <div class="bg-indigo-50/50 p-4 rounded-xl border border-indigo-100 flex flex-col items-center">
+          <span class="text-[9px] font-black uppercase text-indigo-400 tracking-widest mb-1">Promedio Periodo</span>
+          <span class="text-2xl font-black text-indigo-900">{{ data?.promedioGeneral }}</span>
+        </div>
+        <div class="bg-blue-50/50 p-4 rounded-xl border border-blue-100 flex flex-col items-center">
+          <span class="text-[9px] font-black uppercase text-blue-400 tracking-widest mb-1">Nivel Desempeño</span>
+          <span class="text-lg font-black text-blue-900 uppercase">
+             {{ data?.materias?.[0]?.notas_historicas?.find((n: any) => n.id_periodo == data?.periodoActual?.id_periodo)?.desempeno || 'ALTO' }}
+          </span>
+        </div>
+        <div class="bg-purple-50/50 p-4 rounded-xl border border-purple-100 flex flex-col items-center">
+          <span class="text-[9px] font-black uppercase text-purple-400 tracking-widest mb-1">Puesto Académico</span>
+          <div class="flex items-baseline gap-1">
+            <span class="text-2xl font-black text-purple-900">{{ data?.ranking?.puesto ?? '—' }}</span>
+            <span class="text-xs font-bold text-purple-400" v-if="data?.ranking?.total">de {{ data.ranking.total }}</span>
           </div>
         </div>
+      </div>
 
-        <!-- Sección de Firmas -->
-        <div class="col-span-12 grid grid-cols-3 gap-12 mt-16 mb-8 px-4">
-          <div class="text-center">
-            <div class="h-20 flex flex-col justify-end items-center">
-               <div class="w-full border-t border-gray-400 pt-3">
-                 <p class="text-[10px] font-black uppercase text-gray-800 tracking-tight">Firma Director de Grupo</p>
-                 <p class="text-[9px] font-bold text-gray-400 uppercase tracking-tighter">Responsable del Aula</p>
-               </div>
-            </div>
+      <!-- Escala de Valoración (con fallback institucional) -->
+      <div class="bg-gray-50 rounded-xl border border-gray-100 px-4 py-3">
+        <div class="flex items-center gap-6">
+          <span class="text-[9px] font-black uppercase text-gray-400 tracking-widest whitespace-nowrap">Escala de Valoración:</span>
+          <div class="flex flex-1 justify-around">
+            <template v-if="data?.escala && data.escala.length > 0">
+              <div v-for="item in data.escala" :key="item.nivel" class="flex flex-col items-center">
+                <span class="text-[10px] font-black text-gray-800 uppercase">{{ item.nivel }}</span>
+                <span class="text-[8px] font-bold text-gray-400">({{ item.valor_minimo }} – {{ item.valor_maximo }})</span>
+              </div>
+            </template>
+            <template v-else>
+              <div class="flex flex-col items-center"><span class="text-[10px] font-black text-gray-800 uppercase">Bajo</span><span class="text-[8px] font-bold text-gray-400">(0.0 – 2.9)</span></div>
+              <div class="flex flex-col items-center"><span class="text-[10px] font-black text-gray-800 uppercase">Básico</span><span class="text-[8px] font-bold text-gray-400">(3.0 – 3.8)</span></div>
+              <div class="flex flex-col items-center"><span class="text-[10px] font-black text-gray-800 uppercase">Alto</span><span class="text-[8px] font-bold text-gray-400">(3.9 – 4.5)</span></div>
+              <div class="flex flex-col items-center"><span class="text-[10px] font-black text-gray-800 uppercase">Superior</span><span class="text-[8px] font-bold text-gray-400">(4.6 – 5.0)</span></div>
+            </template>
           </div>
-          <div class="text-center">
-            <!-- Espacio para el sello institucional -->
-            <div class="h-20 flex items-center justify-center -mt-4 opacity-[0.08]">
-               <div class="w-20 h-20 rounded-full border-[1.5px] border-gray-900 flex items-center justify-center text-center text-[7px] font-black p-2 border-dashed">
-                 SELLO<br/>ACADEMIA<br/>NEIVA
-               </div>
-            </div>
-          </div>
-          <div class="text-center">
-            <div class="h-20 flex flex-col justify-end items-center">
-               <div class="w-full border-t border-gray-400 pt-3">
-                 <p class="text-[10px] font-black uppercase text-gray-800 tracking-tight">Coordinación Académica</p>
-                 <p class="text-[9px] font-bold text-gray-400 uppercase tracking-tighter">Autoridad Colegiada</p>
-               </div>
-            </div>
-          </div>
+        </div>
+      </div>
+
+      <!-- Mensaje Motivacional -->
+      <div class="bg-gradient-to-r from-indigo-50/60 via-blue-50/40 to-purple-50/60 rounded-xl border border-indigo-100/50 p-5 text-center">
+        <p class="text-[10px] italic text-indigo-600/80 leading-relaxed font-medium tracking-wide">
+          "El éxito es la suma de pequeños esfuerzos repetidos día tras día.<br>Te animamos a seguir cultivando la excelencia en tu proceso formativo."
+        </p>
+        <div class="mt-2 flex justify-center">
+          <div class="w-8 h-0.5 rounded-full bg-gradient-to-r from-indigo-300 to-purple-300"></div>
+        </div>
+      </div>
+
+      <!-- Sección de Firmas (Elegancia Clásica) -->
+      <div class="grid grid-cols-2 gap-32 px-12 pt-16 font-serif">
+        <div class="text-center group">
+          <div class="h-px bg-gradient-to-r from-transparent via-gray-400 to-transparent mb-4"></div>
+          <p class="text-xs font-black uppercase text-gray-900 tracking-tight transition-all duration-300 group-hover:tracking-widest">
+            {{ data?.firmas?.rector || 'RECTORÍA' }}
+          </p>
+          <p class="text-[9px] font-bold text-gray-400 uppercase mt-1 tracking-tighter">Rectoría Institucional</p>
+        </div>
+        <div class="text-center group">
+          <div class="h-px bg-gradient-to-r from-transparent via-gray-400 to-transparent mb-4"></div>
+          <p class="text-xs font-black uppercase text-gray-900 tracking-tight transition-all duration-300 group-hover:tracking-widest">
+             {{ data?.firmas?.titular || 'DIRECTOR(A) DE GRUPO' }}
+          </p>
+          <p class="text-[9px] font-bold text-gray-400 uppercase mt-1 tracking-tighter">Director(a) de Grupo</p>
         </div>
       </div>
       
-      <div class="text-center pt-6 border-t border-gray-50 flex justify-between items-center px-2">
-        <p class="text-[8px] text-gray-300 font-bold uppercase tracking-[0.2em]">CÓDIGO: GB-01 • VERSIÓN: 2.0</p>
-        <p class="text-[8px] text-gray-300 font-bold uppercase tracking-[0.2em]">AcademiaNeiva Cloud • {{ new Date().toLocaleDateString() }}</p>
+      <!-- Pie de Página Técnico -->
+      <div class="text-center pt-12 border-t border-gray-50 flex justify-between items-center px-4">
+        <div class="flex items-center gap-2">
+          <div class="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></div>
+          <p class="text-[7px] text-gray-400 font-bold uppercase tracking-[0.2em]">SISTEMA DE GESTIÓN ACADÉMICA • CÓDIGO: GB-01 • v2.5</p>
+        </div>
+        <p class="text-[7px] text-gray-300 font-bold uppercase tracking-[0.2em]">Generado por AcademiaNeiva Cloud • {{ new Date().toLocaleDateString() }}</p>
       </div>
     </footer>
+
+
+
   </div>
 </template>
 

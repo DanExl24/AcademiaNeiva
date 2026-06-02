@@ -233,9 +233,38 @@ async function insertSchool(
     roleIds.directivo,
   ]);
   await client.query(
-    `INSERT INTO directivo (id_colegio, id_usuario) VALUES ($1, $2)`,
-    [school.id, directivoUserId]
+    `INSERT INTO directivo (id_colegio, id_usuario, cargo) VALUES ($1, $2, $3)`,
+    [school.id, directivoUserId, "COORDINADOR"]
   );
+
+  // --- Crear Rector Institucional ---
+  const rectorEmail = `rector@${school.domain}`;
+  const rectorRes = await client.query<{ id_usuario: number }>(
+    `
+      INSERT INTO usuario (email, password, nombre, apellido, id_colegio, activo)
+      VALUES ($1, $2, $3, $4, $5, true)
+      RETURNING id_usuario
+    `,
+    [rectorEmail, directivoHash, "Rector", school.nombre, school.id]
+  );
+  const rectorUserId = rectorRes.rows[0].id_usuario;
+
+  await client.query(`INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2)`, [
+    rectorUserId,
+    roleIds.directivo,
+  ]);
+  await client.query(
+    `INSERT INTO directivo (id_colegio, id_usuario, cargo) VALUES ($1, $2, $3)`,
+    [school.id, rectorUserId, "RECTOR"]
+  );
+
+  credentials.push({
+    colegio: school.nombre,
+    rol: "DIRECTIVO",
+    nombre: `Rector ${school.nombre}`,
+    correo: rectorEmail,
+    password: DIRECTIVO_PASSWORD,
+  });
 
   credentials.push({
     colegio: school.nombre,
@@ -404,6 +433,12 @@ async function insertSchoolAcademicStructure(
     subjectIdsByName[teacher.subject] = subjectResult.rows[0].id_materia;
   }
 
+  const teachersResForTitular = await client.query<{ id_docente: number }>(
+    "SELECT id_docente FROM docente WHERE id_colegio = $1",
+    [school.id]
+  );
+  let teacherIndexForTitular = 0;
+
   for (const levelSeed of levelSeeds) {
     const levelId = levelIdsByName[levelSeed.nombre];
 
@@ -421,13 +456,17 @@ async function insertSchoolAcademicStructure(
       for (const jornadaId of jornadaIds) {
         for (const sectionName of sectionNames) {
           const sectionId = sectionIds[sectionName];
+          // Asignar un Titular Único
+          const titularId = teachersResForTitular.rows[teacherIndexForTitular]?.id_docente || null;
+          teacherIndexForTitular++;
+
           const groupResult = await client.query<{ id_grupo: number }>(
             `
-              INSERT INTO grupos (id_nivel, id_jornada, id_colegio, id_seccion, cupos_totales, id_tipo_grado)
-              VALUES ($1, $2, $3, $4, $5, $6)
+              INSERT INTO grupos (id_nivel, id_jornada, id_colegio, id_seccion, cupos_totales, id_tipo_grado, id_docente)
+              VALUES ($1, $2, $3, $4, $5, $6, $7)
               RETURNING id_grupo
             `,
-            [levelId, jornadaId, school.id, sectionId, CUPOS_POR_CURSO, gradeTypeId]
+            [levelId, jornadaId, school.id, sectionId, CUPOS_POR_CURSO, gradeTypeId, titularId]
           );
           groupIds.push(groupResult.rows[0].id_grupo);
 
@@ -541,6 +580,28 @@ async function run(): Promise<void> {
       "año_lectivo",
       "colegio",
     ]);
+
+    // --- Fase 4: Migraciones de Esquema ---
+    console.log("Migrando esquema para Firmas y Titulares...");
+    await client.query(`
+      -- 1. Agregar columna cargo a directivo
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='directivo' AND column_name='cargo') THEN
+          ALTER TABLE public.directivo ADD COLUMN cargo character varying(100);
+        END IF;
+      END $$;
+
+      -- 2. Agregar columna id_docente a grupos
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='grupos' AND column_name='id_docente') THEN
+          ALTER TABLE public.grupos ADD COLUMN id_docente integer REFERENCES docente(id_docente);
+        END IF;
+      END $$;
+
+      -- 3. Asegurar restricción de unicidad para titular
+      ALTER TABLE public.grupos DROP CONSTRAINT IF EXISTS unique_titular_docente;
+      ALTER TABLE public.grupos ADD CONSTRAINT unique_titular_docente UNIQUE (id_docente);
+    `);
 
     console.log("Insertando catálogos base...");
     const roleIds = await insertRoles(client);

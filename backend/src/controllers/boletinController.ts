@@ -47,8 +47,9 @@ export const getStudentBoletin = async (req: Request, res: Response) => {
 
     // 2. Fetch Student Info
     const studentRes = await pool.query(`
-      SELECT e.id_estudiante, e.nombre, e.apellido, e.documento, e.codigo, 
-             c.nombre as colegio_nombre, c.sede,
+      SELECT e.id_estudiante, e.nombre, e.apellido, e.documento, e.codigo,
+             e.id_colegio,
+             c.nombre as colegio_nombre, c.sede, c.dane,
              g.nivel, g.seccion, tg.nombre as grado_nombre,
              j.nombre as jornada_nombre,
              al.calendario
@@ -176,9 +177,54 @@ export const getStudentBoletin = async (req: Request, res: Response) => {
       promedioGlobal = sum / currentPeriodGrades.length;
     }
 
+    // 9. Fetch Ranking (Puesto) en el Grupo
+    const rankingRes = await pool.query(`
+      WITH group_averages AS (
+        SELECT 
+          ra2.id_estudiante,
+          ROUND(AVG(COALESCE(ra2.promedio, calc.promedio_calculado))::numeric, 2) as student_avg
+        FROM matricula m2
+        JOIN detalle_grados dg2 ON dg2.id_grupo = m2.id_grupo
+        LEFT JOIN resultado_academico ra2 ON ra2.id_estudiante = m2.id_estudiante AND ra2.id_detallegrado = dg2.id_detallegrado AND ra2.id_periodo = $2
+        LEFT JOIN (
+          SELECT am.id_detallegrado, na.id_estudiante, ROUND(AVG(na.nota)::numeric, 2) as promedio_calculado
+          FROM notas_actividad na
+          JOIN actividad_materia am ON am.id_actividadmateria = na.id_actividadmateria
+          WHERE am.id_periodo = $2
+          GROUP BY am.id_detallegrado, na.id_estudiante
+        ) calc ON calc.id_detallegrado = dg2.id_detallegrado AND calc.id_estudiante = m2.id_estudiante
+        WHERE m2.id_grupo = (SELECT id_grupo FROM matricula WHERE id_estudiante = $1)
+        GROUP BY ra2.id_estudiante
+      )
+      SELECT 
+        student_avg,
+        RANK() OVER (ORDER BY student_avg DESC) as puesto,
+        (SELECT COUNT(*) FROM group_averages) as total_grupo
+      FROM group_averages
+      WHERE id_estudiante = $1;
+    `, [id_estudiante, id_periodo]);
+
+    // 10. Fetch Escala de Valoración Completa
+    const escalaRes = await pool.query(`
+      SELECT nivel, valor_minimo, valor_maximo 
+      FROM escala_valoracion 
+      WHERE id_colegio = $1 
+      ORDER BY valor_minimo
+    `, [studentInfo.id_colegio]);
+
+    // 11. Fetch Firmas (Titular y Rector)
+    const firmasRes = await pool.query(`
+      SELECT 
+        (SELECT nombre || ' ' || apellido FROM docente d JOIN grupos g ON g.id_docente = d.id_docente WHERE g.id_grupo = (SELECT id_grupo FROM matricula WHERE id_estudiante = $1)) as titular,
+        (SELECT u.nombre || ' ' || u.apellido FROM directivo d JOIN usuario u ON u.id_usuario = d.id_usuario WHERE d.id_colegio = $2 AND d.cargo = 'RECTOR' LIMIT 1) as rector
+    `, [id_estudiante, studentInfo.id_colegio]);
+
+    const ranking = rankingRes.rows[0] || { puesto: 0, total_grupo: 0, student_avg: 0 };
+    const firmas = firmasRes.rows[0] || { titular: 'Pendiente', rector: 'Pendiente' };
+
     res.json({
       periodo: periodoDetails.nombre,
-      ano_lectivo: periodoDetails.id_año || new Date().getFullYear(),
+      ano_lectivo: idAnio,
       estudiante: {
          ...studentInfo,
          dane: studentInfo.dane || '183001000940',
@@ -187,9 +233,16 @@ export const getStudentBoletin = async (req: Request, res: Response) => {
          ciudad: studentInfo.ciudad || 'Florencia - Caquetá'
       },
       materias: materias,
-      promedioGeneral: promedioGlobal.toFixed(2),
+      promedioGeneral: promedioGlobal.toFixed(3),
+      ranking: {
+        puesto: ranking.puesto,
+        total: ranking.total_grupo,
+        promedio: ranking.student_avg
+      },
+      escala: escalaRes.rows,
+      firmas: firmas,
       asistencia: {
-        faltasInjustificadas: parseInt(ausenciasRes.rows[0]?.faltas || '0') // Just an overall estimate if needed
+        faltasInjustificadas: parseInt(ausenciasRes.rows[0]?.faltas || '0')
       }
     });
 

@@ -1,6 +1,6 @@
 # Credenciales generadas por reset_and_seed.ts
 
-Fecha de generación: 2026-06-02T06:49:18.415Z
+Fecha de generación: 2026-06-02T07:25:07.827Z
 
 Este archivo se regenera cada vez que ejecutes el seed de reseteo.
 
@@ -8,6 +8,7 @@ Este archivo se regenera cada vez que ejecutes el seed de reseteo.
 
 | Rol | Nombre | Correo | Contraseña | Materia |
 | --- | --- | --- | --- | --- |
+| DIRECTIVO | Rector CEA School Empresarial de los Andes | rector@ceaschool.edu.co | directivo123 | - |
 | DIRECTIVO | Directivo CEA School Empresarial de los Andes | directivo@ceaschool.edu.co | directivo123 | - |
 | DOCENTE | Andrea Rojas 1 | matematicas.1@ceaschool.edu.co | docente123 | Matemáticas |
 | DOCENTE | Carlos Mendoza 1 | espanol.1@ceaschool.edu.co | docente123 | Español |
@@ -22,6 +23,7 @@ Este archivo se regenera cada vez que ejecutes el seed de reseteo.
 
 | Rol | Nombre | Correo | Contraseña | Materia |
 | --- | --- | --- | --- | --- |
+| DIRECTIVO | Rector Institución Educativa El Caguán | rector@iecaguan.edu.co | directivo123 | - |
 | DIRECTIVO | Directivo Institución Educativa El Caguán | directivo@iecaguan.edu.co | directivo123 | - |
 | DOCENTE | Andrea Rojas 2 | matematicas.2@iecaguan.edu.co | docente123 | Matemáticas |
 | DOCENTE | Carlos Mendoza 2 | espanol.2@iecaguan.edu.co | docente123 | Español |
@@ -36,6 +38,7 @@ Este archivo se regenera cada vez que ejecutes el seed de reseteo.
 
 | Rol | Nombre | Correo | Contraseña | Materia |
 | --- | --- | --- | --- | --- |
+| DIRECTIVO | Rector Colegio Heisenberg Neiva | rector@heisenberg.edu.co | directivo123 | - |
 | DIRECTIVO | Directivo Colegio Heisenberg Neiva | directivo@heisenberg.edu.co | directivo123 | - |
 | DOCENTE | Andrea Rojas 3 | matematicas.3@heisenberg.edu.co | docente123 | Matemáticas |
 | DOCENTE | Carlos Mendoza 3 | espanol.3@heisenberg.edu.co | docente123 | Español |
@@ -50,6 +53,7 @@ Este archivo se regenera cada vez que ejecutes el seed de reseteo.
 
 | Rol | Nombre | Correo | Contraseña | Materia |
 | --- | --- | --- | --- | --- |
+| DIRECTIVO | Rector Colegio Claretiano de Neiva | rector@claretianoneiva.edu.co | directivo123 | - |
 | DIRECTIVO | Directivo Colegio Claretiano de Neiva | directivo@claretianoneiva.edu.co | directivo123 | - |
 | DOCENTE | Andrea Rojas 4 | matematicas.4@claretianoneiva.edu.co | docente123 | Matemáticas |
 | DOCENTE | Carlos Mendoza 4 | espanol.4@claretianoneiva.edu.co | docente123 | Español |
@@ -64,6 +68,7 @@ Este archivo se regenera cada vez que ejecutes el seed de reseteo.
 
 | Rol | Nombre | Correo | Contraseña | Materia |
 | --- | --- | --- | --- | --- |
+| DIRECTIVO | Rector Colegio IDESA | rector@colegioidesa.edu.co | directivo123 | - |
 | DIRECTIVO | Directivo Colegio IDESA | directivo@colegioidesa.edu.co | directivo123 | - |
 | DOCENTE | Andrea Rojas 5 | matematicas.5@colegioidesa.edu.co | docente123 | Matemáticas |
 | DOCENTE | Carlos Mendoza 5 | espanol.5@colegioidesa.edu.co | docente123 | Español |
