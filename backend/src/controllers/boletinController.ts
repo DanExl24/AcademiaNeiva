@@ -36,86 +36,160 @@ export const getStudentBoletin = async (req: Request, res: Response) => {
   try {
     // 1. Check if period is closed
     const periodRes = await pool.query(
-      `SELECT estado, nombre, porcentaje FROM periodo_academico WHERE id_periodo = $1`,
+      `SELECT estado, nombre, porcentaje, "id_año", id_colegio, trimestre FROM periodo_academico WHERE id_periodo = $1`,
       [id_periodo]
     );
     if (!periodRes.rows.length || periodRes.rows[0].estado !== 'CERRADO') {
       return res.status(400).json({ error: 'No se puede generar el boletín en un periodo abierto' });
     }
     const periodoDetails = periodRes.rows[0];
+    const idAnio = periodoDetails["id_año"] || periodoDetails["id_año".toLowerCase()];
 
     // 2. Fetch Student Info
     const studentRes = await pool.query(`
       SELECT e.id_estudiante, e.nombre, e.apellido, e.documento, e.codigo, 
              c.nombre as colegio_nombre, c.sede,
-             g.nivel, g.seccion, tg.nombre as grado_nombre
+             g.nivel, g.seccion, tg.nombre as grado_nombre,
+             j.nombre as jornada_nombre,
+             al.calendario
       FROM estudiante e
       JOIN colegio c ON c.id_colegio = e.id_colegio
       LEFT JOIN matricula m ON m.id_estudiante = e.id_estudiante
       LEFT JOIN grupos gr ON gr.id_grupo = m.id_grupo
+      LEFT JOIN jornada j ON j.id_jornada = gr.id_jornada
       LEFT JOIN grados g ON g.id_jornada = gr.id_jornada AND g.id_colegio = gr.id_colegio AND g.seccion = gr.id_seccion::varchar
       LEFT JOIN tipo_grado tg ON tg.id_tipo_grado = gr.id_tipo_grado
+      LEFT JOIN "año_lectivo" al ON al.id_colegio = c.id_colegio AND al."id_año" = $2
       WHERE e.id_estudiante = $1
       LIMIT 1
-    `, [id_estudiante]);
+    `, [id_estudiante, idAnio || new Date().getFullYear()]);
 
     if (!studentRes.rows.length) {
       return res.status(404).json({ error: 'Estudiante no encontrado' });
     }
     const studentInfo = studentRes.rows[0];
 
-    // 3. Fetch Grades Summary
+    // 4. Fetch Todas las Materias y Profesores
     const materiasRes = await pool.query(`
-      SELECT 
-        m.nombre as materia,
-        ra.promedio as calificacion,
-        ev.nivel as desempeno,
-        oe.fortalezas,
-        oe.debilidades,
-        oe.recomendaciones,
-        d.nombre as docente_nombre,
-        d.apellido as docente_apellido
-      FROM resultado_academico ra
-      JOIN detalle_grados dg ON dg.id_detallegrado = ra.id_detallegrado
+      SELECT dg.id_materia, m.nombre as materia,
+             d.nombre as docente_nombre, d.apellido as docente_apellido
+      FROM detalle_grados dg
+      JOIN matricula mat ON mat.id_grupo = dg.id_grupo
       JOIN materias m ON m.id_materia = dg.id_materia
       JOIN docente d ON d.id_docente = dg.id_docente
-      LEFT JOIN escala_valoracion ev ON ev.id_colegio = ra.id_estudiante::int * 0 + dg.id_colegio 
-           AND ra.promedio >= ev.valor_minimo AND ra.promedio <= ev.valor_maximo
-      LEFT JOIN observacion_estudiante oe ON oe.id_estudiante = ra.id_estudiante 
-           AND oe.id_detallegrado = dg.id_detallegrado 
-           AND oe.id_periodo = ra.id_periodo
-      WHERE ra.id_estudiante = $1 AND ra.id_periodo = $2
-    `, [id_estudiante, id_periodo]);
-
-    // 4. Fetch Attendance Summary
-    const attendanceRes = await pool.query(`
+      WHERE mat.id_estudiante = $1
+    `, [id_estudiante]);
+    
+    // 5. Fetch Notas Historicas del Año - Robust logic: use pre-calculated or calculate on-the-fly
+    const notasRes = await pool.query(`
       SELECT 
-        COUNT(*) FILTER (WHERE estado = 'AUSENTE') as faltas,
-        COUNT(*) FILTER (WHERE estado = 'JUSTIFICADA') as justificadas,
-        COUNT(*) FILTER (WHERE estado = 'TARDE') as retardos
-      FROM registro_asistencia
-      WHERE id_estudiante = $1 AND id_detallegrado IN (
-        SELECT id_detallegrado FROM cierre_materia WHERE id_periodo = $2
-      )
+        dg.id_materia,
+        p.nombre AS periodo_nombre,
+        p.id_periodo,
+        p.trimestre,
+        COALESCE(ra.promedio, calc.promedio_calculado) AS calificacion,
+        ev.nivel AS desempeno
+      FROM detalle_grados dg
+      JOIN periodo_academico p ON p."id_año" = $2 AND p.id_colegio = dg.id_colegio
+      LEFT JOIN resultado_academico ra ON ra.id_detallegrado = dg.id_detallegrado AND ra.id_periodo = p.id_periodo AND ra.id_estudiante = $1
+      LEFT JOIN (
+        SELECT am.id_detallegrado, am.id_periodo, ROUND(AVG(na.nota)::numeric, 2) as promedio_calculado
+        FROM notas_actividad na
+        JOIN actividad_materia am ON am.id_actividadmateria = na.id_actividadmateria
+        WHERE na.id_estudiante = $1
+        GROUP BY am.id_detallegrado, am.id_periodo
+      ) calc ON calc.id_detallegrado = dg.id_detallegrado AND calc.id_periodo = p.id_periodo
+      LEFT JOIN escala_valoracion ev 
+             ON ev.id_colegio = dg.id_colegio 
+            AND COALESCE(ra.promedio, calc.promedio_calculado) >= ev.valor_minimo 
+            AND COALESCE(ra.promedio, calc.promedio_calculado) <= ev.valor_maximo
+      WHERE dg.id_grupo IN (SELECT id_grupo FROM matricula WHERE id_estudiante = $1)
+      ORDER BY p.trimestre, dg.id_materia
+    `, [id_estudiante, idAnio]);
+
+    // 6. Fetch Observaciones del Periodo Actual
+    const obsRes = await pool.query(`
+      SELECT dg.id_materia, oe.fortalezas, oe.debilidades, oe.recomendaciones
+      FROM observacion_estudiante oe
+      JOIN detalle_grados dg ON dg.id_detallegrado = oe.id_detallegrado
+      WHERE oe.id_estudiante = $1 AND oe.id_periodo = $2
     `, [id_estudiante, id_periodo]);
 
-    // Calculate General Average
-    const materias = materiasRes.rows;
+    // 7. Fetch Desempeños (Competencias y Evidencias) del grupo y periodo
+    const compRes = await pool.query(`
+      SELECT c.id_materia, ea.descripcion
+      FROM competencias c
+      JOIN matricula mat ON mat.id_grupo = c.id_grupo
+      JOIN evidencia_aprendizaje ea ON ea.id_competencia = c.id_competencia
+      WHERE mat.id_estudiante = $1 AND c.id_periodo = $2
+    `, [id_estudiante, id_periodo]);
+
+    // 8. Fetch Ausencias por Materia - registro_asistencia tiene id_detallegrado directo
+    const ausenciasRes = await pool.query(`
+      SELECT dg.id_materia, COUNT(*) FILTER (WHERE ra2.estado = 'AUSENTE') AS faltas
+      FROM registro_asistencia ra2
+      JOIN detalle_grados dg ON dg.id_detallegrado = ra2.id_detallegrado
+      JOIN cierre_materia cm ON cm.id_detallegrado = dg.id_detallegrado AND cm.id_periodo = $2
+      WHERE ra2.id_estudiante = $1
+      GROUP BY dg.id_materia
+    `, [id_estudiante, id_periodo]);
+
+    // Map all data into the required format
+    const materias = materiasRes.rows.map(m => {
+      const mId = Number(m.id_materia);
+      const targetTrimestre = periodoDetails.trimestre || 1;
+      
+      const notas = notasRes.rows.filter(n => 
+        Number(n.id_materia) === mId && 
+        Number(n.trimestre) <= targetTrimestre
+      );
+      
+      const obs = obsRes.rows.find(o => Number(o.id_materia) === mId);
+      const ausencias = ausenciasRes.rows.find(a => Number(a.id_materia) === mId)?.faltas || 0;
+      const desempenos = compRes.rows.filter(c => Number(c.id_materia) === mId).map(c => c.descripcion);
+      
+      const fortalezas = obs?.fortalezas 
+        ? obs.fortalezas.split(/\\r?\\n|\\./).filter((f: string) => f.trim().length > 0).map((f: string) => f.trim()) 
+        : [];
+      
+      const debilidades = obs?.debilidades 
+        ? obs.debilidades.split(/\\r?\\n|\\./).filter((f: string) => f.trim().length > 0).map((f: string) => f.trim()) 
+        : [];
+
+      return {
+        materia: m.materia,
+        docente_nombre: m.docente_nombre,
+        docente_apellido: m.docente_apellido,
+        ausencias: ausencias,
+        notas_historicas: notas,
+        desempenos: desempenos,
+        fortalezas: fortalezas,
+        debilidades: debilidades
+      };
+    });
+
+    // Calculate General Average based ONLY on the current period
     let promedioGlobal = 0;
-    if (materias.length > 0) {
-      const sum = materias.reduce((acc, curr) => acc + parseFloat(curr.calificacion || '0'), 0);
-      promedioGlobal = sum / materias.length;
+    const currentPeriodGrades = notasRes.rows.filter(n => n.id_periodo === parseInt(id_periodo as string, 10));
+    if (currentPeriodGrades.length > 0) {
+      const sum = currentPeriodGrades.reduce((acc, curr) => acc + parseFloat(curr.calificacion || '0'), 0);
+      promedioGlobal = sum / currentPeriodGrades.length;
     }
 
     res.json({
       periodo: periodoDetails.nombre,
-      estudiante: studentInfo,
+      ano_lectivo: periodoDetails.id_año || new Date().getFullYear(),
+      estudiante: {
+         ...studentInfo,
+         dane: studentInfo.dane || '183001000940',
+         nit: studentInfo.nit || '900009397-4',
+         resolucion: studentInfo.resolucion || 'Resol. Jornada Única No. 070 del 01 de Feb. de 2021 Expedida por la Secretaría de Educación Municipal',
+         ciudad: studentInfo.ciudad || 'Florencia - Caquetá'
+      },
       materias: materias,
       promedioGeneral: promedioGlobal.toFixed(2),
       asistencia: {
-        faltasInjustificadas: parseInt(attendanceRes.rows[0]?.faltas || '0'),
-        faltasJustificadas: parseInt(attendanceRes.rows[0]?.justificadas || '0'),
-        retardos: parseInt(attendanceRes.rows[0]?.retardos || '0'),
+        faltasInjustificadas: parseInt(ausenciasRes.rows[0]?.faltas || '0') // Just an overall estimate if needed
       }
     });
 

@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict UjcQjPq0hAftpHCTsbSlMVvA2cXbI6yxe617ojjWHaFhtmtSG8v19jh1Ggxovl9
+\restrict HPLiXNn35rNFqmmRK63v6hT6xbZ5NYiejAzN1kGqNGfQf42LLLIxqQqANsm4BHx
 
 -- Dumped from database version 18.3
 -- Dumped by pg_dump version 18.3
@@ -1265,7 +1265,9 @@ CREATE TABLE public.periodo_academico (
     id_colegio integer NOT NULL,
     trimestre integer,
     dia_inicio integer,
-    dia_fin integer
+    dia_fin integer,
+    mes_inicio integer,
+    mes_fin integer
 );
 
 
@@ -1303,7 +1305,8 @@ CREATE TABLE public.registro_asistencia (
     id_detallegrado integer NOT NULL,
     fecha timestamp with time zone NOT NULL,
     estado character varying(255) NOT NULL,
-    id_colegio integer NOT NULL
+    id_colegio integer NOT NULL,
+    justificacion text
 );
 
 
@@ -3070,5 +3073,5 @@ REVOKE USAGE ON SCHEMA public FROM PUBLIC;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict UjcQjPq0hAftpHCTsbSlMVvA2cXbI6yxe617ojjWHaFhtmtSG8v19jh1Ggxovl9
+\unrestrict HPLiXNn35rNFqmmRK63v6hT6xbZ5NYiejAzN1kGqNGfQf42LLLIxqQqANsm4BHx
 

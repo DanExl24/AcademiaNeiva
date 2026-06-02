@@ -4,6 +4,7 @@ import path from "path";
 import { PoolClient } from "pg";
 import { ensureCompetencySchema } from "./config/competencyMigration";
 import { pool } from "./config/db";
+import { DEFAULT_ACADEMIC_PERIOD_MONTH_RULES } from "./config/academicCalendarDefaults";
 
 type SchoolSeed = {
   id: number;
@@ -339,12 +340,23 @@ async function insertSchoolAcademicStructure(
   }
 
   for (const periodSeed of periodSeeds) {
+    const monthRule = DEFAULT_ACADEMIC_PERIOD_MONTH_RULES.find(r => r.order === periodSeed.trimestre);
+    
     await client.query(
       `
-        INSERT INTO periodo_academico (nombre, estado, porcentaje, trimestre, "id_año", id_colegio)
-        VALUES ($1, $2, $3, $4, $5, $6)
+        INSERT INTO periodo_academico (nombre, estado, porcentaje, trimestre, "id_año", id_colegio, mes_inicio, mes_fin)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       `,
-      [periodSeed.nombre, periodSeed.estado, periodSeed.porcentaje, periodSeed.trimestre, academicYearId, school.id]
+      [
+        periodSeed.nombre, 
+        periodSeed.estado, 
+        periodSeed.porcentaje, 
+        periodSeed.trimestre, 
+        academicYearId, 
+        school.id,
+        monthRule?.startMonth ?? null,
+        monthRule?.endMonth ?? null
+      ]
     );
   }
 
@@ -495,6 +507,8 @@ async function run(): Promise<void> {
     await client.query(`ALTER TABLE periodo_academico ADD COLUMN IF NOT EXISTS trimestre integer;`);
     await client.query(`ALTER TABLE periodo_academico ADD COLUMN IF NOT EXISTS dia_inicio integer;`);
     await client.query(`ALTER TABLE periodo_academico ADD COLUMN IF NOT EXISTS dia_fin integer;`);
+    await client.query(`ALTER TABLE periodo_academico ADD COLUMN IF NOT EXISTS mes_inicio integer;`);
+    await client.query(`ALTER TABLE periodo_academico ADD COLUMN IF NOT EXISTS mes_fin integer;`);
 
     console.log("Reseteando tablas existentes...");
     await truncateExistingTables(client, [

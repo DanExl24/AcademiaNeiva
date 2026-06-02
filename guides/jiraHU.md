@@ -493,7 +493,6 @@
 **Acción principal**
 
 - El sistema debe permitir ejecutar la distribución de boletines por:
-- grado
 - periodo académico
 
 **Validaciones**
