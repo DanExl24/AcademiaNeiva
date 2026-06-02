@@ -23,9 +23,16 @@ router.put("/settings/defaults", academicAdminController_1.updateSchoolDefaultSe
 router.put("/settings/scales/manual", academicAdminController_1.updateManualScaleConfiguration);
 router.post("/settings/periods", academicAdminController_1.createAcademicPeriod);
 router.patch("/settings/periods/:id/percentage", academicAdminController_1.updateAcademicPeriodPercentage);
+router.get("/settings/closure-details/:schoolId/:periodId", academicAdminController_1.getPeriodClosureDetails);
 router.post("/settings/competencies", academicAdminController_1.upsertCompetencyByAdmin);
 router.post("/settings/periods/:id/close", academicAdminController_1.closeAcademicPeriod);
+router.post("/settings/periods/:id/reopen", academicAdminController_1.reopenAcademicPeriod);
+router.post("/settings/periods/:periodId/reopen-subject/:detailGradeId", academicAdminController_1.reopenSubjectClosure);
 router.post("/settings/scales", academicAdminController_1.createScale);
 router.put("/settings/scales/:id", academicAdminController_1.updateScale);
 router.delete("/settings/scales/:id", academicAdminController_1.deleteScale);
+// Evidencias de aprendizaje
+router.post("/settings/competencies/:competenciaId/evidencias", academicAdminController_1.createEvidencia);
+router.put("/settings/evidencias/:evidenciaId", academicAdminController_1.updateEvidencia);
+router.delete("/settings/evidencias/:evidenciaId", academicAdminController_1.deleteEvidencia);
 exports.default = router;

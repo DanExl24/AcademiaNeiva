@@ -1,7 +1,47 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ensureCompetencyForContext = exports.harmonizeCompetenciesForSchoolYear = exports.syncCompetencyAcrossGrade = exports.DEFAULT_COMPETENCY_TEXT = exports.ensureCompetencySchema = void 0;
+exports.ensureCompetencyForContext = exports.harmonizeCompetenciesForSchoolYear = exports.syncCompetencyAcrossGrade = exports.ensureDefaultEvidencias = exports.DEFAULT_COMPETENCY_TEXT = exports.ensureCompetencySchema = void 0;
 const db_1 = require("./db");
+const evidenciaMigrationSql = `
+CREATE TABLE IF NOT EXISTS public.evidencia_aprendizaje (
+  id_evidencia    SERIAL PRIMARY KEY,
+  id_competencia  INTEGER NOT NULL REFERENCES public.competencias(id_competencia) ON DELETE CASCADE,
+  descripcion     TEXT NOT NULL,
+  orden           INTEGER NOT NULL DEFAULT 0,
+  id_colegio      INTEGER NOT NULL REFERENCES public.colegio(id_colegio) ON DELETE CASCADE
+);
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_indexes
+    WHERE schemaname = 'public'
+      AND tablename  = 'evidencia_aprendizaje'
+      AND indexname  = 'idx_evidencia_competencia'
+  ) THEN
+    CREATE INDEX idx_evidencia_competencia
+      ON public.evidencia_aprendizaje(id_competencia);
+  END IF;
+END $$;
+
+CREATE TABLE IF NOT EXISTS public.criterio_evaluacion (
+  id_criterio          SERIAL PRIMARY KEY,
+  id_actividadmateria  INTEGER NOT NULL REFERENCES public.actividad_materia(id_actividadmateria) ON DELETE CASCADE,
+  id_evidencia         INTEGER REFERENCES public.evidencia_aprendizaje(id_evidencia) ON DELETE SET NULL,
+  descripcion          TEXT NOT NULL,
+  porcentaje           NUMERIC(5,2) NOT NULL,
+  id_colegio           INTEGER NOT NULL REFERENCES public.colegio(id_colegio) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS public.nota_criterio (
+  id_nota_criterio  SERIAL PRIMARY KEY,
+  id_criterio       INTEGER NOT NULL REFERENCES public.criterio_evaluacion(id_criterio) ON DELETE CASCADE,
+  id_estudiante     INTEGER NOT NULL REFERENCES public.estudiante(id_estudiante) ON DELETE CASCADE,
+  nota              NUMERIC(5,2) NOT NULL,
+  id_colegio        INTEGER NOT NULL REFERENCES public.colegio(id_colegio) ON DELETE CASCADE,
+  UNIQUE(id_criterio, id_estudiante)
+);
+`;
 const DEFAULT_COMPETENCY_DESCRIPTION = "Competencia pendiente por definir.";
 const migrationSql = `
 DO $$
@@ -53,6 +93,15 @@ END $$;
 
 ALTER TABLE public.actividad_materia
   ADD COLUMN IF NOT EXISTS id_competencia integer;
+
+ALTER TABLE public.actividad_materia
+  ALTER COLUMN id_detallegrado DROP NOT NULL;
+
+ALTER TABLE public.actividad_materia
+  ALTER COLUMN id_periodo DROP NOT NULL;
+
+ALTER TABLE public.actividad_materia
+  ADD COLUMN IF NOT EXISTS id_evidencia integer REFERENCES public.evidencia_aprendizaje(id_evidencia) ON DELETE SET NULL;
 
 WITH aggregated_competencies AS (
   SELECT
@@ -147,12 +196,30 @@ BEGIN
       ALTER COLUMN id_competencia SET NOT NULL;
   END IF;
 END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'unique_actividad_estudiante'
+  ) THEN
+    DELETE FROM public.notas_actividad n1
+    USING public.notas_actividad n2
+    WHERE n1.id_notaactividad < n2.id_notaactividad
+      AND n1.id_actividadmateria = n2.id_actividadmateria
+      AND n1.id_estudiante = n2.id_estudiante;
+
+    ALTER TABLE public.notas_actividad
+      ADD CONSTRAINT unique_actividad_estudiante UNIQUE (id_actividadmateria, id_estudiante);
+  END IF;
+END $$;
+
 `;
 const ensureCompetencySchema = async () => {
     const client = await db_1.pool.connect();
     try {
         await client.query("BEGIN");
         await client.query(migrationSql);
+        await client.query(evidenciaMigrationSql);
         await client.query("COMMIT");
     }
     catch (error) {
@@ -183,6 +250,17 @@ const getGradePeerGroups = async (client, schoolId, groupId) => {
     return peersRes.rows.map((row) => Number(row.id_grupo));
 };
 const normalizeCompetencyDescription = (value) => value.trim().replace(/\s+/g, " ");
+const ensureDefaultEvidencias = async (client, competencyId, schoolId) => {
+    const checkRes = await client.query("SELECT 1 FROM evidencia_aprendizaje WHERE id_competencia = $1 LIMIT 1", [competencyId]);
+    if (checkRes.rows.length === 0) {
+        await client.query(`INSERT INTO evidencia_aprendizaje (id_competencia, descripcion, orden, id_colegio)
+       VALUES 
+         ($1, 'Reconoce y aplica los conceptos fundamentales de la unidad temática.', 1, $2),
+         ($1, 'Demuestra capacidad analítica y pensamiento crítico en la resolución de problemas.', 2, $2),
+         ($1, 'Participa activamente y colabora con sus compañeros en el entorno de aprendizaje.', 3, $2)`, [competencyId, schoolId]);
+    }
+};
+exports.ensureDefaultEvidencias = ensureDefaultEvidencias;
 const syncCompetencyAcrossGrade = async (client, context, periodId, descripcion) => {
     const peerGroups = await getGradePeerGroups(client, context.idColegio, context.idGrupo);
     if (peerGroups.length === 0) {
@@ -215,7 +293,10 @@ const syncCompetencyAcrossGrade = async (client, context, periodId, descripcion)
        ON CONFLICT (id_año, id_grupo, id_materia, id_periodo, id_colegio)
        DO UPDATE SET descripcion = EXCLUDED.descripcion
        RETURNING *`, [context.idAnio, peerGroupId, context.idMateria, periodId, sharedDescription, context.idColegio]);
-        syncedRows.push(syncedRes.rows[0]);
+        const compRow = syncedRes.rows[0];
+        syncedRows.push(compRow);
+        // Ensure default evidences for each synced competency
+        await (0, exports.ensureDefaultEvidencias)(client, compRow.id_competencia, compRow.id_colegio);
     }
     const currentGroupRow = syncedRows.find((row) => Number(row.id_grupo) === context.idGrupo);
     if (!currentGroupRow) {

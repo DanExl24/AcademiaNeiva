@@ -225,20 +225,32 @@ class MatriculaService {
             const idEstudiante = studentRes.rows[0].id_estudiante;
             // --- CREACIÓN DEL PADRE DE FAMILIA ---
             let idUsuarioPadre;
-            const existingParentUser = await client.query('SELECT id_usuario FROM usuario WHERE email = $1', [correo_padre]);
-            if (existingParentUser.rows.length > 0) {
-                idUsuarioPadre = existingParentUser.rows[0].id_usuario;
+            // Buscar primero por documento en la tabla docente (el dato más fiable según el usuario)
+            const existingDocente = await client.query('SELECT id_usuario FROM docente WHERE documento = $1', [data.parent.documento]);
+            if (existingDocente.rows.length > 0) {
+                idUsuarioPadre = existingDocente.rows[0].id_usuario;
+                console.log('Match found by document (Docente):', idUsuarioPadre);
             }
             else {
-                // Usuario padre
-                const hashedPadrePass = await bcrypt_1.default.hash('padre123', 10);
-                const parentUserRes = await client.query(`INSERT INTO usuario (email, password, nombre, apellido, id_colegio) VALUES ($1, $2, $3, $4, $5) RETURNING id_usuario`, [correo_padre, hashedPadrePass, data.parent.nombre, data.parent.apellido, id_colegio]);
-                idUsuarioPadre = parentUserRes.rows[0].id_usuario;
-                // Rol padre
-                const rolPadre = await client.query("SELECT id_rol FROM rol WHERE nombre = 'padre'");
-                if (rolPadre.rows.length > 0) {
-                    await client.query("INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2)", [idUsuarioPadre, rolPadre.rows[0].id_rol]);
+                // Fallback: Buscar por email (como estaba antes)
+                const existingParentUser = await client.query('SELECT id_usuario FROM usuario WHERE email = $1', [correo_padre]);
+                if (existingParentUser.rows.length > 0) {
+                    idUsuarioPadre = existingParentUser.rows[0].id_usuario;
+                    console.log('Match found by email:', idUsuarioPadre);
                 }
+                else {
+                    // Usuario padre nuevo
+                    const hashedPadrePass = await bcrypt_1.default.hash('padre123', 10);
+                    const parentUserRes = await client.query(`INSERT INTO usuario (email, password, nombre, apellido, id_colegio) VALUES ($1, $2, $3, $4, $5) RETURNING id_usuario`, [correo_padre, hashedPadrePass, data.parent.nombre, data.parent.apellido, id_colegio]);
+                    idUsuarioPadre = parentUserRes.rows[0].id_usuario;
+                }
+            }
+            // Asegurar que el usuario tenga el ROL PADRE (Importante: ahora aplica a todos: nuevos y existentes)
+            const rolPadre = await client.query("SELECT id_rol FROM rol WHERE nombre = 'padre'");
+            if (rolPadre.rows.length > 0) {
+                await client.query(`INSERT INTO usuario_rol (id_usuario, id_rol) 
+               VALUES ($1, $2) 
+               ON CONFLICT (id_usuario, id_rol) DO NOTHING`, [idUsuarioPadre, rolPadre.rows[0].id_rol]);
             }
             // Registro Padre
             const existingParent = await client.query('SELECT id_padrefamilia FROM padre_familia WHERE documeno = $1', [data.parent.documento]);

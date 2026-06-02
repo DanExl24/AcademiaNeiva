@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteSubject = exports.createSubject = exports.updateTeacherStatus = exports.deleteTeacherAssignment = exports.assignTeacherCourseSubject = exports.createTeacher = exports.getTeacherManagementData = exports.deleteScale = exports.updateScale = exports.createScale = exports.updateAcademicPeriodPercentage = exports.closeAcademicPeriod = exports.upsertCompetencyByAdmin = exports.updateManualScaleConfiguration = exports.updateSchoolDefaultSettings = exports.createAcademicYear = exports.createAcademicPeriod = exports.getAcademicSettingsData = exports.getSubjects = exports.deleteGroup = exports.createGroup = exports.deleteGradeType = exports.createGradeType = exports.getGradeManagementData = exports.getAcademicCatalogs = void 0;
+exports.getPeriodClosureDetails = exports.deleteEvidencia = exports.updateEvidencia = exports.createEvidencia = exports.deleteSubject = exports.createSubject = exports.updateTeacherStatus = exports.deleteTeacherAssignment = exports.assignTeacherCourseSubject = exports.createTeacher = exports.getTeacherManagementData = exports.deleteScale = exports.updateScale = exports.createScale = exports.updateAcademicPeriodPercentage = exports.reopenSubjectClosure = exports.reopenAcademicPeriod = exports.closeAcademicPeriod = exports.upsertCompetencyByAdmin = exports.updateManualScaleConfiguration = exports.updateSchoolDefaultSettings = exports.createAcademicYear = exports.createAcademicPeriod = exports.getAcademicSettingsData = exports.getSubjects = exports.deleteGroup = exports.createGroup = exports.deleteGradeType = exports.createGradeType = exports.getGradeManagementData = exports.getAcademicCatalogs = void 0;
 const db_1 = require("../config/db");
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const notificationService_1 = require("../services/notificationService");
@@ -76,6 +76,16 @@ const ensureAcademicPeriodDayColumns = async () => {
     await db_1.pool.query(`
     ALTER TABLE periodo_academico
     ADD COLUMN IF NOT EXISTS dia_fin integer
+  `);
+};
+const ensureAcademicPeriodMonthColumns = async () => {
+    await db_1.pool.query(`
+    ALTER TABLE periodo_academico
+    ADD COLUMN IF NOT EXISTS mes_inicio integer
+  `);
+    await db_1.pool.query(`
+    ALTER TABLE periodo_academico
+    ADD COLUMN IF NOT EXISTS mes_fin integer
   `);
 };
 const ensureSchoolDefaultSettings = async (schoolId) => {
@@ -480,7 +490,31 @@ const getAcademicSettingsData = async (req, res) => {
         await (0, competencyMigration_1.ensureCompetencySchema)();
         await ensureAcademicPeriodTrimesterColumn();
         await ensureAcademicPeriodDayColumns();
+        await ensureAcademicPeriodMonthColumns();
         const currentYearId = await ensureAcademicYearForSchool(schoolId);
+        // Auto-switch periods based on current date
+        const now = new Date();
+        const periodsCheck = await db_1.pool.query(`SELECT id_periodo, mes_inicio, dia_inicio, mes_fin, dia_fin
+       FROM periodo_academico
+       WHERE id_colegio = $1 AND "id_año" = $2`, [schoolId, currentYearId]);
+        let periodIdToOpen = null;
+        for (const p of periodsCheck.rows) {
+            if (p.mes_inicio && p.dia_inicio && p.mes_fin && p.dia_fin) {
+                const start = new Date(now.getFullYear(), p.mes_inicio - 1, p.dia_inicio);
+                const end = new Date(now.getFullYear(), p.mes_fin - 1, p.dia_fin);
+                // Si el fin es menor que el inicio, asumimos que cruza el año
+                if (end < start)
+                    end.setFullYear(end.getFullYear() + 1);
+                if (now >= start && now <= end) {
+                    periodIdToOpen = p.id_periodo;
+                    break;
+                }
+            }
+        }
+        // SIEMPRE ejecutamos el update para asegurar que si no hay match, todo esté CERRADO (o solo el correcto abierto)
+        await db_1.pool.query(`UPDATE periodo_academico
+       SET estado = CASE WHEN id_periodo = $1 THEN 'ABIERTO'::estado_periodo ELSE 'CERRADO'::estado_periodo END
+       WHERE id_colegio = $2 AND "id_año" = $3`, [periodIdToOpen || -1, schoolId, currentYearId]);
         const competencyClient = await db_1.pool.connect();
         try {
             await competencyClient.query("BEGIN");
@@ -504,7 +538,7 @@ const getAcademicSettingsData = async (req, res) => {
          WHERE id_colegio = $1
          ORDER BY "id_año" DESC`, [schoolId]),
             ensureSchoolDefaultSettings(schoolId),
-            db_1.pool.query(`SELECT id_periodo, nombre, estado, porcentaje, trimestre, dia_inicio, dia_fin, "id_año"
+            db_1.pool.query(`SELECT id_periodo, nombre, estado, porcentaje, trimestre, dia_inicio, dia_fin, mes_inicio, mes_fin, "id_año"
          FROM periodo_academico
          WHERE id_colegio = $1
          ORDER BY id_periodo`, [schoolId]),
@@ -563,7 +597,22 @@ const getAcademicSettingsData = async (req, res) => {
            ne.nombre AS nivel_nombre,
            tg.nombre AS tipo_grado_nombre,
            s.nombre AS seccion_nombre,
-           j.nombre AS jornada_nombre
+           j.nombre AS jornada_nombre,
+           COALESCE(
+             (
+               SELECT json_agg(
+                 json_build_object(
+                   'id_evidencia', ev.id_evidencia,
+                   'descripcion',  ev.descripcion,
+                   'orden',        ev.orden
+                 )
+                 ORDER BY ev.orden, ev.id_evidencia
+               )
+               FROM evidencia_aprendizaje ev
+               WHERE ev.id_competencia = c.id_competencia
+             ),
+             '[]'::json
+           ) AS evidencias
          FROM competencias c
          JOIN materias m ON m.id_materia = c.id_materia
          JOIN periodo_academico p ON p.id_periodo = c.id_periodo
@@ -616,21 +665,16 @@ const createAcademicPeriod = async (req, res) => {
     const schoolId = parseSchoolId(req.body.schoolId);
     const nombre = String(req.body.nombre || "").trim();
     const porcentaje = Number(req.body.porcentaje);
-    const trimestre = Number(req.body.trimestre);
-    const diaInicio = req.body.dia_inicio !== undefined && req.body.dia_inicio !== "" && req.body.dia_inicio !== null
-        ? Number(req.body.dia_inicio)
-        : null;
-    const diaFin = req.body.dia_fin !== undefined && req.body.dia_fin !== "" && req.body.dia_fin !== null
-        ? Number(req.body.dia_fin)
-        : null;
+    const mesInicio = Number(req.body.mes_inicio);
+    const diaInicio = Number(req.body.dia_inicio);
+    const mesFin = Number(req.body.mes_fin);
+    const diaFin = Number(req.body.dia_fin);
     if (!schoolId ||
         !nombre ||
         Number.isNaN(porcentaje) ||
         porcentaje <= 0 ||
-        !Number.isInteger(trimestre) ||
-        trimestre < 1 ||
-        trimestre > 3) {
-        res.status(400).json({ error: "Nombre, porcentaje y trimestre válido del periodo son obligatorios" });
+        !mesInicio || !diaInicio || !mesFin || !diaFin) {
+        res.status(400).json({ error: "Nombre, porcentaje y rango de fechas (mes/día) son obligatorios" });
         return;
     }
     if (diaInicio !== null && (!Number.isInteger(diaInicio) || diaInicio < 1 || diaInicio > 31)) {
@@ -667,9 +711,9 @@ const createAcademicPeriod = async (req, res) => {
             res.status(409).json({ error: "Ya existe un periodo académico con ese nombre" });
             return;
         }
-        const created = await db_1.pool.query(`INSERT INTO periodo_academico (nombre, estado, porcentaje, trimestre, dia_inicio, dia_fin, "id_año", id_colegio)
-       VALUES ($1, 'ABIERTO', $2, $3, $4, $5, $6, $7)
-       RETURNING id_periodo, nombre, estado, porcentaje, trimestre, dia_inicio, dia_fin, "id_año"`, [nombre, porcentaje, trimestre, diaInicio, diaFin, currentYearId, schoolId]);
+        const created = await db_1.pool.query(`INSERT INTO periodo_academico (nombre, estado, porcentaje, mes_inicio, dia_inicio, mes_fin, dia_fin, "id_año", id_colegio)
+       VALUES ($1, 'CERRADO', $2, $3, $4, $5, $6, $7, $8)
+       RETURNING id_periodo, nombre, estado, porcentaje, mes_inicio, dia_inicio, mes_fin, dia_fin, "id_año"`, [nombre, porcentaje, mesInicio, diaInicio, mesFin, diaFin, currentYearId, schoolId]);
         res.status(201).json(created.rows[0]);
     }
     catch (error) {
@@ -957,69 +1001,87 @@ const closeAcademicPeriod = async (req, res) => {
     }
 };
 exports.closeAcademicPeriod = closeAcademicPeriod;
+const reopenAcademicPeriod = async (req, res) => {
+    const periodId = Number(req.params.id);
+    const schoolId = parseSchoolId(req.body.schoolId);
+    if (!periodId || !schoolId) {
+        res.status(400).json({ error: "Parámetros inválidos" });
+        return;
+    }
+    try {
+        const updated = await db_1.pool.query(`UPDATE periodo_academico
+       SET estado = 'ABIERTO'
+       WHERE id_periodo = $1
+         AND id_colegio = $2
+         AND estado = 'CERRADO'`, [periodId, schoolId]);
+        if (updated.rowCount === 0) {
+            res.status(404).json({ error: "Periodo no encontrado o no está cerrado" });
+            return;
+        }
+        res.json({ message: "Periodo reabierto con éxito" });
+    }
+    catch (error) {
+        console.error("Error reopening academic period:", error);
+        res.status(500).json({ error: "Error en el servidor" });
+    }
+};
+exports.reopenAcademicPeriod = reopenAcademicPeriod;
+const reopenSubjectClosure = async (req, res) => {
+    const periodId = Number(req.params.periodId);
+    const detailGradeId = Number(req.params.detailGradeId);
+    const schoolId = parseSchoolId(req.body.schoolId);
+    if (!periodId || !detailGradeId || !schoolId) {
+        res.status(400).json({ error: "Parámetros inválidos" });
+        return;
+    }
+    try {
+        // 1. Verify period is from the same school
+        const periodCheck = await db_1.pool.query(`SELECT id_periodo
+       FROM periodo_academico
+       WHERE id_periodo = $1
+         AND id_colegio = $2`, [periodId, schoolId]);
+        if (periodCheck.rows.length === 0) {
+            res.status(404).json({ error: "Periodo no encontrado o no es de tu colegio" });
+            return;
+        }
+        // 2. Erase teacher closure history for this period & detail
+        const deleted = await db_1.pool.query(`DELETE FROM cierre_materia
+       WHERE id_detallegrado = $1
+         AND id_periodo = $2`, [detailGradeId, periodId]);
+        if (deleted.rowCount === 0) {
+            res.status(404).json({ error: "La materia no estaba cerrada para este periodo" });
+            return;
+        }
+        res.json({ message: "Desbloqueado con éxito de cierre" });
+    }
+    catch (error) {
+        console.error("Error reopening subject closure:", error);
+        res.status(500).json({ error: "Error en el servidor al deshacer cierre de materia" });
+    }
+};
+exports.reopenSubjectClosure = reopenSubjectClosure;
 const updateAcademicPeriodPercentage = async (req, res) => {
     const periodId = Number(req.params.id);
     const schoolId = parseSchoolId(req.body.schoolId);
     const porcentaje = Number(req.body.porcentaje);
-    const trimestre = Number(req.body.trimestre);
-    const diaInicio = req.body.dia_inicio !== undefined && req.body.dia_inicio !== "" && req.body.dia_inicio !== null
-        ? Number(req.body.dia_inicio)
-        : null;
-    const diaFin = req.body.dia_fin !== undefined && req.body.dia_fin !== "" && req.body.dia_fin !== null
-        ? Number(req.body.dia_fin)
-        : null;
-    if (!periodId ||
-        !schoolId ||
-        Number.isNaN(porcentaje) ||
-        porcentaje <= 0 ||
-        !Number.isInteger(trimestre) ||
-        trimestre < 1 ||
-        trimestre > 3) {
-        res.status(400).json({ error: "Parámetros inválidos" });
-        return;
-    }
-    if (diaInicio !== null && (!Number.isInteger(diaInicio) || diaInicio < 1 || diaInicio > 31)) {
-        res.status(400).json({ error: "El día de inicio debe ser un número entre 1 y 31" });
-        return;
-    }
-    if (diaFin !== null && (!Number.isInteger(diaFin) || diaFin < 1 || diaFin > 31)) {
-        res.status(400).json({ error: "El día de fin debe ser un número entre 1 y 31" });
-        return;
-    }
-    if (diaInicio !== null && diaFin !== null && diaFin < diaInicio) {
-        res.status(400).json({ error: "El día de fin no puede ser menor al día de inicio" });
+    const mesInicio = Number(req.body.mes_inicio);
+    const diaInicio = Number(req.body.dia_inicio);
+    const mesFin = Number(req.body.mes_fin);
+    const diaFin = Number(req.body.dia_fin);
+    if (!periodId || !schoolId || Number.isNaN(porcentaje) || porcentaje <= 0 || !mesInicio || !diaInicio || !mesFin || !diaFin) {
+        res.status(400).json({ error: "Todos los campos (porcentaje y rango de fechas) son obligatorios" });
         return;
     }
     try {
-        await ensureAcademicPeriodTrimesterColumn();
-        await ensureAcademicPeriodDayColumns();
-        const periodRes = await db_1.pool.query(`SELECT id_periodo, porcentaje, trimestre
-       FROM periodo_academico
-       WHERE id_periodo = $1
-         AND id_colegio = $2`, [periodId, schoolId]);
-        if (periodRes.rows.length === 0) {
-            res.status(404).json({ error: "Periodo académico no encontrado" });
-            return;
-        }
-        const totalsRes = await db_1.pool.query(`SELECT COALESCE(SUM(porcentaje), 0)::numeric AS total
-       FROM periodo_academico
-       WHERE id_colegio = $1
-         AND id_periodo <> $2`, [schoolId, periodId]);
-        const otherTotal = Number(totalsRes.rows[0].total);
-        if (otherTotal + porcentaje > 100) {
-            res.status(409).json({
-                error: `No es posible actualizar el porcentaje de este periodo. La suma total excede 100%. Otros periodos: ${otherTotal}%`,
-            });
-            return;
-        }
         const updated = await db_1.pool.query(`UPDATE periodo_academico
        SET porcentaje = $1,
-           trimestre = $2,
+           mes_inicio = $2,
            dia_inicio = $3,
-           dia_fin = $4
-       WHERE id_periodo = $5
-         AND id_colegio = $6
-       RETURNING id_periodo, nombre, estado, porcentaje, trimestre, dia_inicio, dia_fin, "id_año"`, [porcentaje, trimestre, diaInicio, diaFin, periodId, schoolId]);
+           mes_fin = $4,
+           dia_fin = $5
+       WHERE id_periodo = $6
+         AND id_colegio = $7
+       RETURNING id_periodo, nombre, estado, porcentaje, mes_inicio, dia_inicio, mes_fin, dia_fin, "id_año"`, [porcentaje, mesInicio, diaInicio, mesFin, diaFin, periodId, schoolId]);
         res.json(updated.rows[0]);
     }
     catch (error) {
@@ -1479,3 +1541,158 @@ const deleteSubject = async (req, res) => {
     }
 };
 exports.deleteSubject = deleteSubject;
+// ─── Evidencias de Aprendizaje ────────────────────────────────────────────────
+const createEvidencia = async (req, res) => {
+    const competenciaId = Number(req.params.competenciaId);
+    const descripcion = String(req.body.descripcion || "").trim();
+    const schoolId = parseSchoolId(req.body.schoolId);
+    if (!competenciaId || !descripcion || !schoolId) {
+        res.status(400).json({ error: "Competencia, descripción y colegio son obligatorios" });
+        return;
+    }
+    try {
+        // Verificar que la competencia pertenece a este colegio
+        const check = await db_1.pool.query(`SELECT id_competencia FROM competencias WHERE id_competencia = $1 AND id_colegio = $2`, [competenciaId, schoolId]);
+        if (check.rows.length === 0) {
+            res.status(404).json({ error: "Competencia no encontrada" });
+            return;
+        }
+        // Calcular el siguiente orden
+        const ordenRes = await db_1.pool.query(`SELECT COALESCE(MAX(orden), -1) + 1 AS next_orden FROM evidencia_aprendizaje WHERE id_competencia = $1`, [competenciaId]);
+        const orden = Number(ordenRes.rows[0].next_orden);
+        const result = await db_1.pool.query(`INSERT INTO evidencia_aprendizaje (id_competencia, descripcion, orden, id_colegio)
+       VALUES ($1, $2, $3, $4)
+       RETURNING *`, [competenciaId, descripcion, orden, schoolId]);
+        res.status(201).json(result.rows[0]);
+    }
+    catch (error) {
+        console.error("Error creating evidencia:", error);
+        res.status(500).json({ error: "Error en el servidor" });
+    }
+};
+exports.createEvidencia = createEvidencia;
+const updateEvidencia = async (req, res) => {
+    const evidenciaId = Number(req.params.evidenciaId);
+    const descripcion = String(req.body.descripcion || "").trim();
+    const schoolId = parseSchoolId(req.body.schoolId);
+    if (!evidenciaId || !descripcion || !schoolId) {
+        res.status(400).json({ error: "ID, descripción y colegio son obligatorios" });
+        return;
+    }
+    try {
+        const result = await db_1.pool.query(`UPDATE evidencia_aprendizaje
+       SET descripcion = $1
+       WHERE id_evidencia = $2 AND id_colegio = $3
+       RETURNING *`, [descripcion, evidenciaId, schoolId]);
+        if (result.rows.length === 0) {
+            res.status(404).json({ error: "Evidencia no encontrada" });
+            return;
+        }
+        res.json(result.rows[0]);
+    }
+    catch (error) {
+        console.error("Error updating evidencia:", error);
+        res.status(500).json({ error: "Error en el servidor" });
+    }
+};
+exports.updateEvidencia = updateEvidencia;
+const deleteEvidencia = async (req, res) => {
+    const evidenciaId = Number(req.params.evidenciaId);
+    const schoolId = parseSchoolId(req.query.schoolId);
+    if (!evidenciaId || !schoolId) {
+        res.status(400).json({ error: "Parámetros inválidos" });
+        return;
+    }
+    try {
+        const result = await db_1.pool.query(`DELETE FROM evidencia_aprendizaje
+       WHERE id_evidencia = $1 AND id_colegio = $2
+       RETURNING id_evidencia`, [evidenciaId, schoolId]);
+        if (result.rows.length === 0) {
+            res.status(404).json({ error: "Evidencia no encontrada" });
+            return;
+        }
+        res.json({ message: "Evidencia eliminada correctamente" });
+    }
+    catch (error) {
+        console.error("Error deleting evidencia:", error);
+        res.status(500).json({ error: "Error en el servidor" });
+    }
+};
+exports.deleteEvidencia = deleteEvidencia;
+const getPeriodClosureDetails = async (req, res) => {
+    const periodId = Number(req.params.periodId);
+    const schoolId = parseSchoolId(req.params.schoolId);
+    if (!periodId || !schoolId) {
+        res.status(400).json({ error: "Parámetros inválidos" });
+        return;
+    }
+    const client = await db_1.pool.connect();
+    try {
+        const periodRes = await client.query(`SELECT nombre, estado FROM periodo_academico WHERE id_periodo = $1 AND id_colegio = $2`, [periodId, schoolId]);
+        if (periodRes.rows.length === 0) {
+            res.status(404).json({ error: "Periodo académico no encontrado" });
+            return;
+        }
+        const query = `
+      SELECT
+        d.id_docente,
+        u.nombre AS docente_nombre,
+        u.email AS docente_email,
+        dg.id_detallegrado,
+        m.nombre AS materia_nombre,
+        tg.nombre AS grado_nombre,
+        s.nombre AS seccion_nombre,
+        j.nombre AS jornada_nombre,
+        COALESCE(cm.estado::VARCHAR, 'PENDIENTE') AS estado_cierre
+      FROM docente d
+      JOIN usuario u ON u.id_usuario = d.id_usuario
+      JOIN detalle_grados dg ON dg.id_docente = d.id_docente
+      JOIN materias m ON m.id_materia = dg.id_materia
+      JOIN grupos g ON g.id_grupo = dg.id_grupo
+      JOIN tipo_grado tg ON tg.id_tipo_grado = g.id_tipo_grado
+      JOIN secciones s ON s.id_seccion = g.id_seccion
+      JOIN jornada j ON j.id_jornada = g.id_jornada
+      LEFT JOIN cierre_materia cm ON cm.id_detallegrado = dg.id_detallegrado AND cm.id_periodo = $1
+      WHERE dg.id_colegio = $2
+      ORDER BY u.nombre, m.nombre, tg.nombre
+    `;
+        const detailsRes = await client.query(query, [periodId, schoolId]);
+        const teachersMap = new Map();
+        detailsRes.rows.forEach(row => {
+            if (!teachersMap.has(row.id_docente)) {
+                teachersMap.set(row.id_docente, {
+                    id_docente: row.id_docente,
+                    docente_nombre: row.docente_nombre,
+                    docente_email: row.docente_email,
+                    asignaciones: [],
+                    total_asignaciones: 0,
+                    cerradas: 0,
+                });
+            }
+            const teacher = teachersMap.get(row.id_docente);
+            teacher.asignaciones.push({
+                id_detallegrado: row.id_detallegrado,
+                materia_nombre: row.materia_nombre,
+                grado: `${row.grado_nombre} ${row.seccion_nombre} · ${row.jornada_nombre}`,
+                estado: row.estado_cierre
+            });
+            teacher.total_asignaciones++;
+            if (row.estado_cierre === 'CERRADO') {
+                teacher.cerradas++;
+            }
+        });
+        const teachers = Array.from(teachersMap.values());
+        res.json({
+            periodo: periodRes.rows[0],
+            teachers
+        });
+    }
+    catch (error) {
+        console.error("Error fetching closure details:", error);
+        res.status(500).json({ error: "Error en el servidor" });
+    }
+    finally {
+        client.release();
+    }
+};
+exports.getPeriodClosureDetails = getPeriodClosureDetails;

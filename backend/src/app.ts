@@ -7,6 +7,7 @@ import gradoRoutes from "./routes/grado.routes";
 import authRoutes from "./routes/auth.routes";
 import teacherRoutes from "./routes/teacher.routes";
 import academicAdminRoutes from "./routes/academicAdmin.routes";
+import boletinRoutes from "./routes/boletin.routes";
 
 const app = express();
 
@@ -27,6 +28,7 @@ app.use("/api/grados", gradoRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/teacher", teacherRoutes);
 app.use("/api/academic-admin", academicAdminRoutes);
+app.use("/api/boletines", boletinRoutes);
 
 app.get("/", (req, res) => {
   res.json({ message: "API TS funcionando segura" });

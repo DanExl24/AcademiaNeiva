@@ -16,7 +16,8 @@ import {
   LibraryBig,
   SlidersHorizontal,
   Sun,
-  Moon
+  Moon,
+  FileText
 } from 'lucide-vue-next'
 import { useAuthStore } from '../stores/auth'
 import { useThemeStore } from '../stores/theme'
@@ -64,6 +65,7 @@ const menuItems = computed(() => {
     { name: 'Gestión de Materias', icon: LibraryBig, path: '/dashboard/gestion-materias' },
     { name: 'Docentes', icon: Users, path: '/dashboard/docentes' },
     { name: 'Configuración Académica', icon: SlidersHorizontal, path: '/dashboard/configuracion-academica' },
+    { name: 'Boletines', icon: FileText, path: '/dashboard/boletines' },
   ]
 })
 

@@ -93,10 +93,10 @@ const schools: SchoolSeed[] = [
 const sectionNames = ["A", "B"];
 const jornadaNames = ["MAÑANA", "TARDE", "UNICA"];
 const periodSeeds = [
-  { nombre: "Primer Periodo", estado: "ABIERTO", porcentaje: 25, trimestre: 1 },
-  { nombre: "Segundo Periodo", estado: "CERRADO", porcentaje: 25, trimestre: 2 },
+  { nombre: "Primer Periodo", estado: "CERRADO", porcentaje: 25, trimestre: 1 },
+  { nombre: "Segundo Periodo", estado: "ABIERTO", porcentaje: 25, trimestre: 2 },
   { nombre: "Tercer Periodo", estado: "CERRADO", porcentaje: 25, trimestre: 3 },
-  { nombre: "Cuarto Periodo", estado: "CERRADO", porcentaje: 25, trimestre: 3 },
+  { nombre: "Cuarto Periodo", estado: "CERRADO", porcentaje: 25, trimestre: 4 },
 ];
 const scaleSeeds = [
   { nivel: "SUPERIOR", min: 4.6, max: 5.0 },

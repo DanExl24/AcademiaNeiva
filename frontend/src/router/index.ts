@@ -14,6 +14,7 @@ import SubjectManagement from '../views/admin/SubjectManagement.vue'
 import TeacherManagement from '../views/admin/TeacherManagement.vue'
 import AcademicSettings from '../views/admin/AcademicSettings.vue'
 import AcademicCompetenciesView from '../views/admin/AcademicCompetenciesView.vue'
+import BoletinGenerator from '../views/admin/BoletinGenerator.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -102,6 +103,11 @@ const router = createRouter({
           path: 'configuracion-academica/periodos',
           name: 'Periodos Académicos',
           component: () => import('../views/admin/AcademicPeriodsView.vue')
+        },
+        {
+          path: 'boletines',
+          name: 'Generación de Boletines',
+          component: BoletinGenerator
         },
         // Rutas del Docente
         {

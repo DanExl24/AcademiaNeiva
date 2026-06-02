@@ -68,10 +68,10 @@ const schools = [
 const sectionNames = ["A", "B"];
 const jornadaNames = ["MAÑANA", "TARDE", "UNICA"];
 const periodSeeds = [
-    { nombre: "Primer Periodo", estado: "ABIERTO", porcentaje: 25, trimestre: 1 },
-    { nombre: "Segundo Periodo", estado: "CERRADO", porcentaje: 25, trimestre: 2 },
+    { nombre: "Primer Periodo", estado: "CERRADO", porcentaje: 25, trimestre: 1 },
+    { nombre: "Segundo Periodo", estado: "ABIERTO", porcentaje: 25, trimestre: 2 },
     { nombre: "Tercer Periodo", estado: "CERRADO", porcentaje: 25, trimestre: 3 },
-    { nombre: "Cuarto Periodo", estado: "CERRADO", porcentaje: 25, trimestre: 3 },
+    { nombre: "Cuarto Periodo", estado: "CERRADO", porcentaje: 25, trimestre: 4 },
 ];
 const scaleSeeds = [
     { nivel: "SUPERIOR", min: 4.6, max: 5.0 },
@@ -396,6 +396,23 @@ async function run() {
         }
         await client.query("COMMIT");
         await (0, competencyMigration_1.ensureCompetencySchema)();
+        console.log("Generando evidencias de aprendizaje de prueba...");
+        const compClient = await db_1.pool.connect();
+        try {
+            const compRes = await compClient.query('SELECT id_competencia, id_colegio FROM competencias');
+            for (const comp of compRes.rows) {
+                await compClient.query(`
+          INSERT INTO evidencia_aprendizaje (id_competencia, descripcion, orden, id_colegio)
+          VALUES 
+            ($1, 'Reconoce y aplica los conceptos fundamentales de la unidad temática.', 1, $2),
+            ($1, 'Demuestra capacidad analítica y pensamiento crítico en la resolución de problemas.', 2, $2),
+            ($1, 'Participa activamente y colabora con sus compañeros en el entorno de aprendizaje.', 3, $2)
+        `, [comp.id_competencia, comp.id_colegio]);
+            }
+        }
+        finally {
+            compClient.release();
+        }
         const credentialsPath = writeCredentialsFile(credentials);
         console.log(`Base de datos reseteada correctamente para ${schools.length} colegios.`);
         console.log(`Credenciales guardadas en: ${credentialsPath}`);
