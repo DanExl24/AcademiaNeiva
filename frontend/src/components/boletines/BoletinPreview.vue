@@ -181,7 +181,7 @@
         <div class="bg-blue-50/50 p-4 rounded-xl border border-blue-100 flex flex-col items-center">
           <span class="text-[9px] font-black uppercase text-blue-400 tracking-widest mb-1">Nivel Desempeño</span>
           <span class="text-lg font-black text-blue-900 uppercase">
-             {{ data?.materias?.[0]?.notas_historicas?.find((n: any) => n.id_periodo == data?.periodoActual?.id_periodo)?.desempeno || 'ALTO' }}
+             {{ data?.nivelDesempeno || '—' }}
           </span>
         </div>
         <div class="bg-purple-50/50 p-4 rounded-xl border border-purple-100 flex flex-col items-center">
@@ -193,22 +193,42 @@
         </div>
       </div>
 
-      <!-- Escala de Valoración (con fallback institucional) -->
+      <!-- Escala de Valoración (con colores por nivel) -->
       <div class="bg-gray-50 rounded-xl border border-gray-100 px-4 py-3">
         <div class="flex items-center gap-6">
           <span class="text-[9px] font-black uppercase text-gray-400 tracking-widest whitespace-nowrap">Escala de Valoración:</span>
           <div class="flex flex-1 justify-around">
             <template v-if="data?.escala && data.escala.length > 0">
-              <div v-for="item in data.escala" :key="item.nivel" class="flex flex-col items-center">
-                <span class="text-[10px] font-black text-gray-800 uppercase">{{ item.nivel }}</span>
+              <div v-for="item in data.escala" :key="item.nivel" class="flex flex-col items-center gap-1">
+                <span
+                  class="px-3 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider"
+                  :class="{
+                    'bg-red-100 text-red-700':    item.nivel?.toLowerCase().includes('bajo'),
+                    'bg-amber-100 text-amber-700': item.nivel?.toLowerCase().includes('b') && !item.nivel?.toLowerCase().includes('bajo'),
+                    'bg-green-100 text-green-700': item.nivel?.toLowerCase().includes('alto'),
+                    'bg-blue-100 text-blue-700':   item.nivel?.toLowerCase().includes('superior'),
+                  }"
+                >{{ item.nivel }}</span>
                 <span class="text-[8px] font-bold text-gray-400">({{ item.valor_minimo }} – {{ item.valor_maximo }})</span>
               </div>
             </template>
             <template v-else>
-              <div class="flex flex-col items-center"><span class="text-[10px] font-black text-gray-800 uppercase">Bajo</span><span class="text-[8px] font-bold text-gray-400">(0.0 – 2.9)</span></div>
-              <div class="flex flex-col items-center"><span class="text-[10px] font-black text-gray-800 uppercase">Básico</span><span class="text-[8px] font-bold text-gray-400">(3.0 – 3.8)</span></div>
-              <div class="flex flex-col items-center"><span class="text-[10px] font-black text-gray-800 uppercase">Alto</span><span class="text-[8px] font-bold text-gray-400">(3.9 – 4.5)</span></div>
-              <div class="flex flex-col items-center"><span class="text-[10px] font-black text-gray-800 uppercase">Superior</span><span class="text-[8px] font-bold text-gray-400">(4.6 – 5.0)</span></div>
+              <div class="flex flex-col items-center gap-1">
+                <span class="px-3 py-0.5 rounded-full text-[9px] font-black uppercase bg-red-100 text-red-700">Bajo</span>
+                <span class="text-[8px] font-bold text-gray-400">(0.0 – 2.9)</span>
+              </div>
+              <div class="flex flex-col items-center gap-1">
+                <span class="px-3 py-0.5 rounded-full text-[9px] font-black uppercase bg-amber-100 text-amber-700">Básico</span>
+                <span class="text-[8px] font-bold text-gray-400">(3.0 – 3.8)</span>
+              </div>
+              <div class="flex flex-col items-center gap-1">
+                <span class="px-3 py-0.5 rounded-full text-[9px] font-black uppercase bg-green-100 text-green-700">Alto</span>
+                <span class="text-[8px] font-bold text-gray-400">(3.9 – 4.5)</span>
+              </div>
+              <div class="flex flex-col items-center gap-1">
+                <span class="px-3 py-0.5 rounded-full text-[9px] font-black uppercase bg-blue-100 text-blue-700">Superior</span>
+                <span class="text-[8px] font-bold text-gray-400">(4.6 – 5.0)</span>
+              </div>
             </template>
           </div>
         </div>
@@ -224,18 +244,18 @@
         </div>
       </div>
 
-      <!-- Sección de Firmas (Elegancia Clásica) -->
-      <div class="grid grid-cols-2 gap-32 px-12 pt-16 font-serif">
+      <!-- Sección de Firmas (Quicksand + Elegancia Clásica) -->
+      <div class="grid grid-cols-2 gap-32 px-12 pt-16">
         <div class="text-center group">
           <div class="h-px bg-gradient-to-r from-transparent via-gray-400 to-transparent mb-4"></div>
-          <p class="text-xs font-black uppercase text-gray-900 tracking-tight transition-all duration-300 group-hover:tracking-widest">
+          <p class="text-xs font-black uppercase text-gray-900 tracking-tight transition-all duration-300 group-hover:tracking-widest" style="font-family: 'Quicksand', sans-serif;">
             {{ data?.firmas?.rector || 'RECTORÍA' }}
           </p>
           <p class="text-[9px] font-bold text-gray-400 uppercase mt-1 tracking-tighter">Rectoría Institucional</p>
         </div>
         <div class="text-center group">
           <div class="h-px bg-gradient-to-r from-transparent via-gray-400 to-transparent mb-4"></div>
-          <p class="text-xs font-black uppercase text-gray-900 tracking-tight transition-all duration-300 group-hover:tracking-widest">
+          <p class="text-xs font-black uppercase text-gray-900 tracking-tight transition-all duration-300 group-hover:tracking-widest" style="font-family: 'Quicksand', sans-serif;">
              {{ data?.firmas?.titular || 'DIRECTOR(A) DE GRUPO' }}
           </p>
           <p class="text-[9px] font-bold text-gray-400 uppercase mt-1 tracking-tighter">Director(a) de Grupo</p>

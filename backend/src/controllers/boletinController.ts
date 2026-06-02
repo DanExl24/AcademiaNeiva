@@ -177,15 +177,18 @@ export const getStudentBoletin = async (req: Request, res: Response) => {
       promedioGlobal = sum / currentPeriodGrades.length;
     }
 
-    // 9. Fetch Ranking (Puesto) en el Grupo
+    // 9. Fetch Ranking (Puesto) en el Grupo — usa m2.id_estudiante para evitar errores por LEFT JOIN nullable
     const rankingRes = await pool.query(`
       WITH group_averages AS (
         SELECT 
-          ra2.id_estudiante,
-          ROUND(AVG(COALESCE(ra2.promedio, calc.promedio_calculado))::numeric, 2) as student_avg
+          m2.id_estudiante,
+          ROUND(AVG(COALESCE(ra2.promedio, calc.promedio_calculado, 0))::numeric, 2) as student_avg
         FROM matricula m2
         JOIN detalle_grados dg2 ON dg2.id_grupo = m2.id_grupo
-        LEFT JOIN resultado_academico ra2 ON ra2.id_estudiante = m2.id_estudiante AND ra2.id_detallegrado = dg2.id_detallegrado AND ra2.id_periodo = $2
+        LEFT JOIN resultado_academico ra2 
+          ON ra2.id_estudiante = m2.id_estudiante 
+          AND ra2.id_detallegrado = dg2.id_detallegrado 
+          AND ra2.id_periodo = $2
         LEFT JOIN (
           SELECT am.id_detallegrado, na.id_estudiante, ROUND(AVG(na.nota)::numeric, 2) as promedio_calculado
           FROM notas_actividad na
@@ -193,18 +196,24 @@ export const getStudentBoletin = async (req: Request, res: Response) => {
           WHERE am.id_periodo = $2
           GROUP BY am.id_detallegrado, na.id_estudiante
         ) calc ON calc.id_detallegrado = dg2.id_detallegrado AND calc.id_estudiante = m2.id_estudiante
-        WHERE m2.id_grupo = (SELECT id_grupo FROM matricula WHERE id_estudiante = $1)
-        GROUP BY ra2.id_estudiante
+        WHERE m2.id_grupo = (SELECT id_grupo FROM matricula WHERE id_estudiante = $1 LIMIT 1)
+          AND m2.estado = 'ACTIVA'
+        GROUP BY m2.id_estudiante
+      ),
+      ranked AS (
+        SELECT 
+          id_estudiante,
+          student_avg,
+          RANK() OVER (ORDER BY student_avg DESC) as puesto,
+          COUNT(*) OVER () as total_grupo
+        FROM group_averages
       )
-      SELECT 
-        student_avg,
-        RANK() OVER (ORDER BY student_avg DESC) as puesto,
-        (SELECT COUNT(*) FROM group_averages) as total_grupo
-      FROM group_averages
+      SELECT puesto, total_grupo, student_avg
+      FROM ranked
       WHERE id_estudiante = $1;
     `, [id_estudiante, id_periodo]);
 
-    // 10. Fetch Escala de Valoración Completa
+    // 10. Fetch Escala de Valoración Completa del colegio
     const escalaRes = await pool.query(`
       SELECT nivel, valor_minimo, valor_maximo 
       FROM escala_valoracion 
@@ -212,15 +221,25 @@ export const getStudentBoletin = async (req: Request, res: Response) => {
       ORDER BY valor_minimo
     `, [studentInfo.id_colegio]);
 
+    // Calcular Nivel de Desempeño real desde la escala del colegio
+    const escalaRows = escalaRes.rows;
+    let nivelDesempeno = 'Sin datos';
+    if (escalaRows.length > 0) {
+      const matchedLevel = escalaRows.find(
+        (e: any) => promedioGlobal >= parseFloat(e.valor_minimo) && promedioGlobal <= parseFloat(e.valor_maximo)
+      );
+      nivelDesempeno = matchedLevel?.nivel || escalaRows[escalaRows.length - 1]?.nivel || 'Sin datos';
+    }
+
     // 11. Fetch Firmas (Titular y Rector)
     const firmasRes = await pool.query(`
       SELECT 
-        (SELECT nombre || ' ' || apellido FROM docente d JOIN grupos g ON g.id_docente = d.id_docente WHERE g.id_grupo = (SELECT id_grupo FROM matricula WHERE id_estudiante = $1)) as titular,
+        (SELECT d.nombre || ' ' || d.apellido FROM docente d JOIN grupos g ON g.id_docente = d.id_docente WHERE g.id_grupo = (SELECT id_grupo FROM matricula WHERE id_estudiante = $1 LIMIT 1)) as titular,
         (SELECT u.nombre || ' ' || u.apellido FROM directivo d JOIN usuario u ON u.id_usuario = d.id_usuario WHERE d.id_colegio = $2 AND d.cargo = 'RECTOR' LIMIT 1) as rector
     `, [id_estudiante, studentInfo.id_colegio]);
 
-    const ranking = rankingRes.rows[0] || { puesto: 0, total_grupo: 0, student_avg: 0 };
-    const firmas = firmasRes.rows[0] || { titular: 'Pendiente', rector: 'Pendiente' };
+    const ranking = rankingRes.rows[0] || { puesto: null, total_grupo: null, student_avg: 0 };
+    const firmas = firmasRes.rows[0] || { titular: null, rector: null };
 
     res.json({
       periodo: periodoDetails.nombre,
@@ -228,21 +247,22 @@ export const getStudentBoletin = async (req: Request, res: Response) => {
       estudiante: {
          ...studentInfo,
          dane: studentInfo.dane || '183001000940',
-         nit: studentInfo.nit || '900009397-4',
          resolucion: studentInfo.resolucion || 'Resol. Jornada Única No. 070 del 01 de Feb. de 2021 Expedida por la Secretaría de Educación Municipal',
          ciudad: studentInfo.ciudad || 'Florencia - Caquetá'
       },
       materias: materias,
-      promedioGeneral: promedioGlobal.toFixed(3),
+      promedioGeneral: promedioGlobal.toFixed(2),
+      nivelDesempeno: nivelDesempeno,
       ranking: {
         puesto: ranking.puesto,
         total: ranking.total_grupo,
         promedio: ranking.student_avg
       },
-      escala: escalaRes.rows,
+      escala: escalaRows,
       firmas: firmas,
       asistencia: {
         faltasInjustificadas: parseInt(ausenciasRes.rows[0]?.faltas || '0')
+
       }
     });
 

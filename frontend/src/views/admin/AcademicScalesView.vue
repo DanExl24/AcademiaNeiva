@@ -40,6 +40,15 @@ const manualScaleForm = ref({
   alto_max: '',
 })
 
+const showConfirmModal = ref(false)
+const confirmMessage = ref('')
+const pendingSettings = ref<{
+  nota_minima: number
+  nota_maxima: number
+  nota_aprobacion: number
+  escala_modo: 'AUTOMATICO' | 'MANUAL'
+} | null>(null)
+
 const loadData = async () => {
   if (!schoolId.value) return
   try {
@@ -71,22 +80,48 @@ const loadData = async () => {
   }
 }
 
-const saveDefaultSettings = async () => {
+const saveDefaultSettings = async (bypassConfirm = false) => {
   if (defaultsSaving.value) return
   if (defaultsForm.value.nota_minima === '' || defaultsForm.value.nota_maxima === '' || defaultsForm.value.nota_aprobacion === '') {
     alert('Completa la nota mínima, máxima y aprobatoria del colegio.')
     return
   }
 
+  const nextMin = Number(defaultsForm.value.nota_minima)
+  const nextMax = Number(defaultsForm.value.nota_maxima)
+  const nextAprob = Number(defaultsForm.value.nota_aprobacion)
+  const nextMode = defaultsForm.value.escala_modo
+
+  // Verificar si hay cambio de rango para mostrar advertencia
+  if (!bypassConfirm && defaultSettings.value) {
+    const rangeChanged = 
+      Number(defaultSettings.value.nota_minima) !== nextMin || 
+      Number(defaultSettings.value.nota_maxima) !== nextMax
+
+    if (rangeChanged) {
+      confirmMessage.value = `Has cambiado el rango de calificación (de ${defaultSettings.value.nota_minima}-${defaultSettings.value.nota_maxima} a ${nextMin}-${nextMax}). Todas las notas existentes se rescalarán proporcionalmente (Ej: un 3.8/5 pasará a ser ~7.6/10). ¿Deseas continuar?`
+      pendingSettings.value = {
+        nota_minima: nextMin,
+        nota_maxima: nextMax,
+        nota_aprobacion: nextAprob,
+        escala_modo: nextMode
+      }
+      showConfirmModal.value = true
+      return
+    }
+  }
+
   try {
     defaultsSaving.value = true
     await axios.put('http://localhost:3000/api/academic-admin/settings/defaults', {
       schoolId: schoolId.value,
-      nota_minima: Number(defaultsForm.value.nota_minima),
-      nota_maxima: Number(defaultsForm.value.nota_maxima),
-      nota_aprobacion: Number(defaultsForm.value.nota_aprobacion),
-      escala_modo: defaultsForm.value.escala_modo,
+      nota_minima: nextMin,
+      nota_maxima: nextMax,
+      nota_aprobacion: nextAprob,
+      escala_modo: nextMode,
     })
+    showConfirmModal.value = false
+    pendingSettings.value = null
     await loadData()
   } catch (error: any) {
     alert(error.response?.data?.error || 'No fue posible guardar la configuración predeterminada')
@@ -194,7 +229,12 @@ onMounted(loadData)
               <p class="text-sm font-semibold text-slate-500">
                 Estos valores sirven como base institucional para escalas, aprobación, recalibración de notas y futuras reglas académicas.
               </p>
-              <button type="button" @click="saveDefaultSettings" :disabled="defaultsSaving" class="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-amber-500 px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-amber-400 disabled:opacity-50">
+              <button 
+                type="button" 
+                @click="() => saveDefaultSettings()" 
+                :disabled="defaultsSaving" 
+                class="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-amber-500 px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-amber-400 disabled:opacity-50"
+              >
                 <PenSquare class="h-4 w-4" />
                 {{ defaultsSaving ? 'Guardando...' : 'Guardar configuración' }}
               </button>
@@ -261,6 +301,39 @@ onMounted(loadData)
             </div>
           </div>
         </section>
+    </div>
+
+    <!-- Modal de Confirmación de Rescalado -->
+    <div v-if="showConfirmModal" class="fixed inset-0 z-[200] flex items-center justify-center bg-slate-950/90 backdrop-blur-sm p-4">
+      <div class="w-full max-w-lg rounded-[2rem] bg-white p-8 shadow-2xl border border-slate-100 animate-in fade-in zoom-in duration-300">
+        <div class="flex items-center gap-4 mb-6">
+          <div class="h-12 w-12 rounded-2xl bg-amber-50 flex items-center justify-center text-amber-500">
+            <Scale class="h-6 w-6" />
+          </div>
+          <h3 class="text-xl font-black text-slate-900">Aviso de Rescalado</h3>
+        </div>
+        
+        <p class="text-slate-600 leading-relaxed font-medium">
+          {{ confirmMessage }}
+        </p>
+
+        <div class="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-end">
+          <button 
+            type="button" 
+            @click="showConfirmModal = false; pendingSettings = null"
+            class="px-6 py-3 rounded-xl border border-slate-200 text-sm font-black text-slate-600 hover:bg-slate-50 transition"
+          >
+            Cancelar
+          </button>
+          <button 
+            type="button" 
+            @click="saveDefaultSettings(true)"
+            class="px-8 py-3 rounded-xl bg-slate-900 text-sm font-black text-white shadow-sm hover:bg-slate-800 transition"
+          >
+            Sí, rescalar y guardar
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </template>

@@ -227,31 +227,61 @@ const syncSchoolScalesAndGrades = async (
   manualBreaks?: { basicMax?: number | null; altoMax?: number | null }
 ) => {
   const previousScalesRes = await client.query(
-    `SELECT id_escalavaloracion
+    `SELECT id_escalavaloracion, nivel
      FROM escala_valoracion
-     WHERE id_colegio = $1`,
+     WHERE id_colegio = $1
+     ORDER BY valor_minimo`,
     [schoolId]
   );
 
-  const previousScaleIds = previousScalesRes.rows.map((row) => Number(row.id_escalavaloracion));
   const nextScalesDraft =
     scaleMode === "MANUAL"
       ? buildManualScales(nextMin, nextMax, nextApproval, manualBreaks?.basicMax, manualBreaks?.altoMax)
       : buildAutomaticScales(nextMin, nextMax, nextApproval);
-  const createdScalesRes = await client.query(
-    `INSERT INTO escala_valoracion (nivel, valor_minimo, valor_maximo, id_colegio)
-     VALUES ($1, $2, $3, $4), ($5, $6, $7, $4), ($8, $9, $10, $4), ($11, $12, $13, $4)
-     RETURNING id_escalavaloracion, nivel, valor_minimo, valor_maximo`,
-    [
-      nextScalesDraft[0].nivel, nextScalesDraft[0].valor_minimo, nextScalesDraft[0].valor_maximo,
-      schoolId,
-      nextScalesDraft[1].nivel, nextScalesDraft[1].valor_minimo, nextScalesDraft[1].valor_maximo,
-      nextScalesDraft[2].nivel, nextScalesDraft[2].valor_minimo, nextScalesDraft[2].valor_maximo,
-      nextScalesDraft[3].nivel, nextScalesDraft[3].valor_minimo, nextScalesDraft[3].valor_maximo,
-    ]
-  );
 
-  const nextScales = createdScalesRes.rows;
+  let nextScales: { id_escalavaloracion: number; nivel: string; valor_minimo: number; valor_maximo: number }[] = [];
+
+  if (previousScalesRes.rows.length === nextScalesDraft.length) {
+    // Actualizar en sitio — preserva los IDs que notas_actividad referencia
+    for (let i = 0; i < previousScalesRes.rows.length; i++) {
+      const existingId = previousScalesRes.rows[i].id_escalavaloracion;
+      const draft = nextScalesDraft[i];
+      await client.query(
+        `UPDATE escala_valoracion
+         SET nivel = $1, valor_minimo = $2, valor_maximo = $3
+         WHERE id_escalavaloracion = $4`,
+        [draft.nivel, draft.valor_minimo, draft.valor_maximo, existingId]
+      );
+      nextScales.push({ id_escalavaloracion: existingId, ...draft });
+    }
+  } else {
+    // Caso raro: número de niveles cambió → SET NULL en notas, borrar, reinsertar
+    await client.query(
+      `UPDATE notas_actividad SET id_escalavaloracion = NULL WHERE id_colegio = $1`,
+      [schoolId]
+    );
+    if (previousScalesRes.rows.length > 0) {
+      const oldIds = previousScalesRes.rows.map((r) => Number(r.id_escalavaloracion));
+      await client.query(
+        `DELETE FROM escala_valoracion WHERE id_escalavaloracion = ANY($1::int[])`,
+        [oldIds]
+      );
+    }
+    const createdRes = await client.query(
+      `INSERT INTO escala_valoracion (nivel, valor_minimo, valor_maximo, id_colegio)
+       VALUES ($1, $2, $3, $4), ($5, $6, $7, $4), ($8, $9, $10, $4), ($11, $12, $13, $4)
+       RETURNING id_escalavaloracion, nivel, valor_minimo, valor_maximo`,
+      [
+        nextScalesDraft[0].nivel, nextScalesDraft[0].valor_minimo, nextScalesDraft[0].valor_maximo,
+        schoolId,
+        nextScalesDraft[1].nivel, nextScalesDraft[1].valor_minimo, nextScalesDraft[1].valor_maximo,
+        nextScalesDraft[2].nivel, nextScalesDraft[2].valor_minimo, nextScalesDraft[2].valor_maximo,
+        nextScalesDraft[3].nivel, nextScalesDraft[3].valor_minimo, nextScalesDraft[3].valor_maximo,
+      ]
+    );
+    nextScales = createdRes.rows;
+  }
+
   const notesRes = await client.query(
     `SELECT id_notaactividad, nota
      FROM notas_actividad
@@ -279,17 +309,11 @@ const syncSchoolScalesAndGrades = async (
     );
   }
 
-  if (previousScaleIds.length > 0) {
-    await client.query(
-      `DELETE FROM escala_valoracion
-       WHERE id_colegio = $1
-         AND id_escalavaloracion = ANY($2::int[])`,
-      [schoolId, previousScaleIds]
-    );
-  }
-
+  console.log(`[syncSchoolScalesAndGrades] Processed ${notesRes.rows.length} notes for school ${schoolId}`);
   return nextScales;
 };
+
+
 
 export const getAcademicCatalogs = async (_req: Request, res: Response): Promise<void> => {
   try {
