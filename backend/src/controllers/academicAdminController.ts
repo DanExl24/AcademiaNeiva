@@ -309,7 +309,56 @@ const syncSchoolScalesAndGrades = async (
     );
   }
 
-  console.log(`[syncSchoolScalesAndGrades] Processed ${notesRes.rows.length} notes for school ${schoolId}`);
+  // Escalar tabla nota_criterio
+  const criteriaNotesRes = await client.query(
+    `SELECT id_nota_criterio, nota
+     FROM nota_criterio
+     WHERE id_colegio = $1
+     FOR UPDATE`,
+    [schoolId]
+  );
+
+  for (const row of criteriaNotesRes.rows) {
+    const currentScore = Number(row.nota);
+    const ratio = previousRange > 0 ? (currentScore - previousMin) / previousRange : 0;
+    const normalizedRatio = clamp(ratio, 0, 1);
+    const rescaledScore = roundToOne(nextMin + normalizedRatio * nextRange);
+
+    await client.query(
+      `UPDATE nota_criterio
+       SET nota = $1
+       WHERE id_nota_criterio = $2`,
+      [rescaledScore, row.id_nota_criterio]
+    );
+  }
+
+  // Escalar tabla resultado_academico (promedio)
+  // resultado_academico no tiene id_colegio directo — filtramos por colegio via detalle_grados
+  const resultsRes = await client.query(
+    `SELECT ra.id_resultado, ra.promedio
+     FROM resultado_academico ra
+     JOIN detalle_grados dg ON dg.id_detallegrado = ra.id_detallegrado
+     WHERE dg.id_colegio = $1
+     FOR UPDATE OF ra`,
+    [schoolId]
+  );
+
+  for (const row of resultsRes.rows) {
+    const currentScore = Number(row.promedio);
+    const ratio = previousRange > 0 ? (currentScore - previousMin) / previousRange : 0;
+    const normalizedRatio = clamp(ratio, 0, 1);
+    // Para el promedio podemos usar 2 decimales para mayor precisión
+    const rescaledScore = Number((nextMin + normalizedRatio * nextRange).toFixed(2));
+
+    await client.query(
+      `UPDATE resultado_academico
+       SET promedio = $1
+       WHERE id_resultado = $2`,
+      [rescaledScore, row.id_resultado]
+    );
+  }
+
+  console.log(`[syncSchoolScalesAndGrades] Processed ${notesRes.rows.length} activity notes, ${criteriaNotesRes.rows.length} criteria notes, and ${resultsRes.rows.length} results for school ${schoolId}`);
   return nextScales;
 };
 
