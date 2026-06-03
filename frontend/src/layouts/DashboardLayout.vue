@@ -55,7 +55,7 @@ const menuItems = computed(() => {
     return [
       { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
       { name: 'Mis Hijos', icon: Users, path: '/dashboard/hijos' },
-      { name: 'Calificaciones', icon: ClipboardList, path: '/dashboard/calificaciones-hijos' },
+      { name: 'Calificaciones', icon: ClipboardList, path: '/dashboard/notas-hijos' },
       { name: 'Asistencia', icon: CalendarCheck, path: '/dashboard/asistencia-hijos' },
     ]
   }

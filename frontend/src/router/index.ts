@@ -140,6 +140,17 @@ const router = createRouter({
           name: 'Cierre de Periodo',
           component: () => import('../views/teacher/TeacherClosure.vue')
         },
+        {
+          path: 'mis-notas',
+          name: 'Mis Notas',
+          component: () => import('../views/student/StudentGradesView.vue')
+        },
+        {
+          path: 'mis-notas/:id_materia/:id_periodo',
+          name: 'Detalle de Materia',
+          component: () => import('../views/student/SubjectDetailsView.vue'),
+          meta: { title: 'Detalle de Materia' }
+        },
         // Rutas del Padre
         {
           path: 'hijos',
@@ -147,9 +158,15 @@ const router = createRouter({
           component: () => import('../views/parent/ParentDashboard.vue')
         },
         {
-          path: 'calificaciones-hijos',
+          path: 'notas-hijos',
           name: 'Calificaciones de Hijos',
-          component: () => import('../views/parent/ParentDashboard.vue')
+          component: () => import('../views/parent/ParentGradesView.vue')
+        },
+        {
+          path: 'notas-hijos/:id_estudiante/:id_materia/:id_periodo',
+          name: 'Detalle de Materia (Hijo)',
+          component: () => import('../views/student/SubjectDetailsView.vue'),
+          meta: { title: 'Detalle de Calificaciones' }
         },
         {
           path: 'asistencia-hijos',

@@ -26,7 +26,7 @@ const modules = [
     textColor: 'text-indigo-600 dark:text-indigo-400',
     bgColor: 'bg-indigo-50 dark:bg-indigo-900/30',
     borderColor: 'hover:border-indigo-200 dark:hover:border-indigo-800',
-    comingSoon: true,
+    comingSoon: false,
   },
   {
     id: 'asistencia',
@@ -131,9 +131,10 @@ const modules = [
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-        <div
+        <router-link
           v-for="mod in modules"
           :key="mod.id"
+          :to="mod.id === 'notas' ? '/dashboard/mis-notas' : '#'"
           class="group relative bg-white dark:bg-slate-900 rounded-3xl border-2 border-slate-100 dark:border-slate-800 p-7 transition-all duration-300 hover:shadow-xl cursor-pointer overflow-hidden"
           :class="mod.borderColor"
         >
@@ -153,7 +154,7 @@ const modules = [
             </div>
             <ChevronRight :size="20" class="shrink-0 text-slate-300 dark:text-slate-600 group-hover:text-slate-500 dark:group-hover:text-slate-300 group-hover:translate-x-1 transition-all duration-300 mt-1" />
           </div>
-        </div>
+        </router-link>
       </div>
     </div>
 
