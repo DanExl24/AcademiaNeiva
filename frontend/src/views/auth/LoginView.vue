@@ -105,6 +105,15 @@ const handleLogin = async () => {
             Debes seleccionar una institución educativa para habilitar el inicio de sesión.
           </p>
         </div>
+
+        <div class="mt-6 pt-6 border-t border-gray-100 text-center">
+          <p class="text-sm text-gray-600 font-medium">
+            ¿Eres estudiante? 
+            <router-link to="/login/estudiante" class="text-indigo-600 font-bold hover:text-indigo-700 hover:underline transition-all">
+              Inicia sesión aquí
+            </router-link>
+          </p>
+        </div>
       </form>
     </div>
   </div>

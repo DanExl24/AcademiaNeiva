@@ -30,6 +30,11 @@ const router = createRouter({
       component: LoginView
     },
     {
+      path: '/login/estudiante',
+      name: 'student-login',
+      component: () => import('../views/auth/StudentLoginView.vue')
+    },
+    {
       path: '/matricula',
       name: 'matricula',
       component: EnrollmentView

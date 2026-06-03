@@ -25,11 +25,14 @@ type TeacherSeed = {
 
 type CredentialEntry = {
   colegio: string;
-  rol: "DIRECTIVO" | "DOCENTE";
+  seccion: "staff" | "familia";
+  rol: string;
   nombre: string;
   correo: string;
   password: string;
   materia?: string;
+  codigo?: string;  // For students
+  hijos?: string[]; // For parents
 };
 
 const DOCUMENT_TYPE_CC = 3;
@@ -258,21 +261,23 @@ async function insertSchool(
     [school.id, rectorUserId, "RECTOR"]
   );
 
-  credentials.push({
-    colegio: school.nombre,
-    rol: "DIRECTIVO",
-    nombre: `Rector ${school.nombre}`,
-    correo: rectorEmail,
-    password: DIRECTIVO_PASSWORD,
-  });
+    credentials.push({
+      colegio: school.nombre,
+      seccion: "staff",
+      rol: "DIRECTIVO",
+      nombre: `Rector ${school.nombre}`,
+      correo: rectorEmail,
+      password: DIRECTIVO_PASSWORD,
+    });
 
-  credentials.push({
-    colegio: school.nombre,
-    rol: "DIRECTIVO",
-    nombre: `Directivo ${school.nombre}`,
-    correo: directivoEmail,
-    password: DIRECTIVO_PASSWORD,
-  });
+    credentials.push({
+      colegio: school.nombre,
+      seccion: "staff",
+      rol: "DIRECTIVO",
+      nombre: `Directivo ${school.nombre}`,
+      correo: directivoEmail,
+      password: DIRECTIVO_PASSWORD,
+    });
 
   for (let index = 0; index < teacherSeeds.length; index++) {
     const teacher = teacherSeeds[index];
@@ -314,11 +319,114 @@ async function insertSchool(
 
     credentials.push({
       colegio: school.nombre,
+      seccion: "staff",
       rol: "DOCENTE",
       nombre: `${teacher.firstName} ${fullLastName}`,
       correo: email,
       password: DOCENTE_PASSWORD,
       materia: teacher.subject,
+    });
+  }
+}
+
+async function insertParentsAndStudents(
+  client: PoolClient,
+  school: SchoolSeed,
+  roleIds: Record<string, number>,
+  parentHash: string,
+  studentHash: string,
+  credentials: CredentialEntry[]
+): Promise<void> {
+  const yearsRes = await client.query<{ id_año: number }>('SELECT "id_año" FROM "año_lectivo" WHERE id_colegio = $1', [school.id]);
+  const yearId = yearsRes.rows[0]?.id_año;
+
+  const groupsRes = await client.query<{ id_grupo: number; id_nivel: number }>(
+    "SELECT id_grupo, id_nivel FROM grupos WHERE id_colegio = $1 LIMIT 5",
+    [school.id]
+  );
+  const groups = groupsRes.rows;
+
+  if (groups.length === 0) return;
+
+  for (let pIdx = 1; pIdx <= 3; pIdx++) {
+    const parentEmail = `padre${pIdx}.${school.id}@${school.domain}`;
+    const parentName = `Padre ${pIdx} ${school.nombre}`;
+    
+    // Create Parent User
+    const pUserRes = await client.query<{ id_usuario: number }>(
+      `INSERT INTO usuario (email, password, nombre, apellido, id_colegio, activo) VALUES ($1, $2, $3, $4, $5, true) RETURNING id_usuario`,
+      [parentEmail, parentHash, `Padre ${pIdx}`, school.nombre, school.id]
+    );
+    const parentUserId = pUserRes.rows[0].id_usuario;
+    await client.query(`INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2)`, [parentUserId, roleIds.padre]);
+
+    // Create Parent Record
+    const pFamRes = await client.query<{ id_padrefamilia: number }>(
+      `INSERT INTO padre_familia (nombre, apellido, documeno, id_tipodocumento, id_colegio, id_usuario) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id_padrefamilia`,
+      [`Padre ${pIdx}`, school.nombre, `P-${school.id}-${pIdx}`, DOCUMENT_TYPE_CC, school.id, parentUserId]
+    );
+    const idPadreFamilia = pFamRes.rows[0].id_padrefamilia;
+
+    const childrenNames: string[] = [];
+
+    // Create 3 Children for each parent
+    for (let cIdx = 1; cIdx <= 3; cIdx++) {
+      const studentIdx = (pIdx - 1) * 3 + cIdx;
+      const studentEmail = `estudiante${studentIdx}.${school.id}@${school.domain}`;
+      const studentName = `Estudiante ${studentIdx} ${school.nombre}`;
+      childrenNames.push(studentName);
+
+      // Select a group (cycling through the first 5 groups)
+      const group = groups[(studentIdx - 1) % groups.length];
+
+      // Create Student User
+      const sUserRes = await client.query<{ id_usuario: number }>(
+        `INSERT INTO usuario (email, password, nombre, apellido, id_colegio, activo) VALUES ($1, $2, $3, $4, $5, true) RETURNING id_usuario`,
+        [studentEmail, studentHash, `Estudiante ${studentIdx}`, school.nombre, school.id]
+      );
+      const studentUserId = sUserRes.rows[0].id_usuario;
+      await client.query(`INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2)`, [studentUserId, roleIds.estudiante]);
+
+      // Create Student Record
+      const estRes = await client.query<{ id_estudiante: number }>(
+        `INSERT INTO estudiante (nombre, apellido, documento, codigo, id_tipodocumento, id_nivel, id_colegio, id_usuario) VALUES ($1, $2, $3, $4, 1, $5, $6, $7) RETURNING id_estudiante`,
+        [`Estudiante ${studentIdx}`, school.nombre, `E-${school.id}-${studentIdx}`, `EST-${school.id}-${studentIdx}`, group.id_nivel, school.id, studentUserId]
+      );
+      const idEstudiante = estRes.rows[0].id_estudiante;
+
+      // Link Parent and Child
+      await client.query(
+        `INSERT INTO detalle_padrefamilia (id_padrefamilia, id_estudiante, id_colegio) VALUES ($1, $2, $3)`,
+        [idPadreFamilia, idEstudiante, school.id]
+      );
+
+      // Enrol student
+      if (yearId) {
+        await client.query(
+          `INSERT INTO matricula (id_estudiante, id_nivel, id_colegio, "id_año", estado, correo_padre, id_grupo) VALUES ($1, $2, $3, $4, 'ACTIVA', $5, $6)`,
+          [idEstudiante, group.id_nivel, school.id, yearId, parentEmail, group.id_grupo]
+        );
+      }
+      // Push student credentials
+      credentials.push({
+        colegio: school.nombre,
+        seccion: "familia",
+        rol: "ESTUDIANTE",
+        nombre: `Estudiante ${studentIdx} ${school.nombre}`,
+        correo: studentEmail,
+        codigo: `EST-${school.id}-${studentIdx}`,
+        password: "estudiante123",
+      });
+    }
+
+    credentials.push({
+      colegio: school.nombre,
+      seccion: "familia",
+      rol: "PADRE",
+      nombre: `Padre ${pIdx} ${school.nombre}`,
+      correo: parentEmail,
+      password: "padre123",
+      hijos: childrenNames,
     });
   }
 }
@@ -505,25 +613,57 @@ function writeCredentialsFile(credentials: CredentialEntry[]): string {
   const lines: string[] = [
     "# Credenciales generadas por reset_and_seed.ts",
     "",
-    `Fecha de generación: ${generatedAt}`,
-    "",
-    "Este archivo se regenera cada vez que ejecutes el seed de reseteo.",
+    `> Fecha de generación: ${generatedAt}`,
+    ">",
+    "> Este archivo se regenera cada vez que ejecutes el seed de reseteo.",
     "",
   ];
 
   for (const school of schools) {
+    const schoolCredentials = credentials.filter((e) => e.colegio === school.nombre);
+    const staffCredentials = schoolCredentials.filter((e) => e.seccion === "staff");
+    const familiaCredentials = schoolCredentials.filter((e) => e.seccion === "familia");
+
     lines.push(`## ${school.nombre}`);
+    lines.push("");
+
+    // --- Staff table ---
+    lines.push("### 👤 Personal Institucional (login: correo + contraseña)");
     lines.push("");
     lines.push("| Rol | Nombre | Correo | Contraseña | Materia |");
     lines.push("| --- | --- | --- | --- | --- |");
+    for (const c of staffCredentials) {
+      lines.push(`| ${c.rol} | ${c.nombre} | ${c.correo} | ${c.password} | ${c.materia ?? "-"} |`);
+    }
+    lines.push("");
 
-    const schoolCredentials = credentials.filter((entry) => entry.colegio === school.nombre);
-    for (const credential of schoolCredentials) {
-      lines.push(
-        `| ${credential.rol} | ${credential.nombre} | ${credential.correo} | ${credential.password} | ${credential.materia ?? "-"} |`
-      );
+    // --- Padres table ---
+    const padres = familiaCredentials.filter((e) => e.rol === "PADRE");
+    if (padres.length > 0) {
+      lines.push("### 👨‍👩‍👧 Padres de Familia (login: correo + contraseña)");
+      lines.push("");
+      lines.push("| Rol | Correo | Contraseña | Hijos asociados |");
+      lines.push("| --- | --- | --- | --- |");
+      for (const c of padres) {
+        lines.push(`| ${c.rol} | ${c.correo} | ${c.password} | ${c.hijos?.join(", ") ?? "-"} |`);
+      }
+      lines.push("");
     }
 
+    // --- Students table ---
+    const estudiantes = familiaCredentials.filter((e) => e.rol === "ESTUDIANTE");
+    if (estudiantes.length > 0) {
+      lines.push("### 🎓 Estudiantes (login: código estudiantil + contraseña)");
+      lines.push("");
+      lines.push("| Código Estudiantil | Nombre | Contraseña |");
+      lines.push("| --- | --- | --- |");
+      for (const c of estudiantes) {
+        lines.push(`| ${c.codigo} | ${c.nombre} | ${c.password} |`);
+      }
+      lines.push("");
+    }
+
+    lines.push("---");
     lines.push("");
   }
 
@@ -610,6 +750,8 @@ async function run(): Promise<void> {
 
     const directivoHash = await bcrypt.hash(DIRECTIVO_PASSWORD, 10);
     const docenteHash = await bcrypt.hash(DOCENTE_PASSWORD, 10);
+    const parentHash = await bcrypt.hash("padre123", 10);
+    const studentHash = await bcrypt.hash("estudiante123", 10);
 
     for (const school of schools) {
       console.log(`Creando usuarios base para ${school.nombre}...`);
@@ -619,6 +761,11 @@ async function run(): Promise<void> {
     for (const school of schools) {
       console.log(`Creando estructura académica para ${school.nombre}...`);
       await insertSchoolAcademicStructure(client, school, sectionIds);
+    }
+
+    for (const school of schools) {
+      console.log(`Creando padres y estudiantes para ${school.nombre}...`);
+      await insertParentsAndStudents(client, school, roleIds, parentHash, studentHash, credentials);
     }
 
     await client.query("COMMIT");

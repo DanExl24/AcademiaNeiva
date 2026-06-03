@@ -17,7 +17,10 @@ import {
   SlidersHorizontal,
   Sun,
   Moon,
-  FileText
+  FileText,
+  BookOpen,
+  MessageSquare,
+  History
 } from 'lucide-vue-next'
 import { useAuthStore } from '../stores/auth'
 import { useThemeStore } from '../stores/theme'
@@ -54,6 +57,16 @@ const menuItems = computed(() => {
       { name: 'Mis Hijos', icon: Users, path: '/dashboard/hijos' },
       { name: 'Calificaciones', icon: ClipboardList, path: '/dashboard/calificaciones-hijos' },
       { name: 'Asistencia', icon: CalendarCheck, path: '/dashboard/asistencia-hijos' },
+    ]
+  }
+
+  if (role === 'estudiante') {
+    return [
+      { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
+      { name: 'Mis Notas', icon: BookOpen, path: '/dashboard/mis-notas' },
+      { name: 'Mi Asistencia', icon: CalendarCheck, path: '/dashboard/mi-asistencia' },
+      { name: 'Observaciones', icon: MessageSquare, path: '/dashboard/mis-observaciones' },
+      { name: 'Historial Académico', icon: History, path: '/dashboard/mi-historial' },
     ]
   }
   
