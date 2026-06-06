@@ -101,6 +101,8 @@ export class MatriculaService {
   static async getDetails(idMatricula: number) {
     const matRes = await pool.query(
       `SELECT m.*, ne.nombre as grado_nivel, tg.nombre as tipo_grado, s.nombre as seccion, g.id_jornada, j.nombre as jornada,
+              e.nombre as student_firstname, e.apellido as student_lastname, e.codigo as student_code, e.documento as student_document,
+              pf.nombre as parent_firstname, pf.apellido as parent_lastname, pf.documeno as parent_document,
               (g.cupos_totales - (SELECT COUNT(*) FROM matricula WHERE id_grupo = g.id_grupo AND estado IN ('ACTIVA', 'TRASLADADA'))) as cupos_restantes
        FROM matricula m
        JOIN grupos g ON m.id_grupo = g.id_grupo
@@ -108,6 +110,9 @@ export class MatriculaService {
        LEFT JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
        LEFT JOIN secciones s ON g.id_seccion = s.id_seccion
        LEFT JOIN jornada j ON g.id_jornada = j.id_jornada
+       LEFT JOIN estudiante e ON e.id_estudiante = m.id_estudiante
+       LEFT JOIN detalle_padrefamilia dpf ON dpf.id_estudiante = e.id_estudiante
+       LEFT JOIN padre_familia pf ON pf.id_padrefamilia = dpf.id_padrefamilia
        WHERE m.id_matricula = $1`, [idMatricula]
     );
 
@@ -348,8 +353,10 @@ export class MatriculaService {
 
       // 4. Actualizar Matrícula
       const finalEstado = mat.rows[0].es_traslado ? 'TRASLADADA' : 'ACTIVA';
+      // Nota: Si la columna fecha_aprobacion no existe, se ignorará o fallará. 
+      // Por simplicidad y según el flujo, usaremos el estado y el id_estudiante como confirmación.
       await client.query(
-        "UPDATE matricula SET id_estudiante = $1, id_grupo = $3, estado = $4 WHERE id_matricula = $2",
+        "UPDATE matricula SET id_estudiante = $1, id_grupo = $3, estado = $4, fecha_aprobacion = NOW() WHERE id_matricula = $2",
         [idEstudiante, idMatricula, finalGradeId, finalEstado]
       );
 

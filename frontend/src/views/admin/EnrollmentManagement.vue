@@ -1,20 +1,36 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import axios from 'axios'
-import { 
-  Search, 
+import {
+  Search,
   Eye,
   Inbox,
-  Clock,
   ShieldCheck,
   AlertTriangle,
   AlertCircle,
   XCircle,
-  ArrowLeftRight
+  ArrowLeftRight,
+  FileText,
+  CheckCircle,
+  ExternalLink,
+  Save,
+  Send,
+  ClipboardList,
+  ChevronRight,
+  BookOpen,
+  User,
+  Mail,
+  MapPin
 } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
+import { useNotificationStore } from '../../stores/notifications'
+import { useRouter } from 'vue-router'
 
 const auth = useAuthStore()
+const notify = useNotificationStore()
+const router = useRouter()
+
+// ─── List State ───────────────────────────────────────────────────────────────
 const enrollments = ref<any[]>([])
 const loading = ref(true)
 const filterStatus = ref('PENDIENTE')
@@ -37,201 +53,328 @@ const fetchEnrollments = async () => {
 
 onMounted(fetchEnrollments)
 
-const getStatusClass = (status: string) => {
-  if (status === 'PENDIENTE') return 'bg-amber-100 text-amber-700'
-  if (status === 'RECHAZADA') return 'bg-orange-100 text-orange-700'
-  if (status === 'CORRECCION') return 'bg-purple-100 text-purple-700'
-  if (status === 'ACTIVA') return 'bg-emerald-100 text-emerald-700'
-  if (status === 'TRASLADADA') return 'bg-blue-100 text-blue-700'
-  if (status === 'CANCELADA') return 'bg-red-100 text-red-700'
-  return 'bg-gray-100 text-gray-600'
-}
+const tabs = [
+  { status: 'PENDIENTE',   label: 'Por Revisar',    color: 'amber'   },
+  { status: 'RECHAZADA',   label: 'En Corrección',  color: 'orange'  },
+  { status: 'CORRECCION',  label: 'Docs Corregidos',color: 'purple'  },
+  { status: 'ACTIVA',      label: 'Aprobadas',      color: 'emerald' },
+  { status: 'TRASLADADA',  label: 'Traslados',      color: 'blue'    },
+  { status: 'CANCELADA',   label: 'Canceladas',     color: 'red'     },
+]
 
-const getStatusLabel = (status: string) => {
-  if (status === 'PENDIENTE') return 'POR REVISAR'
-  if (status === 'RECHAZADA') return 'EN CORRECCIÓN'
-  if (status === 'CORRECCION') return 'DOCS CORREGIDOS'
-  if (status === 'ACTIVA') return 'APROBADA'
-  if (status === 'TRASLADADA') return 'TRASLADO'
-  if (status === 'CANCELADA') return 'CANCELADA'
-  return status
-}
+const stats = computed(() => ({
+  pending:     enrollments.value.filter(e => e.estado === 'PENDIENTE').length,
+  rejected:    enrollments.value.filter(e => e.estado === 'RECHAZADA').length,
+  corrected:   enrollments.value.filter(e => e.estado === 'CORRECCION').length,
+  active:      enrollments.value.filter(e => e.estado === 'ACTIVA').length,
+  transferred: enrollments.value.filter(e => e.estado === 'TRASLADADA').length,
+  cancelled:   enrollments.value.filter(e => e.estado === 'CANCELADA').length,
+}))
 
-const stats = computed(() => {
-  return {
-    pending: enrollments.value.filter(e => e.estado === 'PENDIENTE').length,
-    rejected: enrollments.value.filter(e => e.estado === 'RECHAZADA').length,
-    corrected: enrollments.value.filter(e => e.estado === 'CORRECCION').length,
-    active: enrollments.value.filter(e => e.estado === 'ACTIVA').length,
-    transferred: enrollments.value.filter(e => e.estado === 'TRASLADADA').length,
-    cancelled: enrollments.value.filter(e => e.estado === 'CANCELADA').length
-  }
-})
-
-const getFilteredEnrollments = () => {
-  let filtered = enrollments.value.filter(en => en.estado === filterStatus.value)
-  
-  if (searchQuery.value) {
-    filtered = filtered.filter(en => 
-      en.correo_padre.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-      String(en.id_matricula).includes(searchQuery.value)
+const filteredEnrollments = computed(() => {
+  let list = enrollments.value.filter(en => en.estado === filterStatus.value)
+  const q = searchQuery.value.trim().toLowerCase()
+  if (q) {
+    list = list.filter(en =>
+      en.correo_padre.toLowerCase().includes(q) ||
+      String(en.id_matricula).includes(q)
     )
   }
-  return filtered
+  return list
+})
+
+const getStatusMeta = (status: string) => {
+  if (status === 'PENDIENTE')  return { label: 'Por Revisar',     bg: 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400' }
+  if (status === 'RECHAZADA')  return { label: 'En Corrección',   bg: 'bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-400' }
+  if (status === 'CORRECCION') return { label: 'Docs Corregidos', bg: 'bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-400' }
+  if (status === 'ACTIVA')     return { label: 'Aprobada',        bg: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400' }
+  if (status === 'TRASLADADA') return { label: 'Traslado',        bg: 'bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400' }
+  if (status === 'CANCELADA')  return { label: 'Cancelada',       bg: 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400' }
+  return { label: status, bg: 'bg-slate-100 text-slate-600' }
+}
+
+// ─── Drawer / Detail State ────────────────────────────────────────────────────
+const drawerOpen = ref(false)
+const detailLoading = ref(false)
+const matricula = ref<any>(null)
+const currentStep = ref(1)
+const selectedGradeId = ref<number | null>(null)
+const savingGrade = ref(false)
+const showNotifyModal = ref(false)
+const showPendingModal = ref(false)
+const showCancelModal = ref(false)
+const cancelMotivo = ref('Retiro Voluntario')
+const cancelDetalles = ref('')
+const cancelling = ref(false)
+
+const documentLabels: Record<string, string> = {
+  registroCivil: 'Registro Civil',
+  documentoIdentidad: 'Doc. Identidad Padre/Madre',
+  documentoPadre: 'Documento Acudiente Extra',
+  vacunas: 'Carnet de Vacunas',
+  salud: 'Certificado EPS',
+  foto: 'Foto Tamaño Documento',
+  visa: 'Visa (Estudiantes Extranjeros)',
+  reciboPublico: 'Recibo Servicio Público',
+  certificadoDiscapacidad: 'Certificado Discapacidad',
+  certificadosEscolaridad: 'Certificado de Escolaridad (Años anteriores)',
+}
+
+const openDrawer = async (id: number) => {
+  currentStep.value = 1
+  matricula.value = null
+  detailLoading.value = true
+  drawerOpen.value = true
+  try {
+    const response = await axios.get(`http://localhost:3000/api/matriculas/${id}`)
+    matricula.value = response.data
+    selectedGradeId.value = response.data.id_grado
+  } catch {
+    notify.addNotification('Error al cargar la matrícula', 'error')
+    drawerOpen.value = false
+  } finally {
+    detailLoading.value = false
+  }
+}
+
+const closeDrawer = () => { drawerOpen.value = false }
+
+const handleKeydown = (e: KeyboardEvent) => { if (e.key === 'Escape') closeDrawer() }
+onMounted(() => document.addEventListener('keydown', handleKeydown))
+
+const isReadonly = computed(() =>
+  matricula.value && (matricula.value.estado === 'ACTIVA' || matricula.value.estado === 'TRASLADADA' || matricula.value.estado === 'CANCELADA')
+)
+
+const allValidated = computed(() => {
+  if (!matricula.value?.documentos) return false
+  return matricula.value.documentos.every((d: any) => d.estado === 'VALIDADO')
+})
+
+const rejectedDocumentsNames = computed(() => {
+  if (!matricula.value) return []
+  return matricula.value.documentos
+    .filter((d: any) => d.estado === 'RECHAZADO')
+    .map((d: any) => documentLabels[d.tipo_documento] || d.tipo_documento)
+})
+
+const getDocStatusClass = (estado: string) => {
+  if (estado === 'PENDIENTE') return 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400'
+  if (estado === 'VALIDADO')  return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400'
+  return 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400'
+}
+
+const formatUrl = (url: string) => `http://localhost:3000/uploads/${url.split(/[\\/]/).pop()}`
+
+const formatDate = (date: string | null) => {
+  if (!date) return 'Sin fecha'
+  return new Date(date).toLocaleDateString('es-CO', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  })
+}
+
+const assignRoom = () => {
+  if (!selectedGradeId.value) return
+  const selected = matricula.value.availableSections.find((s: any) => s.id_grado === selectedGradeId.value)
+  if (selected) {
+    matricula.value.seccion = selected.seccion
+    matricula.value.id_grado = selected.id_grado
+    notify.addNotification(`Salón ${selected.seccion} seleccionado`, 'info')
+  }
+  currentStep.value = 2
+}
+
+const updateDocumentStatus = async (idDocumento: number, estado: string) => {
+  try {
+    await axios.patch(`http://localhost:3000/api/matriculas/document/${idDocumento}`, { estado })
+    const doc = matricula.value.documentos.find((d: any) => d.id_documento === idDocumento)
+    if (doc) doc.estado = estado
+  } catch {
+    notify.addNotification('Error al actualizar', 'error')
+  }
+}
+
+const handleSave = () => {
+  const hasRejected = matricula.value.documentos.some((d: any) => d.estado === 'RECHAZADO')
+  const hasPending  = matricula.value.documentos.some((d: any) => d.estado === 'PENDIENTE')
+  if (hasRejected)     showNotifyModal.value = true
+  else if (hasPending) showPendingModal.value = true
+  else {
+    notify.addNotification('Cambios guardados', 'success')
+    closeDrawer()
+    fetchEnrollments()
+  }
+}
+
+const confirmSaveLater = () => {
+  notify.addNotification('Guardado. Recuerda revisar los documentos pendientes después.', 'info')
+  showPendingModal.value = false
+  closeDrawer()
+  fetchEnrollments()
+}
+
+const notifyInconsistencies = async () => {
+  try {
+    await axios.post(`http://localhost:3000/api/matriculas/notify-inconsistencies/${matricula.value.id_matricula}`)
+    notify.addNotification('Notificación enviada al padre', 'success')
+    showNotifyModal.value = false
+    closeDrawer()
+    fetchEnrollments()
+  } catch {
+    notify.addNotification('Error al enviar notificación', 'error')
+  }
+}
+
+const toggleTransfer = async () => {
+  try {
+    await axios.patch(`http://localhost:3000/api/matriculas/transfer-status/${matricula.value.id_matricula}`, {
+      es_traslado: matricula.value.es_traslado
+    })
+    notify.addNotification('Estado de traslado actualizado', 'success')
+  } catch {
+    notify.addNotification('Error al actualizar estado de traslado', 'error')
+    matricula.value.es_traslado = !matricula.value.es_traslado
+  }
+}
+
+const cancelEnrollment = async () => {
+  if (!cancelMotivo.value) return
+  cancelling.value = true
+  try {
+    await axios.post(`http://localhost:3000/api/matriculas/cancel/${matricula.value.id_matricula}`, {
+      motivo: cancelMotivo.value, detalles: cancelDetalles.value
+    })
+    notify.addNotification('Matrícula cancelada exitosamente', 'success')
+    showCancelModal.value = false
+    await openDrawer(matricula.value.id_matricula)
+    fetchEnrollments()
+  } catch (error: any) {
+    notify.addNotification(error.response?.data?.error || 'Error al cancelar', 'error')
+  } finally {
+    cancelling.value = false
+  }
 }
 </script>
 
 <template>
-  <div class="space-y-6">
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-      <div>
-        <h1 class="text-3xl font-bold text-gray-900">Gestión de Matrículas</h1>
-        <p class="text-gray-500 mt-1">Supervisa y valida las solicitudes de ingreso a la institución.</p>
-      </div>
-      
-      <!-- Filter Tabs -->
-      <div class="bg-gray-100 p-1.5 rounded-2xl flex gap-1 self-start flex-wrap">
-        <button 
-          v-for="tab in [
-            { status: 'PENDIENTE', label: 'Por Revisar' },
-            { status: 'RECHAZADA', label: 'En Corrección' },
-            { status: 'CORRECCION', label: 'Docs Corregidos' },
-            { status: 'ACTIVA', label: 'Aprobadas' },
-            { status: 'TRASLADADA', label: 'Traslados' },
-            { status: 'CANCELADA', label: 'Canceladas' }
-          ]" 
-          :key="tab.status"
-          @click="filterStatus = tab.status"
-          :class="[
-            filterStatus === tab.status 
-              ? 'bg-white text-indigo-600 shadow-sm' 
-              : 'text-gray-500 hover:text-gray-700',
-            'px-5 py-2.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap'
-          ]"
-        >
-          {{ tab.label }}
-        </button>
-      </div>
-    </div>
-
-    <!-- Stats -->
-    <div class="grid grid-cols-2 md:grid-cols-6 gap-4">
-      <div class="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex items-center gap-3">
-        <div class="p-3 bg-amber-50 text-amber-600 rounded-2xl shrink-0">
-          <Clock :size="20" />
+  <div class="max-w-[1400px] mx-auto space-y-6">
+    <!-- Header -->
+    <div class="bg-white dark:bg-slate-900 rounded-[28px] border border-slate-100 dark:border-slate-800 shadow-sm px-8 py-7 flex flex-col sm:flex-row sm:items-center justify-between gap-5">
+      <div class="flex items-center gap-4">
+        <div class="p-3.5 bg-indigo-50 dark:bg-indigo-950/30 rounded-2xl text-indigo-600 dark:text-indigo-400">
+          <ClipboardList :size="28" />
         </div>
         <div>
-          <p class="text-gray-500 text-xs font-bold uppercase tracking-wider">Por Revisar</p>
-          <p class="text-2xl font-bold text-gray-900 mt-0.5">{{ stats.pending }}</p>
-        </div>
-      </div>
-      <div class="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex items-center gap-3">
-        <div class="p-3 bg-orange-50 text-orange-600 rounded-2xl shrink-0">
-          <AlertCircle :size="20" />
-        </div>
-        <div>
-          <p class="text-gray-500 text-xs font-bold uppercase tracking-wider">En Corrección</p>
-          <p class="text-2xl font-bold text-gray-900 mt-0.5">{{ stats.rejected }}</p>
-        </div>
-      </div>
-      <div class="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex items-center gap-3">
-        <div class="p-3 bg-purple-50 text-purple-600 rounded-2xl shrink-0">
-          <Eye :size="20" />
-        </div>
-        <div>
-          <p class="text-gray-500 text-xs font-bold uppercase tracking-wider">Corregidos</p>
-          <p class="text-2xl font-bold text-gray-900 mt-0.5">{{ stats.corrected }}</p>
-        </div>
-      </div>
-      <div class="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex items-center gap-3">
-        <div class="p-3 bg-emerald-50 text-emerald-600 rounded-2xl shrink-0">
-          <ShieldCheck :size="20" />
-        </div>
-        <div>
-          <p class="text-gray-500 text-xs font-bold uppercase tracking-wider">Aprobadas</p>
-          <p class="text-2xl font-bold text-gray-900 mt-0.5">{{ stats.active }}</p>
-        </div>
-      </div>
-      <div class="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex items-center gap-3">
-        <div class="p-3 bg-blue-50 text-blue-600 rounded-2xl shrink-0">
-          <ArrowLeftRight :size="20" />
-        </div>
-        <div>
-          <p class="text-gray-500 text-xs font-bold uppercase tracking-wider">Traslados</p>
-          <p class="text-2xl font-bold text-gray-900 mt-0.5">{{ stats.transferred }}</p>
-        </div>
-      </div>
-      <div class="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex items-center gap-3">
-        <div class="p-3 bg-red-50 text-red-600 rounded-2xl shrink-0">
-          <XCircle :size="20" />
-        </div>
-        <div>
-          <p class="text-gray-500 text-xs font-bold uppercase tracking-wider">Canceladas</p>
-          <p class="text-2xl font-bold text-gray-900 mt-0.5">{{ stats.cancelled }}</p>
+          <h1 class="text-xl font-black text-slate-900 dark:text-white">Gestión de Matrículas</h1>
+          <p class="text-slate-400 dark:text-slate-500 text-sm font-medium">Supervisa y valida las solicitudes de ingreso a la institución.</p>
         </div>
       </div>
     </div>
 
-    <!-- Search & Table -->
-    <div class="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
-      <div class="p-6 border-b border-gray-50 flex items-center gap-4">
-        <div class="relative flex-1">
-          <Search class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" :size="20" />
-          <input v-model="searchQuery" type="text" placeholder="Buscar por correo o ID..." class="w-full pl-12 pr-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all">
-        </div>
+    <!-- Stats Row -->
+    <div class="grid grid-cols-3 md:grid-cols-6 gap-3">
+      <button
+        v-for="(tab, i) in tabs" :key="tab.status"
+        @click="filterStatus = tab.status"
+        :class="[
+          filterStatus === tab.status
+            ? 'ring-2 ring-indigo-400 dark:ring-indigo-500 shadow-lg'
+            : 'hover:shadow-md',
+          'bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 transition-all text-left'
+        ]"
+      >
+        <p class="text-2xl font-black text-slate-900 dark:text-white">
+          {{ [stats.pending, stats.rejected, stats.corrected, stats.active, stats.transferred, stats.cancelled][i] }}
+        </p>
+        <p class="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-0.5">{{ tab.label }}</p>
+        <div :class="[
+          filterStatus === tab.status ? 'w-full' : 'w-0',
+          'h-0.5 rounded-full mt-2 transition-all duration-300',
+          tab.color === 'amber'   ? 'bg-amber-500' :
+          tab.color === 'orange'  ? 'bg-orange-500' :
+          tab.color === 'purple'  ? 'bg-purple-500' :
+          tab.color === 'emerald' ? 'bg-emerald-500' :
+          tab.color === 'blue'    ? 'bg-blue-500' : 'bg-red-500'
+        ]"></div>
+      </button>
+    </div>
+
+    <!-- Search -->
+    <div class="relative">
+      <Search class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" :size="18" />
+      <input
+        v-model="searchQuery" type="text"
+        placeholder="Buscar por correo del padre o número de matrícula..."
+        class="w-full bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl py-4 pl-12 pr-4 text-sm font-semibold outline-none text-slate-900 dark:text-white shadow-sm focus:ring-2 focus:ring-indigo-500/10 transition-all"
+      />
+    </div>
+
+    <!-- List -->
+    <div v-if="loading" class="h-48 flex items-center justify-center bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800">
+      <div class="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mr-3"></div>
+      <span class="text-slate-400 font-bold text-sm">Cargando matrículas...</span>
+    </div>
+
+    <div v-else class="bg-white dark:bg-slate-900 rounded-[24px] border border-slate-100 dark:border-slate-800 overflow-hidden shadow-sm">
+      <!-- Empty state -->
+      <div v-if="filteredEnrollments.length === 0" class="py-20 text-center text-slate-400">
+        <Inbox :size="48" class="mx-auto mb-4 opacity-10" />
+        <p class="font-black uppercase text-sm tracking-widest">Sin matrículas en esta categoría</p>
       </div>
 
-      <div class="overflow-x-auto">
+      <!-- Table -->
+      <div v-else class="overflow-x-auto">
         <table class="w-full text-left">
-          <thead>
-            <tr class="bg-gray-50 text-gray-500 text-xs font-bold uppercase tracking-wider">
-              <th class="px-8 py-4">Matrícula</th>
-              <th class="px-8 py-4">Correo Padre</th>
-              <th class="px-8 py-4">Nivel/Grado</th>
-              <th class="px-8 py-4">Estado</th>
-              <th class="px-8 py-4 text-right">Acciones</th>
+          <thead class="bg-slate-50 dark:bg-slate-800/50">
+            <tr class="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400 dark:text-slate-500">
+              <th class="px-6 py-4">ID / Token</th>
+              <th class="px-6 py-4">Correo Padre</th>
+              <th class="px-6 py-4">Grado</th>
+              <th class="px-6 py-4">Estado</th>
+              <th class="px-6 py-4 text-right">Gestionar</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-gray-50">
-            <tr v-for="en in getFilteredEnrollments()" :key="en.id_matricula" class="hover:bg-gray-50/50 transition-colors group">
-              <td class="px-8 py-5">
-                <div class="font-bold text-gray-900">#{{ en.id_matricula }}</div>
-                <div class="text-[10px] text-gray-400 font-mono">{{ en.token_seguimiento.substring(0, 8) }}...</div>
+          <tbody class="divide-y divide-slate-50 dark:divide-slate-800">
+            <tr
+              v-for="en in filteredEnrollments"
+              :key="en.id_matricula"
+              class="group hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors"
+            >
+              <td class="px-6 py-4">
+                <p class="font-black text-slate-900 dark:text-white text-sm">#{{ en.id_matricula }}</p>
+                <p class="text-[10px] text-slate-400 font-mono">{{ en.token_seguimiento?.substring(0,10) }}...</p>
               </td>
-              <td class="px-8 py-5 text-gray-600">{{ en.correo_padre }}</td>
-              <td class="px-8 py-5">
-                <span class="text-sm font-medium text-gray-700">ID Grado: {{ en.id_grado }}</span>
+              <td class="px-6 py-4">
+                <p class="font-semibold text-slate-700 dark:text-slate-300 text-sm">{{ en.correo_padre }}</p>
               </td>
-              <td class="px-8 py-5">
+              <td class="px-6 py-4">
+                <p class="text-xs font-bold text-indigo-500 uppercase">ID {{ en.id_grado }}</p>
+              </td>
+              <td class="px-6 py-4">
                 <div class="flex flex-col gap-1.5">
-                  <span :class="[getStatusClass(en.estado), 'px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider w-fit']">
-                    {{ getStatusLabel(en.estado) }}
+                  <span :class="[getStatusMeta(en.estado).bg, 'px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest w-fit']">
+                    {{ getStatusMeta(en.estado).label }}
                   </span>
-                  <div v-if="en.es_traslado && (en.estado === 'TRASLADADA' || en.estado === 'ACTIVA' || en.estado === 'PENDIENTE')" 
-                       class="flex items-center gap-1.5 text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-100 w-fit">
-                    <ArrowLeftRight :size="12" />
-                    <span class="text-[10px] font-bold">Matrícula por Traslado</span>
+                  <div v-if="en.es_traslado && ['TRASLADADA','ACTIVA','PENDIENTE'].includes(en.estado)"
+                       class="flex items-center gap-1 text-blue-600 dark:text-blue-400 text-[10px] font-bold bg-blue-50 dark:bg-blue-950/20 px-2 py-0.5 rounded-lg w-fit">
+                    <ArrowLeftRight :size="10" /> Traslado
                   </div>
-                  <div v-if="en.has_pending_docs && en.estado === 'PENDIENTE'" 
-                       class="flex items-center gap-1.5 text-amber-600 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-100 w-fit">
-                    <AlertTriangle :size="12" />
-                    <span class="text-[10px] font-bold">Diferido: Docs Pendientes</span>
+                  <div v-if="en.has_pending_docs && en.estado === 'PENDIENTE'"
+                       class="flex items-center gap-1 text-amber-600 dark:text-amber-400 text-[10px] font-bold bg-amber-50 dark:bg-amber-950/20 px-2 py-0.5 rounded-lg w-fit">
+                    <AlertTriangle :size="10" /> Docs Diferidos
                   </div>
                 </div>
               </td>
-              <td class="px-8 py-5 text-right">
-                <div class="flex items-center justify-end gap-2">
-                  <router-link :to="`/dashboard/gestion-matriculas/${en.id_matricula}`" 
-                     class="p-2.5 bg-gray-50 text-indigo-600 hover:bg-indigo-600 hover:text-white rounded-xl transition-all flex" title="Gestionar Documentos">
-                    <Eye :size="20" />
-                  </router-link>
-                </div>
-              </td>
-            </tr>
-            <tr v-if="getFilteredEnrollments().length === 0 && !loading">
-              <td colspan="5" class="px-8 py-20 text-center text-gray-400">
-                <Inbox :size="48" class="mx-auto mb-4 opacity-20" />
-                <p class="font-medium">No se encontraron matrículas en esta categoría.</p>
+              <td class="px-6 py-4 text-right">
+                <button
+                  @click="openDrawer(en.id_matricula)"
+                  class="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-950/60 rounded-xl text-xs font-black uppercase tracking-wide transition-all group-hover:shadow-md"
+                >
+                  <Eye :size="14" /> Gestionar
+                  <ChevronRight :size="12" />
+                </button>
               </td>
             </tr>
           </tbody>
@@ -239,4 +382,510 @@ const getFilteredEnrollments = () => {
       </div>
     </div>
   </div>
+
+  <!-- ─── SLIDE-OVER DRAWER ──────────────────────────────────────────────────── -->
+  <Teleport to="body">
+    <Transition name="drawer-fade">
+      <div v-if="drawerOpen" class="fixed inset-0 z-[200] flex">
+        <div class="fixed inset-0 bg-slate-900/50 dark:bg-slate-950/70 backdrop-blur-sm" @click="closeDrawer"></div>
+
+        <Transition name="drawer-slide">
+          <div v-if="drawerOpen" class="fixed right-0 top-0 h-full w-full max-w-[760px] bg-white dark:bg-slate-900 shadow-2xl flex flex-col overflow-hidden">
+
+            <!-- Drawer Header -->
+            <div class="px-8 py-6 bg-gradient-to-r from-indigo-600 to-violet-700 dark:from-indigo-900 dark:to-violet-900 shrink-0">
+              <div class="flex items-start justify-between gap-4">
+                <div>
+                  <p class="text-indigo-200 dark:text-indigo-300 text-[10px] font-black uppercase tracking-widest mb-1">
+                    Matrícula #{{ matricula?.id_matricula }}
+                  </p>
+                  <h2 class="text-xl font-black text-white">
+                    {{ matricula && ['ACTIVA', 'TRASLADADA'].includes(matricula.estado) ? 'Detalle de Matrícula' : 'Validación de Documentos' }}
+                  </h2>
+                  <p v-if="matricula" class="text-indigo-200 text-sm mt-1">
+                    {{ ['ACTIVA', 'TRASLADADA'].includes(matricula.estado) ? matricula.student_firstname + ' ' + matricula.student_lastname : matricula.correo_padre }}
+                  </p>
+                </div>
+                <button @click="closeDrawer" class="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all shrink-0 mt-1">
+                  <X :size="20" />
+                </button>
+              </div>
+
+              <!-- Stepper inside header (Only for non-approved) -->
+              <div v-if="matricula && !['ACTIVA', 'TRASLADADA', 'CANCELADA'].includes(matricula.estado)" class="mt-6 flex items-center gap-0">
+                <div
+                  v-for="s in [{ n: 1, label: 'Salón' }, { n: 2, label: 'Documentos' }, { n: 3, label: 'Registro' }]"
+                  :key="s.n"
+                  class="flex items-center flex-1 last:flex-none"
+                >
+                  <div class="flex flex-col items-center gap-1">
+                    <div :class="[
+                      currentStep >= s.n ? 'bg-white text-indigo-700' : 'bg-white/20 text-white/60',
+                      'h-8 w-8 rounded-full flex items-center justify-center font-black text-sm transition-all shrink-0'
+                    ]">
+                      <CheckCircle v-if="currentStep > s.n" :size="16" />
+                      <span v-else>{{ s.n }}</span>
+                    </div>
+                    <span :class="[currentStep >= s.n ? 'text-white' : 'text-white/50', 'text-[9px] font-black uppercase tracking-widest']">{{ s.label }}</span>
+                  </div>
+                  <div v-if="s.n < 3" :class="[currentStep > s.n ? 'bg-white' : 'bg-white/20', 'h-0.5 flex-1 mb-4 transition-colors duration-500']"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Drawer Loading -->
+            <div v-if="detailLoading" class="flex-1 flex items-center justify-center">
+              <div class="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+            </div>
+
+            <!-- Drawer Body -->
+            <div v-else-if="matricula" class="flex-1 overflow-y-auto custom-scrollbar">
+
+              <!-- ── APPROVED SUMMARY VIEW ────────────────────────────────── -->
+              <div v-if="matricula.estado === 'ACTIVA' || matricula.estado === 'TRASLADADA'" class="p-8 space-y-8">
+                <!-- Status Header Card -->
+                <div class="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900 rounded-[2rem] p-8 text-center space-y-4">
+                  <div class="w-20 h-20 bg-emerald-600 text-white rounded-3xl flex items-center justify-center mx-auto shadow-lg shadow-emerald-200 dark:shadow-none">
+                    <ShieldCheck :size="40" />
+                  </div>
+                  <div>
+                    <h3 class="text-2xl font-black text-emerald-900 dark:text-emerald-300">Solicitud Finalizada</h3>
+                    <p class="text-emerald-700 dark:text-emerald-400 text-sm font-medium mt-1">
+                      El estudiante ha sido registrado exitosamente en el sistema.
+                    </p>
+                  </div>
+                  <div class="flex items-center justify-center gap-6 pt-2">
+                    <div class="text-center">
+                      <p class="text-[10px] font-black text-emerald-800 dark:text-emerald-500 uppercase tracking-widest">Fecha de Aprobación</p>
+                      <p class="text-sm font-bold text-emerald-900 dark:text-emerald-300">{{ formatDate(matricula.fecha_aprobacion) }}</p>
+                    </div>
+                    <div class="h-8 w-px bg-emerald-200 dark:bg-emerald-800"></div>
+                    <div class="text-center">
+                      <p class="text-[10px] font-black text-emerald-800 dark:text-emerald-500 uppercase tracking-widest">Estado Final</p>
+                      <span class="px-3 py-0.5 bg-emerald-600 text-white rounded-full text-[10px] font-black uppercase tracking-widest">
+                        {{ matricula.estado }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Student & Parent Grid -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <!-- Student Card -->
+                  <div class="bg-white dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 space-y-6 shadow-sm">
+                    <div class="flex items-center gap-3 pb-4 border-b border-slate-50 dark:border-slate-700">
+                      <div class="p-2.5 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 rounded-xl">
+                        <User :size="20" />
+                      </div>
+                      <h4 class="font-black text-slate-900 dark:text-white uppercase text-xs tracking-widest">Datos del Estudiante</h4>
+                    </div>
+                    
+                    <div class="space-y-4">
+                      <div>
+                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Nombre Completo</p>
+                        <p class="font-bold text-slate-900 dark:text-white">{{ matricula.student_firstname }} {{ matricula.student_lastname }}</p>
+                      </div>
+                      <div class="grid grid-cols-2 gap-4">
+                        <div>
+                          <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Documento</p>
+                          <p class="text-sm font-bold text-slate-700 dark:text-slate-300">{{ matricula.student_document }}</p>
+                        </div>
+                        <div>
+                          <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Código Portal</p>
+                          <p class="text-sm font-bold text-indigo-600 dark:text-indigo-400">{{ matricula.student_code }}</p>
+                        </div>
+                      </div>
+                      <div class="p-4 bg-slate-50 dark:bg-slate-700/30 rounded-2xl border border-slate-100 dark:border-slate-700">
+                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Curso Asignado</p>
+                        <p class="font-black text-slate-900 dark:text-white">{{ matricula.tipo_grado }} - {{ matricula.seccion }}</p>
+                        <p class="text-[10px] font-bold text-indigo-500 uppercase mt-0.5">{{ matricula.grado_nivel }} · {{ matricula.jornada }}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Parent Card -->
+                  <div class="bg-white dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 space-y-6 shadow-sm">
+                    <div class="flex items-center gap-3 pb-4 border-b border-slate-50 dark:border-slate-700">
+                      <div class="p-2.5 bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 rounded-xl">
+                        <MapPin :size="20" />
+                      </div>
+                      <h4 class="font-black text-slate-900 dark:text-white uppercase text-xs tracking-widest">Información del Acudiente</h4>
+                    </div>
+
+                    <div class="space-y-4">
+                      <div>
+                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Nombre Completo</p>
+                        <p class="font-bold text-slate-900 dark:text-white">{{ matricula.parent_firstname }} {{ matricula.parent_lastname }}</p>
+                      </div>
+                      <div>
+                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Documento de Identidad</p>
+                        <p class="text-sm font-bold text-slate-700 dark:text-slate-300">{{ matricula.parent_document }}</p>
+                      </div>
+                      <div>
+                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Correo Electrónico</p>
+                        <div class="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 text-sm font-bold break-all">
+                          <Mail :size="14" />
+                          {{ matricula.correo_padre }}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Document Access Section -->
+                <div class="bg-white dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 space-y-4 shadow-sm">
+                  <div class="flex items-center justify-between pb-2 border-b border-slate-50 dark:border-slate-700">
+                    <div class="flex items-center gap-2">
+                       <FileText :size="16" class="text-slate-400" />
+                       <h4 class="font-black text-slate-900 dark:text-white uppercase text-[10px] tracking-[0.2em]">Documentación Adjunta</h4>
+                    </div>
+                    <span class="text-[10px] font-black text-emerald-500 uppercase">Validados</span>
+                  </div>
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div v-for="doc in matricula.documentos" :key="doc.id_documento" 
+                         class="group flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-800 rounded-2xl hover:border-indigo-200 transition-all">
+                      <div class="flex items-center gap-3 overflow-hidden">
+                        <div class="p-2 bg-white dark:bg-slate-800 rounded-lg shadow-sm">
+                          <FileText :size="14" class="text-indigo-500" />
+                        </div>
+                        <p class="text-[11px] font-bold text-slate-600 dark:text-slate-300 truncate tracking-tight">
+                          {{ documentLabels[doc.tipo_documento] || doc.tipo_documento }}
+                        </p>
+                      </div>
+                      <a :href="formatUrl(doc.url)" target="_blank" class="p-1.5 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 text-indigo-500 rounded-lg transition-colors">
+                        <ExternalLink :size="14" />
+                      </a>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="flex flex-col sm:flex-row gap-3 pt-4">
+                  <button @click="showCancelModal = true" class="flex-1 py-4 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-red-100 transition-all border border-red-100 dark:border-red-900">
+                    Cancelar Matrícula
+                  </button>
+                  <button @click="closeDrawer" class="flex-1 py-4 bg-slate-900 dark:bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-xl">
+                    Cerrar Detalle
+                  </button>
+                </div>
+              </div>
+
+              <!-- ── STEP 1: Assign Room (Non-Approved) ────────────────────── -->
+              <div v-else-if="currentStep === 1" class="p-8 space-y-6">
+                <!-- Active/Transferred banner -->
+                <div v-if="matricula.estado === 'ACTIVA' || matricula.estado === 'TRASLADADA'"
+                     :class="['p-5 rounded-3xl flex items-start sm:items-center justify-between gap-4',
+                               matricula.estado === 'ACTIVA' ? 'bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900' : 'bg-blue-50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900']">
+                  <div class="flex items-center gap-3">
+                    <div :class="[matricula.estado === 'ACTIVA' ? 'bg-emerald-600' : 'bg-blue-600', 'p-2.5 text-white rounded-2xl']">
+                      <ShieldCheck :size="20" />
+                    </div>
+                    <div>
+                      <p :class="[matricula.estado === 'ACTIVA' ? 'text-emerald-900 dark:text-emerald-300' : 'text-blue-900 dark:text-blue-300', 'font-black text-sm']">
+                        {{ matricula.estado === 'ACTIVA' ? 'Matrícula Aprobada (Activa)' : 'Matrícula por Traslado' }}
+                      </p>
+                      <p :class="[matricula.estado === 'ACTIVA' ? 'text-emerald-700 dark:text-emerald-400' : 'text-blue-700 dark:text-blue-400', 'text-xs font-medium']">
+                        Procesada exitosamente.
+                      </p>
+                    </div>
+                  </div>
+                  <button @click="showCancelModal = true" class="px-4 py-2 bg-red-600 text-white rounded-xl font-black text-xs uppercase tracking-wide hover:bg-red-700 transition-all shrink-0">
+                    Cancelar
+                  </button>
+                </div>
+
+                <!-- Cancelled banner -->
+                <div v-if="matricula.estado === 'CANCELADA'" class="p-5 bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900 rounded-3xl flex items-start gap-4">
+                  <div class="p-2.5 bg-red-600 text-white rounded-2xl"><XCircle :size="20" /></div>
+                  <div>
+                    <p class="font-black text-red-900 dark:text-red-300 text-sm">Matrícula Cancelada</p>
+                    <p class="text-xs font-bold text-red-700 dark:text-red-400 mt-1">{{ matricula.motivo_cancelacion || 'Sin motivo especificado.' }}</p>
+                    <p v-if="matricula.detalles_cancelacion" class="text-[10px] text-red-600 dark:text-red-500 mt-1">{{ matricula.detalles_cancelacion }}</p>
+                  </div>
+                </div>
+
+                <!-- Info card -->
+                <div class="bg-slate-50 dark:bg-slate-800/40 rounded-3xl p-6">
+                  <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">Referencia de Solicitud</p>
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <p class="text-xl font-black text-slate-900 dark:text-white">{{ matricula.grado_nivel }}</p>
+                      <p class="text-sm font-bold text-indigo-500">{{ matricula.tipo_grado }} · {{ matricula.jornada }}</p>
+                    </div>
+                    <span :class="[getStatusMeta(matricula.estado).bg, 'px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest']">{{ getStatusMeta(matricula.estado).label }}</span>
+                  </div>
+                </div>
+
+                <!-- Transfer toggle -->
+                <div class="bg-indigo-50/50 dark:bg-indigo-950/10 rounded-3xl p-5 border border-indigo-100 dark:border-indigo-900 flex items-center justify-between gap-4">
+                  <div>
+                    <p class="font-black text-indigo-900 dark:text-indigo-300 text-sm">Matrícula por Traslado</p>
+                    <p class="text-[10px] text-indigo-700 dark:text-indigo-400 mt-0.5">Estudiante proveniente de otra institución.</p>
+                  </div>
+                  <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" v-model="matricula.es_traslado" @change="toggleTransfer" class="sr-only peer" :disabled="isReadonly" />
+                    <div class="w-12 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                  </label>
+                </div>
+
+                <!-- Section Selector -->
+                <div class="space-y-3">
+                  <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Seleccionar Salón</p>
+                  <div class="space-y-2">
+                    <button
+                      v-for="section in matricula.availableSections"
+                      :key="section.id_grado"
+                      @click="selectedGradeId = section.id_grado"
+                      :disabled="section.cupos_restantes <= 0 || isReadonly"
+                      :class="[
+                        selectedGradeId === section.id_grado
+                          ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/20 ring-2 ring-indigo-100 dark:ring-indigo-900'
+                          : 'border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-indigo-200 dark:hover:border-indigo-800',
+                        section.cupos_restantes <= 0 ? 'opacity-40 cursor-not-allowed' : '',
+                        'w-full flex items-center justify-between p-4 rounded-2xl border-2 text-left transition-all'
+                      ]"
+                    >
+                      <div class="flex items-center gap-3">
+                        <div :class="[selectedGradeId === section.id_grado ? 'bg-indigo-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-400', 'h-11 w-11 rounded-xl flex items-center justify-center font-black text-lg transition-colors']">
+                          {{ section.seccion }}
+                        </div>
+                        <div>
+                          <p class="font-black text-slate-900 dark:text-white text-sm">{{ matricula.tipo_grado }} ({{ section.seccion }})</p>
+                          <p class="text-[10px] text-slate-400">{{ matricula.jornada }}</p>
+                        </div>
+                      </div>
+                      <div class="text-right">
+                        <p :class="[section.cupos_restantes > 5 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400', 'text-lg font-black']">{{ section.cupos_restantes }}</p>
+                        <p class="text-[9px] uppercase tracking-widest text-slate-400 font-black">cupos</p>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  @click="assignRoom"
+                  :disabled="!selectedGradeId || savingGrade || isReadonly"
+                  class="w-full py-4 bg-slate-900 dark:bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-600 dark:hover:bg-indigo-700 transition-all shadow-xl disabled:opacity-30 flex items-center justify-center gap-2"
+                >
+                  {{ matricula.estado === 'ACTIVA' ? 'Continuar' : 'Confirmar y Continuar' }}
+                  <ArrowLeft :size="18" class="rotate-180" />
+                </button>
+              </div>
+
+              <!-- ── STEP 2: Documents ──────────────────────────────────────── -->
+              <div v-if="currentStep === 2" class="p-8 space-y-6">
+                <!-- Context bar -->
+                <div class="grid grid-cols-3 gap-3">
+                  <div class="bg-slate-50 dark:bg-slate-800/40 rounded-2xl p-4">
+                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Nivel</p>
+                    <p class="font-black text-slate-900 dark:text-white text-sm">{{ matricula.grado_nivel }}</p>
+                    <p class="text-[10px] text-indigo-500 font-bold">{{ matricula.tipo_grado }} · Sección {{ matricula.seccion }}</p>
+                  </div>
+                  <div class="bg-slate-50 dark:bg-slate-800/40 rounded-2xl p-4">
+                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Padre</p>
+                    <p class="font-bold text-slate-900 dark:text-white text-xs break-all">{{ matricula.correo_padre }}</p>
+                  </div>
+                  <div class="bg-slate-50 dark:bg-slate-800/40 rounded-2xl p-4 flex items-center justify-center">
+                    <button @click="currentStep = 1" class="text-indigo-600 dark:text-indigo-400 text-xs font-black flex items-center gap-1 hover:underline">
+                      <ArrowLeft :size="14" /> Cambiar Salón
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Documents -->
+                <div class="space-y-3">
+                  <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                    <BookOpen :size="13" />Documentos Entregados
+                  </p>
+                  <div
+                    v-for="doc in matricula.documentos"
+                    :key="doc.id_documento"
+                    class="bg-slate-50 dark:bg-slate-800/40 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center gap-3"
+                  >
+                    <div class="flex items-center gap-3 flex-1">
+                      <div class="p-2.5 bg-white dark:bg-slate-700 rounded-xl border border-slate-100 dark:border-slate-600 shadow-sm">
+                        <FileText :size="18" class="text-indigo-500" />
+                      </div>
+                      <div>
+                        <p class="font-black text-slate-900 dark:text-white text-sm">{{ documentLabels[doc.tipo_documento] || doc.tipo_documento }}</p>
+                        <span :class="[getDocStatusClass(doc.estado), 'text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full']">{{ doc.estado }}</span>
+                      </div>
+                    </div>
+                    <div class="flex items-center gap-2 shrink-0">
+                      <a :href="formatUrl(doc.url)" target="_blank"
+                         class="p-2 bg-white dark:bg-slate-700 border border-slate-100 dark:border-slate-600 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-50 transition-all shadow-sm">
+                        <ExternalLink :size="16" />
+                      </a>
+                      <div class="flex items-center bg-white dark:bg-slate-700 border border-slate-100 dark:border-slate-600 rounded-xl p-1 gap-1">
+                        <template v-if="doc.estado === 'PENDIENTE'">
+                          <button @click="updateDocumentStatus(doc.id_documento, 'VALIDADO')" :disabled="isReadonly"
+                                  class="px-3 py-1.5 rounded-lg text-xs font-black text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-950/40 transition-colors disabled:opacity-30 flex items-center gap-1">
+                            <CheckCircle :size="14" />OK
+                          </button>
+                          <button @click="updateDocumentStatus(doc.id_documento, 'RECHAZADO')" :disabled="isReadonly"
+                                  class="px-3 py-1.5 rounded-lg text-xs font-black text-red-700 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-950/40 transition-colors disabled:opacity-30 flex items-center gap-1">
+                            <XCircle :size="14" />No
+                          </button>
+                        </template>
+                        <button v-else @click="updateDocumentStatus(doc.id_documento, 'PENDIENTE')" :disabled="isReadonly"
+                                class="px-3 py-1.5 rounded-lg text-xs font-black text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-950/40 transition-colors disabled:opacity-30 flex items-center gap-1">
+                          <AlertCircle :size="14" />Re-revisar
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Step 2 footer actions -->
+                <div class="bg-slate-50 dark:bg-slate-800/40 rounded-2xl p-5 flex flex-col sm:flex-row items-center justify-between gap-3">
+                  <div v-if="isReadonly" class="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-bold text-sm">
+                    <CheckCircle :size="18" />Matrícula ya procesada.
+                  </div>
+                  <div v-else-if="allValidated" class="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-bold text-sm">
+                    <CheckCircle :size="18" />Todos los documentos validados.
+                  </div>
+                  <div v-else class="text-slate-500 dark:text-slate-400 text-xs font-medium">Valida todos los documentos para continuar.</div>
+
+                  <div class="flex gap-2">
+                    <button v-if="isReadonly" @click="currentStep = 3"
+                            class="px-5 py-2.5 bg-emerald-600 text-white rounded-xl font-black text-xs uppercase tracking-wide hover:bg-emerald-700 transition-all flex items-center gap-1.5 shadow-lg shadow-emerald-100 dark:shadow-none">
+                      Ver Resumen <ArrowLeft :size="14" class="rotate-180" />
+                    </button>
+                    <button v-else-if="matricula.estado === 'PENDIENTE' && allValidated" @click="currentStep = 3"
+                            class="px-5 py-2.5 bg-indigo-600 text-white rounded-xl font-black text-xs uppercase tracking-wide hover:bg-indigo-700 transition-all flex items-center gap-1.5 shadow-lg shadow-indigo-100 dark:shadow-none">
+                      Siguiente <ArrowLeft :size="14" class="rotate-180" />
+                    </button>
+                    <button v-else-if="['PENDIENTE','RECHAZADA'].includes(matricula.estado)" @click="handleSave"
+                            class="px-5 py-2.5 bg-slate-900 dark:bg-slate-700 text-white rounded-xl font-black text-xs uppercase tracking-wide hover:bg-indigo-600 transition-all flex items-center gap-1.5">
+                      <Save :size="14" />Guardar
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- ── STEP 3: Finalize ───────────────────────────────────────── -->
+              <div v-if="currentStep === 3" class="p-8">
+                <div class="text-center space-y-4">
+                  <div class="mx-auto w-20 h-20 rounded-3xl bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                    <ShieldCheck :size="40" />
+                  </div>
+                  <h2 class="text-2xl font-black text-slate-900 dark:text-white">¡Todo Listo!</h2>
+                  <p class="text-slate-500 dark:text-slate-400 text-sm leading-relaxed">
+                    Salón <strong class="text-slate-900 dark:text-white">{{ matricula.tipo_grado }} ({{ matricula.seccion }})</strong> asignado y documentos validados.
+                  </p>
+                </div>
+
+                <div class="mt-8 p-6 bg-emerald-50 dark:bg-emerald-950/20 rounded-3xl border border-emerald-100 dark:border-emerald-900 space-y-3">
+                  <p class="text-[10px] font-black text-emerald-800 dark:text-emerald-300 uppercase tracking-widest mb-3">Resumen de Registro</p>
+                  <div class="flex justify-between text-sm"><span class="text-emerald-700 dark:text-emerald-400">Nivel</span><span class="font-black text-emerald-900 dark:text-emerald-200">{{ matricula.grado_nivel }}</span></div>
+                  <div class="flex justify-between text-sm"><span class="text-emerald-700 dark:text-emerald-400">Curso</span><span class="font-black text-emerald-900 dark:text-emerald-200">{{ matricula.tipo_grado }} ({{ matricula.seccion }})</span></div>
+                  <div class="flex justify-between text-sm"><span class="text-emerald-700 dark:text-emerald-400">Jornada</span><span class="font-black text-emerald-900 dark:text-emerald-200">{{ matricula.jornada }}</span></div>
+                </div>
+
+                <div class="mt-6 space-y-3">
+                  <button
+                    @click="router.push({ path: `/dashboard/gestion-matriculas/${matricula.id_matricula}/registro`, query: { gradeId: matricula.id_grado } })"
+                    class="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 dark:shadow-none flex items-center justify-center gap-2"
+                  >
+                    Crear Estudiante en el Sistema <ArrowLeft :size="18" class="rotate-180" />
+                  </button>
+                  <button @click="currentStep = 2" class="w-full py-3.5 bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded-2xl font-bold hover:bg-slate-100 dark:hover:bg-slate-700 transition-all text-sm">
+                    Volver a Documentos
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </Transition>
+      </div>
+    </Transition>
+
+    <!-- ── Notify Inconsistencies Modal ─────────────────────────── -->
+    <div v-if="showNotifyModal" class="fixed inset-0 z-[300] flex items-center justify-center p-4">
+      <div class="absolute inset-0 bg-slate-950/50 backdrop-blur-sm" @click="showNotifyModal = false"></div>
+      <div class="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-[28px] shadow-2xl overflow-hidden">
+        <div class="p-8 text-center">
+          <div class="w-16 h-16 bg-red-50 dark:bg-red-950/20 text-red-500 rounded-2xl flex items-center justify-center mx-auto mb-5"><AlertCircle :size="32" /></div>
+          <h3 class="text-lg font-black text-slate-900 dark:text-white uppercase">Notificar Inconsistencias</h3>
+          <p class="text-slate-500 dark:text-slate-400 text-sm mt-3 leading-relaxed">
+            Se detectaron <strong class="text-red-600">{{ rejectedDocumentsNames.length }}</strong> documentos rechazados. ¿Notificar al padre?
+          </p>
+          <div v-if="rejectedDocumentsNames.length" class="mt-4 p-4 bg-red-50 dark:bg-red-950/20 rounded-2xl text-left text-sm text-red-700 dark:text-red-400 space-y-1">
+            <li v-for="n in rejectedDocumentsNames" :key="n" class="list-disc list-inside">{{ n }}</li>
+          </div>
+        </div>
+        <div class="bg-slate-50 dark:bg-slate-800/50 px-8 py-6 flex gap-3">
+          <button @click="showNotifyModal = false" class="flex-1 py-3 rounded-xl font-black text-slate-400 hover:bg-white dark:hover:bg-slate-700 transition-all text-xs uppercase">Cancelar</button>
+          <button @click="notifyInconsistencies" class="flex-[2] bg-indigo-600 text-white py-3 rounded-xl font-black text-xs uppercase flex items-center justify-center gap-2 hover:bg-indigo-700 transition-all"><Send :size="14" />Enviar Correo</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Pending Docs Modal ────────────────────────────────────── -->
+    <div v-if="showPendingModal" class="fixed inset-0 z-[300] flex items-center justify-center p-4">
+      <div class="absolute inset-0 bg-slate-950/50 backdrop-blur-sm" @click="showPendingModal = false"></div>
+      <div class="relative w-full max-w-sm bg-white dark:bg-slate-900 rounded-[28px] shadow-2xl overflow-hidden">
+        <div class="p-8 text-center">
+          <div class="w-14 h-14 bg-amber-50 dark:bg-amber-950/20 text-amber-500 rounded-2xl flex items-center justify-center mx-auto mb-5"><AlertTriangle :size="28" /></div>
+          <h3 class="text-lg font-black text-slate-900 dark:text-white uppercase">Docs Pendientes</h3>
+          <p class="text-slate-500 dark:text-slate-400 text-sm mt-3 leading-relaxed">Aún tienes documentos sin evaluar. ¿Revisarlos ahora o guardar para después?</p>
+        </div>
+        <div class="bg-slate-50 dark:bg-slate-800/50 px-8 py-6 flex gap-3">
+          <button @click="showPendingModal = false" class="flex-1 py-3 rounded-xl font-black text-slate-400 hover:bg-white dark:hover:bg-slate-700 transition-all text-xs uppercase">Revisar</button>
+          <button @click="confirmSaveLater" class="flex-[2] bg-amber-500 text-white py-3 rounded-xl font-black text-xs uppercase hover:bg-amber-600 transition-all">Después</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Cancel Enrollment Modal ───────────────────────────────── -->
+    <div v-if="showCancelModal" class="fixed inset-0 z-[300] flex items-center justify-center p-4">
+      <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" @click="showCancelModal = false"></div>
+      <div class="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-[28px] shadow-2xl overflow-hidden">
+        <div class="p-8 text-center">
+          <div class="w-14 h-14 bg-red-50 dark:bg-red-950/20 text-red-500 rounded-2xl flex items-center justify-center mx-auto mb-5"><XCircle :size="28" /></div>
+          <h3 class="text-lg font-black text-slate-900 dark:text-white uppercase">Cancelar Matrícula</h3>
+          <p class="text-slate-500 dark:text-slate-400 text-sm mt-2">Esta acción es irreversible y liberará el cupo asignado.</p>
+        </div>
+        <div class="px-8 pb-8 space-y-4">
+          <div class="space-y-1.5">
+            <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Motivo</label>
+            <select v-model="cancelMotivo" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3 text-sm font-bold outline-none text-slate-900 dark:text-white">
+              <option>Inconsistencias Graves en Documentos</option>
+              <option>Retiro Voluntario</option>
+              <option>Falta de Pago / Costos</option>
+              <option>Traslado a Otra Institución</option>
+              <option>Otro</option>
+            </select>
+          </div>
+          <div class="space-y-1.5">
+            <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Detalles (Opcional)</label>
+            <textarea v-model="cancelDetalles" rows="3" placeholder="Explica brevemente..." class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3 text-sm font-bold outline-none text-slate-900 dark:text-white"></textarea>
+          </div>
+          <div class="flex gap-3 pt-1">
+            <button @click="showCancelModal = false" :disabled="cancelling" class="flex-1 py-3 rounded-xl font-black text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all text-xs uppercase">Volver</button>
+            <button @click="cancelEnrollment" :disabled="cancelling" class="flex-[2] bg-red-600 text-white py-3 rounded-xl font-black text-xs uppercase flex items-center justify-center gap-2 hover:bg-red-700 transition-all disabled:opacity-50">
+              <span v-if="cancelling" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+              <span v-else>Confirmar</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
+
+<style scoped>
+.drawer-fade-enter-active,
+.drawer-fade-leave-active { transition: opacity 0.3s ease; }
+.drawer-fade-enter-from,
+.drawer-fade-leave-to { opacity: 0; }
+
+.drawer-slide-enter-active,
+.drawer-slide-leave-active { transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1); }
+.drawer-slide-enter-from,
+.drawer-slide-leave-to { transform: translateX(100%); }
+
+.custom-scrollbar::-webkit-scrollbar { width: 5px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+.dark .custom-scrollbar::-webkit-scrollbar-thumb { background: #1e293b; }
+</style>
