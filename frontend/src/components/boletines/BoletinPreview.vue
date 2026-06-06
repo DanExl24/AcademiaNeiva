@@ -134,27 +134,30 @@
               </ul>
             </div>
 
-            <!-- Fortalezas / Observaciones Categorizadas -->
+            <!-- Fortalezas / Observaciones Compactas -->
             <div v-if="materia.observaciones?.length" class="space-y-4">
-              <div v-for="(obs, oIdx) in materia.observaciones" :key="oIdx" class="space-y-2">
-                <div class="border-b border-gray-100 pb-1 mt-1 flex items-center justify-between">
-                  <span class="font-black text-gray-800 uppercase tracking-widest text-[9px]">Observación {{ getTypeLabel(obs.tipo) }}</span>
-                </div>
-                <ul class="space-y-1.5 list-none m-0 p-0 text-[10px] leading-snug">
-                  <li v-for="(fortaleza, idx) in obs.fortalezas" :key="'f'+idx" class="flex items-start gap-2">
-                    <span class="text-green-600 font-bold mt-0.5 text-xs leading-none">▲</span>
-                    <span class="font-medium">{{ fortaleza }}</span>
-                  </li>
-                  <li v-for="(debilidad, idx) in obs.debilidades" :key="'d'+idx" class="flex items-start gap-2">
-                    <span class="text-red-500 font-bold mt-0.5 text-xs leading-none">▼</span>
-                    <span class="font-medium">{{ debilidad }}</span>
-                  </li>
-                  <li v-if="obs.recomendaciones" class="flex items-start gap-2 italic text-gray-500">
-                    <span class="text-indigo-400 font-bold mt-0.5 text-xs leading-none">■</span>
-                    <span class="font-bold">Rec: {{ obs.recomendaciones }}</span>
-                  </li>
-                </ul>
+              <div class="border-b border-gray-100 pb-1 mt-1">
+                <span class="font-black text-gray-800 uppercase tracking-widest text-[9px]">Observaciones y Retroalimentación</span>
               </div>
+              <ul class="space-y-1.5 list-none m-0 p-0 text-[10px] leading-snug">
+                <template v-for="(obs, oIdx) in materia.observaciones" :key="oIdx">
+                  <!-- Fortalezas -->
+                  <li v-for="(fortaleza, fIdx) in obs.fortalezas" :key="'f'+oIdx+fIdx" class="flex items-start gap-2">
+                    <span class="text-green-600 font-bold mt-0.5 text-xs leading-none">▲</span>
+                    <span class="font-medium text-gray-700">{{ fortaleza }} <span class="text-[8px] font-black text-gray-400 uppercase ml-1">- {{ getTypeLabel(obs.tipo) }}</span></span>
+                  </li>
+                  <!-- Debilidades -->
+                  <li v-for="(debilidad, dIdx) in obs.debilidades" :key="'d'+oIdx+dIdx" class="flex items-start gap-2">
+                    <span class="text-red-500 font-bold mt-0.5 text-xs leading-none">▼</span>
+                    <span class="font-medium text-gray-700">{{ debilidad }} <span class="text-[8px] font-black text-gray-400 uppercase ml-1">- {{ getTypeLabel(obs.tipo) }}</span></span>
+                  </li>
+                  <!-- Recomendaciones -->
+                  <li v-if="obs.recomendaciones" :key="'r'+oIdx" class="flex items-start gap-2 italic text-gray-500">
+                    <span class="text-indigo-400 font-bold mt-0.5 text-xs leading-none">■</span>
+                    <span class="font-bold">{{ obs.recomendaciones }} <span class="text-[8px] font-black text-gray-400 uppercase not-italic ml-1">- {{ getTypeLabel(obs.tipo) }}</span></span>
+                  </li>
+                </template>
+              </ul>
             </div>
             
             <!-- Vacio -->
