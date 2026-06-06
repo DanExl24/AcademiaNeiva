@@ -1,0 +1,25 @@
+Calendario Académico
+│
+├── Año Lectivo
+│   │
+│   ├── Período Académico 1
+│   │   ├── Actividades
+│   │   ├── Evaluaciones
+│   │   └── Calificaciones
+│   │
+│   ├── Período Académico 2
+│   │   ├── Actividades
+│   │   ├── Evaluaciones
+│   │   └── Calificaciones
+│   │
+│   ├── Período Académico 3
+│   │   └── ...
+│   │
+│   └── Período Académico 4
+│       └── ...
+│
+├── Año Lectivo
+│   └── ...
+│
+└── Año Lectivo
+    └── ...

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import axios from 'axios'
-import { Layers3, Plus, Search, School2, Trash2 } from 'lucide-vue-next'
+import { Layers3, Plus, Search, School2, Trash2, Info } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 
 interface Nivel {
@@ -49,12 +49,11 @@ const schoolId = computed(() => Number(auth.user?.schoolId || 0))
 const loading = ref(true)
 const savingGrade = ref(false)
 const savingGroup = ref(false)
-const activeView = ref<'records' | 'crud'>('records')
-const crudMode = ref<'grade' | 'course'>('grade')
 const searchMode = ref<'grade' | 'course'>('grade')
 const searchTerm = ref('')
 const createModal = ref<null | 'grade' | 'course'>(null)
 const deleting = ref(false)
+const selectedGradeId = ref<number | null>(null)
 
 type DeleteModalState =
   | { kind: 'grade'; item: TipoGrado }
@@ -89,7 +88,7 @@ const filteredGradeTypes = computed(() =>
 )
 
 const visibleGradeTypes = computed(() => {
-  const term = searchMode.value === 'grade' ? searchTerm.value.trim().toLowerCase() : ''
+  const term = searchTerm.value.trim().toLowerCase()
   if (!term) return tiposGrado.value
 
   return tiposGrado.value.filter((item) =>
@@ -99,16 +98,32 @@ const visibleGradeTypes = computed(() => {
 })
 
 const visibleGroups = computed(() => {
-  const term = searchMode.value === 'course' ? searchTerm.value.trim().toLowerCase() : ''
-  if (!term) return grupos.value
+  let list = grupos.value
 
-  return grupos.value.filter((item) =>
+  // Filter by selected grade if any
+  if (selectedGradeId.value) {
+    list = list.filter(item => item.id_tipo_grado === selectedGradeId.value)
+  }
+
+  // Filter by search term
+  const term = searchTerm.value.trim().toLowerCase()
+  if (!term) return list
+
+  return list.filter((item) =>
     item.tipo_grado_nombre.toLowerCase().includes(term) ||
     item.nivel_nombre.toLowerCase().includes(term) ||
     item.jornada_nombre.toLowerCase().includes(term) ||
     item.seccion_nombre.toLowerCase().includes(term)
   )
 })
+
+const toggleGradeSelection = (id: number) => {
+  if (selectedGradeId.value === id) {
+    selectedGradeId.value = null
+  } else {
+    selectedGradeId.value = id
+  }
+}
 
 const openCreateModal = (mode: 'grade' | 'course') => {
   createModal.value = mode
@@ -173,7 +188,6 @@ const createGradeType = async () => {
     newGradeType.value = { id_nivel: '', nombre: '' }
     await loadData()
     closeCreateModal()
-    activeView.value = 'records'
   } catch (error: any) {
     alert(error.response?.data?.error || 'Error al crear el grado')
   } finally {
@@ -212,7 +226,6 @@ const createGroup = async () => {
     }
     await loadData()
     closeCreateModal()
-    activeView.value = 'records'
   } catch (error: any) {
     alert(error.response?.data?.error || 'Error al crear el curso')
   } finally {
@@ -254,422 +267,333 @@ onMounted(loadData)
 </script>
 
 <template>
-  <div class="space-y-8">
-    <div class="bg-white rounded-3xl border border-slate-100 shadow-sm p-8 md:p-10">
-      <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <h1 class="text-3xl font-black text-slate-900">Gestión de Grados</h1>
-          <p class="mt-2 text-slate-500">Consulta rápida en vista compacta o administración completa en la vista CRUD.</p>
+  <div class="max-w-[1400px] mx-auto space-y-6">
+    <!-- Clean Header -->
+    <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden transition-all duration-300">
+      <div class="px-8 py-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div class="flex items-center gap-4">
+          <div class="p-4 bg-indigo-50 dark:bg-indigo-950/30 rounded-2xl text-indigo-600 dark:text-indigo-400">
+            <Layers3 :size="32" />
+          </div>
+          <div>
+            <h1 class="text-2xl font-black text-slate-900 dark:text-white leading-tight">Estructura Académica</h1>
+            <p class="text-slate-500 dark:text-slate-400 font-medium">Gestión integral de niveles, grados y cursos institucionales.</p>
+          </div>
         </div>
-
-        <div class="inline-flex rounded-2xl bg-slate-100 p-1.5">
-          <button
-            @click="activeView = 'records'"
-            :class="[
-              activeView === 'records' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500',
-              'rounded-xl px-4 py-2 text-sm font-black transition-all'
-            ]"
-          >
-            Registros
+        
+        <div class="flex items-center gap-3">
+          <button @click="openCreateModal('grade')" class="flex items-center gap-2 px-5 py-3 bg-slate-900 dark:bg-slate-800 text-white rounded-xl font-bold text-sm hover:bg-slate-800 dark:hover:bg-slate-700 transition-all shadow-lg shadow-slate-200 dark:shadow-none">
+            <Plus :size="18" />
+            Nuevo Grado
           </button>
-          <button
-            @click="activeView = 'crud'"
-            :class="[
-              activeView === 'crud' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500',
-              'rounded-xl px-4 py-2 text-sm font-black transition-all'
-            ]"
-          >
-            CRUD
+          <button @click="openCreateModal('course')" class="flex items-center gap-2 px-5 py-3 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 dark:shadow-none">
+            <School2 :size="18" />
+            Nuevo Curso
           </button>
         </div>
       </div>
-
-      <div class="mt-8 flex flex-col gap-4 md:flex-row">
-          <button
-          type="button"
-          @click="openCreateModal('grade')"
-          class="inline-flex min-h-14 items-center justify-center gap-3 rounded-2xl bg-slate-900 px-8 py-4 text-base font-black text-white shadow-sm transition-all hover:-translate-y-0.5 hover:bg-slate-800"
-        >
-          <Plus class="h-5 w-5" />
-          Crear grado
-        </button>
-          <button
-          type="button"
-          @click="openCreateModal('course')"
-          class="inline-flex min-h-14 items-center justify-center gap-3 rounded-2xl bg-indigo-600 px-8 py-4 text-base font-black text-white shadow-sm transition-all hover:-translate-y-0.5 hover:bg-indigo-500"
-        >
-          <School2 class="h-5 w-5" />
-          Crear curso
-        </button>
-      </div>
     </div>
 
-    <div v-if="loading" class="bg-white rounded-3xl border border-slate-100 shadow-sm p-16 text-center text-slate-400 font-bold">
-      Cargando estructura académica...
-    </div>
+    <!-- Unified Dashboard -->
+    <div class="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+      
+      <!-- Left Panel: Grades (Compact List) -->
+      <div class="xl:col-span-5 space-y-6">
+        <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col h-[700px]">
+          <div class="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/30">
+            <h3 class="text-sm font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 flex items-center gap-2">
+              <Layers3 :size="16" />
+              Grados Base
+            </h3>
+            <span class="bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider">
+              {{ tiposGrado.length }} Registrados
+            </span>
+          </div>
 
-    <template v-else-if="activeView === 'records'">
-      <section class="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
-        <div class="border-b border-slate-100 p-6">
-          <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <h2 class="text-lg font-black text-slate-900">Búsqueda rápida</h2>
-              <p class="text-sm text-slate-500">Elige si quieres consultar grados o cursos y filtra en una sola vista.</p>
+          <div class="p-4 border-b border-slate-100 dark:border-slate-800">
+            <div class="relative">
+              <Search class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" :size="16" />
+              <input 
+                v-model="searchTerm" 
+                v-if="searchMode === 'grade'"
+                type="text" 
+                placeholder="Buscar por nombre o nivel..."
+                class="w-full bg-slate-50 dark:bg-slate-800/50 border-none rounded-xl py-3 pl-10 pr-4 text-sm font-medium outline-none text-slate-900 dark:text-white"
+              />
             </div>
-            <div class="flex w-full flex-col gap-3 md:flex-row lg:max-w-2xl">
-              <select v-model="searchMode" class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4.5 text-sm font-black text-slate-700 outline-none md:w-52">
-                <option value="grade">Ver grados</option>
-                <option value="course">Ver cursos</option>
-              </select>
-              <div class="relative flex-1">
-                <Search class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <input
-                  v-model="searchTerm"
-                  type="text"
-                  :placeholder="searchMode === 'grade' ? 'Buscar grado o nivel' : 'Buscar curso, jornada o sección'"
-                  class="w-full rounded-2xl border border-slate-200 bg-slate-50 py-4.5 pl-10 pr-4 text-sm font-semibold outline-none"
-                />
+          </div>
+
+          <div class="flex-1 overflow-y-auto p-4 custom-scrollbar">
+            <div v-if="visibleGradeTypes.length === 0" class="h-full flex flex-col items-center justify-center text-slate-400 p-8">
+              <Search :size="48" class="mb-4 opacity-20" />
+              <p class="font-bold">No se encontraron grados</p>
+            </div>
+            
+            <div class="grid gap-3">
+              <div 
+                v-for="item in visibleGradeTypes" 
+                :key="item.id_tipo_grado"
+                @click="toggleGradeSelection(item.id_tipo_grado)"
+                :class="[
+                  selectedGradeId === item.id_tipo_grado 
+                    ? 'border-indigo-600 ring-2 ring-indigo-500/20 bg-indigo-50/30' 
+                    : 'border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900',
+                  'group p-4 rounded-2xl flex items-center justify-between hover:border-indigo-200 dark:hover:border-indigo-900 hover:shadow-md hover:shadow-indigo-50/50 dark:hover:shadow-none transition-all cursor-pointer border'
+                ]"
+              >
+                <div>
+                  <h4 class="font-black text-slate-800 dark:text-white text-base truncate">{{ item.nombre }}</h4>
+                  <p class="text-[10px] font-black text-indigo-500 uppercase tracking-widest mt-0.5">{{ item.nivel_nombre }}</p>
+                </div>
+                
+                <div class="flex items-center gap-3">
+                  <div class="text-right mr-2">
+                    <p class="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-tighter">Cursos</p>
+                    <p class="font-black text-slate-800 dark:text-slate-300 text-sm">{{ item.cursos_count }}</p>
+                  </div>
+                  <button 
+                    @click="openDeleteGradeModal(item)"
+                    class="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-xl transition-all"
+                    title="Eliminar Grado"
+                  >
+                    <Trash2 :size="18" />
+                  </button>
+                </div>
               </div>
             </div>
           </div>
         </div>
-
-        <div v-if="searchMode === 'grade'" class="max-h-[620px] overflow-auto">
-          <div class="flex items-center justify-between bg-amber-50 px-6 py-4">
-            <div>
-              <h3 class="text-sm font-black uppercase tracking-[0.2em] text-amber-700">Grados existentes</h3>
-              <p class="text-sm font-semibold text-amber-900">{{ visibleGradeTypes.length }} resultados de {{ tiposGrado.length }}</p>
-            </div>
-            <button
-              type="button"
-              @click="openCreateModal('grade')"
-              class="rounded-2xl bg-white px-5 py-3 text-sm font-black text-amber-700 shadow-sm transition-all hover:-translate-y-0.5"
-            >
-              Nuevo grado
-            </button>
-          </div>
-          <table class="w-full text-left">
-            <thead class="sticky top-0 bg-slate-50 text-[11px] uppercase tracking-widest text-slate-400">
-              <tr>
-                <th class="px-5 py-3">Grado</th>
-                <th class="px-5 py-3">Nivel</th>
-                <th class="px-5 py-3 text-center">Cursos</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100 text-sm">
-              <tr v-for="item in visibleGradeTypes" :key="item.id_tipo_grado" class="hover:bg-slate-50/70">
-                <td class="px-5 py-4 font-black text-slate-800">{{ item.nombre }}</td>
-                <td class="px-5 py-4 font-semibold text-slate-500">{{ item.nivel_nombre }}</td>
-                <td class="px-5 py-4 text-center">
-                  <span class="rounded-full bg-amber-50 px-3 py-1 text-xs font-black text-amber-700">{{ item.cursos_count }}</span>
-                </td>
-              </tr>
-              <tr v-if="visibleGradeTypes.length === 0">
-                <td colspan="3" class="px-5 py-10 text-center text-sm font-semibold text-slate-400">No se encontraron grados.</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div v-else class="max-h-[620px] overflow-auto">
-          <div class="flex items-center justify-between bg-indigo-50 px-6 py-4">
-            <div>
-              <h3 class="text-sm font-black uppercase tracking-[0.2em] text-indigo-700">Cursos existentes</h3>
-              <p class="text-sm font-semibold text-indigo-900">{{ visibleGroups.length }} resultados de {{ grupos.length }}</p>
-            </div>
-            <button
-              type="button"
-              @click="openCreateModal('course')"
-              class="rounded-2xl bg-white px-5 py-3 text-sm font-black text-indigo-700 shadow-sm transition-all hover:-translate-y-0.5"
-            >
-              Nuevo curso
-            </button>
-          </div>
-          <table class="w-full text-left">
-            <thead class="sticky top-0 bg-slate-50 text-[11px] uppercase tracking-widest text-slate-400">
-              <tr>
-                <th class="px-5 py-3">Curso</th>
-                <th class="px-5 py-3">Cupos</th>
-                <th class="px-5 py-3 text-center">Uso</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100 text-sm">
-              <tr v-for="item in visibleGroups" :key="item.id_grupo" class="hover:bg-slate-50/70">
-                <td class="px-5 py-4">
-                  <p class="font-black text-slate-800">{{ item.tipo_grado_nombre }} {{ item.seccion_nombre }}</p>
-                  <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">{{ item.nivel_nombre }} · {{ item.jornada_nombre }}</p>
-                </td>
-                <td class="px-5 py-4 font-black text-slate-700">{{ item.cupos_totales }}</td>
-                <td class="px-5 py-4">
-                  <div class="flex flex-wrap justify-center gap-1.5 text-[10px] font-black">
-                    <span class="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600">{{ item.matriculas_count }} M</span>
-                    <span class="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600">{{ item.asignaciones_count }} A</span>
-                    <span class="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600">{{ item.competencias_count }} C</span>
-                  </div>
-                </td>
-              </tr>
-              <tr v-if="visibleGroups.length === 0">
-                <td colspan="3" class="px-5 py-10 text-center text-sm font-semibold text-slate-400">No se encontraron cursos.</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-    </template>
-
-    <template v-else>
-      <div class="mb-6 inline-flex rounded-2xl bg-slate-100 p-1.5">
-        <button
-          type="button"
-          @click="crudMode = 'grade'"
-          :class="[
-            crudMode === 'grade' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500',
-            'rounded-xl px-5 py-3 text-sm font-black transition-all'
-          ]"
-        >
-          Formulario de grado
-        </button>
-        <button
-          type="button"
-          @click="crudMode = 'course'"
-          :class="[
-            crudMode === 'course' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500',
-            'rounded-xl px-5 py-3 text-sm font-black transition-all'
-          ]"
-        >
-          Formulario de curso
-        </button>
       </div>
 
-      <div class="grid grid-cols-1 xl:grid-cols-2 gap-8">
-        <section v-if="crudMode === 'grade'" class="bg-white rounded-3xl border border-slate-100 shadow-sm p-8 md:p-9">
-          <div class="mb-6 flex items-center gap-3">
-            <div class="rounded-2xl bg-amber-50 p-3 text-amber-600">
-              <Layers3 class="h-6 w-6" />
+      <!-- Right Panel: Courses (Interactive Grid) -->
+      <div class="xl:col-span-7 space-y-6">
+        <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col h-[700px]">
+          <div class="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-slate-900">
+            <div class="flex items-center gap-3">
+              <h3 class="text-lg font-black text-slate-900 dark:text-white">
+                {{ selectedGradeId ? 'Cursos del Grado' : 'Cursos & Secciones' }}
+              </h3>
+              <div v-if="selectedGradeId" class="flex items-center gap-2">
+                <span class="bg-indigo-600 text-white px-2 py-0.5 rounded text-[10px] font-black uppercase">Filtro Activo</span>
+                <button @click="selectedGradeId = null" class="text-[10px] font-bold text-slate-400 hover:text-indigo-600 transition-colors uppercase underline">Limpiar</button>
+              </div>
             </div>
-            <div>
-              <h2 class="text-lg font-black text-slate-900">Crear grado</h2>
-              <p class="text-sm text-slate-500">Abre el formulario en modal para registrar el grado sin exponer campos en la vista.</p>
-            </div>
-          </div>
-
-          <button type="button" @click="openCreateModal('grade')" class="mt-2 inline-flex min-h-14 w-full items-center justify-center gap-3 rounded-2xl bg-slate-900 px-8 py-4 text-base font-black text-white shadow-sm">
-            <Plus class="h-4 w-4" />
-            Abrir formulario de grado
-          </button>
-
-          <div class="mt-7 rounded-2xl border border-slate-100 bg-slate-50 p-5">
-            <h3 class="text-sm font-black text-slate-700">Eliminar grado</h3>
-            <div class="mt-4 space-y-3">
-              <button
-                v-for="item in tiposGrado"
-                :key="item.id_tipo_grado"
-                @click="openDeleteGradeModal(item)"
-                class="flex w-full items-center justify-between rounded-2xl bg-white px-4 py-3.5 text-left hover:border-red-200 hover:bg-red-50 transition-all"
-              >
-                <div>
-                  <p class="text-sm font-black text-slate-800">{{ item.nombre }}</p>
-                  <p class="text-[11px] font-bold uppercase tracking-widest text-slate-400">{{ item.nivel_nombre }}</p>
-                </div>
-                <Trash2 class="h-4 w-4 text-red-500" />
-              </button>
-            </div>
-          </div>
-        </section>
-
-        <section v-else class="bg-white rounded-3xl border border-slate-100 shadow-sm p-8 md:p-9">
-          <div class="mb-6 flex items-center gap-3">
-            <div class="rounded-2xl bg-indigo-50 p-3 text-indigo-600">
-              <School2 class="h-6 w-6" />
-            </div>
-            <div>
-              <h2 class="text-lg font-black text-slate-900">Crear curso</h2>
-              <p class="text-sm text-slate-500">Abre el formulario en modal para registrar el curso con jornada, grado, sección y cupos.</p>
+            <div class="relative w-64">
+              <Search class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" :size="14" />
+              <input 
+                v-model="searchTerm" 
+                type="text" 
+                placeholder="Filtrar cursos..."
+                class="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl py-2.5 pl-9 pr-4 text-xs font-medium outline-none text-slate-900 dark:text-white shadow-inner"
+              />
             </div>
           </div>
 
-          <button type="button" @click="openCreateModal('course')" class="mt-2 inline-flex min-h-14 w-full items-center justify-center gap-3 rounded-2xl bg-indigo-600 px-8 py-4 text-base font-black text-white shadow-sm">
-            <Plus class="h-4 w-4" />
-            Abrir formulario de curso
-          </button>
+          <div class="flex-1 overflow-y-auto p-6 bg-slate-50/30 dark:bg-slate-950/10 custom-scrollbar">
+            <div v-if="grupos.length === 0" class="h-full flex flex-col items-center justify-center text-slate-400">
+              <School2 :size="64" class="mb-4 opacity-20" />
+              <p class="font-bold">No hay cursos configurados</p>
+              <button @click="openCreateModal('course')" class="mt-4 text-indigo-600 font-bold text-sm hover:underline">Comenzar a crear cursos</button>
+            </div>
 
-          <div class="mt-7 rounded-2xl border border-slate-100 bg-slate-50 p-5">
-            <h3 class="text-sm font-black text-slate-700">Eliminar curso</h3>
-            <div class="mt-4 space-y-3 max-h-64 overflow-auto pr-1">
-              <button
-                v-for="item in grupos"
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div 
+                v-for="item in visibleGroups" 
                 :key="item.id_grupo"
-                @click="openDeleteCourseModal(item)"
-                class="flex w-full items-center justify-between rounded-2xl bg-white px-4 py-3.5 text-left hover:border-red-200 hover:bg-red-50 transition-all"
+                class="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-md transition-all border-l-4"
+                :class="item.jornada_nombre === 'MAÑANA' ? 'border-l-amber-400' : item.jornada_nombre === 'TARDE' ? 'border-l-indigo-400' : 'border-l-emerald-400'"
               >
-                <div>
-                  <p class="text-sm font-black text-slate-800">{{ item.tipo_grado_nombre }} {{ item.seccion_nombre }}</p>
-                  <p class="text-[11px] font-bold uppercase tracking-widest text-slate-400">{{ item.nivel_nombre }} · {{ item.jornada_nombre }}</p>
+                <div class="flex items-start justify-between mb-4">
+                  <div>
+                    <h4 class="font-black text-slate-900 dark:text-white text-lg leading-tight">{{ item.tipo_grado_nombre }} {{ item.seccion_nombre }}</h4>
+                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">{{ item.jornada_nombre }} | {{ item.nivel_nombre }}</p>
+                  </div>
+                  <button @click="openDeleteCourseModal(item)" class="p-2 text-slate-300 hover:text-red-500 transition-colors">
+                    <Trash2 :size="16" />
+                  </button>
                 </div>
-                <Trash2 class="h-4 w-4 text-red-500" />
-              </button>
+
+                <div class="grid grid-cols-3 gap-2 py-3 border-y border-slate-50 dark:border-slate-800 mb-4">
+                  <div class="text-center">
+                    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Estudiantes</p>
+                    <p class="font-black text-slate-800 dark:text-slate-300 text-sm">{{ item.matriculas_count }}</p>
+                  </div>
+                  <div class="text-center border-x border-slate-50 dark:border-slate-800">
+                    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Materias</p>
+                    <p class="font-black text-slate-800 dark:text-slate-300 text-sm">{{ item.asignaciones_count }}</p>
+                  </div>
+                  <div class="text-center">
+                    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Logros</p>
+                    <p class="font-black text-slate-800 dark:text-slate-300 text-sm">{{ item.competencias_count }}</p>
+                  </div>
+                </div>
+
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <div class="h-1.5 w-16 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                      <div 
+                        class="h-full bg-indigo-500" 
+                        :style="`width: ${(item.matriculas_count / item.cupos_totales) * 100}%`"
+                      ></div>
+                    </div>
+                    <span class="text-[10px] font-black text-slate-400">{{ Math.round((item.matriculas_count / item.cupos_totales) * 100) }}% ocupado</span>
+                  </div>
+                  <div class="text-[10px] font-black bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded-md text-slate-500">
+                    {{ item.cupos_totales }} CUPOS
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
-        </section>
-      </div>
-
-      <div class="rounded-3xl border border-indigo-100 bg-indigo-50 p-7 text-sm font-semibold text-indigo-700">
-        La vista CRUD concentra creación y eliminación. La vista de registros está optimizada para búsqueda rápida y revisión sin tanto scroll.
-      </div>
-    </template>
-
-    <div v-if="createModal" class="fixed inset-0 z-[100] flex min-h-screen w-screen items-center justify-center bg-slate-950/88 backdrop-blur-md p-4">
-      <div class="w-full max-w-2xl rounded-[28px] bg-white shadow-2xl">
-        <div class="flex items-start justify-between gap-4 border-b border-slate-100 px-6 py-5 md:px-8">
-          <div>
-            <p class="text-xs font-black uppercase tracking-[0.24em] text-slate-400">Creación rápida</p>
-            <h2 class="mt-1 text-2xl font-black text-slate-900">
-              {{ createModal === 'grade' ? 'Nuevo grado' : 'Nuevo curso' }}
-            </h2>
-            <p class="mt-2 text-sm font-semibold text-slate-500">
-              {{ createModal === 'grade' ? 'Define nivel académico y nombre base del grado.' : 'Completa jornada, grado, sección y cupos del curso.' }}
-            </p>
-          </div>
-          <button type="button" @click="closeCreateModal" class="rounded-2xl bg-slate-100 px-4 py-2 text-sm font-black text-slate-600 transition-all hover:bg-slate-200">
-            Cerrar
-          </button>
-        </div>
-
-        <div v-if="createModal === 'grade'" class="px-6 py-6 md:px-8 md:py-8">
-          <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
-            <label class="space-y-2">
-              <span class="block text-sm font-black text-slate-700">Nivel académico</span>
-              <select v-model="newGradeType.id_nivel" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-semibold outline-none">
-                <option value="">Selecciona un nivel</option>
-                <option v-for="nivel in niveles" :key="nivel.id_nivel" :value="nivel.id_nivel">{{ nivel.nombre }}</option>
-              </select>
-            </label>
-            <label class="space-y-2">
-              <span class="block text-sm font-black text-slate-700">Nombre del grado</span>
-              <input v-model="newGradeType.nombre" type="text" placeholder="Ej. Sexto" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-semibold outline-none" />
-            </label>
-          </div>
-
-          <div class="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-end">
-            <button type="button" @click="closeCreateModal" class="rounded-2xl border border-slate-200 px-6 py-4 text-sm font-black text-slate-700">
-              Cancelar
-            </button>
-            <button type="button" @click="createGradeType" :disabled="savingGrade" class="inline-flex min-h-14 items-center justify-center gap-3 rounded-2xl bg-slate-900 px-8 py-4 text-base font-black text-white shadow-sm disabled:opacity-50">
-              <Plus class="h-4 w-4" />
-              {{ savingGrade ? 'Creando...' : 'Crear grado' }}
-            </button>
-          </div>
-        </div>
-
-        <div v-else class="px-6 py-6 md:px-8 md:py-8">
-          <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
-            <label class="space-y-2">
-              <span class="block text-sm font-black text-slate-700">Nivel académico</span>
-              <select v-model="newGroup.id_nivel" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-semibold outline-none">
-                <option value="">Selecciona un nivel</option>
-                <option v-for="nivel in niveles" :key="nivel.id_nivel" :value="nivel.id_nivel">{{ nivel.nombre }}</option>
-              </select>
-            </label>
-            <label class="space-y-2">
-              <span class="block text-sm font-black text-slate-700">Tipo de grado</span>
-              <select v-model="newGroup.id_tipo_grado" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-semibold outline-none">
-                <option value="">Selecciona un grado</option>
-                <option v-for="tipo in filteredGradeTypes" :key="tipo.id_tipo_grado" :value="tipo.id_tipo_grado">{{ tipo.nombre }}</option>
-              </select>
-            </label>
-            <label class="space-y-2">
-              <span class="block text-sm font-black text-slate-700">Jornada</span>
-              <select v-model="newGroup.id_jornada" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-semibold outline-none">
-                <option value="">Selecciona una jornada</option>
-                <option v-for="jornada in jornadas" :key="jornada.id_jornada" :value="jornada.id_jornada">{{ jornada.nombre }}</option>
-              </select>
-            </label>
-            <label class="space-y-2">
-              <span class="block text-sm font-black text-slate-700">Sección / Letra</span>
-              <select v-model="newGroup.id_seccion" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-semibold outline-none">
-                <option value="">Selecciona una sección</option>
-                <option v-for="seccion in secciones" :key="seccion.id_seccion" :value="seccion.id_seccion">{{ seccion.nombre }}</option>
-              </select>
-            </label>
-            <label class="space-y-2 md:col-span-2">
-              <span class="block text-sm font-black text-slate-700">Cupos</span>
-              <input v-model.number="newGroup.cupos_totales" type="number" min="0" placeholder="Ej. 30" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-semibold outline-none" />
-            </label>
-          </div>
-
-          <div class="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-end">
-            <button type="button" @click="closeCreateModal" class="rounded-2xl border border-slate-200 px-6 py-4 text-sm font-black text-slate-700">
-              Cancelar
-            </button>
-            <button type="button" @click="createGroup" :disabled="savingGroup" class="inline-flex min-h-14 items-center justify-center gap-3 rounded-2xl bg-indigo-600 px-8 py-4 text-base font-black text-white shadow-sm disabled:opacity-50">
-              <Plus class="h-4 w-4" />
-              {{ savingGroup ? 'Creando...' : 'Crear curso' }}
-            </button>
           </div>
         </div>
       </div>
     </div>
 
-    <div v-if="deleteModal" class="fixed inset-0 z-[110] flex min-h-screen w-screen items-center justify-center bg-slate-950/90 backdrop-blur-md p-4">
-      <div class="w-full max-w-2xl rounded-[28px] bg-white shadow-2xl">
-        <div class="border-b border-slate-100 px-6 py-5 md:px-8">
-          <p class="text-xs font-black uppercase tracking-[0.24em] text-red-400">Eliminación sensible</p>
-          <h2 class="mt-1 text-2xl font-black text-slate-900">
-            {{ deleteModal.kind === 'grade' ? 'Eliminar grado' : 'Eliminar curso' }}
-          </h2>
-          <p class="mt-2 text-sm font-semibold text-slate-500">
-            Esta acción puede impactar la estructura académica del colegio y está bloqueada si existen relaciones activas.
-          </p>
+    <!-- Modals (Remained roughly same but with better styling) -->
+    <Teleport to="body">
+      <div v-if="createModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" @click="closeCreateModal"></div>
+        <div class="relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-[32px] shadow-2xl shadow-indigo-500/10 overflow-hidden border border-white/20">
+          <div class="px-8 pt-8 pb-6 bg-slate-50/50 dark:bg-slate-800/30 border-b border-slate-100 dark:border-slate-800">
+            <h2 class="text-2xl font-black text-slate-900 dark:text-white flex items-center gap-3">
+              <Plus :size="24" class="text-indigo-600" />
+              {{ createModal === 'grade' ? 'Configurar Nuevo Grado' : 'Configurar Nuevo Curso' }}
+            </h2>
+            <p class="text-slate-500 dark:text-slate-400 text-sm font-medium mt-1">Completa la información necesaria para el registro.</p>
+          </div>
+
+          <div v-if="createModal === 'grade'" class="p-8 space-y-6">
+            <div class="space-y-4">
+              <div class="space-y-2">
+                <label class="text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Nivel Académico</label>
+                <select v-model="newGradeType.id_nivel" class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 rounded-2xl p-4 font-bold outline-none text-slate-900 dark:text-white transition-all appearance-none cursor-pointer">
+                  <option value="">Selecciona un nivel</option>
+                  <option v-for="nivel in niveles" :key="nivel.id_nivel" :value="nivel.id_nivel">{{ nivel.nombre }}</option>
+                </select>
+              </div>
+              <div class="space-y-2">
+                <label class="text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Nombre Descriptivo</label>
+                <input v-model="newGradeType.nombre" type="text" placeholder="Ej. Grado Sexto" class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 rounded-2xl p-4 font-bold outline-none text-slate-900 dark:text-white placeholder:text-slate-400" />
+              </div>
+            </div>
+
+            <div class="flex gap-3 pt-2">
+              <button @click="closeCreateModal" class="flex-1 px-6 py-4 rounded-2xl font-black text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all">Cancelar</button>
+              <button @click="createGradeType" :disabled="savingGrade" class="flex-[2] bg-slate-900 dark:bg-white dark:text-slate-900 text-white px-6 py-4 rounded-2xl font-black shadow-xl shadow-slate-200 dark:shadow-none hover:translate-y-[-2px] active:translate-y-0 transition-all disabled:opacity-50">
+                {{ savingGrade ? 'Registrando...' : 'Confirmar Registro' }}
+              </button>
+            </div>
+          </div>
+
+          <div v-else class="p-8 space-y-5">
+            <div class="grid grid-cols-2 gap-4">
+              <div class="col-span-2 space-y-2">
+                <label class="text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Nivel Académico</label>
+                <select v-model="newGroup.id_nivel" class="w-full bg-slate-50 dark:bg-slate-800 rounded-2xl p-3.5 font-bold outline-none text-sm text-slate-900 dark:text-white border-2 border-transparent focus:border-indigo-500/20">
+                  <option value="">Seleccionar Nivel</option>
+                  <option v-for="nivel in niveles" :key="nivel.id_nivel" :value="nivel.id_nivel">{{ nivel.nombre }}</option>
+                </select>
+              </div>
+              <div class="space-y-2">
+                <label class="text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Grado Relacionado</label>
+                <select v-model="newGroup.id_tipo_grado" class="w-full bg-slate-50 dark:bg-slate-800 rounded-2xl p-3.5 font-bold outline-none text-sm text-slate-900 dark:text-white border-2 border-transparent focus:border-indigo-500/20">
+                  <option value="">Seleccionar Grado</option>
+                  <option v-for="tipo in filteredGradeTypes" :key="tipo.id_tipo_grado" :value="tipo.id_tipo_grado">{{ tipo.nombre }}</option>
+                </select>
+              </div>
+              <div class="space-y-2">
+                <label class="text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Jornada</label>
+                <select v-model="newGroup.id_jornada" class="w-full bg-slate-50 dark:bg-slate-800 rounded-2xl p-3.5 font-bold outline-none text-sm text-slate-900 dark:text-white border-2 border-transparent focus:border-indigo-500/20">
+                  <option value="">Seleccionar Jornada</option>
+                  <option v-for="jornada in jornadas" :key="jornada.id_jornada" :value="jornada.id_jornada">{{ jornada.nombre }}</option>
+                </select>
+              </div>
+              <div class="space-y-2">
+                <label class="text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Sección</label>
+                <select v-model="newGroup.id_seccion" class="w-full bg-slate-50 dark:bg-slate-800 rounded-2xl p-3.5 font-bold outline-none text-sm text-slate-900 dark:text-white border-2 border-transparent focus:border-indigo-500/20">
+                  <option value="">Seleccionar Sección</option>
+                  <option v-for="seccion in secciones" :key="seccion.id_seccion" :value="seccion.id_seccion">{{ seccion.nombre }}</option>
+                </select>
+              </div>
+              <div class="space-y-2">
+                <label class="text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Capacidad (Cupos)</label>
+                <input v-model.number="newGroup.cupos_totales" type="number" min="0" class="w-full bg-slate-50 dark:bg-slate-800 rounded-2xl p-3.5 font-bold outline-none text-sm text-slate-900 dark:text-white border-2 border-transparent focus:border-indigo-500/20" />
+              </div>
+            </div>
+
+            <div class="flex gap-3 pt-5 border-t border-slate-100 dark:border-slate-800">
+              <button @click="closeCreateModal" class="flex-1 px-4 py-4 rounded-2xl font-black text-slate-500 dark:text-slate-400 hover:bg-slate-50 transition-all">Cancelar</button>
+              <button @click="createGroup" :disabled="savingGroup" class="flex-[2] bg-indigo-600 text-white px-6 py-4 rounded-2xl font-black shadow-xl shadow-indigo-100 dark:shadow-none hover:translate-y-[-2px] transition-all disabled:opacity-50">
+                {{ savingGroup ? 'Creando...' : 'Registrar Curso' }}
+              </button>
+            </div>
+          </div>
         </div>
+      </div>
 
-        <div class="px-6 py-6 md:px-8 md:py-8">
-          <div class="rounded-3xl border border-red-100 bg-red-50 p-5">
-            <p class="text-sm font-black text-red-700">
-              {{ deleteModal.kind === 'grade'
-                ? `Vas a eliminar el grado ${deleteModal.item.nombre} del nivel ${deleteModal.item.nivel_nombre}.`
-                : `Vas a eliminar el curso ${deleteModal.item.tipo_grado_nombre} ${deleteModal.item.seccion_nombre} de ${deleteModal.item.jornada_nombre}.` }}
-            </p>
-            <p class="mt-3 text-sm font-semibold text-red-700/90">
-              Antes de continuar, verifica que no tenga matrículas, asignaciones docentes, competencias u otras relaciones académicas dependientes.
+      <!-- Delete Confirmation Modal -->
+      <div v-if="deleteModal" class="fixed inset-0 z-[110] flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-red-950/30 backdrop-blur-md" @click="closeDeleteModal"></div>
+        <div class="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-[32px] overflow-hidden shadow-2xl">
+          <div class="p-8 text-center">
+            <div class="w-16 h-16 bg-red-50 dark:bg-red-950/30 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Trash2 :size="32" />
+            </div>
+            <h2 class="text-xl font-black text-slate-900 dark:text-white">¿Confirmas la eliminación?</h2>
+            <p class="text-slate-500 dark:text-slate-400 font-medium mt-3 leading-relaxed">
+              Estás a punto de eliminar 
+              <span class="font-black text-slate-800 dark:text-slate-200">
+                {{ deleteModal.kind === 'grade' ? deleteModal.item.nombre : `${deleteModal.item.tipo_grado_nombre} ${deleteModal.item.seccion_nombre}` }}
+              </span>. 
+              Esta acción no se puede deshacer si el registro tiene dependencias.
             </p>
           </div>
-
-          <div class="mt-5 rounded-3xl border border-slate-200 bg-slate-50 p-5 text-sm font-semibold text-slate-600">
-            Si el registro tiene vínculos activos, el sistema rechazará la eliminación y mostrará el motivo.
-          </div>
-
-          <div class="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-end">
-            <button
-              type="button"
-              @click="closeDeleteModal"
+          
+          <div class="bg-slate-50 dark:bg-slate-800/50 p-6 flex gap-3">
+            <button @click="closeDeleteModal" class="flex-1 px-6 py-3 rounded-xl font-black text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800 transition-all">Cancelar</button>
+            <button 
+              @click="deleteModal.kind === 'grade' ? deleteGradeType(deleteModal.item) : deleteGroup(deleteModal.item)"
               :disabled="deleting"
-              class="rounded-2xl border border-slate-200 px-6 py-4 text-sm font-black text-slate-700 disabled:opacity-50"
+              class="flex-1 bg-red-500 text-white px-6 py-3 rounded-xl font-black shadow-lg shadow-red-100 dark:shadow-none hover:bg-red-600 transition-all disabled:opacity-50"
             >
-              Cancelar
-            </button>
-            <button
-              v-if="deleteModal.kind === 'grade'"
-              type="button"
-              @click="deleteGradeType(deleteModal.item)"
-              :disabled="deleting"
-              class="inline-flex min-h-14 items-center justify-center gap-3 rounded-2xl bg-red-600 px-8 py-4 text-base font-black text-white shadow-sm disabled:opacity-50"
-            >
-              <Trash2 class="h-4 w-4" />
-              {{ deleting ? 'Eliminando...' : 'Eliminar grado' }}
-            </button>
-            <button
-              v-else
-              type="button"
-              @click="deleteGroup(deleteModal.item)"
-              :disabled="deleting"
-              class="inline-flex min-h-14 items-center justify-center gap-3 rounded-2xl bg-red-600 px-8 py-4 text-base font-black text-white shadow-sm disabled:opacity-50"
-            >
-              <Trash2 class="h-4 w-4" />
-              {{ deleting ? 'Eliminando...' : 'Eliminar curso' }}
+              {{ deleting ? 'Eliminando...' : 'Sí, Eliminar' }}
             </button>
           </div>
         </div>
+      </div>
+    </Teleport>
+
+    <!-- Info Tip -->
+    <div class="bg-indigo-50/50 dark:bg-indigo-950/20 p-5 rounded-3xl flex items-start gap-4 border border-indigo-100/50 dark:border-indigo-900/50 transition-colors">
+      <div class="p-2 bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-400 rounded-xl">
+        <Info :size="20" />
+      </div>
+      <div>
+        <p class="text-sm font-bold text-indigo-900 dark:text-indigo-300 uppercase tracking-wider">Tip de Gestión</p>
+        <p class="text-indigo-700/80 dark:text-indigo-400/80 text-sm mt-1 font-medium leading-relaxed">
+          Los grados son la estructura base (ej: Sexto, Séptimo), mientras que los cursos son las secciones operativas con una jornada específica (ej: 6-A Tarde). 
+          Asegúrate de configurar los grados antes de proceder con los cursos.
+        </p>
       </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #e2e8f0;
+  border-radius: 10px;
+}
+.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #1e293b;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #cbd5e1;
+}
+</style>

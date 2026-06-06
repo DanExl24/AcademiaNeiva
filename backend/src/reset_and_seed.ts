@@ -4,7 +4,7 @@ import path from "path";
 import { PoolClient } from "pg";
 import { ensureCompetencySchema } from "./config/competencyMigration";
 import { pool } from "./config/db";
-import { DEFAULT_ACADEMIC_PERIOD_MONTH_RULES } from "./config/academicCalendarDefaults";
+import { DEFAULT_ACADEMIC_PERIOD_MONTH_RULES, getPeriodRules } from "./config/academicCalendarDefaults";
 
 type SchoolSeed = {
   id: number;
@@ -15,6 +15,7 @@ type SchoolSeed = {
   correo: string;
   dane: string;
   domain: string;
+  tipo_calendario: 'A' | 'B';
 };
 
 type TeacherSeed = {
@@ -42,56 +43,12 @@ const DOCENTE_PASSWORD = "docente123";
 const CUPOS_POR_CURSO = 30;
 
 const schools: SchoolSeed[] = [
-  {
-    id: 1,
-    nombre: "CEA School Empresarial de los Andes",
-    tipo: "Privado",
-    sede: "Sede Principal",
-    contacto: 3183118044,
-    correo: "rectoria@ceaschool.edu.co",
-    dane: "341001005652",
-    domain: "ceaschool.edu.co",
-  },
-  {
-    id: 2,
-    nombre: "Institución Educativa El Caguán",
-    tipo: "Oficial",
-    sede: "Sede Principal",
-    contacto: 3180000000,
-    correo: "iecaguan@alcaldianeiva.gov.co",
-    dane: "441001002747",
-    domain: "iecaguan.edu.co",
-  },
-  {
-    id: 3,
-    nombre: "Colegio Heisenberg Neiva",
-    tipo: "Privado",
-    sede: "Sede Principal",
-    contacto: 3169100003,
-    correo: "colegioheisenberg@hotmail.com",
-    dane: "DANE-H-001",
-    domain: "heisenberg.edu.co",
-  },
-  {
-    id: 4,
-    nombre: "Colegio Claretiano de Neiva",
-    tipo: "Privado",
-    sede: "Sede Principal",
-    contacto: 3161720175,
-    correo: "admisiones@claretianoneiva.edu.co",
-    dane: "DANE-C-002",
-    domain: "claretianoneiva.edu.co",
-  },
-  {
-    id: 5,
-    nombre: "Colegio IDESA",
-    tipo: "Privado",
-    sede: "Sede Principal",
-    contacto: 3153077861,
-    correo: "info@colegioidesa.com.co",
-    dane: "DANE-I-003",
-    domain: "colegioidesa.edu.co",
-  },
+  // All schools set to Calendario A (Jan-Dec) as per user request
+  { id: 1, nombre: "CEA School Empresarial de los Andes", tipo: "Privado", sede: "Sede Principal", contacto: 3183118044, correo: "rectoria@ceaschool.edu.co", dane: "341001005652", domain: "ceaschool.edu.co", tipo_calendario: 'A' },
+  { id: 2, nombre: "Institución Educativa El Caguán", tipo: "Oficial", sede: "Sede Principal", contacto: 3180000000, correo: "iecaguan@alcaldianeiva.gov.co", dane: "441001002747", domain: "iecaguan.edu.co", tipo_calendario: 'A' },
+  { id: 3, nombre: "Colegio Heisenberg Neiva", tipo: "Privado", sede: "Sede Principal", contacto: 3169100003, correo: "colegioheisenberg@hotmail.com", dane: "DANE-H-001", domain: "heisenberg.edu.co", tipo_calendario: 'A' },
+  { id: 4, nombre: "Colegio Claretiano de Neiva", tipo: "Privado", sede: "Sede Principal", contacto: 3161720175, correo: "admisiones@claretianoneiva.edu.co", dane: "DANE-C-002", domain: "claretianoneiva.edu.co", tipo_calendario: 'A' },
+  { id: 5, nombre: "Colegio IDESA", tipo: "Privado", sede: "Sede Principal", contacto: 3153077861, correo: "info@colegioidesa.com.co", dane: "DANE-I-003", domain: "colegioidesa.edu.co", tipo_calendario: 'A' },
 ];
 
 const sectionNames = ["A", "B"];
@@ -441,15 +398,37 @@ async function insertSchoolAcademicStructure(
   const teacherIdsBySubject: Record<string, number> = {};
   const groupIds: number[] = [];
 
+  // --- Add tipo_calendario migration if column doesn't exist ---
+  await client.query(`
+    ALTER TABLE colegio ADD COLUMN IF NOT EXISTS tipo_calendario CHAR(1) DEFAULT 'A';
+  `);
+  await client.query(
+    `UPDATE colegio SET tipo_calendario = $1 WHERE id_colegio = $2`,
+    [school.tipo_calendario, school.id]
+  );
+
+  // Ensure año_lectivo has tipo_calendario column
+  await client.query(`
+    ALTER TABLE "año_lectivo" ADD COLUMN IF NOT EXISTS tipo_calendario CHAR(1) DEFAULT 'A';
+  `);
+
+  // Year label: 'A' = '2026', 'B' = '2025-2026'
+  const yearLabel = school.tipo_calendario === 'B'
+    ? `${parseInt(CURRENT_YEAR) - 1}-${CURRENT_YEAR}`
+    : CURRENT_YEAR;
+
   const academicYearResult = await client.query<{ id_año: number }>(
     `
-      INSERT INTO "año_lectivo" (calendario, id_colegio)
-      VALUES ($1, $2)
+      INSERT INTO "año_lectivo" (calendario, id_colegio, tipo_calendario)
+      VALUES ($1, $2, $3)
       RETURNING "id_año"
     `,
-    [CURRENT_YEAR, school.id]
+    [yearLabel, school.id, school.tipo_calendario]
   );
   const academicYearId = academicYearResult.rows[0].id_año;
+
+  // Get period rules based on calendar type
+  const periodRules = getPeriodRules(school.tipo_calendario);
 
   for (const levelSeed of levelSeeds) {
     const levelResult = await client.query<{ id_nivel: number }>(
@@ -477,7 +456,7 @@ async function insertSchoolAcademicStructure(
   }
 
   for (const periodSeed of periodSeeds) {
-    const monthRule = DEFAULT_ACADEMIC_PERIOD_MONTH_RULES.find(r => r.order === periodSeed.trimestre);
+    const monthRule = periodRules.find(r => r.order === periodSeed.trimestre);
     
     await client.query(
       `

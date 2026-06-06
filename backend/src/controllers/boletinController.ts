@@ -45,11 +45,12 @@ export const getStudentBoletin = async (req: Request, res: Response) => {
     const periodoDetails = periodRes.rows[0];
     const idAnio = periodoDetails["id_año"] || periodoDetails["id_año".toLowerCase()];
 
-    // 2. Fetch Student Info
+    // 2. Fetch Student Info (including school calendar type)
     const studentRes = await pool.query(`
-      SELECT e.id_estudiante, e.nombre, e.apellido, e.documento, e.codigo,
+      SELECT e.id_estudiante, e.nombre as estudiante_nombre, e.apellido as estudiante_apellido, e.documento, e.codigo,
              e.id_colegio,
              c.nombre as colegio_nombre, c.sede, c.dane,
+             COALESCE(c.tipo_calendario, 'A') as tipo_calendario,
              g.nivel, g.seccion, tg.nombre as grado_nombre,
              j.nombre as jornada_nombre,
              al.calendario
@@ -243,9 +244,11 @@ export const getStudentBoletin = async (req: Request, res: Response) => {
 
     res.json({
       periodo: periodoDetails.nombre,
-      ano_lectivo: idAnio,
+      ano_lectivo: studentInfo.calendario,
       estudiante: {
          ...studentInfo,
+         nombre: studentInfo.estudiante_nombre,
+         apellido: studentInfo.estudiante_apellido,
          dane: studentInfo.dane || '183001000940',
          resolucion: studentInfo.resolucion || 'Resol. Jornada Única No. 070 del 01 de Feb. de 2021 Expedida por la Secretaría de Educación Municipal',
          ciudad: studentInfo.ciudad || 'Florencia - Caquetá'

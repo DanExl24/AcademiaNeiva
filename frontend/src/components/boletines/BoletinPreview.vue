@@ -43,22 +43,22 @@
       <div class="bg-gray-50 border border-gray-200 rounded-xl mb-6 shadow-sm overflow-hidden" style="font-family: 'Quicksand', sans-serif;">
         <div class="grid grid-cols-12 divide-y md:divide-y-0 md:divide-x divide-gray-200">
           
-          <div class="col-span-12 md:col-span-3 bg-white p-4 flex flex-col justify-center">
-            <span class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1">Código Estudiantil</span>
-            <span class="text-indigo-600 font-black text-lg">{{ data?.estudiante?.codigo }}</span>
+          <div class="col-span-12 md:col-span-12 lg:col-span-3 bg-white p-4 flex flex-col justify-center">
+            <span class="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1">Código Estudiantil</span>
+            <span class="text-slate-700 font-black text-lg">{{ data?.estudiante?.codigo }}</span>
           </div>
 
-          <div class="col-span-12 md:col-span-6 bg-white p-4 flex flex-col justify-center">
-            <span class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1">Nombre del Estudiante</span>
-            <span class="text-gray-900 font-extrabold text-lg uppercase truncate">{{ data?.estudiante?.apellido }} {{ data?.estudiante?.nombre }}</span>
+          <div class="col-span-12 md:col-span-12 lg:col-span-6 bg-white p-4 flex flex-col justify-center border-x border-gray-100">
+            <span class="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1">Nombre del Estudiante</span>
+            <span class="text-gray-900 font-black text-base uppercase leading-tight">{{ data?.estudiante?.apellido }} {{ data?.estudiante?.nombre }}</span>
           </div>
 
-          <div class="col-span-12 md:col-span-3 bg-indigo-50 p-4 flex flex-col justify-center relative overflow-hidden">
-            <div class="absolute -right-4 -top-8 text-indigo-100 opacity-50">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-24 w-24" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+          <div class="col-span-12 md:col-span-12 lg:col-span-3 bg-indigo-50/50 p-4 flex flex-col justify-center relative overflow-hidden">
+            <div class="absolute -right-2 -top-4 text-indigo-200/30">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
             </div>
             <span class="text-[10px] text-indigo-400 font-bold uppercase tracking-widest mb-1 relative z-10">Periodo</span>
-            <span class="text-indigo-700 font-black text-lg uppercase relative z-10">{{ data?.periodo }}</span>
+            <span class="text-indigo-700 font-black text-sm uppercase relative z-10">{{ data?.periodo }}</span>
           </div>
         </div>
 

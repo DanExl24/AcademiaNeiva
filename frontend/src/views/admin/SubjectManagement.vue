@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import axios from 'axios'
-import { BookOpen, Plus, Trash2 } from 'lucide-vue-next'
+import { BookOpen, Plus, Trash2, Search, Info, Layers, GraduationCap } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 
 interface SubjectItem {
@@ -12,21 +12,31 @@ interface SubjectItem {
 }
 
 const auth = useAuthStore()
-const schoolId = Number(auth.user?.schoolId || 0)
+const schoolId = computed(() => Number(auth.user?.schoolId || 0))
 
 const loading = ref(true)
 const saving = ref(false)
 const deleting = ref(false)
 const subjects = ref<SubjectItem[]>([])
-const newSubjectName = ref('')
+const searchTerm = ref('')
 const createModalOpen = ref(false)
 const deleteModal = ref<SubjectItem | null>(null)
 
+const newSubject = ref({
+  nombre: ''
+})
+
+const filteredSubjects = computed(() => {
+  const term = searchTerm.value.trim().toLowerCase()
+  if (!term) return subjects.value
+  return subjects.value.filter(s => s.nombre.toLowerCase().includes(term))
+})
+
 const loadSubjects = async () => {
-  if (!schoolId) return
+  if (!schoolId.value) return
   try {
     loading.value = true
-    const response = await axios.get(`http://localhost:3000/api/academic-admin/subjects/${schoolId}`)
+    const response = await axios.get(`http://localhost:3000/api/academic-admin/subjects/${schoolId.value}`)
     subjects.value = response.data
   } catch (error) {
     console.error('Error loading subjects:', error)
@@ -37,7 +47,7 @@ const loadSubjects = async () => {
 
 const createSubject = async () => {
   if (saving.value) return
-  if (!newSubjectName.value.trim()) {
+  if (!newSubject.value.nombre.trim()) {
     alert('Escribe el nombre de la materia antes de crearla.')
     return
   }
@@ -45,10 +55,10 @@ const createSubject = async () => {
   try {
     saving.value = true
     await axios.post('http://localhost:3000/api/academic-admin/subjects', {
-      schoolId,
-      nombre: newSubjectName.value,
+      schoolId: schoolId.value,
+      nombre: newSubject.value.nombre,
     })
-    newSubjectName.value = ''
+    newSubject.value.nombre = ''
     createModalOpen.value = false
     await loadSubjects()
   } catch (error: any) {
@@ -58,11 +68,11 @@ const createSubject = async () => {
   }
 }
 
-const deleteSubject = async (item: SubjectItem) => {
+const confirmDelete = async (item: SubjectItem) => {
   try {
     deleting.value = true
     await axios.delete(`http://localhost:3000/api/academic-admin/subjects/${item.id_materia}`, {
-      params: { schoolId },
+      params: { schoolId: schoolId.value },
     })
     deleteModal.value = null
     await loadSubjects()
@@ -77,158 +87,178 @@ onMounted(loadSubjects)
 </script>
 
 <template>
-  <div class="space-y-8">
-    <div class="bg-white rounded-3xl border border-slate-100 shadow-sm p-8">
-      <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <h1 class="text-3xl font-black text-slate-900">Gestión de Materias</h1>
-          <p class="mt-2 text-slate-500">Crea y administra el catálogo global de materias del colegio.</p>
+  <div class="max-w-[1200px] mx-auto space-y-6">
+    <!-- Modern Header -->
+    <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden transition-all duration-300">
+      <div class="px-8 py-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div class="flex items-center gap-4">
+          <div class="p-4 bg-emerald-50 dark:bg-emerald-950/30 rounded-2xl text-emerald-600 dark:text-emerald-400">
+            <BookOpen :size="32" />
+          </div>
+          <div>
+            <h1 class="text-2xl font-black text-slate-900 dark:text-white leading-tight">Gestión de Materias</h1>
+            <p class="text-slate-500 dark:text-slate-400 font-medium">Administra el catálogo global de asignaturas institucionales.</p>
+          </div>
         </div>
-        <button
-          type="button"
-          @click="createModalOpen = true"
-          class="inline-flex min-h-14 items-center justify-center gap-3 rounded-2xl bg-emerald-600 px-8 py-4 text-base font-black text-white shadow-sm transition-all hover:-translate-y-0.5 hover:bg-emerald-500"
-        >
-          <Plus class="w-5 h-5" />
-          Crear materia
+        
+        <button @click="createModalOpen = true" class="flex items-center gap-2 px-6 py-3.5 bg-emerald-600 text-white rounded-xl font-bold text-sm hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 dark:shadow-none whitespace-nowrap">
+          <Plus :size="20" />
+          Nueva Materia
         </button>
       </div>
     </div>
 
-    <section class="bg-white rounded-3xl border border-slate-100 shadow-sm p-8">
-      <div class="flex items-center gap-3">
-        <div class="rounded-2xl bg-emerald-50 p-3 text-emerald-600">
-          <BookOpen class="w-6 h-6" />
+    <!-- Stats & Search Bar -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div class="md:col-span-3 relative">
+        <Search class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" :size="18" />
+        <input 
+          v-model="searchTerm" 
+          type="text" 
+          placeholder="Buscar materia por nombre..."
+          class="w-full bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl py-4 pl-12 pr-4 text-sm font-semibold outline-none text-slate-900 dark:text-white shadow-sm focus:ring-2 focus:ring-emerald-500/10 transition-all"
+        />
+      </div>
+      <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-4 flex items-center justify-between shadow-sm">
+        <div class="flex items-center gap-3">
+          <div class="p-2 bg-slate-50 dark:bg-slate-800 rounded-lg text-slate-400">
+            <Layers :size="16" />
+          </div>
+          <span class="text-xs font-black text-slate-400 uppercase tracking-wider">Total</span>
         </div>
-        <div>
-          <h2 class="text-xl font-black text-slate-900">Crear materia</h2>
-          <p class="text-sm text-slate-500">Abre el formulario en modal para registrar nuevas materias sin exponer campos en la vista.</p>
+        <span class="text-xl font-black text-slate-900 dark:text-white">{{ subjects.length }}</span>
+      </div>
+    </div>
+
+    <!-- Subjects Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div v-if="loading" class="col-span-full bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 p-16 text-center text-slate-400 font-bold">
+        Cargando catálogo...
+      </div>
+      
+      <template v-else>
+        <div v-if="filteredSubjects.length === 0" class="col-span-full h-64 flex flex-col items-center justify-center text-slate-400">
+          <Search :size="48" class="mb-4 opacity-20" />
+          <p class="font-bold">No se encontraron materias</p>
         </div>
-      </div>
-    </section>
 
-    <section class="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
-      <div class="border-b border-slate-100 p-6">
-        <h2 class="text-xl font-black text-slate-900">Materias del colegio</h2>
-      </div>
+        <div 
+          v-for="item in filteredSubjects" 
+          :key="item.id_materia"
+          class="group bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-md hover:border-emerald-200 dark:hover:border-emerald-900 transition-all flex flex-col justify-between"
+        >
+          <div class="flex items-start justify-between mb-4">
+            <div class="flex items-center gap-3">
+              <div class="h-10 w-10 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 flex items-center justify-center rounded-xl font-black text-sm">
+                {{ item.nombre.charAt(0).toUpperCase() }}
+              </div>
+              <h4 class="font-black text-slate-800 dark:text-white text-lg truncate max-w-[150px]">{{ item.nombre }}</h4>
+            </div>
+            <button @click="deleteModal = item" class="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-xl transition-all">
+              <Trash2 :size="18" />
+            </button>
+          </div>
 
-      <div v-if="loading" class="p-16 text-center text-slate-400 font-bold">
-        Cargando materias...
-      </div>
-
-      <div v-else-if="subjects.length === 0" class="p-16 text-center text-slate-400 font-bold">
-        Aún no hay materias registradas.
-      </div>
-
-      <div v-else class="divide-y divide-slate-100">
-        <div v-for="item in subjects" :key="item.id_materia" class="flex items-center justify-between gap-4 p-6">
-          <div>
-            <p class="text-sm font-black text-slate-900">{{ item.nombre }}</p>
-            <div class="mt-3 flex flex-wrap gap-2 text-[11px] font-bold">
-              <span class="rounded-full bg-slate-100 px-3 py-1 text-slate-600">{{ item.asignaciones_count }} asignaciones</span>
-              <span class="rounded-full bg-slate-100 px-3 py-1 text-slate-600">{{ item.competencias_count }} competencias</span>
+          <div class="flex items-center gap-4 mt-2">
+            <div class="flex-1 flex flex-col">
+              <span class="text-[10px] font-black text-slate-400 uppercase tracking-tighter">Asignaciones</span>
+              <div class="flex items-center gap-1.5 mt-1">
+                <GraduationCap :size="14" class="text-indigo-400" />
+                <span class="text-sm font-black text-slate-700 dark:text-slate-300">{{ item.asignaciones_count }}</span>
+              </div>
+            </div>
+            <div class="flex-1 flex flex-col border-l border-slate-50 dark:border-slate-800 pl-4">
+              <span class="text-[10px] font-black text-slate-400 uppercase tracking-tighter">Competencias</span>
+              <div class="flex items-center gap-1.5 mt-1">
+                <Info :size="14" class="text-amber-400" />
+                <span class="text-sm font-black text-slate-700 dark:text-slate-300">{{ item.competencias_count }}</span>
+              </div>
             </div>
           </div>
-          <button @click="deleteModal = item" class="rounded-2xl bg-red-50 p-3 text-red-500 hover:bg-red-100 transition-colors">
-            <Trash2 class="w-4 h-4" />
-          </button>
         </div>
-      </div>
-    </section>
-
-    <div class="rounded-3xl border border-emerald-100 bg-emerald-50 p-6 text-sm font-semibold text-emerald-700">
-      Si una materia ya está asociada a asignaciones docentes o competencias, el sistema bloquea su eliminación y muestra el motivo.
+      </template>
     </div>
 
-    <div v-if="createModalOpen" class="fixed inset-0 z-[100] flex min-h-screen w-screen items-center justify-center bg-slate-950/88 backdrop-blur-md p-4">
-      <div class="w-full max-w-xl rounded-[28px] bg-white shadow-2xl">
-        <div class="flex items-start justify-between gap-4 border-b border-slate-100 px-6 py-5 md:px-8">
-          <div>
-            <p class="text-xs font-black uppercase tracking-[0.24em] text-slate-400">Creación rápida</p>
-            <h2 class="mt-1 text-2xl font-black text-slate-900">Nueva materia</h2>
-            <p class="mt-2 text-sm font-semibold text-slate-500">
-              Registra una materia nueva. El sistema evita duplicados dentro del mismo colegio.
-            </p>
+    <!-- Info Banner -->
+    <div class="bg-emerald-50/50 dark:bg-emerald-950/20 p-5 rounded-3xl flex items-start gap-4 border border-emerald-100/50 dark:border-emerald-900/50">
+      <div class="p-2 bg-emerald-100 dark:bg-emerald-900 text-emerald-600 dark:text-emerald-400 rounded-xl">
+        <Info :size="20" />
+      </div>
+      <p class="text-emerald-700/80 dark:text-emerald-400/80 text-sm font-medium leading-relaxed">
+        Las materias creadas aquí forman el catálogo global de la escuela. Luego podrás asignarlas a diferentes cursos y docentes desde el módulo de "Docentes" o "Mis Cursos".
+      </p>
+    </div>
+
+    <!-- Modals (Teleported) -->
+    <Teleport to="body">
+      <!-- Create Modal -->
+      <div v-if="createModalOpen" class="fixed inset-0 z-[100] flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" @click="createModalOpen = false"></div>
+        <div class="relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-[32px] shadow-2xl overflow-hidden border border-white/20">
+          <div class="px-8 pt-8 pb-6 bg-slate-50/50 dark:bg-slate-800/30 border-b border-slate-100 dark:border-slate-800">
+            <h2 class="text-2xl font-black text-slate-900 dark:text-white flex items-center gap-3">
+              <Plus :size="24" class="text-emerald-600" />
+              Nueva Materia
+            </h2>
+            <p class="text-slate-500 dark:text-slate-400 text-sm font-medium mt-1">Define el nombre de la asignatura para el catálogo.</p>
           </div>
-          <button type="button" @click="createModalOpen = false" class="rounded-2xl bg-slate-100 px-4 py-2 text-sm font-black text-slate-600 transition-all hover:bg-slate-200">
-            Cerrar
-          </button>
-        </div>
 
-        <div class="px-6 py-6 md:px-8 md:py-8">
-          <label class="space-y-2">
-            <span class="block text-sm font-black text-slate-700">Nombre de la materia</span>
-            <input
-              v-model="newSubjectName"
-              type="text"
-              placeholder="Ej. Matemáticas"
-              class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-semibold outline-none"
-            />
-          </label>
+          <div class="p-8 space-y-6">
+            <div class="space-y-4">
+              <div class="space-y-2">
+                <label class="text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Nombre de la Materia</label>
+                <input 
+                  v-model="newSubject.nombre" 
+                  type="text" 
+                  placeholder="Ej. Física Teórica" 
+                  class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-emerald-500/20 rounded-2xl p-4 font-bold outline-none text-slate-900 dark:text-white transition-all placeholder:text-slate-400" 
+                />
+              </div>
+            </div>
 
-          <div class="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-end">
-            <button type="button" @click="createModalOpen = false" class="rounded-2xl border border-slate-200 px-6 py-4 text-sm font-black text-slate-700">
-              Cancelar
-            </button>
-            <button
-              type="button"
-              @click="createSubject"
-              :disabled="saving"
-              class="inline-flex min-h-14 items-center justify-center gap-3 rounded-2xl bg-emerald-600 px-8 py-4 text-base font-black text-white shadow-sm disabled:opacity-50"
-            >
-              <Plus class="w-4 h-4" />
-              {{ saving ? 'Creando...' : 'Crear materia' }}
-            </button>
+            <div class="flex gap-3 pt-2">
+              <button @click="createModalOpen = false" class="flex-1 px-6 py-4 rounded-2xl font-black text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all">Cancelar</button>
+              <button @click="createSubject" :disabled="saving" class="flex-[2] bg-slate-900 dark:bg-white dark:text-slate-900 text-white px-6 py-4 rounded-2xl font-black shadow-xl shadow-slate-200 dark:shadow-none hover:translate-y-[-2px] active:translate-y-0 transition-all disabled:opacity-50">
+                {{ saving ? 'Registrando...' : 'Confirmar Registro' }}
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <div v-if="deleteModal" class="fixed inset-0 z-[110] flex min-h-screen w-screen items-center justify-center bg-slate-950/90 backdrop-blur-md p-4">
-      <div class="w-full max-w-2xl rounded-[28px] bg-white shadow-2xl">
-        <div class="border-b border-slate-100 px-6 py-5 md:px-8">
-          <p class="text-xs font-black uppercase tracking-[0.24em] text-red-400">Eliminación sensible</p>
-          <h2 class="mt-1 text-2xl font-black text-slate-900">Eliminar materia</h2>
-          <p class="mt-2 text-sm font-semibold text-slate-500">
-            Esta acción puede afectar asignaciones docentes, competencias y otras relaciones académicas activas.
-          </p>
-        </div>
-
-        <div class="px-6 py-6 md:px-8 md:py-8">
-          <div class="rounded-3xl border border-red-100 bg-red-50 p-5">
-            <p class="text-sm font-black text-red-700">
-              Vas a eliminar la materia {{ deleteModal.nombre }}.
+      <!-- Delete Modal -->
+      <div v-if="deleteModal" class="fixed inset-0 z-[110] flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-red-950/30 backdrop-blur-md" @click="deleteModal = null"></div>
+        <div class="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-[32px] overflow-hidden shadow-2xl">
+          <div class="p-8 text-center">
+            <div class="w-16 h-16 bg-red-50 dark:bg-red-950/30 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Trash2 :size="32" />
+            </div>
+            <h2 class="text-xl font-black text-slate-900 dark:text-white">¿Eliminar esta materia?</h2>
+            <p class="text-slate-500 dark:text-slate-400 font-medium mt-3 leading-relaxed">
+              Vas a eliminar <span class="font-black text-slate-800 dark:text-white">{{ deleteModal.nombre }}</span>. 
+              Esta acción puede fallar si existen asignaciones docentes o registros activos vinculados.
             </p>
-            <p class="mt-3 text-sm font-semibold text-red-700/90">
-              Revisa primero si esta materia tiene asignaciones docentes o competencias asociadas. Si existen, el sistema bloqueará la eliminación.
-            </p>
+            <div v-if="deleteModal.asignaciones_count > 0 || deleteModal.competencias_count > 0" class="mt-4 px-4 py-3 bg-amber-50 dark:bg-amber-950/30 rounded-xl text-amber-700 dark:text-amber-400 text-xs font-bold ring-1 ring-amber-100 dark:ring-amber-900">
+              Advertencia: Tiene {{ deleteModal.asignaciones_count }} asignaciones y {{ deleteModal.competencias_count }} competencias activas.
+            </div>
           </div>
-
-          <div class="mt-5 rounded-3xl border border-slate-200 bg-slate-50 p-5 text-sm font-semibold text-slate-600">
-            Relaciones detectadas actualmente: {{ deleteModal.asignaciones_count }} asignaciones y {{ deleteModal.competencias_count }} competencias.
-          </div>
-
-          <div class="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-end">
-            <button
-              type="button"
-              @click="deleteModal = null"
+          
+          <div class="bg-slate-50 dark:bg-slate-800/50 p-6 flex gap-3">
+            <button @click="deleteModal = null" class="flex-1 px-6 py-3 rounded-xl font-black text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800 transition-all">Cancelar</button>
+            <button 
+              @click="confirmDelete(deleteModal)"
               :disabled="deleting"
-              class="rounded-2xl border border-slate-200 px-6 py-4 text-sm font-black text-slate-700 disabled:opacity-50"
+              class="flex-1 bg-red-500 text-white px-6 py-3 rounded-xl font-black shadow-lg shadow-red-100 dark:shadow-none hover:bg-red-600 transition-all disabled:opacity-50"
             >
-              Cancelar
-            </button>
-            <button
-              type="button"
-              @click="deleteSubject(deleteModal)"
-              :disabled="deleting"
-              class="inline-flex min-h-14 items-center justify-center gap-3 rounded-2xl bg-red-600 px-8 py-4 text-base font-black text-white shadow-sm disabled:opacity-50"
-            >
-              <Trash2 class="w-4 h-4" />
-              {{ deleting ? 'Eliminando...' : 'Eliminar materia' }}
+              {{ deleting ? 'Eliminando...' : 'Sí, Eliminar' }}
             </button>
           </div>
         </div>
       </div>
-    </div>
+    </Teleport>
   </div>
 </template>
+
+<style scoped>
+</style>
