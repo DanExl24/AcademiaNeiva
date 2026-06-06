@@ -19,8 +19,7 @@ import {
   Moon,
   FileText,
   BookOpen,
-  MessageSquare,
-  History
+  MessageSquare
 } from 'lucide-vue-next'
 import { useAuthStore } from '../stores/auth'
 import { useThemeStore } from '../stores/theme'
@@ -57,6 +56,7 @@ const menuItems = computed(() => {
       { name: 'Mis Hijos', icon: Users, path: '/dashboard/hijos' },
       { name: 'Calificaciones', icon: ClipboardList, path: '/dashboard/notas-hijos' },
       { name: 'Asistencia', icon: CalendarCheck, path: '/dashboard/asistencia-hijos' },
+      { name: 'Observaciones', icon: MessageSquare, path: '/dashboard/observaciones-hijos' },
     ]
   }
 
@@ -65,8 +65,7 @@ const menuItems = computed(() => {
       { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
       { name: 'Mis Notas', icon: BookOpen, path: '/dashboard/mis-notas' },
       { name: 'Mi Asistencia', icon: CalendarCheck, path: '/dashboard/mi-asistencia' },
-      { name: 'Observaciones', icon: MessageSquare, path: '/dashboard/mis-observaciones' },
-      { name: 'Historial Académico', icon: History, path: '/dashboard/mi-historial' },
+      { name: 'Observaciones', icon: MessageSquare, path: '/dashboard/mi-observacion' },
     ]
   }
   

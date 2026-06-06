@@ -339,6 +339,48 @@ export const getStudentAttendance = async (req: Request, res: Response) => {
 };
 
 /**
+ * Gets academic observations for a specific student and period
+ */
+export const getStudentObservations = async (req: Request, res: Response) => {
+  const { id_estudiante, id_periodo } = req.params;
+  const { tipo } = req.query;
+
+  try {
+    let query = `
+      SELECT 
+        oe.id_observacion,
+        oe.fortalezas,
+        oe.debilidades,
+        oe.recomendaciones,
+        oe.fecha,
+        oe.tipo,
+        m.nombre as materia,
+        d.nombre || ' ' || d.apellido as docente
+      FROM observacion_estudiante oe
+      JOIN detalle_grados dg ON dg.id_detallegrado = oe.id_detallegrado
+      JOIN materias m ON m.id_materia = dg.id_materia
+      JOIN docente d ON d.id_docente = dg.id_docente
+      WHERE oe.id_estudiante = $1 AND oe.id_periodo = $2
+    `;
+
+    const params: any[] = [id_estudiante, id_periodo];
+
+    if (tipo && tipo !== 'all') {
+      query += ` AND oe.tipo = $3`;
+      params.push(tipo);
+    }
+
+    query += ` ORDER BY m.nombre ASC`;
+
+    const result = await pool.query(query, params);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching student observations:', error);
+    res.status(500).json({ error: 'Error al obtener las observaciones académicas' });
+  }
+};
+
+/**
  * Gets student ID from user ID (for logged in students)
  */
 export const getStudentIdByUserId = async (req: Request, res: Response) => {

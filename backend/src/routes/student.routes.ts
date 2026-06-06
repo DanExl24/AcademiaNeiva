@@ -7,7 +7,8 @@ import {
   getParentChildren,
   getStudentIdByUserId,
   getGradeDetails,
-  getStudentAttendance
+  getStudentAttendance,
+  getStudentObservations
 } from '../controllers/studentPortalController';
 
 const router = Router();
@@ -18,6 +19,7 @@ router.get('/periods/:id_estudiante/:id_anio', getStudentClosedPeriods);
 router.get('/grades/:id_estudiante/:id_periodo', getStudentGrades);
 router.get('/grade-details/:id_estudiante/:id_periodo/:id_materia', getGradeDetails);
 router.get('/attendance/:id_estudiante/:id_periodo', getStudentAttendance);
+router.get('/observations/:id_estudiante/:id_periodo', getStudentObservations);
 router.get('/info/:id_estudiante', getStudentInfo);
 router.get('/user-id/:id_usuario', getStudentIdByUserId);
 

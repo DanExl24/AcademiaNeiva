@@ -840,6 +840,13 @@ async function run(): Promise<void> {
 
       -- 4. Ampliar longitud de calendario en año_lectivo
       ALTER TABLE public."año_lectivo" ALTER COLUMN calendario TYPE VARCHAR(10);
+
+      -- 5. Agregar columna tipo a observacion_estudiante
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='observacion_estudiante' AND column_name='tipo') THEN
+          ALTER TABLE public.observacion_estudiante ADD COLUMN tipo character varying(20) DEFAULT 'ACADEMICA';
+        END IF;
+      END $$;
     `);
 
     console.log("Insertando catálogos base...");

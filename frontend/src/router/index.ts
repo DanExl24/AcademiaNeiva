@@ -156,6 +156,11 @@ const router = createRouter({
           name: 'Mi Asistencia',
           component: () => import('../views/student/StudentAttendanceView.vue')
         },
+        {
+          path: 'mi-observacion',
+          name: 'student-observations',
+          component: () => import('../views/student/StudentObservationsView.vue')
+        },
         // Rutas del Padre
         {
           path: 'hijos',

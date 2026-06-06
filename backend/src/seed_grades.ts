@@ -72,10 +72,18 @@ async function runSeedGrades() {
             VALUES ($1, $2, $3, $4, 'APROBADO', NOW(), $5, 'Buen desempeño')
           `, [student.id_estudiante, dg.id_detallegrado, period.id_periodo, nota, dg.id_docente]);
           
-          await client.query(`
-            INSERT INTO observacion_estudiante (id_estudiante, id_detallegrado, id_periodo, fortalezas, debilidades, recomendaciones, fecha, id_colegio)
-            VALUES ($1, $2, $3, 'Estudiante sobresaliente', 'Ninguna', 'Continuar así', NOW(), $4)
-          `, [student.id_estudiante, dg.id_detallegrado, period.id_periodo, dg.id_colegio]);
+          const observationsTemplates = [
+            { tipo: 'ACADEMICA', fortalezas: 'Excelente comprensión de los temas vistos en clase.', debilidades: 'Ocasionalmente se distrae con facilidad.', recomendaciones: 'Mantener el ritmo de estudio y participación.' },
+            { tipo: 'DISCIPLINARIA', fortalezas: 'Respeta las normas del salón y a sus compañeros.', debilidades: 'A veces llega tarde a la primera sesión.', recomendaciones: 'Mejorar la puntualidad en el ingreso a clase.' },
+            { tipo: 'CONVIVENCIAL', fortalezas: 'Muestra gran empatía y liderazgo positivo.', debilidades: 'Debe aprender a manejar mejor los desacuerdos.', recomendaciones: 'Participar en las actividades de resolución de conflictos.' }
+          ];
+
+          for (const obs of observationsTemplates) {
+            await client.query(`
+              INSERT INTO observacion_estudiante (id_estudiante, id_detallegrado, id_periodo, fortalezas, debilidades, recomendaciones, fecha, id_colegio, tipo)
+              VALUES ($1, $2, $3, $4, $5, $6, NOW(), $7, $8)
+            `, [student.id_estudiante, dg.id_detallegrado, period.id_periodo, obs.fortalezas, obs.debilidades, obs.recomendaciones, dg.id_colegio, obs.tipo]);
+          }
           
           notasAgregadas++;
         }
