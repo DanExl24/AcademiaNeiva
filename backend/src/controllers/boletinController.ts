@@ -108,9 +108,9 @@ export const getStudentBoletin = async (req: Request, res: Response) => {
       ORDER BY p.trimestre, dg.id_materia
     `, [id_estudiante, idAnio]);
 
-    // 6. Fetch Observaciones del Periodo Actual
+    // 6. Fetch Observaciones del Periodo Actual - Ahora incluye el tipo
     const obsRes = await pool.query(`
-      SELECT dg.id_materia, oe.fortalezas, oe.debilidades, oe.recomendaciones
+      SELECT dg.id_materia, oe.fortalezas, oe.debilidades, oe.recomendaciones, oe.tipo
       FROM observacion_estudiante oe
       JOIN detalle_grados dg ON dg.id_detallegrado = oe.id_detallegrado
       WHERE oe.id_estudiante = $1 AND oe.id_periodo = $2
@@ -145,17 +145,18 @@ export const getStudentBoletin = async (req: Request, res: Response) => {
         Number(n.trimestre) <= targetTrimestre
       );
       
-      const obs = obsRes.rows.find(o => Number(o.id_materia) === mId);
+      // Filter multiple observations for this subject (instead of find)
+      const subjectObservations = obsRes.rows.filter(o => Number(o.id_materia) === mId).map(o => {
+        return {
+          tipo: o.tipo,
+          fortalezas: o.fortalezas ? o.fortalezas.split(/\\r?\\n|\\./).filter((f: string) => f.trim().length > 0).map((f: string) => f.trim()) : [],
+          debilidades: o.debilidades ? o.debilidades.split(/\\r?\\n|\\./).filter((f: string) => f.trim().length > 0).map((f: string) => f.trim()) : [],
+          recomendaciones: o.recomendaciones || ''
+        };
+      });
+
       const ausencias = ausenciasRes.rows.find(a => Number(a.id_materia) === mId)?.faltas || 0;
       const desempenos = compRes.rows.filter(c => Number(c.id_materia) === mId).map(c => c.descripcion);
-      
-      const fortalezas = obs?.fortalezas 
-        ? obs.fortalezas.split(/\\r?\\n|\\./).filter((f: string) => f.trim().length > 0).map((f: string) => f.trim()) 
-        : [];
-      
-      const debilidades = obs?.debilidades 
-        ? obs.debilidades.split(/\\r?\\n|\\./).filter((f: string) => f.trim().length > 0).map((f: string) => f.trim()) 
-        : [];
 
       return {
         materia: m.materia,
@@ -164,8 +165,7 @@ export const getStudentBoletin = async (req: Request, res: Response) => {
         ausencias: ausencias,
         notas_historicas: notas,
         desempenos: desempenos,
-        fortalezas: fortalezas,
-        debilidades: debilidades
+        observaciones: subjectObservations // New field for categorized obs
       };
     });
 

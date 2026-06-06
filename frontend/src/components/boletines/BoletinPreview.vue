@@ -134,29 +134,31 @@
               </ul>
             </div>
 
-            <!-- Fortalezas / Observaciones -->
-            <div v-if="materia.fortalezas?.length || materia.debilidades?.length || materia.recomendaciones" class="space-y-2">
-              <div class="border-b border-gray-100 pb-1.5 mt-1">
-                <span class="font-extrabold text-gray-800 uppercase tracking-widest text-[10px]">Observaciones</span>
+            <!-- Fortalezas / Observaciones Categorizadas -->
+            <div v-if="materia.observaciones?.length" class="space-y-4">
+              <div v-for="(obs, oIdx) in materia.observaciones" :key="oIdx" class="space-y-2">
+                <div class="border-b border-gray-100 pb-1 mt-1 flex items-center justify-between">
+                  <span class="font-black text-gray-800 uppercase tracking-widest text-[9px]">Observación {{ getTypeLabel(obs.tipo) }}</span>
+                </div>
+                <ul class="space-y-1.5 list-none m-0 p-0 text-[10px] leading-snug">
+                  <li v-for="(fortaleza, idx) in obs.fortalezas" :key="'f'+idx" class="flex items-start gap-2">
+                    <span class="text-green-600 font-bold mt-0.5 text-xs leading-none">▲</span>
+                    <span class="font-medium">{{ fortaleza }}</span>
+                  </li>
+                  <li v-for="(debilidad, idx) in obs.debilidades" :key="'d'+idx" class="flex items-start gap-2">
+                    <span class="text-red-500 font-bold mt-0.5 text-xs leading-none">▼</span>
+                    <span class="font-medium">{{ debilidad }}</span>
+                  </li>
+                  <li v-if="obs.recomendaciones" class="flex items-start gap-2 italic text-gray-500">
+                    <span class="text-indigo-400 font-bold mt-0.5 text-xs leading-none">■</span>
+                    <span class="font-bold">Rec: {{ obs.recomendaciones }}</span>
+                  </li>
+                </ul>
               </div>
-              <ul class="space-y-2 list-none m-0 p-0 text-[11px] leading-relaxed">
-                <li v-for="(fortaleza, idx) in materia.fortalezas" :key="'f'+idx" class="flex items-start gap-2.5">
-                  <span class="text-green-500 font-bold mt-0.5 text-sm leading-none pt-0.5">▲</span>
-                  <span class="font-medium">{{ fortaleza }}</span>
-                </li>
-                <li v-for="(debilidad, idx) in materia.debilidades" :key="'d'+idx" class="flex items-start gap-2.5">
-                  <span class="text-red-500 font-bold mt-0.5 text-sm leading-none pt-0.5">▼</span>
-                  <span class="font-medium">{{ debilidad }}</span>
-                </li>
-                <li v-for="(rec, idx) in (typeof materia.recomendaciones === 'string' && materia.recomendaciones ? [materia.recomendaciones] : [])" :key="'r'+idx" class="flex items-start gap-2.5 italic">
-                  <span class="text-yellow-500 font-bold mt-0.5 text-sm leading-none pt-0.5">■</span>
-                  <span class="font-medium">{{ rec }}</span>
-                </li>
-              </ul>
             </div>
             
             <!-- Vacio -->
-            <div v-if="!materia.desempenos?.length && !materia.fortalezas?.length && !materia.debilidades?.length && !materia.recomendaciones" class="text-gray-400 italic text-center py-3 border border-dashed border-gray-200 rounded-lg">
+            <div v-else class="text-gray-400 italic text-center py-2 border border-dashed border-gray-200 rounded-lg text-[10px]">
               Sin registros cualitativos de observación.
             </div>
           </div>
@@ -300,6 +302,15 @@ const getPerformanceBadge = (performance: string) => {
   if (p.includes('BÁSICO') || p.includes('BASICO')) return 'bg-yellow-100 text-yellow-800'
   if (p.includes('BAJO')) return 'bg-red-100 text-red-800 border border-red-200 print:border-gray-400 print:text-black print:bg-white'
   return 'bg-gray-100 text-gray-800'
+}
+
+const getTypeLabel = (type: string) => {
+  switch (type) {
+    case 'ACADEMICA': return 'Académica'
+    case 'DISCIPLINARIA': return 'Disciplinaria'
+    case 'CONVIVENCIAL': return 'Convivencial'
+    default: return type
+  }
 }
 
 const getCurrentCalificacion = (materia: any) => {
