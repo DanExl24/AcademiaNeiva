@@ -223,6 +223,122 @@ export const getParentChildren = async (req: Request, res: Response) => {
 };
 
 /**
+ * Gets attendance records for a specific student and period
+ */
+export const getStudentAttendance = async (req: Request, res: Response) => {
+  const { id_estudiante, id_periodo } = req.params;
+  const { id_materia, estado, fecha } = req.query; // Optional filters
+
+  try {
+    // 1. Get info about the attendance using a query that handles the period context
+    let query = `
+      SELECT 
+        ra.fecha,
+        ra.estado,
+        ra.justificacion,
+        m.nombre as materia,
+        doc.nombre || ' ' || doc.apellido as docente
+      FROM registro_asistencia ra
+      JOIN detalle_grados dg ON dg.id_detallegrado = ra.id_detallegrado
+      JOIN materias m ON m.id_materia = dg.id_materia
+      JOIN docente doc ON doc.id_docente = dg.id_docente
+      WHERE 
+        ra.id_estudiante = $1 
+    `;
+
+    const params: any[] = [id_estudiante];
+    let paramIndex = 2;
+
+    // Apply period range only if no specific date is provided, or as an additional constraint
+    if (!fecha) {
+      query += `
+        AND ra.fecha >= (
+          SELECT (al.calendario || '-' || LPAD(pa.mes_inicio::text, 2, '0') || '-' || LPAD(pa.dia_inicio::text, 2, '0'))::date
+          FROM periodo_academico pa
+          JOIN "año_lectivo" al ON al."id_año" = pa."id_año"
+          WHERE pa.id_periodo = $${paramIndex}
+        )
+        AND ra.fecha <= (
+          SELECT (al.calendario || '-' || LPAD(pa.mes_fin::text, 2, '0') || '-' || LPAD(pa.dia_fin::text, 2, '0'))::date
+          FROM periodo_academico pa
+          JOIN "año_lectivo" al ON al."id_año" = pa."id_año"
+          WHERE pa.id_periodo = $${paramIndex}
+        )
+      `;
+      params.push(id_periodo);
+      paramIndex++;
+    } else {
+      query += ` AND ra.fecha = $${paramIndex}`;
+      params.push(fecha);
+      paramIndex++;
+    }
+
+    if (id_materia && id_materia !== 'all') {
+      query += ` AND dg.id_materia = $${paramIndex}`;
+      params.push(id_materia);
+      paramIndex++;
+    }
+
+    if (estado && estado !== 'all') {
+      query += ` AND ra.estado = $${paramIndex}`;
+      params.push(estado);
+      paramIndex++;
+    }
+
+    query += ` ORDER BY ra.fecha DESC`;
+
+    const recordsRes = await pool.query(query, params);
+
+    // 2. Calculate statistics (always based on the period, regardless of the list filters)
+    const statsQuery = `
+      SELECT 
+        estado,
+        COUNT(*) as count
+      FROM registro_asistencia ra
+      JOIN detalle_grados dg ON dg.id_detallegrado = ra.id_detallegrado
+      WHERE 
+        ra.id_estudiante = $1
+        AND ra.fecha >= (
+          SELECT (al.calendario || '-' || LPAD(pa.mes_inicio::text, 2, '0') || '-' || LPAD(pa.dia_inicio::text, 2, '0'))::date
+          FROM periodo_academico pa
+          JOIN "año_lectivo" al ON al."id_año" = pa."id_año"
+          WHERE pa.id_periodo = $2
+        )
+        AND ra.fecha <= (
+          SELECT (al.calendario || '-' || LPAD(pa.mes_fin::text, 2, '0') || '-' || LPAD(pa.dia_fin::text, 2, '0'))::date
+          FROM periodo_academico pa
+          JOIN "año_lectivo" al ON al."id_año" = pa."id_año"
+          WHERE pa.id_periodo = $2
+        )
+      GROUP BY estado
+    `;
+
+    const statsRes = await pool.query(statsQuery, [id_estudiante, id_periodo]);
+    
+    const stats: any = {
+      PRESENTE: 0,
+      AUSENTE: 0,
+      TARDE: 0,
+      JUSTIFICADA: 0
+    };
+
+    statsRes.rows.forEach(row => {
+      if (stats.hasOwnProperty(row.estado)) {
+        stats[row.estado] = parseInt(row.count);
+      }
+    });
+
+    res.json({
+      records: recordsRes.rows,
+      stats
+    });
+  } catch (error) {
+    console.error('Error fetching student attendance:', error);
+    res.status(500).json({ error: 'Error al obtener registros de asistencia' });
+  }
+};
+
+/**
  * Gets student ID from user ID (for logged in students)
  */
 export const getStudentIdByUserId = async (req: Request, res: Response) => {

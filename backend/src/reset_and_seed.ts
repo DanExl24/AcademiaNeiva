@@ -36,7 +36,7 @@ type CredentialEntry = {
 };
 
 const DOCUMENT_TYPE_CC = 3;
-const CURRENT_YEAR = "A";
+const CURRENT_YEAR = "2026";
 const DIRECTIVO_PASSWORD = "directivo123";
 const DOCENTE_PASSWORD = "docente123";
 const CUPOS_POR_CURSO = 30;
@@ -481,8 +481,8 @@ async function insertSchoolAcademicStructure(
     
     await client.query(
       `
-        INSERT INTO periodo_academico (nombre, estado, porcentaje, trimestre, "id_año", id_colegio, mes_inicio, mes_fin)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        INSERT INTO periodo_academico (nombre, estado, porcentaje, trimestre, "id_año", id_colegio, mes_inicio, mes_fin, dia_inicio, dia_fin)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       `,
       [
         periodSeed.nombre, 
@@ -492,7 +492,9 @@ async function insertSchoolAcademicStructure(
         academicYearId, 
         school.id,
         monthRule?.startMonth ?? null,
-        monthRule?.endMonth ?? null
+        monthRule?.endMonth ?? null,
+        1, // dia_inicio
+        28 // dia_fin (simplified)
       ]
     );
   }
@@ -601,6 +603,99 @@ async function insertSchoolAcademicStructure(
       );
     }
   }
+}
+
+async function insertSampleAttendance(client: PoolClient): Promise<void> {
+  const enrollmentRes = await client.query(`
+    SELECT m.id_estudiante, m.id_colegio, m.id_grupo, al."id_año"
+    FROM matricula m
+    JOIN "año_lectivo" al ON m."id_año" = al."id_año"
+    WHERE m.estado = 'ACTIVA'
+  `);
+
+  const justifications = [
+    "Cita médica", "Calamidad doméstica", "Gripe común", "Evento institucional", "Retraso transporte"
+  ];
+
+  for (const enrollment of enrollmentRes.rows) {
+    const { id_estudiante, id_colegio, id_grupo, id_año } = enrollment;
+
+    const dgRes = await client.query(`
+      SELECT id_detallegrado 
+      FROM detalle_grados 
+      WHERE id_grupo = $1 AND id_colegio = $2
+    `, [id_grupo, id_colegio]);
+
+    if (dgRes.rows.length === 0) continue;
+
+    const periodsRes = await client.query(`
+      SELECT id_periodo, mes_inicio, mes_fin, dia_inicio, dia_fin
+      FROM periodo_academico 
+      WHERE id_colegio = $1 AND "id_año" = $2
+    `, [id_colegio, id_año]);
+
+    for (const period of periodsRes.rows) {
+      const { mes_inicio, mes_fin, dia_inicio, dia_fin } = period;
+      
+      const batchValues: any[] = [];
+      const batchSize = 100;
+
+      // Iterate through months and days
+      for (let m = mes_inicio; m <= mes_fin; m++) {
+        for (let d = dia_inicio; d <= dia_fin; d++) {
+          const date = new Date(2026, m - 1, d);
+          const dayOfWeek = date.getDay(); // 0 = Sun, 6 = Sat
+
+          // Only weekdays (Mon-Fri)
+          if (dayOfWeek === 0 || dayOfWeek === 6) continue;
+
+          const dateStr = `2026-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+
+          for (const dg of dgRes.rows) {
+            const rand = Math.random();
+            let estado = "PRESENTE";
+            let justificacion = null;
+
+            if (rand > 0.98) {
+              estado = "JUSTIFICADA";
+              justificacion = justifications[Math.floor(Math.random() * justifications.length)];
+            } else if (rand > 0.95) {
+              estado = "AUSENTE";
+            } else if (rand > 0.92) {
+              estado = "TARDE";
+            }
+
+            batchValues.push({
+              id_estudiante,
+              id_detallegrado: dg.id_detallegrado,
+              fecha: dateStr,
+              estado,
+              justificacion,
+              id_colegio
+            });
+
+            if (batchValues.length >= batchSize) {
+              await flushAttendanceBatch(client, batchValues);
+              batchValues.length = 0;
+            }
+          }
+        }
+      }
+      if (batchValues.length > 0) {
+        await flushAttendanceBatch(client, batchValues);
+      }
+    }
+  }
+}
+
+async function flushAttendanceBatch(client: PoolClient, batch: any[]) {
+  const values = batch.map((_, i) => `($${i * 6 + 1}, $${i * 6 + 2}, $${i * 6 + 3}, $${i * 6 + 4}, $${i * 6 + 5}, $${i * 6 + 6})`).join(',');
+  const params = batch.flatMap(r => [r.id_estudiante, r.id_detallegrado, r.fecha, r.estado, r.justificacion, r.id_colegio]);
+  
+  await client.query(`
+    INSERT INTO registro_asistencia (id_estudiante, id_detallegrado, fecha, estado, justificacion, id_colegio)
+    VALUES ${values}
+  `, params);
 }
 
 function writeCredentialsFile(credentials: CredentialEntry[]): string {
@@ -719,6 +814,7 @@ async function run(): Promise<void> {
       "usuario_rol",
       "año_lectivo",
       "colegio",
+      "registro_asistencia"
     ]);
 
     // --- Fase 4: Migraciones de Esquema ---
@@ -741,6 +837,9 @@ async function run(): Promise<void> {
       -- 3. Asegurar restricción de unicidad para titular
       ALTER TABLE public.grupos DROP CONSTRAINT IF EXISTS unique_titular_docente;
       ALTER TABLE public.grupos ADD CONSTRAINT unique_titular_docente UNIQUE (id_docente);
+
+      -- 4. Ampliar longitud de calendario en año_lectivo
+      ALTER TABLE public."año_lectivo" ALTER COLUMN calendario TYPE VARCHAR(10);
     `);
 
     console.log("Insertando catálogos base...");
@@ -767,6 +866,9 @@ async function run(): Promise<void> {
       console.log(`Creando padres y estudiantes para ${school.nombre}...`);
       await insertParentsAndStudents(client, school, roleIds, parentHash, studentHash, credentials);
     }
+
+    console.log("Generando registros de asistencia de prueba...");
+    await insertSampleAttendance(client);
 
     await client.query("COMMIT");
 

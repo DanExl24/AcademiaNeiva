@@ -99,6 +99,11 @@ async function runSeedStudents() {
 
     await client.query("COMMIT");
     console.log(`✅ ¡Éxito! Se crearon ${studentsCreated} estudiantes borrador (y sus padres respectivos) repartidos en los grupos existentes.`);
+
+    // Generate sample attendance for these new students
+    console.log("Generando asistencia para los nuevos estudiantes...");
+    await generateAttendanceForMockStudents(client);
+
     console.log(`Contraseña para padres: padre123`);
     console.log(`Contraseña para estudiantes: estudiante123`);
 
@@ -109,6 +114,89 @@ async function runSeedStudents() {
     client.release();
     await pool.end();
   }
+}
+
+async function generateAttendanceForMockStudents(client: any) {
+  // Get all students created today or with MOCK in their code
+  const studentsRes = await client.query(`
+    SELECT e.id_estudiante, e.id_colegio, m.id_grupo, al."id_año"
+    FROM estudiante e
+    JOIN matricula m ON m.id_estudiante = e.id_estudiante
+    JOIN "año_lectivo" al ON m."id_año" = al."id_año"
+    WHERE e.codigo LIKE 'EST-MOCK-%'
+  `);
+
+  const justifications = [
+    "Cita médica", "Calamidad doméstica", "Gripe", "Evento deportivo", "Retraso transporte"
+  ];
+
+  for (const student of studentsRes.rows) {
+    const { id_estudiante, id_colegio, id_grupo, id_año } = student;
+
+    const dgRes = await client.query(`
+      SELECT id_detallegrado FROM detalle_grados WHERE id_grupo = $1 AND id_colegio = $2
+    `, [id_grupo, id_colegio]);
+
+    const periodsRes = await client.query(`
+      SELECT id_periodo, mes_inicio, mes_fin, dia_inicio, dia_fin
+      FROM periodo_academico 
+      WHERE id_colegio = $1 AND "id_año" = $2
+    `, [id_colegio, id_año]);
+
+    for (const period of periodsRes.rows) {
+      const { mes_inicio, mes_fin, dia_inicio, dia_fin } = period;
+      const batchValues: any[] = [];
+      const batchSize = 100;
+
+      for (let m = mes_inicio; m <= mes_fin; m++) {
+        for (let d = (dia_inicio || 1); d <= (dia_fin || 28); d++) {
+          const date = new Date(2026, m - 1, d);
+          if (date.getDay() === 0 || date.getDay() === 6) continue;
+
+          const dateStr = `2026-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+          
+          for (const dg of dgRes.rows) {
+            const rand = Math.random();
+            let estado = "PRESENTE";
+            let just = null;
+            if (rand > 0.98) {
+              estado = "JUSTIFICADA";
+              just = justifications[Math.floor(Math.random() * justifications.length)];
+            } else if (rand > 0.95) {
+              estado = "AUSENTE";
+            }
+            
+            batchValues.push({
+              id_estudiante,
+              id_detallegrado: dg.id_detallegrado,
+              fecha: dateStr,
+              estado,
+              justificacion: just,
+              id_colegio
+            });
+
+            if (batchValues.length >= batchSize) {
+              await flushAttendanceBatch(client, batchValues);
+              batchValues.length = 0;
+            }
+          }
+        }
+      }
+      if (batchValues.length > 0) {
+        await flushAttendanceBatch(client, batchValues);
+      }
+    }
+  }
+}
+
+async function flushAttendanceBatch(client: any, batch: any[]) {
+  const values = batch.map((_, i) => `($${i * 6 + 1}, $${i * 6 + 2}, $${i * 6 + 3}, $${i * 6 + 4}, $${i * 6 + 5}, $${i * 6 + 6})`).join(',');
+  const params = batch.flatMap(r => [r.id_estudiante, r.id_detallegrado, r.fecha, r.estado, r.justificacion, r.id_colegio]);
+  
+  await client.query(`
+    INSERT INTO registro_asistencia (id_estudiante, id_detallegrado, fecha, estado, justificacion, id_colegio)
+    VALUES ${values}
+  `, params);
 }
 
 runSeedStudents();

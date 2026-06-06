@@ -151,6 +151,11 @@ const router = createRouter({
           component: () => import('../views/student/SubjectDetailsView.vue'),
           meta: { title: 'Detalle de Materia' }
         },
+        {
+          path: 'mi-asistencia',
+          name: 'Mi Asistencia',
+          component: () => import('../views/student/StudentAttendanceView.vue')
+        },
         // Rutas del Padre
         {
           path: 'hijos',
@@ -171,7 +176,7 @@ const router = createRouter({
         {
           path: 'asistencia-hijos',
           name: 'Asistencia de Hijos',
-          component: () => import('../views/parent/ParentDashboard.vue')
+          component: () => import('../views/parent/ParentAttendanceView.vue')
         }
       ]
     }
