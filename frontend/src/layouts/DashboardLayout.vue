@@ -2,7 +2,6 @@
 import { ref } from 'vue'
 import { 
   LayoutDashboard, 
-  Users, 
   ClipboardList, 
   LogOut,
   ChevronLeft,
@@ -53,7 +52,6 @@ const menuItems = computed(() => {
   if (role === 'padre') {
     return [
       { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
-      { name: 'Mis Hijos', icon: Users, path: '/dashboard/hijos' },
       { name: 'Calificaciones', icon: ClipboardList, path: '/dashboard/notas-hijos' },
       { name: 'Asistencia', icon: CalendarCheck, path: '/dashboard/asistencia-hijos' },
       { name: 'Observaciones', icon: MessageSquare, path: '/dashboard/observaciones-hijos' },
@@ -75,7 +73,7 @@ const menuItems = computed(() => {
     { name: 'Gestión Matrículas', icon: ClipboardList, path: '/dashboard/gestion-matriculas' },
     { name: 'Gestión de Grados', icon: Layers3, path: '/dashboard/gestion-grados' },
     { name: 'Gestión de Materias', icon: LibraryBig, path: '/dashboard/gestion-materias' },
-    { name: 'Docentes', icon: Users, path: '/dashboard/docentes' },
+    { name: 'Docentes', icon: GraduationCap, path: '/dashboard/docentes' },
     { name: 'Configuración Académica', icon: SlidersHorizontal, path: '/dashboard/configuracion-academica' },
     { name: 'Boletines', icon: FileText, path: '/dashboard/boletines' },
   ]

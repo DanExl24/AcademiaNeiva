@@ -2,10 +2,10 @@
 -- PostgreSQL database dump
 --
 
-\restrict HPLiXNn35rNFqmmRK63v6hT6xbZ5NYiejAzN1kGqNGfQf42LLLIxqQqANsm4BHx
+\restrict HQHcG2iuX77D0daFngreXZehj29OXMdSyjH0khguuzTKbU0TZwSuFEgaqc9lHXX
 
--- Dumped from database version 18.3
--- Dumped by pg_dump version 18.3
+-- Dumped from database version 18.4
+-- Dumped by pg_dump version 18.4
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -222,8 +222,9 @@ ALTER SEQUENCE public.actividad_materia_id_actividadmateria_seq OWNED BY public.
 
 CREATE TABLE public."año_lectivo" (
     "id_año" integer NOT NULL,
-    calendario character(1),
-    id_colegio integer NOT NULL
+    calendario character varying(10),
+    id_colegio integer NOT NULL,
+    tipo_calendario character(1) DEFAULT 'A'::bpchar
 );
 
 
@@ -299,7 +300,8 @@ CREATE TABLE public.colegio (
     sede character varying(255) NOT NULL,
     contacto numeric NOT NULL,
     correo character varying(100) NOT NULL,
-    dane character varying(100) NOT NULL
+    dane character varying(100) NOT NULL,
+    tipo_calendario character(1) DEFAULT 'A'::bpchar
 );
 
 
@@ -644,7 +646,8 @@ ALTER SEQUENCE public.detalle_padrefamilia_id_detallepadrefamilia_seq OWNED BY p
 CREATE TABLE public.directivo (
     id integer NOT NULL,
     id_colegio integer NOT NULL,
-    id_usuario integer
+    id_usuario integer,
+    cargo character varying(100)
 );
 
 
@@ -918,6 +921,7 @@ CREATE TABLE public.grupos (
     id_seccion integer NOT NULL,
     cupos_totales integer DEFAULT 0 NOT NULL,
     id_tipo_grado integer NOT NULL,
+    id_docente integer,
     CONSTRAINT chk_cupos CHECK ((cupos_totales >= 0))
 );
 
@@ -1034,7 +1038,8 @@ CREATE TABLE public.matricula (
     id_grupo integer,
     motivo_cancelacion character varying(100),
     detalles_cancelacion text,
-    es_traslado boolean DEFAULT false
+    es_traslado boolean DEFAULT false,
+    fecha_aprobacion timestamp without time zone
 );
 
 
@@ -1185,7 +1190,8 @@ CREATE TABLE public.observacion_estudiante (
     debilidades text,
     recomendaciones text,
     fecha timestamp with time zone NOT NULL,
-    id_colegio integer NOT NULL
+    id_colegio integer NOT NULL,
+    tipo character varying(20) DEFAULT 'ACADEMICA'::character varying
 );
 
 
@@ -2336,6 +2342,14 @@ ALTER TABLE ONLY public.configuracion_sistema
 
 
 --
+-- Name: grupos unique_titular_docente; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.grupos
+    ADD CONSTRAINT unique_titular_docente UNIQUE (id_docente);
+
+
+--
 -- Name: tipo_grado uq_tipo_grado; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -2815,6 +2829,14 @@ ALTER TABLE ONLY public.tipo_grado
 
 
 --
+-- Name: grupos grupos_id_docente_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.grupos
+    ADD CONSTRAINT grupos_id_docente_fkey FOREIGN KEY (id_docente) REFERENCES public.docente(id_docente);
+
+
+--
 -- Name: jornada jornada_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -3073,5 +3095,5 @@ REVOKE USAGE ON SCHEMA public FROM PUBLIC;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict HPLiXNn35rNFqmmRK63v6hT6xbZ5NYiejAzN1kGqNGfQf42LLLIxqQqANsm4BHx
+\unrestrict HQHcG2iuX77D0daFngreXZehj29OXMdSyjH0khguuzTKbU0TZwSuFEgaqc9lHXX
 

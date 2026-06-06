@@ -182,6 +182,11 @@ const router = createRouter({
           path: 'asistencia-hijos',
           name: 'Asistencia de Hijos',
           component: () => import('../views/parent/ParentAttendanceView.vue')
+        },
+        {
+          path: 'observaciones-hijos',
+          name: 'Observaciones de Hijos',
+          component: () => import('../views/parent/ParentObservationsView.vue')
         }
       ]
     }

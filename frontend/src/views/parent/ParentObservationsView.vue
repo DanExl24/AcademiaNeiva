@@ -13,7 +13,8 @@ import {
   User,
   BookOpen,
   GraduationCap,
-  CreditCard
+  CreditCard,
+  HelpCircle
 } from 'lucide-vue-next'
 
 const auth = useAuthStore()

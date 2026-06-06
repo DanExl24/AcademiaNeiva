@@ -8,7 +8,8 @@ import {
   getStudentIdByUserId,
   getGradeDetails,
   getStudentAttendance,
-  getStudentObservations
+  getStudentObservations,
+  getParentDashboardData
 } from '../controllers/studentPortalController';
 
 const router = Router();
@@ -25,5 +26,6 @@ router.get('/user-id/:id_usuario', getStudentIdByUserId);
 
 // Parent routes
 router.get('/parent-children/:id_usuario', getParentChildren);
+router.get('/parent-dashboard/:id_usuario', getParentDashboardData);
 
 export default router;
