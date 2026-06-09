@@ -55,6 +55,7 @@ const menuItems = computed(() => {
       { name: 'Calificaciones', icon: ClipboardList, path: '/dashboard/notas-hijos' },
       { name: 'Asistencia', icon: CalendarCheck, path: '/dashboard/asistencia-hijos' },
       { name: 'Observaciones', icon: MessageSquare, path: '/dashboard/observaciones-hijos' },
+      { name: 'Boletines', icon: FileText, path: '/dashboard/boletines-hijos' },
     ]
   }
 
@@ -64,6 +65,7 @@ const menuItems = computed(() => {
       { name: 'Mis Notas', icon: BookOpen, path: '/dashboard/mis-notas' },
       { name: 'Mi Asistencia', icon: CalendarCheck, path: '/dashboard/mi-asistencia' },
       { name: 'Observaciones', icon: MessageSquare, path: '/dashboard/mi-observacion' },
+      { name: 'Mi Boletín', icon: FileText, path: '/dashboard/mi-boletin' },
     ]
   }
   

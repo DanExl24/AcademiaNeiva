@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { onMounted, ref } from 'vue'
+import axios from 'axios'
 import { useAuthStore } from '../../stores/auth'
 import {
   GraduationCap,
@@ -9,10 +11,47 @@ import {
   MessageSquare,
   Star,
   ChevronRight,
-  Sparkles
+  Sparkles,
+  Clock,
+  FileDown
 } from 'lucide-vue-next'
+import BoletinExportModule from '../../components/boletines/BoletinExportModule.vue'
 
 const auth = useAuthStore()
+const studentId = ref<number | null>(null)
+const selectedPeriodId = ref<number | null>(null)
+const periods = ref<any[]>([])
+const loading = ref(true)
+
+const fetchStudentData = async () => {
+  try {
+    const id_usuario = auth.user?.id
+    if (!id_usuario) return
+
+    // Get student ID
+    const idRes = await axios.get(`http://localhost:3000/api/student/user-id/${id_usuario}`)
+    studentId.value = idRes.data.id_estudiante
+
+    if (studentId.value) {
+      // Get periods for current year
+      const year = new Date().getFullYear()
+      const periodsRes = await axios.get(`http://localhost:3000/api/student/periods/${studentId.value}/${year}`)
+      periods.value = periodsRes.data
+      
+      if (periods.value.length > 0) {
+        selectedPeriodId.value = periods.value[periods.value.length - 1].id_periodo
+      }
+    }
+  } catch (err) {
+    console.error('Error fetching student dashboard data:', err)
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(() => {
+  fetchStudentData()
+})
 
 const studentName = auth.user?.name?.split(' ')[0] || 'Estudiante'
 
@@ -86,6 +125,20 @@ const modules = [
           <p class="mt-4 text-indigo-100 text-lg font-medium max-w-lg leading-relaxed">
             Bienvenido a tu portal académico. Aquí podrás consultar tus notas, asistencias, observaciones y tu historial académico.
           </p>
+
+          <!-- Period Selector -->
+          <div v-if="periods.length > 0" class="mt-6 inline-flex items-center gap-3 bg-white/10 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/20">
+            <Clock :size="18" class="text-indigo-200" />
+            <select 
+              v-model="selectedPeriodId"
+              class="bg-transparent text-white text-sm font-bold outline-none cursor-pointer appearance-none pr-6"
+              style="background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22white%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C/polyline%3E%3C/svg%3E'); background-repeat: no-repeat; background-position: right center; background-size: 1.2em;"
+            >
+              <option v-for="p in periods" :key="p.id_periodo" :value="p.id_periodo" class="text-slate-900">
+                {{ p.nombre }}
+              </option>
+            </select>
+          </div>
         </div>
         
         <!-- Student Card Avatar -->
@@ -131,6 +184,31 @@ const modules = [
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <!-- Boletin Export Card -->
+        <div 
+          v-if="studentId && selectedPeriodId"
+          class="group relative bg-indigo-900/5 dark:bg-indigo-900/10 rounded-3xl border-2 border-indigo-100 dark:border-indigo-900/40 p-7 transition-all duration-300 hover:shadow-xl overflow-hidden"
+        >
+          <div class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-500 to-purple-600"></div>
+          <div class="flex items-start gap-5">
+            <div class="bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 p-4 rounded-2xl shrink-0 group-hover:scale-110 transition-transform duration-300">
+              <FileDown :size="28" stroke-width="2" />
+            </div>
+            <div class="flex-1 min-w-0">
+              <h3 class="text-lg font-black text-slate-800 dark:text-white mb-1.5 flex items-center gap-2">
+                Mi Boletín
+                <span class="text-[10px] bg-indigo-600 text-white px-2 py-0.5 rounded-full uppercase">PDF</span>
+              </h3>
+              <p class="text-sm text-slate-500 dark:text-slate-400 leading-relaxed mb-4">Exporta tu reporte académico oficial del periodo seleccionado.</p>
+              
+              <BoletinExportModule 
+                :student-id="studentId" 
+                :period-id="selectedPeriodId" 
+              />
+            </div>
+          </div>
+        </div>
+
         <router-link
           v-for="mod in modules"
           :key="mod.id"

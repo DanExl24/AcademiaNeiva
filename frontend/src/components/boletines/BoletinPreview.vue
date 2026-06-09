@@ -90,22 +90,23 @@
               <h3 class="text-sm font-black text-indigo-900 uppercase tracking-widest print:text-black">{{ materia.materia }}</h3>
               <p class="text-xs font-bold text-indigo-700/80 mt-0.5 uppercase italic print:text-gray-700">{{ materia.docente_nombre }} {{ materia.docente_apellido }}</p>
             </div>
-            <div class="flex flex-wrap items-center gap-2">
-              <div class="bg-white border border-indigo-100 rounded-lg px-4 py-2 text-center shadow-sm w-24">
-                <span class="block text-[9px] font-bold text-gray-500 uppercase tracking-wider">Ausencias</span>
-                <span class="block text-sm font-black text-gray-800">{{ materia.ausencias }}</span>
+            <div class="flex flex-nowrap items-center gap-1.5 shrink-0 ml-auto">
+              <!-- Caja Ausencias -->
+              <div class="bg-white border border-indigo-100 rounded-lg px-2 py-1.5 text-center shadow-sm w-20 shrink-0">
+                <span class="block text-[8px] font-bold text-gray-400 uppercase tracking-tight">Ausencias</span>
+                <span class="block text-xs font-black text-slate-800">{{ materia.ausencias }}</span>
               </div>
               
               <!-- Notas Historicas -->
               <template v-for="nota in materia.notas_historicas" :key="nota.id_periodo">
-                <div class="bg-white border border-indigo-100 rounded-lg px-4 py-2 text-center shadow-sm w-32"
-                     :class="{'ring-2 ring-indigo-400 bg-indigo-50 transform scale-105 print:transform-none': nota.periodo_nombre === data?.periodo}">
-                  <span class="block text-[9px] font-bold uppercase truncate" :class="nota.periodo_nombre === data?.periodo ? 'text-indigo-600 print:text-black' : 'text-gray-400'">
-                    {{ (nota.periodo_nombre || '').replace('Periodo', 'Per.') }}
+                <div class="bg-white border border-indigo-100 rounded-lg px-2 py-1.5 text-center shadow-sm w-20 shrink-0"
+                     :class="{'ring-1 ring-indigo-400 bg-indigo-50/50 transform scale-105 print:transform-none print:ring-0': nota.periodo_nombre === data?.periodo}">
+                  <span class="block text-[8px] font-bold uppercase" :class="nota.periodo_nombre === data?.periodo ? 'text-indigo-600 print:text-black font-black' : 'text-gray-400'">
+                    {{ (nota.periodo_nombre || '').replace(/periodo/i, 'P.') }}
                   </span>
-                  <div class="flex items-center justify-center gap-1.5 mt-0.5">
-                    <span class="text-sm font-black text-gray-900">{{ nota.calificacion }}</span>
-                    <span class="text-[9px] font-extrabold px-1.5 py-0.5 rounded uppercase" :class="getPerformanceBadge(nota.desempeno)">{{ (nota.desempeno || 'SC').substring(0,3) }}</span>
+                  <div class="flex items-center justify-center gap-1 mt-0.5">
+                    <span class="text-xs font-black text-gray-900">{{ nota.calificacion }}</span>
+                    <span class="text-[7px] font-black px-1 py-0.5 rounded leading-none" :class="getPerformanceBadge(nota.desempeno)">{{ (nota.desempeno || 'SC').substring(0,3) }}</span>
                   </div>
                 </div>
               </template>

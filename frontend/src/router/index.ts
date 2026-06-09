@@ -161,6 +161,11 @@ const router = createRouter({
           name: 'student-observations',
           component: () => import('../views/student/StudentObservationsView.vue')
         },
+        {
+          path: 'mi-boletin',
+          name: 'Mi Boletín',
+          component: () => import('../views/student/StudentBoletinView.vue')
+        },
         // Rutas del Padre
         {
           path: 'hijos',
@@ -171,6 +176,11 @@ const router = createRouter({
           path: 'notas-hijos',
           name: 'Calificaciones de Hijos',
           component: () => import('../views/parent/ParentGradesView.vue')
+        },
+        {
+          path: 'boletines-hijos',
+          name: 'Boletines de Hijos',
+          component: () => import('../views/parent/ParentBoletinView.vue')
         },
         {
           path: 'notas-hijos/:id_estudiante/:id_materia/:id_periodo',
