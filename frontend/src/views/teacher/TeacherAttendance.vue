@@ -80,11 +80,12 @@ const searchQuery = ref('')
 
 // Load assigned courses
 const fetchMyCourses = async () => {
+  // In monitoring mode, load the observed teacher's courses
+  const teacherId = auth.isMonitoring ? auth.monitoringUser?.id : auth.user?.id
   try {
-    const response = await axios.get(`http://localhost:3000/api/teacher/courses/${auth.user?.id}`)
+    const response = await axios.get(`http://localhost:3000/api/teacher/courses/${teacherId}`)
     myCourses.value = response.data
     
-    // Si venimos con parámetros de consulta (ej. desde el cierre)
     if (route.query.gradoId) {
       const gId = Number(route.query.gradoId)
       const sId = route.query.subjectId ? Number(route.query.subjectId) : null
@@ -417,8 +418,9 @@ onMounted(() => {
           <Download :size="20" />
           Descargar Formato
         </button>
+        <!-- Save button hidden in monitoring mode -->
         <button 
-          v-if="selectedCourse && activeTab === 'today' && selectedDate === todayStr"
+          v-if="selectedCourse && activeTab === 'today' && selectedDate === todayStr && !auth.isMonitoring"
           @click="saveAllAttendance"
           :disabled="saving || !isEditable"
           class="bg-emerald-600 dark:bg-emerald-500 text-white px-8 py-3 rounded-2xl font-bold shadow-lg shadow-emerald-100 dark:shadow-none hover:bg-emerald-700 dark:hover:bg-emerald-600 active:scale-95 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -427,6 +429,12 @@ onMounted(() => {
           <Save v-else :size="20" />
           {{ saving ? 'Guardando...' : 'Guardar Asistencia' }}
         </button>
+        <div 
+          v-if="auth.isMonitoring && selectedCourse"
+          class="flex items-center gap-2 text-amber-600 font-bold text-sm bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 px-5 py-3 rounded-2xl"
+        >
+          Solo Lectura
+        </div>
       </div>
     </div>
 

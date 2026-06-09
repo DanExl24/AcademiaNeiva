@@ -143,6 +143,15 @@ a múltiples instituciones en el futuro.
 
 **Reglas de Negocio**
 
+Nivel Horas diarias Materias diarias recomendadas
+Primaria 5-6 4-6
+Secundaria 6-7 5-7
+Media (10°-11°) 6-8 5-7
+
+Además, desde el punto de vista de la base de datos y la programación del horario, suele ser útil validar que:
+
+Un estudiante no tenga más de 7 bloques académicos al día.
+
 ## Sistema multi-colegio
 
 El sistema debe operar bajo arquitectura multi-colegio (multi-tenant)

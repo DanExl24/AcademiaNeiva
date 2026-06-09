@@ -109,7 +109,10 @@ const chartOptions = computed(() => {
 
 const fetchDashboard = async () => {
   try {
-    const userId = auth.user?.id_usuario || auth.user?.id
+    // When a directivo is monitoring, load data for the observed teacher
+    const userId = auth.isMonitoring
+      ? auth.monitoringUser?.id
+      : (auth.user?.id_usuario || auth.user?.id)
     if (!userId) return
     const response = await axios.get(`http://localhost:3000/api/teacher/dashboard/${userId}`)
     dashboardData.value = response.data
@@ -157,10 +160,18 @@ const getAlertColors = (type: string) => {
         </p>
       </div>
       <div class="flex flex-col sm:flex-row gap-4 relative z-10">
-        <router-link to="/dashboard/calificaciones" class="bg-white/10 hover:bg-white/25 active:scale-95 border border-white/20 backdrop-blur-md px-6 py-3 rounded-2xl font-bold transition-all flex items-center justify-center gap-2 shadow-lg ring-1 ring-white/10 text-white">
+        <router-link
+          v-if="!auth.isMonitoring"
+          to="/dashboard/calificaciones"
+          class="bg-white/10 hover:bg-white/25 active:scale-95 border border-white/20 backdrop-blur-md px-6 py-3 rounded-2xl font-bold transition-all flex items-center justify-center gap-2 shadow-lg ring-1 ring-white/10 text-white"
+        >
           <ClipboardList :size="20" class="text-indigo-200" />
           Subir Notas
         </router-link>
+        <div v-else class="bg-white/10 border border-white/20 px-6 py-3 rounded-2xl font-bold flex items-center gap-2 text-white/70">
+          <ClipboardList :size="20" />
+          Panel en solo lectura
+        </div>
       </div>
       <!-- Background Accents -->
       <div class="absolute -right-20 -bottom-20 h-96 w-96 bg-white/10 rounded-full blur-3xl pointer-events-none"></div>

@@ -18,7 +18,9 @@ import {
   Moon,
   FileText,
   BookOpen,
-  MessageSquare
+  MessageSquare,
+  XCircle,
+  ShieldAlert
 } from 'lucide-vue-next'
 import { useAuthStore } from '../stores/auth'
 import { useThemeStore } from '../stores/theme'
@@ -91,6 +93,11 @@ const handleLogout = () => {
   auth.logout()
   router.push('/')
 }
+
+const stopMonitoring = () => {
+  auth.stopMonitoring()
+  router.push('/dashboard/docentes')
+}
 </script>
 
 <template>
@@ -151,10 +158,34 @@ const handleLogout = () => {
 
     <!-- Main Content -->
     <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <!-- Monitoring Banner -->
+      <div
+        v-if="auth.isMonitoring"
+        class="bg-amber-500 text-white px-6 py-3 flex items-center justify-between gap-4 shrink-0 z-40 shadow-lg"
+      >
+        <div class="flex items-center gap-3">
+          <ShieldAlert :size="20" class="shrink-0" />
+          <span class="text-sm font-black">
+            Modo Monitoreo — Supervisando a
+            <span class="underline underline-offset-2">
+              {{ auth.monitoringUser?.nombre }} {{ auth.monitoringUser?.apellido }}
+            </span>
+            · Solo Lectura
+          </span>
+        </div>
+        <button
+          @click="stopMonitoring"
+          class="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 px-4 py-1.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all"
+        >
+          <XCircle :size="15" />
+          Salir del Seguimiento
+        </button>
+      </div>
+
       <!-- Navbar -->
       <header class="h-16 bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 flex items-center justify-between px-8 z-30 transition-colors duration-300">
         <h2 class="text-xl font-semibold text-gray-800 dark:text-white">
-          {{ $route.name || 'Panel de Gestión' }}
+          {{ auth.isMonitoring ? `Seguimiento: ${auth.monitoringUser?.nombre} ${auth.monitoringUser?.apellido}` : ($route.name || 'Panel de Gestión') }}
         </h2>
         
         <div class="flex items-center gap-4">

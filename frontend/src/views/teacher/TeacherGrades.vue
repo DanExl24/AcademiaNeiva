@@ -120,11 +120,12 @@ const newActivity = ref({
 
 // Cargar cursos asignados
 const fetchMyCourses = async () => {
+  // In monitoring mode, load the observed teacher's courses
+  const teacherId = auth.isMonitoring ? auth.monitoringUser?.id : auth.user?.id
   try {
-    const response = await axios.get(`http://localhost:3000/api/teacher/courses/${auth.user?.id}`)
+    const response = await axios.get(`http://localhost:3000/api/teacher/courses/${teacherId}`)
     myCourses.value = response.data
     
-    // Si venimos de Cierre de Periodo, pre-seleccionar los filtros
     if (route.query.gradoId) {
       const gId = Number(route.query.gradoId)
       const sId = route.query.subjectId ? Number(route.query.subjectId) : null
@@ -612,7 +613,8 @@ onMounted(() => {
         </div>
       </div>
       
-      <div v-if="selectedSubjectId && selectedPeriodId" class="flex gap-3">
+      <!-- Save button: hidden in monitoring mode -->
+      <div v-if="selectedSubjectId && selectedPeriodId && !auth.isMonitoring" class="flex gap-3">
         <button 
           @click="saveAllGrades"
           :disabled="saving || activitiesLoading"
@@ -622,6 +624,9 @@ onMounted(() => {
           <Save v-else :size="20" />
           {{ saving ? 'Guardando...' : 'Guardar Todo' }}
         </button>
+      </div>
+      <div v-if="selectedSubjectId && selectedPeriodId && auth.isMonitoring" class="flex items-center gap-2 text-amber-600 font-bold text-sm bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 px-5 py-3 rounded-2xl">
+        Solo Lectura
       </div>
     </div>
 
@@ -778,9 +783,9 @@ onMounted(() => {
               </div>
             </div>
 
-            <!-- New Activity Button/Form -->
+            <!-- New Activity Button/Form: hidden in monitoring mode -->
             <button 
-              v-if="!showAddActivity && totalPercentage < 100"
+              v-if="!showAddActivity && totalPercentage < 100 && !auth.isMonitoring"
               @click="showAddActivity = true"
               class="w-full flex items-center justify-center gap-2 py-4 border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-2xl text-slate-400 hover:text-indigo-600 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all font-bold text-sm"
             >

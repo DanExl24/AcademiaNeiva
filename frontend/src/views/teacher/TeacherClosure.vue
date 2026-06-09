@@ -3,11 +3,9 @@ import { ref, onMounted, computed } from 'vue'
 import { 
   GraduationCap, 
   CheckCircle2, 
-  AlertCircle,
   Clock, 
   Loader2,
   Lock,
-  Unlock,
   AlertTriangle,
   Search,
   X,
@@ -92,8 +90,14 @@ const fetchCoursesWithStatus = async () => {
   if (!activePeriodId.value) return
   
   try {
+    const userId = auth.isMonitoring
+      ? auth.monitoringUser?.id
+      : (auth.user?.id_usuario || auth.user?.id)
+
+    if (!userId) return
+
     loading.value = true
-    const response = await axios.get(`http://localhost:3000/api/teacher/courses/${auth.user?.id}`)
+    const response = await axios.get(`http://localhost:3000/api/teacher/courses/${userId}`)
     const rawCourses = response.data
     
     const coursesWithStatus = await Promise.all(rawCourses.map(async (course: any) => {
@@ -340,7 +344,7 @@ onMounted(async () => {
             </button>
 
             <button 
-              v-if="!course.isClosed"
+              v-if="!course.isClosed && !auth.isMonitoring"
               @click="handleClosePeriod(course)"
               :disabled="course.missingGrades?.length > 0 || processingId === course.id_detallegrado"
               class="flex-[1.5] px-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-100 dark:shadow-none transition-all flex items-center justify-center gap-2 disabled:opacity-50"
@@ -349,6 +353,13 @@ onMounted(async () => {
               <Lock v-else class="w-4 h-4" />
               Cerrar Periodo
             </button>
+            <div 
+              v-else-if="auth.isMonitoring && !course.isClosed"
+              class="flex-[1.5] flex items-center justify-center gap-2 text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest bg-amber-50 dark:bg-amber-950/30 rounded-xl border border-amber-100 dark:border-amber-900"
+            >
+              <Lock class="w-4 h-4" />
+              Solo Lectura
+            </div>
             <div v-else class="flex-[1.5] flex items-center justify-center gap-2 text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest bg-emerald-50 dark:bg-emerald-950/30 rounded-xl">
               <CheckCircle2 class="w-4 h-4" />
               Materia Cerrada

@@ -133,7 +133,8 @@ export const getObservations = async (
          o.fortalezas,
          o.debilidades,
          o.recomendaciones,
-         o.fecha
+         o.fecha,
+         o.tipo
        FROM observacion_estudiante o
        JOIN estudiante e ON e.id_estudiante = o.id_estudiante
        WHERE o.id_detallegrado = $1 AND o.id_periodo = $2
@@ -151,6 +152,7 @@ export const getObservations = async (
       debilidades: r.debilidades || null,
       recomendaciones: r.recomendaciones || null,
       fecha: r.fecha,
+      tipo: r.tipo || 'ACADEMICA',
     }));
 
     res.json({
@@ -169,7 +171,7 @@ export const createObservation = async (
   req: Request,
   res: Response
 ): Promise<void> => {
-  const { detailGradeId, periodId, studentId, fortalezas, debilidades, recomendaciones, fecha } =
+  const { detailGradeId, periodId, studentId, fortalezas, debilidades, recomendaciones, fecha, tipo } =
     req.body;
 
   if (!detailGradeId || !periodId || !studentId) {
@@ -221,8 +223,8 @@ export const createObservation = async (
 
     const result = await pool.query(
       `INSERT INTO observacion_estudiante 
-         (id_estudiante, id_detallegrado, id_periodo, fortalezas, debilidades, recomendaciones, fecha, id_colegio)
-       VALUES ($1, $2, $3, $4, $5, $6, $7::timestamp with time zone, $8)
+         (id_estudiante, id_detallegrado, id_periodo, fortalezas, debilidades, recomendaciones, fecha, id_colegio, tipo)
+       VALUES ($1, $2, $3, $4, $5, $6, $7::timestamp with time zone, $8, $9)
        RETURNING id_observacion`,
       [
         studentId,
@@ -233,6 +235,7 @@ export const createObservation = async (
         hasRecomendaciones ? recomendaciones.trim() : null,
         dateValue,
         schoolId,
+        tipo || 'ACADEMICA',
       ]
     );
 
@@ -252,7 +255,7 @@ export const updateObservation = async (
   res: Response
 ): Promise<void> => {
   const observationId = Number(req.params.id);
-  const { fortalezas, debilidades, recomendaciones } = req.body;
+  const { fortalezas, debilidades, recomendaciones, tipo } = req.body;
 
   // Validate at least one observation field
   const hasFortalezas = fortalezas && fortalezas.trim().length > 0;
@@ -289,12 +292,13 @@ export const updateObservation = async (
 
     await pool.query(
       `UPDATE observacion_estudiante 
-       SET fortalezas = $1, debilidades = $2, recomendaciones = $3
-       WHERE id_observacion = $4`,
+       SET fortalezas = $1, debilidades = $2, recomendaciones = $3, tipo = $4
+       WHERE id_observacion = $5`,
       [
         hasFortalezas ? fortalezas.trim() : null,
         hasDebilidades ? debilidades.trim() : null,
         hasRecomendaciones ? recomendaciones.trim() : null,
+        tipo || 'ACADEMICA',
         observationId,
       ]
     );

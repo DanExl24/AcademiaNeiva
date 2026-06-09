@@ -41,7 +41,13 @@ interface AcademicGroup {
 const fetchCourses = async () => {
   try {
     loading.value = true
-    const response = await axios.get(`http://localhost:3000/api/teacher/courses/${auth.user?.id}`)
+    const userId = auth.isMonitoring
+      ? auth.monitoringUser?.id
+      : (auth.user?.id_usuario || auth.user?.id)
+    
+    if (!userId) return
+    
+    const response = await axios.get(`http://localhost:3000/api/teacher/courses/${userId}`)
     rawData.value = response.data
   } catch (error) {
     console.error('Error fetching courses:', error)

@@ -31,6 +31,7 @@ import {
   createEvidencia,
   updateEvidencia,
   deleteEvidencia,
+  getDirectivoDashboard,
 } from "../controllers/academicAdminController";
 
 const router = Router();
@@ -68,5 +69,8 @@ router.delete("/settings/scales/:id", deleteScale);
 router.post("/settings/competencies/:competenciaId/evidencias", createEvidencia);
 router.put("/settings/evidencias/:evidenciaId", updateEvidencia);
 router.delete("/settings/evidencias/:evidenciaId", deleteEvidencia);
+
+// Dashboard Analítico
+router.get("/dashboard/:schoolId", getDirectivoDashboard);
 
 export default router;

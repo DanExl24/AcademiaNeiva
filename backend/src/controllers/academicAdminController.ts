@@ -1526,6 +1526,7 @@ export const getTeacherManagementData = async (req: Request, res: Response): Pro
            d.id_tipodocumento,
            td.tipo AS tipo_documento,
            d.estado,
+           u.id_usuario,
            u.email,
            COALESCE(u.activo, true) AS activo,
            COUNT(DISTINCT dg.id_detallegrado)::int AS asignaciones_count
@@ -1534,7 +1535,7 @@ export const getTeacherManagementData = async (req: Request, res: Response): Pro
          LEFT JOIN usuario u ON u.id_usuario = d.id_usuario
          LEFT JOIN detalle_grados dg ON dg.id_docente = d.id_docente
          WHERE d.id_colegio = $1
-         GROUP BY d.id_docente, td.tipo, d.estado, u.email, u.activo
+         GROUP BY d.id_docente, td.tipo, d.estado, u.id_usuario, u.email, u.activo
          ORDER BY d.nombre, d.apellido`,
         [schoolId]
       ),
@@ -2278,5 +2279,251 @@ export const getPeriodClosureDetails = async (req: Request, res: Response): Prom
     res.status(500).json({ error: "Error en el servidor" });
   } finally {
     client.release();
+  }
+};
+
+export const getDirectivoDashboard = async (req: Request, res: Response): Promise<void> => {
+  const schoolId = parseSchoolId(req.params.schoolId);
+  const { periodId } = req.query;
+
+  if (!schoolId) {
+    res.status(400).json({ error: "Colegio inválido" });
+    return;
+  }
+
+  try {
+    // 1. Get active period if not provided
+    let targetPeriodId = periodId ? Number(periodId) : null;
+    if (!targetPeriodId) {
+      const activePeriodRes = await pool.query(
+        "SELECT id_periodo FROM periodo_academico WHERE id_colegio = $1 AND estado = 'ABIERTO' ORDER BY id_periodo DESC LIMIT 1",
+        [schoolId]
+      );
+      if (activePeriodRes.rows.length > 0) {
+        targetPeriodId = activePeriodRes.rows[0].id_periodo;
+      } else {
+        // Fallback to the most recent period even if not open
+        const lastPeriodRes = await pool.query(
+          "SELECT id_periodo FROM periodo_academico WHERE id_colegio = $1 ORDER BY id_periodo DESC LIMIT 1",
+          [schoolId]
+        );
+        targetPeriodId = lastPeriodRes.rows.length > 0 ? lastPeriodRes.rows[0].id_periodo : null;
+      }
+    }
+
+    // 2. Principal Indicators (Counters)
+    const [studentsCountRes, teachersCountRes, disciplinaryRes, desertionRes] = await Promise.all([
+      pool.query("SELECT COUNT(*) as total FROM matricula WHERE id_colegio = $1 AND estado = 'ACTIVA'", [schoolId]),
+      pool.query("SELECT COUNT(*) as total FROM docente WHERE id_colegio = $1 AND estado = 'ACTIVO'", [schoolId]),
+      pool.query(
+        `SELECT COUNT(*) as total FROM observacion_estudiante 
+         WHERE id_colegio = $1 AND tipo = 'DISCIPLINARIO' ${targetPeriodId ? "AND id_periodo = $2" : ""}`,
+        targetPeriodId ? [schoolId, targetPeriodId] : [schoolId]
+      ),
+      pool.query(
+        "SELECT COUNT(*) as total FROM matricula WHERE id_colegio = $1 AND estado = 'CANCELADA'",
+        [schoolId]
+      ),
+    ]);
+
+    // 3. Attendance % Today
+    const todayStr = new Date().toLocaleDateString("en-CA");
+    const attendanceTodayRes = await pool.query(
+      `SELECT 
+         (COUNT(*) FILTER (WHERE estado = 'PRESENTE')::numeric / NULLIF(COUNT(*), 0) * 100) as rate
+       FROM registro_asistencia 
+       WHERE id_colegio = $1 AND fecha::date = $2::date`,
+      [schoolId, todayStr]
+    );
+
+    // 4. Academic Performance & Risk (Live calculation fallback)
+    let performanceMetrics: { average: number; atRisk: number } = { average: 0, atRisk: 0 };
+    
+    // Shared CTE template that calculates live projected grades when official results are not yet available
+    // NOTE: This produces a query prefix of the form:
+    //   WITH current_results AS ( ... )
+    // It is designed to be prefixed before a SELECT statement.
+    const buildLiveCTE = (extraCTEs = '') => `
+      WITH current_results AS (
+        SELECT ra.id_estudiante, ra.id_detallegrado, ra.id_periodo, ra.promedio
+        FROM resultado_academico ra
+        JOIN detalle_grados dg_ra ON ra.id_detallegrado = dg_ra.id_detallegrado
+        WHERE dg_ra.id_colegio = $1 AND ra.id_periodo = $2
+
+        UNION ALL
+
+        SELECT na.id_estudiante, am.id_detallegrado, am.id_periodo,
+               ROUND(SUM(na.nota * am.porcentaje / 100.0)::numeric, 2) as promedio
+        FROM notas_actividad na
+        JOIN actividad_materia am ON na.id_actividadmateria = am.id_actividadmateria
+        WHERE am.id_periodo = $2 AND am.id_colegio = $1
+        AND NOT EXISTS (
+          SELECT 1 FROM resultado_academico ra3
+          WHERE ra3.id_estudiante = na.id_estudiante
+          AND ra3.id_detallegrado = am.id_detallegrado
+          AND ra3.id_periodo = am.id_periodo
+        )
+        GROUP BY na.id_estudiante, am.id_detallegrado, am.id_periodo
+      )${extraCTEs}
+    `;
+
+    if (targetPeriodId) {
+      const perfRes = await pool.query(
+        `${buildLiveCTE()}
+         SELECT 
+           AVG(promedio) as avg_general,
+           COUNT(*) FILTER (WHERE promedio < 3.0) as at_risk
+         FROM current_results cr
+         JOIN detalle_grados dg ON cr.id_detallegrado = dg.id_detallegrado
+         WHERE dg.id_colegio = $1`,
+        [schoolId, targetPeriodId]
+      );
+      performanceMetrics.average = Number(Number(perfRes.rows[0].avg_general || 0).toFixed(2));
+      performanceMetrics.atRisk = Number(perfRes.rows[0].at_risk || 0);
+    }
+
+    // 5. Charts Data
+    let charts: { performanceByGrade: any[]; performanceBySubject: any[]; evolution: any[] } = { 
+      performanceByGrade: [], 
+      performanceBySubject: [], 
+      evolution: [] 
+    };
+    if (targetPeriodId) {
+      const [gradePerfRes, subjectPerfRes] = await Promise.all([
+        pool.query(
+          `${buildLiveCTE()}
+           SELECT tg.nombre, ROUND(AVG(cr.promedio), 2) as average
+           FROM current_results cr
+           JOIN detalle_grados dg ON cr.id_detallegrado = dg.id_detallegrado
+           JOIN grupos g ON dg.id_grupo = g.id_grupo
+           JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
+           WHERE dg.id_colegio = $1
+           GROUP BY tg.id_tipo_grado, tg.nombre
+           ORDER BY tg.id_tipo_grado`,
+          [schoolId, targetPeriodId]
+        ),
+        pool.query(
+          `${buildLiveCTE()}
+           SELECT m.nombre, ROUND(AVG(cr.promedio), 2) as average
+           FROM current_results cr
+           JOIN detalle_grados dg ON cr.id_detallegrado = dg.id_detallegrado
+           JOIN materias m ON dg.id_materia = m.id_materia
+           WHERE dg.id_colegio = $1
+           GROUP BY m.id_materia, m.nombre
+           ORDER BY average DESC
+           LIMIT 10`,
+          [schoolId, targetPeriodId]
+        ),
+      ]);
+      charts.performanceByGrade = gradePerfRes.rows;
+      charts.performanceBySubject = subjectPerfRes.rows;
+    }
+
+    // Evolution (all periods of the current year) - Historical promedios
+    // For evolution, we use already calculated averages when possible
+    const evolutionRes = await pool.query(
+      `SELECT p.nombre, ROUND(AVG(ra.promedio), 2) as average
+       FROM resultado_academico ra
+       JOIN periodo_academico p ON ra.id_periodo = p.id_periodo
+       JOIN detalle_grados dg ON ra.id_detallegrado = dg.id_detallegrado
+       WHERE dg.id_colegio = $1 AND p.id_año = (SELECT id_año FROM periodo_academico WHERE id_periodo = $2)
+       GROUP BY p.id_periodo, p.nombre
+       ORDER BY p.id_periodo`,
+      [schoolId, targetPeriodId || 0]
+    );
+    charts.evolution = evolutionRes.rows;
+
+    // 6. Low Performance Analysis Block
+    let lowPerformance: {
+      criticalSubjects: { nombre: string; failures: number }[];
+      gradeAlerts: { nombre: string; alerts: number }[];
+      groupRisk: { curso: string; at_risk: number; safe: number }[];
+    } = {
+      criticalSubjects: [],
+      gradeAlerts: [],
+      groupRisk: []
+    };
+
+    if (targetPeriodId) {
+      const [criticalRes, gradeAlertsRes, groupRiskRes] = await Promise.all([
+        // Top 5 subjects with most students failing
+        pool.query(
+          `${buildLiveCTE()}
+           SELECT m.nombre, COUNT(DISTINCT cr.id_estudiante) as failures
+           FROM current_results cr
+           JOIN detalle_grados dg ON cr.id_detallegrado = dg.id_detallegrado
+           JOIN materias m ON dg.id_materia = m.id_materia
+           WHERE dg.id_colegio = $1 AND cr.promedio < 3.0
+           GROUP BY m.id_materia, m.nombre
+           ORDER BY failures DESC
+           LIMIT 5`,
+          [schoolId, targetPeriodId]
+        ),
+        // Concentration of unique students at risk by grade level
+        pool.query(
+          `${buildLiveCTE()}
+           SELECT tg.nombre, COUNT(DISTINCT cr.id_estudiante) as alerts
+           FROM current_results cr
+           JOIN detalle_grados dg ON cr.id_detallegrado = dg.id_detallegrado
+           JOIN grupos g ON dg.id_grupo = g.id_grupo
+           JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
+           WHERE dg.id_colegio = $1 AND cr.promedio < 3.0
+           GROUP BY tg.id_tipo_grado, tg.nombre
+           ORDER BY alerts DESC`,
+          [schoolId, targetPeriodId]
+        ),
+        // Per-group risk: students failing at least one subject vs students passing everything
+        pool.query(
+          `${buildLiveCTE(`,
+           student_status AS (
+             SELECT 
+               cr.id_estudiante,
+               dg.id_grupo,
+               bool_or(cr.promedio < 3.0) as is_at_risk
+             FROM current_results cr
+             JOIN detalle_grados dg ON cr.id_detallegrado = dg.id_detallegrado
+             WHERE dg.id_colegio = $1
+             GROUP BY cr.id_estudiante, dg.id_grupo
+           )`)}
+           SELECT 
+             tg.nombre || ' ' || s.nombre as curso,
+             COUNT(*) FILTER (WHERE ss.is_at_risk) as at_risk,
+             COUNT(*) FILTER (WHERE NOT ss.is_at_risk) as safe
+           FROM student_status ss
+           JOIN grupos g ON ss.id_grupo = g.id_grupo
+           JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
+           JOIN secciones s ON g.id_seccion = s.id_seccion
+           GROUP BY g.id_grupo, tg.nombre, s.nombre
+           ORDER BY at_risk DESC
+           LIMIT 10`,
+          [schoolId, targetPeriodId]
+        )
+      ]);
+
+      lowPerformance.criticalSubjects = criticalRes.rows;
+      lowPerformance.gradeAlerts = gradeAlertsRes.rows;
+      lowPerformance.groupRisk = groupRiskRes.rows.map(r => ({
+        curso: r.curso,
+        at_risk: Number(r.at_risk),
+        safe: Number(r.safe)
+      }));
+    }
+
+    res.json({
+      summary: {
+        totalStudents: Number(studentsCountRes.rows[0].total),
+        totalTeachers: Number(teachersCountRes.rows[0].total),
+        attendanceToday: Number(Number(attendanceTodayRes.rows[0].rate || 0).toFixed(1)),
+        generalAverage: performanceMetrics.average,
+        studentsAtRisk: performanceMetrics.atRisk,
+        disciplinaryReports: Number(disciplinaryRes.rows[0].total),
+        desertionRate: Number(desertionRes.rows[0].total),
+      },
+      charts,
+      lowPerformance,
+    });
+  } catch (error: any) {
+    console.error("Error fetching directivo dashboard:", error);
+    res.status(500).json({ error: "Error en el servidor" });
   }
 };

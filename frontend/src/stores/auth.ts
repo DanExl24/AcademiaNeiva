@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 
 export interface User {
   id: string
+  id_usuario?: number
   name: string
   email: string
   role: 'admin' | 'directivo' | 'docente' | 'padre' | 'estudiante'
@@ -10,11 +11,22 @@ export interface User {
   schoolId?: string
 }
 
+export interface MonitoredTeacher {
+  id: number
+  nombre: string
+  apellido: string
+  email: string
+}
+
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<User | null>(JSON.parse(localStorage.getItem('user') || 'null'))
   const token = ref<string | null>(localStorage.getItem('token'))
   const activeRole = ref<string | null>(localStorage.getItem('activeRole') || (user.value?.role || null))
   
+  // Modo monitoreo: directivo observando el panel de un docente (solo lectura)
+  const monitoringUser = ref<MonitoredTeacher | null>(null)
+  const isMonitoring = computed(() => !!monitoringUser.value)
+
   const isAuthenticated = computed(() => !!token.value)
 
   function setUser(userData: User, userToken: string) {
@@ -31,10 +43,19 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.setItem('activeRole', role)
   }
 
+  function startMonitoring(teacher: MonitoredTeacher) {
+    monitoringUser.value = teacher
+  }
+
+  function stopMonitoring() {
+    monitoringUser.value = null
+  }
+
   function logout() {
     user.value = null
     token.value = null
     activeRole.value = null
+    monitoringUser.value = null
     localStorage.removeItem('token')
     localStorage.removeItem('user')
     localStorage.removeItem('activeRole')
@@ -45,8 +66,12 @@ export const useAuthStore = defineStore('auth', () => {
     token,
     activeRole,
     isAuthenticated,
+    monitoringUser,
+    isMonitoring,
     setUser,
     setActiveRole,
+    startMonitoring,
+    stopMonitoring,
     logout
   }
 })

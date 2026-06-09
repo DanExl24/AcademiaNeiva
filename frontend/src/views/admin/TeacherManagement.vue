@@ -13,9 +13,11 @@ import {
   Users,
   X,
   BookOpen,
-  ChevronRight
+  ChevronRight,
+  Eye
 } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
+import { useRouter } from 'vue-router'
 
 interface DocumentType {
   id_tipodocumento: number
@@ -24,6 +26,7 @@ interface DocumentType {
 
 interface TeacherItem {
   id_docente: number
+  id_usuario: number
   nombre: string
   apellido: string
   documento: string
@@ -69,6 +72,7 @@ interface ConflictTeacher {
 }
 
 const auth = useAuthStore()
+const router = useRouter()
 const schoolId = computed(() => Number(auth.user?.schoolId || 0))
 
 const loading = ref(true)
@@ -164,6 +168,26 @@ const openDrawer = (teacherId: number) => {
 
 const closeDrawer = () => {
   drawerOpen.value = false
+}
+
+const goToTeacherMonitoring = () => {
+  if (!selectedTeacher.value) return
+  
+  if (!selectedTeacher.value.id_usuario) {
+    alert('Este docente no tiene un usuario activo registrado, no es posible monitorear su panel.')
+    return
+  }
+
+  auth.startMonitoring({
+    id: selectedTeacher.value.id_usuario,
+    nombre: selectedTeacher.value.nombre,
+    apellido: selectedTeacher.value.apellido,
+    email: selectedTeacher.value.email
+  })
+  closeDrawer()
+  // Navigate using 'docente' active role so menus switch correctly
+  auth.setActiveRole('docente')
+  router.push('/dashboard')
 }
 
 // Close drawer on Escape
@@ -439,9 +463,20 @@ onMounted(() => {
                   <p class="text-blue-200 dark:text-blue-400 text-[10px] font-black uppercase mt-1 tracking-widest">{{ selectedTeacher.tipo_documento }} {{ selectedTeacher.documento }}</p>
                 </div>
               </div>
-              <button @click="closeDrawer" class="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all mt-1 shrink-0">
-                <X :size="20" />
-              </button>
+              <div class="flex items-center gap-2">
+                <!-- Monitoring Button -->
+                <button
+                  @click="goToTeacherMonitoring"
+                  class="flex items-center gap-1.5 bg-white/15 hover:bg-white/30 border border-white/30 text-white px-3 py-2 rounded-xl text-xs font-black uppercase tracking-wide transition-all"
+                  title="Ver el panel del docente en modo solo lectura"
+                >
+                  <Eye :size="15" />
+                  Ir a Seguimiento
+                </button>
+                <button @click="closeDrawer" class="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all mt-1 shrink-0">
+                  <X :size="20" />
+                </button>
+              </div>
             </div>
 
             <!-- Drawer Body -->

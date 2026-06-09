@@ -1,97 +1,193 @@
 import { pool } from "./config/db";
 
+/**
+ * Grade distribution for realistic testing:
+ *  - 15% fail (1.0 – 2.9): Below performance
+ *  - 35% básico (3.0 – 3.9): Basic performance
+ *  - 30% alto  (4.0 – 4.5): High performance
+ *  - 20% superior (4.6 – 5.0): Superior performance
+ *
+ * This ensures the Directivo dashboard "Low Performance" block
+ * can show meaningful data for testing.
+ */
+function getRealisticGrade(): number {
+  const rand = Math.random();
+  let nota: number;
+
+  if (rand < 0.15) {
+    // 15% failing: 1.0 – 2.9
+    nota = 1.0 + Math.random() * 1.9;
+  } else if (rand < 0.50) {
+    // 35% basic: 3.0 – 3.9
+    nota = 3.0 + Math.random() * 0.9;
+  } else if (rand < 0.80) {
+    // 30% high: 4.0 – 4.5
+    nota = 4.0 + Math.random() * 0.5;
+  } else {
+    // 20% superior: 4.6 – 5.0
+    nota = 4.6 + Math.random() * 0.4;
+  }
+
+  return Math.min(5.0, Math.round(nota * 10) / 10);
+}
+
+function getEscalaId(nota: number): number {
+  if (nota >= 4.6) return 1; // Superior
+  if (nota >= 4.0) return 2; // Alto
+  if (nota >= 3.0) return 3; // Básico
+  return 4;                  // Bajo
+}
+
+function getEstado(nota: number): string {
+  return nota >= 3.0 ? "APROBADO" : "REPROBADO";
+}
+
+function getObservation(nota: number): { fortalezas: string; debilidades: string; recomendaciones: string } {
+  if (nota >= 4.6) return {
+    fortalezas: "Excelente comprensión y dominio de los contenidos. Participación activa y propositiva en clase.",
+    debilidades: "Puede enriquecer sus aprendizajes con lecturas complementarias.",
+    recomendaciones: "Continuar con el mismo nivel de compromiso y apoyar a sus compañeros."
+  };
+  if (nota >= 4.0) return {
+    fortalezas: "Buen manejo de los temas y actitud positiva frente al aprendizaje.",
+    debilidades: "Algunas dificultades en los temas de mayor complejidad.",
+    recomendaciones: "Reforzar los temas con mayor dificultad mediante ejercicios adicionales."
+  };
+  if (nota >= 3.0) return {
+    fortalezas: "Ha cumplido con los requisitos mínimos de la asignatura.",
+    debilidades: "Falta profundizar en varios temas y mejorar la presentación de trabajos.",
+    recomendaciones: "Establecer un plan de estudio regular y solicitar asesoría al docente."
+  };
+  return {
+    fortalezas: "Muestra disposición para asistir a clases.",
+    debilidades: "Dificultades significativas en la comprensión de los contenidos y en la entrega de actividades.",
+    recomendaciones: "Requiere plan de mejoramiento inmediato, apoyo familiar y asesoría permanente del docente."
+  };
+}
+
 async function runSeedGrades() {
   const client = await pool.connect();
   try {
-    console.log("Iniciando seeder de calificaciones (boletines)...");
+    console.log("🌱 Iniciando seeder de calificaciones (distribución realista)...");
     await client.query("BEGIN");
 
-    // Get closed periods
-    const closedPeriodsRes = await client.query(`SELECT id_periodo, id_colegio FROM periodo_academico WHERE estado = 'CERRADO'`);
-    if (closedPeriodsRes.rows.length === 0) {
-      console.log("No hay periodos cerrados para generar boletines.");
+    // ─── CLEAR EXISTING GRADE DATA ───────────────────────────────────────────
+    console.log("🔄 Limpiando datos anteriores de calificaciones...");
+    await client.query("DELETE FROM resultado_academico");
+    await client.query("DELETE FROM notas_actividad");
+    await client.query("DELETE FROM nota_criterio");
+    await client.query("DELETE FROM observacion_estudiante");
+    await client.query("DELETE FROM actividad_materia");
+    await client.query("DELETE FROM cierre_materia");
+    console.log("✅ Datos anteriores eliminados.");
+
+    // ─── FETCH BASE DATA ─────────────────────────────────────────────────────
+    const closedPeriodsRes = await client.query(
+      `SELECT id_periodo, id_colegio FROM periodo_academico WHERE estado = 'CERRADO'`
+    );
+    const openPeriodsRes = await client.query(
+      `SELECT id_periodo, id_colegio FROM periodo_academico WHERE estado = 'ABIERTO'`
+    );
+
+    const allPeriods = [...closedPeriodsRes.rows, ...openPeriodsRes.rows];
+
+    if (allPeriods.length === 0) {
+      console.log("❌ No hay periodos disponibles. Se necesita al menos uno.");
       return;
     }
 
-    // Get active students
     const studentsRes = await client.query(`
       SELECT e.id_estudiante, e.id_colegio, m.id_grupo
       FROM estudiante e
       JOIN matricula m ON m.id_estudiante = e.id_estudiante
+      WHERE m.estado = 'ACTIVA'
     `);
-    
-    // Get all groups with their subjects (detalle_grados)
+
     const detalleGradosRes = await client.query(`
       SELECT dg.id_detallegrado, dg.id_materia, dg.id_docente, dg.id_grupo, dg.id_colegio
       FROM detalle_grados dg
     `);
-    
-    // Competencias (mocking first one available)
-    const competenciasRes = await client.query('SELECT id_competencia FROM competencias LIMIT 1');
-    const defaultCompetenciaId = competenciasRes.rows.length ? competenciasRes.rows[0].id_competencia : 1;
-    
-    let notasAgregadas = 0;
-    
-    for (const period of closedPeriodsRes.rows) {
-      for (const dg of detalleGradosRes.rows.filter(d => d.id_colegio === period.id_colegio)) {
-        
-        // Ensure cierre_materia exists
-        await client.query(`
-          INSERT INTO cierre_materia (id_detallegrado, id_periodo, estado, fecha_cierre)
-          VALUES ($1, $2, 'CERRADO', NOW())
-          ON CONFLICT DO NOTHING
-        `, [dg.id_detallegrado, period.id_periodo]);
 
-        // Ensure at least one activity
+    const competenciasRes = await client.query(`
+      SELECT id_competencia, id_grupo, id_materia, id_colegio
+      FROM competencias LIMIT 1
+    `);
+    const defaultCompetenciaId = competenciasRes.rows.length ? competenciasRes.rows[0].id_competencia : 1;
+
+    let notasAgregadas = 0;
+
+    for (const period of allPeriods) {
+      const isClosed = closedPeriodsRes.rows.some(p => p.id_periodo === period.id_periodo);
+      const detalleGradosDePeriodo = detalleGradosRes.rows.filter(d => d.id_colegio === period.id_colegio);
+
+      for (const dg of detalleGradosDePeriodo) {
+        // Register subject closure for CLOSED periods only
+        if (isClosed) {
+          await client.query(`
+            INSERT INTO cierre_materia (id_detallegrado, id_periodo, estado, fecha_cierre)
+            VALUES ($1, $2, 'CERRADO', NOW())
+            ON CONFLICT DO NOTHING
+          `, [dg.id_detallegrado, period.id_periodo]);
+        }
+
+        // Create a single graded activity (100% weight)
         const actRes = await client.query(`
           INSERT INTO actividad_materia (id_detallegrado, id_periodo, nombre, porcentaje, id_colegio, id_competencia)
-          VALUES ($1, $2, 'Actividad Final (Mock)', 100.0, $3, $4)
+          VALUES ($1, $2, 'Actividad de evaluación', 100.0, $3, $4)
           RETURNING id_actividadmateria
         `, [dg.id_detallegrado, period.id_periodo, dg.id_colegio, defaultCompetenciaId]);
-        
-        const actividadId = actRes.rows[0].id_actividadmateria;
 
-        // Ensure at least one observation for the student in this period
+        const actividadId = actRes.rows[0].id_actividadmateria;
         const studentsInGroup = studentsRes.rows.filter(s => s.id_grupo === dg.id_grupo);
-        
+
         for (const student of studentsInGroup) {
-          // Rand note 3.0 to 5.0
-          const nota = (3 + Math.random() * 2).toFixed(1);
-          // Scale IDs: 1 (Superior 4.6-5.0), 2 (Alto 4.0-4.5), 3 (Básico 3.0-3.9), 4 (Bajo <3.0)
-          let escalaId = 3;
-          if (parseFloat(nota) >= 4.6) escalaId = 1;
-          else if (parseFloat(nota) >= 4.0) escalaId = 2;
-          
+          const nota = getRealisticGrade();
+          const escalaId = getEscalaId(nota);
+          const obs = getObservation(nota);
+
+          // Record in notas_actividad
           await client.query(`
             INSERT INTO notas_actividad (id_actividadmateria, id_estudiante, id_escalavaloracion, nota, id_colegio)
             VALUES ($1, $2, $3, $4, $5)
+            ON CONFLICT DO NOTHING
           `, [actividadId, student.id_estudiante, escalaId, nota, dg.id_colegio]);
-          
-          await client.query(`
-            INSERT INTO resultado_academico (id_estudiante, id_detallegrado, id_periodo, promedio, estado, fecha_cierre, id_docente, observacion)
-            VALUES ($1, $2, $3, $4, 'APROBADO', NOW(), $5, 'Buen desempeño')
-          `, [student.id_estudiante, dg.id_detallegrado, period.id_periodo, nota, dg.id_docente]);
-          
-          const observationsTemplates = [
-            { tipo: 'ACADEMICA', fortalezas: 'Excelente comprensión de los temas vistos en clase.', debilidades: 'Ocasionalmente se distrae con facilidad.', recomendaciones: 'Mantener el ritmo de estudio y participación.' },
-            { tipo: 'DISCIPLINARIA', fortalezas: 'Respeta las normas del salón y a sus compañeros.', debilidades: 'A veces llega tarde a la primera sesión.', recomendaciones: 'Mejorar la puntualidad en el ingreso a clase.' },
-            { tipo: 'CONVIVENCIAL', fortalezas: 'Muestra gran empatía y liderazgo positivo.', debilidades: 'Debe aprender a manejar mejor los desacuerdos.', recomendaciones: 'Participar en las actividades de resolución de conflictos.' }
-          ];
 
-          for (const obs of observationsTemplates) {
+          // For CLOSED periods: also insert oficial result into resultado_academico
+          if (isClosed) {
             await client.query(`
-              INSERT INTO observacion_estudiante (id_estudiante, id_detallegrado, id_periodo, fortalezas, debilidades, recomendaciones, fecha, id_colegio, tipo)
-              VALUES ($1, $2, $3, $4, $5, $6, NOW(), $7, $8)
-            `, [student.id_estudiante, dg.id_detallegrado, period.id_periodo, obs.fortalezas, obs.debilidades, obs.recomendaciones, dg.id_colegio, obs.tipo]);
+              INSERT INTO resultado_academico (id_estudiante, id_detallegrado, id_periodo, promedio, estado, fecha_cierre, id_docente, observacion)
+              VALUES ($1, $2, $3, $4, $5, NOW(), $6, $7)
+              ON CONFLICT DO NOTHING
+            `, [student.id_estudiante, dg.id_detallegrado, period.id_periodo, nota, getEstado(nota), dg.id_docente, obs.recomendaciones]);
           }
-          
+
+          // Observation per student per subject per period (academic type)
+          await client.query(`
+            INSERT INTO observacion_estudiante (id_estudiante, id_detallegrado, id_periodo, fortalezas, debilidades, recomendaciones, fecha, id_colegio, tipo)
+            VALUES ($1, $2, $3, $4, $5, $6, NOW(), $7, 'ACADEMICA')
+            ON CONFLICT DO NOTHING
+          `, [student.id_estudiante, dg.id_detallegrado, period.id_periodo, obs.fortalezas, obs.debilidades, obs.recomendaciones, dg.id_colegio]);
+
           notasAgregadas++;
         }
       }
     }
 
     await client.query("COMMIT");
-    console.log(`✅ ¡Seeder de notas/calificaciones completado! Se agregaron ${notasAgregadas} notas ficticias para periodos cerrados.`);
+
+    const failCount = await pool.query(
+      `SELECT COUNT(*) as total FROM resultado_academico WHERE promedio < 3.0`
+    );
+    const passCount = await pool.query(
+      `SELECT COUNT(*) as total FROM resultado_academico WHERE promedio >= 3.0`
+    );
+
+    console.log(`\n✅ Seeder completado exitosamente!`);
+    console.log(`   📝 Notas agregadas: ${notasAgregadas}`);
+    console.log(`   ✅ Aprobados (>= 3.0): ${passCount.rows[0].total}`);
+    console.log(`   ❌ Reprobados (< 3.0): ${failCount.rows[0].total}`);
+    console.log(`\n   ¡El dashboard ahora mostrará datos reales de bajo rendimiento! 🎉`);
+
   } catch (error) {
     await client.query("ROLLBACK");
     console.error("❌ Error en el seeder de calificaciones:", error);

@@ -156,6 +156,33 @@ export const saveAttendance = async (req: Request, res: Response): Promise<void>
 
     await client.query("BEGIN");
 
+    // 3. Enforce 7-block daily limit per student
+    const studentsWithStatus = records.filter(r => r.estado).map(r => Number(r.id_estudiante));
+    if (studentsWithStatus.length > 0) {
+      const limitCheckRes = await client.query(
+        `SELECT ra.id_estudiante, e.nombre, e.apellido, COUNT(*) as count 
+         FROM registro_asistencia ra
+         JOIN estudiante e ON e.id_estudiante = ra.id_estudiante
+         WHERE ra.id_estudiante = ANY($1) 
+           AND ra.fecha::date = $2::date 
+           AND ra.id_detallegrado != $3
+         GROUP BY ra.id_estudiante, e.nombre, e.apellido
+         HAVING COUNT(*) >= 7`,
+        [studentsWithStatus, date, detailGradeId]
+      );
+
+      if (limitCheckRes.rows.length > 0) {
+        const firstExceeded = limitCheckRes.rows[0];
+        const name = `${firstExceeded.nombre} ${firstExceeded.apellido}`;
+        await client.query("ROLLBACK");
+        res.status(409).json({ 
+          error: `El estudiante ${name} ya alcanzó el límite máximo de 7 bloques académicos para el día ${date}. No es posible registrar más asistencias.` 
+        });
+        client.release();
+        return;
+      }
+    }
+
     for (const record of records) {
       const studentId = Number(record.id_estudiante);
       const estado = record.estado;

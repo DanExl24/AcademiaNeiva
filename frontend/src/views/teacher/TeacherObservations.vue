@@ -60,6 +60,7 @@ interface Observation {
   debilidades: string | null
   recomendaciones: string | null
   fecha: string
+  tipo: 'ACADEMICA' | 'DISCIPLINARIO' | 'CONVIVENCIAL'
 }
 
 const route = useRoute()
@@ -94,16 +95,19 @@ const formData = ref({
   fortalezas: '',
   debilidades: '',
   recomendaciones: '',
-  fecha: new Date().toLocaleDateString('en-CA')
+  fecha: new Date().toLocaleDateString('en-CA'),
+  tipo: 'ACADEMICA' as 'ACADEMICA' | 'DISCIPLINARIO' | 'CONVIVENCIAL'
 })
 
 // Confirm delete
 const confirmDeleteId = ref<number | null>(null)
 
-// Load assigned courses
+// Load my courses
 const fetchMyCourses = async () => {
+  // In monitoring mode, load the observed teacher's courses
+  const teacherId = auth.isMonitoring ? auth.monitoringUser?.id : auth.user?.id
   try {
-    const response = await axios.get(`http://localhost:3000/api/teacher/courses/${auth.user?.id}`)
+    const response = await axios.get(`http://localhost:3000/api/teacher/courses/${teacherId}`)
     myCourses.value = response.data
     
     // Si venimos con parámetros de consulta (ej. desde el cierre)
@@ -327,7 +331,8 @@ const openNewModal = () => {
     fortalezas: '',
     debilidades: '',
     recomendaciones: '',
-    fecha: defaultDate
+    fecha: defaultDate,
+    tipo: 'ACADEMICA'
   }
   showModal.value = true
   fetchStudents()
@@ -341,7 +346,8 @@ const openEditModal = (obs: Observation) => {
     fortalezas: obs.fortalezas || '',
     debilidades: obs.debilidades || '',
     recomendaciones: obs.recomendaciones || '',
-    fecha: new Date(obs.fecha).toLocaleDateString('en-CA')
+    fecha: new Date(obs.fecha).toLocaleDateString('en-CA'),
+    tipo: obs.tipo || 'ACADEMICA'
   }
   showModal.value = true
   fetchStudents()
@@ -375,7 +381,8 @@ const saveObservation = async () => {
       await axios.put(`http://localhost:3000/api/teacher/observations/${editingObservation.value.id_observacion}`, {
         fortalezas: formData.value.fortalezas,
         debilidades: formData.value.debilidades,
-        recomendaciones: formData.value.recomendaciones
+        recomendaciones: formData.value.recomendaciones,
+        tipo: formData.value.tipo
       })
     } else {
       // Create
@@ -386,7 +393,8 @@ const saveObservation = async () => {
         fortalezas: formData.value.fortalezas,
         debilidades: formData.value.debilidades,
         recomendaciones: formData.value.recomendaciones,
-        fecha: `${formData.value.fecha}T12:00:00Z`
+        fecha: `${formData.value.fecha}T12:00:00Z`,
+        tipo: formData.value.tipo
       })
     }
 
@@ -437,13 +445,19 @@ onMounted(() => {
         <p class="text-slate-500 dark:text-slate-400 text-lg transition-colors">Consulta y registra el seguimiento académico: fortalezas, debilidades y recomendaciones.</p>
       </div>
       <button
-        v-if="selectedCourse && selectedPeriodId && isEditable"
+        v-if="selectedCourse && selectedPeriodId && isEditable && !auth.isMonitoring"
         @click="openNewModal"
         class="bg-amber-600 dark:bg-amber-500 text-white px-8 py-3 rounded-2xl font-bold shadow-lg shadow-amber-200/50 dark:shadow-none hover:bg-amber-700 dark:hover:bg-amber-600 active:scale-95 transition-all flex items-center gap-2"
       >
         <Plus :size="20" />
         Nueva Observación
       </button>
+      <div 
+        v-if="auth.isMonitoring && selectedCourse && selectedPeriodId"
+        class="flex items-center gap-2 text-amber-600 font-bold text-sm bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 px-5 py-3 rounded-2xl"
+      >
+        Solo Lectura
+      </div>
     </div>
 
     <!-- Filters in cascade -->
@@ -645,7 +659,18 @@ onMounted(() => {
                   {{ obs.nombre.charAt(0) }}
                 </div>
                 <div>
-                  <h4 class="font-black text-slate-900 dark:text-white text-lg">{{ obs.nombre }}</h4>
+                  <div class="flex items-center gap-2">
+                    <h4 class="font-black text-slate-900 dark:text-white text-lg">{{ obs.nombre }}</h4>
+                    <span 
+                      v-if="obs.tipo && obs.tipo !== 'ACADEMICA'"
+                      :class="[
+                        obs.tipo === 'DISCIPLINARIO' ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400' : 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400',
+                        'px-2 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-tighter'
+                      ]"
+                    >
+                      {{ obs.tipo }}
+                    </span>
+                  </div>
                   <div class="flex items-center gap-2 text-xs text-slate-400 dark:text-slate-500 font-semibold mt-0.5">
                     <Calendar :size="12" />
                     {{ formatDate(obs.fecha) }}
@@ -774,6 +799,34 @@ onMounted(() => {
                 <p v-if="allowedDateRange.min || allowedDateRange.max" class="text-[11px] text-amber-600 dark:text-amber-500 font-semibold ml-1">
                   Rango del periodo: {{ formatDate(allowedDateRange.min) }} al {{ formatDate(allowedDateRange.max) }}
                 </p>
+              </div>
+
+              <!-- Tipo de Seguimiento -->
+              <div class="space-y-2">
+                <label class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">Tipo de Seguimiento *</label>
+                <div class="grid grid-cols-3 gap-3">
+                  <button
+                    type="button"
+                    @click="formData.tipo = 'ACADEMICA'"
+                    :class="[formData.tipo === 'ACADEMICA' ? 'bg-amber-600 text-white shadow-lg shadow-amber-200/50' : 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100', 'py-3 px-4 rounded-2xl text-xs font-bold transition-all border border-transparent']"
+                  >
+                    Académico
+                  </button>
+                  <button
+                    type="button"
+                    @click="formData.tipo = 'DISCIPLINARIO'"
+                    :class="[formData.tipo === 'DISCIPLINARIO' ? 'bg-rose-600 text-white shadow-lg shadow-rose-200/50' : 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100', 'py-3 px-4 rounded-2xl text-xs font-bold transition-all border border-transparent']"
+                  >
+                    Disciplinario
+                  </button>
+                  <button
+                    type="button"
+                    @click="formData.tipo = 'CONVIVENCIAL'"
+                    :class="[formData.tipo === 'CONVIVENCIAL' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200/50' : 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100', 'py-3 px-4 rounded-2xl text-xs font-bold transition-all border border-transparent']"
+                  >
+                    Convivencial
+                  </button>
+                </div>
               </div>
 
               <!-- Fortalezas -->
