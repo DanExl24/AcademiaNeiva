@@ -10,7 +10,8 @@ import {
   Eye,
   ChevronRight,
   ChevronLeft,
-  FileText
+  FileText,
+  GraduationCap
 } from 'lucide-vue-next'
 
 const route = useRoute()
@@ -46,7 +47,12 @@ const fetchDetails = async () => {
   try {
     const response = await axios.get(`http://localhost:3000/api/matriculas/${idMatricula}`)
     matricula.value = response.data
-    // Pre-poblar correo si es necesario o nombres si estuvieran
+    // Si el padre ya tiene cuenta de personal (docente/directivo), pre-poblar formulario
+    if (response.data.existing_parent_user) {
+      const eu = response.data.existing_parent_user
+      parentData.value.nombre = eu.nombre
+      parentData.value.apellido = eu.apellido
+    }
   } catch (error) {
     notify.addNotification('Error al cargar la solicitud', 'error')
     router.push('/dashboard/gestion-matriculas')
@@ -74,7 +80,8 @@ const handleFinalize = async () => {
     const payload = {
       student: studentData.value,
       parent: parentData.value,
-      id_grado: Number(route.query.gradeId)
+      id_grado: Number(route.query.gradeId),
+      existing_parent_user_id: matricula.value?.existing_parent_user?.id_usuario || null
     }
     await axios.post(`http://localhost:3000/api/matriculas/finalize/${idMatricula}`, payload)
     notify.addNotification('Registro finalizado y matrícula activada exitosamente', 'success')
@@ -199,16 +206,42 @@ const documentLabels: Record<string, string> = {
 
         <!-- FORM STEP 2: Parent -->
         <div v-if="step === 2" class="space-y-6 animate-in slide-in-from-right duration-500">
+
+          <!-- Banner: Existing Staff Parent -->
+          <div
+            v-if="matricula?.existing_parent_user"
+            class="p-5 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-4"
+          >
+            <div class="p-2.5 bg-amber-500 text-white rounded-xl shrink-0">
+              <GraduationCap :size="20" />
+            </div>
+            <div>
+              <p class="font-black text-amber-900 text-sm">
+                Acudiente identificado como
+                <span class="uppercase font-extrabold">{{ matricula.existing_parent_user.display_role }}</span>
+              </p>
+              <p class="text-amber-800 text-xs mt-0.5">
+                {{ matricula.existing_parent_user.nombre }} {{ matricula.existing_parent_user.apellido }}
+                · {{ matricula.existing_parent_user.email }}
+              </p>
+              <p class="text-amber-700 text-xs mt-1.5 italic">
+                Los campos de nombre han sido pre-llenados. Solo verifica el número de documento y guarda.
+              </p>
+            </div>
+          </div>
+
           <div class="grid grid-cols-2 gap-6">
             <div class="space-y-2">
               <label class="text-sm font-bold text-gray-700">Nombres del Padre</label>
-              <input v-model="parentData.nombre" type="text" placeholder="Ej: Carlos Mario" 
-                class="w-full rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-4 transition-all">
+              <input v-model="parentData.nombre" type="text" placeholder="Ej: Carlos Mario"
+                :disabled="!!matricula?.existing_parent_user"
+                class="w-full rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-4 transition-all disabled:opacity-60 disabled:cursor-not-allowed">
             </div>
             <div class="space-y-2">
               <label class="text-sm font-bold text-gray-700">Apellidos del Padre</label>
               <input v-model="parentData.apellido" type="text" placeholder="Ej: Pérez Motta"
-                class="w-full rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-4 transition-all">
+                :disabled="!!matricula?.existing_parent_user"
+                class="w-full rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-4 transition-all disabled:opacity-60 disabled:cursor-not-allowed">
             </div>
           </div>
           <div class="grid grid-cols-2 gap-6">

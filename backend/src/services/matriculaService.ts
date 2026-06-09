@@ -143,10 +143,47 @@ export class MatriculaService {
       `SELECT * FROM documento_matriculas WHERE id_matricula = $1`, [idMatricula]
     );
 
+    // Detectar si el correo del padre ya corresponde a un usuario existente (docente/directivo)
+    let existingParentUser = null;
+    if (mat.correo_padre) {
+      const existingUserRes = await pool.query(
+        `SELECT u.id_usuario, u.nombre, u.apellido, u.email,
+                ARRAY_AGG(r.nombre ORDER BY r.nombre) as roles
+         FROM usuario u
+         JOIN usuario_rol ur ON u.id_usuario = ur.id_usuario
+         JOIN rol r ON ur.id_rol = r.id_rol
+         WHERE u.email = $1
+         GROUP BY u.id_usuario, u.nombre, u.apellido, u.email`,
+        [mat.correo_padre]
+      );
+
+      if (existingUserRes.rows.length > 0) {
+        const eu = existingUserRes.rows[0];
+        const roles: string[] = eu.roles;
+        // Solo mostrar alerta si es personal institucional (docente o directivo), no si ya es padre
+        const isStaff = roles.includes('docente') || roles.includes('directivo') || roles.includes('admin');
+        if (isStaff) {
+          let displayRole = 'docente';
+          if (roles.includes('directivo')) displayRole = 'directivo';
+          else if (roles.includes('admin')) displayRole = 'admin';
+
+          existingParentUser = {
+            id_usuario: eu.id_usuario,
+            nombre: eu.nombre,
+            apellido: eu.apellido,
+            email: eu.email,
+            roles: roles,
+            display_role: displayRole
+          };
+        }
+      }
+    }
+
     return {
       ...mat,
       availableSections: sections.rows || [],
-      documentos: docs.rows || []
+      documentos: docs.rows || [],
+      existing_parent_user: existingParentUser
     };
   }
 
@@ -289,29 +326,35 @@ export class MatriculaService {
       // --- CREACIÓN DEL PADRE DE FAMILIA ---
       let idUsuarioPadre;
       
-      // Buscar primero por documento en la tabla docente (el dato más fiable según el usuario)
-      const existingDocente = await client.query(
-          'SELECT id_usuario FROM docente WHERE documento = $1',
-          [data.parent.documento]
-      );
-
-      if (existingDocente.rows.length > 0) {
-          idUsuarioPadre = existingDocente.rows[0].id_usuario;
-          console.log('Match found by document (Docente):', idUsuarioPadre);
+      // PRIORIDAD 1: El frontend ya detectó un usuario existente (docente/directivo)
+      if (data.existing_parent_user_id) {
+          idUsuarioPadre = data.existing_parent_user_id;
+          console.log('Using pre-detected existing user (staff parent):', idUsuarioPadre);
       } else {
-          // Fallback: Buscar por email (como estaba antes)
-          const existingParentUser = await client.query('SELECT id_usuario FROM usuario WHERE email = $1', [correo_padre]);
-          if (existingParentUser.rows.length > 0) {
-              idUsuarioPadre = existingParentUser.rows[0].id_usuario;
-              console.log('Match found by email:', idUsuarioPadre);
+          // PRIORIDAD 2: Buscar por documento en la tabla docente
+          const existingDocente = await client.query(
+              'SELECT id_usuario FROM docente WHERE documento = $1',
+              [data.parent.documento]
+          );
+
+          if (existingDocente.rows.length > 0) {
+              idUsuarioPadre = existingDocente.rows[0].id_usuario;
+              console.log('Match found by document (Docente):', idUsuarioPadre);
           } else {
-              // Usuario padre nuevo
-              const hashedPadrePass = await bcrypt.hash('padre123', 10);
-              const parentUserRes = await client.query(
-                 `INSERT INTO usuario (email, password, nombre, apellido, id_colegio) VALUES ($1, $2, $3, $4, $5) RETURNING id_usuario`,
-                 [correo_padre, hashedPadrePass, data.parent.nombre, data.parent.apellido, id_colegio]
-              );
-              idUsuarioPadre = parentUserRes.rows[0].id_usuario;
+              // PRIORIDAD 3: Buscar por email
+              const existingParentUser = await client.query('SELECT id_usuario FROM usuario WHERE email = $1', [correo_padre]);
+              if (existingParentUser.rows.length > 0) {
+                  idUsuarioPadre = existingParentUser.rows[0].id_usuario;
+                  console.log('Match found by email:', idUsuarioPadre);
+              } else {
+                  // NUEVA CUENTA: No existe, crear usuario padre
+                  const hashedPadrePass = await bcrypt.hash('padre123', 10);
+                  const parentUserRes = await client.query(
+                     `INSERT INTO usuario (email, password, nombre, apellido, id_colegio) VALUES ($1, $2, $3, $4, $5) RETURNING id_usuario`,
+                     [correo_padre, hashedPadrePass, data.parent.nombre, data.parent.apellido, id_colegio]
+                  );
+                  idUsuarioPadre = parentUserRes.rows[0].id_usuario;
+              }
           }
       }
 

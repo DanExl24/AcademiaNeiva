@@ -5,30 +5,37 @@ export const checkDocument = async (req: Request, res: Response): Promise<void> 
   const { document } = req.params;
 
   try {
-    // 1. Buscar en docentes
+    // 1. Buscar en tabla docente (tiene campo documento directo)
     const docenteRes = await pool.query(
-      `SELECT u.nombre, u.apellido, r.nombre as role
+      `SELECT u.id_usuario, u.nombre, u.apellido, u.email,
+              ARRAY_AGG(r.nombre) as roles
        FROM docente d
        JOIN usuario u ON d.id_usuario = u.id_usuario
        JOIN usuario_rol ur ON u.id_usuario = ur.id_usuario
        JOIN rol r ON ur.id_rol = r.id_rol
-       WHERE d.documento = $1`,
+       WHERE d.documento = $1
+       GROUP BY u.id_usuario, u.nombre, u.apellido, u.email`,
       [document]
     );
 
     if (docenteRes.rows.length > 0) {
+      const user = docenteRes.rows[0];
+      const roles: string[] = user.roles;
+      // Determinar rol principal para mostrar (prioridad: directivo > admin > docente)
+      let displayRole = 'docente';
+      if (roles.includes('directivo')) displayRole = 'directivo';
+      else if (roles.includes('admin')) displayRole = 'admin';
+
       res.json({
         exists: true,
-        user: docenteRes.rows[0],
-        role: 'docente'
+        user: { nombre: user.nombre, apellido: user.apellido, email: user.email },
+        role: displayRole,
+        roles: roles
       });
       return;
     }
 
-    // 2. Buscar en directivos (si tienen documento, si no, se podría buscar por otro campo si existiera)
-    // Nota: La tabla directivo no parece tener campo documento directo en el SQL mostrado, 
-    // pero si el usuario es docente y directivo ya lo habríamos encontrado.
-    
+    // 2. No encontrado en docente, no hay otra tabla de personal con documento
     res.json({ exists: false });
   } catch (error: any) {
     console.error("Error checking document:", error);

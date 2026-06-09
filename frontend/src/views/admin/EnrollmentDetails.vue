@@ -16,7 +16,9 @@ import {
   ClipboardList,
   ShieldCheck,
   User,
-  Mail
+  Mail,
+  GraduationCap,
+  ShieldAlert
 } from 'lucide-vue-next'
 
 const route = useRoute()
@@ -376,6 +378,29 @@ const rejectedDocumentsNames = computed(() => {
             </div>
           </div>
           <button @click="showCancelModal = true" class="px-4 py-2 bg-red-600 text-white rounded-xl font-black text-xs hover:bg-red-700 transition-all">Cancelar</button>
+        </div>
+
+        <!-- ⚠️ BANNER: Este padre es Docente/Directivo -->
+        <div
+          v-if="matricula.existing_parent_user && !['ACTIVA', 'TRASLADADA', 'CANCELADA'].includes(matricula.estado)"
+          class="p-5 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-3xl flex items-start gap-4"
+        >
+          <div class="p-2.5 bg-amber-500 text-white rounded-2xl shrink-0">
+            <GraduationCap :size="20" />
+          </div>
+          <div class="flex-1">
+            <p class="font-black text-amber-900 dark:text-amber-300 text-sm">
+              Este acudiente ya tiene cuenta activa como
+              <span class="uppercase">{{ matricula.existing_parent_user.display_role }}</span>
+            </p>
+            <p class="text-amber-800 dark:text-amber-400 text-xs mt-1 font-medium">
+              <strong>{{ matricula.existing_parent_user.nombre }} {{ matricula.existing_parent_user.apellido }}</strong>
+              — {{ matricula.existing_parent_user.email }}
+            </p>
+            <p class="text-amber-700 dark:text-amber-500 text-xs mt-1.5 italic">
+              Al aprobar, el estudiante se vinculará automáticamente a su cuenta existente y se le asignará el rol de Padre.
+            </p>
+          </div>
         </div>
 
         <!-- Cancelled Banner -->
