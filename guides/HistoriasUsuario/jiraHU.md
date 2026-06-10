@@ -153,13 +153,6 @@
 - Documentos con inconsistencias
 - El sistema deberá generar este modulo con las 3 vistas dentro, separadas por responsabilidades
 
-**Notificaciones**
-
-- El sistema debe mostrar notificaciones sobre:
-- Nuevas solicitudes de matrícula
-- Correcciones enviadas por padres
-- Alertas del sistema
-
 **Seguridad**
 
 - El sistema debe restringir el acceso a los módulos según el rol del usuario autenticado

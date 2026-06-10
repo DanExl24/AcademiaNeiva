@@ -148,9 +148,11 @@ Primaria 5-6 4-6
 Secundaria 6-7 5-7
 Media (10°-11°) 6-8 5-7
 
-Además, desde el punto de vista de la base de datos y la programación del horario, suele ser útil validar que:
+**15. Límite de Asistencia Diaria**
 
-Un estudiante no tenga más de 7 bloques académicos al día.
+- Ningún estudiante puede tener más de 7 bloques académicos o registros de asistencia en un mismo día.
+- Esta validación impide que la carga académica registrada supere la capacidad física de una jornada escolar (evitando inconsistencias y duplicados).
+- La regla permite actualizaciones de registros existentes sin penalizar el límite.
 
 ## Sistema multi-colegio
 
@@ -217,6 +219,11 @@ La autenticación debe validar contexto de institución antes del login final
 - El promedio solo puede calcularse si todas las actividades tienen
   calificación registrada.
 
+- **Rescalado Proporcional:**
+  - Cuando se modifica el rango de notas institucional (`nota_minima` o `nota_maxima`), el sistema ejecuta automáticamente una migración proporcional de todas las notas registradas a la fecha.
+  - La fórmula de rescalado es: `nota_nueva = min_nuevo + ((nota_actual - min_anterior) / (max_anterior - min_anterior)) * (max_nuevo - min_nuevo)`.
+  - Esta operación se realiza bajo una transacción ACID para garantizar que no existan inconsistencias si el proceso falla.
+
 - Cada materia debe tener al menos una actividad evaluativa registrada.
 
 **4. Periodos académicos**
@@ -228,6 +235,10 @@ La autenticación debe validar contexto de institución antes del login final
   periodo académico.
 
 - Un boletín solo puede generarse con periodos académicos cerrados.
+
+- **Reapertura de Periodos y Materias:**
+  - Un directivo puede reabrir un periodo global (ABIERTO) o una materia específica de un docente (PENDIENTE) después de haber sido cerrada.
+  - La reapertura habilita nuevamente el registro y modificación de calificaciones y asistencias.
 
 **5. Boletines académicos**
 
@@ -289,8 +300,11 @@ La autenticación debe validar contexto de institución antes del login final
 - El sistema debe actualizar automáticamente los cupos del grado al
   aprobar, cancelar o trasladar una matrícula.
 
-- Un estudiante expulsado o retirado no puede tener una matrícula activa
-  en el mismo año lectivo.
+- Un estudiante expulsado o retirado no puede tener una matrícula activa en el mismo año lectivo.
+
+- **Vinculación Padre-Empleado:**
+  - Si el padre de familia que solicita una matrícula ya tiene una cuenta de usuario en el sistema (como docente o directivo), el sistema debe detectar la duplicidad mediante el documento de identidad o correo.
+  - En lugar de crear un nuevo usuario, el sistema vincula al estudiante directamente a la cuenta de empleado existente, centralizando el acceso del portal de padres para empleados.
 
 **9. Documentos de matrícula**
 
@@ -344,6 +358,15 @@ La autenticación debe validar contexto de institución antes del login final
 - Los rangos de la escala de valoración no deben solaparse.
 
 - Los valores mínimo y máximo deben ser coherentes y continuos.
+
+**15. Modelo de Evaluación Pedagógica**
+
+- La evaluación se estructura de forma jerárquica:
+  - **Competencia:** Objetivo general de aprendizaje por grado, materia y periodo.
+  - **Evidencia:** Manifestación observable del aprendizaje vinculado a la competencia.
+  - **Actividad:** Contenedor de evaluación con un porcentaje de peso específico.
+  - **Criterio/Indicador:** Aspecto puntual evaluado dentro de una actividad, vinculado a una evidencia de aprendizaje.
+- La nota final de la materia es el promedio ponderado de las actividades, las cuales a su vez reflejan el cumplimiento de las competencias mediante sus criterios.
 
 **14. Gestión de grados**
 
