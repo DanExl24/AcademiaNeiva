@@ -75,6 +75,7 @@ const menuItems = computed(() => {
   return [
     { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
     { name: 'Gestión Matrículas', icon: ClipboardList, path: '/dashboard/gestion-matriculas' },
+    { name: 'Gestión Estudiantes', icon: GraduationCap, path: '/dashboard/gestion-estudiantes' },
     { name: 'Gestión de Grados', icon: Layers3, path: '/dashboard/gestion-grados' },
     { name: 'Gestión de Materias', icon: LibraryBig, path: '/dashboard/gestion-materias' },
     { name: 'Docentes', icon: GraduationCap, path: '/dashboard/docentes' },

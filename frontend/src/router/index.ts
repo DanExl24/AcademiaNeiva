@@ -85,6 +85,11 @@ const router = createRouter({
           component: TeacherManagement
         },
         {
+          path: 'gestion-estudiantes',
+          name: 'Gestión de Estudiantes',
+          component: () => import('../views/admin/StudentManagement.vue')
+        },
+        {
           path: 'configuracion-academica',
           name: 'Configuración Académica',
           component: AcademicSettings
