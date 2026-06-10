@@ -1,0 +1,4 @@
+◇ injected env (10) from .env // tip: ⌘ enable debugging { debug: true }
+Conectando a la base de datos: AcademiaNeiva...
+Tabla "papelera_materias" creada correctamente.
+Verificación exitosa: La tabla existe.

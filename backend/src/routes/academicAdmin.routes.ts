@@ -16,6 +16,7 @@ import {
   getAcademicSettingsData,
   getGradeManagementData,
   getSubjects,
+  getSubjectTrash,
   getTeacherManagementData,
   assignTeacherCourseSubject,
   closeAcademicPeriod,
@@ -45,6 +46,7 @@ router.post("/groups", createGroup);
 router.patch("/groups/:id/cupos", updateGroupCupos);
 router.delete("/groups/:id", deleteGroup);
 router.get("/subjects/:schoolId", getSubjects);
+router.get("/subjects/trash/:schoolId", getSubjectTrash);
 router.post("/subjects", createSubject);
 router.delete("/subjects/:id", deleteSubject);
 router.get("/teachers/:schoolId", getTeacherManagementData);

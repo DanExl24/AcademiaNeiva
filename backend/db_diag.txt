@@ -1,0 +1,52 @@
+◇ injected env (10) from .env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
+Diagnosing Database: AcademiaNeiva
+--- TABLES FOUND ---
+public.actividad_materia
+public.año_lectivo
+public.cierre_materia
+public.colegio
+public.competencias
+public.configuracion_base
+public.configuracion_colegio
+public.configuracion_sistema
+public.contrato_docente
+public.criterio_evaluacion
+public.desempeno
+public.detalle_grados
+public.detalle_padrefamilia
+public.directivo
+public.docente
+public.documento_matriculas
+public.escala_valoracion
+public.estudiante
+public.evidencia_aprendizaje
+public.grados
+public.grupos
+public.jornada
+public.materias
+public.matricula
+public.nivel_escolar
+public.nota_criterio
+public.notas_actividad
+public.observacion_estudiante
+public.padre_familia
+public.papelera_materias
+public.periodo_academico
+public.registro_asistencia
+public.resultado_academico
+public.rol
+public.secciones
+public.tipo_documento
+public.tipo_grado
+public.usuario
+public.usuario_rol
+public.vw_asistencia_estudiante
+public.vw_desempeno_estudiante
+public.vw_notas_enriquecidas
+public.vw_observaciones_estudiante
+public.vw_promedio_estudiante_periodo
+public.vw_promedio_materia
+public.vw_promedio_normalizado
+--------------------
+Error consultando "actividades_aprendizaje" con comillas
+Error consultando actividades_aprendizaje sin comillas

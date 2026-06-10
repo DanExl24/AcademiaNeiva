@@ -2073,77 +2073,273 @@ export const createSubject = async (req: Request, res: Response): Promise<void> 
     return;
   }
 
+  const client = await pool.connect();
   try {
-    const duplicateRes = await pool.query(
-      `SELECT id_materia
-       FROM materias
-       WHERE id_colegio = $1
-         AND UPPER(TRIM(nombre)) = UPPER(TRIM($2))`,
+    await client.query('SET search_path TO public, "$user"');
+    const trashId = req.body.trashId ? Number(req.body.trashId) : null;
+
+    await client.query("BEGIN");
+
+    // 1. Verificar duplicado dentro de la transacción
+    const duplicateRes = await client.query(
+      `SELECT id_materia FROM materias WHERE id_colegio = $1 AND UPPER(TRIM(nombre)) = UPPER(TRIM($2))`,
       [schoolId, nombre]
     );
 
     if (duplicateRes.rows.length > 0) {
+      await client.query("ROLLBACK");
       res.status(409).json({ error: "Se encontró una materia con el mismo nombre" });
       return;
     }
 
-    const created = await pool.query(
-      `INSERT INTO materias (nombre, id_colegio)
-       VALUES ($1, $2)
-       RETURNING *`,
+    // 2. Crear materia
+    const created = await client.query(
+      `INSERT INTO materias (nombre, id_colegio) VALUES ($1, $2) RETURNING *`,
       [nombre, schoolId]
     );
 
+    const newSubjectId = created.rows[0].id_materia;
+
+    if (trashId) {
+      // RESTAURACIÓN PROFUNDA
+      const trashRes = await client.query(
+        "SELECT data_respaldo FROM papelera_materias WHERE id_papelera = $1 AND id_colegio = $2",
+        [trashId, schoolId]
+      );
+
+      if (trashRes.rows.length > 0) {
+        const backup = trashRes.rows[0].data_respaldo;
+
+        // 1. Restaurar Asignaciones
+        if (backup.assignments && Array.isArray(backup.assignments)) {
+          for (const asig of backup.assignments) {
+            await client.query(
+              "INSERT INTO detalle_grados (id_materia, id_docente, id_grupo, id_colegio) VALUES ($1, $2, $3, $4)",
+              [newSubjectId, asig.id_docente, asig.id_grupo, schoolId]
+            );
+          }
+        }
+
+        // 2. Restaurar Competencias
+        if (backup.competencies && Array.isArray(backup.competencies)) {
+          for (const comp of backup.competencies) {
+            await client.query(
+              'INSERT INTO competencias (descripcion, id_materia, id_periodo, "id_año", id_grupo, id_colegio) VALUES ($1, $2, $3, $4, $5, $6)',
+              [comp.descripcion, newSubjectId, comp.id_periodo, comp.id_año, comp.id_grupo, schoolId]
+            );
+          }
+        }
+
+        // 3. Limpiar papelera
+        await client.query("DELETE FROM papelera_materias WHERE id_papelera = $1", [trashId]);
+      }
+    }
+
+    await client.query("COMMIT");
     res.status(201).json(created.rows[0]);
   } catch (error: any) {
+    if (client) await client.query("ROLLBACK");
     console.error("Error creating subject:", error);
     res.status(500).json({ error: "Error en el servidor" });
+  } finally {
+    if (client) client.release();
   }
 };
 
 export const deleteSubject = async (req: Request, res: Response): Promise<void> => {
   const subjectId = Number(req.params.id);
   const schoolId = parseSchoolId(req.query.schoolId);
+  const force = req.query.force === "true";
 
   if (!subjectId || !schoolId) {
     res.status(400).json({ error: "Parámetros inválidos" });
     return;
   }
 
+  const client = await pool.connect();
+
   try {
-    const impactRes = await pool.query(
-      `SELECT
-         m.id_materia,
-         COUNT(DISTINCT dg.id_detallegrado)::int AS asignaciones_count,
-         COUNT(DISTINCT c.id_competencia)::int AS competencias_count
-       FROM materias m
-       LEFT JOIN detalle_grados dg ON dg.id_materia = m.id_materia
-       LEFT JOIN competencias c ON c.id_materia = m.id_materia
-       WHERE m.id_materia = $1
-         AND m.id_colegio = $2
-       GROUP BY m.id_materia`,
+    // Asegurar visibilidad del esquema public
+    await client.query('SET search_path TO public, "$user"');
+
+    // 1. Obtener información básica de la materia
+    const subjectRes = await client.query(
+      "SELECT nombre FROM materias WHERE id_materia = $1 AND id_colegio = $2",
       [subjectId, schoolId]
     );
 
-    if (impactRes.rows.length === 0) {
+    if (subjectRes.rows.length === 0) {
       res.status(404).json({ error: "Materia no encontrada" });
       return;
     }
 
+    const subjectName = subjectRes.rows[0].nombre;
+
+    // 2. Analizar impacto (Recolección de datos con subconsultas independientes para evitar duplicados)
+    const impactRes = await client.query(
+      `SELECT
+         (SELECT COUNT(DISTINCT id_detallegrado)::int FROM detalle_grados WHERE id_materia = $1) as asignaciones_count,
+         (SELECT COUNT(DISTINCT id_competencia)::int FROM competencias WHERE id_materia = $1) as competencias_count,
+         (SELECT COUNT(DISTINCT aa.id_actividadmateria)::int FROM actividad_materia aa 
+          JOIN detalle_grados dg ON dg.id_detallegrado = aa.id_detallegrado
+          WHERE dg.id_materia = $1) as actividades_count,
+         (SELECT COUNT(DISTINCT na.id_notaactividad)::int FROM notas_actividad na
+          JOIN actividad_materia aa ON aa.id_actividadmateria = na.id_actividadmateria
+          JOIN detalle_grados dg ON dg.id_detallegrado = aa.id_detallegrado
+          WHERE dg.id_materia = $1) as notas_count
+      `,
+      [subjectId]
+    );
+
     const impact = impactRes.rows[0];
-    if (impact.asignaciones_count > 0 || impact.competencias_count > 0) {
+    const hasRelations = (impact.asignaciones_count > 0) || (impact.competencias_count > 0);
+
+    if (hasRelations && !force) {
       res.status(409).json({
         error: "No se puede eliminar la materia porque tiene relaciones académicas activas",
-        impact,
+        impact
       });
       return;
     }
 
-    await pool.query("DELETE FROM materias WHERE id_materia = $1", [subjectId]);
-    res.json({ message: "Materia eliminada correctamente" });
+    if (force) {
+      await client.query("BEGIN");
+
+      // OBTENER DATOS PARA RESPALDO DETALLADO ANTES DE BORRAR (Granularidad mejorada con Grado y Sección)
+      const assignmentsBackupRes = await client.query(`
+        SELECT DISTINCT dg.id_docente, dg.id_grupo, n.nombre as nivel_nombre,
+               tg.nombre as grado_nombre, s.nombre as seccion_nombre,
+               d.nombre || ' ' || d.apellido as docente_nombre
+        FROM detalle_grados dg
+        JOIN grupos gr ON gr.id_grupo = dg.id_grupo
+        JOIN nivel_escolar n ON n.id_nivel = gr.id_nivel
+        JOIN tipo_grado tg ON tg.id_tipo_grado = gr.id_tipo_grado
+        JOIN secciones s ON s.id_seccion = gr.id_seccion
+        JOIN docente d ON d.id_docente = dg.id_docente
+        WHERE dg.id_materia = $1
+      `, [subjectId]);
+
+      const competenciesBackupRes = await client.query(`
+        SELECT DISTINCT descripcion, id_periodo, id_año, id_grupo
+        FROM competencias
+        WHERE id_materia = $1
+      `, [subjectId]);
+
+      const detailedBackup = {
+        impact,
+        assignments: assignmentsBackupRes.rows,
+        competencies: competenciesBackupRes.rows
+      };
+
+      // 1. Notas
+      await client.query(`
+        DELETE FROM nota_criterio 
+        WHERE id_criterio IN (
+          SELECT c.id_criterio FROM criterio_evaluacion c
+          JOIN actividad_materia aa ON aa.id_actividadmateria = c.id_actividadmateria
+          JOIN detalle_grados dg ON dg.id_detallegrado = aa.id_detallegrado
+          WHERE dg.id_materia = $1
+        )
+      `, [subjectId]);
+
+      await client.query(`
+        DELETE FROM notas_actividad 
+        WHERE id_actividadmateria IN (
+          SELECT aa.id_actividadmateria FROM actividad_materia aa
+          JOIN detalle_grados dg ON dg.id_detallegrado = aa.id_detallegrado
+          WHERE dg.id_materia = $1
+        )
+      `, [subjectId]);
+
+      // 2. Criterios y Actividades
+      await client.query(`
+        DELETE FROM criterio_evaluacion 
+        WHERE id_actividadmateria IN (
+          SELECT aa.id_actividadmateria FROM actividad_materia aa
+          JOIN detalle_grados dg ON dg.id_detallegrado = aa.id_detallegrado
+          WHERE dg.id_materia = $1
+        )
+      `, [subjectId]);
+
+      await client.query(`
+        DELETE FROM actividad_materia 
+        WHERE id_detallegrado IN (
+          SELECT id_detallegrado FROM detalle_grados WHERE id_materia = $1
+        )
+      `, [subjectId]);
+
+      // 3. Competencias y Evidencias
+      await client.query(`
+        DELETE FROM evidencia_aprendizaje 
+        WHERE id_competencia IN (
+          SELECT id_competencia FROM competencias WHERE id_materia = $1
+        )
+      `, [subjectId]);
+
+      await client.query("DELETE FROM competencias WHERE id_materia = $1", [subjectId]);
+
+      // 4. Observación y Resultados Académicos
+      await client.query(`
+        DELETE FROM observacion_estudiante 
+        WHERE id_detallegrado IN (
+          SELECT id_detallegrado FROM detalle_grados WHERE id_materia = $1
+        )
+      `, [subjectId]);
+
+      await client.query(`
+        DELETE FROM resultado_academico 
+        WHERE id_detallegrado IN (
+          SELECT id_detallegrado FROM detalle_grados WHERE id_materia = $1
+        )
+      `, [subjectId]);
+
+      // 5. Cierres de materia y Asistencia
+      await client.query(`
+        DELETE FROM registro_asistencia 
+        WHERE id_detallegrado IN (
+          SELECT id_detallegrado FROM detalle_grados WHERE id_materia = $1
+        )
+      `, [subjectId]);
+
+      await client.query(`
+        DELETE FROM cierre_materia 
+        WHERE id_detallegrado IN (
+          SELECT id_detallegrado FROM detalle_grados WHERE id_materia = $1
+        )
+      `, [subjectId]);
+
+      // 6. Asignaciones (detalle_grados)
+      await client.query("DELETE FROM detalle_grados WHERE id_materia = $1", [subjectId]);
+
+      // 7. La materia en sí
+      await client.query("DELETE FROM materias WHERE id_materia = $1", [subjectId]);
+
+      // 8. Crear respaldo en papelera con DATA DETALLADA
+      await client.query(
+        "INSERT INTO papelera_materias (id_colegio, nombre_materia, data_respaldo) VALUES ($1, $2, $3)",
+        [schoolId, subjectName, JSON.stringify(detailedBackup)]
+      );
+
+      await client.query("COMMIT");
+
+      res.json({
+        message: "Materia y todas sus relaciones eliminadas correctamente",
+        report: {
+          subjectName,
+          timestamp: new Date().toISOString(),
+          details: impact
+        }
+      });
+    } else {
+      await client.query("DELETE FROM materias WHERE id_materia = $1", [subjectId]);
+      res.json({ message: "Materia eliminada correctamente" });
+    }
   } catch (error: any) {
+    await client.query("ROLLBACK");
     console.error("Error deleting subject:", error);
     res.status(500).json({ error: "Error en el servidor" });
+  } finally {
+    client.release();
   }
 };
 
@@ -2573,6 +2769,26 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
     });
   } catch (error: any) {
     console.error("Error fetching directivo dashboard:", error);
+    res.status(500).json({ error: "Error en el servidor" });
+  }
+};
+
+export const getSubjectTrash = async (req: Request, res: Response): Promise<void> => {
+  const schoolId = parseSchoolId(req.params.schoolId);
+
+  if (!schoolId) {
+    res.status(400).json({ error: "Colegio inválido" });
+    return;
+  }
+
+  try {
+    const result = await pool.query(
+      "SELECT id_papelera, nombre_materia, data_respaldo, fecha_borrado FROM papelera_materias WHERE id_colegio = $1 ORDER BY fecha_borrado DESC",
+      [schoolId]
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error("Error fetching subject trash:", error);
     res.status(500).json({ error: "Error en el servidor" });
   }
 };

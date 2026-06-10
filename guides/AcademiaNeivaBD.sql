@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict WloAcOUYiQPc7f3wom2zHQj3T6fbH4WhUnNtytDG3mum6JYRohgZFX5O5u2PMx4
+\restrict nrlYMBgr5jILiSbYjqxXoRJeUKcE4Z9wvUHEFyYcjF5V8x4yVQchlberJA2V1xi
 
 -- Dumped from database version 18.4
 -- Dumped by pg_dump version 18.4
@@ -1259,6 +1259,43 @@ ALTER SEQUENCE public.padre_familia_id_padrefamilia_seq OWNED BY public.padre_fa
 
 
 --
+-- Name: papelera_materias; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.papelera_materias (
+    id_papelera integer NOT NULL,
+    id_colegio integer,
+    nombre_materia character varying(255),
+    data_respaldo jsonb,
+    fecha_borrado timestamp without time zone DEFAULT CURRENT_TIMESTAMP
+);
+
+
+ALTER TABLE public.papelera_materias OWNER TO postgres;
+
+--
+-- Name: papelera_materias_id_papelera_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.papelera_materias_id_papelera_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.papelera_materias_id_papelera_seq OWNER TO postgres;
+
+--
+-- Name: papelera_materias_id_papelera_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.papelera_materias_id_papelera_seq OWNED BY public.papelera_materias.id_papelera;
+
+
+--
 -- Name: periodo_academico; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -1886,6 +1923,13 @@ ALTER TABLE ONLY public.padre_familia ALTER COLUMN id_padrefamilia SET DEFAULT n
 
 
 --
+-- Name: papelera_materias id_papelera; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.papelera_materias ALTER COLUMN id_papelera SET DEFAULT nextval('public.papelera_materias_id_papelera_seq'::regclass);
+
+
+--
 -- Name: periodo_academico id_periodo; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -2251,6 +2295,14 @@ ALTER TABLE ONLY public.padre_familia
 
 ALTER TABLE ONLY public.padre_familia
     ADD CONSTRAINT padre_familia_pkey PRIMARY KEY (id_padrefamilia);
+
+
+--
+-- Name: papelera_materias papelera_materias_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.papelera_materias
+    ADD CONSTRAINT papelera_materias_pkey PRIMARY KEY (id_papelera);
 
 
 --
@@ -3095,5 +3147,5 @@ REVOKE USAGE ON SCHEMA public FROM PUBLIC;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict WloAcOUYiQPc7f3wom2zHQj3T6fbH4WhUnNtytDG3mum6JYRohgZFX5O5u2PMx4
+\unrestrict nrlYMBgr5jILiSbYjqxXoRJeUKcE4Z9wvUHEFyYcjF5V8x4yVQchlberJA2V1xi
 
