@@ -185,8 +185,6 @@ const goToTeacherMonitoring = () => {
     email: selectedTeacher.value.email
   })
   closeDrawer()
-  // Navigate using 'docente' active role so menus switch correctly
-  auth.setActiveRole('docente')
   router.push('/dashboard')
 }
 

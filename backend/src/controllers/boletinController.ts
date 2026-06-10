@@ -250,8 +250,7 @@ export const getStudentBoletin = async (req: Request, res: Response) => {
          nombre: studentInfo.estudiante_nombre,
          apellido: studentInfo.estudiante_apellido,
          dane: studentInfo.dane || '183001000940',
-         resolucion: studentInfo.resolucion || 'Resol. Jornada Única No. 070 del 01 de Feb. de 2021 Expedida por la Secretaría de Educación Municipal',
-         ciudad: studentInfo.ciudad || 'Florencia - Caquetá'
+         ciudad: studentInfo.ciudad || 'Neiva - Huila'
       },
       materias: materias,
       promedioGeneral: promedioGlobal.toFixed(2),

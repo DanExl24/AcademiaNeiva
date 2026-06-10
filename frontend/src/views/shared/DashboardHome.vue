@@ -265,14 +265,14 @@ onMounted(async () => {
       </div>
       
       <!-- Period Filter -->
-      <div class="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm w-full lg:w-72 flex flex-col gap-3">
-        <label class="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+      <div class="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-gray-100 dark:border-slate-800 shadow-sm w-full lg:w-72 flex flex-col gap-3">
+        <label class="text-xs font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2">
           <Filter :size="14" />
           Periodo Académico
         </label>
         <select 
           v-model="selectedPeriodId" 
-          class="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 transition-all cursor-pointer"
+          class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-indigo-500 transition-all cursor-pointer"
         >
           <option :value="null">Periodo Activo (Auto)</option>
           <option v-for="p in periods" :key="p.id_periodo" :value="p.id_periodo">
@@ -287,14 +287,14 @@ onMounted(async () => {
       <div 
         v-for="stat in dashboardStats" 
         :key="stat.name" 
-        class="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex items-center gap-5 group"
+        class="bg-white dark:bg-slate-900 p-6 rounded-[2rem] border border-gray-100 dark:border-slate-800 shadow-sm hover:shadow-xl dark:hover:shadow-indigo-500/10 hover:-translate-y-1 transition-all duration-300 flex items-center gap-5 group"
       >
         <div :class="[stat.bg, stat.color, 'p-5 rounded-2xl transition-transform group-hover:scale-110']">
           <component :is="stat.icon" :size="32" stroke-width="2.5" />
         </div>
         <div>
-          <p class="text-[10px] font-black text-gray-400 uppercase tracking-widest">{{ stat.name }}</p>
-          <p class="text-3xl font-black text-gray-900 mt-0.5 tracking-tight">
+          <p class="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest">{{ stat.name }}</p>
+          <p class="text-3xl font-black text-gray-900 dark:text-white mt-0.5 tracking-tight">
             {{ loading ? '...' : stat.value }}
           </p>
         </div>
@@ -305,8 +305,8 @@ onMounted(async () => {
     <div class="grid grid-cols-1 gap-8">
       
       <!-- Performance by Grade -->
-      <div class="bg-white rounded-[2rem] border border-gray-100 p-8 shadow-sm flex flex-col min-h-[450px]">
-        <h3 class="text-lg font-black text-gray-800 mb-6 flex items-center gap-2">
+      <div class="bg-white dark:bg-slate-900 rounded-[2rem] border border-gray-100 dark:border-slate-800 p-8 shadow-sm flex flex-col min-h-[450px] transition-colors">
+        <h3 class="text-lg font-black text-gray-800 dark:text-white mb-6 flex items-center gap-2">
           <TrendingUp :size="20" class="text-indigo-600" />
           Rendimiento por Grado
         </h3>
@@ -316,8 +316,8 @@ onMounted(async () => {
       </div>
 
       <!-- Performance by Subject -->
-      <div class="bg-white rounded-[2rem] border border-gray-100 p-8 shadow-sm flex flex-col min-h-[500px]">
-        <h3 class="text-lg font-black text-gray-800 mb-6 flex items-center gap-2">
+      <div class="bg-white dark:bg-slate-900 rounded-[2rem] border border-gray-100 dark:border-slate-800 p-8 shadow-sm flex flex-col min-h-[500px] transition-colors">
+        <h3 class="text-lg font-black text-gray-800 dark:text-white mb-6 flex items-center gap-2">
           <BookOpen :size="20" class="text-emerald-500" />
           Rendimiento por Materia (Top 10)
         </h3>
@@ -327,8 +327,8 @@ onMounted(async () => {
       </div>
 
       <!-- Performance Evolution -->
-      <div class="bg-white rounded-[2rem] border border-gray-100 p-8 shadow-sm flex flex-col min-h-[400px]">
-        <h3 class="text-lg font-black text-gray-800 mb-6 flex items-center gap-2">
+      <div class="bg-white dark:bg-slate-900 rounded-[2rem] border border-gray-100 dark:border-slate-800 p-8 shadow-sm flex flex-col min-h-[400px] transition-colors">
+        <h3 class="text-lg font-black text-gray-800 dark:text-white mb-6 flex items-center gap-2">
           <Target :size="20" class="text-amber-500" />
           Evolución del Promedio Institucional
         </h3>
@@ -448,31 +448,31 @@ onMounted(async () => {
 
     <!-- Average Institutional and Other Indicators -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-      <div class="bg-white p-8 rounded-[2rem] border border-gray-100 shadow-sm flex flex-col items-center text-center">
-        <div class="bg-orange-50 text-orange-600 p-4 rounded-full mb-4">
+      <div class="bg-white dark:bg-slate-900 p-8 rounded-[2rem] border border-gray-100 dark:border-slate-800 shadow-sm flex flex-col items-center text-center transition-colors">
+        <div class="bg-orange-50 dark:bg-orange-950/50 text-orange-600 dark:text-orange-400 p-4 rounded-full mb-4">
           <AlertTriangle :size="28" />
         </div>
-        <p class="text-xs font-black text-gray-400 uppercase tracking-widest">Deserción Académica</p>
-        <p class="text-3xl font-black text-gray-900 mt-1">{{ dashboardData.summary.desertionRate }} Estudiantes</p>
-        <p class="text-[10px] text-gray-400 mt-2 italic">Estudiantes retirados o con matrícula cancelada</p>
+        <p class="text-xs font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest">Deserción Académica</p>
+        <p class="text-3xl font-black text-gray-900 dark:text-white mt-1">{{ dashboardData.summary.desertionRate }} Estudiantes</p>
+        <p class="text-[10px] text-gray-400 dark:text-slate-500 mt-2 italic">Estudiantes retirados o con matrícula cancelada</p>
       </div>
 
-      <div class="bg-white p-8 rounded-[2rem] border border-gray-100 shadow-sm flex flex-col items-center text-center">
-        <div class="bg-rose-50 text-rose-600 p-4 rounded-full mb-4">
+      <div class="bg-white dark:bg-slate-900 p-8 rounded-[2rem] border border-gray-100 dark:border-slate-800 shadow-sm flex flex-col items-center text-center transition-colors">
+        <div class="bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 p-4 rounded-full mb-4">
           <ShieldAlert :size="28" />
         </div>
-        <p class="text-xs font-black text-gray-400 uppercase tracking-widest">Reportes Disciplinarios</p>
-        <p class="text-3xl font-black text-gray-900 mt-1">{{ dashboardData.summary.disciplinaryReports }}</p>
-        <p class="text-[10px] text-gray-400 mt-2 italic">Total de seguimientos de tipo disciplinario</p>
+        <p class="text-xs font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest">Reportes Disciplinarios</p>
+        <p class="text-3xl font-black text-gray-900 dark:text-white mt-1">{{ dashboardData.summary.disciplinaryReports }}</p>
+        <p class="text-[10px] text-gray-400 dark:text-slate-500 mt-2 italic">Total de seguimientos de tipo disciplinario</p>
       </div>
 
-      <div class="bg-white p-8 rounded-[2rem] border border-gray-100 shadow-sm flex flex-col items-center text-center">
-        <div class="bg-indigo-50 text-indigo-600 p-4 rounded-full mb-4">
+      <div class="bg-white dark:bg-slate-900 p-8 rounded-[2rem] border border-gray-100 dark:border-slate-800 shadow-sm flex flex-col items-center text-center transition-colors">
+        <div class="bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 p-4 rounded-full mb-4">
           <Users :size="28" />
         </div>
-        <p class="text-xs font-black text-gray-400 uppercase tracking-widest">Promedio Institucional</p>
-        <p class="text-3xl font-black text-gray-900 mt-1">{{ dashboardData.summary.generalAverage }}</p>
-        <p class="text-[10px] text-gray-400 mt-2 italic">Media general en escala de 0 a 5.0</p>
+        <p class="text-xs font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest">Promedio Institucional</p>
+        <p class="text-3xl font-black text-gray-900 dark:text-white mt-1">{{ dashboardData.summary.generalAverage }}</p>
+        <p class="text-[10px] text-gray-400 dark:text-slate-500 mt-2 italic">Media general en escala de 0 a 5.0</p>
       </div>
     </div>
   </div>

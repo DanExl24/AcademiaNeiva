@@ -24,7 +24,8 @@ export const useAuthStore = defineStore('auth', () => {
   const activeRole = ref<string | null>(localStorage.getItem('activeRole') || (user.value?.role || null))
   
   // Modo monitoreo: directivo observando el panel de un docente (solo lectura)
-  const monitoringUser = ref<MonitoredTeacher | null>(null)
+  const monitoringUser = ref<MonitoredTeacher | null>(JSON.parse(localStorage.getItem('monitoringUser') || 'null'))
+  const previousRole = ref<string | null>(localStorage.getItem('previousRole'))
   const isMonitoring = computed(() => !!monitoringUser.value)
 
   const isAuthenticated = computed(() => !!token.value)
@@ -44,11 +45,27 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   function startMonitoring(teacher: MonitoredTeacher) {
+    // Guardar el rol actual para poder restaurarlo después
+    previousRole.value = activeRole.value
+    localStorage.setItem('previousRole', activeRole.value || '')
+    
     monitoringUser.value = teacher
+    localStorage.setItem('monitoringUser', JSON.stringify(teacher))
+    
+    // Cambiar automáticamente a rol docente para ver su panel
+    setActiveRole('docente')
   }
 
   function stopMonitoring() {
     monitoringUser.value = null
+    localStorage.removeItem('monitoringUser')
+    
+    // Restaurar el rol previo si existe
+    if (previousRole.value) {
+      setActiveRole(previousRole.value)
+      previousRole.value = null
+      localStorage.removeItem('previousRole')
+    }
   }
 
   function logout() {
@@ -56,9 +73,12 @@ export const useAuthStore = defineStore('auth', () => {
     token.value = null
     activeRole.value = null
     monitoringUser.value = null
+    previousRole.value = null
     localStorage.removeItem('token')
     localStorage.removeItem('user')
     localStorage.removeItem('activeRole')
+    localStorage.removeItem('monitoringUser')
+    localStorage.removeItem('previousRole')
   }
 
   return {
