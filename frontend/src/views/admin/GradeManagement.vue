@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import axios from 'axios'
-import { Layers3, Plus, Search, School2, Trash2, Info } from 'lucide-vue-next'
+import { Layers3, Plus, Search, School2, Trash2, Info, Pencil } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 
 interface Nivel {
@@ -53,6 +53,9 @@ const searchMode = ref<'grade' | 'course'>('grade')
 const searchTerm = ref('')
 const createModal = ref<null | 'grade' | 'course'>(null)
 const deleting = ref(false)
+const savingCupos = ref(false)
+const editCuposModal = ref(false)
+const selectedGroup = ref<Grupo | null>(null)
 const selectedGradeId = ref<number | null>(null)
 
 type DeleteModalState =
@@ -144,6 +147,17 @@ const openDeleteCourseModal = (item: Grupo) => {
 const closeDeleteModal = () => {
   if (deleting.value) return
   deleteModal.value = null
+}
+
+const openEditCuposModal = (group: Grupo) => {
+  selectedGroup.value = { ...group }
+  editCuposModal.value = true
+}
+
+const closeEditCuposModal = () => {
+  if (savingCupos.value) return
+  editCuposModal.value = false
+  selectedGroup.value = null
 }
 
 const fetchCatalogs = async () => {
@@ -247,7 +261,6 @@ const deleteGradeType = async (item: TipoGrado) => {
     deleting.value = false
   }
 }
-
 const deleteGroup = async (item: Grupo) => {
   try {
     deleting.value = true
@@ -260,6 +273,29 @@ const deleteGroup = async (item: Grupo) => {
     alert(error.response?.data?.error || 'No fue posible eliminar el curso')
   } finally {
     deleting.value = false
+  }
+}
+
+const updateGroupCupos = async () => {
+  if (!selectedGroup.value || savingCupos.value) return
+  
+  if (selectedGroup.value.cupos_totales < selectedGroup.value.matriculas_count) {
+    alert(`No puedes reducir el cupo por debajo de la cantidad de estudiantes matriculados (${selectedGroup.value.matriculas_count}).`)
+    return
+  }
+
+  try {
+    savingCupos.value = true
+    await axios.patch(`http://localhost:3000/api/academic-admin/groups/${selectedGroup.value.id_grupo}/cupos`, {
+      schoolId: schoolId.value,
+      cupos_totales: selectedGroup.value.cupos_totales
+    })
+    await loadData()
+    closeEditCuposModal()
+  } catch (error: any) {
+    alert(error.response?.data?.error || 'Error al actualizar cupos')
+  } finally {
+    savingCupos.value = false
   }
 }
 
@@ -408,9 +444,14 @@ onMounted(loadData)
                     <h4 class="font-black text-slate-900 dark:text-white text-lg leading-tight">{{ item.tipo_grado_nombre }} {{ item.seccion_nombre }}</h4>
                     <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">{{ item.jornada_nombre }} | {{ item.nivel_nombre }}</p>
                   </div>
-                  <button @click="openDeleteCourseModal(item)" class="p-2 text-slate-300 hover:text-red-500 transition-colors">
-                    <Trash2 :size="16" />
-                  </button>
+                  <div class="flex items-center gap-1">
+                    <button @click="openEditCuposModal(item)" class="p-2 text-slate-300 hover:text-indigo-500 transition-colors" title="Editar Cupos">
+                      <Pencil :size="16" />
+                    </button>
+                    <button @click="openDeleteCourseModal(item)" class="p-2 text-slate-300 hover:text-red-500 transition-colors" title="Eliminar Curso">
+                      <Trash2 :size="16" />
+                    </button>
+                  </div>
                 </div>
 
                 <div class="grid grid-cols-3 gap-2 py-3 border-y border-slate-50 dark:border-slate-800 mb-4">
@@ -558,6 +599,55 @@ onMounted(loadData)
             >
               {{ deleting ? 'Eliminando...' : 'Sí, Eliminar' }}
             </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Edit Cupos Modal -->
+      <div v-if="editCuposModal && selectedGroup" class="fixed inset-0 z-[110] flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" @click="closeEditCuposModal"></div>
+        <div class="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-[32px] shadow-2xl overflow-hidden border border-white/20">
+          <div class="p-8">
+            <div class="flex items-center gap-4 mb-6">
+              <div class="p-3 bg-indigo-50 dark:bg-indigo-950/30 rounded-2xl text-indigo-600 dark:text-indigo-400">
+                <Pencil :size="24" />
+              </div>
+              <div>
+                <h3 class="text-xl font-black text-slate-900 dark:text-white">Modificar Capacidad</h3>
+                <p class="text-sm font-medium text-slate-500">{{ selectedGroup.tipo_grado_nombre }} {{ selectedGroup.seccion_nombre }}</p>
+              </div>
+            </div>
+
+            <div class="space-y-4">
+              <div class="bg-indigo-50/50 dark:bg-indigo-950/20 p-4 rounded-2xl border border-indigo-100/50">
+                <div class="flex justify-between items-center text-sm font-bold">
+                  <span class="text-slate-500 uppercase tracking-wider">Matriculados Actuales</span>
+                  <span class="text-indigo-600 dark:text-indigo-400">{{ selectedGroup.matriculas_count }} Estudiantes</span>
+                </div>
+              </div>
+
+              <div class="space-y-2">
+                <label class="text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Nuevo Total de Cupos</label>
+                <input 
+                  v-model.number="selectedGroup.cupos_totales" 
+                  type="number" 
+                  :min="selectedGroup.matriculas_count"
+                  class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 rounded-2xl p-4 font-bold outline-none text-slate-900 dark:text-white transition-all"
+                />
+                <p class="text-[10px] font-bold text-slate-400 ml-1 uppercase">El cupo no puede ser menor a {{ selectedGroup.matriculas_count }}</p>
+              </div>
+            </div>
+
+            <div class="flex gap-3 mt-8">
+              <button @click="closeEditCuposModal" class="flex-1 px-6 py-4 rounded-2xl font-black text-slate-500 dark:text-slate-400 hover:bg-slate-50 transition-all">Cancelar</button>
+              <button 
+                @click="updateGroupCupos"
+                :disabled="savingCupos || selectedGroup.cupos_totales < selectedGroup.matriculas_count"
+                class="flex-[2] bg-slate-900 dark:bg-white dark:text-slate-900 text-white px-6 py-4 rounded-2xl font-black shadow-xl shadow-slate-200 dark:shadow-none hover:translate-y-[-1px] transition-all disabled:opacity-50"
+              >
+                {{ savingCupos ? 'Actualizando...' : 'Guardar Cambios' }}
+              </button>
+            </div>
           </div>
         </div>
       </div>

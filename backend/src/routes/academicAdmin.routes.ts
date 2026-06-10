@@ -28,6 +28,7 @@ import {
   updateSchoolDefaultSettings,
   updateScale,
   updateTeacherStatus,
+  updateGroupCupos,
   createEvidencia,
   updateEvidencia,
   deleteEvidencia,
@@ -41,6 +42,7 @@ router.get("/grades/:schoolId", getGradeManagementData);
 router.post("/grade-types", createGradeType);
 router.delete("/grade-types/:id", deleteGradeType);
 router.post("/groups", createGroup);
+router.patch("/groups/:id/cupos", updateGroupCupos);
 router.delete("/groups/:id", deleteGroup);
 router.get("/subjects/:schoolId", getSubjects);
 router.post("/subjects", createSubject);

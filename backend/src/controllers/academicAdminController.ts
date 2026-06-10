@@ -676,6 +676,55 @@ export const deleteGroup = async (req: Request, res: Response): Promise<void> =>
   }
 };
 
+export const updateGroupCupos = async (req: Request, res: Response): Promise<void> => {
+  const groupId = Number(req.params.id);
+  const schoolId = parseSchoolId(req.body.schoolId);
+  const newCupos = Number(req.body.cupos_totales);
+
+  if (!groupId || !schoolId || isNaN(newCupos) || newCupos < 0) {
+    res.status(400).json({ error: "Parámetros inválidos. Los cupos deben ser un número positivo." });
+    return;
+  }
+
+  try {
+    // 1. Verificar existencia y pertenencia al colegio
+    const groupRes = await pool.query(
+      "SELECT id_grupo FROM grupos WHERE id_grupo = $1 AND id_colegio = $2",
+      [groupId, schoolId]
+    );
+
+    if (groupRes.rows.length === 0) {
+      res.status(404).json({ error: "Curso no encontrado o no pertenece a su institución" });
+      return;
+    }
+
+    // 2. Contar matrículas actuales
+    const matriculasRes = await pool.query(
+      "SELECT COUNT(*)::int as count FROM matricula WHERE id_grupo = $1",
+      [groupId]
+    );
+    const matriculadosActuales = matriculasRes.rows[0].count;
+
+    if (newCupos < matriculadosActuales) {
+      res.status(400).json({ 
+        error: `No se puede reducir el cupo a ${newCupos} porque ya existen ${matriculadosActuales} estudiantes matriculados en este curso.` 
+      });
+      return;
+    }
+
+    // 3. Actualizar
+    await pool.query(
+      "UPDATE grupos SET cupos_totales = $1 WHERE id_grupo = $2",
+      [newCupos, groupId]
+    );
+
+    res.json({ message: "Capacidad del curso actualizada exitosamente", cupos_totales: newCupos });
+  } catch (error: any) {
+    console.error("Error updating group cupos:", error);
+    res.status(500).json({ error: "Error en el servidor" });
+  }
+};
+
 export const getSubjects = async (req: Request, res: Response): Promise<void> => {
   const schoolId = parseSchoolId(req.params.schoolId);
   if (!schoolId) {
