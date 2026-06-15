@@ -144,9 +144,9 @@ const fetchPeriods = async () => {
 
 // Load students for current grade
 const fetchStudents = async () => {
-  if (!selectedCourse.value) return
+  if (!selectedGradeId.value) return
   try {
-    const response = await axios.get(`http://localhost:3000/api/teacher/students/${selectedCourse.value.id_detallegrado}`)
+    const response = await axios.get(`http://localhost:3000/api/teacher/students/${selectedGradeId.value}`)
     students.value = response.data
   } catch (error) {
     console.error('Error fetching students:', error)

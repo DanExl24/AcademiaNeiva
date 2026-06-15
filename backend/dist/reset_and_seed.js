@@ -8,62 +8,19 @@ const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const competencyMigration_1 = require("./config/competencyMigration");
 const db_1 = require("./config/db");
+const academicCalendarDefaults_1 = require("./config/academicCalendarDefaults");
 const DOCUMENT_TYPE_CC = 3;
-const CURRENT_YEAR = "A";
+const CURRENT_YEAR = "2026";
 const DIRECTIVO_PASSWORD = "directivo123";
 const DOCENTE_PASSWORD = "docente123";
 const CUPOS_POR_CURSO = 30;
 const schools = [
-    {
-        id: 1,
-        nombre: "CEA School Empresarial de los Andes",
-        tipo: "Privado",
-        sede: "Sede Principal",
-        contacto: 3183118044,
-        correo: "rectoria@ceaschool.edu.co",
-        dane: "341001005652",
-        domain: "ceaschool.edu.co",
-    },
-    {
-        id: 2,
-        nombre: "Institución Educativa El Caguán",
-        tipo: "Oficial",
-        sede: "Sede Principal",
-        contacto: 3180000000,
-        correo: "iecaguan@alcaldianeiva.gov.co",
-        dane: "441001002747",
-        domain: "iecaguan.edu.co",
-    },
-    {
-        id: 3,
-        nombre: "Colegio Heisenberg Neiva",
-        tipo: "Privado",
-        sede: "Sede Principal",
-        contacto: 3169100003,
-        correo: "colegioheisenberg@hotmail.com",
-        dane: "DANE-H-001",
-        domain: "heisenberg.edu.co",
-    },
-    {
-        id: 4,
-        nombre: "Colegio Claretiano de Neiva",
-        tipo: "Privado",
-        sede: "Sede Principal",
-        contacto: 3161720175,
-        correo: "admisiones@claretianoneiva.edu.co",
-        dane: "DANE-C-002",
-        domain: "claretianoneiva.edu.co",
-    },
-    {
-        id: 5,
-        nombre: "Colegio IDESA",
-        tipo: "Privado",
-        sede: "Sede Principal",
-        contacto: 3153077861,
-        correo: "info@colegioidesa.com.co",
-        dane: "DANE-I-003",
-        domain: "colegioidesa.edu.co",
-    },
+    // All schools set to Calendario A (Jan-Dec) as per user request
+    { id: 1, nombre: "CEA School Empresarial de los Andes", tipo: "Privado", sede: "Sede Principal", contacto: 3183118044, correo: "rectoria@ceaschool.edu.co", dane: "341001005652", domain: "ceaschool.edu.co", tipo_calendario: 'A' },
+    { id: 2, nombre: "Institución Educativa El Caguán", tipo: "Oficial", sede: "Sede Principal", contacto: 3180000000, correo: "iecaguan@alcaldianeiva.gov.co", dane: "441001002747", domain: "iecaguan.edu.co", tipo_calendario: 'A' },
+    { id: 3, nombre: "Colegio Heisenberg Neiva", tipo: "Privado", sede: "Sede Principal", contacto: 3169100003, correo: "colegioheisenberg@hotmail.com", dane: "DANE-H-001", domain: "heisenberg.edu.co", tipo_calendario: 'A' },
+    { id: 4, nombre: "Colegio Claretiano de Neiva", tipo: "Privado", sede: "Sede Principal", contacto: 3161720175, correo: "admisiones@claretianoneiva.edu.co", dane: "DANE-C-002", domain: "claretianoneiva.edu.co", tipo_calendario: 'A' },
+    { id: 5, nombre: "Colegio IDESA", tipo: "Privado", sede: "Sede Principal", contacto: 3153077861, correo: "info@colegioidesa.com.co", dane: "DANE-I-003", domain: "colegioidesa.edu.co", tipo_calendario: 'A' },
 ];
 const sectionNames = ["A", "B"];
 const jornadaNames = ["MAÑANA", "TARDE", "UNICA"];
@@ -165,9 +122,31 @@ async function insertSchool(client, school, roleIds, directivoHash, docenteHash,
         directivoUserId,
         roleIds.directivo,
     ]);
-    await client.query(`INSERT INTO directivo (id_colegio, id_usuario) VALUES ($1, $2)`, [school.id, directivoUserId]);
+    await client.query(`INSERT INTO directivo (id_colegio, id_usuario, cargo) VALUES ($1, $2, $3)`, [school.id, directivoUserId, "COORDINADOR"]);
+    // --- Crear Rector Institucional ---
+    const rectorEmail = `rector@${school.domain}`;
+    const rectorRes = await client.query(`
+      INSERT INTO usuario (email, password, nombre, apellido, id_colegio, activo)
+      VALUES ($1, $2, $3, $4, $5, true)
+      RETURNING id_usuario
+    `, [rectorEmail, directivoHash, "Rector", school.nombre, school.id]);
+    const rectorUserId = rectorRes.rows[0].id_usuario;
+    await client.query(`INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2)`, [
+        rectorUserId,
+        roleIds.directivo,
+    ]);
+    await client.query(`INSERT INTO directivo (id_colegio, id_usuario, cargo) VALUES ($1, $2, $3)`, [school.id, rectorUserId, "RECTOR"]);
     credentials.push({
         colegio: school.nombre,
+        seccion: "staff",
+        rol: "DIRECTIVO",
+        nombre: `Rector ${school.nombre}`,
+        correo: rectorEmail,
+        password: DIRECTIVO_PASSWORD,
+    });
+    credentials.push({
+        colegio: school.nombre,
+        seccion: "staff",
         rol: "DIRECTIVO",
         nombre: `Directivo ${school.nombre}`,
         correo: directivoEmail,
@@ -205,6 +184,7 @@ async function insertSchool(client, school, roleIds, directivoHash, docenteHash,
         ]);
         credentials.push({
             colegio: school.nombre,
+            seccion: "staff",
             rol: "DOCENTE",
             nombre: `${teacher.firstName} ${fullLastName}`,
             correo: email,
@@ -213,17 +193,93 @@ async function insertSchool(client, school, roleIds, directivoHash, docenteHash,
         });
     }
 }
+async function insertParentsAndStudents(client, school, roleIds, parentHash, studentHash, credentials) {
+    const yearsRes = await client.query('SELECT "id_año" FROM "año_lectivo" WHERE id_colegio = $1', [school.id]);
+    const yearId = yearsRes.rows[0]?.id_año;
+    const groupsRes = await client.query("SELECT id_grupo, id_nivel FROM grupos WHERE id_colegio = $1 LIMIT 5", [school.id]);
+    const groups = groupsRes.rows;
+    if (groups.length === 0)
+        return;
+    for (let pIdx = 1; pIdx <= 3; pIdx++) {
+        const parentEmail = `padre${pIdx}.${school.id}@${school.domain}`;
+        const parentName = `Padre ${pIdx} ${school.nombre}`;
+        // Create Parent User
+        const pUserRes = await client.query(`INSERT INTO usuario (email, password, nombre, apellido, id_colegio, activo) VALUES ($1, $2, $3, $4, $5, true) RETURNING id_usuario`, [parentEmail, parentHash, `Padre ${pIdx}`, school.nombre, school.id]);
+        const parentUserId = pUserRes.rows[0].id_usuario;
+        await client.query(`INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2)`, [parentUserId, roleIds.padre]);
+        // Create Parent Record
+        const pFamRes = await client.query(`INSERT INTO padre_familia (nombre, apellido, documeno, id_tipodocumento, id_colegio, id_usuario) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id_padrefamilia`, [`Padre ${pIdx}`, school.nombre, `P-${school.id}-${pIdx}`, DOCUMENT_TYPE_CC, school.id, parentUserId]);
+        const idPadreFamilia = pFamRes.rows[0].id_padrefamilia;
+        const childrenNames = [];
+        // Create 3 Children for each parent
+        for (let cIdx = 1; cIdx <= 3; cIdx++) {
+            const studentIdx = (pIdx - 1) * 3 + cIdx;
+            const studentEmail = `estudiante${studentIdx}.${school.id}@${school.domain}`;
+            const studentName = `Estudiante ${studentIdx} ${school.nombre}`;
+            childrenNames.push(studentName);
+            // Select a group (cycling through the first 5 groups)
+            const group = groups[(studentIdx - 1) % groups.length];
+            // Create Student User
+            const sUserRes = await client.query(`INSERT INTO usuario (email, password, nombre, apellido, id_colegio, activo) VALUES ($1, $2, $3, $4, $5, true) RETURNING id_usuario`, [studentEmail, studentHash, `Estudiante ${studentIdx}`, school.nombre, school.id]);
+            const studentUserId = sUserRes.rows[0].id_usuario;
+            await client.query(`INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2)`, [studentUserId, roleIds.estudiante]);
+            // Create Student Record
+            const estRes = await client.query(`INSERT INTO estudiante (nombre, apellido, documento, codigo, id_tipodocumento, id_nivel, id_colegio, id_usuario) VALUES ($1, $2, $3, $4, 1, $5, $6, $7) RETURNING id_estudiante`, [`Estudiante ${studentIdx}`, school.nombre, `E-${school.id}-${studentIdx}`, `EST-${school.id}-${studentIdx}`, group.id_nivel, school.id, studentUserId]);
+            const idEstudiante = estRes.rows[0].id_estudiante;
+            // Link Parent and Child
+            await client.query(`INSERT INTO detalle_padrefamilia (id_padrefamilia, id_estudiante, id_colegio) VALUES ($1, $2, $3)`, [idPadreFamilia, idEstudiante, school.id]);
+            // Enrol student
+            if (yearId) {
+                await client.query(`INSERT INTO matricula (id_estudiante, id_nivel, id_colegio, "id_año", estado, correo_padre, id_grupo) VALUES ($1, $2, $3, $4, 'ACTIVA', $5, $6)`, [idEstudiante, group.id_nivel, school.id, yearId, parentEmail, group.id_grupo]);
+            }
+            // Push student credentials
+            credentials.push({
+                colegio: school.nombre,
+                seccion: "familia",
+                rol: "ESTUDIANTE",
+                nombre: `Estudiante ${studentIdx} ${school.nombre}`,
+                correo: studentEmail,
+                codigo: `EST-${school.id}-${studentIdx}`,
+                password: "estudiante123",
+            });
+        }
+        credentials.push({
+            colegio: school.nombre,
+            seccion: "familia",
+            rol: "PADRE",
+            nombre: `Padre ${pIdx} ${school.nombre}`,
+            correo: parentEmail,
+            password: "padre123",
+            hijos: childrenNames,
+        });
+    }
+}
 async function insertSchoolAcademicStructure(client, school, sectionIds) {
     const levelIdsByName = {};
     const subjectIdsByName = {};
     const teacherIdsBySubject = {};
     const groupIds = [];
+    // --- Add tipo_calendario migration if column doesn't exist ---
+    await client.query(`
+    ALTER TABLE colegio ADD COLUMN IF NOT EXISTS tipo_calendario CHAR(1) DEFAULT 'A';
+  `);
+    await client.query(`UPDATE colegio SET tipo_calendario = $1 WHERE id_colegio = $2`, [school.tipo_calendario, school.id]);
+    // Ensure año_lectivo has tipo_calendario column
+    await client.query(`
+    ALTER TABLE "año_lectivo" ADD COLUMN IF NOT EXISTS tipo_calendario CHAR(1) DEFAULT 'A';
+  `);
+    // Year label: 'A' = '2026', 'B' = '2025-2026'
+    const yearLabel = school.tipo_calendario === 'B'
+        ? `${parseInt(CURRENT_YEAR) - 1}-${CURRENT_YEAR}`
+        : CURRENT_YEAR;
     const academicYearResult = await client.query(`
-      INSERT INTO "año_lectivo" (calendario, id_colegio)
-      VALUES ($1, $2)
+      INSERT INTO "año_lectivo" (calendario, id_colegio, tipo_calendario)
+      VALUES ($1, $2, $3)
       RETURNING "id_año"
-    `, [CURRENT_YEAR, school.id]);
+    `, [yearLabel, school.id, school.tipo_calendario]);
     const academicYearId = academicYearResult.rows[0].id_año;
+    // Get period rules based on calendar type
+    const periodRules = (0, academicCalendarDefaults_1.getPeriodRules)(school.tipo_calendario);
     for (const levelSeed of levelSeeds) {
         const levelResult = await client.query(`
         INSERT INTO nivel_escolar (nombre, id_colegio)
@@ -242,10 +298,22 @@ async function insertSchoolAcademicStructure(client, school, sectionIds) {
         jornadaIds.push(result.rows[0].id_jornada);
     }
     for (const periodSeed of periodSeeds) {
+        const monthRule = periodRules.find(r => r.order === periodSeed.trimestre);
         await client.query(`
-        INSERT INTO periodo_academico (nombre, estado, porcentaje, trimestre, "id_año", id_colegio)
-        VALUES ($1, $2, $3, $4, $5, $6)
-      `, [periodSeed.nombre, periodSeed.estado, periodSeed.porcentaje, periodSeed.trimestre, academicYearId, school.id]);
+        INSERT INTO periodo_academico (nombre, estado, porcentaje, trimestre, "id_año", id_colegio, mes_inicio, mes_fin, dia_inicio, dia_fin)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      `, [
+            periodSeed.nombre,
+            periodSeed.estado,
+            periodSeed.porcentaje,
+            periodSeed.trimestre,
+            academicYearId,
+            school.id,
+            monthRule?.startMonth ?? null,
+            monthRule?.endMonth ?? null,
+            1, // dia_inicio
+            28 // dia_fin (simplified)
+        ]);
     }
     for (const scaleSeed of scaleSeeds) {
         await client.query(`
@@ -274,6 +342,8 @@ async function insertSchoolAcademicStructure(client, school, sectionIds) {
       `, [teacher.subject, school.id]);
         subjectIdsByName[teacher.subject] = subjectResult.rows[0].id_materia;
     }
+    const teachersResForTitular = await client.query("SELECT id_docente FROM docente WHERE id_colegio = $1", [school.id]);
+    let teacherIndexForTitular = 0;
     for (const levelSeed of levelSeeds) {
         const levelId = levelIdsByName[levelSeed.nombre];
         for (const gradeName of levelSeed.grades) {
@@ -286,11 +356,14 @@ async function insertSchoolAcademicStructure(client, school, sectionIds) {
             for (const jornadaId of jornadaIds) {
                 for (const sectionName of sectionNames) {
                     const sectionId = sectionIds[sectionName];
+                    // Asignar un Titular Único
+                    const titularId = teachersResForTitular.rows[teacherIndexForTitular]?.id_docente || null;
+                    teacherIndexForTitular++;
                     const groupResult = await client.query(`
-              INSERT INTO grupos (id_nivel, id_jornada, id_colegio, id_seccion, cupos_totales, id_tipo_grado)
-              VALUES ($1, $2, $3, $4, $5, $6)
+              INSERT INTO grupos (id_nivel, id_jornada, id_colegio, id_seccion, cupos_totales, id_tipo_grado, id_docente)
+              VALUES ($1, $2, $3, $4, $5, $6, $7)
               RETURNING id_grupo
-            `, [levelId, jornadaId, school.id, sectionId, CUPOS_POR_CURSO, gradeTypeId]);
+            `, [levelId, jornadaId, school.id, sectionId, CUPOS_POR_CURSO, gradeTypeId, titularId]);
                     groupIds.push(groupResult.rows[0].id_grupo);
                     await client.query(`
               INSERT INTO grados (nivel, tipo_grado, id_jornada, id_colegio, cupos_totales, seccion)
@@ -309,6 +382,86 @@ async function insertSchoolAcademicStructure(client, school, sectionIds) {
         }
     }
 }
+async function insertSampleAttendance(client) {
+    const enrollmentRes = await client.query(`
+    SELECT m.id_estudiante, m.id_colegio, m.id_grupo, al."id_año"
+    FROM matricula m
+    JOIN "año_lectivo" al ON m."id_año" = al."id_año"
+    WHERE m.estado = 'ACTIVA'
+  `);
+    const justifications = [
+        "Cita médica", "Calamidad doméstica", "Gripe común", "Evento institucional", "Retraso transporte"
+    ];
+    for (const enrollment of enrollmentRes.rows) {
+        const { id_estudiante, id_colegio, id_grupo, id_año } = enrollment;
+        const dgRes = await client.query(`
+      SELECT id_detallegrado 
+      FROM detalle_grados 
+      WHERE id_grupo = $1 AND id_colegio = $2
+    `, [id_grupo, id_colegio]);
+        if (dgRes.rows.length === 0)
+            continue;
+        const periodsRes = await client.query(`
+      SELECT id_periodo, mes_inicio, mes_fin, dia_inicio, dia_fin
+      FROM periodo_academico 
+      WHERE id_colegio = $1 AND "id_año" = $2
+    `, [id_colegio, id_año]);
+        for (const period of periodsRes.rows) {
+            const { mes_inicio, mes_fin, dia_inicio, dia_fin } = period;
+            const batchValues = [];
+            const batchSize = 100;
+            // Iterate through months and days
+            for (let m = mes_inicio; m <= mes_fin; m++) {
+                for (let d = dia_inicio; d <= dia_fin; d++) {
+                    const date = new Date(2026, m - 1, d);
+                    const dayOfWeek = date.getDay(); // 0 = Sun, 6 = Sat
+                    // Only weekdays (Mon-Fri)
+                    if (dayOfWeek === 0 || dayOfWeek === 6)
+                        continue;
+                    const dateStr = `2026-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                    for (const dg of dgRes.rows) {
+                        const rand = Math.random();
+                        let estado = "PRESENTE";
+                        let justificacion = null;
+                        if (rand > 0.98) {
+                            estado = "JUSTIFICADA";
+                            justificacion = justifications[Math.floor(Math.random() * justifications.length)];
+                        }
+                        else if (rand > 0.95) {
+                            estado = "AUSENTE";
+                        }
+                        else if (rand > 0.92) {
+                            estado = "TARDE";
+                        }
+                        batchValues.push({
+                            id_estudiante,
+                            id_detallegrado: dg.id_detallegrado,
+                            fecha: dateStr,
+                            estado,
+                            justificacion,
+                            id_colegio
+                        });
+                        if (batchValues.length >= batchSize) {
+                            await flushAttendanceBatch(client, batchValues);
+                            batchValues.length = 0;
+                        }
+                    }
+                }
+            }
+            if (batchValues.length > 0) {
+                await flushAttendanceBatch(client, batchValues);
+            }
+        }
+    }
+}
+async function flushAttendanceBatch(client, batch) {
+    const values = batch.map((_, i) => `($${i * 6 + 1}, $${i * 6 + 2}, $${i * 6 + 3}, $${i * 6 + 4}, $${i * 6 + 5}, $${i * 6 + 6})`).join(',');
+    const params = batch.flatMap(r => [r.id_estudiante, r.id_detallegrado, r.fecha, r.estado, r.justificacion, r.id_colegio]);
+    await client.query(`
+    INSERT INTO registro_asistencia (id_estudiante, id_detallegrado, fecha, estado, justificacion, id_colegio)
+    VALUES ${values}
+  `, params);
+}
 function writeCredentialsFile(credentials) {
     const outputDir = path_1.default.resolve(process.cwd(), "backend", "generated");
     const outputFile = path_1.default.join(outputDir, "seed-credentials.md");
@@ -317,20 +470,51 @@ function writeCredentialsFile(credentials) {
     const lines = [
         "# Credenciales generadas por reset_and_seed.ts",
         "",
-        `Fecha de generación: ${generatedAt}`,
-        "",
-        "Este archivo se regenera cada vez que ejecutes el seed de reseteo.",
+        `> Fecha de generación: ${generatedAt}`,
+        ">",
+        "> Este archivo se regenera cada vez que ejecutes el seed de reseteo.",
         "",
     ];
     for (const school of schools) {
+        const schoolCredentials = credentials.filter((e) => e.colegio === school.nombre);
+        const staffCredentials = schoolCredentials.filter((e) => e.seccion === "staff");
+        const familiaCredentials = schoolCredentials.filter((e) => e.seccion === "familia");
         lines.push(`## ${school.nombre}`);
+        lines.push("");
+        // --- Staff table ---
+        lines.push("### 👤 Personal Institucional (login: correo + contraseña)");
         lines.push("");
         lines.push("| Rol | Nombre | Correo | Contraseña | Materia |");
         lines.push("| --- | --- | --- | --- | --- |");
-        const schoolCredentials = credentials.filter((entry) => entry.colegio === school.nombre);
-        for (const credential of schoolCredentials) {
-            lines.push(`| ${credential.rol} | ${credential.nombre} | ${credential.correo} | ${credential.password} | ${credential.materia ?? "-"} |`);
+        for (const c of staffCredentials) {
+            lines.push(`| ${c.rol} | ${c.nombre} | ${c.correo} | ${c.password} | ${c.materia ?? "-"} |`);
         }
+        lines.push("");
+        // --- Padres table ---
+        const padres = familiaCredentials.filter((e) => e.rol === "PADRE");
+        if (padres.length > 0) {
+            lines.push("### 👨‍👩‍👧 Padres de Familia (login: correo + contraseña)");
+            lines.push("");
+            lines.push("| Rol | Correo | Contraseña | Hijos asociados |");
+            lines.push("| --- | --- | --- | --- |");
+            for (const c of padres) {
+                lines.push(`| ${c.rol} | ${c.correo} | ${c.password} | ${c.hijos?.join(", ") ?? "-"} |`);
+            }
+            lines.push("");
+        }
+        // --- Students table ---
+        const estudiantes = familiaCredentials.filter((e) => e.rol === "ESTUDIANTE");
+        if (estudiantes.length > 0) {
+            lines.push("### 🎓 Estudiantes (login: código estudiantil + contraseña)");
+            lines.push("");
+            lines.push("| Código Estudiantil | Nombre | Contraseña |");
+            lines.push("| --- | --- | --- |");
+            for (const c of estudiantes) {
+                lines.push(`| ${c.codigo} | ${c.nombre} | ${c.password} |`);
+            }
+            lines.push("");
+        }
+        lines.push("---");
         lines.push("");
     }
     fs_1.default.writeFileSync(outputFile, `${lines.join("\n")}\n`, "utf8");
@@ -349,6 +533,8 @@ async function run() {
         await client.query(`ALTER TABLE periodo_academico ADD COLUMN IF NOT EXISTS trimestre integer;`);
         await client.query(`ALTER TABLE periodo_academico ADD COLUMN IF NOT EXISTS dia_inicio integer;`);
         await client.query(`ALTER TABLE periodo_academico ADD COLUMN IF NOT EXISTS dia_fin integer;`);
+        await client.query(`ALTER TABLE periodo_academico ADD COLUMN IF NOT EXISTS mes_inicio integer;`);
+        await client.query(`ALTER TABLE periodo_academico ADD COLUMN IF NOT EXISTS mes_fin integer;`);
         console.log("Reseteando tablas existentes...");
         await truncateExistingTables(client, [
             "actividad_materia",
@@ -379,13 +565,47 @@ async function run() {
             "usuario_rol",
             "año_lectivo",
             "colegio",
+            "registro_asistencia"
         ]);
+        // --- Fase 4: Migraciones de Esquema ---
+        console.log("Migrando esquema para Firmas y Titulares...");
+        await client.query(`
+      -- 1. Agregar columna cargo a directivo
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='directivo' AND column_name='cargo') THEN
+          ALTER TABLE public.directivo ADD COLUMN cargo character varying(100);
+        END IF;
+      END $$;
+
+      -- 2. Agregar columna id_docente a grupos
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='grupos' AND column_name='id_docente') THEN
+          ALTER TABLE public.grupos ADD COLUMN id_docente integer REFERENCES docente(id_docente);
+        END IF;
+      END $$;
+
+      -- 3. Asegurar restricción de unicidad para titular
+      ALTER TABLE public.grupos DROP CONSTRAINT IF EXISTS unique_titular_docente;
+      ALTER TABLE public.grupos ADD CONSTRAINT unique_titular_docente UNIQUE (id_docente);
+
+      -- 4. Ampliar longitud de calendario en año_lectivo
+      ALTER TABLE public."año_lectivo" ALTER COLUMN calendario TYPE VARCHAR(10);
+
+      -- 5. Agregar columna tipo a observacion_estudiante
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='observacion_estudiante' AND column_name='tipo') THEN
+          ALTER TABLE public.observacion_estudiante ADD COLUMN tipo character varying(20) DEFAULT 'ACADEMICA';
+        END IF;
+      END $$;
+    `);
         console.log("Insertando catálogos base...");
         const roleIds = await insertRoles(client);
         await insertDocumentTypes(client);
         const sectionIds = await insertSections(client);
         const directivoHash = await bcrypt_1.default.hash(DIRECTIVO_PASSWORD, 10);
         const docenteHash = await bcrypt_1.default.hash(DOCENTE_PASSWORD, 10);
+        const parentHash = await bcrypt_1.default.hash("padre123", 10);
+        const studentHash = await bcrypt_1.default.hash("estudiante123", 10);
         for (const school of schools) {
             console.log(`Creando usuarios base para ${school.nombre}...`);
             await insertSchool(client, school, roleIds, directivoHash, docenteHash, credentials);
@@ -394,6 +614,12 @@ async function run() {
             console.log(`Creando estructura académica para ${school.nombre}...`);
             await insertSchoolAcademicStructure(client, school, sectionIds);
         }
+        for (const school of schools) {
+            console.log(`Creando padres y estudiantes para ${school.nombre}...`);
+            await insertParentsAndStudents(client, school, roleIds, parentHash, studentHash, credentials);
+        }
+        console.log("Generando registros de asistencia de prueba...");
+        await insertSampleAttendance(client);
         await client.query("COMMIT");
         await (0, competencyMigration_1.ensureCompetencySchema)();
         console.log("Generando evidencias de aprendizaje de prueba...");

@@ -89,7 +89,8 @@ const getObservations = async (req, res) => {
          o.fortalezas,
          o.debilidades,
          o.recomendaciones,
-         o.fecha
+         o.fecha,
+         o.tipo
        FROM observacion_estudiante o
        JOIN estudiante e ON e.id_estudiante = o.id_estudiante
        WHERE o.id_detallegrado = $1 AND o.id_periodo = $2
@@ -104,6 +105,7 @@ const getObservations = async (req, res) => {
             debilidades: r.debilidades || null,
             recomendaciones: r.recomendaciones || null,
             fecha: r.fecha,
+            tipo: r.tipo || 'ACADEMICA',
         }));
         res.json({
             editable: editCheck.editable,
@@ -119,7 +121,7 @@ const getObservations = async (req, res) => {
 exports.getObservations = getObservations;
 // POST /api/teacher/observations
 const createObservation = async (req, res) => {
-    const { detailGradeId, periodId, studentId, fortalezas, debilidades, recomendaciones, fecha } = req.body;
+    const { detailGradeId, periodId, studentId, fortalezas, debilidades, recomendaciones, fecha, tipo } = req.body;
     if (!detailGradeId || !periodId || !studentId) {
         res.status(400).json({ error: "Parámetros obligatorios faltantes (grado, periodo, estudiante)." });
         return;
@@ -156,8 +158,8 @@ const createObservation = async (req, res) => {
             return;
         }
         const result = await db_1.pool.query(`INSERT INTO observacion_estudiante 
-         (id_estudiante, id_detallegrado, id_periodo, fortalezas, debilidades, recomendaciones, fecha, id_colegio)
-       VALUES ($1, $2, $3, $4, $5, $6, $7::timestamp with time zone, $8)
+         (id_estudiante, id_detallegrado, id_periodo, fortalezas, debilidades, recomendaciones, fecha, id_colegio, tipo)
+       VALUES ($1, $2, $3, $4, $5, $6, $7::timestamp with time zone, $8, $9)
        RETURNING id_observacion`, [
             studentId,
             detailGradeId,
@@ -167,6 +169,7 @@ const createObservation = async (req, res) => {
             hasRecomendaciones ? recomendaciones.trim() : null,
             dateValue,
             schoolId,
+            tipo || 'ACADEMICA',
         ]);
         res.json({
             message: "Observación registrada exitosamente",
@@ -182,7 +185,7 @@ exports.createObservation = createObservation;
 // PUT /api/teacher/observations/:id
 const updateObservation = async (req, res) => {
     const observationId = Number(req.params.id);
-    const { fortalezas, debilidades, recomendaciones } = req.body;
+    const { fortalezas, debilidades, recomendaciones, tipo } = req.body;
     // Validate at least one observation field
     const hasFortalezas = fortalezas && fortalezas.trim().length > 0;
     const hasDebilidades = debilidades && debilidades.trim().length > 0;
@@ -208,11 +211,12 @@ const updateObservation = async (req, res) => {
             return;
         }
         await db_1.pool.query(`UPDATE observacion_estudiante 
-       SET fortalezas = $1, debilidades = $2, recomendaciones = $3
-       WHERE id_observacion = $4`, [
+       SET fortalezas = $1, debilidades = $2, recomendaciones = $3, tipo = $4
+       WHERE id_observacion = $5`, [
             hasFortalezas ? fortalezas.trim() : null,
             hasDebilidades ? debilidades.trim() : null,
             hasRecomendaciones ? recomendaciones.trim() : null,
+            tipo || 'ACADEMICA',
             observationId,
         ]);
         res.json({ message: "Observación actualizada exitosamente" });

@@ -63,13 +63,6 @@ const getTeacherDashboard = async (req, res) => {
             return;
         }
         const idDocente = docenteRes.rows[0].id_docente;
-        const periodRes = await db_1.pool.query("SELECT id_periodo FROM periodo_academico WHERE estado = 'ABIERTO' LIMIT 1");
-        const activePeriodId = periodRes.rows.length > 0 ? periodRes.rows[0].id_periodo : null;
-        if (!activePeriodId) {
-            res.json({ coursesCount: 0, studentsCount: 0, noGradeActivities: 0, upToDateCourses: 0, courseAverages: [], alerts: [] });
-            return;
-        }
-        // Cursos
         const coursesRes = await db_1.pool.query(`
       SELECT dg.id_detallegrado, m.nombre as materia_nombre, 
              tg.nombre as grado_nombre, s.nombre as seccion, j.nombre as jornada
@@ -82,7 +75,6 @@ const getTeacherDashboard = async (req, res) => {
       WHERE dg.id_docente = $1
     `, [idDocente]);
         const courses = coursesRes.rows;
-        // Estudiantes Activos (Distintos)
         const studentsRes = await db_1.pool.query(`
       SELECT count(distinct m.id_estudiante) as total_students
       FROM detalle_grados dg
@@ -90,6 +82,19 @@ const getTeacherDashboard = async (req, res) => {
       WHERE dg.id_docente = $1 AND m.estado = 'ACTIVA'
     `, [idDocente]);
         const totalActiveStudents = Number(studentsRes.rows[0].total_students);
+        const periodRes = await db_1.pool.query("SELECT id_periodo FROM periodo_academico WHERE estado = 'ABIERTO' LIMIT 1");
+        const activePeriodId = periodRes.rows.length > 0 ? periodRes.rows[0].id_periodo : null;
+        if (!activePeriodId) {
+            res.json({
+                coursesCount: courses.length,
+                studentsCount: totalActiveStudents,
+                noGradeActivities: 0,
+                upToDateCourses: courses.length, // Si está cerrado, todo está "al día"
+                courseAverages: [],
+                alerts: []
+            });
+            return;
+        }
         let noGradeActivitiesCount = 0;
         let upToDateCoursesCount = 0;
         const courseAverages = [];

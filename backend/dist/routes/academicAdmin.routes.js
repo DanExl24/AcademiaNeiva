@@ -8,8 +8,10 @@ router.get("/grades/:schoolId", academicAdminController_1.getGradeManagementData
 router.post("/grade-types", academicAdminController_1.createGradeType);
 router.delete("/grade-types/:id", academicAdminController_1.deleteGradeType);
 router.post("/groups", academicAdminController_1.createGroup);
+router.patch("/groups/:id/cupos", academicAdminController_1.updateGroupCupos);
 router.delete("/groups/:id", academicAdminController_1.deleteGroup);
 router.get("/subjects/:schoolId", academicAdminController_1.getSubjects);
+router.get("/subjects/trash/:schoolId", academicAdminController_1.getSubjectTrash);
 router.post("/subjects", academicAdminController_1.createSubject);
 router.delete("/subjects/:id", academicAdminController_1.deleteSubject);
 router.get("/teachers/:schoolId", academicAdminController_1.getTeacherManagementData);
@@ -35,4 +37,6 @@ router.delete("/settings/scales/:id", academicAdminController_1.deleteScale);
 router.post("/settings/competencies/:competenciaId/evidencias", academicAdminController_1.createEvidencia);
 router.put("/settings/evidencias/:evidenciaId", academicAdminController_1.updateEvidencia);
 router.delete("/settings/evidencias/:evidenciaId", academicAdminController_1.deleteEvidencia);
+// Dashboard Analítico
+router.get("/dashboard/:schoolId", academicAdminController_1.getDirectivoDashboard);
 exports.default = router;

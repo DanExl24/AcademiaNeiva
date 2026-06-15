@@ -287,5 +287,60 @@ class NotificationService {
             console.error('Error enviando email de cancelación:', error);
         }
     }
+    static async sendStudentTransferEmail(to, parentName, studentName, oldGrade, newGrade, reason, schoolName) {
+        if (!to)
+            return;
+        const html = `
+      <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 640px; margin: 0 auto; padding: 20px; color: #1f2937;">
+        <div style="background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%); padding: 40px; border-radius: 24px; text-align: center; color: white; margin-bottom: 30px;">
+          <h1 style="margin: 0; font-size: 28px; font-weight: 800;">Traslado de Curso</h1>
+          <p style="opacity: 0.92; margin-top: 10px; font-size: 16px;">${schoolName}</p>
+        </div>
+
+        <p style="font-size: 18px; font-weight: 600;">Hola, ${parentName},</p>
+        <p style="line-height: 1.6;">Te informamos que se ha realizado un traslado de curso para el estudiante <strong>${studentName}</strong>.</p>
+
+        <div style="background-color: #f8fafc; border-radius: 18px; padding: 24px; margin: 28px 0; border: 1px solid #e2e8f0;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px dashed #e2e8f0; padding-bottom: 15px;">
+            <div style="text-align: center; flex: 1;">
+              <p style="margin: 0; color: #64748b; font-size: 11px; text-transform: uppercase; font-weight: 700;">Curso Anterior</p>
+              <p style="margin: 5px 0 0 0; font-weight: 800; color: #ef4444;">${oldGrade}</p>
+            </div>
+            <div style="padding: 0 15px; color: #94a3b8; font-size: 20px;">→</div>
+            <div style="text-align: center; flex: 1;">
+              <p style="margin: 0; color: #64748b; font-size: 11px; text-transform: uppercase; font-weight: 700;">Nuevo Curso</p>
+              <p style="margin: 5px 0 0 0; font-weight: 800; color: #10b981;">${newGrade}</p>
+            </div>
+          </div>
+          
+          <div style="margin-top: 20px;">
+            <p style="margin: 0 0 8px 0; color: #475569; font-weight: 700; font-size: 12px; text-transform: uppercase;">Motivo del Traslado:</p>
+            <div style="margin: 0; color: #1e2937; line-height: 1.6; font-style: italic; background: #ffffff; padding: 15px; border-radius: 12px; border: 1px solid #f1f5f9;">
+              "${reason}"
+            </div>
+          </div>
+        </div>
+
+        <p style="line-height: 1.6; font-size: 14px; color: #64748b; text-align: center;">Este cambio ya está reflejado en la plataforma institucional.</p>
+
+        <div style="text-align: center; margin-top: 40px;">
+          <a href="http://localhost:5173/login" style="background-color: #4f46e5; color: white; padding: 16px 32px; border-radius: 12px; text-decoration: none; font-weight: 700; display: inline-block;">
+            Acceder a la plataforma
+          </a>
+        </div>
+      </div>
+    `;
+        try {
+            await transporter.sendMail({
+                from: '"Academia Neiva" <' + process.env.SMTP_USER + '>',
+                to,
+                subject: `Notificación de Traslado: ${studentName}`,
+                html,
+            });
+        }
+        catch (error) {
+            console.error('Error enviando email de traslado de estudiante:', error);
+        }
+    }
 }
 exports.NotificationService = NotificationService;

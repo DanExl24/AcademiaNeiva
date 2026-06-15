@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.login = void 0;
+exports.studentLogin = exports.login = void 0;
 const db_1 = require("../config/db");
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
@@ -57,3 +57,52 @@ const login = async (req, res) => {
     }
 };
 exports.login = login;
+const studentLogin = async (req, res) => {
+    const { codigo, password } = req.body;
+    try {
+        // 1. Buscar el estudiante por su código
+        const studentRes = await db_1.pool.query(`SELECT e.id_usuario, u.email, u.nombre, u.password, u.id_colegio, array_agg(r.nombre) as roles
+       FROM estudiante e
+       JOIN usuario u ON e.id_usuario = u.id_usuario
+       JOIN usuario_rol ur ON u.id_usuario = ur.id_usuario
+       JOIN rol r ON ur.id_rol = r.id_rol
+       WHERE e.codigo = $1 AND u.activo = TRUE
+       GROUP BY e.id_usuario, u.email, u.nombre, u.password, u.id_colegio`, [codigo]);
+        if (studentRes.rows.length === 0) {
+            res.status(401).json({ error: "Código o contraseña incorrectos" });
+            return;
+        }
+        const user = studentRes.rows[0];
+        // 2. Verificar contraseña
+        const validPassword = await bcrypt_1.default.compare(password, user.password);
+        if (!validPassword) {
+            res.status(401).json({ error: "Código o contraseña incorrectos" });
+            return;
+        }
+        // 3. Generar JWT
+        const token = jsonwebtoken_1.default.sign({
+            id: user.id_usuario,
+            email: user.email,
+            role: "estudiante",
+            roles: user.roles,
+            schoolId: user.id_colegio
+        }, JWT_SECRET, { expiresIn: "8h" });
+        // 4. Responder
+        res.json({
+            user: {
+                id: user.id_usuario,
+                name: user.nombre,
+                email: user.email,
+                role: "estudiante",
+                roles: user.roles,
+                schoolId: user.id_colegio
+            },
+            token
+        });
+    }
+    catch (error) {
+        console.error("Student Login error:", error);
+        res.status(500).json({ error: "Error en el servidor" });
+    }
+};
+exports.studentLogin = studentLogin;

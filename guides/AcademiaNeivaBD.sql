@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict nrlYMBgr5jILiSbYjqxXoRJeUKcE4Z9wvUHEFyYcjF5V8x4yVQchlberJA2V1xi
+\restrict x9Z5bes4NLi4sLtTTOX4lydFllTx6WQ5ieEhlsI7EGeVm2Dcgoc3q4T0c2sZbxd
 
 -- Dumped from database version 18.4
 -- Dumped by pg_dump version 18.4
@@ -805,7 +805,8 @@ CREATE TABLE public.estudiante (
     id_tipodocumento integer,
     id_nivel integer,
     id_colegio integer NOT NULL,
-    id_usuario integer
+    id_usuario integer,
+    estado public.estado_estudiante DEFAULT 'ACTIVO'::public.estado_estudiante
 );
 
 
@@ -3147,5 +3148,5 @@ REVOKE USAGE ON SCHEMA public FROM PUBLIC;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict nrlYMBgr5jILiSbYjqxXoRJeUKcE4Z9wvUHEFyYcjF5V8x4yVQchlberJA2V1xi
+\unrestrict x9Z5bes4NLi4sLtTTOX4lydFllTx6WQ5ieEhlsI7EGeVm2Dcgoc3q4T0c2sZbxd
 

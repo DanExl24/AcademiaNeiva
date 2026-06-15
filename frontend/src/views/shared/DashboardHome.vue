@@ -10,7 +10,10 @@ import {
   Target,
   AlertTriangle,
   UserCheck,
-  Filter
+  Filter,
+  LayoutDashboard,
+  X,
+  Search
 } from 'lucide-vue-next'
 import {
   Chart as ChartJS,
@@ -56,27 +59,99 @@ const dashboardData = ref({
     disciplinaryReports: 0,
     desertionRate: 0,
   },
+  summaryByGrade: {} as Record<string, {
+    totalStudents: number;
+    totalTeachers: number;
+    attendanceToday: number;
+    generalAverage: number;
+    studentsAtRisk: number;
+    disciplinaryReports: number;
+    desertionRate: number;
+  }>,
   charts: {
     performanceByGrade: [] as {nombre: string, average: number}[],
     performanceBySubject: [] as {nombre: string, average: number}[],
-    evolution: [] as {nombre: string, average: number}[]
+    performanceByCourse: [] as {
+      id_grupo: number;
+      grado_nombre: string;
+      seccion_nombre: string;
+      jornada_nombre: string;
+      average: number;
+    }[],
+    performanceBySubjectCourse: [] as {
+      id_grupo: number;
+      subject_nombre: string;
+      grado_nombre: string;
+      seccion_nombre: string;
+      jornada_nombre: string;
+      average: number;
+    }[],
+    evolution: [] as {nombre: string, average: number}[],
+    evolutionByCourse: [] as {
+      periodo_nombre: string;
+      id_grupo: number;
+      grado_nombre: string;
+      seccion_nombre: string;
+      jornada_nombre: string;
+      average: number;
+    }[]
   },
   lowPerformance: {
-    criticalSubjects: [] as { nombre: string; failures: number }[],
+    criticalSubjects: [] as { 
+      nombre: string; 
+      failures: number; 
+      estudiantes_reprobados: {
+        id_estudiante: number;
+        nombre_completo: string;
+        promedio: number;
+        curso: string;
+      }[];
+    }[],
     gradeAlerts: [] as { nombre: string; alerts: number }[],
-    groupRisk: [] as { curso: string; at_risk: number; safe: number }[]
+    groupRisk: [] as { 
+      curso: string; 
+      id_grupo: number;
+      grado_nombre: string;
+      seccion_nombre: string;
+      jornada_nombre: string;
+      at_risk: number; 
+      safe: number; 
+    }[],
+    studentsAtRiskList: [] as {
+      id_estudiante: number;
+      nombre_completo: string;
+      id_grupo: number;
+      materias_reprobadas: number;
+      promedio_general: number;
+      detalles_materias: { materia_nombre: string; promedio: number }[];
+    }[]
   }
 })
 
 const periods = ref<any[]>([])
 const selectedPeriodId = ref<number | null>(null)
 
+const activeSummary = computed(() => {
+  if (globalSelectedGrade.value === 'ALL') {
+    return dashboardData.value.summary
+  }
+  return dashboardData.value.summaryByGrade?.[globalSelectedGrade.value] || {
+    totalStudents: 0,
+    totalTeachers: 0,
+    attendanceToday: 0,
+    generalAverage: 0,
+    studentsAtRisk: 0,
+    disciplinaryReports: 0,
+    desertionRate: 0
+  }
+})
+
 // Computed Stats for Cards
 const dashboardStats = computed(() => [
-  { name: 'Estudiantes', value: dashboardData.value.summary.totalStudents.toString(), icon: GraduationCap, color: 'text-blue-600', bg: 'bg-blue-50' },
-  { name: 'Docentes', value: dashboardData.value.summary.totalTeachers.toString(), icon: Users, color: 'text-indigo-600', bg: 'bg-indigo-50' },
-  { name: 'Asistencia Hoy', value: `${dashboardData.value.summary.attendanceToday}%`, icon: UserCheck, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-  { name: 'Riesgo Académico', value: dashboardData.value.summary.studentsAtRisk.toString(), icon: AlertTriangle, color: 'text-rose-600', bg: 'bg-rose-50' },
+  { name: 'Estudiantes', value: activeSummary.value.totalStudents.toString(), icon: GraduationCap, color: 'text-blue-600', bg: 'bg-blue-50' },
+  { name: 'Docentes', value: activeSummary.value.totalTeachers.toString(), icon: Users, color: 'text-indigo-600', bg: 'bg-indigo-50' },
+  { name: 'Asistencia Hoy', value: `${activeSummary.value.attendanceToday}%`, icon: UserCheck, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+  { name: 'Riesgo Académico', value: activeSummary.value.studentsAtRisk.toString(), icon: AlertTriangle, color: 'text-rose-600', bg: 'bg-rose-50' },
 ])
 
 // Chart Configs
@@ -133,23 +208,148 @@ const horizontalOptions = computed(() => {
   }
 })
 
-const riskChartData = computed(() => ({
-  labels: dashboardData.value.lowPerformance.groupRisk.map(r => r.curso),
-  datasets: [
-    {
-      label: 'En Riesgo',
-      data: dashboardData.value.lowPerformance.groupRisk.map(r => r.at_risk),
-      backgroundColor: '#f87171',
-      borderRadius: 6
-    },
-    {
-      label: 'A Salvo',
-      data: dashboardData.value.lowPerformance.groupRisk.map(r => r.safe),
-      backgroundColor: '#34d399',
-      borderRadius: 6
+const globalSelectedGrade = ref<string>('ALL')
+
+const globalGradeOptions = computed(() => {
+  const gradesRisk = dashboardData.value.lowPerformance.groupRisk.map(r => r.grado_nombre)
+  const gradesPerf = dashboardData.value.charts.performanceByCourse.map(c => c.grado_nombre)
+  return [...new Set([...gradesRisk, ...gradesPerf])].filter(Boolean).sort()
+})
+
+const availableCoursesForSelectedGrade = computed(() => {
+  if (globalSelectedGrade.value === 'ALL') return []
+  return dashboardData.value.charts.performanceByCourse.filter(
+    c => c.grado_nombre === globalSelectedGrade.value
+  )
+})
+
+const selectedAlertCourse = ref<{ id_grupo: number; name: string } | null>(null)
+const selectedCriticalSubject = ref<{ nombre: string; estudiantes_reprobados: any[] } | null>(null)
+const modalSearchQuery = ref('')
+
+const studentsAtRiskForSelectedAlertCourse = computed(() => {
+  if (!selectedAlertCourse.value) return []
+  const list = dashboardData.value.lowPerformance.studentsAtRiskList.filter(
+    s => s.id_grupo === selectedAlertCourse.value!.id_grupo
+  )
+  if (!modalSearchQuery.value) return list
+  const q = modalSearchQuery.value.toLowerCase().trim()
+  return list.filter(s => s.nombre_completo.toLowerCase().includes(q))
+})
+
+const filteredCriticalSubjectStudents = computed(() => {
+  if (!selectedCriticalSubject.value) return []
+  const list = selectedCriticalSubject.value.estudiantes_reprobados || []
+  if (!modalSearchQuery.value) return list
+  const q = modalSearchQuery.value.toLowerCase().trim()
+  return list.filter(s => s.nombre_completo.toLowerCase().includes(q))
+})
+
+watch([selectedAlertCourse, selectedCriticalSubject], () => {
+  modalSearchQuery.value = ''
+})
+
+const handleAlertClick = (item: { name: string; alerts: number }) => {
+  if (globalSelectedGrade.value === 'ALL') {
+    globalSelectedGrade.value = item.name
+  } else {
+    const course = availableCoursesForSelectedGrade.value.find(
+      c => `Sección ${c.seccion_nombre} - ${c.jornada_nombre}` === item.name
+    )
+    if (course) {
+      selectedAlertCourse.value = {
+        id_grupo: course.id_grupo,
+        name: `${globalSelectedGrade.value} (Sección ${course.seccion_nombre} - ${course.jornada_nombre})`
+      }
     }
-  ]
-}))
+  }
+}
+
+const handleCriticalSubjectClick = (sub: any) => {
+  selectedCriticalSubject.value = {
+    nombre: sub.nombre,
+    estudiantes_reprobados: sub.estudiantes_reprobados || []
+  }
+}
+
+const selectedCourseForSubjects = ref<number | null>(null)
+const selectedCourseForEvolution = ref<number | null>(null)
+
+watch(globalSelectedGrade, (newGrade) => {
+  if (newGrade === 'ALL') {
+    selectedCourseForSubjects.value = null
+    selectedCourseForEvolution.value = null
+  } else {
+    const courses = dashboardData.value.charts.performanceByCourse.filter(
+      c => c.grado_nombre === newGrade
+    )
+    if (courses.length > 0) {
+      selectedCourseForSubjects.value = courses[0].id_grupo
+      selectedCourseForEvolution.value = courses[0].id_grupo
+    } else {
+      selectedCourseForSubjects.value = null
+      selectedCourseForEvolution.value = null
+    }
+  }
+})
+
+const riskChartData = computed(() => {
+  const allRisk = dashboardData.value.lowPerformance.groupRisk
+  
+  if (globalSelectedGrade.value === 'ALL') {
+    const grouped = allRisk.reduce((acc, curr) => {
+      const existing = acc.find(item => item.grado === curr.grado_nombre)
+      if (existing) {
+        existing.at_risk += curr.at_risk
+        existing.safe += curr.safe
+      } else {
+        acc.push({
+          grado: curr.grado_nombre,
+          at_risk: curr.at_risk,
+          safe: curr.safe
+        })
+      }
+      return acc
+    }, [] as { grado: string, at_risk: number, safe: number }[])
+
+    return {
+      labels: grouped.map(g => g.grado),
+      datasets: [
+        {
+          label: 'En Riesgo',
+          data: grouped.map(g => g.at_risk),
+          backgroundColor: '#f87171',
+          borderRadius: 6
+        },
+        {
+          label: 'A Salvo',
+          data: grouped.map(g => g.safe),
+          backgroundColor: '#34d399',
+          borderRadius: 6
+        }
+      ]
+    }
+  }
+
+  const filtered = allRisk.filter(r => r.grado_nombre === globalSelectedGrade.value)
+  return {
+    labels: filtered.map(r => `Sección ${r.seccion_nombre} - ${r.jornada_nombre}`),
+    datasets: [
+      {
+        label: 'En Riesgo',
+        data: filtered.map(r => r.at_risk),
+        backgroundColor: '#f87171',
+        borderRadius: 6
+      },
+      {
+        label: 'A Salvo',
+        data: filtered.map(r => r.safe),
+        backgroundColor: '#34d399',
+        borderRadius: 6
+      }
+    ]
+  }
+})
 
 const riskChartOptions = computed(() => {
   const isDark = theme.isDark
@@ -176,39 +376,122 @@ const riskChartOptions = computed(() => {
   }
 })
 
-const gradeChartData = computed(() => ({
-  labels: dashboardData.value.charts.performanceByGrade.map(g => g.nombre),
-  datasets: [{
-    label: 'Promedio Grado',
-    data: dashboardData.value.charts.performanceByGrade.map(g => g.average),
-    backgroundColor: '#6366f1',
-    borderRadius: 8
-  }]
-}))
+const gradeChartData = computed(() => {
+  const isAll = globalSelectedGrade.value === 'ALL'
+  if (isAll) {
+    return {
+      labels: dashboardData.value.charts.performanceByGrade.map(g => g.nombre),
+      datasets: [{
+        label: 'Promedio Grado',
+        data: dashboardData.value.charts.performanceByGrade.map(g => g.average),
+        backgroundColor: '#6366f1',
+        borderRadius: 8
+      }]
+    }
+  } else {
+    const filteredCourses = dashboardData.value.charts.performanceByCourse.filter(
+      c => c.grado_nombre === globalSelectedGrade.value
+    )
+    return {
+      labels: filteredCourses.map(c => `Sección ${c.seccion_nombre} - ${c.jornada_nombre}`),
+      datasets: [{
+        label: 'Promedio Curso',
+        data: filteredCourses.map(c => c.average),
+        backgroundColor: '#6366f1',
+        borderRadius: 8
+      }]
+    }
+  }
+})
 
-const subjectChartData = computed(() => ({
-  labels: dashboardData.value.charts.performanceBySubject.map(s => s.nombre),
-  datasets: [{
-    label: 'Promedio Materia',
-    data: dashboardData.value.charts.performanceBySubject.map(s => s.average),
-    backgroundColor: '#10b981',
-    borderRadius: 8
-  }]
-}))
+const subjectChartData = computed(() => {
+  if (globalSelectedGrade.value === 'ALL') {
+    return {
+      labels: dashboardData.value.charts.performanceBySubject.map(s => s.nombre),
+      datasets: [{
+        label: 'Promedio Materia',
+        data: dashboardData.value.charts.performanceBySubject.map(s => s.average),
+        backgroundColor: '#10b981',
+        borderRadius: 8
+      }]
+    }
+  } else {
+    if (!selectedCourseForSubjects.value) {
+      return { labels: [], datasets: [] }
+    }
+    const filtered = dashboardData.value.charts.performanceBySubjectCourse
+      .filter(item => item.id_grupo === selectedCourseForSubjects.value)
+      .sort((a, b) => b.average - a.average)
+      .slice(0, 15);
+      
+    return {
+      labels: filtered.map(f => f.subject_nombre),
+      datasets: [{
+        label: 'Promedio Materia',
+        data: filtered.map(f => f.average),
+        backgroundColor: '#10b981',
+        borderRadius: 8
+      }]
+    }
+  }
+})
 
-const evolutionChartData = computed(() => ({
-  labels: dashboardData.value.charts.evolution.map(e => e.nombre),
-  datasets: [{
-    label: 'Media Institucional',
-    data: dashboardData.value.charts.evolution.map(e => e.average),
-    borderColor: '#f59e0b',
-    backgroundColor: 'rgba(245, 158, 11, 0.1)',
-    fill: true,
-    tension: 0.4,
-    pointRadius: 6,
-    pointBackgroundColor: '#f59e0b'
-  }]
-}))
+const evolutionChartData = computed(() => {
+  if (globalSelectedGrade.value === 'ALL') {
+    return {
+      labels: dashboardData.value.charts.evolution.map(e => e.nombre),
+      datasets: [{
+        label: 'Media Institucional',
+        data: dashboardData.value.charts.evolution.map(e => e.average),
+        borderColor: '#f59e0b',
+        backgroundColor: 'rgba(245, 158, 11, 0.1)',
+        fill: true,
+        tension: 0.4,
+        pointRadius: 6,
+        pointBackgroundColor: '#f59e0b'
+      }]
+    }
+  } else {
+    if (!selectedCourseForEvolution.value) {
+      return { labels: [], datasets: [] }
+    }
+    const filtered = dashboardData.value.charts.evolutionByCourse.filter(
+      item => item.id_grupo === selectedCourseForEvolution.value
+    )
+    return {
+      labels: filtered.map(e => e.periodo_nombre),
+      datasets: [{
+        label: 'Promedio Curso',
+        data: filtered.map(e => e.average),
+        borderColor: '#f59e0b',
+        backgroundColor: 'rgba(245, 158, 11, 0.1)',
+        fill: true,
+        tension: 0.4,
+        pointRadius: 6,
+        pointBackgroundColor: '#f59e0b'
+      }]
+    }
+  }
+})
+
+const filteredAlertsData = computed(() => {
+  if (globalSelectedGrade.value === 'ALL') {
+    return dashboardData.value.lowPerformance.gradeAlerts.map(g => ({
+      name: g.nombre,
+      alerts: g.alerts
+    }))
+  } else {
+    const coursesInGrade = dashboardData.value.lowPerformance.groupRisk.filter(
+      r => r.grado_nombre === globalSelectedGrade.value
+    )
+    return coursesInGrade.map(c => ({
+      name: `Sección ${c.seccion_nombre} - ${c.jornada_nombre}`,
+      alerts: c.at_risk
+    }))
+    .filter(c => c.alerts > 0)
+    .sort((a, b) => b.alerts - a.alerts)
+  }
+})
 
 // Methods
 const fetchDashboard = async () => {
@@ -246,6 +529,16 @@ watch(selectedPeriodId, fetchDashboard)
 onMounted(async () => {
   await loadPeriods()
   await fetchDashboard()
+  // Trigger initial setup for courses if grade is not ALL
+  if (globalSelectedGrade.value !== 'ALL') {
+    const courses = dashboardData.value.charts.performanceByCourse.filter(
+      c => c.grado_nombre === globalSelectedGrade.value
+    )
+    if (courses.length > 0) {
+      selectedCourseForSubjects.value = courses[0].id_grupo
+      selectedCourseForEvolution.value = courses[0].id_grupo
+    }
+  }
 })
 </script>
 
@@ -254,7 +547,7 @@ onMounted(async () => {
     
     <!-- Welcome & Period Selector -->
     <div class="flex flex-col lg:flex-row gap-6 items-start lg:items-center justify-between">
-      <div class="bg-indigo-600 rounded-[2rem] p-8 text-white shadow-xl shadow-indigo-100 flex-1 relative overflow-hidden w-full">
+      <div class="bg-indigo-600 rounded-[2rem] p-8 text-white shadow-xl shadow-indigo-100 dark:shadow-none flex-1 relative overflow-hidden w-full">
         <div class="relative z-10">
           <h1 class="text-3xl font-black">¡Bienvenido, {{ auth.user?.name || 'Director' }}! 👋</h1>
           <p class="mt-2 text-indigo-100 max-w-md font-medium">
@@ -264,21 +557,39 @@ onMounted(async () => {
         <div class="absolute -right-10 -bottom-10 h-48 w-48 bg-white/10 rounded-full blur-3xl"></div>
       </div>
       
-      <!-- Period Filter -->
-      <div class="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-gray-100 dark:border-slate-800 shadow-sm w-full lg:w-72 flex flex-col gap-3">
-        <label class="text-xs font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2">
-          <Filter :size="14" />
-          Periodo Académico
-        </label>
-        <select 
-          v-model="selectedPeriodId" 
-          class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-indigo-500 transition-all cursor-pointer"
-        >
-          <option :value="null">Periodo Activo (Auto)</option>
-          <option v-for="p in periods" :key="p.id_periodo" :value="p.id_periodo">
-            {{ p.nombre }}
-          </option>
-        </select>
+      <!-- Filters -->
+      <div class="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-gray-100 dark:border-slate-800 shadow-sm w-full lg:w-auto flex flex-col sm:flex-row gap-6">
+        <div class="flex flex-col gap-3 min-w-[200px]">
+          <label class="text-xs font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2">
+            <Filter :size="14" />
+            Periodo Académico
+          </label>
+          <select 
+            v-model="selectedPeriodId" 
+            class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-indigo-500 transition-all cursor-pointer"
+          >
+            <option :value="null">Periodo Activo (Auto)</option>
+            <option v-for="p in periods" :key="p.id_periodo" :value="p.id_periodo">
+              {{ p.nombre }}
+            </option>
+          </select>
+        </div>
+        
+        <div class="flex flex-col gap-3 min-w-[200px]">
+          <label class="text-xs font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2">
+            <Filter :size="14" />
+            Grado
+          </label>
+          <select 
+            v-model="globalSelectedGrade" 
+            class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-indigo-500 transition-all cursor-pointer"
+          >
+            <option value="ALL">Todos los Grados</option>
+            <option v-for="grade in globalGradeOptions" :key="grade" :value="grade">
+              {{ grade }}
+            </option>
+          </select>
+        </div>
       </div>
     </div>
 
@@ -306,10 +617,12 @@ onMounted(async () => {
       
       <!-- Performance by Grade -->
       <div class="bg-white dark:bg-slate-900 rounded-[2rem] border border-gray-100 dark:border-slate-800 p-8 shadow-sm flex flex-col min-h-[450px] transition-colors">
-        <h3 class="text-lg font-black text-gray-800 dark:text-white mb-6 flex items-center gap-2">
-          <TrendingUp :size="20" class="text-indigo-600" />
-          Rendimiento por Grado
-        </h3>
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+          <h3 class="text-lg font-black text-gray-800 dark:text-white flex items-center gap-2">
+            <TrendingUp :size="20" class="text-indigo-600" />
+            {{ globalSelectedGrade === 'ALL' ? 'Rendimiento por Grado' : 'Rendimiento por Curso' }}
+          </h3>
+        </div>
         <div class="flex-1 w-full">
           <Bar v-if="!loading" :data="gradeChartData" :options="horizontalOptions as any" />
         </div>
@@ -317,22 +630,74 @@ onMounted(async () => {
 
       <!-- Performance by Subject -->
       <div class="bg-white dark:bg-slate-900 rounded-[2rem] border border-gray-100 dark:border-slate-800 p-8 shadow-sm flex flex-col min-h-[500px] transition-colors">
-        <h3 class="text-lg font-black text-gray-800 dark:text-white mb-6 flex items-center gap-2">
-          <BookOpen :size="20" class="text-emerald-500" />
-          Rendimiento por Materia (Top 10)
-        </h3>
-        <div class="flex-1 w-full">
+        <div class="flex flex-col mb-6">
+          <h3 class="text-lg font-black text-gray-800 dark:text-white flex items-center gap-2">
+            <BookOpen :size="20" class="text-emerald-500" />
+            Rendimiento por Materia {{ globalSelectedGrade === 'ALL' ? '(Top 10 Institucional)' : 'por Curso' }}
+          </h3>
+          
+          <!-- Course Selector Blocks (Only visible when a grade is selected) -->
+          <div v-if="globalSelectedGrade !== 'ALL' && availableCoursesForSelectedGrade.length > 0" class="mt-4 flex flex-wrap gap-3">
+            <button
+              v-for="course in availableCoursesForSelectedGrade"
+              :key="course.id_grupo"
+              @click="selectedCourseForSubjects = course.id_grupo"
+              :class="[
+                'px-4 py-2 rounded-xl text-sm font-bold transition-all border',
+                selectedCourseForSubjects === course.id_grupo 
+                  ? 'bg-emerald-500 text-white border-emerald-500 shadow-md shadow-emerald-500/20 scale-105' 
+                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-emerald-400 hover:text-emerald-500'
+              ]"
+            >
+              Sección {{ course.seccion_nombre }} - {{ course.jornada_nombre }}
+            </button>
+          </div>
+          <div v-else-if="globalSelectedGrade !== 'ALL' && availableCoursesForSelectedGrade.length === 0" class="mt-4 text-sm text-slate-500 italic">
+            No hay cursos disponibles para este grado.
+          </div>
+        </div>
+        
+        <div class="flex-1 w-full relative">
+          <div v-if="globalSelectedGrade !== 'ALL' && !selectedCourseForSubjects && availableCoursesForSelectedGrade.length > 0" class="absolute inset-0 flex items-center justify-center bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm z-10 rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
+            <p class="text-slate-500 font-medium">Selecciona un curso arriba para ver su rendimiento.</p>
+          </div>
           <Bar v-if="!loading" :data="subjectChartData" :options="horizontalOptions as any" />
         </div>
       </div>
 
       <!-- Performance Evolution -->
       <div class="bg-white dark:bg-slate-900 rounded-[2rem] border border-gray-100 dark:border-slate-800 p-8 shadow-sm flex flex-col min-h-[400px] transition-colors">
-        <h3 class="text-lg font-black text-gray-800 dark:text-white mb-6 flex items-center gap-2">
-          <Target :size="20" class="text-amber-500" />
-          Evolución del Promedio Institucional
-        </h3>
-        <div class="flex-1 w-full">
+        <div class="flex flex-col mb-6">
+          <h3 class="text-lg font-black text-gray-800 dark:text-white flex items-center gap-2">
+            <Target :size="20" class="text-amber-500" />
+            Evolución del Promedio {{ globalSelectedGrade === 'ALL' ? 'Institucional' : 'por Curso' }}
+          </h3>
+          
+          <!-- Course Selector Blocks for Evolution (Only visible when a grade is selected) -->
+          <div v-if="globalSelectedGrade !== 'ALL' && availableCoursesForSelectedGrade.length > 0" class="mt-4 flex flex-wrap gap-3">
+            <button
+              v-for="course in availableCoursesForSelectedGrade"
+              :key="course.id_grupo"
+              @click="selectedCourseForEvolution = course.id_grupo"
+              :class="[
+                'px-4 py-2 rounded-xl text-sm font-bold transition-all border',
+                selectedCourseForEvolution === course.id_grupo 
+                  ? 'bg-amber-500 text-white border-amber-500 shadow-md shadow-amber-500/20 scale-105' 
+                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-amber-400 hover:text-amber-500'
+              ]"
+            >
+              Sección {{ course.seccion_nombre }} - {{ course.jornada_nombre }}
+            </button>
+          </div>
+          <div v-else-if="globalSelectedGrade !== 'ALL' && availableCoursesForSelectedGrade.length === 0" class="mt-4 text-sm text-slate-500 italic">
+            No hay cursos disponibles para este grado.
+          </div>
+        </div>
+        
+        <div class="flex-1 w-full relative">
+          <div v-if="globalSelectedGrade !== 'ALL' && !selectedCourseForEvolution && availableCoursesForSelectedGrade.length > 0" class="absolute inset-0 flex items-center justify-center bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm z-10 rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
+            <p class="text-slate-500 font-medium">Selecciona un curso arriba para ver su evolución.</p>
+          </div>
           <Line v-if="!loading" :data="evolutionChartData" :options="chartOptionsBase as any" />
         </div>
       </div>
@@ -354,12 +719,14 @@ onMounted(async () => {
         <div class="grid grid-cols-1 gap-12">
           <!-- Risk by Course (STACKED HORIZONTAL) -->
           <div class="bg-white/5 backdrop-blur-xl border border-white/10 p-8 rounded-[3rem] flex flex-col h-[550px]">
-            <div class="flex items-center justify-between mb-8">
-              <h3 class="text-xl font-bold flex items-center gap-2 text-indigo-400">
-                <LayoutDashboard :size="20" />
-                Riesgo de Reprobación por Curso
-              </h3>
-              <div class="flex gap-6 text-[10px] font-black uppercase tracking-widest bg-white/5 px-6 py-3 rounded-2xl border border-white/10">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+              <div class="flex flex-col sm:flex-row sm:items-center gap-4">
+                <h3 class="text-xl font-bold flex items-center gap-2 text-indigo-400">
+                  <LayoutDashboard :size="20" />
+                  {{ globalSelectedGrade === 'ALL' ? 'Riesgo de Reprobación por Grado' : 'Riesgo de Reprobación por Curso' }}
+                </h3>
+              </div>
+              <div class="flex gap-6 text-[10px] font-black uppercase tracking-widest bg-white/5 px-6 py-3 rounded-2xl border border-white/10 shrink-0">
                 <span class="flex items-center gap-2 text-rose-400">
                   <div class="h-2.5 w-2.5 rounded-full bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.5)]"></div> En Riesgo
                 </span>
@@ -387,7 +754,8 @@ onMounted(async () => {
                 <div 
                   v-for="(sub, idx) in dashboardData.lowPerformance.criticalSubjects" 
                   :key="idx"
-                  class="flex items-center justify-between p-5 bg-white/5 rounded-2xl border border-white/5 hover:bg-white/10 transition-all group"
+                  @click="handleCriticalSubjectClick(sub)"
+                  class="flex items-center justify-between p-5 bg-white/5 rounded-2xl border border-white/5 hover:border-rose-500/30 hover:shadow-lg hover:shadow-rose-500/5 hover:-translate-y-0.5 transition-all group cursor-pointer"
                 >
                   <div class="flex items-center gap-4 min-w-0">
                     <div class="h-10 w-10 shrink-0 flex items-center justify-center rounded-xl bg-rose-500/20 text-rose-400 font-black text-xs group-hover:scale-110 transition-transform">
@@ -412,28 +780,34 @@ onMounted(async () => {
               <div class="flex flex-col mb-6">
                 <h3 class="text-lg font-bold flex items-center gap-2 text-amber-400">
                   <Target :size="20" />
-                  Alertas por Grado
+                  {{ globalSelectedGrade === 'ALL' ? 'Alertas por Grado' : 'Alertas por Curso' }}
                 </h3>
                 <p class="text-[10px] text-slate-400 mt-1 uppercase font-black tracking-tighter">Estudiantes que reprueban una o más materias</p>
               </div>
               <div class="space-y-4 overflow-y-auto pr-2 custom-scrollbar flex-1">
                 <div 
-                  v-for="(grado, idx) in dashboardData.lowPerformance.gradeAlerts" 
+                  v-for="(item, idx) in filteredAlertsData" 
                   :key="idx"
-                  class="flex flex-col gap-2 p-5 bg-white/5 rounded-2xl border border-white/5 hover:bg-white/10 transition-all"
+                  @click="handleAlertClick(item)"
+                  :class="[
+                    'flex flex-col gap-2 p-5 bg-white/5 rounded-2xl border border-white/5 transition-all cursor-pointer',
+                    globalSelectedGrade === 'ALL' 
+                      ? 'hover:border-indigo-500/50 hover:bg-white/10 hover:-translate-y-0.5' 
+                      : 'hover:border-amber-500/50 hover:bg-white/10 hover:-translate-y-0.5'
+                  ]"
                 >
                   <div class="flex justify-between items-center mb-1">
-                    <span class="font-bold text-sm text-slate-200">{{ grado.nombre }}</span>
-                    <span class="text-xs font-black text-amber-400">{{ grado.alerts }} Estudiantes</span>
+                    <span class="font-bold text-sm text-slate-200">{{ item.name }}</span>
+                    <span class="text-xs font-black text-amber-400">{{ item.alerts }} Estudiantes</span>
                   </div>
                   <div class="w-full h-3 bg-white/5 rounded-full overflow-hidden shadow-inner p-[2px]">
                     <div 
                       class="h-full bg-gradient-to-r from-amber-600 to-amber-400 rounded-full transition-all duration-1000" 
-                      :style="{ width: `${Math.min(100, (grado.alerts / (dashboardData.summary.totalStudents || 1)) * 100 * 5)}%` }"
+                      :style="{ width: `${Math.min(100, (item.alerts / (dashboardData.summary.totalStudents || 1)) * 100 * 5)}%` }"
                     ></div>
                   </div>
                 </div>
-                <div v-if="dashboardData.lowPerformance.gradeAlerts.length === 0" class="flex flex-col items-center justify-center h-full opacity-30 italic">
+                <div v-if="filteredAlertsData.length === 0" class="flex flex-col items-center justify-center h-full opacity-30 italic">
                   Sin alertas registradas
                 </div>
               </div>
@@ -446,6 +820,150 @@ onMounted(async () => {
       <div class="absolute -left-20 -bottom-20 h-80 w-80 bg-indigo-500/10 rounded-full blur-[100px]"></div>
     </div>
 
+    <!-- Modal for Students at Risk details -->
+    <div v-if="selectedAlertCourse" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <!-- Backdrop -->
+      <div class="absolute inset-0 bg-slate-950/80 backdrop-blur-md" @click="selectedAlertCourse = null"></div>
+      
+      <!-- Modal Content -->
+      <div class="relative bg-slate-900 border border-white/10 rounded-[2.5rem] w-full max-w-2xl overflow-hidden shadow-2xl p-8 max-h-[80vh] flex flex-col animate-in zoom-in-95 duration-200">
+        <div class="flex items-center justify-between mb-6">
+          <div>
+            <h3 class="text-xl font-bold text-white flex items-center gap-2">
+              <AlertTriangle class="text-rose-500" :size="24" />
+              Estudiantes en Riesgo - {{ selectedAlertCourse.name }}
+            </h3>
+            <p class="text-xs text-slate-400 mt-1 font-medium">
+              Estudiantes reprobando 1 o más materias en este curso.
+            </p>
+          </div>
+          <button 
+            @click="selectedAlertCourse = null" 
+            class="bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 p-3 rounded-2xl transition-all text-slate-400 hover:text-white"
+          >
+            <X :size="18" />
+          </button>
+        </div>
+        
+        <!-- Search Bar -->
+        <div class="relative mb-6">
+          <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500">
+            <Search :size="16" />
+          </div>
+          <input
+            v-model="modalSearchQuery"
+            type="text"
+            placeholder="Buscar estudiante por nombre..."
+            class="w-full bg-white/5 border border-white/10 rounded-2xl py-3.5 pl-11 pr-4 text-sm font-bold text-white placeholder-slate-500 outline-none focus:ring-2 focus:ring-rose-500/50 focus:border-rose-500 transition-all"
+          />
+        </div>
+        
+        <!-- Student List -->
+        <div class="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-4">
+          <div 
+            v-for="student in studentsAtRiskForSelectedAlertCourse" 
+            :key="student.id_estudiante"
+            class="flex items-center justify-between p-5 bg-white/5 rounded-2xl border border-white/5 hover:bg-white/10 transition-all"
+          >
+            <div class="flex items-center gap-4 min-w-0">
+              <div class="h-10 w-10 shrink-0 flex items-center justify-center rounded-xl bg-rose-500/15 text-rose-400 font-black text-sm">
+                {{ student.nombre_completo.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() }}
+              </div>
+              <div class="flex flex-col min-w-0">
+                <span class="font-bold truncate text-sm text-slate-200">{{ student.nombre_completo }}</span>
+                <span class="text-xs text-slate-400 mt-0.5">Promedio General: <span class="font-bold text-slate-300">{{ student.promedio_general }}</span></span>
+                <!-- Detalles de materias reprobadas -->
+                <div v-if="student.detalles_materias && student.detalles_materias.length > 0" class="flex flex-wrap gap-1.5 mt-2">
+                  <span 
+                    v-for="(sub, sIdx) in student.detalles_materias" 
+                    :key="sIdx"
+                    class="text-[10px] font-bold bg-rose-500/10 border border-rose-500/25 text-rose-300 px-2 py-0.5 rounded-lg"
+                  >
+                    {{ sub.materia_nombre }}: <span class="text-rose-400 font-extrabold">{{ sub.promedio }}</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div class="flex items-center gap-3 shrink-0">
+              <span class="text-xs font-black bg-rose-500/20 text-rose-400 px-3 py-1.5 rounded-full whitespace-nowrap">
+                {{ student.materias_reprobadas }} {{ student.materias_reprobadas === 1 ? 'materia reprobada' : 'materias reprobadas' }}
+              </span>
+            </div>
+          </div>
+          <div v-if="studentsAtRiskForSelectedAlertCourse.length === 0" class="flex flex-col items-center justify-center py-12 text-slate-500 italic">
+            No se encontraron estudiantes en riesgo en este curso.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal for Critical Subject Students details -->
+    <div v-if="selectedCriticalSubject" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <!-- Backdrop -->
+      <div class="absolute inset-0 bg-slate-950/80 backdrop-blur-md" @click="selectedCriticalSubject = null"></div>
+      
+      <!-- Modal Content -->
+      <div class="relative bg-slate-900 border border-white/10 rounded-[2.5rem] w-full max-w-2xl overflow-hidden shadow-2xl p-8 max-h-[80vh] flex flex-col animate-in zoom-in-95 duration-200">
+        <div class="flex items-center justify-between mb-6">
+          <div>
+            <h3 class="text-xl font-bold text-white flex items-center gap-2">
+              <BookOpen class="text-rose-500" :size="24" />
+              Estudiantes Reprobando - {{ selectedCriticalSubject.nombre }}
+            </h3>
+            <p class="text-xs text-slate-400 mt-1 font-medium">
+              Listado de estudiantes con promedio inferior a 3.0 en esta materia.
+            </p>
+          </div>
+          <button 
+            @click="selectedCriticalSubject = null" 
+            class="bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 p-3 rounded-2xl transition-all text-slate-400 hover:text-white"
+          >
+            <X :size="18" />
+          </button>
+        </div>
+        
+        <!-- Search Bar -->
+        <div class="relative mb-6">
+          <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500">
+            <Search :size="16" />
+          </div>
+          <input
+            v-model="modalSearchQuery"
+            type="text"
+            placeholder="Buscar estudiante por nombre..."
+            class="w-full bg-white/5 border border-white/10 rounded-2xl py-3.5 pl-11 pr-4 text-sm font-bold text-white placeholder-slate-500 outline-none focus:ring-2 focus:ring-rose-500/50 focus:border-rose-500 transition-all"
+          />
+        </div>
+        
+        <!-- Student List -->
+        <div class="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-4">
+          <div 
+            v-for="student in filteredCriticalSubjectStudents" 
+            :key="student.id_estudiante"
+            class="flex items-center justify-between p-5 bg-white/5 rounded-2xl border border-white/5 hover:bg-white/10 transition-all"
+          >
+            <div class="flex items-center gap-4 min-w-0">
+              <div class="h-10 w-10 shrink-0 flex items-center justify-center rounded-xl bg-rose-500/15 text-rose-400 font-black text-sm">
+                {{ student.nombre_completo.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() }}
+              </div>
+              <div class="flex flex-col min-w-0">
+                <span class="font-bold truncate text-sm text-slate-200">{{ student.nombre_completo }}</span>
+                <span class="text-xs text-slate-400 mt-0.5">Curso: <span class="font-bold text-slate-300">{{ student.curso }}</span></span>
+              </div>
+            </div>
+            <div class="flex items-center gap-3 shrink-0">
+              <span class="text-xs font-black bg-rose-500/20 text-rose-400 px-3 py-1.5 rounded-full whitespace-nowrap">
+                Nota: {{ student.promedio }}
+              </span>
+            </div>
+          </div>
+          <div v-if="filteredCriticalSubjectStudents.length === 0" class="flex flex-col items-center justify-center py-12 text-slate-500 italic">
+            No se encontraron estudiantes reprobando esta materia.
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Average Institutional and Other Indicators -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
       <div class="bg-white dark:bg-slate-900 p-8 rounded-[2rem] border border-gray-100 dark:border-slate-800 shadow-sm flex flex-col items-center text-center transition-colors">
@@ -453,7 +971,7 @@ onMounted(async () => {
           <AlertTriangle :size="28" />
         </div>
         <p class="text-xs font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest">Deserción Académica</p>
-        <p class="text-3xl font-black text-gray-900 dark:text-white mt-1">{{ dashboardData.summary.desertionRate }} Estudiantes</p>
+        <p class="text-3xl font-black text-gray-900 dark:text-white mt-1">{{ activeSummary.desertionRate }} Estudiantes</p>
         <p class="text-[10px] text-gray-400 dark:text-slate-500 mt-2 italic">Estudiantes retirados o con matrícula cancelada</p>
       </div>
 
@@ -462,7 +980,7 @@ onMounted(async () => {
           <ShieldAlert :size="28" />
         </div>
         <p class="text-xs font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest">Reportes Disciplinarios</p>
-        <p class="text-3xl font-black text-gray-900 dark:text-white mt-1">{{ dashboardData.summary.disciplinaryReports }}</p>
+        <p class="text-3xl font-black text-gray-900 dark:text-white mt-1">{{ activeSummary.disciplinaryReports }}</p>
         <p class="text-[10px] text-gray-400 dark:text-slate-500 mt-2 italic">Total de seguimientos de tipo disciplinario</p>
       </div>
 
@@ -470,8 +988,10 @@ onMounted(async () => {
         <div class="bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 p-4 rounded-full mb-4">
           <Users :size="28" />
         </div>
-        <p class="text-xs font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest">Promedio Institucional</p>
-        <p class="text-3xl font-black text-gray-900 dark:text-white mt-1">{{ dashboardData.summary.generalAverage }}</p>
+        <p class="text-xs font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest">
+          {{ globalSelectedGrade === 'ALL' ? 'Promedio Institucional' : 'Promedio del Grado' }}
+        </p>
+        <p class="text-3xl font-black text-gray-900 dark:text-white mt-1">{{ activeSummary.generalAverage }}</p>
         <p class="text-[10px] text-gray-400 dark:text-slate-500 mt-2 italic">Media general en escala de 0 a 5.0</p>
       </div>
     </div>

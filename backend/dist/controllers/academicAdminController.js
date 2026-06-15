@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getPeriodClosureDetails = exports.deleteEvidencia = exports.updateEvidencia = exports.createEvidencia = exports.deleteSubject = exports.createSubject = exports.updateTeacherStatus = exports.deleteTeacherAssignment = exports.assignTeacherCourseSubject = exports.createTeacher = exports.getTeacherManagementData = exports.deleteScale = exports.updateScale = exports.createScale = exports.updateAcademicPeriodPercentage = exports.reopenSubjectClosure = exports.reopenAcademicPeriod = exports.closeAcademicPeriod = exports.upsertCompetencyByAdmin = exports.updateManualScaleConfiguration = exports.updateSchoolDefaultSettings = exports.createAcademicYear = exports.createAcademicPeriod = exports.getAcademicSettingsData = exports.getSubjects = exports.deleteGroup = exports.createGroup = exports.deleteGradeType = exports.createGradeType = exports.getGradeManagementData = exports.getAcademicCatalogs = void 0;
+exports.getSubjectTrash = exports.getDirectivoDashboard = exports.getPeriodClosureDetails = exports.deleteEvidencia = exports.updateEvidencia = exports.createEvidencia = exports.deleteSubject = exports.createSubject = exports.updateTeacherStatus = exports.deleteTeacherAssignment = exports.assignTeacherCourseSubject = exports.createTeacher = exports.getTeacherManagementData = exports.deleteScale = exports.updateScale = exports.createScale = exports.updateAcademicPeriodPercentage = exports.reopenSubjectClosure = exports.reopenAcademicPeriod = exports.closeAcademicPeriod = exports.upsertCompetencyByAdmin = exports.updateManualScaleConfiguration = exports.updateSchoolDefaultSettings = exports.createAcademicYear = exports.createAcademicPeriod = exports.getAcademicSettingsData = exports.getSubjects = exports.updateGroupCupos = exports.deleteGroup = exports.createGroup = exports.deleteGradeType = exports.createGradeType = exports.getGradeManagementData = exports.getAcademicCatalogs = void 0;
 const db_1 = require("../config/db");
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const notificationService_1 = require("../services/notificationService");
@@ -158,23 +158,43 @@ const assignScaleForScore = (score, scales) => {
     }) ?? scales[scales.length - 1]);
 };
 const syncSchoolScalesAndGrades = async (client, schoolId, previousMin, previousMax, nextMin, nextMax, nextApproval, scaleMode = "AUTOMATICO", manualBreaks) => {
-    const previousScalesRes = await client.query(`SELECT id_escalavaloracion
+    const previousScalesRes = await client.query(`SELECT id_escalavaloracion, nivel
      FROM escala_valoracion
-     WHERE id_colegio = $1`, [schoolId]);
-    const previousScaleIds = previousScalesRes.rows.map((row) => Number(row.id_escalavaloracion));
+     WHERE id_colegio = $1
+     ORDER BY valor_minimo`, [schoolId]);
     const nextScalesDraft = scaleMode === "MANUAL"
         ? buildManualScales(nextMin, nextMax, nextApproval, manualBreaks?.basicMax, manualBreaks?.altoMax)
         : buildAutomaticScales(nextMin, nextMax, nextApproval);
-    const createdScalesRes = await client.query(`INSERT INTO escala_valoracion (nivel, valor_minimo, valor_maximo, id_colegio)
-     VALUES ($1, $2, $3, $4), ($5, $6, $7, $4), ($8, $9, $10, $4), ($11, $12, $13, $4)
-     RETURNING id_escalavaloracion, nivel, valor_minimo, valor_maximo`, [
-        nextScalesDraft[0].nivel, nextScalesDraft[0].valor_minimo, nextScalesDraft[0].valor_maximo,
-        schoolId,
-        nextScalesDraft[1].nivel, nextScalesDraft[1].valor_minimo, nextScalesDraft[1].valor_maximo,
-        nextScalesDraft[2].nivel, nextScalesDraft[2].valor_minimo, nextScalesDraft[2].valor_maximo,
-        nextScalesDraft[3].nivel, nextScalesDraft[3].valor_minimo, nextScalesDraft[3].valor_maximo,
-    ]);
-    const nextScales = createdScalesRes.rows;
+    let nextScales = [];
+    if (previousScalesRes.rows.length === nextScalesDraft.length) {
+        // Actualizar en sitio — preserva los IDs que notas_actividad referencia
+        for (let i = 0; i < previousScalesRes.rows.length; i++) {
+            const existingId = previousScalesRes.rows[i].id_escalavaloracion;
+            const draft = nextScalesDraft[i];
+            await client.query(`UPDATE escala_valoracion
+         SET nivel = $1, valor_minimo = $2, valor_maximo = $3
+         WHERE id_escalavaloracion = $4`, [draft.nivel, draft.valor_minimo, draft.valor_maximo, existingId]);
+            nextScales.push({ id_escalavaloracion: existingId, ...draft });
+        }
+    }
+    else {
+        // Caso raro: número de niveles cambió → SET NULL en notas, borrar, reinsertar
+        await client.query(`UPDATE notas_actividad SET id_escalavaloracion = NULL WHERE id_colegio = $1`, [schoolId]);
+        if (previousScalesRes.rows.length > 0) {
+            const oldIds = previousScalesRes.rows.map((r) => Number(r.id_escalavaloracion));
+            await client.query(`DELETE FROM escala_valoracion WHERE id_escalavaloracion = ANY($1::int[])`, [oldIds]);
+        }
+        const createdRes = await client.query(`INSERT INTO escala_valoracion (nivel, valor_minimo, valor_maximo, id_colegio)
+       VALUES ($1, $2, $3, $4), ($5, $6, $7, $4), ($8, $9, $10, $4), ($11, $12, $13, $4)
+       RETURNING id_escalavaloracion, nivel, valor_minimo, valor_maximo`, [
+            nextScalesDraft[0].nivel, nextScalesDraft[0].valor_minimo, nextScalesDraft[0].valor_maximo,
+            schoolId,
+            nextScalesDraft[1].nivel, nextScalesDraft[1].valor_minimo, nextScalesDraft[1].valor_maximo,
+            nextScalesDraft[2].nivel, nextScalesDraft[2].valor_minimo, nextScalesDraft[2].valor_maximo,
+            nextScalesDraft[3].nivel, nextScalesDraft[3].valor_minimo, nextScalesDraft[3].valor_maximo,
+        ]);
+        nextScales = createdRes.rows;
+    }
     const notesRes = await client.query(`SELECT id_notaactividad, nota
      FROM notas_actividad
      WHERE id_colegio = $1
@@ -192,11 +212,38 @@ const syncSchoolScalesAndGrades = async (client, schoolId, previousMin, previous
            id_escalavaloracion = $2
        WHERE id_notaactividad = $3`, [rescaledScore, scale.id_escalavaloracion, row.id_notaactividad]);
     }
-    if (previousScaleIds.length > 0) {
-        await client.query(`DELETE FROM escala_valoracion
-       WHERE id_colegio = $1
-         AND id_escalavaloracion = ANY($2::int[])`, [schoolId, previousScaleIds]);
+    // Escalar tabla nota_criterio
+    const criteriaNotesRes = await client.query(`SELECT id_nota_criterio, nota
+     FROM nota_criterio
+     WHERE id_colegio = $1
+     FOR UPDATE`, [schoolId]);
+    for (const row of criteriaNotesRes.rows) {
+        const currentScore = Number(row.nota);
+        const ratio = previousRange > 0 ? (currentScore - previousMin) / previousRange : 0;
+        const normalizedRatio = clamp(ratio, 0, 1);
+        const rescaledScore = roundToOne(nextMin + normalizedRatio * nextRange);
+        await client.query(`UPDATE nota_criterio
+       SET nota = $1
+       WHERE id_nota_criterio = $2`, [rescaledScore, row.id_nota_criterio]);
     }
+    // Escalar tabla resultado_academico (promedio)
+    // resultado_academico no tiene id_colegio directo — filtramos por colegio via detalle_grados
+    const resultsRes = await client.query(`SELECT ra.id_resultado, ra.promedio
+     FROM resultado_academico ra
+     JOIN detalle_grados dg ON dg.id_detallegrado = ra.id_detallegrado
+     WHERE dg.id_colegio = $1
+     FOR UPDATE OF ra`, [schoolId]);
+    for (const row of resultsRes.rows) {
+        const currentScore = Number(row.promedio);
+        const ratio = previousRange > 0 ? (currentScore - previousMin) / previousRange : 0;
+        const normalizedRatio = clamp(ratio, 0, 1);
+        // Para el promedio podemos usar 2 decimales para mayor precisión
+        const rescaledScore = Number((nextMin + normalizedRatio * nextRange).toFixed(2));
+        await client.query(`UPDATE resultado_academico
+       SET promedio = $1
+       WHERE id_resultado = $2`, [rescaledScore, row.id_resultado]);
+    }
+    console.log(`[syncSchoolScalesAndGrades] Processed ${notesRes.rows.length} activity notes, ${criteriaNotesRes.rows.length} criteria notes, and ${resultsRes.rows.length} results for school ${schoolId}`);
     return nextScales;
 };
 const getAcademicCatalogs = async (_req, res) => {
@@ -454,6 +501,40 @@ const deleteGroup = async (req, res) => {
     }
 };
 exports.deleteGroup = deleteGroup;
+const updateGroupCupos = async (req, res) => {
+    const groupId = Number(req.params.id);
+    const schoolId = parseSchoolId(req.body.schoolId);
+    const newCupos = Number(req.body.cupos_totales);
+    if (!groupId || !schoolId || isNaN(newCupos) || newCupos < 0) {
+        res.status(400).json({ error: "Parámetros inválidos. Los cupos deben ser un número positivo." });
+        return;
+    }
+    try {
+        // 1. Verificar existencia y pertenencia al colegio
+        const groupRes = await db_1.pool.query("SELECT id_grupo FROM grupos WHERE id_grupo = $1 AND id_colegio = $2", [groupId, schoolId]);
+        if (groupRes.rows.length === 0) {
+            res.status(404).json({ error: "Curso no encontrado o no pertenece a su institución" });
+            return;
+        }
+        // 2. Contar matrículas actuales
+        const matriculasRes = await db_1.pool.query("SELECT COUNT(*)::int as count FROM matricula WHERE id_grupo = $1", [groupId]);
+        const matriculadosActuales = matriculasRes.rows[0].count;
+        if (newCupos < matriculadosActuales) {
+            res.status(400).json({
+                error: `No se puede reducir el cupo a ${newCupos} porque ya existen ${matriculadosActuales} estudiantes matriculados en este curso.`
+            });
+            return;
+        }
+        // 3. Actualizar
+        await db_1.pool.query("UPDATE grupos SET cupos_totales = $1 WHERE id_grupo = $2", [newCupos, groupId]);
+        res.json({ message: "Capacidad del curso actualizada exitosamente", cupos_totales: newCupos });
+    }
+    catch (error) {
+        console.error("Error updating group cupos:", error);
+        res.status(500).json({ error: "Error en el servidor" });
+    }
+};
+exports.updateGroupCupos = updateGroupCupos;
 const getSubjects = async (req, res) => {
     const schoolId = parseSchoolId(req.params.schoolId);
     if (!schoolId) {
@@ -1128,6 +1209,7 @@ const getTeacherManagementData = async (req, res) => {
            d.id_tipodocumento,
            td.tipo AS tipo_documento,
            d.estado,
+           u.id_usuario,
            u.email,
            COALESCE(u.activo, true) AS activo,
            COUNT(DISTINCT dg.id_detallegrado)::int AS asignaciones_count
@@ -1136,7 +1218,7 @@ const getTeacherManagementData = async (req, res) => {
          LEFT JOIN usuario u ON u.id_usuario = d.id_usuario
          LEFT JOIN detalle_grados dg ON dg.id_docente = d.id_docente
          WHERE d.id_colegio = $1
-         GROUP BY d.id_docente, td.tipo, d.estado, u.email, u.activo
+         GROUP BY d.id_docente, td.tipo, d.estado, u.id_usuario, u.email, u.activo
          ORDER BY d.nombre, d.apellido`, [schoolId]),
             db_1.pool.query(`SELECT id_materia, nombre
          FROM materias
@@ -1482,62 +1564,217 @@ const createSubject = async (req, res) => {
         res.status(400).json({ error: "El nombre de la materia es obligatorio" });
         return;
     }
+    const client = await db_1.pool.connect();
     try {
-        const duplicateRes = await db_1.pool.query(`SELECT id_materia
-       FROM materias
-       WHERE id_colegio = $1
-         AND UPPER(TRIM(nombre)) = UPPER(TRIM($2))`, [schoolId, nombre]);
+        await client.query('SET search_path TO public, "$user"');
+        const trashId = req.body.trashId ? Number(req.body.trashId) : null;
+        await client.query("BEGIN");
+        // 1. Verificar duplicado dentro de la transacción
+        const duplicateRes = await client.query(`SELECT id_materia FROM materias WHERE id_colegio = $1 AND UPPER(TRIM(nombre)) = UPPER(TRIM($2))`, [schoolId, nombre]);
         if (duplicateRes.rows.length > 0) {
+            await client.query("ROLLBACK");
             res.status(409).json({ error: "Se encontró una materia con el mismo nombre" });
             return;
         }
-        const created = await db_1.pool.query(`INSERT INTO materias (nombre, id_colegio)
-       VALUES ($1, $2)
-       RETURNING *`, [nombre, schoolId]);
+        // 2. Crear materia
+        const created = await client.query(`INSERT INTO materias (nombre, id_colegio) VALUES ($1, $2) RETURNING *`, [nombre, schoolId]);
+        const newSubjectId = created.rows[0].id_materia;
+        if (trashId) {
+            // RESTAURACIÓN PROFUNDA
+            const trashRes = await client.query("SELECT data_respaldo FROM papelera_materias WHERE id_papelera = $1 AND id_colegio = $2", [trashId, schoolId]);
+            if (trashRes.rows.length > 0) {
+                const backup = trashRes.rows[0].data_respaldo;
+                // 1. Restaurar Asignaciones
+                if (backup.assignments && Array.isArray(backup.assignments)) {
+                    for (const asig of backup.assignments) {
+                        await client.query("INSERT INTO detalle_grados (id_materia, id_docente, id_grupo, id_colegio) VALUES ($1, $2, $3, $4)", [newSubjectId, asig.id_docente, asig.id_grupo, schoolId]);
+                    }
+                }
+                // 2. Restaurar Competencias
+                if (backup.competencies && Array.isArray(backup.competencies)) {
+                    for (const comp of backup.competencies) {
+                        await client.query('INSERT INTO competencias (descripcion, id_materia, id_periodo, "id_año", id_grupo, id_colegio) VALUES ($1, $2, $3, $4, $5, $6)', [comp.descripcion, newSubjectId, comp.id_periodo, comp.id_año, comp.id_grupo, schoolId]);
+                    }
+                }
+                // 3. Limpiar papelera
+                await client.query("DELETE FROM papelera_materias WHERE id_papelera = $1", [trashId]);
+            }
+        }
+        await client.query("COMMIT");
         res.status(201).json(created.rows[0]);
     }
     catch (error) {
+        if (client)
+            await client.query("ROLLBACK");
         console.error("Error creating subject:", error);
         res.status(500).json({ error: "Error en el servidor" });
+    }
+    finally {
+        if (client)
+            client.release();
     }
 };
 exports.createSubject = createSubject;
 const deleteSubject = async (req, res) => {
     const subjectId = Number(req.params.id);
     const schoolId = parseSchoolId(req.query.schoolId);
+    const force = req.query.force === "true";
     if (!subjectId || !schoolId) {
         res.status(400).json({ error: "Parámetros inválidos" });
         return;
     }
+    const client = await db_1.pool.connect();
     try {
-        const impactRes = await db_1.pool.query(`SELECT
-         m.id_materia,
-         COUNT(DISTINCT dg.id_detallegrado)::int AS asignaciones_count,
-         COUNT(DISTINCT c.id_competencia)::int AS competencias_count
-       FROM materias m
-       LEFT JOIN detalle_grados dg ON dg.id_materia = m.id_materia
-       LEFT JOIN competencias c ON c.id_materia = m.id_materia
-       WHERE m.id_materia = $1
-         AND m.id_colegio = $2
-       GROUP BY m.id_materia`, [subjectId, schoolId]);
-        if (impactRes.rows.length === 0) {
+        // Asegurar visibilidad del esquema public
+        await client.query('SET search_path TO public, "$user"');
+        // 1. Obtener información básica de la materia
+        const subjectRes = await client.query("SELECT nombre FROM materias WHERE id_materia = $1 AND id_colegio = $2", [subjectId, schoolId]);
+        if (subjectRes.rows.length === 0) {
             res.status(404).json({ error: "Materia no encontrada" });
             return;
         }
+        const subjectName = subjectRes.rows[0].nombre;
+        // 2. Analizar impacto (Recolección de datos con subconsultas independientes para evitar duplicados)
+        const impactRes = await client.query(`SELECT
+         (SELECT COUNT(DISTINCT id_detallegrado)::int FROM detalle_grados WHERE id_materia = $1) as asignaciones_count,
+         (SELECT COUNT(DISTINCT id_competencia)::int FROM competencias WHERE id_materia = $1) as competencias_count,
+         (SELECT COUNT(DISTINCT aa.id_actividadmateria)::int FROM actividad_materia aa 
+          JOIN detalle_grados dg ON dg.id_detallegrado = aa.id_detallegrado
+          WHERE dg.id_materia = $1) as actividades_count,
+         (SELECT COUNT(DISTINCT na.id_notaactividad)::int FROM notas_actividad na
+          JOIN actividad_materia aa ON aa.id_actividadmateria = na.id_actividadmateria
+          JOIN detalle_grados dg ON dg.id_detallegrado = aa.id_detallegrado
+          WHERE dg.id_materia = $1) as notas_count
+      `, [subjectId]);
         const impact = impactRes.rows[0];
-        if (impact.asignaciones_count > 0 || impact.competencias_count > 0) {
+        const hasRelations = (impact.asignaciones_count > 0) || (impact.competencias_count > 0);
+        if (hasRelations && !force) {
             res.status(409).json({
                 error: "No se puede eliminar la materia porque tiene relaciones académicas activas",
-                impact,
+                impact
             });
             return;
         }
-        await db_1.pool.query("DELETE FROM materias WHERE id_materia = $1", [subjectId]);
-        res.json({ message: "Materia eliminada correctamente" });
+        if (force) {
+            await client.query("BEGIN");
+            // OBTENER DATOS PARA RESPALDO DETALLADO ANTES DE BORRAR (Granularidad mejorada con Grado y Sección)
+            const assignmentsBackupRes = await client.query(`
+        SELECT DISTINCT dg.id_docente, dg.id_grupo, n.nombre as nivel_nombre,
+               tg.nombre as grado_nombre, s.nombre as seccion_nombre,
+               d.nombre || ' ' || d.apellido as docente_nombre
+        FROM detalle_grados dg
+        JOIN grupos gr ON gr.id_grupo = dg.id_grupo
+        JOIN nivel_escolar n ON n.id_nivel = gr.id_nivel
+        JOIN tipo_grado tg ON tg.id_tipo_grado = gr.id_tipo_grado
+        JOIN secciones s ON s.id_seccion = gr.id_seccion
+        JOIN docente d ON d.id_docente = dg.id_docente
+        WHERE dg.id_materia = $1
+      `, [subjectId]);
+            const competenciesBackupRes = await client.query(`
+        SELECT DISTINCT descripcion, id_periodo, id_año, id_grupo
+        FROM competencias
+        WHERE id_materia = $1
+      `, [subjectId]);
+            const detailedBackup = {
+                impact,
+                assignments: assignmentsBackupRes.rows,
+                competencies: competenciesBackupRes.rows
+            };
+            // 1. Notas
+            await client.query(`
+        DELETE FROM nota_criterio 
+        WHERE id_criterio IN (
+          SELECT c.id_criterio FROM criterio_evaluacion c
+          JOIN actividad_materia aa ON aa.id_actividadmateria = c.id_actividadmateria
+          JOIN detalle_grados dg ON dg.id_detallegrado = aa.id_detallegrado
+          WHERE dg.id_materia = $1
+        )
+      `, [subjectId]);
+            await client.query(`
+        DELETE FROM notas_actividad 
+        WHERE id_actividadmateria IN (
+          SELECT aa.id_actividadmateria FROM actividad_materia aa
+          JOIN detalle_grados dg ON dg.id_detallegrado = aa.id_detallegrado
+          WHERE dg.id_materia = $1
+        )
+      `, [subjectId]);
+            // 2. Criterios y Actividades
+            await client.query(`
+        DELETE FROM criterio_evaluacion 
+        WHERE id_actividadmateria IN (
+          SELECT aa.id_actividadmateria FROM actividad_materia aa
+          JOIN detalle_grados dg ON dg.id_detallegrado = aa.id_detallegrado
+          WHERE dg.id_materia = $1
+        )
+      `, [subjectId]);
+            await client.query(`
+        DELETE FROM actividad_materia 
+        WHERE id_detallegrado IN (
+          SELECT id_detallegrado FROM detalle_grados WHERE id_materia = $1
+        )
+      `, [subjectId]);
+            // 3. Competencias y Evidencias
+            await client.query(`
+        DELETE FROM evidencia_aprendizaje 
+        WHERE id_competencia IN (
+          SELECT id_competencia FROM competencias WHERE id_materia = $1
+        )
+      `, [subjectId]);
+            await client.query("DELETE FROM competencias WHERE id_materia = $1", [subjectId]);
+            // 4. Observación y Resultados Académicos
+            await client.query(`
+        DELETE FROM observacion_estudiante 
+        WHERE id_detallegrado IN (
+          SELECT id_detallegrado FROM detalle_grados WHERE id_materia = $1
+        )
+      `, [subjectId]);
+            await client.query(`
+        DELETE FROM resultado_academico 
+        WHERE id_detallegrado IN (
+          SELECT id_detallegrado FROM detalle_grados WHERE id_materia = $1
+        )
+      `, [subjectId]);
+            // 5. Cierres de materia y Asistencia
+            await client.query(`
+        DELETE FROM registro_asistencia 
+        WHERE id_detallegrado IN (
+          SELECT id_detallegrado FROM detalle_grados WHERE id_materia = $1
+        )
+      `, [subjectId]);
+            await client.query(`
+        DELETE FROM cierre_materia 
+        WHERE id_detallegrado IN (
+          SELECT id_detallegrado FROM detalle_grados WHERE id_materia = $1
+        )
+      `, [subjectId]);
+            // 6. Asignaciones (detalle_grados)
+            await client.query("DELETE FROM detalle_grados WHERE id_materia = $1", [subjectId]);
+            // 7. La materia en sí
+            await client.query("DELETE FROM materias WHERE id_materia = $1", [subjectId]);
+            // 8. Crear respaldo en papelera con DATA DETALLADA
+            await client.query("INSERT INTO papelera_materias (id_colegio, nombre_materia, data_respaldo) VALUES ($1, $2, $3)", [schoolId, subjectName, JSON.stringify(detailedBackup)]);
+            await client.query("COMMIT");
+            res.json({
+                message: "Materia y todas sus relaciones eliminadas correctamente",
+                report: {
+                    subjectName,
+                    timestamp: new Date().toISOString(),
+                    details: impact
+                }
+            });
+        }
+        else {
+            await client.query("DELETE FROM materias WHERE id_materia = $1", [subjectId]);
+            res.json({ message: "Materia eliminada correctamente" });
+        }
     }
     catch (error) {
+        await client.query("ROLLBACK");
         console.error("Error deleting subject:", error);
         res.status(500).json({ error: "Error en el servidor" });
+    }
+    finally {
+        client.release();
     }
 };
 exports.deleteSubject = deleteSubject;
@@ -1696,3 +1933,240 @@ const getPeriodClosureDetails = async (req, res) => {
     }
 };
 exports.getPeriodClosureDetails = getPeriodClosureDetails;
+const getDirectivoDashboard = async (req, res) => {
+    const schoolId = parseSchoolId(req.params.schoolId);
+    const { periodId } = req.query;
+    if (!schoolId) {
+        res.status(400).json({ error: "Colegio inválido" });
+        return;
+    }
+    try {
+        // 1. Get active period if not provided
+        let targetPeriodId = periodId ? Number(periodId) : null;
+        if (!targetPeriodId) {
+            const activePeriodRes = await db_1.pool.query("SELECT id_periodo FROM periodo_academico WHERE id_colegio = $1 AND estado = 'ABIERTO' ORDER BY id_periodo DESC LIMIT 1", [schoolId]);
+            if (activePeriodRes.rows.length > 0) {
+                targetPeriodId = activePeriodRes.rows[0].id_periodo;
+            }
+            else {
+                // Fallback to the most recent period even if not open
+                const lastPeriodRes = await db_1.pool.query("SELECT id_periodo FROM periodo_academico WHERE id_colegio = $1 ORDER BY id_periodo DESC LIMIT 1", [schoolId]);
+                targetPeriodId = lastPeriodRes.rows.length > 0 ? lastPeriodRes.rows[0].id_periodo : null;
+            }
+        }
+        // 2. Principal Indicators (Counters)
+        const [studentsCountRes, teachersCountRes, disciplinaryRes, desertionRes] = await Promise.all([
+            db_1.pool.query("SELECT COUNT(*) as total FROM matricula WHERE id_colegio = $1 AND estado = 'ACTIVA'", [schoolId]),
+            db_1.pool.query("SELECT COUNT(*) as total FROM docente WHERE id_colegio = $1 AND estado = 'ACTIVO'", [schoolId]),
+            db_1.pool.query(`SELECT COUNT(*) as total FROM observacion_estudiante 
+         WHERE id_colegio = $1 AND tipo = 'DISCIPLINARIO' ${targetPeriodId ? "AND id_periodo = $2" : ""}`, targetPeriodId ? [schoolId, targetPeriodId] : [schoolId]),
+            db_1.pool.query("SELECT COUNT(*) as total FROM matricula WHERE id_colegio = $1 AND estado = 'CANCELADA'", [schoolId]),
+        ]);
+        // 3. Attendance % Today
+        const todayStr = new Date().toLocaleDateString("en-CA");
+        const attendanceTodayRes = await db_1.pool.query(`SELECT 
+         (COUNT(*) FILTER (WHERE estado = 'PRESENTE')::numeric / NULLIF(COUNT(*), 0) * 100) as rate
+       FROM registro_asistencia 
+       WHERE id_colegio = $1 AND fecha::date = $2::date`, [schoolId, todayStr]);
+        // 4. Academic Performance & Risk (Live calculation fallback)
+        let performanceMetrics = { average: 0, atRisk: 0 };
+        // Shared CTE template that calculates live projected grades when official results are not yet available
+        // NOTE: This produces a query prefix of the form:
+        //   WITH current_results AS ( ... )
+        // It is designed to be prefixed before a SELECT statement.
+        const buildLiveCTE = (extraCTEs = '') => `
+      WITH current_results AS (
+        SELECT ra.id_estudiante, ra.id_detallegrado, ra.id_periodo, ra.promedio
+        FROM resultado_academico ra
+        JOIN detalle_grados dg_ra ON ra.id_detallegrado = dg_ra.id_detallegrado
+        WHERE dg_ra.id_colegio = $1 AND ra.id_periodo = $2
+
+        UNION ALL
+
+        SELECT na.id_estudiante, am.id_detallegrado, am.id_periodo,
+               ROUND(SUM(na.nota * am.porcentaje / 100.0)::numeric, 2) as promedio
+        FROM notas_actividad na
+        JOIN actividad_materia am ON na.id_actividadmateria = am.id_actividadmateria
+        WHERE am.id_periodo = $2 AND am.id_colegio = $1
+        AND NOT EXISTS (
+          SELECT 1 FROM resultado_academico ra3
+          WHERE ra3.id_estudiante = na.id_estudiante
+          AND ra3.id_detallegrado = am.id_detallegrado
+          AND ra3.id_periodo = am.id_periodo
+        )
+        GROUP BY na.id_estudiante, am.id_detallegrado, am.id_periodo
+      )${extraCTEs}
+    `;
+        if (targetPeriodId) {
+            const perfRes = await db_1.pool.query(`${buildLiveCTE()}
+         SELECT 
+           AVG(promedio) as avg_general,
+           COUNT(*) FILTER (WHERE promedio < 3.0) as at_risk
+         FROM current_results cr
+         JOIN detalle_grados dg ON cr.id_detallegrado = dg.id_detallegrado
+         WHERE dg.id_colegio = $1`, [schoolId, targetPeriodId]);
+            performanceMetrics.average = Number(Number(perfRes.rows[0].avg_general || 0).toFixed(2));
+            performanceMetrics.atRisk = Number(perfRes.rows[0].at_risk || 0);
+        }
+        // 5. Charts Data
+        let charts = {
+            performanceByGrade: [],
+            performanceBySubject: [],
+            performanceByCourse: [],
+            evolution: []
+        };
+        if (targetPeriodId) {
+            const [gradePerfRes, subjectPerfRes, coursePerfRes] = await Promise.all([
+                db_1.pool.query(`${buildLiveCTE()}
+           SELECT tg.nombre, ROUND(AVG(cr.promedio), 2) as average
+           FROM current_results cr
+           JOIN detalle_grados dg ON cr.id_detallegrado = dg.id_detallegrado
+           JOIN grupos g ON dg.id_grupo = g.id_grupo
+           JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
+           WHERE dg.id_colegio = $1
+           GROUP BY tg.id_tipo_grado, tg.nombre
+           ORDER BY tg.id_tipo_grado`, [schoolId, targetPeriodId]),
+                db_1.pool.query(`${buildLiveCTE()}
+           SELECT m.nombre, ROUND(AVG(cr.promedio), 2) as average
+           FROM current_results cr
+           JOIN detalle_grados dg ON cr.id_detallegrado = dg.id_detallegrado
+           JOIN materias m ON dg.id_materia = m.id_materia
+           WHERE dg.id_colegio = $1
+           GROUP BY m.id_materia, m.nombre
+           ORDER BY average DESC
+           LIMIT 10`, [schoolId, targetPeriodId]),
+                db_1.pool.query(`${buildLiveCTE()}
+           SELECT 
+             g.id_grupo,
+             tg.nombre as grado_nombre,
+             s.nombre as seccion_nombre,
+             j.nombre as jornada_nombre,
+             ROUND(AVG(cr.promedio), 2) as average
+           FROM current_results cr
+           JOIN detalle_grados dg ON cr.id_detallegrado = dg.id_detallegrado
+           JOIN grupos g ON dg.id_grupo = g.id_grupo
+           JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
+           JOIN secciones s ON g.id_seccion = s.id_seccion
+           JOIN jornada j ON g.id_jornada = j.id_jornada
+           WHERE dg.id_colegio = $1
+           GROUP BY g.id_grupo, tg.nombre, s.nombre, j.nombre
+           ORDER BY tg.nombre, s.nombre`, [schoolId, targetPeriodId])
+            ]);
+            charts.performanceByGrade = gradePerfRes.rows;
+            charts.performanceBySubject = subjectPerfRes.rows;
+            charts.performanceByCourse = coursePerfRes.rows;
+        }
+        // Evolution (all periods of the current year) - Historical promedios
+        // For evolution, we use already calculated averages when possible
+        const evolutionRes = await db_1.pool.query(`SELECT p.nombre, ROUND(AVG(ra.promedio), 2) as average
+       FROM resultado_academico ra
+       JOIN periodo_academico p ON ra.id_periodo = p.id_periodo
+       JOIN detalle_grados dg ON ra.id_detallegrado = dg.id_detallegrado
+       WHERE dg.id_colegio = $1 AND p.id_año = (SELECT id_año FROM periodo_academico WHERE id_periodo = $2)
+       GROUP BY p.id_periodo, p.nombre
+       ORDER BY p.id_periodo`, [schoolId, targetPeriodId || 0]);
+        charts.evolution = evolutionRes.rows;
+        // 6. Low Performance Analysis Block
+        let lowPerformance = {
+            criticalSubjects: [],
+            gradeAlerts: [],
+            groupRisk: []
+        };
+        if (targetPeriodId) {
+            const [criticalRes, gradeAlertsRes, groupRiskRes] = await Promise.all([
+                // Top 5 subjects with most students failing
+                db_1.pool.query(`${buildLiveCTE()}
+           SELECT m.nombre, COUNT(DISTINCT cr.id_estudiante) as failures
+           FROM current_results cr
+           JOIN detalle_grados dg ON cr.id_detallegrado = dg.id_detallegrado
+           JOIN materias m ON dg.id_materia = m.id_materia
+           WHERE dg.id_colegio = $1 AND cr.promedio < 3.0
+           GROUP BY m.id_materia, m.nombre
+           ORDER BY failures DESC
+           LIMIT 5`, [schoolId, targetPeriodId]),
+                // Concentration of unique students at risk by grade level
+                db_1.pool.query(`${buildLiveCTE()}
+           SELECT tg.nombre, COUNT(DISTINCT cr.id_estudiante) as alerts
+           FROM current_results cr
+           JOIN detalle_grados dg ON cr.id_detallegrado = dg.id_detallegrado
+           JOIN grupos g ON dg.id_grupo = g.id_grupo
+           JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
+           WHERE dg.id_colegio = $1 AND cr.promedio < 3.0
+           GROUP BY tg.id_tipo_grado, tg.nombre
+           ORDER BY alerts DESC`, [schoolId, targetPeriodId]),
+                // Per-group risk: students failing at least one subject vs students passing everything
+                db_1.pool.query(`${buildLiveCTE(`,
+           student_status AS (
+             SELECT 
+               cr.id_estudiante,
+               dg.id_grupo,
+               bool_or(cr.promedio < 3.0) as is_at_risk
+             FROM current_results cr
+             JOIN detalle_grados dg ON cr.id_detallegrado = dg.id_detallegrado
+             WHERE dg.id_colegio = $1
+             GROUP BY cr.id_estudiante, dg.id_grupo
+           )`)}
+           SELECT 
+              g.id_grupo,
+              tg.nombre as grado_nombre,
+              s.nombre as seccion_nombre,
+              j.nombre as jornada_nombre,
+              tg.nombre || ' ' || s.nombre as curso,
+              COUNT(*) FILTER (WHERE ss.is_at_risk) as at_risk,
+              COUNT(*) FILTER (WHERE NOT ss.is_at_risk) as safe
+            FROM student_status ss
+            JOIN grupos g ON ss.id_grupo = g.id_grupo
+            JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
+            JOIN secciones s ON g.id_seccion = s.id_seccion
+            JOIN jornada j ON g.id_jornada = j.id_jornada
+            GROUP BY g.id_grupo, tg.nombre, s.nombre, j.nombre
+            ORDER BY at_risk DESC`, [schoolId, targetPeriodId])
+            ]);
+            lowPerformance.criticalSubjects = criticalRes.rows;
+            lowPerformance.gradeAlerts = gradeAlertsRes.rows;
+            lowPerformance.groupRisk = groupRiskRes.rows.map(r => ({
+                curso: r.curso,
+                id_grupo: Number(r.id_grupo),
+                grado_nombre: r.grado_nombre,
+                seccion_nombre: r.seccion_nombre,
+                jornada_nombre: r.jornada_nombre,
+                at_risk: Number(r.at_risk),
+                safe: Number(r.safe)
+            }));
+        }
+        res.json({
+            summary: {
+                totalStudents: Number(studentsCountRes.rows[0].total),
+                totalTeachers: Number(teachersCountRes.rows[0].total),
+                attendanceToday: Number(Number(attendanceTodayRes.rows[0].rate || 0).toFixed(1)),
+                generalAverage: performanceMetrics.average,
+                studentsAtRisk: performanceMetrics.atRisk,
+                disciplinaryReports: Number(disciplinaryRes.rows[0].total),
+                desertionRate: Number(desertionRes.rows[0].total),
+            },
+            charts,
+            lowPerformance,
+        });
+    }
+    catch (error) {
+        console.error("Error fetching directivo dashboard:", error);
+        res.status(500).json({ error: "Error en el servidor" });
+    }
+};
+exports.getDirectivoDashboard = getDirectivoDashboard;
+const getSubjectTrash = async (req, res) => {
+    const schoolId = parseSchoolId(req.params.schoolId);
+    if (!schoolId) {
+        res.status(400).json({ error: "Colegio inválido" });
+        return;
+    }
+    try {
+        const result = await db_1.pool.query("SELECT id_papelera, nombre_materia, data_respaldo, fecha_borrado FROM papelera_materias WHERE id_colegio = $1 ORDER BY fecha_borrado DESC", [schoolId]);
+        res.json(result.rows);
+    }
+    catch (error) {
+        console.error("Error fetching subject trash:", error);
+        res.status(500).json({ error: "Error en el servidor" });
+    }
+};
+exports.getSubjectTrash = getSubjectTrash;
