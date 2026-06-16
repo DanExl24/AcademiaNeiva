@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, watch, computed } from 'vue'
 import axios from 'axios'
 import { useAuthStore } from '../../stores/auth'
 import {
@@ -13,9 +13,35 @@ import {
   ChevronRight,
   Sparkles,
   Clock,
-  FileDown
+  FileDown,
+  ThumbsUp,
+  ThumbsDown,
+  Info,
+  Calendar
 } from 'lucide-vue-next'
 import BoletinExportModule from '../../components/boletines/BoletinExportModule.vue'
+import { Bar, Doughnut } from 'vue-chartjs'
+import {
+  Chart as ChartJS,
+  Title,
+  Tooltip,
+  Legend,
+  BarElement,
+  CategoryScale,
+  LinearScale,
+  ArcElement
+} from 'chart.js'
+
+// Register Chart.js components
+ChartJS.register(
+  Title,
+  Tooltip,
+  Legend,
+  BarElement,
+  CategoryScale,
+  LinearScale,
+  ArcElement
+)
 
 const auth = useAuthStore()
 const studentId = ref<number | null>(null)
@@ -23,9 +49,15 @@ const selectedPeriodId = ref<number | null>(null)
 const periods = ref<any[]>([])
 const loading = ref(true)
 
+// Stats state
+const dashboardStats = ref<any>(null)
+const statsLoading = ref(true)
+const statsError = ref('')
+const activeChartTab = ref<'best' | 'worst'>('best')
+
 const fetchStudentData = async () => {
   try {
-    const id_usuario = auth.user?.id
+    const id_usuario = auth.isMonitoring ? auth.monitoringUser?.id : auth.user?.id
     if (!id_usuario) return
 
     // Get student ID
@@ -33,74 +65,170 @@ const fetchStudentData = async () => {
     studentId.value = idRes.data.id_estudiante
 
     if (studentId.value) {
-      // Get periods for current year
-      const year = new Date().getFullYear()
-      const periodsRes = await axios.get(`http://localhost:3000/api/student/periods/${studentId.value}/${year}`)
-      periods.value = periodsRes.data
+      // Get all academic years to find the matching calendar year
+      const yearsRes = await axios.get(`http://localhost:3000/api/student/years/${studentId.value}`)
+      const yearsList = yearsRes.data
       
-      if (periods.value.length > 0) {
-        selectedPeriodId.value = periods.value[periods.value.length - 1].id_periodo
+      let activeAnioId = null
+      if (yearsList.length > 0) {
+        const currentYearStr = new Date().getFullYear().toString()
+        const matchingYear = yearsList.find((y: any) => y.calendario === currentYearStr)
+        activeAnioId = matchingYear ? matchingYear.id_año : yearsList[0].id_año
       }
+
+      if (activeAnioId) {
+        // Get periods for the resolved academic year
+        const periodsRes = await axios.get(`http://localhost:3000/api/student/all-periods/${studentId.value}/${activeAnioId}`)
+        periods.value = periodsRes.data
+        
+        if (periods.value.length > 0) {
+          selectedPeriodId.value = periods.value[periods.value.length - 1].id_periodo
+        } else {
+          statsLoading.value = false
+        }
+      } else {
+        statsLoading.value = false
+      }
+    } else {
+      statsLoading.value = false
     }
   } catch (err) {
     console.error('Error fetching student dashboard data:', err)
+    statsLoading.value = false
   } finally {
     loading.value = false
   }
 }
 
-onMounted(() => {
-  fetchStudentData()
+const fetchStats = async () => {
+  if (!studentId.value || !selectedPeriodId.value) {
+    statsLoading.value = false
+    return
+  }
+  
+  statsLoading.value = true
+  statsError.value = ''
+  
+  try {
+    const headers = { Authorization: `Bearer ${auth.token}` }
+    const res = await axios.get(
+      `http://localhost:3000/api/student/dashboard-stats/${studentId.value}/${selectedPeriodId.value}`,
+      { headers }
+    )
+    dashboardStats.value = res.data
+  } catch (err: any) {
+    console.error('Error fetching dashboard stats:', err)
+    statsError.value = 'No se pudieron cargar las estadísticas del periodo'
+  } finally {
+    statsLoading.value = false
+  }
+}
+
+onMounted(async () => {
+  await fetchStudentData()
 })
 
-const studentName = auth.user?.name?.split(' ')[0] || 'Estudiante'
+// Watch for period change to reload statistics
+watch(selectedPeriodId, () => {
+  fetchStats()
+})
 
-const modules = [
-  {
-    id: 'notas',
-    title: 'Mis Notas',
-    description: 'Consulta tus calificaciones por materia y periodo académico.',
-    icon: BookOpen,
-    color: 'from-indigo-500 to-indigo-700',
-    textColor: 'text-indigo-600 dark:text-indigo-400',
-    bgColor: 'bg-indigo-50 dark:bg-indigo-900/30',
-    borderColor: 'hover:border-indigo-200 dark:hover:border-indigo-800',
-    comingSoon: false,
+const studentName = auth.isMonitoring ? auth.monitoringUser?.nombre : (auth.user?.name?.split(' ')[0] || 'Estudiante')
+
+// Chart configs
+const barChartData = computed(() => {
+  if (!dashboardStats.value) return { labels: [], datasets: [] }
+  
+  const isBest = activeChartTab.value === 'best'
+  const items = isBest 
+    ? dashboardStats.value.top_materias_mejores 
+    : dashboardStats.value.top_materias_peores
+
+  return {
+    labels: items.map((i: any) => i.materia.length > 15 ? i.materia.substring(0, 15) + '...' : i.materia),
+    datasets: [{
+      label: isBest ? 'Mejores Promedios' : 'Peores Promedios',
+      data: items.map((i: any) => i.calificacion),
+      backgroundColor: isBest ? 'rgba(99, 102, 241, 0.85)' : 'rgba(244, 63, 94, 0.85)',
+      borderColor: isBest ? '#6366f1' : '#f43f5e',
+      borderWidth: 1.5,
+      borderRadius: 8,
+      borderSkipped: false
+    }]
+  }
+})
+
+const barChartOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: { display: false },
+    tooltip: {
+      backgroundColor: 'rgba(15, 23, 42, 0.9)',
+      titleFont: { size: 12, weight: 'bold' },
+      bodyFont: { size: 11 },
+      padding: 10,
+      cornerRadius: 8
+    }
   },
-  {
-    id: 'asistencia',
-    title: 'Mi Asistencia',
-    description: 'Revisa tu historial de asistencia por materia y fecha.',
-    icon: CalendarCheck,
-    color: 'from-emerald-500 to-emerald-700',
-    textColor: 'text-emerald-600 dark:text-emerald-400',
-    bgColor: 'bg-emerald-50 dark:bg-emerald-900/30',
-    borderColor: 'hover:border-emerald-200 dark:hover:border-emerald-800',
-    comingSoon: true,
+  scales: {
+    x: {
+      grid: { display: false },
+      ticks: { color: '#94a3b8', font: { weight: 'bold', size: 9 } }
+    },
+    y: {
+      min: 0,
+      max: 5,
+      grid: { color: 'rgba(148, 163, 184, 0.08)' },
+      ticks: { color: '#94a3b8', stepSize: 1, font: { weight: 'bold', size: 9 } }
+    }
+  }
+}
+
+const doughnutChartData = computed(() => {
+  if (!dashboardStats.value) return { labels: [], datasets: [] }
+  const c = dashboardStats.value.reportes_conteo
+  return {
+    labels: ['Académicos', 'Disciplinarios', 'Convivenciales'],
+    datasets: [{
+      data: [c.ACADEMICA, c.DISCIPLINARIA, c.CONVIVENCIAL],
+      backgroundColor: ['#6366f1', '#f59e0b', '#ec4899'],
+      hoverOffset: 4,
+      borderWidth: 0
+    }]
+  }
+})
+
+const doughnutChartOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: {
+      position: 'right' as const,
+      labels: {
+        color: '#64748b',
+        font: { weight: 'bold', size: 10 },
+        padding: 12,
+        usePointStyle: true,
+        pointStyle: 'circle'
+      }
+    },
+    tooltip: {
+      backgroundColor: 'rgba(15, 23, 42, 0.9)',
+      padding: 10,
+      cornerRadius: 8
+    }
   },
-  {
-    id: 'observaciones',
-    title: 'Observaciones',
-    description: 'Ve las observaciones académicas registradas por tus docentes.',
-    icon: MessageSquare,
-    color: 'from-amber-500 to-amber-700',
-    textColor: 'text-amber-600 dark:text-amber-400',
-    bgColor: 'bg-amber-50 dark:bg-amber-900/30',
-    borderColor: 'hover:border-amber-200 dark:hover:border-amber-800',
-    comingSoon: true,
-  },
-  {
-    id: 'historial',
-    title: 'Historial Académico',
-    description: 'Consulta tu evolución y rendimiento académico a lo largo del tiempo.',
-    icon: History,
-    color: 'from-purple-500 to-purple-700',
-    textColor: 'text-purple-600 dark:text-purple-400',
-    bgColor: 'bg-purple-50 dark:bg-purple-900/30',
-    borderColor: 'hover:border-purple-200 dark:hover:border-purple-800',
-    comingSoon: true,
-  },
-]
+  cutout: '70%'
+}
+
+// Check if there are observations to draw
+const hasObservations = computed(() => {
+  if (!dashboardStats.value) return false
+  const c = dashboardStats.value.reportes_conteo
+  return (c.ACADEMICA + c.DISCIPLINARIA + c.CONVIVENCIAL) > 0
+})
+
 </script>
 
 <template>
@@ -135,7 +263,7 @@ const modules = [
               style="background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22white%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C/polyline%3E%3C/svg%3E'); background-repeat: no-repeat; background-position: right center; background-size: 1.2em;"
             >
               <option v-for="p in periods" :key="p.id_periodo" :value="p.id_periodo" class="text-slate-900">
-                {{ p.nombre }}
+                {{ p.nombre }}{{ p.estado === 'ABIERTO' ? ' (Activo)' : '' }}
               </option>
             </select>
           </div>
@@ -154,97 +282,264 @@ const modules = [
       </div>
     </div>
 
-    <!-- Quick Stats Banner -->
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-      <div
-        v-for="item in [
-          { label: 'Notas', icon: ClipboardList, color: 'text-indigo-600 dark:text-indigo-400', bg: 'bg-indigo-50 dark:bg-indigo-900/30' },
-          { label: 'Materias', icon: BookOpen, color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-900/30' },
-          { label: 'Asistencia', icon: CalendarCheck, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-900/30' },
-          { label: 'Logros', icon: Star, color: 'text-purple-600 dark:text-purple-400', bg: 'bg-purple-50 dark:bg-purple-900/30' }
-        ]"
-        :key="item.label"
-        class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-5 flex items-center gap-4 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 shadow-sm cursor-default"
-      >
-        <div :class="[item.bg, item.color, 'p-3 rounded-xl']">
-          <component :is="item.icon" :size="22" stroke-width="2.5" />
+    <!-- Quick Stats Banner (KPIs Vivos con protección opcional) -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+      <!-- Card Promedio -->
+      <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 p-6 flex items-center gap-4 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 shadow-sm">
+        <div class="bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 p-4 rounded-2xl">
+          <ClipboardList :size="24" stroke-width="2.5" />
         </div>
-        <div>
-          <p class="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">{{ item.label }}</p>
-          <p class="text-base font-black text-slate-500 dark:text-slate-400 mt-0.5 italic">Próximamente</p>
+        <div class="flex-1 min-w-0">
+          <p class="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Promedio General</p>
+          <div v-if="statsLoading" class="h-6 w-16 bg-slate-100 dark:bg-slate-800 animate-pulse rounded mt-1"></div>
+          <p v-else-if="dashboardStats?.promedio_general !== null" class="text-2xl font-black text-slate-800 dark:text-white mt-0.5 font-mono">
+            {{ dashboardStats.promedio_general }}
+          </p>
+          <p v-else class="text-[10px] font-bold text-slate-400 dark:text-slate-500 mt-1.5 italic leading-tight">
+            Faltan datos para cubrir este registro
+          </p>
+        </div>
+      </div>
+
+      <!-- Card Materias -->
+      <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 p-6 flex items-center gap-4 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 shadow-sm">
+        <div class="bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 p-4 rounded-2xl">
+          <BookOpen :size="24" stroke-width="2.5" />
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Materias (A/R)</p>
+          <div v-if="statsLoading" class="h-6 w-16 bg-slate-100 dark:bg-slate-800 animate-pulse rounded mt-1"></div>
+          <div v-else-if="dashboardStats?.materias_aprobadas !== null" class="flex items-baseline gap-1.5 mt-0.5">
+            <span class="text-2xl font-black text-emerald-600 dark:text-emerald-400">
+              {{ dashboardStats.materias_aprobadas }}
+            </span>
+            <span class="text-[10px] text-slate-400 font-bold uppercase">A</span>
+            <span v-if="dashboardStats?.materias_reprobadas > 0" class="text-2xl font-black text-rose-500 dark:text-rose-400 ml-1.5">
+              {{ dashboardStats.materias_reprobadas }}
+            </span>
+            <span v-if="dashboardStats?.materias_reprobadas > 0" class="text-[10px] text-slate-400 font-bold uppercase">R</span>
+          </div>
+          <div v-else class="text-[10px] font-bold text-slate-400 dark:text-slate-500 mt-1.5 italic leading-tight">
+            Sin datos suficientes
+          </div>
+        </div>
+      </div>
+
+      <!-- Card Asistencia -->
+      <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 p-6 flex items-center gap-4 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 shadow-sm">
+        <div class="bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 p-4 rounded-2xl">
+          <CalendarCheck :size="24" stroke-width="2.5" />
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Asistencia</p>
+          <div v-if="statsLoading" class="h-6 w-16 bg-slate-100 dark:bg-slate-800 animate-pulse rounded mt-1"></div>
+          <div v-else-if="dashboardStats?.asistencia_porcentaje !== null" class="mt-0.5">
+            <p class="text-2xl font-black text-slate-800 dark:text-white font-mono leading-none">
+              {{ dashboardStats.asistencia_porcentaje }}%
+            </p>
+            <p class="text-[9px] text-slate-400 dark:text-slate-500 font-black uppercase tracking-wider mt-1">
+              {{ dashboardStats?.inasistencias_total ?? 0 }} fallas
+            </p>
+          </div>
+          <div v-else class="text-[10px] font-bold text-slate-400 dark:text-slate-500 mt-1.5 italic leading-tight">
+            Sin datos suficientes
+          </div>
+        </div>
+      </div>
+
+      <!-- Card Puesto Académico -->
+      <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 p-6 flex items-center gap-4 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 shadow-sm">
+        <div class="bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 p-4 rounded-2xl">
+          <Star :size="24" stroke-width="2.5" />
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Puesto en Grupo</p>
+          <div v-if="statsLoading" class="h-6 w-20 bg-slate-100 dark:bg-slate-800 animate-pulse rounded mt-1"></div>
+          <p v-else-if="dashboardStats?.puesto_academico" class="text-2xl font-black text-slate-800 dark:text-white mt-0.5">
+            {{ dashboardStats.puesto_academico.puesto }}° <span class="text-xs font-bold text-slate-400">de {{ dashboardStats.puesto_academico.total_estudiantes }}</span>
+          </p>
+          <p v-else class="text-[10px] font-bold text-slate-400 dark:text-slate-500 mt-1.5 italic leading-tight">
+            Sin datos suficientes
+          </p>
         </div>
       </div>
     </div>
 
-    <!-- Modules Grid -->
-    <div>
-      <div class="flex items-center gap-3 mb-6">
-        <h2 class="text-xl font-black text-slate-800 dark:text-white">Mis Módulos</h2>
-        <span class="text-xs font-bold bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-3 py-1 rounded-full">Panel PF01</span>
+    <!-- Charts Section (Gráficos interactivos de rendimiento) -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      
+      <!-- Chart Mejores / Peores Materias (Bar) -->
+      <div class="lg:col-span-7 bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-100 dark:border-slate-800 p-6 shadow-sm flex flex-col min-h-[350px]">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+          <div>
+            <h3 class="text-lg font-black text-slate-800 dark:text-white">Rendimiento por Materias</h3>
+            <p class="text-xs text-slate-400 font-bold uppercase tracking-wider mt-0.5">Top 5 del periodo seleccionado</p>
+          </div>
+          
+          <!-- Tabs switch -->
+          <div class="flex bg-slate-100 dark:bg-slate-800 rounded-xl p-1 gap-1 self-start">
+            <button
+              @click="activeChartTab = 'best'"
+              :class="[
+                'px-4 py-1.5 text-xs font-bold rounded-lg transition-all',
+                activeChartTab === 'best'
+                  ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-sm'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
+              ]"
+            >
+              <span class="flex items-center gap-1.5"><ThumbsUp :size="12" /> Mejores</span>
+            </button>
+            <button
+              @click="activeChartTab = 'worst'"
+              :class="[
+                'px-4 py-1.5 text-xs font-bold rounded-lg transition-all',
+                activeChartTab === 'worst'
+                  ? 'bg-white dark:bg-slate-700 text-rose-600 dark:text-rose-300 shadow-sm'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
+              ]"
+            >
+              <span class="flex items-center gap-1.5"><ThumbsDown :size="12" /> Bajos</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="flex-1 relative min-h-[200px]">
+          <div v-if="statsLoading" class="absolute inset-0 flex items-center justify-center">
+            <div class="w-8 h-8 border-4 border-indigo-600/20 border-t-indigo-600 rounded-full animate-spin"></div>
+          </div>
+          <div v-else-if="!dashboardStats || !dashboardStats?.has_calificaciones || dashboardStats?.top_materias_mejores?.length === 0" class="absolute inset-0 flex items-center justify-center text-slate-400 italic text-sm">
+            Faltan datos para cubrir este registro.
+          </div>
+          <Bar v-else :data="barChartData" :options="barChartOptions" />
+        </div>
       </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-        <!-- Boletin Export Card -->
+      <!-- Chart Observaciones / Reportes (Doughnut) -->
+      <div class="lg:col-span-5 bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-100 dark:border-slate-800 p-6 shadow-sm flex flex-col min-h-[350px]">
+        <div class="mb-6">
+          <h3 class="text-lg font-black text-slate-800 dark:text-white">Observaciones y Reportes</h3>
+          <p class="text-xs text-slate-400 font-bold uppercase tracking-wider mt-0.5">Distribución de registros de convivencia</p>
+        </div>
+
+        <div class="flex-1 relative flex items-center justify-center min-h-[200px]">
+          <div v-if="statsLoading" class="absolute inset-0 flex items-center justify-center">
+            <div class="w-8 h-8 border-4 border-indigo-600/20 border-t-indigo-600 rounded-full animate-spin"></div>
+          </div>
+          <div v-else-if="!hasObservations" class="flex flex-col items-center justify-center text-center p-6 text-slate-400">
+            <div class="h-16 w-16 bg-slate-50 dark:bg-slate-800/50 rounded-2xl flex items-center justify-center text-slate-300 dark:text-slate-700 mb-4 border border-dashed border-slate-200 dark:border-slate-800">
+              <MessageSquare :size="28" />
+            </div>
+            <p class="text-sm font-black uppercase tracking-wider text-slate-500">Excelente Conducta</p>
+            <p class="text-xs mt-1 max-w-[200px] leading-relaxed">No tienes reportes disciplinarios ni convivenciales este periodo.</p>
+          </div>
+          <div v-else class="w-full h-full min-h-[200px] relative">
+            <Doughnut :data="doughnutChartData" :options="doughnutChartOptions" />
+            <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none mt-[-15px]">
+              <span class="text-3xl font-black text-slate-700 dark:text-white leading-none">
+                {{ (dashboardStats?.reportes_conteo?.ACADEMICA || 0) + (dashboardStats?.reportes_conteo?.DISCIPLINARIA || 0) + (dashboardStats?.reportes_conteo?.CONVIVENCIAL || 0) }}
+              </span>
+              <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">Registros</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Actividades Recientes & Boletín Oficial -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      
+      <!-- Actividades Recientes (Timeline) - Ocupa 8 columnas para mayor holgura -->
+      <div class="lg:col-span-8 bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-100 dark:border-slate-800 p-6 shadow-sm flex flex-col">
+        <div class="mb-6">
+          <h3 class="text-lg font-black text-slate-800 dark:text-white">Últimas Actividades Evaluadas</h3>
+          <p class="text-xs text-slate-400 font-bold uppercase tracking-wider mt-0.5">Actividades de materias activas del periodo</p>
+        </div>
+
+        <div class="flex-1 relative min-h-[220px]">
+          <div v-if="statsLoading" class="absolute inset-0 flex items-center justify-center">
+            <div class="w-8 h-8 border-4 border-indigo-600/20 border-t-indigo-600 rounded-full animate-spin"></div>
+          </div>
+          <div v-else-if="!dashboardStats || dashboardStats?.actividades_recientes?.length === 0" class="absolute inset-0 flex flex-col items-center justify-center text-center text-slate-400 p-6">
+            <Calendar :size="32" class="text-slate-300 mb-2" />
+            <p class="text-sm italic">No hay actividades publicadas para tu grupo este periodo.</p>
+          </div>
+          <div v-else class="space-y-5">
+            <div 
+              v-for="(act, idx) in dashboardStats?.actividades_recientes" 
+              :key="idx" 
+              class="relative pl-6 border-l-2 border-slate-100 dark:border-slate-800 pb-1 last:pb-0"
+            >
+              <!-- Timeline Dot -->
+              <div 
+                :class="[
+                  'absolute -left-1.5 top-1 h-3.5 w-3.5 rounded-full border-2 border-white dark:border-slate-900',
+                  act.calificada ? 'bg-indigo-500' : 'bg-slate-300 dark:bg-slate-700'
+                ]"
+              ></div>
+
+              <div class="flex items-start justify-between gap-4">
+                <div>
+                  <h4 class="text-sm font-black text-slate-700 dark:text-slate-200 leading-snug">
+                    {{ act.actividad }}
+                    <span class="text-[9px] font-black uppercase text-slate-400 ml-1.5">({{ act.porcentaje }}%)</span>
+                  </h4>
+                  <p class="text-xs font-bold text-slate-400 dark:text-slate-500 mt-0.5 uppercase tracking-wide">
+                    {{ act.materia }}
+                  </p>
+                </div>
+                
+                <div class="shrink-0 text-right">
+                  <span 
+                    v-if="act.calificada && act.nota !== null" 
+                    :class="[
+                      'px-3 py-1 rounded-xl text-xs font-black font-mono',
+                      act.nota >= 3.0 
+                        ? 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/30' 
+                        : 'bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-900/30'
+                    ]"
+                  >
+                    {{ act.nota.toFixed(2) }}
+                  </span>
+                  <span 
+                    v-else 
+                    class="bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider border border-slate-100 dark:border-slate-800"
+                  >
+                    Pendiente
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Boletin Export Card (Ocupa 4 columnas al lado de las actividades) -->
+      <div class="lg:col-span-4 flex flex-col justify-stretch">
         <div 
           v-if="studentId && selectedPeriodId"
-          class="group relative bg-indigo-900/5 dark:bg-indigo-900/10 rounded-3xl border-2 border-indigo-100 dark:border-indigo-900/40 p-7 transition-all duration-300 hover:shadow-xl overflow-hidden"
+          class="group relative bg-indigo-900/5 dark:bg-indigo-900/10 rounded-3xl border-2 border-indigo-100 dark:border-indigo-900/40 p-6 transition-all duration-300 hover:shadow-xl overflow-hidden flex-1 flex flex-col justify-between"
         >
           <div class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-500 to-purple-600"></div>
-          <div class="flex items-start gap-5">
-            <div class="bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 p-4 rounded-2xl shrink-0 group-hover:scale-110 transition-transform duration-300">
-              <FileDown :size="28" stroke-width="2" />
+          <div>
+            <div class="bg-indigo-100 dark:bg-indigo-900/55 text-indigo-600 dark:text-indigo-400 p-4 rounded-2xl w-fit group-hover:scale-110 transition-transform duration-300 mb-6">
+              <FileDown :size="28" stroke-width="2.5" />
             </div>
-            <div class="flex-1 min-w-0">
-              <h3 class="text-lg font-black text-slate-800 dark:text-white mb-1.5 flex items-center gap-2">
-                Mi Boletín
-                <span class="text-[10px] bg-indigo-600 text-white px-2 py-0.5 rounded-full uppercase">PDF</span>
-              </h3>
-              <p class="text-sm text-slate-500 dark:text-slate-400 leading-relaxed mb-4">Exporta tu reporte académico oficial del periodo seleccionado.</p>
-              
-              <BoletinExportModule 
-                :student-id="studentId" 
-                :period-id="selectedPeriodId" 
-              />
-            </div>
+            <h3 class="text-lg font-black text-slate-800 dark:text-white mb-2 flex items-center gap-2">
+              Boletín Oficial
+              <span class="text-[10px] bg-indigo-600 text-white px-2 py-0.5 rounded-full uppercase tracking-wider font-bold">PDF</span>
+            </h3>
+            <p class="text-sm text-slate-500 dark:text-slate-400 leading-relaxed mb-6">
+              Descarga tu reporte oficial consolidado de calificaciones correspondientes al periodo seleccionado.
+            </p>
           </div>
+          
+          <BoletinExportModule 
+            :student-id="studentId" 
+            :period-id="selectedPeriodId" 
+          />
         </div>
-
-        <router-link
-          v-for="mod in modules"
-          :key="mod.id"
-          :to="mod.id === 'notas' ? '/dashboard/mis-notas' : '#'"
-          class="group relative bg-white dark:bg-slate-900 rounded-3xl border-2 border-slate-100 dark:border-slate-800 p-7 transition-all duration-300 hover:shadow-xl cursor-pointer overflow-hidden"
-          :class="mod.borderColor"
-        >
-          <!-- Module top accent bar -->
-          <div class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-t-3xl" :class="mod.color"></div>
-
-          <div class="flex items-start gap-5">
-            <div :class="[mod.bgColor, mod.textColor, 'p-4 rounded-2xl shrink-0 group-hover:scale-110 transition-transform duration-300']">
-              <component :is="mod.icon" :size="28" stroke-width="2" />
-            </div>
-            <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-2 mb-1.5">
-                <h3 class="text-lg font-black text-slate-800 dark:text-white">{{ mod.title }}</h3>
-                <span v-if="mod.comingSoon" class="text-[10px] font-black uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-2 py-0.5 rounded-full">Próximamente</span>
-              </div>
-              <p class="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">{{ mod.description }}</p>
-            </div>
-            <ChevronRight :size="20" class="shrink-0 text-slate-300 dark:text-slate-600 group-hover:text-slate-500 dark:group-hover:text-slate-300 group-hover:translate-x-1 transition-all duration-300 mt-1" />
-          </div>
-        </router-link>
       </div>
-    </div>
 
-    <!-- Footer info message -->
-    <div class="p-6 bg-gradient-to-r from-indigo-50 to-violet-50 dark:from-indigo-950/30 dark:to-violet-950/30 rounded-3xl border border-indigo-100 dark:border-indigo-900/50 text-center">
-      <Sparkles :size="20" class="text-indigo-400 mx-auto mb-3" />
-      <p class="text-sm font-semibold text-indigo-700 dark:text-indigo-300">
-        Los módulos de consulta académica estarán disponibles próximamente.
-      </p>
-      <p class="text-xs text-indigo-500 dark:text-indigo-400 mt-1">
-        Podrás consultar tus notas, asistencias, observaciones e historial desde este portal.
-      </p>
     </div>
 
   </div>

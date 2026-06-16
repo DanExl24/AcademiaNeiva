@@ -23,9 +23,10 @@ export const useAuthStore = defineStore('auth', () => {
   const token = ref<string | null>(localStorage.getItem('token'))
   const activeRole = ref<string | null>(localStorage.getItem('activeRole') || (user.value?.role || null))
   
-  // Modo monitoreo: directivo observando el panel de un docente (solo lectura)
+  // Modo monitoreo: directivo observando el panel de un docente o estudiante (solo lectura)
   const monitoringUser = ref<MonitoredTeacher | null>(JSON.parse(localStorage.getItem('monitoringUser') || 'null'))
   const previousRole = ref<string | null>(localStorage.getItem('previousRole'))
+  const monitoringType = ref<'docente' | 'estudiante' | null>(localStorage.getItem('monitoringType') as any || null)
   const isMonitoring = computed(() => !!monitoringUser.value)
 
   const isAuthenticated = computed(() => !!token.value)
@@ -51,14 +52,35 @@ export const useAuthStore = defineStore('auth', () => {
     
     monitoringUser.value = teacher
     localStorage.setItem('monitoringUser', JSON.stringify(teacher))
+
+    monitoringType.value = 'docente'
+    localStorage.setItem('monitoringType', 'docente')
     
     // Cambiar automáticamente a rol docente para ver su panel
     setActiveRole('docente')
   }
 
+  function startStudentMonitoring(student: MonitoredTeacher) {
+    // Guardar el rol actual para poder restaurarlo después
+    previousRole.value = activeRole.value
+    localStorage.setItem('previousRole', activeRole.value || '')
+    
+    monitoringUser.value = student
+    localStorage.setItem('monitoringUser', JSON.stringify(student))
+
+    monitoringType.value = 'estudiante'
+    localStorage.setItem('monitoringType', 'estudiante')
+    
+    // Cambiar automáticamente a rol estudiante para ver su panel
+    setActiveRole('estudiante')
+  }
+
   function stopMonitoring() {
     monitoringUser.value = null
     localStorage.removeItem('monitoringUser')
+
+    monitoringType.value = null
+    localStorage.removeItem('monitoringType')
     
     // Restaurar el rol previo si existe
     if (previousRole.value) {
@@ -74,11 +96,13 @@ export const useAuthStore = defineStore('auth', () => {
     activeRole.value = null
     monitoringUser.value = null
     previousRole.value = null
+    monitoringType.value = null
     localStorage.removeItem('token')
     localStorage.removeItem('user')
     localStorage.removeItem('activeRole')
     localStorage.removeItem('monitoringUser')
     localStorage.removeItem('previousRole')
+    localStorage.removeItem('monitoringType')
   }
 
   return {
@@ -87,11 +111,14 @@ export const useAuthStore = defineStore('auth', () => {
     activeRole,
     isAuthenticated,
     monitoringUser,
+    monitoringType,
     isMonitoring,
     setUser,
     setActiveRole,
     startMonitoring,
+    startStudentMonitoring,
     stopMonitoring,
     logout
   }
 })
+

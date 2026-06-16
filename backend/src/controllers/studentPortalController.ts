@@ -43,6 +43,26 @@ export const getStudentClosedPeriods = async (req: Request, res: Response) => {
 };
 
 /**
+ * Gets all periods (open and closed) for a specific student and academic year
+ */
+export const getStudentAllPeriods = async (req: Request, res: Response) => {
+  const { id_estudiante, id_anio } = req.params;
+  try {
+    const result = await pool.query(`
+      SELECT p.id_periodo, p.nombre, p.trimestre, p.porcentaje, p.estado
+      FROM periodo_academico p
+      JOIN estudiante e ON e.id_colegio = p.id_colegio
+      WHERE e.id_estudiante = $1 AND p."id_año" = $2
+      ORDER BY p.trimestre ASC
+    `, [id_estudiante, id_anio]);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching all periods:', error);
+    res.status(500).json({ error: 'Error al obtener todos los periodos' });
+  }
+};
+
+/**
  * Gets grades for a specific student and closed period
  */
 export const getStudentGrades = async (req: Request, res: Response) => {
@@ -601,5 +621,256 @@ export const getStudentIdByUserId = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error fetching student ID:', error);
     res.status(500).json({ error: 'Error al obtener vinculación de estudiante' });
+  }
+};
+
+/**
+ * Gets aggregated dashboard statistics for a specific student and period
+ */
+export const getStudentDashboardStats = async (req: Request, res: Response) => {
+  const { id_estudiante, id_periodo } = req.params;
+
+  try {
+    const studentIdInt = parseInt(id_estudiante);
+    const periodIdInt = parseInt(id_periodo);
+
+    if (isNaN(studentIdInt) || isNaN(periodIdInt)) {
+      return res.status(400).json({ error: 'Parámetros numéricos inválidos' });
+    }
+
+    // 1. Get student basic info and group
+    const studentCheck = await pool.query(`
+      SELECT e.id_estudiante, e.id_colegio, m.id_grupo
+      FROM estudiante e
+      LEFT JOIN matricula m ON m.id_estudiante = e.id_estudiante AND m.estado = 'ACTIVA'
+      WHERE e.id_estudiante = $1
+      LIMIT 1
+    `, [studentIdInt]);
+
+    if (!studentCheck.rows.length) {
+      return res.status(404).json({ error: 'Estudiante no encontrado' });
+    }
+
+    const { id_colegio, id_grupo } = studentCheck.rows[0];
+
+    // Get school grading approval limit
+    const configRes = await pool.query(
+      'SELECT nota_aprobacion FROM configuracion_colegio WHERE id_colegio = $1',
+      [id_colegio]
+    );
+    const nota_aprobacion = configRes.rows.length ? parseFloat(configRes.rows[0].nota_aprobacion) : 3.0;
+
+    // 2. Fetch all student subjects and their grades for this period
+    const gradesRes = await pool.query(`
+      SELECT 
+        m.id_materia,
+        m.nombre as materia,
+        COALESCE(ra.promedio, calc.promedio_calculado, 0) as calificacion
+      FROM detalle_grados dg
+      JOIN materias m ON m.id_materia = dg.id_materia
+      LEFT JOIN resultado_academico ra ON ra.id_detallegrado = dg.id_detallegrado AND ra.id_periodo = $2 AND ra.id_estudiante = $1
+      LEFT JOIN (
+        SELECT am.id_detallegrado, na.id_estudiante, ROUND(AVG(na.nota)::numeric, 2) as promedio_calculado
+        FROM notas_actividad na
+        JOIN actividad_materia am ON am.id_actividadmateria = na.id_actividadmateria
+        WHERE am.id_periodo = $2 AND na.id_estudiante = $1
+        GROUP BY am.id_detallegrado, na.id_estudiante
+      ) calc ON calc.id_detallegrado = dg.id_detallegrado
+      WHERE dg.id_grupo = $3
+      ORDER BY m.nombre ASC
+    `, [studentIdInt, periodIdInt, id_grupo]);
+
+    const grades = gradesRes.rows.map(row => ({
+      id_materia: row.id_materia,
+      materia: row.materia,
+      calificacion: parseFloat(row.calificacion)
+    }));
+
+    // Check if any actual grades or results exist in the database for this period and student
+    const notesCountRes = await pool.query(`
+      SELECT COUNT(*) as count 
+      FROM notas_actividad na
+      JOIN actividad_materia am ON am.id_actividadmateria = na.id_actividadmateria
+      WHERE am.id_periodo = $1 AND na.id_estudiante = $2
+    `, [periodIdInt, studentIdInt]);
+    
+    const resultsCountRes = await pool.query(`
+      SELECT COUNT(*) as count 
+      FROM resultado_academico
+      WHERE id_periodo = $1 AND id_estudiante = $2
+    `, [periodIdInt, studentIdInt]);
+    
+    const has_calificaciones = parseInt(notesCountRes.rows[0].count) > 0 || parseInt(resultsCountRes.rows[0].count) > 0;
+
+    // Calculate grades aggregates
+    let promedio_general = null;
+    let materias_aprobadas = null;
+    let materias_reprobadas = null;
+
+    if (has_calificaciones && grades.length > 0) {
+      const sum = grades.reduce((acc, curr) => acc + curr.calificacion, 0);
+      promedio_general = sum / grades.length;
+      
+      materias_aprobadas = 0;
+      materias_reprobadas = 0;
+      grades.forEach(g => {
+        if (g.calificacion >= nota_aprobacion) {
+          materias_aprobadas++;
+        } else {
+          materias_reprobadas++;
+        }
+      });
+    }
+
+    // Sort to get top best and worst subjects
+    const sortedGrades = [...grades].sort((a, b) => b.calificacion - a.calificacion);
+    const top_materias_mejores = sortedGrades.slice(0, 5);
+    const top_materias_peores = [...sortedGrades].reverse().slice(0, 5);
+
+    // 3. Attendance statistics
+    const attendanceRes = await pool.query(`
+      SELECT 
+        estado,
+        COUNT(*) as count
+      FROM registro_asistencia ra
+      JOIN detalle_grados dg ON dg.id_detallegrado = ra.id_detallegrado
+      WHERE ra.id_estudiante = $1
+        AND ra.fecha >= (
+          SELECT (al.calendario || '-' || LPAD(pa.mes_inicio::text, 2, '0') || '-' || LPAD(pa.dia_inicio::text, 2, '0'))::date
+          FROM periodo_academico pa
+          JOIN "año_lectivo" al ON al."id_año" = pa."id_año"
+          WHERE pa.id_periodo = $2
+        )
+        AND ra.fecha <= (
+          SELECT (al.calendario || '-' || LPAD(pa.mes_fin::text, 2, '0') || '-' || LPAD(pa.dia_fin::text, 2, '0'))::date
+          FROM periodo_academico pa
+          JOIN "año_lectivo" al ON al."id_año" = pa."id_año"
+          WHERE pa.id_periodo = $2
+        )
+      GROUP BY estado
+    `, [studentIdInt, periodIdInt]);
+
+    const attCounts: any = { PRESENTE: 0, AUSENTE: 0, TARDE: 0, JUSTIFICADA: 0 };
+    let attendance_total = 0;
+
+    attendanceRes.rows.forEach(row => {
+      if (attCounts.hasOwnProperty(row.estado)) {
+        const count = parseInt(row.count);
+        attCounts[row.estado] = count;
+        attendance_total += count;
+      }
+    });
+
+    const inasistencias_total = attCounts.AUSENTE;
+    const has_asistencia = attendance_total > 0;
+    const asistencia_porcentaje = has_asistencia
+      ? Math.round(((attendance_total - inasistencias_total) / attendance_total) * 100)
+      : null;
+
+    // 4. Observations count by type
+    const observationsRes = await pool.query(`
+      SELECT tipo, COUNT(*) as count
+      FROM observacion_estudiante
+      WHERE id_estudiante = $1 AND id_periodo = $2
+      GROUP BY tipo
+    `, [studentIdInt, periodIdInt]);
+
+    const reportes_conteo = {
+      ACADEMICA: 0,
+      DISCIPLINARIA: 0,
+      CONVIVENCIAL: 0
+    };
+
+    observationsRes.rows.forEach(row => {
+      if (reportes_conteo.hasOwnProperty(row.tipo)) {
+        reportes_conteo[row.tipo as keyof typeof reportes_conteo] = parseInt(row.count);
+      }
+    });
+
+    // 5. Recent activities
+    const activitiesRes = await pool.query(`
+      SELECT 
+        am.nombre as actividad,
+        am.porcentaje,
+        m.nombre as materia,
+        (CASE WHEN na.nota IS NOT NULL THEN true ELSE false END) as calificada,
+        na.nota
+      FROM actividad_materia am
+      JOIN detalle_grados dg ON dg.id_detallegrado = am.id_detallegrado
+      JOIN materias m ON m.id_materia = dg.id_materia
+      LEFT JOIN notas_actividad na ON na.id_actividadmateria = am.id_actividadmateria AND na.id_estudiante = $1
+      WHERE dg.id_grupo = $2 AND am.id_periodo = $3
+      ORDER BY am.id_actividadmateria DESC
+      LIMIT 5
+    `, [studentIdInt, id_grupo, periodIdInt]);
+
+    const actividades_recientes = activitiesRes.rows.map(row => ({
+      actividad: row.actividad,
+      porcentaje: parseFloat(row.porcentaje),
+      materia: row.materia,
+      calificada: row.calificada,
+      nota: row.nota ? parseFloat(row.nota) : null
+    }));
+
+    // 6. Student ranking / academic position in group
+    let puesto = null;
+    let total_estudiantes = 0;
+
+    if (id_grupo) {
+      const rankingRes = await pool.query(`
+        WITH promedios_estudiantes AS (
+          SELECT 
+            mat.id_estudiante,
+            ROUND(AVG(COALESCE(ra.promedio, calc.promedio_calculado, 0))::numeric, 2) as promedio_general
+          FROM matricula mat
+          JOIN detalle_grados dg ON dg.id_grupo = mat.id_grupo
+          LEFT JOIN resultado_academico ra ON ra.id_detallegrado = dg.id_detallegrado AND ra.id_periodo = $2 AND ra.id_estudiante = mat.id_estudiante
+          LEFT JOIN (
+            SELECT am.id_detallegrado, na.id_estudiante, AVG(na.nota) as promedio_calculado
+            FROM notas_actividad na
+            JOIN actividad_materia am ON am.id_actividadmateria = na.id_actividadmateria
+            WHERE am.id_periodo = $2
+            GROUP BY am.id_detallegrado, na.id_estudiante
+          ) calc ON calc.id_detallegrado = dg.id_detallegrado AND calc.id_estudiante = mat.id_estudiante
+          WHERE mat.id_grupo = $1 AND mat.estado = 'ACTIVA'
+          GROUP BY mat.id_estudiante
+        ),
+        ranking_estudiantes AS (
+          SELECT 
+            id_estudiante,
+            promedio_general,
+            RANK() OVER (ORDER BY promedio_general DESC) as puesto,
+            COUNT(*) OVER () as total_estudiantes
+          FROM promedios_estudiantes
+        )
+        SELECT puesto, total_estudiantes
+        FROM ranking_estudiantes
+        WHERE id_estudiante = $3
+      `, [id_grupo, periodIdInt, studentIdInt]);
+
+      if (rankingRes.rows.length) {
+        puesto = parseInt(rankingRes.rows[0].puesto);
+        total_estudiantes = parseInt(rankingRes.rows[0].total_estudiantes);
+      }
+    }
+
+    res.json({
+      promedio_general: (has_calificaciones && promedio_general !== null) ? parseFloat(promedio_general.toFixed(2)) : null,
+      materias_aprobadas,
+      materias_reprobadas,
+      asistencia_porcentaje,
+      inasistencias_total: has_asistencia ? inasistencias_total : null,
+      reportes_conteo,
+      top_materias_mejores: has_calificaciones ? top_materias_mejores : [],
+      top_materias_peores: has_calificaciones ? top_materias_peores : [],
+      actividades_recientes,
+      puesto_academico: (has_calificaciones && puesto) ? { puesto, total_estudiantes } : null,
+      has_calificaciones,
+      has_asistencia
+    });
+
+  } catch (error) {
+    console.error('Error fetching student dashboard stats:', error);
+    res.status(500).json({ error: 'Error al obtener estadísticas del estudiante' });
   }
 };

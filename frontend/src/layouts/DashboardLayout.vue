@@ -96,8 +96,13 @@ const handleLogout = () => {
 }
 
 const stopMonitoring = () => {
+  const isStudent = auth.monitoringType === 'estudiante'
   auth.stopMonitoring()
-  router.push('/dashboard/docentes')
+  if (isStudent) {
+    router.push('/dashboard/gestion-estudiantes')
+  } else {
+    router.push('/dashboard/docentes')
+  }
 }
 </script>
 

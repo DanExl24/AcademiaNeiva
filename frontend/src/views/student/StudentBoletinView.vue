@@ -6,7 +6,8 @@ import {
   FileDown,
   Clock,
   Sparkles,
-  Info
+  Info,
+  Calendar
 } from 'lucide-vue-next'
 import BoletinExportModule from '../../components/boletines/BoletinExportModule.vue'
 
@@ -20,7 +21,7 @@ const loading = ref(true)
 
 const fetchStudentId = async () => {
   try {
-    const id_usuario = auth.user?.id
+    const id_usuario = auth.isMonitoring ? auth.monitoringUser?.id : auth.user?.id
     if (!id_usuario) return
     const idRes = await axios.get(`http://localhost:3000/api/student/user-id/${id_usuario}`)
     studentId.value = idRes.data.id_estudiante

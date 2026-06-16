@@ -39,23 +39,23 @@
         INFORME ACADÉMICO - AÑO LECTIVO {{ data?.ano_lectivo || '2024' }}
       </div>
 
-      <!-- Tarjeta Moderna Datos Estudiante -->
+      <!-- Tarjeta Moderna Datos Estudiante (Diseño Fijo Horizontal para PDF/Impresión) -->
       <div class="bg-gray-50 border border-gray-200 rounded-xl mb-6 shadow-sm overflow-hidden" style="font-family: 'Quicksand', sans-serif;">
-        <div class="grid grid-cols-12 divide-y md:divide-y-0 md:divide-x divide-gray-200">
+        <div class="grid grid-cols-12 divide-x divide-gray-200">
           
-          <div class="col-span-12 md:col-span-12 lg:col-span-3 bg-white p-4 flex flex-col justify-center">
+          <div class="col-span-3 bg-white p-4 flex flex-col justify-center">
             <span class="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1">Código Estudiantil</span>
             <span class="text-slate-700 font-black text-lg">{{ data?.estudiante?.codigo }}</span>
           </div>
 
-          <div class="col-span-12 md:col-span-12 lg:col-span-6 bg-white p-4 flex flex-col justify-center border-x border-gray-100">
+          <div class="col-span-6 bg-white p-4 flex flex-col justify-center">
             <span class="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1">Nombre del Estudiante</span>
             <span class="text-gray-900 font-black text-base uppercase leading-tight">{{ data?.estudiante?.apellido }} {{ data?.estudiante?.nombre }}</span>
           </div>
 
-          <div class="col-span-12 md:col-span-12 lg:col-span-3 bg-indigo-50/50 p-4 flex flex-col justify-center relative overflow-hidden">
+          <div class="col-span-3 bg-indigo-50/50 p-4 flex flex-col justify-center relative overflow-hidden">
             <div class="absolute -right-2 -top-4 text-indigo-200/30">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+              <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" class="h-16 w-16" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
             </div>
             <span class="text-[10px] text-indigo-400 font-bold uppercase tracking-widest mb-1 relative z-10">Periodo</span>
             <span class="text-indigo-700 font-black text-sm uppercase relative z-10">{{ data?.periodo }}</span>
@@ -84,8 +84,8 @@
       <template v-for="(materia, index) in data?.materias" :key="index">
         <!-- Tarjeta de Materia -->
         <div class="border border-indigo-100 bg-white rounded-xl shadow-sm overflow-hidden break-inside-avoid">
-          <!-- Cabecera de la Materia -->
-          <div class="bg-indigo-50/70 border-b border-indigo-100 px-5 py-3 flex flex-wrap lg:flex-nowrap justify-between items-center gap-4 print:bg-gray-100">
+          <!-- Cabecera de la Materia (Diseño Fijo Horizontal) -->
+          <div class="bg-indigo-50/70 border-b border-indigo-100 px-5 py-3 flex justify-between items-center gap-4 print:bg-gray-100">
             <div class="flex-1">
               <h3 class="text-sm font-black text-indigo-900 uppercase tracking-widest print:text-black">{{ materia.materia }}</h3>
               <p class="text-xs font-bold text-indigo-700/80 mt-0.5 uppercase italic print:text-gray-700">{{ materia.docente_nombre }} {{ materia.docente_apellido }}</p>
@@ -241,26 +241,26 @@
       </div>
 
       <!-- Mensaje Motivacional -->
-      <div class="bg-gradient-to-r from-indigo-50/60 via-blue-50/40 to-purple-50/60 rounded-xl border border-indigo-100/50 p-5 text-center">
+      <div class="bg-indigo-50/40 rounded-xl border border-indigo-100/50 p-5 text-center">
         <p class="text-[10px] italic text-indigo-600/80 leading-relaxed font-medium tracking-wide">
           "El éxito es la suma de pequeños esfuerzos repetidos día tras día.<br>Te animamos a seguir cultivando la excelencia en tu proceso formativo."
         </p>
         <div class="mt-2 flex justify-center">
-          <div class="w-8 h-0.5 rounded-full bg-gradient-to-r from-indigo-300 to-purple-300"></div>
+          <div class="w-8 h-1 rounded-full bg-indigo-300/80"></div>
         </div>
       </div>
 
       <!-- Sección de Firmas (Quicksand + Elegancia Clásica) -->
       <div class="grid grid-cols-2 gap-32 px-12 pt-16">
         <div class="text-center group">
-          <div class="h-px bg-gradient-to-r from-transparent via-gray-400 to-transparent mb-4"></div>
+          <div class="border-t border-gray-300 mb-4"></div>
           <p class="text-xs font-black uppercase text-gray-900 tracking-tight transition-all duration-300 group-hover:tracking-widest" style="font-family: 'Quicksand', sans-serif;">
             {{ data?.firmas?.rector || 'RECTORÍA' }}
           </p>
           <p class="text-[9px] font-bold text-gray-400 uppercase mt-1 tracking-tighter">Rectoría Institucional</p>
         </div>
         <div class="text-center group">
-          <div class="h-px bg-gradient-to-r from-transparent via-gray-400 to-transparent mb-4"></div>
+          <div class="border-t border-gray-300 mb-4"></div>
           <p class="text-xs font-black uppercase text-gray-900 tracking-tight transition-all duration-300 group-hover:tracking-widest" style="font-family: 'Quicksand', sans-serif;">
              {{ data?.firmas?.titular || 'DIRECTOR(A) DE GRUPO' }}
           </p>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import axios from 'axios'
 import {
   Users,
@@ -10,10 +11,17 @@ import {
   ArrowRight,
   GraduationCap,
   Edit2,
-  AlertCircle
+  AlertCircle,
+  X,
+  Eye,
+  Mail,
+  BookOpen,
+  Activity
 } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 import { useNotificationStore } from '../../stores/notifications'
+
+const router = useRouter()
 
 const auth = useAuthStore()
 const notify = useNotificationStore()
@@ -38,6 +46,50 @@ const newStatus = ref('')
 const changeGradeModalOpen = ref(false)
 const selectedGroup = ref('')
 const motivoTraslado = ref('')
+
+// --- Student Summary Drawer State ---
+const drawerOpen = ref(false)
+const selectedStudentId = ref<number | null>(null)
+const studentSummary = ref<any>(null)
+const loadingSummary = ref(false)
+
+const openDrawer = async (studentId: number) => {
+  selectedStudentId.value = studentId
+  drawerOpen.value = true
+  loadingSummary.value = true
+  studentSummary.value = null
+  try {
+    const res = await axios.get(`http://localhost:3000/api/student/${studentId}/summary`)
+    studentSummary.value = res.data
+  } catch (error) {
+    console.error('Error fetching student summary:', error)
+    notify.addNotification('Error al cargar el resumen del estudiante', 'error')
+  } finally {
+    loadingSummary.value = false
+  }
+}
+
+const closeDrawer = () => {
+  drawerOpen.value = false
+}
+
+const goToStudentMonitoring = () => {
+  if (!studentSummary.value) return
+  
+  if (!studentSummary.value.id_usuario) {
+    notify.addNotification('Este estudiante no tiene un usuario activo registrado, no es posible monitorear su panel.', 'error')
+    return
+  }
+
+  auth.startStudentMonitoring({
+    id: studentSummary.value.id_usuario,
+    nombre: studentSummary.value.nombre,
+    apellido: studentSummary.value.apellido,
+    email: studentSummary.value.student_email || `${studentSummary.value.codigo}@academia.edu`
+  })
+  closeDrawer()
+  router.push('/dashboard')
+}
 
 // Form State
 const studentForm = ref({
@@ -264,13 +316,13 @@ const getStatusClass = (estado: string) => {
         </thead>
         <tbody class="divide-y divide-slate-50 dark:divide-slate-800">
           <tr v-for="s in students" :key="s.id_estudiante" class="group hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-all">
-            <td class="px-8 py-5">
+            <td class="px-8 py-5 cursor-pointer hover:bg-indigo-50/40 dark:hover:bg-slate-800/40 rounded-l-2xl transition-all" @click="openDrawer(s.id_estudiante)">
               <div class="flex items-center gap-4">
                 <div class="h-10 w-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-black text-sm">
                   {{ s.nombre.charAt(0) }}{{ s.apellido.charAt(0) }}
                 </div>
                 <div>
-                  <p class="font-black text-slate-900 dark:text-white text-sm uppercase">{{ s.nombre }} {{ s.apellido }}</p>
+                  <p class="font-black text-slate-900 dark:text-white text-sm uppercase group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">{{ s.nombre }} {{ s.apellido }}</p>
                   <p class="text-[10px] font-bold text-slate-400 uppercase leading-none mt-0.5">CÓD: {{ s.codigo }}</p>
                 </div>
               </div>
@@ -420,4 +472,200 @@ const getStatusClass = (estado: string) => {
     </div>
 
   </div>
+
+  <!-- Student Summary Slide-Over Drawer -->
+  <Teleport to="body">
+    <Transition name="drawer-fade">
+      <div v-if="drawerOpen" class="fixed inset-0 z-[400] bg-slate-950/40 backdrop-blur-sm" @click="closeDrawer"></div>
+    </Transition>
+
+    <Transition name="drawer-slide">
+      <div v-if="drawerOpen" class="fixed inset-y-0 right-0 z-[450] w-full max-w-lg bg-white dark:bg-slate-900 shadow-2xl flex flex-col border-l border-slate-100 dark:border-slate-800/60 overflow-hidden">
+        <!-- Drawer Header -->
+        <div class="p-6 border-b border-slate-100 dark:border-slate-800/60 flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <div class="p-2.5 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 rounded-xl">
+              <Users :size="20" />
+            </div>
+            <div>
+              <h3 class="text-base font-black text-slate-900 dark:text-white uppercase tracking-tight">Ficha Resumen</h3>
+              <p class="text-xs text-slate-400 font-medium">Información y seguimiento académico consolidado.</p>
+            </div>
+          </div>
+          <button @click="closeDrawer" class="p-2 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-white transition-all">
+            <X :size="20" />
+          </button>
+        </div>
+
+        <!-- Drawer Content -->
+        <div class="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-6">
+          <!-- Loading Indicator -->
+          <div v-if="loadingSummary" class="h-64 flex flex-col items-center justify-center gap-3">
+            <div class="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+            <p class="text-xs font-bold text-slate-400 uppercase tracking-widest">Cargando datos...</p>
+          </div>
+
+          <!-- Summary Data -->
+          <div v-else-if="studentSummary" class="space-y-6">
+            
+            <!-- Student Profile Card -->
+            <div class="bg-gradient-to-br from-indigo-50/50 to-white dark:from-slate-800/30 dark:to-slate-900 border border-indigo-100/50 dark:border-slate-800 rounded-3xl p-6 relative overflow-hidden">
+              <div class="absolute -right-6 -bottom-6 text-indigo-100 dark:text-slate-800 opacity-20 pointer-events-none">
+                <GraduationCap :size="120" />
+              </div>
+              <div class="flex items-start gap-4">
+                <div class="h-14 w-14 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-black text-xl shadow-lg shadow-indigo-200 dark:shadow-none">
+                  {{ studentSummary.nombre.charAt(0) }}{{ studentSummary.apellido.charAt(0) }}
+                </div>
+                <div class="space-y-1">
+                  <h4 class="text-base font-black text-slate-900 dark:text-white uppercase leading-tight">
+                    {{ studentSummary.nombre_completo }}
+                  </h4>
+                  <p class="text-xs font-bold text-slate-400">CÓDIGO: {{ studentSummary.codigo }}</p>
+                  <p class="text-xs font-black text-indigo-600 dark:text-indigo-400 mt-1 uppercase tracking-wide">
+                    Curso: {{ studentSummary.curso }}
+                  </p>
+                </div>
+              </div>
+
+              <div class="mt-6 flex flex-wrap gap-2">
+                <!-- Status Badge -->
+                <span :class="[
+                  studentSummary.estado_estudiante === 'ACTIVO' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400' : 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400',
+                  'px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider'
+                ]">
+                  Ficha: {{ studentSummary.estado_estudiante }}
+                </span>
+
+                <!-- Academic State Badge -->
+                <span :class="[
+                  studentSummary.estado_academico === 'Normal' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400' : 
+                  studentSummary.estado_academico === 'En riesgo' ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400' : 
+                  'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400',
+                  'px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider'
+                ]">
+                  Académico: {{ studentSummary.estado_academico }}
+                </span>
+              </div>
+            </div>
+
+            <!-- Key Metrics Grid -->
+            <div class="grid grid-cols-2 gap-4">
+              <div class="bg-slate-50 dark:bg-slate-800/40 rounded-2xl p-4 border border-slate-100 dark:border-slate-800/80">
+                <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Promedio General</span>
+                <span class="text-2xl font-black text-indigo-600 dark:text-indigo-400 mt-1 block">
+                  {{ studentSummary.gpa || '0.0' }}
+                </span>
+              </div>
+              <div class="bg-slate-50 dark:bg-slate-800/40 rounded-2xl p-4 border border-slate-100 dark:border-slate-800/80">
+                <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Materias Reprobadas</span>
+                <span class="text-2xl font-black mt-1 block" :class="studentSummary.failed_subjects_count > 0 ? 'text-red-500' : 'text-slate-900 dark:text-white'">
+                  {{ studentSummary.failed_subjects_count }}
+                </span>
+              </div>
+              <div class="bg-slate-50 dark:bg-slate-800/40 rounded-2xl p-4 border border-slate-100 dark:border-slate-800/80">
+                <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Inasistencias</span>
+                <span class="text-2xl font-black text-slate-900 dark:text-white mt-1 block">
+                  {{ studentSummary.total_inasistencias }}
+                </span>
+              </div>
+              <div class="bg-slate-50 dark:bg-slate-800/40 rounded-2xl p-4 border border-slate-100 dark:border-slate-800/80">
+                <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Observaciones Conv.</span>
+                <span class="text-2xl font-black text-slate-900 dark:text-white mt-1 block">
+                  {{ studentSummary.total_disciplinarias }}
+                </span>
+              </div>
+            </div>
+
+            <!-- Failed Subjects List -->
+            <div v-if="studentSummary.failed_subjects && studentSummary.failed_subjects.length > 0" class="space-y-3">
+              <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                <BookOpen :size="14" class="text-red-400" />
+                Materias Reprobadas ({{ studentSummary.failed_subjects.length }})
+              </h4>
+              <div class="space-y-2">
+                <div v-for="sub in studentSummary.failed_subjects" :key="sub.id_materia" class="bg-red-50/50 dark:bg-red-950/10 border border-red-100 dark:border-red-950/40 rounded-2xl p-3.5 flex justify-between items-center">
+                  <span class="text-sm font-black text-red-900 dark:text-red-300">
+                    ❌ {{ sub.materia }}
+                  </span>
+                  <span class="text-sm font-black text-red-600 dark:text-red-400 bg-red-100/50 dark:bg-red-950/40 px-2.5 py-0.5 rounded-lg">
+                    {{ sub.calificacion }}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Parent Info -->
+            <div class="space-y-3">
+              <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Contacto de Acudiente</h4>
+              <div v-if="studentSummary.parent" class="bg-slate-50 dark:bg-slate-800/40 rounded-3xl p-5 border border-slate-100 dark:border-slate-800/80 space-y-2">
+                <p class="text-sm font-black text-slate-900 dark:text-white uppercase leading-none">
+                  {{ studentSummary.parent.nombre }}
+                </p>
+                <p class="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1.5 mt-2">
+                  <Mail :size="14" /> {{ studentSummary.parent.email }}
+                </p>
+              </div>
+              <div v-else class="text-xs italic text-slate-400 p-4 border border-dashed rounded-3xl text-center">
+                Sin información de acudiente asociada.
+              </div>
+            </div>
+
+            <!-- System Activity -->
+            <div class="space-y-3">
+              <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Actividad en el Sistema</h4>
+              <div class="bg-slate-50 dark:bg-slate-800/40 rounded-3xl p-5 border border-slate-100 dark:border-slate-800/80 flex items-center justify-between">
+                <span class="text-xs font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                  <Activity :size="14" /> Última actividad
+                </span>
+                <span class="text-xs font-black text-slate-900 dark:text-white uppercase">
+                  {{ studentSummary.ultima_actividad }}
+                </span>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Drawer Footer (Deep Tracking Button) -->
+        <div v-if="studentSummary && !loadingSummary" class="p-6 border-t border-slate-100 dark:border-slate-800/60 bg-slate-50/50 dark:bg-slate-900">
+          <button 
+            @click="goToStudentMonitoring"
+            class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 px-6 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-indigo-100 dark:shadow-none transition-all"
+          >
+            <Eye :size="16" />
+            Ver Seguimiento Completo
+          </button>
+          <p class="text-[10px] text-center text-slate-400 font-bold mt-2">
+            Ingresa al panel del estudiante en modo de solo lectura.
+          </p>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
 </template>
+
+<style scoped>
+.drawer-fade-enter-active,
+.drawer-fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+.drawer-fade-enter-from,
+.drawer-fade-leave-to {
+  opacity: 0;
+}
+
+.drawer-slide-enter-active,
+.drawer-slide-leave-active {
+  transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.drawer-slide-enter-from,
+.drawer-slide-leave-to {
+  transform: translateX(100%);
+}
+
+.custom-scrollbar::-webkit-scrollbar { width: 5px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+.dark .custom-scrollbar::-webkit-scrollbar-thumb { background: #1e293b; }
+</style>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, nextTick } from 'vue'
 import { FileDown, Loader2 } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 import BoletinPreview from './BoletinPreview.vue'
@@ -37,37 +37,85 @@ const handleExport = async () => {
     }
     
     boletinData.value = await res.json()
-    
-    // Start PDF generation
     isExporting.value = true
-    
-    // Wait for the component to render
-    setTimeout(async () => {
-      try {
-        const element = boletinPreviewRef.value?.boletinRef
-        if (!element) throw new Error('No se pudo encontrar el elemento del boletín')
 
-        const opt = {
-          margin: 0.5,
-          filename: `boletin_${boletinData.value?.estudiante?.codigo || 'estudiante'}_${boletinData.value?.periodo || 'periodo'}.pdf`,
-          image: { type: 'jpeg' as const, quality: 0.98 },
-          html2canvas: { scale: 2, useCORS: true },
-          jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' as const }
-        }
+    // Esperar a que Vue renderice el componente completamente
+    await nextTick()
+    await new Promise(resolve => setTimeout(resolve, 800))
 
-        await html2pdf().set(opt).from(element).save()
-        isExporting.value = false
-        boletinData.value = null // Clear data after export to hide preview
-      } catch (err: any) {
-        console.error(err)
-        error.value = 'Error al generar el PDF'
-        isExporting.value = false
+    try {
+      const element = boletinPreviewRef.value?.boletinRef
+      console.log('--- DIAGNÓSTICO DE EXPORTACIÓN PDF ---')
+      console.log('Elemento recuperado de BoletinPreview:', element)
+
+      if (!element) throw new Error('No se pudo encontrar el elemento del boletín')
+
+      // Verificar que el elemento tiene dimensiones válidas antes de generar
+      let rect = element.getBoundingClientRect()
+      console.log('Dimensiones iniciales del elemento:', {
+        width: rect.width,
+        height: rect.height,
+        scrollWidth: element.scrollWidth,
+        scrollHeight: element.scrollHeight,
+        offsetWidth: element.offsetWidth,
+        offsetHeight: element.offsetHeight
+      })
+
+      if (rect.width === 0 || rect.height === 0) {
+        console.warn('¡Alerta! El elemento tiene dimensiones 0. Forzando tamaño de layout fijo...')
+        element.style.width = '816px'
+        element.style.minHeight = '600px'
+        element.style.display = 'block'
+        element.style.visibility = 'visible'
+        
+        // Dar otro tick al browser para re-calcular layout
+        await new Promise(resolve => setTimeout(resolve, 200))
+        rect = element.getBoundingClientRect()
+        console.log('Dimensiones tras forzar estilos:', {
+          width: rect.width,
+          height: rect.height
+        })
       }
-    }, 500)
+
+      // Validar si hay algún canvas de tamaño 0 adentro
+      const canvases = element.querySelectorAll('canvas')
+      console.log('Cantidad de canvas dentro del boletín:', canvases.length)
+      canvases.forEach((c: any, index: number) => {
+        console.log(`Canvas #${index}:`, { width: c.width, height: c.height, styleWidth: c.style.width, styleHeight: c.style.height })
+      })
+
+      const opt = {
+        margin: 0.5,
+        filename: `boletin_${boletinData.value?.estudiante?.codigo || 'estudiante'}_${boletinData.value?.periodo || 'periodo'}.pdf`,
+        image: { type: 'jpeg' as const, quality: 0.98 },
+        html2canvas: { 
+          scale: 2, 
+          useCORS: true,
+          logging: true, // Habilitar logs internos de html2canvas para debug
+          scrollX: 0,
+          scrollY: 0,
+          windowWidth: 816
+        },
+        jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' as const }
+      }
+
+      console.log('Iniciando html2pdf con opciones:', opt)
+      await html2pdf().set(opt).from(element).save()
+      console.log('PDF generado exitosamente.')
+    } catch (err: any) {
+      console.error('Error detallado en la generación del PDF:', err)
+      error.value = `Error al generar el PDF: ${err.message || err}`
+    } finally {
+      // Siempre limpiar el estado para desbloquear la vista
+      isExporting.value = false
+      boletinData.value = null
+    }
 
   } catch (err: any) {
-    console.error(err)
+    console.error('Error en handleExport:', err)
     error.value = err.message || 'Error de conexión'
+    isExporting.value = false
+    boletinData.value = null
   } finally {
     isLoading.value = false
   }
@@ -83,15 +131,18 @@ const handleExport = async () => {
     >
       <Loader2 v-if="isLoading || isExporting" class="w-4 h-4 animate-spin" />
       <FileDown v-else class="w-4 h-4" />
-      {{ isExporting ? 'Generando...' : isLoading ? 'Cargando...' : 'Descargar Boletín' }}
+      {{ isExporting ? 'Generando PDF...' : isLoading ? 'Cargando...' : 'Descargar Boletín' }}
     </button>
     
     <p v-if="error" class="mt-2 text-[10px] text-rose-500 font-bold text-center italic">
       {{ error }}
     </p>
 
-    <!-- Hidden Preview for PDF Generation -->
-    <div v-if="boletinData" class="hidden-preview-container">
+    <!-- Contenedor oculto para renderizar el boletín antes de exportar a PDF -->
+    <!-- fixed con z-index: -99999 y opacity: 0.005 asegura que esté siempre en el viewport visible
+         del navegador (incluso si hay scroll) para que se renderice correctamente en la GPU,
+         pero sin molestar al usuario ni permitir interacción alguna. -->
+    <div v-if="boletinData" class="hidden-preview-container" aria-hidden="true">
       <BoletinPreview 
         :data="boletinData" 
         ref="boletinPreviewRef" 
@@ -102,9 +153,15 @@ const handleExport = async () => {
 
 <style scoped>
 .hidden-preview-container {
-  position: absolute;
-  left: -9999px;
-  top: -9999px;
-  width: 8.5in; /* Letter size width */
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 816px; /* 8.5in a 96dpi */
+  height: 100vh;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+  opacity: 0.005;
+  z-index: -99999;
 }
 </style>

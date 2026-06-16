@@ -29,7 +29,7 @@ const fetchDetails = async () => {
     let finalStudentId = id_estudiante_param
     
     if (!finalStudentId) {
-      const userId = auth.user?.id
+      const userId = auth.isMonitoring ? auth.monitoringUser?.id : auth.user?.id
       if (!userId) return
       const resEst = await axios.get(`http://localhost:3000/api/student/user-id/${userId}`)
       finalStudentId = resEst.data.id_estudiante

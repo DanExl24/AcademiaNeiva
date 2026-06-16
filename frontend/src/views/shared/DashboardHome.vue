@@ -272,6 +272,17 @@ const handleCriticalSubjectClick = (sub: any) => {
   }
 }
 
+const getInitials = (name: string): string => {
+  if (!name) return ''
+  return name
+    .split(' ')
+    .filter(Boolean)
+    .map(n => n[0])
+    .join('')
+    .substring(0, 2)
+    .toUpperCase()
+}
+
 const selectedCourseForSubjects = ref<number | null>(null)
 const selectedCourseForEvolution = ref<number | null>(null)
 
@@ -944,7 +955,7 @@ onMounted(async () => {
           >
             <div class="flex items-center gap-4 min-w-0">
               <div class="h-10 w-10 shrink-0 flex items-center justify-center rounded-xl bg-rose-500/15 text-rose-400 font-black text-sm">
-                {{ student.nombre_completo.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() }}
+                {{ getInitials(student.nombre_completo) }}
               </div>
               <div class="flex flex-col min-w-0">
                 <span class="font-bold truncate text-sm text-slate-200">{{ student.nombre_completo }}</span>
