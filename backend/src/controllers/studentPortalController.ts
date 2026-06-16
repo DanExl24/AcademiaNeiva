@@ -11,8 +11,7 @@ export const getStudentAcademicYears = async (req: Request, res: Response) => {
       SELECT DISTINCT al."id_año", al.calendario
       FROM "año_lectivo" al
       JOIN estudiante e ON e.id_colegio = al.id_colegio
-      JOIN periodo_academico p ON p."id_año" = al."id_año"
-      WHERE e.id_estudiante = $1 AND p.estado = 'CERRADO'
+      WHERE e.id_estudiante = $1
       ORDER BY al.calendario DESC
     `, [id_estudiante]);
     res.json(result.rows);
@@ -631,8 +630,8 @@ export const getStudentDashboardStats = async (req: Request, res: Response) => {
   const { id_estudiante, id_periodo } = req.params;
 
   try {
-    const studentIdInt = parseInt(id_estudiante);
-    const periodIdInt = parseInt(id_periodo);
+    const studentIdInt = parseInt(id_estudiante as string);
+    const periodIdInt = parseInt(id_periodo as string);
 
     if (isNaN(studentIdInt) || isNaN(periodIdInt)) {
       return res.status(400).json({ error: 'Parámetros numéricos inválidos' });
@@ -704,22 +703,24 @@ export const getStudentDashboardStats = async (req: Request, res: Response) => {
 
     // Calculate grades aggregates
     let promedio_general = null;
-    let materias_aprobadas = null;
-    let materias_reprobadas = null;
+    let materias_aprobadas: number | null = null;
+    let materias_reprobadas: number | null = null;
 
     if (has_calificaciones && grades.length > 0) {
       const sum = grades.reduce((acc, curr) => acc + curr.calificacion, 0);
       promedio_general = sum / grades.length;
       
-      materias_aprobadas = 0;
-      materias_reprobadas = 0;
+      let aprobadas = 0;
+      let reprobadas = 0;
       grades.forEach(g => {
         if (g.calificacion >= nota_aprobacion) {
-          materias_aprobadas++;
+          aprobadas++;
         } else {
-          materias_reprobadas++;
+          reprobadas++;
         }
       });
+      materias_aprobadas = aprobadas;
+      materias_reprobadas = reprobadas;
     }
 
     // Sort to get top best and worst subjects

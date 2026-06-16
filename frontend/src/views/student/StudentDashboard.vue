@@ -17,7 +17,8 @@ import {
   ThumbsUp,
   ThumbsDown,
   Info,
-  Calendar
+  Calendar,
+  CalendarDays
 } from 'lucide-vue-next'
 import BoletinExportModule from '../../components/boletines/BoletinExportModule.vue'
 import { Bar, Doughnut } from 'vue-chartjs'
@@ -46,6 +47,8 @@ ChartJS.register(
 const auth = useAuthStore()
 const studentId = ref<number | null>(null)
 const selectedPeriodId = ref<number | null>(null)
+const selectedYearId = ref<number | null>(null)
+const academicYears = ref<any[]>([])
 const periods = ref<any[]>([])
 const loading = ref(true)
 
@@ -65,27 +68,16 @@ const fetchStudentData = async () => {
     studentId.value = idRes.data.id_estudiante
 
     if (studentId.value) {
-      // Get all academic years to find the matching calendar year
+      // Get all academic years
       const yearsRes = await axios.get(`http://localhost:3000/api/student/years/${studentId.value}`)
-      const yearsList = yearsRes.data
+      academicYears.value = yearsRes.data
       
-      let activeAnioId = null
-      if (yearsList.length > 0) {
+      if (academicYears.value.length > 0) {
+        // Default to current calendar year match, or first in list
         const currentYearStr = new Date().getFullYear().toString()
-        const matchingYear = yearsList.find((y: any) => y.calendario === currentYearStr)
-        activeAnioId = matchingYear ? matchingYear.id_año : yearsList[0].id_año
-      }
-
-      if (activeAnioId) {
-        // Get periods for the resolved academic year
-        const periodsRes = await axios.get(`http://localhost:3000/api/student/all-periods/${studentId.value}/${activeAnioId}`)
-        periods.value = periodsRes.data
-        
-        if (periods.value.length > 0) {
-          selectedPeriodId.value = periods.value[periods.value.length - 1].id_periodo
-        } else {
-          statsLoading.value = false
-        }
+        const matchingYear = academicYears.value.find((y: any) => y.calendario === currentYearStr)
+        selectedYearId.value = matchingYear ? matchingYear['id_año'] : academicYears.value[0]['id_año']
+        // loadPeriodsForYear will be triggered by the watcher
       } else {
         statsLoading.value = false
       }
@@ -97,6 +89,27 @@ const fetchStudentData = async () => {
     statsLoading.value = false
   } finally {
     loading.value = false
+  }
+}
+
+const loadPeriodsForYear = async () => {
+  if (!studentId.value || !selectedYearId.value) return
+  try {
+    const periodsRes = await axios.get(`http://localhost:3000/api/student/all-periods/${studentId.value}/${selectedYearId.value}`)
+    periods.value = periodsRes.data
+    
+    if (periods.value.length > 0) {
+      // Default to the open period, or the last one
+      const openPeriod = periods.value.find((p: any) => p.estado === 'ABIERTO')
+      selectedPeriodId.value = openPeriod ? openPeriod.id_periodo : periods.value[periods.value.length - 1].id_periodo
+    } else {
+      selectedPeriodId.value = null
+      dashboardStats.value = null
+      statsLoading.value = false
+    }
+  } catch (err) {
+    console.error('Error loading periods for year:', err)
+    statsLoading.value = false
   }
 }
 
@@ -126,6 +139,11 @@ const fetchStats = async () => {
 
 onMounted(async () => {
   await fetchStudentData()
+})
+
+// Watch for year change to reload periods
+watch(selectedYearId, () => {
+  loadPeriodsForYear()
 })
 
 // Watch for period change to reload statistics
@@ -254,18 +272,33 @@ const hasObservations = computed(() => {
             Bienvenido a tu portal académico. Aquí podrás consultar tus notas, asistencias, observaciones y tu historial académico.
           </p>
 
-          <!-- Period Selector -->
-          <div v-if="periods.length > 0" class="mt-6 inline-flex items-center gap-3 bg-white/10 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/20">
-            <Clock :size="18" class="text-indigo-200" />
-            <select 
-              v-model="selectedPeriodId"
-              class="bg-transparent text-white text-sm font-bold outline-none cursor-pointer appearance-none pr-6"
-              style="background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22white%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C/polyline%3E%3C/svg%3E'); background-repeat: no-repeat; background-position: right center; background-size: 1.2em;"
-            >
-              <option v-for="p in periods" :key="p.id_periodo" :value="p.id_periodo" class="text-slate-900">
-                {{ p.nombre }}{{ p.estado === 'ABIERTO' ? ' (Activo)' : '' }}
-              </option>
-            </select>
+          <!-- Year & Period Selectors -->
+          <div v-if="academicYears.length > 0" class="mt-6 flex flex-wrap items-center gap-3">
+            <div class="inline-flex items-center gap-3 bg-white/10 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/20">
+              <CalendarDays :size="18" class="text-indigo-200" />
+              <select 
+                v-model="selectedYearId"
+                class="bg-transparent text-white text-sm font-bold outline-none cursor-pointer appearance-none pr-6"
+                style="background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22white%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C/polyline%3E%3C/svg%3E'); background-repeat: no-repeat; background-position: right center; background-size: 1.2em;"
+              >
+                <option v-for="y in academicYears" :key="y['id_año']" :value="y['id_año']" class="text-slate-900">
+                  Año {{ y.calendario }}
+                </option>
+              </select>
+            </div>
+
+            <div v-if="periods.length > 0" class="inline-flex items-center gap-3 bg-white/10 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/20">
+              <Clock :size="18" class="text-indigo-200" />
+              <select 
+                v-model="selectedPeriodId"
+                class="bg-transparent text-white text-sm font-bold outline-none cursor-pointer appearance-none pr-6"
+                style="background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22white%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C/polyline%3E%3C/svg%3E'); background-repeat: no-repeat; background-position: right center; background-size: 1.2em;"
+              >
+                <option v-for="p in periods" :key="p.id_periodo" :value="p.id_periodo" class="text-slate-900">
+                  {{ p.nombre }}{{ p.estado === 'ABIERTO' ? ' (Activo)' : '' }}
+                </option>
+              </select>
+            </div>
           </div>
         </div>
         

@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
+import axios from 'axios'
 import { 
   LayoutDashboard, 
   ClipboardList, 
@@ -25,7 +26,6 @@ import {
 import { useAuthStore } from '../stores/auth'
 import { useThemeStore } from '../stores/theme'
 import { useRouter } from 'vue-router'
-import { computed } from 'vue'
 
 const auth = useAuthStore()
 const theme = useThemeStore()
@@ -104,6 +104,43 @@ const stopMonitoring = () => {
     router.push('/dashboard/docentes')
   }
 }
+
+const activeYear = ref<string>('')
+const currentTime = ref<string>('')
+
+const fetchActiveYear = async () => {
+  const schoolId = auth.user?.schoolId
+  if (!schoolId) return
+  try {
+    const response = await axios.get(`http://localhost:3000/api/academic-admin/settings/${schoolId}`)
+    if (response.data?.activeYear) {
+      activeYear.value = response.data.activeYear.calendario
+    }
+  } catch (error) {
+    console.error('Error fetching active year:', error)
+  }
+}
+
+const updateClock = () => {
+  const now = new Date()
+  currentTime.value = now.toLocaleTimeString('es-CO', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true
+  })
+}
+
+let clockInterval: any
+onMounted(() => {
+  fetchActiveYear()
+  updateClock()
+  clockInterval = setInterval(updateClock, 1000)
+})
+
+onUnmounted(() => {
+  if (clockInterval) clearInterval(clockInterval)
+})
 </script>
 
 <template>
@@ -194,19 +231,37 @@ const stopMonitoring = () => {
           {{ auth.isMonitoring ? `Seguimiento: ${auth.monitoringUser?.nombre} ${auth.monitoringUser?.apellido}` : ($route.name || 'Panel de Gestión') }}
         </h2>
         
-        <div class="flex items-center gap-4">
-          <div class="text-right hidden sm:block">
-            <p class="text-sm font-bold text-gray-900 dark:text-white">{{ auth.user?.name || 'Usuario' }}</p>
-            <p class="text-xs text-gray-500 dark:text-slate-400 capitalize flex items-center justify-end gap-1">
-              {{ auth.activeRole || 'Rol' }}
-              <button v-if="hasMultipleRoles" @click="switchRole(otherRole!)" 
-                class="ml-2 text-[10px] bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded-full font-bold hover:bg-indigo-600 hover:text-white transition-all">
-                Cambiar a {{ otherRole }}
-              </button>
-            </p>
+        <div class="flex items-center gap-6">
+          <!-- Año Lectivo y Hora Actual -->
+          <div class="hidden md:flex items-center gap-4 text-xs font-semibold text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/40 px-4 py-2 rounded-2xl border border-slate-100 dark:border-slate-800/50">
+            <div class="flex items-center gap-1.5 border-r border-slate-200 dark:border-slate-700/60 pr-4">
+              <span class="text-indigo-500 dark:text-indigo-400 font-bold uppercase tracking-widest text-[9px]">Año:</span>
+              <span class="font-extrabold text-slate-700 dark:text-slate-200 bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded-lg border border-indigo-100/30 dark:border-indigo-900/20">
+                {{ activeYear || '...' }}
+              </span>
+            </div>
+            <div class="flex items-center gap-1.5 font-mono">
+              <span class="text-emerald-500 dark:text-emerald-400 font-bold uppercase tracking-widest text-[9px]">Hora:</span>
+              <span class="font-bold text-slate-700 dark:text-slate-200">
+                {{ currentTime }}
+              </span>
+            </div>
           </div>
-          <div class="h-10 w-10 rounded-full bg-indigo-100 dark:bg-indigo-900 border-2 border-white dark:border-slate-800 shadow-sm flex items-center justify-center text-indigo-600 dark:text-indigo-300 font-bold">
-            {{ (auth.user?.name || 'U').charAt(0) }}
+
+          <div class="flex items-center gap-4">
+            <div class="text-right hidden sm:block">
+              <p class="text-sm font-bold text-gray-900 dark:text-white">{{ auth.user?.name || 'Usuario' }}</p>
+              <p class="text-xs text-gray-500 dark:text-slate-400 capitalize flex items-center justify-end gap-1">
+                {{ auth.activeRole || 'Rol' }}
+                <button v-if="hasMultipleRoles" @click="switchRole(otherRole!)" 
+                  class="ml-2 text-[10px] bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded-full font-bold hover:bg-indigo-600 hover:text-white transition-all">
+                  Cambiar a {{ otherRole }}
+                </button>
+              </p>
+            </div>
+            <div class="h-10 w-10 rounded-full bg-indigo-100 dark:bg-indigo-900 border-2 border-white dark:border-slate-800 shadow-sm flex items-center justify-center text-indigo-600 dark:text-indigo-300 font-bold">
+              {{ (auth.user?.name || 'U').charAt(0) }}
+            </div>
           </div>
         </div>
       </header>

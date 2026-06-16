@@ -3,7 +3,7 @@ import { PoolClient } from "pg";
 import { pool } from "../config/db";
 import bcrypt from "bcrypt";
 import { NotificationService } from "../services/notificationService";
-import { getDefaultMonthsLabelForPeriodOrder } from "../config/academicCalendarDefaults";
+import { getDefaultMonthsLabelForPeriodOrder, getAcademicYearLabel } from "../config/academicCalendarDefaults";
 import {
   DEFAULT_COMPETENCY_TEXT,
   ensureCompetencySchema,
@@ -38,11 +38,74 @@ const ensureTeacherStatusColumn = async () => {
   `);
 };
 
+const autoSwitchPeriodsForYear = async (client: any, schoolId: number, yearId: number): Promise<void> => {
+  const yearRes = await client.query(
+    `SELECT "id_año", calendario, tipo_calendario
+     FROM "año_lectivo"
+     WHERE "id_año" = $1 AND id_colegio = $2`,
+    [yearId, schoolId]
+  );
+  if (!yearRes.rows.length) return;
+  const yearRow = yearRes.rows[0];
+  const calendarType = yearRow.tipo_calendario || 'A';
+
+  const periodsRes = await client.query(
+    `SELECT id_periodo, mes_inicio, dia_inicio, mes_fin, dia_fin
+     FROM periodo_academico
+     WHERE id_colegio = $1 AND "id_año" = $2`,
+    [schoolId, yearId]
+  );
+
+  const now = new Date();
+  const currentMonth = now.getMonth() + 1; // 1-12
+  const currentDay = now.getDate();
+  let periodIdToOpen: number | null = null;
+
+  for (const p of periodsRes.rows) {
+    if (p.mes_inicio && p.dia_inicio && p.mes_fin && p.dia_fin) {
+      const mesInicio = Number(p.mes_inicio);
+      const diaInicio = Number(p.dia_inicio);
+      const mesFin = Number(p.mes_fin);
+      const diaFin = Number(p.dia_fin);
+
+      if (calendarType === 'A') {
+        // Calendario A: all periods within a single calendar year (Jan-Dec)
+        // Compare month/day numerically — no dependency on the year label
+        const nowVal = currentMonth * 100 + currentDay;
+        const startVal = mesInicio * 100 + diaInicio;
+        const endVal = mesFin * 100 + diaFin;
+        if (nowVal >= startVal && nowVal <= endVal) {
+          periodIdToOpen = p.id_periodo;
+          break;
+        }
+      } else {
+        // Calendario B: spans Aug-Jul across two calendar years
+        // Normalize months to a linear scale: Aug(8)→1, Sep(9)→2, ..., Dec(12)→5, Jan(1)→6, ..., Jul(7)→12
+        const normalizeMonth = (m: number) => m >= 8 ? m - 7 : m + 5;
+        const nowNorm = normalizeMonth(currentMonth) * 100 + currentDay;
+        const startNorm = normalizeMonth(mesInicio) * 100 + diaInicio;
+        const endNorm = normalizeMonth(mesFin) * 100 + diaFin;
+        if (nowNorm >= startNorm && nowNorm <= endNorm) {
+          periodIdToOpen = p.id_periodo;
+          break;
+        }
+      }
+    }
+  }
+
+  await client.query(
+    `UPDATE periodo_academico
+     SET estado = CASE WHEN id_periodo = $1 THEN 'ABIERTO'::estado_periodo ELSE 'CERRADO'::estado_periodo END
+     WHERE id_colegio = $2 AND "id_año" = $3`,
+    [periodIdToOpen || -1, schoolId, yearId]
+  );
+};
+
 const ensureAcademicYearForSchool = async (schoolId: number): Promise<number> => {
   const existing = await pool.query(
     `SELECT "id_año"
      FROM "año_lectivo"
-     WHERE id_colegio = $1
+     WHERE id_colegio = $1 AND estado = 'ABIERTO'
      ORDER BY "id_año" DESC
      LIMIT 1`,
     [schoolId]
@@ -52,12 +115,26 @@ const ensureAcademicYearForSchool = async (schoolId: number): Promise<number> =>
     return Number(existing.rows[0]["id_año"]);
   }
 
+  // Fallback to highest year regardless of state if none are open
+  const fallback = await pool.query(
+    `SELECT "id_año"
+     FROM "año_lectivo"
+     WHERE id_colegio = $1
+     ORDER BY "id_año" DESC
+     LIMIT 1`,
+    [schoolId]
+  );
+
+  if (fallback.rows.length > 0) {
+    return Number(fallback.rows[0]["id_año"]);
+  }
+
   const currentYear = new Date().getFullYear();
   const created = await pool.query(
-    `INSERT INTO "año_lectivo" ("id_año", calendario, id_colegio)
-     VALUES ($1, 'A', $2)
+    `INSERT INTO "año_lectivo" (calendario, id_colegio, tipo_calendario, estado)
+     VALUES ($1, $2, 'A', 'ABIERTO')
      RETURNING "id_año"`,
-    [currentYear, schoolId]
+    [String(currentYear), schoolId]
   );
 
   return Number(created.rows[0]["id_año"]);
@@ -763,6 +840,10 @@ export const getAcademicSettingsData = async (req: Request, res: Response): Prom
   }
 
   try {
+    await pool.query(`
+      ALTER TABLE "año_lectivo"
+      ADD COLUMN IF NOT EXISTS estado VARCHAR(20) DEFAULT 'ABIERTO'
+    `);
     await ensureCompetencySchema();
     await ensureAcademicPeriodTrimesterColumn();
     await ensureAcademicPeriodDayColumns();
@@ -770,36 +851,7 @@ export const getAcademicSettingsData = async (req: Request, res: Response): Prom
     const currentYearId = await ensureAcademicYearForSchool(schoolId);
 
     // Auto-switch periods based on current date
-    const now = new Date();
-    const periodsCheck = await pool.query(
-      `SELECT id_periodo, mes_inicio, dia_inicio, mes_fin, dia_fin
-       FROM periodo_academico
-       WHERE id_colegio = $1 AND "id_año" = $2`,
-      [schoolId, currentYearId]
-    );
-
-    let periodIdToOpen: number | null = null;
-    for (const p of periodsCheck.rows) {
-      if (p.mes_inicio && p.dia_inicio && p.mes_fin && p.dia_fin) {
-        const start = new Date(now.getFullYear(), p.mes_inicio - 1, p.dia_inicio);
-        const end = new Date(now.getFullYear(), p.mes_fin - 1, p.dia_fin);
-        // Si el fin es menor que el inicio, asumimos que cruza el año
-        if (end < start) end.setFullYear(end.getFullYear() + 1);
-        
-        if (now >= start && now <= end) {
-          periodIdToOpen = p.id_periodo;
-          break;
-        }
-      }
-    }
-
-    // SIEMPRE ejecutamos el update para asegurar que si no hay match, todo esté CERRADO (o solo el correcto abierto)
-    await pool.query(
-      `UPDATE periodo_academico
-       SET estado = CASE WHEN id_periodo = $1 THEN 'ABIERTO'::estado_periodo ELSE 'CERRADO'::estado_periodo END
-       WHERE id_colegio = $2 AND "id_año" = $3`,
-      [periodIdToOpen || -1, schoolId, currentYearId]
-    );
+    await autoSwitchPeriodsForYear(pool, schoolId, currentYearId);
 
     const competencyClient = await pool.connect();
     try {
@@ -815,14 +867,14 @@ export const getAcademicSettingsData = async (req: Request, res: Response): Prom
 
     const [yearRes, academicYearsRes, defaultSettingsRes, periodsRes, scalesRes, assignmentsRes, competenciesRes, closureSummaryRes] = await Promise.all([
       pool.query(
-        `SELECT "id_año", calendario
+        `SELECT "id_año", calendario, tipo_calendario, estado
          FROM "año_lectivo"
          WHERE "id_año" = $1
            AND id_colegio = $2`,
         [currentYearId, schoolId]
       ),
       pool.query(
-        `SELECT "id_año", calendario
+        `SELECT "id_año", calendario, tipo_calendario, estado
          FROM "año_lectivo"
          WHERE id_colegio = $1
          ORDER BY "id_año" DESC`,
@@ -954,6 +1006,7 @@ export const getAcademicSettingsData = async (req: Request, res: Response): Prom
 
     res.json({
       currentYear: yearRes.rows[0] || null,
+      activeYear: yearRes.rows[0] || null,
       academicYears: academicYearsRes.rows,
       defaultSettings: defaultSettingsRes,
       periods: periodsWithDefaults,
@@ -976,6 +1029,7 @@ export const createAcademicPeriod = async (req: Request, res: Response): Promise
   const diaInicio = Number(req.body.dia_inicio);
   const mesFin = Number(req.body.mes_fin);
   const diaFin = Number(req.body.dia_fin);
+  const targetYearId = req.body.id_año ? Number(req.body.id_año) : null;
 
   if (
     !schoolId ||
@@ -1006,13 +1060,13 @@ export const createAcademicPeriod = async (req: Request, res: Response): Promise
   try {
     await ensureAcademicPeriodTrimesterColumn();
     await ensureAcademicPeriodDayColumns();
-    const currentYearId = await ensureAcademicYearForSchool(schoolId);
+    const finalYearId = targetYearId || await ensureAcademicYearForSchool(schoolId);
 
     const totalsRes = await pool.query(
       `SELECT COALESCE(SUM(porcentaje), 0)::numeric AS total
        FROM periodo_academico
-       WHERE id_colegio = $1`,
-      [schoolId]
+       WHERE id_colegio = $1 AND "id_año" = $2`,
+      [schoolId, finalYearId]
     );
 
     const currentTotal = Number(totalsRes.rows[0].total);
@@ -1027,12 +1081,13 @@ export const createAcademicPeriod = async (req: Request, res: Response): Promise
       `SELECT id_periodo
        FROM periodo_academico
        WHERE id_colegio = $1
-         AND UPPER(TRIM(nombre)) = UPPER(TRIM($2))`,
-      [schoolId, nombre]
+         AND "id_año" = $2
+         AND UPPER(TRIM(nombre)) = UPPER(TRIM($3))`,
+      [schoolId, finalYearId, nombre]
     );
 
     if (duplicateRes.rows.length > 0) {
-      res.status(409).json({ error: "Ya existe un periodo académico con ese nombre" });
+      res.status(409).json({ error: "Ya existe un periodo académico con ese nombre en este año" });
       return;
     }
 
@@ -1040,7 +1095,7 @@ export const createAcademicPeriod = async (req: Request, res: Response): Promise
       `INSERT INTO periodo_academico (nombre, estado, porcentaje, mes_inicio, dia_inicio, mes_fin, dia_fin, "id_año", id_colegio)
        VALUES ($1, 'CERRADO', $2, $3, $4, $5, $6, $7, $8)
        RETURNING id_periodo, nombre, estado, porcentaje, mes_inicio, dia_inicio, mes_fin, dia_fin, "id_año"`,
-      [nombre, porcentaje, mesInicio, diaInicio, mesFin, diaFin, currentYearId, schoolId]
+      [nombre, porcentaje, mesInicio, diaInicio, mesFin, diaFin, finalYearId, schoolId]
     );
 
     res.status(201).json(created.rows[0]);
@@ -1060,33 +1115,176 @@ export const createAcademicYear = async (req: Request, res: Response): Promise<v
     return;
   }
 
+  if (calendario !== "A" && calendario !== "B") {
+    res.status(400).json({ error: "El tipo de calendario debe ser A o B" });
+    return;
+  }
+
+  const client = await pool.connect();
   try {
-    const duplicateRes = await pool.query(
+    await client.query("BEGIN");
+
+    const yearLabel = getAcademicYearLabel(yearId, calendario as "A" | "B");
+
+    const duplicateRes = await client.query(
       `SELECT "id_año"
        FROM "año_lectivo"
-       WHERE "id_año" = $1
+       WHERE calendario = $1
          AND id_colegio = $2`,
-      [yearId, schoolId]
+      [yearLabel, schoolId]
     );
 
     if (duplicateRes.rows.length > 0) {
+      await client.query("ROLLBACK");
       res.status(409).json({ error: "Ese año lectivo ya está configurado para el colegio" });
       return;
     }
 
-    const created = await pool.query(
-      `INSERT INTO "año_lectivo" ("id_año", calendario, id_colegio)
+    const createdYear = await client.query(
+      `INSERT INTO "año_lectivo" (calendario, id_colegio, tipo_calendario)
        VALUES ($1, $2, $3)
-       RETURNING "id_año", calendario`,
-      [yearId, calendario || "A", schoolId]
+       RETURNING "id_año", calendario, tipo_calendario`,
+      [yearLabel, schoolId, calendario]
     );
 
-    res.status(201).json(created.rows[0]);
+    const newYearId = Number(createdYear.rows[0]["id_año"]);
+
+    // Auto-generate standard periods based on chosen calendar type
+    const periodsTemplate = calendario === "A" ? [
+      { nombre: "Primer Periodo", porcentaje: 25, trimestre: 1, mes_inicio: 2, dia_inicio: 1, mes_fin: 3, dia_fin: 28 },
+      { nombre: "Segundo Periodo", porcentaje: 25, trimestre: 2, mes_inicio: 4, dia_inicio: 1, mes_fin: 6, dia_fin: 28 },
+      { nombre: "Tercer Periodo", porcentaje: 25, trimestre: 3, mes_inicio: 7, dia_inicio: 1, mes_fin: 9, dia_fin: 28 },
+      { nombre: "Cuarto Periodo", porcentaje: 25, trimestre: 4, mes_inicio: 10, dia_inicio: 1, mes_fin: 12, dia_fin: 28 }
+    ] : [
+      { nombre: "Primer Periodo", porcentaje: 25, trimestre: 1, mes_inicio: 8, dia_inicio: 1, mes_fin: 10, dia_fin: 15 },
+      { nombre: "Segundo Periodo", porcentaje: 25, trimestre: 2, mes_inicio: 10, dia_inicio: 16, mes_fin: 12, dia_fin: 15 },
+      { nombre: "Tercer Periodo", porcentaje: 25, trimestre: 3, mes_inicio: 1, dia_inicio: 15, mes_fin: 3, dia_fin: 31 },
+      { nombre: "Cuarto Periodo", porcentaje: 25, trimestre: 4, mes_inicio: 4, dia_inicio: 1, mes_fin: 6, dia_fin: 15 }
+    ];
+
+    const generatedPeriods = [];
+    for (const p of periodsTemplate) {
+      const pRes = await client.query(
+        `INSERT INTO periodo_academico (nombre, estado, porcentaje, mes_inicio, dia_inicio, mes_fin, dia_fin, "id_año", id_colegio, trimestre)
+         VALUES ($1, 'CERRADO', $2, $3, $4, $5, $6, $7, $8, $9)
+         RETURNING id_periodo, nombre, estado, porcentaje, mes_inicio, dia_inicio, mes_fin, dia_fin, trimestre`,
+        [p.nombre, p.porcentaje, p.mes_inicio, p.dia_inicio, p.mes_fin, p.dia_fin, newYearId, schoolId, p.trimestre]
+      );
+      generatedPeriods.push(pRes.rows[0]);
+    }
+
+    await autoSwitchPeriodsForYear(client, schoolId, newYearId);
+
+    const updatedPeriodsRes = await client.query(
+      `SELECT id_periodo, nombre, estado, porcentaje, mes_inicio, dia_inicio, mes_fin, dia_fin, trimestre
+       FROM periodo_academico
+       WHERE "id_año" = $1 AND id_colegio = $2
+       ORDER BY id_periodo`,
+      [newYearId, schoolId]
+    );
+
+    await client.query("COMMIT");
+
+    res.status(201).json({
+      ...createdYear.rows[0],
+      periods: updatedPeriodsRes.rows,
+      message: `Año lectivo ${yearLabel} creado con Calendario ${calendario}. Se han generado automáticamente sus 4 periodos estándar.`
+    });
   } catch (error: any) {
+    await client.query("ROLLBACK");
     console.error("Error creating academic year:", error);
+    res.status(500).json({ error: "Error en el servidor" });
+  } finally {
+    client.release();
+  }
+};
+
+export const deleteAcademicYear = async (req: Request, res: Response): Promise<void> => {
+  const schoolId = parseSchoolId(req.body.schoolId);
+  const yearId = Number(req.params.id);
+
+  if (!schoolId || Number.isNaN(yearId)) {
+    res.status(400).json({ error: "Parámetros inválidos" });
+    return;
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    // Check if there are any active enrollments (matriculas) for this year
+    const matriculaCheck = await client.query(
+      `SELECT id_matricula
+       FROM matricula
+       WHERE "id_año" = $1 AND id_colegio = $2
+       LIMIT 1`,
+      [yearId, schoolId]
+    );
+
+    if (matriculaCheck.rows.length > 0) {
+      await client.query("ROLLBACK");
+      res.status(409).json({
+        error: "No es posible eliminar el año lectivo porque ya tiene matrículas asociadas en el sistema.",
+      });
+      return;
+    }
+
+    // Delete associated periods first
+    await client.query(
+      `DELETE FROM periodo_academico
+       WHERE "id_año" = $1 AND id_colegio = $2`,
+      [yearId, schoolId]
+    );
+
+    // Delete the year
+    await client.query(
+      `DELETE FROM "año_lectivo"
+       WHERE "id_año" = $1 AND id_colegio = $2`,
+      [yearId, schoolId]
+    );
+
+    await client.query("COMMIT");
+    res.json({ message: "Año lectivo y sus periodos eliminados exitosamente." });
+  } catch (error: any) {
+    await client.query("ROLLBACK");
+    console.error("Error deleting academic year:", error);
+    res.status(500).json({ error: "Error en el servidor" });
+  } finally {
+    client.release();
+  }
+};
+
+export const updateAcademicYearStatus = async (req: Request, res: Response): Promise<void> => {
+  const schoolId = parseSchoolId(req.body.schoolId);
+  const yearId = Number(req.params.id);
+  const nuevoEstado = String(req.body.estado || "").trim().toUpperCase();
+
+  if (!schoolId || Number.isNaN(yearId) || (nuevoEstado !== "ABIERTO" && nuevoEstado !== "CERRADO")) {
+    res.status(400).json({ error: "Parámetros de cambio de estado inválidos" });
+    return;
+  }
+
+  try {
+    const resUpdate = await pool.query(
+      `UPDATE "año_lectivo"
+       SET estado = $1
+       WHERE "id_año" = $2 AND id_colegio = $3
+       RETURNING "id_año", calendario, tipo_calendario, estado`,
+      [nuevoEstado, yearId, schoolId]
+    );
+
+    if (resUpdate.rows.length === 0) {
+      res.status(404).json({ error: "Año lectivo no encontrado" });
+      return;
+    }
+
+    res.json(resUpdate.rows[0]);
+  } catch (error: any) {
+    console.error("Error updating academic year status:", error);
     res.status(500).json({ error: "Error en el servidor" });
   }
 };
+
 
 export const updateSchoolDefaultSettings = async (req: Request, res: Response): Promise<void> => {
   const schoolId = parseSchoolId(req.body.schoolId);
@@ -2529,7 +2727,7 @@ export const getPeriodClosureDetails = async (req: Request, res: Response): Prom
 
 export const getDirectivoDashboard = async (req: Request, res: Response): Promise<void> => {
   const schoolId = parseSchoolId(req.params.schoolId);
-  const { periodId } = req.query;
+  const { periodId, yearId: yearIdParam } = req.query;
 
   if (!schoolId) {
     res.status(400).json({ error: "Colegio inválido" });
@@ -2537,20 +2735,26 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
   }
 
   try {
-    // 1. Get active period if not provided
+    // 0. Resolve target year
+    let targetYearId = yearIdParam ? Number(yearIdParam) : null;
+    if (!targetYearId || isNaN(targetYearId)) {
+      targetYearId = await ensureAcademicYearForSchool(schoolId);
+    }
+
+    // 1. Get active period within the target year if not provided
     let targetPeriodId = periodId ? Number(periodId) : null;
     if (!targetPeriodId) {
       const activePeriodRes = await pool.query(
-        "SELECT id_periodo FROM periodo_academico WHERE id_colegio = $1 AND estado = 'ABIERTO' ORDER BY id_periodo DESC LIMIT 1",
-        [schoolId]
+        `SELECT id_periodo FROM periodo_academico WHERE id_colegio = $1 AND "id_año" = $2 AND estado = 'ABIERTO' ORDER BY id_periodo DESC LIMIT 1`,
+        [schoolId, targetYearId]
       );
       if (activePeriodRes.rows.length > 0) {
         targetPeriodId = activePeriodRes.rows[0].id_periodo;
       } else {
-        // Fallback to the most recent period even if not open
+        // Fallback to the most recent period in this year even if not open
         const lastPeriodRes = await pool.query(
-          "SELECT id_periodo FROM periodo_academico WHERE id_colegio = $1 ORDER BY id_periodo DESC LIMIT 1",
-          [schoolId]
+          `SELECT id_periodo FROM periodo_academico WHERE id_colegio = $1 AND "id_año" = $2 ORDER BY id_periodo DESC LIMIT 1`,
+          [schoolId, targetYearId]
         );
         targetPeriodId = lastPeriodRes.rows.length > 0 ? lastPeriodRes.rows[0].id_periodo : null;
       }
@@ -2561,7 +2765,7 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
       studentsCountRes, teachersCountRes, disciplinaryRes, desertionRes,
       studentsByGradeRes, teachersByGradeRes, disciplinaryByGradeRes, desertionByGradeRes
     ] = await Promise.all([
-      pool.query("SELECT COUNT(*) as total FROM matricula WHERE id_colegio = $1 AND estado = 'ACTIVA'", [schoolId]),
+      pool.query(`SELECT COUNT(*) as total FROM matricula WHERE id_colegio = $1 AND "id_año" = $2 AND estado = 'ACTIVA'`, [schoolId, targetYearId]),
       pool.query("SELECT COUNT(*) as total FROM docente WHERE id_colegio = $1 AND estado = 'ACTIVO'", [schoolId]),
       pool.query(
         `SELECT COUNT(*) as total FROM observacion_estudiante 
@@ -2569,17 +2773,17 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
         targetPeriodId ? [schoolId, targetPeriodId] : [schoolId]
       ),
       pool.query(
-        "SELECT COUNT(*) as total FROM matricula WHERE id_colegio = $1 AND estado = 'CANCELADA'",
-        [schoolId]
+        `SELECT COUNT(*) as total FROM matricula WHERE id_colegio = $1 AND "id_año" = $2 AND estado = 'CANCELADA'`,
+        [schoolId, targetYearId]
       ),
       pool.query(
         `SELECT tg.nombre as grade, COUNT(m.id_matricula)::int as total
          FROM matricula m
          JOIN grupos g ON m.id_grupo = g.id_grupo
          JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
-         WHERE m.id_colegio = $1 AND m.estado = 'ACTIVA'
+         WHERE m.id_colegio = $1 AND m."id_año" = $2 AND m.estado = 'ACTIVA'
          GROUP BY tg.nombre`,
-        [schoolId]
+        [schoolId, targetYearId]
       ),
       pool.query(
         `SELECT tg.nombre as grade, COUNT(DISTINCT dg.id_docente)::int as total
@@ -2594,21 +2798,21 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
         `SELECT tg.nombre as grade, COUNT(o.id_observacion)::int as total
          FROM observacion_estudiante o
          JOIN estudiante e ON o.id_estudiante = e.id_estudiante
-         JOIN matricula m ON e.id_estudiante = m.id_estudiante
+         JOIN matricula m ON e.id_estudiante = m.id_estudiante AND m."id_año" = $2
          JOIN grupos g ON m.id_grupo = g.id_grupo
          JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
-         WHERE o.id_colegio = $1 AND m.estado = 'ACTIVA' ${targetPeriodId ? "AND o.id_periodo = $2" : ""}
+         WHERE o.id_colegio = $1 AND m.estado = 'ACTIVA' ${targetPeriodId ? "AND o.id_periodo = $3" : ""}
          GROUP BY tg.nombre`,
-        targetPeriodId ? [schoolId, targetPeriodId] : [schoolId]
+        targetPeriodId ? [schoolId, targetYearId, targetPeriodId] : [schoolId, targetYearId]
       ),
       pool.query(
         `SELECT tg.nombre as grade, COUNT(m.id_matricula)::int as total
          FROM matricula m
          JOIN grupos g ON m.id_grupo = g.id_grupo
          JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
-         WHERE m.id_colegio = $1 AND m.estado = 'CANCELADA'
+         WHERE m.id_colegio = $1 AND m."id_año" = $2 AND m.estado = 'CANCELADA'
          GROUP BY tg.nombre`,
-        [schoolId]
+        [schoolId, targetYearId]
       )
     ]);
 
@@ -2627,12 +2831,12 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
          tg.nombre as grade,
          (COUNT(*) FILTER (WHERE ra.estado = 'PRESENTE')::numeric / NULLIF(COUNT(*), 0) * 100) as rate
        FROM registro_asistencia ra
-       JOIN matricula m ON ra.id_estudiante = m.id_estudiante
+       JOIN matricula m ON ra.id_estudiante = m.id_estudiante AND m."id_año" = $3
        JOIN grupos g ON m.id_grupo = g.id_grupo
        JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
        WHERE ra.id_colegio = $1 AND ra.fecha::date = $2::date AND m.estado = 'ACTIVA'
        GROUP BY tg.nombre`,
-      [schoolId, todayStr]
+      [schoolId, todayStr, targetYearId]
     );
 
     // Compile summaryByGrade
@@ -2831,10 +3035,10 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
        FROM resultado_academico ra
        JOIN periodo_academico p ON ra.id_periodo = p.id_periodo
        JOIN detalle_grados dg ON ra.id_detallegrado = dg.id_detallegrado
-       WHERE dg.id_colegio = $1 AND p.id_año = (SELECT id_año FROM periodo_academico WHERE id_periodo = $2)
+       WHERE dg.id_colegio = $1 AND p."id_año" = $2
        GROUP BY p.id_periodo, p.nombre
        ORDER BY p.id_periodo`,
-      [schoolId, targetPeriodId || 0]
+      [schoolId, targetYearId]
     );
     charts.evolution = evolutionRes.rows;
 
@@ -2853,10 +3057,10 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
        JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
        JOIN secciones s ON g.id_seccion = s.id_seccion
        JOIN jornada j ON g.id_jornada = j.id_jornada
-       WHERE dg.id_colegio = $1 AND p.id_año = (SELECT id_año FROM periodo_academico WHERE id_periodo = $2)
+       WHERE dg.id_colegio = $1 AND p."id_año" = $2
        GROUP BY p.id_periodo, p.nombre, g.id_grupo, tg.nombre, s.nombre, j.nombre
        ORDER BY p.id_periodo, tg.nombre, s.nombre`,
-      [schoolId, targetPeriodId || 0]
+      [schoolId, targetYearId]
     );
     charts.evolutionByCourse = evolutionByCourseRes.rows;
 

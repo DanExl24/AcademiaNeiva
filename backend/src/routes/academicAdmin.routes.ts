@@ -34,6 +34,8 @@ import {
   updateEvidencia,
   deleteEvidencia,
   getDirectivoDashboard,
+  deleteAcademicYear,
+  updateAcademicYearStatus,
 } from "../controllers/academicAdminController";
 
 const router = Router();
@@ -56,6 +58,8 @@ router.post("/teacher-assignments", assignTeacherCourseSubject);
 router.delete("/teacher-assignments/:id", deleteTeacherAssignment);
 router.get("/settings/:schoolId", getAcademicSettingsData);
 router.post("/settings/years", createAcademicYear);
+router.delete("/settings/years/:id", deleteAcademicYear);
+router.patch("/settings/years/:id/status", updateAcademicYearStatus);
 router.put("/settings/defaults", updateSchoolDefaultSettings);
 router.put("/settings/scales/manual", updateManualScaleConfiguration);
 router.post("/settings/periods", createAcademicPeriod);

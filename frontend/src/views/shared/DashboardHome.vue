@@ -13,7 +13,8 @@ import {
   Filter,
   LayoutDashboard,
   X,
-  Search
+  Search,
+  CalendarDays
 } from 'lucide-vue-next'
 import {
   Chart as ChartJS,
@@ -128,8 +129,16 @@ const dashboardData = ref({
   }
 })
 
-const periods = ref<any[]>([])
+const allPeriods = ref<any[]>([])
+const academicYears = ref<any[]>([])
+const selectedYearId = ref<number | null>(null)
 const selectedPeriodId = ref<number | null>(null)
+
+// Only show periods for the selected year
+const periods = computed(() => {
+  if (!selectedYearId.value) return allPeriods.value
+  return allPeriods.value.filter((p: any) => p['id_año'] === selectedYearId.value)
+})
 
 const activeSummary = computed(() => {
   if (globalSelectedGrade.value === 'ALL') {
@@ -510,7 +519,9 @@ const fetchDashboard = async () => {
   loading.value = true
   try {
     const url = `http://localhost:3000/api/academic-admin/dashboard/${schoolId.value}`
-    const params = selectedPeriodId.value ? { periodId: selectedPeriodId.value } : {}
+    const params: any = {}
+    if (selectedYearId.value) params.yearId = selectedYearId.value
+    if (selectedPeriodId.value) params.periodId = selectedPeriodId.value
     const response = await axios.get(url, { params })
     dashboardData.value = response.data
   } catch (error) {
@@ -524,7 +535,14 @@ const loadPeriods = async () => {
   if (!schoolId.value) return
   try {
     const response = await axios.get(`http://localhost:3000/api/academic-admin/settings/${schoolId.value}`)
-    periods.value = response.data.periods
+    allPeriods.value = response.data.periods
+    academicYears.value = response.data.academicYears || []
+
+    // Default to the active year
+    if (!selectedYearId.value && response.data.activeYear) {
+      selectedYearId.value = response.data.activeYear['id_año']
+    }
+
     // Set active period by default if none selected
     if (!selectedPeriodId.value) {
       const active = periods.value.find(p => p.estado === 'ABIERTO')
@@ -534,6 +552,14 @@ const loadPeriods = async () => {
     console.error('Error loading periods:', error)
   }
 }
+
+// When year changes, reset period to the open one for that year
+watch(selectedYearId, () => {
+  const yearPeriods = periods.value
+  const active = yearPeriods.find(p => p.estado === 'ABIERTO')
+  selectedPeriodId.value = active ? active.id_periodo : (yearPeriods.length > 0 ? yearPeriods[yearPeriods.length - 1].id_periodo : null)
+  fetchDashboard()
+})
 
 watch(selectedPeriodId, fetchDashboard)
 
@@ -570,6 +596,21 @@ onMounted(async () => {
       
       <!-- Filters -->
       <div class="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-gray-100 dark:border-slate-800 shadow-sm w-full lg:w-auto flex flex-col sm:flex-row gap-6">
+        <div class="flex flex-col gap-3 min-w-[180px]">
+          <label class="text-xs font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2">
+            <CalendarDays :size="14" />
+            Año Lectivo
+          </label>
+          <select 
+            v-model="selectedYearId" 
+            class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-indigo-500 transition-all cursor-pointer"
+          >
+            <option v-for="y in academicYears" :key="y['id_año']" :value="y['id_año']">
+              {{ y.calendario }}{{ y.estado === 'CERRADO' ? ' (Cerrado)' : '' }}
+            </option>
+          </select>
+        </div>
+
         <div class="flex flex-col gap-3 min-w-[200px]">
           <label class="text-xs font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2">
             <Filter :size="14" />
@@ -581,7 +622,7 @@ onMounted(async () => {
           >
             <option :value="null">Periodo Activo (Auto)</option>
             <option v-for="p in periods" :key="p.id_periodo" :value="p.id_periodo">
-              {{ p.nombre }}
+              {{ p.nombre }}{{ p.estado === 'ABIERTO' ? ' (Activo)' : '' }}
             </option>
           </select>
         </div>
