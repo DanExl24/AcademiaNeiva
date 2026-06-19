@@ -1,8 +1,16 @@
 # Credenciales generadas por reset_and_seed.ts
 
-> Fecha de generación: 2026-06-06T04:17:33.065Z
+> Fecha de generación: 2026-06-19T05:55:11.083Z
 >
 > Este archivo se regenera cada vez que ejecutes el seed de reseteo.
+
+## 🔑 Administrador General (login: correo + contraseña)
+
+| Rol | Nombre | Correo | Contraseña |
+| --- | --- | --- | --- |
+| ADMIN_GENERAL | Administrador General | admin.general@academianeiva.edu.co | adminGeneral123 |
+
+---
 
 ## CEA School Empresarial de los Andes
 

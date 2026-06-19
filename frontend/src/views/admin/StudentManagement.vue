@@ -222,6 +222,65 @@ const getStatusClass = (estado: string) => {
   return 'bg-slate-100 text-slate-700'
 }
 
+const exportToSIMAT = () => {
+  if (students.value.length === 0) return
+
+  const headers = [
+    'ID Estudiante',
+    'Codigo',
+    'Nombres',
+    'Apellidos',
+    'Tipo Documento',
+    'Documento',
+    'Nivel Escolar',
+    'Grado',
+    'Seccion',
+    'Jornada',
+    'Correo Estudiante',
+    'Acudiente',
+    'Documento Acudiente',
+    'Estado'
+  ]
+
+  const rows = students.value.map(s => {
+    const acudienteFull = s.acudiente_nombre 
+      ? `${s.acudiente_nombre} ${s.acudiente_apellido || ''}`.trim()
+      : 'No registrado'
+
+    return [
+      s.id_estudiante,
+      s.codigo,
+      `"${s.nombre.replace(/"/g, '""')}"`,
+      `"${s.apellido.replace(/"/g, '""')}"`,
+      `"${(s.tipo_documento_nombre || '').replace(/"/g, '""')}"`,
+      s.documento || '',
+      `"${(s.nivel_nombre || '').replace(/"/g, '""')}"`,
+      `"${(s.grado_nombre || 'Sin Grado').replace(/"/g, '""')}"`,
+      `"${(s.seccion_nombre || 'A').replace(/"/g, '""')}"`,
+      `"${(s.jornada_nombre || 'ÚNICA').replace(/"/g, '""')}"`,
+      s.email || 'Sin correo',
+      `"${acudienteFull.replace(/"/g, '""')}"`,
+      s.acudiente_documento || '',
+      s.estado
+    ]
+  })
+
+  const csvContent = '\uFEFF' + [
+    headers.join(','),
+    ...rows.map(e => e.join(','))
+  ].join('\n')
+
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.setAttribute('href', url)
+  link.setAttribute('download', `simat_roster_colegio_${new Date().toLocaleDateString()}.csv`)
+  link.style.visibility = 'hidden'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+}
+
 </script>
 
 <template>
@@ -237,6 +296,16 @@ const getStatusClass = (estado: string) => {
           <p class="text-slate-400 dark:text-slate-500 text-sm font-medium">Administra matrículas, estados y asignaciones escolares.</p>
         </div>
       </div>
+      <button 
+        v-if="students.length > 0"
+        @click="exportToSIMAT"
+        class="bg-indigo-650 dark:bg-indigo-600 hover:bg-indigo-750 text-white px-6 py-3 rounded-2xl font-bold flex items-center gap-2 shadow-md transition-all active:scale-95 text-sm shrink-0"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+        </svg>
+        Exportar SIMAT (CSV)
+      </button>
     </div>
 
     <!-- Stats -->

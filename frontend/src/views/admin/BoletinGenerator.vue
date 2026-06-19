@@ -2,18 +2,18 @@
   <div class="max-w-6xl mx-auto space-y-6">
     <div class="flex items-center justify-between">
       <div>
-        <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Generador de Boletines</h1>
-        <p class="mt-2 text-slate-500">Configura y exporta los boletines académicos del periodo cerrado.</p>
+        <h1 class="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Generador de Boletines</h1>
+        <p class="mt-2 text-slate-500 dark:text-slate-400">Configura y exporta los boletines académicos del periodo cerrado.</p>
       </div>
     </div>
 
     <!-- Filters -->
-    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+    <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-6">
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <!-- Colegios (si se requiere) o Periodo -->
         <div>
-          <label class="block text-sm font-semibold text-slate-700 mb-2">Periodo Académico</label>
-          <select v-model="selectedPeriodo" class="w-full h-11 rounded-xl border-slate-200 focus:border-indigo-500 focus:ring-indigo-500 shadow-sm transition-shadow">
+          <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Periodo Académico</label>
+          <select v-model="selectedPeriodo" class="w-full h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:border-indigo-500 focus:ring-indigo-500 shadow-sm transition-shadow">
             <option value="">Seleccione un periodo cerrado</option>
             <option v-for="periodo in periodos" :key="periodo.id_periodo" :value="periodo.id_periodo">
               {{ periodo.nombre }}
@@ -22,8 +22,8 @@
         </div>
 
         <div>
-          <label class="block text-sm font-semibold text-slate-700 mb-2">Nivel</label>
-          <select v-model="selectedLevel" class="w-full h-11 rounded-xl border-slate-200 focus:border-indigo-500 focus:ring-indigo-500 shadow-sm transition-shadow">
+          <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Nivel</label>
+          <select v-model="selectedLevel" class="w-full h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:border-indigo-500 focus:ring-indigo-500 shadow-sm transition-shadow">
             <option value="">Seleccione nivel</option>
             <option v-for="level in levels" :key="level.id_nivel" :value="level.id_nivel">
               {{ level.nombre }}
@@ -32,8 +32,8 @@
         </div>
 
         <div>
-          <label class="block text-sm font-semibold text-slate-700 mb-2">Grupo</label>
-          <select v-model="selectedGroup" @change="fetchStudentsForGroup" :disabled="!selectedLevel" class="w-full h-11 rounded-xl border-slate-200 focus:border-indigo-500 focus:ring-indigo-500 shadow-sm transition-shadow disabled:bg-slate-50 disabled:text-slate-400">
+          <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Grupo</label>
+          <select v-model="selectedGroup" @change="fetchStudentsForGroup" :disabled="!selectedLevel" class="w-full h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:border-indigo-500 focus:ring-indigo-500 shadow-sm transition-shadow disabled:bg-slate-50 dark:disabled:bg-slate-950/40 disabled:text-slate-400 dark:disabled:text-slate-600">
             <option value="">Seleccione grupo</option>
             <option v-for="grupo in filteredGroups" :key="grupo.id_grupo" :value="grupo.id_grupo">
               {{ grupo.tipo_grado_nombre }} - Grupo {{ grupo.seccion_nombre }} ({{ grupo.jornada_nombre }})
@@ -42,8 +42,8 @@
         </div>
 
         <div>
-          <label class="block text-sm font-semibold text-slate-700 mb-2">Estudiante Opcional</label>
-          <select v-model="selectedStudent" :disabled="!selectedGroup" class="w-full h-11 rounded-xl border-slate-200 focus:border-indigo-500 focus:ring-indigo-500 shadow-sm transition-shadow disabled:bg-slate-50 disabled:text-slate-400">
+          <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Estudiante Opcional</label>
+          <select v-model="selectedStudent" :disabled="!selectedGroup" class="w-full h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:border-indigo-500 focus:ring-indigo-500 shadow-sm transition-shadow disabled:bg-slate-50 dark:disabled:bg-slate-950/40 disabled:text-slate-400 dark:disabled:text-slate-600">
             <option value="">Todos los estudiantes (Generación masiva)</option>
             <option v-for="student in students" :key="student.id_estudiante" :value="student.id_estudiante">
               {{ student.nombre }} {{ student.apellido }}
@@ -56,7 +56,7 @@
         <button 
           @click="fetchBoletinData" 
           :disabled="!selectedPeriodo || !selectedGroup || isLoading"
-          class="inline-flex items-center justify-center px-6 py-3 rounded-xl text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+          class="inline-flex items-center justify-center px-6 py-3 rounded-xl text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:ring-offset-slate-950"
         >
           <svg v-if="isLoading" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -68,7 +68,7 @@
     </div>
 
     <!-- Error state -->
-    <div v-if="error" class="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-xl shadow-sm">
+    <div v-if="error" class="bg-red-50 dark:bg-red-950/20 border border-red-200/50 dark:border-red-900/30 border-l-4 dark:border-l-red-500 p-4 rounded-r-xl shadow-sm">
       <div class="flex">
         <div class="flex-shrink-0">
           <svg class="h-5 w-5 text-red-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
@@ -76,22 +76,22 @@
           </svg>
         </div>
         <div class="ml-3">
-          <p class="text-sm text-red-700 font-medium">{{ error }}</p>
+          <p class="text-sm text-red-700 dark:text-red-400 font-medium">{{ error }}</p>
         </div>
       </div>
     </div>
 
     <!-- Results Overview & Download PDF -->
-    <div v-if="boletinesData.length > 0" class="bg-indigo-50 border border-indigo-100 rounded-2xl p-6 flex flex-col sm:flex-row items-center justify-between shadow-inner">
+    <div v-if="boletinesData.length > 0" class="bg-indigo-50 dark:bg-indigo-950/15 border border-indigo-100 dark:border-indigo-900/30 rounded-2xl p-6 flex flex-col sm:flex-row items-center justify-between shadow-inner">
       <div class="flex items-center mb-4 sm:mb-0">
-        <div class="p-3 bg-indigo-100 rounded-full mr-4 text-indigo-600">
+        <div class="p-3 bg-indigo-100 dark:bg-indigo-900/35 rounded-full mr-4 text-indigo-600 dark:text-indigo-400">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
         </div>
         <div>
-          <h3 class="text-lg font-bold text-indigo-900">Listos para Generar</h3>
-          <p class="text-sm text-indigo-700">{{ boletinesData.length }} boletines cargados exitosamente.</p>
+          <h3 class="text-lg font-bold text-indigo-900 dark:text-indigo-300">Listos para Generar</h3>
+          <p class="text-sm text-indigo-700 dark:text-indigo-400">{{ boletinesData.length }} boletines cargados exitosamente.</p>
         </div>
       </div>
       <button 
@@ -115,7 +115,7 @@
       <div v-for="(b, idx) in boletinesData" :key="idx" class="relative">
         <!-- Render preview component, we pass the ref to an array -->
         <BoletinPreview :data="b" :ref="el => collectPreviewRefs(el, idx)" />
-        <div class="absolute -top-4 -right-4 bg-white border border-slate-200 shadow-sm rounded-full h-8 w-8 flex items-center justify-center font-bold text-slate-500 text-sm">
+        <div class="absolute -top-4 -right-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm rounded-full h-8 w-8 flex items-center justify-center font-bold text-slate-500 dark:text-slate-400 text-sm">
           {{ idx + 1 }}
         </div>
       </div>
@@ -150,17 +150,22 @@ const previewRefs = ref<any[]>([])
 
 const filteredGroups = computed(() => {
   if (!selectedLevel.value) return []
-  return groups.value.filter(g => g.id_nivel === selectedLevel.value)
+  return groups.value.filter(g => g.id_nivel === selectedLevel.value && groupsWithStudents.value.has(g.id_grupo))
 })
+
+// Set of group IDs that have at least one enrolled student
+const groupsWithStudents = ref<Set<number>>(new Set())
+const allStudents = ref<any[]>([])
 
 const fetchInitialData = async () => {
   try {
     const headers = { Authorization: `Bearer ${auth.token}` }
     
     const schoolId = auth.user?.schoolId || 1
-    const [settingsRes, gradesRes] = await Promise.all([
+    const [settingsRes, gradesRes, studentsRes] = await Promise.all([
       fetch(`http://localhost:3000/api/academic-admin/settings/${schoolId}`, { headers }),
-      fetch(`http://localhost:3000/api/academic-admin/grades/${schoolId}`, { headers })
+      fetch(`http://localhost:3000/api/academic-admin/grades/${schoolId}`, { headers }),
+      fetch(`http://localhost:3000/api/student/colegio/${schoolId}`, { headers })
     ])
     
     if (settingsRes.ok && gradesRes.ok) {
@@ -171,6 +176,16 @@ const fetchInitialData = async () => {
       periodos.value = settingsData.periods.filter((p: any) => p.estado === 'CERRADO')
       levels.value = gradesData.niveles
       groups.value = gradesData.grupos
+    }
+
+    // Build set of groups that have enrolled students
+    if (studentsRes.ok) {
+      allStudents.value = await studentsRes.json()
+      const gSet = new Set<number>()
+      for (const s of allStudents.value) {
+        if (s.id_grupo) gSet.add(s.id_grupo)
+      }
+      groupsWithStudents.value = gSet
     }
   } catch (err) {
     console.error("Error al cargar datos iniciales:", err)
@@ -184,18 +199,8 @@ onMounted(() => {
 
 const fetchStudentsForGroup = async () => {
   if (!selectedGroup.value) return
-  try {
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await fetch(`http://localhost:3000/api/matriculas/colegio`, { headers })
-    if (res.ok) {
-      const data = await res.json()
-      // Filter the ones in the group manually if backend doesn't provide direct group endpoint
-      // Adjust according to existing backend
-      students.value = data.filter((m: any) => m.id_grupo === selectedGroup.value).map((m:any) => m.estudiante || m) 
-    }
-  } catch (err) {
-    console.error(err)
-  }
+  // Filter from already-loaded students instead of another API call
+  students.value = allStudents.value.filter((s: any) => s.id_grupo === selectedGroup.value)
 }
 
 const collectPreviewRefs = (el: any, index: number) => {
@@ -205,6 +210,12 @@ const collectPreviewRefs = (el: any, index: number) => {
 }
 
 const fetchBoletinData = async () => {
+  console.log('[fetchBoletinData] Start fetching boletines:', {
+    selectedPeriodo: selectedPeriodo.value,
+    selectedLevel: selectedLevel.value,
+    selectedGroup: selectedGroup.value,
+    selectedStudent: selectedStudent.value
+  })
   error.value = ''
   isLoading.value = true
   boletinesData.value = []
@@ -215,32 +226,45 @@ const fetchBoletinData = async () => {
     
     // Si hay un estudiante específico, trae solo ese.
     if (selectedStudent.value) {
-      const res = await fetch(`http://localhost:3000/api/boletines/student/${selectedStudent.value}/${selectedPeriodo.value}`, { headers })
+      const url = `http://localhost:3000/api/boletines/student/${selectedStudent.value}/${selectedPeriodo.value}`
+      console.log('[fetchBoletinData] Fetching student bulletin:', url)
+      const res = await fetch(url, { headers })
       if (!res.ok) {
         const d = await res.json()
+        console.error('[fetchBoletinData] Error fetching individual:', d)
         throw new Error(d.error || 'Error fetching boletin individual')
       }
       const data = await res.json()
+      console.log('[fetchBoletinData] Student bulletin loaded successfully:', data)
       boletinesData.value.push(data)
     } else {
-      // Masivo (todo el grupo)
-      const groupRes = await fetch(`http://localhost:3000/api/boletines/grade/${selectedGroup.value}/${selectedPeriodo.value}`, { headers })
+      const url = `http://localhost:3000/api/boletines/grade/${selectedGroup.value}/${selectedPeriodo.value}`
+      console.log('[fetchBoletinData] Fetching mass group bulletins:', url)
+      const groupRes = await fetch(url, { headers })
       if (!groupRes.ok) {
          const d = await groupRes.json()
+         console.error('[fetchBoletinData] Error fetching mass group:', d)
          throw new Error(d.error || 'Error fetching boletines masivos')
       }
       const groupData = await groupRes.json()
       const ids = groupData.students || []
+      console.log('[fetchBoletinData] Student IDs to generate:', ids)
       
       for (const id of ids) {
-        const sRes = await fetch(`http://localhost:3000/api/boletines/student/${id}/${selectedPeriodo.value}`, { headers })
+        const sUrl = `http://localhost:3000/api/boletines/student/${id}/${selectedPeriodo.value}`
+        console.log('[fetchBoletinData] Fetching individual student in loop:', sUrl)
+        const sRes = await fetch(sUrl, { headers })
         if (sRes.ok) {
-          boletinesData.value.push(await sRes.json())
+          const sData = await sRes.json()
+          console.log(`[fetchBoletinData] Loaded student ${id} success:`, sData)
+          boletinesData.value.push(sData)
+        } else {
+          console.error(`[fetchBoletinData] Failed to load student ${id}:`, sRes.status)
         }
       }
     }
   } catch (err: any) {
-    console.error(err)
+    console.error('[fetchBoletinData] Caught error:', err)
     error.value = err.message || 'Error al conectar con el servidor'
   } finally {
     isLoading.value = false

@@ -396,6 +396,59 @@ const printAttendanceSheet = () => {
   printWindow.document.close()
 }
 
+const exportHistoryToCSV = () => {
+  if (!selectedCourse.value || historyData.value.length === 0) return
+
+  const courseInfo = selectedCourse.value
+  const headers = [
+    'Código Estudiante',
+    'Estudiante',
+    'Grado',
+    'Sección',
+    'Materia',
+    'Jornada',
+    'Presentes (Asistencias)',
+    'Ausentes (Inasistencias)',
+    'Retrasos (Tardes)',
+    'Justificadas',
+    'Porcentaje Asistencia'
+  ]
+
+  const rows = historyData.value.map(s => {
+    const total = s.presentes + s.ausentes + s.tardes + s.justificadas
+    const rate = total > 0 ? Math.round(((s.presentes + s.tardes + s.justificadas) / total) * 100) : 100
+
+    return [
+      s.codigo,
+      `"${s.nombre.replace(/"/g, '""')}"`,
+      `"${courseInfo.grado_nombre.replace(/"/g, '""')}"`,
+      `"${courseInfo.seccion.replace(/"/g, '""')}"`,
+      `"${courseInfo.materia_nombre.replace(/"/g, '""')}"`,
+      `"${courseInfo.jornada_nombre.replace(/"/g, '""')}"`,
+      s.presentes,
+      s.ausentes,
+      s.tardes,
+      s.justificadas,
+      `${rate}%`
+    ]
+  })
+
+  const csvContent = '\uFEFF' + [
+    headers.join(','),
+    ...rows.map(e => e.join(','))
+  ].join('\n')
+
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.setAttribute('href', url)
+  link.setAttribute('download', `asistencia_historial_${courseInfo.grado_nombre.replace(/\s+/g, '_')}_${courseInfo.seccion}_${new Date().toLocaleDateString()}.csv`)
+  link.style.visibility = 'hidden'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+}
+
 onMounted(() => {
   fetchMyCourses()
 })
@@ -417,6 +470,14 @@ onMounted(() => {
         >
           <Download :size="20" />
           Descargar Formato
+        </button>
+        <button 
+          v-if="selectedCourse && activeTab === 'history' && historyData.length > 0"
+          @click="exportHistoryToCSV"
+          class="bg-indigo-650 dark:bg-indigo-600 text-white px-6 py-3 rounded-2xl font-bold hover:bg-indigo-750 transition-all flex items-center gap-2 shadow-md"
+        >
+          <Download :size="20" />
+          Exportar Historial (CSV)
         </button>
         <!-- Save button hidden in monitoring mode -->
         <button 

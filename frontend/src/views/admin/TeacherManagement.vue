@@ -14,7 +14,8 @@ import {
   X,
   BookOpen,
   ChevronRight,
-  Eye
+  Eye,
+  Download
 } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 import { useRouter } from 'vue-router'
@@ -305,6 +306,56 @@ const submitTeacherStatus = async () => {
   }
 }
 
+const exportTeachersToCSV = () => {
+  if (teachers.value.length === 0) return
+
+  const headers = [
+    'ID Docente',
+    'Nombres',
+    'Apellidos',
+    'Tipo Documento',
+    'Documento',
+    'Email',
+    'Estado',
+    'Cursos y Materias Asignados',
+    'Total Asignaciones'
+  ]
+
+  const rows = teachers.value.map(t => {
+    const teacherAssignments = assignments.value
+      .filter(a => a.id_docente === t.id_docente)
+      .map(a => `${a.materia_nombre} (${a.tipo_grado_nombre} ${a.seccion_nombre} - ${a.jornada_nombre})`)
+      .join('; ')
+
+    return [
+      t.id_docente,
+      `"${t.nombre.replace(/"/g, '""')}"`,
+      `"${t.apellido.replace(/"/g, '""')}"`,
+      `"${(t.tipo_documento || '').replace(/"/g, '""')}"`,
+      t.documento || '',
+      t.email || '',
+      t.estado,
+      `"${teacherAssignments.replace(/"/g, '""')}"`,
+      t.asignaciones_count || 0
+    ]
+  })
+
+  const csvContent = '\uFEFF' + [
+    headers.join(','),
+    ...rows.map(e => e.join(','))
+  ].join('\n')
+
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.setAttribute('href', url)
+  link.setAttribute('download', `nomina_docentes_${new Date().toLocaleDateString('es-CO').replace(/\//g, '-')}.csv`)
+  link.style.visibility = 'hidden'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+}
+
 onMounted(() => {
   loadData()
   document.addEventListener('keydown', handleKeydown)
@@ -324,10 +375,20 @@ onMounted(() => {
           <p class="text-slate-400 dark:text-slate-500 text-sm font-medium">Administra docentes, carga horaria y estados académicos.</p>
         </div>
       </div>
-      <button @click="createTeacherModal = true" class="flex items-center gap-2 px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm transition-all shadow-lg shadow-blue-100/60 dark:shadow-none whitespace-nowrap">
-        <Plus :size="18" />
-        Nuevo Docente
-      </button>
+      <div class="flex flex-wrap items-center gap-3">
+        <button 
+          v-if="teachers.length > 0"
+          @click="exportTeachersToCSV" 
+          class="flex items-center gap-2 px-5 py-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl font-bold text-sm transition-all shadow-sm whitespace-nowrap active:scale-95"
+        >
+          <Download :size="18" />
+          Exportar Excel (CSV)
+        </button>
+        <button @click="createTeacherModal = true" class="flex items-center gap-2 px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm transition-all shadow-lg shadow-blue-100/60 dark:shadow-none whitespace-nowrap active:scale-95">
+          <Plus :size="18" />
+          Nuevo Docente
+        </button>
+      </div>
     </div>
 
     <!-- Stat Cards -->

@@ -7,16 +7,13 @@ import {
   BookOpen,
   CalendarCheck,
   ClipboardList,
-  History,
   MessageSquare,
   Star,
-  ChevronRight,
   Sparkles,
   Clock,
   FileDown,
   ThumbsUp,
   ThumbsDown,
-  Info,
   Calendar,
   CalendarDays
 } from 'lucide-vue-next'
@@ -183,7 +180,7 @@ const barChartOptions = {
     legend: { display: false },
     tooltip: {
       backgroundColor: 'rgba(15, 23, 42, 0.9)',
-      titleFont: { size: 12, weight: 'bold' },
+      titleFont: { size: 12, weight: 'bold' as const },
       bodyFont: { size: 11 },
       padding: 10,
       cornerRadius: 8
@@ -192,13 +189,13 @@ const barChartOptions = {
   scales: {
     x: {
       grid: { display: false },
-      ticks: { color: '#94a3b8', font: { weight: 'bold', size: 9 } }
+      ticks: { color: '#94a3b8', font: { weight: 'bold' as const, size: 9 } }
     },
     y: {
       min: 0,
       max: 5,
       grid: { color: 'rgba(148, 163, 184, 0.08)' },
-      ticks: { color: '#94a3b8', stepSize: 1, font: { weight: 'bold', size: 9 } }
+      ticks: { color: '#94a3b8', stepSize: 1, font: { weight: 'bold' as const, size: 9 } }
     }
   }
 }
@@ -225,7 +222,7 @@ const doughnutChartOptions = {
       position: 'right' as const,
       labels: {
         color: '#64748b',
-        font: { weight: 'bold', size: 10 },
+        font: { weight: 'bold' as const, size: 10 },
         padding: 12,
         usePointStyle: true,
         pointStyle: 'circle'

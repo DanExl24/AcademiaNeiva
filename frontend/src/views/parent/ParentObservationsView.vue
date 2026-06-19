@@ -16,6 +16,7 @@ import {
   CreditCard,
   HelpCircle
 } from 'lucide-vue-next'
+import BoletinExportModule from '../../components/boletines/BoletinExportModule.vue'
 
 const auth = useAuthStore()
 const loading = ref(true)
@@ -161,6 +162,7 @@ const getTypeLabel = (type: string) => {
         </p>
       </div>
 
+      <!-- Child Selector & Export -->
       <div class="flex flex-wrap items-center gap-4">
         <div v-if="children.length > 0" class="flex items-center gap-3 bg-white dark:bg-slate-900 px-6 py-3 rounded-2xl border border-indigo-100 dark:border-indigo-900/50 shadow-sm transition-all focus-within:ring-4 focus-within:ring-indigo-500/10">
           <GraduationCap :size="20" class="text-indigo-500" />
@@ -172,6 +174,13 @@ const getTypeLabel = (type: string) => {
               {{ child.nombre }} {{ child.apellido }}
             </option>
           </select>
+        </div>
+        <div v-if="selectedChildId && selectedPeriod" class="w-full sm:w-auto">
+          <BoletinExportModule
+            :student-id="selectedChildId"
+            :period-id="selectedPeriod"
+            :student-name="studentInfo?.nombre || ''"
+          />
         </div>
       </div>
     </div>

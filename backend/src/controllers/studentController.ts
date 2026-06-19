@@ -14,7 +14,11 @@ export const getAllStudents = async (req: Request, res: Response) => {
              n.nombre as nivel_nombre,
              m.id_grupo,
              tg.nombre as grado_nombre,
-             s.nombre as seccion_nombre
+             s.nombre as seccion_nombre,
+             j.nombre as jornada_nombre,
+             pf.nombre as acudiente_nombre,
+             pf.apellido as acudiente_apellido,
+             pf.documeno as acudiente_documento
       FROM estudiante e
       LEFT JOIN usuario u ON e.id_usuario = u.id_usuario
       LEFT JOIN tipo_documento td ON e.id_tipodocumento = td.id_tipodocumento
@@ -23,6 +27,12 @@ export const getAllStudents = async (req: Request, res: Response) => {
       LEFT JOIN grupos g ON m.id_grupo = g.id_grupo
       LEFT JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
       LEFT JOIN secciones s ON g.id_seccion = s.id_seccion
+      LEFT JOIN jornada j ON g.id_jornada = j.id_jornada
+      LEFT JOIN (
+        SELECT DISTINCT ON (id_estudiante) id_estudiante, id_padrefamilia
+        FROM detalle_padrefamilia
+      ) dp ON e.id_estudiante = dp.id_estudiante
+      LEFT JOIN padre_familia pf ON dp.id_padrefamilia = pf.id_padrefamilia
       WHERE e.id_colegio = $1
     `;
 

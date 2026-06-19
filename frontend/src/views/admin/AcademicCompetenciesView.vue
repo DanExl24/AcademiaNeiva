@@ -551,71 +551,86 @@ onMounted(loadData)
     </template>
 
     <!-- Modal de Creación/Edición -->
-    <div v-if="competencyModal" class="fixed inset-0 z-[100] flex min-h-screen w-screen items-center justify-center bg-slate-950/90 p-4 backdrop-blur-md transition-all">
-      <div class="w-full max-w-3xl rounded-[2.5rem] bg-white shadow-2xl dark:bg-slate-900 border border-slate-100 dark:border-slate-800 overflow-hidden animate-in fade-in zoom-in duration-300">
-        <div class="border-b border-slate-100 px-8 py-7 md:px-10 dark:border-slate-800">
-          <div class="flex items-center gap-4">
-            <div class="h-12 w-12 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400 shadow-inner">
-               <Plus class="h-6 w-6" v-if="!competencyForm.id_periodo" />
-               <PenSquare class="h-6 w-6" v-else />
-            </div>
-            <div>
-              <h2 class="text-2xl font-black text-slate-900 dark:text-white tracking-tight uppercase">Asignar competencia</h2>
-              <p class="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-[0.2em] mt-1">Definición académica base</p>
-            </div>
-          </div>
-        </div>
-        <div class="px-8 py-8 md:px-10 md:py-10">
-          <div class="mb-8 rounded-3xl border border-emerald-100 bg-emerald-50 p-6 dark:bg-emerald-950/10 dark:border-emerald-900/30">
-            <p class="text-xs font-black text-emerald-800 dark:text-emerald-400 uppercase tracking-widest">Consistencia garantizada</p>
-            <p class="mt-3 text-sm font-semibold leading-relaxed text-emerald-900 dark:text-emerald-300/80">
-              La competencia definida se replicará automáticamente a todos los cursos del grado seleccionado para mantener la uniformidad pedagógica.
-            </p>
-          </div>
+    <div v-if="competencyModal" class="fixed inset-0 z-[100] overflow-y-auto bg-slate-950/80 backdrop-blur-md transition-all">
+      <div class="flex min-h-full items-center justify-center p-4 sm:p-6 md:p-8">
+        <!-- Backdrop close handler -->
+        <div class="fixed inset-0 bg-transparent" @click="competencyModal = false; resetForm()"></div>
 
-          <div class="grid grid-cols-1 gap-8 md:grid-cols-2">
-            <label class="space-y-3">
-              <span class="block text-xs font-black text-slate-700 dark:text-slate-300 ml-1 uppercase tracking-widest">Grado académico</span>
-              <select v-model="competencyForm.gradeKey" @change="handleFormGradeChange" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-bold text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500/20">
-                <option value="">Selecciona un grado</option>
-                <option v-for="item in gradeChoices" :key="item.key" :value="item.key">
-                  {{ item.label }}
-                </option>
-              </select>
-            </label>
-            <div class="space-y-3">
-              <span class="block text-xs font-black text-slate-700 dark:text-slate-300 ml-1 uppercase tracking-widest">Cobertura institucional</span>
-              <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs font-bold text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400 leading-relaxed italic">
-                Se aplicará a todos los cursos disponibles del grado seleccionado.
+        <!-- Modal content card -->
+        <div class="relative w-full max-w-3xl rounded-[2.5rem] bg-white shadow-2xl dark:bg-slate-900 border border-slate-100 dark:border-slate-800/80 overflow-hidden animate-in fade-in zoom-in duration-300">
+          <div class="border-b border-slate-100 px-6 py-5 md:px-8 dark:border-slate-800/60">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-4">
+                <div class="h-11 w-11 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400 shadow-inner">
+                   <Plus class="h-5 w-5" v-if="!competencyForm.id_periodo" />
+                   <PenSquare class="h-5 w-5" v-else />
+                </div>
+                <div>
+                  <h2 class="text-xl md:text-2xl font-black text-slate-900 dark:text-white tracking-tight uppercase">Asignar competencia</h2>
+                  <p class="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-[0.2em] mt-1">Definición académica base</p>
+                </div>
               </div>
+              <button
+                type="button"
+                @click="competencyModal = false; resetForm()"
+                class="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300 transition-colors"
+              >
+                <X class="h-5 w-5" />
+              </button>
             </div>
-            <label class="space-y-3">
-              <span class="block text-xs font-black text-slate-700 dark:text-slate-300 ml-1 uppercase tracking-widest">Periodo lectivo</span>
-              <select v-model="competencyForm.id_periodo" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-bold text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500/20">
-                <option value="">Selecciona un periodo</option>
-                <option v-for="period in periods" :key="period.id_periodo" :value="String(period.id_periodo)">{{ period.nombre }}</option>
-              </select>
-            </label>
-            <label class="space-y-3">
-              <span class="block text-xs font-black text-slate-700 dark:text-slate-300 ml-1 uppercase tracking-widest">Materia / Asignatura</span>
-              <select v-model="competencyForm.subjectKey" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-bold text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500/20">
-                <option value="">Selecciona una materia</option>
-                <option v-for="item in formSubjectChoices" :key="item.key" :value="item.key">
-                  {{ item.label }}
-                </option>
-              </select>
-            </label>
-            <label class="space-y-3 md:col-span-2">
-              <span class="block text-xs font-black text-slate-700 dark:text-slate-300 ml-1 uppercase tracking-widest">Descripción pedagógica</span>
-              <textarea v-model="competencyForm.descripcion" rows="5" placeholder="Indica el aprendizaje esperado..." class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-5 font-bold text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500/20 resize-none" />
-            </label>
           </div>
-          <div class="mt-12 flex flex-col gap-4 sm:flex-row sm:justify-end">
-            <button type="button" @click="competencyModal = false; resetForm()" class="px-8 py-4 rounded-2xl border border-slate-200 text-xs font-black text-slate-600 hover:bg-slate-50 transition-all dark:border-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 uppercase tracking-widest">Cancelar</button>
-            <button type="button" @click="saveCompetency" :disabled="saving" class="inline-flex min-h-14 items-center justify-center gap-3 rounded-2xl bg-emerald-600 px-10 py-4 text-sm font-black text-white shadow-xl shadow-emerald-200/20 dark:shadow-none hover:bg-emerald-500 transition-all disabled:opacity-50 uppercase tracking-widest">
-              <Plus class="h-4 w-4" />
-              {{ saving ? 'Guardando...' : 'Guardar competencia' }}
-            </button>
+          <div class="px-6 py-6 md:px-8 md:py-8">
+            <div class="mb-6 rounded-3xl border border-emerald-100 bg-emerald-50 p-5 dark:bg-emerald-950/10 dark:border-emerald-900/30">
+              <p class="text-xs font-black text-emerald-800 dark:text-emerald-400 uppercase tracking-widest">Consistencia garantizada</p>
+              <p class="mt-2 text-sm font-semibold leading-relaxed text-emerald-900 dark:text-emerald-300/80">
+                La competencia definida se replicará automáticamente a todos los cursos del grado seleccionado para mantener la uniformidad pedagógica.
+              </p>
+            </div>
+
+            <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+              <label class="space-y-2">
+                <span class="block text-xs font-black text-slate-700 dark:text-slate-300 ml-1 uppercase tracking-widest">Grado académico</span>
+                <select v-model="competencyForm.gradeKey" @change="handleFormGradeChange" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-3.5 font-bold text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500/20">
+                  <option value="">Selecciona un grado</option>
+                  <option v-for="item in gradeChoices" :key="item.key" :value="item.key">
+                    {{ item.label }}
+                  </option>
+                </select>
+              </label>
+              <div class="space-y-2">
+                <span class="block text-xs font-black text-slate-700 dark:text-slate-300 ml-1 uppercase tracking-widest">Cobertura institucional</span>
+                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-3.5 text-xs font-bold text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400 leading-relaxed italic">
+                  Se aplicará a todos los cursos disponibles del grado seleccionado.
+                </div>
+              </div>
+              <label class="space-y-2">
+                <span class="block text-xs font-black text-slate-700 dark:text-slate-300 ml-1 uppercase tracking-widest">Periodo lectivo</span>
+                <select v-model="competencyForm.id_periodo" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-3.5 font-bold text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500/20">
+                  <option value="">Selecciona un periodo</option>
+                  <option v-for="period in periods" :key="period.id_periodo" :value="String(period.id_periodo)">{{ period.nombre }}</option>
+                </select>
+              </label>
+              <label class="space-y-2">
+                <span class="block text-xs font-black text-slate-700 dark:text-slate-300 ml-1 uppercase tracking-widest">Materia / Asignatura</span>
+                <select v-model="competencyForm.subjectKey" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-3.5 font-bold text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500/20">
+                  <option value="">Selecciona una materia</option>
+                  <option v-for="item in formSubjectChoices" :key="item.key" :value="item.key">
+                    {{ item.label }}
+                  </option>
+                </select>
+              </label>
+              <label class="space-y-2 md:col-span-2">
+                <span class="block text-xs font-black text-slate-700 dark:text-slate-300 ml-1 uppercase tracking-widest">Descripción pedagógica</span>
+                <textarea v-model="competencyForm.descripcion" rows="4" placeholder="Indica el aprendizaje esperado..." class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-bold text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500/20 resize-none" />
+              </label>
+            </div>
+            <div class="mt-8 flex flex-col gap-4 sm:flex-row sm:justify-end">
+              <button type="button" @click="competencyModal = false; resetForm()" class="px-8 py-3.5 rounded-2xl border border-slate-200 text-xs font-black text-slate-600 hover:bg-slate-50 transition-all dark:border-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 uppercase tracking-widest">Cancelar</button>
+              <button type="button" @click="saveCompetency" :disabled="saving" class="inline-flex min-h-12 items-center justify-center gap-3 rounded-2xl bg-emerald-600 px-10 py-3.5 text-sm font-black text-white shadow-xl shadow-emerald-200/20 dark:shadow-none hover:bg-emerald-500 transition-all disabled:opacity-50 uppercase tracking-widest">
+                <Plus class="h-4 w-4" />
+                {{ saving ? 'Guardando...' : 'Guardar competencia' }}
+              </button>
+            </div>
           </div>
         </div>
       </div>

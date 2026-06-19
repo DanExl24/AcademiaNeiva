@@ -29,6 +29,10 @@ export const useAuthStore = defineStore('auth', () => {
   const monitoringType = ref<'docente' | 'estudiante' | null>(localStorage.getItem('monitoringType') as any || null)
   const isMonitoring = computed(() => !!monitoringUser.value)
 
+  // Modo supervisión: admin general observando/editando el panel de rector de un colegio
+  const supervision = ref<any>(JSON.parse(localStorage.getItem('supervision') || 'null'))
+  const isSupervising = computed(() => !!supervision.value)
+
   const isAuthenticated = computed(() => !!token.value)
 
   function setUser(userData: User, userToken: string) {
@@ -90,6 +94,39 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  function startSupervision(supervisionData: any) {
+    // Guardar rol previo
+    previousRole.value = activeRole.value
+    localStorage.setItem('previousRole', activeRole.value || '')
+
+    supervision.value = supervisionData
+    localStorage.setItem('supervision', JSON.stringify(supervisionData))
+
+    // Heredar rol de Rector (directivo en el menu) y asignar schoolId
+    setActiveRole('directivo')
+    if (user.value) {
+      user.value.schoolId = String(supervisionData.id_colegio)
+      localStorage.setItem('user', JSON.stringify(user.value))
+    }
+  }
+
+  function stopSupervision() {
+    supervision.value = null
+    localStorage.removeItem('supervision')
+
+    if (user.value) {
+      delete user.value.schoolId
+      localStorage.setItem('user', JSON.stringify(user.value))
+    }
+
+    // Restaurar rol previo
+    if (previousRole.value) {
+      setActiveRole(previousRole.value)
+      previousRole.value = null
+      localStorage.removeItem('previousRole')
+    }
+  }
+
   function logout() {
     user.value = null
     token.value = null
@@ -97,12 +134,14 @@ export const useAuthStore = defineStore('auth', () => {
     monitoringUser.value = null
     previousRole.value = null
     monitoringType.value = null
+    supervision.value = null
     localStorage.removeItem('token')
     localStorage.removeItem('user')
     localStorage.removeItem('activeRole')
     localStorage.removeItem('monitoringUser')
     localStorage.removeItem('previousRole')
     localStorage.removeItem('monitoringType')
+    localStorage.removeItem('supervision')
   }
 
   return {
@@ -113,11 +152,15 @@ export const useAuthStore = defineStore('auth', () => {
     monitoringUser,
     monitoringType,
     isMonitoring,
+    supervision,
+    isSupervising,
     setUser,
     setActiveRole,
     startMonitoring,
     startStudentMonitoring,
     stopMonitoring,
+    startSupervision,
+    stopSupervision,
     logout
   }
 })

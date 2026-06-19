@@ -106,10 +106,16 @@ const handleLogin = async () => {
           </p>
         </div>
 
-        <div class="mt-6 pt-6 border-t border-gray-100 text-center">
+        <div class="mt-6 pt-6 border-t border-gray-100 text-center space-y-3">
           <p class="text-sm text-gray-600 font-medium">
             ¿Eres estudiante? 
             <router-link to="/login/estudiante" class="text-indigo-600 font-bold hover:text-indigo-700 hover:underline transition-all">
+              Inicia sesión aquí
+            </router-link>
+          </p>
+          <p class="text-sm text-gray-600 font-medium">
+            ¿Administrador General? 
+            <router-link to="/login/admin" class="text-indigo-600 font-bold hover:text-indigo-700 hover:underline transition-all">
               Inicia sesión aquí
             </router-link>
           </p>

@@ -2,6 +2,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
+import html2pdf from 'html2pdf.js'
 import { useNotificationStore } from '../../stores/notifications'
 import {
   ArrowLeft,
@@ -18,7 +19,7 @@ import {
   User,
   Mail,
   GraduationCap,
-  ShieldAlert
+  Download
 } from 'lucide-vue-next'
 
 const route = useRoute()
@@ -186,6 +187,31 @@ const rejectedDocumentsNames = computed(() => {
     .filter((d: any) => d.estado === 'RECHAZADO')
     .map((d: any) => documentLabels[d.tipo_documento] || d.tipo_documento)
 })
+
+const isExportingPDF = ref(false)
+const printableRef = ref<HTMLElement | null>(null)
+
+const downloadEnrollmentPDF = async () => {
+  if (!matricula.value || isExportingPDF.value || !printableRef.value) return
+  isExportingPDF.value = true
+
+  try {
+    const opt = {
+      margin:       0.5,
+      filename:     `ficha_matricula_${matricula.value.student_code}_${matricula.value.id_matricula}.pdf`,
+      image:        { type: 'jpeg' as const, quality: 0.98 },
+      html2canvas:  { scale: 2, useCORS: true },
+      jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' as const }
+    }
+    
+    await html2pdf().set(opt).from(printableRef.value!).save()
+  } catch (err) {
+    console.error("Error al exportar ficha en PDF:", err)
+    notify.addNotification("Error al generar el PDF de la ficha", "error")
+  } finally {
+    isExportingPDF.value = false
+  }
+}
 </script>
 
 <template>
@@ -355,11 +381,20 @@ const rejectedDocumentsNames = computed(() => {
           </div>
         </div>
 
-        <div class="flex gap-4 pt-4">
-          <button @click="router.push('/dashboard/gestion-matriculas')" class="flex-1 py-5 bg-slate-900 dark:bg-indigo-600 text-white rounded-[2rem] font-black text-sm uppercase tracking-widest hover:bg-slate-800 dark:hover:bg-indigo-700 transition-all shadow-xl">
+        <div class="flex flex-col sm:flex-row gap-4 pt-4">
+          <button @click="router.push('/dashboard/gestion-matriculas')" class="flex-1 py-5 bg-slate-900 dark:bg-slate-800 text-white rounded-[2rem] font-black text-sm uppercase tracking-widest hover:bg-slate-800 dark:hover:bg-slate-700 transition-all shadow-xl">
             Volver al Listado
           </button>
-          <button @click="showCancelModal = true" class="px-10 py-5 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 rounded-[2rem] font-black text-sm uppercase tracking-widest hover:bg-red-100 transition-all border border-red-100 dark:border-red-900">
+          <button 
+            @click="downloadEnrollmentPDF" 
+            :disabled="isExportingPDF"
+            class="flex-1 py-5 bg-indigo-600 text-white rounded-[2rem] font-black text-sm uppercase tracking-widest hover:bg-indigo-750 transition-all shadow-xl flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
+          >
+            <span v-if="isExportingPDF" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+            <Download v-else :size="18" />
+            Descargar Ficha (PDF)
+          </button>
+          <button @click="showCancelModal = true" class="px-8 py-5 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 rounded-[2rem] font-black text-sm uppercase tracking-widest hover:bg-red-100 transition-all border border-red-100 dark:border-red-900 shrink-0">
             Cancelar Matrícula
           </button>
         </div>
@@ -631,5 +666,115 @@ const rejectedDocumentsNames = computed(() => {
         </div>
       </div>
     </div>
+
+    <!-- Hidden Printable Ficha de Matricula Template -->
+    <div v-if="matricula" style="position: fixed; top: 0; left: 0; width: 800px; height: 100vh; overflow: hidden; pointer-events: none; opacity: 0.005; z-index: -99999;">
+      <div ref="printableRef" style="width: 800px; padding: 40px; background-color: #ffffff; color: #0f172a; font-family: 'Inter', system-ui, -apple-system, sans-serif; box-sizing: border-box;">
+      <!-- Header -->
+      <div style="text-align: center; border-bottom: 2px solid #cbd5e1; padding-bottom: 20px; margin-bottom: 30px;">
+        <h1 style="font-size: 26px; font-weight: 900; text-transform: uppercase; color: #1e1b4b; margin: 0; letter-spacing: -0.025em;">ACADEMIANEIVA</h1>
+        <p style="font-size: 11px; font-weight: 800; color: #4f46e5; margin: 5px 0 0 0; text-transform: uppercase; letter-spacing: 0.15em;">Ficha Oficial de Matrícula Académica</p>
+        <p style="font-size: 10px; font-weight: 500; color: #64748b; margin: 4px 0 0 0;">Matrícula Código: #{{ route.params.id }} | Generado el: {{ new Date().toLocaleDateString('es-CO') }}</p>
+      </div>
+
+      <!-- General Grid -->
+      <div style="display: flex; gap: 20px; margin-bottom: 35px;">
+        <!-- Student Information Card -->
+        <div style="flex: 1; border: 1px solid #e2e8f0; border-radius: 20px; padding: 20px; background-color: #fafafa;">
+          <h3 style="font-size: 13px; font-weight: 900; text-transform: uppercase; color: #4338ca; margin-top: 0; margin-bottom: 15px; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; letter-spacing: 0.05em;">Datos del Estudiante</h3>
+          <table style="width: 100%; font-size: 12px; border-collapse: collapse;">
+            <tbody>
+              <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="font-weight: 700; color: #64748b; padding: 6px 0; width: 45%;">Nombres:</td>
+                <td style="font-weight: 800; color: #0f172a; padding: 6px 0;">{{ matricula.student_firstname }}</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="font-weight: 700; color: #64748b; padding: 6px 0;">Apellidos:</td>
+                <td style="font-weight: 800; color: #0f172a; padding: 6px 0;">{{ matricula.student_lastname }}</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="font-weight: 700; color: #64748b; padding: 6px 0;">Documento:</td>
+                <td style="font-weight: 700; color: #334155; padding: 6px 0;">{{ matricula.student_document }}</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="font-weight: 700; color: #64748b; padding: 6px 0;">Código Portal:</td>
+                <td style="font-weight: 800; color: #4338ca; padding: 6px 0; font-family: monospace;">{{ matricula.student_code }}</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="font-weight: 700; color: #64748b; padding: 6px 0;">Nivel / Grado:</td>
+                <td style="font-weight: 700; color: #334155; padding: 6px 0;">{{ matricula.grado_nivel }}</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="font-weight: 700; color: #64748b; padding: 6px 0;">Curso Sección:</td>
+                <td style="font-weight: 800; color: #0f172a; padding: 6px 0;">{{ matricula.tipo_grado }} ({{ matricula.seccion }})</td>
+              </tr>
+              <tr>
+                <td style="font-weight: 700; color: #64748b; padding: 6px 0;">Jornada:</td>
+                <td style="font-weight: 800; color: #4338ca; padding: 6px 0; text-transform: uppercase;">{{ matricula.jornada }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Parent Information Card -->
+        <div style="flex: 1; border: 1px solid #e2e8f0; border-radius: 20px; padding: 20px; background-color: #fafafa;">
+          <h3 style="font-size: 13px; font-weight: 900; text-transform: uppercase; color: #b45309; margin-top: 0; margin-bottom: 15px; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; letter-spacing: 0.05em;">Datos del Acudiente</h3>
+          <table style="width: 100%; font-size: 12px; border-collapse: collapse;">
+            <tbody>
+              <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="font-weight: 700; color: #64748b; padding: 6px 0; width: 45%;">Nombres:</td>
+                <td style="font-weight: 800; color: #0f172a; padding: 6px 0;">{{ matricula.parent_firstname }}</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="font-weight: 700; color: #64748b; padding: 6px 0;">Apellidos:</td>
+                <td style="font-weight: 800; color: #0f172a; padding: 6px 0;">{{ matricula.parent_lastname }}</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="font-weight: 700; color: #64748b; padding: 6px 0;">Identificación:</td>
+                <td style="font-weight: 700; color: #334155; padding: 6px 0;">{{ matricula.parent_document }}</td>
+              </tr>
+              <tr>
+                <td style="font-weight: 700; color: #64748b; padding: 6px 0;">Correo Electrónico:</td>
+                <td style="font-weight: 700; color: #4338ca; padding: 6px 0; word-break: break-all;">{{ matricula.correo_padre }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Validated Documents -->
+      <div style="border: 1px solid #e2e8f0; border-radius: 20px; padding: 20px; margin-bottom: 45px;">
+        <h3 style="font-size: 13px; font-weight: 900; text-transform: uppercase; color: #334155; margin-top: 0; margin-bottom: 15px; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; letter-spacing: 0.05em;">Documentación Verificada y Validada</h3>
+        <div v-if="matricula.documentos && matricula.documentos.length > 0" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+          <div v-for="doc in matricula.documentos" :key="doc.id_documento" style="font-size: 11px; display: flex; align-items: center; gap: 8px;">
+            <span style="color: #10b981; font-weight: 900; font-size: 14px;">✔</span>
+            <span style="font-weight: 700; color: #334155;">{{ documentLabels[doc.tipo_documento] || doc.tipo_documento }}</span>
+            <span style="color: #64748b; font-size: 9px; font-style: italic;">({{ doc.estado }})</span>
+          </div>
+        </div>
+        <div v-else style="padding: 12px; background-color: #fffbeb; border: 1px solid #fef3c7; border-radius: 12px; display: flex; align-items: center; gap: 8px; color: #b45309; font-size: 11px; font-weight: 700; line-height: 1.4;">
+          <span style="font-size: 14px; margin-right: 4px;">⚠</span>
+          <span>Atención: Esta matrícula se encuentra registrada para desarrollo y no cuenta con documentos de validación adjuntos en el sistema.</span>
+        </div>
+      </div>
+
+      <!-- Signatures -->
+      <div style="display: flex; justify-content: space-between; margin-top: 100px; padding-left: 20px; padding-right: 20px;">
+        <div style="text-align: center; width: 280px;">
+          <div style="border-bottom: 1px solid #94a3b8; height: 1px; margin-bottom: 10px;"></div>
+          <p style="font-size: 12px; font-weight: 800; color: #0f172a; margin: 0; text-transform: uppercase;">{{ matricula.parent_firstname }} {{ matricula.parent_lastname }}</p>
+          <p style="font-size: 10px; font-weight: 600; color: #64748b; margin: 4px 0 0 0;">Firma del Acudiente Responsable</p>
+          <p style="font-size: 9px; font-weight: 500; color: #94a3b8; margin: 2px 0 0 0;">Documento: {{ matricula.parent_document }}</p>
+        </div>
+        
+        <div style="text-align: center; width: 280px;">
+          <div style="border-bottom: 1px solid #94a3b8; height: 1px; margin-bottom: 10px;"></div>
+          <p style="font-size: 12px; font-weight: 800; color: #0f172a; margin: 0; text-transform: uppercase;">Secretaría Académica</p>
+          <p style="font-size: 10px; font-weight: 600; color: #64748b; margin: 4px 0 0 0;">Firma de Aprobación Institucional</p>
+          <p style="font-size: 9px; font-weight: 500; color: #94a3b8; margin: 2px 0 0 0;">Colegio AcademiaNeiva</p>
+        </div>
+      </div>
+    </div>
   </div>
+</div>
 </template>

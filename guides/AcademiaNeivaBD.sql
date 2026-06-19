@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict x9Z5bes4NLi4sLtTTOX4lydFllTx6WQ5ieEhlsI7EGeVm2Dcgoc3q4T0c2sZbxd
+\restrict hRC4Yxw7WWu8ynBs1ieczDSATwdzrqyK2GNPW7Xaqko5ERb1sgO0KiJrAoRMhXV
 
 -- Dumped from database version 18.4
 -- Dumped by pg_dump version 18.4
@@ -76,6 +76,21 @@ CREATE TYPE public.estado_cierre_materia AS ENUM (
 ALTER TYPE public.estado_cierre_materia OWNER TO postgres;
 
 --
+-- Name: estado_colegio; Type: TYPE; Schema: public; Owner: postgres
+--
+
+CREATE TYPE public.estado_colegio AS ENUM (
+    'PENDIENTE',
+    'ACTIVO',
+    'SUSPENDIDO',
+    'RECHAZADO',
+    'ELIMINADO'
+);
+
+
+ALTER TYPE public.estado_colegio OWNER TO postgres;
+
+--
 -- Name: estado_documento; Type: TYPE; Schema: public; Owner: postgres
 --
 
@@ -144,6 +159,51 @@ CREATE TYPE public.estado_resultado AS ENUM (
 ALTER TYPE public.estado_resultado OWNER TO postgres;
 
 --
+-- Name: estado_supervision; Type: TYPE; Schema: public; Owner: postgres
+--
+
+CREATE TYPE public.estado_supervision AS ENUM (
+    'SOLICITADA',
+    'APROBADA',
+    'ACTIVA',
+    'FINALIZADA',
+    'REVOCADA',
+    'EXPIRADA'
+);
+
+
+ALTER TYPE public.estado_supervision OWNER TO postgres;
+
+--
+-- Name: estado_usuario_sistema; Type: TYPE; Schema: public; Owner: postgres
+--
+
+CREATE TYPE public.estado_usuario_sistema AS ENUM (
+    'ACTIVO',
+    'SUSPENDIDO',
+    'BANEADO',
+    'ELIMINADO'
+);
+
+
+ALTER TYPE public.estado_usuario_sistema OWNER TO postgres;
+
+--
+-- Name: tipo_accion_auditoria; Type: TYPE; Schema: public; Owner: postgres
+--
+
+CREATE TYPE public.tipo_accion_auditoria AS ENUM (
+    'LECTURA',
+    'CREACION',
+    'MODIFICACION',
+    'ELIMINACION',
+    'EXPORTACION'
+);
+
+
+ALTER TYPE public.tipo_accion_auditoria OWNER TO postgres;
+
+--
 -- Name: tipo_documento_identidad; Type: TYPE; Schema: public; Owner: postgres
 --
 
@@ -171,6 +231,87 @@ CREATE TYPE public.tipo_jornada AS ENUM (
 
 
 ALTER TYPE public.tipo_jornada OWNER TO postgres;
+
+--
+-- Name: tipo_supervision; Type: TYPE; Schema: public; Owner: postgres
+--
+
+CREATE TYPE public.tipo_supervision AS ENUM (
+    'SOLO_LECTURA',
+    'EDITOR'
+);
+
+
+ALTER TYPE public.tipo_supervision OWNER TO postgres;
+
+--
+-- Name: proteger_acciones_auditoria(); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.proteger_acciones_auditoria() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+    v_estado estado_supervision;
+BEGIN
+    -- Obtener el estado de la auditoría padre
+    SELECT estado_supervision INTO v_estado
+    FROM auditoria_supervision
+    WHERE id_auditoria = COALESCE(OLD.id_auditoria, NEW.id_auditoria);
+
+    IF v_estado IN ('FINALIZADA', 'REVOCADA', 'EXPIRADA') THEN
+        IF TG_OP = 'DELETE' THEN
+            RAISE EXCEPTION 'No se pueden eliminar acciones de una auditoría finalizada';
+        END IF;
+        IF TG_OP = 'UPDATE' THEN
+            RAISE EXCEPTION 'No se pueden modificar acciones de una auditoría finalizada';
+        END IF;
+    END IF;
+
+    -- Bloquear DELETE siempre (las acciones de auditoría nunca se eliminan)
+    IF TG_OP = 'DELETE' THEN
+        RAISE EXCEPTION 'Los registros de acciones de auditoría no pueden ser eliminados';
+    END IF;
+
+    RETURN COALESCE(NEW, OLD);
+END;
+$$;
+
+
+ALTER FUNCTION public.proteger_acciones_auditoria() OWNER TO postgres;
+
+--
+-- Name: proteger_auditoria_finalizada(); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.proteger_auditoria_finalizada() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    -- Bloquear DELETE siempre (soft-delete únicamente)
+    IF TG_OP = 'DELETE' THEN
+        RAISE EXCEPTION 'Los registros de auditoría no pueden ser eliminados. Use soft-delete.';
+    END IF;
+
+    -- Bloquear UPDATE si la auditoría ya fue finalizada/revocada/expirada
+    IF TG_OP = 'UPDATE' THEN
+        IF OLD.estado_supervision IN ('FINALIZADA', 'REVOCADA', 'EXPIRADA') THEN
+            -- Permitir solo actualizar el campo "eliminado" para soft-delete
+            IF NEW.eliminado IS DISTINCT FROM OLD.eliminado AND
+               NEW.id_auditoria = OLD.id_auditoria AND
+               NEW.estado_supervision = OLD.estado_supervision THEN
+                RETURN NEW;
+            END IF;
+            RAISE EXCEPTION 'No se puede modificar una auditoría en estado %', OLD.estado_supervision;
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION public.proteger_auditoria_finalizada() OWNER TO postgres;
 
 SET default_tablespace = '';
 
@@ -217,6 +358,84 @@ ALTER SEQUENCE public.actividad_materia_id_actividadmateria_seq OWNED BY public.
 
 
 --
+-- Name: auditoria_acciones_realizadas; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.auditoria_acciones_realizadas (
+    id_accion integer NOT NULL,
+    id_auditoria integer NOT NULL,
+    fecha_accion timestamp with time zone DEFAULT now() NOT NULL,
+    modulo character varying(255) NOT NULL,
+    tipo_accion public.tipo_accion_auditoria NOT NULL,
+    accion character varying(255) NOT NULL,
+    recurso_afectado text NOT NULL,
+    id_usuario_afectado integer,
+    valor_antiguo jsonb,
+    valor_nuevo jsonb,
+    motivo_cambio text,
+    CONSTRAINT chk_modificacion_completa CHECK (((tipo_accion <> 'MODIFICACION'::public.tipo_accion_auditoria) OR ((valor_antiguo IS NOT NULL) AND (valor_nuevo IS NOT NULL) AND (motivo_cambio IS NOT NULL))))
+);
+
+
+ALTER TABLE public.auditoria_acciones_realizadas OWNER TO postgres;
+
+--
+-- Name: auditoria_acciones_realizadas_id_accion_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+ALTER TABLE public.auditoria_acciones_realizadas ALTER COLUMN id_accion ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.auditoria_acciones_realizadas_id_accion_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: auditoria_supervision; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.auditoria_supervision (
+    id_auditoria integer NOT NULL,
+    id_admin_general integer NOT NULL,
+    id_colegio integer NOT NULL,
+    id_directivo_aprobador integer,
+    motivo_solicitud text NOT NULL,
+    fecha_solicitud timestamp with time zone DEFAULT now() NOT NULL,
+    tipo_supervision public.tipo_supervision NOT NULL,
+    estado_supervision public.estado_supervision DEFAULT 'SOLICITADA'::public.estado_supervision NOT NULL,
+    fecha_aprobacion timestamp with time zone,
+    motivo_entrada text,
+    fecha_entrada timestamp with time zone,
+    fecha_salida timestamp with time zone,
+    duracion_maxima_minutos integer DEFAULT 60 NOT NULL,
+    revocado_por integer,
+    fecha_revocacion timestamp with time zone,
+    ip_admin character varying(45),
+    eliminado boolean DEFAULT false NOT NULL,
+    fecha_retencion_hasta timestamp with time zone DEFAULT (now() + '5 years'::interval) NOT NULL
+);
+
+
+ALTER TABLE public.auditoria_supervision OWNER TO postgres;
+
+--
+-- Name: auditoria_supervision_id_auditoria_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+ALTER TABLE public.auditoria_supervision ALTER COLUMN id_auditoria ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.auditoria_supervision_id_auditoria_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
 -- Name: año_lectivo; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -224,7 +443,8 @@ CREATE TABLE public."año_lectivo" (
     "id_año" integer NOT NULL,
     calendario character varying(10),
     id_colegio integer NOT NULL,
-    tipo_calendario character(1) DEFAULT 'A'::bpchar
+    tipo_calendario character(1) DEFAULT 'A'::bpchar,
+    estado character varying(20) DEFAULT 'ABIERTO'::character varying
 );
 
 
@@ -301,7 +521,11 @@ CREATE TABLE public.colegio (
     contacto numeric NOT NULL,
     correo character varying(100) NOT NULL,
     dane character varying(100) NOT NULL,
-    tipo_calendario character(1) DEFAULT 'A'::bpchar
+    tipo_calendario character(1) DEFAULT 'A'::bpchar,
+    estado public.estado_colegio DEFAULT 'ACTIVO'::public.estado_colegio NOT NULL,
+    fecha_registro timestamp with time zone DEFAULT now() NOT NULL,
+    motivo_rechazo text,
+    fecha_cambio_estado timestamp with time zone
 );
 
 
@@ -647,7 +871,10 @@ CREATE TABLE public.directivo (
     id integer NOT NULL,
     id_colegio integer NOT NULL,
     id_usuario integer,
-    cargo character varying(100)
+    cargo character varying(100),
+    estado character varying(20) DEFAULT 'ACTIVO'::character varying NOT NULL,
+    fecha_vinculacion timestamp with time zone DEFAULT now() NOT NULL,
+    fecha_desvinculacion timestamp with time zone
 );
 
 
@@ -1179,6 +1406,70 @@ ALTER SEQUENCE public.notas_actividad_id_notaactividad_seq OWNED BY public.notas
 
 
 --
+-- Name: notificacion_colegio; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.notificacion_colegio (
+    id_notificacion integer NOT NULL,
+    id_colegio integer NOT NULL,
+    id_directivo integer NOT NULL,
+    tipo character varying(50) NOT NULL,
+    mensaje text NOT NULL,
+    estado_anterior character varying(20),
+    estado_nuevo character varying(20),
+    leida boolean DEFAULT false NOT NULL,
+    fecha_notificacion timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE public.notificacion_colegio OWNER TO postgres;
+
+--
+-- Name: notificacion_colegio_id_notificacion_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+ALTER TABLE public.notificacion_colegio ALTER COLUMN id_notificacion ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.notificacion_colegio_id_notificacion_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: notificacion_supervision; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.notificacion_supervision (
+    id_notificacion integer NOT NULL,
+    id_auditoria integer NOT NULL,
+    id_directivo integer NOT NULL,
+    tipo_notificacion character varying(50) NOT NULL,
+    mensaje text NOT NULL,
+    leida boolean DEFAULT false NOT NULL,
+    fecha_notificacion timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE public.notificacion_supervision OWNER TO postgres;
+
+--
+-- Name: notificacion_supervision_id_notificacion_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+ALTER TABLE public.notificacion_supervision ALTER COLUMN id_notificacion ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.notificacion_supervision_id_notificacion_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
 -- Name: observacion_estudiante; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -1568,7 +1859,11 @@ CREATE TABLE public.usuario (
     apellido character varying(255),
     id_colegio integer,
     activo boolean DEFAULT true,
-    fecha_creacion timestamp with time zone DEFAULT now()
+    fecha_creacion timestamp with time zone DEFAULT now(),
+    estado public.estado_usuario_sistema DEFAULT 'ACTIVO'::public.estado_usuario_sistema NOT NULL,
+    motivo_baneo text,
+    fecha_baneo timestamp with time zone,
+    baneado_por integer
 );
 
 
@@ -1995,6 +2290,22 @@ ALTER TABLE ONLY public.actividad_materia
 
 
 --
+-- Name: auditoria_acciones_realizadas auditoria_acciones_realizadas_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.auditoria_acciones_realizadas
+    ADD CONSTRAINT auditoria_acciones_realizadas_pkey PRIMARY KEY (id_accion);
+
+
+--
+-- Name: auditoria_supervision auditoria_supervision_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.auditoria_supervision
+    ADD CONSTRAINT auditoria_supervision_pkey PRIMARY KEY (id_auditoria);
+
+
+--
 -- Name: año_lectivo año_lectivo_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -2267,6 +2578,22 @@ ALTER TABLE ONLY public.notas_actividad
 
 
 --
+-- Name: notificacion_colegio notificacion_colegio_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.notificacion_colegio
+    ADD CONSTRAINT notificacion_colegio_pkey PRIMARY KEY (id_notificacion);
+
+
+--
+-- Name: notificacion_supervision notificacion_supervision_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.notificacion_supervision
+    ADD CONSTRAINT notificacion_supervision_pkey PRIMARY KEY (id_notificacion);
+
+
+--
 -- Name: observacion_estudiante observacion_estudiante_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -2442,6 +2769,76 @@ CREATE INDEX idx_asistencia_estudiante ON public.registro_asistencia USING btree
 
 
 --
+-- Name: idx_audit_acc_auditoria; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_audit_acc_auditoria ON public.auditoria_acciones_realizadas USING btree (id_auditoria);
+
+
+--
+-- Name: idx_audit_acc_fecha; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_audit_acc_fecha ON public.auditoria_acciones_realizadas USING btree (fecha_accion);
+
+
+--
+-- Name: idx_audit_acc_tipo; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_audit_acc_tipo ON public.auditoria_acciones_realizadas USING btree (tipo_accion);
+
+
+--
+-- Name: idx_audit_acc_usuario; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_audit_acc_usuario ON public.auditoria_acciones_realizadas USING btree (id_usuario_afectado) WHERE (id_usuario_afectado IS NOT NULL);
+
+
+--
+-- Name: idx_audit_sup_admin; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_audit_sup_admin ON public.auditoria_supervision USING btree (id_admin_general);
+
+
+--
+-- Name: idx_audit_sup_colegio; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_audit_sup_colegio ON public.auditoria_supervision USING btree (id_colegio);
+
+
+--
+-- Name: idx_audit_sup_eliminado; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_audit_sup_eliminado ON public.auditoria_supervision USING btree (eliminado) WHERE (eliminado = false);
+
+
+--
+-- Name: idx_audit_sup_estado; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_audit_sup_estado ON public.auditoria_supervision USING btree (estado_supervision);
+
+
+--
+-- Name: idx_audit_sup_fecha; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_audit_sup_fecha ON public.auditoria_supervision USING btree (fecha_solicitud);
+
+
+--
+-- Name: idx_colegio_estado; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_colegio_estado ON public.colegio USING btree (estado);
+
+
+--
 -- Name: idx_evidencia_competencia; Type: INDEX; Schema: public; Owner: postgres
 --
 
@@ -2477,6 +2874,48 @@ CREATE INDEX idx_notas_estudiante ON public.notas_actividad USING btree (id_estu
 
 
 --
+-- Name: idx_notif_col_colegio; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_notif_col_colegio ON public.notificacion_colegio USING btree (id_colegio);
+
+
+--
+-- Name: idx_notif_col_directivo; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_notif_col_directivo ON public.notificacion_colegio USING btree (id_directivo);
+
+
+--
+-- Name: idx_notif_col_leida; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_notif_col_leida ON public.notificacion_colegio USING btree (leida) WHERE (leida = false);
+
+
+--
+-- Name: idx_notif_sup_auditoria; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_notif_sup_auditoria ON public.notificacion_supervision USING btree (id_auditoria);
+
+
+--
+-- Name: idx_notif_sup_directivo; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_notif_sup_directivo ON public.notificacion_supervision USING btree (id_directivo);
+
+
+--
+-- Name: idx_notif_sup_leida; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_notif_sup_leida ON public.notificacion_supervision USING btree (leida) WHERE (leida = false);
+
+
+--
 -- Name: idx_observacion_estudiante; Type: INDEX; Schema: public; Owner: postgres
 --
 
@@ -2495,6 +2934,27 @@ CREATE INDEX idx_usuario_colegio ON public.usuario USING btree (id_colegio);
 --
 
 CREATE INDEX idx_usuario_email ON public.usuario USING btree (email);
+
+
+--
+-- Name: idx_usuario_estado; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_usuario_estado ON public.usuario USING btree (estado);
+
+
+--
+-- Name: auditoria_acciones_realizadas trg_proteger_acciones; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE TRIGGER trg_proteger_acciones BEFORE DELETE OR UPDATE ON public.auditoria_acciones_realizadas FOR EACH ROW EXECUTE FUNCTION public.proteger_acciones_auditoria();
+
+
+--
+-- Name: auditoria_supervision trg_proteger_auditoria; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE TRIGGER trg_proteger_auditoria BEFORE DELETE OR UPDATE ON public.auditoria_supervision FOR EACH ROW EXECUTE FUNCTION public.proteger_auditoria_finalizada();
 
 
 --
@@ -2535,6 +2995,38 @@ ALTER TABLE ONLY public.actividad_materia
 
 ALTER TABLE ONLY public.actividad_materia
     ADD CONSTRAINT actividad_materia_id_periodo_fkey FOREIGN KEY (id_periodo) REFERENCES public.periodo_academico(id_periodo);
+
+
+--
+-- Name: auditoria_acciones_realizadas auditoria_acciones_realizadas_id_auditoria_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.auditoria_acciones_realizadas
+    ADD CONSTRAINT auditoria_acciones_realizadas_id_auditoria_fkey FOREIGN KEY (id_auditoria) REFERENCES public.auditoria_supervision(id_auditoria);
+
+
+--
+-- Name: auditoria_supervision auditoria_supervision_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.auditoria_supervision
+    ADD CONSTRAINT auditoria_supervision_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio);
+
+
+--
+-- Name: auditoria_supervision auditoria_supervision_id_directivo_aprobador_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.auditoria_supervision
+    ADD CONSTRAINT auditoria_supervision_id_directivo_aprobador_fkey FOREIGN KEY (id_directivo_aprobador) REFERENCES public.directivo(id);
+
+
+--
+-- Name: auditoria_supervision auditoria_supervision_revocado_por_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.auditoria_supervision
+    ADD CONSTRAINT auditoria_supervision_revocado_por_fkey FOREIGN KEY (revocado_por) REFERENCES public.directivo(id);
 
 
 --
@@ -2994,6 +3486,38 @@ ALTER TABLE ONLY public.notas_actividad
 
 
 --
+-- Name: notificacion_colegio notificacion_colegio_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.notificacion_colegio
+    ADD CONSTRAINT notificacion_colegio_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio);
+
+
+--
+-- Name: notificacion_colegio notificacion_colegio_id_directivo_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.notificacion_colegio
+    ADD CONSTRAINT notificacion_colegio_id_directivo_fkey FOREIGN KEY (id_directivo) REFERENCES public.directivo(id);
+
+
+--
+-- Name: notificacion_supervision notificacion_supervision_id_auditoria_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.notificacion_supervision
+    ADD CONSTRAINT notificacion_supervision_id_auditoria_fkey FOREIGN KEY (id_auditoria) REFERENCES public.auditoria_supervision(id_auditoria);
+
+
+--
+-- Name: notificacion_supervision notificacion_supervision_id_directivo_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.notificacion_supervision
+    ADD CONSTRAINT notificacion_supervision_id_directivo_fkey FOREIGN KEY (id_directivo) REFERENCES public.directivo(id);
+
+
+--
 -- Name: observacion_estudiante observacion_estudiante_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -3114,6 +3638,14 @@ ALTER TABLE ONLY public.resultado_academico
 
 
 --
+-- Name: usuario usuario_baneado_por_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.usuario
+    ADD CONSTRAINT usuario_baneado_por_fkey FOREIGN KEY (baneado_por) REFERENCES public.usuario(id_usuario);
+
+
+--
 -- Name: usuario usuario_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -3148,5 +3680,5 @@ REVOKE USAGE ON SCHEMA public FROM PUBLIC;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict x9Z5bes4NLi4sLtTTOX4lydFllTx6WQ5ieEhlsI7EGeVm2Dcgoc3q4T0c2sZbxd
+\unrestrict hRC4Yxw7WWu8ynBs1ieczDSATwdzrqyK2GNPW7Xaqko5ERb1sgO0KiJrAoRMhXV
 

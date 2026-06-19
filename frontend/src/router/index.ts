@@ -35,6 +35,11 @@ const router = createRouter({
       component: () => import('../views/auth/StudentLoginView.vue')
     },
     {
+      path: '/login/admin',
+      name: 'admin-login',
+      component: () => import('../views/auth/AdminLoginView.vue')
+    },
+    {
       path: '/matricula',
       name: 'matricula',
       component: EnrollmentView
@@ -202,6 +207,60 @@ const router = createRouter({
           path: 'observaciones-hijos',
           name: 'Observaciones de Hijos',
           component: () => import('../views/parent/ParentObservationsView.vue')
+        },
+        // Rutas del Admin General
+        {
+          path: 'colegios',
+          name: 'Gestión de Colegios',
+          component: () => import('../views/adminGeneral/ColegiosList.vue')
+        },
+        {
+          path: 'usuarios',
+          name: 'Gestión de Usuarios',
+          component: () => import('../views/adminGeneral/UsuariosList.vue')
+        },
+        {
+          path: 'supervision/solicitudes',
+          name: 'Solicitudes de Supervisión',
+          component: () => import('../views/adminGeneral/SupervisionSolicitudes.vue')
+        },
+        {
+          path: 'supervision/activas',
+          name: 'Supervisiones Activas',
+          component: () => import('../views/adminGeneral/SupervisionActivas.vue')
+        },
+        {
+          path: 'supervision/historial',
+          name: 'Historial de Supervisiones',
+          component: () => import('../views/adminGeneral/SupervisionHistorial.vue')
+        },
+        {
+          path: 'auditorias/lecturas',
+          name: 'Auditoría de Lecturas',
+          component: () => import('../views/adminGeneral/AuditoriasList.vue'),
+          props: { tipo: 'LECTURA' }
+        },
+        {
+          path: 'auditorias/modificaciones',
+          name: 'Auditoría de Modificaciones',
+          component: () => import('../views/adminGeneral/AuditoriasList.vue'),
+          props: { tipo: 'MODIFICACION' }
+        },
+        {
+          path: 'auditorias/exportaciones',
+          name: 'Auditoría de Exportaciones',
+          component: () => import('../views/adminGeneral/AuditoriasList.vue'),
+          props: { tipo: 'EXPORTACION' }
+        },
+        {
+          path: 'notificaciones',
+          name: 'Notificaciones del Sistema',
+          component: () => import('../views/adminGeneral/NotificacionesList.vue')
+        },
+        {
+          path: 'configuracion',
+          name: 'Configuración de Plataforma',
+          component: () => import('../views/adminGeneral/ConfiguracionPanel.vue')
         }
       ]
     }

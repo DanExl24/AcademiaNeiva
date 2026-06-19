@@ -23,3 +23,11 @@ Calendario Académico
 │
 └── Año Lectivo
     └── ...
+
+
+
+    # 1. Resetear tablas y sembrar colegios, usuarios, grupos y asistencia
+npm run seed:reset
+
+# 2. Generar las notas de los estudiantes matriculados en sus respectivos grupos
+npm run seed:grades

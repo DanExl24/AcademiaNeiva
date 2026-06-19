@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, nextTick } from 'vue'
 import axios from 'axios'
+import html2pdf from 'html2pdf.js'
 import {
   Search,
   Eye,
@@ -20,7 +21,8 @@ import {
   BookOpen,
   User,
   Mail,
-  MapPin
+  MapPin,
+  Download
 } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 import { useNotificationStore } from '../../stores/notifications'
@@ -256,6 +258,47 @@ const cancelEnrollment = async () => {
     cancelling.value = false
   }
 }
+
+// ─── PDF Export State & Functions ──────────────────────────────────────────────
+const isExportingPDF = ref(false)
+const tempPrintableRef = ref<HTMLElement | null>(null)
+const tempMatricula = ref<any>(null)
+
+const downloadPDF = async (fullMatricula: any) => {
+  if (!fullMatricula || isExportingPDF.value) return
+  isExportingPDF.value = true
+  try {
+    tempMatricula.value = fullMatricula
+    await nextTick()
+    await new Promise(resolve => setTimeout(resolve, 500)) // Give Vue 500ms to render the template fully
+    const opt = {
+      margin:       0.5,
+      filename:     `ficha_matricula_${fullMatricula.student_code || 'SIN_CODIGO'}_${fullMatricula.id_matricula}.pdf`,
+      image:        { type: 'jpeg' as const, quality: 0.98 },
+      html2canvas:  { scale: 2, useCORS: true },
+      jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' as const }
+    }
+    if (tempPrintableRef.value) {
+      await html2pdf().set(opt).from(tempPrintableRef.value).save()
+    }
+  } catch (err) {
+    console.error("Error al exportar ficha en PDF:", err)
+    notify.addNotification("Error al generar el PDF de la ficha", "error")
+  } finally {
+    tempMatricula.value = null
+    isExportingPDF.value = false
+  }
+}
+
+const fetchAndDownloadPDF = async (id: number) => {
+  try {
+    const response = await axios.get(`http://localhost:3000/api/matriculas/${id}`)
+    await downloadPDF(response.data)
+  } catch (err) {
+    console.error("Error fetching matricula details for PDF:", err)
+    notify.addNotification("Error al cargar detalles de la matrícula", "error")
+  }
+}
 </script>
 
 <template>
@@ -368,13 +411,24 @@ const cancelEnrollment = async () => {
                 </div>
               </td>
               <td class="px-6 py-4 text-right">
-                <button
-                  @click="openDrawer(en.id_matricula)"
-                  class="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-950/60 rounded-xl text-xs font-black uppercase tracking-wide transition-all group-hover:shadow-md"
-                >
-                  <Eye :size="14" /> Gestionar
-                  <ChevronRight :size="12" />
-                </button>
+                <div class="flex items-center justify-end gap-2">
+                  <button
+                    v-if="en.estado === 'ACTIVA' || en.estado === 'TRASLADADA'"
+                    @click.stop="fetchAndDownloadPDF(en.id_matricula)"
+                    :disabled="isExportingPDF"
+                    class="inline-flex items-center justify-center p-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-black uppercase tracking-wide transition-all disabled:opacity-50 active:scale-95 shrink-0"
+                    title="Descargar Ficha PDF"
+                  >
+                    <Download :size="14" />
+                  </button>
+                  <button
+                    @click="openDrawer(en.id_matricula)"
+                    class="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-950/60 rounded-xl text-xs font-black uppercase tracking-wide transition-all group-hover:shadow-md"
+                  >
+                    <Eye :size="14" /> Gestionar
+                    <ChevronRight :size="12" />
+                  </button>
+                </div>
               </td>
             </tr>
           </tbody>
@@ -559,11 +613,20 @@ const cancelEnrollment = async () => {
                   </div>
                 </div>
 
-                <div class="flex flex-col sm:flex-row gap-3 pt-4">
-                  <button @click="showCancelModal = true" class="flex-1 py-4 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-red-100 transition-all border border-red-100 dark:border-red-900">
+                 <div class="flex flex-col sm:flex-row gap-3 pt-4">
+                  <button @click="showCancelModal = true" class="flex-1 py-4 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-red-100 transition-all border border-red-100 dark:border-red-900 font-sans">
                     Cancelar Matrícula
                   </button>
-                  <button @click="closeDrawer" class="flex-1 py-4 bg-slate-900 dark:bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-xl">
+                  <button 
+                    @click="downloadPDF(matricula)" 
+                    :disabled="isExportingPDF"
+                    class="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-wide hover:bg-indigo-700 transition-all shadow-xl flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
+                  >
+                    <span v-if="isExportingPDF" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                    <Download v-else :size="16" />
+                    Descargar Ficha (PDF)
+                  </button>
+                  <button @click="closeDrawer" class="flex-1 py-4 bg-slate-900 dark:bg-slate-800 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-800 dark:hover:bg-slate-700 transition-all shadow-xl">
                     Cerrar Detalle
                   </button>
                 </div>
@@ -871,6 +934,116 @@ const cancelEnrollment = async () => {
       </div>
     </div>
   </Teleport>
+
+  <!-- Hidden Printable Ficha de Matricula Template -->
+  <div v-if="tempMatricula" style="position: fixed; top: 0; left: 0; width: 800px; height: 100vh; overflow: hidden; pointer-events: none; opacity: 0.005; z-index: -99999;">
+    <div ref="tempPrintableRef" style="width: 800px; padding: 40px; background-color: #ffffff; color: #0f172a; font-family: 'Inter', system-ui, -apple-system, sans-serif; box-sizing: border-box;">
+    <!-- Header -->
+    <div style="text-align: center; border-bottom: 2px solid #cbd5e1; padding-bottom: 20px; margin-bottom: 30px;">
+      <h1 style="font-size: 26px; font-weight: 900; text-transform: uppercase; color: #1e1b4b; margin: 0; letter-spacing: -0.025em;">ACADEMIANEIVA</h1>
+      <p style="font-size: 11px; font-weight: 800; color: #4f46e5; margin: 5px 0 0 0; text-transform: uppercase; letter-spacing: 0.15em;">Ficha Oficial de Matrícula Académica</p>
+      <p style="font-size: 10px; font-weight: 500; color: #64748b; margin: 4px 0 0 0;">Matrícula Código: #{{ tempMatricula.id_matricula }} | Generado el: {{ new Date().toLocaleDateString('es-CO') }}</p>
+    </div>
+
+    <!-- General Grid -->
+    <div style="display: flex; gap: 20px; margin-bottom: 35px;">
+      <!-- Student Information Card -->
+      <div style="flex: 1; border: 1px solid #e2e8f0; border-radius: 20px; padding: 20px; background-color: #fafafa;">
+        <h3 style="font-size: 13px; font-weight: 900; text-transform: uppercase; color: #4338ca; margin-top: 0; margin-bottom: 15px; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; letter-spacing: 0.05em;">Datos del Estudiante</h3>
+        <table style="width: 100%; font-size: 12px; border-collapse: collapse;">
+          <tbody>
+            <tr style="border-bottom: 1px solid #f1f5f9;">
+              <td style="font-weight: 700; color: #64748b; padding: 6px 0; width: 45%;">Nombres:</td>
+              <td style="font-weight: 800; color: #0f172a; padding: 6px 0;">{{ tempMatricula.student_firstname }}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #f1f5f9;">
+              <td style="font-weight: 700; color: #64748b; padding: 6px 0;">Apellidos:</td>
+              <td style="font-weight: 800; color: #0f172a; padding: 6px 0;">{{ tempMatricula.student_lastname }}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #f1f5f9;">
+              <td style="font-weight: 700; color: #64748b; padding: 6px 0;">Documento:</td>
+              <td style="font-weight: 700; color: #334155; padding: 6px 0;">{{ tempMatricula.student_document }}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #f1f5f9;">
+              <td style="font-weight: 700; color: #64748b; padding: 6px 0;">Código Portal:</td>
+              <td style="font-weight: 800; color: #4338ca; padding: 6px 0; font-family: monospace;">{{ tempMatricula.student_code }}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #f1f5f9;">
+              <td style="font-weight: 700; color: #64748b; padding: 6px 0;">Nivel / Grado:</td>
+              <td style="font-weight: 700; color: #334155; padding: 6px 0;">{{ tempMatricula.grado_nivel }}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #f1f5f9;">
+              <td style="font-weight: 700; color: #64748b; padding: 6px 0;">Curso Sección:</td>
+              <td style="font-weight: 800; color: #0f172a; padding: 6px 0;">{{ tempMatricula.tipo_grado }} ({{ tempMatricula.seccion }})</td>
+            </tr>
+            <tr>
+              <td style="font-weight: 700; color: #64748b; padding: 6px 0;">Jornada:</td>
+              <td style="font-weight: 800; color: #4338ca; padding: 6px 0; text-transform: uppercase;">{{ tempMatricula.jornada }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Parent Information Card -->
+      <div style="flex: 1; border: 1px solid #e2e8f0; border-radius: 20px; padding: 20px; background-color: #fafafa;">
+        <h3 style="font-size: 13px; font-weight: 900; text-transform: uppercase; color: #b45309; margin-top: 0; margin-bottom: 15px; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; letter-spacing: 0.05em;">Datos del Acudiente</h3>
+        <table style="width: 100%; font-size: 12px; border-collapse: collapse;">
+          <tbody>
+            <tr style="border-bottom: 1px solid #f1f5f9;">
+              <td style="font-weight: 700; color: #64748b; padding: 6px 0; width: 45%;">Nombres:</td>
+              <td style="font-weight: 800; color: #0f172a; padding: 6px 0;">{{ tempMatricula.parent_firstname }}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #f1f5f9;">
+              <td style="font-weight: 700; color: #64748b; padding: 6px 0;">Apellidos:</td>
+              <td style="font-weight: 800; color: #0f172a; padding: 6px 0;">{{ tempMatricula.parent_lastname }}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #f1f5f9;">
+              <td style="font-weight: 700; color: #64748b; padding: 6px 0;">Identificación:</td>
+              <td style="font-weight: 700; color: #334155; padding: 6px 0;">{{ tempMatricula.parent_document }}</td>
+            </tr>
+            <tr>
+              <td style="font-weight: 700; color: #64748b; padding: 6px 0;">Correo Electrónico:</td>
+              <td style="font-weight: 700; color: #4338ca; padding: 6px 0; word-break: break-all;">{{ tempMatricula.correo_padre }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Validated Documents -->
+    <div style="border: 1px solid #e2e8f0; border-radius: 20px; padding: 20px; margin-bottom: 45px;">
+      <h3 style="font-size: 13px; font-weight: 900; text-transform: uppercase; color: #334155; margin-top: 0; margin-bottom: 15px; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; letter-spacing: 0.05em;">Documentación Verificada y Validada</h3>
+      <div v-if="tempMatricula.documentos && tempMatricula.documentos.length > 0" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+        <div v-for="doc in tempMatricula.documentos" :key="doc.id_documento" style="font-size: 11px; display: flex; align-items: center; gap: 8px;">
+          <span style="color: #10b981; font-weight: 900; font-size: 14px;">✔</span>
+          <span style="font-weight: 700; color: #334155;">{{ documentLabels[doc.tipo_documento] || doc.tipo_documento }}</span>
+          <span style="color: #64748b; font-size: 9px; font-style: italic;">({{ doc.estado }})</span>
+        </div>
+      </div>
+      <div v-else style="padding: 12px; background-color: #fffbeb; border: 1px solid #fef3c7; border-radius: 12px; display: flex; align-items: center; gap: 8px; color: #b45309; font-size: 11px; font-weight: 700; line-height: 1.4;">
+        <span style="font-size: 14px; margin-right: 4px;">⚠</span>
+        <span>Atención: Esta matrícula se encuentra registrada para desarrollo y no cuenta con documentos de validación adjuntos en el sistema.</span>
+      </div>
+    </div>
+
+    <!-- Signatures -->
+    <div style="display: flex; justify-content: space-between; margin-top: 100px; padding-left: 20px; padding-right: 20px;">
+      <div style="text-align: center; width: 280px;">
+        <div style="border-bottom: 1px solid #94a3b8; height: 1px; margin-bottom: 10px;"></div>
+        <p style="font-size: 12px; font-weight: 800; color: #0f172a; margin: 0; text-transform: uppercase;">{{ tempMatricula.parent_firstname }} {{ tempMatricula.parent_lastname }}</p>
+        <p style="font-size: 10px; font-weight: 600; color: #64748b; margin: 4px 0 0 0;">Firma del Acudiente Responsable</p>
+        <p style="font-size: 9px; font-weight: 500; color: #94a3b8; margin: 2px 0 0 0;">Documento: {{ tempMatricula.parent_document }}</p>
+      </div>
+      
+      <div style="text-align: center; width: 280px;">
+        <div style="border-bottom: 1px solid #94a3b8; height: 1px; margin-bottom: 10px;"></div>
+        <p style="font-size: 12px; font-weight: 800; color: #0f172a; margin: 0; text-transform: uppercase;">Secretaría Académica</p>
+        <p style="font-size: 10px; font-weight: 600; color: #64748b; margin: 4px 0 0 0;">Firma de Aprobación Institucional</p>
+        <p style="font-size: 9px; font-weight: 500; color: #94a3b8; margin: 2px 0 0 0;">Firma Autorizada</p>
+      </div>
+    </div>
+  </div>
+</div>
 </template>
 
 <style scoped>

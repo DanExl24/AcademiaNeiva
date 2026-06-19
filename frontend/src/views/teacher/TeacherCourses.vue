@@ -9,7 +9,6 @@ import {
   ClipboardList,
   SlidersHorizontal,
   X,
-  UserCircle2,
   Hash,
   FileText
 } from 'lucide-vue-next'

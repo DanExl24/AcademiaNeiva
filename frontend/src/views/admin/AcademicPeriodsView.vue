@@ -8,6 +8,7 @@ interface AcademicYear {
   id_año: number
   calendario: string | null
   tipo_calendario?: string | null
+  estado?: string
 }
 
 interface AcademicPeriod {

@@ -10,7 +10,8 @@ import {
   Loader2,
   Search,
   X,
-  ClipboardList
+  ClipboardList,
+  Download
 } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 import axios from 'axios'
@@ -92,7 +93,6 @@ const gradeRange = ref({ min: 0, max: 5, approval: 3 })
 const scales = ref<any[]>([])
 const saving = ref(false)
 const activitiesLoading = ref(false)
-const competencySaving = ref(false)
 
 // Búsqueda de estudiantes
 const studentSearch = ref('')
@@ -387,22 +387,22 @@ const addActivity = async () => {
   }
 }
 
-const saveCompetency = async () => {
-  if (!competency.value || !competencyDraft.value.trim() || competencySaving.value) return
-
-  try {
-    competencySaving.value = true
-    const response = await axios.put(`http://localhost:3000/api/teacher/competencies/${competency.value.id_competencia}`, {
-      descripcion: competencyDraft.value
-    })
-    competency.value = response.data
-    competencyDraft.value = response.data.descripcion
-  } catch (error: any) {
-    alert(error.response?.data?.error || 'Error al guardar la competencia')
-  } finally {
-    competencySaving.value = false
-  }
-}
+// const saveCompetency = async () => {
+//   if (!competency.value || !competencyDraft.value.trim() || competencySaving.value) return
+// 
+//   try {
+//     competencySaving.value = true
+//     const response = await axios.put(`http://localhost:3000/api/teacher/competencies/${competency.value.id_competencia}`, {
+//       descripcion: competencyDraft.value
+//     })
+//     competency.value = response.data
+//     competencyDraft.value = response.data.descripcion
+//   } catch (error: any) {
+//     alert(error.response?.data?.error || 'Error al guardar la competencia')
+//   } finally {
+//     competencySaving.value = false
+//   }
+// }
 
 // Eliminar actividad
 const removeActivity = async (id: number) => {
@@ -592,6 +592,70 @@ watch([selectedGradeId, selectedSubjectId, selectedPeriodId], () => {
   if (selectedGradeId.value) fetchStudents()
 })
 
+const exportGradesToCSV = () => {
+  if (students.value.length === 0) return
+
+  const dynamicHeaders = tableColumns.value.map(col => {
+    if (col.type === 'activity') {
+      return `"${col.activity.nombre} (${col.activity.porcentaje}%)"`
+    } else if (col.type === 'criterion') {
+      return `"${col.activity.nombre} - ${col.criterion?.descripcion} (${col.criterion?.porcentaje}%)"`
+    } else {
+      return `"Total ${col.activity.nombre} (${col.activity.porcentaje}%)"`
+    }
+  })
+
+  const headers = [
+    'Código Estudiante',
+    'Estudiante',
+    ...dynamicHeaders,
+    'Nota Definitiva',
+    'Nivel Desempeño'
+  ]
+
+  const rows = students.value.map(st => {
+    const rowData = [
+      st.codigo,
+      `"${st.nombre} ${st.apellido}"`
+    ]
+
+    tableColumns.value.forEach(col => {
+      if (col.type === 'activity') {
+        const studentGrades = gradesMatrix.value[st.id_estudiante] || {}
+        rowData.push(studentGrades[col.activity.id_actividadmateria] ?? '')
+      } else if (col.type === 'criterion') {
+        const cGrades = criteriaGradesMatrix.value[st.id_estudiante] || {}
+        rowData.push(cGrades[col.criterion?.id_criterio ?? 0] ?? '')
+      } else if (col.type === 'activity_total') {
+        rowData.push(calculateActivityGrade(st.id_estudiante, col.activity).toFixed(1))
+      }
+    })
+
+    const finalGrade = calculateFinal(st.id_estudiante)
+    rowData.push(finalGrade)
+    rowData.push(getScaleLevel(finalGrade))
+
+    return rowData
+  })
+
+  const csvContent = '\uFEFF' + [
+    headers.join(','),
+    ...rows.map(e => e.join(','))
+  ].join('\n')
+
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.setAttribute('href', url)
+  
+  const label = `${selectedGradeName.value || ''}_${selectedSection.value || ''}_${selectedSubjectId.value || ''}`.replace(/\s+/g, '_')
+  link.setAttribute('download', `consolidado_notas_${label}_${new Date().toLocaleDateString()}.csv`)
+  link.style.visibility = 'hidden'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+}
+
 onMounted(() => {
   fetchGradeRange()
   fetchMyCourses()
@@ -613,9 +677,10 @@ onMounted(() => {
         </div>
       </div>
       
-      <!-- Save button: hidden in monitoring mode -->
-      <div v-if="selectedSubjectId && selectedPeriodId && !auth.isMonitoring" class="flex gap-3">
+      <!-- Actions buttons -->
+      <div v-if="selectedSubjectId && selectedPeriodId" class="flex flex-wrap items-center gap-3">
         <button 
+          v-if="!auth.isMonitoring"
           @click="saveAllGrades"
           :disabled="saving || activitiesLoading"
           class="bg-emerald-600 dark:bg-emerald-500 text-white px-8 py-3 rounded-2xl font-bold shadow-lg shadow-emerald-100 dark:shadow-none hover:bg-emerald-700 transition-all flex items-center gap-2 active:scale-95 disabled:opacity-50"
@@ -624,9 +689,17 @@ onMounted(() => {
           <Save v-else :size="20" />
           {{ saving ? 'Guardando...' : 'Guardar Todo' }}
         </button>
-      </div>
-      <div v-if="selectedSubjectId && selectedPeriodId && auth.isMonitoring" class="flex items-center gap-2 text-amber-600 font-bold text-sm bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 px-5 py-3 rounded-2xl">
-        Solo Lectura
+        <button 
+          @click="exportGradesToCSV"
+          :disabled="saving || activitiesLoading || students.length === 0"
+          class="bg-indigo-600 dark:bg-indigo-500 text-white px-6 py-3 rounded-2xl font-bold shadow-lg shadow-indigo-100 dark:shadow-none hover:bg-indigo-700 transition-all flex items-center gap-2 active:scale-95"
+        >
+          <Download :size="20" />
+          Exportar CSV
+        </button>
+        <div v-if="auth.isMonitoring" class="text-amber-600 font-bold text-sm bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 px-5 py-3 rounded-2xl">
+          Solo Lectura
+        </div>
       </div>
     </div>
 
@@ -859,10 +932,10 @@ onMounted(() => {
                       <div v-else-if="col.type === 'activity_total'" class="text-[9px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-tighter">Total {{ col.activity.nombre }}</div>
                       
                       <div class="text-xs font-black text-slate-700 dark:text-slate-200 truncate max-w-[100px] mx-auto">
-                        {{ col.type === 'criterion' ? col.criterion.descripcion : (col.type === 'activity_total' ? 'Σ' : col.activity.nombre) }}
+                        {{ col.type === 'criterion' ? col.criterion?.descripcion : (col.type === 'activity_total' ? 'Σ' : col.activity.nombre) }}
                       </div>
                       <div class="text-[10px] font-bold text-slate-400">
-                        {{ col.type === 'criterion' ? col.criterion.porcentaje : col.activity.porcentaje }}%
+                        {{ col.type === 'criterion' ? col.criterion?.porcentaje : col.activity.porcentaje }}%
                       </div>
                     </div>
                   </th>
@@ -903,8 +976,8 @@ onMounted(() => {
                       v-else-if="col.type === 'criterion' && criteriaGradesMatrix[st.id_estudiante]"
                       type="number"
                       step="0.1"
-                      v-model="criteriaGradesMatrix[st.id_estudiante][col.criterion.id_criterio]"
-                      @blur="validateGradeInput(st.id_estudiante, col.criterion.id_criterio, 'criterion', $event)"
+                      v-model="criteriaGradesMatrix[st.id_estudiante][col.criterion!.id_criterio]"
+                      @blur="validateGradeInput(st.id_estudiante, col.criterion!.id_criterio, 'criterion', $event)"
                       class="w-16 mx-auto bg-slate-50 dark:bg-slate-800 border-0 rounded-lg p-2 text-center font-bold text-sm text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
                     />
                     <div v-else-if="col.type === 'activity_total'" class="text-sm font-black text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/30 py-2 rounded-lg w-16 mx-auto border border-indigo-100 dark:border-indigo-900">

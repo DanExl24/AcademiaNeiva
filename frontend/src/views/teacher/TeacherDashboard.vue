@@ -4,7 +4,6 @@ import { useAuthStore } from '../../stores/auth'
 import axios from 'axios'
 import { 
   GraduationCap, 
-  BookOpen, 
   ClipboardList, 
   CalendarCheck,
   TrendingUp,
@@ -154,7 +153,7 @@ const getAlertColors = (type: string) => {
     <!-- Welcome Header -->
     <div class="bg-gradient-to-br from-indigo-600 to-violet-700 rounded-3xl p-8 md:p-10 text-white shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-6 relative overflow-hidden">
       <div class="relative z-10 transition-transform hover:scale-[1.02] duration-300">
-        <h1 class="text-3xl md:text-4xl font-black mb-3 text-white tracking-tight">¡Hola, Profe {{ auth.user?.nombre?.split(' ')[0] || auth.user?.name?.split(' ')[0] || '' }}! 🍎</h1>
+        <h1 class="text-3xl md:text-4xl font-black mb-3 text-white tracking-tight">¡Hola, Profe {{ (auth.user as any)?.nombre?.split(' ')[0] || auth.user?.name?.split(' ')[0] || '' }}! 🍎</h1>
         <p class="text-indigo-100 text-lg max-w-md font-medium leading-relaxed">
           Manejas <span class="font-extrabold text-white bg-white/20 px-2 py-0.5 rounded-lg ml-1 whitespace-nowrap">{{ dashboardData.coursesCount }} cursos</span> activos actualmente. Cuentas con {{ dashboardData.studentsCount }} estudiantes en total.
         </p>

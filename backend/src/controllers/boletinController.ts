@@ -33,17 +33,21 @@ export const validatePeriodClosed = async (req: Request, res: Response) => {
  */
 export const getStudentBoletin = async (req: Request, res: Response) => {
   const { id_estudiante, id_periodo } = req.params;
+  console.log('[getStudentBoletin] Received parameters:', { id_estudiante, id_periodo });
   try {
     // 1. Check if period is closed
     const periodRes = await pool.query(
       `SELECT estado, nombre, porcentaje, "id_año", id_colegio, trimestre FROM periodo_academico WHERE id_periodo = $1`,
       [id_periodo]
     );
+    console.log('[getStudentBoletin] Period query result:', periodRes.rows);
     if (!periodRes.rows.length || periodRes.rows[0].estado !== 'CERRADO') {
+      console.log('[getStudentBoletin] Rejection: Period is not closed or not found');
       return res.status(400).json({ error: 'No se puede generar el boletín en un periodo abierto' });
     }
     const periodoDetails = periodRes.rows[0];
     const idAnio = periodoDetails["id_año"] || periodoDetails["id_año".toLowerCase()];
+
 
     // 2. Fetch Student Info (including school calendar type)
     const studentRes = await pool.query(`
@@ -269,7 +273,7 @@ export const getStudentBoletin = async (req: Request, res: Response) => {
     });
 
   } catch (error) {
-    console.error(error);
+    console.error('[getStudentBoletin] ERROR:', error);
     res.status(500).json({ error: 'Error generando boletín' });
   }
 };
@@ -300,7 +304,7 @@ export const getGradeBoletines = async (req: Request, res: Response) => {
     
     res.json({ students: studentIds });
   } catch (error) {
-    console.error(error);
+    console.error('[getGradeBoletines] ERROR:', error);
     res.status(500).json({ error: 'Error generando boletines masivos' });
   }
 };
