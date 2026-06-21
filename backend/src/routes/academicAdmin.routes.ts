@@ -36,9 +36,21 @@ import {
   getDirectivoDashboard,
   deleteAcademicYear,
   updateAcademicYearStatus,
+  getMySchoolData,
+  updateMySchoolIdentity,
+  resetMySchoolIdentity,
+  uploadMySchoolEscudo,
 } from "../controllers/academicAdminController";
+import { upload } from "../config/multer";
+import { verifyToken, requireDirectivo } from "../middleware/authMiddleware";
 
 const router = Router();
+
+router.get("/my-school/:schoolId", verifyToken, requireDirectivo, getMySchoolData);
+router.put("/my-school/:schoolId/identidad", verifyToken, requireDirectivo, updateMySchoolIdentity);
+router.post("/my-school/:schoolId/identidad/reset", verifyToken, requireDirectivo, resetMySchoolIdentity);
+router.post("/my-school/:schoolId/identidad/upload-escudo", verifyToken, requireDirectivo, upload.single("escudo"), uploadMySchoolEscudo);
+
 
 router.get("/catalogs", getAcademicCatalogs);
 router.get("/grades/:schoolId", getGradeManagementData);

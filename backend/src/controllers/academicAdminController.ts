@@ -3260,3 +3260,216 @@ export const getSubjectTrash = async (req: Request, res: Response): Promise<void
     res.status(500).json({ error: "Error en el servidor" });
   }
 };
+
+import * as path from 'path';
+import * as fs from 'fs';
+import { AuthRequest } from '../middleware/authMiddleware';
+
+export const getMySchoolData = async (req: Request, res: Response): Promise<void> => {
+  const schoolId = Number(req.params.schoolId);
+  if (!schoolId) {
+    res.status(400).json({ error: "Colegio inválido" });
+    return;
+  }
+
+  try {
+    const [schoolRes, studentsRes, teachersRes, parentsRes] = await Promise.all([
+      pool.query(
+        `SELECT id_colegio, nombre, tipo_colegio, sede, contacto, correo, dane, tipo_calendario, escudo_url, color_primario, color_secundario 
+         FROM colegio 
+         WHERE id_colegio = $1`,
+        [schoolId]
+      ),
+      pool.query(`SELECT COUNT(*)::int AS count FROM estudiante WHERE id_colegio = $1 AND estado = 'ACTIVO'`, [schoolId]),
+      pool.query(`SELECT COUNT(*)::int AS count FROM docente WHERE id_colegio = $1 AND estado = 'ACTIVO'`, [schoolId]),
+      pool.query(`SELECT COUNT(*)::int AS count FROM padre_familia WHERE id_colegio = $1`, [schoolId])
+    ]);
+
+    if (schoolRes.rows.length === 0) {
+      res.status(404).json({ error: "Colegio no encontrado" });
+      return;
+    }
+
+    res.json({
+      school: schoolRes.rows[0],
+      kpis: {
+        totalEstudiantes: studentsRes.rows[0].count,
+        totalDocentes: teachersRes.rows[0].count,
+        totalPadres: parentsRes.rows[0].count
+      }
+    });
+  } catch (error: any) {
+    console.error("Error fetching my school data:", error);
+    res.status(500).json({ error: "Error en el servidor" });
+  }
+};
+
+export const updateMySchoolIdentity = async (req: Request, res: Response): Promise<void> => {
+  const schoolId = Number(req.params.schoolId);
+  const { escudo_url, color_primario, color_secundario, motivo_cambio } = req.body;
+  if (!schoolId) {
+    res.status(400).json({ error: "Colegio inválido" });
+    return;
+  }
+
+  try {
+    const authReq = req as AuthRequest;
+    const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+    let activeAuditoriaId: number | null = null;
+    
+    if (isSupervision) {
+      if (!motivo_cambio) {
+        res.status(400).json({ error: "Se requiere justificar el cambio para registrar en la auditoría." });
+        return;
+      }
+      const auditRes = await pool.query(
+        `SELECT id_auditoria 
+         FROM auditoria_supervision 
+         WHERE id_colegio = $1 AND id_admin_general = $2 AND estado_supervision = 'ACTIVA'`,
+        [schoolId, authReq.user!.id]
+      );
+      if (auditRes.rows.length > 0) {
+        activeAuditoriaId = auditRes.rows[0].id_auditoria;
+      }
+    }
+
+    const currentRes = await pool.query(
+      "SELECT escudo_url, color_primario, color_secundario FROM colegio WHERE id_colegio = $1",
+      [schoolId]
+    );
+    if (currentRes.rows.length === 0) {
+      res.status(404).json({ error: "Colegio no encontrado" });
+      return;
+    }
+    const currentVal = currentRes.rows[0];
+
+    await pool.query(
+      `UPDATE colegio 
+       SET escudo_url = $1, color_primario = $2, color_secundario = $3 
+       WHERE id_colegio = $4`,
+      [escudo_url || null, color_primario || null, color_secundario || null, schoolId]
+    );
+
+    if (activeAuditoriaId) {
+      const valorAntiguo = {
+        escudo_url: currentVal.escudo_url,
+        color_primario: currentVal.color_primario,
+        color_secundario: currentVal.color_secundario
+      };
+      const valorNuevo = {
+        escudo_url: escudo_url || null,
+        color_primario: color_primario || null,
+        color_secundario: color_secundario || null
+      };
+      
+      await pool.query(
+        `INSERT INTO auditoria_acciones_realizadas
+         (id_auditoria, modulo, tipo_accion, accion, recurso_afectado, valor_antiguo, valor_nuevo, motivo_cambio)
+         VALUES ($1, 'CONFIGURACION', 'MODIFICACION', 'Modificación de Identidad Institucional', $2, $3, $4, $5)`,
+        [activeAuditoriaId, `Colegio ID: ${schoolId}`, JSON.stringify(valorAntiguo), JSON.stringify(valorNuevo), motivo_cambio]
+      );
+    }
+
+    res.json({ message: "Identidad del colegio actualizada exitosamente" });
+  } catch (error: any) {
+    console.error("Error updating my school identity:", error);
+    res.status(500).json({ error: "Error en el servidor" });
+  }
+};
+
+export const resetMySchoolIdentity = async (req: Request, res: Response): Promise<void> => {
+  const schoolId = Number(req.params.schoolId);
+  const { motivo_cambio } = req.body;
+  if (!schoolId) {
+    res.status(400).json({ error: "Colegio inválido" });
+    return;
+  }
+
+  try {
+    const authReq = req as AuthRequest;
+    const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+    let activeAuditoriaId: number | null = null;
+    
+    if (isSupervision) {
+      if (!motivo_cambio) {
+        res.status(400).json({ error: "Se requiere justificar el cambio para registrar en la auditoría." });
+        return;
+      }
+      const auditRes = await pool.query(
+        `SELECT id_auditoria 
+         FROM auditoria_supervision 
+         WHERE id_colegio = $1 AND id_admin_general = $2 AND estado_supervision = 'ACTIVA'`,
+        [schoolId, authReq.user!.id]
+      );
+      if (auditRes.rows.length > 0) {
+        activeAuditoriaId = auditRes.rows[0].id_auditoria;
+      }
+    }
+
+    const currentRes = await pool.query(
+      "SELECT escudo_url, color_primario, color_secundario FROM colegio WHERE id_colegio = $1",
+      [schoolId]
+    );
+    if (currentRes.rows.length === 0) {
+      res.status(404).json({ error: "Colegio no encontrado" });
+      return;
+    }
+    const currentVal = currentRes.rows[0];
+
+    await pool.query(
+      `UPDATE colegio 
+       SET escudo_url = NULL, color_primario = NULL, color_secundario = NULL 
+       WHERE id_colegio = $1`,
+      [schoolId]
+    );
+
+    if (activeAuditoriaId) {
+      const valorAntiguo = {
+        escudo_url: currentVal.escudo_url,
+        color_primario: currentVal.color_primario,
+        color_secundario: currentVal.color_secundario
+      };
+      const valorNuevo = {
+        escudo_url: null,
+        color_primario: null,
+        color_secundario: null
+      };
+      
+      await pool.query(
+        `INSERT INTO auditoria_acciones_realizadas
+         (id_auditoria, modulo, tipo_accion, accion, recurso_afectado, valor_antiguo, valor_nuevo, motivo_cambio)
+         VALUES ($1, 'CONFIGURACION', 'MODIFICACION', 'Restablecer Identidad Institucional por defecto', $2, $3, $4, $5)`,
+        [activeAuditoriaId, `Colegio ID: ${schoolId}`, JSON.stringify(valorAntiguo), JSON.stringify(valorNuevo), motivo_cambio]
+      );
+    }
+
+    res.json({ message: "Identidad del colegio restablecida por defecto" });
+  } catch (error: any) {
+    console.error("Error resetting my school identity:", error);
+    res.status(500).json({ error: "Error en el servidor" });
+  }
+};
+
+export const uploadMySchoolEscudo = async (req: Request, res: Response): Promise<void> => {
+  try {
+    if (!req.file) {
+      res.status(400).json({ error: 'No se ha subido ningún archivo' });
+      return;
+    }
+
+    const ext = path.extname(req.file.originalname).toLowerCase();
+    const allowedExts = ['.jpg', '.jpeg', '.png', '.svg'];
+    if (!allowedExts.includes(ext)) {
+      fs.unlinkSync(req.file.path);
+      res.status(400).json({ error: 'Formato no soportado. Solo se permiten JPG, JPEG, PNG y SVG.' });
+      return;
+    }
+
+    const fileUrl = `/uploads/${req.file.filename}`;
+    res.json({ url: fileUrl });
+  } catch (error: any) {
+    console.error('Error al subir escudo:', error);
+    res.status(500).json({ error: 'Error al subir el escudo del colegio' });
+  }
+};
+

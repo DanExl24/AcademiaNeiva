@@ -2,7 +2,13 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const academicAdminController_1 = require("../controllers/academicAdminController");
+const multer_1 = require("../config/multer");
+const authMiddleware_1 = require("../middleware/authMiddleware");
 const router = (0, express_1.Router)();
+router.get("/my-school/:schoolId", authMiddleware_1.verifyToken, authMiddleware_1.requireDirectivo, academicAdminController_1.getMySchoolData);
+router.put("/my-school/:schoolId/identidad", authMiddleware_1.verifyToken, authMiddleware_1.requireDirectivo, academicAdminController_1.updateMySchoolIdentity);
+router.post("/my-school/:schoolId/identidad/reset", authMiddleware_1.verifyToken, authMiddleware_1.requireDirectivo, academicAdminController_1.resetMySchoolIdentity);
+router.post("/my-school/:schoolId/identidad/upload-escudo", authMiddleware_1.verifyToken, authMiddleware_1.requireDirectivo, multer_1.upload.single("escudo"), academicAdminController_1.uploadMySchoolEscudo);
 router.get("/catalogs", academicAdminController_1.getAcademicCatalogs);
 router.get("/grades/:schoolId", academicAdminController_1.getGradeManagementData);
 router.post("/grade-types", academicAdminController_1.createGradeType);
@@ -21,6 +27,8 @@ router.post("/teacher-assignments", academicAdminController_1.assignTeacherCours
 router.delete("/teacher-assignments/:id", academicAdminController_1.deleteTeacherAssignment);
 router.get("/settings/:schoolId", academicAdminController_1.getAcademicSettingsData);
 router.post("/settings/years", academicAdminController_1.createAcademicYear);
+router.delete("/settings/years/:id", academicAdminController_1.deleteAcademicYear);
+router.patch("/settings/years/:id/status", academicAdminController_1.updateAcademicYearStatus);
 router.put("/settings/defaults", academicAdminController_1.updateSchoolDefaultSettings);
 router.put("/settings/scales/manual", academicAdminController_1.updateManualScaleConfiguration);
 router.post("/settings/periods", academicAdminController_1.createAcademicPeriod);

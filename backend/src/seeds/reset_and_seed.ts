@@ -50,7 +50,7 @@ const STUDENTS_PER_GROUP = 5;
 // ─── SCHOOL DEFINITIONS ────────────────────────────────────────────────────────
 
 const schools: SchoolSeed[] = [
-  { id: 1, nombre: "CEA School Empresarial de los Andes", tipo: "Privado", sede: "Sede Principal", contacto: 3183118044, correo: "rectoria@ceaschool.edu.co", dane: "341001005652", domain: "ceaschool.edu.co", tipo_calendario: "A" },
+  { id: 1, nombre: "CEA School Empresarial de los Andes", tipo: "Privado", sede: "Sede Principal", contacto: 3183118044, correo: "rectoria@cea.edu.co", dane: "341001005652", domain: "ceaschool.edu.co", tipo_calendario: "A" },
   { id: 2, nombre: "Institución Educativa El Caguán", tipo: "Oficial", sede: "Sede Principal", contacto: 3180000000, correo: "iecaguan@alcaldianeiva.gov.co", dane: "441001002747", domain: "iecaguan.edu.co", tipo_calendario: "A" },
   { id: 3, nombre: "Colegio Heisenberg Neiva", tipo: "Privado", sede: "Sede Principal", contacto: 3169100003, correo: "colegioheisenberg@hotmail.com", dane: "DANE-H-001", domain: "heisenberg.edu.co", tipo_calendario: "A" },
   { id: 4, nombre: "Colegio Claretiano de Neiva", tipo: "Privado", sede: "Sede Principal", contacto: 3161720175, correo: "admisiones@claretianoneiva.edu.co", dane: "DANE-C-002", domain: "claretianoneiva.edu.co", tipo_calendario: "A" },

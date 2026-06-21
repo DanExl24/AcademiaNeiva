@@ -14,6 +14,7 @@ const teacher_routes_1 = __importDefault(require("./routes/teacher.routes"));
 const academicAdmin_routes_1 = __importDefault(require("./routes/academicAdmin.routes"));
 const boletin_routes_1 = __importDefault(require("./routes/boletin.routes"));
 const student_routes_1 = __importDefault(require("./routes/student.routes"));
+const adminGeneral_routes_1 = __importDefault(require("./routes/adminGeneral.routes"));
 const app = (0, express_1.default)();
 // Middlewares
 app.use((0, helmet_1.default)({
@@ -32,6 +33,7 @@ app.use("/api/teacher", teacher_routes_1.default);
 app.use("/api/academic-admin", academicAdmin_routes_1.default);
 app.use("/api/boletines", boletin_routes_1.default);
 app.use("/api/student", student_routes_1.default);
+app.use("/api/admin", adminGeneral_routes_1.default);
 app.get("/", (req, res) => {
     res.json({ message: "API TS funcionando segura" });
 });

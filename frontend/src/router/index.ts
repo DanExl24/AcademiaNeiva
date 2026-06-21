@@ -100,6 +100,12 @@ const router = createRouter({
           component: AcademicSettings
         },
         {
+          path: 'mi-colegio',
+          name: 'Mi Colegio',
+          component: () => import('../views/admin/MySchool.vue')
+        },
+
+        {
           path: 'configuracion-academica/competencias',
           name: 'Competencias Académicas',
           component: AcademicCompetenciesView

@@ -132,6 +132,7 @@ const menuItems = computed(() => {
   // Default (Admin/Directivo)
   return [
     { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
+    { name: 'Mi Colegio', icon: School, path: '/dashboard/mi-colegio' },
     { name: 'Gestión Matrículas', icon: ClipboardList, path: '/dashboard/gestion-matriculas' },
     { name: 'Gestión Estudiantes', icon: GraduationCap, path: '/dashboard/gestion-estudiantes' },
     { name: 'Gestión de Grados', icon: Layers3, path: '/dashboard/gestion-grados' },
@@ -165,6 +166,71 @@ const stopMonitoring = () => {
 
 const activeYear = ref<string>('')
 const currentTime = ref<string>('')
+const schoolName = ref('AcademiaNeiva')
+const schoolEscudo = ref<string | null>(null)
+
+const hexToRgb = (hex: string): { r: number; g: number; b: number } | null => {
+  const shorthandRegex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i;
+  const fullHex = hex.replace(shorthandRegex, (_m, r, g, b) => r + r + g + g + b + b);
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(fullHex);
+  return result ? {
+    r: parseInt(result[1], 16),
+    g: parseInt(result[2], 16),
+    b: parseInt(result[3], 16)
+  } : null;
+}
+
+const applyThemeColors = (primary: string, secondary: string) => {
+  document.documentElement.style.setProperty('--color-primary', primary)
+  document.documentElement.style.setProperty('--color-secondary', secondary)
+  
+  const rgbPrimary = hexToRgb(primary)
+  if (rgbPrimary) {
+    document.documentElement.style.setProperty('--color-primary-rgb', `${rgbPrimary.r}, ${rgbPrimary.g}, ${rgbPrimary.b}`)
+  }
+  
+  const rgbSecondary = hexToRgb(secondary)
+  if (rgbSecondary) {
+    document.documentElement.style.setProperty('--color-secondary-rgb', `${rgbSecondary.r}, ${rgbSecondary.g}, ${rgbSecondary.b}`)
+  }
+}
+
+const clearThemeColors = () => {
+  document.documentElement.style.removeProperty('--color-primary')
+  document.documentElement.style.removeProperty('--color-secondary')
+  document.documentElement.style.removeProperty('--color-primary-rgb')
+  document.documentElement.style.removeProperty('--color-secondary-rgb')
+}
+
+const fetchSchoolIdentity = async () => {
+  const sId = auth.user?.schoolId || auth.supervision?.id_colegio || null
+  if (!sId) {
+    clearThemeColors()
+    schoolName.value = 'AcademiaNeiva'
+    schoolEscudo.value = null
+    return
+  }
+
+  try {
+    const headers = auth.token ? { Authorization: `Bearer ${auth.token}` } : {}
+    const response = await axios.get(`http://localhost:3000/api/auth/school-identity/${sId}`, { headers })
+    if (response.data) {
+      schoolName.value = response.data.nombre || 'Mi Colegio'
+      schoolEscudo.value = response.data.escudo_url ? `http://localhost:3000${response.data.escudo_url}` : null
+      
+      const primary = response.data.color_primario || '#4f46e5'
+      const secondary = response.data.color_secundario || '#0f172a'
+      applyThemeColors(primary, secondary)
+    }
+  } catch (error) {
+    console.error('Error fetching school identity:', error)
+  }
+}
+
+watch(() => [auth.user?.schoolId, auth.supervision?.id_colegio], () => {
+  fetchSchoolIdentity()
+}, { immediate: true })
+
 
 const fetchActiveYear = async () => {
   const schoolId = auth.user?.schoolId
@@ -333,7 +399,9 @@ onUnmounted(() => {
   if (clockInterval) clearInterval(clockInterval)
   if (supervisionTimer) clearInterval(supervisionTimer)
   if (checkInterval) clearInterval(checkInterval)
+  clearThemeColors()
 })
+
 </script>
 
 <template>
@@ -346,10 +414,14 @@ onUnmounted(() => {
       ]"
     >
       <!-- Logo Area -->
-      <div class="h-16 flex items-center px-6 border-b border-gray-100 dark:border-slate-800">
-        <School class="text-indigo-600 flex-shrink-0" :size="28" />
-        <span v-if="!isCollapsed" class="ml-3 font-bold text-gray-900 dark:text-white truncate">AcademiaNeiva</span>
+      <div class="h-16 flex items-center px-5 border-b border-gray-100 dark:border-slate-800 gap-3">
+        <div class="w-8 h-8 rounded-lg overflow-hidden shrink-0 flex items-center justify-center bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-800">
+          <img v-if="schoolEscudo" :src="schoolEscudo" class="w-full h-full object-contain" alt="Escudo" />
+          <School v-else class="text-indigo-600 flex-shrink-0" :size="20" />
+        </div>
+        <span v-if="!isCollapsed" class="font-bold text-gray-900 dark:text-white truncate text-xs leading-tight max-w-[150px]">{{ schoolName }}</span>
       </div>
+
 
       <!-- Navigation -->
       <nav class="flex-1 py-6 px-4 space-y-2 overflow-y-auto">

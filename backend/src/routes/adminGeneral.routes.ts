@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { upload } from '../config/multer';
 import { verifyToken, requireAdminGeneral, requireDirectivo } from '../middleware/authMiddleware';
 import {
   // Colegios
@@ -6,6 +7,7 @@ import {
   detalleColegio,
   registrarColegio,
   actualizarColegio,
+  uploadEscudo,
   cambiarEstadoColegio,
   eliminarColegio,
   // Usuarios
@@ -48,6 +50,7 @@ router.get('/dashboard/stats', verifyToken, requireAdminGeneral, obtenerStatsDas
 router.get('/colegios', verifyToken, requireAdminGeneral, listarColegios);
 router.get('/colegios/:id', verifyToken, requireAdminGeneral, detalleColegio);
 router.post('/colegios', verifyToken, requireAdminGeneral, registrarColegio);
+router.post('/colegios/upload-escudo', verifyToken, requireAdminGeneral, upload.single('escudo'), uploadEscudo);
 router.put('/colegios/:id', verifyToken, requireAdminGeneral, actualizarColegio);
 router.patch('/colegios/:id/estado', verifyToken, requireAdminGeneral, cambiarEstadoColegio);
 router.delete('/colegios/:id', verifyToken, requireAdminGeneral, eliminarColegio);

@@ -67,8 +67,12 @@ export const requireDirectivo = (req: AuthRequest, res: Response, next: NextFunc
     return;
   }
 
-  if (!req.user.roles.includes('directivo') && !req.user.roles.includes('rector')) {
-    res.status(403).json({ error: 'Acceso denegado. Se requiere rol de Directivo.' });
+  if (
+    !req.user.roles.includes('directivo') &&
+    !req.user.roles.includes('rector') &&
+    !req.user.roles.includes('admin_general')
+  ) {
+    res.status(403).json({ error: 'Acceso denegado. Se requiere rol de Directivo o Administrador General.' });
     return;
   }
 

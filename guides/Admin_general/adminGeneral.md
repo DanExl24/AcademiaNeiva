@@ -162,3 +162,26 @@ Los registros de auditoría no podrán ser modificados ni eliminados desde la ap
 Los registros de auditoría deberán ser conservados por un período mínimo de 5 años.
 Las auditorías deberán ser exportables por el Admin General para fines de revisión externa.
 Las auditorías deberán ser accesibles para consultas internas cuando sea necesario.
+
+
+## RA02 - Identidad Institucional del Colegio
+Como: Admin General
+Quiero: Una opcion para cargar el escudo de los colegios
+Para: Preservar la identidad Institucional del colegio y adaptar sus colores a la plataforma
+
+## Criterios de Aceptacion
+El administrador general podrá gestionar la identidad institucional de cada colegio, permitiendo la personalización de su escudo y colores corporativos.
+El sistema almacenará el archivo de imagen del escudo y los códigos de color principales.
+El sistema debe permitir cambiar los colores principales de la siguiente manera:
+- Colores primarios del colegio
+- Colores secundarios del colegio
+El sistema debe permitir cambiar los colores del colegio en cualquier momento
+El sistema debe reflejar una vista para cambiar el diseño frontend de la plataforma segun los colores primarios y secundarios del colegio
+El sistema debera mostrar una vista previa de los colores implementados en la plataforma
+El sistema debe permitir guardar los cambios realizados
+El sistema debe permitir deshacer los cambios realizados
+El sistema debe permitir restablecer los colores por defecto del colegio
+
+## Reglas de Historia de Usuario
+El cambio de Colores solo debe verse reflejado en los paneles de usuarios y en sus navegaciones
+La landing page del dashboard mantendra su design igual sin ningun cambio.

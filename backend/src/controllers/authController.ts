@@ -177,3 +177,42 @@ export const studentLogin = async (req: Request, res: Response): Promise<void> =
     res.status(500).json({ error: "Error en el servidor" });
   }
 };
+
+export const getSchoolIdentity = async (req: Request, res: Response): Promise<void> => {
+  const schoolId = Number(req.params.schoolId);
+  if (!schoolId) {
+    res.status(400).json({ error: "Colegio inválido" });
+    return;
+  }
+
+  try {
+    const schoolRes = await pool.query(
+      `SELECT id_colegio, nombre, escudo_url, color_primario, color_secundario 
+       FROM colegio 
+       WHERE id_colegio = $1`,
+      [schoolId]
+    );
+
+    if (schoolRes.rows.length === 0) {
+      res.status(404).json({ error: "Colegio no encontrado" });
+      return;
+    }
+
+    const school = schoolRes.rows[0];
+    
+    const DEFAULT_PRIMARY = "#4f46e5";
+    const DEFAULT_SECONDARY = "#0f172a";
+
+    res.json({
+      id_colegio: school.id_colegio,
+      nombre: school.nombre,
+      escudo_url: school.escudo_url || null,
+      color_primario: school.color_primario || DEFAULT_PRIMARY,
+      color_secundario: school.color_secundario || DEFAULT_SECONDARY
+    });
+  } catch (error: any) {
+    console.error("Error getting school identity:", error);
+    res.status(500).json({ error: "Error en el servidor" });
+  }
+};
+

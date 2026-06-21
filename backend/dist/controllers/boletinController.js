@@ -29,10 +29,13 @@ exports.validatePeriodClosed = validatePeriodClosed;
  */
 const getStudentBoletin = async (req, res) => {
     const { id_estudiante, id_periodo } = req.params;
+    console.log('[getStudentBoletin] Received parameters:', { id_estudiante, id_periodo });
     try {
         // 1. Check if period is closed
         const periodRes = await db_1.pool.query(`SELECT estado, nombre, porcentaje, "id_año", id_colegio, trimestre FROM periodo_academico WHERE id_periodo = $1`, [id_periodo]);
+        console.log('[getStudentBoletin] Period query result:', periodRes.rows);
         if (!periodRes.rows.length || periodRes.rows[0].estado !== 'CERRADO') {
+            console.log('[getStudentBoletin] Rejection: Period is not closed or not found');
             return res.status(400).json({ error: 'No se puede generar el boletín en un periodo abierto' });
         }
         const periodoDetails = periodRes.rows[0];
@@ -41,7 +44,7 @@ const getStudentBoletin = async (req, res) => {
         const studentRes = await db_1.pool.query(`
       SELECT e.id_estudiante, e.nombre as estudiante_nombre, e.apellido as estudiante_apellido, e.documento, e.codigo,
              e.id_colegio,
-             c.nombre as colegio_nombre, c.sede, c.dane,
+             c.nombre as colegio_nombre, c.sede, c.dane, c.escudo_url, c.colores,
              COALESCE(c.tipo_calendario, 'A') as tipo_calendario,
              g.nivel, g.seccion, tg.nombre as grado_nombre,
              j.nombre as jornada_nombre,
@@ -238,7 +241,7 @@ const getStudentBoletin = async (req, res) => {
         });
     }
     catch (error) {
-        console.error(error);
+        console.error('[getStudentBoletin] ERROR:', error);
         res.status(500).json({ error: 'Error generando boletín' });
     }
 };
@@ -264,7 +267,7 @@ const getGradeBoletines = async (req, res) => {
         res.json({ students: studentIds });
     }
     catch (error) {
-        console.error(error);
+        console.error('[getGradeBoletines] ERROR:', error);
         res.status(500).json({ error: 'Error generando boletines masivos' });
     }
 };

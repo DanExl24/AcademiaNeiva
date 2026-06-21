@@ -29,7 +29,12 @@ interface Colegio {
   padres_count?: number
   estudiantes_count?: number
   usuarios_totales?: number
+  escudo_url?: string
+  colores?: string
+  color_primario?: string
+  color_secundario?: string
 }
+
 
 const loading = ref(true)
 const colleges = ref<Colegio[]>([])
@@ -61,8 +66,12 @@ const form = ref({
   contacto: '',
   correo: '',
   dane: '',
-  tipo_calendario: 'A'
+  tipo_calendario: 'A',
+  escudo_url: '',
+  colores: ''
 })
+
+
 
 const fetchColleges = async () => {
   try {
@@ -111,7 +120,9 @@ const openCreate = () => {
     contacto: '',
     correo: '',
     dane: '',
-    tipo_calendario: 'A'
+    tipo_calendario: 'A',
+    escudo_url: '',
+    colores: ''
   }
   showCreateModal.value = true
 }
@@ -143,7 +154,9 @@ const openEdit = (college: Colegio) => {
     contacto: String(college.contacto),
     correo: college.correo,
     dane: college.dane,
-    tipo_calendario: college.tipo_calendario
+    tipo_calendario: college.tipo_calendario,
+    escudo_url: college.escudo_url || '',
+    colores: college.colores || ''
   }
   showEditModal.value = true
 }
@@ -452,8 +465,8 @@ const handleDelete = async (college: Colegio) => {
       <!-- Create/Edit Modals -->
       <div v-if="showCreateModal || showEditModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4">
         <div class="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" @click="showCreateModal = showEditModal = false"></div>
-        <div class="relative w-full max-w-xl bg-white dark:bg-slate-900 rounded-[32px] shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden">
-          <div class="px-8 pt-8 pb-6 bg-slate-50/50 dark:bg-slate-800/30 border-b border-slate-100 dark:border-slate-800">
+        <div class="relative w-full max-w-xl bg-white dark:bg-slate-900 rounded-[32px] shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden max-h-[90vh] flex flex-col">
+          <div class="px-8 pt-8 pb-6 bg-slate-50/50 dark:bg-slate-800/30 border-b border-slate-100 dark:border-slate-800 shrink-0">
             <h2 class="text-2xl font-black text-slate-900 dark:text-white flex items-center gap-3">
               <School :size="24" class="text-indigo-600" />
               {{ showCreateModal ? 'Registrar Nueva Institución' : 'Editar Información del Colegio' }}
@@ -461,7 +474,7 @@ const handleDelete = async (college: Colegio) => {
             <p class="text-slate-500 dark:text-slate-400 text-sm font-medium mt-1">Completa los campos de registro primario.</p>
           </div>
 
-          <div class="p-8 space-y-4">
+          <div class="p-8 space-y-4 overflow-y-auto flex-1">
             <div class="grid grid-cols-2 gap-4">
               <div class="col-span-2 space-y-1">
                 <label class="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">Nombre del Colegio *</label>
@@ -504,13 +517,13 @@ const handleDelete = async (college: Colegio) => {
                 </select>
               </div>
             </div>
+          </div>
 
-            <div class="flex gap-3 pt-6 border-t border-slate-100 dark:border-slate-800 mt-6">
-              <button @click="showCreateModal = showEditModal = false" class="flex-1 px-4 py-3.5 rounded-2xl font-bold text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all">Cancelar</button>
-              <button @click="showCreateModal ? handleCreate() : handleEdit()" :disabled="saving" class="flex-[2] bg-indigo-600 text-white px-6 py-3.5 rounded-2xl font-bold hover:bg-indigo-700 transition-all disabled:opacity-50 shadow-lg shadow-indigo-100 dark:shadow-none">
-                {{ saving ? 'Guardando...' : 'Confirmar' }}
-              </button>
-            </div>
+          <div class="px-8 py-6 bg-slate-50/50 dark:bg-slate-800/30 border-t border-slate-100 dark:border-slate-800 flex gap-3 shrink-0">
+            <button @click="showCreateModal = showEditModal = false" class="flex-1 px-4 py-3.5 rounded-2xl font-bold text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all">Cancelar</button>
+            <button @click="showCreateModal ? handleCreate() : handleEdit()" :disabled="saving" class="flex-[2] bg-indigo-600 text-white px-6 py-3.5 rounded-2xl font-bold hover:bg-indigo-700 transition-all disabled:opacity-50 shadow-lg shadow-indigo-100 dark:shadow-none">
+              {{ saving ? 'Guardando...' : 'Confirmar' }}
+            </button>
           </div>
         </div>
       </div>
@@ -551,6 +564,33 @@ const handleDelete = async (college: Colegio) => {
               <p v-if="selectedCollege.fecha_cambio_estado" class="text-slate-600 dark:text-slate-400 font-bold">Fecha del último cambio: <span class="font-medium text-slate-900 dark:text-white">{{ new Date(selectedCollege.fecha_cambio_estado).toLocaleString() }}</span></p>
               <p v-if="selectedCollege.motivo_rechazo" class="text-slate-600 dark:text-slate-400 font-bold">Motivo registrado: <span class="font-medium text-red-800 dark:text-red-300 block mt-1 bg-red-100/50 dark:bg-red-950/40 p-2 rounded-xl">{{ selectedCollege.motivo_rechazo }}</span></p>
             </div>
+
+            <!-- Identidad Visual -->
+            <div class="border-t border-slate-100 dark:border-slate-800 pt-6 grid grid-cols-2 gap-6 text-sm">
+              <div class="space-y-2">
+                <h4 class="text-xs font-black text-slate-400 uppercase tracking-wider">Escudo Institucional</h4>
+                <div class="w-24 h-24 rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 p-2 flex items-center justify-center overflow-hidden">
+                  <img v-if="selectedCollege.escudo_url" :src="`http://localhost:3000${selectedCollege.escudo_url}`" alt="Escudo" class="w-full h-full object-contain" />
+                  <span v-else class="text-xs text-slate-400 italic font-medium">Sin Escudo</span>
+                </div>
+              </div>
+              
+              <div class="space-y-2">
+                <h4 class="text-xs font-black text-slate-400 uppercase tracking-wider">Colores Corporativos</h4>
+                <div v-if="selectedCollege.color_primario || selectedCollege.color_secundario" class="flex flex-wrap gap-3 mt-2">
+                  <div v-if="selectedCollege.color_primario" class="flex items-center gap-1.5">
+                    <div class="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-700 shadow-sm" :style="{ backgroundColor: selectedCollege.color_primario }" :title="selectedCollege.color_primario"></div>
+                    <span class="text-[10px] font-bold text-slate-500">Primario ({{ selectedCollege.color_primario }})</span>
+                  </div>
+                  <div v-if="selectedCollege.color_secundario" class="flex items-center gap-1.5">
+                    <div class="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-700 shadow-sm" :style="{ backgroundColor: selectedCollege.color_secundario }" :title="selectedCollege.color_secundario"></div>
+                    <span class="text-[10px] font-bold text-slate-500">Secundario ({{ selectedCollege.color_secundario }})</span>
+                  </div>
+                </div>
+                <span v-else class="text-xs text-slate-400 italic font-medium block mt-2">Sin Colores Definidos</span>
+              </div>
+            </div>
+
 
             <!-- Statistics Box -->
             <div class="border-t border-slate-100 dark:border-slate-800 pt-6">

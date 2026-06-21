@@ -18,9 +18,13 @@ export const listarColegios = async (req: AuthRequest, res: Response): Promise<v
     let query = `
       SELECT c.*, 
              COUNT(DISTINCT d.id) AS total_directivos,
+             COUNT(DISTINCT d.id) AS directivos_count,
              COUNT(DISTINCT doc.id_docente) AS total_docentes,
+             COUNT(DISTINCT doc.id_docente) AS docentes_count,
              COUNT(DISTINCT e.id_estudiante) AS total_estudiantes,
-             COUNT(DISTINCT pf.id_padrefamilia) AS total_padres
+             COUNT(DISTINCT e.id_estudiante) AS estudiantes_count,
+             COUNT(DISTINCT pf.id_padrefamilia) AS total_padres,
+             COUNT(DISTINCT pf.id_padrefamilia) AS padres_count
       FROM colegio c
       LEFT JOIN directivo d ON d.id_colegio = c.id_colegio AND d.estado = 'ACTIVO'
       LEFT JOIN docente doc ON doc.id_colegio = c.id_colegio AND doc.estado = 'ACTIVO'
@@ -60,9 +64,13 @@ export const detalleColegio = async (req: AuthRequest, res: Response): Promise<v
     const result = await pool.query(
       `SELECT c.*,
               COUNT(DISTINCT d.id) AS total_directivos,
+              COUNT(DISTINCT d.id) AS directivos_count,
               COUNT(DISTINCT doc.id_docente) AS total_docentes,
+              COUNT(DISTINCT doc.id_docente) AS docentes_count,
               COUNT(DISTINCT e.id_estudiante) AS total_estudiantes,
-              COUNT(DISTINCT pf.id_padrefamilia) AS total_padres
+              COUNT(DISTINCT e.id_estudiante) AS estudiantes_count,
+              COUNT(DISTINCT pf.id_padrefamilia) AS total_padres,
+              COUNT(DISTINCT pf.id_padrefamilia) AS padres_count
        FROM colegio c
        LEFT JOIN directivo d ON d.id_colegio = c.id_colegio
        LEFT JOIN docente doc ON doc.id_colegio = c.id_colegio
@@ -91,7 +99,7 @@ export const detalleColegio = async (req: AuthRequest, res: Response): Promise<v
  */
 export const registrarColegio = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { nombre, tipo_colegio, sede, contacto, correo, dane, tipo_calendario } = req.body;
+    const { nombre, tipo_colegio, sede, contacto, correo, dane, tipo_calendario, escudo_url, colores } = req.body;
 
     if (!nombre || !tipo_colegio || !sede || !contacto || !correo || !dane) {
       res.status(400).json({ error: 'Todos los campos son obligatorios' });
@@ -99,10 +107,10 @@ export const registrarColegio = async (req: AuthRequest, res: Response): Promise
     }
 
     const result = await pool.query(
-      `INSERT INTO colegio (nombre, tipo_colegio, sede, contacto, correo, dane, tipo_calendario, estado, fecha_registro)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 'PENDIENTE', NOW())
+      `INSERT INTO colegio (nombre, tipo_colegio, sede, contacto, correo, dane, tipo_calendario, estado, fecha_registro, escudo_url, colores)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'PENDIENTE', NOW(), $8, $9)
        RETURNING *`,
-      [nombre, tipo_colegio, sede, contacto, correo, dane, tipo_calendario || 'A']
+      [nombre, tipo_colegio, sede, contacto, correo, dane, tipo_calendario || 'A', escudo_url || null, colores || null]
     );
 
     res.status(201).json(result.rows[0]);
@@ -120,7 +128,7 @@ export const registrarColegio = async (req: AuthRequest, res: Response): Promise
 export const actualizarColegio = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const { nombre, tipo_colegio, sede, contacto, correo, dane, tipo_calendario } = req.body;
+    const { nombre, tipo_colegio, sede, contacto, correo, dane, tipo_calendario, escudo_url, colores } = req.body;
 
     // Verificar estado actual
     const colegioActual = await pool.query('SELECT estado FROM colegio WHERE id_colegio = $1', [id]);
@@ -141,16 +149,36 @@ export const actualizarColegio = async (req: AuthRequest, res: Response): Promis
            contacto = COALESCE($4, contacto),
            correo = COALESCE($5, correo),
            dane = COALESCE($6, dane),
-           tipo_calendario = COALESCE($7, tipo_calendario)
-       WHERE id_colegio = $8
+           tipo_calendario = COALESCE($7, tipo_calendario),
+           escudo_url = COALESCE($8, escudo_url),
+           colores = COALESCE($9, colores)
+       WHERE id_colegio = $10
        RETURNING *`,
-      [nombre, tipo_colegio, sede, contacto, correo, dane, tipo_calendario, id]
+      [nombre, tipo_colegio, sede, contacto, correo, dane, tipo_calendario, escudo_url || null, colores || null, id]
     );
 
     res.json(result.rows[0]);
   } catch (error: any) {
     console.error('Error actualizando colegio:', error);
     res.status(500).json({ error: 'Error al actualizar colegio' });
+  }
+};
+
+/**
+ * POST /admin/colegios/upload-escudo
+ * Subir archivo del escudo del colegio.
+ */
+export const uploadEscudo = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.file) {
+      res.status(400).json({ error: 'No se ha subido ningún archivo' });
+      return;
+    }
+    const fileUrl = `/uploads/${req.file.filename}`;
+    res.json({ url: fileUrl });
+  } catch (error: any) {
+    console.error('Error al subir escudo:', error);
+    res.status(500).json({ error: 'Error al subir el escudo del colegio' });
   }
 };
 

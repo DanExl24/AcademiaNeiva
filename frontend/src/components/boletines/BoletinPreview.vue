@@ -5,9 +5,10 @@
       <div class="flex items-center justify-between mt-4">
         <!-- Izquierda Logo -->
         <div class="w-32 h-32 flex items-center justify-center">
-            <!-- Espacio reservado para Logo Izquierdo -->
-            <div class="w-24 h-24 rounded-full border border-gray-400 bg-gray-100 flex items-center justify-center overflow-hidden">
-                <span class="text-xs text-gray-400 text-center px-2">Logo Colegio</span>
+            <!-- Espacio reservado para Logo Izquierdo o Escudo Real -->
+            <div class="w-24 h-24 rounded-full border border-gray-300 bg-gray-55 flex items-center justify-center overflow-hidden">
+                <img v-if="data?.estudiante?.escudo_url" :src="`http://localhost:3000${data.estudiante.escudo_url}`" alt="Escudo Colegio" class="max-w-[90%] max-h-[90%] object-contain" />
+                <span v-else class="text-xs text-gray-400 text-center px-2">Logo Colegio</span>
             </div>
         </div>
 
@@ -17,7 +18,7 @@
             {{ data?.estudiante?.colegio_nombre?.toUpperCase() || 'INSTITUCIÓN EDUCATIVA NORMAL SUPERIOR' }}
           </h1>
           <p class="text-[13px] font-bold mb-1" style="font-family: 'Quicksand', sans-serif;">
-            DANE: {{ data?.estudiante?.dane }} – NIT: {{ data?.estudiante?.nit }}
+            DANE: {{ data?.estudiante?.dane }}
           </p>
           <div class="text-[12px] font-medium leading-tight" style="font-family: 'Quicksand', sans-serif;">
             <p>{{ (data?.estudiante?.resolucion || '').split('Expedida')[0] }}</p>
@@ -26,11 +27,14 @@
           <p class="text-[13px] font-bold mt-2" style="font-family: 'Quicksand', sans-serif;">{{ data?.estudiante?.ciudad }}</p>
         </div>
 
-        <!-- Derecha Logo (Escudo Colombia) -->
+        <!-- Derecha Logo (Toga de estudiante de contorno morado sin fondo) -->
         <div class="w-32 h-32 flex items-center justify-center">
-             <!-- Espacio reservado para Logo Derecho -->
-             <div class="w-24 h-24 border border-gray-400 bg-gray-100 flex items-center justify-center overflow-hidden" style="border-radius: 20% 20% 50% 50%;">
-                <span class="text-xs text-gray-400 text-center flex-col flex items-center leading-none"><span>Escudo</span><span>Nacional</span></span>
+             <div class="w-24 h-24 flex items-center justify-center overflow-hidden">
+                <svg viewBox="0 0 24 24" width="60" height="60" fill="none" stroke="#7c3aed" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"/>
+                  <path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"/>
+                  <path d="M21.5 12v6"/>
+                </svg>
              </div>
         </div>
       </div>

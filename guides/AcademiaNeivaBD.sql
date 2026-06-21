@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict hRC4Yxw7WWu8ynBs1ieczDSATwdzrqyK2GNPW7Xaqko5ERb1sgO0KiJrAoRMhXV
+\restrict VFAAFC5OgAhyt4fagOGKTyYfgUW6VFdjASN5i6XmY5HNAk8ryExxnetEKNn7Lby
 
 -- Dumped from database version 18.4
 -- Dumped by pg_dump version 18.4
@@ -525,7 +525,9 @@ CREATE TABLE public.colegio (
     estado public.estado_colegio DEFAULT 'ACTIVO'::public.estado_colegio NOT NULL,
     fecha_registro timestamp with time zone DEFAULT now() NOT NULL,
     motivo_rechazo text,
-    fecha_cambio_estado timestamp with time zone
+    fecha_cambio_estado timestamp with time zone,
+    escudo_url text,
+    colores character varying(255)
 );
 
 
@@ -2722,14 +2724,6 @@ ALTER TABLE ONLY public.configuracion_sistema
 
 
 --
--- Name: grupos unique_titular_docente; Type: CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.grupos
-    ADD CONSTRAINT unique_titular_docente UNIQUE (id_docente);
-
-
---
 -- Name: tipo_grado uq_tipo_grado; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -3680,5 +3674,5 @@ REVOKE USAGE ON SCHEMA public FROM PUBLIC;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict hRC4Yxw7WWu8ynBs1ieczDSATwdzrqyK2GNPW7Xaqko5ERb1sgO0KiJrAoRMhXV
+\unrestrict VFAAFC5OgAhyt4fagOGKTyYfgUW6VFdjASN5i6XmY5HNAk8ryExxnetEKNn7Lby
 

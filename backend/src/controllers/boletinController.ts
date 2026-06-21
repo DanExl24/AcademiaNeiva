@@ -53,7 +53,7 @@ export const getStudentBoletin = async (req: Request, res: Response) => {
     const studentRes = await pool.query(`
       SELECT e.id_estudiante, e.nombre as estudiante_nombre, e.apellido as estudiante_apellido, e.documento, e.codigo,
              e.id_colegio,
-             c.nombre as colegio_nombre, c.sede, c.dane,
+             c.nombre as colegio_nombre, c.sede, c.dane, c.escudo_url, c.colores,
              COALESCE(c.tipo_calendario, 'A') as tipo_calendario,
              g.nivel, g.seccion, tg.nombre as grado_nombre,
              j.nombre as jornada_nombre,

@@ -2,10 +2,26 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const studentController_1 = require("../controllers/studentController");
+const studentPortalController_1 = require("../controllers/studentPortalController");
 const router = (0, express_1.Router)();
 router.get("/colegio/:idColegio", studentController_1.getAllStudents);
+router.get("/:id/summary", studentController_1.getStudentSummary);
 router.put("/:id", studentController_1.updateStudent);
 router.patch("/:id/status", studentController_1.updateStudentStatus);
 router.patch("/:id/change-grade", studentController_1.changeStudentGrade);
 router.delete("/:id", studentController_1.deleteStudent);
+// Student portal endpoints consumed by the frontend
+router.get("/user-id/:id_usuario", studentPortalController_1.getStudentIdByUserId);
+router.get("/info/:id_estudiante", studentPortalController_1.getStudentInfo);
+router.get("/periods/:id_estudiante/:id_anio", studentPortalController_1.getStudentClosedPeriods);
+router.get("/all-periods/:id_estudiante/:id_anio", studentPortalController_1.getStudentAllPeriods);
+router.get("/grades/:id_estudiante/:id_periodo", studentPortalController_1.getStudentGrades);
+router.get("/grade-details/:id_estudiante/:id_periodo/:id_materia", studentPortalController_1.getGradeDetails);
+router.get("/attendance/:id_estudiante/:id_periodo", studentPortalController_1.getStudentAttendance);
+router.get("/observations/:id_estudiante/:id_periodo", studentPortalController_1.getStudentObservations);
+router.get("/parent-dashboard/:id_usuario", studentPortalController_1.getParentDashboardData);
+router.get("/dashboard-stats/:id_estudiante/:id_periodo", studentPortalController_1.getStudentDashboardStats);
+router.get("/parent-children/:id_usuario", studentPortalController_1.getParentChildren);
+router.get("/academic-years/:id_estudiante", studentPortalController_1.getStudentAcademicYears);
+router.get("/years/:id_estudiante", studentPortalController_1.getStudentAcademicYears);
 exports.default = router;
