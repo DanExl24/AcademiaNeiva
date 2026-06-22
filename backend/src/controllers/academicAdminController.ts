@@ -4035,6 +4035,17 @@ export const createExtraordinaryEnrollment = async (req: Request, res: Response)
         res.status(400).json({ error: `El estudiante se encuentra en estado ${studentStatus} y no puede ser matriculado` });
         return;
       }
+
+      // Check if student already has an active or transferred enrollment for this year
+      const activeEnrollmentRes = await client.query(
+        `SELECT id_matricula FROM matricula 
+         WHERE id_estudiante = $1 AND id_colegio = $2 AND "id_año" = $3 AND estado IN ('ACTIVA', 'TRASLADADA')`,
+        [id_estudiante, schoolId, id_año]
+      );
+      if (activeEnrollmentRes.rows.length > 0) {
+        res.status(400).json({ error: "El estudiante ya cuenta con una matrícula ACTIVA o TRASLADADA para este año lectivo." });
+        return;
+      }
     }
 
     // Insert matricula
@@ -4082,7 +4093,7 @@ export const createExtraordinaryEnrollment = async (req: Request, res: Response)
     for (const doc of requiredDocs) {
       await client.query(
         `INSERT INTO documento_matriculas (id_matricula, tipo_documento, url, estado, fecha, id_colegio)
-         VALUES ($1, $2, NULL, 'PENDIENTE', NOW(), $3)`,
+         VALUES ($1, $2, 'PENDIENTE', 'PENDIENTE', NOW(), $3)`,
         [idMatricula, doc, schoolId]
       );
     }

@@ -394,6 +394,13 @@ const submitExtraordinary = async () => {
     notify.addNotification('Por favor, rellene todos los campos obligatorios.', 'error')
     return
   }
+  if (extraordinaryForm.value.id_estudiante) {
+    const student = institutionStudents.value.find(s => s.id_estudiante === extraordinaryForm.value.id_estudiante)
+    if (student && (student.matricula_estado === 'ACTIVA' || student.id_grupo)) {
+      notify.addNotification('El estudiante ya cuenta con una matrícula ACTIVA.', 'error')
+      return
+    }
+  }
   extraordinaryLoading.value = true
   try {
     const payload = {
@@ -1229,8 +1236,8 @@ const rejectException = async (id: number) => {
               <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Estudiante Existente (Opcional - Renovaciones)</label>
               <select v-model="extraordinaryForm.id_estudiante" @change="onStudentSelected" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-semibold outline-none text-slate-900 dark:text-white transition-all focus:border-indigo-400">
                 <option :value="null">-- Registrar Estudiante Nuevo --</option>
-                <option v-for="student in institutionStudents" :key="student.id_estudiante" :value="student.id_estudiante">
-                  {{ student.nombre }} {{ student.apellido }} (Doc: {{ student.documento }} / Cód: {{ student.codigo }})
+                <option v-for="student in institutionStudents" :key="student.id_estudiante" :value="student.id_estudiante" :disabled="student.matricula_estado === 'ACTIVA' || !!student.id_grupo">
+                  {{ student.nombre }} {{ student.apellido }} (Doc: {{ student.documento }} / Cód: {{ student.codigo }}){{ (student.matricula_estado === 'ACTIVA' || student.id_grupo) ? ' - [Matrícula ACTIVA]' : '' }}
                 </option>
               </select>
             </div>
