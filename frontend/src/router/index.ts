@@ -100,6 +100,11 @@ const router = createRouter({
           component: AcademicSettings
         },
         {
+          path: 'configuracion-academica/inscripciones',
+          name: 'Fechas de Inscripción',
+          component: () => import('../views/admin/AcademicEnrollmentDatesView.vue')
+        },
+        {
           path: 'mi-colegio',
           name: 'Mi Colegio',
           component: () => import('../views/admin/MySchool.vue')

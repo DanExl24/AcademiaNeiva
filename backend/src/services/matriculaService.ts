@@ -36,15 +36,54 @@ export class MatriculaService {
     try {
       await client.query('BEGIN');
 
+      // Fetch active year for the school
+      const yearRes = await client.query(
+        `SELECT "id_año" FROM "año_lectivo" WHERE id_colegio = $1 AND estado = 'ABIERTO' LIMIT 1`,
+        [id_colegio]
+      );
+      if (yearRes.rows.length === 0) {
+        throw new Error("El colegio seleccionado no tiene un año lectivo activo abierto.");
+      }
+      const activeYearId = yearRes.rows[0].id_año;
+
+      // Validate enrollment configuration dates and state
+      const configRes = await client.query(
+        `SELECT fecha_inicio, fecha_cierre, habilitada 
+         FROM configuracion_inscripcion 
+         WHERE id_colegio = $1 AND id_año = $2`,
+        [id_colegio, activeYearId]
+      );
+
+      if (configRes.rows.length === 0) {
+        throw new Error("Las inscripciones para esta institución aún no están configuradas.");
+      }
+
+      const config = configRes.rows[0];
+      if (!config.habilitada) {
+        throw new Error("Las inscripciones están deshabilitadas temporalmente por la institución.");
+      }
+
+      const now = new Date();
+      const start = new Date(config.fecha_inicio);
+      const end = new Date(config.fecha_cierre);
+
+      if (now < start) {
+        throw new Error(`Las inscripciones aún no han comenzado. Abren el ${start.toLocaleDateString('es-CO')}.`);
+      }
+      if (now > end) {
+        throw new Error(`Las inscripciones ya cerraron. Finalizaron el ${end.toLocaleDateString('es-CO')}.`);
+      }
+
       // 1. Insertar en tabla matricula original (id_estudiante es NULL)
       const matRes = await client.query(
         `INSERT INTO matricula 
            (id_estudiante, id_nivel, id_grupo, id_colegio, "id_año", estado, correo_padre, tiene_discapacidad, es_extranjero)
-         VALUES (NULL, NULL, $1, $2, 1, 'PENDIENTE', $3, $4, $5)
+         VALUES (NULL, NULL, $1, $2, $3, 'PENDIENTE', $4, $5, $6)
          RETURNING id_matricula`,
-        [data.grade, id_colegio, parentEmail, hasDisability === 'true', isForeigner === 'true']
+        [data.grade, id_colegio, activeYearId, parentEmail, hasDisability === 'true', isForeigner === 'true']
       );
       const idMatricula = matRes.rows[0].id_matricula;
+
 
       // 2. Guardar documentos en tabla documento_matriculas
       for (const [key, fileArray] of Object.entries(files)) {

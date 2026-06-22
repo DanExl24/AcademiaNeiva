@@ -3919,3 +3919,156 @@ export const uploadMySchoolEscudo = async (req: Request, res: Response): Promise
   }
 };
 
+export const getEnrollmentConfig = async (req: Request, res: Response): Promise<void> => {
+  const schoolId = parseSchoolId(req.params.schoolId);
+  const yearId = Number(req.params.yearId);
+  if (!schoolId || !yearId) {
+    res.status(400).json({ error: "Colegio o año lectivo inválido" });
+    return;
+  }
+
+  try {
+    const result = await pool.query(
+      `SELECT id_configuracion, id_colegio, id_año, fecha_inicio, fecha_cierre, habilitada 
+       FROM configuracion_inscripcion 
+       WHERE id_colegio = $1 AND id_año = $2`,
+      [schoolId, yearId]
+    );
+
+    const approvedRes = await pool.query(
+      `SELECT COUNT(*)::int AS count 
+       FROM matricula 
+       WHERE id_colegio = $1 AND "id_año" = $2 AND estado IN ('ACTIVA', 'TRASLADADA')`,
+      [schoolId, yearId]
+    );
+    const hasApproved = approvedRes.rows[0].count > 0;
+
+    if (result.rows.length > 0) {
+      res.json({
+        ...result.rows[0],
+        hasApproved
+      });
+    } else {
+      res.json({
+        id_configuracion: null,
+        id_colegio: schoolId,
+        id_año: yearId,
+        fecha_inicio: null,
+        fecha_cierre: null,
+        habilitada: true,
+        hasApproved
+      });
+    }
+  } catch (error: any) {
+    console.error("Error in getEnrollmentConfig:", error);
+    res.status(500).json({ error: "Error en el servidor" });
+  }
+};
+
+export const saveEnrollmentConfig = async (req: Request, res: Response): Promise<void> => {
+  const { id_colegio, id_año, fecha_inicio, fecha_cierre, habilitada, motivo_cambio } = req.body;
+  
+  if (!id_colegio || !id_año || !fecha_inicio || !fecha_cierre) {
+    res.status(400).json({ error: "Todos los campos (colegio, año, fecha de inicio y cierre) son obligatorios." });
+    return;
+  }
+
+  const start = new Date(fecha_inicio);
+  const end = new Date(fecha_cierre);
+
+  if (end <= start) {
+    res.status(400).json({ error: "La fecha de cierre debe ser posterior a la fecha de inicio." });
+    return;
+  }
+
+  try {
+    const authReq = req as AuthRequest;
+    const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+    let activeAuditoriaId: number | null = null;
+    
+    if (isSupervision) {
+      if (!motivo_cambio) {
+        res.status(400).json({ error: "Se requiere justificar el cambio para registrar en la auditoría." });
+        return;
+      }
+      const auditRes = await pool.query(
+        `SELECT id_auditoria 
+         FROM auditoria_supervision 
+         WHERE id_colegio = $1 AND id_admin_general = $2 AND estado_supervision = 'ACTIVA'`,
+        [id_colegio, authReq.user!.id]
+      );
+      if (auditRes.rows.length > 0) {
+        activeAuditoriaId = auditRes.rows[0].id_auditoria;
+      }
+    }
+
+    // Check if approved matriculas exist for this school and year
+    const approvedRes = await pool.query(
+      `SELECT COUNT(*)::int AS count 
+       FROM matricula 
+       WHERE id_colegio = $1 AND "id_año" = $2 AND estado IN ('ACTIVA', 'TRASLADADA')`,
+      [id_colegio, id_año]
+    );
+    const hasApproved = approvedRes.rows[0].count > 0;
+
+    // Fetch existing configuration
+    const existingRes = await pool.query(
+      `SELECT fecha_inicio, fecha_cierre, habilitada 
+       FROM configuracion_inscripcion 
+       WHERE id_colegio = $1 AND id_año = $2`,
+      [id_colegio, id_año]
+    );
+    const oldConfig = existingRes.rows[0] || null;
+
+    if (hasApproved && oldConfig) {
+      // Validate that dates are not being changed
+      const oldStart = new Date(oldConfig.fecha_inicio).getTime();
+      const oldEnd = new Date(oldConfig.fecha_cierre).getTime();
+      const newStart = start.getTime();
+      const newEnd = end.getTime();
+      
+      if (oldStart !== newStart || oldEnd !== newEnd) {
+        res.status(400).json({ error: "No se pueden modificar las fechas de inscripción porque ya existen matrículas aprobadas para este año académico." });
+        return;
+      }
+    }
+
+    // Save/Update config
+    const result = await pool.query(
+      `INSERT INTO configuracion_inscripcion (id_colegio, id_año, fecha_inicio, fecha_cierre, habilitada)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (id_colegio, id_año)
+       DO UPDATE SET 
+         fecha_inicio = EXCLUDED.fecha_inicio, 
+         fecha_cierre = EXCLUDED.fecha_cierre, 
+         habilitada = EXCLUDED.habilitada
+       RETURNING *`,
+      [id_colegio, id_año, fecha_inicio, fecha_cierre, habilitada !== undefined ? Boolean(habilitada) : true]
+    );
+
+    const newConfig = result.rows[0];
+
+    // Logging action if supervised
+    if (activeAuditoriaId) {
+      await pool.query(
+        `INSERT INTO auditoria_acciones_realizadas
+         (id_auditoria, modulo, tipo_accion, accion, recurso_afectado, valor_antiguo, valor_nuevo, motivo_cambio)
+         VALUES ($1, 'CONFIGURACION', 'MODIFICACION', 'Modificación de Fechas de Inscripción', $2, $3, $4, $5)`,
+        [
+          activeAuditoriaId, 
+          `Colegio ID: ${id_colegio}, Año ID: ${id_año}`, 
+          oldConfig ? JSON.stringify(oldConfig) : null, 
+          JSON.stringify(newConfig), 
+          motivo_cambio
+        ]
+      );
+    }
+
+    res.json({ message: "Configuración de inscripción guardada exitosamente", config: newConfig });
+  } catch (error: any) {
+    console.error("Error in saveEnrollmentConfig:", error);
+    res.status(500).json({ error: "Error en el servidor" });
+  }
+};
+
+

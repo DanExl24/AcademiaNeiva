@@ -66,11 +66,70 @@ const fetchGrados = async () => {
 import { onMounted, watch } from 'vue'
 onMounted(fetchInitialData)
 
+const enrollmentConfig = ref<any>(null)
+const yearLabel = ref<string | null>(null)
+const loadingConfig = ref(false)
+
+const fetchEnrollmentConfig = async () => {
+  if (!schoolId.value) {
+    enrollmentConfig.value = null
+    yearLabel.value = null
+    return
+  }
+  loadingConfig.value = true
+  try {
+    const res = await axios.get(`http://localhost:3000/api/matriculas/school/${schoolId.value}/enrollment-config`)
+    enrollmentConfig.value = res.data.config
+    yearLabel.value = res.data.yearLabel
+  } catch (error) {
+    console.error('Error fetching public enrollment config:', error)
+    enrollmentConfig.value = null
+    yearLabel.value = null
+  } finally {
+    loadingConfig.value = false
+  }
+}
+
+const isEnrollmentOpen = computed(() => {
+  if (!schoolId.value) return true
+  if (!enrollmentConfig.value) return false
+  if (!enrollmentConfig.value.habilitada) return false
+  
+  const now = new Date()
+  const start = new Date(enrollmentConfig.value.fecha_inicio)
+  const end = new Date(enrollmentConfig.value.fecha_cierre)
+  return now >= start && now <= end
+})
+
+const enrollmentStatusMessage = computed(() => {
+  if (!schoolId.value) return ''
+  if (!enrollmentConfig.value) {
+    return 'Las inscripciones para esta institución aún no han sido configuradas por las directivas.'
+  }
+  if (!enrollmentConfig.value.habilitada) {
+    return 'Las inscripciones están deshabilitadas temporalmente por la institución.'
+  }
+  
+  const now = new Date()
+  const start = new Date(enrollmentConfig.value.fecha_inicio)
+  const end = new Date(enrollmentConfig.value.fecha_cierre)
+  
+  if (now < start) {
+    return `Las inscripciones para el año lectivo ${yearLabel.value || ''} aún no han comenzado. Iniciarán el ${start.toLocaleString('es-CO')}.`
+  }
+  if (now > end) {
+    return `Las inscripciones para el año lectivo ${yearLabel.value || ''} ya cerraron el día ${end.toLocaleString('es-CO')}.`
+  }
+  
+  return `Inscripciones abiertas para el año lectivo ${yearLabel.value || ''} desde el ${start.toLocaleDateString('es-CO')} hasta el ${end.toLocaleDateString('es-CO')}.`
+})
+
 watch(schoolId, () => {
   level.value = ''
   selectedTipoGrado.value = ''
   grade.value = ''
   fetchGrados()
+  fetchEnrollmentConfig()
 })
 
 watch(level, () => {
@@ -161,6 +220,10 @@ const nextStep = () => {
   if (step.value === 1) {
     if (!schoolId.value || !level.value || !grade.value || !formData.value.parentEmail) {
       notify.addNotification('Por favor completa todos los campos obligatorios.', 'warning')
+      return
+    }
+    if (!isEnrollmentOpen.value) {
+      notify.addNotification('Las inscripciones para este colegio están cerradas o deshabilitadas.', 'error')
       return
     }
   }
@@ -262,6 +325,20 @@ const submitEnrollment = async () => {
             <div class="border-b border-gray-100 pb-6">
               <h3 class="text-3xl font-bold text-gray-900">Solicitud de Matrícula</h3>
               <p class="text-gray-500 mt-2">Este formulario es para la carga inicial de documentos y reserva de cupo.</p>
+            </div>
+
+            <!-- Banner de Estado de Inscripciones -->
+            <div v-if="schoolId && !loadingConfig" class="p-5 rounded-2xl border flex items-start gap-3 shadow-sm transition-all"
+              :class="[
+                isEnrollmentOpen 
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-800' 
+                  : 'bg-rose-50 border-rose-200 text-rose-800'
+              ]"
+            >
+              <component :is="isEnrollmentOpen ? CheckCircle2 : AlertCircle" class="h-5 w-5 shrink-0 mt-0.5" />
+              <div class="text-sm font-bold leading-normal">
+                {{ enrollmentStatusMessage }}
+              </div>
             </div>
 
             <div class="grid grid-cols-1 gap-8 md:grid-cols-2">

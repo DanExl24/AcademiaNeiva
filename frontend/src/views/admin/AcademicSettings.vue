@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import axios from 'axios'
-import { BookMarked, Scale, SlidersHorizontal } from 'lucide-vue-next'
+import { BookMarked, Scale, SlidersHorizontal, CalendarDays } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 
 interface AcademicYear {
@@ -40,7 +40,7 @@ onMounted(loadData)
           <p class="mt-2 text-slate-500 dark:text-slate-400">Define los periodos y escalas que sostienen calificaciones, competencias, cierres y boletines.</p>
         </div>
         <div class="rounded-2xl bg-orange-50 px-5 py-4 text-sm font-black text-orange-700 dark:bg-orange-950/30 dark:text-orange-400">
-          Año lectivo activo: {{ currentYear ? `${currentYear.id_año}` : 'No configurado' }}
+          Año lectivo activo: {{ currentYear ? `${currentYear.calendario || currentYear.id_año}` : 'No configurado' }}
         </div>
       </div>
     </div>
@@ -163,7 +163,37 @@ onMounted(loadData)
             </div>
           </div>
         </router-link>
+
+        <router-link
+          to="/dashboard/configuracion-academica/inscripciones"
+          class="group overflow-hidden rounded-3xl border border-violet-100 bg-[radial-gradient(circle_at_top_left,_rgba(139,92,246,0.14),_transparent_38%),linear-gradient(135deg,#faf5ff_0%,#f3e8ff_48%,#e9d5ff_100%)] p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-lg dark:border-violet-900/30 dark:bg-[radial-gradient(circle_at_top_left,_rgba(139,92,246,0.1),_transparent_38%),linear-gradient(135deg,#4c1d95_0%,#3b0764_48%,#581c87_100%)]"
+        >
+          <div class="flex h-full flex-col justify-between gap-6">
+            <div>
+              <div class="inline-flex rounded-2xl bg-violet-600 p-3 text-white shadow-sm">
+                <CalendarDays class="h-6 w-6" />
+              </div>
+              <h2 class="mt-5 text-2xl font-black text-slate-900 dark:text-white">Fechas de Inscripción</h2>
+              <p class="mt-3 max-w-2xl text-sm font-semibold leading-6 text-slate-600 dark:text-slate-300">
+                Define el rango de fechas de inicio y cierre de matrículas públicas para el año lectivo y habilita o deshabilita manualmente el registro.
+              </p>
+            </div>
+
+            <div class="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+              <div class="flex flex-wrap gap-3">
+                <span class="rounded-full bg-white/80 px-4 py-2 text-sm font-black text-violet-700 shadow-sm dark:bg-slate-800/80 dark:text-violet-400">
+                  Control de acudientes
+                </span>
+              </div>
+              <span class="inline-flex items-center gap-2 text-sm font-black text-violet-700 transition group-hover:translate-x-1 dark:text-violet-400">
+                Configurar fechas
+              </span>
+            </div>
+          </div>
+        </router-link>
+
       </div>
     </template>
+
   </div>
 </template>

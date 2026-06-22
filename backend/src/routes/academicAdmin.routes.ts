@@ -41,13 +41,19 @@ import {
   updateMySchoolIdentity,
   resetMySchoolIdentity,
   uploadMySchoolEscudo,
+  getEnrollmentConfig,
+  saveEnrollmentConfig,
 } from "../controllers/academicAdminController";
 import { upload } from "../config/multer";
 import { verifyToken, requireDirectivo } from "../middleware/authMiddleware";
 
 const router = Router();
 
+router.get("/settings/enrollment-config/:schoolId/:yearId", verifyToken, requireDirectivo, getEnrollmentConfig);
+router.post("/settings/enrollment-config", verifyToken, requireDirectivo, saveEnrollmentConfig);
+
 router.get("/my-school/:schoolId", verifyToken, requireDirectivo, getMySchoolData);
+
 router.put("/my-school/:schoolId/identidad", verifyToken, requireDirectivo, updateMySchoolIdentity);
 router.post("/my-school/:schoolId/identidad/reset", verifyToken, requireDirectivo, resetMySchoolIdentity);
 router.post("/my-school/:schoolId/identidad/upload-escudo", verifyToken, requireDirectivo, upload.single("escudo"), uploadMySchoolEscudo);

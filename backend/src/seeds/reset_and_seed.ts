@@ -126,6 +126,45 @@ async function createSchoolConfigTable(client: PoolClient): Promise<void> {
   `);
 }
 
+async function createEnrollmentConfigTable(client: PoolClient): Promise<void> {
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS configuracion_inscripcion (
+      id_configuracion SERIAL PRIMARY KEY,
+      id_colegio INTEGER NOT NULL REFERENCES colegio(id_colegio) ON DELETE CASCADE,
+      id_año INTEGER NOT NULL REFERENCES "año_lectivo"("id_año") ON DELETE CASCADE,
+      fecha_inicio TIMESTAMPTZ NOT NULL,
+      fecha_cierre TIMESTAMPTZ NOT NULL,
+      habilitada BOOLEAN NOT NULL DEFAULT TRUE,
+      CONSTRAINT chk_fechas CHECK (fecha_cierre > fecha_inicio),
+      CONSTRAINT uq_colegio_anio UNIQUE (id_colegio, id_año)
+    );
+  `);
+  await client.query(`
+    CREATE INDEX IF NOT EXISTS idx_config_inscripcion_colegio ON configuracion_inscripcion (id_colegio);
+  `);
+}
+
+async function seedEnrollmentConfigs(client: PoolClient): Promise<void> {
+  const schoolsRes = await client.query('SELECT id_colegio FROM colegio');
+  for (const s of schoolsRes.rows) {
+    const yearRes = await client.query('SELECT "id_año" FROM "año_lectivo" WHERE id_colegio = $1', [s.id_colegio]);
+    if (yearRes.rows.length > 0) {
+      const yearId = yearRes.rows[0].id_año;
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - 5); // 5 days ago
+      const endDate = new Date();
+      endDate.setDate(endDate.getDate() + 15); // 15 days from now
+      
+      await client.query(`
+        INSERT INTO configuracion_inscripcion (id_colegio, id_año, fecha_inicio, fecha_cierre, habilitada)
+        VALUES ($1, $2, $3, $4, TRUE)
+        ON CONFLICT (id_colegio, id_año) DO NOTHING
+      `, [s.id_colegio, yearId, startDate.toISOString(), endDate.toISOString()]);
+    }
+  }
+}
+
+
 // ─── HELPER: TRUNCATE TABLES ────────────────────────────────────────────────────
 
 async function truncateExistingTables(client: PoolClient, tables: string[]): Promise<void> {
@@ -738,6 +777,7 @@ async function run(): Promise<void> {
     const adminGeneralMigrationSql = fs.readFileSync(path.join(__dirname, "../migrations/001_admin_general.sql"), "utf8");
     await client.query(adminGeneralMigrationSql);
     await createSchoolConfigTable(client);
+    await createEnrollmentConfigTable(client);
 
     // ── Phase 2: Schema migrations ──
     console.log("🔧 Migrando columnas adicionales...");
@@ -818,6 +858,7 @@ async function run(): Promise<void> {
       "año_lectivo",
       "escala_valoracion",
       "configuracion_colegio",
+      "configuracion_inscripcion",
       // Auth
       "usuario_rol",
       "usuario",
@@ -869,6 +910,9 @@ async function run(): Promise<void> {
       console.log(`📚 Creando estructura académica para ${school.nombre}...`);
       await insertSchoolAcademicStructure(client, school, sectionIds);
     }
+
+    // ── Phase 7.5: Enrollment configs ──
+    await seedEnrollmentConfigs(client);
 
     // ── Phase 8: Students and parents (5 per MAÑANA-A group) ──
     for (const school of schools) {

@@ -563,9 +563,47 @@ watch(selectedYearId, () => {
 
 watch(selectedPeriodId, fetchDashboard)
 
+const enrollmentNotice = ref<string | null>(null)
+
+const checkEnrollmentDates = async () => {
+  if (!schoolId.value) return
+  try {
+    const response = await axios.get(`http://localhost:3000/api/matriculas/school/${schoolId.value}/enrollment-config`)
+    const data = response.data
+    if (data && data.config && data.config.habilitada) {
+      const now = new Date()
+      const start = new Date(data.config.fecha_inicio)
+      const end = new Date(data.config.fecha_cierre)
+      if (now >= start && now <= end) {
+        const diffTime = end.getTime() - now.getTime()
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+        if (diffDays === 0) {
+          enrollmentNotice.value = "Fechas de inscripción abiertas, terminan hoy"
+        } else if (diffDays === 1) {
+          enrollmentNotice.value = "Fechas de inscripción abiertas, terminan mañana"
+        } else {
+          enrollmentNotice.value = `Fechas de inscripción abiertas, terminan en ${diffDays} días`
+        }
+      } else {
+        enrollmentNotice.value = null
+      }
+    } else {
+      enrollmentNotice.value = null
+    }
+  } catch (error) {
+    console.error('Error checking enrollment dates for notice:', error)
+    enrollmentNotice.value = null
+  }
+}
+
+watch(schoolId, () => {
+  checkEnrollmentDates()
+})
+
 onMounted(async () => {
   await loadPeriods()
   await fetchDashboard()
+  await checkEnrollmentDates()
   // Trigger initial setup for courses if grade is not ALL
   if (globalSelectedGrade.value !== 'ALL') {
     const courses = dashboardData.value.charts.performanceByCourse.filter(
@@ -643,6 +681,17 @@ onMounted(async () => {
           </select>
         </div>
       </div>
+    </div>
+
+    <!-- Enrollment Active Alert Banner -->
+    <div v-if="enrollmentNotice" class="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 p-4 px-6 rounded-2xl flex items-center justify-between shadow-sm animate-pulse">
+      <div class="flex items-center gap-3">
+        <div class="h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]"></div>
+        <span class="text-sm font-bold text-emerald-800 dark:text-emerald-300">{{ enrollmentNotice }}</span>
+      </div>
+      <router-link to="/dashboard/gestion-matriculas" class="text-xs font-black text-emerald-700 dark:text-emerald-400 hover:underline uppercase tracking-wider">
+        Gestionar Matrículas
+      </router-link>
     </div>
 
     <!-- Principal KPIs -->
