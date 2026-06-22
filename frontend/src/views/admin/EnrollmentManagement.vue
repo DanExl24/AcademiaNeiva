@@ -131,15 +131,28 @@ const documentLabels: Record<string, string> = {
   certificadosEscolaridad: 'Certificado de Escolaridad (Años anteriores)',
 }
 
+const studentSummary = ref<any>(null)
+
 const openDrawer = async (id: number) => {
   currentStep.value = 1
   matricula.value = null
+  studentSummary.value = null
   detailLoading.value = true
   drawerOpen.value = true
   try {
     const response = await axios.get(`http://localhost:3000/api/matriculas/${id}`)
     matricula.value = response.data
     selectedGradeId.value = response.data.id_grado
+
+    // Fetch academic summary if it is a reingreso
+    if (response.data.tipo === 'REINGRESO' && response.data.id_estudiante) {
+      try {
+        const studentSumRes = await axios.get(`http://localhost:3000/api/student/${response.data.id_estudiante}/summary`)
+        studentSummary.value = studentSumRes.data
+      } catch (err) {
+        console.error("Error loading student academic history:", err)
+      }
+    }
   } catch {
     notify.addNotification('Error al cargar la matrícula', 'error')
     drawerOpen.value = false
@@ -309,7 +322,7 @@ const fetchAndDownloadPDF = async (id: number) => {
   }
 }
 
-// ─── Extraordinary Enrollment State ──────────────────────────────────────────
+// ─── Extraordinary & Reingreso Enrollment State ──────────────────────────────
 const showExtraordinaryModal = ref(false)
 const extraordinaryLoading = ref(false)
 const extraordinaryForm = ref({
@@ -320,14 +333,32 @@ const extraordinaryForm = ref({
   id_estudiante: null as number | null,
   tiene_discapacidad: false,
   es_extranjero: false,
-  motivo_extraordinaria: '',
-  observaciones_extraordinaria: '',
+  motivo: '',
+  observaciones: '',
+})
+
+// Reingreso
+const showReingresoModal = ref(false)
+const reingresoLoading = ref(false)
+const reingresoForm = ref({
+  id_estudiante: null as number | null,
+  id_nivel: null as number | null,
+  id_grupo: null as number | null,
+  id_año: null as number | null,
+  tiene_discapacidad: false,
+  es_extranjero: false,
+  motivo: 'Se retiró voluntariamente',
+  observaciones: '',
 })
 
 const catalogNiveles = ref<any[]>([])
 const catalogGrupos = ref<any[]>([])
 const catalogYears = ref<any[]>([])
 const institutionStudents = ref<any[]>([])
+
+const retiredStudents = computed(() => {
+  return institutionStudents.value.filter(s => s.estado === 'RETIRADO')
+})
 
 const fetchExtraordinaryCatalogs = async () => {
   try {
@@ -347,7 +378,7 @@ const fetchExtraordinaryCatalogs = async () => {
       (s: any) => s.estado !== 'EXPULSADO' && s.estado !== 'GRADUADO'
     )
   } catch (error) {
-    console.error('Error fetching extraordinary catalogs:', error)
+    console.error('Error fetching catalogs:', error)
   }
 }
 
@@ -359,14 +390,25 @@ const getYearId = (y: any) => y.id_año || y['id_año'] || y.id_ao;
 
 watch(catalogYears, (years) => {
   const activeYear = years.find(y => y.estado === 'ABIERTO')
-  if (activeYear && !extraordinaryForm.value.id_año) {
-    extraordinaryForm.value.id_año = getYearId(activeYear)
+  if (activeYear) {
+    const activeYearId = getYearId(activeYear)
+    if (!extraordinaryForm.value.id_año) {
+      extraordinaryForm.value.id_año = activeYearId
+    }
+    if (!reingresoForm.value.id_año) {
+      reingresoForm.value.id_año = activeYearId
+    }
   }
 })
 
 const filteredExtraordinaryGroups = computed(() => {
   if (!extraordinaryForm.value.id_nivel) return []
   return catalogGrupos.value.filter(g => g.id_nivel === extraordinaryForm.value.id_nivel)
+})
+
+const filteredReingresoGroups = computed(() => {
+  if (!reingresoForm.value.id_nivel) return []
+  return catalogGrupos.value.filter(g => g.id_nivel === reingresoForm.value.id_nivel)
 })
 
 const onStudentSelected = () => {
@@ -389,8 +431,34 @@ const onStudentSelected = () => {
   }
 }
 
+const openReingresoModal = () => {
+  reingresoForm.value = {
+    id_estudiante: null,
+    id_nivel: null,
+    id_grupo: null,
+    id_año: catalogYears.value.find(y => y.estado === 'ABIERTO') ? getYearId(catalogYears.value.find(y => y.estado === 'ABIERTO')) : null,
+    tiene_discapacidad: false,
+    es_extranjero: false,
+    motivo: 'Se retiró voluntariamente',
+    observaciones: '',
+  }
+  showReingresoModal.value = true
+}
+
+const onReingresoStudentSelected = () => {
+  const selectedStudentId = reingresoForm.value.id_estudiante
+  if (selectedStudentId) {
+    const student = institutionStudents.value.find(s => s.id_estudiante === selectedStudentId)
+    if (student) {
+      if (student.id_nivel) {
+        reingresoForm.value.id_nivel = student.id_nivel
+      }
+    }
+  }
+}
+
 const submitExtraordinary = async () => {
-  if (!extraordinaryForm.value.correo_padre || !extraordinaryForm.value.id_nivel || !extraordinaryForm.value.id_grupo || !extraordinaryForm.value.id_año || !extraordinaryForm.value.motivo_extraordinaria) {
+  if (!extraordinaryForm.value.correo_padre || !extraordinaryForm.value.id_nivel || !extraordinaryForm.value.id_grupo || !extraordinaryForm.value.id_año || !extraordinaryForm.value.motivo) {
     notify.addNotification('Por favor, rellene todos los campos obligatorios.', 'error')
     return
   }
@@ -423,8 +491,8 @@ const submitExtraordinary = async () => {
       id_estudiante: null,
       tiene_discapacidad: false,
       es_extranjero: false,
-      motivo_extraordinaria: '',
-      observaciones_extraordinaria: '',
+      motivo: '',
+      observaciones: '',
     }
     fetchEnrollments()
   } catch (error: any) {
@@ -434,27 +502,59 @@ const submitExtraordinary = async () => {
   }
 }
 
+const submitReingreso = async () => {
+  if (!reingresoForm.value.id_estudiante || !reingresoForm.value.id_nivel || !reingresoForm.value.id_grupo || !reingresoForm.value.id_año || !reingresoForm.value.motivo) {
+    notify.addNotification('Por favor, rellene todos los campos obligatorios.', 'error')
+    return
+  }
+  reingresoLoading.value = true
+  try {
+    const payload = {
+      ...reingresoForm.value,
+      id_estudiante: Number(reingresoForm.value.id_estudiante),
+      id_nivel: Number(reingresoForm.value.id_nivel),
+      id_grupo: Number(reingresoForm.value.id_grupo),
+      id_año: Number(reingresoForm.value.id_año),
+    }
+    const headers = { Authorization: `Bearer ${auth.token}` }
+    await axios.post('http://localhost:3000/api/academic-admin/matriculas/reingreso', payload, { headers })
+    notify.addNotification('Solicitud de reingreso creada exitosamente.', 'success')
+    showReingresoModal.value = false
+    fetchEnrollments()
+  } catch (error: any) {
+    notify.addNotification(error.response?.data?.error || 'Error al crear solicitud de reingreso', 'error')
+  } finally {
+    reingresoLoading.value = false
+  }
+}
+
 const approveException = async (id: number) => {
   try {
     const headers = { Authorization: `Bearer ${auth.token}` }
-    const response = await axios.post(`http://localhost:3000/api/academic-admin/matriculas/extraordinaria/${id}/aprobar`, {}, { headers })
-    notify.addNotification(response.data.message || 'Excepción aprobada exitosamente', 'success')
+    const endpoint = matricula.value?.tipo === 'REINGRESO'
+      ? `http://localhost:3000/api/academic-admin/matriculas/reingreso/${id}/aprobar`
+      : `http://localhost:3000/api/academic-admin/matriculas/extraordinaria/${id}/aprobar`;
+    const response = await axios.post(endpoint, {}, { headers })
+    notify.addNotification(response.data.message || 'Solicitud aprobada exitosamente', 'success')
     closeDrawer()
     fetchEnrollments()
   } catch (error: any) {
-    notify.addNotification(error.response?.data?.error || 'Error al aprobar excepción', 'error')
+    notify.addNotification(error.response?.data?.error || 'Error al aprobar solicitud', 'error')
   }
 }
 
 const rejectException = async (id: number) => {
   try {
     const headers = { Authorization: `Bearer ${auth.token}` }
-    const response = await axios.post(`http://localhost:3000/api/academic-admin/matriculas/extraordinaria/${id}/rechazar`, {}, { headers })
-    notify.addNotification(response.data.message || 'Excepción rechazada exitosamente', 'success')
+    const endpoint = matricula.value?.tipo === 'REINGRESO'
+      ? `http://localhost:3000/api/academic-admin/matriculas/reingreso/${id}/rechazar`
+      : `http://localhost:3000/api/academic-admin/matriculas/extraordinaria/${id}/rechazar`;
+    const response = await axios.post(endpoint, {}, { headers })
+    notify.addNotification(response.data.message || 'Solicitud rechazada exitosamente', 'success')
     closeDrawer()
     fetchEnrollments()
   } catch (error: any) {
-    notify.addNotification(error.response?.data?.error || 'Error al rechazar excepción', 'error')
+    notify.addNotification(error.response?.data?.error || 'Error al rechazar solicitud', 'error')
   }
 }
 </script>
@@ -472,9 +572,14 @@ const rejectException = async (id: number) => {
           <p class="text-slate-400 dark:text-slate-500 text-sm font-medium">Supervisa y valida las solicitudes de ingreso a la institución.</p>
         </div>
       </div>
-      <button @click="showExtraordinaryModal = true" class="px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black text-xs uppercase tracking-wide transition-all shadow-lg shadow-indigo-100 dark:shadow-none flex items-center gap-2 self-start sm:self-center">
-        <Plus :size="16" /> Nueva Matrícula Extraordinaria
-      </button>
+      <div class="flex flex-wrap gap-2 self-start sm:self-center">
+        <button @click="showExtraordinaryModal = true" class="px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black text-xs uppercase tracking-wide transition-all shadow-lg shadow-indigo-100 dark:shadow-none flex items-center gap-2">
+          <Plus :size="16" /> Nueva Matrícula Extraordinaria
+        </button>
+        <button @click="openReingresoModal" class="px-5 py-3 bg-violet-600 hover:bg-violet-700 text-white rounded-2xl font-black text-xs uppercase tracking-wide transition-all shadow-lg shadow-violet-100 dark:shadow-none flex items-center gap-2">
+          <Plus :size="16" /> Nuevo Reingreso de Estudiante
+        </button>
+      </div>
     </div>
 
     <!-- Stats Row -->
@@ -547,9 +652,10 @@ const rejectException = async (id: number) => {
               class="group hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors"
             >
               <td class="px-6 py-4">
-                <div class="flex items-center gap-1.5">
+                <div class="flex items-center gap-1.5 font-sans">
                   <p class="font-black text-slate-900 dark:text-white text-sm">#{{ en.id_matricula }}</p>
                   <span v-if="en.tipo === 'EXTRAORDINARIA'" class="bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400 text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded">Extraordinaria</span>
+                  <span v-else-if="en.tipo === 'REINGRESO'" class="bg-purple-100 text-purple-800 dark:bg-purple-950/40 dark:text-purple-400 text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded">Reingreso</span>
                 </div>
                 <p class="text-[10px] text-slate-400 font-mono">{{ en.token_seguimiento?.substring(0,10) }}...</p>
               </td>
@@ -659,16 +765,17 @@ const rejectException = async (id: number) => {
             <!-- Drawer Body -->
             <div v-else-if="matricula" class="flex-1 overflow-y-auto custom-scrollbar">
 
-              <!-- ── EXTRAORDINARY PENDING EXCEPTION VIEW ─────────────────── -->
-              <div v-if="matricula.tipo === 'EXTRAORDINARIA' && matricula.estado === 'PENDIENTE'" class="p-8 space-y-6">
-                <div class="bg-amber-50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900 rounded-[2rem] p-8 text-center space-y-4">
-                  <div class="w-20 h-20 bg-amber-600 text-white rounded-3xl flex items-center justify-center mx-auto shadow-lg shadow-amber-200 dark:shadow-none">
-                    <AlertTriangle :size="40" />
+              <!-- ── EXTRAORDINARY & REINGRESO PENDING EXCEPTION VIEW ─────────────────── -->
+              <div v-if="(matricula.tipo === 'EXTRAORDINARIA' || matricula.tipo === 'REINGRESO') && matricula.estado === 'PENDIENTE'" class="p-8 space-y-6">
+                <div :class="[matricula.tipo === 'REINGRESO' ? 'bg-violet-50 dark:bg-violet-950/20 border-violet-100 dark:border-violet-900 text-violet-950 dark:text-violet-300' : 'bg-amber-50 dark:bg-amber-950/20 border-amber-100 dark:border-amber-900 text-amber-950 dark:text-amber-300', 'border rounded-[2rem] p-8 text-center space-y-4']">
+                  <div :class="[matricula.tipo === 'REINGRESO' ? 'bg-violet-600' : 'bg-amber-600', 'w-20 h-20 text-white rounded-3xl flex items-center justify-center mx-auto shadow-lg']">
+                    <AlertTriangle v-if="matricula.tipo === 'EXTRAORDINARIA'" :size="40" />
+                    <ArrowLeftRight v-else :size="40" />
                   </div>
                   <div>
-                    <h3 class="text-2xl font-black text-amber-950 dark:text-amber-300">Excepción de Matrícula</h3>
-                    <p class="text-amber-700 dark:text-amber-400 text-sm font-medium mt-1">
-                      Esta es una solicitud de matrícula extraordinaria que requiere aprobación.
+                    <h3 class="text-2xl font-black">{{ matricula.tipo === 'REINGRESO' ? 'Solicitud de Reingreso' : 'Excepción de Matrícula' }}</h3>
+                    <p class="text-sm font-medium mt-1 opacity-80">
+                      {{ matricula.tipo === 'REINGRESO' ? 'Esta es una solicitud de reingreso estudiantil que requiere aprobación.' : 'Esta es una solicitud de matrícula extraordinaria que requiere aprobación.' }}
                     </p>
                   </div>
                 </div>
@@ -692,7 +799,9 @@ const rejectException = async (id: number) => {
                   </div>
 
                   <div v-if="matricula.id_estudiante" class="p-4 bg-indigo-50/50 dark:bg-indigo-950/20 rounded-2xl border border-indigo-100 dark:border-indigo-900">
-                    <p class="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest mb-1">Estudiante Pre-asociado</p>
+                    <p class="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest mb-1">
+                      {{ matricula.tipo === 'REINGRESO' ? 'Ficha del Estudiante a Reingresar' : 'Estudiante Pre-asociado' }}
+                    </p>
                     <p class="font-black text-indigo-900 dark:text-indigo-200">
                       {{ matricula.student_firstname }} {{ matricula.student_lastname }}
                     </p>
@@ -702,37 +811,69 @@ const rejectException = async (id: number) => {
                   <div class="p-4 bg-slate-50 dark:bg-slate-700/30 rounded-2xl border border-slate-100 dark:border-slate-700">
                     <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Motivo de Solicitud</p>
                     <p class="text-sm font-semibold text-slate-700 dark:text-slate-300 italic">
-                      "{{ matricula.motivo_extraordinaria }}"
+                      "{{ matricula.motivo }}"
                     </p>
                   </div>
 
-                  <div v-if="matricula.observaciones_extraordinaria" class="p-4 bg-slate-50 dark:bg-slate-700/30 rounded-2xl border border-slate-100 dark:border-slate-700">
+                  <div v-if="matricula.observaciones" class="p-4 bg-slate-50 dark:bg-slate-700/30 rounded-2xl border border-slate-100 dark:border-slate-700">
                     <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Observaciones</p>
                     <p class="text-xs text-slate-600 dark:text-slate-400">
-                      {{ matricula.observaciones_extraordinaria }}
+                      {{ matricula.observaciones }}
                     </p>
+                  </div>
+                </div>
+
+                <!-- Historial Académico para Reingreso (DR05) -->
+                <div v-if="matricula.tipo === 'REINGRESO' && studentSummary" class="bg-white dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 space-y-4 shadow-sm">
+                  <h4 class="font-black text-slate-900 dark:text-white uppercase text-[10px] tracking-wider border-b pb-2">Historial Académico Previo</h4>
+                  <div class="grid grid-cols-2 gap-4 text-xs">
+                    <div>
+                      <p class="text-slate-400">Promedio General (GPA):</p>
+                      <p class="font-bold text-slate-800 dark:text-slate-200" :class="studentSummary.gpa < 3.0 ? 'text-red-500' : 'text-emerald-500'">{{ studentSummary.gpa || 'N/A' }}</p>
+                    </div>
+                    <div>
+                      <p class="text-slate-400">Inasistencias totales:</p>
+                      <p class="font-bold text-slate-800 dark:text-slate-200">{{ studentSummary.total_inasistencias }}</p>
+                    </div>
+                    <div>
+                      <p class="text-slate-400">Reportes Disciplinarios:</p>
+                      <p class="font-bold text-slate-800 dark:text-slate-200">{{ studentSummary.total_disciplinarias }}</p>
+                    </div>
+                    <div>
+                      <p class="text-slate-400">Estado Académico:</p>
+                      <p class="font-bold uppercase" :class="studentSummary.estado_academico === 'Crítico' ? 'text-red-500' : studentSummary.estado_academico === 'En riesgo' ? 'text-amber-500' : 'text-emerald-500'">{{ studentSummary.estado_academico }}</p>
+                    </div>
+                  </div>
+                  
+                  <div v-if="studentSummary.failed_subjects && studentSummary.failed_subjects.length > 0" class="p-3 bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900 rounded-xl">
+                    <p class="text-[10px] font-black text-red-700 dark:text-red-400 uppercase tracking-widest mb-1">Materias Reprobadas (Último período):</p>
+                    <ul class="text-[11px] text-red-600 dark:text-red-400 list-disc list-inside">
+                      <li v-for="subj in studentSummary.failed_subjects" :key="subj.id_materia">
+                        {{ subj.materia }}: <strong class="font-black">{{ subj.calificacion }}</strong>
+                      </li>
+                    </ul>
                   </div>
                 </div>
 
                 <!-- Exception approval actions -->
                 <div class="flex flex-col sm:flex-row gap-3 pt-4">
                   <button @click="rejectException(matricula.id_matricula)" class="flex-1 py-4 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-red-100 transition-all border border-red-100 dark:border-red-900">
-                    Rechazar Excepción
+                    Rechazar Solicitud
                   </button>
                   <button @click="approveException(matricula.id_matricula)" class="flex-[2] py-4 bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-xl">
-                    Aprobar Excepción
+                    Aprobar Solicitud
                   </button>
                 </div>
               </div>
 
-              <!-- ── EXTRAORDINARY APPROVED (WAITING FOR DOCS) VIEW ────────── -->
-              <div v-else-if="matricula.tipo === 'EXTRAORDINARIA' && matricula.estado === 'APROBADA'" class="p-8 space-y-6">
+              <!-- ── EXTRAORDINARY & REINGRESO APPROVED (WAITING FOR DOCS) VIEW ────────── -->
+              <div v-else-if="(matricula.tipo === 'EXTRAORDINARIA' || matricula.tipo === 'REINGRESO') && matricula.estado === 'APROBADA'" class="p-8 space-y-6">
                 <div class="bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900 rounded-[2rem] p-8 text-center space-y-4">
                   <div class="w-20 h-20 bg-indigo-600 text-white rounded-3xl flex items-center justify-center mx-auto shadow-lg shadow-indigo-200 dark:shadow-none">
                     <ShieldCheck :size="40" />
                   </div>
                   <div>
-                    <h3 class="text-2xl font-black text-indigo-950 dark:text-indigo-300">Excepción Aprobada</h3>
+                    <h3 class="text-2xl font-black text-indigo-950 dark:text-indigo-300">Solicitud Aprobada</h3>
                     <p class="text-indigo-700 dark:text-indigo-400 text-sm font-medium mt-1">
                       Esperando que el acudiente suba los documentos requeridos.
                     </p>
@@ -766,7 +907,6 @@ const rejectException = async (id: number) => {
                     </div>
                   </div>
                 </div>
-
                 <button @click="closeDrawer" class="w-full py-4 bg-slate-900 dark:bg-slate-800 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-800 dark:hover:bg-slate-700 transition-all shadow-xl">
                   Cerrar Detalle
                 </button>
@@ -1297,13 +1437,13 @@ const rejectException = async (id: number) => {
             <!-- Reason (textarea) -->
             <div class="space-y-1.5 col-span-2 text-left">
               <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 font-sans">Motivo de Excepción *</label>
-              <textarea v-model="extraordinaryForm.motivo_extraordinaria" rows="3" placeholder="Justificación obligatoria de la matrícula extraordinaria..." class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-semibold outline-none text-slate-900 dark:text-white transition-all focus:border-indigo-400"></textarea>
+              <textarea v-model="extraordinaryForm.motivo" rows="3" placeholder="Justificación obligatoria de la matrícula extraordinaria..." class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-semibold outline-none text-slate-900 dark:text-white transition-all focus:border-indigo-400"></textarea>
             </div>
 
             <!-- Observations (textarea) -->
             <div class="space-y-1.5 col-span-2 text-left">
               <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 font-sans">Observaciones Adicionales</label>
-              <textarea v-model="extraordinaryForm.observaciones_extraordinaria" rows="2" placeholder="Notas internas u observaciones opcionales..." class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-semibold outline-none text-slate-900 dark:text-white transition-all focus:border-indigo-400"></textarea>
+              <textarea v-model="extraordinaryForm.observaciones" rows="2" placeholder="Notas internas u observaciones opcionales..." class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-semibold outline-none text-slate-900 dark:text-white transition-all focus:border-indigo-400"></textarea>
             </div>
           </div>
 
@@ -1315,6 +1455,113 @@ const rejectException = async (id: number) => {
           <button @click="submitExtraordinary" :disabled="extraordinaryLoading" class="flex-[2] bg-indigo-600 text-white py-3.5 rounded-xl font-black text-xs uppercase flex items-center justify-center gap-2 hover:bg-indigo-700 transition-all disabled:opacity-50">
             <span v-if="extraordinaryLoading" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
             <span v-else>Registrar Matrícula</span>
+          </button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ── Nuevo Reingreso de Estudiante Modal ─────────────────── -->
+    <div v-if="showReingresoModal" class="fixed inset-0 z-[300] flex items-center justify-center p-4">
+      <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" @click="showReingresoModal = false"></div>
+      <div class="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-[28px] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+        
+        <!-- Modal Header -->
+        <div class="px-8 py-6 bg-gradient-to-r from-violet-600 to-indigo-700 text-white shrink-0 flex justify-between items-center">
+          <div>
+            <h3 class="text-lg font-black uppercase tracking-wider text-white">Nuevo Reingreso de Estudiante</h3>
+            <p class="text-xs text-indigo-100 mt-1">Registra la solicitud de reingreso para un estudiante previamente retirado o desertor.</p>
+          </div>
+          <button @click="showReingresoModal = false" class="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all">
+            <X :size="20" />
+          </button>
+        </div>
+
+        <!-- Modal Body (Scrollable) -->
+        <div class="p-8 space-y-5 overflow-y-auto custom-scrollbar flex-1">
+          
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <!-- Student Selector -->
+            <div class="space-y-1.5 col-span-2 text-left">
+              <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Estudiante Retirado *</label>
+              <select v-model="reingresoForm.id_estudiante" @change="onReingresoStudentSelected" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-semibold outline-none text-slate-900 dark:text-white transition-all focus:border-violet-400">
+                <option :value="null">-- Seleccione el Estudiante --</option>
+                <option v-for="student in retiredStudents" :key="student.id_estudiante" :value="student.id_estudiante">
+                  {{ student.nombre }} {{ student.apellido }} (Doc: {{ student.documento }} / Cód: {{ student.codigo }})
+                </option>
+              </select>
+            </div>
+
+            <!-- Academic Year -->
+            <div class="space-y-1.5 text-left">
+              <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Año Lectivo *</label>
+              <select v-model="reingresoForm.id_año" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-semibold outline-none text-slate-900 dark:text-white transition-all focus:border-violet-400">
+                <option v-for="year in catalogYears" :key="getYearId(year)" :value="getYearId(year)">
+                  Año {{ year.calendario }}
+                </option>
+              </select>
+            </div>
+
+            <!-- Level Selection -->
+            <div class="space-y-1.5 text-left">
+              <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nivel Escolar *</label>
+              <select v-model="reingresoForm.id_nivel" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-semibold outline-none text-slate-900 dark:text-white transition-all focus:border-violet-400">
+                <option v-for="nivel in catalogNiveles" :key="nivel.id_nivel" :value="nivel.id_nivel">
+                  {{ nivel.nombre }}
+                </option>
+              </select>
+            </div>
+
+            <!-- Group Selection -->
+            <div class="space-y-1.5 col-span-2 text-left">
+              <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Grado / Grupo Asignado *</label>
+              <select v-model="reingresoForm.id_grupo" :disabled="!reingresoForm.id_nivel" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-semibold outline-none text-slate-900 dark:text-white transition-all focus:border-violet-400 disabled:opacity-50 disabled:cursor-not-allowed">
+                <option :value="null">-- Seleccione el Grupo --</option>
+                <option v-for="g in filteredReingresoGroups" :key="g.id_grupo" :value="g.id_grupo">
+                  {{ g.tipo_grado_nombre }} - Sección {{ g.seccion_nombre }} ({{ g.jornada_nombre }}) - Cupos Disp: {{ g.cupos_totales - g.matriculas_count }}
+                </option>
+              </select>
+            </div>
+
+            <!-- Checkboxes for foreign/disabled -->
+            <div class="flex items-center gap-6 col-span-2 py-2">
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" v-model="reingresoForm.tiene_discapacidad" class="rounded text-violet-600 focus:ring-violet-500" />
+                <span class="text-xs font-semibold text-slate-700 dark:text-slate-300">Tiene discapacidad</span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" v-model="reingresoForm.es_extranjero" class="rounded text-violet-600 focus:ring-violet-500" />
+                <span class="text-xs font-semibold text-slate-700 dark:text-slate-300">Es extranjero</span>
+              </label>
+            </div>
+
+            <!-- Reason Selector -->
+            <div class="space-y-1.5 col-span-2 text-left">
+              <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Motivo del Reingreso *</label>
+              <select v-model="reingresoForm.motivo" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-semibold outline-none text-slate-900 dark:text-white transition-all focus:border-violet-400">
+                <option>Desertó el año pasado</option>
+                <option>Se retiró voluntariamente</option>
+                <option>Se ausentó un año o más</option>
+                <option>Quiere volver al colegio</option>
+                <option>Otro</option>
+              </select>
+            </div>
+
+            <!-- Observations (textarea) -->
+            <div class="space-y-1.5 col-span-2 text-left">
+              <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 font-sans">Observaciones o Notas Académicas</label>
+              <textarea v-model="reingresoForm.observaciones" rows="2" placeholder="Notas sobre el estado académico del estudiante o condiciones particulares de reingreso..." class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-semibold outline-none text-slate-900 dark:text-white transition-all focus:border-violet-400"></textarea>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Modal Footer -->
+        <div class="bg-slate-50 dark:bg-slate-800/50 px-8 py-6 flex gap-3 shrink-0">
+          <button @click="showReingresoModal = false" :disabled="reingresoLoading" class="flex-1 py-3.5 rounded-xl font-black text-slate-400 hover:bg-white dark:hover:bg-slate-700 transition-all text-xs uppercase">Cancelar</button>
+          <button @click="submitReingreso" :disabled="reingresoLoading" class="flex-[2] bg-violet-600 text-white py-3.5 rounded-xl font-black text-xs uppercase flex items-center justify-center gap-2 hover:bg-violet-700 transition-all disabled:opacity-50">
+            <span v-if="reingresoLoading" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+            <span v-else>Solicitar Reingreso</span>
           </button>
         </div>
 

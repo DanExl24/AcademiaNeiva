@@ -46,6 +46,9 @@ import {
   createExtraordinaryEnrollment,
   approveExtraordinaryEnrollment,
   rejectExtraordinaryEnrollment,
+  createReingresoEnrollment,
+  approveReingresoEnrollment,
+  rejectReingresoEnrollment,
 } from "../controllers/academicAdminController";
 import { upload } from "../config/multer";
 import { verifyToken, requireDirectivo } from "../middleware/authMiddleware";
@@ -108,5 +111,10 @@ router.get("/dashboard/:schoolId", getDirectivoDashboard);
 router.post("/matriculas/extraordinaria", verifyToken, requireDirectivo, createExtraordinaryEnrollment);
 router.post("/matriculas/extraordinaria/:id/aprobar", verifyToken, requireDirectivo, approveExtraordinaryEnrollment);
 router.post("/matriculas/extraordinaria/:id/rechazar", verifyToken, requireDirectivo, rejectExtraordinaryEnrollment);
+
+// Reingreso
+router.post("/matriculas/reingreso", verifyToken, requireDirectivo, createReingresoEnrollment);
+router.post("/matriculas/reingreso/:id/aprobar", verifyToken, requireDirectivo, approveReingresoEnrollment);
+router.post("/matriculas/reingreso/:id/rechazar", verifyToken, requireDirectivo, rejectReingresoEnrollment);
 
 export default router;

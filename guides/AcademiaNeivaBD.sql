@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict skaa3AEGus9caVdfCcCHOlP1SjvuhTRSlSFJeWbsNNt4yVkOC9fHMNOES1QP4Fs
+\restrict CngLsVUm1vIcTVJpb3nltfWSAefHlXXoAQFr1xOpUqnqlnDu2s42ZS8PbmPLdHn
 
 -- Dumped from database version 18.4
 -- Dumped by pg_dump version 18.4
@@ -127,7 +127,8 @@ CREATE TYPE public.estado_matricula AS ENUM (
     'CANCELADA',
     'TRASLADADA',
     'RECHAZADA',
-    'CORRECCION'
+    'CORRECCION',
+    'APROBADA'
 );
 
 
@@ -1311,7 +1312,12 @@ CREATE TABLE public.matricula (
     motivo_cancelacion character varying(100),
     detalles_cancelacion text,
     es_traslado boolean DEFAULT false,
-    fecha_aprobacion timestamp without time zone
+    fecha_aprobacion timestamp without time zone,
+    tipo character varying(50) DEFAULT 'REGULAR'::character varying,
+    motivo text,
+    observaciones text,
+    id_usuario_responsable integer,
+    fecha_creacion timestamp without time zone DEFAULT now()
 );
 
 
@@ -3762,5 +3768,5 @@ REVOKE USAGE ON SCHEMA public FROM PUBLIC;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict skaa3AEGus9caVdfCcCHOlP1SjvuhTRSlSFJeWbsNNt4yVkOC9fHMNOES1QP4Fs
+\unrestrict CngLsVUm1vIcTVJpb3nltfWSAefHlXXoAQFr1xOpUqnqlnDu2s42ZS8PbmPLdHn
 

@@ -243,9 +243,19 @@ END $$;
 `;
 
 const extraordinaryMigrationSql = `
+  DO $$
+  BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'matricula' AND column_name = 'motivo_extraordinaria') THEN
+      ALTER TABLE public.matricula RENAME COLUMN motivo_extraordinaria TO motivo;
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'matricula' AND column_name = 'observaciones_extraordinaria') THEN
+      ALTER TABLE public.matricula RENAME COLUMN observaciones_extraordinaria TO observaciones;
+    END IF;
+  END $$;
+
   ALTER TABLE public.matricula ADD COLUMN IF NOT EXISTS tipo VARCHAR(50) DEFAULT 'REGULAR';
-  ALTER TABLE public.matricula ADD COLUMN IF NOT EXISTS motivo_extraordinaria TEXT;
-  ALTER TABLE public.matricula ADD COLUMN IF NOT EXISTS observaciones_extraordinaria TEXT;
+  ALTER TABLE public.matricula ADD COLUMN IF NOT EXISTS motivo TEXT;
+  ALTER TABLE public.matricula ADD COLUMN IF NOT EXISTS observaciones TEXT;
   ALTER TABLE public.matricula ADD COLUMN IF NOT EXISTS id_usuario_responsable INTEGER REFERENCES public.usuario(id_usuario) ON DELETE SET NULL;
   ALTER TABLE public.matricula ADD COLUMN IF NOT EXISTS fecha_creacion TIMESTAMP DEFAULT NOW();
 `;

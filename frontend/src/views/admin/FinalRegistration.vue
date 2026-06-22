@@ -11,7 +11,9 @@ import {
   ChevronRight,
   ChevronLeft,
   FileText,
-  GraduationCap
+  GraduationCap,
+  XCircle,
+  AlertCircle
 } from 'lucide-vue-next'
 
 const route = useRoute()
@@ -47,6 +49,29 @@ const fetchDetails = async () => {
   try {
     const response = await axios.get(`http://localhost:3000/api/matriculas/${idMatricula}`)
     matricula.value = response.data
+
+    // Pre-populate student data
+    if (response.data.renovacion?.is_renovacion) {
+      const st = response.data.renovacion.student
+      studentData.value.nombre = st.nombre
+      studentData.value.apellido = st.apellido
+      studentData.value.documento = st.documento
+      studentData.value.id_tipodocumento = st.id_tipodocumento || 1
+    } else if (response.data.tipo === 'REINGRESO' || response.data.id_estudiante) {
+      studentData.value.nombre = response.data.student_firstname || ''
+      studentData.value.apellido = response.data.student_lastname || ''
+      studentData.value.documento = response.data.student_document || ''
+      studentData.value.id_tipodocumento = response.data.student_id_tipodocumento || 1
+    }
+
+    // Pre-populate parent data
+    if (response.data.parent_firstname) {
+      parentData.value.nombre = response.data.parent_firstname
+      parentData.value.apellido = response.data.parent_lastname
+      parentData.value.documento = response.data.parent_document
+      parentData.value.id_tipodocumento = response.data.parent_id_tipodocumento || 2
+    }
+
     // Si el padre ya tiene cuenta de personal (docente/directivo), pre-poblar formulario
     if (response.data.existing_parent_user) {
       const eu = response.data.existing_parent_user
@@ -81,7 +106,10 @@ const handleFinalize = async () => {
       student: studentData.value,
       parent: parentData.value,
       id_grado: Number(route.query.gradeId),
-      existing_parent_user_id: matricula.value?.existing_parent_user?.id_usuario || null
+      existing_parent_user_id: matricula.value?.existing_parent_user?.id_usuario || null,
+      id_estudiante: matricula.value?.renovacion?.is_renovacion 
+        ? matricula.value.renovacion.student.id_estudiante 
+        : (matricula.value?.id_estudiante || null)
     }
     await axios.post(`http://localhost:3000/api/matriculas/finalize/${idMatricula}`, payload)
     notify.addNotification('Registro finalizado y matrícula activada exitosamente', 'success')
@@ -153,6 +181,36 @@ const documentLabels: Record<string, string> = {
           <p class="text-gray-500 mt-2">Completa los datos personales para activar la matrícula.</p>
         </div>
 
+        <!-- Banners for Renovación and Reingreso -->
+        <div v-if="matricula?.renovacion?.is_renovacion" class="mb-8 font-sans">
+          <div v-if="matricula.renovacion.error_message" class="p-5 bg-red-50 border border-red-200 rounded-3xl flex items-start gap-4">
+            <div class="p-2.5 bg-red-600 text-white rounded-xl shrink-0"><XCircle :size="20" /></div>
+            <div>
+              <p class="font-black text-red-900 text-sm">Bloqueo de Renovación Académica</p>
+              <p class="text-red-700 text-xs mt-1 font-semibold">{{ matricula.renovacion.error_message }}</p>
+            </div>
+          </div>
+          <div v-else class="p-5 bg-emerald-50 border border-emerald-200 rounded-3xl flex items-start gap-4">
+            <div class="p-2.5 bg-emerald-600 text-white rounded-xl shrink-0"><CheckCircle :size="20" /></div>
+            <div>
+              <p class="font-black text-emerald-900 text-sm">Renovación Automática Detectada</p>
+              <p class="text-emerald-700 text-xs mt-0.5 font-semibold">El estudiante estuvo activo en el año lectivo anterior. Los datos personales han sido pre-cargados.</p>
+            </div>
+          </div>
+        </div>
+
+        <div v-else-if="matricula?.tipo === 'REINGRESO'" class="mb-8 font-sans">
+          <div class="p-5 bg-violet-50 border border-violet-200 rounded-3xl flex items-start gap-4">
+            <div class="p-2.5 bg-violet-600 text-white rounded-xl shrink-0"><CheckCircle :size="20" /></div>
+            <div>
+              <p class="font-black text-violet-900 text-sm">Reingreso Estudiantil Detectado</p>
+              <p class="text-violet-700 text-xs mt-0.5 font-semibold">
+                Estudiante reingresado (Estado previo: RETIRADO). Motivo: {{ matricula.motivo }}.
+              </p>
+            </div>
+          </div>
+        </div>
+
         <!-- Stepper -->
         <div class="flex items-center gap-8 mb-12">
           <div :class="[step === 1 ? 'text-indigo-600' : 'text-gray-400', 'flex items-center gap-2 font-bold transition-all']">
@@ -171,19 +229,19 @@ const documentLabels: Record<string, string> = {
           <div class="grid grid-cols-2 gap-6">
             <div class="space-y-2">
               <label class="text-sm font-bold text-gray-700">Nombres</label>
-              <input v-model="studentData.nombre" type="text" placeholder="Ej: Juan Andrés" 
-                class="w-full rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-4 transition-all">
+              <input v-model="studentData.nombre" type="text" placeholder="Ej: Juan Andrés" :disabled="matricula?.renovacion?.is_renovacion"
+                class="w-full rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-4 transition-all disabled:opacity-60 disabled:cursor-not-allowed">
             </div>
             <div class="space-y-2">
               <label class="text-sm font-bold text-gray-700">Apellidos</label>
-              <input v-model="studentData.apellido" type="text" placeholder="Ej: Pérez García"
-                class="w-full rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-4 transition-all">
+              <input v-model="studentData.apellido" type="text" placeholder="Ej: Pérez García" :disabled="matricula?.renovacion?.is_renovacion"
+                class="w-full rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-4 transition-all disabled:opacity-60 disabled:cursor-not-allowed">
             </div>
           </div>
           <div class="grid grid-cols-2 gap-6">
             <div class="space-y-2">
               <label class="text-sm font-bold text-gray-700">Tipo de Documento</label>
-              <select v-model="studentData.id_tipodocumento" class="w-full rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-4 transition-all">
+              <select v-model="studentData.id_tipodocumento" :disabled="matricula?.renovacion?.is_renovacion" class="w-full rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-4 transition-all disabled:opacity-60 disabled:cursor-not-allowed">
                 <option :value="1">Tarjeta de Identidad</option>
                 <option :value="2">Cédula de Ciudadanía</option>
                 <option :value="3">Registro Civil</option>
@@ -192,12 +250,12 @@ const documentLabels: Record<string, string> = {
             </div>
             <div class="space-y-2">
               <label class="text-sm font-bold text-gray-700">Número de Documento</label>
-              <input v-model="studentData.documento" type="text" placeholder="Ej: 1075..."
-                class="w-full rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-4 transition-all">
+              <input v-model="studentData.documento" type="text" placeholder="Ej: 1075..." :disabled="matricula?.renovacion?.is_renovacion"
+                class="w-full rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-4 transition-all disabled:opacity-60 disabled:cursor-not-allowed">
             </div>
           </div>
           <div class="pt-8 flex justify-end">
-            <button @click="step = 2" class="bg-gray-900 text-white px-10 py-4 rounded-2xl font-bold hover:bg-indigo-600 transition-all flex items-center gap-2">
+            <button @click="step = 2" :disabled="!!matricula?.renovacion?.error_message" class="bg-gray-900 text-white px-10 py-4 rounded-2xl font-bold hover:bg-indigo-600 transition-all flex items-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed">
               Siguiente: Datos del Padre
               <ChevronRight :size="20" />
             </button>
@@ -281,7 +339,7 @@ const documentLabels: Record<string, string> = {
               <ChevronLeft :size="20" />
               Atrás
             </button>
-            <button @click="handleFinalize" class="bg-indigo-600 text-white px-10 py-4 rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 flex items-center gap-2">
+            <button @click="handleFinalize" :disabled="!!matricula?.renovacion?.error_message" class="bg-indigo-600 text-white px-10 py-4 rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 flex items-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed">
               Finalizar y Activar Matrícula
               <Save :size="20" />
             </button>

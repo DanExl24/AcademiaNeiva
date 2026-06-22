@@ -151,8 +151,8 @@ export class MatriculaService {
   static async getDetails(idMatricula: number) {
     const matRes = await pool.query(
       `SELECT m.*, ne.nombre as grado_nivel, tg.nombre as tipo_grado, s.nombre as seccion, g.id_jornada, j.nombre as jornada,
-              e.nombre as student_firstname, e.apellido as student_lastname, e.codigo as student_code, e.documento as student_document,
-              pf.nombre as parent_firstname, pf.apellido as parent_lastname, pf.documeno as parent_document,
+              e.nombre as student_firstname, e.apellido as student_lastname, e.codigo as student_code, e.documento as student_document, e.id_tipodocumento as student_id_tipodocumento,
+              pf.nombre as parent_firstname, pf.apellido as parent_lastname, pf.documeno as parent_document, pf.id_tipodocumento as parent_id_tipodocumento,
               (g.cupos_totales - (SELECT COUNT(*) FROM matricula WHERE id_grupo = g.id_grupo AND estado IN ('ACTIVA', 'TRASLADADA'))) as cupos_restantes
        FROM matricula m
        JOIN grupos g ON m.id_grupo = g.id_grupo
@@ -229,11 +229,98 @@ export class MatriculaService {
       }
     }
 
+    // Renovación check
+    let renovacion = {
+      is_renovacion: false,
+      student: null as any,
+      error_message: null as string | null
+    };
+
+    if ((mat.estado === 'PENDIENTE' || mat.estado === 'CORRECCION' || mat.estado === 'RECHAZADA') && !mat.id_estudiante && mat.correo_padre) {
+      const parentUserRes = await pool.query(
+        `SELECT u.id_usuario FROM usuario u 
+         JOIN usuario_rol ur ON u.id_usuario = ur.id_usuario
+         JOIN rol r ON ur.id_rol = r.id_rol
+         WHERE u.email = $1 AND r.nombre = 'padre' LIMIT 1`,
+        [mat.correo_padre]
+      );
+      if (parentUserRes.rows.length > 0) {
+        const idUsuarioPadre = parentUserRes.rows[0].id_usuario;
+        
+        const parentRes = await pool.query(
+          `SELECT id_padrefamilia FROM padre_familia WHERE id_usuario = $1 LIMIT 1`,
+          [idUsuarioPadre]
+        );
+        if (parentRes.rows.length > 0) {
+          const idPadre = parentRes.rows[0].id_padrefamilia;
+          
+          const childrenRes = await pool.query(
+            `SELECT e.*, u.email as student_email 
+             FROM estudiante e
+             JOIN detalle_padrefamilia dp ON e.id_estudiante = dp.id_estudiante
+             LEFT JOIN usuario u ON e.id_usuario = u.id_usuario
+             WHERE dp.id_padrefamilia = $1 AND e.id_colegio = $2`,
+            [idPadre, mat.id_colegio]
+          );
+          
+          if (childrenRes.rows.length > 0) {
+            const currentYearRes = await pool.query(
+              `SELECT calendario FROM "año_lectivo" WHERE "id_año" = $1 LIMIT 1`,
+              [mat.id_año]
+            );
+            if (currentYearRes.rows.length > 0) {
+              const currentYearStr = currentYearRes.rows[0].calendario;
+              const prevYearStr = String(Number(currentYearStr) - 1);
+              
+              const prevYearRes = await pool.query(
+                `SELECT "id_año" FROM "año_lectivo" WHERE id_colegio = $1 AND calendario = $2 LIMIT 1`,
+                [mat.id_colegio, prevYearStr]
+              );
+              
+              if (prevYearRes.rows.length > 0) {
+                const prevYearId = prevYearRes.rows[0].id_año;
+                
+                for (const child of childrenRes.rows) {
+                  const prevEnrollmentRes = await pool.query(
+                    `SELECT id_matricula, estado FROM matricula 
+                     WHERE id_estudiante = $1 AND "id_año" = $2 AND estado IN ('ACTIVA', 'TRASLADADA') LIMIT 1`,
+                    [child.id_estudiante, prevYearId]
+                  );
+                  
+                  if (prevEnrollmentRes.rows.length > 0) {
+                    const prevEnrollment = prevEnrollmentRes.rows[0];
+                    renovacion.is_renovacion = true;
+                    renovacion.student = child;
+                    
+                    const status = child.estado;
+                    if (status === 'EXPULSADO') {
+                      renovacion.error_message = 'El estudiante se encuentra en estado EXPULSADO y no puede realizar renovación.';
+                    } else if (status === 'SANCIONADO') {
+                      renovacion.error_message = 'El estudiante se encuentra en estado SUSPENDIDO/SANCIONADO. No se puede renovar la matrícula hasta que la sanción sea levantada.';
+                    } else if (prevEnrollment.estado === 'TRASLADADA') {
+                      renovacion.error_message = 'El estudiante se encuentra en estado de TRASLADO y no puede renovar matrícula en la institución de origen.';
+                    } else if (status !== 'ACTIVO') {
+                      renovacion.error_message = `El estudiante se encuentra en estado ${status} (No activo).`;
+                    }
+                    
+                    if (!renovacion.error_message) {
+                      break;
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
     return {
       ...mat,
       availableSections: sections.rows || [],
       documentos: docs.rows || [],
-      existing_parent_user: existingParentUser
+      existing_parent_user: existingParentUser,
+      renovacion
     };
   }
 
@@ -348,7 +435,7 @@ export class MatriculaService {
       const { id_colegio, correo_padre, id_nivel } = mat.rows[0];
 
       // --- CREACIÓN O ACTUALIZACIÓN DEL ESTUDIANTE ---
-      let idEstudiante = mat.rows[0].id_estudiante;
+      let idEstudiante = mat.rows[0].id_estudiante || (data.id_estudiante ? Number(data.id_estudiante) : null);
       let studentCode;
 
       if (idEstudiante) {
@@ -485,6 +572,44 @@ export class MatriculaService {
         "UPDATE matricula SET id_estudiante = $1, id_grupo = $3, estado = $4, fecha_aprobacion = NOW() WHERE id_matricula = $2",
         [idEstudiante, idMatricula, finalGradeId, finalEstado]
       );
+
+      // Supervision Logging if admin_general
+      const isRenovacion = !!data.id_estudiante;
+      const isReingreso = mat.rows[0].tipo === 'REINGRESO';
+      const isExtraordinaria = mat.rows[0].tipo === 'EXTRAORDINARIA';
+      let actionLabel = 'Aprobación de Matrícula';
+      let reasonLabel = 'Matrícula de ingreso regular finalizada';
+      if (isReingreso) {
+        actionLabel = 'Aprobación de Reingreso';
+        reasonLabel = 'Reingreso de estudiante retirado finalizado';
+      } else if (isRenovacion) {
+        actionLabel = 'Renovación de Matrícula';
+        reasonLabel = 'Renovación de estudiante existente';
+      } else if (isExtraordinaria) {
+        actionLabel = 'Aprobación de Matrícula Extraordinaria';
+        reasonLabel = 'Matrícula extraordinaria finalizada';
+      }
+
+      const auditRes = await client.query(
+        `SELECT id_auditoria FROM auditoria_supervision 
+         WHERE id_colegio = $1 AND estado_supervision = 'ACTIVA' LIMIT 1`,
+        [id_colegio]
+      );
+      if (auditRes.rows.length > 0) {
+        const activeAuditoriaId = auditRes.rows[0].id_auditoria;
+        await client.query(
+          `INSERT INTO auditoria_acciones_realizadas
+           (id_auditoria, modulo, tipo_accion, accion, recurso_afectado, valor_antiguo, valor_nuevo, motivo_cambio)
+           VALUES ($1, 'MATRICULAS', 'MODIFICACION', $2, $3, NULL, $4, $5)`,
+          [
+            activeAuditoriaId,
+            actionLabel,
+            `Matricula ID: ${idMatricula}`,
+            JSON.stringify({ idEstudiante, finalGradeId }),
+            reasonLabel
+          ]
+        );
+      }
 
       await client.query('COMMIT');
 
