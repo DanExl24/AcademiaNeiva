@@ -10,9 +10,12 @@ const checkEditability = async (detailGradeId, schoolId, periodId) => {
         return { editable: false, error: "Periodo académico no encontrado." };
     }
     if (periodRes.rows[0].estado !== "ABIERTO") {
+        const isPending = periodRes.rows[0].estado === "PENDIENTE";
         return {
             editable: false,
-            error: "El periodo académico está cerrado. No se pueden modificar observaciones.",
+            error: isPending
+                ? "El periodo académico está pendiente de aprobación. No se pueden registrar observaciones."
+                : "El periodo académico está cerrado. No se pueden modificar observaciones.",
         };
     }
     // 2. Check if subject is closed for this period

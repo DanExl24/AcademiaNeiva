@@ -94,6 +94,7 @@ const isEnrollmentOpen = computed(() => {
   if (!schoolId.value) return true
   if (!enrollmentConfig.value) return false
   if (!enrollmentConfig.value.habilitada) return false
+  if (enrollmentConfig.value.hasApproved) return false
   
   const now = new Date()
   const start = new Date(enrollmentConfig.value.fecha_inicio)
@@ -101,10 +102,20 @@ const isEnrollmentOpen = computed(() => {
   return now >= start && now <= end
 })
 
+const submitButtonText = computed(() => {
+  if (schoolId.value && enrollmentConfig.value && !enrollmentConfig.value.habilitada) {
+    return 'DESHABILITADO'
+  }
+  return 'Cargar Documentos'
+})
+
 const enrollmentStatusMessage = computed(() => {
   if (!schoolId.value) return ''
   if (!enrollmentConfig.value) {
     return 'Las inscripciones para esta institución aún no han sido configuradas por las directivas.'
+  }
+  if (enrollmentConfig.value.hasApproved) {
+    return `Las inscripciones para el año lectivo ${yearLabel.value || ''} ya han finalizado.`
   }
   if (!enrollmentConfig.value.habilitada) {
     return 'Las inscripciones están deshabilitadas temporalmente por la institución.'
@@ -397,9 +408,18 @@ const submitEnrollment = async () => {
             </div>
 
             <div class="pt-8 flex justify-end">
-              <button @click="nextStep" class="bg-gray-900 text-white px-10 py-4 rounded-2xl font-bold hover:bg-indigo-600 transition-all shadow-xl active:scale-95 flex items-center gap-2">
-                Cargar Documentos
-                <ArrowLeft :size="20" class="rotate-180" />
+              <button 
+                @click="nextStep" 
+                :disabled="submitButtonText === 'DESHABILITADO'"
+                :class="[
+                  submitButtonText === 'DESHABILITADO' 
+                    ? 'bg-gray-300 dark:bg-gray-800 text-gray-500 cursor-not-allowed opacity-50' 
+                    : 'bg-gray-900 hover:bg-indigo-600 text-white active:scale-95 shadow-xl',
+                  'px-10 py-4 rounded-2xl font-bold transition-all flex items-center gap-2'
+                ]"
+              >
+                {{ submitButtonText }}
+                <ArrowLeft v-if="submitButtonText !== 'DESHABILITADO'" :size="20" class="rotate-180" />
               </button>
             </div>
           </div>

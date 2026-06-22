@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, nextTick } from 'vue'
+import { ref, onMounted, computed, nextTick, watch } from 'vue'
 import axios from 'axios'
 import html2pdf from 'html2pdf.js'
 import {
@@ -22,7 +22,10 @@ import {
   User,
   Mail,
   MapPin,
-  Download
+  Download,
+  X,
+  ArrowLeft,
+  Plus
 } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 import { useNotificationStore } from '../../stores/notifications'
@@ -66,7 +69,7 @@ const tabs = [
 
 const stats = computed(() => ({
   pending:     enrollments.value.filter(e => e.estado === 'PENDIENTE').length,
-  rejected:    enrollments.value.filter(e => e.estado === 'RECHAZADA').length,
+  rejected:    enrollments.value.filter(e => e.estado === 'RECHAZADA' || e.estado === 'APROBADA').length,
   corrected:   enrollments.value.filter(e => e.estado === 'CORRECCION').length,
   active:      enrollments.value.filter(e => e.estado === 'ACTIVA').length,
   transferred: enrollments.value.filter(e => e.estado === 'TRASLADADA').length,
@@ -74,7 +77,12 @@ const stats = computed(() => ({
 }))
 
 const filteredEnrollments = computed(() => {
-  let list = enrollments.value.filter(en => en.estado === filterStatus.value)
+  let list = enrollments.value.filter(en => {
+    if (filterStatus.value === 'RECHAZADA') {
+      return en.estado === 'RECHAZADA' || en.estado === 'APROBADA'
+    }
+    return en.estado === filterStatus.value
+  })
   const q = searchQuery.value.trim().toLowerCase()
   if (q) {
     list = list.filter(en =>
@@ -88,6 +96,7 @@ const filteredEnrollments = computed(() => {
 const getStatusMeta = (status: string) => {
   if (status === 'PENDIENTE')  return { label: 'Por Revisar',     bg: 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400' }
   if (status === 'RECHAZADA')  return { label: 'En Corrección',   bg: 'bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-400' }
+  if (status === 'APROBADA')   return { label: 'Excepción Aprobada', bg: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400' }
   if (status === 'CORRECCION') return { label: 'Docs Corregidos', bg: 'bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-400' }
   if (status === 'ACTIVA')     return { label: 'Aprobada',        bg: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400' }
   if (status === 'TRASLADADA') return { label: 'Traslado',        bg: 'bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400' }
@@ -299,6 +308,148 @@ const fetchAndDownloadPDF = async (id: number) => {
     notify.addNotification("Error al cargar detalles de la matrícula", "error")
   }
 }
+
+// ─── Extraordinary Enrollment State ──────────────────────────────────────────
+const showExtraordinaryModal = ref(false)
+const extraordinaryLoading = ref(false)
+const extraordinaryForm = ref({
+  correo_padre: '',
+  id_nivel: null as number | null,
+  id_grupo: null as number | null,
+  id_año: null as number | null,
+  id_estudiante: null as number | null,
+  tiene_discapacidad: false,
+  es_extranjero: false,
+  motivo_extraordinaria: '',
+  observaciones_extraordinaria: '',
+})
+
+const catalogNiveles = ref<any[]>([])
+const catalogGrupos = ref<any[]>([])
+const catalogYears = ref<any[]>([])
+const institutionStudents = ref<any[]>([])
+
+const fetchExtraordinaryCatalogs = async () => {
+  try {
+    const idColegio = auth.user?.schoolId || 1
+    // Fetch levels & groups
+    const gradesRes = await axios.get(`http://localhost:3000/api/academic-admin/grades/${idColegio}`)
+    catalogNiveles.value = gradesRes.data.niveles || []
+    catalogGrupos.value = gradesRes.data.grupos || []
+    
+    // Fetch academic years
+    const settingsRes = await axios.get(`http://localhost:3000/api/academic-admin/settings/${idColegio}`)
+    catalogYears.value = settingsRes.data.academicYears || []
+    
+    // Fetch students, filter out EXPULSADO & GRADUADO
+    const studentsRes = await axios.get(`http://localhost:3000/api/student/colegio/${idColegio}`)
+    institutionStudents.value = (studentsRes.data || []).filter(
+      (s: any) => s.estado !== 'EXPULSADO' && s.estado !== 'GRADUADO'
+    )
+  } catch (error) {
+    console.error('Error fetching extraordinary catalogs:', error)
+  }
+}
+
+onMounted(async () => {
+  await fetchExtraordinaryCatalogs()
+})
+
+const getYearId = (y: any) => y.id_año || y['id_año'] || y.id_ao;
+
+watch(catalogYears, (years) => {
+  const activeYear = years.find(y => y.estado === 'ABIERTO')
+  if (activeYear && !extraordinaryForm.value.id_año) {
+    extraordinaryForm.value.id_año = getYearId(activeYear)
+  }
+})
+
+const filteredExtraordinaryGroups = computed(() => {
+  if (!extraordinaryForm.value.id_nivel) return []
+  return catalogGrupos.value.filter(g => g.id_nivel === extraordinaryForm.value.id_nivel)
+})
+
+const onStudentSelected = () => {
+  const selectedStudentId = extraordinaryForm.value.id_estudiante
+  if (selectedStudentId) {
+    const student = institutionStudents.value.find(s => s.id_estudiante === selectedStudentId)
+    if (student) {
+      axios.get(`http://localhost:3000/api/student/${selectedStudentId}/summary`)
+        .then(res => {
+          if (res.data.parent && res.data.parent.email) {
+            extraordinaryForm.value.correo_padre = res.data.parent.email
+          }
+        })
+        .catch(err => {
+          console.error("Error fetching student parent email:", err)
+        })
+    }
+  } else {
+    extraordinaryForm.value.correo_padre = ''
+  }
+}
+
+const submitExtraordinary = async () => {
+  if (!extraordinaryForm.value.correo_padre || !extraordinaryForm.value.id_nivel || !extraordinaryForm.value.id_grupo || !extraordinaryForm.value.id_año || !extraordinaryForm.value.motivo_extraordinaria) {
+    notify.addNotification('Por favor, rellene todos los campos obligatorios.', 'error')
+    return
+  }
+  extraordinaryLoading.value = true
+  try {
+    const payload = {
+      ...extraordinaryForm.value,
+      id_nivel: Number(extraordinaryForm.value.id_nivel),
+      id_grupo: Number(extraordinaryForm.value.id_grupo),
+      id_año: Number(extraordinaryForm.value.id_año),
+      id_estudiante: extraordinaryForm.value.id_estudiante ? Number(extraordinaryForm.value.id_estudiante) : null,
+    }
+    const headers = { Authorization: `Bearer ${auth.token}` }
+    await axios.post('http://localhost:3000/api/academic-admin/matriculas/extraordinaria', payload, { headers })
+    notify.addNotification('Matrícula extraordinaria creada exitosamente.', 'success')
+    showExtraordinaryModal.value = false
+    // Reset form
+    extraordinaryForm.value = {
+      correo_padre: '',
+      id_nivel: null,
+      id_grupo: null,
+      id_año: catalogYears.value.find(y => y.estado === 'ABIERTO') ? getYearId(catalogYears.value.find(y => y.estado === 'ABIERTO')) : null,
+      id_estudiante: null,
+      tiene_discapacidad: false,
+      es_extranjero: false,
+      motivo_extraordinaria: '',
+      observaciones_extraordinaria: '',
+    }
+    fetchEnrollments()
+  } catch (error: any) {
+    notify.addNotification(error.response?.data?.error || 'Error al crear matrícula extraordinaria', 'error')
+  } finally {
+    extraordinaryLoading.value = false
+  }
+}
+
+const approveException = async (id: number) => {
+  try {
+    const headers = { Authorization: `Bearer ${auth.token}` }
+    const response = await axios.post(`http://localhost:3000/api/academic-admin/matriculas/extraordinaria/${id}/aprobar`, {}, { headers })
+    notify.addNotification(response.data.message || 'Excepción aprobada exitosamente', 'success')
+    closeDrawer()
+    fetchEnrollments()
+  } catch (error: any) {
+    notify.addNotification(error.response?.data?.error || 'Error al aprobar excepción', 'error')
+  }
+}
+
+const rejectException = async (id: number) => {
+  try {
+    const headers = { Authorization: `Bearer ${auth.token}` }
+    const response = await axios.post(`http://localhost:3000/api/academic-admin/matriculas/extraordinaria/${id}/rechazar`, {}, { headers })
+    notify.addNotification(response.data.message || 'Excepción rechazada exitosamente', 'success')
+    closeDrawer()
+    fetchEnrollments()
+  } catch (error: any) {
+    notify.addNotification(error.response?.data?.error || 'Error al rechazar excepción', 'error')
+  }
+}
 </script>
 
 <template>
@@ -314,6 +465,9 @@ const fetchAndDownloadPDF = async (id: number) => {
           <p class="text-slate-400 dark:text-slate-500 text-sm font-medium">Supervisa y valida las solicitudes de ingreso a la institución.</p>
         </div>
       </div>
+      <button @click="showExtraordinaryModal = true" class="px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black text-xs uppercase tracking-wide transition-all shadow-lg shadow-indigo-100 dark:shadow-none flex items-center gap-2 self-start sm:self-center">
+        <Plus :size="16" /> Nueva Matrícula Extraordinaria
+      </button>
     </div>
 
     <!-- Stats Row -->
@@ -386,7 +540,10 @@ const fetchAndDownloadPDF = async (id: number) => {
               class="group hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors"
             >
               <td class="px-6 py-4">
-                <p class="font-black text-slate-900 dark:text-white text-sm">#{{ en.id_matricula }}</p>
+                <div class="flex items-center gap-1.5">
+                  <p class="font-black text-slate-900 dark:text-white text-sm">#{{ en.id_matricula }}</p>
+                  <span v-if="en.tipo === 'EXTRAORDINARIA'" class="bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400 text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded">Extraordinaria</span>
+                </div>
                 <p class="text-[10px] text-slate-400 font-mono">{{ en.token_seguimiento?.substring(0,10) }}...</p>
               </td>
               <td class="px-6 py-4">
@@ -495,8 +652,121 @@ const fetchAndDownloadPDF = async (id: number) => {
             <!-- Drawer Body -->
             <div v-else-if="matricula" class="flex-1 overflow-y-auto custom-scrollbar">
 
+              <!-- ── EXTRAORDINARY PENDING EXCEPTION VIEW ─────────────────── -->
+              <div v-if="matricula.tipo === 'EXTRAORDINARIA' && matricula.estado === 'PENDIENTE'" class="p-8 space-y-6">
+                <div class="bg-amber-50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900 rounded-[2rem] p-8 text-center space-y-4">
+                  <div class="w-20 h-20 bg-amber-600 text-white rounded-3xl flex items-center justify-center mx-auto shadow-lg shadow-amber-200 dark:shadow-none">
+                    <AlertTriangle :size="40" />
+                  </div>
+                  <div>
+                    <h3 class="text-2xl font-black text-amber-950 dark:text-amber-300">Excepción de Matrícula</h3>
+                    <p class="text-amber-700 dark:text-amber-400 text-sm font-medium mt-1">
+                      Esta es una solicitud de matrícula extraordinaria que requiere aprobación.
+                    </p>
+                  </div>
+                </div>
+
+                <!-- Info Grid -->
+                <div class="bg-white dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 space-y-4 shadow-sm">
+                  <div>
+                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Correo Electrónico del Acudiente</p>
+                    <p class="font-bold text-slate-900 dark:text-white">{{ matricula.correo_padre }}</p>
+                  </div>
+                  
+                  <div class="grid grid-cols-2 gap-4">
+                    <div>
+                      <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Nivel Escolar</p>
+                      <p class="text-sm font-bold text-slate-700 dark:text-slate-300">{{ matricula.grado_nivel }}</p>
+                    </div>
+                    <div>
+                      <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Sección / Grupo</p>
+                      <p class="text-sm font-bold text-slate-700 dark:text-slate-300">{{ matricula.tipo_grado }} ({{ matricula.seccion }})</p>
+                    </div>
+                  </div>
+
+                  <div v-if="matricula.id_estudiante" class="p-4 bg-indigo-50/50 dark:bg-indigo-950/20 rounded-2xl border border-indigo-100 dark:border-indigo-900">
+                    <p class="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest mb-1">Estudiante Pre-asociado</p>
+                    <p class="font-black text-indigo-900 dark:text-indigo-200">
+                      {{ matricula.student_firstname }} {{ matricula.student_lastname }}
+                    </p>
+                    <p class="text-[10px] text-indigo-500 font-bold">Código: {{ matricula.student_code }} | Documento: {{ matricula.student_document }}</p>
+                  </div>
+
+                  <div class="p-4 bg-slate-50 dark:bg-slate-700/30 rounded-2xl border border-slate-100 dark:border-slate-700">
+                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Motivo de Solicitud</p>
+                    <p class="text-sm font-semibold text-slate-700 dark:text-slate-300 italic">
+                      "{{ matricula.motivo_extraordinaria }}"
+                    </p>
+                  </div>
+
+                  <div v-if="matricula.observaciones_extraordinaria" class="p-4 bg-slate-50 dark:bg-slate-700/30 rounded-2xl border border-slate-100 dark:border-slate-700">
+                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Observaciones</p>
+                    <p class="text-xs text-slate-600 dark:text-slate-400">
+                      {{ matricula.observaciones_extraordinaria }}
+                    </p>
+                  </div>
+                </div>
+
+                <!-- Exception approval actions -->
+                <div class="flex flex-col sm:flex-row gap-3 pt-4">
+                  <button @click="rejectException(matricula.id_matricula)" class="flex-1 py-4 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-red-100 transition-all border border-red-100 dark:border-red-900">
+                    Rechazar Excepción
+                  </button>
+                  <button @click="approveException(matricula.id_matricula)" class="flex-[2] py-4 bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-xl">
+                    Aprobar Excepción
+                  </button>
+                </div>
+              </div>
+
+              <!-- ── EXTRAORDINARY APPROVED (WAITING FOR DOCS) VIEW ────────── -->
+              <div v-else-if="matricula.tipo === 'EXTRAORDINARIA' && matricula.estado === 'APROBADA'" class="p-8 space-y-6">
+                <div class="bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900 rounded-[2rem] p-8 text-center space-y-4">
+                  <div class="w-20 h-20 bg-indigo-600 text-white rounded-3xl flex items-center justify-center mx-auto shadow-lg shadow-indigo-200 dark:shadow-none">
+                    <ShieldCheck :size="40" />
+                  </div>
+                  <div>
+                    <h3 class="text-2xl font-black text-indigo-950 dark:text-indigo-300">Excepción Aprobada</h3>
+                    <p class="text-indigo-700 dark:text-indigo-400 text-sm font-medium mt-1">
+                      Esperando que el acudiente suba los documentos requeridos.
+                    </p>
+                  </div>
+                </div>
+
+                <div class="bg-slate-50 dark:bg-slate-800/40 rounded-3xl p-6 space-y-4">
+                  <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Enlace de Seguimiento para el Acudiente</p>
+                  <p class="text-[11px] font-mono text-slate-500 select-all p-3 bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-xl break-all">
+                    http://localhost:5173/matricula/corregir/{{ matricula.token_seguimiento }}
+                  </p>
+                  <p class="text-xs text-slate-500">
+                    Puedes copiar este enlace y enviarlo directamente al acudiente si es necesario.
+                  </p>
+                </div>
+
+                <!-- Info Grid -->
+                <div class="bg-white dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 space-y-4 shadow-sm">
+                  <div>
+                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Correo Electrónico del Acudiente</p>
+                    <p class="font-bold text-slate-900 dark:text-white">{{ matricula.correo_padre }}</p>
+                  </div>
+                  <div class="grid grid-cols-2 gap-4">
+                    <div>
+                      <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Grado / Grupo Asignado</p>
+                      <p class="text-sm font-bold text-slate-700 dark:text-slate-300">{{ matricula.tipo_grado }} ({{ matricula.seccion }})</p>
+                    </div>
+                    <div>
+                      <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Jornada</p>
+                      <p class="text-sm font-bold text-slate-700 dark:text-slate-300 text-capitalize">{{ matricula.jornada }}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <button @click="closeDrawer" class="w-full py-4 bg-slate-900 dark:bg-slate-800 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-800 dark:hover:bg-slate-700 transition-all shadow-xl">
+                  Cerrar Detalle
+                </button>
+              </div>
+
               <!-- ── APPROVED SUMMARY VIEW ────────────────────────────────── -->
-              <div v-if="matricula.estado === 'ACTIVA' || matricula.estado === 'TRASLADADA'" class="p-8 space-y-8">
+              <div v-else-if="matricula.estado === 'ACTIVA' || matricula.estado === 'TRASLADADA'" class="p-8 space-y-8">
                 <!-- Status Header Card -->
                 <div class="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900 rounded-[2rem] p-8 text-center space-y-4">
                   <div class="w-20 h-20 bg-emerald-600 text-white rounded-3xl flex items-center justify-center mx-auto shadow-lg shadow-emerald-200 dark:shadow-none">
@@ -813,11 +1083,11 @@ const fetchAndDownloadPDF = async (id: number) => {
                             class="px-5 py-2.5 bg-emerald-600 text-white rounded-xl font-black text-xs uppercase tracking-wide hover:bg-emerald-700 transition-all flex items-center gap-1.5 shadow-lg shadow-emerald-100 dark:shadow-none">
                       Ver Resumen <ArrowLeft :size="14" class="rotate-180" />
                     </button>
-                    <button v-else-if="matricula.estado === 'PENDIENTE' && allValidated" @click="currentStep = 3"
+                    <button v-else-if="['PENDIENTE', 'CORRECCION'].includes(matricula.estado) && allValidated" @click="currentStep = 3"
                             class="px-5 py-2.5 bg-indigo-600 text-white rounded-xl font-black text-xs uppercase tracking-wide hover:bg-indigo-700 transition-all flex items-center gap-1.5 shadow-lg shadow-indigo-100 dark:shadow-none">
                       Siguiente <ArrowLeft :size="14" class="rotate-180" />
                     </button>
-                    <button v-else-if="['PENDIENTE','RECHAZADA'].includes(matricula.estado)" @click="handleSave"
+                    <button v-else-if="['PENDIENTE','RECHAZADA','CORRECCION'].includes(matricula.estado)" @click="handleSave"
                             class="px-5 py-2.5 bg-slate-900 dark:bg-slate-700 text-white rounded-xl font-black text-xs uppercase tracking-wide hover:bg-indigo-600 transition-all flex items-center gap-1.5">
                       <Save :size="14" />Guardar
                     </button>
@@ -931,6 +1201,116 @@ const fetchAndDownloadPDF = async (id: number) => {
             </button>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- ── Nueva Matrícula Extraordinaria Modal ─────────────────── -->
+    <div v-if="showExtraordinaryModal" class="fixed inset-0 z-[300] flex items-center justify-center p-4">
+      <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" @click="showExtraordinaryModal = false"></div>
+      <div class="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-[28px] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+        
+        <!-- Modal Header -->
+        <div class="px-8 py-6 bg-gradient-to-r from-indigo-600 to-violet-700 text-white shrink-0 flex justify-between items-center">
+          <div>
+            <h3 class="text-lg font-black uppercase tracking-wider text-white">Nueva Matrícula Extraordinaria</h3>
+            <p class="text-xs text-indigo-100 mt-1">Registra una excepción de matrícula fuera del calendario ordinario.</p>
+          </div>
+          <button @click="showExtraordinaryModal = false" class="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all">
+            <X :size="20" />
+          </button>
+        </div>
+
+        <!-- Modal Body (Scrollable) -->
+        <div class="p-8 space-y-5 overflow-y-auto custom-scrollbar flex-1">
+          
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <!-- Student Type Selection -->
+            <div class="space-y-1.5 col-span-2 text-left">
+              <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Estudiante Existente (Opcional - Renovaciones)</label>
+              <select v-model="extraordinaryForm.id_estudiante" @change="onStudentSelected" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-semibold outline-none text-slate-900 dark:text-white transition-all focus:border-indigo-400">
+                <option :value="null">-- Registrar Estudiante Nuevo --</option>
+                <option v-for="student in institutionStudents" :key="student.id_estudiante" :value="student.id_estudiante">
+                  {{ student.nombre }} {{ student.apellido }} (Doc: {{ student.documento }} / Cód: {{ student.codigo }})
+                </option>
+              </select>
+            </div>
+
+            <!-- Parent Email -->
+            <div class="space-y-1.5 col-span-2 text-left">
+              <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Correo Electrónico del Acudiente *</label>
+              <div class="relative">
+                <Mail class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" :size="16" />
+                <input v-model="extraordinaryForm.correo_padre" type="email" placeholder="acudiente@ejemplo.com" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl py-3.5 pl-12 pr-4 text-sm font-semibold outline-none text-slate-900 dark:text-white transition-all focus:border-indigo-400" />
+              </div>
+            </div>
+
+            <!-- Academic Year -->
+            <div class="space-y-1.5 text-left">
+              <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Año Lectivo *</label>
+              <select v-model="extraordinaryForm.id_año" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-semibold outline-none text-slate-900 dark:text-white transition-all focus:border-indigo-400">
+                <option v-for="year in catalogYears" :key="getYearId(year)" :value="getYearId(year)">
+                  Año {{ year.calendario }}
+                </option>
+              </select>
+            </div>
+
+            <!-- Level Selection -->
+            <div class="space-y-1.5 text-left">
+              <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nivel Escolar *</label>
+              <select v-model="extraordinaryForm.id_nivel" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-semibold outline-none text-slate-900 dark:text-white transition-all focus:border-indigo-400">
+                <option v-for="nivel in catalogNiveles" :key="nivel.id_nivel" :value="nivel.id_nivel">
+                  {{ nivel.nombre }}
+                </option>
+              </select>
+            </div>
+
+            <!-- Group Selection -->
+            <div class="space-y-1.5 col-span-2 text-left">
+              <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Grado / Grupo Asignado *</label>
+              <select v-model="extraordinaryForm.id_grupo" :disabled="!extraordinaryForm.id_nivel" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-semibold outline-none text-slate-900 dark:text-white transition-all focus:border-indigo-400 disabled:opacity-50 disabled:cursor-not-allowed">
+                <option :value="null">-- Seleccione el Grupo --</option>
+                <option v-for="g in filteredExtraordinaryGroups" :key="g.id_grupo" :value="g.id_grupo">
+                  {{ g.tipo_grado_nombre }} - Sección {{ g.seccion_nombre }} ({{ g.jornada_nombre }}) - Cupos Disp: {{ g.cupos_totales - g.matriculas_count }}
+                </option>
+              </select>
+            </div>
+
+            <!-- Checkboxes for foreign/disabled -->
+            <div class="flex items-center gap-6 col-span-2 py-2">
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" v-model="extraordinaryForm.tiene_discapacidad" class="rounded text-indigo-600 focus:ring-indigo-500" />
+                <span class="text-xs font-semibold text-slate-700 dark:text-slate-300">Tiene discapacidad</span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" v-model="extraordinaryForm.es_extranjero" class="rounded text-indigo-600 focus:ring-indigo-500" />
+                <span class="text-xs font-semibold text-slate-700 dark:text-slate-300">Es extranjero</span>
+              </label>
+            </div>
+
+            <!-- Reason (textarea) -->
+            <div class="space-y-1.5 col-span-2 text-left">
+              <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 font-sans">Motivo de Excepción *</label>
+              <textarea v-model="extraordinaryForm.motivo_extraordinaria" rows="3" placeholder="Justificación obligatoria de la matrícula extraordinaria..." class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-semibold outline-none text-slate-900 dark:text-white transition-all focus:border-indigo-400"></textarea>
+            </div>
+
+            <!-- Observations (textarea) -->
+            <div class="space-y-1.5 col-span-2 text-left">
+              <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 font-sans">Observaciones Adicionales</label>
+              <textarea v-model="extraordinaryForm.observaciones_extraordinaria" rows="2" placeholder="Notas internas u observaciones opcionales..." class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-semibold outline-none text-slate-900 dark:text-white transition-all focus:border-indigo-400"></textarea>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Modal Footer -->
+        <div class="bg-slate-50 dark:bg-slate-800/50 px-8 py-6 flex gap-3 shrink-0">
+          <button @click="showExtraordinaryModal = false" :disabled="extraordinaryLoading" class="flex-1 py-3.5 rounded-xl font-black text-slate-400 hover:bg-white dark:hover:bg-slate-700 transition-all text-xs uppercase">Cancelar</button>
+          <button @click="submitExtraordinary" :disabled="extraordinaryLoading" class="flex-[2] bg-indigo-600 text-white py-3.5 rounded-xl font-black text-xs uppercase flex items-center justify-center gap-2 hover:bg-indigo-700 transition-all disabled:opacity-50">
+            <span v-if="extraordinaryLoading" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+            <span v-else>Registrar Matrícula</span>
+          </button>
+        </div>
+
       </div>
     </div>
   </Teleport>

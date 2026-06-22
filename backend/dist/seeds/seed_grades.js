@@ -182,11 +182,37 @@ async function runSeedGrades() {
             const isClosed = closedPeriodsRes.rows.some((p) => p.id_periodo === period.id_periodo);
             const detalleGradosDePeriodo = detalleGradosRes.rows.filter((d) => d.id_colegio === period.id_colegio);
             for (const dg of detalleGradosDePeriodo) {
+                let shouldProcess = true;
+                let gradePercentageOfStudents = 1.0;
+                let shouldCloseSubject = false;
+                // In open periods, simulate realistic progress:
+                // - 25% of subjects are graded and closed.
+                // - 35% of subjects are partially graded (e.g. 60% of students graded).
+                // - 40% of subjects have no grades or activities.
+                if (!isClosed) {
+                    const randScenario = Math.random();
+                    if (randScenario < 0.25) {
+                        shouldProcess = true;
+                        gradePercentageOfStudents = 1.0;
+                        shouldCloseSubject = true;
+                    }
+                    else if (randScenario < 0.60) {
+                        shouldProcess = true;
+                        gradePercentageOfStudents = 0.6;
+                        shouldCloseSubject = false;
+                    }
+                    else {
+                        shouldProcess = false;
+                    }
+                }
+                if (!shouldProcess) {
+                    continue;
+                }
                 // Get the correct competency for this group+materia+periodo
                 const compKey = `${dg.id_grupo}-${dg.id_materia}-${period.id_periodo}`;
                 const competenciaId = competencyMap.get(compKey) || fallbackCompetency[dg.id_colegio] || 1;
-                // Register subject closure for CLOSED periods
-                if (isClosed) {
+                // Register subject closure for CLOSED periods or completed open subjects
+                if (isClosed || shouldCloseSubject) {
                     await client.query(`INSERT INTO cierre_materia (id_detallegrado, id_periodo, estado, fecha_cierre)
              VALUES ($1, $2, 'CERRADO', NOW()) ON CONFLICT DO NOTHING`, [dg.id_detallegrado, period.id_periodo]);
                 }
@@ -196,19 +222,24 @@ async function runSeedGrades() {
            RETURNING id_actividadmateria`, [dg.id_detallegrado, period.id_periodo, dg.id_colegio, competenciaId]);
                 const actividadId = actRes.rows[0].id_actividadmateria;
                 const studentsInGroup = studentsRes.rows.filter((s) => s.id_grupo === dg.id_grupo);
-                for (const student of studentsInGroup) {
+                let studentsToGrade = studentsInGroup;
+                if (gradePercentageOfStudents < 1.0) {
+                    const limit = Math.ceil(studentsInGroup.length * gradePercentageOfStudents);
+                    studentsToGrade = studentsInGroup.slice(0, limit);
+                }
+                for (const student of studentsToGrade) {
                     const nota = getRealisticGrade();
                     const escalaId = getEscalaId(nota, dg.id_colegio);
                     const obsAcad = getAcademicObservation(nota);
                     // Grade
                     await client.query(`INSERT INTO notas_actividad (id_actividadmateria, id_estudiante, id_escalavaloracion, nota, id_colegio)
              VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING`, [actividadId, student.id_estudiante, escalaId, nota, dg.id_colegio]);
-                    // Official result for CLOSED periods
+                    // Official result only for CLOSED periods
                     if (isClosed) {
                         await client.query(`INSERT INTO resultado_academico (id_estudiante, id_detallegrado, id_periodo, promedio, estado, fecha_cierre, id_docente, observacion)
                VALUES ($1, $2, $3, $4, $5, NOW(), $6, $7) ON CONFLICT DO NOTHING`, [student.id_estudiante, dg.id_detallegrado, period.id_periodo, nota, getEstado(nota), dg.id_docente, obsAcad.recomendaciones]);
                     }
-                    // ── ACADEMIC observation (always) ──
+                    // ── ACADEMIC observation (always for graded students) ──
                     await client.query(`INSERT INTO observacion_estudiante (id_estudiante, id_detallegrado, id_periodo, fortalezas, debilidades, recomendaciones, fecha, id_colegio, tipo)
              VALUES ($1, $2, $3, $4, $5, $6, NOW(), $7, 'ACADEMICA') ON CONFLICT DO NOTHING`, [student.id_estudiante, dg.id_detallegrado, period.id_periodo, obsAcad.fortalezas, obsAcad.debilidades, obsAcad.recomendaciones, dg.id_colegio]);
                     observacionesAcademicas++;

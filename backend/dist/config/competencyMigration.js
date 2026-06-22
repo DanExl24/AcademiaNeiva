@@ -214,12 +214,38 @@ BEGIN
 END $$;
 
 `;
+const enrollmentConfigMigrationSql = `
+CREATE TABLE IF NOT EXISTS public.configuracion_inscripcion (
+  id_configuracion  SERIAL PRIMARY KEY,
+  id_colegio        INTEGER NOT NULL REFERENCES public.colegio(id_colegio) ON DELETE CASCADE,
+  id_año            INTEGER NOT NULL REFERENCES public."año_lectivo"("id_año") ON DELETE CASCADE,
+  fecha_inicio      TIMESTAMP WITH TIME ZONE NOT NULL,
+  fecha_cierre      TIMESTAMP WITH TIME ZONE NOT NULL,
+  habilitada        BOOLEAN NOT NULL DEFAULT TRUE,
+  CONSTRAINT chk_fechas CHECK (fecha_cierre > fecha_inicio),
+  CONSTRAINT uq_colegio_anio UNIQUE (id_colegio, id_año)
+);
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_indexes
+    WHERE schemaname = 'public'
+      AND tablename  = 'configuracion_inscripcion'
+      AND indexname  = 'idx_config_inscripcion_colegio'
+  ) THEN
+    CREATE INDEX idx_config_inscripcion_colegio
+      ON public.configuracion_inscripcion(id_colegio);
+  END IF;
+END $$;
+`;
 const ensureCompetencySchema = async () => {
     const client = await db_1.pool.connect();
     try {
         await client.query("BEGIN");
         await client.query(migrationSql);
         await client.query(evidenciaMigrationSql);
+        await client.query(enrollmentConfigMigrationSql);
         await client.query("COMMIT");
     }
     catch (error) {

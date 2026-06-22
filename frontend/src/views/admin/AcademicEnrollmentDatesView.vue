@@ -60,6 +60,11 @@ const justification = ref('')
 
 const message = ref<{ text: string; type: 'success' | 'error' | 'warning' } | null>(null)
 
+const isPastCloseDate = computed(() => {
+  if (!config.value.fecha_cierre) return false
+  return new Date() > new Date(config.value.fecha_cierre)
+})
+
 const loadYears = async () => {
   if (!schoolId.value) return
   try {
@@ -312,7 +317,7 @@ onMounted(() => {
           </div>
 
           <!-- Manual Toggle Habilitada -->
-          <div class="md:col-span-2 bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800/80 p-6 rounded-3xl flex items-center justify-between">
+          <div v-if="!(config.fecha_cierre && isPastCloseDate)" class="md:col-span-2 bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800/80 p-6 rounded-3xl flex items-center justify-between">
             <div class="space-y-1">
               <h3 class="text-base font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
                 <component :is="localHabilitada ? Unlock : Lock" :size="18" :class="localHabilitada ? 'text-emerald-500' : 'text-rose-500'" />
@@ -324,7 +329,7 @@ onMounted(() => {
             </div>
             <label class="relative inline-flex items-center cursor-pointer">
               <input type="checkbox" v-model="localHabilitada" class="sr-only peer">
-              <div class="w-14 h-8 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all dark:border-gray-600 peer-checked:bg-emerald-500"></div>
+              <div class="w-12 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
             </label>
           </div>
 

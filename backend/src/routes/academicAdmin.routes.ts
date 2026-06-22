@@ -43,6 +43,9 @@ import {
   uploadMySchoolEscudo,
   getEnrollmentConfig,
   saveEnrollmentConfig,
+  createExtraordinaryEnrollment,
+  approveExtraordinaryEnrollment,
+  rejectExtraordinaryEnrollment,
 } from "../controllers/academicAdminController";
 import { upload } from "../config/multer";
 import { verifyToken, requireDirectivo } from "../middleware/authMiddleware";
@@ -100,5 +103,10 @@ router.delete("/settings/evidencias/:evidenciaId", deleteEvidencia);
 
 // Dashboard Analítico
 router.get("/dashboard/:schoolId", getDirectivoDashboard);
+
+// Matrícula Extraordinaria
+router.post("/matriculas/extraordinaria", verifyToken, requireDirectivo, createExtraordinaryEnrollment);
+router.post("/matriculas/extraordinaria/:id/aprobar", verifyToken, requireDirectivo, approveExtraordinaryEnrollment);
+router.post("/matriculas/extraordinaria/:id/rechazar", verifyToken, requireDirectivo, rejectExtraordinaryEnrollment);
 
 export default router;

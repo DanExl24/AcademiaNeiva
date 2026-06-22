@@ -5,6 +5,8 @@ const academicAdminController_1 = require("../controllers/academicAdminControlle
 const multer_1 = require("../config/multer");
 const authMiddleware_1 = require("../middleware/authMiddleware");
 const router = (0, express_1.Router)();
+router.get("/settings/enrollment-config/:schoolId/:yearId", authMiddleware_1.verifyToken, authMiddleware_1.requireDirectivo, academicAdminController_1.getEnrollmentConfig);
+router.post("/settings/enrollment-config", authMiddleware_1.verifyToken, authMiddleware_1.requireDirectivo, academicAdminController_1.saveEnrollmentConfig);
 router.get("/my-school/:schoolId", authMiddleware_1.verifyToken, authMiddleware_1.requireDirectivo, academicAdminController_1.getMySchoolData);
 router.put("/my-school/:schoolId/identidad", authMiddleware_1.verifyToken, authMiddleware_1.requireDirectivo, academicAdminController_1.updateMySchoolIdentity);
 router.post("/my-school/:schoolId/identidad/reset", authMiddleware_1.verifyToken, authMiddleware_1.requireDirectivo, academicAdminController_1.resetMySchoolIdentity);
@@ -36,6 +38,7 @@ router.patch("/settings/periods/:id/percentage", academicAdminController_1.updat
 router.get("/settings/closure-details/:schoolId/:periodId", academicAdminController_1.getPeriodClosureDetails);
 router.post("/settings/competencies", academicAdminController_1.upsertCompetencyByAdmin);
 router.post("/settings/periods/:id/close", academicAdminController_1.closeAcademicPeriod);
+router.post("/settings/periods/:id/approve", authMiddleware_1.verifyToken, authMiddleware_1.requireDirectivo, academicAdminController_1.approveAcademicPeriod);
 router.post("/settings/periods/:id/reopen", academicAdminController_1.reopenAcademicPeriod);
 router.post("/settings/periods/:periodId/reopen-subject/:detailGradeId", academicAdminController_1.reopenSubjectClosure);
 router.post("/settings/scales", academicAdminController_1.createScale);

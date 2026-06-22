@@ -8,7 +8,8 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "seed:reset": "ts-node-dev --transpile-only src/seeds/reset_and_seed.ts",
-    "seed:grades": "ts-node-dev --transpile-only src/seeds/seed_grades.ts"
+    "seed:grades": "ts-node-dev --transpile-only src/seeds/seed_grades.ts",
+    "db:clean": "ts-node-dev --transpile-only src/clean_db.ts"
   },
   "keywords": [],
   "author": "",

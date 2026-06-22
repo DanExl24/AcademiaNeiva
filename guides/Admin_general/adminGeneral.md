@@ -432,3 +432,95 @@ El historial académico del estudiante deberá conservarse de forma permanente.
 ### RN-05
 
 El cambio de estado a Graduado deberá registrarse en auditoría.
+
+
+
+
+
+
+
+## DR05 - Matrícula Extraordinaria
+
+### Como:
+
+Directivo
+
+### Quiero:
+
+Registrar una matrícula extraordinaria fuera del periodo oficial de inscripciones
+
+### Para:
+
+Permitir el ingreso de estudiantes en situaciones excepcionales debidamente justificadas.
+
+## Criterios de Aceptación
+
+* El sistema debe proporcionar una opción para crear una matrícula extraordinaria.
+* La opción deberá mostrarse mediante un modal o formulario independiente al proceso regular de matrícula.
+* El sistema debe permitir seleccionar al estudiante o crear una nueva solicitud de matrícula extraordinaria.
+* El sistema debe solicitar obligatoriamente el motivo de la matrícula extraordinaria.
+* El sistema debe registrar la fecha de creación de la matrícula extraordinaria.
+* El sistema debe registrar el directivo responsable de la aprobación.
+* El sistema debe permitir adjuntar observaciones adicionales.
+* El sistema debe permitir continuar con el proceso normal de matrícula una vez aprobada la excepción.
+* El sistema debe registrar en auditoría todas las acciones relacionadas con la matrícula extraordinaria.
+
+## Reglas de Negocio
+
+### RN-01
+
+Las matrículas extraordinarias solo podrán ser creadas por usuarios con rol Directivo o superior.
+
+### RN-02
+
+Toda matrícula extraordinaria deberá contener un motivo obligatorio.
+
+### RN-03
+
+Las matrículas extraordinarias podrán registrarse fuera de las fechas oficiales de inscripción.
+
+### RN-04
+
+Las matrículas extraordinarias no modificarán ni extenderán las fechas oficiales de inscripción.
+
+### RN-05
+
+Toda matrícula extraordinaria deberá quedar identificada con el tipo "EXTRAORDINARIA".
+
+### RN-06
+
+El sistema deberá registrar:
+
+* Fecha de creación.
+* Usuario responsable.
+* Motivo de la excepción.
+* Estado de la solicitud.
+
+### RN-07
+
+Las matrículas extraordinarias deberán seguir las mismas validaciones académicas que una matrícula regular.
+
+### RN-08
+
+Los estudiantes en estado Expulsado no podrán ser matriculados mediante matrícula extraordinaria.
+
+### RN-09
+
+Los estudiantes en estado Graduado no podrán ser matriculados mediante matrícula extraordinaria.
+
+### RN-10
+
+Las matrículas extraordinarias deberán quedar registradas en la auditoría institucional.
+
+### RN-11
+
+La aprobación de una matrícula extraordinaria no exime al estudiante de cumplir los requisitos documentales exigidos por la institución.
+
+### RN-12
+
+Las matrículas extraordinarias podrán encontrarse en uno de los siguientes estados:
+
+* Pendiente
+* Aprobada
+* Rechazada
+* Cancelada

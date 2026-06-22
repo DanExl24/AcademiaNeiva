@@ -42,6 +42,14 @@ router.get("/school/:schoolId/enrollment-config", async (req, res) => {
     const yearId = yearRes.rows[0].id_año;
     const yearLabel = yearRes.rows[0].calendario;
     
+    const approvedRes = await pool.query(
+      `SELECT COUNT(*)::int AS count 
+       FROM matricula 
+       WHERE id_colegio = $1 AND "id_año" = $2 AND estado IN ('ACTIVA', 'TRASLADADA')`,
+      [schoolId, yearId]
+    );
+    const hasApproved = approvedRes.rows[0].count > 0;
+
     const configRes = await pool.query(
       `SELECT id_configuracion, fecha_inicio, fecha_cierre, habilitada 
        FROM configuracion_inscripcion 
@@ -50,12 +58,26 @@ router.get("/school/:schoolId/enrollment-config", async (req, res) => {
     );
     
     if (configRes.rows.length === 0) {
-      res.json({ config: null, yearLabel });
+      res.json({
+        config: {
+          id_configuracion: null,
+          id_colegio: Number(schoolId),
+          id_año: yearId,
+          fecha_inicio: null,
+          fecha_cierre: null,
+          habilitada: true,
+          hasApproved
+        },
+        yearLabel
+      });
       return;
     }
     
     res.json({
-      config: configRes.rows[0],
+      config: {
+        ...configRes.rows[0],
+        hasApproved
+      },
       yearLabel
     });
   } catch (e: any) {

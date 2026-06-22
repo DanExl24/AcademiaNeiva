@@ -46,6 +46,17 @@ export class MatriculaService {
       }
       const activeYearId = yearRes.rows[0].id_año;
 
+      // Check if approved matriculas exist for this year
+      const approvedRes = await client.query(
+        `SELECT COUNT(*)::int AS count 
+         FROM matricula 
+         WHERE id_colegio = $1 AND "id_año" = $2 AND estado IN ('ACTIVA', 'TRASLADADA')`,
+        [id_colegio, activeYearId]
+      );
+      if (approvedRes.rows[0].count > 0) {
+        throw new Error("Las inscripciones para este año académico ya han finalizado.");
+      }
+
       // Validate enrollment configuration dates and state
       const configRes = await client.query(
         `SELECT fecha_inicio, fecha_cierre, habilitada 
@@ -336,31 +347,60 @@ export class MatriculaService {
       const finalGradeId = data.id_grado || mat.rows[0].id_grupo;
       const { id_colegio, correo_padre, id_nivel } = mat.rows[0];
 
-      // --- CREACIÓN DEL ESTUDIANTE ---
-      const studentCode = 'MAT-' + Date.now();
-      
-      // Usuario estudiante
-      const hashedStudentPass = await bcrypt.hash(studentCode, 10);
-      const studentUserRes = await client.query(
-         `INSERT INTO usuario (email, password, nombre, apellido, id_colegio) VALUES ($1, $2, $3, $4, $5) RETURNING id_usuario`,
-         [studentCode, hashedStudentPass, data.student.nombre, data.student.apellido, id_colegio]
-      );
-      const idUsuarioEstudiante = studentUserRes.rows[0].id_usuario;
-      
-      // Rol estudiante
-      const rolEstudiante = await client.query("SELECT id_rol FROM rol WHERE nombre = 'estudiante'");
-      if(rolEstudiante.rows.length > 0) {
-          await client.query("INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2)", [idUsuarioEstudiante, rolEstudiante.rows[0].id_rol]);
-      }
+      // --- CREACIÓN O ACTUALIZACIÓN DEL ESTUDIANTE ---
+      let idEstudiante = mat.rows[0].id_estudiante;
+      let studentCode;
 
-      // Registro Estudiante
-      const studentRes = await client.query(
-        `INSERT INTO estudiante (nombre, apellido, documento, codigo, id_tipodocumento, id_nivel, id_colegio, id_usuario)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-         RETURNING id_estudiante`,
-        [data.student.nombre, data.student.apellido, data.student.documento, studentCode, data.student.id_tipodocumento, id_nivel, id_colegio, idUsuarioEstudiante]
-      );
-      const idEstudiante = studentRes.rows[0].id_estudiante;
+      if (idEstudiante) {
+        // Estudiante existente
+        const estRes = await client.query(
+          `SELECT id_usuario, codigo FROM estudiante WHERE id_estudiante = $1`,
+          [idEstudiante]
+        );
+        if (estRes.rows.length === 0) throw new Error('Estudiante pre-asociado no encontrado');
+        studentCode = estRes.rows[0].codigo;
+        const idUsuarioEstudiante = estRes.rows[0].id_usuario;
+
+        // Actualizar usuario del estudiante para asegurar que esté activo y con sus nombres actualizados
+        await client.query(
+          `UPDATE usuario SET activo = TRUE, nombre = $1, apellido = $2 WHERE id_usuario = $3`,
+          [data.student.nombre, data.student.apellido, idUsuarioEstudiante]
+        );
+
+        // Actualizar estudiante (estado a ACTIVO, id_nivel, nombre, apellido, documento, id_tipodocumento)
+        await client.query(
+          `UPDATE estudiante 
+           SET estado = 'ACTIVO', id_nivel = $1, nombre = $2, apellido = $3, documento = $4, id_tipodocumento = $5 
+           WHERE id_estudiante = $6`,
+          [id_nivel, data.student.nombre, data.student.apellido, data.student.documento, data.student.id_tipodocumento, idEstudiante]
+        );
+      } else {
+        // Estudiante nuevo
+        studentCode = 'MAT-' + Date.now();
+        
+        // Usuario estudiante
+        const hashedStudentPass = await bcrypt.hash(studentCode, 10);
+        const studentUserRes = await client.query(
+           `INSERT INTO usuario (email, password, nombre, apellido, id_colegio) VALUES ($1, $2, $3, $4, $5) RETURNING id_usuario`,
+           [studentCode, hashedStudentPass, data.student.nombre, data.student.apellido, id_colegio]
+        );
+        const idUsuarioEstudiante = studentUserRes.rows[0].id_usuario;
+        
+        // Rol estudiante
+        const rolEstudiante = await client.query("SELECT id_rol FROM rol WHERE nombre = 'estudiante'");
+        if(rolEstudiante.rows.length > 0) {
+            await client.query("INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2)", [idUsuarioEstudiante, rolEstudiante.rows[0].id_rol]);
+        }
+
+        // Registro Estudiante
+        const studentRes = await client.query(
+          `INSERT INTO estudiante (nombre, apellido, documento, codigo, id_tipodocumento, id_nivel, id_colegio, id_usuario, estado)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'ACTIVO')
+           RETURNING id_estudiante`,
+          [data.student.nombre, data.student.apellido, data.student.documento, studentCode, data.student.id_tipodocumento, id_nivel, id_colegio, idUsuarioEstudiante]
+        );
+        idEstudiante = studentRes.rows[0].id_estudiante;
+      }
 
       // --- CREACIÓN DEL PADRE DE FAMILIA ---
       let idUsuarioPadre;
@@ -404,7 +444,7 @@ export class MatriculaService {
               `INSERT INTO usuario_rol (id_usuario, id_rol) 
                VALUES ($1, $2) 
                ON CONFLICT (id_usuario, id_rol) DO NOTHING`, 
-              [idUsuarioPadre, rolPadre.rows[0].id_rol]
+               [idUsuarioPadre, rolPadre.rows[0].id_rol]
           );
       }
 
@@ -427,16 +467,20 @@ export class MatriculaService {
          idPadre = parentRes.rows[0].id_padrefamilia;
       }
 
-      // 3. Vincular Estudiante y Padre
-      await client.query(
-        "INSERT INTO detalle_padrefamilia (id_padrefamilia, id_estudiante, id_colegio) VALUES ($1, $2, $3)",
-        [idPadre, idEstudiante, id_colegio]
+      // 3. Vincular Estudiante y Padre (si no están vinculados)
+      const linkRes = await client.query(
+        "SELECT 1 FROM detalle_padrefamilia WHERE id_padrefamilia = $1 AND id_estudiante = $2",
+        [idPadre, idEstudiante]
       );
+      if (linkRes.rows.length === 0) {
+        await client.query(
+          "INSERT INTO detalle_padrefamilia (id_padrefamilia, id_estudiante, id_colegio) VALUES ($1, $2, $3)",
+          [idPadre, idEstudiante, id_colegio]
+        );
+      }
 
       // 4. Actualizar Matrícula
       const finalEstado = mat.rows[0].es_traslado ? 'TRASLADADA' : 'ACTIVA';
-      // Nota: Si la columna fecha_aprobacion no existe, se ignorará o fallará. 
-      // Por simplicidad y según el flujo, usaremos el estado y el id_estudiante como confirmación.
       await client.query(
         "UPDATE matricula SET id_estudiante = $1, id_grupo = $3, estado = $4, fecha_aprobacion = NOW() WHERE id_matricula = $2",
         [idEstudiante, idMatricula, finalGradeId, finalEstado]

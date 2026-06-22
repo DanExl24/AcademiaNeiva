@@ -15,6 +15,33 @@ router.get("/", async (req, res) => {
         res.status(500).json({ error: e.message });
     }
 });
+router.get("/school/:schoolId/enrollment-config", async (req, res) => {
+    try {
+        const { schoolId } = req.params;
+        // Find active year for school
+        const yearRes = await db_1.pool.query(`SELECT "id_año", calendario FROM "año_lectivo" WHERE id_colegio = $1 AND estado = 'ABIERTO' LIMIT 1`, [schoolId]);
+        if (yearRes.rows.length === 0) {
+            res.json({ config: null, yearLabel: null });
+            return;
+        }
+        const yearId = yearRes.rows[0].id_año;
+        const yearLabel = yearRes.rows[0].calendario;
+        const configRes = await db_1.pool.query(`SELECT id_configuracion, fecha_inicio, fecha_cierre, habilitada 
+       FROM configuracion_inscripcion 
+       WHERE id_colegio = $1 AND id_año = $2`, [schoolId, yearId]);
+        if (configRes.rows.length === 0) {
+            res.json({ config: null, yearLabel });
+            return;
+        }
+        res.json({
+            config: configRes.rows[0],
+            yearLabel
+        });
+    }
+    catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
 router.post("/submit", multer_1.upload.fields([
     { name: 'registroCivil', maxCount: 1 },
     { name: 'documentoIdentidad', maxCount: 1 },

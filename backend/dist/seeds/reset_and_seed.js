@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
+const child_process_1 = require("child_process");
 const competencyMigration_1 = require("../config/competencyMigration");
 const db_1 = require("../config/db");
 const academicCalendarDefaults_1 = require("../config/academicCalendarDefaults");
@@ -30,8 +31,8 @@ const jornadaNames = ["MAÑANA", "TARDE", "UNICA"];
 const periodSeeds = [
     { nombre: "Primer Periodo", estado: "CERRADO", porcentaje: 25, trimestre: 1 },
     { nombre: "Segundo Periodo", estado: "ABIERTO", porcentaje: 25, trimestre: 2 },
-    { nombre: "Tercer Periodo", estado: "CERRADO", porcentaje: 25, trimestre: 3 },
-    { nombre: "Cuarto Periodo", estado: "CERRADO", porcentaje: 25, trimestre: 4 },
+    { nombre: "Tercer Periodo", estado: "PENDIENTE", porcentaje: 25, trimestre: 3 },
+    { nombre: "Cuarto Periodo", estado: "PENDIENTE", porcentaje: 25, trimestre: 4 },
 ];
 const scaleSeeds = [
     { nivel: "SUPERIOR", min: 4.6, max: 5.0 },
@@ -80,6 +81,41 @@ async function createSchoolConfigTable(client) {
       escala_modo varchar(20) NOT NULL DEFAULT 'AUTOMATICO'
     );
   `);
+}
+async function createEnrollmentConfigTable(client) {
+    await client.query(`
+    CREATE TABLE IF NOT EXISTS configuracion_inscripcion (
+      id_configuracion SERIAL PRIMARY KEY,
+      id_colegio INTEGER NOT NULL REFERENCES colegio(id_colegio) ON DELETE CASCADE,
+      id_año INTEGER NOT NULL REFERENCES "año_lectivo"("id_año") ON DELETE CASCADE,
+      fecha_inicio TIMESTAMPTZ NOT NULL,
+      fecha_cierre TIMESTAMPTZ NOT NULL,
+      habilitada BOOLEAN NOT NULL DEFAULT TRUE,
+      CONSTRAINT chk_fechas CHECK (fecha_cierre > fecha_inicio),
+      CONSTRAINT uq_colegio_anio UNIQUE (id_colegio, id_año)
+    );
+  `);
+    await client.query(`
+    CREATE INDEX IF NOT EXISTS idx_config_inscripcion_colegio ON configuracion_inscripcion (id_colegio);
+  `);
+}
+async function seedEnrollmentConfigs(client) {
+    const schoolsRes = await client.query('SELECT id_colegio FROM colegio');
+    for (const s of schoolsRes.rows) {
+        const yearRes = await client.query('SELECT "id_año" FROM "año_lectivo" WHERE id_colegio = $1', [s.id_colegio]);
+        if (yearRes.rows.length > 0) {
+            const yearId = yearRes.rows[0].id_año;
+            const startDate = new Date();
+            startDate.setDate(startDate.getDate() - 5); // 5 days ago
+            const endDate = new Date();
+            endDate.setDate(endDate.getDate() + 15); // 15 days from now
+            await client.query(`
+        INSERT INTO configuracion_inscripcion (id_colegio, id_año, fecha_inicio, fecha_cierre, habilitada)
+        VALUES ($1, $2, $3, $4, TRUE)
+        ON CONFLICT (id_colegio, id_año) DO NOTHING
+      `, [s.id_colegio, yearId, startDate.toISOString(), endDate.toISOString()]);
+        }
+    }
 }
 // ─── HELPER: TRUNCATE TABLES ────────────────────────────────────────────────────
 async function truncateExistingTables(client, tables) {
@@ -486,6 +522,16 @@ async function run() {
     const client = await db_1.pool.connect();
     const credentials = [];
     try {
+        // Ensure PENDIENTE exists in estado_periodo enum (outside transaction block)
+        const enumCheck = await client.query(`
+      SELECT 1 FROM pg_type t 
+      JOIN pg_enum e ON t.oid = e.enumtypid 
+      WHERE t.typname = 'estado_periodo' AND e.enumlabel = 'PENDIENTE'
+    `);
+        if (enumCheck.rows.length === 0) {
+            console.log("Adding 'PENDIENTE' to estado_periodo enum...");
+            await client.query("ALTER TYPE estado_periodo ADD VALUE 'PENDIENTE'");
+        }
         await client.query("BEGIN");
         // ── Phase 1: Ensure base schema ──
         console.log("📦 Asegurando estructura base...");
@@ -495,6 +541,7 @@ async function run() {
         const adminGeneralMigrationSql = fs_1.default.readFileSync(path_1.default.join(__dirname, "../migrations/001_admin_general.sql"), "utf8");
         await client.query(adminGeneralMigrationSql);
         await createSchoolConfigTable(client);
+        await createEnrollmentConfigTable(client);
         // ── Phase 2: Schema migrations ──
         console.log("🔧 Migrando columnas adicionales...");
         await client.query(`ALTER TABLE grados ADD COLUMN IF NOT EXISTS seccion VARCHAR(10) DEFAULT 'A';`);
@@ -568,6 +615,7 @@ async function run() {
             "año_lectivo",
             "escala_valoracion",
             "configuracion_colegio",
+            "configuracion_inscripcion",
             // Auth
             "usuario_rol",
             "usuario",
@@ -611,6 +659,8 @@ async function run() {
             console.log(`📚 Creando estructura académica para ${school.nombre}...`);
             await insertSchoolAcademicStructure(client, school, sectionIds);
         }
+        // ── Phase 7.5: Enrollment configs ──
+        await seedEnrollmentConfigs(client);
         // ── Phase 8: Students and parents (5 per MAÑANA-A group) ──
         for (const school of schools) {
             console.log(`👨‍👩‍👧‍👦 Creando estudiantes y padres para ${school.nombre}...`);
@@ -648,6 +698,14 @@ async function run() {
         }
         // ── Phase 13: Write credentials ──
         const credentialsPath = writeCredentialsFile(credentials);
+        // ── Phase 14: Populate academic grades ──
+        console.log("\n📊 Generando calificaciones y datos académicos de prueba...");
+        try {
+            (0, child_process_1.execSync)("npm run seed:grades", { stdio: "inherit", cwd: path_1.default.resolve(__dirname, "../..") });
+        }
+        catch (err) {
+            console.error("⚠️ Error al generar calificaciones:", err);
+        }
         // ── Summary ──
         const totalStudents = schools.length * 14 * STUDENTS_PER_GROUP;
         const expelled = credentials.filter(() => false).length; // Not in credentials
