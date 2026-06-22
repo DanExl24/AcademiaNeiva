@@ -280,8 +280,18 @@ onMounted(() => {
             <div class="flex items-center gap-4">
               <div class="flex items-center gap-2 mr-2">
                 <span class="h-3 w-3 rounded-full bg-emerald-500" v-if="periodDetails.estado === 'ABIERTO'"></span>
+                <span class="h-3 w-3 rounded-full bg-amber-500" v-else-if="periodDetails.estado === 'PENDIENTE'"></span>
                 <span class="h-3 w-3 rounded-full bg-slate-400 dark:bg-slate-500" v-else></span>
-                <span class="text-sm font-black tracking-wide" :class="periodDetails.estado === 'ABIERTO' ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-300'">PERIODO {{ periodDetails.estado }}</span>
+                <span 
+                  class="text-sm font-black tracking-wide" 
+                  :class="[
+                    periodDetails.estado === 'ABIERTO' ? 'text-emerald-700 dark:text-emerald-400' : 
+                    periodDetails.estado === 'PENDIENTE' ? 'text-amber-700 dark:text-amber-400' : 
+                    'text-slate-700 dark:text-slate-300'
+                  ]"
+                >
+                  PERIODO {{ periodDetails.estado }}
+                </span>
               </div>
 
               <template v-if="periodDetails.estado === 'ABIERTO'">
@@ -294,6 +304,20 @@ onMounted(() => {
                   <Lock class="h-4 w-4" />
                   {{ closingPeriod ? 'Procesando...' : 'Proceder con Cierre' }}
                 </button>
+              </template>
+              <template v-else-if="periodDetails.estado === 'PENDIENTE'">
+                <div class="flex flex-col sm:flex-row items-center gap-4">
+                  <div class="px-4 py-3 bg-amber-50 dark:bg-amber-950/20 rounded-2xl text-amber-700 dark:text-amber-400 font-bold text-xs flex gap-2 items-center border border-amber-200 dark:border-amber-900/40">
+                    <AlertCircle class="w-5 h-5 shrink-0" />
+                    <span>Periodo pendiente de aprobación. No se pueden gestionar cierres.</span>
+                  </div>
+                  <router-link
+                    to="/dashboard/configuracion-academica/periodos"
+                    class="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-amber-500 px-6 py-3 text-sm font-black text-white hover:bg-amber-600 transition-all shadow-md shadow-amber-200/50 dark:shadow-none"
+                  >
+                    <span>Configurar y Aprobar</span>
+                  </router-link>
+                </div>
               </template>
               <template v-else>
                 <div class="px-5 py-3 bg-slate-100 dark:bg-slate-800 rounded-2xl text-slate-500 dark:text-slate-400 font-bold text-sm flex gap-2 items-center border border-slate-200 dark:border-slate-700">

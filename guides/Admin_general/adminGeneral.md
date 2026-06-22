@@ -164,13 +164,15 @@ Las auditorías deberán ser exportables por el Admin General para fines de revi
 Las auditorías deberán ser accesibles para consultas internas cuando sea necesario.
 
 
-## RA02 - Identidad Institucional del Colegio
-Como: Admin General
+## DR01 - Identidad Institucional del Colegio
+Como: Directivo
 Quiero: Una opcion para cargar el escudo de los colegios
 Para: Preservar la identidad Institucional del colegio y adaptar sus colores a la plataforma
 
 ## Criterios de Aceptacion
-El administrador general podrá gestionar la identidad institucional de cada colegio, permitiendo la personalización de su escudo y colores corporativos.
+El sistema debe permitir cargar imágenes en formato JPG, JPEG, PNG y SVG.
+El sistema debe validar el tamaño máximo permitido para el archivo.
+El directivo podrá gestionar la identidad institucional de cada colegio, permitiendo la personalización de su escudo y colores corporativos.
 El sistema almacenará el archivo de imagen del escudo y los códigos de color principales.
 El sistema debe permitir cambiar los colores principales de la siguiente manera:
 - Colores primarios del colegio
@@ -178,10 +180,255 @@ El sistema debe permitir cambiar los colores principales de la siguiente manera:
 El sistema debe permitir cambiar los colores del colegio en cualquier momento
 El sistema debe reflejar una vista para cambiar el diseño frontend de la plataforma segun los colores primarios y secundarios del colegio
 El sistema debera mostrar una vista previa de los colores implementados en la plataforma
+El sistema debe mostrar una vista previa de:
+- Barra lateral
+- Barra superior
+- Botones
+- Enlaces
+- Tarjetas
 El sistema debe permitir guardar los cambios realizados
 El sistema debe permitir deshacer los cambios realizados
 El sistema debe permitir restablecer los colores por defecto del colegio
+Los cambios guardados deben reflejarse para todos los usuarios pertenecientes al colegio.
+El sistema debe registrar las modificaciones realizadas sobre:
+- Escudo institucional
+- Color primario
+- Color secundario
 
-## Reglas de Historia de Usuario
-El cambio de Colores solo debe verse reflejado en los paneles de usuarios y en sus navegaciones
-La landing page del dashboard mantendra su design igual sin ningun cambio.
+## Reglas de Negocio
+Los cambios de identidad visual solo afectarán los paneles internos del colegio.
+La identidad visual de un colegio no podrá afectar la interfaz de otros colegios.
+La landing page institucional de la plataforma mantendrá su diseño corporativo y no podrá ser personalizada por los colegios.
+Cada colegio podrá tener únicamente:
+- Un escudo activo
+- Un color primario activo
+- Un color secundario activo
+Los colores seleccionados deberán cumplir criterios mínimos de contraste y legibilidad.
+Restablecer colores por defecto devolverá la configuración visual inicial definida para el colegio.
+
+
+
+
+
+## DR02 - Periodos en Estado Pendiente
+Como: Directivo
+Quiero: Crear un estado "Pendiente" para los periodos académicos
+Para: Evitar el uso de periodos académicos no aprobados o en proceso de configuración
+
+## Criterios de Aceptacion
+El sistema debe permitir crear un periodo académico con estado "Pendiente".
+El directivo debe aprobar un periodo académico para cambiar su estado a "Activo".
+El sistema no debe permitir registrar notas o evaluaciones en periodos académicos en estado "Pendiente".
+Todo cambio de estado de un periodo académico debe registrarse en la auditoría.
+
+## Reglas de Negocio
+Debe existir una opcion de configurar un periodo academico como estado pendiente
+Un periodo en estado pendiente no puede tener un rango de fechas anterior al periodo actual
+Se debe permitir registrar un periodo academico en estado pendiente si sus rangos de fechas son posteriores al periodo actual
+El estado pendiente solo afectara al periodo academico
+No se permitirá registrar:
+- Notas
+- Evaluaciones
+- Asistencias
+- Observaciones
+- Actividades calificables
+Un periodo académico pendiente solo podrá activarse si el periodo anterior se encuentra Cerrado.
+Los rangos de fechas de los periodos académicos no pueden superponerse.
+Se debe permitir
+- Crear el periodo
+- Configurar fechas
+- Configurar porcentaje del periodo
+- Configurar observaciones administrativas
+para periodos academicos en estado pendiente
+El sistema podrá activar automáticamente un periodo pendiente cuando:
+- La fecha de inicio sea alcanzada.
+- El periodo anterior se encuentre cerrado.
+Toda modificación de fechas de un periodo pendiente debe registrarse en auditoría.
+Un periodo pendiente no puede pasar directamente a Cerrado.
+
+
+
+## DR03 - Gestión de Fechas de Inscripción
+Como: Directivo
+
+Quiero: Gestionar las fechas de inicio y cierre de inscripciones de matrícula
+
+Para: Controlar cuándo los padres de familia pueden registrar solicitudes de matrícula para un año académico determinado.
+
+## Criterios de Aceptación
+El sistema debe proporcionar una vista para configurar las fechas de inscripción de matrícula.
+El directivo debe poder configurar:
+Fecha de inicio de inscripciones.
+Fecha de cierre de inscripciones.
+Año académico al que pertenecen las inscripciones.
+Estado de las inscripciones (Habilitadas o Deshabilitadas).
+El sistema debe mostrar las fechas de inscripción al momento de iniciar una solicitud de matrícula.
+El sistema debe permitir modificar las fechas de inscripción mientras no existan solicitudes aprobadas para el año académico configurado.
+El sistema debe registrar en auditoría toda modificación realizada sobre las fechas de inscripción.
+El sistema debe permitir habilitar o deshabilitar manualmente las inscripciones sin modificar las fechas configuradas.
+
+
+## Reglas de Negocio
+
+La fecha de cierre de inscripciones debe ser posterior a la fecha de inicio.
+No podrán existir dos periodos de inscripción activos simultáneamente para el mismo año académico.
+Solo se permitirá registrar nuevas solicitudes de matrícula cuando:
+La fecha actual se encuentre dentro del rango de inscripción configurado.
+Las inscripciones se encuentren habilitadas.
+No se permitirá registrar nuevas solicitudes de matrícula después de la fecha de cierre de inscripciones.
+Las solicitudes de matrícula registradas dentro del periodo de inscripción podrán ser revisadas, aprobadas o rechazadas después de la fecha de cierre.
+Las fechas de inscripción configuradas deberán mostrarse a los usuarios antes de iniciar una solicitud de matrícula.
+Toda modificación de fechas o del estado de las inscripciones deberá registrarse en auditoría.
+La deshabilitación manual de las inscripciones impedirá la creación de nuevas solicitudes de matrícula independientemente de las fechas configuradas.
+Cada configuración de inscripción deberá estar asociada a un único año académico.
+Las fechas de inscripción no afectarán las solicitudes ya registradas antes del cierre del periodo
+
+
+
+
+
+
+## DR04 - Renovación de Matrícula
+
+### Como:
+
+Padre de Familia
+
+### Quiero:
+
+Renovar la matrícula de un estudiante ya registrado en el colegio
+
+### Para:
+
+Continuar su proceso académico sin volver a diligenciar toda la información institucional.
+
+## Criterios de Aceptación
+
+* El sistema debe identificar si el estudiante estuvo matriculado durante el año académico anterior.
+* El sistema debe permitir reutilizar la información registrada previamente.
+* El sistema debe permitir actualizar los datos que hayan cambiado.
+* El sistema debe mostrar al directivo que la solicitud corresponde a una renovación.
+* El sistema debe validar el estado académico del estudiante antes de permitir la renovación.
+* El sistema debe registrar la renovación en auditoría.
+
+## Reglas de Negocio
+
+### RN-01
+
+Solo podrán renovar matrícula estudiantes matriculados durante el año académico inmediatamente anterior.
+
+### RN-02
+
+Los estudiantes en estado Activo podrán realizar renovación.
+
+### RN-03
+
+Los estudiantes en estado Suspendido no podrán renovar matrícula hasta que la suspensión sea levantada.
+
+### RN-04
+
+Los estudiantes en estado Expulsado no podrán renovar matrícula.
+
+### RN-05
+
+Los estudiantes en estado Traslado no podrán renovar matrícula en la institución de origen.
+
+### RN-06
+
+Toda renovación deberá generar una nueva matrícula para el año académico correspondiente.
+
+
+
+
+
+
+## DR05 - Reingreso de Estudiante
+
+### Como:
+
+Directivo
+
+### Quiero:
+
+Gestionar el reingreso de estudiantes que hayan abandonado la institución
+
+### Para:
+
+Permitir su reincorporación al proceso académico.
+
+## Criterios de Aceptación
+
+* El sistema debe identificar estudiantes retirados o desertores.
+* El sistema debe permitir solicitar el reingreso.
+* El sistema debe conservar el historial académico del estudiante.
+* El sistema debe registrar el motivo del reingreso.
+* El sistema debe registrar la aprobación del reingreso.
+
+## Reglas de Negocio
+
+### RN-01
+
+Solo los estudiantes en estado Retirado o Desertor podrán solicitar reingreso.
+
+### RN-02
+
+Los estudiantes en estado Expulsado no podrán realizar reingreso.
+
+### RN-03
+
+Los estudiantes en estado Graduado no podrán realizar reingreso.
+
+### RN-04
+
+El historial académico del estudiante deberá mantenerse intacto.
+
+### RN-05
+
+La aprobación del reingreso deberá ser realizada por un directivo.
+
+
+
+
+
+## DR06 - Gestión de Graduados
+
+### Como:
+
+Directivo
+
+### Quiero:
+
+Gestionar el cambio de estado a Graduado
+
+### Para:
+
+Cerrar formalmente el ciclo académico de estudiantes que culminen sus estudios.
+
+## Criterios de Aceptación
+
+* El sistema debe permitir marcar estudiantes como graduados.
+* El sistema debe conservar permanentemente el historial académico.
+* El sistema debe impedir nuevas matrículas de estudiantes graduados.
+* El sistema debe registrar la fecha de graduación.
+
+## Reglas de Negocio
+
+### RN-01
+
+Solo estudiantes de grado Undécimo podrán adquirir el estado Graduado.
+
+### RN-02
+
+El estudiante deberá haber aprobado los requisitos académicos definidos por la institución.
+
+### RN-03
+
+Un estudiante graduado no podrá matricularse nuevamente.
+
+### RN-04
+
+El historial académico del estudiante deberá conservarse de forma permanente.
+
+### RN-05
+
+El cambio de estado a Graduado deberá registrarse en auditoría.

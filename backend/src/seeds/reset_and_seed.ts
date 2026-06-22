@@ -1,6 +1,7 @@
 import bcrypt from "bcrypt";
 import fs from "fs";
 import path from "path";
+import { execSync } from "child_process";
 import { PoolClient } from "pg";
 import { ensureCompetencySchema } from "../config/competencyMigration";
 import { pool } from "../config/db";
@@ -65,8 +66,8 @@ const jornadaNames = ["MAÑANA", "TARDE", "UNICA"];
 const periodSeeds = [
   { nombre: "Primer Periodo", estado: "CERRADO", porcentaje: 25, trimestre: 1 },
   { nombre: "Segundo Periodo", estado: "ABIERTO", porcentaje: 25, trimestre: 2 },
-  { nombre: "Tercer Periodo", estado: "CERRADO", porcentaje: 25, trimestre: 3 },
-  { nombre: "Cuarto Periodo", estado: "CERRADO", porcentaje: 25, trimestre: 4 },
+  { nombre: "Tercer Periodo", estado: "PENDIENTE", porcentaje: 25, trimestre: 3 },
+  { nombre: "Cuarto Periodo", estado: "PENDIENTE", porcentaje: 25, trimestre: 4 },
 ];
 
 const scaleSeeds = [
@@ -715,6 +716,17 @@ async function run(): Promise<void> {
   const credentials: CredentialEntry[] = [];
 
   try {
+    // Ensure PENDIENTE exists in estado_periodo enum (outside transaction block)
+    const enumCheck = await client.query(`
+      SELECT 1 FROM pg_type t 
+      JOIN pg_enum e ON t.oid = e.enumtypid 
+      WHERE t.typname = 'estado_periodo' AND e.enumlabel = 'PENDIENTE'
+    `);
+    if (enumCheck.rows.length === 0) {
+      console.log("Adding 'PENDIENTE' to estado_periodo enum...");
+      await client.query("ALTER TYPE estado_periodo ADD VALUE 'PENDIENTE'");
+    }
+
     await client.query("BEGIN");
 
     // ── Phase 1: Ensure base schema ──
@@ -903,6 +915,14 @@ async function run(): Promise<void> {
 
     // ── Phase 13: Write credentials ──
     const credentialsPath = writeCredentialsFile(credentials);
+
+    // ── Phase 14: Populate academic grades ──
+    console.log("\n📊 Generando calificaciones y datos académicos de prueba...");
+    try {
+      execSync("npm run seed:grades", { stdio: "inherit", cwd: path.resolve(__dirname, "../..") });
+    } catch (err) {
+      console.error("⚠️ Error al generar calificaciones:", err);
+    }
 
     // ── Summary ──
     const totalStudents = schools.length * 14 * STUDENTS_PER_GROUP;

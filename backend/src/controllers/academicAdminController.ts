@@ -50,18 +50,20 @@ const autoSwitchPeriodsForYear = async (client: any, schoolId: number, yearId: n
   const calendarType = yearRow.tipo_calendario || 'A';
 
   const periodsRes = await client.query(
-    `SELECT id_periodo, mes_inicio, dia_inicio, mes_fin, dia_fin
+    `SELECT id_periodo, nombre, estado, porcentaje, trimestre, mes_inicio, dia_inicio, mes_fin, dia_fin
      FROM periodo_academico
-     WHERE id_colegio = $1 AND "id_año" = $2`,
+     WHERE id_colegio = $1 AND "id_año" = $2
+     ORDER BY trimestre ASC, id_periodo ASC`,
     [schoolId, yearId]
   );
+  const periods = periodsRes.rows;
 
   const now = new Date();
   const currentMonth = now.getMonth() + 1; // 1-12
   const currentDay = now.getDate();
   let periodIdToOpen: number | null = null;
 
-  for (const p of periodsRes.rows) {
+  for (const p of periods) {
     if (p.mes_inicio && p.dia_inicio && p.mes_fin && p.dia_fin) {
       const mesInicio = Number(p.mes_inicio);
       const diaInicio = Number(p.dia_inicio);
@@ -69,7 +71,6 @@ const autoSwitchPeriodsForYear = async (client: any, schoolId: number, yearId: n
       const diaFin = Number(p.dia_fin);
 
       if (calendarType === 'A') {
-        // Calendario A: all periods within a single calendar year (Jan-Dec)
         // Compare month/day numerically — no dependency on the year label
         const nowVal = currentMonth * 100 + currentDay;
         const startVal = mesInicio * 100 + diaInicio;
@@ -79,7 +80,6 @@ const autoSwitchPeriodsForYear = async (client: any, schoolId: number, yearId: n
           break;
         }
       } else {
-        // Calendario B: spans Aug-Jul across two calendar years
         // Normalize months to a linear scale: Aug(8)→1, Sep(9)→2, ..., Dec(12)→5, Jan(1)→6, ..., Jul(7)→12
         const normalizeMonth = (m: number) => m >= 8 ? m - 7 : m + 5;
         const nowNorm = normalizeMonth(currentMonth) * 100 + currentDay;
@@ -93,12 +93,34 @@ const autoSwitchPeriodsForYear = async (client: any, schoolId: number, yearId: n
     }
   }
 
-  await client.query(
-    `UPDATE periodo_academico
-     SET estado = CASE WHEN id_periodo = $1 THEN 'ABIERTO'::estado_periodo ELSE 'CERRADO'::estado_periodo END
-     WHERE id_colegio = $2 AND "id_año" = $3`,
-    [periodIdToOpen || -1, schoolId, yearId]
-  );
+  for (let i = 0; i < periods.length; i++) {
+    const p = periods[i];
+    let nextState = p.estado;
+
+    if (p.id_periodo === periodIdToOpen) {
+      if (p.estado === 'PENDIENTE') {
+        const previousPeriod = i > 0 ? periods[i - 1] : null;
+        if (!previousPeriod || previousPeriod.estado === 'CERRADO') {
+          nextState = 'ABIERTO';
+        }
+      } else if (p.estado === 'CERRADO') {
+        nextState = 'CERRADO';
+      } else {
+        nextState = 'ABIERTO';
+      }
+    } else {
+      if (p.estado === 'ABIERTO') {
+        nextState = 'CERRADO';
+      }
+    }
+
+    if (nextState !== p.estado) {
+      await client.query(
+        `UPDATE periodo_academico SET estado = $1::estado_periodo WHERE id_periodo = $2`,
+        [nextState, p.id_periodo]
+      );
+    }
+  }
 };
 
 const ensureAcademicYearForSchool = async (schoolId: number): Promise<number> => {
@@ -832,6 +854,17 @@ export const getSubjects = async (req: Request, res: Response): Promise<void> =>
   }
 };
 
+export const ensureAcademicPeriodPendingStatus = async () => {
+  const res = await pool.query(`
+    SELECT 1 FROM pg_type t 
+    JOIN pg_enum e ON t.oid = e.enumtypid 
+    WHERE t.typname = 'estado_periodo' AND e.enumlabel = 'PENDIENTE'
+  `);
+  if (res.rows.length === 0) {
+    await pool.query("ALTER TYPE estado_periodo ADD VALUE 'PENDIENTE'");
+  }
+};
+
 export const getAcademicSettingsData = async (req: Request, res: Response): Promise<void> => {
   const schoolId = parseSchoolId(req.params.schoolId);
   if (!schoolId) {
@@ -848,6 +881,7 @@ export const getAcademicSettingsData = async (req: Request, res: Response): Prom
     await ensureAcademicPeriodTrimesterColumn();
     await ensureAcademicPeriodDayColumns();
     await ensureAcademicPeriodMonthColumns();
+    await ensureAcademicPeriodPendingStatus();
     const currentYearId = await ensureAcademicYearForSchool(schoolId);
 
     // Auto-switch periods based on current date
@@ -1030,6 +1064,9 @@ export const createAcademicPeriod = async (req: Request, res: Response): Promise
   const mesFin = Number(req.body.mes_fin);
   const diaFin = Number(req.body.dia_fin);
   const targetYearId = req.body.id_año ? Number(req.body.id_año) : null;
+  const estadoInput = req.body.estado;
+  const estado = (estadoInput === 'ABIERTO' || estadoInput === 'CERRADO' || estadoInput === 'PENDIENTE') ? estadoInput : 'PENDIENTE';
+  const { motivo_cambio } = req.body;
 
   if (
     !schoolId ||
@@ -1052,17 +1089,89 @@ export const createAcademicPeriod = async (req: Request, res: Response): Promise
     return;
   }
 
-  if (diaInicio !== null && diaFin !== null && diaFin < diaInicio) {
-    res.status(400).json({ error: "El día de fin no puede ser menor al día de inicio" });
-    return;
-  }
-
+  const client = await pool.connect();
   try {
+    await client.query("BEGIN");
+
     await ensureAcademicPeriodTrimesterColumn();
     await ensureAcademicPeriodDayColumns();
+    await ensureAcademicPeriodPendingStatus();
     const finalYearId = targetYearId || await ensureAcademicYearForSchool(schoolId);
 
-    const totalsRes = await pool.query(
+    // Get school year info for calendar type
+    const yearRes = await client.query(
+      `SELECT tipo_calendario FROM "año_lectivo" WHERE "id_año" = $1 AND id_colegio = $2`,
+      [finalYearId, schoolId]
+    );
+    const calendarType = yearRes.rows[0]?.tipo_calendario || 'A';
+
+    // Validate ranges don't overlap with other periods
+    const otherPeriodsRes = await client.query(
+      `SELECT id_periodo, nombre, mes_inicio, dia_inicio, mes_fin, dia_fin
+       FROM periodo_academico
+       WHERE id_colegio = $1 AND "id_año" = $2`,
+      [schoolId, finalYearId]
+    );
+
+    const getNormalizedDateVal = (month: number, day: number, calType: string) => {
+      if (calType === 'B') {
+        const normalizeMonth = (m: number) => m >= 8 ? m - 7 : m + 5;
+        return normalizeMonth(month) * 100 + day;
+      }
+      return month * 100 + day;
+    };
+
+    const newStartVal = getNormalizedDateVal(mesInicio, diaInicio, calendarType);
+    const newEndVal = getNormalizedDateVal(mesFin, diaFin, calendarType);
+
+    if (newStartVal > newEndVal) {
+      await client.query("ROLLBACK");
+      res.status(400).json({ error: "La fecha de inicio no puede ser posterior a la fecha de fin" });
+      return;
+    }
+
+    for (const other of otherPeriodsRes.rows) {
+      if (other.mes_inicio && other.dia_inicio && other.mes_fin && other.dia_fin) {
+        const otherStartVal = getNormalizedDateVal(other.mes_inicio, other.dia_inicio, calendarType);
+        const otherEndVal = getNormalizedDateVal(other.mes_fin, other.dia_fin, calendarType);
+
+        const overlap = !(newEndVal < otherStartVal || otherEndVal < newStartVal);
+        if (overlap) {
+          await client.query("ROLLBACK");
+          res.status(409).json({
+            error: `El rango de fechas se superpone con el periodo '${other.nombre}' (${other.dia_inicio}/${other.mes_inicio} - ${other.dia_fin}/${other.mes_fin})`
+          });
+          return;
+        }
+      }
+    }
+
+    // If pending state: "Un periodo en estado pendiente no puede tener un rango de fechas anterior al periodo actual"
+    if (estado === 'PENDIENTE') {
+      const activePeriodRes = await client.query(
+        `SELECT id_periodo, nombre, mes_inicio, mes_fin, dia_inicio, dia_fin
+         FROM periodo_academico
+         WHERE id_colegio = $1 AND "id_año" = $2 AND estado = 'ABIERTO'
+         LIMIT 1`,
+        [schoolId, finalYearId]
+      );
+
+      if (activePeriodRes.rows.length > 0) {
+        const active = activePeriodRes.rows[0];
+        if (active.mes_fin && active.dia_fin) {
+          const activeEndVal = getNormalizedDateVal(active.mes_fin, active.dia_fin, calendarType);
+          if (newStartVal < activeEndVal) {
+            await client.query("ROLLBACK");
+            res.status(400).json({
+              error: `Un periodo en estado Pendiente no puede tener un rango de fechas anterior al periodo actual (${active.nombre})`
+            });
+            return;
+          }
+        }
+      }
+    }
+
+    const totalsRes = await client.query(
       `SELECT COALESCE(SUM(porcentaje), 0)::numeric AS total
        FROM periodo_academico
        WHERE id_colegio = $1 AND "id_año" = $2`,
@@ -1071,13 +1180,14 @@ export const createAcademicPeriod = async (req: Request, res: Response): Promise
 
     const currentTotal = Number(totalsRes.rows[0].total);
     if (currentTotal + porcentaje > 100) {
+      await client.query("ROLLBACK");
       res.status(409).json({
         error: `No es posible crear el periodo porque la suma de porcentajes excede 100%. Actual: ${currentTotal}%`,
       });
       return;
     }
 
-    const duplicateRes = await pool.query(
+    const duplicateRes = await client.query(
       `SELECT id_periodo
        FROM periodo_academico
        WHERE id_colegio = $1
@@ -1087,21 +1197,63 @@ export const createAcademicPeriod = async (req: Request, res: Response): Promise
     );
 
     if (duplicateRes.rows.length > 0) {
+      await client.query("ROLLBACK");
       res.status(409).json({ error: "Ya existe un periodo académico con ese nombre en este año" });
       return;
     }
 
+    // Determine the next trimestre number
+    const maxTrimestreRes = await client.query(
+      `SELECT COALESCE(MAX(trimestre), 0) as max_trim
+       FROM periodo_academico
+       WHERE id_colegio = $1 AND "id_año" = $2`,
+      [schoolId, finalYearId]
+    );
+    const nextTrimestre = Number(maxTrimestreRes.rows[0].max_trim) + 1;
+
     const created = await pool.query(
-      `INSERT INTO periodo_academico (nombre, estado, porcentaje, mes_inicio, dia_inicio, mes_fin, dia_fin, "id_año", id_colegio)
-       VALUES ($1, 'CERRADO', $2, $3, $4, $5, $6, $7, $8)
-       RETURNING id_periodo, nombre, estado, porcentaje, mes_inicio, dia_inicio, mes_fin, dia_fin, "id_año"`,
-      [nombre, porcentaje, mesInicio, diaInicio, mesFin, diaFin, finalYearId, schoolId]
+      `INSERT INTO periodo_academico (nombre, estado, porcentaje, mes_inicio, dia_inicio, mes_fin, dia_fin, "id_año", id_colegio, trimestre)
+       VALUES ($1, $2::estado_periodo, $3, $4, $5, $6, $7, $8, $9, $10)
+       RETURNING id_periodo, nombre, estado, porcentaje, mes_inicio, dia_inicio, mes_fin, dia_fin, "id_año", trimestre`,
+      [nombre, estado, porcentaje, mesInicio, diaInicio, mesFin, diaFin, finalYearId, schoolId, nextTrimestre]
     );
 
-    res.status(201).json(created.rows[0]);
+    const newPeriod = created.rows[0];
+
+    // Audit check (if in supervision mode)
+    const authReq = req as AuthRequest;
+    const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+    let activeAuditoriaId: number | null = null;
+    
+    if (isSupervision) {
+      const auditRes = await client.query(
+        `SELECT id_auditoria 
+         FROM auditoria_supervision 
+         WHERE id_colegio = $1 AND id_admin_general = $2 AND estado_supervision = 'ACTIVA'`,
+        [schoolId, authReq.user!.id]
+      );
+      if (auditRes.rows.length > 0) {
+        activeAuditoriaId = auditRes.rows[0].id_auditoria;
+      }
+    }
+
+    if (activeAuditoriaId) {
+      await client.query(
+        `INSERT INTO auditoria_acciones_realizadas
+         (id_auditoria, modulo, tipo_accion, accion, recurso_afectado, valor_antiguo, valor_nuevo, motivo_cambio)
+         VALUES ($1, 'CONFIGURACION', 'CREACION', 'Creación de periodo académico', $2, NULL, $3, $4)`,
+        [activeAuditoriaId, `Periodo ID: ${newPeriod.id_periodo} (${nombre})`, JSON.stringify(newPeriod), motivo_cambio || 'Creación inicial']
+      );
+    }
+
+    await client.query("COMMIT");
+    res.status(201).json(newPeriod);
   } catch (error: any) {
+    await client.query("ROLLBACK");
     console.error("Error creating academic period:", error);
     res.status(500).json({ error: "Error en el servidor" });
+  } finally {
+    client.release();
   }
 };
 
@@ -1542,6 +1694,13 @@ export const closeAcademicPeriod = async (req: Request, res: Response): Promise<
       return;
     }
 
+    const period = periodRes.rows[0];
+    if (period.estado === 'PENDIENTE') {
+      await client.query("ROLLBACK");
+      res.status(409).json({ error: "Un periodo en estado Pendiente no se puede cerrar directamente. Debe ser aprobado primero." });
+      return;
+    }
+
     const assignmentsRes = await client.query(
       `SELECT
          dg.id_detallegrado,
@@ -1704,30 +1863,317 @@ export const updateAcademicPeriodPercentage = async (req: Request, res: Response
   const diaInicio = Number(req.body.dia_inicio);
   const mesFin = Number(req.body.mes_fin);
   const diaFin = Number(req.body.dia_fin);
+  const { motivo_cambio } = req.body;
 
   if (!periodId || !schoolId || Number.isNaN(porcentaje) || porcentaje <= 0 || !mesInicio || !diaInicio || !mesFin || !diaFin) {
     res.status(400).json({ error: "Todos los campos (porcentaje y rango de fechas) son obligatorios" });
     return;
   }
 
+  if (diaInicio !== null && (!Number.isInteger(diaInicio) || diaInicio < 1 || diaInicio > 31)) {
+    res.status(400).json({ error: "El día de inicio debe ser un número entre 1 y 31" });
+    return;
+  }
+
+  if (diaFin !== null && (!Number.isInteger(diaFin) || diaFin < 1 || diaFin > 31)) {
+    res.status(400).json({ error: "El día de fin debe ser un número entre 1 y 31" });
+    return;
+  }
+
+  const client = await pool.connect();
   try {
-    const updated = await pool.query(
+    await client.query("BEGIN");
+
+    // Get current period data
+    const periodRes = await client.query(
+      `SELECT id_periodo, nombre, estado, porcentaje, mes_inicio, dia_inicio, mes_fin, dia_fin, "id_año"
+       FROM periodo_academico
+       WHERE id_periodo = $1 AND id_colegio = $2`,
+      [periodId, schoolId]
+    );
+
+    if (periodRes.rows.length === 0) {
+      await client.query("ROLLBACK");
+      res.status(404).json({ error: "Periodo académico no encontrado" });
+      return;
+    }
+
+    const period = periodRes.rows[0];
+
+    // Get school year info for calendar type
+    const yearRes = await client.query(
+      `SELECT tipo_calendario FROM "año_lectivo" WHERE "id_año" = $1 AND id_colegio = $2`,
+      [period.id_año, schoolId]
+    );
+    const calendarType = yearRes.rows[0]?.tipo_calendario || 'A';
+
+    // Validate ranges don't overlap with other periods
+    const otherPeriodsRes = await client.query(
+      `SELECT id_periodo, nombre, mes_inicio, dia_inicio, mes_fin, dia_fin, estado
+       FROM periodo_academico
+       WHERE id_colegio = $1 AND "id_año" = $2 AND id_periodo != $3`,
+      [schoolId, period.id_año, periodId]
+    );
+
+    const getNormalizedDateVal = (month: number, day: number, calType: string) => {
+      if (calType === 'B') {
+        const normalizeMonth = (m: number) => m >= 8 ? m - 7 : m + 5;
+        return normalizeMonth(month) * 100 + day;
+      }
+      return month * 100 + day;
+    };
+
+    const newStartVal = getNormalizedDateVal(mesInicio, diaInicio, calendarType);
+    const newEndVal = getNormalizedDateVal(mesFin, diaFin, calendarType);
+
+    if (newStartVal > newEndVal) {
+      await client.query("ROLLBACK");
+      res.status(400).json({ error: "La fecha de inicio no puede ser posterior a la fecha de fin" });
+      return;
+    }
+
+    for (const other of otherPeriodsRes.rows) {
+      if (other.mes_inicio && other.dia_inicio && other.mes_fin && other.dia_fin) {
+        const otherStartVal = getNormalizedDateVal(other.mes_inicio, other.dia_inicio, calendarType);
+        const otherEndVal = getNormalizedDateVal(other.mes_fin, other.dia_fin, calendarType);
+
+        const overlap = !(newEndVal < otherStartVal || otherEndVal < newStartVal);
+        if (overlap) {
+          await client.query("ROLLBACK");
+          res.status(409).json({
+            error: `El rango de fechas se superpone con el periodo '${other.nombre}' (${other.dia_inicio}/${other.mes_inicio} - ${other.dia_fin}/${other.mes_fin})`
+          });
+          return;
+        }
+      }
+    }
+
+    // If pending state: "Un periodo en estado pendiente no puede tener un rango de fechas anterior al periodo actual"
+    if (period.estado === 'PENDIENTE') {
+      const activePeriodRes = await client.query(
+        `SELECT id_periodo, nombre, mes_inicio, mes_fin, dia_inicio, dia_fin
+         FROM periodo_academico
+         WHERE id_colegio = $1 AND "id_año" = $2 AND estado = 'ABIERTO' AND id_periodo != $3
+         LIMIT 1`,
+        [schoolId, period.id_año, periodId]
+      );
+
+      if (activePeriodRes.rows.length > 0) {
+        const active = activePeriodRes.rows[0];
+        if (active.mes_fin && active.dia_fin) {
+          const activeEndVal = getNormalizedDateVal(active.mes_fin, active.dia_fin, calendarType);
+          if (newStartVal < activeEndVal) {
+            await client.query("ROLLBACK");
+            res.status(400).json({
+              error: `Un periodo en estado Pendiente no puede tener un rango de fechas anterior al periodo actual (${active.nombre})`
+            });
+            return;
+          }
+        }
+      }
+    }
+
+    // Validate percentage sum <= 100
+    const totalsRes = await client.query(
+      `SELECT COALESCE(SUM(porcentaje), 0)::numeric AS total
+       FROM periodo_academico
+       WHERE id_colegio = $1 AND "id_año" = $2 AND id_periodo != $3`,
+      [schoolId, period.id_año, periodId]
+    );
+    const otherTotal = Number(totalsRes.rows[0].total);
+    if (otherTotal + porcentaje > 100) {
+      await client.query("ROLLBACK");
+      res.status(409).json({
+        error: `No es posible actualizar el porcentaje porque la suma de porcentajes excede 100%. Actual del resto de periodos: ${otherTotal}%`
+      });
+      return;
+    }
+
+    // Audit check (if in supervision mode)
+    const authReq = req as AuthRequest;
+    const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+    let activeAuditoriaId: number | null = null;
+    
+    if (isSupervision) {
+      if (!motivo_cambio) {
+        await client.query("ROLLBACK");
+        res.status(400).json({ error: "Se requiere justificar el cambio para registrar en la auditoría." });
+        return;
+      }
+      const auditRes = await client.query(
+        `SELECT id_auditoria 
+         FROM auditoria_supervision 
+         WHERE id_colegio = $1 AND id_admin_general = $2 AND estado_supervision = 'ACTIVA'`,
+        [schoolId, authReq.user!.id]
+      );
+      if (auditRes.rows.length > 0) {
+        activeAuditoriaId = auditRes.rows[0].id_auditoria;
+      }
+    }
+
+    // Perform UPDATE
+    const updated = await client.query(
       `UPDATE periodo_academico
        SET porcentaje = $1,
            mes_inicio = $2,
            dia_inicio = $3,
            mes_fin = $4,
            dia_fin = $5
-       WHERE id_periodo = $6
-         AND id_colegio = $7
+       WHERE id_periodo = $6 AND id_colegio = $7
        RETURNING id_periodo, nombre, estado, porcentaje, mes_inicio, dia_inicio, mes_fin, dia_fin, "id_año"`,
       [porcentaje, mesInicio, diaInicio, mesFin, diaFin, periodId, schoolId]
     );
 
+    // Record in audit
+    if (activeAuditoriaId) {
+      const valorAntiguo = {
+        porcentaje: period.porcentaje,
+        mes_inicio: period.mes_inicio,
+        dia_inicio: period.dia_inicio,
+        mes_fin: period.mes_fin,
+        dia_fin: period.dia_fin
+      };
+      const valorNuevo = {
+        porcentaje: porcentaje,
+        mes_inicio: mesInicio,
+        dia_inicio: diaInicio,
+        mes_fin: mesFin,
+        dia_fin: diaFin
+      };
+      
+      await client.query(
+        `INSERT INTO auditoria_acciones_realizadas
+         (id_auditoria, modulo, tipo_accion, accion, recurso_afectado, valor_antiguo, valor_nuevo, motivo_cambio)
+         VALUES ($1, 'CONFIGURACION', 'MODIFICACION', 'Modificación de fechas y porcentaje de periodo académico', $2, $3, $4, $5)`,
+        [activeAuditoriaId, `Periodo ID: ${periodId} (${period.nombre})`, JSON.stringify(valorAntiguo), JSON.stringify(valorNuevo), motivo_cambio]
+      );
+    }
+
+    await client.query("COMMIT");
     res.json(updated.rows[0]);
   } catch (error: any) {
+    await client.query("ROLLBACK");
     console.error("Error updating academic period percentage:", error);
     res.status(500).json({ error: "Error en el servidor" });
+  } finally {
+    client.release();
+  }
+};
+
+export const approveAcademicPeriod = async (req: Request, res: Response): Promise<void> => {
+  const periodId = Number(req.params.id);
+  const schoolId = parseSchoolId(req.body.schoolId);
+  const { motivo_cambio } = req.body;
+
+  if (!periodId || !schoolId) {
+    res.status(400).json({ error: "Parámetros inválidos" });
+    return;
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    // 1. Get current period
+    const periodRes = await client.query(
+      `SELECT id_periodo, nombre, estado, "id_año", trimestre
+       FROM periodo_academico
+       WHERE id_periodo = $1 AND id_colegio = $2`,
+      [periodId, schoolId]
+    );
+
+    if (periodRes.rows.length === 0) {
+      await client.query("ROLLBACK");
+      res.status(404).json({ error: "Periodo académico no encontrado" });
+      return;
+    }
+
+    const period = periodRes.rows[0];
+    if (period.estado !== 'PENDIENTE') {
+      await client.query("ROLLBACK");
+      res.status(409).json({ error: "Solo se pueden activar periodos en estado Pendiente." });
+      return;
+    }
+
+    // 2. Validate previous period is Closed
+    const previousPeriodRes = await client.query(
+      `SELECT id_periodo, nombre, estado
+       FROM periodo_academico
+       WHERE id_colegio = $1 AND "id_año" = $2 AND trimestre < $3
+       ORDER BY trimestre DESC
+       LIMIT 1`,
+      [schoolId, period.id_año, period.trimestre]
+    );
+
+    if (previousPeriodRes.rows.length > 0) {
+      const prev = previousPeriodRes.rows[0];
+      if (prev.estado !== 'CERRADO') {
+        await client.query("ROLLBACK");
+        res.status(409).json({
+          error: `El periodo anterior (${prev.nombre}) debe estar Cerrado para activar este periodo.`
+        });
+        return;
+      }
+    }
+
+    // 3. Audit check (if in supervision mode)
+    const authReq = req as AuthRequest;
+    const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+    let activeAuditoriaId: number | null = null;
+    
+    if (isSupervision) {
+      if (!motivo_cambio) {
+        await client.query("ROLLBACK");
+        res.status(400).json({ error: "Se requiere justificar el cambio para registrar en la auditoría." });
+        return;
+      }
+      const auditRes = await client.query(
+        `SELECT id_auditoria 
+         FROM auditoria_supervision 
+         WHERE id_colegio = $1 AND id_admin_general = $2 AND estado_supervision = 'ACTIVA'`,
+        [schoolId, authReq.user!.id]
+      );
+      if (auditRes.rows.length > 0) {
+        activeAuditoriaId = auditRes.rows[0].id_auditoria;
+      }
+    }
+
+    // 4. Deactivate any currently ABIERTO periods to CERRADO (only one can be open)
+    await client.query(
+      `UPDATE periodo_academico
+       SET estado = 'CERRADO'
+       WHERE id_colegio = $1 AND "id_año" = $2 AND estado = 'ABIERTO'`,
+      [schoolId, period.id_año]
+    );
+
+    // 5. Activate this period
+    await client.query(
+      `UPDATE periodo_academico
+       SET estado = 'ABIERTO'
+       WHERE id_periodo = $1 AND id_colegio = $2`,
+      [periodId, schoolId]
+    );
+
+    // 6. Record in audit
+    if (activeAuditoriaId) {
+      const valorAntiguo = { estado: period.estado };
+      const valorNuevo = { estado: 'ABIERTO' };
+      await client.query(
+        `INSERT INTO auditoria_acciones_realizadas
+         (id_auditoria, modulo, tipo_accion, accion, recurso_afectado, valor_antiguo, valor_nuevo, motivo_cambio)
+         VALUES ($1, 'CONFIGURACION', 'MODIFICACION', 'Aprobación y activación de periodo académico', $2, $3, $4, $5)`,
+        [activeAuditoriaId, `Periodo ID: ${periodId} (${period.nombre})`, JSON.stringify(valorAntiguo), JSON.stringify(valorNuevo), motivo_cambio]
+      );
+    }
+
+    await client.query("COMMIT");
+    res.json({ message: "Periodo académico aprobado y activado con éxito", id_periodo: periodId, estado: 'ABIERTO' });
+  } catch (error: any) {
+    await client.query("ROLLBACK");
+    console.error("Error approving academic period:", error);
+    res.status(500).json({ error: "Error en el servidor" });
+  } finally {
+    client.release();
   }
 };
 

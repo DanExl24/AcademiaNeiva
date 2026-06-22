@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict VFAAFC5OgAhyt4fagOGKTyYfgUW6VFdjASN5i6XmY5HNAk8ryExxnetEKNn7Lby
+\restrict AcE6FOWiO7E04NZy26u9hRzHyaS1WqLtZApRXThadAlUm1Hq3jOhIjzwRYmZfzD
 
 -- Dumped from database version 18.4
 -- Dumped by pg_dump version 18.4
@@ -138,6 +138,7 @@ ALTER TYPE public.estado_matricula OWNER TO postgres;
 --
 
 CREATE TYPE public.estado_periodo AS ENUM (
+    'PENDIENTE',
     'ABIERTO',
     'CERRADO'
 );
@@ -527,7 +528,9 @@ CREATE TABLE public.colegio (
     motivo_rechazo text,
     fecha_cambio_estado timestamp with time zone,
     escudo_url text,
-    colores character varying(255)
+    colores character varying(255),
+    color_primario character varying(50) DEFAULT NULL::character varying,
+    color_secundario character varying(50) DEFAULT NULL::character varying
 );
 
 
@@ -1604,7 +1607,8 @@ CREATE TABLE public.periodo_academico (
     dia_inicio integer,
     dia_fin integer,
     mes_inicio integer,
-    mes_fin integer
+    mes_fin integer,
+    observaciones_administrativas text
 );
 
 
@@ -3674,5 +3678,5 @@ REVOKE USAGE ON SCHEMA public FROM PUBLIC;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict VFAAFC5OgAhyt4fagOGKTyYfgUW6VFdjASN5i6XmY5HNAk8ryExxnetEKNn7Lby
+\unrestrict AcE6FOWiO7E04NZy26u9hRzHyaS1WqLtZApRXThadAlUm1Hq3jOhIjzwRYmZfzD
 

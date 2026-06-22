@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import axios from 'axios'
-import { ArrowLeft, BookMarked, PenSquare, Plus, Info, Trash2, Play, Lock, ShieldAlert } from 'lucide-vue-next'
+import { ArrowLeft, BookMarked, PenSquare, Plus, Info, Trash2, Play, Lock, ShieldAlert, Check } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 
 interface AcademicYear {
@@ -14,7 +14,7 @@ interface AcademicYear {
 interface AcademicPeriod {
   id_periodo: number
   nombre: string
-  estado: 'ABIERTO' | 'CERRADO'
+  estado: 'ABIERTO' | 'CERRADO' | 'PENDIENTE'
   porcentaje: number
   mes_inicio: number | null
   dia_inicio: number | null
@@ -241,6 +241,24 @@ const updatePeriodPercentage = async () => {
   }
 }
 
+const approvePeriod = async (period: AcademicPeriod) => {
+  const confirmApprove = confirm(`¿Está seguro de aprobar y activar el periodo "${period.nombre}"? Esta acción cerrará el periodo actual si está abierto.`)
+  if (!confirmApprove) return
+
+  try {
+    loading.value = true
+    await axios.post(`http://localhost:3000/api/academic-admin/settings/periods/${period.id_periodo}/approve`, {
+      schoolId: schoolId.value,
+    })
+    alert('Periodo académico aprobado y activado correctamente.')
+    await loadData()
+  } catch (error: any) {
+    alert(error.response?.data?.error || 'No fue posible aprobar el periodo')
+  } finally {
+    loading.value = false
+  }
+}
+
 const createAcademicYear = async () => {
   if (yearSaving.value) return
   if (!academicYearForm.value.id_año) {
@@ -436,7 +454,19 @@ onMounted(loadData)
             <div v-for="period in filteredPeriods" :key="period.id_periodo" class="flex flex-col gap-4 px-6 py-5 md:flex-row md:items-center md:justify-between hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
               <div>
                 <p class="text-base font-black text-slate-900 dark:text-white">{{ period.nombre }}</p>
-                <p class="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-400">Estado: <span :class="period.estado === 'ABIERTO' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'">{{ period.estado }}</span> · Año: {{ selectedYearObj ? selectedYearObj.calendario : period.id_año }}</p>
+                <p class="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-400">
+                  Estado: 
+                  <span 
+                    :class="[
+                      period.estado === 'ABIERTO' ? 'text-emerald-600 dark:text-emerald-400 font-black' :
+                      period.estado === 'PENDIENTE' ? 'text-amber-600 dark:text-amber-500 font-black' :
+                      'text-slate-400'
+                    ]"
+                  >
+                    {{ period.estado }}
+                  </span> 
+                  · Año: {{ selectedYearObj ? selectedYearObj.calendario : period.id_año }}
+                </p>
                 <p class="mt-1 text-xs font-semibold text-slate-400 italic dark:text-slate-500">
                   <span v-if="period.mes_inicio !== null">
                     📅 Desde {{ months[period.mes_inicio - 1].name }} {{ period.dia_inicio }} hasta {{ months[period.mes_fin! - 1].name }} {{ period.dia_fin }}
@@ -446,6 +476,18 @@ onMounted(loadData)
               </div>
               <div class="flex items-center gap-3">
                 <span class="rounded-full bg-orange-50 px-3 py-1 text-sm font-black text-orange-700 dark:bg-orange-950/40 dark:text-orange-400">{{ Number(period.porcentaje).toFixed(2) }}%</span>
+                
+                <button
+                  v-if="period.estado === 'PENDIENTE'"
+                  type="button"
+                  @click="approvePeriod(period)"
+                  class="inline-flex items-center justify-center gap-1.5 rounded-2xl bg-emerald-50 px-3.5 py-3 text-xs font-black text-emerald-700 hover:bg-emerald-100 transition-all dark:bg-emerald-950/20 dark:text-emerald-400 dark:hover:bg-emerald-950/40"
+                  title="Aprobar y activar periodo"
+                >
+                  <Check class="h-4 w-4" />
+                  Aprobar
+                </button>
+
                 <button
                   type="button"
                   @click="periodEditModal = period; periodEdit.porcentaje = String(period.porcentaje); periodEdit.mes_inicio = String(period.mes_inicio); periodEdit.dia_inicio = String(period.dia_inicio); periodEdit.mes_fin = String(period.mes_fin); periodEdit.dia_fin = String(period.dia_fin)"

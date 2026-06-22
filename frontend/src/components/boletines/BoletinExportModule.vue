@@ -18,6 +18,58 @@ const error = ref('')
 const boletinData = ref<any>(null)
 const boletinPreviewRef = ref<any>(null)
 
+const resolveColorToRgb = (colorStr: string): string => {
+  if (typeof colorStr !== 'string') return colorStr
+  if (
+    colorStr.includes('color(') ||
+    colorStr.includes('oklch(') ||
+    colorStr.includes('oklab(') ||
+    colorStr.includes('color-mix(')
+  ) {
+    try {
+      const canvas = document.createElement('canvas')
+      canvas.width = 1
+      canvas.height = 1
+      const ctx = canvas.getContext('2d')
+      if (ctx) {
+        ctx.fillStyle = colorStr
+        ctx.fillRect(0, 0, 1, 1)
+        const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data
+        if (a === 255) {
+          return `rgb(${r}, ${g}, ${b})`
+        } else {
+          return `rgba(${r}, ${g}, ${b}, ${(a / 255).toFixed(3)})`
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to resolve color to rgb via canvas:', e)
+    }
+  }
+  return colorStr
+}
+
+const resolveComplexStyle = (styleVal: string): string => {
+  if (typeof styleVal !== 'string') return styleVal
+  
+  let parsed = styleVal.replace(/color\([^)]+\)/g, (match) => {
+    return resolveColorToRgb(match)
+  })
+  
+  parsed = parsed.replace(/oklch\([^)]+\)/g, (match) => {
+    return resolveColorToRgb(match)
+  })
+
+  parsed = parsed.replace(/oklab\([^)]+\)/g, (match) => {
+    return resolveColorToRgb(match)
+  })
+
+  parsed = parsed.replace(/color-mix\([^)]+\)/g, (match) => {
+    return resolveColorToRgb(match)
+  })
+
+  return parsed
+}
+
 const handleExport = async () => {
   if (!props.studentId || !props.periodId) {
     error.value = 'Faltan datos para la exportación'
@@ -26,6 +78,29 @@ const handleExport = async () => {
 
   error.value = ''
   isLoading.value = true
+  
+  const originalGetComputedStyle = window.getComputedStyle
+  window.getComputedStyle = function (el, pseudoElt) {
+    const style = originalGetComputedStyle.call(window, el, pseudoElt)
+    return new Proxy(style, {
+      get(target, prop) {
+        const val = Reflect.get(target, prop)
+        if (typeof val === 'string') {
+          return resolveComplexStyle(val)
+        }
+        if (typeof val === 'function') {
+          return function (...args: any[]) {
+            const res = val.apply(target, args)
+            if (typeof res === 'string') {
+              return resolveComplexStyle(res)
+            }
+            return res
+          }
+        }
+        return val
+      }
+    })
+  }
   
   try {
     const headers = { Authorization: `Bearer ${auth.token}` }
@@ -117,6 +192,7 @@ const handleExport = async () => {
     isExporting.value = false
     boletinData.value = null
   } finally {
+    window.getComputedStyle = originalGetComputedStyle
     isLoading.value = false
   }
 }

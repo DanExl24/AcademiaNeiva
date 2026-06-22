@@ -5,6 +5,7 @@ import {
   createSubject,
   createTeacher,
   createAcademicPeriod,
+  approveAcademicPeriod,
   createAcademicYear,
   createScale,
   deleteGradeType,
@@ -79,6 +80,7 @@ router.patch("/settings/periods/:id/percentage", updateAcademicPeriodPercentage)
 router.get("/settings/closure-details/:schoolId/:periodId", getPeriodClosureDetails);
 router.post("/settings/competencies", upsertCompetencyByAdmin);
 router.post("/settings/periods/:id/close", closeAcademicPeriod);
+router.post("/settings/periods/:id/approve", verifyToken, requireDirectivo, approveAcademicPeriod);
 router.post("/settings/periods/:id/reopen", reopenAcademicPeriod);
 router.post("/settings/periods/:periodId/reopen-subject/:detailGradeId", reopenSubjectClosure);
 router.post("/settings/scales", createScale);
