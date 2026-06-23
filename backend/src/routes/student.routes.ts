@@ -5,7 +5,8 @@ import {
   updateStudentStatus, 
   changeStudentGrade, 
   deleteStudent,
-  getStudentSummary
+  getStudentSummary,
+  graduateStudent
 } from "../controllers/studentController";
 import {
   getStudentAcademicYears,
@@ -29,6 +30,7 @@ router.get("/:id/summary", getStudentSummary);
 router.put("/:id", updateStudent);
 router.patch("/:id/status", updateStudentStatus);
 router.patch("/:id/change-grade", changeStudentGrade);
+router.post("/:id/graduate", graduateStudent);
 router.delete("/:id", deleteStudent);
 
 // Student portal endpoints consumed by the frontend

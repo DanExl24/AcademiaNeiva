@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict CngLsVUm1vIcTVJpb3nltfWSAefHlXXoAQFr1xOpUqnqlnDu2s42ZS8PbmPLdHn
+\restrict sj42fhPnZAqD4apNtsMY2kf3uCltXzhVIlJaT9t1knxFgRHaJ14ovToIvqbHpq1
 
 -- Dumped from database version 18.4
 -- Dumped by pg_dump version 18.4
@@ -111,7 +111,8 @@ CREATE TYPE public.estado_estudiante AS ENUM (
     'ACTIVO',
     'SANCIONADO',
     'EXPULSADO',
-    'RETIRADO'
+    'RETIRADO',
+    'GRADUADO'
 );
 
 
@@ -128,7 +129,8 @@ CREATE TYPE public.estado_matricula AS ENUM (
     'TRASLADADA',
     'RECHAZADA',
     'CORRECCION',
-    'APROBADA'
+    'APROBADA',
+    'CULMINADA'
 );
 
 
@@ -3765,8 +3767,36 @@ REVOKE USAGE ON SCHEMA public FROM PUBLIC;
 
 
 --
+-- Name: registro_graduados; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.registro_graduados (
+    id_graduado integer NOT NULL,
+    id_estudiante integer NOT NULL,
+    fecha_graduacion timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    observaciones text,
+    id_usuario_registro integer,
+    creado_en timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+ALTER TABLE public.registro_graduados OWNER TO postgres;
+
+ALTER TABLE ONLY public.registro_graduados
+    ADD CONSTRAINT registro_graduados_pkey PRIMARY KEY (id_graduado);
+
+ALTER TABLE ONLY public.registro_graduados
+    ADD CONSTRAINT registro_graduados_id_estudiante_key UNIQUE (id_estudiante);
+
+ALTER TABLE ONLY public.registro_graduados
+    ADD CONSTRAINT registro_graduados_id_estudiante_fkey FOREIGN KEY (id_estudiante) REFERENCES public.estudiante(id_estudiante) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.registro_graduados
+    ADD CONSTRAINT registro_graduados_id_usuario_registro_fkey FOREIGN KEY (id_usuario_registro) REFERENCES public.usuario(id_usuario);
+
+
+--
 -- PostgreSQL database dump complete
 --
 
-\unrestrict CngLsVUm1vIcTVJpb3nltfWSAefHlXXoAQFr1xOpUqnqlnDu2s42ZS8PbmPLdHn
+\unrestrict sj42fhPnZAqD4apNtsMY2kf3uCltXzhVIlJaT9t1knxFgRHaJ14ovToIvqbHpq1
 

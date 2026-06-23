@@ -297,6 +297,8 @@ export class MatriculaService {
                     const status = child.estado;
                     if (status === 'EXPULSADO') {
                       renovacion.error_message = 'El estudiante se encuentra en estado EXPULSADO y no puede realizar renovación.';
+                    } else if (status === 'GRADUADO') {
+                      renovacion.error_message = 'El estudiante ya se encuentra graduado y no puede matricularse nuevamente.';
                     } else if (status === 'SANCIONADO') {
                       renovacion.error_message = 'El estudiante se encuentra en estado SUSPENDIDO/SANCIONADO. No se puede renovar la matrícula hasta que la sanción sea levantada.';
                     } else if (prevEnrollment.estado === 'TRASLADADA') {
@@ -443,10 +445,13 @@ export class MatriculaService {
       if (idEstudiante) {
         // Estudiante existente
         const estRes = await client.query(
-          `SELECT id_usuario, codigo FROM estudiante WHERE id_estudiante = $1`,
+          `SELECT id_usuario, codigo, estado FROM estudiante WHERE id_estudiante = $1`,
           [idEstudiante]
         );
         if (estRes.rows.length === 0) throw new Error('Estudiante pre-asociado no encontrado');
+        if (estRes.rows[0].estado === 'GRADUADO') {
+          throw new Error('El estudiante ya se encuentra graduado y no puede matricularse nuevamente');
+        }
         studentCode = estRes.rows[0].codigo;
         const idUsuarioEstudiante = estRes.rows[0].id_usuario;
 
