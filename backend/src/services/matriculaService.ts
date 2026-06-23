@@ -153,9 +153,11 @@ export class MatriculaService {
       `SELECT m.*, ne.nombre as grado_nivel, tg.nombre as tipo_grado, s.nombre as seccion, g.id_jornada, j.nombre as jornada,
               e.nombre as student_firstname, e.apellido as student_lastname, e.codigo as student_code, e.documento as student_document, e.id_tipodocumento as student_id_tipodocumento,
               pf.nombre as parent_firstname, pf.apellido as parent_lastname, pf.documeno as parent_document, pf.id_tipodocumento as parent_id_tipodocumento,
+              col.escudo_url, col.nombre as school_name,
               (g.cupos_totales - (SELECT COUNT(*) FROM matricula WHERE id_grupo = g.id_grupo AND estado IN ('ACTIVA', 'TRASLADADA'))) as cupos_restantes
        FROM matricula m
        JOIN grupos g ON m.id_grupo = g.id_grupo
+       LEFT JOIN colegio col ON col.id_colegio = m.id_colegio
        LEFT JOIN nivel_escolar ne ON g.id_nivel = ne.id_nivel
        LEFT JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
        LEFT JOIN secciones s ON g.id_seccion = s.id_seccion

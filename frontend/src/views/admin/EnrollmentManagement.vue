@@ -294,11 +294,12 @@ const downloadPDF = async (fullMatricula: any) => {
     await nextTick()
     await new Promise(resolve => setTimeout(resolve, 500)) // Give Vue 500ms to render the template fully
     const opt = {
-      margin:       0.5,
+      margin:       0,
       filename:     `ficha_matricula_${fullMatricula.student_code || 'SIN_CODIGO'}_${fullMatricula.id_matricula}.pdf`,
       image:        { type: 'jpeg' as const, quality: 0.98 },
-      html2canvas:  { scale: 2, useCORS: true },
-      jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' as const }
+      html2canvas:  { scale: 2, useCORS: true, scrollX: 0, scrollY: 0, windowWidth: 816 },
+      jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' as const },
+      pagebreak:    { mode: ['css', 'legacy'] }
     }
     if (tempPrintableRef.value) {
       await html2pdf().set(opt).from(tempPrintableRef.value).save()
@@ -1570,13 +1571,27 @@ const rejectException = async (id: number) => {
   </Teleport>
 
   <!-- Hidden Printable Ficha de Matricula Template -->
-  <div v-if="tempMatricula" style="position: fixed; top: 0; left: 0; width: 800px; height: 100vh; overflow: hidden; pointer-events: none; opacity: 0.005; z-index: -99999;">
-    <div ref="tempPrintableRef" style="width: 800px; padding: 40px; background-color: #ffffff; color: #0f172a; font-family: 'Inter', system-ui, -apple-system, sans-serif; box-sizing: border-box;">
+  <div v-if="tempMatricula" style="position: fixed; top: 0; left: 0; width: 816px; height: 100vh; overflow: hidden; pointer-events: none; opacity: 0.005; z-index: -99999;">
+    <div ref="tempPrintableRef" style="width: 816px; padding: 48px; background-color: #ffffff; color: #0f172a; font-family: 'Inter', system-ui, -apple-system, sans-serif; box-sizing: border-box;">
     <!-- Header -->
-    <div style="text-align: center; border-bottom: 2px solid #cbd5e1; padding-bottom: 20px; margin-bottom: 30px;">
-      <h1 style="font-size: 26px; font-weight: 900; text-transform: uppercase; color: #1e1b4b; margin: 0; letter-spacing: -0.025em;">ACADEMIANEIVA</h1>
-      <p style="font-size: 11px; font-weight: 800; color: #4f46e5; margin: 5px 0 0 0; text-transform: uppercase; letter-spacing: 0.15em;">Ficha Oficial de Matrícula Académica</p>
-      <p style="font-size: 10px; font-weight: 500; color: #64748b; margin: 4px 0 0 0;">Matrícula Código: #{{ tempMatricula.id_matricula }} | Generado el: {{ new Date().toLocaleDateString('es-CO') }}</p>
+    <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #cbd5e1; padding-bottom: 20px; margin-bottom: 30px;">
+      <!-- School Shield (Left) -->
+      <div style="width: 120px; height: 90px; flex-shrink: 0;">
+        <img v-if="tempMatricula.escudo_url" :src="`http://localhost:3000${tempMatricula.escudo_url}`" crossorigin="anonymous" style="width: 120px; height: 90px; object-fit: contain;" />
+        <div v-else style="width: 120px; height: 90px; background: #f1f5f9; border-radius: 12px; display: flex; align-items: center; justify-content: center;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        </div>
+      </div>
+      <!-- Title (Center) -->
+      <div style="text-align: center; flex: 1; padding: 0 20px;">
+        <h1 style="font-size: 24px; font-weight: 900; text-transform: uppercase; color: #1e1b4b; margin: 0; letter-spacing: -0.025em;">{{ tempMatricula.school_name || 'ACADEMIANEIVA' }}</h1>
+        <p style="font-size: 11px; font-weight: 800; color: #4f46e5; margin: 5px 0 0 0; text-transform: uppercase; letter-spacing: 0.15em;">Ficha Oficial de Matrícula Académica</p>
+        <p style="font-size: 10px; font-weight: 500; color: #64748b; margin: 4px 0 0 0;">Matrícula Código: #{{ tempMatricula.id_matricula }} | Generado el: {{ new Date().toLocaleDateString('es-CO') }}</p>
+      </div>
+      <!-- Graduation Cap (Right) -->
+      <div style="width: 90px; height: 90px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2v-5"/></svg>
+      </div>
     </div>
 
     <!-- General Grid -->
@@ -1659,6 +1674,40 @@ const rejectException = async (id: number) => {
         <span>Atención: Esta matrícula se encuentra registrada para desarrollo y no cuenta con documentos de validación adjuntos en el sistema.</span>
       </div>
     </div>
+
+    <!-- Attached Document Pages -->
+    <template v-if="tempMatricula.documentos && tempMatricula.documentos.length > 0">
+      <div v-for="doc in tempMatricula.documentos" :key="'attach-' + doc.id_documento" style="page-break-before: always;">
+        <!-- Document Page Header -->
+        <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #cbd5e1; padding-bottom: 16px; margin-bottom: 24px;">
+          <div style="width: 80px; height: 64px; flex-shrink: 0;">
+            <img v-if="tempMatricula.escudo_url" :src="`http://localhost:3000${tempMatricula.escudo_url}`" crossorigin="anonymous" style="width: 80px; height: 64px; object-fit: contain;" />
+            <div v-else style="width: 80px; height: 64px; background: #f1f5f9; border-radius: 10px; display: flex; align-items: center; justify-content: center;">
+              <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            </div>
+          </div>
+          <div style="text-align: center; flex: 1; padding: 0 16px;">
+            <p style="font-size: 14px; font-weight: 900; text-transform: uppercase; color: #1e1b4b; margin: 0;">{{ documentLabels[doc.tipo_documento] || doc.tipo_documento }}</p>
+            <p style="font-size: 9px; font-weight: 600; color: #64748b; margin: 4px 0 0 0;">Estudiante: {{ tempMatricula.student_firstname }} {{ tempMatricula.student_lastname }} · Doc: {{ tempMatricula.student_document }}</p>
+          </div>
+          <div style="width: 64px; height: 64px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2v-5"/></svg>
+          </div>
+        </div>
+        <!-- Document Content -->
+        <div v-if="doc.url && !doc.url.toLowerCase().endsWith('.pdf')" style="text-align: center; padding: 10px;">
+          <img :src="formatUrl(doc.url)" crossorigin="anonymous" style="max-width: 100%; max-height: 820px; object-fit: contain; border-radius: 12px; border: 1px solid #e2e8f0;" />
+        </div>
+        <div v-else-if="doc.url && doc.url.toLowerCase().endsWith('.pdf')" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 80px 40px; border: 2px dashed #cbd5e1; border-radius: 20px; margin: 40px 0; background: #f8fafc;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+          <p style="font-size: 16px; font-weight: 800; color: #334155; margin: 20px 0 6px 0;">{{ documentLabels[doc.tipo_documento] || doc.tipo_documento }}</p>
+          <p style="font-size: 11px; font-weight: 600; color: #94a3b8; margin: 0;">Documento PDF adjunto digitalmente — Ver en plataforma</p>
+        </div>
+        <div v-else style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 80px 40px; border: 2px dashed #fef3c7; border-radius: 20px; margin: 40px 0; background: #fffbeb;">
+          <p style="font-size: 14px; font-weight: 700; color: #b45309;">Documento pendiente de carga</p>
+        </div>
+      </div>
+    </template>
 
     <!-- Signatures -->
     <div style="display: flex; justify-content: space-between; margin-top: 100px; padding-left: 20px; padding-right: 20px;">

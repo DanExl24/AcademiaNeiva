@@ -49,6 +49,8 @@ import {
   createReingresoEnrollment,
   approveReingresoEnrollment,
   rejectReingresoEnrollment,
+  renameSingleCourse,
+  bulkRenameCourses,
 } from "../controllers/academicAdminController";
 import { upload } from "../config/multer";
 import { verifyToken, requireDirectivo } from "../middleware/authMiddleware";
@@ -71,6 +73,8 @@ router.post("/grade-types", createGradeType);
 router.delete("/grade-types/:id", deleteGradeType);
 router.post("/groups", createGroup);
 router.patch("/groups/:id/cupos", updateGroupCupos);
+router.patch("/groups/:id/rename", verifyToken, requireDirectivo, renameSingleCourse);
+router.patch("/grade-types/:id/bulk-rename", verifyToken, requireDirectivo, bulkRenameCourses);
 router.delete("/groups/:id", deleteGroup);
 router.get("/subjects/:schoolId", getSubjects);
 router.get("/subjects/trash/:schoolId", getSubjectTrash);

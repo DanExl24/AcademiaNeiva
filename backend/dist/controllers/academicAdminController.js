@@ -36,7 +36,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.saveEnrollmentConfig = exports.getEnrollmentConfig = exports.uploadMySchoolEscudo = exports.resetMySchoolIdentity = exports.updateMySchoolIdentity = exports.getMySchoolData = exports.getSubjectTrash = exports.getDirectivoDashboard = exports.getPeriodClosureDetails = exports.deleteEvidencia = exports.updateEvidencia = exports.createEvidencia = exports.deleteSubject = exports.createSubject = exports.updateTeacherStatus = exports.deleteTeacherAssignment = exports.assignTeacherCourseSubject = exports.createTeacher = exports.getTeacherManagementData = exports.deleteScale = exports.updateScale = exports.createScale = exports.approveAcademicPeriod = exports.updateAcademicPeriodPercentage = exports.reopenSubjectClosure = exports.reopenAcademicPeriod = exports.closeAcademicPeriod = exports.upsertCompetencyByAdmin = exports.updateManualScaleConfiguration = exports.updateSchoolDefaultSettings = exports.updateAcademicYearStatus = exports.deleteAcademicYear = exports.createAcademicYear = exports.createAcademicPeriod = exports.getAcademicSettingsData = exports.ensureAcademicPeriodPendingStatus = exports.getSubjects = exports.updateGroupCupos = exports.deleteGroup = exports.createGroup = exports.deleteGradeType = exports.createGradeType = exports.getGradeManagementData = exports.getAcademicCatalogs = void 0;
+exports.rejectReingresoEnrollment = exports.approveReingresoEnrollment = exports.createReingresoEnrollment = exports.rejectExtraordinaryEnrollment = exports.approveExtraordinaryEnrollment = exports.createExtraordinaryEnrollment = exports.saveEnrollmentConfig = exports.getEnrollmentConfig = exports.uploadMySchoolEscudo = exports.resetMySchoolIdentity = exports.updateMySchoolIdentity = exports.getMySchoolData = exports.getSubjectTrash = exports.getDirectivoDashboard = exports.getPeriodClosureDetails = exports.deleteEvidencia = exports.updateEvidencia = exports.createEvidencia = exports.deleteSubject = exports.createSubject = exports.updateTeacherStatus = exports.deleteTeacherAssignment = exports.assignTeacherCourseSubject = exports.createTeacher = exports.getTeacherManagementData = exports.deleteScale = exports.updateScale = exports.createScale = exports.approveAcademicPeriod = exports.updateAcademicPeriodPercentage = exports.reopenSubjectClosure = exports.reopenAcademicPeriod = exports.closeAcademicPeriod = exports.upsertCompetencyByAdmin = exports.updateManualScaleConfiguration = exports.updateSchoolDefaultSettings = exports.updateAcademicYearStatus = exports.deleteAcademicYear = exports.createAcademicYear = exports.createAcademicPeriod = exports.getAcademicSettingsData = exports.ensureAcademicPeriodPendingStatus = exports.getSubjects = exports.updateGroupCupos = exports.deleteGroup = exports.createGroup = exports.deleteGradeType = exports.createGradeType = exports.getGradeManagementData = exports.getAcademicCatalogs = void 0;
+exports.bulkRenameCourses = exports.renameSingleCourse = void 0;
 const db_1 = require("../config/db");
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const notificationService_1 = require("../services/notificationService");
@@ -49,22 +50,7 @@ const parseSchoolId = (value) => {
     }
     return parsed;
 };
-const ensureTeacherStatusColumn = async () => {
-    await db_1.pool.query(`
-    ALTER TABLE docente
-    ADD COLUMN IF NOT EXISTS estado VARCHAR(20) NOT NULL DEFAULT 'ACTIVO'
-  `);
-    await db_1.pool.query(`
-    UPDATE docente d
-    SET estado = CASE
-      WHEN u.activo = FALSE THEN 'INACTIVO'
-      ELSE 'ACTIVO'
-    END
-    FROM usuario u
-    WHERE d.id_usuario = u.id_usuario
-      AND (d.estado IS NULL OR d.estado NOT IN ('ACTIVO', 'INACTIVO', 'DESVINCULADO'))
-  `);
-};
+const ensureTeacherStatusColumn = async () => { };
 const autoSwitchPeriodsForYear = async (client, schoolId, yearId) => {
     const yearRes = await client.query(`SELECT "id_año", calendario, tipo_calendario
      FROM "año_lectivo"
@@ -162,49 +148,11 @@ const ensureAcademicYearForSchool = async (schoolId) => {
      RETURNING "id_año"`, [String(currentYear), schoolId]);
     return Number(created.rows[0]["id_año"]);
 };
-const ensureSchoolSettingsTable = async () => {
-    await db_1.pool.query(`
-    CREATE TABLE IF NOT EXISTS configuracion_colegio (
-      id_colegio integer PRIMARY KEY REFERENCES colegio(id_colegio) ON DELETE CASCADE,
-      nota_minima numeric(5,2) NOT NULL DEFAULT 0,
-      nota_maxima numeric(5,2) NOT NULL DEFAULT 5,
-      nota_aprobacion numeric(5,2) NOT NULL DEFAULT 3,
-      escala_modo varchar(20) NOT NULL DEFAULT 'AUTOMATICO'
-    )
-  `);
-    await db_1.pool.query(`
-    ALTER TABLE configuracion_colegio
-    ADD COLUMN IF NOT EXISTS escala_modo varchar(20) NOT NULL DEFAULT 'AUTOMATICO'
-  `);
-};
-const ensureAcademicPeriodTrimesterColumn = async () => {
-    await db_1.pool.query(`
-    ALTER TABLE periodo_academico
-    ADD COLUMN IF NOT EXISTS trimestre integer
-  `);
-};
-const ensureAcademicPeriodDayColumns = async () => {
-    await db_1.pool.query(`
-    ALTER TABLE periodo_academico
-    ADD COLUMN IF NOT EXISTS dia_inicio integer
-  `);
-    await db_1.pool.query(`
-    ALTER TABLE periodo_academico
-    ADD COLUMN IF NOT EXISTS dia_fin integer
-  `);
-};
-const ensureAcademicPeriodMonthColumns = async () => {
-    await db_1.pool.query(`
-    ALTER TABLE periodo_academico
-    ADD COLUMN IF NOT EXISTS mes_inicio integer
-  `);
-    await db_1.pool.query(`
-    ALTER TABLE periodo_academico
-    ADD COLUMN IF NOT EXISTS mes_fin integer
-  `);
-};
+const ensureSchoolSettingsTable = async () => { };
+const ensureAcademicPeriodTrimesterColumn = async () => { };
+const ensureAcademicPeriodDayColumns = async () => { };
+const ensureAcademicPeriodMonthColumns = async () => { };
 const ensureSchoolDefaultSettings = async (schoolId) => {
-    await ensureSchoolSettingsTable();
     const existing = await db_1.pool.query(`SELECT id_colegio, nota_minima, nota_maxima, nota_aprobacion, escala_modo
      FROM configuracion_colegio
      WHERE id_colegio = $1`, [schoolId]);
@@ -676,16 +624,7 @@ const getSubjects = async (req, res) => {
     }
 };
 exports.getSubjects = getSubjects;
-const ensureAcademicPeriodPendingStatus = async () => {
-    const res = await db_1.pool.query(`
-    SELECT 1 FROM pg_type t 
-    JOIN pg_enum e ON t.oid = e.enumtypid 
-    WHERE t.typname = 'estado_periodo' AND e.enumlabel = 'PENDIENTE'
-  `);
-    if (res.rows.length === 0) {
-        await db_1.pool.query("ALTER TYPE estado_periodo ADD VALUE 'PENDIENTE'");
-    }
-};
+const ensureAcademicPeriodPendingStatus = async () => { };
 exports.ensureAcademicPeriodPendingStatus = ensureAcademicPeriodPendingStatus;
 const getAcademicSettingsData = async (req, res) => {
     const schoolId = parseSchoolId(req.params.schoolId);
@@ -694,15 +633,6 @@ const getAcademicSettingsData = async (req, res) => {
         return;
     }
     try {
-        await db_1.pool.query(`
-      ALTER TABLE "año_lectivo"
-      ADD COLUMN IF NOT EXISTS estado VARCHAR(20) DEFAULT 'ABIERTO'
-    `);
-        await (0, competencyMigration_1.ensureCompetencySchema)();
-        await ensureAcademicPeriodTrimesterColumn();
-        await ensureAcademicPeriodDayColumns();
-        await ensureAcademicPeriodMonthColumns();
-        await (0, exports.ensureAcademicPeriodPendingStatus)();
         const currentYearId = await ensureAcademicYearForSchool(schoolId);
         // Auto-switch periods based on current date
         await autoSwitchPeriodsForYear(db_1.pool, schoolId, currentYearId);
@@ -1271,7 +1201,6 @@ const upsertCompetencyByAdmin = async (req, res) => {
         return;
     }
     try {
-        await (0, competencyMigration_1.ensureCompetencySchema)();
         const contextRes = await db_1.pool.query(`SELECT p."id_año"
        FROM periodo_academico p
        WHERE p.id_periodo = $1
@@ -1728,7 +1657,6 @@ const getTeacherManagementData = async (req, res) => {
         return;
     }
     try {
-        await ensureTeacherStatusColumn();
         const [documentTypesRes, teachersRes, subjectsRes, groupsRes, assignmentsRes] = await Promise.all([
             db_1.pool.query(`SELECT id_tipodocumento, tipo
          FROM tipo_documento
@@ -1823,10 +1751,6 @@ const createTeacher = async (req, res) => {
     const client = await db_1.pool.connect();
     try {
         await client.query("BEGIN");
-        await client.query(`
-      ALTER TABLE docente
-      ADD COLUMN IF NOT EXISTS estado VARCHAR(20) NOT NULL DEFAULT 'ACTIVO'
-    `);
         const documentTypeRes = await client.query("SELECT id_tipodocumento, tipo FROM tipo_documento WHERE id_tipodocumento = $1", [documentTypeId]);
         const existingTeacherRes = await client.query(`SELECT id_docente
        FROM docente
@@ -3163,3 +3087,600 @@ const saveEnrollmentConfig = async (req, res) => {
     }
 };
 exports.saveEnrollmentConfig = saveEnrollmentConfig;
+const createExtraordinaryEnrollment = async (req, res) => {
+    const authReq = req;
+    const schoolId = authReq.user?.schoolId;
+    if (!schoolId) {
+        res.status(400).json({ error: "No se pudo identificar el colegio del directivo" });
+        return;
+    }
+    const { correo_padre, id_nivel, id_grupo, id_año, id_estudiante, motivo, motivo_extraordinaria, observaciones, observaciones_extraordinaria, tiene_discapacidad, es_extranjero, motivo_cambio } = req.body;
+    const actualMotivo = motivo || motivo_extraordinaria;
+    const actualObservaciones = observaciones || observaciones_extraordinaria;
+    if (!correo_padre || !id_nivel || !id_grupo || !id_año || !actualMotivo) {
+        res.status(400).json({ error: "Los campos correo_padre, id_nivel, id_grupo, id_año y motivo son obligatorios." });
+        return;
+    }
+    const client = await db_1.pool.connect();
+    try {
+        await client.query("BEGIN");
+        // If existing student is provided, check their status
+        if (id_estudiante) {
+            const studentRes = await client.query("SELECT estado FROM estudiante WHERE id_estudiante = $1 AND id_colegio = $2", [id_estudiante, schoolId]);
+            if (studentRes.rows.length === 0) {
+                res.status(400).json({ error: "El estudiante especificado no pertenece a esta institución." });
+                return;
+            }
+            const studentStatus = studentRes.rows[0].estado;
+            if (studentStatus === 'EXPULSADO' || studentStatus === 'GRADUADO') {
+                res.status(400).json({ error: `El estudiante se encuentra en estado ${studentStatus} y no puede ser matriculado` });
+                return;
+            }
+            // Check if student already has an active or transferred enrollment for this year
+            const activeEnrollmentRes = await client.query(`SELECT id_matricula FROM matricula 
+         WHERE id_estudiante = $1 AND id_colegio = $2 AND "id_año" = $3 AND estado IN ('ACTIVA', 'TRASLADADA')`, [id_estudiante, schoolId, id_año]);
+            if (activeEnrollmentRes.rows.length > 0) {
+                res.status(400).json({ error: "El estudiante ya cuenta con una matrícula ACTIVA o TRASLADADA para este año lectivo." });
+                return;
+            }
+        }
+        // Insert matricula
+        const matRes = await client.query(`INSERT INTO matricula 
+         (id_estudiante, id_nivel, id_grupo, id_colegio, "id_año", estado, correo_padre, tiene_discapacidad, es_extranjero, tipo, motivo, observaciones, id_usuario_responsable, fecha_creacion)
+       VALUES ($1, $2, $3, $4, $5, 'PENDIENTE', $6, $7, $8, 'EXTRAORDINARIA', $9, $10, $11, NOW())
+       RETURNING *`, [
+            id_estudiante || null,
+            id_nivel,
+            id_grupo,
+            schoolId,
+            id_año,
+            correo_padre,
+            tiene_discapacidad === true || tiene_discapacidad === 'true',
+            es_extranjero === true || es_extranjero === 'true',
+            actualMotivo,
+            actualObservaciones || null,
+            authReq.user.id
+        ]);
+        const newMat = matRes.rows[0];
+        const idMatricula = newMat.id_matricula;
+        // Retrieve level name to determine required documents
+        const levelRes = await client.query('SELECT nombre FROM nivel_escolar WHERE id_nivel = $1', [id_nivel]);
+        if (levelRes.rows.length === 0)
+            throw new Error("Nivel escolar no válido");
+        const levelName = levelRes.rows[0].nombre;
+        const ALWAYS_REQUIRED = ['documentoPadre', 'salud', 'foto', 'reciboPublico'];
+        const REQUIRED_FOR_LOWER_LEVELS = ['registroCivil', 'vacunas'];
+        const REQUIRED_NOT_INFANT = ['documentoIdentidad', 'certificadosEscolaridad'];
+        const isHigher = levelName === 'SECUNDARIA' || levelName === 'MEDIA';
+        const isPre = levelName === 'PREESCOLAR';
+        const requiredDocs = [...ALWAYS_REQUIRED];
+        if (!isHigher)
+            requiredDocs.push(...REQUIRED_FOR_LOWER_LEVELS);
+        if (!isPre)
+            requiredDocs.push(...REQUIRED_NOT_INFANT);
+        if (es_extranjero === true || es_extranjero === 'true')
+            requiredDocs.push('visa');
+        if (tiene_discapacidad === true || tiene_discapacidad === 'true')
+            requiredDocs.push('certificadoDiscapacidad');
+        for (const doc of requiredDocs) {
+            await client.query(`INSERT INTO documento_matriculas (id_matricula, tipo_documento, url, estado, fecha, id_colegio)
+         VALUES ($1, $2, 'PENDIENTE', 'PENDIENTE', NOW(), $3)`, [idMatricula, doc, schoolId]);
+        }
+        // Supervision Logging if admin_general
+        const isSupervised = authReq.user?.roles.includes("admin_general");
+        if (isSupervised) {
+            const auditRes = await client.query(`SELECT id_auditoria FROM auditoria_supervision 
+         WHERE id_colegio = $1 AND id_admin_general = $2 AND estado_supervision = 'ACTIVA' LIMIT 1`, [schoolId, authReq.user.id]);
+            if (auditRes.rows.length > 0) {
+                const activeAuditoriaId = auditRes.rows[0].id_auditoria;
+                await client.query(`INSERT INTO auditoria_acciones_realizadas
+           (id_auditoria, modulo, tipo_accion, accion, recurso_afectado, valor_antiguo, valor_nuevo, motivo_cambio)
+           VALUES ($1, 'MATRICULAS', 'CREACION', 'Creación de Matrícula Extraordinaria', $2, NULL, $3, $4)`, [
+                    activeAuditoriaId,
+                    `Matricula ID: ${idMatricula}`,
+                    JSON.stringify(newMat),
+                    motivo_cambio || 'Acción bajo supervisión de Admin General'
+                ]);
+            }
+        }
+        await client.query("COMMIT");
+        res.json({ message: "Matrícula extraordinaria creada exitosamente", matricula: newMat });
+    }
+    catch (error) {
+        await client.query("ROLLBACK");
+        console.error("Error in createExtraordinaryEnrollment:", error);
+        res.status(500).json({ error: "Error en el servidor" });
+    }
+    finally {
+        client.release();
+    }
+};
+exports.createExtraordinaryEnrollment = createExtraordinaryEnrollment;
+const approveExtraordinaryEnrollment = async (req, res) => {
+    const authReq = req;
+    const { id } = req.params;
+    const { motivo_cambio } = req.body;
+    const schoolId = authReq.user?.schoolId;
+    if (!schoolId) {
+        res.status(400).json({ error: "No se pudo identificar el colegio del directivo" });
+        return;
+    }
+    const client = await db_1.pool.connect();
+    try {
+        await client.query("BEGIN");
+        // Fetch the matricula
+        const matRes = await client.query("SELECT * FROM matricula WHERE id_matricula = $1 AND id_colegio = $2", [id, schoolId]);
+        if (matRes.rows.length === 0) {
+            res.status(404).json({ error: "Matrícula no encontrada" });
+            return;
+        }
+        const mat = matRes.rows[0];
+        if (mat.tipo !== 'EXTRAORDINARIA' || mat.estado !== 'PENDIENTE') {
+            res.status(400).json({ error: "Solo se pueden aprobar excepciones de matrículas extraordinarias en estado PENDIENTE." });
+            return;
+        }
+        // Update state to APROBADA
+        const updatedRes = await client.query("UPDATE matricula SET estado = 'APROBADA' WHERE id_matricula = $1 RETURNING *", [id]);
+        const updatedMat = updatedRes.rows[0];
+        // Notification: send email to parent with tracking token
+        await notificationService_1.NotificationService.sendExtraordinaryApprovalEmail(mat.correo_padre, 'Acudiente', mat.token_seguimiento);
+        // Supervision Logging if admin_general
+        const isSupervised = authReq.user?.roles.includes("admin_general");
+        if (isSupervised) {
+            const auditRes = await client.query(`SELECT id_auditoria FROM auditoria_supervision 
+         WHERE id_colegio = $1 AND id_admin_general = $2 AND estado_supervision = 'ACTIVA' LIMIT 1`, [schoolId, authReq.user.id]);
+            if (auditRes.rows.length > 0) {
+                const activeAuditoriaId = auditRes.rows[0].id_auditoria;
+                await client.query(`INSERT INTO auditoria_acciones_realizadas
+           (id_auditoria, modulo, tipo_accion, accion, recurso_afectado, valor_antiguo, valor_nuevo, motivo_cambio)
+           VALUES ($1, 'MATRICULAS', 'MODIFICACION', 'Aprobación de Excepción de Matrícula Extraordinaria', $2, $3, $4, $5)`, [
+                    activeAuditoriaId,
+                    `Matricula ID: ${id}`,
+                    JSON.stringify(mat),
+                    JSON.stringify(updatedMat),
+                    motivo_cambio || 'Acción bajo supervisión de Admin General'
+                ]);
+            }
+        }
+        await client.query("COMMIT");
+        res.json({ message: "Excepción aprobada exitosamente y notificación enviada al acudiente.", matricula: updatedMat });
+    }
+    catch (error) {
+        await client.query("ROLLBACK");
+        console.error("Error in approveExtraordinaryEnrollment:", error);
+        res.status(500).json({ error: "Error en el servidor" });
+    }
+    finally {
+        client.release();
+    }
+};
+exports.approveExtraordinaryEnrollment = approveExtraordinaryEnrollment;
+const rejectExtraordinaryEnrollment = async (req, res) => {
+    const authReq = req;
+    const { id } = req.params;
+    const { motivo_cambio } = req.body;
+    const schoolId = authReq.user?.schoolId;
+    if (!schoolId) {
+        res.status(400).json({ error: "No se pudo identificar el colegio del directivo" });
+        return;
+    }
+    const client = await db_1.pool.connect();
+    try {
+        await client.query("BEGIN");
+        // Fetch the matricula
+        const matRes = await client.query("SELECT * FROM matricula WHERE id_matricula = $1 AND id_colegio = $2", [id, schoolId]);
+        if (matRes.rows.length === 0) {
+            res.status(404).json({ error: "Matrícula no encontrada" });
+            return;
+        }
+        const mat = matRes.rows[0];
+        if (mat.tipo !== 'EXTRAORDINARIA' || mat.estado !== 'PENDIENTE') {
+            res.status(400).json({ error: "Solo se pueden rechazar excepciones de matrículas extraordinarias en estado PENDIENTE." });
+            return;
+        }
+        // Update state to RECHAZADA
+        const updatedRes = await client.query("UPDATE matricula SET estado = 'RECHAZADA' WHERE id_matricula = $1 RETURNING *", [id]);
+        const updatedMat = updatedRes.rows[0];
+        // Supervision Logging if admin_general
+        const isSupervised = authReq.user?.roles.includes("admin_general");
+        if (isSupervised) {
+            const auditRes = await client.query(`SELECT id_auditoria FROM auditoria_supervision 
+         WHERE id_colegio = $1 AND id_admin_general = $2 AND estado_supervision = 'ACTIVA' LIMIT 1`, [schoolId, authReq.user.id]);
+            if (auditRes.rows.length > 0) {
+                const activeAuditoriaId = auditRes.rows[0].id_auditoria;
+                await client.query(`INSERT INTO auditoria_acciones_realizadas
+           (id_auditoria, modulo, tipo_accion, accion, recurso_afectado, valor_antiguo, valor_nuevo, motivo_cambio)
+           VALUES ($1, 'MATRICULAS', 'MODIFICACION', 'Rechazo de Excepción de Matrícula Extraordinaria', $2, $3, $4, $5)`, [
+                    activeAuditoriaId,
+                    `Matricula ID: ${id}`,
+                    JSON.stringify(mat),
+                    JSON.stringify(updatedMat),
+                    motivo_cambio || 'Acción bajo supervisión de Admin General'
+                ]);
+            }
+        }
+        await client.query("COMMIT");
+        res.json({ message: "Excepción rechazada exitosamente.", matricula: updatedMat });
+    }
+    catch (error) {
+        await client.query("ROLLBACK");
+        console.error("Error in rejectExtraordinaryEnrollment:", error);
+        res.status(500).json({ error: "Error en el servidor" });
+    }
+    finally {
+        client.release();
+    }
+};
+exports.rejectExtraordinaryEnrollment = rejectExtraordinaryEnrollment;
+const createReingresoEnrollment = async (req, res) => {
+    const authReq = req;
+    const schoolId = authReq.user?.schoolId;
+    if (!schoolId) {
+        res.status(400).json({ error: "No se pudo identificar el colegio del directivo" });
+        return;
+    }
+    const { id_estudiante, id_nivel, id_grupo, id_año, motivo, observaciones, tiene_discapacidad, es_extranjero, motivo_cambio } = req.body;
+    if (!id_estudiante || !id_nivel || !id_grupo || !id_año || !motivo) {
+        res.status(400).json({ error: "Los campos id_estudiante, id_nivel, id_grupo, id_año y motivo son obligatorios." });
+        return;
+    }
+    const client = await db_1.pool.connect();
+    try {
+        await client.query("BEGIN");
+        // Check student status
+        const studentRes = await client.query("SELECT estado FROM estudiante WHERE id_estudiante = $1 AND id_colegio = $2", [id_estudiante, schoolId]);
+        if (studentRes.rows.length === 0) {
+            res.status(400).json({ error: "El estudiante especificado no pertenece a esta institución." });
+            return;
+        }
+        const studentStatus = studentRes.rows[0].estado;
+        if (studentStatus === 'EXPULSADO' || studentStatus === 'GRADUADO' || studentStatus === 'SANCIONADO') {
+            res.status(400).json({ error: `El estudiante se encuentra en estado ${studentStatus} y no es elegible para reingreso.` });
+            return;
+        }
+        if (studentStatus !== 'RETIRADO') {
+            res.status(400).json({ error: `Solo estudiantes con estado 'RETIRADO' pueden solicitar reingreso.` });
+            return;
+        }
+        // Check if there is already an active or pending enrollment for this student in the current year
+        const existingEnrollmentRes = await client.query(`SELECT id_matricula, estado FROM matricula 
+       WHERE id_estudiante = $1 AND id_colegio = $2 AND "id_año" = $3 AND estado IN ('ACTIVA', 'TRASLADADA', 'PENDIENTE', 'CORRECCION')`, [id_estudiante, schoolId, id_año]);
+        if (existingEnrollmentRes.rows.length > 0) {
+            res.status(400).json({ error: "El estudiante ya cuenta con una matrícula activa, trasladada o pendiente para este año lectivo." });
+            return;
+        }
+        // Fetch the parent's email
+        const parentRes = await client.query(`SELECT u.email FROM detalle_padrefamilia dp
+       JOIN padre_familia pf ON dp.id_padrefamilia = pf.id_padrefamilia
+       JOIN usuario u ON pf.id_usuario = u.id_usuario
+       WHERE dp.id_estudiante = $1 AND dp.id_colegio = $2
+       LIMIT 1`, [id_estudiante, schoolId]);
+        if (parentRes.rows.length === 0) {
+            res.status(400).json({ error: "No se encontró un acudiente asociado al estudiante para notificar." });
+            return;
+        }
+        const correo_padre = parentRes.rows[0].email;
+        // Insert matricula
+        const matRes = await client.query(`INSERT INTO matricula 
+         (id_estudiante, id_nivel, id_grupo, id_colegio, "id_año", estado, correo_padre, tiene_discapacidad, es_extranjero, tipo, motivo, observaciones, id_usuario_responsable, fecha_creacion)
+       VALUES ($1, $2, $3, $4, $5, 'PENDIENTE', $6, $7, $8, 'REINGRESO', $9, $10, $11, NOW())
+       RETURNING *`, [
+            id_estudiante,
+            id_nivel,
+            id_grupo,
+            schoolId,
+            id_año,
+            correo_padre,
+            tiene_discapacidad === true || tiene_discapacidad === 'true',
+            es_extranjero === true || es_extranjero === 'true',
+            motivo,
+            observaciones || null,
+            authReq.user.id
+        ]);
+        const newMat = matRes.rows[0];
+        const idMatricula = newMat.id_matricula;
+        // Retrieve level name to determine required documents
+        const levelRes = await client.query('SELECT nombre FROM nivel_escolar WHERE id_nivel = $1', [id_nivel]);
+        if (levelRes.rows.length === 0)
+            throw new Error("Nivel escolar no válido");
+        const levelName = levelRes.rows[0].nombre;
+        const ALWAYS_REQUIRED = ['documentoPadre', 'salud', 'foto', 'reciboPublico'];
+        const REQUIRED_FOR_LOWER_LEVELS = ['registroCivil', 'vacunas'];
+        const REQUIRED_NOT_INFANT = ['documentoIdentidad', 'certificadosEscolaridad'];
+        const isHigher = levelName === 'SECUNDARIA' || levelName === 'MEDIA';
+        const isPre = levelName === 'PREESCOLAR';
+        const requiredDocs = [...ALWAYS_REQUIRED];
+        if (!isHigher)
+            requiredDocs.push(...REQUIRED_FOR_LOWER_LEVELS);
+        if (!isPre)
+            requiredDocs.push(...REQUIRED_NOT_INFANT);
+        if (es_extranjero === true || es_extranjero === 'true')
+            requiredDocs.push('visa');
+        if (tiene_discapacidad === true || tiene_discapacidad === 'true')
+            requiredDocs.push('certificadoDiscapacidad');
+        for (const doc of requiredDocs) {
+            await client.query(`INSERT INTO documento_matriculas (id_matricula, tipo_documento, url, estado, fecha, id_colegio)
+         VALUES ($1, $2, 'PENDIENTE', 'PENDIENTE', NOW(), $3)`, [idMatricula, doc, schoolId]);
+        }
+        // Supervision Logging if admin_general
+        const isSupervised = authReq.user?.roles.includes("admin_general");
+        if (isSupervised) {
+            const auditRes = await client.query(`SELECT id_auditoria FROM auditoria_supervision 
+         WHERE id_colegio = $1 AND id_admin_general = $2 AND estado_supervision = 'ACTIVA' LIMIT 1`, [schoolId, authReq.user.id]);
+            if (auditRes.rows.length > 0) {
+                const activeAuditoriaId = auditRes.rows[0].id_auditoria;
+                await client.query(`INSERT INTO auditoria_acciones_realizadas
+           (id_auditoria, modulo, tipo_accion, accion, recurso_afectado, valor_antiguo, valor_nuevo, motivo_cambio)
+           VALUES ($1, 'MATRICULAS', 'CREACION', 'Creación de Solicitud de Reingreso', $2, NULL, $3, $4)`, [
+                    activeAuditoriaId,
+                    `Matricula ID: ${idMatricula}`,
+                    JSON.stringify(newMat),
+                    motivo_cambio || 'Acción bajo supervisión de Admin General'
+                ]);
+            }
+        }
+        await client.query("COMMIT");
+        res.json({ message: "Solicitud de reingreso creada exitosamente", matricula: newMat });
+    }
+    catch (error) {
+        await client.query("ROLLBACK");
+        console.error("Error in createReingresoEnrollment:", error);
+        res.status(500).json({ error: "Error en el servidor" });
+    }
+    finally {
+        client.release();
+    }
+};
+exports.createReingresoEnrollment = createReingresoEnrollment;
+const approveReingresoEnrollment = async (req, res) => {
+    const authReq = req;
+    const { id } = req.params;
+    const { motivo_cambio } = req.body;
+    const schoolId = authReq.user?.schoolId;
+    if (!schoolId) {
+        res.status(400).json({ error: "No se pudo identificar el colegio del directivo" });
+        return;
+    }
+    const client = await db_1.pool.connect();
+    try {
+        await client.query("BEGIN");
+        // Fetch the matricula
+        const matRes = await client.query("SELECT * FROM matricula WHERE id_matricula = $1 AND id_colegio = $2", [id, schoolId]);
+        if (matRes.rows.length === 0) {
+            res.status(404).json({ error: "Matrícula no encontrada" });
+            return;
+        }
+        const mat = matRes.rows[0];
+        if (mat.tipo !== 'REINGRESO' || mat.estado !== 'PENDIENTE') {
+            res.status(400).json({ error: "Solo se pueden aprobar solicitudes de reingreso en estado PENDIENTE." });
+            return;
+        }
+        // Update state to APROBADA
+        const updatedRes = await client.query("UPDATE matricula SET estado = 'APROBADA' WHERE id_matricula = $1 RETURNING *", [id]);
+        const updatedMat = updatedRes.rows[0];
+        // Notification: send email to parent with tracking token for reingreso
+        await notificationService_1.NotificationService.sendReingresoApprovalEmail(mat.correo_padre, 'Acudiente', mat.token_seguimiento);
+        // Supervision Logging if admin_general
+        const isSupervised = authReq.user?.roles.includes("admin_general");
+        if (isSupervised) {
+            const auditRes = await client.query(`SELECT id_auditoria FROM auditoria_supervision 
+         WHERE id_colegio = $1 AND id_admin_general = $2 AND estado_supervision = 'ACTIVA' LIMIT 1`, [schoolId, authReq.user.id]);
+            if (auditRes.rows.length > 0) {
+                const activeAuditoriaId = auditRes.rows[0].id_auditoria;
+                await client.query(`INSERT INTO auditoria_acciones_realizadas
+           (id_auditoria, modulo, tipo_accion, accion, recurso_afectado, valor_antiguo, valor_nuevo, motivo_cambio)
+           VALUES ($1, 'MATRICULAS', 'MODIFICACION', 'Aprobación de Solicitud de Reingreso', $2, $3, $4, $5)`, [
+                    activeAuditoriaId,
+                    `Matricula ID: ${id}`,
+                    JSON.stringify(mat),
+                    JSON.stringify(updatedMat),
+                    motivo_cambio || 'Acción bajo supervisión de Admin General'
+                ]);
+            }
+        }
+        await client.query("COMMIT");
+        res.json({ message: "Solicitud de reingreso aprobada exitosamente y notificación enviada al acudiente.", matricula: updatedMat });
+    }
+    catch (error) {
+        await client.query("ROLLBACK");
+        console.error("Error in approveReingresoEnrollment:", error);
+        res.status(500).json({ error: "Error en el servidor" });
+    }
+    finally {
+        client.release();
+    }
+};
+exports.approveReingresoEnrollment = approveReingresoEnrollment;
+const rejectReingresoEnrollment = async (req, res) => {
+    const authReq = req;
+    const { id } = req.params;
+    const { motivo_cambio } = req.body;
+    const schoolId = authReq.user?.schoolId;
+    if (!schoolId) {
+        res.status(400).json({ error: "No se pudo identificar el colegio del directivo" });
+        return;
+    }
+    const client = await db_1.pool.connect();
+    try {
+        await client.query("BEGIN");
+        // Fetch the matricula
+        const matRes = await client.query("SELECT * FROM matricula WHERE id_matricula = $1 AND id_colegio = $2", [id, schoolId]);
+        if (matRes.rows.length === 0) {
+            res.status(404).json({ error: "Matrícula no encontrada" });
+            return;
+        }
+        const mat = matRes.rows[0];
+        if (mat.tipo !== 'REINGRESO' || mat.estado !== 'PENDIENTE') {
+            res.status(400).json({ error: "Solo se pueden rechazar solicitudes de reingreso en estado PENDIENTE." });
+            return;
+        }
+        // Update state to RECHAZADA
+        const updatedRes = await client.query("UPDATE matricula SET estado = 'RECHAZADA' WHERE id_matricula = $1 RETURNING *", [id]);
+        const updatedMat = updatedRes.rows[0];
+        // Supervision Logging if admin_general
+        const isSupervised = authReq.user?.roles.includes("admin_general");
+        if (isSupervised) {
+            const auditRes = await client.query(`SELECT id_auditoria FROM auditoria_supervision 
+         WHERE id_colegio = $1 AND id_admin_general = $2 AND estado_supervision = 'ACTIVA' LIMIT 1`, [schoolId, authReq.user.id]);
+            if (auditRes.rows.length > 0) {
+                const activeAuditoriaId = auditRes.rows[0].id_auditoria;
+                await client.query(`INSERT INTO auditoria_acciones_realizadas
+           (id_auditoria, modulo, tipo_accion, accion, recurso_afectado, valor_antiguo, valor_nuevo, motivo_cambio)
+           VALUES ($1, 'MATRICULAS', 'MODIFICACION', 'Rechazo de Solicitud de Reingreso', $2, $3, $4, $5)`, [
+                    activeAuditoriaId,
+                    `Matricula ID: ${id}`,
+                    JSON.stringify(mat),
+                    JSON.stringify(updatedMat),
+                    motivo_cambio || 'Acción bajo supervisión de Admin General'
+                ]);
+            }
+        }
+        await client.query("COMMIT");
+        res.json({ message: "Solicitud de reingreso rechazada exitosamente.", matricula: updatedMat });
+    }
+    catch (error) {
+        await client.query("ROLLBACK");
+        console.error("Error in rejectReingresoEnrollment:", error);
+        res.status(500).json({ error: "Error en el servidor" });
+    }
+    finally {
+        client.release();
+    }
+};
+exports.rejectReingresoEnrollment = rejectReingresoEnrollment;
+// ─────────────────────────────────────────────────────────────────────────────
+// RENAME SINGLE COURSE
+// PATCH /api/academic-admin/groups/:id/rename
+// ─────────────────────────────────────────────────────────────────────────────
+const renameSingleCourse = async (req, res) => {
+    const idGrupo = Number(req.params.id);
+    const { schoolId, nuevo_nombre } = req.body;
+    if (!schoolId || !idGrupo) {
+        res.status(400).json({ error: "Parámetros inválidos" });
+        return;
+    }
+    const nombre = (nuevo_nombre || "").trim();
+    if (!nombre) {
+        res.status(400).json({ error: "El nombre no puede estar vacío" });
+        return;
+    }
+    if (nombre.length > 10) {
+        res.status(400).json({ error: "El nombre no puede superar los 10 caracteres" });
+        return;
+    }
+    const client = await db_1.pool.connect();
+    try {
+        await client.query("BEGIN");
+        // Security: verify group belongs to school
+        const groupRes = await client.query(`SELECT g.id_grupo, g.id_seccion FROM grupos g WHERE g.id_grupo = $1 AND g.id_colegio = $2`, [idGrupo, schoolId]);
+        if (!groupRes.rows.length) {
+            res.status(404).json({ error: "Curso no encontrado" });
+            await client.query("ROLLBACK");
+            return;
+        }
+        const { id_seccion } = groupRes.rows[0];
+        // Check how many groups share this section
+        const shareRes = await client.query(`SELECT COUNT(*)::int AS total FROM grupos WHERE id_seccion = $1 AND id_colegio = $2`, [id_seccion, schoolId]);
+        const shared = shareRes.rows[0].total;
+        if (shared <= 1) {
+            // Only this group uses the section → rename directly
+            await client.query(`UPDATE secciones SET nombre = $1 WHERE id_seccion = $2`, [nombre, id_seccion]);
+        }
+        else {
+            // Section is shared → create a new section and reassign
+            const newSecRes = await client.query(`INSERT INTO secciones (nombre) VALUES ($1) RETURNING id_seccion`, [nombre]);
+            const newSeccionId = newSecRes.rows[0].id_seccion;
+            await client.query(`UPDATE grupos SET id_seccion = $1 WHERE id_grupo = $2`, [newSeccionId, idGrupo]);
+        }
+        await client.query("COMMIT");
+        res.json({ message: `Curso renombrado a "${nombre}" exitosamente.` });
+    }
+    catch (error) {
+        await client.query("ROLLBACK");
+        console.error("Error in renameSingleCourse:", error);
+        res.status(500).json({ error: "Error en el servidor" });
+    }
+    finally {
+        client.release();
+    }
+};
+exports.renameSingleCourse = renameSingleCourse;
+// ─────────────────────────────────────────────────────────────────────────────
+// BULK RENAME ALL COURSES IN A GRADE
+// PATCH /api/academic-admin/grade-types/:id/bulk-rename
+// ─────────────────────────────────────────────────────────────────────────────
+const bulkRenameCourses = async (req, res) => {
+    const idTipoGrado = Number(req.params.id);
+    const { schoolId, prefijo, separador } = req.body;
+    if (!schoolId || !idTipoGrado) {
+        res.status(400).json({ error: "Parámetros inválidos" });
+        return;
+    }
+    const base = (prefijo || "").trim();
+    if (!base) {
+        res.status(400).json({ error: "El prefijo no puede estar vacío" });
+        return;
+    }
+    if (base.length > 10) {
+        res.status(400).json({ error: "El prefijo no puede superar los 10 caracteres" });
+        return;
+    }
+    // sep can be "-", ".", " ", or "" (empty = no separator)
+    const sep = (separador !== undefined && separador !== null) ? String(separador) : "-";
+    const client = await db_1.pool.connect();
+    try {
+        await client.query("BEGIN");
+        // Verify grade type belongs to school
+        const gtRes = await client.query(`SELECT tg.id_tipo_grado 
+       FROM tipo_grado tg
+       JOIN nivel_escolar ne ON tg.id_nivel = ne.id_nivel
+       WHERE tg.id_tipo_grado = $1 AND ne.id_colegio = $2`, [idTipoGrado, schoolId]);
+        if (!gtRes.rows.length) {
+            res.status(404).json({ error: "Grado no encontrado" });
+            await client.query("ROLLBACK");
+            return;
+        }
+        // Get all groups for this grade ordered consistently
+        const groupsRes = await client.query(`SELECT id_grupo, id_seccion FROM grupos WHERE id_tipo_grado = $1 AND id_colegio = $2 ORDER BY id_grupo ASC`, [idTipoGrado, schoolId]);
+        const groups = groupsRes.rows;
+        if (!groups.length) {
+            res.status(400).json({ error: "Este grado no tiene cursos" });
+            await client.query("ROLLBACK");
+            return;
+        }
+        // Validate generated name length
+        const maxNumberStr = String(groups.length);
+        const maxGeneratedName = `${base}${sep}${maxNumberStr}`;
+        if (maxGeneratedName.length > 10) {
+            res.status(400).json({ error: `La estructura del nombre superaría los 10 caracteres (ej: ${maxGeneratedName})` });
+            await client.query("ROLLBACK");
+            return;
+        }
+        for (let i = 0; i < groups.length; i++) {
+            const { id_grupo, id_seccion } = groups[i];
+            const nuevoNombre = `${base}${sep}${i + 1}`;
+            // Check section sharing
+            const shareRes = await client.query(`SELECT COUNT(*)::int AS total FROM grupos WHERE id_seccion = $1 AND id_colegio = $2`, [id_seccion, schoolId]);
+            const shared = shareRes.rows[0].total;
+            if (shared <= 1) {
+                await client.query(`UPDATE secciones SET nombre = $1 WHERE id_seccion = $2`, [nuevoNombre, id_seccion]);
+            }
+            else {
+                const newSecRes = await client.query(`INSERT INTO secciones (nombre) VALUES ($1) RETURNING id_seccion`, [nuevoNombre]);
+                const newSeccionId = newSecRes.rows[0].id_seccion;
+                await client.query(`UPDATE grupos SET id_seccion = $1 WHERE id_grupo = $2`, [newSeccionId, id_grupo]);
+            }
+        }
+        await client.query("COMMIT");
+        res.json({ message: `${groups.length} cursos renombrados exitosamente.`, renamed: groups.length });
+    }
+    catch (error) {
+        await client.query("ROLLBACK");
+        console.error("Error in bulkRenameCourses:", error);
+        res.status(500).json({ error: "Error en el servidor" });
+    }
+    finally {
+        client.release();
+    }
+};
+exports.bulkRenameCourses = bulkRenameCourses;

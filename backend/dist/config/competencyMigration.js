@@ -239,13 +239,91 @@ BEGIN
   END IF;
 END $$;
 `;
+const extraordinaryMigrationSql = `
+  DO $$
+  BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'matricula' AND column_name = 'motivo_extraordinaria') THEN
+      ALTER TABLE public.matricula RENAME COLUMN motivo_extraordinaria TO motivo;
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'matricula' AND column_name = 'observaciones_extraordinaria') THEN
+      ALTER TABLE public.matricula RENAME COLUMN observaciones_extraordinaria TO observaciones;
+    END IF;
+  END $$;
+
+  ALTER TABLE public.matricula ADD COLUMN IF NOT EXISTS tipo VARCHAR(50) DEFAULT 'REGULAR';
+  ALTER TABLE public.matricula ADD COLUMN IF NOT EXISTS motivo TEXT;
+  ALTER TABLE public.matricula ADD COLUMN IF NOT EXISTS observaciones TEXT;
+  ALTER TABLE public.matricula ADD COLUMN IF NOT EXISTS id_usuario_responsable INTEGER REFERENCES public.usuario(id_usuario) ON DELETE SET NULL;
+  ALTER TABLE public.matricula ADD COLUMN IF NOT EXISTS fecha_creacion TIMESTAMP DEFAULT NOW();
+`;
 const ensureCompetencySchema = async () => {
     const client = await db_1.pool.connect();
     try {
+        // 1. Check/create enum values (must be outside transaction)
+        const checkEnum = await client.query(`
+      SELECT 1 FROM pg_type t 
+      JOIN pg_enum e ON t.oid = e.enumtypid 
+      WHERE t.typname = 'estado_matricula' AND e.enumlabel = 'APROBADA'
+    `);
+        if (checkEnum.rows.length === 0) {
+            console.log("Adding 'APROBADA' to estado_matricula enum...");
+            await client.query("ALTER TYPE estado_matricula ADD VALUE 'APROBADA'");
+        }
+        const checkPeriodEnum = await client.query(`
+      SELECT 1 FROM pg_type t 
+      JOIN pg_enum e ON t.oid = e.enumtypid 
+      WHERE t.typname = 'estado_periodo' AND e.enumlabel = 'PENDIENTE'
+    `);
+        if (checkPeriodEnum.rows.length === 0) {
+            console.log("Adding 'PENDIENTE' to estado_periodo enum...");
+            await client.query("ALTER TYPE estado_periodo ADD VALUE 'PENDIENTE'");
+        }
+        // 2. Perform table definitions and modifications within a transaction
         await client.query("BEGIN");
         await client.query(migrationSql);
         await client.query(evidenciaMigrationSql);
         await client.query(enrollmentConfigMigrationSql);
+        await client.query(extraordinaryMigrationSql);
+        // Dynamic database modifications moved from controllers to server startup
+        await client.query(`
+      ALTER TABLE "año_lectivo"
+      ADD COLUMN IF NOT EXISTS estado VARCHAR(20) DEFAULT 'ABIERTO'
+    `);
+        await client.query(`
+      ALTER TABLE docente
+      ADD COLUMN IF NOT EXISTS estado VARCHAR(20) NOT NULL DEFAULT 'ACTIVO'
+    `);
+        await client.query(`
+      UPDATE docente d
+      SET estado = CASE
+        WHEN u.activo = FALSE THEN 'INACTIVO'
+        ELSE 'ACTIVO'
+      END
+      FROM usuario u
+      WHERE d.id_usuario = u.id_usuario
+        AND (d.estado IS NULL OR d.estado NOT IN ('ACTIVO', 'INACTIVO', 'DESVINCULADO'))
+    `);
+        await client.query(`
+      CREATE TABLE IF NOT EXISTS configuracion_colegio (
+        id_colegio integer PRIMARY KEY REFERENCES colegio(id_colegio) ON DELETE CASCADE,
+        nota_minima numeric(5,2) NOT NULL DEFAULT 0,
+        nota_maxima numeric(5,2) NOT NULL DEFAULT 5,
+        nota_aprobacion numeric(5,2) NOT NULL DEFAULT 3,
+        escala_modo varchar(20) NOT NULL DEFAULT 'AUTOMATICO'
+      )
+    `);
+        await client.query(`
+      ALTER TABLE configuracion_colegio
+      ADD COLUMN IF NOT EXISTS escala_modo varchar(20) NOT NULL DEFAULT 'AUTOMATICO'
+    `);
+        await client.query(`
+      ALTER TABLE periodo_academico
+      ADD COLUMN IF NOT EXISTS trimestre integer,
+      ADD COLUMN IF NOT EXISTS dia_inicio integer,
+      ADD COLUMN IF NOT EXISTS dia_fin integer,
+      ADD COLUMN IF NOT EXISTS mes_inicio integer,
+      ADD COLUMN IF NOT EXISTS mes_fin integer
+    `);
         await client.query("COMMIT");
     }
     catch (error) {

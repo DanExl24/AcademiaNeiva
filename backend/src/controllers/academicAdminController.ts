@@ -4612,5 +4612,141 @@ export const rejectReingresoEnrollment = async (req: Request, res: Response): Pr
     client.release();
   }
 };
+// ─────────────────────────────────────────────────────────────────────────────
+// RENAME SINGLE COURSE
+// PATCH /api/academic-admin/groups/:id/rename
+// ─────────────────────────────────────────────────────────────────────────────
+export const renameSingleCourse = async (req: Request, res: Response): Promise<void> => {
+  const idGrupo = Number(req.params.id);
+  const { schoolId, nuevo_nombre } = req.body;
 
+  if (!schoolId || !idGrupo) { res.status(400).json({ error: "Parámetros inválidos" }); return; }
+  const nombre = (nuevo_nombre || "").trim();
+  if (!nombre) { res.status(400).json({ error: "El nombre no puede estar vacío" }); return; }
+  if (nombre.length > 10) { res.status(400).json({ error: "El nombre no puede superar los 10 caracteres" }); return; }
 
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    // Security: verify group belongs to school
+    const groupRes = await client.query(
+      `SELECT g.id_grupo, g.id_seccion FROM grupos g WHERE g.id_grupo = $1 AND g.id_colegio = $2`,
+      [idGrupo, schoolId]
+    );
+    if (!groupRes.rows.length) { res.status(404).json({ error: "Curso no encontrado" }); await client.query("ROLLBACK"); return; }
+
+    const { id_seccion } = groupRes.rows[0];
+
+    // Check how many groups share this section
+    const shareRes = await client.query(
+      `SELECT COUNT(*)::int AS total FROM grupos WHERE id_seccion = $1 AND id_colegio = $2`,
+      [id_seccion, schoolId]
+    );
+    const shared = shareRes.rows[0].total;
+
+    if (shared <= 1) {
+      // Only this group uses the section → rename directly
+      await client.query(`UPDATE secciones SET nombre = $1 WHERE id_seccion = $2`, [nombre, id_seccion]);
+    } else {
+      // Section is shared → create a new section and reassign
+      const newSecRes = await client.query(
+        `INSERT INTO secciones (nombre) VALUES ($1) RETURNING id_seccion`,
+        [nombre]
+      );
+      const newSeccionId = newSecRes.rows[0].id_seccion;
+      await client.query(`UPDATE grupos SET id_seccion = $1 WHERE id_grupo = $2`, [newSeccionId, idGrupo]);
+    }
+
+    await client.query("COMMIT");
+    res.json({ message: `Curso renombrado a "${nombre}" exitosamente.` });
+  } catch (error: any) {
+    await client.query("ROLLBACK");
+    console.error("Error in renameSingleCourse:", error);
+    res.status(500).json({ error: "Error en el servidor" });
+  } finally {
+    client.release();
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BULK RENAME ALL COURSES IN A GRADE
+// PATCH /api/academic-admin/grade-types/:id/bulk-rename
+// ─────────────────────────────────────────────────────────────────────────────
+export const bulkRenameCourses = async (req: Request, res: Response): Promise<void> => {
+  const idTipoGrado = Number(req.params.id);
+  const { schoolId, prefijo, separador } = req.body;
+
+  if (!schoolId || !idTipoGrado) { res.status(400).json({ error: "Parámetros inválidos" }); return; }
+  const base = (prefijo || "").trim();
+  if (!base) { res.status(400).json({ error: "El prefijo no puede estar vacío" }); return; }
+  if (base.length > 10) { res.status(400).json({ error: "El prefijo no puede superar los 10 caracteres" }); return; }
+
+  // sep can be "-", ".", " ", or "" (empty = no separator)
+  const sep: string = (separador !== undefined && separador !== null) ? String(separador) : "-";
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    // Verify grade type belongs to school
+    const gtRes = await client.query(
+      `SELECT tg.id_tipo_grado 
+       FROM tipo_grado tg
+       JOIN nivel_escolar ne ON tg.id_nivel = ne.id_nivel
+       WHERE tg.id_tipo_grado = $1 AND ne.id_colegio = $2`,
+      [idTipoGrado, schoolId]
+    );
+    if (!gtRes.rows.length) { res.status(404).json({ error: "Grado no encontrado" }); await client.query("ROLLBACK"); return; }
+
+    // Get all groups for this grade ordered consistently
+    const groupsRes = await client.query(
+      `SELECT id_grupo, id_seccion FROM grupos WHERE id_tipo_grado = $1 AND id_colegio = $2 ORDER BY id_grupo ASC`,
+      [idTipoGrado, schoolId]
+    );
+    const groups = groupsRes.rows;
+
+    if (!groups.length) { res.status(400).json({ error: "Este grado no tiene cursos" }); await client.query("ROLLBACK"); return; }
+
+    // Validate generated name length
+    const maxNumberStr = String(groups.length);
+    const maxGeneratedName = `${base}${sep}${maxNumberStr}`;
+    if (maxGeneratedName.length > 10) {
+      res.status(400).json({ error: `La estructura del nombre superaría los 10 caracteres (ej: ${maxGeneratedName})` });
+      await client.query("ROLLBACK");
+      return;
+    }
+
+    for (let i = 0; i < groups.length; i++) {
+      const { id_grupo, id_seccion } = groups[i];
+      const nuevoNombre = `${base}${sep}${i + 1}`;
+
+      // Check section sharing
+      const shareRes = await client.query(
+        `SELECT COUNT(*)::int AS total FROM grupos WHERE id_seccion = $1 AND id_colegio = $2`,
+        [id_seccion, schoolId]
+      );
+      const shared = shareRes.rows[0].total;
+
+      if (shared <= 1) {
+        await client.query(`UPDATE secciones SET nombre = $1 WHERE id_seccion = $2`, [nuevoNombre, id_seccion]);
+      } else {
+        const newSecRes = await client.query(
+          `INSERT INTO secciones (nombre) VALUES ($1) RETURNING id_seccion`,
+          [nuevoNombre]
+        );
+        const newSeccionId = newSecRes.rows[0].id_seccion;
+        await client.query(`UPDATE grupos SET id_seccion = $1 WHERE id_grupo = $2`, [newSeccionId, id_grupo]);
+      }
+    }
+
+    await client.query("COMMIT");
+    res.json({ message: `${groups.length} cursos renombrados exitosamente.`, renamed: groups.length });
+  } catch (error: any) {
+    await client.query("ROLLBACK");
+    console.error("Error in bulkRenameCourses:", error);
+    res.status(500).json({ error: "Error en el servidor" });
+  } finally {
+    client.release();
+  }
+};

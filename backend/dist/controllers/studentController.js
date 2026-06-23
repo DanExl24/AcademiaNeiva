@@ -13,6 +13,7 @@ const getAllStudents = async (req, res) => {
              td.tipo as tipo_documento_nombre,
              n.nombre as nivel_nombre,
              m.id_grupo,
+             m.estado AS matricula_estado,
              tg.nombre as grado_nombre,
              s.nombre as seccion_nombre,
              j.nombre as jornada_nombre,

@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import axios from 'axios'
-import { Layers3, Plus, Search, School2, Trash2, Info, Pencil } from 'lucide-vue-next'
+import { Layers3, Plus, Search, School2, Trash2, Info, Pencil, Tag, RefreshCw } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
+import { useNotificationStore } from '../../stores/notifications'
 
 interface Nivel {
   id_nivel: number
@@ -45,6 +46,7 @@ interface Grupo {
 
 const auth = useAuthStore()
 const schoolId = computed(() => Number(auth.user?.schoolId || 0))
+const notify = useNotificationStore()
 
 const loading = ref(true)
 const savingGrade = ref(false)
@@ -57,6 +59,25 @@ const savingCupos = ref(false)
 const editCuposModal = ref(false)
 const selectedGroup = ref<Grupo | null>(null)
 const selectedGradeId = ref<number | null>(null)
+
+// Reactives for Renaming
+const renameModal = ref(false)
+const renameTarget = ref<Grupo | null>(null)
+const renameName = ref('')
+const renaming = ref(false)
+
+const bulkModal = ref(false)
+const bulkTarget = ref<TipoGrado | null>(null)
+const bulkPrefijo = ref('')
+const bulkSeparador = ref('-')
+const bulkRenaming = ref(false)
+
+const sepOptions = [
+  { label: 'Guión  ( - )', value: '-' },
+  { label: 'Punto  ( . )', value: '.' },
+  { label: 'Espacio (   )', value: ' ' },
+  { label: 'Ninguno  (sin separador)', value: '' },
+]
 
 type DeleteModalState =
   | { kind: 'grade'; item: TipoGrado }
@@ -119,6 +140,37 @@ const visibleGroups = computed(() => {
     item.seccion_nombre.toLowerCase().includes(term)
   )
 })
+
+const selectedGrade = computed(() => {
+  if (!selectedGradeId.value) return undefined
+  return tiposGrado.value.find(t => t.id_tipo_grado === selectedGradeId.value)
+})
+
+const bulkCourseCount = computed(() => {
+  if (!bulkTarget.value) return 0
+  return grupos.value.filter(g => g.id_tipo_grado === bulkTarget.value!.id_tipo_grado).length
+})
+
+const previewNames = computed(() => {
+  const base = bulkPrefijo.value.trim().toUpperCase()
+  const sep = bulkSeparador.value
+  if (!base || !bulkCourseCount.value) return []
+  return Array.from({ length: bulkCourseCount.value }, (_, i) => `${base}${sep}${i + 1}`)
+})
+
+const bulkPrefijoError = computed(() => {
+  const base = bulkPrefijo.value.trim()
+  if (!base) return 'El prefijo no puede estar vacío'
+  if (base.length > 10) return 'El prefijo no puede superar los 10 caracteres'
+  
+  const lastNum = bulkCourseCount.value
+  const longestName = `${base.toUpperCase()}${bulkSeparador.value}${lastNum}`
+  if (longestName.length > 10) {
+    return `La estructura superaría los 10 caracteres (ej: ${longestName})`
+  }
+  return ''
+})
+
 
 const toggleGradeSelection = (id: number) => {
   if (selectedGradeId.value === id) {
@@ -188,7 +240,7 @@ const loadData = async () => {
 const createGradeType = async () => {
   if (savingGrade.value) return
   if (!newGradeType.value.id_nivel || !newGradeType.value.nombre.trim()) {
-    alert('Completa nivel académico y nombre del grado antes de crearlo.')
+    notify.addNotification('Completa nivel académico y nombre del grado antes de crearlo.', 'warning')
     return
   }
 
@@ -202,8 +254,9 @@ const createGradeType = async () => {
     newGradeType.value = { id_nivel: '', nombre: '' }
     await loadData()
     closeCreateModal()
+    notify.addNotification('Grado creado exitosamente.', 'success')
   } catch (error: any) {
-    alert(error.response?.data?.error || 'Error al crear el grado')
+    notify.addNotification(error.response?.data?.error || 'Error al crear el grado', 'error')
   } finally {
     savingGrade.value = false
   }
@@ -213,11 +266,11 @@ const createGroup = async () => {
   const payload = newGroup.value
   if (savingGroup.value) return
   if (!payload.id_nivel || !payload.id_tipo_grado || !payload.id_jornada || !payload.id_seccion) {
-    alert('Completa nivel, grado, jornada y sección antes de crear el curso.')
+    notify.addNotification('Completa nivel, grado, jornada y sección antes de crear el curso.', 'warning')
     return
   }
   if (Number(payload.cupos_totales) < 0) {
-    alert('Los cupos del curso no pueden ser negativos.')
+    notify.addNotification('Los cupos del curso no pueden ser negativos.', 'warning')
     return
   }
 
@@ -240,8 +293,9 @@ const createGroup = async () => {
     }
     await loadData()
     closeCreateModal()
+    notify.addNotification('Curso creado exitosamente.', 'success')
   } catch (error: any) {
-    alert(error.response?.data?.error || 'Error al crear el curso')
+    notify.addNotification(error.response?.data?.error || 'Error al crear el curso', 'error')
   } finally {
     savingGroup.value = false
   }
@@ -255,8 +309,9 @@ const deleteGradeType = async (item: TipoGrado) => {
     })
     closeDeleteModal()
     await loadData()
+    notify.addNotification('Grado eliminado exitosamente.', 'success')
   } catch (error: any) {
-    alert(error.response?.data?.error || 'No fue posible eliminar el grado')
+    notify.addNotification(error.response?.data?.error || 'No fue posible eliminar el grado', 'error')
   } finally {
     deleting.value = false
   }
@@ -269,8 +324,9 @@ const deleteGroup = async (item: Grupo) => {
     })
     closeDeleteModal()
     await loadData()
+    notify.addNotification('Curso eliminado exitosamente.', 'success')
   } catch (error: any) {
-    alert(error.response?.data?.error || 'No fue posible eliminar el curso')
+    notify.addNotification(error.response?.data?.error || 'No fue posible eliminar el curso', 'error')
   } finally {
     deleting.value = false
   }
@@ -280,7 +336,7 @@ const updateGroupCupos = async () => {
   if (!selectedGroup.value || savingCupos.value) return
   
   if (selectedGroup.value.cupos_totales < selectedGroup.value.matriculas_count) {
-    alert(`No puedes reducir el cupo por debajo de la cantidad de estudiantes matriculados (${selectedGroup.value.matriculas_count}).`)
+    notify.addNotification(`No puedes reducir el cupo por debajo de la cantidad de estudiantes matriculados (${selectedGroup.value.matriculas_count}).`, 'warning')
     return
   }
 
@@ -292,12 +348,90 @@ const updateGroupCupos = async () => {
     })
     await loadData()
     closeEditCuposModal()
+    notify.addNotification('Capacidad de cupos actualizada exitosamente.', 'success')
   } catch (error: any) {
-    alert(error.response?.data?.error || 'Error al actualizar cupos')
+    notify.addNotification(error.response?.data?.error || 'Error al actualizar cupos', 'error')
   } finally {
     savingCupos.value = false
   }
 }
+
+const openRenameModal = (group: Grupo) => {
+  renameTarget.value = group
+  renameName.value = group.seccion_nombre
+  renameModal.value = true
+}
+
+const closeRenameModal = () => {
+  if (renaming.value) return
+  renameModal.value = false
+  renameTarget.value = null
+  renameName.value = ''
+}
+
+const confirmRename = async () => {
+  if (!renameTarget.value || renaming.value) return
+  const nombre = renameName.value.trim().toUpperCase()
+  if (!nombre) return
+  if (nombre.length > 10) {
+    notify.addNotification('El nombre del curso no puede superar los 10 caracteres', 'warning')
+    return
+  }
+
+  renaming.value = true
+  try {
+    await axios.patch(
+      `http://localhost:3000/api/academic-admin/groups/${renameTarget.value.id_grupo}/rename`,
+      { schoolId: schoolId.value, nuevo_nombre: nombre },
+      { headers: { Authorization: `Bearer ${auth.token}` } }
+    )
+    await loadData()
+    closeRenameModal()
+    notify.addNotification('Curso renombrado exitosamente.', 'success')
+  } catch (error: any) {
+    notify.addNotification(error.response?.data?.error || 'Error al renombrar el curso', 'error')
+  } finally {
+    renaming.value = false
+  }
+}
+
+const openBulkRenameModal = (grade: TipoGrado) => {
+  bulkTarget.value = grade
+  bulkPrefijo.value = ''
+  bulkSeparador.value = '-'
+  bulkModal.value = true
+}
+
+const closeBulkModal = () => {
+  if (bulkRenaming.value) return
+  bulkModal.value = false
+  bulkTarget.value = null
+  bulkPrefijo.value = ''
+}
+
+const confirmBulkRename = async () => {
+  if (!bulkTarget.value || bulkRenaming.value || bulkPrefijoError.value) return
+  bulkRenaming.value = true
+  try {
+    await axios.patch(
+      `http://localhost:3000/api/academic-admin/grade-types/${bulkTarget.value.id_tipo_grado}/bulk-rename`,
+      {
+        schoolId: schoolId.value,
+        prefijo: bulkPrefijo.value.trim().toUpperCase(),
+        separador: bulkSeparador.value
+      },
+      { headers: { Authorization: `Bearer ${auth.token}` } }
+    )
+    await loadData()
+    closeBulkModal()
+    notify.addNotification('Cursos renombrados masivamente con éxito.', 'success')
+  } catch (error: any) {
+    notify.addNotification(error.response?.data?.error || 'Error al renombrar los cursos', 'error')
+  } finally {
+    bulkRenaming.value = false
+  }
+}
+
 
 onMounted(loadData)
 </script>
@@ -388,7 +522,15 @@ onMounted(loadData)
                     <p class="font-black text-slate-800 dark:text-slate-300 text-sm">{{ item.cursos_count }}</p>
                   </div>
                   <button 
-                    @click="openDeleteGradeModal(item)"
+                    v-if="item.cursos_count > 0"
+                    @click.stop="openBulkRenameModal(item)"
+                    class="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 rounded-xl transition-all"
+                    title="Renombrar Cursos en Masa"
+                  >
+                    <RefreshCw :size="18" />
+                  </button>
+                  <button 
+                    @click.stop="openDeleteGradeModal(item)"
                     class="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-xl transition-all"
                     title="Eliminar Grado"
                   >
@@ -411,7 +553,16 @@ onMounted(loadData)
               </h3>
               <div v-if="selectedGradeId" class="flex items-center gap-2">
                 <span class="bg-indigo-600 text-white px-2 py-0.5 rounded text-[10px] font-black uppercase">Filtro Activo</span>
-                <button @click="selectedGradeId = null" class="text-[10px] font-bold text-slate-400 hover:text-indigo-600 transition-colors uppercase underline">Limpiar</button>
+                <button @click="selectedGradeId = null" class="text-[10px] font-bold text-slate-400 hover:text-indigo-600 transition-colors uppercase underline mr-2">Limpiar</button>
+                <button 
+                  v-if="selectedGrade && selectedGrade.cursos_count > 0"
+                  @click="openBulkRenameModal(selectedGrade)"
+                  class="flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 rounded-lg text-[10px] font-black uppercase hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-all border border-indigo-100/50 dark:border-indigo-900/50"
+                  title="Renombrar en Masa"
+                >
+                  <RefreshCw :size="10" />
+                  Renombrar en Masa
+                </button>
               </div>
             </div>
             <div class="relative w-64">
@@ -445,6 +596,9 @@ onMounted(loadData)
                     <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">{{ item.jornada_nombre }} | {{ item.nivel_nombre }}</p>
                   </div>
                   <div class="flex items-center gap-1">
+                    <button @click="openRenameModal(item)" class="p-2 text-slate-300 hover:text-indigo-500 transition-colors" title="Renombrar Curso">
+                      <Tag :size="16" />
+                    </button>
                     <button @click="openEditCuposModal(item)" class="p-2 text-slate-300 hover:text-indigo-500 transition-colors" title="Editar Cupos">
                       <Pencil :size="16" />
                     </button>
@@ -646,6 +800,122 @@ onMounted(loadData)
                 class="flex-[2] bg-slate-900 dark:bg-white dark:text-slate-900 text-white px-6 py-4 rounded-2xl font-black shadow-xl shadow-slate-200 dark:shadow-none hover:translate-y-[-1px] transition-all disabled:opacity-50"
               >
                 {{ savingCupos ? 'Actualizando...' : 'Guardar Cambios' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Rename Single Modal -->
+      <div v-if="renameModal && renameTarget" class="fixed inset-0 z-[110] flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" @click="closeRenameModal"></div>
+        <div class="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-[32px] shadow-2xl overflow-hidden border border-white/20">
+          <div class="p-8">
+            <div class="flex items-center gap-4 mb-6">
+              <div class="p-3 bg-indigo-50 dark:bg-indigo-950/30 rounded-2xl text-indigo-600 dark:text-indigo-400">
+                <Tag :size="24" />
+              </div>
+              <div>
+                <h3 class="text-xl font-black text-slate-900 dark:text-white">Renombrar Curso</h3>
+                <p class="text-sm font-medium text-slate-500">{{ renameTarget.tipo_grado_nombre }} {{ renameTarget.seccion_nombre }}</p>
+              </div>
+            </div>
+
+            <div class="space-y-4">
+              <div class="space-y-2">
+                <label class="text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Nuevo Nombre del Curso</label>
+                <input 
+                  v-model="renameName" 
+                  type="text"
+                  maxlength="10"
+                  placeholder="Ej. A o 601"
+                  class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 rounded-2xl p-4 font-bold outline-none text-slate-900 dark:text-white uppercase transition-all"
+                />
+                <p class="text-[10px] font-bold text-slate-400 ml-1 uppercase">Máximo 10 caracteres. Se guardará en mayúsculas.</p>
+              </div>
+            </div>
+
+            <div class="flex gap-3 mt-8">
+              <button @click="closeRenameModal" class="flex-1 px-6 py-4 rounded-2xl font-black text-slate-500 dark:text-slate-400 hover:bg-slate-50 transition-all">Cancelar</button>
+              <button 
+                @click="confirmRename"
+                :disabled="renaming || !renameName.trim()"
+                class="flex-[2] bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-4 rounded-2xl font-black shadow-xl shadow-indigo-100 dark:shadow-none hover:translate-y-[-1px] transition-all disabled:opacity-50"
+              >
+                {{ renaming ? 'Renombrando...' : 'Confirmar' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bulk Rename Modal -->
+      <div v-if="bulkModal && bulkTarget" class="fixed inset-0 z-[110] flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" @click="closeBulkModal"></div>
+        <div class="relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-[32px] shadow-2xl overflow-hidden border border-white/20">
+          <div class="p-8">
+            <div class="flex items-center gap-4 mb-6">
+              <div class="p-3 bg-indigo-50 dark:bg-indigo-950/30 rounded-2xl text-indigo-600 dark:text-indigo-400">
+                <RefreshCw :size="24" />
+              </div>
+              <div>
+                <h3 class="text-xl font-black text-slate-900 dark:text-white">Renombre Masivo</h3>
+                <p class="text-sm font-medium text-slate-500">Grado: {{ bulkTarget.nombre }} | {{ bulkCourseCount }} Cursos</p>
+              </div>
+            </div>
+
+            <div class="space-y-4">
+              <!-- Prefix input -->
+              <div class="space-y-2">
+                <label class="text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Estructura Base (Prefijo)</label>
+                <input 
+                  v-model="bulkPrefijo" 
+                  type="text"
+                  maxlength="10"
+                  placeholder="Ej: 10, DECIMO, 6"
+                  class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 rounded-2xl p-4 font-bold outline-none text-slate-900 dark:text-white uppercase transition-all"
+                />
+                <p class="text-[10px] font-bold text-slate-400 ml-1 uppercase">Se convertirá automáticamente a mayúsculas.</p>
+              </div>
+
+              <!-- Separator option -->
+              <div class="space-y-2">
+                <label class="text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Separador con el Ordinal</label>
+                <select 
+                  v-model="bulkSeparador" 
+                  class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 rounded-2xl p-4 font-bold outline-none text-slate-900 dark:text-white appearance-none cursor-pointer transition-all"
+                >
+                  <option v-for="opt in sepOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+                </select>
+              </div>
+
+              <!-- Real-time Preview -->
+              <div v-if="previewNames.length > 0" class="bg-indigo-50/50 dark:bg-indigo-950/20 p-4 rounded-2xl border border-indigo-100/50 dark:border-indigo-900/50">
+                <h4 class="text-xs font-black uppercase text-slate-400 dark:text-slate-500 mb-2">Vista Previa de los Cursos:</h4>
+                <div class="flex flex-wrap gap-2 max-h-24 overflow-y-auto custom-scrollbar">
+                  <span 
+                    v-for="(pName, idx) in previewNames" 
+                    :key="idx"
+                    class="bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 px-3 py-1 rounded-full text-xs font-black border border-indigo-200/50 dark:border-indigo-900/50"
+                  >
+                    {{ pName }}
+                  </span>
+                </div>
+              </div>
+
+              <p v-if="bulkPrefijoError" class="text-xs font-bold text-red-500 bg-red-50 dark:bg-red-950/30 p-3 rounded-xl border border-red-100 dark:border-red-950">
+                {{ bulkPrefijoError }}
+              </p>
+            </div>
+
+            <div class="flex gap-3 mt-8">
+              <button @click="closeBulkModal" class="flex-1 px-6 py-4 rounded-2xl font-black text-slate-500 dark:text-slate-400 hover:bg-slate-50 transition-all">Cancelar</button>
+              <button 
+                @click="confirmBulkRename"
+                :disabled="bulkRenaming || !!bulkPrefijoError"
+                class="flex-[2] bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-4 rounded-2xl font-black shadow-xl shadow-indigo-100 dark:shadow-none hover:translate-y-[-1px] transition-all disabled:opacity-50"
+              >
+                {{ bulkRenaming ? 'Aplicando...' : 'Aplicar Renombre' }}
               </button>
             </div>
           </div>

@@ -17,6 +17,8 @@ router.post("/grade-types", academicAdminController_1.createGradeType);
 router.delete("/grade-types/:id", academicAdminController_1.deleteGradeType);
 router.post("/groups", academicAdminController_1.createGroup);
 router.patch("/groups/:id/cupos", academicAdminController_1.updateGroupCupos);
+router.patch("/groups/:id/rename", authMiddleware_1.verifyToken, authMiddleware_1.requireDirectivo, academicAdminController_1.renameSingleCourse);
+router.patch("/grade-types/:id/bulk-rename", authMiddleware_1.verifyToken, authMiddleware_1.requireDirectivo, academicAdminController_1.bulkRenameCourses);
 router.delete("/groups/:id", academicAdminController_1.deleteGroup);
 router.get("/subjects/:schoolId", academicAdminController_1.getSubjects);
 router.get("/subjects/trash/:schoolId", academicAdminController_1.getSubjectTrash);
@@ -50,4 +52,12 @@ router.put("/settings/evidencias/:evidenciaId", academicAdminController_1.update
 router.delete("/settings/evidencias/:evidenciaId", academicAdminController_1.deleteEvidencia);
 // Dashboard Analítico
 router.get("/dashboard/:schoolId", academicAdminController_1.getDirectivoDashboard);
+// Matrícula Extraordinaria
+router.post("/matriculas/extraordinaria", authMiddleware_1.verifyToken, authMiddleware_1.requireDirectivo, academicAdminController_1.createExtraordinaryEnrollment);
+router.post("/matriculas/extraordinaria/:id/aprobar", authMiddleware_1.verifyToken, authMiddleware_1.requireDirectivo, academicAdminController_1.approveExtraordinaryEnrollment);
+router.post("/matriculas/extraordinaria/:id/rechazar", authMiddleware_1.verifyToken, authMiddleware_1.requireDirectivo, academicAdminController_1.rejectExtraordinaryEnrollment);
+// Reingreso
+router.post("/matriculas/reingreso", authMiddleware_1.verifyToken, authMiddleware_1.requireDirectivo, academicAdminController_1.createReingresoEnrollment);
+router.post("/matriculas/reingreso/:id/aprobar", authMiddleware_1.verifyToken, authMiddleware_1.requireDirectivo, academicAdminController_1.approveReingresoEnrollment);
+router.post("/matriculas/reingreso/:id/rechazar", authMiddleware_1.verifyToken, authMiddleware_1.requireDirectivo, academicAdminController_1.rejectReingresoEnrollment);
 exports.default = router;
