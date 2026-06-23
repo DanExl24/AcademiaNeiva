@@ -15,6 +15,7 @@ import {
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
 import axios from 'axios'
+import { getCourseDisplayName } from '../../utils/courseHelper'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -294,7 +295,7 @@ onMounted(async () => {
           <div>
             <h3 class="text-xl font-black text-slate-900 dark:text-white leading-tight mb-1">{{ course.materia_nombre }}</h3>
             <div class="flex items-center gap-2 text-slate-500 dark:text-slate-400 font-bold text-sm">
-              {{ course.grado_nombre }} {{ course.seccion }} • {{ course.jornada_nombre }}
+              {{ getCourseDisplayName({ grado_nombre: course.grado_nombre, seccion_nombre: course.seccion }) }} • {{ course.jornada_nombre }}
             </div>
           </div>
 

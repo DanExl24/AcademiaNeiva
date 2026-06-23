@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import axios from 'axios'
-import { useRouter } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
 import { 
   ArrowLeft, 
@@ -32,7 +31,6 @@ interface EnrollmentConfig {
 }
 
 const auth = useAuthStore()
-const router = useRouter()
 const schoolId = computed(() => Number(auth.user?.schoolId || auth.supervision?.id_colegio || 0))
 const isSupervision = computed(() => auth.activeRole === 'admin_general')
 

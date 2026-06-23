@@ -20,6 +20,7 @@ import {
 } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 import axios from 'axios'
+import { getCourseDisplayName } from '../../utils/courseHelper'
 
 interface Course {
   id_grado: number
@@ -357,7 +358,7 @@ const printAttendanceSheet = () => {
   printWindow.document.write(`
     <html>
       <head>
-        <title>Formato de Asistencia - ${courseInfo.grado_nombre} ${courseInfo.seccion}</title>
+        <title>Formato de Asistencia - ${getCourseDisplayName({ grado_nombre: courseInfo.grado_nombre, seccion_nombre: courseInfo.seccion })}</title>
         <style>
           body { font-family: system-ui, -apple-system, sans-serif; color: #1e293b; padding: 40px; }
           .header { margin-bottom: 30px; border-bottom: 2px solid #e2e8f0; padding-bottom: 20px; }
@@ -376,7 +377,7 @@ const printAttendanceSheet = () => {
       <body>
         <div class="header">
           <h1 class="title">Control de Asistencia Escolar</h1>
-          <p class="meta"><strong>Grado:</strong> ${courseInfo.grado_nombre} ${courseInfo.seccion} | <strong>Materia:</strong> ${courseInfo.materia_nombre}</p>
+          <p class="meta"><strong>Grado:</strong> ${getCourseDisplayName({ grado_nombre: courseInfo.grado_nombre, seccion_nombre: courseInfo.seccion })} | <strong>Materia:</strong> ${courseInfo.materia_nombre}</p>
           <p class="meta"><strong>Fecha de reporte:</strong> ${dateStr} | <strong>Tipo:</strong> ${activeTab.value === 'today' ? 'Control Diario' : 'Reporte Consolidado Histórico'}</p>
         </div>
         <table>
@@ -442,7 +443,7 @@ const exportHistoryToCSV = () => {
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.setAttribute('href', url)
-  link.setAttribute('download', `asistencia_historial_${courseInfo.grado_nombre.replace(/\s+/g, '_')}_${courseInfo.seccion}_${new Date().toLocaleDateString()}.csv`)
+  link.setAttribute('download', `asistencia_historial_${getCourseDisplayName({ grado_nombre: courseInfo.grado_nombre, seccion_nombre: courseInfo.seccion }).replace(/\s+/g, '_')}_${new Date().toLocaleDateString()}.csv`)
   link.style.visibility = 'hidden'
   document.body.appendChild(link)
   link.click()

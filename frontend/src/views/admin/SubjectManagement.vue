@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import axios from 'axios'
 import { BookOpen, Plus, Trash2, Search, Info, Layers, GraduationCap } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
+import { getCourseDisplayName } from '../../utils/courseHelper'
 
 interface SubjectItem {
   id_materia: number
@@ -447,7 +448,7 @@ onMounted(loadSubjects)
                 >
                   <div class="flex flex-col">
                     <p class="text-sm font-black text-slate-700 dark:text-slate-300">
-                      {{ a.grado_nombre && a.seccion_nombre ? a.grado_nombre + ' - ' + a.seccion_nombre : 'Grupo ID: ' + a.id_grupo + ' (' + a.nivel_nombre + ')' }}
+                      {{ a.grado_nombre && a.seccion_nombre ? getCourseDisplayName({ grado_nombre: a.grado_nombre, seccion_nombre: a.seccion_nombre }) : 'Grupo ID: ' + a.id_grupo + ' (' + a.nivel_nombre + ')' }}
                     </p>
                     <p class="text-[10px] font-bold text-slate-400 uppercase">
                       Respaldo: {{ a.docente_nombre || 'Docente ID: ' + a.id_docente }}

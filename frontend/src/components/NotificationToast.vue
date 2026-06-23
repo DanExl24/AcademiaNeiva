@@ -18,7 +18,7 @@ const getIcon = (type: string) => {
 }
 
 const getStyles = (type: string) => {
-  if (type === 'success') return 'bg-emerald-50 border-emerald-100 text-emerald-800'
+  if (type === 'success') return 'bg-green-50 border-green-100 text-green-800'
   if (type === 'error') return 'bg-red-50 border-red-100 text-red-800'
   if (type === 'warning') return 'bg-amber-50 border-amber-100 text-amber-800'
   return 'bg-blue-50 border-blue-100 text-blue-800'
@@ -26,7 +26,7 @@ const getStyles = (type: string) => {
 </script>
 
 <template>
-  <div class="fixed top-6 right-6 z-[100] flex flex-col gap-3 w-80">
+  <div class="fixed top-6 right-6 z-[200] flex flex-col gap-3 w-80">
     <TransitionGroup 
       enter-active-class="transform transition ease-out duration-300"
       enter-from-class="translate-y-2 opacity-0 sm:translate-y-0 sm:translate-x-4"

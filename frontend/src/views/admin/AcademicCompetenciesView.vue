@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import axios from 'axios'
 import { ArrowLeft, BookOpenCheck, PenSquare, Plus, Search, Sparkles, Check, Trash2, X } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
+import { getCourseDisplayName } from '../../utils/courseHelper'
 
 interface AcademicPeriod {
   id_periodo: number
@@ -90,7 +91,7 @@ const assignmentChoices = computed(() =>
     gradeKey: `${item.nivel_nombre}:${item.tipo_grado_nombre}`,
     courseKey: String(item.id_grupo),
     subjectKey: String(item.id_materia),
-    label: `${item.tipo_grado_nombre} ${item.seccion_nombre} · ${item.jornada_nombre} · ${item.materia_nombre}`,
+    label: `${getCourseDisplayName({ tipo_grado_nombre: item.tipo_grado_nombre, seccion_nombre: item.seccion_nombre })} · ${item.jornada_nombre} · ${item.materia_nombre}`,
   }))
 )
 

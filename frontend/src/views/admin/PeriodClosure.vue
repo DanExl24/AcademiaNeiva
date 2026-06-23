@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import axios from 'axios'
 import { ArrowLeft, CheckCircle2, Lock, Unlock, FileX, SlidersHorizontal, AlertCircle, Search, ChevronDown } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
+import { getCourseDisplayName } from '../../utils/courseHelper'
 
 const auth = useAuthStore()
 const schoolId = computed(() => Number(auth.user?.schoolId || 0))
@@ -508,7 +509,7 @@ onMounted(() => {
             <div v-for="item in closePeriodPending" :key="item.id_detallegrado" class="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm flex flex-col md:flex-row md:items-center justify-between gap-2 shadow-sm">
               <div>
                 <p class="font-black text-slate-700 dark:text-slate-200">{{ item.materia_nombre }}</p>
-                <p class="text-xs text-slate-500 dark:text-slate-400 font-semibold">{{ item.tipo_grado_nombre }} {{ item.seccion_nombre }} · {{ item.jornada_nombre }}</p>
+                <p class="text-xs text-slate-500 dark:text-slate-400 font-semibold">{{ getCourseDisplayName({ tipo_grado_nombre: item.tipo_grado_nombre, seccion_nombre: item.seccion_nombre }) }} · {{ item.jornada_nombre }}</p>
               </div>
               <span class="inline-flex bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-400 rounded-lg px-2 py-1 text-[11px] font-black uppercase tracking-wider">Pendiente</span>
             </div>

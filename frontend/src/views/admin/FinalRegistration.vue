@@ -12,8 +12,7 @@ import {
   ChevronLeft,
   FileText,
   GraduationCap,
-  XCircle,
-  AlertCircle
+  XCircle
 } from 'lucide-vue-next'
 
 const route = useRoute()

@@ -30,6 +30,7 @@ import {
 import { useAuthStore } from '../../stores/auth'
 import { useNotificationStore } from '../../stores/notifications'
 import { useRouter } from 'vue-router'
+import { getCourseDisplayName } from '../../utils/courseHelper'
 
 const auth = useAuthStore()
 const notify = useNotificationStore()
@@ -1418,7 +1419,7 @@ const rejectException = async (id: number) => {
               <select v-model="extraordinaryForm.id_grupo" :disabled="!extraordinaryForm.id_nivel" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-semibold outline-none text-slate-900 dark:text-white transition-all focus:border-indigo-400 disabled:opacity-50 disabled:cursor-not-allowed">
                 <option :value="null">-- Seleccione el Grupo --</option>
                 <option v-for="g in filteredExtraordinaryGroups" :key="g.id_grupo" :value="g.id_grupo">
-                  {{ g.tipo_grado_nombre }} - Sección {{ g.seccion_nombre }} ({{ g.jornada_nombre }}) - Cupos Disp: {{ g.cupos_totales - g.matriculas_count }}
+                  {{ getCourseDisplayName({ tipo_grado_nombre: g.tipo_grado_nombre, seccion_nombre: g.seccion_nombre }) }} ({{ g.jornada_nombre }}) - Cupos Disp: {{ g.cupos_totales - g.matriculas_count }}
                 </option>
               </select>
             </div>
@@ -1519,7 +1520,7 @@ const rejectException = async (id: number) => {
               <select v-model="reingresoForm.id_grupo" :disabled="!reingresoForm.id_nivel" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-semibold outline-none text-slate-900 dark:text-white transition-all focus:border-violet-400 disabled:opacity-50 disabled:cursor-not-allowed">
                 <option :value="null">-- Seleccione el Grupo --</option>
                 <option v-for="g in filteredReingresoGroups" :key="g.id_grupo" :value="g.id_grupo">
-                  {{ g.tipo_grado_nombre }} - Sección {{ g.seccion_nombre }} ({{ g.jornada_nombre }}) - Cupos Disp: {{ g.cupos_totales - g.matriculas_count }}
+                  {{ getCourseDisplayName({ tipo_grado_nombre: g.tipo_grado_nombre, seccion_nombre: g.seccion_nombre }) }} ({{ g.jornada_nombre }}) - Cupos Disp: {{ g.cupos_totales - g.matriculas_count }}
                 </option>
               </select>
             </div>

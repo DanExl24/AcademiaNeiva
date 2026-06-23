@@ -36,7 +36,7 @@
           <select v-model="selectedGroup" @change="fetchStudentsForGroup" :disabled="!selectedLevel" class="w-full h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:border-indigo-500 focus:ring-indigo-500 shadow-sm transition-shadow disabled:bg-slate-50 dark:disabled:bg-slate-950/40 disabled:text-slate-400 dark:disabled:text-slate-600">
             <option value="">Seleccione grupo</option>
             <option v-for="grupo in filteredGroups" :key="grupo.id_grupo" :value="grupo.id_grupo">
-              {{ grupo.tipo_grado_nombre }} - Grupo {{ grupo.seccion_nombre }} ({{ grupo.jornada_nombre }})
+              {{ getCourseDisplayName({ tipo_grado_nombre: grupo.tipo_grado_nombre, seccion_nombre: grupo.seccion_nombre }) }} ({{ grupo.jornada_nombre }})
             </option>
           </select>
         </div>
@@ -128,6 +128,7 @@ import { ref, computed, onMounted, nextTick } from 'vue'
 import { useAuthStore } from '../../stores/auth'
 import BoletinPreview from '../../components/boletines/BoletinPreview.vue'
 import html2pdf from 'html2pdf.js'
+import { getCourseDisplayName } from '../../utils/courseHelper'
 
 const auth = useAuthStore()
 

@@ -3605,13 +3605,23 @@ const renameSingleCourse = async (req, res) => {
     }
 };
 exports.renameSingleCourse = renameSingleCourse;
+// Helper to convert index to letter sequence: 0 -> A, 1 -> B ... 26 -> AA ...
+const indexToLetter = (index) => {
+    let temp = index;
+    let letter = "";
+    while (temp >= 0) {
+        letter = String.fromCharCode((temp % 26) + 65) + letter;
+        temp = Math.floor(temp / 26) - 1;
+    }
+    return letter;
+};
 // ─────────────────────────────────────────────────────────────────────────────
 // BULK RENAME ALL COURSES IN A GRADE
 // PATCH /api/academic-admin/grade-types/:id/bulk-rename
 // ─────────────────────────────────────────────────────────────────────────────
 const bulkRenameCourses = async (req, res) => {
     const idTipoGrado = Number(req.params.id);
-    const { schoolId, prefijo, separador } = req.body;
+    const { schoolId, prefijo, separador, tipo_ordinal } = req.body;
     if (!schoolId || !idTipoGrado) {
         res.status(400).json({ error: "Parámetros inválidos" });
         return;
@@ -3627,6 +3637,7 @@ const bulkRenameCourses = async (req, res) => {
     }
     // sep can be "-", ".", " ", or "" (empty = no separator)
     const sep = (separador !== undefined && separador !== null) ? String(separador) : "-";
+    const isLetter = (tipo_ordinal === "LETRA");
     const client = await db_1.pool.connect();
     try {
         await client.query("BEGIN");
@@ -3649,8 +3660,8 @@ const bulkRenameCourses = async (req, res) => {
             return;
         }
         // Validate generated name length
-        const maxNumberStr = String(groups.length);
-        const maxGeneratedName = `${base}${sep}${maxNumberStr}`;
+        const lastOrdinal = isLetter ? indexToLetter(groups.length - 1) : String(groups.length);
+        const maxGeneratedName = `${base}${sep}${lastOrdinal}`;
         if (maxGeneratedName.length > 10) {
             res.status(400).json({ error: `La estructura del nombre superaría los 10 caracteres (ej: ${maxGeneratedName})` });
             await client.query("ROLLBACK");
@@ -3658,7 +3669,8 @@ const bulkRenameCourses = async (req, res) => {
         }
         for (let i = 0; i < groups.length; i++) {
             const { id_grupo, id_seccion } = groups[i];
-            const nuevoNombre = `${base}${sep}${i + 1}`;
+            const ordinal = isLetter ? indexToLetter(i) : String(i + 1);
+            const nuevoNombre = `${base}${sep}${ordinal}`;
             // Check section sharing
             const shareRes = await client.query(`SELECT COUNT(*)::int AS total FROM grupos WHERE id_seccion = $1 AND id_colegio = $2`, [id_seccion, schoolId]);
             const shared = shareRes.rows[0].total;

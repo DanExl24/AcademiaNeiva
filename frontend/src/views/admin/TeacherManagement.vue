@@ -19,6 +19,7 @@ import {
 } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 import { useRouter } from 'vue-router'
+import { getCourseDisplayName } from '../../utils/courseHelper'
 
 interface DocumentType {
   id_tipodocumento: number
@@ -324,7 +325,7 @@ const exportTeachersToCSV = () => {
   const rows = teachers.value.map(t => {
     const teacherAssignments = assignments.value
       .filter(a => a.id_docente === t.id_docente)
-      .map(a => `${a.materia_nombre} (${a.tipo_grado_nombre} ${a.seccion_nombre} - ${a.jornada_nombre})`)
+      .map(a => `${a.materia_nombre} (${getCourseDisplayName({ tipo_grado_nombre: a.tipo_grado_nombre, seccion_nombre: a.seccion_nombre })} - ${a.jornada_nombre})`)
       .join('; ')
 
     return [
@@ -582,7 +583,7 @@ onMounted(() => {
                     <select v-model="assignmentForm.id_grupo" class="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-xs font-bold outline-none text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500/20 transition-all">
                       <option value="">Seleccionar curso...</option>
                       <option v-for="group in groups" :key="group.id_grupo" :value="group.id_grupo">
-                        {{ group.tipo_grado_nombre }} {{ group.seccion_nombre }} ({{ group.jornada_nombre }})
+                        {{ getCourseDisplayName({ tipo_grado_nombre: group.tipo_grado_nombre, seccion_nombre: group.seccion_nombre }) }} ({{ group.jornada_nombre }})
                       </option>
                     </select>
                   </div>
@@ -628,7 +629,7 @@ onMounted(() => {
                     <select v-model="assignmentFilterGroupId" class="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl p-2.5 text-[10px] font-black outline-none text-slate-900 dark:text-white transition-all focus:ring-2 focus:ring-indigo-500/10">
                       <option :value="null">Todos los cursos</option>
                       <option v-for="g in groups" :key="g.id_grupo" :value="g.id_grupo">
-                        {{ g.tipo_grado_nombre }} {{ g.seccion_nombre }}
+                        {{ getCourseDisplayName({ tipo_grado_nombre: g.tipo_grado_nombre, seccion_nombre: g.seccion_nombre }) }}
                       </option>
                     </select>
                   </div>
@@ -650,7 +651,7 @@ onMounted(() => {
                   >
                     <div>
                       <p class="font-black text-slate-900 dark:text-white text-sm">{{ assignment.materia_nombre }}</p>
-                      <p class="text-[10px] font-bold text-indigo-500 uppercase tracking-widest mt-0.5">{{ assignment.tipo_grado_nombre }} {{ assignment.seccion_nombre }} · {{ assignment.jornada_nombre }}</p>
+                      <p class="text-[10px] font-bold text-indigo-500 uppercase tracking-widest mt-0.5">{{ getCourseDisplayName({ tipo_grado_nombre: assignment.tipo_grado_nombre, seccion_nombre: assignment.seccion_nombre }) }} · {{ assignment.jornada_nombre }}</p>
                     </div>
                     <button
                       @click="deleteAssignmentModal = assignment"

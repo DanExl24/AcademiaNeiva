@@ -4,6 +4,7 @@ import axios from 'axios'
 import { Layers3, Plus, Search, School2, Trash2, Info, Pencil, Tag, RefreshCw } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 import { useNotificationStore } from '../../stores/notifications'
+import { getCourseDisplayName, getNextSectionName } from '../../utils/courseHelper'
 
 interface Nivel {
   id_nivel: number
@@ -70,6 +71,7 @@ const bulkModal = ref(false)
 const bulkTarget = ref<TipoGrado | null>(null)
 const bulkPrefijo = ref('')
 const bulkSeparador = ref('-')
+const bulkOrdinalType = ref<'NUMERO' | 'LETRA'>('NUMERO')
 const bulkRenaming = ref(false)
 
 const sepOptions = [
@@ -131,14 +133,28 @@ const visibleGroups = computed(() => {
 
   // Filter by search term
   const term = searchTerm.value.trim().toLowerCase()
-  if (!term) return list
+  if (term) {
+    list = list.filter((item) =>
+      item.tipo_grado_nombre.toLowerCase().includes(term) ||
+      item.nivel_nombre.toLowerCase().includes(term) ||
+      item.jornada_nombre.toLowerCase().includes(term) ||
+      item.seccion_nombre.toLowerCase().includes(term)
+    )
+  }
 
-  return list.filter((item) =>
-    item.tipo_grado_nombre.toLowerCase().includes(term) ||
-    item.nivel_nombre.toLowerCase().includes(term) ||
-    item.jornada_nombre.toLowerCase().includes(term) ||
-    item.seccion_nombre.toLowerCase().includes(term)
-  )
+  // Sort list naturally
+  return [...list].sort((a, b) => {
+    const levelCompare = a.nivel_nombre.localeCompare(b.nivel_nombre, undefined, { sensitivity: 'base' })
+    if (levelCompare !== 0) return levelCompare
+
+    const gradeCompare = a.tipo_grado_nombre.localeCompare(b.tipo_grado_nombre, undefined, { numeric: true, sensitivity: 'base' })
+    if (gradeCompare !== 0) return gradeCompare
+
+    const sectionCompare = a.seccion_nombre.localeCompare(b.seccion_nombre, undefined, { numeric: true, sensitivity: 'base' })
+    if (sectionCompare !== 0) return sectionCompare
+
+    return a.jornada_nombre.localeCompare(b.jornada_nombre, undefined, { sensitivity: 'base' })
+  })
 })
 
 const selectedGrade = computed(() => {
@@ -151,11 +167,34 @@ const bulkCourseCount = computed(() => {
   return grupos.value.filter(g => g.id_tipo_grado === bulkTarget.value!.id_tipo_grado).length
 })
 
+const computedNextSectionName = computed(() => {
+  const gradeId = Number(newGroup.value.id_tipo_grado)
+  if (!gradeId) return ''
+  const gradeGroups = grupos.value.filter(g => g.id_tipo_grado === gradeId)
+  const existingNames = gradeGroups.map(g => g.seccion_nombre)
+  return getNextSectionName(existingNames)
+})
+
+const indexToLetter = (index: number): string => {
+  let temp = index
+  let letter = ''
+  while (temp >= 0) {
+    letter = String.fromCharCode((temp % 26) + 65) + letter
+    temp = Math.floor(temp / 26) - 1
+  }
+  return letter
+}
+
+
 const previewNames = computed(() => {
   const base = bulkPrefijo.value.trim().toUpperCase()
   const sep = bulkSeparador.value
   if (!base || !bulkCourseCount.value) return []
-  return Array.from({ length: bulkCourseCount.value }, (_, i) => `${base}${sep}${i + 1}`)
+  const isLetter = (bulkOrdinalType.value === 'LETRA')
+  return Array.from({ length: bulkCourseCount.value }, (_, i) => {
+    const ordinal = isLetter ? indexToLetter(i) : String(i + 1)
+    return `${base}${sep}${ordinal}`
+  })
 })
 
 const bulkPrefijoError = computed(() => {
@@ -163,8 +202,10 @@ const bulkPrefijoError = computed(() => {
   if (!base) return 'El prefijo no puede estar vacío'
   if (base.length > 10) return 'El prefijo no puede superar los 10 caracteres'
   
+  const isLetter = (bulkOrdinalType.value === 'LETRA')
   const lastNum = bulkCourseCount.value
-  const longestName = `${base.toUpperCase()}${bulkSeparador.value}${lastNum}`
+  const lastOrdinal = isLetter ? indexToLetter(lastNum - 1) : String(lastNum)
+  const longestName = `${base.toUpperCase()}${bulkSeparador.value}${lastOrdinal}`
   if (longestName.length > 10) {
     return `La estructura superaría los 10 caracteres (ej: ${longestName})`
   }
@@ -265,7 +306,7 @@ const createGradeType = async () => {
 const createGroup = async () => {
   const payload = newGroup.value
   if (savingGroup.value) return
-  if (!payload.id_nivel || !payload.id_tipo_grado || !payload.id_jornada || !payload.id_seccion) {
+  if (!payload.id_nivel || !payload.id_tipo_grado || !payload.id_jornada || !computedNextSectionName.value) {
     notify.addNotification('Completa nivel, grado, jornada y sección antes de crear el curso.', 'warning')
     return
   }
@@ -281,7 +322,7 @@ const createGroup = async () => {
       id_nivel: Number(payload.id_nivel),
       id_tipo_grado: Number(payload.id_tipo_grado),
       id_jornada: Number(payload.id_jornada),
-      id_seccion: Number(payload.id_seccion),
+      seccion_nombre: computedNextSectionName.value,
       cupos_totales: Number(payload.cupos_totales),
     })
     newGroup.value = {
@@ -399,6 +440,7 @@ const openBulkRenameModal = (grade: TipoGrado) => {
   bulkTarget.value = grade
   bulkPrefijo.value = ''
   bulkSeparador.value = '-'
+  bulkOrdinalType.value = 'NUMERO'
   bulkModal.value = true
 }
 
@@ -407,6 +449,7 @@ const closeBulkModal = () => {
   bulkModal.value = false
   bulkTarget.value = null
   bulkPrefijo.value = ''
+  bulkOrdinalType.value = 'NUMERO'
 }
 
 const confirmBulkRename = async () => {
@@ -418,7 +461,8 @@ const confirmBulkRename = async () => {
       {
         schoolId: schoolId.value,
         prefijo: bulkPrefijo.value.trim().toUpperCase(),
-        separador: bulkSeparador.value
+        separador: bulkSeparador.value,
+        tipo_ordinal: bulkOrdinalType.value
       },
       { headers: { Authorization: `Bearer ${auth.token}` } }
     )
@@ -592,8 +636,8 @@ onMounted(loadData)
               >
                 <div class="flex items-start justify-between mb-4">
                   <div>
-                    <h4 class="font-black text-slate-900 dark:text-white text-lg leading-tight">{{ item.tipo_grado_nombre }} {{ item.seccion_nombre }}</h4>
-                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">{{ item.jornada_nombre }} | {{ item.nivel_nombre }}</p>
+                    <h4 class="font-black text-slate-900 dark:text-white text-lg leading-tight">{{ getCourseDisplayName(item) }}</h4>
+                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">{{ item.tipo_grado_nombre }} | {{ item.jornada_nombre }} | {{ item.nivel_nombre }}</p>
                   </div>
                   <div class="flex items-center gap-1">
                     <button @click="openRenameModal(item)" class="p-2 text-slate-300 hover:text-indigo-500 transition-colors" title="Renombrar Curso">
@@ -704,11 +748,13 @@ onMounted(loadData)
                 </select>
               </div>
               <div class="space-y-2">
-                <label class="text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Sección</label>
-                <select v-model="newGroup.id_seccion" class="w-full bg-slate-50 dark:bg-slate-800 rounded-2xl p-3.5 font-bold outline-none text-sm text-slate-900 dark:text-white border-2 border-transparent focus:border-indigo-500/20">
-                  <option value="">Seleccionar Sección</option>
-                  <option v-for="seccion in secciones" :key="seccion.id_seccion" :value="seccion.id_seccion">{{ seccion.nombre }}</option>
-                </select>
+                <label class="text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Sección Auto-Generada</label>
+                <input 
+                  :value="computedNextSectionName || 'Selecciona un Grado primero'" 
+                  type="text" 
+                  disabled
+                  class="w-full bg-slate-100 dark:bg-slate-800 border-2 border-transparent rounded-2xl p-3.5 font-bold outline-none text-sm text-slate-500 dark:text-slate-400 cursor-not-allowed" 
+                />
               </div>
               <div class="space-y-2">
                 <label class="text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Capacidad (Cupos)</label>
@@ -738,7 +784,7 @@ onMounted(loadData)
             <p class="text-slate-500 dark:text-slate-400 font-medium mt-3 leading-relaxed">
               Estás a punto de eliminar 
               <span class="font-black text-slate-800 dark:text-slate-200">
-                {{ deleteModal.kind === 'grade' ? deleteModal.item.nombre : `${deleteModal.item.tipo_grado_nombre} ${deleteModal.item.seccion_nombre}` }}
+                {{ deleteModal.kind === 'grade' ? deleteModal.item.nombre : getCourseDisplayName(deleteModal.item) }}
               </span>. 
               Esta acción no se puede deshacer si el registro tiene dependencias.
             </p>
@@ -768,7 +814,7 @@ onMounted(loadData)
               </div>
               <div>
                 <h3 class="text-xl font-black text-slate-900 dark:text-white">Modificar Capacidad</h3>
-                <p class="text-sm font-medium text-slate-500">{{ selectedGroup.tipo_grado_nombre }} {{ selectedGroup.seccion_nombre }}</p>
+                <p class="text-sm font-medium text-slate-500">{{ getCourseDisplayName(selectedGroup) }}</p>
               </div>
             </div>
 
@@ -817,7 +863,7 @@ onMounted(loadData)
               </div>
               <div>
                 <h3 class="text-xl font-black text-slate-900 dark:text-white">Renombrar Curso</h3>
-                <p class="text-sm font-medium text-slate-500">{{ renameTarget.tipo_grado_nombre }} {{ renameTarget.seccion_nombre }}</p>
+                <p class="text-sm font-medium text-slate-500">{{ getCourseDisplayName(renameTarget) }}</p>
               </div>
             </div>
 
@@ -876,6 +922,21 @@ onMounted(loadData)
                   class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 rounded-2xl p-4 font-bold outline-none text-slate-900 dark:text-white uppercase transition-all"
                 />
                 <p class="text-[10px] font-bold text-slate-400 ml-1 uppercase">Se convertirá automáticamente a mayúsculas.</p>
+              </div>
+
+              <!-- Ordinal Type selection -->
+              <div class="space-y-2">
+                <label class="text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Tipo de Sufijo (Ordinal)</label>
+                <div class="flex gap-4">
+                  <label class="flex-1 flex items-center justify-between p-3.5 bg-slate-50 dark:bg-slate-800 rounded-2xl cursor-pointer border-2 border-transparent hover:border-indigo-500/20 transition-all">
+                    <span class="text-sm font-bold text-slate-850 dark:text-slate-200">Números (1, 2, 3...)</span>
+                    <input type="radio" value="NUMERO" v-model="bulkOrdinalType" class="accent-indigo-600 w-4 h-4" />
+                  </label>
+                  <label class="flex-1 flex items-center justify-between p-3.5 bg-slate-50 dark:bg-slate-800 rounded-2xl cursor-pointer border-2 border-transparent hover:border-indigo-500/20 transition-all">
+                    <span class="text-sm font-bold text-slate-850 dark:text-slate-200">Letras (A, B, C...)</span>
+                    <input type="radio" value="LETRA" v-model="bulkOrdinalType" class="accent-indigo-600 w-4 h-4" />
+                  </label>
+                </div>
               </div>
 
               <!-- Separator option -->

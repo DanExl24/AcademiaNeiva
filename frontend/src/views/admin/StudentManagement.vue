@@ -20,6 +20,7 @@ import {
 } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 import { useNotificationStore } from '../../stores/notifications'
+import { getCourseDisplayName } from '../../utils/courseHelper'
 
 const router = useRouter()
 
@@ -403,7 +404,7 @@ const exportToSIMAT = () => {
             <td class="px-8 py-5">
               <div v-if="s.grado_nombre" class="flex flex-col">
                 <p class="text-sm font-black text-slate-900 dark:text-white">
-                  {{ s.grado_nombre }} - {{ s.seccion_nombre }}
+                  {{ getCourseDisplayName({ grado_nombre: s.grado_nombre, seccion_nombre: s.seccion_nombre || '' }) }}
                 </p>
                 <p class="text-[10px] font-bold text-indigo-500 uppercase">{{ s.nivel_nombre }}</p>
               </div>
@@ -508,7 +509,7 @@ const exportToSIMAT = () => {
           <div class="p-8 space-y-6 text-center">
             <div class="bg-indigo-50 dark:bg-indigo-950/30 p-5 rounded-2xl border border-indigo-100 dark:border-indigo-900">
                <p class="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">Curso Actual</p>
-               <p class="text-lg font-black text-indigo-900 dark:text-white">{{ selectedStudent.grado_nombre || 'SIN ASIGNAR' }} - {{ selectedStudent.seccion_nombre }}</p>
+               <p class="text-lg font-black text-indigo-900 dark:text-white">{{ selectedStudent.grado_nombre ? getCourseDisplayName({ grado_nombre: selectedStudent.grado_nombre, seccion_nombre: selectedStudent.seccion_nombre || '' }) : 'SIN ASIGNAR' }}</p>
             </div>
 
             <div class="space-y-1 text-left">
@@ -516,7 +517,7 @@ const exportToSIMAT = () => {
               <select v-model="selectedGroup" class="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl p-4 text-sm font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/20">
                 <option value="">Selecciona un grupo...</option>
                 <option v-for="g in groups" :key="g.id_grupo" :value="g.id_grupo">
-                  {{ g.tipo_grado_nombre }} {{ g.seccion_nombre }} ({{ g.jornada_nombre }}) 
+                  {{ getCourseDisplayName({ tipo_grado_nombre: g.tipo_grado_nombre, seccion_nombre: g.seccion_nombre }) }} ({{ g.jornada_nombre }}) 
                   - Cupos: {{ g.cupos_totales - g.matriculas_count }} disponibles
                 </option>
               </select>

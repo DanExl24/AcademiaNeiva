@@ -489,7 +489,7 @@ export const getGradeManagementData = async (req: Request, res: Response): Promi
          GROUP BY
            g.id_grupo, g.id_nivel, g.id_jornada, g.id_seccion, g.id_tipo_grado, g.cupos_totales,
            ne.nombre, tg.nombre, j.nombre, s.nombre
-         ORDER BY ne.nombre, tg.nombre, j.nombre, s.nombre`,
+         ORDER BY ne.nombre, tg.nombre, LENGTH(s.nombre), s.nombre, j.nombre`,
         [schoolId]
       ),
     ]);
@@ -607,17 +607,51 @@ export const createGroup = async (req: Request, res: Response): Promise<void> =>
   const schoolId = parseSchoolId(req.body.schoolId);
   const idNivel = Number(req.body.id_nivel);
   const idJornada = Number(req.body.id_jornada);
-  const idSeccion = Number(req.body.id_seccion);
   const idTipoGrado = Number(req.body.id_tipo_grado);
   const cuposTotales = Number(req.body.cupos_totales);
+  const seccionNombre = (req.body.seccion_nombre || "").trim().toUpperCase();
 
-  if (!schoolId || !idNivel || !idJornada || !idSeccion || !idTipoGrado || cuposTotales < 0) {
+  let idSeccion = Number(req.body.id_seccion);
+
+  if (!schoolId || !idNivel || !idJornada || !idTipoGrado || cuposTotales < 0) {
     res.status(400).json({ error: "Todos los campos del curso son obligatorios" });
     return;
   }
 
+  const client = await pool.connect();
   try {
-    const validationRes = await pool.query(
+    await client.query("BEGIN");
+
+    // If seccionNombre is provided, find or create section
+    if (seccionNombre) {
+      if (seccionNombre.length > 10) {
+        res.status(400).json({ error: "El nombre de la sección no puede superar los 10 caracteres" });
+        await client.query("ROLLBACK");
+        return;
+      }
+
+      const secRes = await client.query(
+        `SELECT id_seccion FROM secciones WHERE UPPER(nombre) = $1`,
+        [seccionNombre]
+      );
+      if (secRes.rows.length > 0) {
+        idSeccion = secRes.rows[0].id_seccion;
+      } else {
+        const insertRes = await client.query(
+          `INSERT INTO secciones (nombre) VALUES ($1) RETURNING id_seccion`,
+          [seccionNombre]
+        );
+        idSeccion = insertRes.rows[0].id_seccion;
+      }
+    }
+
+    if (!idSeccion) {
+      res.status(400).json({ error: "La sección es obligatoria" });
+      await client.query("ROLLBACK");
+      return;
+    }
+
+    const validationRes = await client.query(
       `SELECT
          EXISTS(SELECT 1 FROM nivel_escolar WHERE id_nivel = $1 AND id_colegio = $2) AS nivel_ok,
          EXISTS(SELECT 1 FROM jornada WHERE id_jornada = $3 AND id_colegio = $2) AS jornada_ok,
@@ -636,10 +670,11 @@ export const createGroup = async (req: Request, res: Response): Promise<void> =>
     const validation = validationRes.rows[0];
     if (!validation.nivel_ok || !validation.jornada_ok || !validation.seccion_ok || !validation.tipo_ok) {
       res.status(400).json({ error: "La combinación de nivel, jornada, sección y grado no es válida" });
+      await client.query("ROLLBACK");
       return;
     }
 
-    const duplicateRes = await pool.query(
+    const duplicateRes = await client.query(
       `SELECT id_grupo
        FROM grupos
        WHERE id_colegio = $1
@@ -652,20 +687,25 @@ export const createGroup = async (req: Request, res: Response): Promise<void> =>
 
     if (duplicateRes.rows.length > 0) {
       res.status(409).json({ error: "Ya existe un curso con esta combinación de jornada, grado y sección" });
+      await client.query("ROLLBACK");
       return;
     }
 
-    const created = await pool.query(
+    const created = await client.query(
       `INSERT INTO grupos (id_nivel, id_jornada, id_colegio, id_seccion, cupos_totales, id_tipo_grado)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING *`,
       [idNivel, idJornada, schoolId, idSeccion, cuposTotales, idTipoGrado]
     );
 
+    await client.query("COMMIT");
     res.status(201).json(created.rows[0]);
   } catch (error: any) {
+    await client.query("ROLLBACK");
     console.error("Error creating group:", error);
     res.status(500).json({ error: "Error en el servidor" });
+  } finally {
+    client.release();
   }
 };
 
@@ -879,7 +919,7 @@ export const getAcademicSettingsData = async (req: Request, res: Response): Prom
          JOIN jornada j ON j.id_jornada = g.id_jornada
          WHERE dg.id_colegio = $1
            AND dg.id_grupo IS NOT NULL
-         ORDER BY ne.nombre, tg.nombre, j.nombre, s.nombre, m.nombre`,
+         ORDER BY ne.nombre, tg.nombre, LENGTH(s.nombre), s.nombre, j.nombre, m.nombre`,
         [schoolId]
       ),
       pool.query(
@@ -2174,7 +2214,7 @@ export const getTeacherManagementData = async (req: Request, res: Response): Pro
          JOIN secciones s ON s.id_seccion = g.id_seccion
          JOIN jornada j ON j.id_jornada = g.id_jornada
          WHERE g.id_colegio = $1
-         ORDER BY ne.nombre, tg.nombre, j.nombre, s.nombre`,
+          ORDER BY ne.nombre, tg.nombre, LENGTH(s.nombre), s.nombre, j.nombre`,
         [schoolId]
       ),
       pool.query(
@@ -3361,7 +3401,7 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
            JOIN jornada j ON g.id_jornada = j.id_jornada
             WHERE dg.id_colegio = $1
            GROUP BY g.id_grupo, tg.nombre, s.nombre, j.nombre
-           ORDER BY tg.nombre, s.nombre`,
+           ORDER BY tg.nombre, LENGTH(s.nombre), s.nombre`,
           [schoolId, targetPeriodId]
         ),
         pool.query(
@@ -3382,7 +3422,7 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
            JOIN jornada j ON g.id_jornada = j.id_jornada
            WHERE dg.id_colegio = $1
            GROUP BY m.id_materia, m.nombre, g.id_grupo, tg.nombre, s.nombre, j.nombre
-           ORDER BY tg.nombre, s.nombre, average DESC`,
+           ORDER BY tg.nombre, LENGTH(s.nombre), s.nombre, average DESC`,
           [schoolId, targetPeriodId]
         )
       ]);
@@ -3423,7 +3463,7 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
        JOIN jornada j ON g.id_jornada = j.id_jornada
        WHERE dg.id_colegio = $1 AND p."id_año" = $2
        GROUP BY p.id_periodo, p.nombre, g.id_grupo, tg.nombre, s.nombre, j.nombre
-       ORDER BY p.id_periodo, tg.nombre, s.nombre`,
+        ORDER BY p.id_periodo, tg.nombre, LENGTH(s.nombre), s.nombre`,
       [schoolId, targetYearId]
     );
     charts.evolutionByCourse = evolutionByCourseRes.rows;
@@ -4669,13 +4709,24 @@ export const renameSingleCourse = async (req: Request, res: Response): Promise<v
   }
 };
 
+// Helper to convert index to letter sequence: 0 -> A, 1 -> B ... 26 -> AA ...
+const indexToLetter = (index: number): string => {
+  let temp = index;
+  let letter = "";
+  while (temp >= 0) {
+    letter = String.fromCharCode((temp % 26) + 65) + letter;
+    temp = Math.floor(temp / 26) - 1;
+  }
+  return letter;
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // BULK RENAME ALL COURSES IN A GRADE
 // PATCH /api/academic-admin/grade-types/:id/bulk-rename
 // ─────────────────────────────────────────────────────────────────────────────
 export const bulkRenameCourses = async (req: Request, res: Response): Promise<void> => {
   const idTipoGrado = Number(req.params.id);
-  const { schoolId, prefijo, separador } = req.body;
+  const { schoolId, prefijo, separador, tipo_ordinal } = req.body;
 
   if (!schoolId || !idTipoGrado) { res.status(400).json({ error: "Parámetros inválidos" }); return; }
   const base = (prefijo || "").trim();
@@ -4684,6 +4735,7 @@ export const bulkRenameCourses = async (req: Request, res: Response): Promise<vo
 
   // sep can be "-", ".", " ", or "" (empty = no separator)
   const sep: string = (separador !== undefined && separador !== null) ? String(separador) : "-";
+  const isLetter = (tipo_ordinal === "LETRA");
 
   const client = await pool.connect();
   try {
@@ -4709,8 +4761,8 @@ export const bulkRenameCourses = async (req: Request, res: Response): Promise<vo
     if (!groups.length) { res.status(400).json({ error: "Este grado no tiene cursos" }); await client.query("ROLLBACK"); return; }
 
     // Validate generated name length
-    const maxNumberStr = String(groups.length);
-    const maxGeneratedName = `${base}${sep}${maxNumberStr}`;
+    const lastOrdinal = isLetter ? indexToLetter(groups.length - 1) : String(groups.length);
+    const maxGeneratedName = `${base}${sep}${lastOrdinal}`;
     if (maxGeneratedName.length > 10) {
       res.status(400).json({ error: `La estructura del nombre superaría los 10 caracteres (ej: ${maxGeneratedName})` });
       await client.query("ROLLBACK");
@@ -4719,7 +4771,8 @@ export const bulkRenameCourses = async (req: Request, res: Response): Promise<vo
 
     for (let i = 0; i < groups.length; i++) {
       const { id_grupo, id_seccion } = groups[i];
-      const nuevoNombre = `${base}${sep}${i + 1}`;
+      const ordinal = isLetter ? indexToLetter(i) : String(i + 1);
+      const nuevoNombre = `${base}${sep}${ordinal}`;
 
       // Check section sharing
       const shareRes = await client.query(

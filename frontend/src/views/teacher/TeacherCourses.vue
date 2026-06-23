@@ -15,6 +15,7 @@ import {
 import { useAuthStore } from '../../stores/auth'
 import axios from 'axios'
 import { useRouter } from 'vue-router'
+import { getCourseDisplayName } from '../../utils/courseHelper'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -119,7 +120,7 @@ const groupedBySubjects = computed(() => {
     if (!groups[item.materia_nombre].cursos.some((c: any) => c.id_grado === item.id_grado)) {
       groups[item.materia_nombre].cursos.push({
         id_grado: item.id_grado,
-        nombre: `${item.grado_nombre} ${item.seccion}`,
+        nombre: getCourseDisplayName({ grado_nombre: item.grado_nombre, seccion_nombre: item.seccion }),
         jornada: item.jornada_nombre
       })
     }
@@ -158,7 +159,7 @@ const studentsLoading = ref(false)
 const studentsList = ref<any[]>([])
 
 const openStudentsModal = async (group: any) => {
-  studentsModalTitle.value = `${group.nombre} ${group.seccion} — ${group.jornada || ''}`
+  studentsModalTitle.value = `${getCourseDisplayName({ grado_nombre: group.nombre, seccion_nombre: group.seccion })} — ${group.jornada || ''}`
   showStudentsModal.value = true
   studentsLoading.value = true
   studentsList.value = []
@@ -317,7 +318,7 @@ const closeStudentsModal = () => {
             </div>
           </div>
 
-          <h3 class="text-2xl font-black text-slate-900 dark:text-white mb-1">{{ group.nombre }} {{ group.seccion }}</h3>
+          <h3 class="text-2xl font-black text-slate-900 dark:text-white mb-1">{{ getCourseDisplayName({ grado_nombre: group.nombre, seccion_nombre: group.seccion }) }}</h3>
           
           <div class="space-y-4 mt-6">
             <div v-for="materia in group.materias" :key="materia.id" class="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-700 group/item hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:border-indigo-100 dark:hover:border-indigo-800 transition-colors duration-300">

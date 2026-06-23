@@ -2,6 +2,7 @@
 import { ref, onMounted, computed, watch } from 'vue'
 import { useAuthStore } from '../../stores/auth'
 import axios from 'axios'
+import { getCourseDisplayName } from '../../utils/courseHelper'
 import { 
   Users, 
   GraduationCap, 
@@ -263,12 +264,12 @@ const handleAlertClick = (item: { name: string; alerts: number }) => {
     globalSelectedGrade.value = item.name
   } else {
     const course = availableCoursesForSelectedGrade.value.find(
-      c => `Sección ${c.seccion_nombre} - ${c.jornada_nombre}` === item.name
+      c => `${getCourseDisplayName(c)} - ${c.jornada_nombre}` === item.name
     )
     if (course) {
       selectedAlertCourse.value = {
         id_grupo: course.id_grupo,
-        name: `${globalSelectedGrade.value} (Sección ${course.seccion_nombre} - ${course.jornada_nombre})`
+        name: `${getCourseDisplayName(course)} - ${course.jornada_nombre}`
       }
     }
   }
@@ -353,7 +354,7 @@ const riskChartData = computed(() => {
 
   const filtered = allRisk.filter(r => r.grado_nombre === globalSelectedGrade.value)
   return {
-    labels: filtered.map(r => `Sección ${r.seccion_nombre} - ${r.jornada_nombre}`),
+    labels: filtered.map(r => `${getCourseDisplayName({ grado_nombre: r.grado_nombre, seccion_nombre: r.seccion_nombre })} - ${r.jornada_nombre}`),
     datasets: [
       {
         label: 'En Riesgo',
@@ -413,7 +414,7 @@ const gradeChartData = computed(() => {
       c => c.grado_nombre === globalSelectedGrade.value
     )
     return {
-      labels: filteredCourses.map(c => `Sección ${c.seccion_nombre} - ${c.jornada_nombre}`),
+      labels: filteredCourses.map(c => `${getCourseDisplayName(c)} - ${c.jornada_nombre}`),
       datasets: [{
         label: 'Promedio Curso',
         data: filteredCourses.map(c => c.average),
@@ -505,7 +506,7 @@ const filteredAlertsData = computed(() => {
       r => r.grado_nombre === globalSelectedGrade.value
     )
     return coursesInGrade.map(c => ({
-      name: `Sección ${c.seccion_nombre} - ${c.jornada_nombre}`,
+      name: `${getCourseDisplayName(c)} - ${c.jornada_nombre}`,
       alerts: c.at_risk
     }))
     .filter(c => c.alerts > 0)
@@ -750,7 +751,7 @@ onMounted(async () => {
                   : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-emerald-400 hover:text-emerald-500'
               ]"
             >
-              Sección {{ course.seccion_nombre }} - {{ course.jornada_nombre }}
+              {{ getCourseDisplayName(course) }} - {{ course.jornada_nombre }}
             </button>
           </div>
           <div v-else-if="globalSelectedGrade !== 'ALL' && availableCoursesForSelectedGrade.length === 0" class="mt-4 text-sm text-slate-500 italic">
@@ -787,7 +788,7 @@ onMounted(async () => {
                   : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-amber-400 hover:text-amber-500'
               ]"
             >
-              Sección {{ course.seccion_nombre }} - {{ course.jornada_nombre }}
+              {{ getCourseDisplayName(course) }} - {{ course.jornada_nombre }}
             </button>
           </div>
           <div v-else-if="globalSelectedGrade !== 'ALL' && availableCoursesForSelectedGrade.length === 0" class="mt-4 text-sm text-slate-500 italic">
