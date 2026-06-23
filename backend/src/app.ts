@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import path from "path";
+import rateLimit from "express-rate-limit";
 import matriculaRoutes from "./routes/matricula.routes";
 import gradoRoutes from "./routes/grado.routes";
 import authRoutes from "./routes/auth.routes";
@@ -13,14 +14,63 @@ import adminGeneralRoutes from "./routes/adminGeneral.routes";
 
 const app = express();
 
+// Rate Limiters
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 200,
+  message: { error: "Demasiadas peticiones. Intenta de nuevo en 15 minutos." }
+});
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 10,
+  message: { error: "Demasiados intentos de inicio de sesión. Intenta de nuevo en 15 minutos." }
+});
+
+const enrollmentLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 20, // 20 solicitudes cada 15 min (solicitud del usuario)
+  message: { error: "Límite de solicitudes de matrícula alcanzado. Intenta de nuevo en 15 minutos." }
+});
+
 // Middlewares
 app.use(helmet({
   crossOriginResourcePolicy: false,
-  contentSecurityPolicy: false,
-  frameguard: false,
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      imgSrc: ["'self'", "data:", "blob:", "http:", "https:"],
+      connectSrc: ["'self'", "http://localhost:5173", "http://localhost:3000"]
+    }
+  },
+  frameguard: { action: "deny" }
 }));
-app.use(cors());
+
+const allowedOrigins = process.env.ALLOWED_ORIGINS 
+  ? process.env.ALLOWED_ORIGINS.split(",") 
+  : ["http://localhost:5173"];
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
+  credentials: true
+}));
+
 app.use(express.json());
+
+// Apply rate limiting
+app.use(globalLimiter);
+app.use("/api/auth/login", loginLimiter);
+app.use("/api/auth/student-login", loginLimiter);
+app.use("/api/matriculas/submit", enrollmentLimiter);
 
 // Serve uploaded files
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));

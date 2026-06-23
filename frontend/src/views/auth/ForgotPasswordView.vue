@@ -1,0 +1,84 @@
+<script setup lang="ts">
+import { ref } from 'vue'
+import { ArrowLeft, Mail } from 'lucide-vue-next'
+import axios from 'axios'
+
+const email = ref('')
+const loading = ref(false)
+const message = ref('')
+const error = ref('')
+
+const handleForgotPassword = async () => {
+  if (!email.value) return
+
+  try {
+    loading.value = true
+    error.value = ''
+    message.value = ''
+
+    const response = await axios.post('http://localhost:3000/api/auth/forgot-password', {
+      email: email.value
+    })
+
+    message.value = response.data.message || 'Si el correo está registrado, recibirás un enlace de recuperación en breve.'
+  } catch (err: any) {
+    console.error('Error requesting password reset:', err)
+    error.value = err.response?.data?.error || 'Hubo un problema al procesar la solicitud. Intenta nuevamente.'
+  } finally {
+    loading.value = false
+  }
+}
+</script>
+
+<template>
+  <div class="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-12 sm:px-6 lg:px-8">
+    <div class="max-w-md w-full space-y-8 bg-white p-10 rounded-3xl shadow-xl border border-gray-100">
+      <div class="text-center">
+        <router-link to="/login" class="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-indigo-600 mb-8 transition-colors">
+          <ArrowLeft :size="16" />
+          Volver al inicio de sesión
+        </router-link>
+        <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-600 text-white mx-auto shadow-lg shadow-indigo-100 mb-4">
+          <Mail :size="24" />
+        </div>
+        <h2 class="text-3xl font-extrabold text-gray-900">Recuperar Contraseña</h2>
+        <p class="mt-2 text-sm text-gray-600">Ingresa tu correo para recibir un enlace de recuperación</p>
+      </div>
+
+      <div v-if="error" class="p-4 bg-red-50 border border-red-100 rounded-xl">
+        <p class="text-xs text-red-600 text-center font-bold">{{ error }}</p>
+      </div>
+
+      <div v-if="message" class="p-4 bg-green-50 border border-green-100 rounded-xl">
+        <p class="text-xs text-green-700 text-center font-bold">{{ message }}</p>
+      </div>
+      
+      <form v-if="!message" class="mt-8 space-y-6" @submit.prevent="handleForgotPassword">
+        <div class="rounded-md shadow-sm space-y-4">
+          <div>
+            <label for="email" class="block text-sm font-medium text-gray-700 mb-1">Correo electrónico</label>
+            <input 
+              id="email" 
+              v-model="email" 
+              type="email" 
+              required 
+              class="appearance-none block w-full px-4 py-3 border border-gray-300 rounded-xl placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" 
+              placeholder="usuario@ejemplo.com"
+              :disabled="loading"
+            />
+          </div>
+        </div>
+
+        <div>
+          <button 
+            type="submit" 
+            :disabled="loading"
+            class="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-semibold rounded-xl text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all active:scale-95 shadow-lg shadow-indigo-100 disabled:opacity-50"
+          >
+            {{ loading ? 'Enviando...' : 'Enviar enlace de recuperación' }}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</template>

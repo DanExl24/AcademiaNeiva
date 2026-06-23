@@ -458,4 +458,99 @@ export class NotificationService {
       console.error('Error enviando email de traslado de estudiante:', error);
     }
   }
+
+  static async sendPasswordResetEmail(to: string, userName: string, resetLink: string) {
+    if (!to) {
+      console.error('❌ Error: No se puede enviar email de restablecimiento de contraseña porque no hay destinatario (to)');
+      return;
+    }
+    const html = `
+      <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #1f2937;">
+        <div style="background: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%); padding: 40px; border-radius: 24px; text-align: center; color: white; margin-bottom: 30px;">
+          <h1 style="margin: 0; font-size: 28px; font-weight: 800;">Restablecer Contraseña</h1>
+          <p style="opacity: 0.9; margin-top: 10px; font-size: 16px;">Academia Neiva - Portal del Usuario</p>
+        </div>
+        
+        <p style="font-size: 18px; font-weight: 600;">Hola, ${userName},</p>
+        <p style="line-height: 1.6;">Has solicitado restablecer la contraseña para acceder a la plataforma institucional de Academia Neiva.</p>
+        <p style="line-height: 1.6;">Haz clic en el siguiente botón para definir una nueva contraseña. Este enlace expirará en 1 hora:</p>
+
+        <div style="text-align: center; margin-top: 40px;">
+          <a href="${resetLink}" style="background-color: #4f46e5; color: white; padding: 16px 32px; border-radius: 12px; text-decoration: none; font-weight: 700; display: inline-block; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+            Restablecer mi contraseña
+          </a>
+        </div>
+
+        <p style="line-height: 1.6; margin-top: 30px; font-size: 14px; color: #6b7280;">Si no solicitaste este cambio, puedes ignorar este correo de forma segura.</p>
+
+        <div style="margin-top: 60px; padding-top: 20px; border-top: 1px solid #f3f4f6; text-align: center; color: #9ca3af; font-size: 12px;">
+          <p>© 2024 Academia Neiva. Todos los derechos reservados.</p>
+        </div>
+      </div>
+    `;
+
+    try {
+      await transporter.sendMail({
+        from: `"Academia Neiva" <${process.env.SMTP_USER}>`,
+        to,
+        subject: 'Recuperación de contraseña - Academia Neiva',
+        html,
+      });
+      console.log(`Email de recuperación enviado con éxito a ${to}`);
+    } catch (error) {
+      console.error('Error enviando email de recuperación de contraseña:', error);
+    }
+  }
+
+  static async sendEnrollmentSubmittedEmail(
+    to: string,
+    parentName: string,
+    studentName: string,
+    trackingToken: string
+  ) {
+    if (!to) {
+      console.error('❌ Error: No se puede enviar email de confirmación de matrícula porque no hay destinatario (to)');
+      return;
+    }
+    const trackingLink = `http://localhost:5173/matricula/seguimiento?token=${trackingToken}`;
+    const html = `
+      <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #1f2937;">
+        <div style="background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%); padding: 40px; border-radius: 24px; text-align: center; color: white; margin-bottom: 30px;">
+          <h1 style="margin: 0; font-size: 28px; font-weight: 800;">Solicitud Recibida</h1>
+          <p style="opacity: 0.9; margin-top: 10px; font-size: 16px;">Academia Neiva - Registro de Matrícula</p>
+        </div>
+        
+        <p style="font-size: 18px; font-weight: 600;">Hola, ${parentName},</p>
+        <p style="line-height: 1.6;">Hemos recibido correctamente el formulario de inscripción y documentos para el estudiante <strong>${studentName}</strong>.</p>
+        <p style="line-height: 1.6;">Nuestra secretaría académica revisará la documentación en breve. Mientras tanto, puedes realizar el seguimiento de tu solicitud ingresando al portal con tu código único:</p>
+
+        <div style="background-color: #f8fafc; border-radius: 12px; padding: 20px; margin: 25px 0; text-align: center; border: 1px solid #e2e8f0;">
+          <p style="margin: 0; color: #64748b; font-size: 12px; text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em;">Token Único de Seguimiento</p>
+          <p style="margin: 10px 0; font-family: monospace; font-size: 18px; font-weight: bold; color: #1e1b4b; word-break: break-all;">${trackingToken}</p>
+        </div>
+
+        <div style="text-align: center; margin-top: 40px;">
+          <a href="${trackingLink}" style="background-color: #4f46e5; color: white; padding: 16px 32px; border-radius: 12px; text-decoration: none; font-weight: 700; display: inline-block; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+            Ver estado de mi matrícula
+          </a>
+        </div>
+
+        <div style="margin-top: 60px; padding-top: 20px; border-top: 1px solid #f3f4f6; text-align: center; color: #9ca3af; font-size: 12px;">
+          <p>© 2024 Academia Neiva. Todos los derechos reservados.</p>
+        </div>
+      </div>
+    `;
+
+    try {
+      await transporter.sendMail({
+        from: `"Academia Neiva" <${process.env.SMTP_USER}>`,
+        to,
+        subject: 'Confirmación: Solicitud de Matrícula Recibida',
+        html,
+      });
+      console.log(`Email de confirmación de matrícula enviado con éxito a ${to}`);
+    } catch (error) {
+      console.error('Error enviando email de confirmación de matrícula:', error);
+    }
+  }
 }

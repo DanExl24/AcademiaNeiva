@@ -92,6 +92,12 @@ const handleLogin = async () => {
             <label for="password" class="block text-sm font-medium text-gray-700 mb-1">Contraseña</label>
             <input id="password" v-model="loginData.password" type="password" required class="appearance-none block w-full px-4 py-3 border border-gray-300 rounded-xl placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="••••••••">
           </div>
+          
+          <div v-if="selectedCollege" class="text-right">
+            <router-link to="/forgot-password" class="text-xs font-semibold text-indigo-600 hover:text-indigo-700 hover:underline">
+              ¿Olvidaste tu contraseña?
+            </router-link>
+          </div>
         </div>
 
         <div v-if="selectedCollege">

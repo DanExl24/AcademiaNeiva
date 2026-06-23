@@ -26,7 +26,11 @@ import {
   deleteObservation,
 } from "../controllers/observationController";
 
+import { verifyToken } from "../middleware/authMiddleware";
+
 const router = Router();
+
+router.use(verifyToken);
 
 router.get("/dashboard/:userId", getTeacherDashboard);
 router.get("/courses/:userId", getTeacherCourses);

@@ -12,10 +12,22 @@ import {
   toggleTransfer
 } from "../controllers/matriculaController";
 import { upload } from "../config/multer";
+import { verifyToken, requireDirectivo } from "../middleware/authMiddleware";
 
 import { pool } from "../config/db";
 
 const router = Router();
+
+// Helper helper middleware to protect routes that request an integer ID, but bypass for UUID tokens
+const protectIfIntegerId = (req: any, res: any, next: any) => {
+  const { id } = req.params;
+  if (id && id.length <= 20) {
+    return verifyToken(req, res, () => {
+      return requireDirectivo(req, res, next);
+    });
+  }
+  next();
+};
 
 router.get("/", async (req, res) => {
   try {
@@ -99,8 +111,9 @@ router.post("/submit", upload.fields([
   { name: 'certificadosEscolaridad', maxCount: 1 }
 ]), submitEnrollment);
 
-router.get("/pending/:idColegio", getPendingMatriculas);
-router.get("/filtered/:idColegio", async (req, res) => {
+router.get("/pending/:idColegio", verifyToken, requireDirectivo, getPendingMatriculas);
+
+router.get("/filtered/:idColegio", verifyToken, requireDirectivo, async (req, res) => {
   try {
     const { estado } = req.query;
     const result = await MatriculaService.getFiltered(Number(req.params.idColegio), estado as string);
@@ -109,7 +122,8 @@ router.get("/filtered/:idColegio", async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
-router.get("/:id", async (req, res) => {
+
+router.get("/:id", protectIfIntegerId, async (req, res) => {
   try {
     const id = req.params.id;
     let result;
@@ -124,9 +138,9 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-router.patch("/document/:idDocumento", validateDocument);
-router.post("/assign-grade/:id", assignGrade);
-router.post("/notify-inconsistencies/:id", notifyInconsistencies);
+router.patch("/document/:idDocumento", verifyToken, requireDirectivo, validateDocument);
+router.post("/assign-grade/:id", verifyToken, requireDirectivo, assignGrade);
+router.post("/notify-inconsistencies/:id", verifyToken, requireDirectivo, notifyInconsistencies);
 router.post("/update-documents/:token", upload.fields([
   { name: 'registroCivil', maxCount: 1 },
   { name: 'documentoIdentidad', maxCount: 1 },
@@ -146,8 +160,8 @@ router.post("/update-documents/:token", upload.fields([
     res.status(500).json({ error: e.message });
   }
 });
-router.post("/finalize/:id", finalizeEnrollment);
-router.post("/cancel/:id", cancelEnrollment);
-router.patch("/transfer-status/:id", toggleTransfer);
+router.post("/finalize/:id", verifyToken, requireDirectivo, finalizeEnrollment);
+router.post("/cancel/:id", verifyToken, requireDirectivo, cancelEnrollment);
+router.patch("/transfer-status/:id", verifyToken, requireDirectivo, toggleTransfer);
 
 export default router;

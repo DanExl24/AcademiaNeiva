@@ -224,10 +224,11 @@ export const getParentChildren = async (req: Request, res: Response) => {
   try {
     const result = await pool.query(`
       SELECT e.id_estudiante, e.nombre, e.apellido, e.codigo,
-             tg.nombre as grado, s.nombre as grupo
+             tg.nombre as grado, s.nombre as grupo, dpf.id_colegio, col.nombre as colegio_nombre
       FROM padre_familia pf
       JOIN detalle_padrefamilia dpf ON dpf.id_padrefamilia = pf.id_padrefamilia
       JOIN estudiante e ON e.id_estudiante = dpf.id_estudiante
+      LEFT JOIN colegio col ON col.id_colegio = dpf.id_colegio
       LEFT JOIN matricula m ON m.id_estudiante = e.id_estudiante AND m.estado = 'ACTIVA'
       LEFT JOIN grupos gr ON gr.id_grupo = m.id_grupo
       LEFT JOIN secciones s ON s.id_seccion = gr.id_seccion
@@ -428,9 +429,20 @@ export const getParentDashboardData = async (req: Request, res: Response) => {
       });
     }
 
-    const id_colegio = children[0].id_colegio;
+    const schoolId = req.query.id_colegio ? parseInt(req.query.id_colegio as string) : children[0].id_colegio;
+    const filteredChildren = children.filter(c => c.id_colegio === schoolId);
 
-    // 2. Get all available periods for the picker
+    if (filteredChildren.length === 0) {
+      return res.json({ 
+        children, 
+        studentStats: [], 
+        recentActivity: [], 
+        activePeriod: null,
+        periods: [] 
+      });
+    }
+
+    // 2. Get all available periods for the picker for the selected school
     const allPeriodsRes = await pool.query(`
       SELECT 
         pa.id_periodo, pa.nombre, pa.trimestre, pa.estado,
@@ -440,7 +452,7 @@ export const getParentDashboardData = async (req: Request, res: Response) => {
       JOIN "año_lectivo" al ON al."id_año" = pa."id_año"
       WHERE pa.id_colegio = $1 
       ORDER BY pa.trimestre ASC
-    `, [id_colegio]);
+    `, [schoolId]);
     const periods = allPeriodsRes.rows;
 
     // 3. Determine active period (either from query or auto-detected)
@@ -463,11 +475,8 @@ export const getParentDashboardData = async (req: Request, res: Response) => {
       id_periodo = activePeriod?.id_periodo;
     }
 
-    // 4. Aggregate stats per child
-    // This is complex, we'll do some loops for clarity or a very long query.
-    // Let's do a combined stats query for efficiency.
-    
-    const statsPromises = children.map(async (child) => {
+    // 4. Aggregate stats per child (only for the selected school)
+    const statsPromises = filteredChildren.map(async (child) => {
       // Average and At Risk
       const gradesRes = await pool.query(`
         SELECT 
@@ -500,12 +509,12 @@ export const getParentDashboardData = async (req: Request, res: Response) => {
         FROM registro_asistencia
         WHERE id_estudiante = $1 AND id_colegio = $2
         AND fecha BETWEEN $3 AND $4
-      `, [child.id_estudiante, id_colegio, activePeriod.fecha_inicio, activePeriod.fecha_fin]);
+      `, [child.id_estudiante, child.id_colegio, activePeriod.fecha_inicio, activePeriod.fecha_fin]);
       
       const attStats = attRes.rows[0];
       const attRate = attStats.total > 0 ? (parseInt(attStats.presentes) / parseInt(attStats.total)) * 100 : 100;
 
-      // Pending Activities (simplified: activities in current period without grade in notas_actividad)
+      // Pending Activities
       const pendingRes = await pool.query(`
         SELECT COUNT(*) as count
         FROM actividad_materia am
@@ -545,8 +554,8 @@ export const getParentDashboardData = async (req: Request, res: Response) => {
     const studentStats = await Promise.all(statsPromises);
     console.log(`[Dashboard] Calculated stats for ${studentStats.length} students`);
 
-    // 4. Recent Activity (Already implemented, just use studentIds)
-    const studentIds = children.map(c => c.id_estudiante);
+    // 4. Recent Activity (use filtered studentIds)
+    const studentIds = filteredChildren.map(c => c.id_estudiante);
     const recentActivityRes = await pool.query(`
       (
         SELECT 

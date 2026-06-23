@@ -19,7 +19,7 @@ export const getAllStudents = async (req: Request, res: Response) => {
              j.nombre as jornada_nombre,
              pf.nombre as acudiente_nombre,
              pf.apellido as acudiente_apellido,
-             pf.documeno as acudiente_documento
+             pf.documento as acudiente_documento
       FROM estudiante e
       LEFT JOIN usuario u ON e.id_usuario = u.id_usuario
       LEFT JOIN tipo_documento td ON e.id_tipodocumento = td.id_tipodocumento

@@ -1,11 +1,16 @@
 import app from "./app";
 import { ensureCompetencySchema } from "./config/competencyMigration";
+import { SchedulerService } from "./services/schedulerService";
 
 const PORT = process.env.PORT || 3000;
 
 async function startServer() {
   try {
     await ensureCompetencySchema();
+    
+    // Iniciar tareas en segundo plano (Scheduler)
+    SchedulerService.start();
+    
     app.listen(PORT, () => {
       console.log(`Servidor corriendo en puerto ${PORT}`);
     });

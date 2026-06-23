@@ -7,6 +7,7 @@ exports.getSchoolIdentity = exports.studentLogin = exports.login = void 0;
 const db_1 = require("../config/db");
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
+const crypto_1 = __importDefault(require("crypto"));
 const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret";
 const login = async (req, res) => {
     const { email, password } = req.body;
@@ -61,13 +62,26 @@ const login = async (req, res) => {
             res.status(401).json({ error: "Credenciales incorrectas" });
             return;
         }
+        // Query schoolIds for parent
+        let schoolIds = [];
+        if (user.roles.includes("padre")) {
+            const parentInfoRes = await db_1.pool.query(`SELECT id_padrefamilia FROM padre_familia WHERE id_usuario = $1`, [user.id_usuario]);
+            if (parentInfoRes.rows.length > 0) {
+                const idPadre = parentInfoRes.rows[0].id_padrefamilia;
+                const schoolsRes = await db_1.pool.query(`SELECT DISTINCT id_colegio FROM detalle_padrefamilia WHERE id_padrefamilia = $1`, [idPadre]);
+                schoolIds = schoolsRes.rows.map(r => Number(r.id_colegio));
+            }
+        }
         // 3. Generar JWT
+        const jti = crypto_1.default.randomUUID();
         const token = jsonwebtoken_1.default.sign({
             id: user.id_usuario,
             email: user.email,
             role: user.roles[0], // Tomamos el primer rol como principal
             roles: user.roles,
-            schoolId: user.id_colegio
+            schoolId: user.id_colegio,
+            schoolIds: schoolIds.length > 0 ? schoolIds : undefined,
+            jti
         }, JWT_SECRET, { expiresIn: "8h" });
         // 4. Responder con datos del usuario (sin password)
         const { password: _, ...userWithoutPassword } = user;
@@ -78,7 +92,8 @@ const login = async (req, res) => {
                 email: userWithoutPassword.email,
                 role: userWithoutPassword.roles[0],
                 roles: userWithoutPassword.roles,
-                schoolId: userWithoutPassword.id_colegio
+                schoolId: userWithoutPassword.id_colegio,
+                schoolIds: schoolIds.length > 0 ? schoolIds : undefined
             },
             token
         });
@@ -122,12 +137,14 @@ const studentLogin = async (req, res) => {
             return;
         }
         // 3. Generar JWT
+        const jti = crypto_1.default.randomUUID();
         const token = jsonwebtoken_1.default.sign({
             id: user.id_usuario,
             email: user.email,
             role: "estudiante",
             roles: user.roles,
-            schoolId: user.id_colegio
+            schoolId: user.id_colegio,
+            jti
         }, JWT_SECRET, { expiresIn: "8h" });
         // 4. Responder
         res.json({

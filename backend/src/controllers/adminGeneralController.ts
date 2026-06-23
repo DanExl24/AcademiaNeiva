@@ -15,6 +15,9 @@ import bcrypt from 'bcrypt';
 export const listarColegios = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { estado, busqueda } = req.query;
+    const page = req.query.page ? Number(req.query.page) : null;
+    const limit = req.query.limit ? Number(req.query.limit) : null;
+
     let query = `
       SELECT c.*, 
              COUNT(DISTINCT d.id) AS total_directivos,
@@ -46,7 +49,22 @@ export const listarColegios = async (req: AuthRequest, res: Response): Promise<v
 
     query += ` GROUP BY c.id_colegio ORDER BY c.fecha_registro DESC`;
 
+    // Count query for total
+    const countQuery = `SELECT COUNT(*)::int as count FROM (${query}) AS temp`;
+    const countResult = await pool.query(countQuery, params);
+    const totalCount = countResult.rows[0].count;
+
+    if (page && limit) {
+      const offset = (page - 1) * limit;
+      params.push(limit);
+      query += ` LIMIT $${params.length}`;
+      params.push(offset);
+      query += ` OFFSET $${params.length}`;
+    }
+
     const result = await pool.query(query, params);
+    res.setHeader("x-total-count", String(totalCount));
+    res.setHeader("Access-Control-Expose-Headers", "x-total-count");
     res.json(result.rows);
   } catch (error: any) {
     console.error('Error listando colegios:', error);
@@ -298,6 +316,9 @@ export const eliminarColegio = async (req: AuthRequest, res: Response): Promise<
 export const listarUsuarios = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { estado, rol, busqueda, id_colegio } = req.query;
+    const page = req.query.page ? Number(req.query.page) : null;
+    const limit = req.query.limit ? Number(req.query.limit) : null;
+
     let query = `
       SELECT u.id_usuario, u.email, u.nombre, u.apellido, u.estado, u.id_colegio,
              u.fecha_creacion, u.motivo_baneo, u.fecha_baneo,
@@ -333,7 +354,22 @@ export const listarUsuarios = async (req: AuthRequest, res: Response): Promise<v
 
     query += ` GROUP BY u.id_usuario, c.nombre ORDER BY u.fecha_creacion DESC`;
 
+    // Count query for total
+    const countQuery = `SELECT COUNT(*)::int as count FROM (${query}) AS temp`;
+    const countResult = await pool.query(countQuery, params);
+    const totalCount = countResult.rows[0].count;
+
+    if (page && limit) {
+      const offset = (page - 1) * limit;
+      params.push(limit);
+      query += ` LIMIT $${params.length}`;
+      params.push(offset);
+      query += ` OFFSET $${params.length}`;
+    }
+
     const result = await pool.query(query, params);
+    res.setHeader("x-total-count", String(totalCount));
+    res.setHeader("Access-Control-Expose-Headers", "x-total-count");
     res.json(result.rows);
   } catch (error: any) {
     console.error('Error listando usuarios:', error);
@@ -470,9 +506,10 @@ export const forzarCierreSesion = async (req: AuthRequest, res: Response): Promi
       return;
     }
 
-    // En un sistema con JWT stateless, la forma más robusta de invalidar sesiones
-    // sería con un campo token_version o una blacklist. Por ahora registramos la acción.
-    res.json({ message: 'Sesión cerrada forzosamente', usuario: user.rows[0] });
+    // Actualizar logged_out_at para invalidar todos los tokens emitidos antes de ahora
+    await pool.query('UPDATE usuario SET logged_out_at = NOW() WHERE id_usuario = $1', [id]);
+
+    res.json({ message: 'Sesión cerrada forzosamente y tokens invalidados', usuario: user.rows[0] });
   } catch (error: any) {
     console.error('Error forzando cierre de sesión:', error);
     res.status(500).json({ error: 'Error al forzar cierre de sesión' });
@@ -1492,7 +1529,10 @@ export const obtenerStatsDashboard = async (req: AuthRequest, res: Response): Pr
  */
 export const listarAuditoriasAcciones = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { tipo_accion, modulo, id_colegio, search } = req.query;
+    const { tipo_accion, modulo, id_colegio, search, fecha_desde, fecha_hasta } = req.query;
+    const page = req.query.page ? Number(req.query.page) : null;
+    const limit = req.query.limit ? Number(req.query.limit) : null;
+
     let query = `
       SELECT aar.*, 
              aus.id_colegio, 
@@ -1530,9 +1570,34 @@ export const listarAuditoriasAcciones = async (req: AuthRequest, res: Response):
       query += ` AND (aar.accion ILIKE $${params.length} OR aar.recurso_afectado ILIKE $${params.length} OR c.nombre ILIKE $${params.length})`;
     }
 
+    if (fecha_desde) {
+      params.push(fecha_desde);
+      query += ` AND aar.fecha_accion >= $${params.length}`;
+    }
+
+    if (fecha_hasta) {
+      params.push(`${fecha_hasta} 23:59:59`);
+      query += ` AND aar.fecha_accion <= $${params.length}`;
+    }
+
     query += ` ORDER BY aar.fecha_accion DESC`;
 
+    // Count query for total
+    const countQuery = `SELECT COUNT(*)::int as count FROM (${query}) AS temp`;
+    const countResult = await pool.query(countQuery, params);
+    const totalCount = countResult.rows[0].count;
+
+    if (page && limit) {
+      const offset = (page - 1) * limit;
+      params.push(limit);
+      query += ` LIMIT $${params.length}`;
+      params.push(offset);
+      query += ` OFFSET $${params.length}`;
+    }
+
     const result = await pool.query(query, params);
+    res.setHeader("x-total-count", String(totalCount));
+    res.setHeader("Access-Control-Expose-Headers", "x-total-count");
     res.json(result.rows);
   } catch (error: any) {
     console.error('Error obteniendo auditorías:', error);

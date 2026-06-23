@@ -520,7 +520,7 @@ async function insertStudentsAndParents(
         await client.query(`INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2)`, [parentUserId, roleIds.padre]);
 
         const pFamRes = await client.query<{ id_padrefamilia: number }>(
-          `INSERT INTO padre_familia (nombre, apellido, documeno, id_tipodocumento, id_colegio, id_usuario)
+          `INSERT INTO padre_familia (nombre, apellido, documento, id_tipodocumento, id_colegio, id_usuario)
            VALUES ($1, $2, $3, $4, $5, $6) RETURNING id_padrefamilia`,
           [`Padre ${parentIdx}`, school.nombre, `P-${school.id}-${parentIdx}`, DOCUMENT_TYPE_CC, school.id, parentUserId]
         );
@@ -767,6 +767,7 @@ async function run(): Promise<void> {
     }
 
     await client.query("BEGIN");
+    await client.query("SET my.app.bypass_triggers = 'true';");
 
     // ── Phase 1: Ensure base schema ──
     console.log("📦 Asegurando estructura base...");
@@ -778,6 +779,22 @@ async function run(): Promise<void> {
     await client.query(adminGeneralMigrationSql);
     await createSchoolConfigTable(client);
     await createEnrollmentConfigTable(client);
+
+    console.log("📦 Aplicando migración 002 (enums, constraints y views)...");
+    const fixEnumsMigrationSql = fs.readFileSync(path.join(__dirname, "../migrations/002_fix_enums_and_constraints.sql"), "utf8");
+    await client.query(fixEnumsMigrationSql);
+
+    console.log("📦 Aplicando migración 003 (padre multicolegio)...");
+    const multicolegioMigrationSql = fs.readFileSync(path.join(__dirname, "../migrations/003_padre_multicolegio.sql"), "utf8");
+    await client.query(multicolegioMigrationSql);
+
+    console.log("📦 Aplicando migración 004 (recuperación de contraseña)...");
+    const passwordResetMigrationSql = fs.readFileSync(path.join(__dirname, "../migrations/004_password_reset.sql"), "utf8");
+    await client.query(passwordResetMigrationSql);
+
+    console.log("📦 Aplicando migración 005 (protección de periodos cerrados)...");
+    const protectClosedPeriodsMigrationSql = fs.readFileSync(path.join(__dirname, "../migrations/005_protect_closed_periods.sql"), "utf8");
+    await client.query(protectClosedPeriodsMigrationSql);
 
     // ── Phase 2: Schema migrations ──
     console.log("🔧 Migrando columnas adicionales...");

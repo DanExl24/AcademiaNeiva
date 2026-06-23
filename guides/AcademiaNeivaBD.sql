@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict sj42fhPnZAqD4apNtsMY2kf3uCltXzhVIlJaT9t1knxFgRHaJ14ovToIvqbHpq1
+\restrict wSWbbrEMHTSBEfZsQ8z9vzyXmOlFeleFSox3MNVj9dbSNk2Nd5fB2YqyTPCWbbP
 
 -- Dumped from database version 18.4
 -- Dumped by pg_dump version 18.4
@@ -1722,6 +1722,44 @@ ALTER SEQUENCE public.registro_asistencia_id_registroasistencia_seq OWNED BY pub
 
 
 --
+-- Name: registro_graduados; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.registro_graduados (
+    id_graduado integer NOT NULL,
+    id_estudiante integer NOT NULL,
+    fecha_graduacion timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    observaciones text,
+    id_usuario_registro integer,
+    creado_en timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+ALTER TABLE public.registro_graduados OWNER TO postgres;
+
+--
+-- Name: registro_graduados_id_graduado_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.registro_graduados_id_graduado_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.registro_graduados_id_graduado_seq OWNER TO postgres;
+
+--
+-- Name: registro_graduados_id_graduado_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.registro_graduados_id_graduado_seq OWNED BY public.registro_graduados.id_graduado;
+
+
+--
 -- Name: resultado_academico; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -2299,6 +2337,13 @@ ALTER TABLE ONLY public.registro_asistencia ALTER COLUMN id_registroasistencia S
 
 
 --
+-- Name: registro_graduados id_graduado; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.registro_graduados ALTER COLUMN id_graduado SET DEFAULT nextval('public.registro_graduados_id_graduado_seq'::regclass);
+
+
+--
 -- Name: resultado_academico id_resultado; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -2714,6 +2759,22 @@ ALTER TABLE ONLY public.periodo_academico
 
 ALTER TABLE ONLY public.registro_asistencia
     ADD CONSTRAINT registro_asistencia_pkey PRIMARY KEY (id_registroasistencia);
+
+
+--
+-- Name: registro_graduados registro_graduados_id_estudiante_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.registro_graduados
+    ADD CONSTRAINT registro_graduados_id_estudiante_key UNIQUE (id_estudiante);
+
+
+--
+-- Name: registro_graduados registro_graduados_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.registro_graduados
+    ADD CONSTRAINT registro_graduados_pkey PRIMARY KEY (id_graduado);
 
 
 --
@@ -3696,6 +3757,22 @@ ALTER TABLE ONLY public.registro_asistencia
 
 
 --
+-- Name: registro_graduados registro_graduados_id_estudiante_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.registro_graduados
+    ADD CONSTRAINT registro_graduados_id_estudiante_fkey FOREIGN KEY (id_estudiante) REFERENCES public.estudiante(id_estudiante) ON DELETE CASCADE;
+
+
+--
+-- Name: registro_graduados registro_graduados_id_usuario_registro_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.registro_graduados
+    ADD CONSTRAINT registro_graduados_id_usuario_registro_fkey FOREIGN KEY (id_usuario_registro) REFERENCES public.usuario(id_usuario);
+
+
+--
 -- Name: resultado_academico resultado_academico_id_detallegrado_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -3767,36 +3844,125 @@ REVOKE USAGE ON SCHEMA public FROM PUBLIC;
 
 
 --
--- Name: registro_graduados; Type: TABLE; Schema: public; Owner: postgres
+-- Name: password_reset_tokens; Type: TABLE; Schema: public; Owner: postgres
 --
 
-CREATE TABLE public.registro_graduados (
-    id_graduado integer NOT NULL,
-    id_estudiante integer NOT NULL,
-    fecha_graduacion timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    observaciones text,
-    id_usuario_registro integer,
-    creado_en timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+CREATE TABLE IF NOT EXISTS public.password_reset_tokens (
+    id SERIAL PRIMARY KEY,
+    id_usuario INTEGER NOT NULL REFERENCES public.usuario(id_usuario) ON DELETE CASCADE,
+    token VARCHAR(255) UNIQUE NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    used BOOLEAN DEFAULT false NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
 
-ALTER TABLE public.registro_graduados OWNER TO postgres;
+CREATE INDEX IF NOT EXISTS idx_password_reset_token ON public.password_reset_tokens(token);
 
-ALTER TABLE ONLY public.registro_graduados
-    ADD CONSTRAINT registro_graduados_pkey PRIMARY KEY (id_graduado);
 
-ALTER TABLE ONLY public.registro_graduados
-    ADD CONSTRAINT registro_graduados_id_estudiante_key UNIQUE (id_estudiante);
+--
+-- Name: fn_bloquear_periodo_cerrado; Type: FUNCTION; Schema: public; Owner: postgres
+--
 
-ALTER TABLE ONLY public.registro_graduados
-    ADD CONSTRAINT registro_graduados_id_estudiante_fkey FOREIGN KEY (id_estudiante) REFERENCES public.estudiante(id_estudiante) ON DELETE CASCADE;
+CREATE OR REPLACE FUNCTION public.fn_bloquear_periodo_cerrado()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_id_periodo INTEGER;
+    v_estado VARCHAR(20);
+    v_fecha TIMESTAMP WITH TIME ZONE;
+    v_id_colegio INTEGER;
+    v_val INTEGER;
+BEGIN
+    -- Permitir bypass para scripts de seed
+    IF current_setting('my.app.bypass_triggers', true) = 'true' THEN
+        IF TG_OP = 'DELETE' THEN
+            RETURN OLD;
+        ELSE
+            RETURN NEW;
+        END IF;
+    END IF;
 
-ALTER TABLE ONLY public.registro_graduados
-    ADD CONSTRAINT registro_graduados_id_usuario_registro_fkey FOREIGN KEY (id_usuario_registro) REFERENCES public.usuario(id_usuario);
+    IF TG_TABLE_NAME = 'notas_actividad' THEN
+        IF TG_OP = 'INSERT' OR TG_OP = 'UPDATE' THEN
+            SELECT id_periodo INTO v_id_periodo 
+            FROM public.actividad_materia 
+            WHERE id_actividadmateria = NEW.id_actividadmateria;
+        ELSIF TG_OP = 'DELETE' THEN
+            SELECT id_periodo INTO v_id_periodo 
+            FROM public.actividad_materia 
+            WHERE id_actividadmateria = OLD.id_actividadmateria;
+        END IF;
+
+    ELSIF TG_TABLE_NAME = 'observacion_estudiante' THEN
+        IF TG_OP = 'INSERT' OR TG_OP = 'UPDATE' THEN
+            v_id_periodo := NEW.id_periodo;
+        ELSIF TG_OP = 'DELETE' THEN
+            v_id_periodo := OLD.id_periodo;
+        END IF;
+
+    ELSIF TG_TABLE_NAME = 'registro_asistencia' THEN
+        IF TG_OP = 'INSERT' OR TG_OP = 'UPDATE' THEN
+            v_fecha := NEW.fecha;
+            v_id_colegio := NEW.id_colegio;
+        ELSIF TG_OP = 'DELETE' THEN
+            v_fecha := OLD.fecha;
+            v_id_colegio := OLD.id_colegio;
+        END IF;
+
+        v_val := EXTRACT(MONTH FROM v_fecha) * 100 + EXTRACT(DAY FROM v_fecha);
+
+        SELECT pa.id_periodo INTO v_id_periodo
+        FROM public.periodo_academico pa
+        JOIN public."año_lectivo" al ON pa.id_año = al.id_año
+        WHERE pa.id_colegio = v_id_colegio
+          AND (
+            al.calendario = EXTRACT(YEAR FROM v_fecha)::text OR
+            al.calendario LIKE '%' || EXTRACT(YEAR FROM v_fecha)::text || '%'
+          )
+          AND (
+            (pa.mes_inicio * 100 + pa.dia_inicio <= pa.mes_fin * 100 + pa.dia_fin AND
+             v_val BETWEEN (pa.mes_inicio * 100 + pa.dia_inicio) AND (pa.mes_fin * 100 + pa.dia_fin))
+            OR
+            (pa.mes_inicio * 100 + pa.dia_inicio > pa.mes_fin * 100 + pa.dia_fin AND
+             (v_val >= pa.mes_inicio * 100 + pa.dia_inicio OR v_val <= pa.mes_fin * 100 + pa.dia_fin))
+          )
+        LIMIT 1;
+    END IF;
+
+    IF v_id_periodo IS NOT NULL THEN
+        SELECT estado INTO v_estado FROM public.periodo_academico WHERE id_periodo = v_id_periodo;
+        IF v_estado = 'CERRADO' THEN
+            RAISE EXCEPTION 'Operación denegada: El periodo académico correspondiente está cerrado y no se permiten modificaciones.';
+        END IF;
+    END IF;
+
+    IF TG_OP = 'DELETE' THEN
+        RETURN OLD;
+    ELSE
+        RETURN NEW;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+
+DROP TRIGGER IF EXISTS trg_bloquear_notas_periodo ON public.notas_actividad;
+CREATE TRIGGER trg_bloquear_notas_periodo
+BEFORE INSERT OR UPDATE OR DELETE ON public.notas_actividad
+FOR EACH ROW EXECUTE FUNCTION public.fn_bloquear_periodo_cerrado();
+
+DROP TRIGGER IF EXISTS trg_bloquear_asistencia_periodo ON public.registro_asistencia;
+CREATE TRIGGER trg_bloquear_asistencia_periodo
+BEFORE INSERT OR UPDATE OR DELETE ON public.registro_asistencia
+FOR EACH ROW EXECUTE FUNCTION public.fn_bloquear_periodo_cerrado();
+
+DROP TRIGGER IF EXISTS trg_bloquear_observacion_periodo ON public.observacion_estudiante;
+CREATE TRIGGER trg_bloquear_observacion_periodo
+BEFORE INSERT OR UPDATE OR DELETE ON public.observacion_estudiante
+FOR EACH ROW EXECUTE FUNCTION public.fn_bloquear_periodo_cerrado();
 
 
 --
 -- PostgreSQL database dump complete
 --
 
-\unrestrict sj42fhPnZAqD4apNtsMY2kf3uCltXzhVIlJaT9t1knxFgRHaJ14ovToIvqbHpq1
+\unrestrict wSWbbrEMHTSBEfZsQ8z9vzyXmOlFeleFSox3MNVj9dbSNk2Nd5fB2YqyTPCWbbP
 

@@ -109,6 +109,7 @@ async function runSeedGrades() {
     try {
         console.log("🌱 Iniciando seeder de calificaciones (distribución realista)...");
         await client.query("BEGIN");
+        await client.query("SET my.app.bypass_triggers = 'true';");
         // ─── CLEAR EXISTING GRADE DATA ──────────────────────────────────────────
         console.log("🔄 Limpiando datos anteriores de calificaciones...");
         await client.query("DELETE FROM resultado_academico");
@@ -254,7 +255,7 @@ async function runSeedGrades() {
                     if (Math.random() < 0.15) {
                         const genObs = generalObservations[Math.floor(Math.random() * generalObservations.length)];
                         await client.query(`INSERT INTO observacion_estudiante (id_estudiante, id_detallegrado, id_periodo, fortalezas, debilidades, recomendaciones, fecha, id_colegio, tipo)
-               VALUES ($1, $2, $3, $4, $5, $6, NOW(), $7, 'GENERAL')`, [student.id_estudiante, dg.id_detallegrado, period.id_periodo, genObs.fortalezas, genObs.debilidades, genObs.recomendaciones, dg.id_colegio]);
+               VALUES ($1, $2, $3, $4, $5, $6, NOW(), $7, 'OTRO')`, [student.id_estudiante, dg.id_detallegrado, period.id_periodo, genObs.fortalezas, genObs.debilidades, genObs.recomendaciones, dg.id_colegio]);
                         observacionesGenerales++;
                     }
                     notasAgregadas++;

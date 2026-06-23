@@ -3,14 +3,18 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const studentController_1 = require("../controllers/studentController");
 const studentPortalController_1 = require("../controllers/studentPortalController");
+const authMiddleware_1 = require("../middleware/authMiddleware");
 const router = (0, express_1.Router)();
-router.get("/colegio/:idColegio", studentController_1.getAllStudents);
-router.get("/:id/summary", studentController_1.getStudentSummary);
-router.put("/:id", studentController_1.updateStudent);
-router.patch("/:id/status", studentController_1.updateStudentStatus);
-router.patch("/:id/change-grade", studentController_1.changeStudentGrade);
-router.delete("/:id", studentController_1.deleteStudent);
-// Student portal endpoints consumed by the frontend
+// Administrative CRUD operations (require Directivo or Admin General)
+router.get("/colegio/:idColegio", authMiddleware_1.verifyToken, authMiddleware_1.requireDirectivo, studentController_1.getAllStudents);
+router.get("/:id/summary", authMiddleware_1.verifyToken, authMiddleware_1.requireDirectivo, studentController_1.getStudentSummary);
+router.put("/:id", authMiddleware_1.verifyToken, authMiddleware_1.requireDirectivo, studentController_1.updateStudent);
+router.patch("/:id/status", authMiddleware_1.verifyToken, authMiddleware_1.requireDirectivo, studentController_1.updateStudentStatus);
+router.patch("/:id/change-grade", authMiddleware_1.verifyToken, authMiddleware_1.requireDirectivo, studentController_1.changeStudentGrade);
+router.post("/:id/graduate", authMiddleware_1.verifyToken, authMiddleware_1.requireDirectivo, studentController_1.graduateStudent);
+router.delete("/:id", authMiddleware_1.verifyToken, authMiddleware_1.requireDirectivo, studentController_1.deleteStudent);
+// Student portal endpoints (require authentication)
+router.use(authMiddleware_1.verifyToken);
 router.get("/user-id/:id_usuario", studentPortalController_1.getStudentIdByUserId);
 router.get("/info/:id_estudiante", studentPortalController_1.getStudentInfo);
 router.get("/periods/:id_estudiante/:id_anio", studentPortalController_1.getStudentClosedPeriods);

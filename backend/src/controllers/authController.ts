@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { pool } from "../config/db";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import crypto from "crypto";
 
 const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret";
 
@@ -71,14 +72,34 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    // Query schoolIds for parent
+    let schoolIds: number[] = [];
+    if (user.roles.includes("padre")) {
+      const parentInfoRes = await pool.query(
+        `SELECT id_padrefamilia FROM padre_familia WHERE id_usuario = $1`,
+        [user.id_usuario]
+      );
+      if (parentInfoRes.rows.length > 0) {
+        const idPadre = parentInfoRes.rows[0].id_padrefamilia;
+        const schoolsRes = await pool.query(
+          `SELECT DISTINCT id_colegio FROM detalle_padrefamilia WHERE id_padrefamilia = $1`,
+          [idPadre]
+        );
+        schoolIds = schoolsRes.rows.map(r => Number(r.id_colegio));
+      }
+    }
+
     // 3. Generar JWT
+    const jti = crypto.randomUUID();
     const token = jwt.sign(
       { 
         id: user.id_usuario, 
         email: user.email, 
         role: user.roles[0], // Tomamos el primer rol como principal
         roles: user.roles,
-        schoolId: user.id_colegio 
+        schoolId: user.id_colegio,
+        schoolIds: schoolIds.length > 0 ? schoolIds : undefined,
+        jti
       },
       JWT_SECRET,
       { expiresIn: "8h" }
@@ -93,7 +114,8 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         email: userWithoutPassword.email,
         role: userWithoutPassword.roles[0],
         roles: userWithoutPassword.roles,
-        schoolId: userWithoutPassword.id_colegio
+        schoolId: userWithoutPassword.id_colegio,
+        schoolIds: schoolIds.length > 0 ? schoolIds : undefined
       },
       token
     });
@@ -147,13 +169,15 @@ export const studentLogin = async (req: Request, res: Response): Promise<void> =
     }
 
     // 3. Generar JWT
+    const jti = crypto.randomUUID();
     const token = jwt.sign(
       { 
         id: user.id_usuario, 
         email: user.email, 
         role: "estudiante", 
         roles: user.roles,
-        schoolId: user.id_colegio 
+        schoolId: user.id_colegio,
+        jti
       },
       JWT_SECRET,
       { expiresIn: "8h" }

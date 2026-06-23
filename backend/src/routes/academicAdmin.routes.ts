@@ -57,24 +57,28 @@ import { verifyToken, requireDirectivo } from "../middleware/authMiddleware";
 
 const router = Router();
 
-router.get("/settings/enrollment-config/:schoolId/:yearId", verifyToken, requireDirectivo, getEnrollmentConfig);
-router.post("/settings/enrollment-config", verifyToken, requireDirectivo, saveEnrollmentConfig);
-
-router.get("/my-school/:schoolId", verifyToken, requireDirectivo, getMySchoolData);
-
-router.put("/my-school/:schoolId/identidad", verifyToken, requireDirectivo, updateMySchoolIdentity);
-router.post("/my-school/:schoolId/identidad/reset", verifyToken, requireDirectivo, resetMySchoolIdentity);
-router.post("/my-school/:schoolId/identidad/upload-escudo", verifyToken, requireDirectivo, upload.single("escudo"), uploadMySchoolEscudo);
-
-
+// Public routes
 router.get("/catalogs", getAcademicCatalogs);
+
+// Protected routes (require Directivo or Admin General)
+router.use(verifyToken, requireDirectivo);
+
+router.get("/settings/enrollment-config/:schoolId/:yearId", getEnrollmentConfig);
+router.post("/settings/enrollment-config", saveEnrollmentConfig);
+
+router.get("/my-school/:schoolId", getMySchoolData);
+
+router.put("/my-school/:schoolId/identidad", updateMySchoolIdentity);
+router.post("/my-school/:schoolId/identidad/reset", resetMySchoolIdentity);
+router.post("/my-school/:schoolId/identidad/upload-escudo", upload.single("escudo"), uploadMySchoolEscudo);
+
 router.get("/grades/:schoolId", getGradeManagementData);
 router.post("/grade-types", createGradeType);
 router.delete("/grade-types/:id", deleteGradeType);
 router.post("/groups", createGroup);
 router.patch("/groups/:id/cupos", updateGroupCupos);
-router.patch("/groups/:id/rename", verifyToken, requireDirectivo, renameSingleCourse);
-router.patch("/grade-types/:id/bulk-rename", verifyToken, requireDirectivo, bulkRenameCourses);
+router.patch("/groups/:id/rename", renameSingleCourse);
+router.patch("/grade-types/:id/bulk-rename", bulkRenameCourses);
 router.delete("/groups/:id", deleteGroup);
 router.get("/subjects/:schoolId", getSubjects);
 router.get("/subjects/trash/:schoolId", getSubjectTrash);
@@ -96,7 +100,7 @@ router.patch("/settings/periods/:id/percentage", updateAcademicPeriodPercentage)
 router.get("/settings/closure-details/:schoolId/:periodId", getPeriodClosureDetails);
 router.post("/settings/competencies", upsertCompetencyByAdmin);
 router.post("/settings/periods/:id/close", closeAcademicPeriod);
-router.post("/settings/periods/:id/approve", verifyToken, requireDirectivo, approveAcademicPeriod);
+router.post("/settings/periods/:id/approve", approveAcademicPeriod);
 router.post("/settings/periods/:id/reopen", reopenAcademicPeriod);
 router.post("/settings/periods/:periodId/reopen-subject/:detailGradeId", reopenSubjectClosure);
 router.post("/settings/scales", createScale);
@@ -112,13 +116,13 @@ router.delete("/settings/evidencias/:evidenciaId", deleteEvidencia);
 router.get("/dashboard/:schoolId", getDirectivoDashboard);
 
 // Matrícula Extraordinaria
-router.post("/matriculas/extraordinaria", verifyToken, requireDirectivo, createExtraordinaryEnrollment);
-router.post("/matriculas/extraordinaria/:id/aprobar", verifyToken, requireDirectivo, approveExtraordinaryEnrollment);
-router.post("/matriculas/extraordinaria/:id/rechazar", verifyToken, requireDirectivo, rejectExtraordinaryEnrollment);
+router.post("/matriculas/extraordinaria", createExtraordinaryEnrollment);
+router.post("/matriculas/extraordinaria/:id/aprobar", approveExtraordinaryEnrollment);
+router.post("/matriculas/extraordinaria/:id/rechazar", rejectExtraordinaryEnrollment);
 
 // Reingreso
-router.post("/matriculas/reingreso", verifyToken, requireDirectivo, createReingresoEnrollment);
-router.post("/matriculas/reingreso/:id/aprobar", verifyToken, requireDirectivo, approveReingresoEnrollment);
-router.post("/matriculas/reingreso/:id/rechazar", verifyToken, requireDirectivo, rejectReingresoEnrollment);
+router.post("/matriculas/reingreso", createReingresoEnrollment);
+router.post("/matriculas/reingreso/:id/aprobar", approveReingresoEnrollment);
+router.post("/matriculas/reingreso/:id/rechazar", rejectReingresoEnrollment);
 
 export default router;

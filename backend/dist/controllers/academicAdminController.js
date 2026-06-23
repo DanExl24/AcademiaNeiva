@@ -382,7 +382,7 @@ const getGradeManagementData = async (req, res) => {
          GROUP BY
            g.id_grupo, g.id_nivel, g.id_jornada, g.id_seccion, g.id_tipo_grado, g.cupos_totales,
            ne.nombre, tg.nombre, j.nombre, s.nombre
-         ORDER BY ne.nombre, tg.nombre, j.nombre, s.nombre`, [schoolId]),
+         ORDER BY ne.nombre, tg.nombre, LENGTH(s.nombre), s.nombre, j.nombre`, [schoolId]),
         ]);
         res.json({
             jornadas: jornadasRes.rows,
@@ -476,15 +476,39 @@ const createGroup = async (req, res) => {
     const schoolId = parseSchoolId(req.body.schoolId);
     const idNivel = Number(req.body.id_nivel);
     const idJornada = Number(req.body.id_jornada);
-    const idSeccion = Number(req.body.id_seccion);
     const idTipoGrado = Number(req.body.id_tipo_grado);
     const cuposTotales = Number(req.body.cupos_totales);
-    if (!schoolId || !idNivel || !idJornada || !idSeccion || !idTipoGrado || cuposTotales < 0) {
+    const seccionNombre = (req.body.seccion_nombre || "").trim().toUpperCase();
+    let idSeccion = Number(req.body.id_seccion);
+    if (!schoolId || !idNivel || !idJornada || !idTipoGrado || cuposTotales < 0) {
         res.status(400).json({ error: "Todos los campos del curso son obligatorios" });
         return;
     }
+    const client = await db_1.pool.connect();
     try {
-        const validationRes = await db_1.pool.query(`SELECT
+        await client.query("BEGIN");
+        // If seccionNombre is provided, find or create section
+        if (seccionNombre) {
+            if (seccionNombre.length > 10) {
+                res.status(400).json({ error: "El nombre de la sección no puede superar los 10 caracteres" });
+                await client.query("ROLLBACK");
+                return;
+            }
+            const secRes = await client.query(`SELECT id_seccion FROM secciones WHERE UPPER(nombre) = $1`, [seccionNombre]);
+            if (secRes.rows.length > 0) {
+                idSeccion = secRes.rows[0].id_seccion;
+            }
+            else {
+                const insertRes = await client.query(`INSERT INTO secciones (nombre) VALUES ($1) RETURNING id_seccion`, [seccionNombre]);
+                idSeccion = insertRes.rows[0].id_seccion;
+            }
+        }
+        if (!idSeccion) {
+            res.status(400).json({ error: "La sección es obligatoria" });
+            await client.query("ROLLBACK");
+            return;
+        }
+        const validationRes = await client.query(`SELECT
          EXISTS(SELECT 1 FROM nivel_escolar WHERE id_nivel = $1 AND id_colegio = $2) AS nivel_ok,
          EXISTS(SELECT 1 FROM jornada WHERE id_jornada = $3 AND id_colegio = $2) AS jornada_ok,
          EXISTS(SELECT 1 FROM secciones WHERE id_seccion = $4) AS seccion_ok,
@@ -499,9 +523,10 @@ const createGroup = async (req, res) => {
         const validation = validationRes.rows[0];
         if (!validation.nivel_ok || !validation.jornada_ok || !validation.seccion_ok || !validation.tipo_ok) {
             res.status(400).json({ error: "La combinación de nivel, jornada, sección y grado no es válida" });
+            await client.query("ROLLBACK");
             return;
         }
-        const duplicateRes = await db_1.pool.query(`SELECT id_grupo
+        const duplicateRes = await client.query(`SELECT id_grupo
        FROM grupos
        WHERE id_colegio = $1
          AND id_nivel = $2
@@ -510,16 +535,22 @@ const createGroup = async (req, res) => {
          AND id_tipo_grado = $5`, [schoolId, idNivel, idJornada, idSeccion, idTipoGrado]);
         if (duplicateRes.rows.length > 0) {
             res.status(409).json({ error: "Ya existe un curso con esta combinación de jornada, grado y sección" });
+            await client.query("ROLLBACK");
             return;
         }
-        const created = await db_1.pool.query(`INSERT INTO grupos (id_nivel, id_jornada, id_colegio, id_seccion, cupos_totales, id_tipo_grado)
+        const created = await client.query(`INSERT INTO grupos (id_nivel, id_jornada, id_colegio, id_seccion, cupos_totales, id_tipo_grado)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING *`, [idNivel, idJornada, schoolId, idSeccion, cuposTotales, idTipoGrado]);
+        await client.query("COMMIT");
         res.status(201).json(created.rows[0]);
     }
     catch (error) {
+        await client.query("ROLLBACK");
         console.error("Error creating group:", error);
         res.status(500).json({ error: "Error en el servidor" });
+    }
+    finally {
+        client.release();
     }
 };
 exports.createGroup = createGroup;
@@ -692,7 +723,7 @@ const getAcademicSettingsData = async (req, res) => {
          JOIN jornada j ON j.id_jornada = g.id_jornada
          WHERE dg.id_colegio = $1
            AND dg.id_grupo IS NOT NULL
-         ORDER BY ne.nombre, tg.nombre, j.nombre, s.nombre, m.nombre`, [schoolId]),
+         ORDER BY ne.nombre, tg.nombre, LENGTH(s.nombre), s.nombre, j.nombre, m.nombre`, [schoolId]),
             db_1.pool.query(`SELECT
            c.id_competencia,
            c.id_grupo,
@@ -1696,7 +1727,7 @@ const getTeacherManagementData = async (req, res) => {
          JOIN secciones s ON s.id_seccion = g.id_seccion
          JOIN jornada j ON j.id_jornada = g.id_jornada
          WHERE g.id_colegio = $1
-         ORDER BY ne.nombre, tg.nombre, j.nombre, s.nombre`, [schoolId]),
+          ORDER BY ne.nombre, tg.nombre, LENGTH(s.nombre), s.nombre, j.nombre`, [schoolId]),
             db_1.pool.query(`SELECT
            dg.id_detallegrado,
            dg.id_docente,
@@ -2598,7 +2629,7 @@ const getDirectivoDashboard = async (req, res) => {
            JOIN jornada j ON g.id_jornada = j.id_jornada
             WHERE dg.id_colegio = $1
            GROUP BY g.id_grupo, tg.nombre, s.nombre, j.nombre
-           ORDER BY tg.nombre, s.nombre`, [schoolId, targetPeriodId]),
+           ORDER BY tg.nombre, LENGTH(s.nombre), s.nombre`, [schoolId, targetPeriodId]),
                 db_1.pool.query(`${buildLiveCTE()}
            SELECT 
              g.id_grupo,
@@ -2616,7 +2647,7 @@ const getDirectivoDashboard = async (req, res) => {
            JOIN jornada j ON g.id_jornada = j.id_jornada
            WHERE dg.id_colegio = $1
            GROUP BY m.id_materia, m.nombre, g.id_grupo, tg.nombre, s.nombre, j.nombre
-           ORDER BY tg.nombre, s.nombre, average DESC`, [schoolId, targetPeriodId])
+           ORDER BY tg.nombre, LENGTH(s.nombre), s.nombre, average DESC`, [schoolId, targetPeriodId])
             ]);
             charts.performanceByGrade = gradePerfRes.rows;
             charts.performanceBySubject = subjectPerfRes.rows;
@@ -2649,7 +2680,7 @@ const getDirectivoDashboard = async (req, res) => {
        JOIN jornada j ON g.id_jornada = j.id_jornada
        WHERE dg.id_colegio = $1 AND p."id_año" = $2
        GROUP BY p.id_periodo, p.nombre, g.id_grupo, tg.nombre, s.nombre, j.nombre
-       ORDER BY p.id_periodo, tg.nombre, s.nombre`, [schoolId, targetYearId]);
+        ORDER BY p.id_periodo, tg.nombre, LENGTH(s.nombre), s.nombre`, [schoolId, targetYearId]);
         charts.evolutionByCourse = evolutionByCourseRes.rows;
         // 6. Low Performance Analysis Block
         let lowPerformance = {

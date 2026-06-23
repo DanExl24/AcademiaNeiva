@@ -100,13 +100,16 @@ const roles = [
           <p class="mx-auto mt-8 max-w-2xl text-lg leading-8 text-gray-600">
             La solución integral multi-colegio para simplificar la matrícula, controlar el rendimiento estudiantil y generar boletines automáticos en segundos.
           </p>
-          <div class="mt-10 flex items-center justify-center gap-x-6">
+          <div class="mt-10 flex flex-wrap items-center justify-center gap-x-6 gap-y-4">
             <router-link to="/login" class="group flex items-center gap-2 rounded-full bg-gray-900 px-8 py-4 text-lg font-semibold text-white shadow-xl hover:bg-gray-800 transition-all">
               Entrar al Sistema
               <ArrowRight :size="20" class="group-hover:translate-x-1 transition-transform" />
             </router-link>
             <router-link to="/matricula" class="text-lg font-semibold leading-6 text-gray-900 hover:text-indigo-600 transition-colors">
               Iniciar Matrícula <span aria-hidden="true">→</span>
+            </router-link>
+            <router-link to="/matricula/seguimiento" class="text-lg font-semibold leading-6 text-indigo-600 hover:text-indigo-700 transition-colors">
+              Consultar Estado <span aria-hidden="true">→</span>
             </router-link>
           </div>
         </div>

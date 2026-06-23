@@ -23,17 +23,22 @@ import {
   getStudentAllPeriods
 } from "../controllers/studentPortalController";
 
+import { verifyToken, requireDirectivo } from "../middleware/authMiddleware";
+
 const router = Router();
 
-router.get("/colegio/:idColegio", getAllStudents);
-router.get("/:id/summary", getStudentSummary);
-router.put("/:id", updateStudent);
-router.patch("/:id/status", updateStudentStatus);
-router.patch("/:id/change-grade", changeStudentGrade);
-router.post("/:id/graduate", graduateStudent);
-router.delete("/:id", deleteStudent);
+// Administrative CRUD operations (require Directivo or Admin General)
+router.get("/colegio/:idColegio", verifyToken, requireDirectivo, getAllStudents);
+router.get("/:id/summary", verifyToken, requireDirectivo, getStudentSummary);
+router.put("/:id", verifyToken, requireDirectivo, updateStudent);
+router.patch("/:id/status", verifyToken, requireDirectivo, updateStudentStatus);
+router.patch("/:id/change-grade", verifyToken, requireDirectivo, changeStudentGrade);
+router.post("/:id/graduate", verifyToken, requireDirectivo, graduateStudent);
+router.delete("/:id", verifyToken, requireDirectivo, deleteStudent);
 
-// Student portal endpoints consumed by the frontend
+// Student portal endpoints (require authentication)
+router.use(verifyToken);
+
 router.get("/user-id/:id_usuario", getStudentIdByUserId);
 router.get("/info/:id_estudiante", getStudentInfo);
 router.get("/periods/:id_estudiante/:id_anio", getStudentClosedPeriods);

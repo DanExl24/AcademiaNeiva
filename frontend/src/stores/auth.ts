@@ -9,6 +9,7 @@ export interface User {
   role: 'admin' | 'directivo' | 'docente' | 'padre' | 'estudiante'
   roles: string[]
   schoolId?: string
+  schoolIds?: number[]
 }
 
 export interface MonitoredTeacher {
@@ -23,6 +24,12 @@ export const useAuthStore = defineStore('auth', () => {
   const token = ref<string | null>(localStorage.getItem('token'))
   const activeRole = ref<string | null>(localStorage.getItem('activeRole') || (user.value?.role || null))
   
+  // Selected school context for multi-school parents / general users
+  const selectedSchoolId = ref<number | null>(
+    localStorage.getItem('selectedSchoolId') ? Number(localStorage.getItem('selectedSchoolId')) : 
+    (user.value?.schoolIds?.[0] ? Number(user.value.schoolIds[0]) : (user.value?.schoolId ? Number(user.value.schoolId) : null))
+  )
+
   // Modo monitoreo: directivo observando el panel de un docente o estudiante (solo lectura)
   const monitoringUser = ref<MonitoredTeacher | null>(JSON.parse(localStorage.getItem('monitoringUser') || 'null'))
   const previousRole = ref<string | null>(localStorage.getItem('previousRole'))
@@ -35,6 +42,15 @@ export const useAuthStore = defineStore('auth', () => {
 
   const isAuthenticated = computed(() => !!token.value)
 
+  function setSelectedSchoolId(schoolId: number | null) {
+    selectedSchoolId.value = schoolId
+    if (schoolId) {
+      localStorage.setItem('selectedSchoolId', String(schoolId))
+    } else {
+      localStorage.removeItem('selectedSchoolId')
+    }
+  }
+
   function setUser(userData: User, userToken: string) {
     user.value = userData
     token.value = userToken
@@ -42,6 +58,15 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.setItem('token', userToken)
     localStorage.setItem('user', JSON.stringify(userData))
     localStorage.setItem('activeRole', userData.role)
+
+    // Auto-select school context
+    if (userData.schoolIds && userData.schoolIds.length > 0) {
+      setSelectedSchoolId(userData.schoolIds[0])
+    } else if (userData.schoolId) {
+      setSelectedSchoolId(Number(userData.schoolId))
+    } else {
+      setSelectedSchoolId(null)
+    }
   }
 
   function setActiveRole(role: string) {
@@ -108,6 +133,7 @@ export const useAuthStore = defineStore('auth', () => {
       user.value.schoolId = String(supervisionData.id_colegio)
       localStorage.setItem('user', JSON.stringify(user.value))
     }
+    setSelectedSchoolId(Number(supervisionData.id_colegio))
   }
 
   function stopSupervision() {
@@ -125,6 +151,14 @@ export const useAuthStore = defineStore('auth', () => {
       previousRole.value = null
       localStorage.removeItem('previousRole')
     }
+
+    if (user.value?.schoolIds && user.value.schoolIds.length > 0) {
+      setSelectedSchoolId(user.value.schoolIds[0])
+    } else if (user.value?.schoolId) {
+      setSelectedSchoolId(Number(user.value.schoolId))
+    } else {
+      setSelectedSchoolId(null)
+    }
   }
 
   function logout() {
@@ -135,6 +169,7 @@ export const useAuthStore = defineStore('auth', () => {
     previousRole.value = null
     monitoringType.value = null
     supervision.value = null
+    selectedSchoolId.value = null
     localStorage.removeItem('token')
     localStorage.removeItem('user')
     localStorage.removeItem('activeRole')
@@ -142,6 +177,7 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem('previousRole')
     localStorage.removeItem('monitoringType')
     localStorage.removeItem('supervision')
+    localStorage.removeItem('selectedSchoolId')
   }
 
   return {
@@ -149,6 +185,7 @@ export const useAuthStore = defineStore('auth', () => {
     token,
     activeRole,
     isAuthenticated,
+    selectedSchoolId,
     monitoringUser,
     monitoringType,
     isMonitoring,
@@ -156,6 +193,7 @@ export const useAuthStore = defineStore('auth', () => {
     isSupervising,
     setUser,
     setActiveRole,
+    setSelectedSchoolId,
     startMonitoring,
     startStudentMonitoring,
     stopMonitoring,

@@ -90,10 +90,11 @@ export class MatriculaService {
         `INSERT INTO matricula 
            (id_estudiante, id_nivel, id_grupo, id_colegio, "id_año", estado, correo_padre, tiene_discapacidad, es_extranjero)
          VALUES (NULL, NULL, $1, $2, $3, 'PENDIENTE', $4, $5, $6)
-         RETURNING id_matricula`,
+         RETURNING id_matricula, token_seguimiento`,
         [data.grade, id_colegio, activeYearId, parentEmail, hasDisability === 'true', isForeigner === 'true']
       );
       const idMatricula = matRes.rows[0].id_matricula;
+      const tokenSeguimiento = matRes.rows[0].token_seguimiento;
 
 
       // 2. Guardar documentos en tabla documento_matriculas
@@ -107,7 +108,13 @@ export class MatriculaService {
       }
 
       await client.query('COMMIT');
-      return { idMatricula };
+
+      // Enviar correo de confirmación de forma asíncrona
+      NotificationService.sendEnrollmentSubmittedEmail(parentEmail, 'Padre de Familia', 'Aspirante', tokenSeguimiento).catch(err => {
+        console.error('Error enviando correo de confirmación de matrícula:', err);
+      });
+
+      return { idMatricula, token_seguimiento: tokenSeguimiento };
     } catch (e) {
       await client.query('ROLLBACK');
       throw e;
@@ -152,7 +159,7 @@ export class MatriculaService {
     const matRes = await pool.query(
       `SELECT m.*, ne.nombre as grado_nivel, tg.nombre as tipo_grado, s.nombre as seccion, g.id_jornada, j.nombre as jornada,
               e.nombre as student_firstname, e.apellido as student_lastname, e.codigo as student_code, e.documento as student_document, e.id_tipodocumento as student_id_tipodocumento,
-              pf.nombre as parent_firstname, pf.apellido as parent_lastname, pf.documeno as parent_document, pf.id_tipodocumento as parent_id_tipodocumento,
+              pf.nombre as parent_firstname, pf.apellido as parent_lastname, pf.documento as parent_document, pf.id_tipodocumento as parent_id_tipodocumento,
               col.escudo_url, col.nombre as school_name,
               (g.cupos_totales - (SELECT COUNT(*) FROM matricula WHERE id_grupo = g.id_grupo AND estado IN ('ACTIVA', 'TRASLADADA'))) as cupos_restantes
        FROM matricula m
@@ -543,7 +550,7 @@ export class MatriculaService {
       }
 
       // Registro Padre
-      const existingParent = await client.query('SELECT id_padrefamilia FROM padre_familia WHERE documeno = $1', [data.parent.documento]);
+      const existingParent = await client.query('SELECT id_padrefamilia FROM padre_familia WHERE documento = $1', [data.parent.documento]);
       let idPadre;
       if (existingParent.rows.length > 0) {
          idPadre = existingParent.rows[0].id_padrefamilia;
@@ -554,7 +561,7 @@ export class MatriculaService {
          );
       } else {
          const parentRes = await client.query(
-            `INSERT INTO padre_familia (nombre, apellido, documeno, id_tipodocumento, id_colegio, id_usuario)
+            `INSERT INTO padre_familia (nombre, apellido, documento, id_tipodocumento, id_colegio, id_usuario)
              VALUES ($1, $2, $3, $4, $5, $6) RETURNING id_padrefamilia`,
             [data.parent.nombre, data.parent.apellido, data.parent.documento, data.parent.id_tipodocumento, id_colegio, idUsuarioPadre]
          );

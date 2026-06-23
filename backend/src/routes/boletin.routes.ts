@@ -1,7 +1,11 @@
 import { Router } from 'express';
 import { validatePeriodClosed, getStudentBoletin, getGradeBoletines } from '../controllers/boletinController';
 
+import { verifyToken } from '../middleware/authMiddleware';
+
 const router = Router();
+
+router.use(verifyToken);
 
 // Validate if period is closed (used for enabling bulk generation button)
 router.get('/validate/:id_colegio/:id_periodo', validatePeriodClosed);

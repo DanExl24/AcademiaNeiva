@@ -1,6 +1,6 @@
 # Credenciales generadas por reset_and_seed.ts
 
-> Fecha de generación: 2026-06-22T05:03:58.088Z
+> Fecha de generación: 2026-06-23T05:48:47.450Z
 >
 > Este archivo se regenera cada vez que ejecutes el seed de reseteo.
 

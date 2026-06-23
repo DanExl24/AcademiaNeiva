@@ -2,7 +2,9 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const boletinController_1 = require("../controllers/boletinController");
+const authMiddleware_1 = require("../middleware/authMiddleware");
 const router = (0, express_1.Router)();
+router.use(authMiddleware_1.verifyToken);
 // Validate if period is closed (used for enabling bulk generation button)
 router.get('/validate/:id_colegio/:id_periodo', boletinController_1.validatePeriodClosed);
 // Get boletin for a specific student

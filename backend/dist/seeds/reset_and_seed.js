@@ -346,7 +346,7 @@ async function insertStudentsAndParents(client, school, roleIds, parentHash, stu
            VALUES ($1, $2, $3, $4, $5, true) RETURNING id_usuario`, [currentParentEmail, parentHash, `Padre ${parentIdx}`, school.nombre, school.id]);
                 const parentUserId = pUserRes.rows[0].id_usuario;
                 await client.query(`INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2)`, [parentUserId, roleIds.padre]);
-                const pFamRes = await client.query(`INSERT INTO padre_familia (nombre, apellido, documeno, id_tipodocumento, id_colegio, id_usuario)
+                const pFamRes = await client.query(`INSERT INTO padre_familia (nombre, apellido, documento, id_tipodocumento, id_colegio, id_usuario)
            VALUES ($1, $2, $3, $4, $5, $6) RETURNING id_padrefamilia`, [`Padre ${parentIdx}`, school.nombre, `P-${school.id}-${parentIdx}`, DOCUMENT_TYPE_CC, school.id, parentUserId]);
                 currentParentId = pFamRes.rows[0].id_padrefamilia;
             }
@@ -533,6 +533,7 @@ async function run() {
             await client.query("ALTER TYPE estado_periodo ADD VALUE 'PENDIENTE'");
         }
         await client.query("BEGIN");
+        await client.query("SET my.app.bypass_triggers = 'true';");
         // ── Phase 1: Ensure base schema ──
         console.log("📦 Asegurando estructura base...");
         const authSql = fs_1.default.readFileSync(path_1.default.join(__dirname, "../config/auth.migration.sql"), "utf8");
@@ -542,6 +543,18 @@ async function run() {
         await client.query(adminGeneralMigrationSql);
         await createSchoolConfigTable(client);
         await createEnrollmentConfigTable(client);
+        console.log("📦 Aplicando migración 002 (enums, constraints y views)...");
+        const fixEnumsMigrationSql = fs_1.default.readFileSync(path_1.default.join(__dirname, "../migrations/002_fix_enums_and_constraints.sql"), "utf8");
+        await client.query(fixEnumsMigrationSql);
+        console.log("📦 Aplicando migración 003 (padre multicolegio)...");
+        const multicolegioMigrationSql = fs_1.default.readFileSync(path_1.default.join(__dirname, "../migrations/003_padre_multicolegio.sql"), "utf8");
+        await client.query(multicolegioMigrationSql);
+        console.log("📦 Aplicando migración 004 (recuperación de contraseña)...");
+        const passwordResetMigrationSql = fs_1.default.readFileSync(path_1.default.join(__dirname, "../migrations/004_password_reset.sql"), "utf8");
+        await client.query(passwordResetMigrationSql);
+        console.log("📦 Aplicando migración 005 (protección de periodos cerrados)...");
+        const protectClosedPeriodsMigrationSql = fs_1.default.readFileSync(path_1.default.join(__dirname, "../migrations/005_protect_closed_periods.sql"), "utf8");
+        await client.query(protectClosedPeriodsMigrationSql);
         // ── Phase 2: Schema migrations ──
         console.log("🔧 Migrando columnas adicionales...");
         await client.query(`ALTER TABLE grados ADD COLUMN IF NOT EXISTS seccion VARCHAR(10) DEFAULT 'A';`);
