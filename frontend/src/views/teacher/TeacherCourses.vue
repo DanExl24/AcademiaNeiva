@@ -39,24 +39,32 @@ interface AcademicGroup {
 }
 
 const fetchCourses = async () => {
+  console.log('[LOG-VISTA][TeacherCourses] fetchCourses started')
   try {
     loading.value = true
     const userId = auth.isMonitoring
       ? auth.monitoringUser?.id
       : (auth.user?.id_usuario || auth.user?.id)
     
-    if (!userId) return
+    if (!userId) {
+      console.warn('[LOG-VISTA][TeacherCourses] No userId found, skipping fetch')
+      return
+    }
     
     const response = await axios.get(`http://localhost:3000/api/teacher/courses/${userId}`)
     rawData.value = response.data
-  } catch (error) {
-    console.error('Error fetching courses:', error)
+    console.log('[LOG-VISTA][TeacherCourses] fetchCourses OK. Courses count:', rawData.value.length, 'for userId', userId, 'data:', rawData.value)
+  } catch (error: any) {
+    console.error('[LOG-VISTA][TeacherCourses] fetchCourses error:', error?.response?.data || error?.message || error)
   } finally {
     loading.value = false
   }
 }
 
-onMounted(fetchCourses)
+onMounted(() => {
+  console.log('[LOG-VISTA][TeacherCourses] onMounted triggered')
+  fetchCourses()
+})
 
 // Extraer grados únicos para el filtro
 const uniqueGrades = computed(() => {
@@ -166,8 +174,9 @@ const openStudentsModal = async (group: any) => {
   try {
     const response = await axios.get(`http://localhost:3000/api/teacher/students/${group.id_grado}`)
     studentsList.value = response.data
-  } catch (error) {
-    console.error('Error fetching students:', error)
+    console.log('[TeacherCourses] openStudentsModal OK:', studentsList.value.length, 'for gradeId', group.id_grado)
+  } catch (error: any) {
+    console.error('[TeacherCourses] openStudentsModal error:', error?.response?.data || error?.message || error)
   } finally {
     studentsLoading.value = false
   }

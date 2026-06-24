@@ -41,6 +41,7 @@ router.delete('/directivos/:id', authMiddleware_1.verifyToken, authMiddleware_1.
 // ─────────────────────────────────────────────────────────────
 // Admin General solicita, entra, sale, historial, exporta
 router.post('/supervision/solicitar', authMiddleware_1.verifyToken, authMiddleware_1.requireAdminGeneral, adminGeneralController_1.solicitarSupervision);
+router.get('/supervision/verificar-activa', authMiddleware_1.verifyToken, authMiddleware_1.requireAdminGeneral, adminGeneralController_1.verificarSupervisionActiva);
 router.post('/supervision/:id/entrar', authMiddleware_1.verifyToken, authMiddleware_1.requireAdminGeneral, adminGeneralController_1.entrarSupervision);
 router.post('/supervision/:id/salir', authMiddleware_1.verifyToken, authMiddleware_1.requireAdminGeneral, adminGeneralController_1.salirSupervision);
 router.get('/supervision/:id/acciones', authMiddleware_1.verifyToken, authMiddleware_1.requireAdminGeneral, adminGeneralController_1.verAccionesSupervision);
@@ -49,6 +50,8 @@ router.post('/supervision/:id/exportar', authMiddleware_1.verifyToken, authMiddl
 // Directivo aprueba o revoca
 router.post('/supervision/:id/aprobar', authMiddleware_1.verifyToken, authMiddleware_1.requireDirectivo, adminGeneralController_1.aprobarSupervision);
 router.post('/supervision/:id/revocar', authMiddleware_1.verifyToken, authMiddleware_1.requireDirectivo, adminGeneralController_1.revocarSupervision);
+router.get('/colegio/:colegioId/supervisiones', authMiddleware_1.verifyToken, authMiddleware_1.requireDirectivo, adminGeneralController_1.listarSupervisionesColegio);
+router.get('/supervision/:id/acciones-directivo', authMiddleware_1.verifyToken, authMiddleware_1.requireDirectivo, adminGeneralController_1.verAccionesSupervisionDirectivo);
 // Global Auditorias logs query (Admin General)
 router.get('/auditorias', authMiddleware_1.verifyToken, authMiddleware_1.requireAdminGeneral, adminGeneralController_1.listarAuditoriasAcciones);
 // Global Notifications logs query (Admin General)

@@ -116,6 +116,14 @@ const verifyToken = async (req, res, next) => {
                 else {
                     // Supervisión activa y no expirada -> Asignar id_colegio de la supervisión
                     req.user.schoolId = supervision.id_colegio;
+                    // Bloquear escrituras si el modo es SOLO_LECTURA
+                    if (supervision.tipo_supervision === 'SOLO_LECTURA') {
+                        const isExitRoute = req.originalUrl.includes('/supervision/') && req.originalUrl.endsWith('/salir');
+                        if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method) && !isExitRoute) {
+                            res.status(403).json({ error: 'Acceso denegado. Estás en modo supervisión de SOLO LECTURA.' });
+                            return;
+                        }
+                    }
                 }
             }
         }

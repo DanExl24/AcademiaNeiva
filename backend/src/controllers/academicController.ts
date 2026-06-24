@@ -2,23 +2,24 @@ import { Request, Response } from "express";
 import { pool } from "../config/db";
 
 export const getTeacherCourses = async (req: Request, res: Response): Promise<void> => {
-  const { userId } = req.params; // id_usuario del docente
+  const { userId } = req.params;
+  console.log(`[DEV] getTeacherCourses called - userId: ${userId}`);
 
   try {
-    // 1. Obtener el id_docente vinculado al usuario
     const docenteRes = await pool.query(
       "SELECT id_docente FROM docente WHERE id_usuario = $1",
       [userId]
     );
 
     if (docenteRes.rows.length === 0) {
+      console.warn(`[DEV] getTeacherCourses - No docente found for id_usuario=${userId}`);
       res.status(404).json({ error: "Docente no encontrado" });
       return;
     }
 
     const idDocente = docenteRes.rows[0].id_docente;
+    console.log(`[DEV] getTeacherCourses - id_docente=${idDocente}`);
 
-    // 2. Obtener la jerarquía de Grados -> Materias
     const result = await pool.query(
       `SELECT 
         dg.id_detallegrado,
@@ -40,15 +41,17 @@ export const getTeacherCourses = async (req: Request, res: Response): Promise<vo
       [idDocente]
     );
 
+    console.log(`[DEV] getTeacherCourses - returning ${result.rows.length} course(s) for id_docente=${idDocente}`);
     res.json(result.rows);
   } catch (error: any) {
-    console.error("Error fetching teacher courses:", error);
+    console.error(`[DEV] getTeacherCourses ERROR - userId=${userId}:`, error.message, error.detail || '');
     res.status(500).json({ error: "Error en el servidor" });
   }
 };
 
 export const getStudentsByGrade = async (req: Request, res: Response): Promise<void> => {
   const { gradeId } = req.params;
+  console.log(`[DEV] getStudentsByGrade called - gradeId (id_grupo): ${gradeId}`);
 
   try {
     const result = await pool.query(
@@ -59,23 +62,27 @@ export const getStudentsByGrade = async (req: Request, res: Response): Promise<v
        ORDER BY e.apellido, e.nombre`,
       [gradeId]
     );
+    console.log(`[DEV] getStudentsByGrade - gradeId=${gradeId} -> ${result.rows.length} student(s)`);
     res.json(result.rows);
   } catch (error: any) {
-    console.error("Error fetching students:", error);
+    console.error(`[DEV] getStudentsByGrade ERROR - gradeId=${gradeId}:`, error.message, error.detail || '');
     res.status(500).json({ error: "Error en el servidor" });
   }
 };
 
 export const getTeacherDashboard = async (req: Request, res: Response): Promise<void> => {
   const { userId } = req.params;
+  console.log(`[DEV] getTeacherDashboard called - userId: ${userId}`);
 
   try {
     const docenteRes = await pool.query("SELECT id_docente FROM docente WHERE id_usuario = $1", [userId]);
     if (docenteRes.rows.length === 0) {
+      console.warn(`[DEV] getTeacherDashboard - No docente found for id_usuario=${userId}`);
       res.status(404).json({ error: "Docente no encontrado" });
       return;
     }
     const idDocente = docenteRes.rows[0].id_docente;
+    console.log(`[DEV] getTeacherDashboard - id_docente=${idDocente}`);
 
     const coursesRes = await pool.query(`
       SELECT dg.id_detallegrado, m.nombre as materia_nombre, 
@@ -89,6 +96,7 @@ export const getTeacherDashboard = async (req: Request, res: Response): Promise<
       WHERE dg.id_docente = $1
     `, [idDocente]);
     const courses = coursesRes.rows;
+    console.log(`[DEV] getTeacherDashboard - courses found: ${courses.length}`);
 
     const studentsRes = await pool.query(`
       SELECT count(distinct m.id_estudiante) as total_students
@@ -97,16 +105,19 @@ export const getTeacherDashboard = async (req: Request, res: Response): Promise<
       WHERE dg.id_docente = $1 AND m.estado = 'ACTIVA'
     `, [idDocente]);
     const totalActiveStudents = Number(studentsRes.rows[0].total_students);
+    console.log(`[DEV] getTeacherDashboard - total active students: ${totalActiveStudents}`);
 
     const periodRes = await pool.query("SELECT id_periodo FROM periodo_academico WHERE estado = 'ABIERTO' LIMIT 1");
     const activePeriodId = periodRes.rows.length > 0 ? periodRes.rows[0].id_periodo : null;
+    console.log(`[DEV] getTeacherDashboard - active periodId: ${activePeriodId}`);
 
     if (!activePeriodId) {
+      console.log(`[DEV] getTeacherDashboard - No active period, returning basic stats`);
       res.json({ 
         coursesCount: courses.length, 
         studentsCount: totalActiveStudents, 
         noGradeActivities: 0, 
-        upToDateCourses: courses.length, // Si está cerrado, todo está "al día"
+        upToDateCourses: courses.length,
         courseAverages: [], 
         alerts: [] 
       });
@@ -118,10 +129,10 @@ export const getTeacherDashboard = async (req: Request, res: Response): Promise<
     const courseAverages: any[] = [];
     const alerts: any[] = [];
 
-    // Iterar por curso para sacar detalle exhaustivo (promedios y estados de entrega)
     for (const course of courses) {
       const dgId = course.id_detallegrado;
       const courseName = `${course.grado_nombre} ${course.seccion} - ${course.materia_nombre} (${course.jornada})`;
+      console.log(`[DEV] getTeacherDashboard - processing course dgId=${dgId}: ${courseName}`);
 
       // 1. Actividades del curso
       const activitiesRes = await pool.query(`
@@ -132,6 +143,7 @@ export const getTeacherDashboard = async (req: Request, res: Response): Promise<
       `, [dgId, activePeriodId]);
       const activities = activitiesRes.rows;
       const activityCount = activities.length;
+      console.log(`[DEV]   -> activities: ${activityCount}`);
 
       // 2. Estudiantes del curso
       const courseStudentsRes = await pool.query(`
@@ -142,17 +154,16 @@ export const getTeacherDashboard = async (req: Request, res: Response): Promise<
         WHERE dg.id_detallegrado = $1 AND m.estado = 'ACTIVA'
       `, [dgId]);
       const courseStudents = courseStudentsRes.rows;
+      console.log(`[DEV]   -> courseStudents: ${courseStudents.length}`);
 
       if (courseStudents.length === 0 || activityCount === 0) {
-        // No cuenta como 'al dia' si no hay actividades
-        courseAverages.push({ name: courseName, average: 0 });
+        courseAverages.push({ name: courseName, shortName: `${course.grado_nombre} ${course.seccion} - ${course.materia_nombre}`, average: 0 });
         continue;
       }
 
       let courseTotalSum = 0;
       let missingAnyGradeForCourse = false;
 
-      // Revisar actividad por actividad si está "Vacia" (0 notas)
       for (const act of activities) {
         const totalNotasRes = await pool.query(`
           SELECT count(*) as count FROM notas_actividad WHERE id_actividadmateria = $1
@@ -162,7 +173,6 @@ export const getTeacherDashboard = async (req: Request, res: Response): Promise<
         }
       }
 
-      // Evaluar a cada estudiante individualmente
       for (const stu of courseStudents) {
         const studentName = `${stu.nombre} ${stu.apellido}`;
         let studentMissingDeliveries = 0;
@@ -170,7 +180,7 @@ export const getTeacherDashboard = async (req: Request, res: Response): Promise<
 
         for (const act of activities) {
           const checkRes = await pool.query(`
-            SELECT nota, estado FROM notas_actividad 
+            SELECT nota FROM notas_actividad 
             WHERE id_actividadmateria = $1 AND id_estudiante = $2
           `, [act.id_actividadmateria, stu.id_estudiante]);
 
@@ -179,14 +189,13 @@ export const getTeacherDashboard = async (req: Request, res: Response): Promise<
             studentMissingDeliveries++;
           } else {
             studentAverage += Number(checkRes.rows[0].nota) * (Number(act.porcentaje) / 100);
-            if (checkRes.rows[0].estado === 'NO ENTREGADO' || Number(checkRes.rows[0].nota) === 0) {
+            if (Number(checkRes.rows[0].nota) === 0) {
               studentMissingDeliveries++;
             }
           }
         }
         courseTotalSum += studentAverage;
 
-        // Alerts for student
         if (studentAverage > 0 && studentAverage < 3.0) {
           alerts.push({
             type: 'riesgo',
@@ -200,11 +209,10 @@ export const getTeacherDashboard = async (req: Request, res: Response): Promise<
           });
         }
 
-        // Faltas (asistencia)
         const inasistenciasRes = await pool.query(`
-          SELECT count(*) as faltas
-          FROM asistencia
-          WHERE id_estudiante = $1 AND id_detallegrado = $2 AND estado IN ('FALTA', 'INJUSTIFICADA')
+          SELECT count(*)::int as faltas
+          FROM registro_asistencia
+          WHERE id_estudiante = $1 AND id_detallegrado = $2 AND estado = 'AUSENTE'
         `, [stu.id_estudiante, dgId]);
         const faltas = Number(inasistenciasRes.rows[0].faltas);
         
@@ -214,7 +222,7 @@ export const getTeacherDashboard = async (req: Request, res: Response): Promise<
             message: `El estudiante ${studentName} tiene ${faltas} faltas acumuladas en ${course.materia_nombre}.`
           });
         }
-      } // end course students loop
+      }
 
       if (!missingAnyGradeForCourse) {
         upToDateCoursesCount++;
@@ -235,16 +243,17 @@ export const getTeacherDashboard = async (req: Request, res: Response): Promise<
       }
     }
 
+    console.log(`[DEV] getTeacherDashboard - done. courses=${courses.length}, students=${totalActiveStudents}, noGradeActs=${noGradeActivitiesCount}, alerts=${alerts.length}`);
     res.json({
       coursesCount: courses.length,
       studentsCount: totalActiveStudents,
       noGradeActivities: noGradeActivitiesCount,
       upToDateCourses: upToDateCoursesCount,
-      courseAverages,     // Para la gráfica
-      alerts              // Lista automática
+      courseAverages,
+      alerts
     });
   } catch (error: any) {
-    console.error("Error fetching teacher dashboard:", error);
+    console.error(`[DEV] getTeacherDashboard ERROR - userId=${userId}:`, error.message, error.detail || '', error.hint || '');
     res.status(500).json({ error: "Error en el servidor" });
   }
 };

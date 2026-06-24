@@ -63,12 +63,13 @@ DO $$ BEGIN
     CREATE TYPE tipo_observacion AS ENUM (
         'ACADEMICA',
         'CONVIVENCIA',
+        'DISCIPLINARIA',
         'OTRO'
     );
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- Mapear GENERAL u otros no soportados a 'OTRO'
-UPDATE observacion_estudiante SET tipo = 'OTRO' WHERE tipo NOT IN ('ACADEMICA', 'CONVIVENCIA', 'OTRO');
+UPDATE observacion_estudiante SET tipo = 'OTRO' WHERE tipo NOT IN ('ACADEMICA', 'CONVIVENCIA', 'DISCIPLINARIA', 'OTRO');
 ALTER TABLE observacion_estudiante ALTER COLUMN tipo DROP DEFAULT;
 ALTER TABLE observacion_estudiante 
   ALTER COLUMN tipo TYPE tipo_observacion 

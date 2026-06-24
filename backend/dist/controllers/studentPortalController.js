@@ -355,12 +355,20 @@ const getStudentObservations = async (req, res) => {
     `;
         const params = [id_estudiante, id_periodo];
         if (tipo && tipo !== 'all') {
+            let targetTipo = tipo;
+            if (tipo === 'CONVIVENCIAL') {
+                targetTipo = 'CONVIVENCIA';
+            }
             query += ` AND oe.tipo = $3`;
-            params.push(tipo);
+            params.push(targetTipo);
         }
         query += ` ORDER BY m.nombre ASC`;
         const result = await db_1.pool.query(query, params);
-        res.json(result.rows);
+        const mappedRows = result.rows.map(row => ({
+            ...row,
+            tipo: row.tipo === 'CONVIVENCIA' ? 'CONVIVENCIAL' : row.tipo
+        }));
+        res.json(mappedRows);
     }
     catch (error) {
         console.error('Error fetching student observations:', error);
@@ -729,8 +737,14 @@ const getStudentDashboardStats = async (req, res) => {
             CONVIVENCIAL: 0
         };
         observationsRes.rows.forEach(row => {
-            if (reportes_conteo.hasOwnProperty(row.tipo)) {
-                reportes_conteo[row.tipo] = parseInt(row.count);
+            if (row.tipo === 'ACADEMICA') {
+                reportes_conteo.ACADEMICA = parseInt(row.count);
+            }
+            else if (row.tipo === 'CONVIVENCIA') {
+                reportes_conteo.CONVIVENCIAL = parseInt(row.count);
+            }
+            else if (row.tipo === 'DISCIPLINARIA') {
+                reportes_conteo.DISCIPLINARIA = parseInt(row.count);
             }
         });
         // 5. Recent activities

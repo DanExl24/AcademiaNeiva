@@ -107,22 +107,29 @@ const chartOptions = computed(() => {
 })
 
 const fetchDashboard = async () => {
+  console.log('[LOG-VISTA][TeacherDashboard] fetchDashboard started')
   try {
     // When a directivo is monitoring, load data for the observed teacher
     const userId = auth.isMonitoring
       ? auth.monitoringUser?.id
       : (auth.user?.id_usuario || auth.user?.id)
-    if (!userId) return
+    if (!userId) {
+      console.warn('[LOG-VISTA][TeacherDashboard] No userId found, skipping fetch')
+      return
+    }
     const response = await axios.get(`http://localhost:3000/api/teacher/dashboard/${userId}`)
     dashboardData.value = response.data
-  } catch (error) {
-    console.error("Error fetching dashboard data:", error)
+    console.log('[LOG-VISTA][TeacherDashboard] fetchDashboard OK for userId', userId, 'data:', dashboardData.value)
+  } catch (error: any) {
+    console.error('[LOG-VISTA][TeacherDashboard] fetchDashboard error:', error?.response?.data || error?.message || error)
   } finally {
     loading.value = false
   }
 }
 
+
 onMounted(() => {
+  console.log('[LOG-VISTA][TeacherDashboard] onMounted triggered')
   fetchDashboard()
 })
 

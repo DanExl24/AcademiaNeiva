@@ -140,6 +140,7 @@ const menuItems = computed(() => {
     { name: 'Docentes', icon: GraduationCap, path: '/dashboard/docentes' },
     { name: 'Configuración Académica', icon: SlidersHorizontal, path: '/dashboard/configuracion-academica' },
     { name: 'Boletines', icon: FileText, path: '/dashboard/boletines' },
+    { name: 'Supervisiones', icon: ShieldAlert, path: '/dashboard/supervisiones' }
   ]
 })
 
@@ -236,7 +237,8 @@ const fetchActiveYear = async () => {
   const schoolId = auth.user?.schoolId
   if (!schoolId) return
   try {
-    const response = await axios.get(`http://localhost:3000/api/academic-admin/settings/${schoolId}`)
+    const headers = { Authorization: `Bearer ${auth.token}` }
+    const response = await axios.get(`http://localhost:3000/api/academic-admin/settings/${schoolId}`, { headers })
     if (response.data?.activeYear) {
       activeYear.value = response.data.activeYear.calendario
     }
@@ -301,7 +303,7 @@ const handleExitSupervisionAuto = async () => {
     }
   }
   auth.stopSupervision()
-  router.push('/dashboard')
+  window.location.href = '/dashboard'
 }
 
 const handleExitSupervisionManual = async () => {
@@ -316,11 +318,11 @@ const handleExitSupervisionManual = async () => {
         console.error('Error exiting supervision:', e)
       }
       auth.stopSupervision()
-      router.push('/dashboard')
+      window.location.href = '/dashboard'
     }
   } else {
     auth.stopSupervision()
-    router.push('/dashboard')
+    window.location.href = '/dashboard'
   }
 }
 
@@ -376,6 +378,31 @@ const checkRecentActivity = async () => {
   }
 }
 
+const directivoActiveSupervision = ref<any>(null)
+const isReadOnlySupervision = computed(() => auth.isSupervising && auth.supervision?.tipo_supervision === 'SOLO_LECTURA')
+
+const checkDirectivoActiveSupervision = async () => {
+  if (auth.activeRole !== 'directivo' || !auth.token) {
+    directivoActiveSupervision.value = null
+    return
+  }
+  const sId = auth.user?.schoolId || auth.selectedSchoolId || null
+  if (!sId) return
+  try {
+    const headers = { Authorization: `Bearer ${auth.token}` }
+    const res = await axios.get(`http://localhost:3000/api/admin/colegio/${sId}/supervisiones`, { headers })
+    const active = res.data.find((s: any) => s.estado_supervision === 'ACTIVA')
+    
+    if (active && !directivoActiveSupervision.value) {
+      showToast(`¡El Administrador General (${active.admin_nombre}) ha entrado al colegio en modo supervisión (${active.tipo_supervision === 'EDITOR' ? 'Editor' : 'Solo Lectura'})!`, 'warning')
+    }
+    
+    directivoActiveSupervision.value = active || null
+  } catch (error) {
+    console.error('Error checking active supervision for directivo:', error)
+  }
+}
+
 watch(() => auth.activeRole, (newRole) => {
   if (checkInterval) {
     clearInterval(checkInterval)
@@ -383,9 +410,80 @@ watch(() => auth.activeRole, (newRole) => {
   }
   knownActions.clear()
   toasts.value = []
+  directivoActiveSupervision.value = null
+  
   if (newRole === 'admin_general') {
     checkRecentActivity()
     checkInterval = setInterval(checkRecentActivity, 8000)
+  } else if (newRole === 'directivo') {
+    checkDirectivoActiveSupervision()
+    checkInterval = setInterval(checkDirectivoActiveSupervision, 8000)
+  }
+}, { immediate: true })
+
+// --- CONTROL DE SUPERVISIÓN REVOCADA (ADMIN GENERAL) ---
+const showRevocationModal = ref(false)
+const revocationDetails = ref({
+  revocador: '',
+  motivo: ''
+})
+let supervisionCheckInterval: any = null
+
+const checkAdminSupervisionStatus = async () => {
+  console.log('[Supervision Poll] Running checkAdminSupervisionStatus. isSupervising:', auth.isSupervising, 'supervision:', auth.supervision)
+  if (!auth.isSupervising || !auth.supervision || !auth.token) {
+    console.log('[Supervision Poll] Bypassing check, criteria not met.')
+    return
+  }
+  try {
+    const headers = { Authorization: `Bearer ${auth.token}` }
+    const res = await axios.get('http://localhost:3000/api/admin/supervision/verificar-activa', { headers })
+    console.log('[Supervision Poll] Backend response:', res.data)
+    
+    if (res.data.activa === false) {
+      if (res.data.estado === 'REVOCADA') {
+        console.log('[Supervision Poll] Supervision has been REVOKED by directivo!')
+        revocationDetails.value = {
+          revocador: res.data.revocador_nombre || 'Un directivo',
+          motivo: res.data.motivo_revocacion || 'No especificado'
+        }
+        showRevocationModal.value = true
+        // Limpiar el intervalo de verificación para que no siga consultando
+        if (supervisionCheckInterval) {
+          clearInterval(supervisionCheckInterval)
+          supervisionCheckInterval = null
+        }
+      } else {
+        console.log('[Supervision Poll] Supervision expired or ended. Stopping supervision.')
+        // Expirada o finalizada por salida normal
+        auth.stopSupervision()
+        showToast('La supervisión ha finalizado o expirado.', 'info')
+        router.push('/dashboard')
+      }
+    }
+  } catch (error) {
+    console.error('[Supervision Poll] Error verifying active supervision status:', error)
+  }
+}
+
+const handleCloseRevocationModal = () => {
+  console.log('[Supervision Modal] Closing revocation modal, stopping supervision.')
+  showRevocationModal.value = false
+  auth.stopSupervision()
+  router.push('/dashboard')
+}
+
+watch(() => auth.isSupervising, (supervising) => {
+  console.log('[Supervision Watch] auth.isSupervising changed to:', supervising)
+  if (supervisionCheckInterval) {
+    console.log('[Supervision Watch] Clearing existing check interval')
+    clearInterval(supervisionCheckInterval)
+    supervisionCheckInterval = null
+  }
+  if (supervising) {
+    console.log('[Supervision Watch] Starting supervision poll interval')
+    checkAdminSupervisionStatus()
+    supervisionCheckInterval = setInterval(checkAdminSupervisionStatus, 5000)
   }
 }, { immediate: true })
 
@@ -399,6 +497,7 @@ onUnmounted(() => {
   if (clockInterval) clearInterval(clockInterval)
   if (supervisionTimer) clearInterval(supervisionTimer)
   if (checkInterval) clearInterval(checkInterval)
+  if (supervisionCheckInterval) clearInterval(supervisionCheckInterval)
   clearThemeColors()
 })
 
@@ -538,6 +637,20 @@ onUnmounted(() => {
         </div>
       </div>
 
+      <!-- Directivo Active Supervision Banner -->
+      <div
+        v-if="auth.activeRole === 'directivo' && directivoActiveSupervision"
+        class="bg-gradient-to-r from-red-700 via-red-650 to-red-800 text-white px-6 py-3.5 flex items-center gap-3 shrink-0 z-40 shadow-lg border-b border-red-500/20 animate-pulse"
+      >
+        <ShieldAlert :size="20" class="shrink-0 text-red-200 animate-bounce" />
+        <span class="text-sm font-black tracking-wide">
+          ATENCIÓN: El Administrador General ({{ directivoActiveSupervision.admin_nombre }}) está supervisando actualmente este colegio en MODO:
+          <span class="bg-red-950 px-2 py-0.5 rounded text-xs font-mono font-extrabold border border-red-500/30">
+            {{ directivoActiveSupervision.tipo_supervision === 'EDITOR' ? 'EDITOR (CON ESCRITURA)' : 'SOLO LECTURA' }}
+          </span>
+        </span>
+      </div>
+
       <!-- Monitoring Banner -->
       <div
         v-if="auth.isMonitoring"
@@ -604,7 +717,7 @@ onUnmounted(() => {
       </header>
 
       <!-- Page Content -->
-      <main class="flex-1 overflow-y-auto p-8 bg-gray-50 dark:bg-slate-950 transition-colors duration-300">
+      <main :class="['flex-1 overflow-y-auto p-8 bg-gray-50 dark:bg-slate-950 transition-colors duration-300', isReadOnlySupervision ? 'supervision-readonly-mode' : '']">
         <div class="max-w-7xl mx-auto">
           <router-view />
         </div>
@@ -642,8 +755,87 @@ onUnmounted(() => {
         </div>
       </TransitionGroup>
     </div>
+
+    <!-- Modal de Supervisión Revocada (Admin General) -->
+    <Teleport to="body">
+      <Transition
+        enter-active-class="transition duration-300 ease-out"
+        enter-from-class="opacity-0 scale-95"
+        enter-to-class="opacity-100 scale-100"
+        leave-active-class="transition duration-200 ease-in"
+        leave-from-class="opacity-100 scale-100"
+        leave-to-class="opacity-0 scale-95"
+      >
+        <div v-if="showRevocationModal" class="fixed inset-0 z-[99999] flex items-center justify-center p-4">
+          <!-- Backdrop -->
+          <div class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm"></div>
+
+          <!-- Modal Body -->
+          <div class="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] shadow-2xl p-8 max-w-lg w-full text-center space-y-6">
+            <div class="w-20 h-20 bg-rose-50 dark:bg-rose-950/30 rounded-full flex items-center justify-center mx-auto text-rose-600 dark:text-rose-400">
+              <ShieldAlert :size="48" class="animate-pulse" />
+            </div>
+
+            <div class="space-y-2">
+              <h2 class="text-2xl font-black text-slate-900 dark:text-white leading-tight">
+                ¡Supervisión Revocada!
+              </h2>
+              <p class="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
+                Un directivo del colegio ha decidido revocar tu sesión de supervisión activa.
+              </p>
+            </div>
+
+            <div class="bg-rose-50/50 dark:bg-rose-950/10 border border-rose-100 dark:border-rose-900/50 rounded-2xl p-5 text-left space-y-3">
+              <div>
+                <span class="text-[10px] font-bold text-rose-500 uppercase tracking-wider block">Revocado por</span>
+                <span class="text-sm font-bold text-slate-800 dark:text-slate-200">{{ revocationDetails.revocador }}</span>
+              </div>
+              <div class="pt-2 border-t border-rose-100/50 dark:border-rose-900/30">
+                <span class="text-[10px] font-bold text-rose-500 uppercase tracking-wider block">Motivo de revocación</span>
+                <p class="text-xs font-semibold text-slate-650 dark:text-slate-350 leading-relaxed mt-0.5">
+                  "{{ revocationDetails.motivo }}"
+                </p>
+              </div>
+            </div>
+
+            <button
+              @click="handleCloseRevocationModal"
+              class="w-full bg-rose-600 hover:bg-rose-700 text-white py-4 px-6 rounded-2xl font-bold shadow-lg shadow-rose-250 dark:shadow-none hover:scale-[1.01] active:scale-[0.99] transition-all allow-supervision-action"
+            >
+              Entendido y Salir
+            </button>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
-<style scoped>
+<style>
+/* CSS global para inhabilitar interacciones visuales en modo Solo Lectura */
+.supervision-readonly-mode input:not([type="search"]),
+.supervision-readonly-mode select,
+.supervision-readonly-mode textarea {
+  pointer-events: none !important;
+  opacity: 0.75 !important;
+  cursor: not-allowed !important;
+}
+
+.supervision-readonly-mode button:not(.allow-supervision-action):not([type="button"]):not([aria-haspopup="menu"]):not(.theme-toggle),
+.supervision-readonly-mode .btn-primary,
+.supervision-readonly-mode button[type="submit"],
+.supervision-readonly-mode a.bg-indigo-600,
+.supervision-readonly-mode button.bg-indigo-600,
+.supervision-readonly-mode button.bg-indigo-500,
+.supervision-readonly-mode button.bg-red-600,
+.supervision-readonly-mode button.bg-emerald-600,
+.supervision-readonly-mode button.bg-rose-600,
+.supervision-readonly-mode button.text-red-650,
+.supervision-readonly-mode button.text-red-600,
+.supervision-readonly-mode button.text-indigo-600,
+.supervision-readonly-mode td.text-right button {
+  pointer-events: none !important;
+  opacity: 0.45 !important;
+  cursor: not-allowed !important;
+}
 </style>

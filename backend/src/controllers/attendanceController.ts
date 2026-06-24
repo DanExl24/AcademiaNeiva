@@ -40,9 +40,11 @@ const checkEditability = async (detailGradeId: number, schoolId: number): Promis
 // GET /api/teacher/attendance/:detailGradeId/:date
 export const getAttendanceByDate = async (req: Request, res: Response): Promise<void> => {
   const detailGradeId = Number(req.params.detailGradeId);
-  const dateStr = req.params.date; // format YYYY-MM-DD
+  const dateStr = req.params.date;
+  console.log(`[DEV] getAttendanceByDate called - detailGradeId=${detailGradeId}, date=${dateStr}`);
 
   try {
+
     // Get school id from teaching assignment
     const dgRes = await pool.query(
       `SELECT id_colegio, id_grupo FROM detalle_grados WHERE id_detallegrado = $1`,
@@ -105,6 +107,7 @@ export const getAttendanceByDate = async (req: Request, res: Response): Promise<
       };
     });
 
+    console.log(`[DEV] getAttendanceByDate - id_grupo=${id_grupo}, editable=${editable}, students=${studentsRes.rows.length}`);
     res.json({
       editable,
       error: errorReason,
@@ -112,7 +115,7 @@ export const getAttendanceByDate = async (req: Request, res: Response): Promise<
       students: studentsWithAttendance
     });
   } catch (error: any) {
-    console.error("Error fetching attendance by date:", error);
+    console.error(`[DEV] getAttendanceByDate ERROR - detailGradeId=${detailGradeId}, date=${dateStr}:`, error.message, error.detail || '');
     res.status(500).json({ error: "Error en el servidor" });
   }
 };
@@ -120,7 +123,7 @@ export const getAttendanceByDate = async (req: Request, res: Response): Promise<
 // POST /api/teacher/attendance
 export const saveAttendance = async (req: Request, res: Response): Promise<void> => {
   const { detailGradeId, date, records } = req.body; 
-  // records: Array of { id_estudiante: number, estado: string | null, justificacion: string | null }
+  console.log(`[DEV] saveAttendance called - detailGradeId=${detailGradeId}, date=${date}, records=${Array.isArray(records) ? records.length : 'invalid'}`);
 
   if (!detailGradeId || !date || !Array.isArray(records)) {
     res.status(400).json({ error: "Parámetros inválidos" });
@@ -225,6 +228,7 @@ export const saveAttendance = async (req: Request, res: Response): Promise<void>
 // GET /api/teacher/attendance-history/:detailGradeId
 export const getAttendanceHistory = async (req: Request, res: Response): Promise<void> => {
   const detailGradeId = Number(req.params.detailGradeId);
+  console.log(`[DEV] getAttendanceHistory called - detailGradeId=${detailGradeId}`);
 
   try {
     const dgRes = await pool.query(
@@ -265,7 +269,7 @@ export const getAttendanceHistory = async (req: Request, res: Response): Promise
 
     // Get distinct dates with attendance recorded
     const datesRes = await pool.query(
-      `SELECT DISTINCT fecha::date as date_recorded
+      `SELECT DISTINCT TO_CHAR(fecha, 'YYYY-MM-DD') as date_recorded
        FROM registro_asistencia
        WHERE id_detallegrado = $1
        ORDER BY date_recorded DESC`,
@@ -293,14 +297,7 @@ export const getAttendanceHistory = async (req: Request, res: Response): Promise
       };
     });
 
-    const datesList = datesRes.rows.map(r => {
-      // Format as YYYY-MM-DD
-      const d = new Date(r.date_recorded);
-      const year = d.getFullYear();
-      const month = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      return `${year}-${month}-${day}`;
-    });
+    const datesList = datesRes.rows.map(r => r.date_recorded);
 
     res.json({
       studentsHistory,

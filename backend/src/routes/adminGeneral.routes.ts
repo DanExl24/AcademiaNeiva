@@ -29,12 +29,15 @@ import {
   entrarSupervision,
   salirSupervision,
   revocarSupervision,
+  verificarSupervisionActiva,
   verAccionesSupervision,
   historialSupervision,
   exportarAuditoria,
   obtenerStatsDashboard,
   listarAuditoriasAcciones,
   listarNotificacionesSistema,
+  listarSupervisionesColegio,
+  verAccionesSupervisionDirectivo,
 } from '../controllers/adminGeneralController';
 
 const router = Router();
@@ -79,6 +82,7 @@ router.delete('/directivos/:id', verifyToken, requireAdminGeneral, eliminarDirec
 // ─────────────────────────────────────────────────────────────
 // Admin General solicita, entra, sale, historial, exporta
 router.post('/supervision/solicitar', verifyToken, requireAdminGeneral, solicitarSupervision);
+router.get('/supervision/verificar-activa', verifyToken, requireAdminGeneral, verificarSupervisionActiva);
 router.post('/supervision/:id/entrar', verifyToken, requireAdminGeneral, entrarSupervision);
 router.post('/supervision/:id/salir', verifyToken, requireAdminGeneral, salirSupervision);
 router.get('/supervision/:id/acciones', verifyToken, requireAdminGeneral, verAccionesSupervision);
@@ -88,6 +92,8 @@ router.post('/supervision/:id/exportar', verifyToken, requireAdminGeneral, expor
 // Directivo aprueba o revoca
 router.post('/supervision/:id/aprobar', verifyToken, requireDirectivo, aprobarSupervision);
 router.post('/supervision/:id/revocar', verifyToken, requireDirectivo, revocarSupervision);
+router.get('/colegio/:colegioId/supervisiones', verifyToken, requireDirectivo, listarSupervisionesColegio);
+router.get('/supervision/:id/acciones-directivo', verifyToken, requireDirectivo, verAccionesSupervisionDirectivo);
 
 // Global Auditorias logs query (Admin General)
 router.get('/auditorias', verifyToken, requireAdminGeneral, listarAuditoriasAcciones);

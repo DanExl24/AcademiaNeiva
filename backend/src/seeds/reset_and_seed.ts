@@ -766,6 +766,23 @@ async function run(): Promise<void> {
       await client.query("ALTER TYPE estado_periodo ADD VALUE 'PENDIENTE'");
     }
 
+    // Ensure DISCIPLINARIA exists in tipo_observacion enum if the type exists (outside transaction block)
+    const tipoObsCheck = await client.query(`
+      SELECT 1 FROM pg_type t 
+      WHERE t.typname = 'tipo_observacion'
+    `);
+    if (tipoObsCheck.rows.length > 0) {
+      const enumValCheck = await client.query(`
+        SELECT 1 FROM pg_type t 
+        JOIN pg_enum e ON t.oid = e.enumtypid 
+        WHERE t.typname = 'tipo_observacion' AND e.enumlabel = 'DISCIPLINARIA'
+      `);
+      if (enumValCheck.rows.length === 0) {
+        console.log("Adding 'DISCIPLINARIA' to tipo_observacion enum...");
+        await client.query("ALTER TYPE tipo_observacion ADD VALUE 'DISCIPLINARIA'");
+      }
+    }
+
     await client.query("BEGIN");
     await client.query("SET my.app.bypass_triggers = 'true';");
 
@@ -795,6 +812,10 @@ async function run(): Promise<void> {
     console.log("📦 Aplicando migración 005 (protección de periodos cerrados)...");
     const protectClosedPeriodsMigrationSql = fs.readFileSync(path.join(__dirname, "../migrations/005_protect_closed_periods.sql"), "utf8");
     await client.query(protectClosedPeriodsMigrationSql);
+
+    console.log("📦 Aplicando migración 006 (motivo de revocación)...");
+    const addMotivoRevocacionMigrationSql = fs.readFileSync(path.join(__dirname, "../migrations/006_add_motivo_revocacion.sql"), "utf8");
+    await client.query(addMotivoRevocacionMigrationSql);
 
     // ── Phase 2: Schema migrations ──
     console.log("🔧 Migrando columnas adicionales...");

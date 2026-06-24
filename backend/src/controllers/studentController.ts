@@ -375,7 +375,7 @@ export const getStudentSummary = async (req: Request, res: Response) => {
     const observationsRes = await pool.query(`
       SELECT COUNT(*)::integer as count 
       FROM observacion_estudiante 
-      WHERE id_estudiante = $1 AND tipo ILIKE 'disciplinari%'
+      WHERE id_estudiante = $1 AND tipo = 'DISCIPLINARIA'
     `, [id]);
     const totalObservacionesDisciplinarias = observationsRes.rows[0]?.count || 0;
 

@@ -195,6 +195,7 @@ async function runSeedGrades() {
     let notasAgregadas = 0;
     let observacionesAcademicas = 0;
     let observacionesConvivencia = 0;
+    let observacionesDisciplinarias = 0;
     let observacionesGenerales = 0;
 
     for (const period of allPeriods) {
@@ -287,8 +288,8 @@ async function runSeedGrades() {
           );
           observacionesAcademicas++;
 
-          // ── CONVIVENCIA observation (~30% of students) ──
-          if (Math.random() < 0.3) {
+          // ── CONVIVENCIA observation (~20% of students) ──
+          if (Math.random() < 0.20) {
             const convObs = convivenciaObservations[Math.floor(Math.random() * convivenciaObservations.length)];
             await client.query(
               `INSERT INTO observacion_estudiante (id_estudiante, id_detallegrado, id_periodo, fortalezas, debilidades, recomendaciones, fecha, id_colegio, tipo)
@@ -298,8 +299,19 @@ async function runSeedGrades() {
             observacionesConvivencia++;
           }
 
-          // ── GENERAL observation (~15% of students) ──
-          if (Math.random() < 0.15) {
+          // ── DISCIPLINARIA observation (~10% of students) ──
+          if (Math.random() < 0.10) {
+            const discObs = convivenciaObservations[Math.floor(Math.random() * convivenciaObservations.length)];
+            await client.query(
+              `INSERT INTO observacion_estudiante (id_estudiante, id_detallegrado, id_periodo, fortalezas, debilidades, recomendaciones, fecha, id_colegio, tipo)
+               VALUES ($1, $2, $3, $4, $5, $6, NOW(), $7, 'DISCIPLINARIA')`,
+              [student.id_estudiante, dg.id_detallegrado, period.id_periodo, discObs.fortalezas, discObs.debilidades, discObs.recomendaciones, dg.id_colegio]
+            );
+            observacionesDisciplinarias++;
+          }
+
+          // ── GENERAL observation (~10% of students) ──
+          if (Math.random() < 0.10) {
             const genObs = generalObservations[Math.floor(Math.random() * generalObservations.length)];
             await client.query(
               `INSERT INTO observacion_estudiante (id_estudiante, id_detallegrado, id_periodo, fortalezas, debilidades, recomendaciones, fecha, id_colegio, tipo)
@@ -325,6 +337,7 @@ async function runSeedGrades() {
     console.log(`   ❌ Reprobados (< 3.0): ${failCount.rows[0].total}`);
     console.log(`   📋 Observaciones ACADÉMICAS: ${observacionesAcademicas}`);
     console.log(`   🤝 Observaciones CONVIVENCIA: ${observacionesConvivencia}`);
+    console.log(`   🚨 Observaciones DISCIPLINARIAS: ${observacionesDisciplinarias}`);
     console.log(`   📌 Observaciones GENERALES: ${observacionesGenerales}`);
     console.log(`\n   ¡El dashboard ahora mostrará datos reales de bajo rendimiento! 🎉`);
   } catch (error) {

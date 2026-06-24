@@ -2451,7 +2451,7 @@ const getDirectivoDashboard = async (req, res) => {
             db_1.pool.query(`SELECT COUNT(*) as total FROM matricula WHERE id_colegio = $1 AND "id_año" = $2 AND estado = 'ACTIVA'`, [schoolId, targetYearId]),
             db_1.pool.query("SELECT COUNT(*) as total FROM docente WHERE id_colegio = $1 AND estado = 'ACTIVO'", [schoolId]),
             db_1.pool.query(`SELECT COUNT(*) as total FROM observacion_estudiante 
-         WHERE id_colegio = $1 AND tipo = 'DISCIPLINARIO' ${targetPeriodId ? "AND id_periodo = $2" : ""}`, targetPeriodId ? [schoolId, targetPeriodId] : [schoolId]),
+         WHERE id_colegio = $1 AND tipo = 'DISCIPLINARIA' ${targetPeriodId ? "AND id_periodo = $2" : ""}`, targetPeriodId ? [schoolId, targetPeriodId] : [schoolId]),
             db_1.pool.query(`SELECT COUNT(*) as total FROM matricula WHERE id_colegio = $1 AND "id_año" = $2 AND estado = 'CANCELADA'`, [schoolId, targetYearId]),
             db_1.pool.query(`SELECT tg.nombre as grade, COUNT(m.id_matricula)::int as total
          FROM matricula m
@@ -2471,7 +2471,7 @@ const getDirectivoDashboard = async (req, res) => {
          JOIN matricula m ON e.id_estudiante = m.id_estudiante AND m."id_año" = $2
          JOIN grupos g ON m.id_grupo = g.id_grupo
          JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
-         WHERE o.id_colegio = $1 AND m.estado = 'ACTIVA' ${targetPeriodId ? "AND o.id_periodo = $3" : ""}
+         WHERE o.id_colegio = $1 AND o.tipo = 'DISCIPLINARIA' AND m.estado = 'ACTIVA' ${targetPeriodId ? "AND o.id_periodo = $3" : ""}
          GROUP BY tg.nombre`, targetPeriodId ? [schoolId, targetYearId, targetPeriodId] : [schoolId, targetYearId]),
             db_1.pool.query(`SELECT tg.nombre as grade, COUNT(m.id_matricula)::int as total
          FROM matricula m

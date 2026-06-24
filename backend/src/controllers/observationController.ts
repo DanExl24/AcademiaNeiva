@@ -106,8 +106,10 @@ export const getObservations = async (
 ): Promise<void> => {
   const detailGradeId = Number(req.params.detailGradeId);
   const periodId = Number(req.params.periodId);
+  console.log(`[DEV] getObservations called - detailGradeId=${detailGradeId}, periodId=${periodId}`);
 
   try {
+
     // Get school id from teaching assignment
     const dgRes = await pool.query(
       `SELECT id_colegio, id_grupo FROM detalle_grados WHERE id_detallegrado = $1`,
@@ -145,26 +147,37 @@ export const getObservations = async (
       [detailGradeId, periodId]
     );
 
-    const observations = observationsRes.rows.map((r) => ({
-      id_observacion: r.id_observacion,
-      id_estudiante: r.id_estudiante,
-      nombre: `${r.nombre} ${r.apellido}`,
-      documento: r.documento,
-      codigo: r.codigo,
-      fortalezas: r.fortalezas || null,
-      debilidades: r.debilidades || null,
-      recomendaciones: r.recomendaciones || null,
-      fecha: r.fecha,
-      tipo: r.tipo || 'ACADEMICA',
-    }));
+    const observations = observationsRes.rows.map((r) => {
+      let clientTipo = 'ACADEMICA';
+      if (r.tipo === 'DISCIPLINARIA') {
+        clientTipo = 'DISCIPLINARIO';
+      } else if (r.tipo === 'CONVIVENCIA') {
+        clientTipo = 'CONVIVENCIAL';
+      } else if (r.tipo) {
+        clientTipo = r.tipo;
+      }
+      return {
+        id_observacion: r.id_observacion,
+        id_estudiante: r.id_estudiante,
+        nombre: `${r.nombre} ${r.apellido}`,
+        documento: r.documento,
+        codigo: r.codigo,
+        fortalezas: r.fortalezas || null,
+        debilidades: r.debilidades || null,
+        recomendaciones: r.recomendaciones || null,
+        fecha: r.fecha,
+        tipo: clientTipo,
+      };
+    });
 
+    console.log(`[DEV] getObservations - editable=${editCheck.editable}, observations=${observations.length}, error=${editCheck.error || 'none'}`);
     res.json({
       editable: editCheck.editable,
       error: editCheck.error,
       observations,
     });
   } catch (error: any) {
-    console.error("Error fetching observations:", error);
+    console.error(`[DEV] getObservations ERROR - detailGradeId=${detailGradeId}, periodId=${periodId}:`, error.message, error.detail || '');
     res.status(500).json({ error: "Error en el servidor" });
   }
 };
@@ -176,6 +189,7 @@ export const createObservation = async (
 ): Promise<void> => {
   const { detailGradeId, periodId, studentId, fortalezas, debilidades, recomendaciones, fecha, tipo } =
     req.body;
+  console.log(`[DEV] createObservation called - detailGradeId=${detailGradeId}, periodId=${periodId}, studentId=${studentId}, tipo=${tipo}`);
 
   if (!detailGradeId || !periodId || !studentId) {
     res.status(400).json({ error: "Parámetros obligatorios faltantes (grado, periodo, estudiante)." });
@@ -224,6 +238,17 @@ export const createObservation = async (
       return;
     }
 
+    let dbTipo = 'ACADEMICA';
+    if (tipo === 'DISCIPLINARIO') {
+      dbTipo = 'DISCIPLINARIA';
+    } else if (tipo === 'CONVIVENCIAL' || tipo === 'CONVIVENCIA') {
+      dbTipo = 'CONVIVENCIA';
+    } else if (tipo === 'ACADEMICA') {
+      dbTipo = 'ACADEMICA';
+    } else if (tipo) {
+      dbTipo = tipo;
+    }
+
     const result = await pool.query(
       `INSERT INTO observacion_estudiante 
          (id_estudiante, id_detallegrado, id_periodo, fortalezas, debilidades, recomendaciones, fecha, id_colegio, tipo)
@@ -238,7 +263,7 @@ export const createObservation = async (
         hasRecomendaciones ? recomendaciones.trim() : null,
         dateValue,
         schoolId,
-        tipo || 'ACADEMICA',
+        dbTipo,
       ]
     );
 
@@ -293,6 +318,17 @@ export const updateObservation = async (
       return;
     }
 
+    let dbTipo = 'ACADEMICA';
+    if (tipo === 'DISCIPLINARIO') {
+      dbTipo = 'DISCIPLINARIA';
+    } else if (tipo === 'CONVIVENCIAL' || tipo === 'CONVIVENCIA') {
+      dbTipo = 'CONVIVENCIA';
+    } else if (tipo === 'ACADEMICA') {
+      dbTipo = 'ACADEMICA';
+    } else if (tipo) {
+      dbTipo = tipo;
+    }
+
     await pool.query(
       `UPDATE observacion_estudiante 
        SET fortalezas = $1, debilidades = $2, recomendaciones = $3, tipo = $4
@@ -301,7 +337,7 @@ export const updateObservation = async (
         hasFortalezas ? fortalezas.trim() : null,
         hasDebilidades ? debilidades.trim() : null,
         hasRecomendaciones ? recomendaciones.trim() : null,
-        tipo || 'ACADEMICA',
+        dbTipo,
         observationId,
       ]
     );

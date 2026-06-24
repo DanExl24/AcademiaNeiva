@@ -98,18 +98,30 @@ const getObservations = async (req, res) => {
        JOIN estudiante e ON e.id_estudiante = o.id_estudiante
        WHERE o.id_detallegrado = $1 AND o.id_periodo = $2
        ORDER BY o.fecha DESC`, [detailGradeId, periodId]);
-        const observations = observationsRes.rows.map((r) => ({
-            id_observacion: r.id_observacion,
-            id_estudiante: r.id_estudiante,
-            nombre: `${r.nombre} ${r.apellido}`,
-            documento: r.documento,
-            codigo: r.codigo,
-            fortalezas: r.fortalezas || null,
-            debilidades: r.debilidades || null,
-            recomendaciones: r.recomendaciones || null,
-            fecha: r.fecha,
-            tipo: r.tipo || 'ACADEMICA',
-        }));
+        const observations = observationsRes.rows.map((r) => {
+            let clientTipo = 'ACADEMICA';
+            if (r.tipo === 'DISCIPLINARIA') {
+                clientTipo = 'DISCIPLINARIO';
+            }
+            else if (r.tipo === 'CONVIVENCIA') {
+                clientTipo = 'CONVIVENCIAL';
+            }
+            else if (r.tipo) {
+                clientTipo = r.tipo;
+            }
+            return {
+                id_observacion: r.id_observacion,
+                id_estudiante: r.id_estudiante,
+                nombre: `${r.nombre} ${r.apellido}`,
+                documento: r.documento,
+                codigo: r.codigo,
+                fortalezas: r.fortalezas || null,
+                debilidades: r.debilidades || null,
+                recomendaciones: r.recomendaciones || null,
+                fecha: r.fecha,
+                tipo: clientTipo,
+            };
+        });
         res.json({
             editable: editCheck.editable,
             error: editCheck.error,
@@ -160,6 +172,19 @@ const createObservation = async (req, res) => {
             res.status(400).json({ error: dateCheck.error });
             return;
         }
+        let dbTipo = 'ACADEMICA';
+        if (tipo === 'DISCIPLINARIO') {
+            dbTipo = 'DISCIPLINARIA';
+        }
+        else if (tipo === 'CONVIVENCIAL' || tipo === 'CONVIVENCIA') {
+            dbTipo = 'CONVIVENCIA';
+        }
+        else if (tipo === 'ACADEMICA') {
+            dbTipo = 'ACADEMICA';
+        }
+        else if (tipo) {
+            dbTipo = tipo;
+        }
         const result = await db_1.pool.query(`INSERT INTO observacion_estudiante 
          (id_estudiante, id_detallegrado, id_periodo, fortalezas, debilidades, recomendaciones, fecha, id_colegio, tipo)
        VALUES ($1, $2, $3, $4, $5, $6, $7::timestamp with time zone, $8, $9)
@@ -172,7 +197,7 @@ const createObservation = async (req, res) => {
             hasRecomendaciones ? recomendaciones.trim() : null,
             dateValue,
             schoolId,
-            tipo || 'ACADEMICA',
+            dbTipo,
         ]);
         res.json({
             message: "Observación registrada exitosamente",
@@ -213,13 +238,26 @@ const updateObservation = async (req, res) => {
             res.status(409).json({ error: editCheck.error });
             return;
         }
+        let dbTipo = 'ACADEMICA';
+        if (tipo === 'DISCIPLINARIO') {
+            dbTipo = 'DISCIPLINARIA';
+        }
+        else if (tipo === 'CONVIVENCIAL' || tipo === 'CONVIVENCIA') {
+            dbTipo = 'CONVIVENCIA';
+        }
+        else if (tipo === 'ACADEMICA') {
+            dbTipo = 'ACADEMICA';
+        }
+        else if (tipo) {
+            dbTipo = tipo;
+        }
         await db_1.pool.query(`UPDATE observacion_estudiante 
        SET fortalezas = $1, debilidades = $2, recomendaciones = $3, tipo = $4
        WHERE id_observacion = $5`, [
             hasFortalezas ? fortalezas.trim() : null,
             hasDebilidades ? debilidades.trim() : null,
             hasRecomendaciones ? recomendaciones.trim() : null,
-            tipo || 'ACADEMICA',
+            dbTipo,
             observationId,
         ]);
         res.json({ message: "Observación actualizada exitosamente" });

@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import axios from 'axios'
 
 export interface User {
   id: string
@@ -141,7 +142,9 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem('supervision')
 
     if (user.value) {
-      delete user.value.schoolId
+      const updatedUser = { ...user.value }
+      delete updatedUser.schoolId
+      user.value = updatedUser
       localStorage.setItem('user', JSON.stringify(user.value))
     }
 
@@ -202,4 +205,47 @@ export const useAuthStore = defineStore('auth', () => {
     logout
   }
 })
+
+// Interceptor global para adjuntar el token de autorización y bloquear modificaciones en modo SOLO LECTURA
+axios.interceptors.request.use(
+  (config) => {
+    try {
+      const store = useAuthStore()
+      if (store.token) {
+        config.headers.Authorization = `Bearer ${store.token}`
+      }
+      
+      if (store.isSupervising && store.supervision?.tipo_supervision === 'SOLO_LECTURA') {
+        const method = config.method?.toUpperCase()
+        const isExitRoute = config.url?.includes('/salir') || false
+        if (method && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) && !isExitRoute) {
+          return Promise.reject(new Error('Acceso denegado. Estás en modo supervisión de SOLO LECTURA.'))
+        }
+      }
+    } catch (e) {
+      // Ignorar errores si Pinia no está listo
+    }
+    return config
+  },
+  (error) => {
+    return Promise.reject(error)
+  }
+)
+
+// Interceptor global de respuesta para exponer todos los errores de fetch en la consola del navegador
+axios.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    console.error(
+      `[Axios Error] Falla en petición ${error.config?.method?.toUpperCase()} a ${error.config?.url}:`,
+      error.response ? {
+        status: error.response.status,
+        statusText: error.response.statusText,
+        data: error.response.data
+      } : error.message
+    )
+    return Promise.reject(error)
+  }
+)
+
 

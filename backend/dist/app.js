@@ -20,7 +20,7 @@ const app = (0, express_1.default)();
 // Rate Limiters
 const globalLimiter = (0, express_rate_limit_1.default)({
     windowMs: 15 * 60 * 1000, // 15 minutos
-    max: 200,
+    max: 1000,
     message: { error: "Demasiadas peticiones. Intenta de nuevo en 15 minutos." }
 });
 const loginLimiter = (0, express_rate_limit_1.default)({

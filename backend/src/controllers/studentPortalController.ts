@@ -371,14 +371,22 @@ export const getStudentObservations = async (req: Request, res: Response) => {
     const params: any[] = [id_estudiante, id_periodo];
 
     if (tipo && tipo !== 'all') {
+      let targetTipo = tipo;
+      if (tipo === 'CONVIVENCIAL') {
+        targetTipo = 'CONVIVENCIA';
+      }
       query += ` AND oe.tipo = $3`;
-      params.push(tipo);
+      params.push(targetTipo);
     }
 
     query += ` ORDER BY m.nombre ASC`;
 
     const result = await pool.query(query, params);
-    res.json(result.rows);
+    const mappedRows = result.rows.map(row => ({
+      ...row,
+      tipo: row.tipo === 'CONVIVENCIA' ? 'CONVIVENCIAL' : row.tipo
+    }));
+    res.json(mappedRows);
   } catch (error) {
     console.error('Error fetching student observations:', error);
     res.status(500).json({ error: 'Error al obtener las observaciones académicas' });
@@ -792,8 +800,12 @@ export const getStudentDashboardStats = async (req: Request, res: Response) => {
     };
 
     observationsRes.rows.forEach(row => {
-      if (reportes_conteo.hasOwnProperty(row.tipo)) {
-        reportes_conteo[row.tipo as keyof typeof reportes_conteo] = parseInt(row.count);
+      if (row.tipo === 'ACADEMICA') {
+        reportes_conteo.ACADEMICA = parseInt(row.count);
+      } else if (row.tipo === 'CONVIVENCIA') {
+        reportes_conteo.CONVIVENCIAL = parseInt(row.count);
+      } else if (row.tipo === 'DISCIPLINARIA') {
+        reportes_conteo.DISCIPLINARIA = parseInt(row.count);
       }
     });
 

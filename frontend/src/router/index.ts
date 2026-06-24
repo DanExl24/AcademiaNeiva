@@ -164,6 +164,12 @@ const router = createRouter({
           component: BoletinGenerator,
           meta: { roles: ['directivo'] }
         },
+        {
+          path: 'supervisiones',
+          name: 'Supervisiones Externas',
+          component: () => import('../views/admin/SupervisionManagement.vue'),
+          meta: { roles: ['directivo'] }
+        },
         // Rutas del Docente
         {
           path: 'mis-cursos',
@@ -331,12 +337,11 @@ const router = createRouter({
   ]
 })
 
-router.beforeEach((to, _from, next) => {
+router.beforeEach((to) => {
   const auth = useAuthStore()
   
   if (to.meta.requiresAuth && !auth.isAuthenticated) {
-    next('/login')
-    return
+    return '/login'
   }
 
   if (auth.isAuthenticated) {
@@ -345,12 +350,9 @@ router.beforeEach((to, _from, next) => {
     
     if (allowedRoles && !allowedRoles.includes(activeRole || '')) {
       // Redirigir al dashboard home dispatcher si no tiene el rol
-      next('/dashboard')
-      return
+      return '/dashboard'
     }
   }
-
-  next()
 })
 
 export default router

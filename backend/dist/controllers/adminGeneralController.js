@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.listarNotificacionesSistema = exports.listarAuditoriasAcciones = exports.obtenerStatsDashboard = exports.registrarAccionAuditoria = exports.exportarAuditoria = exports.historialSupervision = exports.verAccionesSupervision = exports.revocarSupervision = exports.salirSupervision = exports.entrarSupervision = exports.aprobarSupervision = exports.solicitarSupervision = exports.eliminarDirectivo = exports.desvincularDirectivo = exports.actualizarDirectivo = exports.registrarDirectivo = exports.listarDirectivos = exports.eliminarUsuario = exports.forzarCierreSesion = exports.restablecerPassword = exports.cambiarEstadoUsuario = exports.detalleUsuario = exports.listarUsuarios = exports.eliminarColegio = exports.cambiarEstadoColegio = exports.uploadEscudo = exports.actualizarColegio = exports.registrarColegio = exports.detalleColegio = exports.listarColegios = void 0;
+exports.verAccionesSupervisionDirectivo = exports.listarSupervisionesColegio = exports.listarNotificacionesSistema = exports.listarAuditoriasAcciones = exports.obtenerStatsDashboard = exports.registrarAccionAuditoria = exports.exportarAuditoria = exports.historialSupervision = exports.verAccionesSupervision = exports.verificarSupervisionActiva = exports.revocarSupervision = exports.salirSupervision = exports.entrarSupervision = exports.aprobarSupervision = exports.solicitarSupervision = exports.eliminarDirectivo = exports.desvincularDirectivo = exports.actualizarDirectivo = exports.registrarDirectivo = exports.listarDirectivos = exports.eliminarUsuario = exports.forzarCierreSesion = exports.restablecerPassword = exports.cambiarEstadoUsuario = exports.detalleUsuario = exports.listarUsuarios = exports.eliminarColegio = exports.cambiarEstadoColegio = exports.uploadEscudo = exports.actualizarColegio = exports.registrarColegio = exports.detalleColegio = exports.listarColegios = void 0;
 const db_1 = require("../config/db");
 const adminGeneralNotificationService_1 = require("../services/adminGeneralNotificationService");
 const bcrypt_1 = __importDefault(require("bcrypt"));
@@ -851,7 +851,7 @@ const revocarSupervision = async (req, res) => {
        FROM auditoria_supervision a
        JOIN colegio c ON c.id_colegio = a.id_colegio
        JOIN usuario u ON u.id_usuario = a.id_admin_general
-       WHERE a.id_auditoria = $1 AND a.estado_supervision IN ('APROBADA', 'ACTIVA') AND a.eliminado = FALSE`, [id]);
+       WHERE a.id_auditoria = $1 AND a.estado_supervision IN ('SOLICITADA', 'APROBADA', 'ACTIVA') AND a.eliminado = FALSE`, [id]);
         if (auditoria.rows.length === 0) {
             await client.query('ROLLBACK');
             res.status(404).json({ error: 'Supervisión no encontrada o no revocable' });
@@ -870,8 +870,9 @@ const revocarSupervision = async (req, res) => {
        SET estado_supervision = 'REVOCADA',
            revocado_por = $1,
            fecha_revocacion = NOW(),
+           motivo_revocacion = $2,
            fecha_salida = CASE WHEN fecha_entrada IS NOT NULL THEN NOW() ELSE fecha_salida END
-       WHERE id_auditoria = $2`, [directivo.rows[0].id, id]);
+       WHERE id_auditoria = $3`, [directivo.rows[0].id, motivo || 'No especificado', id]);
         const aud = auditoria.rows[0];
         // Email al admin
         adminGeneralNotificationService_1.AdminGeneralNotificationService.sendSupervisionRechazada(aud.admin_email, aud.admin_nombre, aud.colegio_nombre, req.user.email, motivo || 'No especificado');
@@ -888,6 +889,38 @@ const revocarSupervision = async (req, res) => {
     }
 };
 exports.revocarSupervision = revocarSupervision;
+/**
+ * GET /admin/supervision/verificar-activa
+ * Verificar el estado de la supervisión activa para el Administrador General.
+ */
+const verificarSupervisionActiva = async (req, res) => {
+    try {
+        const supervisionRes = await db_1.pool.query(`SELECT a.*, c.nombre AS colegio_nombre,
+              u.nombre AS directivo_revocador_nombre, u.apellido AS directivo_revocador_apellido
+       FROM auditoria_supervision a
+       JOIN colegio c ON c.id_colegio = a.id_colegio
+       LEFT JOIN directivo d ON d.id = a.revocado_por
+       LEFT JOIN usuario u ON u.id_usuario = d.id_usuario
+       WHERE a.id_admin_general = $1 AND a.eliminado = FALSE
+       ORDER BY a.fecha_solicitud DESC LIMIT 1`, [req.user.id]);
+        if (supervisionRes.rows.length === 0) {
+            res.json({ activa: false });
+            return;
+        }
+        const sup = supervisionRes.rows[0];
+        res.json({
+            activa: sup.estado_supervision === 'ACTIVA',
+            estado: sup.estado_supervision,
+            motivo_revocacion: sup.motivo_revocacion || null,
+            revocador_nombre: sup.revocado_por ? `${sup.directivo_revocador_nombre} ${sup.directivo_revocador_apellido || ''}`.trim() : null
+        });
+    }
+    catch (error) {
+        console.error('Error verificando supervision activa:', error);
+        res.status(500).json({ error: 'Error en el servidor' });
+    }
+};
+exports.verificarSupervisionActiva = verificarSupervisionActiva;
 /**
  * GET /admin/supervision/:id/acciones
  * Ver acciones registradas durante una supervisión.
@@ -1345,3 +1378,85 @@ const listarNotificacionesSistema = async (req, res) => {
     }
 };
 exports.listarNotificacionesSistema = listarNotificacionesSistema;
+/**
+ * GET /admin/colegio/:colegioId/supervisiones
+ * Listar supervisiones de un colegio para el directivo.
+ */
+const listarSupervisionesColegio = async (req, res) => {
+    try {
+        const { colegioId } = req.params;
+        const schoolId = Number(colegioId);
+        // Verificar que el usuario es directivo del colegio o Administrador General
+        let isAuthorized = false;
+        if (req.user.roles.includes('admin_general')) {
+            isAuthorized = true;
+        }
+        else {
+            const directivo = await db_1.pool.query(`SELECT d.id FROM directivo d
+         WHERE d.id_usuario = $1 AND d.id_colegio = $2 AND d.estado = 'ACTIVO'`, [req.user.id, schoolId]);
+            if (directivo.rows.length > 0) {
+                isAuthorized = true;
+            }
+        }
+        if (!isAuthorized) {
+            res.status(403).json({ error: 'No tienes permisos para ver las supervisiones de este colegio' });
+            return;
+        }
+        const query = `
+      SELECT a.*,
+             u.nombre AS admin_nombre, u.email AS admin_email,
+             ud.nombre AS directivo_nombre, ud.apellido AS directivo_apellido,
+             udr.nombre AS directivo_revocador_nombre, udr.apellido AS directivo_revocador_apellido,
+             (SELECT COUNT(*) FROM auditoria_acciones_realizadas acc WHERE acc.id_auditoria = a.id_auditoria) AS total_acciones
+      FROM auditoria_supervision a
+      JOIN usuario u ON u.id_usuario = a.id_admin_general
+      LEFT JOIN directivo d ON d.id = a.id_directivo_aprobador
+      LEFT JOIN usuario ud ON ud.id_usuario = d.id_usuario
+      LEFT JOIN directivo dr ON dr.id = a.revocado_por
+      LEFT JOIN usuario udr ON udr.id_usuario = dr.id_usuario
+      WHERE a.id_colegio = $1 AND a.eliminado = FALSE
+      ORDER BY a.fecha_solicitud DESC
+    `;
+        const result = await db_1.pool.query(query, [schoolId]);
+        res.json(result.rows);
+    }
+    catch (error) {
+        console.error('Error obteniendo supervisiones del colegio:', error);
+        res.status(500).json({ error: 'Error al obtener supervisiones del colegio' });
+    }
+};
+exports.listarSupervisionesColegio = listarSupervisionesColegio;
+/**
+ * GET /admin/supervision/:id/acciones-directivo
+ * Ver acciones registradas durante una supervisión para el directivo del colegio.
+ */
+const verAccionesSupervisionDirectivo = async (req, res) => {
+    try {
+        const { id } = req.params;
+        // Obtener la supervisión
+        const supervision = await db_1.pool.query(`SELECT id_colegio FROM auditoria_supervision WHERE id_auditoria = $1 AND eliminado = FALSE`, [id]);
+        if (supervision.rows.length === 0) {
+            res.status(404).json({ error: 'Supervisión no encontrada' });
+            return;
+        }
+        const schoolId = supervision.rows[0].id_colegio;
+        // Verificar que el usuario es directivo del colegio
+        const directivo = await db_1.pool.query(`SELECT d.id FROM directivo d
+       WHERE d.id_usuario = $1 AND d.id_colegio = $2 AND d.estado = 'ACTIVO'`, [req.user.id, schoolId]);
+        if (directivo.rows.length === 0) {
+            res.status(403).json({ error: 'No tienes permisos para ver las acciones de esta supervisión' });
+            return;
+        }
+        const result = await db_1.pool.query(`SELECT a.*, u.nombre AS usuario_afectado_nombre, u.email AS usuario_afectado_email
+       FROM auditoria_acciones_realizadas a
+       LEFT JOIN usuario u ON u.id_usuario = a.id_usuario_afectado
+       WHERE a.id_auditoria = $1
+       ORDER BY a.fecha_accion ASC`, [id]);
+        res.json(result.rows);
+    }
+    catch (error) {
+        console.error('Error obteniendo acciones para directivo:', error);
+        res.status(500).json({ error: 'Error al obtener acciones de la supervisión' });
+    }
+};
+exports.verAccionesSupervisionDirectivo = verAccionesSupervisionDirectivo;

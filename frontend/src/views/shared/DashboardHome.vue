@@ -48,6 +48,7 @@ const theme = useThemeStore()
 const auth = useAuthStore()
 
 const loading = ref(true)
+const fetchError = ref(false)
 const schoolId = computed(() => Number(auth.user?.schoolId || 0))
 
 // Data State
@@ -518,15 +519,18 @@ const filteredAlertsData = computed(() => {
 const fetchDashboard = async () => {
   if (!schoolId.value) return
   loading.value = true
+  fetchError.value = false
   try {
     const url = `http://localhost:3000/api/academic-admin/dashboard/${schoolId.value}`
     const params: any = {}
     if (selectedYearId.value) params.yearId = selectedYearId.value
     if (selectedPeriodId.value) params.periodId = selectedPeriodId.value
-    const response = await axios.get(url, { params })
+    const headers = { Authorization: `Bearer ${auth.token}` }
+    const response = await axios.get(url, { params, headers })
     dashboardData.value = response.data
   } catch (error) {
     console.error('Error fetching dashboard data:', error)
+    fetchError.value = true
   } finally {
     loading.value = false
   }
@@ -535,7 +539,8 @@ const fetchDashboard = async () => {
 const loadPeriods = async () => {
   if (!schoolId.value) return
   try {
-    const response = await axios.get(`http://localhost:3000/api/academic-admin/settings/${schoolId.value}`)
+    const headers = { Authorization: `Bearer ${auth.token}` }
+    const response = await axios.get(`http://localhost:3000/api/academic-admin/settings/${schoolId.value}`, { headers })
     allPeriods.value = response.data.periods
     academicYears.value = response.data.academicYears || []
 
@@ -551,6 +556,7 @@ const loadPeriods = async () => {
     }
   } catch (error) {
     console.error('Error loading periods:', error)
+    fetchError.value = true
   }
 }
 
@@ -569,7 +575,8 @@ const enrollmentNotice = ref<string | null>(null)
 const checkEnrollmentDates = async () => {
   if (!schoolId.value) return
   try {
-    const response = await axios.get(`http://localhost:3000/api/matriculas/school/${schoolId.value}/enrollment-config`)
+    const headers = { Authorization: `Bearer ${auth.token}` }
+    const response = await axios.get(`http://localhost:3000/api/matriculas/school/${schoolId.value}/enrollment-config`, { headers })
     const data = response.data
     if (data && data.config && data.config.habilitada && !data.config.hasApproved) {
       const now = new Date()
@@ -601,20 +608,34 @@ watch(schoolId, () => {
   checkEnrollmentDates()
 })
 
-onMounted(async () => {
-  await loadPeriods()
-  await fetchDashboard()
-  await checkEnrollmentDates()
-  // Trigger initial setup for courses if grade is not ALL
-  if (globalSelectedGrade.value !== 'ALL') {
-    const courses = dashboardData.value.charts.performanceByCourse.filter(
-      c => c.grado_nombre === globalSelectedGrade.value
-    )
-    if (courses.length > 0) {
-      selectedCourseForSubjects.value = courses[0].id_grupo
-      selectedCourseForEvolution.value = courses[0].id_grupo
+const handleRetry = async () => {
+  loading.value = true
+  fetchError.value = false
+  try {
+    await loadPeriods()
+    await fetchDashboard()
+    await checkEnrollmentDates()
+    
+    // Trigger initial setup for courses if grade is not ALL
+    if (globalSelectedGrade.value !== 'ALL') {
+      const courses = dashboardData.value.charts.performanceByCourse.filter(
+        c => c.grado_nombre === globalSelectedGrade.value
+      )
+      if (courses.length > 0) {
+        selectedCourseForSubjects.value = courses[0].id_grupo
+        selectedCourseForEvolution.value = courses[0].id_grupo
+      }
     }
+  } catch (error) {
+    console.error('Error in handleRetry:', error)
+    fetchError.value = true
+  } finally {
+    loading.value = false
   }
+}
+
+onMounted(() => {
+  handleRetry()
 })
 </script>
 
@@ -683,420 +704,413 @@ onMounted(async () => {
         </div>
       </div>
     </div>
-
-    <!-- Enrollment Active Alert Banner -->
-    <div v-if="enrollmentNotice" class="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 p-4 px-6 rounded-2xl flex items-center justify-between shadow-sm animate-pulse">
-      <div class="flex items-center gap-3">
-        <div class="h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]"></div>
-        <span class="text-sm font-bold text-emerald-800 dark:text-emerald-300">{{ enrollmentNotice }}</span>
-      </div>
-      <router-link to="/dashboard/gestion-matriculas" class="text-xs font-black text-emerald-700 dark:text-emerald-400 hover:underline uppercase tracking-wider">
-        Gestionar Matrículas
-      </router-link>
+    <!-- Loading State -->
+    <div v-if="loading" class="flex flex-col items-center justify-center py-20 min-h-[400px]">
+      <div class="animate-spin rounded-full h-12 w-12 border-4 border-indigo-200 border-t-indigo-600 dark:border-slate-800 dark:border-t-indigo-400 mb-4"></div>
+      <p class="text-sm font-medium text-slate-500 dark:text-slate-400 animate-pulse">Cargando datos institucionales...</p>
     </div>
 
-    <!-- Principal KPIs -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-      <div 
-        v-for="stat in dashboardStats" 
-        :key="stat.name" 
-        class="bg-white dark:bg-slate-900 p-6 rounded-[2rem] border border-gray-100 dark:border-slate-800 shadow-sm hover:shadow-xl dark:hover:shadow-indigo-500/10 hover:-translate-y-1 transition-all duration-300 flex items-center gap-5 group"
+    <!-- Error State -->
+    <div v-else-if="fetchError" class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-[2rem] p-12 text-center flex flex-col items-center justify-center min-h-[400px] shadow-sm transition-colors w-full">
+      <div class="bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 p-5 rounded-full mb-4">
+        <AlertTriangle :size="36" />
+      </div>
+      <h3 class="text-xl font-black text-slate-900 dark:text-white">Error al cargar la información</h3>
+      <p class="mt-2 text-sm text-slate-500 dark:text-slate-400 max-w-md font-medium">
+        No se pudo obtener la información del colegio. Por favor verifica tu sesión o vuelve a intentarlo.
+      </p>
+      <button 
+        @click="handleRetry"
+        class="mt-6 px-8 py-3 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white rounded-2xl font-black transition-all text-sm shadow-md hover:shadow-lg focus:outline-none"
       >
-        <div :class="[stat.bg, stat.color, 'p-5 rounded-2xl transition-transform group-hover:scale-110']">
-          <component :is="stat.icon" :size="32" stroke-width="2.5" />
-        </div>
-        <div>
-          <p class="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest">{{ stat.name }}</p>
-          <p class="text-3xl font-black text-gray-900 dark:text-white mt-0.5 tracking-tight">
-            {{ loading ? '...' : stat.value }}
-          </p>
-        </div>
-      </div>
+        Reintentar
+      </button>
     </div>
 
-    <!-- Charts Section -->
-    <div class="grid grid-cols-1 gap-8">
-      
-      <!-- Performance by Grade -->
-      <div class="bg-white dark:bg-slate-900 rounded-[2rem] border border-gray-100 dark:border-slate-800 p-8 shadow-sm flex flex-col min-h-[450px] transition-colors">
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-          <h3 class="text-lg font-black text-gray-800 dark:text-white flex items-center gap-2">
-            <TrendingUp :size="20" class="text-indigo-600" />
-            {{ globalSelectedGrade === 'ALL' ? 'Rendimiento por Grado' : 'Rendimiento por Curso' }}
-          </h3>
+    <!-- Main Content -->
+    <template v-else>
+      <!-- Enrollment Active Alert Banner -->
+      <div v-if="enrollmentNotice" class="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 p-4 px-6 rounded-2xl flex items-center justify-between shadow-sm animate-pulse">
+        <div class="flex items-center gap-3">
+          <div class="h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]"></div>
+          <span class="text-sm font-bold text-emerald-800 dark:text-emerald-300">{{ enrollmentNotice }}</span>
         </div>
-        <div class="flex-1 w-full">
-          <Bar v-if="!loading" :data="gradeChartData" :options="horizontalOptions as any" />
-        </div>
+        <router-link to="/dashboard/gestion-matriculas" class="text-xs font-black text-emerald-700 dark:text-emerald-400 hover:underline uppercase tracking-wider">
+          Gestionar Matrículas
+        </router-link>
       </div>
 
-      <!-- Performance by Subject -->
-      <div class="bg-white dark:bg-slate-900 rounded-[2rem] border border-gray-100 dark:border-slate-800 p-8 shadow-sm flex flex-col min-h-[500px] transition-colors">
-        <div class="flex flex-col mb-6">
-          <h3 class="text-lg font-black text-gray-800 dark:text-white flex items-center gap-2">
-            <BookOpen :size="20" class="text-emerald-500" />
-            Rendimiento por Materia {{ globalSelectedGrade === 'ALL' ? '(Top 10 Institucional)' : 'por Curso' }}
-          </h3>
-          
-          <!-- Course Selector Blocks (Only visible when a grade is selected) -->
-          <div v-if="globalSelectedGrade !== 'ALL' && availableCoursesForSelectedGrade.length > 0" class="mt-4 flex flex-wrap gap-3">
-            <button
-              v-for="course in availableCoursesForSelectedGrade"
-              :key="course.id_grupo"
-              @click="selectedCourseForSubjects = course.id_grupo"
-              :class="[
-                'px-4 py-2 rounded-xl text-sm font-bold transition-all border',
-                selectedCourseForSubjects === course.id_grupo 
-                  ? 'bg-emerald-500 text-white border-emerald-500 shadow-md shadow-emerald-500/20 scale-105' 
-                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-emerald-400 hover:text-emerald-500'
-              ]"
-            >
-              {{ getCourseDisplayName(course) }} - {{ course.jornada_nombre }}
-            </button>
-          </div>
-          <div v-else-if="globalSelectedGrade !== 'ALL' && availableCoursesForSelectedGrade.length === 0" class="mt-4 text-sm text-slate-500 italic">
-            No hay cursos disponibles para este grado.
-          </div>
-        </div>
-        
-        <div class="flex-1 w-full relative">
-          <div v-if="globalSelectedGrade !== 'ALL' && !selectedCourseForSubjects && availableCoursesForSelectedGrade.length > 0" class="absolute inset-0 flex items-center justify-center bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm z-10 rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
-            <p class="text-slate-500 font-medium">Selecciona un curso arriba para ver su rendimiento.</p>
-          </div>
-          <Bar v-if="!loading" :data="subjectChartData" :options="horizontalOptions as any" />
-        </div>
-      </div>
-
-      <!-- Performance Evolution -->
-      <div class="bg-white dark:bg-slate-900 rounded-[2rem] border border-gray-100 dark:border-slate-800 p-8 shadow-sm flex flex-col min-h-[400px] transition-colors">
-        <div class="flex flex-col mb-6">
-          <h3 class="text-lg font-black text-gray-800 dark:text-white flex items-center gap-2">
-            <Target :size="20" class="text-amber-500" />
-            Evolución del Promedio {{ globalSelectedGrade === 'ALL' ? 'Institucional' : 'por Curso' }}
-          </h3>
-          
-          <!-- Course Selector Blocks for Evolution (Only visible when a grade is selected) -->
-          <div v-if="globalSelectedGrade !== 'ALL' && availableCoursesForSelectedGrade.length > 0" class="mt-4 flex flex-wrap gap-3">
-            <button
-              v-for="course in availableCoursesForSelectedGrade"
-              :key="course.id_grupo"
-              @click="selectedCourseForEvolution = course.id_grupo"
-              :class="[
-                'px-4 py-2 rounded-xl text-sm font-bold transition-all border',
-                selectedCourseForEvolution === course.id_grupo 
-                  ? 'bg-amber-500 text-white border-amber-500 shadow-md shadow-amber-500/20 scale-105' 
-                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-amber-400 hover:text-amber-500'
-              ]"
-            >
-              {{ getCourseDisplayName(course) }} - {{ course.jornada_nombre }}
-            </button>
-          </div>
-          <div v-else-if="globalSelectedGrade !== 'ALL' && availableCoursesForSelectedGrade.length === 0" class="mt-4 text-sm text-slate-500 italic">
-            No hay cursos disponibles para este grado.
-          </div>
-        </div>
-        
-        <div class="flex-1 w-full relative">
-          <div v-if="globalSelectedGrade !== 'ALL' && !selectedCourseForEvolution && availableCoursesForSelectedGrade.length > 0" class="absolute inset-0 flex items-center justify-center bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm z-10 rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
-            <p class="text-slate-500 font-medium">Selecciona un curso arriba para ver su evolución.</p>
-          </div>
-          <Line v-if="!loading" :data="evolutionChartData" :options="chartOptionsBase as any" />
-        </div>
-      </div>
-    </div>
-
-    <!-- Low Performance Analysis Section -->
-    <div class="bg-slate-900 rounded-[3rem] p-10 text-white shadow-2xl relative overflow-hidden">
-      <div class="relative z-10">
-        <div class="flex items-center gap-4 mb-10">
-          <div class="bg-rose-500 p-4 rounded-3xl shadow-lg shadow-rose-500/20">
-            <AlertTriangle :size="32" class="text-white" />
+      <!-- Principal KPIs -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div 
+          v-for="stat in dashboardStats" 
+          :key="stat.name" 
+          class="bg-white dark:bg-slate-900 p-6 rounded-[2rem] border border-gray-100 dark:border-slate-800 shadow-sm hover:shadow-xl dark:hover:shadow-indigo-500/10 hover:-translate-y-1 transition-all duration-300 flex items-center gap-5 group"
+        >
+          <div :class="[stat.bg, stat.color, 'p-5 rounded-2xl transition-transform group-hover:scale-110']">
+            <component :is="stat.icon" :size="32" stroke-width="2.5" />
           </div>
           <div>
-            <h2 class="text-3xl font-black tracking-tight">Análisis de Desempeño Crítico</h2>
-            <p class="text-slate-400 font-medium">Detectando focos de riesgo académico para intervención temprana.</p>
-          </div>
-        </div>
-
-        <div class="grid grid-cols-1 gap-12">
-          <!-- Risk by Course (STACKED HORIZONTAL) -->
-          <div class="bg-white/5 backdrop-blur-xl border border-white/10 p-8 rounded-[3rem] flex flex-col h-[550px]">
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-              <div class="flex flex-col sm:flex-row sm:items-center gap-4">
-                <h3 class="text-xl font-bold flex items-center gap-2 text-indigo-400">
-                  <LayoutDashboard :size="20" />
-                  {{ globalSelectedGrade === 'ALL' ? 'Riesgo de Reprobación por Grado' : 'Riesgo de Reprobación por Curso' }}
-                </h3>
-              </div>
-              <div class="flex gap-6 text-[10px] font-black uppercase tracking-widest bg-white/5 px-6 py-3 rounded-2xl border border-white/10 shrink-0">
-                <span class="flex items-center gap-2 text-rose-400">
-                  <div class="h-2.5 w-2.5 rounded-full bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.5)]"></div> En Riesgo
-                </span>
-                <span class="flex items-center gap-2 text-emerald-400">
-                  <div class="h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]"></div> A Salvo
-                </span>
-              </div>
-            </div>
-            <div class="flex-1 w-full">
-              <Bar v-if="!loading" :data="riskChartData" :options="riskChartOptions as any" />
-            </div>
-          </div>
-
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-10">
-            <!-- Critical Subjects List -->
-            <div class="bg-white/5 backdrop-blur-xl border border-white/10 p-8 rounded-[2rem] flex flex-col h-[450px]">
-              <div class="flex flex-col mb-6">
-                <h3 class="text-lg font-bold flex items-center gap-2 text-rose-400">
-                  <BookOpen :size="20" />
-                  Materias Críticas
-                </h3>
-                <p class="text-[10px] text-slate-400 mt-1 uppercase font-black tracking-tighter">Materias con mayor índice de reprobación</p>
-              </div>
-              <div class="space-y-4 overflow-y-auto pr-2 custom-scrollbar flex-1">
-                <div 
-                  v-for="(sub, idx) in dashboardData.lowPerformance.criticalSubjects" 
-                  :key="idx"
-                  @click="handleCriticalSubjectClick(sub)"
-                  class="flex items-center justify-between p-5 bg-white/5 rounded-2xl border border-white/5 hover:border-rose-500/30 hover:shadow-lg hover:shadow-rose-500/5 hover:-translate-y-0.5 transition-all group cursor-pointer"
-                >
-                  <div class="flex items-center gap-4 min-w-0">
-                    <div class="h-10 w-10 shrink-0 flex items-center justify-center rounded-xl bg-rose-500/20 text-rose-400 font-black text-xs group-hover:scale-110 transition-transform">
-                      #{{ idx + 1 }}
-                    </div>
-                    <span class="font-bold truncate text-sm text-slate-200">{{ sub.nombre }}</span>
-                  </div>
-                  <div class="flex flex-col items-end">
-                    <span class="text-xs font-black bg-rose-500/20 text-rose-400 px-3 py-1 rounded-full whitespace-nowrap">
-                      {{ sub.failures }} Estudiantes
-                    </span>
-                  </div>
-                </div>
-                <div v-if="dashboardData.lowPerformance.criticalSubjects.length === 0" class="flex flex-col items-center justify-center h-full opacity-30 italic">
-                  Sin datos de reprobación
-                </div>
-              </div>
-            </div>
-
-            <!-- Grade Alerts -->
-            <div class="bg-white/5 backdrop-blur-xl border border-white/10 p-8 rounded-[2rem] flex flex-col h-[450px]">
-              <div class="flex flex-col mb-6">
-                <h3 class="text-lg font-bold flex items-center gap-2 text-amber-400">
-                  <Target :size="20" />
-                  {{ globalSelectedGrade === 'ALL' ? 'Alertas por Grado' : 'Alertas por Curso' }}
-                </h3>
-                <p class="text-[10px] text-slate-400 mt-1 uppercase font-black tracking-tighter">Estudiantes que reprueban una o más materias</p>
-              </div>
-              <div class="space-y-4 overflow-y-auto pr-2 custom-scrollbar flex-1">
-                <div 
-                  v-for="(item, idx) in filteredAlertsData" 
-                  :key="idx"
-                  @click="handleAlertClick(item)"
-                  :class="[
-                    'flex flex-col gap-2 p-5 bg-white/5 rounded-2xl border border-white/5 transition-all cursor-pointer',
-                    globalSelectedGrade === 'ALL' 
-                      ? 'hover:border-indigo-500/50 hover:bg-white/10 hover:-translate-y-0.5' 
-                      : 'hover:border-amber-500/50 hover:bg-white/10 hover:-translate-y-0.5'
-                  ]"
-                >
-                  <div class="flex justify-between items-center mb-1">
-                    <span class="font-bold text-sm text-slate-200">{{ item.name }}</span>
-                    <span class="text-xs font-black text-amber-400">{{ item.alerts }} Estudiantes</span>
-                  </div>
-                  <div class="w-full h-3 bg-white/5 rounded-full overflow-hidden shadow-inner p-[2px]">
-                    <div 
-                      class="h-full bg-gradient-to-r from-amber-600 to-amber-400 rounded-full transition-all duration-1000" 
-                      :style="{ width: `${Math.min(100, (item.alerts / (dashboardData.summary.totalStudents || 1)) * 100 * 5)}%` }"
-                    ></div>
-                  </div>
-                </div>
-                <div v-if="filteredAlertsData.length === 0" class="flex flex-col items-center justify-center h-full opacity-30 italic">
-                  Sin alertas registradas
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <!-- Decorative BG -->
-      <div class="absolute -right-20 -top-20 h-80 w-80 bg-rose-500/10 rounded-full blur-[100px]"></div>
-      <div class="absolute -left-20 -bottom-20 h-80 w-80 bg-indigo-500/10 rounded-full blur-[100px]"></div>
-    </div>
-
-    <!-- Modal for Students at Risk details -->
-    <div v-if="selectedAlertCourse" class="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <!-- Backdrop -->
-      <div class="absolute inset-0 bg-slate-950/80 backdrop-blur-md" @click="selectedAlertCourse = null"></div>
-      
-      <!-- Modal Content -->
-      <div class="relative bg-slate-900 border border-white/10 rounded-[2.5rem] w-full max-w-2xl overflow-hidden shadow-2xl p-8 max-h-[80vh] flex flex-col animate-in zoom-in-95 duration-200">
-        <div class="flex items-center justify-between mb-6">
-          <div>
-            <h3 class="text-xl font-bold text-white flex items-center gap-2">
-              <AlertTriangle class="text-rose-500" :size="24" />
-              Estudiantes en Riesgo - {{ selectedAlertCourse.name }}
-            </h3>
-            <p class="text-xs text-slate-400 mt-1 font-medium">
-              Estudiantes reprobando 1 o más materias en este curso.
+            <p class="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest">{{ stat.name }}</p>
+            <p class="text-3xl font-black text-gray-900 dark:text-white mt-0.5 tracking-tight">
+              {{ stat.value }}
             </p>
           </div>
-          <button 
-            @click="selectedAlertCourse = null" 
-            class="bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 p-3 rounded-2xl transition-all text-slate-400 hover:text-white"
-          >
-            <X :size="18" />
-          </button>
         </div>
+      </div>
+
+      <!-- Charts Section -->
+      <div class="grid grid-cols-1 gap-8">
         
-        <!-- Search Bar -->
-        <div class="relative mb-6">
-          <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500">
-            <Search :size="16" />
+        <!-- Performance by Grade -->
+        <div class="bg-white dark:bg-slate-900 rounded-[2rem] border border-gray-100 dark:border-slate-800 p-8 shadow-sm flex flex-col min-h-[450px] transition-colors">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+            <h3 class="text-lg font-black text-gray-800 dark:text-white flex items-center gap-2">
+              <TrendingUp :size="20" class="text-indigo-600" />
+              {{ globalSelectedGrade === 'ALL' ? 'Rendimiento por Grado' : 'Rendimiento por Curso' }}
+            </h3>
           </div>
-          <input
-            v-model="modalSearchQuery"
-            type="text"
-            placeholder="Buscar estudiante por nombre..."
-            class="w-full bg-white/5 border border-white/10 rounded-2xl py-3.5 pl-11 pr-4 text-sm font-bold text-white placeholder-slate-500 outline-none focus:ring-2 focus:ring-rose-500/50 focus:border-rose-500 transition-all"
-          />
+          <div class="flex-1 w-full">
+            <Bar v-if="!loading" :data="gradeChartData" :options="horizontalOptions as any" />
+          </div>
         </div>
-        
-        <!-- Student List -->
-        <div class="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-4">
-          <div 
-            v-for="student in studentsAtRiskForSelectedAlertCourse" 
-            :key="student.id_estudiante"
-            class="flex items-center justify-between p-5 bg-white/5 rounded-2xl border border-white/5 hover:bg-white/10 transition-all"
-          >
-            <div class="flex items-center gap-4 min-w-0">
-              <div class="h-10 w-10 shrink-0 flex items-center justify-center rounded-xl bg-rose-500/15 text-rose-400 font-black text-sm">
-                {{ student.nombre_completo.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() }}
-              </div>
-              <div class="flex flex-col min-w-0">
-                <span class="font-bold truncate text-sm text-slate-200">{{ student.nombre_completo }}</span>
-                <span class="text-xs text-slate-400 mt-0.5">Promedio General: <span class="font-bold text-slate-300">{{ student.promedio_general }}</span></span>
-                <!-- Detalles de materias reprobadas -->
-                <div v-if="student.detalles_materias && student.detalles_materias.length > 0" class="flex flex-wrap gap-1.5 mt-2">
-                  <span 
-                    v-for="(sub, sIdx) in student.detalles_materias" 
-                    :key="sIdx"
-                    class="text-[10px] font-bold bg-rose-500/10 border border-rose-500/25 text-rose-300 px-2 py-0.5 rounded-lg"
-                  >
-                    {{ sub.materia_nombre }}: <span class="text-rose-400 font-extrabold">{{ sub.promedio }}</span>
+
+        <!-- Performance by Subject -->
+        <div class="bg-white dark:bg-slate-900 rounded-[2rem] border border-gray-100 dark:border-slate-800 p-8 shadow-sm flex flex-col min-h-[500px] transition-colors">
+          <div class="flex flex-col mb-6">
+            <h3 class="text-lg font-black text-gray-800 dark:text-white flex items-center gap-2">
+              <BookOpen :size="20" class="text-emerald-500" />
+              Rendimiento por Materia {{ globalSelectedGrade === 'ALL' ? '(Top 10 Institucional)' : 'por Curso' }}
+            </h3>
+            
+            <!-- Course Selector Blocks (Only visible when a grade is selected) -->
+            <div v-if="globalSelectedGrade !== 'ALL' && availableCoursesForSelectedGrade.length > 0" class="mt-4 flex flex-wrap gap-3">
+              <button
+                v-for="course in availableCoursesForSelectedGrade"
+                :key="course.id_grupo"
+                @click="selectedCourseForSubjects = course.id_grupo"
+                :class="[
+                  'px-4 py-2 rounded-xl text-sm font-bold transition-all border',
+                  selectedCourseForSubjects === course.id_grupo 
+                    ? 'bg-emerald-500 text-white border-emerald-500 shadow-md shadow-emerald-500/20 scale-105' 
+                    : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-emerald-400 hover:text-emerald-500'
+                ]"
+              >
+                {{ getCourseDisplayName(course) }} - {{ course.jornada_nombre }}
+              </button>
+            </div>
+            <div v-else-if="globalSelectedGrade !== 'ALL' && availableCoursesForSelectedGrade.length === 0" class="mt-4 text-sm text-slate-500 italic">
+              No hay cursos disponibles para este grado.
+            </div>
+          </div>
+          
+          <div class="flex-1 w-full relative">
+            <div v-if="globalSelectedGrade !== 'ALL' && !selectedCourseForSubjects && availableCoursesForSelectedGrade.length > 0" class="absolute inset-0 flex items-center justify-center bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm z-10 rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
+              <p class="text-slate-500 font-medium">Selecciona un curso arriba para ver su rendimiento.</p>
+            </div>
+            <Bar v-if="!loading" :data="subjectChartData" :options="horizontalOptions as any" />
+          </div>
+        </div>
+
+        <!-- Performance Evolution -->
+        <div class="bg-white dark:bg-slate-900 rounded-[2rem] border border-gray-100 dark:border-slate-800 p-8 shadow-sm flex flex-col min-h-[400px] transition-colors">
+          <div class="flex flex-col mb-6">
+            <h3 class="text-lg font-black text-gray-800 dark:text-white flex items-center gap-2">
+              <Target :size="20" class="text-amber-500" />
+              Evolución del Promedio {{ globalSelectedGrade === 'ALL' ? 'Institucional' : 'por Curso' }}
+            </h3>
+            
+            <!-- Course Selector Blocks for Evolution (Only visible when a grade is selected) -->
+            <div v-if="globalSelectedGrade !== 'ALL' && availableCoursesForSelectedGrade.length > 0" class="mt-4 flex flex-wrap gap-3">
+              <button
+                v-for="course in availableCoursesForSelectedGrade"
+                :key="course.id_grupo"
+                @click="selectedCourseForEvolution = course.id_grupo"
+                :class="[
+                  'px-4 py-2 rounded-xl text-sm font-bold transition-all border',
+                  selectedCourseForEvolution === course.id_grupo 
+                    ? 'bg-amber-500 text-white border-amber-500 shadow-md shadow-amber-500/20 scale-105' 
+                    : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-amber-400 hover:text-amber-500'
+                ]"
+              >
+                {{ getCourseDisplayName(course) }} - {{ course.jornada_nombre }}
+              </button>
+            </div>
+            <div v-else-if="globalSelectedGrade !== 'ALL' && availableCoursesForSelectedGrade.length === 0" class="mt-4 text-sm text-slate-500 italic">
+              No hay cursos disponibles para este grado.
+            </div>
+          </div>
+          
+          <div class="flex-1 w-full relative">
+            <div v-if="globalSelectedGrade !== 'ALL' && !selectedCourseForEvolution && availableCoursesForSelectedGrade.length > 0" class="absolute inset-0 flex items-center justify-center bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm z-10 rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
+              <p class="text-slate-500 font-medium">Selecciona un curso arriba para ver su evolución.</p>
+            </div>
+            <Line v-if="!loading" :data="evolutionChartData" :options="chartOptionsBase as any" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Low Performance Analysis Section -->
+      <div class="bg-slate-900 rounded-[3rem] p-10 text-white shadow-2xl relative overflow-hidden">
+        <div class="relative z-10">
+          <div class="flex items-center gap-4 mb-10">
+            <div class="bg-rose-500 p-4 rounded-3xl shadow-lg shadow-rose-500/20">
+              <AlertTriangle :size="32" class="text-white" />
+            </div>
+            <div>
+              <h2 class="text-3xl font-black tracking-tight">Análisis de Desempeño Crítico</h2>
+              <p class="text-slate-400 font-medium">Detectando focos de riesgo académico para intervención temprana.</p>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 gap-12">
+            <!-- Risk by Course (STACKED HORIZONTAL) -->
+            <div class="bg-white/5 backdrop-blur-xl border border-white/10 p-8 rounded-[3rem] flex flex-col h-[550px]">
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+                <div class="flex flex-col sm:flex-row sm:items-center gap-4">
+                  <h3 class="text-xl font-bold flex items-center gap-2 text-indigo-400">
+                    <LayoutDashboard :size="20" />
+                    {{ globalSelectedGrade === 'ALL' ? 'Riesgo de Reprobación por Grado' : 'Riesgo de Reprobación por Curso' }}
+                  </h3>
+                </div>
+                <div class="flex gap-6 text-[10px] font-black uppercase tracking-widest bg-white/5 px-6 py-3 rounded-2xl border border-white/10 shrink-0">
+                  <span class="flex items-center gap-2 text-rose-400">
+                    <div class="h-2.5 w-2.5 rounded-full bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.5)]"></div> En Riesgo
+                  </span>
+                  <span class="flex items-center gap-2 text-emerald-400">
+                    <div class="h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]"></div> A Salvo
                   </span>
                 </div>
               </div>
-            </div>
-            <div class="flex items-center gap-3 shrink-0">
-              <span class="text-xs font-black bg-rose-500/20 text-rose-400 px-3 py-1.5 rounded-full whitespace-nowrap">
-                {{ student.materias_reprobadas }} {{ student.materias_reprobadas === 1 ? 'materia reprobada' : 'materias reprobadas' }}
-              </span>
-            </div>
-          </div>
-          <div v-if="studentsAtRiskForSelectedAlertCourse.length === 0" class="flex flex-col items-center justify-center py-12 text-slate-500 italic">
-            No se encontraron estudiantes en riesgo en este curso.
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Modal for Critical Subject Students details -->
-    <div v-if="selectedCriticalSubject" class="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <!-- Backdrop -->
-      <div class="absolute inset-0 bg-slate-950/80 backdrop-blur-md" @click="selectedCriticalSubject = null"></div>
-      
-      <!-- Modal Content -->
-      <div class="relative bg-slate-900 border border-white/10 rounded-[2.5rem] w-full max-w-2xl overflow-hidden shadow-2xl p-8 max-h-[80vh] flex flex-col animate-in zoom-in-95 duration-200">
-        <div class="flex items-center justify-between mb-6">
-          <div>
-            <h3 class="text-xl font-bold text-white flex items-center gap-2">
-              <BookOpen class="text-rose-500" :size="24" />
-              Estudiantes Reprobando - {{ selectedCriticalSubject.nombre }}
-            </h3>
-            <p class="text-xs text-slate-400 mt-1 font-medium">
-              Listado de estudiantes con promedio inferior a 3.0 en esta materia.
-            </p>
-          </div>
-          <button 
-            @click="selectedCriticalSubject = null" 
-            class="bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 p-3 rounded-2xl transition-all text-slate-400 hover:text-white"
-          >
-            <X :size="18" />
-          </button>
-        </div>
-        
-        <!-- Search Bar -->
-        <div class="relative mb-6">
-          <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500">
-            <Search :size="16" />
-          </div>
-          <input
-            v-model="modalSearchQuery"
-            type="text"
-            placeholder="Buscar estudiante por nombre..."
-            class="w-full bg-white/5 border border-white/10 rounded-2xl py-3.5 pl-11 pr-4 text-sm font-bold text-white placeholder-slate-500 outline-none focus:ring-2 focus:ring-rose-500/50 focus:border-rose-500 transition-all"
-          />
-        </div>
-        
-        <!-- Student List -->
-        <div class="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-4">
-          <div 
-            v-for="student in filteredCriticalSubjectStudents" 
-            :key="student.id_estudiante"
-            class="flex items-center justify-between p-5 bg-white/5 rounded-2xl border border-white/5 hover:bg-white/10 transition-all"
-          >
-            <div class="flex items-center gap-4 min-w-0">
-              <div class="h-10 w-10 shrink-0 flex items-center justify-center rounded-xl bg-rose-500/15 text-rose-400 font-black text-sm">
-                {{ getInitials(student.nombre_completo) }}
-              </div>
-              <div class="flex flex-col min-w-0">
-                <span class="font-bold truncate text-sm text-slate-200">{{ student.nombre_completo }}</span>
-                <span class="text-xs text-slate-400 mt-0.5">Curso: <span class="font-bold text-slate-300">{{ student.curso }}</span></span>
+              <div class="flex-1 w-full">
+                <Bar v-if="!loading" :data="riskChartData" :options="riskChartOptions as any" />
               </div>
             </div>
-            <div class="flex items-center gap-3 shrink-0">
-              <span class="text-xs font-black bg-rose-500/20 text-rose-400 px-3 py-1.5 rounded-full whitespace-nowrap">
-                Nota: {{ student.promedio }}
-              </span>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-10">
+              <!-- Critical Subjects List -->
+              <div class="bg-white/5 backdrop-blur-xl border border-white/10 p-8 rounded-[2rem] flex flex-col h-[450px]">
+                <div class="flex flex-col mb-6">
+                  <h3 class="text-lg font-bold flex items-center gap-2 text-rose-400">
+                    <BookOpen :size="20" />
+                    Materias Críticas
+                  </h3>
+                  <p class="text-[10px] text-slate-400 mt-1 uppercase font-black tracking-tighter">Materias con mayor índice de reprobación</p>
+                </div>
+                <div class="space-y-4 overflow-y-auto pr-2 custom-scrollbar flex-1">
+                  <div 
+                    v-for="(sub, idx) in dashboardData.lowPerformance.criticalSubjects" 
+                    :key="idx"
+                    @click="handleCriticalSubjectClick(sub)"
+                    class="flex items-center justify-between p-5 bg-white/5 rounded-2xl border border-white/5 hover:border-rose-500/30 hover:shadow-lg hover:shadow-rose-500/5 hover:-translate-y-0.5 transition-all group cursor-pointer"
+                  >
+                    <div class="flex items-center gap-4 min-w-0">
+                      <div class="h-10 w-10 shrink-0 flex items-center justify-center rounded-xl bg-rose-500/20 text-rose-400 font-black text-xs group-hover:scale-110 transition-transform">
+                        #{{ idx + 1 }}
+                      </div>
+                      <span class="font-bold truncate text-sm text-slate-200">{{ sub.nombre }}</span>
+                    </div>
+                    <div class="flex flex-col items-end">
+                      <span class="text-xs font-black bg-rose-500/20 text-rose-400 px-3 py-1 rounded-full whitespace-nowrap">
+                        {{ sub.failures }} Estudiantes
+                      </span>
+                    </div>
+                  </div>
+                  <div v-if="dashboardData.lowPerformance.criticalSubjects.length === 0" class="flex flex-col items-center justify-center h-full opacity-30 italic">
+                    Sin datos de reprobación
+                  </div>
+                </div>
+              </div>
+
+              <!-- Grade Alerts -->
+              <div class="bg-white/5 backdrop-blur-xl border border-white/10 p-8 rounded-[2rem] flex flex-col h-[450px]">
+                <div class="flex flex-col mb-6">
+                  <h3 class="text-lg font-bold flex items-center gap-2 text-amber-400">
+                    <Target :size="20" />
+                    {{ globalSelectedGrade === 'ALL' ? 'Alertas por Grado' : 'Alertas por Curso' }}
+                  </h3>
+                  <p class="text-[10px] text-slate-400 mt-1 uppercase font-black tracking-tighter">Estudiantes que reprueban una o más materias</p>
+                </div>
+                <div class="space-y-4 overflow-y-auto pr-2 custom-scrollbar flex-1">
+                  <div 
+                    v-for="(item, idx) in filteredAlertsData" 
+                    :key="idx"
+                    @click="handleAlertClick(item)"
+                    :class="[
+                      'flex flex-col gap-2 p-5 bg-white/5 rounded-2xl border border-white/5 transition-all cursor-pointer',
+                      globalSelectedGrade === 'ALL' 
+                        ? 'hover:border-indigo-500/50 hover:bg-white/10 hover:-translate-y-0.5' 
+                        : 'hover:border-amber-500/50 hover:bg-white/10 hover:-translate-y-0.5'
+                    ]"
+                  >
+                    <div class="flex justify-between items-center mb-1">
+                      <span class="font-bold text-sm text-slate-200">{{ item.name }}</span>
+                      <span class="text-xs font-black text-amber-400">{{ item.alerts }} Estudiantes</span>
+                    </div>
+                    <div class="w-full h-3 bg-white/5 rounded-full overflow-hidden shadow-inner p-[2px]">
+                      <div 
+                        class="h-full bg-gradient-to-r from-amber-600 to-amber-400 rounded-full transition-all duration-1000" 
+                        :style="{ width: `${Math.min(100, (item.alerts / (dashboardData.summary.totalStudents || 1)) * 100 * 5)}%` }"
+                      ></div>
+                    </div>
+                  </div>
+                  <div v-if="filteredAlertsData.length === 0" class="flex flex-col items-center justify-center h-full opacity-30 italic">
+                    Sin alertas registradas
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
-          <div v-if="filteredCriticalSubjectStudents.length === 0" class="flex flex-col items-center justify-center py-12 text-slate-500 italic">
-            No se encontraron estudiantes reprobando esta materia.
+        </div>
+        <!-- Decorative BG -->
+        <div class="absolute -right-20 -top-20 h-80 w-80 bg-rose-500/10 rounded-full blur-[100px]"></div>
+        <div class="absolute -left-20 -bottom-20 h-80 w-80 bg-indigo-500/10 rounded-full blur-[100px]"></div>
+      </div>
+
+      <!-- Modal for Students at Risk details -->
+      <div v-if="selectedAlertCourse" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <!-- Backdrop -->
+        <div class="absolute inset-0 bg-slate-950/80 backdrop-blur-md" @click="selectedAlertCourse = null"></div>
+        
+        <!-- Modal Content -->
+        <div class="relative bg-slate-900 border border-white/10 rounded-[2.5rem] w-full max-w-2xl overflow-hidden shadow-2xl p-8 max-h-[80vh] flex flex-col animate-in zoom-in-95 duration-200">
+          <div class="flex items-center justify-between mb-6">
+            <div>
+              <h3 class="text-xl font-bold text-white flex items-center gap-2">
+                <AlertTriangle class="text-rose-500" :size="24" />
+                Estudiantes en Riesgo - {{ selectedAlertCourse.name }}
+              </h3>
+              <p class="text-xs text-slate-400 mt-1 font-medium">
+                Estudiantes reprobando 1 o más materias en este curso.
+              </p>
+            </div>
+            <button 
+              @click="selectedAlertCourse = null" 
+              class="bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 p-3 rounded-2xl transition-all text-slate-400 hover:text-white"
+            >
+              <X :size="18" />
+            </button>
+          </div>
+          
+          <!-- Search Bar -->
+          <div class="relative mb-6">
+            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500">
+              <Search :size="16" />
+            </div>
+            <input
+              v-model="modalSearchQuery"
+              type="text"
+              placeholder="Buscar estudiante por nombre..."
+              class="w-full bg-white/5 border border-white/10 rounded-2xl py-3.5 pl-11 pr-4 text-sm font-bold text-white placeholder-slate-500 outline-none focus:ring-2 focus:ring-rose-500/50 focus:border-rose-500 transition-all"
+            />
+          </div>
+          
+          <!-- Student List -->
+          <div class="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-4">
+            <div 
+              v-for="student in studentsAtRiskForSelectedAlertCourse" 
+              :key="student.id_estudiante"
+              class="flex items-center justify-between p-5 bg-white/5 rounded-2xl border border-white/5 hover:bg-white/10 transition-all"
+            >
+              <div class="flex items-center gap-4 min-w-0">
+                <div class="h-10 w-10 shrink-0 flex items-center justify-center rounded-xl bg-rose-500/15 text-rose-400 font-black text-sm">
+                  {{ student.nombre_completo.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() }}
+                </div>
+                <div class="flex flex-col min-w-0">
+                  <span class="font-bold truncate text-sm text-slate-200">{{ student.nombre_completo }}</span>
+                  <span class="text-xs text-slate-400 mt-0.5">Promedio General: <span class="font-bold text-slate-300">{{ student.promedio_general }}</span></span>
+                  <!-- Detalles de materias reprobadas -->
+                  <div v-if="student.detalles_materias && student.detalles_materias.length > 0" class="flex flex-wrap gap-1.5 mt-2">
+                    <span 
+                      v-for="(sub, sIdx) in student.detalles_materias" 
+                      :key="sIdx"
+                      class="text-[10px] font-bold bg-rose-500/10 border border-rose-500/25 text-rose-300 px-2 py-0.5 rounded-lg"
+                    >
+                      {{ sub.materia_nombre }}: <span class="text-rose-400 font-extrabold">{{ sub.promedio }}</span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div class="flex items-center gap-3 shrink-0">
+                <span class="text-xs font-black bg-rose-500/20 text-rose-400 px-3 py-1.5 rounded-full whitespace-nowrap">
+                  {{ student.materias_reprobadas }} {{ student.materias_reprobadas === 1 ? 'materia reprobada' : 'materias reprobadas' }}
+                </span>
+              </div>
+            </div>
+            <div v-if="studentsAtRiskForSelectedAlertCourse.length === 0" class="flex flex-col items-center justify-center py-12 text-slate-500 italic">
+              No se encontraron estudiantes en riesgo en este curso.
+            </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- Average Institutional and Other Indicators -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-      <div class="bg-white dark:bg-slate-900 p-8 rounded-[2rem] border border-gray-100 dark:border-slate-800 shadow-sm flex flex-col items-center text-center transition-colors">
-        <div class="bg-orange-50 dark:bg-orange-950/50 text-orange-600 dark:text-orange-400 p-4 rounded-full mb-4">
-          <AlertTriangle :size="28" />
+      <!-- Modal for Critical Subject Students details -->
+      <div v-if="selectedCriticalSubject" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <!-- Backdrop -->
+        <div class="absolute inset-0 bg-slate-950/80 backdrop-blur-md" @click="selectedCriticalSubject = null"></div>
+        
+        <!-- Modal Content -->
+        <div class="relative bg-slate-900 border border-white/10 rounded-[2.5rem] w-full max-w-2xl overflow-hidden shadow-2xl p-8 max-h-[80vh] flex flex-col animate-in zoom-in-95 duration-200">
+          <div class="flex items-center justify-between mb-6">
+            <div>
+              <h3 class="text-xl font-bold text-white flex items-center gap-2">
+                <BookOpen class="text-rose-500" :size="24" />
+                Estudiantes Reprobando - {{ selectedCriticalSubject.nombre }}
+              </h3>
+              <p class="text-xs text-slate-400 mt-1 font-medium">
+                Listado de estudiantes con promedio inferior a 3.0 en esta materia.
+              </p>
+            </div>
+            <button 
+              @click="selectedCriticalSubject = null" 
+              class="bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 p-3 rounded-2xl transition-all text-slate-400 hover:text-white"
+            >
+              <X :size="18" />
+            </button>
+          </div>
+          
+          <!-- Search Bar -->
+          <div class="relative mb-6">
+            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500">
+              <Search :size="16" />
+            </div>
+            <input
+              v-model="modalSearchQuery"
+              type="text"
+              placeholder="Buscar estudiante por nombre..."
+              class="w-full bg-white/5 border border-white/10 rounded-2xl py-3.5 pl-11 pr-4 text-sm font-bold text-white placeholder-slate-500 outline-none focus:ring-2 focus:ring-rose-500/50 focus:border-rose-500 transition-all"
+            />
+          </div>
+          
+          <!-- Student List -->
+          <div class="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-4">
+            <div 
+              v-for="student in filteredCriticalSubjectStudents" 
+              :key="student.id_estudiante"
+              class="flex items-center justify-between p-5 bg-white/5 rounded-2xl border border-white/5 hover:bg-white/10 transition-all"
+            >
+              <div class="flex items-center gap-4 min-w-0">
+                <div class="h-10 w-10 shrink-0 flex items-center justify-center rounded-xl bg-rose-500/15 text-rose-400 font-black text-sm">
+                  {{ getInitials(student.nombre_completo) }}
+                </div>
+                <div class="flex flex-col min-w-0">
+                  <span class="font-bold truncate text-sm text-slate-200">{{ student.nombre_completo }}</span>
+                  <span class="text-xs text-slate-400 mt-0.5">Curso: <span class="font-bold text-slate-300">{{ student.curso }}</span></span>
+                </div>
+              </div>
+              <div class="flex items-center gap-3 shrink-0">
+                <span class="text-xs font-black bg-rose-500/20 text-rose-400 px-3 py-1.5 rounded-full whitespace-nowrap">
+                  Nota: {{ student.promedio }}
+                </span>
+              </div>
+            </div>
+            <div v-if="filteredCriticalSubjectStudents.length === 0" class="flex flex-col items-center justify-center py-12 text-slate-500 italic">
+              No se encontraron estudiantes reprobando esta materia.
+            </div>
+          </div>
         </div>
-        <p class="text-xs font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest">Deserción Académica</p>
-        <p class="text-3xl font-black text-gray-900 dark:text-white mt-1">{{ activeSummary.desertionRate }} Estudiantes</p>
-        <p class="text-[10px] text-gray-400 dark:text-slate-500 mt-2 italic">Estudiantes retirados o con matrícula cancelada</p>
       </div>
-
-      <div class="bg-white dark:bg-slate-900 p-8 rounded-[2rem] border border-gray-100 dark:border-slate-800 shadow-sm flex flex-col items-center text-center transition-colors">
-        <div class="bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 p-4 rounded-full mb-4">
-          <ShieldAlert :size="28" />
-        </div>
-        <p class="text-xs font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest">Reportes Disciplinarios</p>
-        <p class="text-3xl font-black text-gray-900 dark:text-white mt-1">{{ activeSummary.disciplinaryReports }}</p>
-        <p class="text-[10px] text-gray-400 dark:text-slate-500 mt-2 italic">Total de seguimientos de tipo disciplinario</p>
-      </div>
-
-      <div class="bg-white dark:bg-slate-900 p-8 rounded-[2rem] border border-gray-100 dark:border-slate-800 shadow-sm flex flex-col items-center text-center transition-colors">
-        <div class="bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 p-4 rounded-full mb-4">
-          <Users :size="28" />
-        </div>
-        <p class="text-xs font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest">
-          {{ globalSelectedGrade === 'ALL' ? 'Promedio Institucional' : 'Promedio del Grado' }}
-        </p>
-        <p class="text-3xl font-black text-gray-900 dark:text-white mt-1">{{ activeSummary.generalAverage }}</p>
-        <p class="text-[10px] text-gray-400 dark:text-slate-500 mt-2 italic">Media general en escala de 0 a 5.0</p>
-      </div>
-    </div>
+    </template>
   </div>
 </template>
 

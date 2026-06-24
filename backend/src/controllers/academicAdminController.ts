@@ -3173,7 +3173,7 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
       pool.query("SELECT COUNT(*) as total FROM docente WHERE id_colegio = $1 AND estado = 'ACTIVO'", [schoolId]),
       pool.query(
         `SELECT COUNT(*) as total FROM observacion_estudiante 
-         WHERE id_colegio = $1 AND tipo = 'DISCIPLINARIO' ${targetPeriodId ? "AND id_periodo = $2" : ""}`,
+         WHERE id_colegio = $1 AND tipo = 'DISCIPLINARIA' ${targetPeriodId ? "AND id_periodo = $2" : ""}`,
         targetPeriodId ? [schoolId, targetPeriodId] : [schoolId]
       ),
       pool.query(
@@ -3205,7 +3205,7 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
          JOIN matricula m ON e.id_estudiante = m.id_estudiante AND m."id_año" = $2
          JOIN grupos g ON m.id_grupo = g.id_grupo
          JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
-         WHERE o.id_colegio = $1 AND m.estado = 'ACTIVA' ${targetPeriodId ? "AND o.id_periodo = $3" : ""}
+         WHERE o.id_colegio = $1 AND o.tipo = 'DISCIPLINARIA' AND m.estado = 'ACTIVA' ${targetPeriodId ? "AND o.id_periodo = $3" : ""}
          GROUP BY tg.nombre`,
         targetPeriodId ? [schoolId, targetYearId, targetPeriodId] : [schoolId, targetYearId]
       ),

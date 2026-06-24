@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { useAuthStore } from '../../stores/auth'
 import { 
@@ -8,7 +7,6 @@ import {
 } from 'lucide-vue-next'
 
 const auth = useAuthStore()
-const router = useRouter()
 
 interface SupervisionActiva {
   id_auditoria: number
@@ -72,7 +70,7 @@ const handleAutoExit = async (id: number) => {
     console.error('Error auto-exiting supervision:', e)
   }
   auth.stopSupervision()
-  router.push('/dashboard')
+  window.location.href = '/dashboard'
 }
 
 const handleExit = async (sup: SupervisionActiva) => {
@@ -85,10 +83,10 @@ const handleExit = async (sup: SupervisionActiva) => {
     // Stop local Pinia supervision context if this is the supervision we were in
     if (auth.supervision?.id_auditoria === sup.id_auditoria) {
       auth.stopSupervision()
+      window.location.href = '/dashboard'
+    } else {
+      await fetchActiveSupervisions()
     }
-    
-    await fetchActiveSupervisions()
-    router.push('/dashboard')
   } catch (error: any) {
     alert(error.response?.data?.error || 'Error al salir de la supervisión')
   }

@@ -17,7 +17,7 @@ const app = express();
 // Rate Limiters
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
-  max: 200,
+  max: 1000,
   message: { error: "Demasiadas peticiones. Intenta de nuevo en 15 minutos." }
 });
 
