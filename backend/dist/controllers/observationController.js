@@ -71,6 +71,7 @@ const checkDateInPeriod = async (periodId, dateInput) => {
 const getObservations = async (req, res) => {
     const detailGradeId = Number(req.params.detailGradeId);
     const periodId = Number(req.params.periodId);
+    console.log(`[DEV] getObservations called - detailGradeId=${detailGradeId}, periodId=${periodId}`);
     try {
         // Get school id from teaching assignment
         const dgRes = await db_1.pool.query(`SELECT id_colegio, id_grupo FROM detalle_grados WHERE id_detallegrado = $1`, [detailGradeId]);
@@ -122,6 +123,7 @@ const getObservations = async (req, res) => {
                 tipo: clientTipo,
             };
         });
+        console.log(`[DEV] getObservations - editable=${editCheck.editable}, observations=${observations.length}, error=${editCheck.error || 'none'}`);
         res.json({
             editable: editCheck.editable,
             error: editCheck.error,
@@ -129,7 +131,7 @@ const getObservations = async (req, res) => {
         });
     }
     catch (error) {
-        console.error("Error fetching observations:", error);
+        console.error(`[DEV] getObservations ERROR - detailGradeId=${detailGradeId}, periodId=${periodId}:`, error.message, error.detail || '');
         res.status(500).json({ error: "Error en el servidor" });
     }
 };
@@ -137,6 +139,7 @@ exports.getObservations = getObservations;
 // POST /api/teacher/observations
 const createObservation = async (req, res) => {
     const { detailGradeId, periodId, studentId, fortalezas, debilidades, recomendaciones, fecha, tipo } = req.body;
+    console.log(`[DEV] createObservation called - detailGradeId=${detailGradeId}, periodId=${periodId}, studentId=${studentId}, tipo=${tipo}`);
     if (!detailGradeId || !periodId || !studentId) {
         res.status(400).json({ error: "Parámetros obligatorios faltantes (grado, periodo, estudiante)." });
         return;

@@ -894,6 +894,7 @@ exports.revocarSupervision = revocarSupervision;
  * Verificar el estado de la supervisión activa para el Administrador General.
  */
 const verificarSupervisionActiva = async (req, res) => {
+    console.log('[Backend verificarSupervisionActiva] Verifying active supervision for user ID:', req.user.id);
     try {
         const supervisionRes = await db_1.pool.query(`SELECT a.*, c.nombre AS colegio_nombre,
               u.nombre AS directivo_revocador_nombre, u.apellido AS directivo_revocador_apellido
@@ -903,20 +904,24 @@ const verificarSupervisionActiva = async (req, res) => {
        LEFT JOIN usuario u ON u.id_usuario = d.id_usuario
        WHERE a.id_admin_general = $1 AND a.eliminado = FALSE
        ORDER BY a.fecha_solicitud DESC LIMIT 1`, [req.user.id]);
+        console.log('[Backend verificarSupervisionActiva] Found rows:', supervisionRes.rows.length);
         if (supervisionRes.rows.length === 0) {
+            console.log('[Backend verificarSupervisionActiva] No row found. Returning activa: false');
             res.json({ activa: false });
             return;
         }
         const sup = supervisionRes.rows[0];
-        res.json({
+        const payload = {
             activa: sup.estado_supervision === 'ACTIVA',
             estado: sup.estado_supervision,
             motivo_revocacion: sup.motivo_revocacion || null,
             revocador_nombre: sup.revocado_por ? `${sup.directivo_revocador_nombre} ${sup.directivo_revocador_apellido || ''}`.trim() : null
-        });
+        };
+        console.log('[Backend verificarSupervisionActiva] Returning payload:', payload);
+        res.json(payload);
     }
     catch (error) {
-        console.error('Error verificando supervision activa:', error);
+        console.error('[Backend verificarSupervisionActiva] Error verifying active supervision status:', error);
         res.status(500).json({ error: 'Error en el servidor' });
     }
 };

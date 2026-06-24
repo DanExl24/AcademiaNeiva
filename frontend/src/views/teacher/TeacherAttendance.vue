@@ -83,16 +83,13 @@ const searchQuery = ref('')
 const fetchMyCourses = async () => {
   // In monitoring mode, load the observed teacher's courses
   const teacherId = auth.isMonitoring ? auth.monitoringUser?.id : auth.user?.id
-  console.log('[LOG-VISTA][TeacherAttendance] fetchMyCourses started for teacherId:', teacherId, 'isMonitoring:', auth.isMonitoring)
   try {
     const response = await axios.get(`http://localhost:3000/api/teacher/courses/${teacherId}`)
     myCourses.value = response.data
-    console.log('[LOG-VISTA][TeacherAttendance] fetchMyCourses OK. Loaded courses count:', myCourses.value.length, myCourses.value)
     
     if (route.query.gradoId) {
       const gId = Number(route.query.gradoId)
       const sId = route.query.subjectId ? Number(route.query.subjectId) : null
-      console.log('[LOG-VISTA][TeacherAttendance] Query params found - gradoId:', gId, 'subjectId:', sId)
       
       const course = myCourses.value.find(c => c.id_grado === gId)
       if (course) {
@@ -100,30 +97,25 @@ const fetchMyCourses = async () => {
         selectedSection.value = course.seccion
         selectedJornada.value = course.jornada_nombre
         if (sId) selectedSubjectId.value = sId
-        console.log('[LOG-VISTA][TeacherAttendance] Auto-selected course from query:', course)
       }
     }
   } catch (error) {
-    console.error('[LOG-VISTA][TeacherAttendance] Error fetching courses:', error)
   }
 }
 
 // Find id_detallegrado
 const selectedCourse = computed(() => {
-  console.log('[LOG-VISTA][TeacherAttendance] selectedCourse evaluated - selectedGradeName:', selectedGradeName.value, 'selectedSection:', selectedSection.value, 'selectedJornada:', selectedJornada.value, 'selectedSubjectId:', selectedSubjectId.value)
   const course = myCourses.value.find(c => 
     c.grado_nombre === selectedGradeName.value && 
     c.seccion === selectedSection.value && 
     c.jornada_nombre === selectedJornada.value &&
     c.id_materia === selectedSubjectId.value
   )
-  console.log('[LOG-VISTA][TeacherAttendance] selectedCourse result:', course)
   return course
 })
 
 // Load attendance for selected date
 const fetchAttendance = async () => {
-  console.log('[LOG-VISTA][TeacherAttendance] fetchAttendance started - selectedCourse:', selectedCourse.value, 'selectedDate:', selectedDate.value)
   if (!selectedCourse.value) return
   try {
     loading.value = true
@@ -131,9 +123,7 @@ const fetchAttendance = async () => {
     students.value = response.data.students
     isEditable.value = response.data.editable
     lockReason.value = response.data.error || ''
-    console.log('[LOG-VISTA][TeacherAttendance] fetchAttendance OK:', students.value.length, 'students. Response data:', response.data)
   } catch (error: any) {
-    console.error('[LOG-VISTA][TeacherAttendance] fetchAttendance error:', error?.response?.data || error?.message || error)
     students.value = []
     isEditable.value = false
     lockReason.value = 'Error al cargar la asistencia del servidor.'
@@ -144,16 +134,13 @@ const fetchAttendance = async () => {
 
 // Load attendance history
 const fetchHistory = async () => {
-  console.log('[LOG-VISTA][TeacherAttendance] fetchHistory started - selectedCourse:', selectedCourse.value)
   if (!selectedCourse.value) return
   try {
     historyLoading.value = true
     const response = await axios.get(`http://localhost:3000/api/teacher/attendance-history/${selectedCourse.value.id_detallegrado}`)
     historyData.value = response.data.studentsHistory || []
     recordedDates.value = response.data.recordedDates || []
-    console.log('[LOG-VISTA][TeacherAttendance] fetchHistory OK. historyData count:', historyData.value.length, 'recordedDates:', recordedDates.value)
   } catch (error: any) {
-    console.error('[LOG-VISTA][TeacherAttendance] fetchHistory error:', error?.response?.data || error?.message || error)
     historyData.value = []
     recordedDates.value = []
   } finally {
@@ -164,26 +151,22 @@ const fetchHistory = async () => {
 
 // Navigate to specific date
 const viewDate = (date: string) => {
-  console.log('[LOG-VISTA][TeacherAttendance] viewDate called:', date)
   selectedDate.value = date
   activeTab.value = 'today'
 }
 
 // Reset date to today
 const resetToToday = () => {
-  console.log('[LOG-VISTA][TeacherAttendance] resetToToday called')
   selectedDate.value = todayStr.value
   fetchAttendance()
 }
 
 // Watchers
 watch([selectedGradeName, selectedSection, selectedJornada], () => {
-  console.log('[LOG-VISTA][TeacherAttendance] Watch triggered on grade/section/jornada filters - resetting selectedSubjectId to null')
   selectedSubjectId.value = null
 })
 
 watch([selectedCourse, selectedSubjectId], () => {
-  console.log('[LOG-VISTA][TeacherAttendance] Watch triggered on selectedCourse/selectedSubjectId - selectedCourse:', selectedCourse.value, 'selectedSubjectId:', selectedSubjectId.value)
   students.value = []
   historyData.value = []
   recordedDates.value = []
@@ -197,14 +180,12 @@ watch([selectedCourse, selectedSubjectId], () => {
 })
 
 watch(selectedDate, () => {
-  console.log('[LOG-VISTA][TeacherAttendance] Watch triggered on selectedDate - selectedDate:', selectedDate.value)
   if (selectedCourse.value && activeTab.value === 'today') {
     fetchAttendance()
   }
 })
 
 watch(activeTab, (newTab) => {
-  console.log('[LOG-VISTA][TeacherAttendance] Watch triggered on activeTab - activeTab:', newTab)
   if (selectedCourse.value) {
     if (newTab === 'today') {
       fetchAttendance()

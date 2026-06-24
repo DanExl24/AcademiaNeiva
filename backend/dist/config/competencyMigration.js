@@ -1,7 +1,12 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ensureCompetencyForContext = exports.harmonizeCompetenciesForSchoolYear = exports.syncCompetencyAcrossGrade = exports.ensureDefaultEvidencias = exports.DEFAULT_COMPETENCY_TEXT = exports.ensureCompetencySchema = void 0;
 const db_1 = require("./db");
+const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
 const evidenciaMigrationSql = `
 CREATE TABLE IF NOT EXISTS public.evidencia_aprendizaje (
   id_evidencia    SERIAL PRIMARY KEY,
@@ -324,6 +329,12 @@ const ensureCompetencySchema = async () => {
       ADD COLUMN IF NOT EXISTS mes_inicio integer,
       ADD COLUMN IF NOT EXISTS mes_fin integer
     `);
+        // Ejecutar migración del catálogo global de DBA
+        const dbaMigrationPath = path_1.default.join(__dirname, "../migrations/007_dba_catalogo_global.sql");
+        if (fs_1.default.existsSync(dbaMigrationPath)) {
+            const dbaMigrationSql = fs_1.default.readFileSync(dbaMigrationPath, "utf8");
+            await client.query(dbaMigrationSql);
+        }
         await client.query("COMMIT");
     }
     catch (error) {

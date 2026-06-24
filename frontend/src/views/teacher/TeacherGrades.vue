@@ -124,16 +124,13 @@ const newActivity = ref({
 const fetchMyCourses = async () => {
   // In monitoring mode, load the observed teacher's courses
   const teacherId = auth.isMonitoring ? auth.monitoringUser?.id : auth.user?.id
-  console.log('[LOG-VISTA][TeacherGrades] fetchMyCourses started for teacherId:', teacherId, 'isMonitoring:', auth.isMonitoring)
   try {
     const response = await axios.get(`http://localhost:3000/api/teacher/courses/${teacherId}`)
     myCourses.value = response.data
-    console.log('[LOG-VISTA][TeacherGrades] fetchMyCourses OK. Loaded courses:', myCourses.value.length, myCourses.value)
     
     if (route.query.gradoId) {
       const gId = Number(route.query.gradoId)
       const sId = route.query.subjectId ? Number(route.query.subjectId) : null
-      console.log('[LOG-VISTA][TeacherGrades] Query params found - gradoId:', gId, 'subjectId:', sId)
       
       const course = myCourses.value.find(c => c.id_grado === gId)
       if (course) {
@@ -141,37 +138,29 @@ const fetchMyCourses = async () => {
         selectedSection.value = course.seccion
         selectedJornada.value = course.jornada_nombre
         if (sId) selectedSubjectId.value = sId
-        console.log('[LOG-VISTA][TeacherGrades] Auto-selected course from query:', course)
       }
     }
   } catch (error) {
-    console.error('[LOG-VISTA][TeacherGrades] Error fetching courses:', error)
   }
 }
 
 // Cargar periodos
 const fetchPeriods = async () => {
-  console.log('[LOG-VISTA][TeacherGrades] fetchPeriods started for schoolId:', auth.user?.schoolId)
   try {
     const response = await axios.get(`http://localhost:3000/api/teacher/periods/${auth.user?.schoolId}`)
     periods.value = response.data
-    console.log('[LOG-VISTA][TeacherGrades] fetchPeriods OK. Loaded periods:', periods.value)
     const openPeriod = periods.value.find(p => p.estado === 'ABIERTO')
     if (openPeriod) {
       selectedPeriodId.value = openPeriod.id_periodo
-      console.log('[LOG-VISTA][TeacherGrades] Selected active period:', openPeriod.id_periodo, openPeriod.nombre)
     }
   } catch (error) {
-    console.error('[LOG-VISTA][TeacherGrades] Error fetching periods:', error)
   }
 }
 
 const fetchGradeRange = async () => {
   if (!auth.user?.schoolId) return
-  console.log('[LOG-VISTA][TeacherGrades] fetchGradeRange started for schoolId:', auth.user.schoolId)
   try {
     const response = await axios.get(`http://localhost:3000/api/academic-admin/settings/${auth.user.schoolId}`)
-    console.log('[LOG-VISTA][TeacherGrades] fetchGradeRange Response:', response.data)
     if (response.data?.defaultSettings) {
       gradeRange.value = {
         min: Number(response.data.defaultSettings.nota_minima),
@@ -179,15 +168,12 @@ const fetchGradeRange = async () => {
         approval: Number(response.data.defaultSettings.nota_aprobacion),
       }
       scales.value = response.data.scales || []
-      console.log('[LOG-VISTA][TeacherGrades] Grade settings initialized:', gradeRange.value, 'Scales:', scales.value)
     }
   } catch (error) {
-    console.error('[LOG-VISTA][TeacherGrades] Error fetching grade range:', error)
   }
 }
 
 const initializeMatrixForStudents = () => {
-  console.log('[LOG-VISTA][TeacherGrades] initializeMatrixForStudents started. Students count:', students.value.length)
   students.value.forEach(s => {
     if (!gradesMatrix.value[s.id_estudiante]) {
       gradesMatrix.value[s.id_estudiante] = {}
@@ -200,26 +186,22 @@ const initializeMatrixForStudents = () => {
 
 // ID de Grado (Grupo) seleccionado basado en los filtros
 const selectedGradeId = computed(() => {
-  console.log('[LOG-VISTA][TeacherGrades] selectedGradeId evaluated - selectedGradeName:', selectedGradeName.value, 'selectedSection:', selectedSection.value, 'selectedJornada:', selectedJornada.value)
   const course = myCourses.value.find(c => 
     c.grado_nombre === selectedGradeName.value && 
     c.seccion === selectedSection.value && 
     c.jornada_nombre === selectedJornada.value
   )
   const gId = course ? course.id_grado : null
-  console.log('[LOG-VISTA][TeacherGrades] selectedGradeId result:', gId)
   return gId
 })
 
 // Cargar notas actuales
 const fetchGrades = async () => {
-  console.log('[LOG-VISTA][TeacherGrades] fetchGrades started - selectedGradeId:', selectedGradeId.value, 'selectedSubjectId:', selectedSubjectId.value, 'selectedPeriodId:', selectedPeriodId.value)
   if (!selectedGradeId.value || !selectedSubjectId.value || !selectedPeriodId.value) return
   try {
     gradesMatrix.value = {}
     criteriaGradesMatrix.value = {}
     const response = await axios.get(`http://localhost:3000/api/teacher/grades/${selectedGradeId.value}/${selectedSubjectId.value}/${selectedPeriodId.value}`)
-    console.log('[LOG-VISTA][TeacherGrades] fetchGrades response data:', response.data)
     
     response.data.activityGrades.forEach((n: any) => {
       if (!gradesMatrix.value[n.id_estudiante]) gradesMatrix.value[n.id_estudiante] = {}
@@ -234,27 +216,23 @@ const fetchGrades = async () => {
     // Garantizar que todos los estudiantes cargados tengan una fila en la matriz
     initializeMatrixForStudents()
   } catch (error) {
-    console.error('[LOG-VISTA][TeacherGrades] Error fetching grades:', error)
   }
 }
 
 // Cargar actividades
 const fetchActivities = async () => {
-  console.log('[LOG-VISTA][TeacherGrades] fetchActivities started - selectedGradeId:', selectedGradeId.value, 'selectedSubjectId:', selectedSubjectId.value, 'selectedPeriodId:', selectedPeriodId.value)
   if (!selectedGradeId.value || !selectedSubjectId.value || !selectedPeriodId.value) return
   try {
     activitiesLoading.value = true
     const response = await axios.get(`http://localhost:3000/api/teacher/activities/${selectedGradeId.value}/${selectedSubjectId.value}/${selectedPeriodId.value}`, {
       params: { userId: auth.user?.id }
     })
-    console.log('[LOG-VISTA][TeacherGrades] fetchActivities response data:', response.data)
     competency.value = response.data.competencia
     competencyDraft.value = response.data.competencia?.descripcion || ''
     evidencias.value = response.data.evidencias || []
     activities.value = response.data.activities || []
     await fetchGrades()
   } catch (error) {
-    console.error('[LOG-VISTA][TeacherGrades] Error fetching activities:', error)
     competency.value = null
     competencyDraft.value = ''
     evidencias.value = []
@@ -266,15 +244,12 @@ const fetchActivities = async () => {
 
 // Cargar estudiantes
 const fetchStudents = async () => {
-  console.log('[LOG-VISTA][TeacherGrades] fetchStudents started - selectedGradeId:', selectedGradeId.value)
   if (!selectedGradeId.value) return
   try {
     const response = await axios.get(`http://localhost:3000/api/teacher/students/${selectedGradeId.value}`)
     students.value = response.data
-    console.log('[LOG-VISTA][TeacherGrades] fetchStudents OK:', students.value.length, 'for gradeId', selectedGradeId.value, 'Students:', students.value)
     initializeMatrixForStudents()
   } catch (error: any) {
-    console.error('[LOG-VISTA][TeacherGrades] fetchStudents error:', error?.response?.data || error?.message || error)
   }
 }
 
@@ -604,12 +579,10 @@ const subjectsOptions = computed(() => {
 
 // Watchers
 watch([selectedGradeName, selectedSection, selectedJornada], () => {
-  console.log('[LOG-VISTA][TeacherGrades] Watch triggered on grade/section/jornada filters - resetting selectedSubjectId to null')
   selectedSubjectId.value = null
 })
 
 watch([selectedGradeId, selectedSubjectId, selectedPeriodId], () => {
-  console.log('[LOG-VISTA][TeacherGrades] Watch triggered on core IDs - selectedGradeId:', selectedGradeId.value, 'selectedSubjectId:', selectedSubjectId.value, 'selectedPeriodId:', selectedPeriodId.value)
   gradesMatrix.value = {}
   criteriaGradesMatrix.value = {}
   newCriterion.value = {}
@@ -617,7 +590,6 @@ watch([selectedGradeId, selectedSubjectId, selectedPeriodId], () => {
   if (selectedGradeId.value) {
     fetchStudents()
   } else {
-    console.log('[LOG-VISTA][TeacherGrades] selectedGradeId is null, skipping fetchStudents')
   }
 })
 

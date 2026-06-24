@@ -29,7 +29,8 @@ const checkEditability = async (detailGradeId, schoolId) => {
 // GET /api/teacher/attendance/:detailGradeId/:date
 const getAttendanceByDate = async (req, res) => {
     const detailGradeId = Number(req.params.detailGradeId);
-    const dateStr = req.params.date; // format YYYY-MM-DD
+    const dateStr = req.params.date;
+    console.log(`[DEV] getAttendanceByDate called - detailGradeId=${detailGradeId}, date=${dateStr}`);
     try {
         // Get school id from teaching assignment
         const dgRes = await db_1.pool.query(`SELECT id_colegio, id_grupo FROM detalle_grados WHERE id_detallegrado = $1`, [detailGradeId]);
@@ -75,6 +76,7 @@ const getAttendanceByDate = async (req, res) => {
                 justificacion: att ? att.justificacion : null
             };
         });
+        console.log(`[DEV] getAttendanceByDate - id_grupo=${id_grupo}, editable=${editable}, students=${studentsRes.rows.length}`);
         res.json({
             editable,
             error: errorReason,
@@ -83,7 +85,7 @@ const getAttendanceByDate = async (req, res) => {
         });
     }
     catch (error) {
-        console.error("Error fetching attendance by date:", error);
+        console.error(`[DEV] getAttendanceByDate ERROR - detailGradeId=${detailGradeId}, date=${dateStr}:`, error.message, error.detail || '');
         res.status(500).json({ error: "Error en el servidor" });
     }
 };
@@ -91,7 +93,7 @@ exports.getAttendanceByDate = getAttendanceByDate;
 // POST /api/teacher/attendance
 const saveAttendance = async (req, res) => {
     const { detailGradeId, date, records } = req.body;
-    // records: Array of { id_estudiante: number, estado: string | null, justificacion: string | null }
+    console.log(`[DEV] saveAttendance called - detailGradeId=${detailGradeId}, date=${date}, records=${Array.isArray(records) ? records.length : 'invalid'}`);
     if (!detailGradeId || !date || !Array.isArray(records)) {
         res.status(400).json({ error: "Parámetros inválidos" });
         return;
@@ -171,6 +173,7 @@ exports.saveAttendance = saveAttendance;
 // GET /api/teacher/attendance-history/:detailGradeId
 const getAttendanceHistory = async (req, res) => {
     const detailGradeId = Number(req.params.detailGradeId);
+    console.log(`[DEV] getAttendanceHistory called - detailGradeId=${detailGradeId}`);
     try {
         const dgRes = await db_1.pool.query(`SELECT id_grupo FROM detalle_grados WHERE id_detallegrado = $1`, [detailGradeId]);
         if (dgRes.rows.length === 0) {
@@ -195,7 +198,7 @@ const getAttendanceHistory = async (req, res) => {
        WHERE id_detallegrado = $1
        GROUP BY id_estudiante`, [detailGradeId]);
         // Get distinct dates with attendance recorded
-        const datesRes = await db_1.pool.query(`SELECT DISTINCT fecha::date as date_recorded
+        const datesRes = await db_1.pool.query(`SELECT DISTINCT TO_CHAR(fecha, 'YYYY-MM-DD') as date_recorded
        FROM registro_asistencia
        WHERE id_detallegrado = $1
        ORDER BY date_recorded DESC`, [detailGradeId]);
@@ -218,14 +221,7 @@ const getAttendanceHistory = async (req, res) => {
                 ...counts
             };
         });
-        const datesList = datesRes.rows.map(r => {
-            // Format as YYYY-MM-DD
-            const d = new Date(r.date_recorded);
-            const year = d.getFullYear();
-            const month = String(d.getMonth() + 1).padStart(2, '0');
-            const day = String(d.getDate()).padStart(2, '0');
-            return `${year}-${month}-${day}`;
-        });
+        const datesList = datesRes.rows.map(r => r.date_recorded);
         res.json({
             studentsHistory,
             recordedDates: datesList

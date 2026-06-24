@@ -106,17 +106,14 @@ const confirmDeleteId = ref<number | null>(null)
 const fetchMyCourses = async () => {
   // In monitoring mode, load the observed teacher's courses
   const teacherId = auth.isMonitoring ? auth.monitoringUser?.id : auth.user?.id
-  console.log('[LOG-VISTA][TeacherObservations] fetchMyCourses started for teacherId:', teacherId, 'isMonitoring:', auth.isMonitoring)
   try {
     const response = await axios.get(`http://localhost:3000/api/teacher/courses/${teacherId}`)
     myCourses.value = response.data
-    console.log('[LOG-VISTA][TeacherObservations] fetchMyCourses OK. Loaded courses:', myCourses.value.length, myCourses.value)
     
     // Si venimos con parámetros de consulta (ej. desde el cierre)
     if (route.query.gradoId) {
       const gId = Number(route.query.gradoId)
       const sId = route.query.subjectId ? Number(route.query.subjectId) : null
-      console.log('[LOG-VISTA][TeacherObservations] Query params found - gradoId:', gId, 'subjectId:', sId)
       
       const course = myCourses.value.find(c => c.id_grado === gId)
       if (course) {
@@ -124,78 +121,63 @@ const fetchMyCourses = async () => {
         selectedSection.value = course.seccion
         selectedJornada.value = course.jornada_nombre
         if (sId) selectedSubjectId.value = sId
-        console.log('[LOG-VISTA][TeacherObservations] Auto-selected course from query:', course)
       }
     }
   } catch (error) {
-    console.error('[LOG-VISTA][TeacherObservations] Error fetching courses:', error)
   }
 }
 
 // Load periods
 const fetchPeriods = async () => {
-  console.log('[LOG-VISTA][TeacherObservations] fetchPeriods started for schoolId:', auth.user?.schoolId)
   try {
     const response = await axios.get(`http://localhost:3000/api/teacher/periods/${auth.user?.schoolId}`)
     periods.value = response.data
-    console.log('[LOG-VISTA][TeacherObservations] fetchPeriods OK. Loaded periods:', periods.value)
     // Select first open period by default
     const openPeriod = periods.value.find(p => p.estado === 'ABIERTO')
     if (openPeriod) {
       selectedPeriodId.value = openPeriod.id_periodo
-      console.log('[LOG-VISTA][TeacherObservations] Selected active period:', openPeriod.id_periodo, openPeriod.nombre)
     } else if (periods.value.length > 0) {
       selectedPeriodId.value = periods.value[0].id_periodo
-      console.log('[LOG-VISTA][TeacherObservations] No active period found, default to first period:', periods.value[0].id_periodo)
     }
   } catch (error) {
-    console.error('[LOG-VISTA][TeacherObservations] Error fetching periods:', error)
   }
 }
 
 // Computed: current course (requires subject for observations/editability)
 const selectedCourse = computed(() => {
-  console.log('[LOG-VISTA][TeacherObservations] selectedCourse evaluated - selectedGradeName:', selectedGradeName.value, 'selectedSection:', selectedSection.value, 'selectedJornada:', selectedJornada.value, 'selectedSubjectId:', selectedSubjectId.value)
   const course = myCourses.value.find(c => 
     c.grado_nombre === selectedGradeName.value && 
     c.seccion === selectedSection.value && 
     c.jornada_nombre === selectedJornada.value &&
     c.id_materia === selectedSubjectId.value
   )
-  console.log('[LOG-VISTA][TeacherObservations] selectedCourse result:', course)
   return course
 })
 
 // Grade ID based only on grade + section + jornada (students belong to group, not subject)
 const selectedGradeId = computed(() => {
-  console.log('[LOG-VISTA][TeacherObservations] selectedGradeId evaluated - selectedGradeName:', selectedGradeName.value, 'selectedSection:', selectedSection.value, 'selectedJornada:', selectedJornada.value)
   const course = myCourses.value.find(c =>
     c.grado_nombre === selectedGradeName.value &&
     c.seccion === selectedSection.value &&
     c.jornada_nombre === selectedJornada.value
   )
   const gId = course ? course.id_grado : null
-  console.log('[LOG-VISTA][TeacherObservations] selectedGradeId result:', gId)
   return gId
 })
 
 // Load students for current grade
 const fetchStudents = async () => {
-  console.log('[LOG-VISTA][TeacherObservations] fetchStudents started for selectedGradeId:', selectedGradeId.value)
   if (!selectedGradeId.value) return
   try {
     const response = await axios.get(`http://localhost:3000/api/teacher/students/${selectedGradeId.value}`)
     students.value = response.data
-    console.log('[LOG-VISTA][TeacherObservations] fetchStudents OK:', students.value.length, 'students. Loaded students:', students.value)
   } catch (error: any) {
-    console.error('[LOG-VISTA][TeacherObservations] fetchStudents error:', error?.response?.data || error?.message || error)
     students.value = []
   }
 }
 
 // Load observations
 const fetchObservations = async () => {
-  console.log('[LOG-VISTA][TeacherObservations] fetchObservations started - selectedCourse:', selectedCourse.value, 'selectedPeriodId:', selectedPeriodId.value)
   if (!selectedCourse.value || !selectedPeriodId.value) return
   try {
     loading.value = true
@@ -205,9 +187,7 @@ const fetchObservations = async () => {
     observations.value = response.data.observations || []
     isEditable.value = response.data.editable
     lockReason.value = response.data.error || ''
-    console.log('[LOG-VISTA][TeacherObservations] fetchObservations OK. Count:', observations.value.length, 'isEditable:', isEditable.value, 'lockReason:', lockReason.value)
   } catch (error: any) {
-    console.error('[LOG-VISTA][TeacherObservations] Error fetching observations:', error)
     observations.value = []
     isEditable.value = false
     lockReason.value = 'Error al cargar las observaciones del servidor.'
@@ -343,7 +323,6 @@ const getObservationTypes = (obs: Observation) => {
 
 // Modal: Open new
 const openNewModal = () => {
-  console.log('[LOG-VISTA][TeacherObservations] openNewModal called')
   editingObservation.value = null
   
   let defaultDate = new Date().toLocaleDateString('en-CA')
@@ -368,7 +347,6 @@ const openNewModal = () => {
 
 // Modal: Open edit
 const openEditModal = (obs: Observation) => {
-  console.log('[LOG-VISTA][TeacherObservations] openEditModal called for observation:', obs)
   editingObservation.value = obs
   formData.value = {
     studentId: obs.id_estudiante,
@@ -384,7 +362,6 @@ const openEditModal = (obs: Observation) => {
 
 // Modal: Close
 const closeModal = () => {
-  console.log('[LOG-VISTA][TeacherObservations] closeModal called')
   showModal.value = false
   editingObservation.value = null
 }
@@ -397,13 +374,11 @@ const formValid = computed(() => {
     formData.value.debilidades.trim().length > 0 ||
     formData.value.recomendaciones.trim().length > 0
   const isValid = hasStudent && hasContent
-  console.log('[LOG-VISTA][TeacherObservations] formValid evaluated:', isValid, 'hasStudent:', hasStudent, 'hasContent:', hasContent)
   return isValid
 })
 
 // Save observation (create or update)
 const saveObservation = async () => {
-  console.log('[LOG-VISTA][TeacherObservations] saveObservation requested. formValid:', formValid.value, 'saving:', saving.value, 'editingObservation:', editingObservation.value)
   if (!formValid.value || saving.value) return
 
   try {
@@ -426,7 +401,6 @@ const saveObservation = async () => {
           tipo: formData.value.tipo
         }
 
-    console.log('[LOG-VISTA][TeacherObservations] saveObservation payload:', payload)
 
     if (editingObservation.value) {
       // Update
@@ -436,11 +410,9 @@ const saveObservation = async () => {
       await axios.post('http://localhost:3000/api/teacher/observations', payload)
     }
 
-    console.log('[LOG-VISTA][TeacherObservations] saveObservation OK')
     closeModal()
     await fetchObservations()
   } catch (error: any) {
-    console.error('[LOG-VISTA][TeacherObservations] Error saving observation:', error)
     alert(error.response?.data?.error || 'Error al guardar la observación')
   } finally {
     saving.value = false
@@ -449,27 +421,22 @@ const saveObservation = async () => {
 
 // Delete observation
 const deleteObservation = async (id: number) => {
-  console.log('[LOG-VISTA][TeacherObservations] deleteObservation requested for id:', id)
   try {
     await axios.delete(`http://localhost:3000/api/teacher/observations/${id}`)
-    console.log('[LOG-VISTA][TeacherObservations] deleteObservation OK for id:', id)
     confirmDeleteId.value = null
     await fetchObservations()
   } catch (error: any) {
-    console.error('[LOG-VISTA][TeacherObservations] Error deleting observation:', error)
     alert(error.response?.data?.error || 'Error al eliminar la observación')
   }
 }
 
 // Watchers
 watch([selectedGradeName, selectedSection, selectedJornada], () => {
-  console.log('[LOG-VISTA][TeacherObservations] Watch triggered on grade/section/jornada filters - resetting selectedSubjectId to null')
   selectedSubjectId.value = null
 })
 
 // When grade changes, pre-fetch students so modal dropdown is ready
 watch(selectedGradeId, (newGradeId) => {
-  console.log('[LOG-VISTA][TeacherObservations] Watch triggered on selectedGradeId:', newGradeId)
   students.value = []
   if (newGradeId) {
     fetchStudents()
@@ -477,7 +444,6 @@ watch(selectedGradeId, (newGradeId) => {
 })
 
 watch([selectedCourse, selectedPeriodId], () => {
-  console.log('[LOG-VISTA][TeacherObservations] Watch triggered on selectedCourse or selectedPeriodId. selectedCourse:', selectedCourse.value, 'selectedPeriodId:', selectedPeriodId.value)
   observations.value = []
   if (selectedCourse.value && selectedPeriodId.value) {
     fetchObservations()
@@ -490,7 +456,6 @@ const itemsPerPage = 3
 
 const totalPages = computed(() => {
   const pages = Math.ceil(filteredObservations.value.length / itemsPerPage)
-  console.log('[LOG-VISTA][TeacherObservations] totalPages evaluated:', pages)
   return pages
 })
 
@@ -498,18 +463,15 @@ const paginatedObservations = computed(() => {
   const start = (currentPage.value - 1) * itemsPerPage
   const end = start + itemsPerPage
   const paginated = filteredObservations.value.slice(start, end)
-  console.log('[LOG-VISTA][TeacherObservations] paginatedObservations evaluated. Page:', currentPage.value, 'Count:', paginated.length)
   return paginated
 })
 
 // Reset to page 1 on filter or search changes
 watch([selectedGradeName, selectedSection, selectedJornada, selectedSubjectId, selectedPeriodId, searchQuery, filterType], () => {
-  console.log('[LOG-VISTA][TeacherObservations] Resetting currentPage to 1 due to filter/search change')
   currentPage.value = 1
 })
 
 onMounted(() => {
-  console.log('[LOG-VISTA][TeacherObservations] onMounted triggered')
   fetchMyCourses()
   fetchPeriods()
 })

@@ -11,6 +11,7 @@ import academicAdminRoutes from "./routes/academicAdmin.routes";
 import boletinRoutes from "./routes/boletin.routes";
 import studentRoutes from "./routes/student.routes";
 import adminGeneralRoutes from "./routes/adminGeneral.routes";
+import dbaRoutes from "./routes/dba.routes";
 
 const app = express();
 
@@ -83,6 +84,7 @@ app.use("/api/academic-admin", academicAdminRoutes);
 app.use("/api/boletines", boletinRoutes);
 app.use("/api/student", studentRoutes);
 app.use("/api/admin", adminGeneralRoutes);
+app.use("/api/admin", dbaRoutes);
 
 app.get("/", (req, res) => {
   res.json({ message: "API TS funcionando segura" });

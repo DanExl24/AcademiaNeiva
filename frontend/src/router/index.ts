@@ -331,6 +331,12 @@ const router = createRouter({
           name: 'Configuración de Plataforma',
           component: () => import('../views/adminGeneral/ConfiguracionPanel.vue'),
           meta: { roles: ['admin_general'] }
+        },
+        {
+          path: 'catalogo-dba',
+          name: 'Catálogo DBA',
+          component: () => import('../views/adminGeneral/DbaGlobalView.vue'),
+          meta: { roles: ['admin_general'] }
         }
       ]
     }

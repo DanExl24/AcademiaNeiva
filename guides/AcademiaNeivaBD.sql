@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict Ibfoa9GatoyoODQRHcescsAKErDEzf1katoVHTu2RZO98UNDjkFgltR35MCt2dS
+\restrict eMxo2H9tFSoGKfqqyhUhdYbuXSsO65mIBHT5B6DSNJn5ftCGQRcMFHq1Uw4lwJx
 
 -- Dumped from database version 18.4
 -- Dumped by pg_dump version 18.4
@@ -243,8 +243,8 @@ ALTER TYPE public.tipo_jornada OWNER TO postgres;
 CREATE TYPE public.tipo_observacion AS ENUM (
     'ACADEMICA',
     'CONVIVENCIA',
-    'DISCIPLINARIA',
-    'OTRO'
+    'OTRO',
+    'DISCIPLINARIA'
 );
 
 
@@ -526,7 +526,8 @@ CREATE TABLE public.auditoria_supervision (
     fecha_revocacion timestamp with time zone,
     ip_admin character varying(45),
     eliminado boolean DEFAULT false NOT NULL,
-    fecha_retencion_hasta timestamp with time zone DEFAULT (now() + '5 years'::interval) NOT NULL
+    fecha_retencion_hasta timestamp with time zone DEFAULT (now() + '5 years'::interval) NOT NULL,
+    motivo_revocacion text
 );
 
 
@@ -4119,5 +4120,5 @@ REVOKE USAGE ON SCHEMA public FROM PUBLIC;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict Ibfoa9GatoyoODQRHcescsAKErDEzf1katoVHTu2RZO98UNDjkFgltR35MCt2dS
+\unrestrict eMxo2H9tFSoGKfqqyhUhdYbuXSsO65mIBHT5B6DSNJn5ftCGQRcMFHq1Uw4lwJx
 

@@ -39,7 +39,6 @@ interface AcademicGroup {
 }
 
 const fetchCourses = async () => {
-  console.log('[LOG-VISTA][TeacherCourses] fetchCourses started')
   try {
     loading.value = true
     const userId = auth.isMonitoring
@@ -47,22 +46,18 @@ const fetchCourses = async () => {
       : (auth.user?.id_usuario || auth.user?.id)
     
     if (!userId) {
-      console.warn('[LOG-VISTA][TeacherCourses] No userId found, skipping fetch')
       return
     }
     
     const response = await axios.get(`http://localhost:3000/api/teacher/courses/${userId}`)
     rawData.value = response.data
-    console.log('[LOG-VISTA][TeacherCourses] fetchCourses OK. Courses count:', rawData.value.length, 'for userId', userId, 'data:', rawData.value)
   } catch (error: any) {
-    console.error('[LOG-VISTA][TeacherCourses] fetchCourses error:', error?.response?.data || error?.message || error)
   } finally {
     loading.value = false
   }
 }
 
 onMounted(() => {
-  console.log('[LOG-VISTA][TeacherCourses] onMounted triggered')
   fetchCourses()
 })
 

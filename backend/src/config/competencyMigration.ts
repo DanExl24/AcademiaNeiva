@@ -1,5 +1,8 @@
 import { PoolClient } from "pg";
 import { pool } from "./db";
+import fs from "fs";
+import path from "path";
+
 
 const evidenciaMigrationSql = `
 CREATE TABLE IF NOT EXISTS public.evidencia_aprendizaje (
@@ -337,6 +340,13 @@ export const ensureCompetencySchema = async (): Promise<void> => {
       ADD COLUMN IF NOT EXISTS mes_inicio integer,
       ADD COLUMN IF NOT EXISTS mes_fin integer
     `);
+
+    // Ejecutar migración del catálogo global de DBA
+    const dbaMigrationPath = path.join(__dirname, "../migrations/007_dba_catalogo_global.sql");
+    if (fs.existsSync(dbaMigrationPath)) {
+      const dbaMigrationSql = fs.readFileSync(dbaMigrationPath, "utf8");
+      await client.query(dbaMigrationSql);
+    }
 
     await client.query("COMMIT");
   } catch (error) {

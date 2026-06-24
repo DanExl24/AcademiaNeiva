@@ -31,12 +31,14 @@ const resolveTeachingContext = async (gradeId, subjectId, periodId, userId) => {
 // Obtener periodos del colegio
 const getPeriods = async (req, res) => {
     const { schoolId } = req.params;
+    console.log(`[DEV] getPeriods called - schoolId=${schoolId}`);
     try {
         const currentPeriod = await (0, periodHelpers_1.getCurrentAllowedPeriodForSchool)(Number(schoolId));
+        console.log(`[DEV] getPeriods - result: ${currentPeriod ? JSON.stringify(currentPeriod) : 'null (no open period)'}`);
         res.json(currentPeriod ? [currentPeriod] : []);
     }
     catch (error) {
-        console.error("Error fetching periods:", error);
+        console.error(`[DEV] getPeriods ERROR - schoolId=${schoolId}:`, error.message, error.detail || '');
         res.status(500).json({ error: "Error en el servidor" });
     }
 };
@@ -47,8 +49,10 @@ const getActivities = async (req, res) => {
     const subjectId = Number(req.params.subjectId);
     const periodId = Number(req.params.periodId);
     const userId = req.query.userId ? Number(req.query.userId) : undefined;
+    console.log(`[DEV] getActivities called - gradeId=${gradeId}, subjectId=${subjectId}, periodId=${periodId}, userId=${userId}`);
     try {
         const contextPreview = await resolveTeachingContext(gradeId, subjectId, periodId, userId);
+        console.log(`[DEV] getActivities - resolveTeachingContext result: ${contextPreview ? JSON.stringify(contextPreview) : 'null (not found)'}`);
         if (!contextPreview) {
             res.status(404).json({ error: "No se encontró la asignación académica" });
             return;

@@ -77,48 +77,39 @@ const clearFilters = () => {
 }
 
 const fetchPeriods = async () => {
-  console.log('[LOG-VISTA][TeacherClosure] fetchPeriods started for schoolId:', auth.user?.schoolId)
   try {
     const response = await axios.get(`http://localhost:3000/api/teacher/periods/${auth.user?.schoolId}`)
     periods.value = response.data
-    console.log('[LOG-VISTA][TeacherClosure] fetchPeriods OK. Loaded periods:', periods.value)
     const openPeriod = periods.value.find((p: any) => p.estado === 'ABIERTO')
     if (openPeriod) {
       activePeriodId.value = openPeriod.id_periodo
-      console.log('[LOG-VISTA][TeacherClosure] Selected active period:', openPeriod.id_periodo)
     }
   } catch (error) {
-    console.error('[LOG-VISTA][TeacherClosure] Error fetching periods:', error)
   }
 }
 
 const fetchCoursesWithStatus = async () => {
-  console.log('[LOG-VISTA][TeacherClosure] fetchCoursesWithStatus started for activePeriodId:', activePeriodId.value)
   if (!activePeriodId.value) return
   
   try {
     const userId = auth.isMonitoring
       ? auth.monitoringUser?.id
       : (auth.user?.id_usuario || auth.user?.id)
-    console.log('[LOG-VISTA][TeacherClosure] userId resolved:', userId)
 
     if (!userId) return
 
     loading.value = true
     const response = await axios.get(`http://localhost:3000/api/teacher/courses/${userId}`)
     const rawCourses = response.data
-    console.log('[LOG-VISTA][TeacherClosure] fetchCourses raw data:', rawCourses)
     
     const coursesWithStatus = await Promise.all(rawCourses.map(async (course: any) => {
       try {
         const statusRes = await axios.get(`http://localhost:3000/api/teacher/closure-status/${course.id_detallegrado}/${activePeriodId.value}`)
-        console.log('[LOG-VISTA][TeacherClosure] closure-status for detailGradeId', course.id_detallegrado, 'status:', statusRes.data)
         return {
           ...course,
           ...statusRes.data
         }
       } catch (err: any) {
-        console.error('[LOG-VISTA][TeacherClosure] Error checking closure-status for detailGradeId:', course.id_detallegrado, err)
         return {
           ...course,
           status: 'pendiente',
@@ -129,18 +120,14 @@ const fetchCoursesWithStatus = async () => {
     }))
     
     courses.value = coursesWithStatus
-    console.log('[LOG-VISTA][TeacherClosure] courses.value populated with closure statuses:', courses.value)
   } catch (error) {
-    console.error('[LOG-VISTA][TeacherClosure] Error fetching courses with status:', error)
   } finally {
     loading.value = false
   }
 }
 
 const handleClosePeriod = async (course: any) => {
-  console.log('[LOG-VISTA][TeacherClosure] handleClosePeriod requested for course:', course, 'activePeriodId:', activePeriodId.value)
   if (!confirm(`¿Estás seguro de cerrar el periodo para ${course.materia_nombre} en ${course.grado_nombre}?`)) {
-    console.log('[LOG-VISTA][TeacherClosure] handleClosePeriod cancelled by user')
     return
   }
 
@@ -152,11 +139,9 @@ const handleClosePeriod = async (course: any) => {
       userId: auth.user?.id
     })
     
-    console.log('[LOG-VISTA][TeacherClosure] handleClosePeriod response:', response.data)
     alert(response.data.message || 'Periodo cerrado correctamente')
     await fetchCoursesWithStatus()
   } catch (error: any) {
-    console.error('[LOG-VISTA][TeacherClosure] Error closing period:', error)
     alert(error.response?.data?.error || 'Error al cerrar el periodo')
   } finally {
     processingId.value = null
@@ -165,12 +150,10 @@ const handleClosePeriod = async (course: any) => {
 
 const activePeriodName = computed(() => {
   const name = periods.value.find(p => p.id_periodo === activePeriodId.value)?.nombre || 'Cargando...'
-  console.log('[LOG-VISTA][TeacherClosure] activePeriodName evaluated:', name, 'for activePeriodId:', activePeriodId.value)
   return name
 })
 
 const navigateToGrades = (course: any) => {
-  console.log('[LOG-VISTA][TeacherClosure] navigateToGrades selected course:', course)
   router.push({ 
     path: '/dashboard/calificaciones', 
     query: { 
@@ -181,7 +164,6 @@ const navigateToGrades = (course: any) => {
 }
 
 onMounted(async () => {
-  console.log('[LOG-VISTA][TeacherClosure] onMounted triggered')
   await fetchPeriods()
   await fetchCoursesWithStatus()
 })

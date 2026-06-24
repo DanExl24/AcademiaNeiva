@@ -94,7 +94,8 @@ const menuItems = computed(() => {
         ]
       },
       { name: 'Notificaciones', icon: Bell, path: '/dashboard/notificaciones' },
-      { name: 'Configuración', icon: Settings, path: '/dashboard/configuracion' }
+      { name: 'Configuración', icon: Settings, path: '/dashboard/configuracion' },
+      { name: 'Catálogo DBA', icon: BookOpen, path: '/dashboard/catalogo-dba' }
     ]
   }
   
