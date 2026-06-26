@@ -240,3 +240,64 @@ export const getSchoolIdentity = async (req: Request, res: Response): Promise<vo
   }
 };
 
+/**
+ * GET /api/auth/verify
+ * Verifica que el JWT sea válido y que el usuario siga activo.
+ * Usado por el frontend en el router guard para evitar acceso con tokens expirados/invalidados.
+ */
+export const verifySession = async (req: Request, res: Response): Promise<void> => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    res.status(401).json({ valid: false, error: 'Token requerido' });
+    return;
+  }
+
+  const token = authHeader.split(' ')[1];
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET) as any;
+
+    // Verificar blacklist
+    if (decoded.jti) {
+      const blacklistRes = await pool.query(
+        'SELECT 1 FROM token_blacklist WHERE jti = $1',
+        [decoded.jti]
+      );
+      if (blacklistRes.rows.length > 0) {
+        res.status(401).json({ valid: false, error: 'Sesión invalidada' });
+        return;
+      }
+    }
+
+    // Verificar estado del usuario e invalidación global
+    const userDbRes = await pool.query(
+      'SELECT estado, logged_out_at FROM usuario WHERE id_usuario = $1',
+      [decoded.id]
+    );
+
+    if (userDbRes.rows.length === 0) {
+      res.status(401).json({ valid: false, error: 'Usuario no encontrado' });
+      return;
+    }
+
+    const dbUser = userDbRes.rows[0];
+
+    if (dbUser.estado !== 'ACTIVO') {
+      res.status(401).json({ valid: false, error: 'Cuenta inactiva o suspendida' });
+      return;
+    }
+
+    if (dbUser.logged_out_at && decoded.iat) {
+      const loggedOutTime = new Date(dbUser.logged_out_at).getTime();
+      const tokenIssuedTime = decoded.iat * 1000;
+      if (tokenIssuedTime < loggedOutTime) {
+        res.status(401).json({ valid: false, error: 'Sesión expirada' });
+        return;
+      }
+    }
+
+    res.json({ valid: true, userId: decoded.id });
+  } catch {
+    res.status(401).json({ valid: false, error: 'Token inválido o expirado' });
+  }
+};
+

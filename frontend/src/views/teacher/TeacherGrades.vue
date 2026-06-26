@@ -49,6 +49,7 @@ interface Activity {
   porcentaje: string | number
   id_competencia: number
   id_evidencia: number | null
+  evidencias_dba?: number[]
   criterios?: Criterion[]
 }
 
@@ -117,8 +118,16 @@ const showAddActivity = ref(false)
 const newActivity = ref({
   nombre: '',
   porcentaje: 0,
-  id_evidencia: null as number | null
+  id_evidencia: null as number | null,
+  evidencias_dba: [] as number[]
 })
+
+const dbaEvidencesInfo = ref<{
+  usaDba: boolean
+  versionCurricular?: string
+  planeadas: any[]
+  extras: any[]
+} | null>(null)
 
 // Cargar cursos asignados
 const fetchMyCourses = async () => {
@@ -219,6 +228,23 @@ const fetchGrades = async () => {
   }
 }
 
+// Cargar evidencias del catálogo DBA
+const fetchDbaEvidences = async () => {
+  if (!selectedGradeId.value || !selectedSubjectId.value) {
+    dbaEvidencesInfo.value = null
+    return
+  }
+  try {
+    const res = await axios.get(`http://localhost:3000/api/teacher/courses/${selectedGradeId.value}/${selectedSubjectId.value}/evidencias-dba`, {
+      params: { schoolId: auth.user?.schoolId }
+    })
+    dbaEvidencesInfo.value = res.data
+  } catch (error) {
+    console.error('Error fetching competency DBA evidences:', error)
+    dbaEvidencesInfo.value = null
+  }
+}
+
 // Cargar actividades
 const fetchActivities = async () => {
   if (!selectedGradeId.value || !selectedSubjectId.value || !selectedPeriodId.value) return
@@ -231,12 +257,14 @@ const fetchActivities = async () => {
     competencyDraft.value = response.data.competencia?.descripcion || ''
     evidencias.value = response.data.evidencias || []
     activities.value = response.data.activities || []
+    await fetchDbaEvidences()
     await fetchGrades()
   } catch (error) {
     competency.value = null
     competencyDraft.value = ''
     evidencias.value = []
     activities.value = []
+    dbaEvidencesInfo.value = null
   } finally {
     activitiesLoading.value = false
   }
@@ -359,30 +387,55 @@ const saveAllGrades = async () => {
 
 // Agregar actividad
 const addActivity = async () => {
-  if (!newActivity.value.nombre || newActivity.value.porcentaje <= 0 || !newActivity.value.id_evidencia) {
-    alert('Debes seleccionar una evidencia de aprendizaje, un nombre y un porcentaje.')
-    return
+  const isDba = dbaEvidencesInfo.value?.usaDba
+  if (isDba) {
+    if (!newActivity.value.nombre || newActivity.value.porcentaje <= 0 || !newActivity.value.evidencias_dba.length) {
+      alert('Debes seleccionar al menos una evidencia del DBA, un nombre y un porcentaje.')
+      return
+    }
+  } else {
+    if (!newActivity.value.nombre || newActivity.value.porcentaje <= 0 || !newActivity.value.id_evidencia) {
+      alert('Debes seleccionar una evidencia de aprendizaje, un nombre y un porcentaje.')
+      return
+    }
   }
+
   try {
-    if (!competency.value) {
-      alert('No se ha podido identificar la competencia asociada a este curso.')
+    const payload: any = {
+      id_competencia: competency.value?.id_competencia || null,
+      id_detallegrado: myCourses.value.find(c => c.id_grado === selectedGradeId.value && c.id_materia === selectedSubjectId.value)?.id_detallegrado || null,
+      id_periodo: selectedPeriodId.value,
+      nombre: newActivity.value.nombre,
+      porcentaje: newActivity.value.porcentaje,
+      id_colegio: auth.user?.schoolId
+    }
+
+    if (!payload.id_detallegrado) {
+      alert('No se pudo identificar la asignación del curso.')
       return
     }
 
-    const response = await axios.post('http://localhost:3000/api/teacher/activities', {
-      id_competencia: competency.value.id_competencia,
-      nombre: newActivity.value.nombre,
-      porcentaje: newActivity.value.porcentaje,
-      id_evidencia: newActivity.value.id_evidencia,
-      id_colegio: auth.user?.schoolId
-    })
-    initializeMatrixForStudents()
-    activities.value.push(response.data)
-    newActivity.value = { nombre: '', porcentaje: 0, id_evidencia: null }
+    if (isDba) {
+      payload.evidencias_dba = newActivity.value.evidencias_dba
+    } else {
+      payload.id_evidencia = newActivity.value.id_evidencia
+    }
+
+    await axios.post('http://localhost:3000/api/teacher/activities', payload)
+    newActivity.value = { nombre: '', porcentaje: 0, id_evidencia: null, evidencias_dba: [] }
     showAddActivity.value = false
+    await fetchActivities()
   } catch (error: any) {
     alert(error.response?.data?.error || 'Error al crear actividad')
   }
+}
+
+const getDbaEvidenceLabels = (act: Activity) => {
+  if (!act.evidencias_dba || !Array.isArray(act.evidencias_dba) || act.evidencias_dba.length === 0) return []
+  if (!dbaEvidencesInfo.value) return []
+  const allEvs = [...dbaEvidencesInfo.value.planeadas, ...dbaEvidencesInfo.value.extras]
+  const matched = allEvs.filter(e => act.evidencias_dba?.includes(e.id_evidencia_dba))
+  return matched.map(e => `DBA ${e.numero_dba}: ${e.descripcion}`)
 }
 
 // const saveCompetency = async () => {
@@ -822,6 +875,12 @@ onMounted(() => {
                   <div>
                     <h4 class="text-sm font-bold text-slate-900 dark:text-white">{{ act.nombre }}</h4>
                     <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Peso: {{ act.porcentaje }}%</p>
+                    <div v-if="dbaEvidencesInfo?.usaDba && getDbaEvidenceLabels(act).length > 0" class="mt-2 space-y-1">
+                      <div v-for="lbl in getDbaEvidenceLabels(act)" :key="lbl" class="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-start gap-1">
+                        <span class="shrink-0">•</span>
+                        <span>{{ lbl }}</span>
+                      </div>
+                    </div>
                   </div>
                   <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button @click="toggleAddCriterion(act.id_actividadmateria)" class="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-white dark:hover:bg-slate-700 rounded-lg transition-all" title="Añadir criterio">
@@ -868,7 +927,31 @@ onMounted(() => {
             </button>
 
             <div v-if="showAddActivity" class="p-5 bg-indigo-50/50 dark:bg-indigo-950/20 rounded-2xl border border-indigo-100 dark:border-indigo-900 space-y-4 animate-in zoom-in-95">
-              <div class="space-y-1">
+              <div v-if="dbaEvidencesInfo?.usaDba" class="space-y-4">
+                <div class="space-y-2">
+                  <label class="text-[10px] font-black text-indigo-400 uppercase tracking-widest ml-1">Evidencias Planeadas *</label>
+                  <div class="space-y-2 max-h-40 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-xl p-3 bg-white dark:bg-slate-900">
+                    <div v-if="dbaEvidencesInfo.planeadas.length === 0" class="text-xs text-slate-400 dark:text-slate-500 italic">No hay evidencias planeadas.</div>
+                    <label v-for="ev in dbaEvidencesInfo.planeadas" :key="ev.id_evidencia_dba" class="flex items-start gap-2.5 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 cursor-pointer">
+                      <input type="checkbox" v-model="newActivity.evidencias_dba" :value="ev.id_evidencia_dba" class="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
+                      <span>DBA {{ ev.numero_dba }}: {{ ev.descripcion }}</span>
+                    </label>
+                  </div>
+                </div>
+                
+                <div class="space-y-2">
+                  <label class="text-[10px] font-black text-indigo-400 uppercase tracking-widest ml-1">Evidencias Adicionales (Extras)</label>
+                  <div class="space-y-2 max-h-40 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-xl p-3 bg-white dark:bg-slate-900">
+                    <div v-if="dbaEvidencesInfo.extras.length === 0" class="text-xs text-slate-400 dark:text-slate-500 italic">No hay evidencias adicionales disponibles.</div>
+                    <label v-for="ev in dbaEvidencesInfo.extras" :key="ev.id_evidencia_dba" class="flex items-start gap-2.5 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 cursor-pointer">
+                      <input type="checkbox" v-model="newActivity.evidencias_dba" :value="ev.id_evidencia_dba" class="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
+                      <span>DBA {{ ev.numero_dba }}: {{ ev.descripcion }}</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+              
+              <div v-else class="space-y-1">
                 <label class="text-[9px] font-black text-indigo-400 uppercase tracking-widest ml-1">Evidencia *</label>
                 <select v-model="newActivity.id_evidencia" class="w-full bg-white dark:bg-slate-900 border-indigo-100 dark:border-indigo-900 rounded-xl px-3 py-2.5 text-xs font-semibold text-slate-600 dark:text-slate-300 outline-none">
                   <option :value="null">Selecciona</option>

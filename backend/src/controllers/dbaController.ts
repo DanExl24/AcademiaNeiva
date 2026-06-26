@@ -407,6 +407,37 @@ export const asignarVersionColegio = async (req: AuthRequest, res: Response): Pr
       return;
     }
 
+    if (grado === "TODOS") {
+      // Verificar que existan DBA activos en el catálogo para esta combinación de área y versión
+      const dbaCheck = await pool.query(
+        `SELECT DISTINCT grado FROM dba 
+         WHERE area = $1 AND version_curricular = $2 AND estado = 'ACTIVO'`,
+        [area, version_curricular]
+      );
+
+      if (dbaCheck.rows.length === 0) {
+        res.status(400).json({ error: "No existen DBA activos en el catálogo para esta combinación de área y versión" });
+        return;
+      }
+
+      const gradesToAssign = dbaCheck.rows.map(r => r.grado);
+      const insertedRows = [];
+      for (const g of gradesToAssign) {
+        const result = await pool.query(
+          `INSERT INTO colegio_version_curricular (id_colegio, area, grado, version_curricular, fecha_asignacion)
+           VALUES ($1, $2, $3, $4, NOW())
+           ON CONFLICT (id_colegio, area, grado)
+           DO UPDATE SET version_curricular = EXCLUDED.version_curricular, fecha_asignacion = NOW()
+           RETURNING *`,
+          [id_colegio, area, g, version_curricular]
+        );
+        insertedRows.push(result.rows[0]);
+      }
+
+      res.json({ message: "Versión curricular asignada a todos los grados exitosamente", rows: insertedRows });
+      return;
+    }
+
     // Verificar que exista esa versión/área/grado en los DBA antes de asignar
     const dbaCheck = await pool.query(
       `SELECT 1 FROM dba 

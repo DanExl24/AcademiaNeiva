@@ -929,6 +929,13 @@ export const getAcademicSettingsData = async (req: Request, res: Response): Prom
            c.id_materia,
            c.id_periodo,
            c.descripcion,
+           EXISTS (
+             SELECT 1 
+             FROM colegio_version_curricular cvc
+             WHERE cvc.id_colegio = c.id_colegio
+               AND cvc.area = m.nombre
+               AND cvc.grado = tg.nombre
+           ) AS usa_dba,
            CASE
              WHEN EXISTS (
                SELECT 1
@@ -955,7 +962,8 @@ export const getAcademicSettingsData = async (req: Request, res: Response): Prom
                  json_build_object(
                    'id_evidencia', ev.id_evidencia,
                    'descripcion',  ev.descripcion,
-                   'orden',        ev.orden
+                   'orden',        ev.orden,
+                   'id_evidencia_dba', ev.id_evidencia_dba
                  )
                  ORDER BY ev.orden, ev.id_evidencia
                )
@@ -4803,3 +4811,214 @@ export const bulkRenameCourses = async (req: Request, res: Response): Promise<vo
     client.release();
   }
 };
+
+// ============================================================================
+// ─── Planeación y Gestión de DBA en Colegios (Fase 2) ────────────────────────
+// ============================================================================
+
+export const getDbaPlaneacionDisponibles = async (req: Request, res: Response): Promise<void> => {
+  const schoolId = parseSchoolId(req.params.schoolId);
+  const groupId = Number(req.query.id_grupo);
+  const subjectId = Number(req.query.id_materia);
+
+  if (!schoolId || !groupId || !subjectId) {
+    res.status(400).json({ error: "Colegio, grupo y materia son obligatorios" });
+    return;
+  }
+
+  try {
+    // 1. Obtener la versión curricular asignada
+    const cvcRes = await pool.query(
+      `SELECT cvc.version_curricular
+       FROM colegio_version_curricular cvc
+       WHERE cvc.id_colegio = $1
+         AND cvc.area = (SELECT nombre FROM materias WHERE id_materia = $2)
+         AND cvc.grado = (
+           SELECT tg.nombre 
+           FROM grupos g 
+           JOIN tipo_grado tg ON tg.id_tipo_grado = g.id_tipo_grado 
+           WHERE g.id_grupo = $3
+         )`,
+      [schoolId, subjectId, groupId]
+    );
+
+    if (cvcRes.rows.length === 0) {
+      // Retornar vacío si no hay asignación, indicando que no usa catálogo oficial
+      res.json({ dba: [], versionCurricular: null });
+      return;
+    }
+
+    const versionCurricular = cvcRes.rows[0].version_curricular;
+
+    // 2. Obtener los DBA y evidencias oficiales activos
+    const dbaRes = await pool.query(
+      `SELECT d.id_dba, d.numero_dba, d.enunciado, d.area, d.grado, d.version_curricular,
+              COALESCE(
+                (SELECT json_agg(
+                   json_build_object(
+                     'id_evidencia_dba', e.id_evidencia_dba,
+                     'descripcion', e.descripcion,
+                     'orden', e.orden
+                   ) ORDER BY e.orden, e.id_evidencia_dba
+                 )
+                 FROM evidencias_dba e
+                 WHERE e.id_dba = d.id_dba AND e.estado = 'ACTIVO'
+                ), '[]'::json
+              ) AS evidencias
+       FROM dba d
+       WHERE d.area = (SELECT nombre FROM materias WHERE id_materia = $1)
+         AND d.grado = (
+           SELECT tg.nombre 
+           FROM grupos g 
+           JOIN tipo_grado tg ON tg.id_tipo_grado = g.id_tipo_grado 
+           WHERE g.id_grupo = $2
+         )
+         AND d.version_curricular = $3
+         AND d.estado = 'ACTIVO'
+       ORDER BY d.numero_dba`,
+      [subjectId, groupId, versionCurricular]
+    );
+
+    res.json({ dba: dbaRes.rows, versionCurricular });
+  } catch (error: any) {
+    console.error("Error al obtener DBA disponibles para planeación:", error);
+    res.status(500).json({ error: "Error en el servidor" });
+  }
+};
+
+export const vincularEvidenciasDbaACompetencia = async (req: Request, res: Response): Promise<void> => {
+  const competencyId = Number(req.params.competenciaId);
+  const schoolId = parseSchoolId(req.body.schoolId);
+  const idEvidenciasDba: number[] = req.body.id_evidencias_dba; // Arreglo de IDs de evidencias_dba
+
+  if (!competencyId || !schoolId || !Array.isArray(idEvidenciasDba)) {
+    res.status(400).json({ error: "ID de competencia, ID de colegio y el listado de evidencias_dba son requeridos" });
+    return;
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    // 1. Obtener la competencia para verificar pertenencia y obtener el contexto (año, materia, periodo, grupo)
+    const compRes = await client.query(
+      `SELECT id_competencia, id_año, id_grupo, id_materia, id_periodo, id_colegio 
+       FROM competencias 
+       WHERE id_competencia = $1 AND id_colegio = $2`,
+      [competencyId, schoolId]
+    );
+
+    if (compRes.rows.length === 0) {
+      await client.query("ROLLBACK");
+      res.status(404).json({ error: "Competencia no encontrada" });
+      return;
+    }
+
+    const comp = compRes.rows[0];
+
+    // 2. Obtener todos los grupos pares de la misma categoría de grado (sincronización a nivel de grado)
+    const peerGroupsRes = await client.query(
+      `SELECT g2.id_grupo
+       FROM grupos g1
+       JOIN grupos g2 ON g2.id_nivel = g1.id_nivel AND g2.id_tipo_grado = g1.id_tipo_grado
+       WHERE g1.id_grupo = $1 AND g1.id_colegio = $2`,
+      [comp.id_grupo, schoolId]
+    );
+    const peerGroupIds = peerGroupsRes.rows.map(r => r.id_grupo);
+
+    // Obtener todas las competencias hermanas del mismo año, materia, periodo y grupos pares
+    const compsRes = await client.query(
+      `SELECT id_competencia, id_grupo 
+       FROM competencias 
+       WHERE id_colegio = $1 AND id_año = $2 AND id_materia = $3 AND id_periodo = $4 AND id_grupo = ANY($5::int[])`,
+      [schoolId, comp.id_año, comp.id_materia, comp.id_periodo, peerGroupIds]
+    );
+    const sisterCompIds = compsRes.rows.map(r => r.id_competencia);
+
+    // 3. Si no hay evidencias DBA seleccionadas, eliminamos todas las evidencias de aprendizaje que estén enlazadas a DBA para estas competencias
+    if (idEvidenciasDba.length === 0) {
+      await client.query(
+        `DELETE FROM evidencia_aprendizaje 
+         WHERE id_competencia = ANY($1::int[]) AND id_evidencia_dba IS NOT NULL`,
+        [sisterCompIds]
+      );
+      await client.query("COMMIT");
+      res.json({ message: "Evidencias DBA desvinculadas correctamente de la competencia." });
+      return;
+    }
+
+    // 4. Consultar las evidencias oficiales del DBA para obtener sus descripciones y orden
+    const officialEvsRes = await client.query(
+      `SELECT id_evidencia_dba, descripcion, orden 
+       FROM evidencias_dba 
+       WHERE id_evidencia_dba = ANY($1::int[]) AND estado = 'ACTIVO'`,
+      [idEvidenciasDba]
+    );
+
+    if (officialEvsRes.rows.length === 0) {
+      await client.query("ROLLBACK");
+      res.status(400).json({ error: "Ninguna de las evidencias DBA especificadas es válida o está activa" });
+      return;
+    }
+
+    // Para cada competencia del grado (sincronización vertical):
+    for (const targetCompId of sisterCompIds) {
+      // Obtener qué evidencias_dba ya están vinculadas en evidencia_aprendizaje para esta competencia
+      const existingRes = await client.query(
+        `SELECT id_evidencia, id_evidencia_dba FROM evidencia_aprendizaje 
+         WHERE id_competencia = $1 AND id_evidencia_dba IS NOT NULL`,
+        [targetCompId]
+      );
+
+      const existingMap = new Map<number, number>(); // id_evidencia_dba -> id_evidencia
+      existingRes.rows.forEach(r => existingMap.set(r.id_evidencia_dba, r.id_evidencia));
+
+      const activeDbaIds = officialEvsRes.rows.map(r => r.id_evidencia_dba);
+
+      // Eliminar las que ya no están seleccionadas
+      const deleteIds: number[] = [];
+      existingRes.rows.forEach(r => {
+        if (!activeDbaIds.includes(r.id_evidencia_dba)) {
+          deleteIds.push(r.id_evidencia);
+        }
+      });
+
+      if (deleteIds.length > 0) {
+        await client.query(
+          `DELETE FROM evidencia_aprendizaje WHERE id_evidencia = ANY($1::int[])`,
+          [deleteIds]
+        );
+      }
+
+      // Insertar o actualizar las seleccionadas
+      for (const offEv of officialEvsRes.rows) {
+        if (existingMap.has(offEv.id_evidencia_dba)) {
+          // Ya existe, actualizamos descripción y orden por si cambiaron en el catálogo global
+          await client.query(
+            `UPDATE evidencia_aprendizaje 
+             SET descripcion = $1, orden = $2 
+             WHERE id_evidencia = $3`,
+            [offEv.descripcion, offEv.orden, existingMap.get(offEv.id_evidencia_dba)]
+          );
+        } else {
+          // No existe, la insertamos
+          await client.query(
+            `INSERT INTO evidencia_aprendizaje (id_competencia, descripcion, orden, id_colegio, id_evidencia_dba)
+             VALUES ($1, $2, $3, $4, $5)`,
+            [targetCompId, offEv.descripcion, offEv.orden, schoolId, offEv.id_evidencia_dba]
+          );
+        }
+      }
+    }
+
+    await client.query("COMMIT");
+    res.json({ message: "Evidencias del DBA vinculadas correctamente a la competencia del grado escolar." });
+  } catch (error: any) {
+    await client.query("ROLLBACK");
+    console.error("Error al vincular evidencias de DBA a competencia:", error);
+    res.status(500).json({ error: "Error interno en el servidor" });
+  } finally {
+    client.release();
+  }
+};
+

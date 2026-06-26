@@ -1362,10 +1362,11 @@ export const obtenerStatsDashboard = async (req: AuthRequest, res: Response): Pr
       WHERE estado != 'ELIMINADO'
     `);
     const usuariosTotal = usuariosRes.rows[0]?.total || 0;
-    const usuariosActivos = usuariosRes.rows[0]?.activos || 0;
     
-    // connected users: mock based on active users count
-    const usuariosConectados = Math.max(3, Math.round(usuariosActivos * 0.03));
+    // Usuarios conectados en tiempo real vía WebSockets
+    const { socketManager } = require('../services/socketManager');
+    const usuariosConectados = socketManager.activeUserCount;
+
 
     // 3. Distribución de usuarios por Rol
     const distribucionRes = await pool.query(`

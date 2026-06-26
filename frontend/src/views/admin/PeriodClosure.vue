@@ -81,7 +81,7 @@ const loadInitialData = async () => {
   try {
     loading.value = true
     const response = await axios.get(`http://localhost:3000/api/academic-admin/settings/${schoolId.value}`)
-    periods.value = response.data.periods
+    periods.value = (response.data.periods || []).filter((p: any) => p.estado !== 'PENDIENTE')
     const openPeriod = periods.value.find(p => p.estado === 'ABIERTO')
     if (openPeriod) {
       selectedPeriodId.value = openPeriod.id_periodo

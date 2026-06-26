@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict eMxo2H9tFSoGKfqqyhUhdYbuXSsO65mIBHT5B6DSNJn5ftCGQRcMFHq1Uw4lwJx
+\restrict 7hf0cUaOxS9xINcvd2mCmTMFdLd9jgPlXtf9lOygt0b9obTqZIgfPSU8jg18zBD
 
 -- Dumped from database version 18.4
 -- Dumped by pg_dump version 18.4
@@ -89,6 +89,18 @@ CREATE TYPE public.estado_colegio AS ENUM (
 
 
 ALTER TYPE public.estado_colegio OWNER TO postgres;
+
+--
+-- Name: estado_dba; Type: TYPE; Schema: public; Owner: postgres
+--
+
+CREATE TYPE public.estado_dba AS ENUM (
+    'ACTIVO',
+    'INACTIVO'
+);
+
+
+ALTER TYPE public.estado_dba OWNER TO postgres;
 
 --
 -- Name: estado_documento; Type: TYPE; Schema: public; Owner: postgres
@@ -429,6 +441,18 @@ SET default_tablespace = '';
 SET default_table_access_method = heap;
 
 --
+-- Name: actividad_evidencia_dba; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.actividad_evidencia_dba (
+    id_actividadmateria integer NOT NULL,
+    id_evidencia_dba integer NOT NULL
+);
+
+
+ALTER TABLE public.actividad_evidencia_dba OWNER TO postgres;
+
+--
 -- Name: actividad_materia; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -670,6 +694,44 @@ ALTER SEQUENCE public.colegio_id_colegio_seq OWNED BY public.colegio.id_colegio;
 
 
 --
+-- Name: colegio_version_curricular; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.colegio_version_curricular (
+    id integer NOT NULL,
+    id_colegio integer NOT NULL,
+    area character varying(100) NOT NULL,
+    grado character varying(50) NOT NULL,
+    version_curricular character varying(20) NOT NULL,
+    fecha_asignacion timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE public.colegio_version_curricular OWNER TO postgres;
+
+--
+-- Name: colegio_version_curricular_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.colegio_version_curricular_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.colegio_version_curricular_id_seq OWNER TO postgres;
+
+--
+-- Name: colegio_version_curricular_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.colegio_version_curricular_id_seq OWNED BY public.colegio_version_curricular.id;
+
+
+--
 -- Name: competencias; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -680,7 +742,8 @@ CREATE TABLE public.competencias (
     id_materia integer NOT NULL,
     id_periodo integer NOT NULL,
     descripcion text DEFAULT 'Competencia pendiente por definir.'::text NOT NULL,
-    id_colegio integer NOT NULL
+    id_colegio integer NOT NULL,
+    nombre character varying(200)
 );
 
 
@@ -907,6 +970,47 @@ ALTER SEQUENCE public.criterio_evaluacion_id_criterio_seq OWNER TO postgres;
 --
 
 ALTER SEQUENCE public.criterio_evaluacion_id_criterio_seq OWNED BY public.criterio_evaluacion.id_criterio;
+
+
+--
+-- Name: dba; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.dba (
+    id_dba integer NOT NULL,
+    area character varying(100) NOT NULL,
+    grado character varying(50) NOT NULL,
+    numero_dba integer NOT NULL,
+    enunciado text NOT NULL,
+    version_curricular character varying(20) NOT NULL,
+    estado public.estado_dba DEFAULT 'ACTIVO'::public.estado_dba NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE public.dba OWNER TO postgres;
+
+--
+-- Name: dba_id_dba_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.dba_id_dba_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.dba_id_dba_seq OWNER TO postgres;
+
+--
+-- Name: dba_id_dba_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.dba_id_dba_seq OWNED BY public.dba.id_dba;
 
 
 --
@@ -1225,7 +1329,8 @@ CREATE TABLE public.evidencia_aprendizaje (
     id_competencia integer NOT NULL,
     descripcion text NOT NULL,
     orden integer DEFAULT 0 NOT NULL,
-    id_colegio integer NOT NULL
+    id_colegio integer NOT NULL,
+    id_evidencia_dba integer
 );
 
 
@@ -1251,6 +1356,44 @@ ALTER SEQUENCE public.evidencia_aprendizaje_id_evidencia_seq OWNER TO postgres;
 --
 
 ALTER SEQUENCE public.evidencia_aprendizaje_id_evidencia_seq OWNED BY public.evidencia_aprendizaje.id_evidencia;
+
+
+--
+-- Name: evidencias_dba; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.evidencias_dba (
+    id_evidencia_dba integer NOT NULL,
+    id_dba integer NOT NULL,
+    descripcion text NOT NULL,
+    orden integer DEFAULT 1 NOT NULL,
+    estado public.estado_dba DEFAULT 'ACTIVO'::public.estado_dba NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE public.evidencias_dba OWNER TO postgres;
+
+--
+-- Name: evidencias_dba_id_evidencia_dba_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.evidencias_dba_id_evidencia_dba_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.evidencias_dba_id_evidencia_dba_seq OWNER TO postgres;
+
+--
+-- Name: evidencias_dba_id_evidencia_dba_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.evidencias_dba_id_evidencia_dba_seq OWNED BY public.evidencias_dba.id_evidencia_dba;
 
 
 --
@@ -2327,6 +2470,13 @@ ALTER TABLE ONLY public.colegio ALTER COLUMN id_colegio SET DEFAULT nextval('pub
 
 
 --
+-- Name: colegio_version_curricular id; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.colegio_version_curricular ALTER COLUMN id SET DEFAULT nextval('public.colegio_version_curricular_id_seq'::regclass);
+
+
+--
 -- Name: competencias id_competencia; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -2366,6 +2516,13 @@ ALTER TABLE ONLY public.contrato_docente ALTER COLUMN id_contratodocente SET DEF
 --
 
 ALTER TABLE ONLY public.criterio_evaluacion ALTER COLUMN id_criterio SET DEFAULT nextval('public.criterio_evaluacion_id_criterio_seq'::regclass);
+
+
+--
+-- Name: dba id_dba; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.dba ALTER COLUMN id_dba SET DEFAULT nextval('public.dba_id_dba_seq'::regclass);
 
 
 --
@@ -2429,6 +2586,13 @@ ALTER TABLE ONLY public.estudiante ALTER COLUMN id_estudiante SET DEFAULT nextva
 --
 
 ALTER TABLE ONLY public.evidencia_aprendizaje ALTER COLUMN id_evidencia SET DEFAULT nextval('public.evidencia_aprendizaje_id_evidencia_seq'::regclass);
+
+
+--
+-- Name: evidencias_dba id_evidencia_dba; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.evidencias_dba ALTER COLUMN id_evidencia_dba SET DEFAULT nextval('public.evidencias_dba_id_evidencia_dba_seq'::regclass);
 
 
 --
@@ -2586,6 +2750,14 @@ ALTER TABLE ONLY public.usuario ALTER COLUMN id_usuario SET DEFAULT nextval('pub
 
 
 --
+-- Name: actividad_evidencia_dba actividad_evidencia_dba_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.actividad_evidencia_dba
+    ADD CONSTRAINT actividad_evidencia_dba_pkey PRIMARY KEY (id_actividadmateria, id_evidencia_dba);
+
+
+--
 -- Name: actividad_materia actividad_materia_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -2631,6 +2803,14 @@ ALTER TABLE ONLY public.cierre_materia
 
 ALTER TABLE ONLY public.colegio
     ADD CONSTRAINT colegio_pkey PRIMARY KEY (id_colegio);
+
+
+--
+-- Name: colegio_version_curricular colegio_version_curricular_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.colegio_version_curricular
+    ADD CONSTRAINT colegio_version_curricular_pkey PRIMARY KEY (id);
 
 
 --
@@ -2703,6 +2883,14 @@ ALTER TABLE ONLY public.contrato_docente
 
 ALTER TABLE ONLY public.criterio_evaluacion
     ADD CONSTRAINT criterio_evaluacion_pkey PRIMARY KEY (id_criterio);
+
+
+--
+-- Name: dba dba_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.dba
+    ADD CONSTRAINT dba_pkey PRIMARY KEY (id_dba);
 
 
 --
@@ -2807,6 +2995,14 @@ ALTER TABLE ONLY public.estudiante
 
 ALTER TABLE ONLY public.evidencia_aprendizaje
     ADD CONSTRAINT evidencia_aprendizaje_pkey PRIMARY KEY (id_evidencia);
+
+
+--
+-- Name: evidencias_dba evidencias_dba_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.evidencias_dba
+    ADD CONSTRAINT evidencias_dba_pkey PRIMARY KEY (id_evidencia_dba);
 
 
 --
@@ -3090,6 +3286,22 @@ ALTER TABLE ONLY public.configuracion_inscripcion
 
 
 --
+-- Name: colegio_version_curricular uq_colegio_area_grado; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.colegio_version_curricular
+    ADD CONSTRAINT uq_colegio_area_grado UNIQUE (id_colegio, area, grado);
+
+
+--
+-- Name: dba uq_dba_area_grado_num_version; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.dba
+    ADD CONSTRAINT uq_dba_area_grado_num_version UNIQUE (area, grado, numero_dba, version_curricular);
+
+
+--
 -- Name: tipo_grado uq_tipo_grado; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -3119,6 +3331,20 @@ ALTER TABLE ONLY public.usuario
 
 ALTER TABLE ONLY public.usuario_rol
     ADD CONSTRAINT usuario_rol_pkey PRIMARY KEY (id_usuario, id_rol);
+
+
+--
+-- Name: idx_actividad_evidencia_dba_act; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_actividad_evidencia_dba_act ON public.actividad_evidencia_dba USING btree (id_actividadmateria);
+
+
+--
+-- Name: idx_actividad_evidencia_dba_ev; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_actividad_evidencia_dba_ev ON public.actividad_evidencia_dba USING btree (id_evidencia_dba);
 
 
 --
@@ -3199,10 +3425,38 @@ CREATE INDEX idx_colegio_estado ON public.colegio USING btree (estado);
 
 
 --
+-- Name: idx_colegio_version_colegio; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_colegio_version_colegio ON public.colegio_version_curricular USING btree (id_colegio);
+
+
+--
 -- Name: idx_config_inscripcion_colegio; Type: INDEX; Schema: public; Owner: postgres
 --
 
 CREATE INDEX idx_config_inscripcion_colegio ON public.configuracion_inscripcion USING btree (id_colegio);
+
+
+--
+-- Name: idx_dba_area_grado; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_dba_area_grado ON public.dba USING btree (area, grado);
+
+
+--
+-- Name: idx_dba_estado; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_dba_estado ON public.dba USING btree (estado) WHERE (estado = 'ACTIVO'::public.estado_dba);
+
+
+--
+-- Name: idx_dba_version; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_dba_version ON public.dba USING btree (version_curricular);
 
 
 --
@@ -3213,10 +3467,24 @@ CREATE INDEX idx_detalle_padrefamilia_padrefamilia ON public.detalle_padrefamili
 
 
 --
+-- Name: idx_evidencia_aprendizaje_dba; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_evidencia_aprendizaje_dba ON public.evidencia_aprendizaje USING btree (id_evidencia_dba) WHERE (id_evidencia_dba IS NOT NULL);
+
+
+--
 -- Name: idx_evidencia_competencia; Type: INDEX; Schema: public; Owner: postgres
 --
 
 CREATE INDEX idx_evidencia_competencia ON public.evidencia_aprendizaje USING btree (id_competencia);
+
+
+--
+-- Name: idx_evidencias_dba_dba; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_evidencias_dba_dba ON public.evidencias_dba USING btree (id_dba);
 
 
 --
@@ -3374,6 +3642,22 @@ CREATE TRIGGER trg_proteger_auditoria BEFORE DELETE OR UPDATE ON public.auditori
 
 
 --
+-- Name: actividad_evidencia_dba actividad_evidencia_dba_id_actividadmateria_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.actividad_evidencia_dba
+    ADD CONSTRAINT actividad_evidencia_dba_id_actividadmateria_fkey FOREIGN KEY (id_actividadmateria) REFERENCES public.actividad_materia(id_actividadmateria) ON DELETE CASCADE;
+
+
+--
+-- Name: actividad_evidencia_dba actividad_evidencia_dba_id_evidencia_dba_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.actividad_evidencia_dba
+    ADD CONSTRAINT actividad_evidencia_dba_id_evidencia_dba_fkey FOREIGN KEY (id_evidencia_dba) REFERENCES public.evidencias_dba(id_evidencia_dba) ON DELETE CASCADE;
+
+
+--
 -- Name: actividad_materia actividad_materia_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -3467,6 +3751,14 @@ ALTER TABLE ONLY public.cierre_materia
 
 ALTER TABLE ONLY public.cierre_materia
     ADD CONSTRAINT cierre_materia_id_periodo_fkey FOREIGN KEY (id_periodo) REFERENCES public.periodo_academico(id_periodo);
+
+
+--
+-- Name: colegio_version_curricular colegio_version_curricular_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.colegio_version_curricular
+    ADD CONSTRAINT colegio_version_curricular_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio) ON DELETE CASCADE;
 
 
 --
@@ -3707,6 +3999,22 @@ ALTER TABLE ONLY public.evidencia_aprendizaje
 
 ALTER TABLE ONLY public.evidencia_aprendizaje
     ADD CONSTRAINT evidencia_aprendizaje_id_competencia_fkey FOREIGN KEY (id_competencia) REFERENCES public.competencias(id_competencia) ON DELETE CASCADE;
+
+
+--
+-- Name: evidencia_aprendizaje evidencia_aprendizaje_id_evidencia_dba_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.evidencia_aprendizaje
+    ADD CONSTRAINT evidencia_aprendizaje_id_evidencia_dba_fkey FOREIGN KEY (id_evidencia_dba) REFERENCES public.evidencias_dba(id_evidencia_dba) ON DELETE SET NULL;
+
+
+--
+-- Name: evidencias_dba evidencias_dba_id_dba_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.evidencias_dba
+    ADD CONSTRAINT evidencias_dba_id_dba_fkey FOREIGN KEY (id_dba) REFERENCES public.dba(id_dba) ON DELETE CASCADE;
 
 
 --
@@ -4120,5 +4428,5 @@ REVOKE USAGE ON SCHEMA public FROM PUBLIC;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict eMxo2H9tFSoGKfqqyhUhdYbuXSsO65mIBHT5B6DSNJn5ftCGQRcMFHq1Uw4lwJx
+\unrestrict 7hf0cUaOxS9xINcvd2mCmTMFdLd9jgPlXtf9lOygt0b9obTqZIgfPSU8jg18zBD
 

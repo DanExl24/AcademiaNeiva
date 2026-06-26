@@ -37,10 +37,12 @@ interface CompetencyItem {
   tipo_grado_nombre: string
   seccion_nombre: string
   jornada_nombre: string
+  usa_dba?: boolean
   evidencias: {
     id_evidencia: number
     descripcion: string
     orden: number
+    id_evidencia_dba?: number | null
   }[]
 }
 
@@ -50,6 +52,13 @@ const schoolId = computed(() => Number(auth.user?.schoolId || 0))
 const loading = ref(true)
 const saving = ref(false)
 const competencyModal = ref(false)
+
+const dbaModal = ref(false)
+const loadingDba = ref(false)
+const availableDba = ref<any[]>([])
+const dbaVersion = ref<string | null>(null)
+const selectedCompetenciaForDba = ref<CompetencyItem | null>(null)
+const checkedDbaEvidences = ref<number[]>([])
 
 const periods = ref<AcademicPeriod[]>([])
 const assignments = ref<AssignmentOption[]>([])
@@ -332,6 +341,54 @@ const removeEvidencia = async (competencia: CompetencyItem, evidenciaId: number)
   }
 }
 
+const openDbaModal = async (competencia: CompetencyItem) => {
+  selectedCompetenciaForDba.value = competencia
+  dbaModal.value = true
+  loadingDba.value = true
+  availableDba.value = []
+  dbaVersion.value = null
+  
+  // Initialize checked evidences
+  checkedDbaEvidences.value = competencia.evidencias
+    .filter(e => e.id_evidencia_dba)
+    .map(e => e.id_evidencia_dba as number)
+
+  try {
+    const res = await axios.get(`http://localhost:3000/api/academic-admin/settings/dba-planeacion/disponibles/${schoolId.value}`, {
+      params: {
+        id_grupo: competencia.id_grupo,
+        id_materia: competencia.id_materia
+      }
+    })
+    availableDba.value = res.data.dba || []
+    dbaVersion.value = res.data.versionCurricular
+  } catch (error) {
+    console.error('Error fetching available DBA:', error)
+    alert('No fue posible cargar el catálogo de DBA')
+  } finally {
+    loadingDba.value = false
+  }
+}
+
+const saveDbaEvidencias = async () => {
+  if (!selectedCompetenciaForDba.value) return
+
+  try {
+    saving.value = true
+    await axios.post(`http://localhost:3000/api/academic-admin/settings/competencias/${selectedCompetenciaForDba.value.id_competencia}/vincular-evidencias-dba`, {
+      schoolId: schoolId.value,
+      id_evidencias_dba: checkedDbaEvidences.value
+    })
+    dbaModal.value = false
+    selectedCompetenciaForDba.value = null
+    await loadData()
+  } catch (error: any) {
+    alert(error.response?.data?.error || 'Error al vincular evidencias de DBA')
+  } finally {
+    saving.value = false
+  }
+}
+
 onMounted(loadData)
 </script>
 
@@ -517,6 +574,7 @@ onMounted(loadData)
                 <h4 class="text-xs font-black text-slate-900 dark:text-white mb-5 uppercase tracking-widest flex items-center gap-2">
                   <Sparkles class="h-3.5 w-3.5 text-emerald-500" />
                   Evidencias de aprendizaje
+                  <span v-if="item.usa_dba" class="rounded-full bg-emerald-100 px-2 py-0.5 text-[9px] font-black uppercase text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 tracking-wider">Catálogo DBA</span>
                 </h4>
                 
                 <ul v-if="item.evidencias?.length" class="space-y-4 mb-6">
@@ -529,7 +587,7 @@ onMounted(loadData)
                     </div>
                     <div v-else class="flex-1 flex justify-between items-start gap-4">
                       <span class="text-sm font-semibold text-slate-700 dark:text-slate-400">{{ ev.descripcion }}</span>
-                      <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div v-if="!ev.id_evidencia_dba" class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button @click="startEditEvidencia(ev)" class="text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400"><PenSquare class="h-4 w-4" /></button>
                         <button @click="removeEvidencia(item, ev.id_evidencia)" class="text-slate-400 hover:text-red-500"><Trash2 class="h-4 w-4" /></button>
                       </div>
@@ -538,7 +596,12 @@ onMounted(loadData)
                 </ul>
                 <div v-else class="text-sm text-slate-500 dark:text-slate-600 italic mb-6">No hay evidencias definidas para esta competencia.</div>
                 
-                <div class="flex gap-3">
+                <div v-if="item.usa_dba" class="flex justify-start">
+                  <button @click="openDbaModal(item)" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-6 py-3 text-xs font-black text-white hover:bg-emerald-500 uppercase tracking-widest transition-all shadow-sm">
+                    <Sparkles class="h-4 w-4" /> Vincular Evidencias del DBA
+                  </button>
+                </div>
+                <div v-else class="flex gap-3">
                   <input type="text" v-model="newEvidencia[item.id_competencia]" @keyup.enter="addEvidencia(item)" placeholder="Agregar evidencia..." class="flex-1 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold outline-none transition focus:border-emerald-400 dark:bg-slate-900 dark:border-slate-700 dark:text-white dark:focus:ring-2 dark:focus:ring-emerald-500/20" />
                   <button @click="addEvidencia(item)" :disabled="!newEvidencia[item.id_competencia]?.trim() || saving" class="inline-flex items-center justify-center rounded-xl bg-slate-100 px-6 py-3 text-xs font-black text-slate-700 transition hover:bg-slate-200 disabled:opacity-50 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700 uppercase tracking-widest">
                     <Plus class="h-4 w-4 mr-1.5" /> Agregar
@@ -632,6 +695,112 @@ onMounted(loadData)
                 {{ saving ? 'Guardando...' : 'Guardar competencia' }}
               </button>
             </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal de Vinculación de Evidencias DBA (Fase 2) -->
+    <div v-if="dbaModal" class="fixed inset-0 z-[100] overflow-y-auto bg-slate-950/80 backdrop-blur-md transition-all animate-in fade-in duration-200">
+      <div class="flex min-h-full items-center justify-center p-4 sm:p-6 md:p-8">
+        <div class="fixed inset-0 bg-transparent" @click="dbaModal = false; selectedCompetenciaForDba = null"></div>
+
+        <div class="relative w-full max-w-4xl rounded-[2.5rem] bg-white shadow-2xl dark:bg-slate-900 border border-slate-100 dark:border-slate-800/80 overflow-hidden animate-in fade-in zoom-in duration-300">
+          <div class="border-b border-slate-100 px-6 py-5 md:px-8 dark:border-slate-800/60">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-4">
+                <div class="h-11 w-11 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400 shadow-inner">
+                   <BookOpenCheck class="h-5 w-5" />
+                </div>
+                <div>
+                  <h2 class="text-xl md:text-2xl font-black text-slate-900 dark:text-white tracking-tight uppercase">Vincular Evidencias DBA</h2>
+                  <p class="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-[0.2em] mt-1">Catálogo Oficial del Ministerio de Educación</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                @click="dbaModal = false; selectedCompetenciaForDba = null"
+                class="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300 transition-colors"
+              >
+                <X class="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+          
+          <div class="px-6 py-6 md:px-8 md:py-8 max-h-[60vh] overflow-y-auto">
+            <div v-if="loadingDba" class="py-12 text-center text-sm font-semibold text-slate-500 dark:text-slate-400">
+              Cargando evidencias del catálogo oficial DBA...
+            </div>
+            <div v-else-if="availableDba.length === 0" class="py-12 text-center">
+              <p class="text-base font-black text-slate-700 dark:text-slate-400">No hay catálogo DBA asignado.</p>
+              <p class="mt-2 text-sm font-semibold text-slate-500 max-w-md mx-auto leading-relaxed">
+                Este grado o materia no tiene una versión curricular del catálogo DBA asociada a la institución académica.
+              </p>
+            </div>
+            <div v-else class="space-y-8">
+              <div class="rounded-3xl border border-emerald-100 bg-emerald-50 p-5 dark:bg-emerald-950/10 dark:border-emerald-900/30">
+                <span class="rounded-full bg-emerald-600 px-3 py-1 text-[9px] font-black uppercase text-white tracking-widest">
+                  Versión Activa: {{ dbaVersion }}
+                </span>
+                <h3 class="mt-3 text-sm font-black text-emerald-900 dark:text-emerald-300 uppercase tracking-wider">
+                  {{ selectedCompetenciaForDba?.materia_nombre }} — Grado {{ selectedCompetenciaForDba?.tipo_grado_nombre }}
+                </h3>
+                <p class="mt-2 text-xs font-semibold text-emerald-800/80 dark:text-emerald-400 leading-relaxed">
+                  Selecciona qué evidencias oficiales formarán parte de tu planeación académica. Estas evidencias serán consultadas por los docentes para sus actividades.
+                </p>
+              </div>
+
+              <div class="space-y-6">
+                <div v-for="dbaItem in availableDba" :key="dbaItem.id_dba" class="rounded-3xl border border-slate-100 bg-slate-50 p-6 dark:bg-slate-800/50 dark:border-slate-800 shadow-sm">
+                  <div class="flex items-start gap-4">
+                    <span class="rounded-2xl bg-emerald-100 text-emerald-800 px-3 py-2 text-xs font-black dark:bg-emerald-950/40 dark:text-emerald-400 shrink-0">
+                      DBA #{{ dbaItem.numero_dba }}
+                    </span>
+                    <p class="text-sm font-bold text-slate-800 dark:text-slate-200 leading-relaxed">
+                      {{ dbaItem.enunciado }}
+                    </p>
+                  </div>
+
+                  <div class="mt-6 border-t border-slate-200/60 pt-5 dark:border-slate-700/60 space-y-4">
+                    <h4 class="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                      Evidencias Oficiales:
+                    </h4>
+                    <div class="grid grid-cols-1 gap-3">
+                      <label v-for="ev in dbaItem.evidencias" :key="ev.id_evidencia_dba" class="flex items-start gap-3 rounded-2xl border border-slate-200/50 bg-white p-4 transition-colors hover:bg-emerald-50/20 cursor-pointer dark:bg-slate-900 dark:border-slate-800">
+                        <input
+                          type="checkbox"
+                          v-model="checkedDbaEvidences"
+                          :value="ev.id_evidencia_dba"
+                          class="mt-1 h-4.5 w-4.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                        />
+                        <span class="text-xs font-semibold leading-relaxed text-slate-700 dark:text-slate-300">
+                          {{ ev.descripcion }}
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="border-t border-slate-100 px-6 py-5 md:px-8 dark:border-slate-800/60 flex flex-col gap-4 sm:flex-row sm:justify-end bg-slate-50 dark:bg-slate-900/40">
+            <button
+              type="button"
+              @click="dbaModal = false; selectedCompetenciaForDba = null"
+              class="px-8 py-3.5 rounded-2xl border border-slate-200 text-xs font-black text-slate-600 hover:bg-slate-50 transition-all dark:border-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 uppercase tracking-widest"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              @click="saveDbaEvidencias"
+              :disabled="saving || loadingDba || availableDba.length === 0"
+              class="inline-flex min-h-12 items-center justify-center gap-3 rounded-2xl bg-emerald-600 px-10 py-3.5 text-sm font-black text-white hover:bg-emerald-500 transition-all disabled:opacity-50 uppercase tracking-widest shadow-xl shadow-emerald-600/10 dark:shadow-none"
+            >
+              <Check class="h-4 w-4" />
+              {{ saving ? 'Guardando...' : 'Guardar Vinculación' }}
+            </button>
           </div>
         </div>
       </div>

@@ -159,6 +159,12 @@ const router = createRouter({
           meta: { roles: ['directivo'] }
         },
         {
+          path: 'configuracion-academica/reportes-dba',
+          name: 'Reportes y Coherencia DBA',
+          component: () => import('../views/admin/DbaReportsView.vue'),
+          meta: { roles: ['directivo'] }
+        },
+        {
           path: 'boletines',
           name: 'Generación de Boletines',
           component: BoletinGenerator,
@@ -343,13 +349,51 @@ const router = createRouter({
   ]
 })
 
-router.beforeEach((to) => {
+// La verificación del token se cachea en sessionStorage.
+// Se verifica contra el backend una sola vez por sesión del navegador (nueva pestaña/tab = nueva verificación).
+// Al hacer logout, sessionStorage._sessionVerified se limpia.
+
+router.beforeEach(async (to) => {
   const auth = useAuthStore()
-  
-  if (to.meta.requiresAuth && !auth.isAuthenticated) {
-    return '/login'
+
+  // Rutas públicas: si el usuario ya está autenticado y va al login, redirigir al dashboard
+  if ((to.path === '/login' || to.path === '/login/estudiante' || to.path === '/login/admin') && auth.isAuthenticated) {
+    return '/dashboard'
   }
 
+  // Rutas protegidas
+  if (to.meta.requiresAuth) {
+    // Si no hay token local, redirigir inmediatamente al login
+    if (!auth.isAuthenticated || !auth.token) {
+      auth.logout()
+      return '/login'
+    }
+
+    // Validar token contra el backend (una vez por sesión de navegador)
+    const alreadyVerified = sessionStorage.getItem('_sessionVerified') === 'true'
+    if (!alreadyVerified) {
+      try {
+        const res = await fetch('http://localhost:3000/api/auth/verify', {
+          headers: { 'Authorization': `Bearer ${auth.token}` }
+        })
+
+        if (!res.ok) {
+          // Token inválido, expirado o usuario suspendido → limpiar y redirigir
+          console.warn('[Auth Guard] Token inválido. Cerrando sesión local.')
+          auth.logout()
+          return '/login'
+        }
+
+        sessionStorage.setItem('_sessionVerified', 'true')
+      } catch (err) {
+        // Error de red (backend caído): permitir acceso local pero no re-verificar constantemente
+        console.warn('[Auth Guard] No se pudo verificar el token con el servidor:', err)
+        sessionStorage.setItem('_sessionVerified', 'true')
+      }
+    }
+  }
+
+  // Verificación de roles
   if (auth.isAuthenticated) {
     const activeRole = auth.activeRole
     const allowedRoles = to.meta.roles as string[] | undefined
@@ -362,3 +406,4 @@ router.beforeEach((to) => {
 })
 
 export default router
+

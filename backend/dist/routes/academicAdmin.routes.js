@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const academicAdminController_1 = require("../controllers/academicAdminController");
+const dbaReportsController_1 = require("../controllers/dbaReportsController");
 const multer_1 = require("../config/multer");
 const authMiddleware_1 = require("../middleware/authMiddleware");
 const router = (0, express_1.Router)();
@@ -53,6 +54,11 @@ router.delete("/settings/scales/:id", academicAdminController_1.deleteScale);
 router.post("/settings/competencies/:competenciaId/evidencias", academicAdminController_1.createEvidencia);
 router.put("/settings/evidencias/:evidenciaId", academicAdminController_1.updateEvidencia);
 router.delete("/settings/evidencias/:evidenciaId", academicAdminController_1.deleteEvidencia);
+// Integración de DBA en Colegios (Fase 2)
+router.get("/settings/dba-planeacion/disponibles/:schoolId", academicAdminController_1.getDbaPlaneacionDisponibles);
+router.post("/settings/competencias/:competenciaId/vincular-evidencias-dba", academicAdminController_1.vincularEvidenciasDbaACompetencia);
+router.get("/settings/dba-reportes/coherencia/:schoolId", dbaReportsController_1.obtenerReporteCoherenciaCurricular);
+router.get("/settings/dba-reportes/cobertura/:schoolId", dbaReportsController_1.obtenerReporteCoberturaDba);
 // Dashboard Analítico
 router.get("/dashboard/:schoolId", academicAdminController_1.getDirectivoDashboard);
 // Matrícula Extraordinaria

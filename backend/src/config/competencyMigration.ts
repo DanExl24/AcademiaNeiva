@@ -183,23 +183,7 @@ BEGIN
   END IF;
 END $$;
 
-DO $$
-BEGIN
-  IF EXISTS (
-    SELECT 1
-    FROM information_schema.columns
-    WHERE table_schema = 'public'
-      AND table_name = 'actividad_materia'
-      AND column_name = 'id_competencia'
-  ) AND EXISTS (
-    SELECT 1
-    FROM public.actividad_materia
-    WHERE id_competencia IS NOT NULL
-  ) THEN
-    ALTER TABLE public.actividad_materia
-      ALTER COLUMN id_competencia SET NOT NULL;
-  END IF;
-END $$;
+-- NOT NULL constraint on id_competencia removed for Phase 3 evaluation independence
 
 DO $$
 BEGIN
@@ -346,6 +330,20 @@ export const ensureCompetencySchema = async (): Promise<void> => {
     if (fs.existsSync(dbaMigrationPath)) {
       const dbaMigrationSql = fs.readFileSync(dbaMigrationPath, "utf8");
       await client.query(dbaMigrationSql);
+    }
+
+    // Ejecutar migración de planeación y ejecución institucional de DBA
+    const instMigrationPath = path.join(__dirname, "../migrations/008_dba_planeacion_institucional.sql");
+    if (fs.existsSync(instMigrationPath)) {
+      const instMigrationSql = fs.readFileSync(instMigrationPath, "utf8");
+      await client.query(instMigrationSql);
+    }
+
+    // Ejecutar migración de independencia de actividades (Fase 3)
+    const indMigrationPath = path.join(__dirname, "../migrations/009_dba_independencia_actividades.sql");
+    if (fs.existsSync(indMigrationPath)) {
+      const indMigrationSql = fs.readFileSync(indMigrationPath, "utf8");
+      await client.query(indMigrationSql);
     }
 
     await client.query("COMMIT");

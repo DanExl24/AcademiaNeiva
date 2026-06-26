@@ -181,6 +181,9 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem('monitoringType')
     localStorage.removeItem('supervision')
     localStorage.removeItem('selectedSchoolId')
+
+    // Resetear la verificación del router guard via sessionStorage
+    sessionStorage.removeItem('_sessionVerified')
   }
 
   return {

@@ -51,7 +51,13 @@ import {
   rejectReingresoEnrollment,
   renameSingleCourse,
   bulkRenameCourses,
+  getDbaPlaneacionDisponibles,
+  vincularEvidenciasDbaACompetencia,
 } from "../controllers/academicAdminController";
+import {
+  obtenerReporteCoherenciaCurricular,
+  obtenerReporteCoberturaDba
+} from "../controllers/dbaReportsController";
 import { upload } from "../config/multer";
 import { verifyToken, requireDirectivo } from "../middleware/authMiddleware";
 
@@ -111,6 +117,12 @@ router.delete("/settings/scales/:id", deleteScale);
 router.post("/settings/competencies/:competenciaId/evidencias", createEvidencia);
 router.put("/settings/evidencias/:evidenciaId", updateEvidencia);
 router.delete("/settings/evidencias/:evidenciaId", deleteEvidencia);
+
+// Integración de DBA en Colegios (Fase 2)
+router.get("/settings/dba-planeacion/disponibles/:schoolId", getDbaPlaneacionDisponibles);
+router.post("/settings/competencias/:competenciaId/vincular-evidencias-dba", vincularEvidenciasDbaACompetencia);
+router.get("/settings/dba-reportes/coherencia/:schoolId", obtenerReporteCoherenciaCurricular);
+router.get("/settings/dba-reportes/cobertura/:schoolId", obtenerReporteCoberturaDba);
 
 // Dashboard Analítico
 router.get("/dashboard/:schoolId", getDirectivoDashboard);

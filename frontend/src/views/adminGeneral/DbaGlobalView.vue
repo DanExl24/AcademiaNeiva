@@ -375,7 +375,7 @@ const handleAssignVersion = async () => {
 
   try {
     saving.value = true
-    await axios.post('http://localhost:3000/api/admin/dba/assign-version', {
+    await axios.post('http://localhost:3000/api/admin/dba/asignar-version', {
       id_colegio: Number(assignForm.value.id_colegio),
       area: assignForm.value.area,
       grado: assignForm.value.grado,
@@ -934,6 +934,7 @@ const handleImportPDF = async () => {
           <div>
             <label class="text-xs font-bold text-slate-400 uppercase block mb-1">Grado *</label>
             <select v-model="assignForm.grado" class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              <option value="TODOS">Todos los grados</option>
               <option v-for="grade in gradeOptions" :key="grade" :value="grade">{{ grade }}</option>
             </select>
           </div>

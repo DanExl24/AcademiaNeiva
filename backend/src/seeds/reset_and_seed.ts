@@ -60,7 +60,7 @@ const schools: SchoolSeed[] = [
 
 // ─── ACADEMIC CATALOGS ──────────────────────────────────────────────────────────
 
-const sectionNames = ["A", "B"];
+const sectionNames = ["A", "B", "C"];
 const jornadaNames = ["MAÑANA", "TARDE", "UNICA"];
 
 const periodSeeds = [
@@ -449,13 +449,13 @@ async function insertStudentsAndParents(
   const yearId = yearsRes.rows[0]?.id_año;
   if (!yearId) return;
 
-  // Get groups for MAÑANA + A only (14 groups: one per grade type)
+  // Get groups for MAÑANA + A, B, C (42 groups: 3 per grade type)
   const groupsRes = await client.query<{ id_grupo: number; id_nivel: number }>(
     `SELECT g.id_grupo, g.id_nivel
      FROM grupos g
      JOIN jornada j ON g.id_jornada = j.id_jornada
      JOIN secciones s ON g.id_seccion = s.id_seccion
-     WHERE g.id_colegio = $1 AND j.nombre = 'MAÑANA' AND s.nombre = 'A'
+     WHERE g.id_colegio = $1 AND j.nombre = 'MAÑANA' AND s.nombre IN ('A', 'B', 'C')
      ORDER BY g.id_grupo`,
     [school.id]
   );
@@ -962,11 +962,30 @@ async function run(): Promise<void> {
     console.log("📅 Generando registros de asistencia de prueba...");
     await insertSampleAttendance(client);
 
+    // ── Phase 9.5: Seed Admin General Supervisions ──
+    console.log("🕵️ Generando supervisiones de auditoría del Administrador General...");
+    const adminGenId = adminGeneralResult.rows[0].id_usuario;
+    const directivosRes = await client.query(`SELECT DISTINCT ON (id_colegio) id, id_colegio FROM directivo`);
+    for (const d of directivosRes.rows) {
+      await client.query(`
+        INSERT INTO auditoria_supervision (
+          id_admin_general, id_colegio, id_directivo_aprobador, motivo_solicitud,
+          tipo_supervision, estado_supervision, fecha_aprobacion, motivo_entrada,
+          fecha_entrada, fecha_salida, duracion_maxima_minutos
+        ) VALUES (
+          $1, $2, $3, 'Revisión rutinaria de calificaciones y planeación curricular',
+          'SOLO_LECTURA'::tipo_supervision, 'FINALIZADA'::estado_supervision, NOW() - INTERVAL '2 days',
+          'Entrada autorizada para auditoría semestral', NOW() - INTERVAL '2 days', NOW() - INTERVAL '2 days' + INTERVAL '45 minutes', 60
+        )
+      `, [adminGenId, d.id_colegio, d.id]);
+    }
+
     // ── Phase 10: Sync sequences ──
     console.log("🔄 Sincronizando secuencias de base de datos...");
     await client.query(`
       SELECT setval(pg_get_serial_sequence('colegio', 'id_colegio'), COALESCE(MAX(id_colegio), 1)) FROM colegio;
       SELECT setval(pg_get_serial_sequence('tipo_documento', 'id_tipodocumento'), COALESCE(MAX(id_tipodocumento), 1)) FROM tipo_documento;
+      SELECT setval(pg_get_serial_sequence('auditoria_supervision', 'id_auditoria'), COALESCE(MAX(id_auditoria), 1)) FROM auditoria_supervision;
     `);
 
     await client.query("COMMIT");
@@ -1007,10 +1026,10 @@ async function run(): Promise<void> {
     }
 
     // ── Summary ──
-    const totalStudents = schools.length * 14 * STUDENTS_PER_GROUP;
+    const totalStudents = schools.length * 42 * STUDENTS_PER_GROUP;
     const expelled = credentials.filter(() => false).length; // Not in credentials
     console.log(`\n🎉 Base de datos reseteada correctamente para ${schools.length} colegios.`);
-    console.log(`   📊 Estudiantes totales: ${totalStudents} (${STUDENTS_PER_GROUP}/grupo × 14 grupos × ${schools.length} colegios)`);
+    console.log(`   📊 Estudiantes totales: ${totalStudents} (${STUDENTS_PER_GROUP}/grupo × 42 grupos × ${schools.length} colegios)`);
     console.log(`   ⚠️  ~5% SANCIONADOS, ~5% EXPULSADOS, ~5% RETIRADOS`);
     console.log(`   📄 Credenciales: ${credentialsPath}`);
   } catch (error) {

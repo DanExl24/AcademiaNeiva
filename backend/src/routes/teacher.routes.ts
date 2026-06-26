@@ -13,6 +13,8 @@ import {
   updateCompetency,
   getClosureStatus,
   closePeriodForTeacher,
+  getCompetenciaEvidenciasDba,
+  getCourseEvidenciasDba,
 } from "../controllers/gradingController";
 import {
   getAttendanceByDate,
@@ -47,6 +49,8 @@ router.post("/activities/criteria", createCriterion);
 router.delete("/activities/criteria/:id", deleteCriterion);
 
 router.put("/competencies/:id", updateCompetency);
+router.get("/competencies/:competenciaId/evidencias-dba", getCompetenciaEvidenciasDba);
+router.get("/courses/:gradeId/:subjectId/evidencias-dba", getCourseEvidenciasDba);
 router.get("/periods/:schoolId", getPeriods);
 
 // Rutas de Calificaciones - Notas

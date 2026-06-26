@@ -136,10 +136,13 @@ const academicYears = ref<any[]>([])
 const selectedYearId = ref<number | null>(null)
 const selectedPeriodId = ref<number | null>(null)
 
-// Only show periods for the selected year
+// Only show periods for the selected year and hide PENDIENTE ones
 const periods = computed(() => {
-  if (!selectedYearId.value) return allPeriods.value
-  return allPeriods.value.filter((p: any) => p['id_año'] === selectedYearId.value)
+  let list = allPeriods.value
+  if (selectedYearId.value) {
+    list = list.filter((p: any) => p['id_año'] === selectedYearId.value)
+  }
+  return list.filter((p: any) => p.estado !== 'PENDIENTE')
 })
 
 const activeSummary = computed(() => {

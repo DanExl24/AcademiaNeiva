@@ -20,6 +20,8 @@ router.delete("/activities/:id", gradingController_1.deleteActivity);
 router.post("/activities/criteria", gradingController_1.createCriterion);
 router.delete("/activities/criteria/:id", gradingController_1.deleteCriterion);
 router.put("/competencies/:id", gradingController_1.updateCompetency);
+router.get("/competencies/:competenciaId/evidencias-dba", gradingController_1.getCompetenciaEvidenciasDba);
+router.get("/courses/:gradeId/:subjectId/evidencias-dba", gradingController_1.getCourseEvidenciasDba);
 router.get("/periods/:schoolId", gradingController_1.getPeriods);
 // Rutas de Calificaciones - Notas
 router.get("/grades/:gradeId/:subjectId/:periodId", gradingController_1.getGrades);

@@ -192,6 +192,34 @@ onMounted(loadData)
           </div>
         </router-link>
 
+        <router-link
+          to="/dashboard/configuracion-academica/reportes-dba"
+          class="group overflow-hidden rounded-3xl border border-amber-100 bg-[radial-gradient(circle_at_top_left,_rgba(245,158,11,0.14),_transparent_38%),linear-gradient(135deg,#fffbeb_0%,#fef3c7_48%,#fde68a_100%)] p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-lg dark:border-amber-900/30 dark:bg-[radial-gradient(circle_at_top_left,_rgba(245,158,11,0.1),_transparent_38%),linear-gradient(135deg,#78350f_0%,#451a03_48%,#92400e_100%)]"
+        >
+          <div class="flex h-full flex-col justify-between gap-6">
+            <div>
+              <div class="inline-flex rounded-2xl bg-amber-600 p-3 text-white shadow-sm">
+                <SlidersHorizontal class="h-6 w-6" />
+              </div>
+              <h2 class="mt-5 text-2xl font-black text-slate-900 dark:text-white">Reportes y Coherencia DBA</h2>
+              <p class="mt-3 max-w-2xl text-sm font-semibold leading-6 text-slate-600 dark:text-slate-300">
+                Visualiza el cumplimiento del currículo nacional oficial de Derechos Básicos de Aprendizaje (DBA), analizando la cobertura de evidencias y la coherencia de planeación.
+              </p>
+            </div>
+
+            <div class="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+              <div class="flex flex-wrap gap-3">
+                <span class="rounded-full bg-white/80 px-4 py-2 text-sm font-black text-amber-700 shadow-sm dark:bg-slate-800/80 dark:text-amber-400">
+                  Análisis curricular
+                </span>
+              </div>
+              <span class="inline-flex items-center gap-2 text-sm font-black text-amber-700 transition group-hover:translate-x-1 dark:text-amber-400">
+                Ver reportes
+              </span>
+            </div>
+          </div>
+        </router-link>
+
       </div>
     </template>
 

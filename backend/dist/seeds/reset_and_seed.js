@@ -26,7 +26,7 @@ const schools = [
     { id: 5, nombre: "Colegio IDESA", tipo: "Privado", sede: "Sede Principal", contacto: 3153077861, correo: "info@colegioidesa.com.co", dane: "DANE-I-003", domain: "colegioidesa.edu.co", tipo_calendario: "A" },
 ];
 // ─── ACADEMIC CATALOGS ──────────────────────────────────────────────────────────
-const sectionNames = ["A", "B"];
+const sectionNames = ["A", "B", "C"];
 const jornadaNames = ["MAÑANA", "TARDE", "UNICA"];
 const periodSeeds = [
     { nombre: "Primer Periodo", estado: "CERRADO", porcentaje: 25, trimestre: 1 },
@@ -701,11 +701,29 @@ async function run() {
         // ── Phase 9: Sample attendance ──
         console.log("📅 Generando registros de asistencia de prueba...");
         await insertSampleAttendance(client);
+        // ── Phase 9.5: Seed Admin General Supervisions ──
+        console.log("🕵️ Generando supervisiones de auditoría del Administrador General...");
+        const adminGenId = adminGeneralResult.rows[0].id_usuario;
+        const directivosRes = await client.query(`SELECT id, id_colegio FROM directivo`);
+        for (const d of directivosRes.rows) {
+            await client.query(`
+        INSERT INTO auditoria_supervision (
+          id_admin_general, id_colegio, id_directivo_aprobador, motivo_solicitud,
+          tipo_supervision, estado_supervision, fecha_aprobacion, motivo_entrada,
+          fecha_entrada, fecha_salida, duracion_maxima_minutos
+        ) VALUES (
+          $1, $2, $3, 'Revisión rutinaria de calificaciones y planeación curricular',
+          'SOLO_LECTURA'::tipo_supervision, 'FINALIZADA'::estado_supervision, NOW() - INTERVAL '2 days',
+          'Entrada autorizada para auditoría semestral', NOW() - INTERVAL '2 days', NOW() - INTERVAL '2 days' + INTERVAL '45 minutes', 60
+        )
+      `, [adminGenId, d.id_colegio, d.id]);
+        }
         // ── Phase 10: Sync sequences ──
         console.log("🔄 Sincronizando secuencias de base de datos...");
         await client.query(`
       SELECT setval(pg_get_serial_sequence('colegio', 'id_colegio'), COALESCE(MAX(id_colegio), 1)) FROM colegio;
       SELECT setval(pg_get_serial_sequence('tipo_documento', 'id_tipodocumento'), COALESCE(MAX(id_tipodocumento), 1)) FROM tipo_documento;
+      SELECT setval(pg_get_serial_sequence('auditoria_supervision', 'id_auditoria'), COALESCE(MAX(id_auditoria), 1)) FROM auditoria_supervision;
     `);
         await client.query("COMMIT");
         console.log("✅ Transacción principal completada.");

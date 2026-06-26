@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { onMounted, ref, computed } from 'vue'
+import { onMounted, onUnmounted, ref, computed } from 'vue'
 import axios from 'axios'
 import { useAuthStore } from '../../stores/auth'
+import { socketService } from '../../services/socketService'
 import { Doughnut, Line } from 'vue-chartjs'
 import {
   Chart as ChartJS,
@@ -60,7 +61,27 @@ const fetchStats = async () => {
   }
 }
 
-onMounted(fetchStats)
+// WebSocket: escuchar actualizaciones de sesiones activas en tiempo real
+let cleanupSocket: (() => void) | null = null
+
+onMounted(() => {
+  fetchStats()
+
+  // Suscribirse al evento de sesiones activas
+  cleanupSocket = socketService.on('active_sessions_update', (data: { conectados: number }) => {
+    if (stats.value && stats.value.usuarios) {
+      stats.value.usuarios.conectados = data.conectados
+    }
+  })
+})
+
+onUnmounted(() => {
+  if (cleanupSocket) {
+    cleanupSocket()
+    cleanupSocket = null
+  }
+})
+
 
 // Chart 1: Platform Growth (Line Chart)
 const growthChartData = computed(() => {
@@ -286,13 +307,19 @@ const distributionChartOptions = {
         </div>
       </div>
 
-      <!-- Usuarios Conectados -->
-      <div class="bg-white dark:bg-slate-950 rounded-3xl border border-slate-100 dark:border-slate-900 p-6 flex flex-col justify-between hover:shadow-xl hover:-translate-y-1 transition-all duration-300 shadow-sm relative overflow-hidden group">
+      <!-- Usuarios Conectados (Tiempo Real) -->
+      <div class="bg-white dark:bg-slate-950 rounded-3xl border border-emerald-200 dark:border-emerald-900/50 p-6 flex flex-col justify-between hover:shadow-xl hover:shadow-emerald-500/5 hover:-translate-y-1 transition-all duration-300 shadow-sm relative overflow-hidden group">
         <div class="absolute -right-6 -bottom-6 text-emerald-100 dark:text-emerald-950/20 opacity-20 group-hover:scale-110 transition-transform duration-300 pointer-events-none">
           <Users :size="96" />
         </div>
         <div class="flex items-center justify-between">
-          <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider">En Línea</span>
+          <div class="flex items-center gap-2">
+            <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider">En Línea</span>
+            <span class="inline-flex items-center gap-1 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 rounded-full px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider">
+              <span class="h-1.5 w-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+              LIVE
+            </span>
+          </div>
           <div class="bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 p-2 rounded-xl">
             <Activity :size="18" class="animate-pulse" />
           </div>

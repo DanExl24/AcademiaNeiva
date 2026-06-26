@@ -207,19 +207,14 @@ async function runSeedGrades() {
         let gradePercentageOfStudents = 1.0;
         let shouldCloseSubject = false;
 
-        // In open periods, simulate realistic progress:
-        // - 25% of subjects are graded and closed.
-        // - 35% of subjects are partially graded (e.g. 60% of students graded).
+        // In open periods, simulate 60% academic load:
+        // - 60% of subjects have activities/grades.
         // - 40% of subjects have no grades or activities.
         if (!isClosed) {
           const randScenario = Math.random();
-          if (randScenario < 0.25) {
+          if (randScenario < 0.60) {
             shouldProcess = true;
             gradePercentageOfStudents = 1.0;
-            shouldCloseSubject = true;
-          } else if (randScenario < 0.60) {
-            shouldProcess = true;
-            gradePercentageOfStudents = 0.6;
             shouldCloseSubject = false;
           } else {
             shouldProcess = false;
@@ -232,7 +227,7 @@ async function runSeedGrades() {
 
         // Get the correct competency for this group+materia+periodo
         const compKey = `${dg.id_grupo}-${dg.id_materia}-${period.id_periodo}`;
-        const competenciaId = competencyMap.get(compKey) || fallbackCompetency[dg.id_colegio] || 1;
+        const competenciaId = competencyMap.get(compKey) || fallbackCompetency[dg.id_colegio] || null;
 
         // Register subject closure for CLOSED periods or completed open subjects
         if (isClosed || shouldCloseSubject) {

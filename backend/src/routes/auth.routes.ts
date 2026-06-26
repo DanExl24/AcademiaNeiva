@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { login, studentLogin, getSchoolIdentity } from "../controllers/authController";
+import { login, studentLogin, getSchoolIdentity, verifySession } from "../controllers/authController";
 import { checkDocument } from "../controllers/userController";
 import { forgotPassword, resetPassword } from "../controllers/passwordResetController";
 import { verifyToken } from "../middleware/authMiddleware";
@@ -12,6 +12,7 @@ router.post("/forgot-password", forgotPassword);
 router.post("/reset-password", resetPassword);
 router.get("/check-document/:document", checkDocument);
 router.get("/school-identity/:schoolId", verifyToken, getSchoolIdentity);
+router.get("/verify", verifySession);
 
 export default router;
 
