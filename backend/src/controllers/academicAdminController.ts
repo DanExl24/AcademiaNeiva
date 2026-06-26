@@ -1590,6 +1590,7 @@ export const upsertCompetencyByAdmin = async (req: Request, res: Response): Prom
   const subjectId = Number(req.body.id_materia);
   const periodId = Number(req.body.id_periodo);
   const descripcion = String(req.body.descripcion || "").trim();
+  const idEvidenciasDba = req.body.id_evidencias_dba;
 
   if (!schoolId || !groupId || !subjectId || !periodId || !descripcion) {
     res.status(400).json({ error: "Curso, materia, periodo y descripción son obligatorios" });
@@ -1622,8 +1623,91 @@ export const upsertCompetencyByAdmin = async (req: Request, res: Response): Prom
 
       await client.query("BEGIN");
       const created = await syncCompetencyAcrossGrade(client, context, periodId, descripcion);
-      await client.query("COMMIT");
 
+      // Si se proporcionó id_evidencias_dba, vincularlas a las competencias de todo el grado
+      if (idEvidenciasDba !== undefined && Array.isArray(idEvidenciasDba)) {
+        // Obtener las competencias hermanas para este grado/materia/año/periodo
+        const sisterCompsRes = await client.query(
+          `SELECT id_competencia 
+           FROM competencias 
+           WHERE id_colegio = $1 
+             AND id_año = $2 
+             AND id_materia = $3 
+             AND id_periodo = $4 
+             AND id_grupo IN (
+               SELECT g2.id_grupo
+               FROM grupos g1
+               JOIN grupos g2 ON g2.id_nivel = g1.id_nivel AND g2.id_tipo_grado = g1.id_tipo_grado
+               WHERE g1.id_grupo = $5 AND g1.id_colegio = $1
+             )`,
+          [schoolId, created.id_año, created.id_materia, created.id_periodo, created.id_grupo]
+        );
+        const sisterCompIds = sisterCompsRes.rows.map(r => r.id_competencia);
+
+        if (idEvidenciasDba.length === 0) {
+          // Desvincular todas
+          await client.query(
+            `DELETE FROM evidencia_aprendizaje 
+             WHERE id_competencia = ANY($1::int[]) AND id_evidencia_dba IS NOT NULL`,
+            [sisterCompIds]
+          );
+        } else {
+          const officialEvsRes = await client.query(
+            `SELECT id_evidencia_dba, descripcion, orden 
+             FROM evidencias_dba 
+             WHERE id_evidencia_dba = ANY($1::int[]) AND estado = 'ACTIVO'`,
+            [idEvidenciasDba]
+          );
+
+          if (officialEvsRes.rows.length > 0) {
+            for (const targetCompId of sisterCompIds) {
+              const existingRes = await client.query(
+                `SELECT id_evidencia, id_evidencia_dba FROM evidencia_aprendizaje 
+                 WHERE id_competencia = $1 AND id_evidencia_dba IS NOT NULL`,
+                [targetCompId]
+              );
+
+              const existingMap = new Map<number, number>();
+              existingRes.rows.forEach(r => existingMap.set(r.id_evidencia_dba, r.id_evidencia));
+
+              const activeDbaIds = officialEvsRes.rows.map(r => r.id_evidencia_dba);
+
+              const deleteIds: number[] = [];
+              existingRes.rows.forEach(r => {
+                if (!activeDbaIds.includes(r.id_evidencia_dba)) {
+                  deleteIds.push(r.id_evidencia);
+                }
+              });
+
+              if (deleteIds.length > 0) {
+                await client.query(
+                  `DELETE FROM evidencia_aprendizaje WHERE id_evidencia = ANY($1::int[])`,
+                  [deleteIds]
+                );
+              }
+
+              for (const offEv of officialEvsRes.rows) {
+                if (existingMap.has(offEv.id_evidencia_dba)) {
+                  await client.query(
+                    `UPDATE evidencia_aprendizaje 
+                     SET descripcion = $1, orden = $2 
+                     WHERE id_evidencia = $3`,
+                    [offEv.descripcion, offEv.orden, existingMap.get(offEv.id_evidencia_dba)]
+                  );
+                } else {
+                  await client.query(
+                    `INSERT INTO evidencia_aprendizaje (id_competencia, descripcion, orden, id_colegio, id_evidencia_dba)
+                     VALUES ($1, $2, $3, $4, $5)`,
+                    [targetCompId, offEv.descripcion, offEv.orden, schoolId, offEv.id_evidencia_dba]
+                  );
+                }
+              }
+            }
+          }
+        }
+      }
+
+      await client.query("COMMIT");
       res.json(created);
     } catch (error) {
       await client.query("ROLLBACK");

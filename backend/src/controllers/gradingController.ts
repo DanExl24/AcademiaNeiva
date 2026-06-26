@@ -1167,6 +1167,7 @@ export const getCourseEvidenciasDba = async (req: Request, res: Response): Promi
   const gradeId = Number(req.params.gradeId);
   const subjectId = Number(req.params.subjectId);
   const schoolId = Number(req.query.schoolId);
+  const periodId = req.query.periodId ? Number(req.query.periodId) : null;
 
   if (!gradeId || !subjectId || !schoolId) {
     res.status(400).json({ error: "Faltan parámetros obligatorios" });
@@ -1190,28 +1191,58 @@ export const getCourseEvidenciasDba = async (req: Request, res: Response): Promi
     );
 
     if (cvcRes.rows.length === 0) {
-      res.json({ usaDba: false, planeadas: [], extras: [] });
+      res.json({ usaDba: false, dba: [] });
       return;
     }
 
     const versionCurricular = cvcRes.rows[0].version_curricular;
 
     // 2. Obtener las evidencias planeadas (vinculadas a la competencia del periodo actual)
+    const planeadasParams: any[] = [gradeId, subjectId, schoolId];
+    let planeadasFilter = "";
+    if (periodId) {
+      planeadasParams.push(periodId);
+      planeadasFilter = ` AND c.id_periodo = $${planeadasParams.length}`;
+    }
+
     const planeadasRes = await pool.query(
-      `SELECT ea.id_evidencia, ea.id_evidencia_dba, ea.descripcion, ea.orden, d.numero_dba
+      `SELECT ea.id_evidencia, ea.id_evidencia_dba, ea.descripcion, ea.orden, d.numero_dba, d.id_dba, d.enunciado AS dba_enunciado
        FROM evidencia_aprendizaje ea
        JOIN competencias c ON c.id_competencia = ea.id_competencia
        JOIN evidencias_dba edba ON edba.id_evidencia_dba = ea.id_evidencia_dba
        JOIN dba d ON d.id_dba = edba.id_dba
-       WHERE c.id_grupo = $1 AND c.id_materia = $2 AND c.id_colegio = $3 AND ea.id_evidencia_dba IS NOT NULL
-       ORDER BY ea.orden, ea.id_evidencia`,
-      [gradeId, subjectId, schoolId]
+       WHERE c.id_grupo = $1 AND c.id_materia = $2 AND c.id_colegio = $3 AND ea.id_evidencia_dba IS NOT NULL${planeadasFilter}
+       ORDER BY d.numero_dba, ea.orden, ea.id_evidencia`,
+      planeadasParams
     );
     const planeadasIds = planeadasRes.rows.map(r => r.id_evidencia_dba);
 
-    // 3. Obtener todas las evidencias del catálogo DBA
+    // 3. Obtener evidencias ya evaluadas en periodos CERRADOS (para excluirlas de extras)
+    // RN-DBA-022: Una evidencia evaluada en un periodo cerrado no debe reaparecer
+    // Excepción: si fue re-planeada explícitamente en el periodo actual (ya está en planeadasIds)
+    let evaluadasEnCerradosIds: number[] = [];
+    if (periodId) {
+      const evaluadasRes = await pool.query(
+        `SELECT DISTINCT aedba.id_evidencia_dba
+         FROM actividad_evidencia_dba aedba
+         JOIN actividad_materia am ON am.id_actividadmateria = aedba.id_actividadmateria
+         JOIN periodo_academico p ON p.id_periodo = am.id_periodo
+         WHERE p.estado = 'CERRADO'
+           AND am.id_colegio = $1
+           AND am.id_periodo != $2
+           AND am.id_detallegrado IN (
+             SELECT id_detallegrado FROM detalle_grados 
+             WHERE id_grupo = $3 AND id_materia = $4 AND id_colegio = $1
+           )`,
+        [schoolId, periodId, gradeId, subjectId]
+      );
+      evaluadasEnCerradosIds = evaluadasRes.rows.map(r => r.id_evidencia_dba);
+    }
+
+    // 4. Obtener todos los DBA con evidencias del catálogo para este grado/materia
     const dbaEvsRes = await pool.query(
-      `SELECT e.id_evidencia_dba, e.descripcion, e.orden, d.numero_dba
+      `SELECT d.id_dba, d.numero_dba, d.enunciado AS dba_enunciado,
+              e.id_evidencia_dba, e.descripcion, e.orden
        FROM evidencias_dba e
        JOIN dba d ON d.id_dba = e.id_dba
        WHERE d.area = (SELECT nombre FROM materias WHERE id_materia = $1)
@@ -1227,14 +1258,84 @@ export const getCourseEvidenciasDba = async (req: Request, res: Response): Promi
       [subjectId, gradeId, versionCurricular]
     );
 
-    const planeadas = planeadasRes.rows;
-    const extras = dbaEvsRes.rows.filter(r => !planeadasIds.includes(r.id_evidencia_dba));
+    // 5. Agrupar por DBA y clasificar cada evidencia
+    const dbaMap = new Map<number, {
+      id_dba: number;
+      numero_dba: number;
+      enunciado: string;
+      evidencias: Array<{
+        id_evidencia_dba: number;
+        descripcion: string;
+        orden: number;
+        tipo: 'PLANEADA' | 'EXTRA';
+        evaluada_en_cerrado: boolean;
+      }>;
+    }>();
+
+    for (const row of dbaEvsRes.rows) {
+      if (!dbaMap.has(row.id_dba)) {
+        dbaMap.set(row.id_dba, {
+          id_dba: row.id_dba,
+          numero_dba: row.numero_dba,
+          enunciado: row.dba_enunciado,
+          evidencias: [],
+        });
+      }
+
+      const esPlaneada = planeadasIds.includes(row.id_evidencia_dba);
+      const evaluadaEnCerrado = evaluadasEnCerradosIds.includes(row.id_evidencia_dba);
+
+      // Si fue evaluada en un periodo cerrado Y no fue re-planeada, la ocultamos de extras
+      if (evaluadaEnCerrado && !esPlaneada) {
+        continue;
+      }
+
+      dbaMap.get(row.id_dba)!.evidencias.push({
+        id_evidencia_dba: row.id_evidencia_dba,
+        descripcion: row.descripcion,
+        orden: row.orden,
+        tipo: esPlaneada ? 'PLANEADA' : 'EXTRA',
+        evaluada_en_cerrado: evaluadaEnCerrado,
+      });
+    }
+
+    // También incluir planeadas que no estaban en el catálogo filtrado (por seguridad)
+    for (const pl of planeadasRes.rows) {
+      if (!dbaMap.has(pl.id_dba)) {
+        dbaMap.set(pl.id_dba, {
+          id_dba: pl.id_dba,
+          numero_dba: pl.numero_dba,
+          enunciado: pl.dba_enunciado,
+          evidencias: [],
+        });
+      }
+      const dbaEntry = dbaMap.get(pl.id_dba)!;
+      if (!dbaEntry.evidencias.some(e => e.id_evidencia_dba === pl.id_evidencia_dba)) {
+        dbaEntry.evidencias.push({
+          id_evidencia_dba: pl.id_evidencia_dba,
+          descripcion: pl.descripcion,
+          orden: pl.orden,
+          tipo: 'PLANEADA',
+          evaluada_en_cerrado: evaluadasEnCerradosIds.includes(pl.id_evidencia_dba),
+        });
+      }
+    }
+
+    // Ordenar DBA por numero_dba
+    const dbaList = Array.from(dbaMap.values()).sort((a, b) => a.numero_dba - b.numero_dba);
+
+    // Mantener compatibilidad: también enviar planeadas y extras planas
+    const planeadasFlat = planeadasRes.rows;
+    const extrasFlat = dbaEvsRes.rows.filter(
+      r => !planeadasIds.includes(r.id_evidencia_dba) && !(evaluadasEnCerradosIds.includes(r.id_evidencia_dba))
+    );
 
     res.json({
       usaDba: true,
       versionCurricular,
-      planeadas,
-      extras
+      dba: dbaList,
+      planeadas: planeadasFlat,
+      extras: extrasFlat,
     });
   } catch (error: any) {
     console.error("Error al obtener evidencias DBA del curso:", error);

@@ -60,6 +60,12 @@ const dbaVersion = ref<string | null>(null)
 const selectedCompetenciaForDba = ref<CompetencyItem | null>(null)
 const checkedDbaEvidences = ref<number[]>([])
 
+const loadingFormDba = ref(false)
+const availableFormDba = ref<any[]>([])
+const formDbaVersion = ref<string | null>(null)
+const checkedFormDbaEvidences = ref<number[]>([])
+const showFormDba = ref(false)
+
 const periods = ref<AcademicPeriod[]>([])
 const assignments = ref<AssignmentOption[]>([])
 const competencies = ref<CompetencyItem[]>([])
@@ -214,19 +220,72 @@ const resetForm = () => {
   }
 }
 
+const onFormContextChange = async () => {
+  const gradeKey = competencyForm.value.gradeKey
+  const subjectKey = competencyForm.value.subjectKey
+
+  if (!gradeKey || !subjectKey) {
+    availableFormDba.value = []
+    formDbaVersion.value = null
+    showFormDba.value = false
+    return
+  }
+
+  const targets = assignmentChoices.value.filter((item) => {
+    if (item.gradeKey !== gradeKey) return false
+    if (item.subjectKey !== subjectKey) return false
+    return true
+  })
+
+  if (!targets.length) {
+    availableFormDba.value = []
+    formDbaVersion.value = null
+    showFormDba.value = false
+    return
+  }
+
+  const target = targets[0]
+  try {
+    loadingFormDba.value = true
+    showFormDba.value = true
+    const res = await axios.get(`http://localhost:3000/api/academic-admin/settings/dba-planeacion/disponibles/${schoolId.value}`, {
+      params: {
+        id_grupo: target.id_grupo,
+        id_materia: target.id_materia
+      }
+    })
+    availableFormDba.value = res.data.dba || []
+    formDbaVersion.value = res.data.versionCurricular
+  } catch (error) {
+    console.error('Error fetching available DBA for form:', error)
+    availableFormDba.value = []
+    formDbaVersion.value = null
+  } finally {
+    loadingFormDba.value = false
+  }
+}
+
 const openCreateModal = () => {
   resetForm()
+  availableFormDba.value = []
+  formDbaVersion.value = null
+  checkedFormDbaEvidences.value = []
+  showFormDba.value = false
   competencyModal.value = true
 }
 
-const openEditModal = (item: CompetencyItem) => {
+const openEditModal = async (item: CompetencyItem) => {
   competencyForm.value = {
     id_periodo: String(item.id_periodo),
     gradeKey: `${item.nivel_nombre}:${item.tipo_grado_nombre}`,
     subjectKey: String(item.id_materia),
     descripcion: item.descripcion,
   }
+  checkedFormDbaEvidences.value = item.evidencias
+    ? item.evidencias.filter(e => e.id_evidencia_dba).map(e => e.id_evidencia_dba as number)
+    : []
   competencyModal.value = true
+  await onFormContextChange()
 }
 
 const saveCompetency = async () => {
@@ -255,6 +314,7 @@ const saveCompetency = async () => {
       id_materia: assignment.id_materia,
       id_periodo: Number(competencyForm.value.id_periodo),
       descripcion: competencyForm.value.descripcion.trim(),
+      id_evidencias_dba: checkedFormDbaEvidences.value,
     })
     competencyModal.value = false
     resetForm()
@@ -272,6 +332,11 @@ const handleGradeFilterChange = () => {
 
 const handleFormGradeChange = () => {
   competencyForm.value.subjectKey = ''
+  onFormContextChange()
+}
+
+const handleFormSubjectChange = () => {
+  onFormContextChange()
 }
 
 const newEvidencia = ref<Record<number, string>>({})
@@ -676,7 +741,7 @@ onMounted(loadData)
               </label>
               <label class="space-y-2">
                 <span class="block text-xs font-black text-slate-700 dark:text-slate-300 ml-1 uppercase tracking-widest">Materia / Asignatura</span>
-                <select v-model="competencyForm.subjectKey" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-3.5 font-bold text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500/20">
+                <select v-model="competencyForm.subjectKey" @change="handleFormSubjectChange" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-3.5 font-bold text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500/20">
                   <option value="">Selecciona una materia</option>
                   <option v-for="item in formSubjectChoices" :key="item.key" :value="item.key">
                     {{ item.label }}
@@ -687,6 +752,54 @@ onMounted(loadData)
                 <span class="block text-xs font-black text-slate-700 dark:text-slate-300 ml-1 uppercase tracking-widest">Descripción pedagógica</span>
                 <textarea v-model="competencyForm.descripcion" rows="4" placeholder="Indica el aprendizaje esperado..." class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-bold text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500/20 resize-none" />
               </label>
+
+              <!-- Vinculación de Evidencias DBA desde el modal de creación -->
+              <div v-if="showFormDba" class="md:col-span-2 space-y-4">
+                <div class="flex items-center justify-between border-t border-slate-100 pt-4 dark:border-slate-800">
+                  <h3 class="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
+                    <BookOpenCheck class="h-4 w-4 text-emerald-600" />
+                    Vincular Evidencias del DBA
+                  </h3>
+                  <span v-if="formDbaVersion" class="rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 tracking-widest">
+                    {{ formDbaVersion }}
+                  </span>
+                </div>
+                
+                <div v-if="loadingFormDba" class="py-6 text-center text-sm font-semibold text-slate-400">
+                  Cargando evidencias del catálogo oficial DBA...
+                </div>
+                
+                <div v-else-if="availableFormDba.length === 0" class="rounded-2xl border border-slate-100 bg-slate-50 p-4 text-center dark:bg-slate-800/40 dark:border-slate-800">
+                  <p class="text-xs font-bold text-slate-500">No hay catálogo DBA activo para este grado/materia.</p>
+                </div>
+                
+                <div v-else class="space-y-4 max-h-[300px] overflow-y-auto pr-2">
+                  <div v-for="dbaItem in availableFormDba" :key="dbaItem.id_dba" class="rounded-2xl border border-slate-100 bg-slate-50 p-4 dark:bg-slate-800/30 dark:border-slate-800">
+                    <div class="flex items-start gap-3">
+                      <span class="rounded-xl bg-emerald-100 text-emerald-800 px-2.5 py-1 text-[10px] font-black dark:bg-emerald-950/40 dark:text-emerald-400 shrink-0">
+                        DBA #{{ dbaItem.numero_dba }}
+                      </span>
+                      <p class="text-xs font-bold text-slate-700 dark:text-slate-300 leading-relaxed">
+                        {{ dbaItem.enunciado }}
+                      </p>
+                    </div>
+
+                    <div class="mt-4 border-t border-slate-200/50 pt-3 dark:border-slate-700/50 space-y-2">
+                      <label v-for="ev in dbaItem.evidencias" :key="ev.id_evidencia_dba" class="flex items-start gap-2.5 rounded-xl border border-slate-200/40 bg-white p-3 transition-colors hover:bg-emerald-50/20 cursor-pointer dark:bg-slate-900 dark:border-slate-800">
+                        <input
+                          type="checkbox"
+                          v-model="checkedFormDbaEvidences"
+                          :value="ev.id_evidencia_dba"
+                          class="mt-0.5 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                        />
+                        <span class="text-xs font-semibold leading-relaxed text-slate-600 dark:text-slate-400">
+                          {{ ev.descripcion }}
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
             <div class="mt-8 flex flex-col gap-4 sm:flex-row sm:justify-end">
               <button type="button" @click="competencyModal = false; resetForm()" class="px-8 py-3.5 rounded-2xl border border-slate-200 text-xs font-black text-slate-600 hover:bg-slate-50 transition-all dark:border-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 uppercase tracking-widest">Cancelar</button>

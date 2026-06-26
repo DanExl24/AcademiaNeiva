@@ -75,6 +75,9 @@ interface Student {
 const route = useRoute()
 const auth = useAuthStore()
 
+const schoolId = computed(() => Number(auth.user?.schoolId || auth.selectedSchoolId || 0))
+
+
 // Estado de selección
 const selectedGradeName = ref<string | null>(null)
 const selectedSection = ref<string | null>(null)
@@ -127,7 +130,38 @@ const dbaEvidencesInfo = ref<{
   versionCurricular?: string
   planeadas: any[]
   extras: any[]
+  dba?: any[]
 } | null>(null)
+
+// Drawer y filtros
+const isDrawerOpen = ref(false)
+const dbaEvidenceFilter = ref<'TODAS' | 'PLANEADAS' | 'EXTRAS'>('TODAS')
+
+const openDrawer = () => {
+  console.log('openDrawer triggered')
+  isDrawerOpen.value = true
+}
+
+const closeDrawer = () => {
+  console.log('closeDrawer triggered')
+  isDrawerOpen.value = false
+}
+
+const filteredDbaItems = computed(() => {
+  if (!dbaEvidencesInfo.value || !dbaEvidencesInfo.value.dba) return []
+  const filter = dbaEvidenceFilter.value
+  return dbaEvidencesInfo.value.dba.map(dbaItem => {
+    const filteredEvs = dbaItem.evidencias.filter((ev: any) => {
+      if (filter === 'PLANEADAS') return ev.tipo === 'PLANEADA'
+      if (filter === 'EXTRAS') return ev.tipo === 'EXTRA'
+      return true
+    })
+    return {
+      ...dbaItem,
+      evidencias: filteredEvs
+    }
+  }).filter(dbaItem => dbaItem.evidencias.length > 0)
+})
 
 // Cargar cursos asignados
 const fetchMyCourses = async () => {
@@ -155,8 +189,9 @@ const fetchMyCourses = async () => {
 
 // Cargar periodos
 const fetchPeriods = async () => {
+  if (!schoolId.value) return
   try {
-    const response = await axios.get(`http://localhost:3000/api/teacher/periods/${auth.user?.schoolId}`)
+    const response = await axios.get(`http://localhost:3000/api/teacher/periods/${schoolId.value}`)
     periods.value = response.data
     const openPeriod = periods.value.find(p => p.estado === 'ABIERTO')
     if (openPeriod) {
@@ -167,9 +202,9 @@ const fetchPeriods = async () => {
 }
 
 const fetchGradeRange = async () => {
-  if (!auth.user?.schoolId) return
+  if (!schoolId.value) return
   try {
-    const response = await axios.get(`http://localhost:3000/api/academic-admin/settings/${auth.user.schoolId}`)
+    const response = await axios.get(`http://localhost:3000/api/academic-admin/settings/${schoolId.value}`)
     if (response.data?.defaultSettings) {
       gradeRange.value = {
         min: Number(response.data.defaultSettings.nota_minima),
@@ -181,6 +216,7 @@ const fetchGradeRange = async () => {
   } catch (error) {
   }
 }
+
 
 const initializeMatrixForStudents = () => {
   students.value.forEach(s => {
@@ -228,7 +264,6 @@ const fetchGrades = async () => {
   }
 }
 
-// Cargar evidencias del catálogo DBA
 const fetchDbaEvidences = async () => {
   if (!selectedGradeId.value || !selectedSubjectId.value) {
     dbaEvidencesInfo.value = null
@@ -236,7 +271,10 @@ const fetchDbaEvidences = async () => {
   }
   try {
     const res = await axios.get(`http://localhost:3000/api/teacher/courses/${selectedGradeId.value}/${selectedSubjectId.value}/evidencias-dba`, {
-      params: { schoolId: auth.user?.schoolId }
+      params: { 
+        schoolId: schoolId.value,
+        periodId: selectedPeriodId.value
+      }
     })
     dbaEvidencesInfo.value = res.data
   } catch (error) {
@@ -375,7 +413,7 @@ const saveAllGrades = async () => {
     await axios.post('http://localhost:3000/api/teacher/grades', {
       activityGrades: activityGradesToSave,
       criteriaGrades: criteriaGradesToSave,
-      schoolId: auth.user?.schoolId
+      schoolId: schoolId.value
     })
     alert('Calificaciones guardadas exitosamente')
   } catch (error: any) {
@@ -407,7 +445,7 @@ const addActivity = async () => {
       id_periodo: selectedPeriodId.value,
       nombre: newActivity.value.nombre,
       porcentaje: newActivity.value.porcentaje,
-      id_colegio: auth.user?.schoolId
+      id_colegio: schoolId.value
     }
 
     if (!payload.id_detallegrado) {
@@ -430,12 +468,59 @@ const addActivity = async () => {
   }
 }
 
-const getDbaEvidenceLabels = (act: Activity) => {
+const getDbaEvidenceDetails = (act: Activity) => {
   if (!act.evidencias_dba || !Array.isArray(act.evidencias_dba) || act.evidencias_dba.length === 0) return []
   if (!dbaEvidencesInfo.value) return []
-  const allEvs = [...dbaEvidencesInfo.value.planeadas, ...dbaEvidencesInfo.value.extras]
-  const matched = allEvs.filter(e => act.evidencias_dba?.includes(e.id_evidencia_dba))
-  return matched.map(e => `DBA ${e.numero_dba}: ${e.descripcion}`)
+  
+  const result: Array<{
+    id_evidencia_dba: number
+    numero_dba: number
+    descripcion: string
+    tipo: 'PLANEADA' | 'EXTRA'
+  }> = []
+
+  for (const id of act.evidencias_dba) {
+    let found = false
+    if (dbaEvidencesInfo.value.dba) {
+      for (const dbaItem of dbaEvidencesInfo.value.dba) {
+        const match = dbaItem.evidencias.find((e: any) => e.id_evidencia_dba === id)
+        if (match) {
+          result.push({
+            id_evidencia_dba: id,
+            numero_dba: dbaItem.numero_dba,
+            descripcion: match.descripcion,
+            tipo: match.tipo
+          })
+          found = true
+          break
+        }
+      }
+    }
+    
+    if (!found) {
+      const planeadaMatch = dbaEvidencesInfo.value.planeadas?.find(e => e.id_evidencia_dba === id)
+      if (planeadaMatch) {
+        result.push({
+          id_evidencia_dba: id,
+          numero_dba: planeadaMatch.numero_dba,
+          descripcion: planeadaMatch.descripcion,
+          tipo: 'PLANEADA'
+        })
+      } else {
+        const extraMatch = dbaEvidencesInfo.value.extras?.find(e => e.id_evidencia_dba === id)
+        if (extraMatch) {
+          result.push({
+            id_evidencia_dba: id,
+            numero_dba: extraMatch.numero_dba,
+            descripcion: extraMatch.descripcion,
+            tipo: 'EXTRA'
+          })
+        }
+      }
+    }
+  }
+  
+  return result
 }
 
 // const saveCompetency = async () => {
@@ -463,6 +548,29 @@ const removeActivity = async (id: number) => {
     activities.value = activities.value.filter(a => a.id_actividadmateria !== id)
   } catch (error) {
     console.error('Error deleting activity:', error)
+  }
+}
+
+// Actualizar peso de actividad
+const updateActivityWeight = async (act: Activity) => {
+  const percentage = parseFloat(act.porcentaje.toString())
+  if (isNaN(percentage) || percentage <= 0) {
+    alert('El peso debe ser un número mayor a 0.')
+    await fetchActivities()
+    return
+  }
+
+  try {
+    const payload = {
+      nombre: act.nombre,
+      porcentaje: percentage,
+      evidencias_dba: act.evidencias_dba || []
+    }
+    await axios.put(`http://localhost:3000/api/teacher/activities/${act.id_actividadmateria}`, payload)
+    await fetchActivities() // Recargar para actualizar los totales y consolidar matrices
+  } catch (error: any) {
+    alert(error.response?.data?.error || 'Error al actualizar el porcentaje de la actividad')
+    await fetchActivities()
   }
 }
 
@@ -547,7 +655,7 @@ const addCriterion = async (act: Activity) => {
       id_evidencia: form.id_evidencia,
       descripcion: form.descripcion,
       porcentaje: form.porcentaje,
-      id_colegio: auth.user?.schoolId
+      id_colegio: schoolId.value
     })
     
     if (!act.criterios) act.criterios = []
@@ -645,6 +753,12 @@ watch([selectedGradeId, selectedSubjectId, selectedPeriodId], () => {
   } else {
   }
 })
+watch(schoolId, (newSchoolId) => {
+  if (newSchoolId) {
+    fetchGradeRange()
+    fetchPeriods()
+  }
+}, { immediate: true })
 
 const exportGradesToCSV = () => {
   if (students.value.length === 0) return
@@ -711,9 +825,7 @@ const exportGradesToCSV = () => {
 }
 
 onMounted(() => {
-  fetchGradeRange()
   fetchMyCourses()
-  fetchPeriods()
 })
 </script>
 
@@ -750,6 +862,13 @@ onMounted(() => {
         >
           <Download :size="20" />
           Exportar CSV
+        </button>
+        <button
+          @click="openDrawer"
+          class="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-6 py-3 rounded-2xl font-bold transition-all flex items-center gap-2 active:scale-95 border border-slate-200 dark:border-slate-700 shadow-sm"
+        >
+          <BookOpen :size="20" class="text-indigo-500" />
+          Configurar Actividades
         </button>
         <div v-if="auth.isMonitoring" class="text-amber-600 font-bold text-sm bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 px-5 py-3 rounded-2xl">
           Solo Lectura
@@ -812,296 +931,419 @@ onMounted(() => {
     </div>
 
     <!-- Main Content Grid -->
-    <div v-else class="grid grid-cols-1 xl:grid-cols-4 gap-8">
-      <!-- Left Panel: Activities & Competency -->
-      <div class="xl:col-span-1 space-y-6">
-        <!-- Competency View -->
-        <div class="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm transition-colors">
-          <div class="flex items-center gap-2 mb-4">
-            <div class="w-7 h-7 bg-violet-50 dark:bg-violet-950/30 rounded-lg flex items-center justify-center shrink-0">
-              <BookOpen class="w-4 h-4 text-violet-500 dark:text-violet-400" />
-            </div>
-            <h3 class="text-lg font-black text-slate-900 dark:text-white">Competencia</h3>
+    <div v-else class="space-y-6 animate-in fade-in duration-500">
+      <!-- Competency top banner -->
+      <div v-if="competency" class="bg-violet-50/60 dark:bg-violet-950/20 border border-violet-100/80 dark:border-violet-900 rounded-3xl p-6 flex flex-col md:flex-row md:items-center justify-between gap-5 transition-all shadow-sm">
+        <div class="flex items-start gap-4">
+          <div class="p-3 bg-violet-600 dark:bg-violet-500 rounded-2xl text-white shadow-lg shadow-violet-100 dark:shadow-none shrink-0">
+            <BookOpen :size="24" />
           </div>
-
-          <div v-if="!competencyDraft" class="flex flex-col items-center justify-center py-8 text-center">
-            <AlertCircle class="w-8 h-8 text-slate-200 dark:text-slate-700 mb-2" />
-            <p class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase">Sin competencia definida</p>
-          </div>
-          <div v-else class="space-y-4">
-            <div class="bg-violet-50 dark:bg-violet-950/20 border border-violet-100 dark:border-violet-900 rounded-2xl p-4">
-              <p class="text-sm font-semibold text-violet-900 dark:text-violet-300 leading-relaxed">{{ competencyDraft }}</p>
-              
-              <div v-if="evidencias.length" class="mt-4 pt-4 border-t border-violet-200/60 dark:border-violet-800/60">
-                <h4 class="text-[10px] font-black text-violet-900 dark:text-violet-400 uppercase tracking-wider mb-2">Evidencias</h4>
-                <ul class="space-y-1.5">
-                  <li v-for="ev in evidencias" :key="ev.id_evidencia" class="flex items-start gap-2">
-                    <div class="w-1 h-1 rounded-full bg-violet-400 mt-1.5 shrink-0"></div>
-                    <span class="text-[11px] font-medium text-violet-800 dark:text-violet-300/80">{{ ev.descripcion }}</span>
-                  </li>
-                </ul>
-              </div>
-            </div>
-            <div class="flex items-center gap-2 px-1">
-              <div class="w-3.5 h-3.5 text-slate-400 shrink-0">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                </svg>
-              </div>
-              <p class="text-[11px] text-slate-400 dark:text-slate-500 font-semibold">
-                Definida por la dirección académica
-              </p>
-            </div>
+          <div>
+            <span class="text-[10px] font-black text-violet-600 dark:text-violet-400 uppercase tracking-widest block">Competencia del Periodo</span>
+            <p class="text-sm font-semibold text-slate-700 dark:text-slate-200 mt-1 leading-relaxed max-w-4xl">{{ competency.descripcion }}</p>
           </div>
         </div>
-
-        <!-- Activities List -->
-        <div class="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm transition-colors">
-          <div class="flex items-center justify-between mb-6">
-            <h3 class="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
-              <Settings class="w-5 h-5 text-indigo-500" />
-              Actividades
-            </h3>
-            <span :class="[totalPercentage === 100 ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400' : 'bg-amber-50 text-amber-600 dark:bg-amber-950/30 dark:text-amber-400', 'px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter']">
-              {{ totalPercentage }}% / 100%
-            </span>
-          </div>
-
-          <div class="space-y-4">
-            <div v-for="act in activities" :key="act.id_actividadmateria" class="space-y-3">
-              <div class="group relative p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800 hover:border-indigo-200 dark:hover:border-indigo-900 transition-all">
-                <div class="flex justify-between items-start">
-                  <div>
-                    <h4 class="text-sm font-bold text-slate-900 dark:text-white">{{ act.nombre }}</h4>
-                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Peso: {{ act.porcentaje }}%</p>
-                    <div v-if="dbaEvidencesInfo?.usaDba && getDbaEvidenceLabels(act).length > 0" class="mt-2 space-y-1">
-                      <div v-for="lbl in getDbaEvidenceLabels(act)" :key="lbl" class="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-start gap-1">
-                        <span class="shrink-0">•</span>
-                        <span>{{ lbl }}</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button @click="toggleAddCriterion(act.id_actividadmateria)" class="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-white dark:hover:bg-slate-700 rounded-lg transition-all" title="Añadir criterio">
-                      <Plus :size="14" />
-                    </button>
-                    <button @click="removeActivity(act.id_actividadmateria)" class="p-1.5 text-slate-400 hover:text-red-500 hover:bg-white dark:hover:bg-slate-700 rounded-lg transition-all" title="Eliminar">
-                      <Trash2 :size="14" />
-                    </button>
-                  </div>
-                </div>
-
-                <!-- Criterios List -->
-                <div v-if="act.criterios && act.criterios.length > 0" class="mt-4 space-y-2 border-t border-slate-200/60 dark:border-slate-700/60 pt-3">
-                  <div v-for="crit in act.criterios" :key="crit.id_criterio" class="flex items-center justify-between bg-white dark:bg-slate-900/50 p-2 rounded-xl text-[11px] group/crit shadow-sm border border-transparent hover:border-indigo-100 dark:hover:border-indigo-900">
-                    <span class="font-medium text-slate-600 dark:text-slate-300 truncate pr-2">{{ crit.descripcion }}</span>
-                    <div class="flex items-center gap-2 shrink-0">
-                      <span class="font-black text-indigo-500">{{ crit.porcentaje }}%</span>
-                      <button @click="removeCriterion(act, crit.id_criterio)" class="text-slate-300 hover:text-red-500 opacity-0 group-hover/crit:opacity-100 p-0.5">
-                        <X :size="12" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Add Criterion Form -->
-                <div v-if="newCriterion[act.id_actividadmateria]" class="mt-3 p-3 bg-white dark:bg-slate-900 rounded-xl border border-indigo-100 dark:border-indigo-900 space-y-3 animate-in slide-in-from-top-1 duration-200 shadow-sm">
-                  <input v-model="newCriterion[act.id_actividadmateria].descripcion" type="text" placeholder="Descripción..." class="w-full bg-slate-50 dark:bg-slate-800 border-0 rounded-lg px-3 py-2 text-xs font-medium outline-none focus:ring-1 focus:ring-indigo-500 dark:text-white" />
-                  <div class="flex gap-2">
-                    <input v-model.number="newCriterion[act.id_actividadmateria].porcentaje" type="number" placeholder="Peso %" class="w-20 bg-slate-50 dark:bg-slate-800 border-0 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:ring-1 focus:ring-indigo-500 dark:text-white" />
-                    <button @click="addCriterion(act)" class="flex-1 bg-indigo-600 text-white py-2 rounded-lg text-[10px] font-black uppercase">Añadir</button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- New Activity Button/Form: hidden in monitoring mode -->
-            <button 
-              v-if="!showAddActivity && totalPercentage < 100 && !auth.isMonitoring"
-              @click="showAddActivity = true"
-              class="w-full flex items-center justify-center gap-2 py-4 border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-2xl text-slate-400 hover:text-indigo-600 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all font-bold text-sm"
-            >
-              <Plus :size="16" />
-              Nueva Actividad
-            </button>
-
-            <div v-if="showAddActivity" class="p-5 bg-indigo-50/50 dark:bg-indigo-950/20 rounded-2xl border border-indigo-100 dark:border-indigo-900 space-y-4 animate-in zoom-in-95">
-              <div v-if="dbaEvidencesInfo?.usaDba" class="space-y-4">
-                <div class="space-y-2">
-                  <label class="text-[10px] font-black text-indigo-400 uppercase tracking-widest ml-1">Evidencias Planeadas *</label>
-                  <div class="space-y-2 max-h-40 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-xl p-3 bg-white dark:bg-slate-900">
-                    <div v-if="dbaEvidencesInfo.planeadas.length === 0" class="text-xs text-slate-400 dark:text-slate-500 italic">No hay evidencias planeadas.</div>
-                    <label v-for="ev in dbaEvidencesInfo.planeadas" :key="ev.id_evidencia_dba" class="flex items-start gap-2.5 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 cursor-pointer">
-                      <input type="checkbox" v-model="newActivity.evidencias_dba" :value="ev.id_evidencia_dba" class="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
-                      <span>DBA {{ ev.numero_dba }}: {{ ev.descripcion }}</span>
-                    </label>
-                  </div>
-                </div>
-                
-                <div class="space-y-2">
-                  <label class="text-[10px] font-black text-indigo-400 uppercase tracking-widest ml-1">Evidencias Adicionales (Extras)</label>
-                  <div class="space-y-2 max-h-40 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-xl p-3 bg-white dark:bg-slate-900">
-                    <div v-if="dbaEvidencesInfo.extras.length === 0" class="text-xs text-slate-400 dark:text-slate-500 italic">No hay evidencias adicionales disponibles.</div>
-                    <label v-for="ev in dbaEvidencesInfo.extras" :key="ev.id_evidencia_dba" class="flex items-start gap-2.5 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 cursor-pointer">
-                      <input type="checkbox" v-model="newActivity.evidencias_dba" :value="ev.id_evidencia_dba" class="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
-                      <span>DBA {{ ev.numero_dba }}: {{ ev.descripcion }}</span>
-                    </label>
-                  </div>
-                </div>
-              </div>
-              
-              <div v-else class="space-y-1">
-                <label class="text-[9px] font-black text-indigo-400 uppercase tracking-widest ml-1">Evidencia *</label>
-                <select v-model="newActivity.id_evidencia" class="w-full bg-white dark:bg-slate-900 border-indigo-100 dark:border-indigo-900 rounded-xl px-3 py-2.5 text-xs font-semibold text-slate-600 dark:text-slate-300 outline-none">
-                  <option :value="null">Selecciona</option>
-                  <option v-for="ev in evidencias" :key="ev.id_evidencia" :value="ev.id_evidencia">
-                    E{{ ev.orden }}: {{ ev.descripcion }}
-                  </option>
-                </select>
-              </div>
-              <input v-model="newActivity.nombre" type="text" placeholder="Nombre (ej: Taller 1)" class="w-full bg-white dark:bg-slate-900 border-indigo-100 dark:border-indigo-900 rounded-xl px-3 py-2.5 text-xs font-bold outline-none dark:text-white" />
-              <div class="flex items-center gap-3">
-                <input v-model.number="newActivity.porcentaje" type="number" placeholder="%" class="w-24 bg-white dark:bg-slate-900 border-indigo-100 dark:border-indigo-900 rounded-xl px-3 py-2.5 text-xs font-bold outline-none dark:text-white" />
-                <span class="text-[10px] font-black text-slate-400 uppercase tracking-tighter">% del total</span>
-              </div>
-              <div class="flex gap-2">
-                <button @click="showAddActivity = false" class="flex-1 py-2 text-[10px] font-black uppercase text-slate-400 hover:text-slate-600">Cancelar</button>
-                <button @click="addActivity" class="flex-1 bg-indigo-600 text-white py-2 rounded-xl text-[10px] font-black uppercase shadow-lg shadow-indigo-100 dark:shadow-none">Crear</button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <button 
+          @click="openDrawer"
+          class="shrink-0 bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-violet-700 dark:text-violet-300 font-bold px-6 py-3 rounded-2xl transition-all flex items-center gap-2 active:scale-95 border border-violet-100 dark:border-violet-850 text-xs shadow-sm self-start md:self-auto"
+        >
+          <Settings :size="16" />
+          Configurar Actividades
+        </button>
       </div>
 
-      <!-- Right Panel: Grade Matrix -->
-      <div class="xl:col-span-3 space-y-6">
-        <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden transition-colors">
-          <div class="p-6 border-b border-slate-100 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
-             <div class="flex items-center gap-3">
-               <div class="p-2.5 bg-indigo-50 dark:bg-indigo-950/30 rounded-xl text-indigo-600 dark:text-indigo-400">
-                 <Users :size="20" />
-               </div>
-               <h3 class="text-xl font-black text-slate-900 dark:text-white">Planilla de Notas</h3>
+      <!-- Grade Matrix Container -->
+      <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden transition-colors">
+        <div class="p-6 border-b border-slate-100 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
+           <div class="flex items-center gap-3">
+             <div class="p-2.5 bg-indigo-50 dark:bg-indigo-950/30 rounded-xl text-indigo-600 dark:text-indigo-400">
+               <Users :size="20" />
              </div>
+             <h3 class="text-xl font-black text-slate-900 dark:text-white">Planilla de Notas</h3>
+           </div>
 
-             <!-- In-Table Search -->
-             <div v-if="students.length > 0" class="relative w-full md:w-72">
-               <input 
-                 v-model="studentSearch"
-                 type="text"
-                 placeholder="Buscar estudiante..."
-                 class="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-semibold text-slate-700 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all duration-300"
-               />
-               <Search class="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
-               <button v-if="studentSearch" @click="studentSearch = ''" class="absolute right-3.5 top-3.5 text-slate-400">
-                 <X :size="14" />
-               </button>
-             </div>
+           <!-- In-Table Search -->
+           <div v-if="students.length > 0" class="relative w-full md:w-72">
+             <input 
+               v-model="studentSearch"
+               type="text"
+               placeholder="Buscar estudiante..."
+               class="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-semibold text-slate-700 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all duration-300"
+             />
+             <Search class="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+             <button v-if="studentSearch" @click="studentSearch = ''" class="absolute right-3.5 top-3.5 text-slate-400">
+               <X :size="14" />
+             </button>
+           </div>
+        </div>
+
+        <!-- Empty Activities State -->
+        <div v-if="activities.length === 0 && students.length > 0" class="p-20 text-center">
+          <div class="w-16 h-16 bg-indigo-50 dark:bg-indigo-950/30 rounded-full flex items-center justify-center mx-auto mb-4 text-indigo-600">
+            <ClipboardList :size="32" />
           </div>
+          <p class="text-base font-bold text-slate-700 dark:text-slate-300">No hay actividades creadas para este periodo</p>
+          <p class="text-sm text-slate-500 dark:text-slate-400 mt-1 mb-6">Crea actividades y asigna evidencias DBA para comenzar a calificar.</p>
+          <button 
+            @click="openDrawer"
+            class="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 py-3.5 rounded-2xl transition-all shadow-lg shadow-indigo-100 dark:shadow-none active:scale-95"
+          >
+            <Plus :size="16" />
+            Configurar Actividades
+          </button>
+        </div>
 
-          <!-- Table Container -->
-          <div class="overflow-x-auto custom-scrollbar">
-            <table class="w-full border-collapse">
-              <thead>
-                <tr class="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
-                  <th class="p-6 text-left text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest sticky left-0 bg-slate-50 dark:bg-slate-800 z-10">Estudiante</th>
-                  
-                  <!-- Dynamic Columns for Activities/Criteria -->
-                  <th v-for="col in tableColumns" :key="col.id" 
-                      :class="['p-4 text-center border-l border-slate-100 dark:border-slate-800 min-w-[120px]', col.type === 'activity_total' ? 'bg-indigo-50/20 dark:bg-indigo-950/20' : '']">
-                    <div class="space-y-1">
-                      <div v-if="col.type === 'activity'" class="text-[9px] font-black text-indigo-500 uppercase tracking-tighter">{{ col.activity.nombre }}</div>
-                      <div v-else-if="col.type === 'criterion'" class="text-[9px] font-black text-indigo-500 uppercase tracking-tighter truncate" :title="col.activity.nombre">{{ col.activity.nombre }}</div>
-                      <div v-else-if="col.type === 'activity_total'" class="text-[9px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-tighter">Total {{ col.activity.nombre }}</div>
-                      
-                      <div class="text-xs font-black text-slate-700 dark:text-slate-200 truncate max-w-[100px] mx-auto">
-                        {{ col.type === 'criterion' ? col.criterion?.descripcion : (col.type === 'activity_total' ? 'Σ' : col.activity.nombre) }}
-                      </div>
-                      <div class="text-[10px] font-bold text-slate-400">
-                        {{ col.type === 'criterion' ? col.criterion?.porcentaje : col.activity.porcentaje }}%
-                      </div>
+        <!-- Table Container -->
+        <div v-else class="overflow-x-auto custom-scrollbar">
+          <table class="w-full border-collapse">
+            <thead>
+              <tr class="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
+                <th class="p-6 text-left text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest sticky left-0 bg-slate-50 dark:bg-slate-800 z-10">Estudiante</th>
+                
+                <!-- Dynamic Columns for Activities/Criteria -->
+                <th v-for="col in tableColumns" :key="col.id" 
+                    :class="['p-4 text-center border-l border-slate-100 dark:border-slate-800 min-w-[120px]', col.type === 'activity_total' ? 'bg-indigo-50/20 dark:bg-indigo-950/20' : '']">
+                  <div class="space-y-1">
+                    <div v-if="col.type === 'activity'" class="text-[9px] font-black text-indigo-500 uppercase tracking-tighter">{{ col.activity.nombre }}</div>
+                    <div v-else-if="col.type === 'criterion'" class="text-[9px] font-black text-indigo-500 uppercase tracking-tighter truncate" :title="col.activity.nombre">{{ col.activity.nombre }}</div>
+                    <div v-else-if="col.type === 'activity_total'" class="text-[9px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-tighter">Total {{ col.activity.nombre }}</div>
+                    
+                    <div class="text-xs font-black text-slate-700 dark:text-slate-200 truncate max-w-[100px] mx-auto">
+                      {{ col.type === 'criterion' ? col.criterion?.descripcion : (col.type === 'activity_total' ? 'Σ' : col.activity.nombre) }}
                     </div>
-                  </th>
-
-                  <th class="p-6 text-center text-[10px] font-black text-slate-900 dark:text-white uppercase tracking-widest bg-slate-100 dark:bg-slate-800/80 border-l border-slate-200 dark:border-slate-700 shadow-[-4px_0_10px_rgba(0,0,0,0.02)]">Nota Definitiva</th>
-                  <th class="p-6 text-center text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Nivel</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr 
-                  v-for="st in filteredStudents" 
-                  :key="st.id_estudiante"
-                  class="border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors group"
-                >
-                  <td class="p-6 sticky left-0 bg-white dark:bg-slate-900 z-10 shadow-[4px_0_10px_rgba(0,0,0,0.01)]">
-                    <div class="flex items-center gap-3">
-                      <div class="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-[10px] font-black">
-                        {{ st.nombre.charAt(0) }}{{ st.apellido.charAt(0) }}
-                      </div>
-                      <div>
-                        <p class="text-xs font-bold text-slate-700 dark:text-slate-200">{{ st.nombre }} {{ st.apellido }}</p>
-                        <p class="text-[9px] font-medium text-slate-400">{{ st.codigo }}</p>
-                      </div>
+                    <div class="text-[10px] font-bold text-slate-400">
+                      {{ col.type === 'criterion' ? col.criterion?.porcentaje : col.activity.porcentaje }}%
                     </div>
-                  </td>
+                  </div>
+                </th>
 
-                  <!-- Grades Inputs -->
-                  <td v-for="col in tableColumns" :key="col.id" class="p-2 border-l border-slate-50 dark:border-slate-800/50 text-center">
-                    <input 
-                      v-if="col.type === 'activity' && gradesMatrix[st.id_estudiante]"
-                      type="number"
-                      step="0.1"
-                      v-model="gradesMatrix[st.id_estudiante][col.activity.id_actividadmateria]"
-                      @blur="validateGradeInput(st.id_estudiante, col.activity.id_actividadmateria, 'activity', $event)"
-                      class="w-16 mx-auto bg-slate-50 dark:bg-slate-800 border-0 rounded-lg p-2 text-center font-bold text-sm text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
-                    />
-                    <input 
-                      v-else-if="col.type === 'criterion' && criteriaGradesMatrix[st.id_estudiante]"
-                      type="number"
-                      step="0.1"
-                      v-model="criteriaGradesMatrix[st.id_estudiante][col.criterion!.id_criterio]"
-                      @blur="validateGradeInput(st.id_estudiante, col.criterion!.id_criterio, 'criterion', $event)"
-                      class="w-16 mx-auto bg-slate-50 dark:bg-slate-800 border-0 rounded-lg p-2 text-center font-bold text-sm text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
-                    />
-                    <div v-else-if="col.type === 'activity_total'" class="text-sm font-black text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/30 py-2 rounded-lg w-16 mx-auto border border-indigo-100 dark:border-indigo-900">
-                      {{ calculateActivityGrade(st.id_estudiante, col.activity).toFixed(1) }}
+                <th class="p-6 text-center text-[10px] font-black text-slate-900 dark:text-white uppercase tracking-widest bg-slate-100 dark:bg-slate-800/80 border-l border-slate-200 dark:border-slate-700 shadow-[-4px_0_10px_rgba(0,0,0,0.02)]">Nota Definitiva</th>
+                <th class="p-6 text-center text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Nivel</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr 
+                v-for="st in filteredStudents" 
+                :key="st.id_estudiante"
+                class="border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors group"
+              >
+                <td class="p-6 sticky left-0 bg-white dark:bg-slate-900 z-10 shadow-[4px_0_10px_rgba(0,0,0,0.01)]">
+                  <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-[10px] font-black">
+                      {{ st.nombre.charAt(0) }}{{ st.apellido.charAt(0) }}
                     </div>
-                  </td>
-
-                  <!-- Final Grade -->
-                  <td class="p-6 text-center bg-slate-50/50 dark:bg-slate-800/30 border-l border-slate-100 dark:border-slate-800">
-                    <div 
-                      :class="[
-                        parseFloat(calculateFinal(st.id_estudiante)) >= gradeRange.approval ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 border-emerald-100 dark:border-emerald-900' : 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 border-red-100 dark:border-red-900',
-                        'inline-flex items-center justify-center w-14 h-10 rounded-xl font-black text-lg border shadow-sm'
-                      ]"
-                    >
-                      {{ calculateFinal(st.id_estudiante) }}
+                    <div>
+                      <p class="text-xs font-bold text-slate-700 dark:text-slate-200">{{ st.nombre }} {{ st.apellido }}</p>
+                      <p class="text-[9px] font-medium text-slate-400">{{ st.codigo }}</p>
                     </div>
-                  </td>
+                  </div>
+                </td>
 
-                  <!-- Academic Scale -->
-                  <td class="p-6 text-center">
-                    <span 
-                      :class="[
-                        getScaleClass(getScaleLevel(calculateFinal(st.id_estudiante))),
-                        'px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border'
-                      ]"
-                    >
-                      {{ getScaleLevel(calculateFinal(st.id_estudiante)) }}
-                    </span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+                <!-- Grades Inputs -->
+                <td v-for="col in tableColumns" :key="col.id" class="p-2 border-l border-slate-50 dark:border-slate-800/50 text-center">
+                  <input 
+                    v-if="col.type === 'activity' && gradesMatrix[st.id_estudiante]"
+                    type="number"
+                    step="0.1"
+                    v-model="gradesMatrix[st.id_estudiante][col.activity.id_actividadmateria]"
+                    @blur="validateGradeInput(st.id_estudiante, col.activity.id_actividadmateria, 'activity', $event)"
+                    class="w-16 mx-auto bg-slate-50 dark:bg-slate-800 border-0 rounded-lg p-2 text-center font-bold text-sm text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
+                  />
+                  <input 
+                    v-else-if="col.type === 'criterion' && criteriaGradesMatrix[st.id_estudiante]"
+                    type="number"
+                    step="0.1"
+                    v-model="criteriaGradesMatrix[st.id_estudiante][col.criterion!.id_criterio]"
+                    @blur="validateGradeInput(st.id_estudiante, col.criterion!.id_criterio, 'criterion', $event)"
+                    class="w-16 mx-auto bg-slate-50 dark:bg-slate-800 border-0 rounded-lg p-2 text-center font-bold text-sm text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
+                  />
+                  <div v-else-if="col.type === 'activity_total'" class="text-sm font-black text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/30 py-2 rounded-lg w-16 mx-auto border border-indigo-100 dark:border-indigo-900">
+                    {{ calculateActivityGrade(st.id_estudiante, col.activity).toFixed(1) }}
+                  </div>
+                </td>
+
+                <!-- Final Grade -->
+                <td class="p-6 text-center bg-slate-50/50 dark:bg-slate-800/30 border-l border-slate-100 dark:border-slate-800">
+                  <div 
+                    :class="[
+                      parseFloat(calculateFinal(st.id_estudiante)) >= gradeRange.approval ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 border-emerald-100 dark:border-emerald-900' : 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 border-red-100 dark:border-red-900',
+                      'inline-flex items-center justify-center w-14 h-10 rounded-xl font-black text-lg border shadow-sm'
+                    ]"
+                  >
+                    {{ calculateFinal(st.id_estudiante) }}
+                  </div>
+                </td>
+
+                <!-- Academic Scale -->
+                <td class="p-6 text-center">
+                  <span 
+                    :class="[
+                      getScaleClass(getScaleLevel(calculateFinal(st.id_estudiante))),
+                      'px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border'
+                    ]"
+                  >
+                    {{ getScaleLevel(calculateFinal(st.id_estudiante)) }}
+                  </span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        
+        <div v-if="filteredStudents.length === 0 && students.length > 0" class="p-20 text-center">
+          <div class="w-16 h-16 bg-slate-50 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Search class="w-8 h-8 text-slate-300" />
+          </div>
+          <p class="text-sm font-bold text-slate-400">No se encontraron estudiantes con ese nombre o código</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Slide-Over Drawer -->
+    <div v-if="isDrawerOpen" class="fixed inset-0 z-50 overflow-hidden" aria-labelledby="slide-over-title" role="dialog" aria-modal="true">
+      <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" @click="closeDrawer"></div>
+      
+      <div class="absolute inset-y-0 right-0 pl-10 max-w-full flex">
+        <div class="w-screen max-w-lg bg-white dark:bg-slate-900 shadow-2xl flex flex-col transition-all transform duration-300 ease-in-out border-l border-slate-100 dark:border-slate-800">
+          <!-- Drawer Header -->
+          <div class="px-6 py-5 bg-slate-50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div class="p-2.5 bg-indigo-50 dark:bg-indigo-950/30 rounded-xl text-indigo-600 dark:text-indigo-400">
+                <Settings :size="20" />
+              </div>
+              <div>
+                <h2 class="text-lg font-black text-slate-900 dark:text-white leading-none">Gestión Pedagógica</h2>
+                <p class="text-xs text-slate-500 dark:text-slate-400 font-semibold mt-1">Configura actividades y evidencias DBA</p>
+              </div>
+            </div>
+            <button @click="closeDrawer" class="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-all">
+              <X :size="20" />
+            </button>
           </div>
           
-          <div v-if="filteredStudents.length === 0 && students.length > 0" class="p-20 text-center">
-            <div class="w-16 h-16 bg-slate-50 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Search class="w-8 h-8 text-slate-300" />
+          <!-- Drawer Body (scrollable) -->
+          <div class="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
+            <!-- Section 1: Active Competency -->
+            <div class="space-y-4">
+              <div class="flex items-center gap-2">
+                <div class="w-7 h-7 bg-violet-50 dark:bg-violet-950/30 rounded-lg flex items-center justify-center shrink-0">
+                  <BookOpen class="w-4 h-4 text-violet-500 dark:text-violet-400" />
+                </div>
+                <h3 class="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider">Competencia del Periodo</h3>
+              </div>
+
+              <div v-if="!competency" class="flex flex-col items-center justify-center py-8 text-center bg-slate-50 dark:bg-slate-800/30 rounded-2xl border border-dashed border-slate-200 dark:border-slate-850">
+                <AlertCircle class="w-8 h-8 text-slate-300 dark:text-slate-600 mb-2" />
+                <p class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase">Sin competencia definida</p>
+              </div>
+              <div v-else class="space-y-3">
+                <div class="bg-violet-50 dark:bg-violet-950/20 border border-violet-100 dark:border-violet-900 rounded-2xl p-4">
+                  <p class="text-sm font-semibold text-violet-900 dark:text-violet-300 leading-relaxed">{{ competency.descripcion }}</p>
+                  
+                  <div v-if="evidencias.length" class="mt-4 pt-4 border-t border-violet-200/60 dark:border-violet-800/60">
+                    <h4 class="text-[10px] font-black text-violet-900 dark:text-violet-400 uppercase tracking-wider mb-2">Evidencias Vinculadas</h4>
+                    <ul class="space-y-1.5">
+                      <li v-for="ev in evidencias" :key="ev.id_evidencia" class="flex items-start gap-2">
+                        <div class="w-1 h-1 rounded-full bg-violet-400 mt-1.5 shrink-0"></div>
+                        <span class="text-[11px] font-medium text-violet-800 dark:text-violet-300/80">{{ ev.descripcion }}</span>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+                <div class="flex items-center gap-2 px-1">
+                  <div class="w-3.5 h-3.5 text-slate-400 shrink-0">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                      <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                    </svg>
+                  </div>
+                  <p class="text-[11px] text-slate-400 dark:text-slate-500 font-semibold">
+                    Definida por la dirección académica
+                  </p>
+                </div>
+              </div>
             </div>
-            <p class="text-sm font-bold text-slate-400">No se encontraron estudiantes con ese nombre o código</p>
+
+            <hr class="border-slate-100 dark:border-slate-800" />
+
+            <!-- Section 2: Activities List & Creation -->
+            <div class="space-y-6">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <div class="w-7 h-7 bg-indigo-50 dark:bg-indigo-950/30 rounded-lg flex items-center justify-center shrink-0">
+                    <ClipboardList class="w-4 h-4 text-indigo-500 dark:text-indigo-400" />
+                  </div>
+                  <h3 class="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider">Actividades</h3>
+                </div>
+                <span :class="[totalPercentage === 100 ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400' : 'bg-amber-50 text-amber-600 dark:bg-amber-950/30 dark:text-amber-400', 'px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter']">
+                  {{ totalPercentage }}% / 100%
+                </span>
+              </div>
+
+              <!-- List of activities -->
+              <div class="space-y-4">
+                <div v-for="act in activities" :key="act.id_actividadmateria" class="space-y-3">
+                  <div class="group relative p-4 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-850 hover:border-indigo-200 dark:hover:border-indigo-900 transition-all">
+                    <div class="flex justify-between items-start">
+                      <div>
+                        <h4 class="text-sm font-bold text-slate-900 dark:text-white">{{ act.nombre }}</h4>
+                        <div class="flex items-center gap-1.5 mt-1">
+                          <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Peso:</span>
+                          <input 
+                            v-if="!auth.isMonitoring"
+                            type="number" 
+                            v-model.number="act.porcentaje" 
+                            @blur="updateActivityWeight(act)"
+                            @keyup.enter="$event.target.blur()"
+                            class="w-12 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-1.5 py-0.5 text-[10px] font-black text-center text-slate-700 dark:text-slate-200 focus:ring-1 focus:ring-indigo-500 outline-none"
+                          />
+                          <span v-else class="text-[10px] font-black text-slate-600 dark:text-slate-400">{{ act.porcentaje }}%</span>
+                        </div>
+                        
+                        <!-- DBA Evidences of Activity -->
+                        <div v-if="dbaEvidencesInfo?.usaDba && getDbaEvidenceDetails(act).length > 0" class="mt-2 space-y-1.5">
+                          <div v-for="ev in getDbaEvidenceDetails(act)" :key="ev.id_evidencia_dba" class="text-[10px] font-semibold text-slate-600 dark:text-slate-400 flex flex-col gap-0.5">
+                            <div class="flex items-start gap-1.5 flex-wrap">
+                              <span class="shrink-0 font-bold text-emerald-600 dark:text-emerald-400">DBA {{ ev.numero_dba }}:</span>
+                              <span>{{ ev.descripcion }}</span>
+                              <span :class="ev.tipo === 'PLANEADA' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400' : 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400'" class="rounded px-1.5 py-0.2 text-[8px] font-black uppercase">
+                                {{ ev.tipo }}
+                              </span>
+                            </div>
+                            <div v-if="ev.tipo === 'PLANEADA' && competency" class="text-[9px] text-slate-400 dark:text-slate-500 italic pl-2">
+                              <span class="font-bold text-violet-600 dark:text-violet-400">Competencia:</span> {{ competency.descripcion }}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <!-- Delete & Add Criterion buttons -->
+                      <div v-if="!auth.isMonitoring" class="flex gap-1">
+                        <button @click="toggleAddCriterion(act.id_actividadmateria)" class="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-white dark:hover:bg-slate-700 rounded-lg transition-all" title="Añadir criterio">
+                          <Plus :size="14" />
+                        </button>
+                        <button @click="removeActivity(act.id_actividadmateria)" class="p-1.5 text-slate-400 hover:text-red-500 hover:bg-white dark:hover:bg-slate-700 rounded-lg transition-all" title="Eliminar">
+                          <Trash2 :size="14" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <!-- Criteria List -->
+                    <div v-if="act.criterios && act.criterios.length > 0" class="mt-4 space-y-2 border-t border-slate-200/60 dark:border-slate-750/60 pt-3">
+                      <div v-for="crit in act.criterios" :key="crit.id_criterio" class="flex items-center justify-between bg-white dark:bg-slate-900/50 p-2 rounded-xl text-[11px] group/crit shadow-sm border border-transparent hover:border-indigo-100 dark:hover:border-indigo-900">
+                        <span class="font-medium text-slate-600 dark:text-slate-300 truncate pr-2">{{ crit.descripcion }}</span>
+                        <div class="flex items-center gap-2 shrink-0">
+                          <span class="font-black text-indigo-500">{{ crit.porcentaje }}%</span>
+                          <button v-if="!auth.isMonitoring" @click="removeCriterion(act, crit.id_criterio)" class="text-slate-300 hover:text-red-500 opacity-0 group-hover/crit:opacity-100 p-0.5">
+                            <X :size="12" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Add Criterion Form -->
+                    <div v-if="newCriterion[act.id_actividadmateria]" class="mt-3 p-3 bg-white dark:bg-slate-900 rounded-xl border border-indigo-100 dark:border-indigo-900 space-y-3 animate-in slide-in-from-top-1 duration-200 shadow-sm">
+                      <input v-model="newCriterion[act.id_actividadmateria].descripcion" type="text" placeholder="Descripción del criterio..." class="w-full bg-slate-50 dark:bg-slate-800 border-0 rounded-lg px-3 py-2 text-xs font-medium outline-none focus:ring-1 focus:ring-indigo-500 dark:text-white" />
+                      <div class="flex gap-2">
+                        <input v-model.number="newCriterion[act.id_actividadmateria].porcentaje" type="number" placeholder="Peso %" class="w-20 bg-slate-50 dark:bg-slate-800 border-0 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:ring-1 focus:ring-indigo-500 dark:text-white" />
+                        <button @click="addCriterion(act)" class="flex-1 bg-indigo-600 text-white py-2 rounded-lg text-[10px] font-black uppercase">Añadir</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- New Activity Button & Form -->
+              <div v-if="!auth.isMonitoring && totalPercentage < 100" class="border-t border-slate-100 dark:border-slate-800 pt-6">
+                <button 
+                  v-if="!showAddActivity"
+                  @click="showAddActivity = true"
+                  class="w-full flex items-center justify-center gap-2 py-4 border-2 border-dashed border-slate-200 dark:border-slate-800 hover:border-indigo-300 dark:hover:border-indigo-900 rounded-2xl text-slate-400 hover:text-indigo-600 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-all font-bold text-sm"
+                >
+                  <Plus :size="16" />
+                  Nueva Actividad
+                </button>
+
+                <div v-else class="p-5 bg-indigo-50/30 dark:bg-indigo-950/20 rounded-2xl border border-indigo-100 dark:border-indigo-900 space-y-4 animate-in zoom-in-95">
+                  <div v-if="dbaEvidencesInfo?.usaDba" class="space-y-4">
+                    <!-- Modern Select Filter for DBA Evidences -->
+                    <div class="flex flex-col gap-2">
+                      <div class="flex items-center justify-between">
+                        <label class="text-[10px] font-black text-indigo-500 dark:text-indigo-400 uppercase tracking-widest ml-1">Evidencias DBA *</label>
+                        <select v-model="dbaEvidenceFilter" class="bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-600 dark:text-slate-300 focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer">
+                          <option value="TODAS">Todas</option>
+                          <option value="PLANEADAS">Planeadas</option>
+                          <option value="EXTRAS">Extras</option>
+                        </select>
+                      </div>
+                      
+                      <!-- DBA Scrollable Selector -->
+                      <div class="space-y-4 max-h-60 overflow-y-auto border border-slate-200 dark:border-slate-750 rounded-xl p-3 bg-white dark:bg-slate-900">
+                        <div v-if="filteredDbaItems.length === 0" class="text-xs text-slate-400 dark:text-slate-500 italic py-2 text-center">
+                          No hay evidencias que coincidan con el filtro.
+                        </div>
+                        
+                        <div v-for="dbaItem in filteredDbaItems" :key="dbaItem.id_dba" class="space-y-2 pb-3 border-b border-slate-100 dark:border-slate-800 last:border-0 last:pb-0">
+                          <div class="flex items-start gap-2">
+                            <span class="rounded bg-indigo-50 text-indigo-700 px-1.5 py-0.5 text-[9px] font-black dark:bg-indigo-950/40 dark:text-indigo-400 shrink-0">
+                              DBA #{{ dbaItem.numero_dba }}
+                            </span>
+                            <p class="text-xs font-bold text-slate-700 dark:text-slate-300 leading-normal">
+                              {{ dbaItem.enunciado }}
+                            </p>
+                          </div>
+                          
+                          <div class="pl-4 space-y-1.5">
+                            <label v-for="ev in dbaItem.evidencias" :key="ev.id_evidencia_dba" class="flex flex-col gap-1 p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer border border-transparent hover:border-slate-100 dark:hover:border-slate-700">
+                              <div class="flex items-start gap-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400">
+                                <input type="checkbox" v-model="newActivity.evidencias_dba" :value="ev.id_evidencia_dba" class="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 shrink-0" />
+                                <div class="flex flex-wrap items-center gap-1.5">
+                                  <span>{{ ev.descripcion }}</span>
+                                  <span :class="ev.tipo === 'PLANEADA' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400' : 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400'" class="rounded px-1.5 py-0.2 text-[8px] font-black uppercase">
+                                    {{ ev.tipo }}
+                                  </span>
+                                </div>
+                              </div>
+                              <div v-if="ev.tipo === 'PLANEADA' && competency" class="pl-6 text-[10px] text-slate-400 dark:text-slate-500 italic">
+                                <span class="font-bold text-violet-600 dark:text-violet-400">Competencia:</span> {{ competency.descripcion }}
+                              </div>
+                            </label>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div v-else class="space-y-1">
+                    <label class="text-[9px] font-black text-indigo-400 uppercase tracking-widest ml-1">Evidencia *</label>
+                    <select v-model="newActivity.id_evidencia" class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded-xl px-3 py-2.5 text-xs font-semibold text-slate-600 dark:text-slate-300 outline-none">
+                      <option :value="null">Selecciona</option>
+                      <option v-for="ev in evidencias" :key="ev.id_evidencia" :value="ev.id_evidencia">
+                        E{{ ev.orden }}: {{ ev.descripcion }}
+                      </option>
+                    </select>
+                  </div>
+
+                  <div class="space-y-1">
+                    <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Nombre de la actividad</label>
+                    <input v-model="newActivity.nombre" type="text" placeholder="Ej: Taller 1, Evaluación..." class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2.5 text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white" />
+                  </div>
+
+                  <div class="space-y-1">
+                    <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Peso porcentual</label>
+                    <div class="flex items-center gap-3">
+                      <input v-model.number="newActivity.porcentaje" type="number" placeholder="Ej: 20" class="w-24 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2.5 text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white" />
+                      <span class="text-[10px] font-black text-slate-400 uppercase tracking-tighter">% del total</span>
+                    </div>
+                  </div>
+
+                  <div class="flex gap-2 pt-2">
+                    <button @click="showAddActivity = false" class="flex-1 py-2 text-[10px] font-black uppercase text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">Cancelar</button>
+                    <button @click="addActivity" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-xl text-[10px] font-black uppercase shadow-lg shadow-indigo-100 dark:shadow-none active:scale-95 transition-all">Crear Actividad</button>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>

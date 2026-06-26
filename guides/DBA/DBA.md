@@ -319,3 +319,30 @@ Competencias históricas.
 Reportes históricos.
 
 La información debe conservarse para fines de auditoría.
+
+---
+
+# RN-DBA-022 - Planeación única de evidencias
+
+Una evidencia de aprendizaje solo podrá ser planificada una vez dentro del mismo año lectivo para un grado, área y curso.
+
+Excepción:
+El sistema permitirá que una evidencia ya planificada sea utilizada nuevamente en actividades evaluativas cuando el docente lo considere necesario.
+
+# RN-DBA-023 - Reutilización de evidencias
+
+La reutilización de una evidencia previamente planificada no modifica la planeación curricular ni genera una nueva asignación al periodo académico.
+
+Incluso puedes aprovechar esto en la interfaz
+
+Cuando el directivo esté armando las competencias del periodo siguiente, el sistema podría mostrar:
+
+⚠ Esta evidencia ya fue planificada en el Periodo x (anterior).
+
+¿Desea agregarla nuevamente?
+
+Motivo:
+[ ] Refuerzo
+[ ] Recuperación
+[ ] Proyecto integrador
+[ ] Otro

@@ -66,13 +66,19 @@ const router = Router();
 // Public routes
 router.get("/catalogs", getAcademicCatalogs);
 
-// Protected routes (require Directivo or Admin General)
-router.use(verifyToken, requireDirectivo);
+// Protected routes (require verification)
+router.use(verifyToken);
+
+// Expose read-only routes to all authenticated users (Docentes need these settings to show scales and branding)
+router.get("/my-school/:schoolId", getMySchoolData);
+router.get("/settings/:schoolId", getAcademicSettingsData);
+
+// Require Directivo role for administrative actions
+router.use(requireDirectivo);
 
 router.get("/settings/enrollment-config/:schoolId/:yearId", getEnrollmentConfig);
 router.post("/settings/enrollment-config", saveEnrollmentConfig);
 
-router.get("/my-school/:schoolId", getMySchoolData);
 
 router.put("/my-school/:schoolId/identidad", updateMySchoolIdentity);
 router.post("/my-school/:schoolId/identidad/reset", resetMySchoolIdentity);
@@ -95,7 +101,6 @@ router.post("/teachers", createTeacher);
 router.patch("/teachers/:id/status", updateTeacherStatus);
 router.post("/teacher-assignments", assignTeacherCourseSubject);
 router.delete("/teacher-assignments/:id", deleteTeacherAssignment);
-router.get("/settings/:schoolId", getAcademicSettingsData);
 router.post("/settings/years", createAcademicYear);
 router.delete("/settings/years/:id", deleteAcademicYear);
 router.patch("/settings/years/:id/status", updateAcademicYearStatus);
