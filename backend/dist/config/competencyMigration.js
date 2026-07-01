@@ -7,6 +7,7 @@ exports.ensureCompetencyForContext = exports.harmonizeCompetenciesForSchoolYear 
 const db_1 = require("./db");
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
+const crypto_1 = require("crypto");
 const evidenciaMigrationSql = `
 CREATE TABLE IF NOT EXISTS public.evidencia_aprendizaje (
   id_evidencia    SERIAL PRIMARY KEY,
@@ -83,16 +84,19 @@ WHERE c.id_periodo = p.id_periodo
 ALTER TABLE public.competencias
   ALTER COLUMN id_colegio SET NOT NULL;
 
+ALTER TABLE public.competencias DROP CONSTRAINT IF EXISTS competencias_unique_context;
+ALTER TABLE public.competencias ADD COLUMN IF NOT EXISTS sync_uuid UUID;
+
 DO $$
 BEGIN
   IF NOT EXISTS (
-    SELECT 1
-    FROM pg_constraint
-    WHERE conname = 'competencias_unique_context'
+    SELECT 1 FROM pg_indexes
+    WHERE schemaname = 'public'
+      AND tablename  = 'competencias'
+      AND indexname  = 'idx_competencias_sync_uuid'
   ) THEN
-    ALTER TABLE public.competencias
-      ADD CONSTRAINT competencias_unique_context
-      UNIQUE (id_año, id_grupo, id_materia, id_periodo, id_colegio);
+    CREATE INDEX idx_competencias_sync_uuid
+      ON public.competencias(sync_uuid);
   END IF;
 END $$;
 
@@ -107,6 +111,9 @@ ALTER TABLE public.actividad_materia
 
 ALTER TABLE public.actividad_materia
   ADD COLUMN IF NOT EXISTS id_evidencia integer REFERENCES public.evidencia_aprendizaje(id_evidencia) ON DELETE SET NULL;
+
+ALTER TABLE public.actividad_materia
+  ADD COLUMN IF NOT EXISTS fecha_creacion timestamp with time zone DEFAULT now();
 
 WITH aggregated_competencies AS (
   SELECT
@@ -127,9 +134,15 @@ WITH aggregated_competencies AS (
 )
 INSERT INTO public.competencias (id_año, id_grupo, id_materia, id_periodo, descripcion, id_colegio)
 SELECT id_año, id_grupo, id_materia, id_periodo, descripcion, id_colegio
-FROM aggregated_competencies
-ON CONFLICT (id_año, id_grupo, id_materia, id_periodo, id_colegio)
-DO UPDATE SET descripcion = EXCLUDED.descripcion;
+FROM aggregated_competencies ac
+WHERE NOT EXISTS (
+  SELECT 1 FROM public.competencias c
+  WHERE c.id_año = ac.id_año
+    AND c.id_grupo = ac.id_grupo
+    AND c.id_materia = ac.id_materia
+    AND c.id_periodo = ac.id_periodo
+    AND c.id_colegio = ac.id_colegio
+);
 
 INSERT INTO public.competencias (id_año, id_grupo, id_materia, id_periodo, descripcion, id_colegio)
 SELECT
@@ -141,7 +154,14 @@ SELECT
   dg.id_colegio
 FROM public.detalle_grados dg
 JOIN public.periodo_academico p ON p.id_colegio = dg.id_colegio
-ON CONFLICT (id_año, id_grupo, id_materia, id_periodo, id_colegio) DO NOTHING;
+WHERE NOT EXISTS (
+  SELECT 1 FROM public.competencias c
+  WHERE c.id_año = p."id_año"
+    AND c.id_grupo = dg.id_grupo
+    AND c.id_materia = dg.id_materia
+    AND c.id_periodo = p.id_periodo
+    AND c.id_colegio = dg.id_colegio
+);
 
 WITH activity_targets AS (
   SELECT
@@ -331,6 +351,17 @@ const ensureCompetencySchema = async () => {
             const indMigrationSql = fs_1.default.readFileSync(indMigrationPath, "utf8");
             await client.query(indMigrationSql);
         }
+        // Backfill sync_uuid for existing competencies
+        const unmigratedRes = await client.query(`
+      SELECT id_colegio, "id_año", id_materia, id_periodo, descripcion, ARRAY_AGG(id_competencia) AS ids
+      FROM public.competencias
+      WHERE sync_uuid IS NULL
+      GROUP BY id_colegio, "id_año", id_materia, id_periodo, descripcion
+    `);
+        for (const group of unmigratedRes.rows) {
+            const uuid = (0, crypto_1.randomUUID)();
+            await client.query(`UPDATE public.competencias SET sync_uuid = $1 WHERE id_competencia = ANY($2::int[])`, [uuid, group.ids]);
+        }
         await client.query("COMMIT");
     }
     catch (error) {
@@ -372,7 +403,7 @@ const ensureDefaultEvidencias = async (client, competencyId, schoolId) => {
     }
 };
 exports.ensureDefaultEvidencias = ensureDefaultEvidencias;
-const syncCompetencyAcrossGrade = async (client, context, periodId, descripcion) => {
+const syncCompetencyAcrossGrade = async (client, context, periodId, descripcion, competencyId) => {
     const peerGroups = await getGradePeerGroups(client, context.idColegio, context.idGrupo);
     if (peerGroups.length === 0) {
         throw new Error("No se encontraron cursos para sincronizar la competencia del grado");
@@ -380,34 +411,59 @@ const syncCompetencyAcrossGrade = async (client, context, periodId, descripcion)
     const chosenDescription = descripcion && normalizeCompetencyDescription(descripcion)
         ? normalizeCompetencyDescription(descripcion)
         : null;
-    const existingRes = await client.query(`SELECT *
-     FROM competencias
-     WHERE id_colegio = $1
-       AND id_año = $2
-       AND id_materia = $3
-       AND id_periodo = $4
-       AND id_grupo = ANY($5::int[])
-     ORDER BY
-       CASE
-         WHEN UPPER(TRIM(TRAILING '.' FROM descripcion)) <> UPPER(TRIM(TRAILING '.' FROM $6)) THEN 0
-         ELSE 1
-       END,
-       id_competencia ASC`, [context.idColegio, context.idAnio, context.idMateria, periodId, peerGroups, exports.DEFAULT_COMPETENCY_TEXT]);
+    let syncUuid;
+    if (competencyId) {
+        // Modo Edición: Obtener el sync_uuid existente
+        const compRes = await client.query(`SELECT sync_uuid FROM public.competencias WHERE id_competencia = $1`, [competencyId]);
+        if (compRes.rows.length === 0) {
+            throw new Error("Competencia no encontrada para editar");
+        }
+        if (compRes.rows[0].sync_uuid) {
+            syncUuid = compRes.rows[0].sync_uuid;
+        }
+        else {
+            syncUuid = (0, crypto_1.randomUUID)();
+            // Asignar el nuevo UUID a la competencia
+            await client.query(`UPDATE public.competencias SET sync_uuid = $1 WHERE id_competencia = $2`, [syncUuid, competencyId]);
+        }
+    }
+    else {
+        // Modo Creación: Generar un nuevo sync_uuid
+        syncUuid = (0, crypto_1.randomUUID)();
+    }
     const sharedDescription = chosenDescription ??
-        existingRes.rows.find((row) => normalizeCompetencyDescription(row.descripcion).replace(/\.+$/, "").toUpperCase() !==
-            normalizeCompetencyDescription(exports.DEFAULT_COMPETENCY_TEXT).replace(/\.+$/, "").toUpperCase())?.descripcion ??
+        (competencyId
+            ? (await client.query(`SELECT descripcion FROM public.competencias WHERE id_competencia = $1`, [competencyId])).rows[0]?.descripcion
+            : null) ??
         DEFAULT_COMPETENCY_DESCRIPTION;
     const syncedRows = [];
     for (const peerGroupId of peerGroups) {
-        const syncedRes = await client.query(`INSERT INTO competencias (id_año, id_grupo, id_materia, id_periodo, descripcion, id_colegio)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       ON CONFLICT (id_año, id_grupo, id_materia, id_periodo, id_colegio)
-       DO UPDATE SET descripcion = EXCLUDED.descripcion
-       RETURNING *`, [context.idAnio, peerGroupId, context.idMateria, periodId, sharedDescription, context.idColegio]);
+        let syncedRes;
+        if (competencyId) {
+            // Verificar si ya existe registro hermano con este sync_uuid para este grupo
+            const checkPeer = await client.query(`SELECT * FROM public.competencias WHERE sync_uuid = $1 AND id_grupo = $2`, [syncUuid, peerGroupId]);
+            if (checkPeer.rows.length > 0) {
+                syncedRes = await client.query(`UPDATE public.competencias 
+           SET descripcion = $1 
+           WHERE sync_uuid = $2 AND id_grupo = $3
+           RETURNING *`, [sharedDescription, syncUuid, peerGroupId]);
+            }
+            else {
+                syncedRes = await client.query(`INSERT INTO public.competencias (id_año, id_grupo, id_materia, id_periodo, descripcion, id_colegio, sync_uuid)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
+           RETURNING *`, [context.idAnio, peerGroupId, context.idMateria, periodId, sharedDescription, context.idColegio, syncUuid]);
+                await (0, exports.ensureDefaultEvidencias)(client, syncedRes.rows[0].id_competencia, context.idColegio);
+            }
+        }
+        else {
+            // Creación: Insertar en todos los grupos paralelos
+            syncedRes = await client.query(`INSERT INTO public.competencias (id_año, id_grupo, id_materia, id_periodo, descripcion, id_colegio, sync_uuid)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         RETURNING *`, [context.idAnio, peerGroupId, context.idMateria, periodId, sharedDescription, context.idColegio, syncUuid]);
+            await (0, exports.ensureDefaultEvidencias)(client, syncedRes.rows[0].id_competencia, context.idColegio);
+        }
         const compRow = syncedRes.rows[0];
         syncedRows.push(compRow);
-        // Ensure default evidences for each synced competency
-        await (0, exports.ensureDefaultEvidencias)(client, compRow.id_competencia, compRow.id_colegio);
     }
     const currentGroupRow = syncedRows.find((row) => Number(row.id_grupo) === context.idGrupo);
     if (!currentGroupRow) {
@@ -417,24 +473,24 @@ const syncCompetencyAcrossGrade = async (client, context, periodId, descripcion)
 };
 exports.syncCompetencyAcrossGrade = syncCompetencyAcrossGrade;
 const harmonizeCompetenciesForSchoolYear = async (client, schoolId, yearId) => {
-    const contextsRes = await client.query(`SELECT
-       MIN(c.id_grupo)::int AS id_grupo,
-       c.id_materia,
-       c.id_periodo
-     FROM competencias c
-     JOIN grupos g ON g.id_grupo = c.id_grupo
-     WHERE c.id_colegio = $1
-       AND c.id_año = $2
-     GROUP BY g.id_nivel, g.id_tipo_grado, c.id_materia, c.id_periodo
-     ORDER BY MIN(c.id_grupo), c.id_materia, c.id_periodo`, [schoolId, yearId]);
-    for (const row of contextsRes.rows) {
-        await (0, exports.syncCompetencyAcrossGrade)(client, {
-            idDetalleGrado: 0,
-            idGrupo: Number(row.id_grupo),
-            idMateria: Number(row.id_materia),
-            idColegio: schoolId,
-            idAnio: yearId,
-        }, Number(row.id_periodo));
+    // Obtener todas las competencias distintas por sync_uuid en este año/colegio
+    const competenciesRes = await client.query(`SELECT DISTINCT ON (c.sync_uuid) c.sync_uuid, c.id_grupo, c.id_materia, c.id_periodo, c.descripcion
+     FROM public.competencias c
+     WHERE c.id_colegio = $1 AND c.id_año = $2 AND c.sync_uuid IS NOT NULL`, [schoolId, yearId]);
+    for (const row of competenciesRes.rows) {
+        const peerGroups = await getGradePeerGroups(client, schoolId, row.id_grupo);
+        for (const peerGroupId of peerGroups) {
+            const existCheck = await client.query(`SELECT id_competencia FROM public.competencias WHERE sync_uuid = $1 AND id_grupo = $2`, [row.sync_uuid, peerGroupId]);
+            if (existCheck.rows.length === 0) {
+                const insertRes = await client.query(`INSERT INTO public.competencias (id_año, id_grupo, id_materia, id_periodo, descripcion, id_colegio, sync_uuid)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
+           RETURNING id_competencia`, [yearId, peerGroupId, row.id_materia, row.id_periodo, row.descripcion, schoolId, row.sync_uuid]);
+                await (0, exports.ensureDefaultEvidencias)(client, insertRes.rows[0].id_competencia, schoolId);
+            }
+            else {
+                await client.query(`UPDATE public.competencias SET descripcion = $1 WHERE sync_uuid = $2 AND id_grupo = $3`, [row.descripcion, row.sync_uuid, peerGroupId]);
+            }
+        }
     }
 };
 exports.harmonizeCompetenciesForSchoolYear = harmonizeCompetenciesForSchoolYear;

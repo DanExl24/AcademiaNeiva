@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import axios from 'axios'
 import { ArrowLeft, BookOpenCheck, PenSquare, Plus, Search, Sparkles, Check, Trash2, X } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
+import { useNotificationStore } from '../../stores/notifications'
 import { getCourseDisplayName } from '../../utils/courseHelper'
 
 interface AcademicPeriod {
@@ -47,6 +48,7 @@ interface CompetencyItem {
 }
 
 const auth = useAuthStore()
+const notify = useNotificationStore()
 const schoolId = computed(() => Number(auth.user?.schoolId || 0))
 
 const loading = ref(true)
@@ -59,16 +61,24 @@ const availableDba = ref<any[]>([])
 const dbaVersion = ref<string | null>(null)
 const selectedCompetenciaForDba = ref<CompetencyItem | null>(null)
 const checkedDbaEvidences = ref<number[]>([])
+const dbaSearch = ref('')
 
 const loadingFormDba = ref(false)
 const availableFormDba = ref<any[]>([])
 const formDbaVersion = ref<string | null>(null)
 const checkedFormDbaEvidences = ref<number[]>([])
 const showFormDba = ref(false)
+const formDbaSearch = ref('')
 
 const periods = ref<AcademicPeriod[]>([])
 const assignments = ref<AssignmentOption[]>([])
 const competencies = ref<CompetencyItem[]>([])
+
+const isPeriodClosed = (id_periodo: any): boolean => {
+  if (!id_periodo) return false
+  const p = periods.value.find(p => String(p.id_periodo) === String(id_periodo))
+  return p?.estado === 'CERRADO'
+}
 
 const search = ref('')
 const selectedPeriod = ref('')
@@ -251,7 +261,8 @@ const onFormContextChange = async () => {
     const res = await axios.get(`http://localhost:3000/api/academic-admin/settings/dba-planeacion/disponibles/${schoolId.value}`, {
       params: {
         id_grupo: target.id_grupo,
-        id_materia: target.id_materia
+        id_materia: target.id_materia,
+        id_periodo: competencyForm.value.id_periodo || undefined
       }
     })
     availableFormDba.value = res.data.dba || []
@@ -290,7 +301,12 @@ const openEditModal = async (item: CompetencyItem) => {
 
 const saveCompetency = async () => {
   if (!competencyForm.value.id_periodo || !competencyForm.value.gradeKey || !competencyForm.value.subjectKey || !competencyForm.value.descripcion.trim()) {
-    alert('Selecciona grado, materia, periodo y escribe la competencia.')
+    notify.addNotification('Selecciona grado, materia, periodo y escribe la competencia.', 'warning')
+    return
+  }
+
+  if (isPeriodClosed(competencyForm.value.id_periodo)) {
+    notify.addNotification('No se pueden asignar ni modificar competencias en periodos cerrados.', 'error')
     return
   }
 
@@ -301,7 +317,7 @@ const saveCompetency = async () => {
   })
 
   if (!targets.length) {
-    alert('No hay cursos disponibles para esa materia dentro del grado seleccionado.')
+    notify.addNotification('No hay cursos disponibles para esa materia dentro del grado seleccionado.', 'warning')
     return
   }
 
@@ -319,8 +335,9 @@ const saveCompetency = async () => {
     competencyModal.value = false
     resetForm()
     await loadData()
+    notify.addNotification('Competencia guardada correctamente', 'success')
   } catch (error: any) {
-    alert(error.response?.data?.error || 'No fue posible guardar la competencia')
+    notify.addNotification(error.response?.data?.error || 'No fue posible guardar la competencia', 'error')
   } finally {
     saving.value = false
   }
@@ -356,8 +373,9 @@ const addEvidencia = async (competencia: CompetencyItem) => {
     if (!competencia.evidencias) competencia.evidencias = []
     competencia.evidencias.push(response.data)
     newEvidencia.value[competencia.id_competencia] = ''
+    notify.addNotification('Evidencia agregada correctamente', 'success')
   } catch (error: any) {
-    alert(error.response?.data?.error || 'Error al agregar evidencia')
+    notify.addNotification(error.response?.data?.error || 'Error al agregar evidencia', 'error')
   } finally {
     saving.value = false
   }
@@ -383,8 +401,9 @@ const saveEditEvidencia = async (evidencia: any) => {
     })
     evidencia.descripcion = desc
     editingEvidencia.value = null
+    notify.addNotification('Evidencia actualizada correctamente', 'success')
   } catch (error: any) {
-    alert(error.response?.data?.error || 'Error al actualizar evidencia')
+    notify.addNotification(error.response?.data?.error || 'Error al actualizar evidencia', 'error')
   } finally {
     saving.value = false
   }
@@ -399,8 +418,9 @@ const removeEvidencia = async (competencia: CompetencyItem, evidenciaId: number)
       params: { schoolId: schoolId.value }
     })
     competencia.evidencias = competencia.evidencias.filter((e: any) => e.id_evidencia !== evidenciaId)
+    notify.addNotification('Evidencia eliminada correctamente', 'success')
   } catch (error: any) {
-    alert(error.response?.data?.error || 'Error al eliminar evidencia')
+    notify.addNotification(error.response?.data?.error || 'Error al eliminar evidencia', 'error')
   } finally {
     saving.value = false
   }
@@ -412,6 +432,7 @@ const openDbaModal = async (competencia: CompetencyItem) => {
   loadingDba.value = true
   availableDba.value = []
   dbaVersion.value = null
+  dbaSearch.value = ''
   
   // Initialize checked evidences
   checkedDbaEvidences.value = competencia.evidencias
@@ -422,14 +443,16 @@ const openDbaModal = async (competencia: CompetencyItem) => {
     const res = await axios.get(`http://localhost:3000/api/academic-admin/settings/dba-planeacion/disponibles/${schoolId.value}`, {
       params: {
         id_grupo: competencia.id_grupo,
-        id_materia: competencia.id_materia
+        id_materia: competencia.id_materia,
+        id_periodo: competencia.id_periodo,
+        id_competencia: competencia.id_competencia
       }
     })
     availableDba.value = res.data.dba || []
     dbaVersion.value = res.data.versionCurricular
   } catch (error) {
     console.error('Error fetching available DBA:', error)
-    alert('No fue posible cargar el catálogo de DBA')
+    notify.addNotification('No fue posible cargar el catálogo de DBA', 'error')
   } finally {
     loadingDba.value = false
   }
@@ -447,12 +470,45 @@ const saveDbaEvidencias = async () => {
     dbaModal.value = false
     selectedCompetenciaForDba.value = null
     await loadData()
+    notify.addNotification('Evidencias del DBA vinculadas correctamente', 'success')
   } catch (error: any) {
-    alert(error.response?.data?.error || 'Error al vincular evidencias de DBA')
+    notify.addNotification(error.response?.data?.error || 'Error al vincular evidencias de DBA', 'error')
   } finally {
     saving.value = false
   }
 }
+
+const filteredAvailableDba = computed(() => {
+  const q = dbaSearch.value.toLowerCase().trim()
+  if (!q) return availableDba.value
+  return availableDba.value
+    .map(dba => {
+      const matchesDba = dba.enunciado?.toLowerCase().includes(q) || String(dba.numero_dba).includes(q)
+      const filteredEvidencias = (dba.evidencias || []).filter((ev: any) =>
+        ev.descripcion?.toLowerCase().includes(q)
+      )
+      if (matchesDba) return dba
+      if (filteredEvidencias.length > 0) return { ...dba, evidencias: filteredEvidencias }
+      return null
+    })
+    .filter(Boolean)
+})
+
+const filteredFormDba = computed(() => {
+  const q = formDbaSearch.value.toLowerCase().trim()
+  if (!q) return availableFormDba.value
+  return availableFormDba.value
+    .map(dba => {
+      const matchesDba = dba.enunciado?.toLowerCase().includes(q) || String(dba.numero_dba).includes(q)
+      const filteredEvidencias = (dba.evidencias || []).filter((ev: any) =>
+        ev.descripcion?.toLowerCase().includes(q)
+      )
+      if (matchesDba) return dba
+      if (filteredEvidencias.length > 0) return { ...dba, evidencias: filteredEvidencias }
+      return null
+    })
+    .filter(Boolean)
+})
 
 onMounted(loadData)
 </script>
@@ -623,6 +679,7 @@ onMounted(loadData)
               </div>
 
               <button
+                v-if="!isPeriodClosed(item.id_periodo)"
                 type="button"
                 @click="openEditModal(item)"
                 class="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-slate-200 px-5 py-3 text-xs font-black text-slate-700 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 dark:border-slate-700 dark:text-slate-400 dark:hover:text-emerald-400 dark:hover:bg-emerald-900/30 uppercase tracking-widest"
@@ -630,6 +687,9 @@ onMounted(loadData)
                 <PenSquare class="h-4 w-4" />
                 Editar
               </button>
+              <span v-else class="inline-flex min-h-11 items-center justify-center rounded-2xl bg-slate-100 px-5 py-3 text-xs font-black uppercase text-slate-400 dark:bg-slate-800 dark:text-slate-500 tracking-wider">
+                Periodo Cerrado
+              </span>
             </div>
 
             <div class="mt-6 rounded-3xl border border-slate-100 bg-slate-50 p-6 dark:bg-slate-800 dark:border-slate-700 shadow-inner">
@@ -652,7 +712,7 @@ onMounted(loadData)
                     </div>
                     <div v-else class="flex-1 flex justify-between items-start gap-4">
                       <span class="text-sm font-semibold text-slate-700 dark:text-slate-400">{{ ev.descripcion }}</span>
-                      <div v-if="!ev.id_evidencia_dba" class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div v-if="!ev.id_evidencia_dba && !isPeriodClosed(item.id_periodo)" class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button @click="startEditEvidencia(ev)" class="text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400"><PenSquare class="h-4 w-4" /></button>
                         <button @click="removeEvidencia(item, ev.id_evidencia)" class="text-slate-400 hover:text-red-500"><Trash2 class="h-4 w-4" /></button>
                       </div>
@@ -661,12 +721,12 @@ onMounted(loadData)
                 </ul>
                 <div v-else class="text-sm text-slate-500 dark:text-slate-600 italic mb-6">No hay evidencias definidas para esta competencia.</div>
                 
-                <div v-if="item.usa_dba" class="flex justify-start">
+                <div v-if="item.usa_dba && !isPeriodClosed(item.id_periodo)" class="flex justify-start">
                   <button @click="openDbaModal(item)" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-6 py-3 text-xs font-black text-white hover:bg-emerald-500 uppercase tracking-widest transition-all shadow-sm">
                     <Sparkles class="h-4 w-4" /> Vincular Evidencias del DBA
                   </button>
                 </div>
-                <div v-else class="flex gap-3">
+                <div v-else-if="!isPeriodClosed(item.id_periodo)" class="flex gap-3">
                   <input type="text" v-model="newEvidencia[item.id_competencia]" @keyup.enter="addEvidencia(item)" placeholder="Agregar evidencia..." class="flex-1 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold outline-none transition focus:border-emerald-400 dark:bg-slate-900 dark:border-slate-700 dark:text-white dark:focus:ring-2 dark:focus:ring-emerald-500/20" />
                   <button @click="addEvidencia(item)" :disabled="!newEvidencia[item.id_competencia]?.trim() || saving" class="inline-flex items-center justify-center rounded-xl bg-slate-100 px-6 py-3 text-xs font-black text-slate-700 transition hover:bg-slate-200 disabled:opacity-50 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700 uppercase tracking-widest">
                     <Plus class="h-4 w-4 mr-1.5" /> Agregar
@@ -734,9 +794,11 @@ onMounted(loadData)
               </div>
               <label class="space-y-2">
                 <span class="block text-xs font-black text-slate-700 dark:text-slate-300 ml-1 uppercase tracking-widest">Periodo lectivo</span>
-                <select v-model="competencyForm.id_periodo" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-3.5 font-bold text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500/20">
+                <select v-model="competencyForm.id_periodo" @change="onFormContextChange" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-3.5 font-bold text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500/20">
                   <option value="">Selecciona un periodo</option>
-                  <option v-for="period in periods" :key="period.id_periodo" :value="String(period.id_periodo)">{{ period.nombre }}</option>
+                  <option v-for="period in periods" :key="period.id_periodo" :value="String(period.id_periodo)" :disabled="period.estado === 'CERRADO'">
+                    {{ period.nombre }}{{ period.estado === 'CERRADO' ? ' (CERRADO)' : '' }}
+                  </option>
                 </select>
               </label>
               <label class="space-y-2">
@@ -773,29 +835,69 @@ onMounted(loadData)
                   <p class="text-xs font-bold text-slate-500">No hay catálogo DBA activo para este grado/materia.</p>
                 </div>
                 
-                <div v-else class="space-y-4 max-h-[300px] overflow-y-auto pr-2">
-                  <div v-for="dbaItem in availableFormDba" :key="dbaItem.id_dba" class="rounded-2xl border border-slate-100 bg-slate-50 p-4 dark:bg-slate-800/30 dark:border-slate-800">
-                    <div class="flex items-start gap-3">
-                      <span class="rounded-xl bg-emerald-100 text-emerald-800 px-2.5 py-1 text-[10px] font-black dark:bg-emerald-950/40 dark:text-emerald-400 shrink-0">
-                        DBA #{{ dbaItem.numero_dba }}
-                      </span>
-                      <p class="text-xs font-bold text-slate-700 dark:text-slate-300 leading-relaxed">
-                        {{ dbaItem.enunciado }}
-                      </p>
-                    </div>
+                <div v-else class="space-y-3">
+                  <!-- Buscador en creación -->
+                  <div class="relative">
+                    <Search class="absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                    <input
+                      v-model="formDbaSearch"
+                      type="text"
+                      placeholder="Buscar evidencia..."
+                      class="w-full rounded-xl border border-slate-200 bg-white pl-10 pr-4 py-2.5 text-xs font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300 dark:bg-slate-800 dark:border-slate-700 dark:text-white"
+                    />
+                  </div>
 
-                    <div class="mt-4 border-t border-slate-200/50 pt-3 dark:border-slate-700/50 space-y-2">
-                      <label v-for="ev in dbaItem.evidencias" :key="ev.id_evidencia_dba" class="flex items-start gap-2.5 rounded-xl border border-slate-200/40 bg-white p-3 transition-colors hover:bg-emerald-50/20 cursor-pointer dark:bg-slate-900 dark:border-slate-800">
-                        <input
-                          type="checkbox"
-                          v-model="checkedFormDbaEvidences"
-                          :value="ev.id_evidencia_dba"
-                          class="mt-0.5 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
-                        />
-                        <span class="text-xs font-semibold leading-relaxed text-slate-600 dark:text-slate-400">
-                          {{ ev.descripcion }}
+                  <div v-if="filteredFormDba.length === 0" class="py-4 text-center text-xs font-semibold text-slate-400">
+                    No se encontraron evidencias.
+                  </div>
+
+                  <div class="max-h-[300px] overflow-y-auto pr-2 space-y-4">
+                    <div v-for="dbaItem in filteredFormDba" :key="dbaItem.id_dba" class="rounded-2xl border border-slate-100 bg-slate-50 p-4 dark:bg-slate-800/30 dark:border-slate-800">
+                      <div class="flex items-start gap-3">
+                        <span class="rounded-xl bg-emerald-100 text-emerald-800 px-2.5 py-1 text-[10px] font-black dark:bg-emerald-950/40 dark:text-emerald-400 shrink-0">
+                          DBA #{{ dbaItem.numero_dba }}
                         </span>
-                      </label>
+                        <p class="text-xs font-bold text-slate-700 dark:text-slate-300 leading-relaxed">
+                          {{ dbaItem.enunciado }}
+                        </p>
+                      </div>
+
+                      <div class="mt-4 border-t border-slate-200/50 pt-3 dark:border-slate-700/50 space-y-2">
+                        <label
+                          v-for="ev in dbaItem.evidencias"
+                          :key="ev.id_evidencia_dba"
+                          :class="[
+                            'flex items-start gap-2.5 rounded-xl border p-3 transition-colors',
+                            ev.asignada
+                              ? 'border-amber-200/50 bg-amber-50/30 cursor-not-allowed dark:bg-amber-950/10 dark:border-amber-900/30'
+                              : 'border-slate-200/40 bg-white hover:bg-emerald-50/20 cursor-pointer dark:bg-slate-900 dark:border-slate-800'
+                          ]"
+                        >
+                          <input
+                            v-if="!ev.asignada"
+                            type="checkbox"
+                            v-model="checkedFormDbaEvidences"
+                            :value="ev.id_evidencia_dba"
+                            class="mt-0.5 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                          />
+                          <div v-else class="mt-0.5 h-4 w-4 rounded border border-amber-300 bg-amber-100 flex items-center justify-center shrink-0 dark:bg-amber-900/30 dark:border-amber-700">
+                            <svg class="h-2.5 w-2.5 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" /></svg>
+                          </div>
+                          <div class="flex-1 min-w-0">
+                            <span :class="ev.asignada ? 'text-amber-700/70 dark:text-amber-400/70' : 'text-slate-600 dark:text-slate-400'" class="text-xs font-semibold leading-relaxed block">
+                              {{ ev.descripcion }}
+                            </span>
+                            <div v-if="ev.asignada && ev.asignada_a" class="mt-1.5 flex items-center gap-1.5 flex-wrap">
+                              <span class="rounded-full bg-amber-100 px-2 py-0.5 text-[8px] font-black uppercase text-amber-700 tracking-wider dark:bg-amber-900/40 dark:text-amber-400">
+                                {{ ev.asignada_a.periodo_nombre }}
+                              </span>
+                              <span class="text-[9px] font-semibold text-amber-600/70 dark:text-amber-400/50 truncate max-w-[200px]" :title="ev.asignada_a.competencia_descripcion">
+                                {{ ev.asignada_a.competencia_descripcion }}
+                              </span>
+                            </div>
+                          </div>
+                        </label>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -850,7 +952,7 @@ onMounted(loadData)
                 Este grado o materia no tiene una versión curricular del catálogo DBA asociada a la institución académica.
               </p>
             </div>
-            <div v-else class="space-y-8">
+            <div v-else class="space-y-6">
               <div class="rounded-3xl border border-emerald-100 bg-emerald-50 p-5 dark:bg-emerald-950/10 dark:border-emerald-900/30">
                 <span class="rounded-full bg-emerald-600 px-3 py-1 text-[9px] font-black uppercase text-white tracking-widest">
                   Versión Activa: {{ dbaVersion }}
@@ -859,12 +961,27 @@ onMounted(loadData)
                   {{ selectedCompetenciaForDba?.materia_nombre }} — Grado {{ selectedCompetenciaForDba?.tipo_grado_nombre }}
                 </h3>
                 <p class="mt-2 text-xs font-semibold text-emerald-800/80 dark:text-emerald-400 leading-relaxed">
-                  Selecciona qué evidencias oficiales formarán parte de tu planeación académica. Estas evidencias serán consultadas por los docentes para sus actividades.
+                  Selecciona qué evidencias oficiales formarán parte de tu planeación académica. Las evidencias bloqueadas ya fueron asignadas a otra competencia.
                 </p>
               </div>
 
+              <!-- Buscador -->
+              <div class="relative">
+                <Search class="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <input
+                  v-model="dbaSearch"
+                  type="text"
+                  placeholder="Buscar evidencia por texto o número de DBA..."
+                  class="w-full rounded-2xl border border-slate-200 bg-white pl-11 pr-4 py-3.5 text-sm font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300 dark:bg-slate-800 dark:border-slate-700 dark:text-white"
+                />
+              </div>
+
+              <div v-if="filteredAvailableDba.length === 0" class="py-8 text-center text-sm font-semibold text-slate-400">
+                No se encontraron evidencias que coincidan con tu búsqueda.
+              </div>
+
               <div class="space-y-6">
-                <div v-for="dbaItem in availableDba" :key="dbaItem.id_dba" class="rounded-3xl border border-slate-100 bg-slate-50 p-6 dark:bg-slate-800/50 dark:border-slate-800 shadow-sm">
+                <div v-for="dbaItem in filteredAvailableDba" :key="dbaItem.id_dba" class="rounded-3xl border border-slate-100 bg-slate-50 p-6 dark:bg-slate-800/50 dark:border-slate-800 shadow-sm">
                   <div class="flex items-start gap-4">
                     <span class="rounded-2xl bg-emerald-100 text-emerald-800 px-3 py-2 text-xs font-black dark:bg-emerald-950/40 dark:text-emerald-400 shrink-0">
                       DBA #{{ dbaItem.numero_dba }}
@@ -879,16 +996,40 @@ onMounted(loadData)
                       Evidencias Oficiales:
                     </h4>
                     <div class="grid grid-cols-1 gap-3">
-                      <label v-for="ev in dbaItem.evidencias" :key="ev.id_evidencia_dba" class="flex items-start gap-3 rounded-2xl border border-slate-200/50 bg-white p-4 transition-colors hover:bg-emerald-50/20 cursor-pointer dark:bg-slate-900 dark:border-slate-800">
+                      <!-- Evidencia LIBRE (seleccionable) -->
+                      <label
+                        v-for="ev in dbaItem.evidencias"
+                        :key="ev.id_evidencia_dba"
+                        :class="[
+                          'flex items-start gap-3 rounded-2xl border p-4 transition-colors',
+                          ev.asignada
+                            ? 'border-amber-200/60 bg-amber-50/40 cursor-not-allowed dark:bg-amber-950/10 dark:border-amber-900/30'
+                            : 'border-slate-200/50 bg-white hover:bg-emerald-50/20 cursor-pointer dark:bg-slate-900 dark:border-slate-800'
+                        ]"
+                      >
                         <input
+                          v-if="!ev.asignada"
                           type="checkbox"
                           v-model="checkedDbaEvidences"
                           :value="ev.id_evidencia_dba"
                           class="mt-1 h-4.5 w-4.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
                         />
-                        <span class="text-xs font-semibold leading-relaxed text-slate-700 dark:text-slate-300">
-                          {{ ev.descripcion }}
-                        </span>
+                        <div v-else class="mt-1 h-4.5 w-4.5 rounded border border-amber-300 bg-amber-100 flex items-center justify-center shrink-0 dark:bg-amber-900/30 dark:border-amber-700">
+                          <svg class="h-3 w-3 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" /></svg>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                          <span :class="ev.asignada ? 'text-amber-800/70 dark:text-amber-400/70' : 'text-slate-700 dark:text-slate-300'" class="text-xs font-semibold leading-relaxed block">
+                            {{ ev.descripcion }}
+                          </span>
+                          <div v-if="ev.asignada && ev.asignada_a" class="mt-2 flex items-center gap-2 flex-wrap">
+                            <span class="rounded-full bg-amber-100 px-2.5 py-0.5 text-[9px] font-black uppercase text-amber-700 tracking-wider dark:bg-amber-900/40 dark:text-amber-400">
+                              Asignada · {{ ev.asignada_a.periodo_nombre }}
+                            </span>
+                            <span class="text-[10px] font-semibold text-amber-600/80 dark:text-amber-400/60 truncate max-w-xs" :title="ev.asignada_a.competencia_descripcion">
+                              {{ ev.asignada_a.competencia_descripcion }}
+                            </span>
+                          </div>
+                        </div>
                       </label>
                     </div>
                   </div>

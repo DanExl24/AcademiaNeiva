@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict 7hf0cUaOxS9xINcvd2mCmTMFdLd9jgPlXtf9lOygt0b9obTqZIgfPSU8jg18zBD
+\restrict IAm24Hs2HTjAbvhcHusBRUkaLo5JhcrAEMEccpyKYLjRKmhhg7l5UF2tqSqoxEL
 
 -- Dumped from database version 18.4
 -- Dumped by pg_dump version 18.4
@@ -463,8 +463,9 @@ CREATE TABLE public.actividad_materia (
     nombre character varying(255) NOT NULL,
     porcentaje numeric(5,2) NOT NULL,
     id_colegio integer NOT NULL,
-    id_competencia integer NOT NULL,
-    id_evidencia integer
+    id_competencia integer,
+    id_evidencia integer,
+    fecha_creacion timestamp with time zone DEFAULT now()
 );
 
 
@@ -4428,5 +4429,5 @@ REVOKE USAGE ON SCHEMA public FROM PUBLIC;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 7hf0cUaOxS9xINcvd2mCmTMFdLd9jgPlXtf9lOygt0b9obTqZIgfPSU8jg18zBD
+\unrestrict IAm24Hs2HTjAbvhcHusBRUkaLo5JhcrAEMEccpyKYLjRKmhhg7l5UF2tqSqoxEL
 

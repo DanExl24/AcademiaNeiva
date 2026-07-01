@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { PoolClient } from "pg";
 import { pool } from "../config/db";
 import bcrypt from "bcrypt";
+import { randomUUID } from "crypto";
 import { NotificationService } from "../services/notificationService";
 import { getDefaultMonthsLabelForPeriodOrder, getAcademicYearLabel } from "../config/academicCalendarDefaults";
 import {
@@ -1599,7 +1600,7 @@ export const upsertCompetencyByAdmin = async (req: Request, res: Response): Prom
 
   try {
     const contextRes = await pool.query(
-      `SELECT p."id_año"
+      `SELECT p."id_año", p.estado
        FROM periodo_academico p
        WHERE p.id_periodo = $1
          AND p.id_colegio = $2`,
@@ -1608,6 +1609,11 @@ export const upsertCompetencyByAdmin = async (req: Request, res: Response): Prom
 
     if (contextRes.rows.length === 0) {
       res.status(404).json({ error: "Periodo académico no encontrado" });
+      return;
+    }
+
+    if (contextRes.rows[0].estado === "CERRADO") {
+      res.status(409).json({ error: "No se pueden asignar ni modificar competencias en periodos cerrados." });
       return;
     }
 
@@ -1652,6 +1658,33 @@ export const upsertCompetencyByAdmin = async (req: Request, res: Response): Prom
             [sisterCompIds]
           );
         } else {
+          // Validar que ninguna de las evidencias oficiales seleccionadas esté vinculada a otra competencia del mismo año, asignatura y grupo (o paralelos) en un periodo diferente
+          const alreadyAssignedRes = await client.query(
+            `SELECT ea.id_evidencia_dba, c.id_periodo, p.nombre AS periodo_nombre
+             FROM evidencia_aprendizaje ea
+             JOIN competencias c ON c.id_competencia = ea.id_competencia
+             JOIN periodo_academico p ON p.id_periodo = c.id_periodo
+             WHERE c.id_colegio = $1
+               AND c.id_año = $2
+               AND c.id_materia = $3
+               AND c.id_grupo IN (
+                 SELECT g2.id_grupo
+                 FROM grupos g1
+                 JOIN grupos g2 ON g2.id_nivel = g1.id_nivel AND g2.id_tipo_grado = g1.id_tipo_grado
+                 WHERE g1.id_grupo = $4 AND g1.id_colegio = $1
+               )
+               AND c.id_periodo != $5
+               AND ea.id_evidencia_dba = ANY($6::int[])`,
+            [schoolId, created.id_año, created.id_materia, created.id_grupo, periodId, idEvidenciasDba]
+          );
+
+          if (alreadyAssignedRes.rows.length > 0) {
+            await client.query("ROLLBACK");
+            const names = alreadyAssignedRes.rows.map(r => `Evidencia ID ${r.id_evidencia_dba} en periodo ${r.periodo_nombre}`).join(", ");
+            res.status(400).json({ error: `Una o más evidencias ya están asignadas a otra competencia: ${names}` });
+            return;
+          }
+
           const officialEvsRes = await client.query(
             `SELECT id_evidencia_dba, descripcion, orden 
              FROM evidencias_dba 
@@ -3050,13 +3083,21 @@ export const createEvidencia = async (req: Request, res: Response): Promise<void
   }
 
   try {
-    // Verificar que la competencia pertenece a este colegio
+    // Verificar que la competencia pertenece a este colegio y obtener estado del periodo
     const check = await pool.query(
-      `SELECT id_competencia FROM competencias WHERE id_competencia = $1 AND id_colegio = $2`,
+      `SELECT c.id_competencia, p.estado AS period_estado 
+       FROM competencias c
+       JOIN periodo_academico p ON p.id_periodo = c.id_periodo
+       WHERE c.id_competencia = $1 AND c.id_colegio = $2`,
       [competenciaId, schoolId]
     );
     if (check.rows.length === 0) {
       res.status(404).json({ error: "Competencia no encontrada" });
+      return;
+    }
+
+    if (check.rows[0].period_estado === "CERRADO") {
+      res.status(409).json({ error: "No se pueden agregar evidencias a una competencia en un periodo cerrado" });
       return;
     }
 
@@ -3091,6 +3132,24 @@ export const updateEvidencia = async (req: Request, res: Response): Promise<void
   }
 
   try {
+    // Verificar estado del periodo de la competencia
+    const check = await pool.query(
+      `SELECT ea.id_evidencia, p.estado AS period_estado 
+       FROM evidencia_aprendizaje ea
+       JOIN competencias c ON c.id_competencia = ea.id_competencia
+       JOIN periodo_academico p ON p.id_periodo = c.id_periodo
+       WHERE ea.id_evidencia = $1 AND ea.id_colegio = $2`,
+      [evidenciaId, schoolId]
+    );
+    if (check.rows.length === 0) {
+      res.status(404).json({ error: "Evidencia no encontrada" });
+      return;
+    }
+    if (check.rows[0].period_estado === "CERRADO") {
+      res.status(409).json({ error: "No se puede modificar evidencias de una competencia en un periodo cerrado" });
+      return;
+    }
+
     const result = await pool.query(
       `UPDATE evidencia_aprendizaje
        SET descripcion = $1
@@ -3119,6 +3178,24 @@ export const deleteEvidencia = async (req: Request, res: Response): Promise<void
   }
 
   try {
+    // Verificar estado del periodo de la competencia
+    const check = await pool.query(
+      `SELECT ea.id_evidencia, p.estado AS period_estado 
+       FROM evidencia_aprendizaje ea
+       JOIN competencias c ON c.id_competencia = ea.id_competencia
+       JOIN periodo_academico p ON p.id_periodo = c.id_periodo
+       WHERE ea.id_evidencia = $1 AND ea.id_colegio = $2`,
+      [evidenciaId, schoolId]
+    );
+    if (check.rows.length === 0) {
+      res.status(404).json({ error: "Evidencia no encontrada" });
+      return;
+    }
+    if (check.rows[0].period_estado === "CERRADO") {
+      res.status(409).json({ error: "No se puede eliminar evidencias de una competencia en un periodo cerrado" });
+      return;
+    }
+
     const result = await pool.query(
       `DELETE FROM evidencia_aprendizaje
        WHERE id_evidencia = $1 AND id_colegio = $2
@@ -4904,6 +4981,7 @@ export const getDbaPlaneacionDisponibles = async (req: Request, res: Response): 
   const schoolId = parseSchoolId(req.params.schoolId);
   const groupId = Number(req.query.id_grupo);
   const subjectId = Number(req.query.id_materia);
+  const competencyId = req.query.id_competencia ? Number(req.query.id_competencia) : null;
 
   if (!schoolId || !groupId || !subjectId) {
     res.status(400).json({ error: "Colegio, grupo y materia son obligatorios" });
@@ -4963,7 +5041,78 @@ export const getDbaPlaneacionDisponibles = async (req: Request, res: Response): 
       [subjectId, groupId, versionCurricular]
     );
 
-    res.json({ dba: dbaRes.rows, versionCurricular });
+    // 3. Obtener las evidencias ya asignadas a competencias (con detalle de a cuál pertenecen)
+    let assignedMap: Map<number, { competencia_descripcion: string; periodo_nombre: string }> = new Map();
+    if (groupId && subjectId) {
+      let queryStr = "";
+      let queryParams: any[] = [];
+
+      if (competencyId) {
+        // Al editar: obtener evidencias asignadas a OTRAS competencias (con sync_uuid diferente)
+        queryStr = `
+          SELECT DISTINCT ea.id_evidencia_dba, c.descripcion AS competencia_descripcion, p.nombre AS periodo_nombre
+          FROM evidencia_aprendizaje ea
+          JOIN competencias c ON c.id_competencia = ea.id_competencia
+          JOIN periodo_academico p ON p.id_periodo = c.id_periodo
+          WHERE c.id_colegio = $1
+            AND c.id_materia = $2
+            AND c.id_grupo IN (
+              SELECT g2.id_grupo
+              FROM grupos g1
+              JOIN grupos g2 ON g2.id_nivel = g1.id_nivel AND g2.id_tipo_grado = g1.id_tipo_grado
+              WHERE g1.id_grupo = $3 AND g1.id_colegio = $1
+            )
+            AND c.id_año = (SELECT "id_año" FROM "año_lectivo" WHERE id_colegio = $1 ORDER BY "id_año" DESC LIMIT 1)
+            AND (c.sync_uuid != (SELECT sync_uuid FROM competencias WHERE id_competencia = $4) OR c.sync_uuid IS NULL)
+            AND ea.id_evidencia_dba IS NOT NULL
+        `;
+        queryParams = [schoolId, subjectId, groupId, competencyId];
+      } else {
+        // Al crear: obtener TODAS las evidencias ya vinculadas en cualquier competencia
+        queryStr = `
+          SELECT DISTINCT ea.id_evidencia_dba, c.descripcion AS competencia_descripcion, p.nombre AS periodo_nombre
+          FROM evidencia_aprendizaje ea
+          JOIN competencias c ON c.id_competencia = ea.id_competencia
+          JOIN periodo_academico p ON p.id_periodo = c.id_periodo
+          WHERE c.id_colegio = $1
+            AND c.id_materia = $2
+            AND c.id_grupo IN (
+              SELECT g2.id_grupo
+              FROM grupos g1
+              JOIN grupos g2 ON g2.id_nivel = g1.id_nivel AND g2.id_tipo_grado = g1.id_tipo_grado
+              WHERE g1.id_grupo = $3 AND g1.id_colegio = $1
+            )
+            AND c.id_año = (SELECT "id_año" FROM "año_lectivo" WHERE id_colegio = $1 ORDER BY "id_año" DESC LIMIT 1)
+            AND ea.id_evidencia_dba IS NOT NULL
+        `;
+        queryParams = [schoolId, subjectId, groupId];
+      }
+
+      const assignedRes = await pool.query(queryStr, queryParams);
+      for (const row of assignedRes.rows) {
+        assignedMap.set(Number(row.id_evidencia_dba), {
+          competencia_descripcion: row.competencia_descripcion,
+          periodo_nombre: row.periodo_nombre,
+        });
+      }
+    }
+
+    // 4. Anotar cada evidencia con su estado de asignación
+    const annotatedDba = dbaRes.rows.map(dba => {
+      if (Array.isArray(dba.evidencias)) {
+        dba.evidencias = dba.evidencias.map((ev: any) => {
+          const assignment = assignedMap.get(Number(ev.id_evidencia_dba));
+          return {
+            ...ev,
+            asignada: !!assignment,
+            asignada_a: assignment || null,
+          };
+        });
+      }
+      return dba;
+    });
+
+    res.json({ dba: annotatedDba, versionCurricular });
   } catch (error: any) {
     console.error("Error al obtener DBA disponibles para planeación:", error);
     res.status(500).json({ error: "Error en el servidor" });
@@ -4984,9 +5133,9 @@ export const vincularEvidenciasDbaACompetencia = async (req: Request, res: Respo
   try {
     await client.query("BEGIN");
 
-    // 1. Obtener la competencia para verificar pertenencia y obtener el contexto (año, materia, periodo, grupo)
+    // 1. Obtener la competencia para verificar pertenencia y obtener el contexto (año, materia, periodo, grupo, sync_uuid)
     const compRes = await client.query(
-      `SELECT id_competencia, id_año, id_grupo, id_materia, id_periodo, id_colegio 
+      `SELECT id_competencia, id_año, id_grupo, id_materia, id_periodo, id_colegio, sync_uuid 
        FROM competencias 
        WHERE id_competencia = $1 AND id_colegio = $2`,
       [competencyId, schoolId]
@@ -5000,6 +5149,28 @@ export const vincularEvidenciasDbaACompetencia = async (req: Request, res: Respo
 
     const comp = compRes.rows[0];
 
+    // Asegurar que exista un sync_uuid
+    let syncUuid = comp.sync_uuid;
+    if (!syncUuid) {
+      syncUuid = randomUUID();
+      await client.query(
+        `UPDATE public.competencias SET sync_uuid = $1 WHERE id_competencia = $2`,
+        [syncUuid, competencyId]
+      );
+      comp.sync_uuid = syncUuid;
+    }
+
+    // Verificar el estado del periodo
+    const periodRes = await client.query(
+      `SELECT estado FROM periodo_academico WHERE id_periodo = $1`,
+      [comp.id_periodo]
+    );
+    if (periodRes.rows.length > 0 && periodRes.rows[0].estado === "CERRADO") {
+      await client.query("ROLLBACK");
+      res.status(409).json({ error: "No se pueden vincular evidencias a competencias en periodos cerrados." });
+      return;
+    }
+
     // 2. Obtener todos los grupos pares de la misma categoría de grado (sincronización a nivel de grado)
     const peerGroupsRes = await client.query(
       `SELECT g2.id_grupo
@@ -5010,12 +5181,36 @@ export const vincularEvidenciasDbaACompetencia = async (req: Request, res: Respo
     );
     const peerGroupIds = peerGroupsRes.rows.map(r => r.id_grupo);
 
-    // Obtener todas las competencias hermanas del mismo año, materia, periodo y grupos pares
+    // Si se seleccionaron evidencias DBA, verificar que ninguna esté ya vinculada a otra competencia (con sync_uuid diferente o nulo)
+    if (idEvidenciasDba.length > 0) {
+      const alreadyAssignedRes = await client.query(
+        `SELECT ea.id_evidencia_dba, c.id_periodo, p.nombre AS periodo_nombre
+         FROM evidencia_aprendizaje ea
+         JOIN competencias c ON c.id_competencia = ea.id_competencia
+         JOIN periodo_academico p ON p.id_periodo = c.id_periodo
+         WHERE c.id_colegio = $1
+           AND c.id_año = $2
+           AND c.id_materia = $3
+           AND c.id_grupo = ANY($4::int[])
+           AND (c.sync_uuid != $5 OR c.sync_uuid IS NULL)
+           AND ea.id_evidencia_dba = ANY($6::int[])`,
+        [schoolId, comp.id_año, comp.id_materia, peerGroupIds, comp.sync_uuid, idEvidenciasDba]
+      );
+
+      if (alreadyAssignedRes.rows.length > 0) {
+        await client.query("ROLLBACK");
+        const names = alreadyAssignedRes.rows.map(r => `Evidencia ID ${r.id_evidencia_dba} en periodo ${r.periodo_nombre}`).join(", ");
+        res.status(400).json({ error: `Una o más evidencias ya están asignadas a otra competencia: ${names}` });
+        return;
+      }
+    }
+
+    // Obtener todas las competencias hermanas que comparten el mismo sync_uuid
     const compsRes = await client.query(
       `SELECT id_competencia, id_grupo 
        FROM competencias 
-       WHERE id_colegio = $1 AND id_año = $2 AND id_materia = $3 AND id_periodo = $4 AND id_grupo = ANY($5::int[])`,
-      [schoolId, comp.id_año, comp.id_materia, comp.id_periodo, peerGroupIds]
+       WHERE id_colegio = $1 AND sync_uuid = $2`,
+      [schoolId, comp.sync_uuid]
     );
     const sisterCompIds = compsRes.rows.map(r => r.id_competencia);
 

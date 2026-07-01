@@ -1194,7 +1194,7 @@ onMounted(() => {
                             type="number" 
                             v-model.number="act.porcentaje" 
                             @blur="updateActivityWeight(act)"
-                            @keyup.enter="$event.target.blur()"
+                            @keyup.enter="($event.target as HTMLInputElement).blur()"
                             class="w-12 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-1.5 py-0.5 text-[10px] font-black text-center text-slate-700 dark:text-slate-200 focus:ring-1 focus:ring-indigo-500 outline-none"
                           />
                           <span v-else class="text-[10px] font-black text-slate-600 dark:text-slate-400">{{ act.porcentaje }}%</span>

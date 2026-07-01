@@ -346,3 +346,11 @@ Motivo:
 [ ] Recuperación
 [ ] Proyecto integrador
 [ ] Otro
+
+# RN-DBA-024 - Planeación única de evidencias
+
+Una evidencia de aprendizaje solo podrá estar asociada a una única competencia dentro del mismo año lectivo para un grado y área determinados.
+
+# RN-DBA-025 - Cobertura curricular
+
+La totalidad de las competencias del año deberá cubrir las evidencias de los DBA definidos para el grado y área, evitando duplicidades en la planeación.

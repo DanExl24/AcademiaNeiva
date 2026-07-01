@@ -12,4 +12,5 @@ router.post("/forgot-password", passwordResetController_1.forgotPassword);
 router.post("/reset-password", passwordResetController_1.resetPassword);
 router.get("/check-document/:document", userController_1.checkDocument);
 router.get("/school-identity/:schoolId", authMiddleware_1.verifyToken, authController_1.getSchoolIdentity);
+router.get("/verify", authController_1.verifySession);
 exports.default = router;

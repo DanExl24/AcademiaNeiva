@@ -287,12 +287,12 @@ async function insertStudentsAndParents(client, school, roleIds, parentHash, stu
     const yearId = yearsRes.rows[0]?.id_año;
     if (!yearId)
         return;
-    // Get groups for MAÑANA + A only (14 groups: one per grade type)
+    // Get groups for MAÑANA + A, B, C (42 groups: 3 per grade type)
     const groupsRes = await client.query(`SELECT g.id_grupo, g.id_nivel
      FROM grupos g
      JOIN jornada j ON g.id_jornada = j.id_jornada
      JOIN secciones s ON g.id_seccion = s.id_seccion
-     WHERE g.id_colegio = $1 AND j.nombre = 'MAÑANA' AND s.nombre = 'A'
+     WHERE g.id_colegio = $1 AND j.nombre = 'MAÑANA' AND s.nombre IN ('A', 'B', 'C')
      ORDER BY g.id_grupo`, [school.id]);
     const groups = groupsRes.rows;
     if (groups.length === 0)
@@ -704,7 +704,7 @@ async function run() {
         // ── Phase 9.5: Seed Admin General Supervisions ──
         console.log("🕵️ Generando supervisiones de auditoría del Administrador General...");
         const adminGenId = adminGeneralResult.rows[0].id_usuario;
-        const directivosRes = await client.query(`SELECT id, id_colegio FROM directivo`);
+        const directivosRes = await client.query(`SELECT DISTINCT ON (id_colegio) id, id_colegio FROM directivo`);
         for (const d of directivosRes.rows) {
             await client.query(`
         INSERT INTO auditoria_supervision (
@@ -757,10 +757,10 @@ async function run() {
             console.error("⚠️ Error al generar calificaciones:", err);
         }
         // ── Summary ──
-        const totalStudents = schools.length * 14 * STUDENTS_PER_GROUP;
+        const totalStudents = schools.length * 42 * STUDENTS_PER_GROUP;
         const expelled = credentials.filter(() => false).length; // Not in credentials
         console.log(`\n🎉 Base de datos reseteada correctamente para ${schools.length} colegios.`);
-        console.log(`   📊 Estudiantes totales: ${totalStudents} (${STUDENTS_PER_GROUP}/grupo × 14 grupos × ${schools.length} colegios)`);
+        console.log(`   📊 Estudiantes totales: ${totalStudents} (${STUDENTS_PER_GROUP}/grupo × 42 grupos × ${schools.length} colegios)`);
         console.log(`   ⚠️  ~5% SANCIONADOS, ~5% EXPULSADOS, ~5% RETIRADOS`);
         console.log(`   📄 Credenciales: ${credentialsPath}`);
     }

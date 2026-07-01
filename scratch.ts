@@ -1,20 +1,15 @@
-import { pool } from "./backend/src/config/db";
+import { ensureCompetencySchema } from "./backend/src/config/competencyMigration";
 
-async function getColumns() {
-  const tables = ['estudiante', 'padre_familia', 'usuario'];
-  const client = await pool.connect();
-  
-  for (const table of tables) {
-    const res = await client.query(`
-      SELECT column_name 
-      FROM information_schema.columns 
-      WHERE table_name = $1
-    `, [table]);
-    console.log(`Table ${table} columns:`, res.rows.map(r => r.column_name).join(', '));
+async function run() {
+  try {
+    console.log("Running ensureCompetencySchema...");
+    await ensureCompetencySchema();
+    console.log("Migration completed successfully!");
+  } catch (error) {
+    console.error("Migration failed:", error);
+  } finally {
+    process.exit(0);
   }
-  
-  client.release();
-  process.exit(0);
 }
 
-getColumns();
+run();

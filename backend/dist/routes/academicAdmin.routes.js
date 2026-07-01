@@ -8,11 +8,15 @@ const authMiddleware_1 = require("../middleware/authMiddleware");
 const router = (0, express_1.Router)();
 // Public routes
 router.get("/catalogs", academicAdminController_1.getAcademicCatalogs);
-// Protected routes (require Directivo or Admin General)
-router.use(authMiddleware_1.verifyToken, authMiddleware_1.requireDirectivo);
+// Protected routes (require verification)
+router.use(authMiddleware_1.verifyToken);
+// Expose read-only routes to all authenticated users (Docentes need these settings to show scales and branding)
+router.get("/my-school/:schoolId", academicAdminController_1.getMySchoolData);
+router.get("/settings/:schoolId", academicAdminController_1.getAcademicSettingsData);
+// Require Directivo role for administrative actions
+router.use(authMiddleware_1.requireDirectivo);
 router.get("/settings/enrollment-config/:schoolId/:yearId", academicAdminController_1.getEnrollmentConfig);
 router.post("/settings/enrollment-config", academicAdminController_1.saveEnrollmentConfig);
-router.get("/my-school/:schoolId", academicAdminController_1.getMySchoolData);
 router.put("/my-school/:schoolId/identidad", academicAdminController_1.updateMySchoolIdentity);
 router.post("/my-school/:schoolId/identidad/reset", academicAdminController_1.resetMySchoolIdentity);
 router.post("/my-school/:schoolId/identidad/upload-escudo", multer_1.upload.single("escudo"), academicAdminController_1.uploadMySchoolEscudo);
@@ -33,7 +37,6 @@ router.post("/teachers", academicAdminController_1.createTeacher);
 router.patch("/teachers/:id/status", academicAdminController_1.updateTeacherStatus);
 router.post("/teacher-assignments", academicAdminController_1.assignTeacherCourseSubject);
 router.delete("/teacher-assignments/:id", academicAdminController_1.deleteTeacherAssignment);
-router.get("/settings/:schoolId", academicAdminController_1.getAcademicSettingsData);
 router.post("/settings/years", academicAdminController_1.createAcademicYear);
 router.delete("/settings/years/:id", academicAdminController_1.deleteAcademicYear);
 router.patch("/settings/years/:id/status", academicAdminController_1.updateAcademicYearStatus);

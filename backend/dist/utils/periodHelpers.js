@@ -45,20 +45,22 @@ const getCurrentAllowedPeriodForSchool = async (schoolId) => {
 };
 exports.getCurrentAllowedPeriodForSchool = getCurrentAllowedPeriodForSchool;
 const ensureCurrentPeriodForSchool = async (schoolId, periodId) => {
-    const currentPeriod = await (0, exports.getCurrentAllowedPeriodForSchool)(schoolId);
-    return Boolean(currentPeriod && Number(currentPeriod.id_periodo) === periodId);
+    const result = await db_1.pool.query(`SELECT estado FROM periodo_academico WHERE id_periodo = $1 AND id_colegio = $2`, [periodId, schoolId]);
+    if (result.rows.length === 0) {
+        return false;
+    }
+    return result.rows[0].estado !== "CERRADO";
 };
 exports.ensureCurrentPeriodForSchool = ensureCurrentPeriodForSchool;
 const ensureCurrentPeriodOrRespond = async (res, schoolId, periodId) => {
-    const currentPeriod = await (0, exports.getCurrentAllowedPeriodForSchool)(schoolId);
-    if (!currentPeriod) {
-        res.status(409).json({ error: "No hay un periodo académico actual configurado para este colegio" });
+    const periodRes = await db_1.pool.query(`SELECT estado, nombre FROM periodo_academico WHERE id_periodo = $1 AND id_colegio = $2`, [periodId, schoolId]);
+    if (periodRes.rows.length === 0) {
+        res.status(404).json({ error: "Periodo académico no encontrado" });
         return false;
     }
-    if (Number(currentPeriod.id_periodo) !== periodId) {
+    if (periodRes.rows[0].estado === "CERRADO") {
         res.status(409).json({
-            error: `Solo está habilitado el periodo actual: ${currentPeriod.nombre}`,
-            currentPeriod,
+            error: `El periodo académico "${periodRes.rows[0].nombre}" está cerrado institucionalmente y no admite modificaciones.`,
         });
         return false;
     }

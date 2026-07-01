@@ -163,12 +163,11 @@ export const updateCompetency = async (req: Request, res: Response): Promise<voi
       return;
     }
 
-    if (!(await ensureCurrentPeriodOrRespond(res, Number(periodRes.rows[0].id_colegio), Number(periodRes.rows[0].id_periodo)))) {
-      return;
-    }
-
-    const periodOpen = await ensurePeriodOpen(Number(periodRes.rows[0].id_periodo));
-    if (!periodOpen) {
+    const periodStatusRes = await client.query(
+      `SELECT estado FROM periodo_academico WHERE id_periodo = $1`,
+      [Number(periodRes.rows[0].id_periodo)]
+    );
+    if (periodStatusRes.rows.length > 0 && periodStatusRes.rows[0].estado === "CERRADO") {
       res.status(409).json({ error: "No se puede modificar la competencia porque el periodo está cerrado institucionalmente" });
       return;
     }
@@ -198,7 +197,8 @@ export const updateCompetency = async (req: Request, res: Response): Promise<voi
       client,
       context,
       Number(periodRes.rows[0].id_periodo),
-      descripcion.trim()
+      descripcion.trim(),
+      Number(id)
     );
     await client.query("COMMIT");
 
@@ -1258,6 +1258,33 @@ export const getCourseEvidenciasDba = async (req: Request, res: Response): Promi
       [subjectId, gradeId, versionCurricular]
     );
 
+    // Obtener evidencias ya asociadas a competencias en otros periodos para la misma asignatura, año lectivo y grado/grupo
+    let planeadasOtrosPeriodosIds: number[] = [];
+    if (periodId) {
+      const otrosRes = await pool.query(
+        `SELECT DISTINCT ea.id_evidencia_dba
+         FROM evidencia_aprendizaje ea
+         JOIN competencias c ON c.id_competencia = ea.id_competencia
+         WHERE c.id_colegio = $1
+           AND c.id_año = (SELECT "id_año" FROM "año_lectivo" WHERE id_colegio = $1 ORDER BY "id_año" DESC LIMIT 1)
+           AND c.id_materia = $2
+           AND c.id_grupo IN (
+             SELECT g2.id_grupo
+             FROM grupos g1
+             JOIN grupos g2 ON g2.id_nivel = g1.id_nivel AND g2.id_tipo_grado = g1.id_tipo_grado
+             WHERE g1.id_grupo = $3 AND g1.id_colegio = $1
+           )
+           AND c.id_periodo != $4
+           AND ea.id_evidencia_dba IS NOT NULL`,
+        [schoolId, subjectId, gradeId, periodId]
+      );
+      planeadasOtrosPeriodosIds = otrosRes.rows.map(r => Number(r.id_evidencia_dba));
+    }
+
+    const filteredCatalogRows = dbaEvsRes.rows.filter(
+      row => !planeadasOtrosPeriodosIds.includes(Number(row.id_evidencia_dba))
+    );
+
     // 5. Agrupar por DBA y clasificar cada evidencia
     const dbaMap = new Map<number, {
       id_dba: number;
@@ -1272,7 +1299,7 @@ export const getCourseEvidenciasDba = async (req: Request, res: Response): Promi
       }>;
     }>();
 
-    for (const row of dbaEvsRes.rows) {
+    for (const row of filteredCatalogRows) {
       if (!dbaMap.has(row.id_dba)) {
         dbaMap.set(row.id_dba, {
           id_dba: row.id_dba,
@@ -1326,7 +1353,7 @@ export const getCourseEvidenciasDba = async (req: Request, res: Response): Promi
 
     // Mantener compatibilidad: también enviar planeadas y extras planas
     const planeadasFlat = planeadasRes.rows;
-    const extrasFlat = dbaEvsRes.rows.filter(
+    const extrasFlat = filteredCatalogRows.filter(
       r => !planeadasIds.includes(r.id_evidencia_dba) && !(evaluadasEnCerradosIds.includes(r.id_evidencia_dba))
     );
 
