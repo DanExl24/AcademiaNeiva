@@ -30,16 +30,6 @@ const router = createRouter({
       component: LoginView
     },
     {
-      path: '/login/estudiante',
-      name: 'student-login',
-      component: () => import('../views/auth/StudentLoginView.vue')
-    },
-    {
-      path: '/login/admin',
-      name: 'admin-login',
-      component: () => import('../views/auth/AdminLoginView.vue')
-    },
-    {
       path: '/matricula',
       name: 'matricula',
       component: EnrollmentView
@@ -357,7 +347,7 @@ router.beforeEach(async (to) => {
   const auth = useAuthStore()
 
   // Rutas públicas: si el usuario ya está autenticado y va al login, redirigir al dashboard
-  if ((to.path === '/login' || to.path === '/login/estudiante' || to.path === '/login/admin') && auth.isAuthenticated) {
+  if (to.path === '/login' && auth.isAuthenticated) {
     return '/dashboard'
   }
 

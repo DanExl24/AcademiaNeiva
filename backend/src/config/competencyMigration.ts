@@ -129,6 +129,7 @@ WITH aggregated_competencies AS (
   JOIN public.detalle_grados dg ON dg.id_detallegrado = a.id_detallegrado
   JOIN public.periodo_academico p ON p.id_periodo = a.id_periodo
   LEFT JOIN public.desempeno d ON d.id_actividadmateria = a.id_actividadmateria
+  WHERE p.estado = 'CERRADO'
   GROUP BY p."id_año", dg.id_grupo, dg.id_materia, a.id_periodo, a.id_colegio
 )
 INSERT INTO public.competencias (id_año, id_grupo, id_materia, id_periodo, descripcion, id_colegio)
@@ -153,14 +154,15 @@ SELECT
   dg.id_colegio
 FROM public.detalle_grados dg
 JOIN public.periodo_academico p ON p.id_colegio = dg.id_colegio
-WHERE NOT EXISTS (
-  SELECT 1 FROM public.competencias c
-  WHERE c.id_año = p."id_año"
-    AND c.id_grupo = dg.id_grupo
-    AND c.id_materia = dg.id_materia
-    AND c.id_periodo = p.id_periodo
-    AND c.id_colegio = dg.id_colegio
-);
+WHERE p.estado = 'CERRADO'
+  AND NOT EXISTS (
+    SELECT 1 FROM public.competencias c
+    WHERE c.id_año = p."id_año"
+      AND c.id_grupo = dg.id_grupo
+      AND c.id_materia = dg.id_materia
+      AND c.id_periodo = p.id_periodo
+      AND c.id_colegio = dg.id_colegio
+  );
 
 WITH activity_targets AS (
   SELECT

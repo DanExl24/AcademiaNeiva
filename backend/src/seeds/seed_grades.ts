@@ -127,11 +127,8 @@ async function runSeedGrades() {
     const closedPeriodsRes = await client.query(
       `SELECT id_periodo, id_colegio, "id_año" FROM periodo_academico WHERE estado = 'CERRADO'`
     );
-    const openPeriodsRes = await client.query(
-      `SELECT id_periodo, id_colegio, "id_año" FROM periodo_academico WHERE estado = 'ABIERTO'`
-    );
 
-    const allPeriods = [...closedPeriodsRes.rows, ...openPeriodsRes.rows];
+    const allPeriods = closedPeriodsRes.rows;
 
     if (allPeriods.length === 0) {
       console.log("❌ No hay periodos disponibles. Se necesita al menos uno.");

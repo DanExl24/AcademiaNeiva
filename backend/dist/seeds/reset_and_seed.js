@@ -408,7 +408,7 @@ async function insertSampleAttendance(client) {
         const dgRes = await client.query(`SELECT id_detallegrado FROM detalle_grados WHERE id_grupo = $1 AND id_colegio = $2`, [id_grupo, id_colegio]);
         if (dgRes.rows.length === 0)
             continue;
-        const periodsRes = await client.query(`SELECT id_periodo, mes_inicio FROM periodo_academico WHERE id_colegio = $1 AND "id_año" = $2`, [id_colegio, id_año]);
+        const periodsRes = await client.query(`SELECT id_periodo, mes_inicio FROM periodo_academico WHERE id_colegio = $1 AND "id_año" = $2 AND estado = 'CERRADO'`, [id_colegio, id_año]);
         // Generate 5 sample dates per period (first 5 weekdays of the period's start month)
         for (const period of periodsRes.rows) {
             const mes = period.mes_inicio || 1;
