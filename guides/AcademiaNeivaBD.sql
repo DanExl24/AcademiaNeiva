@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict IAm24Hs2HTjAbvhcHusBRUkaLo5JhcrAEMEccpyKYLjRKmhhg7l5UF2tqSqoxEL
+\restrict 6YKri3mgRMzn3ZdAO2ljGKX54n0MwmUS66FgEU9mOr0CJ6ZNpaOt7BvgCZuXH6b
 
 -- Dumped from database version 18.4
 -- Dumped by pg_dump version 18.4
@@ -330,7 +330,7 @@ BEGIN
         -- Encontrar el periodo que abarca esta fecha para el colegio
         SELECT pa.id_periodo INTO v_id_periodo
         FROM periodo_academico pa
-        JOIN "año_lectivo" al ON pa.id_año = al.id_año
+        JOIN anio_lectivo al ON pa.id_anio = al.id_anio
         WHERE pa.id_colegio = v_id_colegio
           AND (
             al.calendario = EXTRACT(YEAR FROM v_fecha)::text OR
@@ -494,6 +494,44 @@ ALTER SEQUENCE public.actividad_materia_id_actividadmateria_seq OWNED BY public.
 
 
 --
+-- Name: anio_lectivo; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.anio_lectivo (
+    id_anio integer CONSTRAINT "año_lectivo_id_año_not_null" NOT NULL,
+    calendario character varying(10),
+    id_colegio integer CONSTRAINT "año_lectivo_id_colegio_not_null" NOT NULL,
+    tipo_calendario character(1) DEFAULT 'A'::bpchar,
+    estado public.estado_periodo DEFAULT 'ABIERTO'::public.estado_periodo,
+    CONSTRAINT chk_calendario CHECK (((calendario)::text ~ '^[0-9]{4}(-[0-9]{4})?$'::text))
+);
+
+
+ALTER TABLE public.anio_lectivo OWNER TO postgres;
+
+--
+-- Name: anio_lectivo_id_anio_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.anio_lectivo_id_anio_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.anio_lectivo_id_anio_seq OWNER TO postgres;
+
+--
+-- Name: anio_lectivo_id_anio_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.anio_lectivo_id_anio_seq OWNED BY public.anio_lectivo.id_anio;
+
+
+--
 -- Name: auditoria_acciones_realizadas; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -570,43 +608,6 @@ ALTER TABLE public.auditoria_supervision ALTER COLUMN id_auditoria ADD GENERATED
     NO MAXVALUE
     CACHE 1
 );
-
-
---
--- Name: año_lectivo; Type: TABLE; Schema: public; Owner: postgres
---
-
-CREATE TABLE public."año_lectivo" (
-    "id_año" integer NOT NULL,
-    calendario character varying(10),
-    id_colegio integer NOT NULL,
-    tipo_calendario character(1) DEFAULT 'A'::bpchar,
-    estado public.estado_periodo DEFAULT 'ABIERTO'::public.estado_periodo
-);
-
-
-ALTER TABLE public."año_lectivo" OWNER TO postgres;
-
---
--- Name: año_lectivo_id_año_seq; Type: SEQUENCE; Schema: public; Owner: postgres
---
-
-CREATE SEQUENCE public."año_lectivo_id_año_seq"
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
-ALTER SEQUENCE public."año_lectivo_id_año_seq" OWNER TO postgres;
-
---
--- Name: año_lectivo_id_año_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
---
-
-ALTER SEQUENCE public."año_lectivo_id_año_seq" OWNED BY public."año_lectivo"."id_año";
 
 
 --
@@ -738,13 +739,14 @@ ALTER SEQUENCE public.colegio_version_curricular_id_seq OWNED BY public.colegio_
 
 CREATE TABLE public.competencias (
     id_competencia integer NOT NULL,
-    "id_año" integer NOT NULL,
+    id_anio integer CONSTRAINT "competencias_id_año_not_null" NOT NULL,
     id_grupo integer NOT NULL,
     id_materia integer NOT NULL,
     id_periodo integer NOT NULL,
     descripcion text DEFAULT 'Competencia pendiente por definir.'::text NOT NULL,
     id_colegio integer NOT NULL,
-    nombre character varying(200)
+    nombre character varying(200),
+    sync_uuid uuid
 );
 
 
@@ -831,7 +833,7 @@ ALTER TABLE public.configuracion_colegio OWNER TO postgres;
 CREATE TABLE public.configuracion_inscripcion (
     id_configuracion integer NOT NULL,
     id_colegio integer NOT NULL,
-    "id_año" integer NOT NULL,
+    id_anio integer CONSTRAINT "configuracion_inscripcion_id_año_not_null" NOT NULL,
     fecha_inicio timestamp with time zone NOT NULL,
     fecha_cierre timestamp with time zone NOT NULL,
     habilitada boolean DEFAULT true NOT NULL,
@@ -1293,7 +1295,8 @@ CREATE TABLE public.estudiante (
     id_nivel integer,
     id_colegio integer NOT NULL,
     id_usuario integer,
-    estado public.estado_estudiante DEFAULT 'ACTIVO'::public.estado_estudiante
+    estado public.estado_estudiante DEFAULT 'ACTIVO'::public.estado_estudiante,
+    motivo_estado text
 );
 
 
@@ -1556,7 +1559,7 @@ CREATE TABLE public.matricula (
     id_estudiante integer,
     id_nivel integer,
     id_colegio integer NOT NULL,
-    "id_año" integer NOT NULL,
+    id_anio integer CONSTRAINT "matricula_id_año_not_null" NOT NULL,
     estado public.estado_matricula NOT NULL,
     correo_padre character varying(100),
     tiene_discapacidad boolean DEFAULT false,
@@ -1939,7 +1942,7 @@ CREATE TABLE public.periodo_academico (
     nombre character varying(100) NOT NULL,
     estado public.estado_periodo NOT NULL,
     porcentaje numeric(5,2) NOT NULL,
-    "id_año" integer,
+    id_anio integer,
     id_colegio integer NOT NULL,
     trimestre integer,
     dia_inicio integer,
@@ -2023,7 +2026,7 @@ CREATE TABLE public.registro_graduados (
     observaciones text,
     id_usuario_registro integer,
     creado_en timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    "id_año" integer
+    id_anio integer
 );
 
 
@@ -2450,10 +2453,10 @@ ALTER TABLE ONLY public.actividad_materia ALTER COLUMN id_actividadmateria SET D
 
 
 --
--- Name: año_lectivo id_año; Type: DEFAULT; Schema: public; Owner: postgres
+-- Name: anio_lectivo id_anio; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
-ALTER TABLE ONLY public."año_lectivo" ALTER COLUMN "id_año" SET DEFAULT nextval('public."año_lectivo_id_año_seq"'::regclass);
+ALTER TABLE ONLY public.anio_lectivo ALTER COLUMN id_anio SET DEFAULT nextval('public.anio_lectivo_id_anio_seq'::regclass);
 
 
 --
@@ -2783,11 +2786,11 @@ ALTER TABLE ONLY public.auditoria_supervision
 
 
 --
--- Name: año_lectivo año_lectivo_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: anio_lectivo año_lectivo_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
-ALTER TABLE ONLY public."año_lectivo"
-    ADD CONSTRAINT "año_lectivo_pkey" PRIMARY KEY ("id_año");
+ALTER TABLE ONLY public.anio_lectivo
+    ADD CONSTRAINT "año_lectivo_pkey" PRIMARY KEY (id_anio);
 
 
 --
@@ -2820,14 +2823,6 @@ ALTER TABLE ONLY public.colegio_version_curricular
 
 ALTER TABLE ONLY public.competencias
     ADD CONSTRAINT competencias_pkey PRIMARY KEY (id_competencia);
-
-
---
--- Name: competencias competencias_unique_context; Type: CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.competencias
-    ADD CONSTRAINT competencias_unique_context UNIQUE ("id_año", id_grupo, id_materia, id_periodo, id_colegio);
 
 
 --
@@ -3283,7 +3278,7 @@ ALTER TABLE ONLY public.configuracion_sistema
 --
 
 ALTER TABLE ONLY public.configuracion_inscripcion
-    ADD CONSTRAINT uq_colegio_anio UNIQUE (id_colegio, "id_año");
+    ADD CONSTRAINT uq_colegio_anio UNIQUE (id_colegio, id_anio);
 
 
 --
@@ -3433,6 +3428,13 @@ CREATE INDEX idx_colegio_version_colegio ON public.colegio_version_curricular US
 
 
 --
+-- Name: idx_competencias_sync_uuid; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_competencias_sync_uuid ON public.competencias USING btree (sync_uuid);
+
+
+--
 -- Name: idx_config_inscripcion_colegio; Type: INDEX; Schema: public; Owner: postgres
 --
 
@@ -3506,7 +3508,7 @@ CREATE INDEX idx_matricula_estudiante ON public.matricula USING btree (id_estudi
 -- Name: idx_matricula_estudiante_anio_colegio_activo; Type: INDEX; Schema: public; Owner: postgres
 --
 
-CREATE UNIQUE INDEX idx_matricula_estudiante_anio_colegio_activo ON public.matricula USING btree (id_estudiante, "id_año", id_colegio) WHERE (estado <> ALL (ARRAY['CANCELADA'::public.estado_matricula, 'RECHAZADA'::public.estado_matricula]));
+CREATE UNIQUE INDEX idx_matricula_estudiante_anio_colegio_activo ON public.matricula USING btree (id_estudiante, id_anio, id_colegio) WHERE (estado <> ALL (ARRAY['CANCELADA'::public.estado_matricula, 'RECHAZADA'::public.estado_matricula]));
 
 
 --
@@ -3731,10 +3733,10 @@ ALTER TABLE ONLY public.auditoria_supervision
 
 
 --
--- Name: año_lectivo año_lectivo_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: anio_lectivo año_lectivo_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
-ALTER TABLE ONLY public."año_lectivo"
+ALTER TABLE ONLY public.anio_lectivo
     ADD CONSTRAINT "año_lectivo_id_colegio_fkey" FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio) ON DELETE CASCADE;
 
 
@@ -3767,7 +3769,7 @@ ALTER TABLE ONLY public.colegio_version_curricular
 --
 
 ALTER TABLE ONLY public.competencias
-    ADD CONSTRAINT "competencias_id_año_fkey" FOREIGN KEY ("id_año") REFERENCES public."año_lectivo"("id_año") ON DELETE CASCADE;
+    ADD CONSTRAINT "competencias_id_año_fkey" FOREIGN KEY (id_anio) REFERENCES public.anio_lectivo(id_anio) ON DELETE CASCADE;
 
 
 --
@@ -3815,7 +3817,7 @@ ALTER TABLE ONLY public.configuracion_colegio
 --
 
 ALTER TABLE ONLY public.configuracion_inscripcion
-    ADD CONSTRAINT "configuracion_inscripcion_id_año_fkey" FOREIGN KEY ("id_año") REFERENCES public."año_lectivo"("id_año") ON DELETE CASCADE;
+    ADD CONSTRAINT "configuracion_inscripcion_id_año_fkey" FOREIGN KEY (id_anio) REFERENCES public.anio_lectivo(id_anio) ON DELETE CASCADE;
 
 
 --
@@ -4087,7 +4089,7 @@ ALTER TABLE ONLY public.grupos
 --
 
 ALTER TABLE ONLY public.matricula
-    ADD CONSTRAINT fk_matricula_anio FOREIGN KEY ("id_año") REFERENCES public."año_lectivo"("id_año") ON UPDATE CASCADE ON DELETE RESTRICT;
+    ADD CONSTRAINT fk_matricula_anio FOREIGN KEY (id_anio) REFERENCES public.anio_lectivo(id_anio) ON UPDATE CASCADE ON DELETE RESTRICT;
 
 
 --
@@ -4303,7 +4305,7 @@ ALTER TABLE ONLY public.padre_familia
 --
 
 ALTER TABLE ONLY public.periodo_academico
-    ADD CONSTRAINT "periodo_academico_id_año_fkey" FOREIGN KEY ("id_año") REFERENCES public."año_lectivo"("id_año");
+    ADD CONSTRAINT "periodo_academico_id_año_fkey" FOREIGN KEY (id_anio) REFERENCES public.anio_lectivo(id_anio);
 
 
 --
@@ -4343,7 +4345,7 @@ ALTER TABLE ONLY public.registro_asistencia
 --
 
 ALTER TABLE ONLY public.registro_graduados
-    ADD CONSTRAINT "registro_graduados_id_año_fkey" FOREIGN KEY ("id_año") REFERENCES public."año_lectivo"("id_año");
+    ADD CONSTRAINT "registro_graduados_id_año_fkey" FOREIGN KEY (id_anio) REFERENCES public.anio_lectivo(id_anio);
 
 
 --
@@ -4429,5 +4431,5 @@ REVOKE USAGE ON SCHEMA public FROM PUBLIC;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict IAm24Hs2HTjAbvhcHusBRUkaLo5JhcrAEMEccpyKYLjRKmhhg7l5UF2tqSqoxEL
+\unrestrict 6YKri3mgRMzn3ZdAO2ljGKX54n0MwmUS66FgEU9mOr0CJ6ZNpaOt7BvgCZuXH6b
 

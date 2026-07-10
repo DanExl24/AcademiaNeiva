@@ -331,7 +331,7 @@ const extraordinaryForm = ref({
   correo_padre: '',
   id_nivel: null as number | null,
   id_grupo: null as number | null,
-  id_año: null as number | null,
+  id_anio: null as number | null,
   id_estudiante: null as number | null,
   tiene_discapacidad: false,
   es_extranjero: false,
@@ -346,7 +346,7 @@ const reingresoForm = ref({
   id_estudiante: null as number | null,
   id_nivel: null as number | null,
   id_grupo: null as number | null,
-  id_año: null as number | null,
+  id_anio: null as number | null,
   tiene_discapacidad: false,
   es_extranjero: false,
   motivo: 'Se retiró voluntariamente',
@@ -388,17 +388,17 @@ onMounted(async () => {
   await fetchExtraordinaryCatalogs()
 })
 
-const getYearId = (y: any) => y.id_año || y['id_año'] || y.id_ao;
+const getYearId = (y: any) => y.id_anio || y['id_anio'] || y.id_ao;
 
 watch(catalogYears, (years) => {
   const activeYear = years.find(y => y.estado === 'ABIERTO')
   if (activeYear) {
     const activeYearId = getYearId(activeYear)
-    if (!extraordinaryForm.value.id_año) {
-      extraordinaryForm.value.id_año = activeYearId
+    if (!extraordinaryForm.value.id_anio) {
+      extraordinaryForm.value.id_anio = activeYearId
     }
-    if (!reingresoForm.value.id_año) {
-      reingresoForm.value.id_año = activeYearId
+    if (!reingresoForm.value.id_anio) {
+      reingresoForm.value.id_anio = activeYearId
     }
   }
 })
@@ -438,7 +438,7 @@ const openReingresoModal = () => {
     id_estudiante: null,
     id_nivel: null,
     id_grupo: null,
-    id_año: catalogYears.value.find(y => y.estado === 'ABIERTO') ? getYearId(catalogYears.value.find(y => y.estado === 'ABIERTO')) : null,
+    id_anio: catalogYears.value.find(y => y.estado === 'ABIERTO') ? getYearId(catalogYears.value.find(y => y.estado === 'ABIERTO')) : null,
     tiene_discapacidad: false,
     es_extranjero: false,
     motivo: 'Se retiró voluntariamente',
@@ -460,7 +460,7 @@ const onReingresoStudentSelected = () => {
 }
 
 const submitExtraordinary = async () => {
-  if (!extraordinaryForm.value.correo_padre || !extraordinaryForm.value.id_nivel || !extraordinaryForm.value.id_grupo || !extraordinaryForm.value.id_año || !extraordinaryForm.value.motivo) {
+  if (!extraordinaryForm.value.correo_padre || !extraordinaryForm.value.id_nivel || !extraordinaryForm.value.id_grupo || !extraordinaryForm.value.id_anio || !extraordinaryForm.value.motivo) {
     notify.addNotification('Por favor, rellene todos los campos obligatorios.', 'error')
     return
   }
@@ -477,7 +477,7 @@ const submitExtraordinary = async () => {
       ...extraordinaryForm.value,
       id_nivel: Number(extraordinaryForm.value.id_nivel),
       id_grupo: Number(extraordinaryForm.value.id_grupo),
-      id_año: Number(extraordinaryForm.value.id_año),
+      id_anio: Number(extraordinaryForm.value.id_anio),
       id_estudiante: extraordinaryForm.value.id_estudiante ? Number(extraordinaryForm.value.id_estudiante) : null,
     }
     const headers = { Authorization: `Bearer ${auth.token}` }
@@ -489,7 +489,7 @@ const submitExtraordinary = async () => {
       correo_padre: '',
       id_nivel: null,
       id_grupo: null,
-      id_año: catalogYears.value.find(y => y.estado === 'ABIERTO') ? getYearId(catalogYears.value.find(y => y.estado === 'ABIERTO')) : null,
+      id_anio: catalogYears.value.find(y => y.estado === 'ABIERTO') ? getYearId(catalogYears.value.find(y => y.estado === 'ABIERTO')) : null,
       id_estudiante: null,
       tiene_discapacidad: false,
       es_extranjero: false,
@@ -505,7 +505,7 @@ const submitExtraordinary = async () => {
 }
 
 const submitReingreso = async () => {
-  if (!reingresoForm.value.id_estudiante || !reingresoForm.value.id_nivel || !reingresoForm.value.id_grupo || !reingresoForm.value.id_año || !reingresoForm.value.motivo) {
+  if (!reingresoForm.value.id_estudiante || !reingresoForm.value.id_nivel || !reingresoForm.value.id_grupo || !reingresoForm.value.id_anio || !reingresoForm.value.motivo) {
     notify.addNotification('Por favor, rellene todos los campos obligatorios.', 'error')
     return
   }
@@ -516,7 +516,7 @@ const submitReingreso = async () => {
       id_estudiante: Number(reingresoForm.value.id_estudiante),
       id_nivel: Number(reingresoForm.value.id_nivel),
       id_grupo: Number(reingresoForm.value.id_grupo),
-      id_año: Number(reingresoForm.value.id_año),
+      id_anio: Number(reingresoForm.value.id_anio),
     }
     const headers = { Authorization: `Bearer ${auth.token}` }
     await axios.post('http://localhost:3000/api/academic-admin/matriculas/reingreso', payload, { headers })
@@ -1396,7 +1396,7 @@ const rejectException = async (id: number) => {
             <!-- Academic Year -->
             <div class="space-y-1.5 text-left">
               <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Año Lectivo *</label>
-              <select v-model="extraordinaryForm.id_año" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-semibold outline-none text-slate-900 dark:text-white transition-all focus:border-indigo-400">
+              <select v-model="extraordinaryForm.id_anio" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-semibold outline-none text-slate-900 dark:text-white transition-all focus:border-indigo-400">
                 <option v-for="year in catalogYears" :key="getYearId(year)" :value="getYearId(year)">
                   Año {{ year.calendario }}
                 </option>
@@ -1497,7 +1497,7 @@ const rejectException = async (id: number) => {
             <!-- Academic Year -->
             <div class="space-y-1.5 text-left">
               <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Año Lectivo *</label>
-              <select v-model="reingresoForm.id_año" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-semibold outline-none text-slate-900 dark:text-white transition-all focus:border-violet-400">
+              <select v-model="reingresoForm.id_anio" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-semibold outline-none text-slate-900 dark:text-white transition-all focus:border-violet-400">
                 <option v-for="year in catalogYears" :key="getYearId(year)" :value="getYearId(year)">
                   Año {{ year.calendario }}
                 </option>

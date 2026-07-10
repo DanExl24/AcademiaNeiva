@@ -5,7 +5,7 @@ import { BookMarked, Scale, SlidersHorizontal, CalendarDays } from 'lucide-vue-n
 import { useAuthStore } from '../../stores/auth'
 
 interface AcademicYear {
-  id_año: number
+  id_anio: number
   calendario: string | null
 }
 
@@ -40,7 +40,7 @@ onMounted(loadData)
           <p class="mt-2 text-slate-500 dark:text-slate-400">Define los periodos y escalas que sostienen calificaciones, competencias, cierres y boletines.</p>
         </div>
         <div class="rounded-2xl bg-orange-50 px-5 py-4 text-sm font-black text-orange-700 dark:bg-orange-950/30 dark:text-orange-400">
-          Año lectivo activo: {{ currentYear ? `${currentYear.calendario || currentYear.id_año}` : 'No configurado' }}
+          Año lectivo activo: {{ currentYear ? `${currentYear.calendario || currentYear.id_anio}` : 'No configurado' }}
         </div>
       </div>
     </div>

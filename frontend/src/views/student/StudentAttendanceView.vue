@@ -52,7 +52,7 @@ const fetchInitialData = async () => {
     studentInfo.value = infoRes.data
     
     if (years.value.length > 0) {
-      selectedYear.value = years.value[0].id_año
+      selectedYear.value = years.value[0].id_anio
     }
   } catch (err) {
     console.error("Error fetching initial academic data:", err)
@@ -64,7 +64,7 @@ const fetchInitialData = async () => {
 const fetchPeriods = async () => {
   if (!studentId.value || !selectedYear.value) return
   try {
-    const res = await axios.get(`http://localhost:3000/api/student/periods/${studentId.value}/${selectedYear.value}`)
+    const res = await axios.get(`http://localhost:3000/api/student/all-periods/${studentId.value}/${selectedYear.value}`)
     periods.value = res.data
     if (periods.value.length > 0) {
       selectedPeriod.value = periods.value[periods.value.length - 1].id_periodo
@@ -172,7 +172,7 @@ const formatDate = (dateString: string) => {
         <div class="flex items-center gap-2 bg-white dark:bg-slate-900 px-4 py-2 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm transition-all focus-within:ring-2 focus-within:ring-indigo-500/20">
           <Calendar :size="18" class="text-slate-400" />
           <select v-model="selectedYear" class="bg-transparent border-none text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-0 outline-none cursor-pointer">
-            <option v-for="y in years" :key="y.id_año" :value="y.id_año">Año {{ y.calendario }}</option>
+            <option v-for="y in years" :key="y.id_anio" :value="y.id_anio">Año {{ y.calendario }}</option>
           </select>
         </div>
 
@@ -180,8 +180,8 @@ const formatDate = (dateString: string) => {
         <div class="flex items-center gap-2 bg-white dark:bg-slate-900 px-4 py-2 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm transition-all focus-within:ring-2 focus-within:ring-indigo-500/20">
           <Filter :size="18" class="text-slate-400" />
           <select v-model="selectedPeriod" class="bg-transparent border-none text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-0 outline-none cursor-pointer" :disabled="periods.length === 0">
-            <option v-if="periods.length === 0" disabled value="">Sin periodos</option>
-            <option v-for="p in periods" :key="p.id_periodo" :value="p.id_periodo">{{ p.nombre }}</option>
+            <option v-if="periods.length === 0" disabled value="">No hay periodos disponibles</option>
+            <option v-for="p in periods" :key="p.id_periodo" :value="p.id_periodo">{{ p.nombre }}{{ p.estado === 'ABIERTO' ? ' - En Curso' : '' }}</option>
           </select>
         </div>
 

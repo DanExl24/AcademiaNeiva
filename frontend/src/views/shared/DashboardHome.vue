@@ -124,6 +124,8 @@ const dashboardData = ref({
       id_estudiante: number;
       nombre_completo: string;
       id_grupo: number;
+      grado_nombre?: string;
+      curso?: string;
       materias_reprobadas: number;
       promedio_general: number;
       detalles_materias: { materia_nombre: string; promedio: number }[];
@@ -140,7 +142,7 @@ const selectedPeriodId = ref<number | null>(null)
 const periods = computed(() => {
   let list = allPeriods.value
   if (selectedYearId.value) {
-    list = list.filter((p: any) => p['id_año'] === selectedYearId.value)
+    list = list.filter((p: any) => p['id_anio'] === selectedYearId.value)
   }
   return list.filter((p: any) => p.estado !== 'PENDIENTE')
 })
@@ -240,6 +242,7 @@ const availableCoursesForSelectedGrade = computed(() => {
 const selectedAlertCourse = ref<{ id_grupo: number; name: string } | null>(null)
 const selectedCriticalSubject = ref<{ nombre: string; estudiantes_reprobados: any[] } | null>(null)
 const modalSearchQuery = ref('')
+const selectedModalGroup = ref<string>('ALL')
 
 const studentsAtRiskForSelectedAlertCourse = computed(() => {
   if (!selectedAlertCourse.value) return []
@@ -251,9 +254,21 @@ const studentsAtRiskForSelectedAlertCourse = computed(() => {
   return list.filter(s => s.nombre_completo.toLowerCase().includes(q))
 })
 
-const filteredCriticalSubjectStudents = computed(() => {
+const availableModalGroups = computed(() => {
   if (!selectedCriticalSubject.value) return []
   const list = selectedCriticalSubject.value.estudiantes_reprobados || []
+  const groups = list.map(s => s.curso).filter(Boolean)
+  return [...new Set(groups)].sort()
+})
+
+const filteredCriticalSubjectStudents = computed(() => {
+  if (!selectedCriticalSubject.value) return []
+  let list = selectedCriticalSubject.value.estudiantes_reprobados || []
+  
+  if (selectedModalGroup.value !== 'ALL') {
+    list = list.filter(s => s.curso === selectedModalGroup.value)
+  }
+  
   if (!modalSearchQuery.value) return list
   const q = modalSearchQuery.value.toLowerCase().trim()
   return list.filter(s => s.nombre_completo.toLowerCase().includes(q))
@@ -261,6 +276,7 @@ const filteredCriticalSubjectStudents = computed(() => {
 
 watch([selectedAlertCourse, selectedCriticalSubject], () => {
   modalSearchQuery.value = ''
+  selectedModalGroup.value = 'ALL'
 })
 
 const handleAlertClick = (item: { name: string; alerts: number }) => {
@@ -518,6 +534,58 @@ const filteredAlertsData = computed(() => {
   }
 })
 
+const filteredCriticalSubjects = computed(() => {
+  const studentsList = dashboardData.value.lowPerformance.studentsAtRiskList || []
+  
+  // Filter students based on selected grade
+  const filteredStudents = globalSelectedGrade.value === 'ALL'
+    ? studentsList
+    : studentsList.filter(s => s.grado_nombre === globalSelectedGrade.value)
+    
+  // Aggregate subject failures
+  const subjectMap = new Map<string, {
+    nombre: string;
+    failures: number;
+    estudiantes_reprobados: {
+      id_estudiante: number;
+      nombre_completo: string;
+      promedio: number;
+      curso: string;
+    }[]
+  }>()
+  
+  for (const student of filteredStudents) {
+    if (!student.detalles_materias) continue
+    for (const detail of student.detalles_materias) {
+      const subjectName = detail.materia_nombre
+      const gradeOrCourseName = student.curso || 'Desconocido'
+      
+      let subjectData = subjectMap.get(subjectName)
+      if (!subjectData) {
+        subjectData = {
+          nombre: subjectName,
+          failures: 0,
+          estudiantes_reprobados: []
+        }
+        subjectMap.set(subjectName, subjectData)
+      }
+      
+      subjectData.failures++
+      subjectData.estudiantes_reprobados.push({
+        id_estudiante: student.id_estudiante,
+        nombre_completo: student.nombre_completo,
+        promedio: detail.promedio,
+        curso: gradeOrCourseName
+      })
+    }
+  }
+  
+  // Convert map to array, sort by failures desc, and take the top 5
+  return Array.from(subjectMap.values())
+    .sort((a, b) => b.failures - a.failures)
+    .slice(0, 5)
+})
+
 // Methods
 const fetchDashboard = async () => {
   if (!schoolId.value) return
@@ -549,7 +617,7 @@ const loadPeriods = async () => {
 
     // Default to the active year
     if (!selectedYearId.value && response.data.activeYear) {
-      selectedYearId.value = response.data.activeYear['id_año']
+      selectedYearId.value = response.data.activeYear['id_anio']
     }
 
     // Set active period by default if none selected
@@ -668,7 +736,7 @@ onMounted(() => {
             v-model="selectedYearId" 
             class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-indigo-500 transition-all cursor-pointer"
           >
-            <option v-for="y in academicYears" :key="y['id_año']" :value="y['id_año']">
+            <option v-for="y in academicYears" :key="y['id_anio']" :value="y['id_anio']">
               {{ y.calendario }}{{ y.estado === 'CERRADO' ? ' (Cerrado)' : '' }}
             </option>
           </select>
@@ -902,7 +970,7 @@ onMounted(() => {
                 </div>
                 <div class="space-y-4 overflow-y-auto pr-2 custom-scrollbar flex-1">
                   <div 
-                    v-for="(sub, idx) in dashboardData.lowPerformance.criticalSubjects" 
+                    v-for="(sub, idx) in filteredCriticalSubjects" 
                     :key="idx"
                     @click="handleCriticalSubjectClick(sub)"
                     class="flex items-center justify-between p-5 bg-white/5 rounded-2xl border border-white/5 hover:border-rose-500/30 hover:shadow-lg hover:shadow-rose-500/5 hover:-translate-y-0.5 transition-all group cursor-pointer"
@@ -919,7 +987,7 @@ onMounted(() => {
                       </span>
                     </div>
                   </div>
-                  <div v-if="dashboardData.lowPerformance.criticalSubjects.length === 0" class="flex flex-col items-center justify-center h-full opacity-30 italic">
+                  <div v-if="filteredCriticalSubjects.length === 0" class="flex flex-col items-center justify-center h-full opacity-30 italic">
                     Sin datos de reprobación
                   </div>
                 </div>
@@ -1072,17 +1140,33 @@ onMounted(() => {
             </button>
           </div>
           
-          <!-- Search Bar -->
-          <div class="relative mb-6">
-            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500">
-              <Search :size="16" />
+          <!-- Search Bar and Group Filter -->
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div class="relative md:col-span-2">
+              <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500">
+                <Search :size="16" />
+              </div>
+              <input
+                v-model="modalSearchQuery"
+                type="text"
+                placeholder="Buscar estudiante por nombre..."
+                class="w-full bg-white/5 border border-white/10 rounded-2xl py-3.5 pl-11 pr-4 text-sm font-bold text-white placeholder-slate-500 outline-none focus:ring-2 focus:ring-rose-500/50 focus:border-rose-500 transition-all"
+              />
             </div>
-            <input
-              v-model="modalSearchQuery"
-              type="text"
-              placeholder="Buscar estudiante por nombre..."
-              class="w-full bg-white/5 border border-white/10 rounded-2xl py-3.5 pl-11 pr-4 text-sm font-bold text-white placeholder-slate-500 outline-none focus:ring-2 focus:ring-rose-500/50 focus:border-rose-500 transition-all"
-            />
+            <div class="relative">
+              <select
+                v-model="selectedModalGroup"
+                class="w-full bg-white/5 border border-white/10 rounded-2xl py-3.5 pl-4 pr-10 text-sm font-bold text-white outline-none focus:ring-2 focus:ring-rose-500/50 focus:border-rose-500 transition-all cursor-pointer"
+              >
+                <option value="ALL" class="bg-slate-900 text-white">Todos los Cursos</option>
+                <option v-for="group in availableModalGroups" :key="group" :value="group" class="bg-slate-900 text-white">
+                  {{ group }}
+                </option>
+              </select>
+              <div class="absolute inset-y-0 right-0 flex items-center pr-4 pointer-events-none text-slate-500">
+                <Filter :size="14" />
+              </div>
+            </div>
           </div>
           
           <!-- Student List -->

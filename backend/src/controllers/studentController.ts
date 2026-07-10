@@ -74,7 +74,7 @@ export const getAllStudents = async (req: Request, res: Response) => {
         e.codigo ILIKE $${paramCount} OR
         tg.nombre ILIKE $${paramCount} OR
         s.nombre ILIKE $${paramCount} OR
-        j.nombre ILIKE $${paramCount} OR
+        j.nombre::text ILIKE $${paramCount} OR
         (tg.nombre || '-' || s.nombre) ILIKE $${paramCount} OR
         (tg.nombre || ' ' || s.nombre) ILIKE $${paramCount}
       )`;
@@ -116,11 +116,17 @@ export const updateStudent = async (req: Request, res: Response) => {
 export const updateStudentStatus = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { estado } = req.body; // 'ACTIVO', 'SANCIONADO', 'EXPULSADO', 'RETIRADO'
+    const { estado, motivo } = req.body; // 'ACTIVO', 'SANCIONADO', 'EXPULSADO', 'RETIRADO'
+
+    if ((estado === 'SANCIONADO' || estado === 'EXPULSADO') && (!motivo || motivo.trim().length < 10)) {
+      return res.status(400).json({ error: "El motivo es requerido y debe tener al menos 10 caracteres para sanción o expulsión." });
+    }
+
+    const motivoValue = (estado === 'SANCIONADO' || estado === 'EXPULSADO') ? motivo.trim() : null;
 
     const result = await pool.query(
-      "UPDATE estudiante SET estado = $1 WHERE id_estudiante = $2 RETURNING *",
-      [estado, id]
+      "UPDATE estudiante SET estado = $1, motivo_estado = $2 WHERE id_estudiante = $3 RETURNING *",
+      [estado, motivoValue, id]
     );
 
     if (result.rowCount === 0) {
@@ -253,7 +259,7 @@ export const getStudentSummary = async (req: Request, res: Response) => {
 
     // 1. Basic Student and Group Info
     const studentRes = await pool.query(`
-      SELECT e.id_estudiante, e.nombre, e.apellido, e.documento, e.codigo, e.estado, e.id_usuario, e.id_colegio,
+      SELECT e.id_estudiante, e.nombre, e.apellido, e.documento, e.codigo, e.estado, e.id_usuario, e.id_colegio, e.motivo_estado,
              tg.nombre as grado_nombre, s.nombre as seccion_nombre, n.nombre as nivel_nombre,
              m.id_grupo, u.email as student_email, u.fecha_creacion as user_created_at
       FROM estudiante e
@@ -420,6 +426,7 @@ export const getStudentSummary = async (req: Request, res: Response) => {
       curso: student.grado_nombre && student.seccion_nombre ? `${student.grado_nombre}-${student.seccion_nombre}` : 'Sin Grupo',
       nivel: student.nivel_nombre || 'Sin Nivel',
       estado_estudiante: student.estado, 
+      motivo_estado: student.motivo_estado,
       estado_academico: estadoAcademico, 
       gpa: promedioGeneral,
       periodo_nombre: periodName,

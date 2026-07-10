@@ -131,12 +131,12 @@ async function createEnrollmentConfigTable(client: PoolClient): Promise<void> {
     CREATE TABLE IF NOT EXISTS configuracion_inscripcion (
       id_configuracion SERIAL PRIMARY KEY,
       id_colegio INTEGER NOT NULL REFERENCES colegio(id_colegio) ON DELETE CASCADE,
-      id_año INTEGER NOT NULL REFERENCES "año_lectivo"("id_año") ON DELETE CASCADE,
+      id_anio INTEGER NOT NULL REFERENCES anio_lectivo(id_anio) ON DELETE CASCADE,
       fecha_inicio TIMESTAMPTZ NOT NULL,
       fecha_cierre TIMESTAMPTZ NOT NULL,
       habilitada BOOLEAN NOT NULL DEFAULT TRUE,
       CONSTRAINT chk_fechas CHECK (fecha_cierre > fecha_inicio),
-      CONSTRAINT uq_colegio_anio UNIQUE (id_colegio, id_año)
+      CONSTRAINT uq_colegio_anio UNIQUE (id_colegio, id_anio)
     );
   `);
   await client.query(`
@@ -147,18 +147,18 @@ async function createEnrollmentConfigTable(client: PoolClient): Promise<void> {
 async function seedEnrollmentConfigs(client: PoolClient): Promise<void> {
   const schoolsRes = await client.query('SELECT id_colegio FROM colegio');
   for (const s of schoolsRes.rows) {
-    const yearRes = await client.query('SELECT "id_año" FROM "año_lectivo" WHERE id_colegio = $1', [s.id_colegio]);
+    const yearRes = await client.query('SELECT id_anio FROM anio_lectivo WHERE id_colegio = $1', [s.id_colegio]);
     if (yearRes.rows.length > 0) {
-      const yearId = yearRes.rows[0].id_año;
+      const yearId = yearRes.rows[0].id_anio;
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - 5); // 5 days ago
       const endDate = new Date();
       endDate.setDate(endDate.getDate() + 15); // 15 days from now
       
       await client.query(`
-        INSERT INTO configuracion_inscripcion (id_colegio, id_año, fecha_inicio, fecha_cierre, habilitada)
+        INSERT INTO configuracion_inscripcion (id_colegio, id_anio, fecha_inicio, fecha_cierre, habilitada)
         VALUES ($1, $2, $3, $4, TRUE)
-        ON CONFLICT (id_colegio, id_año) DO NOTHING
+        ON CONFLICT (id_colegio, id_anio) DO NOTHING
       `, [s.id_colegio, yearId, startDate.toISOString(), endDate.toISOString()]);
     }
   }
@@ -311,14 +311,14 @@ async function insertSchoolAcademicStructure(
   // --- Calendar type column ---
   await client.query(`ALTER TABLE colegio ADD COLUMN IF NOT EXISTS tipo_calendario CHAR(1) DEFAULT 'A';`);
   await client.query(`UPDATE colegio SET tipo_calendario = $1 WHERE id_colegio = $2`, [school.tipo_calendario, school.id]);
-  await client.query(`ALTER TABLE "año_lectivo" ADD COLUMN IF NOT EXISTS tipo_calendario CHAR(1) DEFAULT 'A';`);
+  await client.query(`ALTER TABLE anio_lectivo ADD COLUMN IF NOT EXISTS tipo_calendario CHAR(1) DEFAULT 'A';`);
 
   const yearLabel = school.tipo_calendario === "B" ? `${parseInt(CURRENT_YEAR) - 1}-${CURRENT_YEAR}` : CURRENT_YEAR;
-  const academicYearResult = await client.query<{ id_año: number }>(
-    `INSERT INTO "año_lectivo" (calendario, id_colegio, tipo_calendario) VALUES ($1, $2, $3) RETURNING "id_año"`,
+  const academicYearResult = await client.query<{ id_anio: number }>(
+    `INSERT INTO anio_lectivo (calendario, id_colegio, tipo_calendario) VALUES ($1, $2, $3) RETURNING id_anio`,
     [yearLabel, school.id, school.tipo_calendario]
   );
-  const academicYearId = academicYearResult.rows[0].id_año;
+  const academicYearId = academicYearResult.rows[0].id_anio;
 
   // --- Levels ---
   for (const levelSeed of levelSeeds) {
@@ -344,7 +344,7 @@ async function insertSchoolAcademicStructure(
   for (const periodSeed of periodSeeds) {
     const monthRule = periodRules.find((r) => r.order === periodSeed.trimestre);
     await client.query(
-      `INSERT INTO periodo_academico (nombre, estado, porcentaje, trimestre, "id_año", id_colegio, mes_inicio, mes_fin, dia_inicio, dia_fin)
+      `INSERT INTO periodo_academico (nombre, estado, porcentaje, trimestre, id_anio, id_colegio, mes_inicio, mes_fin, dia_inicio, dia_fin)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
       [periodSeed.nombre, periodSeed.estado, periodSeed.porcentaje, periodSeed.trimestre, academicYearId, school.id,
        monthRule?.startMonth ?? null, monthRule?.endMonth ?? null, 1, 28]
@@ -445,8 +445,8 @@ async function insertStudentsAndParents(
   credentials: CredentialEntry[]
 ): Promise<void> {
   // Get academic year
-  const yearsRes = await client.query<{ id_año: number }>('SELECT "id_año" FROM "año_lectivo" WHERE id_colegio = $1', [school.id]);
-  const yearId = yearsRes.rows[0]?.id_año;
+  const yearsRes = await client.query<{ id_anio: number }>('SELECT id_anio FROM anio_lectivo WHERE id_colegio = $1', [school.id]);
+  const yearId = yearsRes.rows[0]?.id_anio;
   if (!yearId) return;
 
   // Get groups for MAÑANA + A, B, C (42 groups: 3 per grade type)
@@ -487,15 +487,18 @@ async function insertStudentsAndParents(
       let studentState: "ACTIVO" | "SANCIONADO" | "EXPULSADO" | "RETIRADO" = "ACTIVO";
       let enrollmentState: "ACTIVA" | "CANCELADA" = "ACTIVA";
       let motivoCancelacion: string | null = null;
+      let motivoEstado: string | null = null;
       let userActive = true;
 
       if (globalStudentIdx % 20 === 5) {
         studentState = "SANCIONADO";
+        motivoEstado = "Incumplimiento reiterado de las normas de convivencia escolar.";
         // Sanctioned: still enrolled, can still log in
       } else if (globalStudentIdx % 20 === 10) {
         studentState = "EXPULSADO";
         enrollmentState = "CANCELADA";
         motivoCancelacion = "EXPULSION";
+        motivoEstado = "Falta grave contra la integridad de la comunidad educativa.";
         userActive = false; // Blocked from login
       } else if (globalStudentIdx % 20 === 15) {
         studentState = "RETIRADO";
@@ -549,9 +552,9 @@ async function insertStudentsAndParents(
 
       // ── Create student record with estado ──
       const estRes = await client.query<{ id_estudiante: number }>(
-        `INSERT INTO estudiante (nombre, apellido, documento, codigo, id_tipodocumento, id_nivel, id_colegio, id_usuario, estado)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::estado_estudiante) RETURNING id_estudiante`,
-        [firstName, lastName, `E-${school.id}-${globalStudentIdx}`, studentCode, 1, group.id_nivel, school.id, studentUserId, studentState]
+        `INSERT INTO estudiante (nombre, apellido, documento, codigo, id_tipodocumento, id_nivel, id_colegio, id_usuario, estado, motivo_estado)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::estado_estudiante, $10) RETURNING id_estudiante`,
+        [firstName, lastName, `E-${school.id}-${globalStudentIdx}`, studentCode, 1, group.id_nivel, school.id, studentUserId, studentState, motivoEstado]
       );
       const idEstudiante = estRes.rows[0].id_estudiante;
 
@@ -563,7 +566,7 @@ async function insertStudentsAndParents(
 
       // ── Enroll ──
       await client.query(
-        `INSERT INTO matricula (id_estudiante, id_nivel, id_colegio, "id_año", estado, correo_padre, id_grupo, motivo_cancelacion)
+        `INSERT INTO matricula (id_estudiante, id_nivel, id_colegio, id_anio, estado, correo_padre, id_grupo, motivo_cancelacion)
          VALUES ($1, $2, $3, $4, $5::estado_matricula, $6, $7, $8)`,
         [idEstudiante, group.id_nivel, school.id, yearId, enrollmentState, currentParentEmail, group.id_grupo, motivoCancelacion]
       );
@@ -600,16 +603,16 @@ async function insertSampleAttendance(client: PoolClient): Promise<void> {
 
   // Only enrolled + ACTIVA students
   const enrollmentRes = await client.query(`
-    SELECT m.id_estudiante, m.id_colegio, m.id_grupo, al."id_año"
+    SELECT m.id_estudiante, m.id_colegio, m.id_grupo, al.id_anio
     FROM matricula m
-    JOIN "año_lectivo" al ON m."id_año" = al."id_año"
+    JOIN anio_lectivo al ON m.id_anio = al.id_anio
     WHERE m.estado = 'ACTIVA'
   `);
 
   const batchValues: any[] = [];
 
   for (const enrollment of enrollmentRes.rows) {
-    const { id_estudiante, id_colegio, id_grupo, id_año } = enrollment;
+    const { id_estudiante, id_colegio, id_grupo, id_anio } = enrollment;
 
     const dgRes = await client.query(
       `SELECT id_detallegrado FROM detalle_grados WHERE id_grupo = $1 AND id_colegio = $2`,
@@ -618,8 +621,8 @@ async function insertSampleAttendance(client: PoolClient): Promise<void> {
     if (dgRes.rows.length === 0) continue;
 
      const periodsRes = await client.query(
-       `SELECT id_periodo, mes_inicio FROM periodo_academico WHERE id_colegio = $1 AND "id_año" = $2 AND estado = 'CERRADO'`,
-       [id_colegio, id_año]
+       `SELECT id_periodo, mes_inicio FROM periodo_academico WHERE id_colegio = $1 AND id_anio = $2 AND estado = 'CERRADO'`,
+       [id_colegio, id_anio]
      );
 
     // Generate 5 sample dates per period (first 5 weekdays of the period's start month)
@@ -848,7 +851,7 @@ async function run(): Promise<void> {
     await client.query(`ALTER TABLE public.grupos DROP CONSTRAINT IF EXISTS unique_titular_docente;`);
 
     // Expand calendario column length
-    await client.query(`ALTER TABLE public."año_lectivo" ALTER COLUMN calendario TYPE VARCHAR(10);`);
+    await client.query(`ALTER TABLE public.anio_lectivo ALTER COLUMN calendario TYPE VARCHAR(10);`);
 
     // Add tipo column to observacion_estudiante
     await client.query(`
@@ -893,7 +896,7 @@ async function run(): Promise<void> {
       "materias",
       "nivel_escolar",
       "periodo_academico",
-      "año_lectivo",
+      "anio_lectivo",
       "escala_valoracion",
       "configuracion_colegio",
       "configuracion_inscripcion",

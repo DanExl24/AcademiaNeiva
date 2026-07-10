@@ -48,7 +48,7 @@ const fetchInitialData = async () => {
     studentInfo.value = infoRes.data
     
     if (years.value.length > 0) {
-      selectedYear.value = years.value[0].id_año
+      selectedYear.value = years.value[0].id_anio
     }
   } catch (err) {
     console.error("Error fetching initial academic data:", err)
@@ -60,7 +60,7 @@ const fetchInitialData = async () => {
 const fetchPeriods = async () => {
   if (!studentId.value || !selectedYear.value) return
   try {
-    const res = await axios.get(`http://localhost:3000/api/student/periods/${studentId.value}/${selectedYear.value}`)
+    const res = await axios.get(`http://localhost:3000/api/student/all-periods/${studentId.value}/${selectedYear.value}`)
     periods.value = res.data
     if (periods.value.length > 0) {
       selectedPeriod.value = periods.value[periods.value.length - 1].id_periodo
@@ -128,15 +128,15 @@ const getPerformanceColor = (level: string) => {
         <div class="flex items-center gap-2 bg-white dark:bg-slate-900 px-4 py-2 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm transition-all focus-within:ring-2 focus-within:ring-indigo-500/20">
           <Calendar :size="18" class="text-slate-400" />
           <select v-model="selectedYear" class="bg-transparent border-none text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-0 outline-none cursor-pointer">
-            <option v-for="y in years" :key="y.id_año" :value="y.id_año">Año {{ y.calendario }}</option>
+            <option v-for="y in years" :key="y.id_anio" :value="y.id_anio">Año {{ y.calendario }}</option>
           </select>
         </div>
 
         <div class="flex items-center gap-2 bg-white dark:bg-slate-900 px-4 py-2 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm transition-all focus-within:ring-2 focus-within:ring-indigo-500/20">
           <TrendingUp :size="18" class="text-slate-400" />
           <select v-model="selectedPeriod" class="bg-transparent border-none text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-0 outline-none cursor-pointer" :disabled="periods.length === 0">
-            <option v-if="periods.length === 0" disabled value="">No hay periodos cerrados</option>
-            <option v-for="p in periods" :key="p.id_periodo" :value="p.id_periodo">{{ p.nombre }} ({{ p.porcentaje }}%)</option>
+            <option v-if="periods.length === 0" disabled value="">No hay periodos disponibles</option>
+            <option v-for="p in periods" :key="p.id_periodo" :value="p.id_periodo">{{ p.nombre }} ({{ p.porcentaje }}%){{ p.estado === 'ABIERTO' ? ' - En Curso' : '' }}</option>
           </select>
         </div>
       </div>
@@ -189,7 +189,7 @@ const getPerformanceColor = (level: string) => {
       </div>
       <h3 class="text-xl font-bold text-slate-800 dark:text-white">Sin información disponible</h3>
       <p class="text-slate-500 dark:text-slate-400 mt-2 max-w-sm text-center px-4 leading-relaxed">
-        No se encontraron calificaciones para el periodo seleccionado. Asegúrate de que el periodo esté cerrado por la institución.
+        No se encontraron calificaciones para el periodo seleccionado. Si el periodo está en curso, es posible que los docentes aún no hayan registrado notas.
       </p>
     </div>
 

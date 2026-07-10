@@ -125,7 +125,7 @@ async function runSeedGrades() {
 
     // ─── FETCH BASE DATA ────────────────────────────────────────────────────
     const closedPeriodsRes = await client.query(
-      `SELECT id_periodo, id_colegio, "id_año" FROM periodo_academico WHERE estado = 'CERRADO'`
+      `SELECT id_periodo, id_colegio, id_anio FROM periodo_academico WHERE estado = 'CERRADO'`
     );
 
     const allPeriods = closedPeriodsRes.rows;

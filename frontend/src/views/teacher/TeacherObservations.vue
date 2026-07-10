@@ -36,7 +36,7 @@ interface Period {
   nombre: string
   estado: 'ABIERTO' | 'CERRADO'
   porcentaje: number
-  id_año: number
+  id_anio: number
   mes_inicio?: number | null
   dia_inicio?: number | null
   mes_fin?: number | null
@@ -276,7 +276,7 @@ const allowedDateRange = computed(() => {
     return { min: '', max: '' }
   }
 
-  let year = period.id_año ? Number(period.id_año) : new Date().getFullYear()
+  let year = period.id_anio ? Number(period.id_anio) : new Date().getFullYear()
   if (year < 2000) {
     year = new Date().getFullYear()
   }

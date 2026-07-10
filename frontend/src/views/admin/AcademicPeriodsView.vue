@@ -5,7 +5,7 @@ import { ArrowLeft, BookMarked, PenSquare, Plus, Info, Trash2, Play, Lock, Shiel
 import { useAuthStore } from '../../stores/auth'
 
 interface AcademicYear {
-  id_año: number
+  id_anio: number
   calendario: string | null
   tipo_calendario?: string | null
   estado?: string
@@ -21,7 +21,7 @@ interface AcademicPeriod {
   mes_fin: number | null
   dia_fin: number | null
   meses_referencia?: string | null
-  id_año: number
+  id_anio: number
 }
 
 const auth = useAuthStore()
@@ -54,19 +54,19 @@ const toggleYearStatus = async (year: AcademicYear) => {
   const currentStatus = year.estado || 'ABIERTO'
   const targetStatus = currentStatus === 'ABIERTO' ? 'CERRADO' : 'ABIERTO'
   try {
-    togglingYearId.value = year.id_año
-    const response = await axios.patch(`http://localhost:3000/api/academic-admin/settings/years/${year.id_año}/status`, {
+    togglingYearId.value = year.id_anio
+    const response = await axios.patch(`http://localhost:3000/api/academic-admin/settings/years/${year.id_anio}/status`, {
       schoolId: schoolId.value,
       estado: targetStatus,
     })
     
     // Update local state
     const updated = response.data
-    const found = academicYears.value.find(y => y.id_año === year.id_año)
+    const found = academicYears.value.find(y => y.id_anio === year.id_anio)
     if (found) {
       found.estado = updated.estado
     }
-    if (currentYear.value?.id_año === year.id_año) {
+    if (currentYear.value?.id_anio === year.id_anio) {
       currentYear.value.estado = updated.estado
     }
     await loadData()
@@ -85,14 +85,14 @@ const deleteYear = async (year: AcademicYear) => {
   }
 
   try {
-    deletingYearId.value = year.id_año
-    await axios.delete(`http://localhost:3000/api/academic-admin/settings/years/${year.id_año}`, {
+    deletingYearId.value = year.id_anio
+    await axios.delete(`http://localhost:3000/api/academic-admin/settings/years/${year.id_anio}`, {
       data: { schoolId: schoolId.value }
     })
     
     alert(`Año lectivo ${year.calendario} eliminado correctamente.`)
     
-    if (selectedYearId.value === year.id_año) {
+    if (selectedYearId.value === year.id_anio) {
       selectedYearId.value = null
     }
     await loadData()
@@ -121,7 +121,7 @@ const periodEdit = ref({
 })
 
 const academicYearForm = ref({
-  id_año: '',
+  id_anio: '',
   calendario: 'A',
 })
 
@@ -143,12 +143,12 @@ const months = [
 const selectedYearId = ref<number | null>(null)
 
 const selectedYearObj = computed(() =>
-  academicYears.value.find(y => y.id_año === selectedYearId.value)
+  academicYears.value.find(y => y.id_anio === selectedYearId.value)
 )
 
 const filteredPeriods = computed(() => {
   if (!selectedYearId.value) return periods.value
-  return periods.value.filter(p => p.id_año === selectedYearId.value)
+  return periods.value.filter(p => p.id_anio === selectedYearId.value)
 })
 
 const totalPeriodPercentage = computed(() =>
@@ -166,7 +166,7 @@ const loadData = async () => {
     
     // Set selected year to current active year on first load if not already set
     if (!selectedYearId.value && currentYear.value) {
-      selectedYearId.value = currentYear.value.id_año
+      selectedYearId.value = currentYear.value.id_anio
     }
   } catch (error) {
     console.error('Error loading academic settings:', error)
@@ -197,7 +197,7 @@ const createPeriod = async () => {
       dia_inicio: diaInicio,
       mes_fin: mesFin,
       dia_fin: diaFin,
-      id_año: selectedYearId.value,
+      id_anio: selectedYearId.value,
     })
     newPeriod.value = { nombre: '', porcentaje: '', mes_inicio: '', dia_inicio: '', mes_fin: '', dia_fin: '' }
     periodModal.value = false
@@ -261,7 +261,7 @@ const approvePeriod = async (period: AcademicPeriod) => {
 
 const createAcademicYear = async () => {
   if (yearSaving.value) return
-  if (!academicYearForm.value.id_año) {
+  if (!academicYearForm.value.id_anio) {
     alert('Ingresa el año lectivo que deseas configurar.')
     return
   }
@@ -270,7 +270,7 @@ const createAcademicYear = async () => {
     yearSaving.value = true
     const response = await axios.post('http://localhost:3000/api/academic-admin/settings/years', {
       schoolId: schoolId.value,
-      id_año: Number(academicYearForm.value.id_año),
+      id_anio: Number(academicYearForm.value.id_anio),
       calendario: academicYearForm.value.calendario,
     })
     
@@ -278,9 +278,9 @@ const createAcademicYear = async () => {
     yearSuccessMessage.value = response.data.message
     yearSuccessPeriods.value = response.data.periods || []
     showYearSuccessAlert.value = true
-    selectedYearId.value = response.data.id_año
+    selectedYearId.value = response.data.id_anio
 
-    academicYearForm.value = { id_año: '', calendario: 'A' }
+    academicYearForm.value = { id_anio: '', calendario: 'A' }
     await loadData()
   } catch (error: any) {
     alert(error.response?.data?.error || 'No fue posible crear el año lectivo')
@@ -344,7 +344,7 @@ onMounted(loadData)
           <div class="grid grid-cols-1 gap-6 border-b border-slate-100 p-6 md:grid-cols-[1fr_140px_auto] dark:border-slate-800">
             <label class="space-y-2">
               <span class="block text-sm font-black text-slate-700 dark:text-slate-300">Año lectivo</span>
-              <input v-model="academicYearForm.id_año" type="number" min="2000" max="2100" placeholder="2026" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-semibold outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white" />
+              <input v-model="academicYearForm.id_anio" type="number" min="2000" max="2100" placeholder="2026" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-semibold outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white" />
             </label>
             <label class="space-y-2">
               <span class="block text-sm font-black text-slate-700 dark:text-slate-300">Calendario</span>
@@ -368,10 +368,10 @@ onMounted(loadData)
           <div v-else class="divide-y divide-slate-100 overflow-y-auto max-h-[400px] dark:divide-slate-800">
             <div 
               v-for="year in academicYears" 
-              :key="year.id_año"
-              @click="selectedYearId = year.id_año"
+              :key="year.id_anio"
+              @click="selectedYearId = year.id_anio"
               :class="[
-                selectedYearId === year.id_año ? 'bg-indigo-50/50 dark:bg-indigo-950/20 border-l-4 border-indigo-600' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50 border-l-4 border-transparent',
+                selectedYearId === year.id_anio ? 'bg-indigo-50/50 dark:bg-indigo-950/20 border-l-4 border-indigo-600' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50 border-l-4 border-transparent',
                 'flex flex-col gap-3 px-6 py-5 md:flex-row md:items-center md:justify-between transition-all cursor-pointer'
               ]"
             >
@@ -397,7 +397,7 @@ onMounted(loadData)
                   <button
                     type="button"
                     @click="toggleYearStatus(year)"
-                    :disabled="togglingYearId === year.id_año"
+                    :disabled="togglingYearId === year.id_anio"
                     title="Alternar estado abierto/cerrado del año"
                     class="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 transition"
                   >
@@ -406,7 +406,7 @@ onMounted(loadData)
                   <button
                     type="button"
                     @click="deleteYear(year)"
-                    :disabled="deletingYearId === year.id_año"
+                    :disabled="deletingYearId === year.id_anio"
                     title="Eliminar año lectivo permanentemente"
                     class="p-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 dark:bg-rose-950/20 dark:hover:bg-rose-950/40 dark:text-rose-400 transition"
                   >
@@ -414,8 +414,8 @@ onMounted(loadData)
                   </button>
                 </template>
                 <template v-else>
-                  <span :class="[currentYear?.id_año === year.id_año ? 'bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-400' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400', 'rounded-full px-3 py-1 text-sm font-black']">
-                    {{ currentYear?.id_año === year.id_año ? 'Activo en el módulo' : 'Configurado' }}
+                  <span :class="[currentYear?.id_anio === year.id_anio ? 'bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-400' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400', 'rounded-full px-3 py-1 text-sm font-black']">
+                    {{ currentYear?.id_anio === year.id_anio ? 'Activo en el módulo' : 'Configurado' }}
                   </span>
                 </template>
               </div>
@@ -465,7 +465,7 @@ onMounted(loadData)
                   >
                     {{ period.estado }}
                   </span> 
-                  · Año: {{ selectedYearObj ? selectedYearObj.calendario : period.id_año }}
+                  · Año: {{ selectedYearObj ? selectedYearObj.calendario : period.id_anio }}
                 </p>
                 <p class="mt-1 text-xs font-semibold text-slate-400 italic dark:text-slate-500">
                   <span v-if="period.mes_inicio !== null">

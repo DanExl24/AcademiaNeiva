@@ -47,7 +47,7 @@ const fetchYears = async () => {
     const res = await axios.get(`http://localhost:3000/api/student/years/${selectedChildId.value}`)
     years.value = res.data
     if (years.value.length > 0) {
-      selectedYear.value = years.value[0].id_año
+      selectedYear.value = years.value[0].id_anio
     }
   } catch (err) {
     console.error("Error fetching years:", err)
@@ -138,7 +138,7 @@ watch(selectedYear, async (newVal) => {
                 class="w-full h-12 bg-slate-50 dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-xl px-4 font-bold text-sm text-slate-700 dark:text-slate-200 focus:border-indigo-500 transition-all cursor-pointer outline-none"
               >
                 <option v-if="years.length === 0" disabled value="">Sin años</option>
-                <option v-for="y in years" :key="y.id_año" :value="y.id_año">Año {{ y.calendario }}</option>
+                <option v-for="y in years" :key="y.id_anio" :value="y.id_anio">Año {{ y.calendario }}</option>
               </select>
             </div>
 

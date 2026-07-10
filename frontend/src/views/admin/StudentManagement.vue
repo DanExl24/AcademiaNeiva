@@ -53,6 +53,7 @@ const selectedStudent = ref<any>(null)
 
 const statusModalOpen = ref(false)
 const newStatus = ref('')
+const statusMotivo = ref('')
 
 const changeGradeModalOpen = ref(false)
 const selectedGroup = ref('')
@@ -268,14 +269,21 @@ const saveStudent = async () => {
 const openStatusModal = (student: any, status: string) => {
   selectedStudent.value = student
   newStatus.value = status
+  statusMotivo.value = ''
   statusModalOpen.value = true
 }
 
 const confirmStatusChange = async () => {
+  if ((newStatus.value === 'SANCIONADO' || newStatus.value === 'EXPULSADO') && statusMotivo.value.trim().length < 10) {
+    notify.addNotification('Debe ingresar un motivo de al menos 10 caracteres', 'error')
+    return
+  }
+
   try {
     const headers = { Authorization: `Bearer ${auth.token}` }
     await axios.patch(`http://localhost:3000/api/student/${selectedStudent.value.id_estudiante}/status`, {
-      estado: newStatus.value
+      estado: newStatus.value,
+      motivo: statusMotivo.value
     }, { headers })
     notify.addNotification(`Estado actualizado a ${newStatus.value}`, 'success')
     statusModalOpen.value = false
@@ -523,9 +531,12 @@ const exportToSIMAT = () => {
               <span v-else class="text-[10px] font-bold text-red-400 uppercase tracking-widest italic">Sin grupo asignado</span>
             </td>
             <td class="px-8 py-5">
-              <span :class="[getStatusClass(s.estado), 'px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest']">
+              <span :class="[getStatusClass(s.estado), 'px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest block w-fit']">
                 {{ s.estado }}
               </span>
+              <p v-if="s.motivo_estado" class="text-[10px] text-red-500 dark:text-red-400 font-semibold italic mt-1 max-w-[200px] leading-tight" :title="s.motivo_estado">
+                {{ s.motivo_estado }}
+              </p>
             </td>
             <td class="px-8 py-5 text-right">
               <div class="flex items-center justify-end gap-2">
@@ -596,7 +607,7 @@ const exportToSIMAT = () => {
     <!-- Status Change -->
     <div v-if="statusModalOpen" class="fixed inset-0 z-[300] flex items-center justify-center p-4">
       <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" @click="statusModalOpen = false"></div>
-      <div class="relative w-full max-w-sm bg-white dark:bg-slate-900 rounded-[28px] overflow-hidden shadow-2xl">
+      <div class="relative w-full bg-white dark:bg-slate-900 rounded-[28px] overflow-hidden shadow-2xl transition-all" :class="newStatus === 'SANCIONADO' || newStatus === 'EXPULSADO' ? 'max-w-md' : 'max-w-sm'">
         <div class="p-8 text-center bg-slate-50 dark:bg-slate-800/50">
           <div :class="[newStatus === 'ACTIVO' ? 'bg-emerald-50 text-emerald-500' : 'bg-red-50 text-red-500', 'h-16 w-16 rounded-3xl mx-auto flex items-center justify-center mb-4']">
              <AlertCircle :size="32" />
@@ -605,10 +616,30 @@ const exportToSIMAT = () => {
           <p class="text-slate-500 text-sm font-medium mt-2">
             ¿Estás seguro de que deseas cambiar el estado de <span class="font-black text-slate-900 dark:text-white">{{ selectedStudent.nombre }}</span> a <span class="font-black uppercase" :class="newStatus === 'ACTIVO' ? 'text-emerald-600' : 'text-red-500'">{{ newStatus }}</span>?
           </p>
+
+          <!-- Reason Input for Sanction/Expulsion -->
+          <div v-if="newStatus === 'SANCIONADO' || newStatus === 'EXPULSADO'" class="mt-5 text-left">
+            <label class="block text-slate-500 text-xs font-black uppercase tracking-wider mb-2">Motivo del Cambio de Estado <span class="text-red-500">*</span></label>
+            <textarea 
+              v-model="statusMotivo" 
+              rows="3" 
+              placeholder="Describa el motivo detalladamente (mínimo 10 caracteres)..."
+              class="w-full bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-sm font-medium outline-none text-slate-900 dark:text-white focus:border-indigo-500 transition-all resize-none"
+            ></textarea>
+            <div class="flex justify-between items-center mt-1">
+              <span class="text-[10px] text-slate-400 font-bold">Mínimo 10 caracteres</span>
+              <span class="text-[10px] font-black" :class="statusMotivo.trim().length >= 10 ? 'text-emerald-500' : 'text-slate-400'">{{ statusMotivo.trim().length }}/10</span>
+            </div>
+          </div>
         </div>
         <div class="p-8 flex gap-3">
           <button @click="statusModalOpen = false" class="flex-1 py-3 font-black text-slate-400 uppercase text-xs">Atrás</button>
-          <button @click="confirmStatusChange" class="flex-2 bg-slate-900 dark:bg-indigo-600 text-white rounded-xl font-black px-6 py-3 uppercase text-xs shadow-xl">Confirmar</button>
+          <button 
+            @click="confirmStatusChange" 
+            :disabled="(newStatus === 'SANCIONADO' || newStatus === 'EXPULSADO') && statusMotivo.trim().length < 10"
+            :class="[(newStatus === 'SANCIONADO' || newStatus === 'EXPULSADO') && statusMotivo.trim().length < 10 ? 'opacity-40 cursor-not-allowed' : 'hover:bg-slate-800 dark:hover:bg-indigo-750']"
+            class="flex-2 bg-slate-900 dark:bg-indigo-600 text-white rounded-xl font-black px-6 py-3 uppercase text-xs shadow-xl transition-all"
+          >Confirmar</button>
         </div>
       </div>
     </div>
@@ -851,6 +882,22 @@ const exportToSIMAT = () => {
                 <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Observaciones / Distinción</span>
                 <p class="text-xs font-bold text-slate-750 dark:text-slate-350 italic leading-relaxed">
                   "{{ studentSummary.graduation.observaciones }}"
+                </p>
+              </div>
+            </div>
+
+            <!-- Sanction/Expulsion Info Card -->
+            <div v-if="(studentSummary.estado_estudiante === 'SANCIONADO' || studentSummary.estado_estudiante === 'EXPULSADO') && studentSummary.motivo_estado" class="bg-gradient-to-br from-red-50 to-red-100/30 dark:from-slate-900 dark:to-red-950/20 border-2 border-red-200/50 dark:border-red-950/60 rounded-3xl p-5 space-y-3 relative overflow-hidden">
+              <div class="absolute -right-4 -bottom-4 text-red-200 dark:text-red-900 opacity-20 pointer-events-none">
+                <AlertCircle :size="80" />
+              </div>
+              <h4 class="text-[10px] font-black text-red-600 dark:text-red-450 uppercase tracking-widest flex items-center gap-1.5 leading-none">
+                <AlertCircle :size="16" />
+                Motivo de {{ studentSummary.estado_estudiante === 'SANCIONADO' ? 'Sanción' : 'Expulsión' }}
+              </h4>
+              <div class="space-y-1">
+                <p class="text-xs font-semibold text-slate-750 dark:text-slate-350 italic leading-relaxed">
+                  "{{ studentSummary.motivo_estado }}"
                 </p>
               </div>
             </div>

@@ -50,13 +50,13 @@ ALTER TABLE directivo
   USING estado::estado_usuario_sistema;
 ALTER TABLE directivo ALTER COLUMN estado SET DEFAULT 'ACTIVO'::estado_usuario_sistema;
 
--- 6. Cambiar año_lectivo.estado a estado_periodo ENUM
-UPDATE "año_lectivo" SET estado = 'ABIERTO' WHERE estado NOT IN ('ABIERTO', 'CERRADO', 'PENDIENTE');
-ALTER TABLE "año_lectivo" ALTER COLUMN estado DROP DEFAULT;
-ALTER TABLE "año_lectivo" 
+-- 6. Cambiar anio_lectivo.estado a estado_periodo ENUM
+UPDATE anio_lectivo SET estado = 'ABIERTO' WHERE estado NOT IN ('ABIERTO', 'CERRADO', 'PENDIENTE');
+ALTER TABLE anio_lectivo ALTER COLUMN estado DROP DEFAULT;
+ALTER TABLE anio_lectivo 
   ALTER COLUMN estado TYPE estado_periodo 
   USING estado::estado_periodo;
-ALTER TABLE "año_lectivo" ALTER COLUMN estado SET DEFAULT 'ABIERTO'::estado_periodo;
+ALTER TABLE anio_lectivo ALTER COLUMN estado SET DEFAULT 'ABIERTO'::estado_periodo;
 
 -- 7. Cambiar observacion_estudiante.tipo a tipo_observacion ENUM
 DO $$ BEGIN
@@ -76,14 +76,14 @@ ALTER TABLE observacion_estudiante
   USING tipo::tipo_observacion;
 ALTER TABLE observacion_estudiante ALTER COLUMN tipo SET DEFAULT 'ACADEMICA'::tipo_observacion;
 
--- 8. UNIQUE CONSTRAINT en matricula(id_estudiante, id_año, id_colegio) para estados no terminales
+-- 8. UNIQUE CONSTRAINT en matricula(id_estudiante, id_anio, id_colegio) para estados no terminales
 DROP INDEX IF EXISTS idx_matricula_estudiante_anio_colegio_activo;
 CREATE UNIQUE INDEX idx_matricula_estudiante_anio_colegio_activo 
-ON matricula(id_estudiante, "id_año", id_colegio) 
+ON matricula(id_estudiante, id_anio, id_colegio) 
 WHERE estado NOT IN ('CANCELADA', 'RECHAZADA');
 
--- 9. Agregar id_año a registro_graduados
-ALTER TABLE registro_graduados ADD COLUMN IF NOT EXISTS "id_año" integer REFERENCES "año_lectivo"("id_año");
+-- 9. Agregar id_anio a registro_graduados
+ALTER TABLE registro_graduados ADD COLUMN IF NOT EXISTS id_anio integer REFERENCES anio_lectivo(id_anio);
 
 -- 10. Agregar fecha_expiracion a papelera_materias
 ALTER TABLE papelera_materias ADD COLUMN IF NOT EXISTS fecha_expiracion timestamp without time zone DEFAULT (CURRENT_TIMESTAMP + INTERVAL '30 days');

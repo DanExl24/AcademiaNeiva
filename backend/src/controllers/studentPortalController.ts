@@ -8,8 +8,8 @@ export const getStudentAcademicYears = async (req: Request, res: Response) => {
   const { id_estudiante } = req.params;
   try {
     const result = await pool.query(`
-      SELECT DISTINCT al."id_año", al.calendario
-      FROM "año_lectivo" al
+      SELECT DISTINCT al.id_anio, al.calendario
+      FROM anio_lectivo al
       JOIN estudiante e ON e.id_colegio = al.id_colegio
       WHERE e.id_estudiante = $1
       ORDER BY al.calendario DESC
@@ -31,7 +31,7 @@ export const getStudentClosedPeriods = async (req: Request, res: Response) => {
       SELECT p.id_periodo, p.nombre, p.trimestre, p.porcentaje
       FROM periodo_academico p
       JOIN estudiante e ON e.id_colegio = p.id_colegio
-      WHERE e.id_estudiante = $1 AND p."id_año" = $2 AND p.estado = 'CERRADO'
+      WHERE e.id_estudiante = $1 AND p.id_anio = $2 AND p.estado = 'CERRADO'
       ORDER BY p.trimestre ASC
     `, [id_estudiante, id_anio]);
     res.json(result.rows);
@@ -51,7 +51,7 @@ export const getStudentAllPeriods = async (req: Request, res: Response) => {
       SELECT p.id_periodo, p.nombre, p.trimestre, p.porcentaje, p.estado
       FROM periodo_academico p
       JOIN estudiante e ON e.id_colegio = p.id_colegio
-      WHERE e.id_estudiante = $1 AND p."id_año" = $2 AND p.estado != 'PENDIENTE'
+      WHERE e.id_estudiante = $1 AND p.id_anio = $2 AND p.estado != 'PENDIENTE'
       ORDER BY p.trimestre ASC
     `, [id_estudiante, id_anio]);
     res.json(result.rows);
@@ -67,13 +67,13 @@ export const getStudentAllPeriods = async (req: Request, res: Response) => {
 export const getStudentGrades = async (req: Request, res: Response) => {
   const { id_estudiante, id_periodo } = req.params;
   try {
-    // 1. Verify period is closed
+    // 1. Verify period exists and is not pending
     const periodCheck = await pool.query(
       'SELECT estado, id_colegio FROM periodo_academico WHERE id_periodo = $1',
       [id_periodo]
     );
-    if (!periodCheck.rows.length || periodCheck.rows[0].estado !== 'CERRADO') {
-      return res.status(400).json({ error: 'Solo se pueden consultar notas de periodos cerrados' });
+    if (!periodCheck.rows.length || periodCheck.rows[0].estado === 'PENDIENTE') {
+      return res.status(400).json({ error: 'El periodo seleccionado no está disponible' });
     }
     const id_colegio = periodCheck.rows[0].id_colegio;
 
@@ -264,13 +264,13 @@ export const getStudentAttendance = async (req: Request, res: Response) => {
         AND ra.fecha >= (
           SELECT (al.calendario || '-' || LPAD(pa.mes_inicio::text, 2, '0') || '-' || LPAD(pa.dia_inicio::text, 2, '0'))::date
           FROM periodo_academico pa
-          JOIN "año_lectivo" al ON al."id_año" = pa."id_año"
+          JOIN anio_lectivo al ON al.id_anio = pa.id_anio
           WHERE pa.id_periodo = $${paramIndex}
         )
         AND ra.fecha <= (
           SELECT (al.calendario || '-' || LPAD(pa.mes_fin::text, 2, '0') || '-' || LPAD(pa.dia_fin::text, 2, '0'))::date
           FROM periodo_academico pa
-          JOIN "año_lectivo" al ON al."id_año" = pa."id_año"
+          JOIN anio_lectivo al ON al.id_anio = pa.id_anio
           WHERE pa.id_periodo = $${paramIndex}
         )
       `;
@@ -415,7 +415,7 @@ export const getParentDashboardData = async (req: Request, res: Response) => {
         s.nombre as grupo, 
         e.id_colegio,
         m.id_grupo,
-        m."id_año"
+        m.id_anio
       FROM padre_familia pf
       JOIN detalle_padrefamilia dpf ON dpf.id_padrefamilia = pf.id_padrefamilia
       JOIN estudiante e ON e.id_estudiante = dpf.id_estudiante
@@ -457,7 +457,7 @@ export const getParentDashboardData = async (req: Request, res: Response) => {
         (al.calendario || '-' || lpad(pa.mes_inicio::text, 2, '0') || '-' || lpad(pa.dia_inicio::text, 2, '0'))::date as fecha_inicio,
         (al.calendario || '-' || lpad(pa.mes_fin::text, 2, '0') || '-' || lpad(pa.dia_fin::text, 2, '0'))::date as fecha_fin
       FROM periodo_academico pa
-      JOIN "año_lectivo" al ON al."id_año" = pa."id_año"
+      JOIN anio_lectivo al ON al.id_anio = pa.id_anio
       WHERE pa.id_colegio = $1 AND pa.estado != 'PENDIENTE'
       ORDER BY pa.trimestre ASC
     `, [schoolId]);
@@ -536,10 +536,10 @@ export const getParentDashboardData = async (req: Request, res: Response) => {
         SELECT pa.nombre as periodo, ROUND(AVG(ra.promedio)::numeric, 2) as promedio
         FROM resultado_academico ra
         JOIN periodo_academico pa ON pa.id_periodo = ra.id_periodo
-        WHERE ra.id_estudiante = $1 AND pa."id_año" = $2
+        WHERE ra.id_estudiante = $1 AND pa.id_anio = $2
         GROUP BY pa.id_periodo, pa.nombre, pa.trimestre
         ORDER BY pa.trimestre ASC
-      `, [child.id_estudiante, child.id_año]);
+      `, [child.id_estudiante, child.id_anio]);
 
       return {
         id_estudiante: child.id_estudiante,
@@ -756,13 +756,13 @@ export const getStudentDashboardStats = async (req: Request, res: Response) => {
         AND ra.fecha >= (
           SELECT (al.calendario || '-' || LPAD(pa.mes_inicio::text, 2, '0') || '-' || LPAD(pa.dia_inicio::text, 2, '0'))::date
           FROM periodo_academico pa
-          JOIN "año_lectivo" al ON al."id_año" = pa."id_año"
+          JOIN anio_lectivo al ON al.id_anio = pa.id_anio
           WHERE pa.id_periodo = $2
         )
         AND ra.fecha <= (
           SELECT (al.calendario || '-' || LPAD(pa.mes_fin::text, 2, '0') || '-' || LPAD(pa.dia_fin::text, 2, '0'))::date
           FROM periodo_academico pa
-          JOIN "año_lectivo" al ON al."id_año" = pa."id_año"
+          JOIN anio_lectivo al ON al.id_anio = pa.id_anio
           WHERE pa.id_periodo = $2
         )
       GROUP BY estado

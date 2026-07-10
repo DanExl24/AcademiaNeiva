@@ -77,7 +77,7 @@
           </div>
           <div class="flex items-center justify-end gap-2">
             <span class="font-bold text-gray-500 uppercase">Calendario:</span>
-            <span class="font-bold text-gray-900">{{ data?.estudiante?.calendario || 'A' }}</span>
+            <span class="font-bold text-gray-900">{{ data?.estudiante?.tipo_calendario || 'A' }}</span>
           </div>
         </div>
       </div>

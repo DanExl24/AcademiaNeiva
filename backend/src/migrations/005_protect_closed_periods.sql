@@ -56,7 +56,7 @@ BEGIN
         -- Encontrar el periodo que abarca esta fecha para el colegio
         SELECT pa.id_periodo INTO v_id_periodo
         FROM periodo_academico pa
-        JOIN "año_lectivo" al ON pa.id_año = al.id_año
+        JOIN anio_lectivo al ON pa.id_anio = al.id_anio
         WHERE pa.id_colegio = v_id_colegio
           AND (
             al.calendario = EXTRACT(YEAR FROM v_fecha)::text OR

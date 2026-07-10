@@ -27,11 +27,11 @@ export const ensureSubjectOpen = async (detailGradeId: number, periodId: number)
 };
 
 export const getCurrentAllowedPeriodForSchool = async (schoolId: number) => {
-  const currentYearRes = await pool.query<{ id_año: number }>(
-    `SELECT "id_año"
-     FROM "año_lectivo"
+  const currentYearRes = await pool.query<{ id_anio: number }>(
+    `SELECT id_anio
+     FROM anio_lectivo
      WHERE id_colegio = $1
-     ORDER BY "id_año" DESC
+     ORDER BY id_anio DESC
      LIMIT 1`,
     [schoolId]
   );
@@ -45,27 +45,27 @@ export const getCurrentAllowedPeriodForSchool = async (schoolId: number) => {
     nombre: string;
     estado: "ABIERTO" | "CERRADO";
     porcentaje: number;
-    id_año: number;
+    id_anio: number;
     trimestre: number | null;
     dia_inicio: number | null;
     dia_fin: number | null;
     mes_inicio: number | null;
     mes_fin: number | null;
   }>(
-    `SELECT id_periodo, nombre, estado, porcentaje, "id_año", dia_inicio, dia_fin, mes_inicio, mes_fin
+    `SELECT id_periodo, nombre, estado, porcentaje, id_anio, dia_inicio, dia_fin, mes_inicio, mes_fin
      FROM periodo_academico
      WHERE id_colegio = $1
-       AND "id_año" = $2
+       AND id_anio = $2
        AND estado = 'ABIERTO'
      ORDER BY id_periodo
      LIMIT 1`,
-    [schoolId, Number(currentYearRes.rows[0].id_año)]
+    [schoolId, Number(currentYearRes.rows[0].id_anio)]
   );
 
   const period = periodsRes.rows[0];
   if (period) {
-    if (period.id_año < 2000) {
-       period.id_año = new Date().getFullYear();
+    if (period.id_anio < 2000) {
+       period.id_anio = new Date().getFullYear();
     }
   }
 

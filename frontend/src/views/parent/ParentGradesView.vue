@@ -61,7 +61,7 @@ const fetchYearsAndInfo = async () => {
     studentInfo.value = infoRes.data
     
     if (years.value.length > 0) {
-      selectedYear.value = years.value[0].id_año
+      selectedYear.value = years.value[0].id_anio
     }
   } catch (err) {
     console.error("Error fetching years/info:", err)
@@ -198,7 +198,7 @@ const getPerformanceColor = (level: string) => {
         <div class="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700">
           <Calendar :size="18" class="text-slate-400" />
           <select v-model="selectedYear" class="bg-transparent border-none text-xs font-bold text-slate-700 dark:text-slate-200 focus:ring-0 outline-none cursor-pointer">
-            <option v-for="y in years" :key="y.id_año" :value="y.id_año">Año {{ y.calendario }}</option>
+            <option v-for="y in years" :key="y.id_anio" :value="y.id_anio">Año {{ y.calendario }}</option>
           </select>
         </div>
 

@@ -38,19 +38,19 @@ export class MatriculaService {
 
       // Fetch active year for the school
       const yearRes = await client.query(
-        `SELECT "id_año" FROM "año_lectivo" WHERE id_colegio = $1 AND estado = 'ABIERTO' LIMIT 1`,
+        `SELECT id_anio FROM anio_lectivo WHERE id_colegio = $1 AND estado = 'ABIERTO' LIMIT 1`,
         [id_colegio]
       );
       if (yearRes.rows.length === 0) {
         throw new Error("El colegio seleccionado no tiene un año lectivo activo abierto.");
       }
-      const activeYearId = yearRes.rows[0].id_año;
+      const activeYearId = yearRes.rows[0].id_anio;
 
       // Check if approved matriculas exist for this year
       const approvedRes = await client.query(
         `SELECT COUNT(*)::int AS count 
          FROM matricula 
-         WHERE id_colegio = $1 AND "id_año" = $2 AND estado IN ('ACTIVA', 'TRASLADADA')`,
+         WHERE id_colegio = $1 AND id_anio = $2 AND estado IN ('ACTIVA', 'TRASLADADA')`,
         [id_colegio, activeYearId]
       );
       if (approvedRes.rows[0].count > 0) {
@@ -61,7 +61,7 @@ export class MatriculaService {
       const configRes = await client.query(
         `SELECT fecha_inicio, fecha_cierre, habilitada 
          FROM configuracion_inscripcion 
-         WHERE id_colegio = $1 AND id_año = $2`,
+         WHERE id_colegio = $1 AND id_anio = $2`,
         [id_colegio, activeYearId]
       );
 
@@ -88,7 +88,7 @@ export class MatriculaService {
       // 1. Insertar en tabla matricula original (id_estudiante es NULL)
       const matRes = await client.query(
         `INSERT INTO matricula 
-           (id_estudiante, id_nivel, id_grupo, id_colegio, "id_año", estado, correo_padre, tiene_discapacidad, es_extranjero)
+           (id_estudiante, id_nivel, id_grupo, id_colegio, id_anio, estado, correo_padre, tiene_discapacidad, es_extranjero)
          VALUES (NULL, NULL, $1, $2, $3, 'PENDIENTE', $4, $5, $6)
          RETURNING id_matricula, token_seguimiento`,
         [data.grade, id_colegio, activeYearId, parentEmail, hasDisability === 'true', isForeigner === 'true']
@@ -274,25 +274,25 @@ export class MatriculaService {
           
           if (childrenRes.rows.length > 0) {
             const currentYearRes = await pool.query(
-              `SELECT calendario FROM "año_lectivo" WHERE "id_año" = $1 LIMIT 1`,
-              [mat.id_año]
+              `SELECT calendario FROM anio_lectivo WHERE id_anio = $1 LIMIT 1`,
+              [mat.id_anio]
             );
             if (currentYearRes.rows.length > 0) {
               const currentYearStr = currentYearRes.rows[0].calendario;
               const prevYearStr = String(Number(currentYearStr) - 1);
               
               const prevYearRes = await pool.query(
-                `SELECT "id_año" FROM "año_lectivo" WHERE id_colegio = $1 AND calendario = $2 LIMIT 1`,
+                `SELECT id_anio FROM anio_lectivo WHERE id_colegio = $1 AND calendario = $2 LIMIT 1`,
                 [mat.id_colegio, prevYearStr]
               );
               
               if (prevYearRes.rows.length > 0) {
-                const prevYearId = prevYearRes.rows[0].id_año;
+                const prevYearId = prevYearRes.rows[0].id_anio;
                 
                 for (const child of childrenRes.rows) {
                   const prevEnrollmentRes = await pool.query(
                     `SELECT id_matricula, estado FROM matricula 
-                     WHERE id_estudiante = $1 AND "id_año" = $2 AND estado IN ('ACTIVA', 'TRASLADADA') LIMIT 1`,
+                     WHERE id_estudiante = $1 AND id_anio = $2 AND estado IN ('ACTIVA', 'TRASLADADA') LIMIT 1`,
                     [child.id_estudiante, prevYearId]
                   );
                   

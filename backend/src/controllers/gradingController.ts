@@ -35,7 +35,7 @@ const resolveTeachingContext = async (
        dg.id_grupo AS "idGrupo",
        dg.id_materia AS "idMateria",
        dg.id_colegio AS "idColegio",
-       p."id_año" AS "idAnio"
+       p.id_anio AS "idAnio"
      FROM detalle_grados dg
      JOIN periodo_academico p
        ON p.id_periodo = $3
@@ -152,7 +152,7 @@ export const updateCompetency = async (req: Request, res: Response): Promise<voi
   const client = await pool.connect();
   try {
     const periodRes = await client.query(
-      `SELECT c.id_periodo, c.id_materia, c.id_grupo, c.id_año, c.id_colegio
+      `SELECT c.id_periodo, c.id_materia, c.id_grupo, c.id_anio, c.id_colegio
        FROM competencias
        WHERE id_competencia = $1`,
       [id]
@@ -189,7 +189,7 @@ export const updateCompetency = async (req: Request, res: Response): Promise<voi
       idGrupo: Number(periodRes.rows[0].id_grupo),
       idMateria: Number(periodRes.rows[0].id_materia),
       idColegio: Number(periodRes.rows[0].id_colegio),
-      idAnio: Number(periodRes.rows[0].id_año),
+      idAnio: Number(periodRes.rows[0].id_anio),
     };
 
     await client.query("BEGIN");
@@ -1266,7 +1266,7 @@ export const getCourseEvidenciasDba = async (req: Request, res: Response): Promi
          FROM evidencia_aprendizaje ea
          JOIN competencias c ON c.id_competencia = ea.id_competencia
          WHERE c.id_colegio = $1
-           AND c.id_año = (SELECT "id_año" FROM "año_lectivo" WHERE id_colegio = $1 ORDER BY "id_año" DESC LIMIT 1)
+           AND c.id_anio = (SELECT id_anio FROM anio_lectivo WHERE id_colegio = $1 ORDER BY id_anio DESC LIMIT 1)
            AND c.id_materia = $2
            AND c.id_grupo IN (
              SELECT g2.id_grupo

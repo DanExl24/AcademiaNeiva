@@ -58,7 +58,7 @@ BEGIN
   ) THEN
     CREATE TABLE public.competencias (
       id_competencia SERIAL PRIMARY KEY,
-      id_año integer NOT NULL REFERENCES public."año_lectivo"("id_año") ON DELETE CASCADE,
+      id_anio integer NOT NULL REFERENCES public.anio_lectivo(id_anio) ON DELETE CASCADE,
       id_grupo integer NOT NULL REFERENCES public.grupos(id_grupo) ON DELETE CASCADE,
       id_materia integer NOT NULL REFERENCES public.materias(id_materia) ON DELETE CASCADE,
       id_periodo integer NOT NULL REFERENCES public.periodo_academico(id_periodo) ON DELETE CASCADE,
@@ -116,7 +116,7 @@ ALTER TABLE public.actividad_materia
 
 WITH aggregated_competencies AS (
   SELECT
-    p."id_año" AS id_año,
+    p.id_anio AS id_anio,
     dg.id_grupo AS id_grupo,
     dg.id_materia AS id_materia,
     a.id_periodo AS id_periodo,
@@ -130,23 +130,23 @@ WITH aggregated_competencies AS (
   JOIN public.periodo_academico p ON p.id_periodo = a.id_periodo
   LEFT JOIN public.desempeno d ON d.id_actividadmateria = a.id_actividadmateria
   WHERE p.estado = 'CERRADO'
-  GROUP BY p."id_año", dg.id_grupo, dg.id_materia, a.id_periodo, a.id_colegio
+  GROUP BY p.id_anio, dg.id_grupo, dg.id_materia, a.id_periodo, a.id_colegio
 )
-INSERT INTO public.competencias (id_año, id_grupo, id_materia, id_periodo, descripcion, id_colegio)
-SELECT id_año, id_grupo, id_materia, id_periodo, descripcion, id_colegio
+INSERT INTO public.competencias (id_anio, id_grupo, id_materia, id_periodo, descripcion, id_colegio)
+SELECT id_anio, id_grupo, id_materia, id_periodo, descripcion, id_colegio
 FROM aggregated_competencies ac
 WHERE NOT EXISTS (
   SELECT 1 FROM public.competencias c
-  WHERE c.id_año = ac.id_año
+  WHERE c.id_anio = ac.id_anio
     AND c.id_grupo = ac.id_grupo
     AND c.id_materia = ac.id_materia
     AND c.id_periodo = ac.id_periodo
     AND c.id_colegio = ac.id_colegio
 );
 
-INSERT INTO public.competencias (id_año, id_grupo, id_materia, id_periodo, descripcion, id_colegio)
+INSERT INTO public.competencias (id_anio, id_grupo, id_materia, id_periodo, descripcion, id_colegio)
 SELECT
-  p."id_año",
+  p.id_anio,
   dg.id_grupo,
   dg.id_materia,
   p.id_periodo,
@@ -157,7 +157,7 @@ JOIN public.periodo_academico p ON p.id_colegio = dg.id_colegio
 WHERE p.estado = 'CERRADO'
   AND NOT EXISTS (
     SELECT 1 FROM public.competencias c
-    WHERE c.id_año = p."id_año"
+    WHERE c.id_anio = p.id_anio
       AND c.id_grupo = dg.id_grupo
       AND c.id_materia = dg.id_materia
       AND c.id_periodo = p.id_periodo
@@ -172,7 +172,7 @@ WITH activity_targets AS (
   JOIN public.detalle_grados dg ON dg.id_detallegrado = a.id_detallegrado
   JOIN public.periodo_academico p ON p.id_periodo = a.id_periodo
   JOIN public.competencias c
-    ON c.id_año = p."id_año"
+    ON c.id_anio = p.id_anio
    AND c.id_grupo = dg.id_grupo
    AND c.id_materia = dg.id_materia
    AND c.id_periodo = a.id_periodo
@@ -229,12 +229,12 @@ const enrollmentConfigMigrationSql = `
 CREATE TABLE IF NOT EXISTS public.configuracion_inscripcion (
   id_configuracion  SERIAL PRIMARY KEY,
   id_colegio        INTEGER NOT NULL REFERENCES public.colegio(id_colegio) ON DELETE CASCADE,
-  id_año            INTEGER NOT NULL REFERENCES public."año_lectivo"("id_año") ON DELETE CASCADE,
+  id_anio            INTEGER NOT NULL REFERENCES public.anio_lectivo(id_anio) ON DELETE CASCADE,
   fecha_inicio      TIMESTAMP WITH TIME ZONE NOT NULL,
   fecha_cierre      TIMESTAMP WITH TIME ZONE NOT NULL,
   habilitada        BOOLEAN NOT NULL DEFAULT TRUE,
   CONSTRAINT chk_fechas CHECK (fecha_cierre > fecha_inicio),
-  CONSTRAINT uq_colegio_anio UNIQUE (id_colegio, id_año)
+  CONSTRAINT uq_colegio_anio UNIQUE (id_colegio, id_anio)
 );
 
 DO $$
@@ -303,7 +303,7 @@ export const ensureCompetencySchema = async (): Promise<void> => {
 
     // Dynamic database modifications moved from controllers to server startup
     await client.query(`
-      ALTER TABLE "año_lectivo"
+      ALTER TABLE anio_lectivo
       ADD COLUMN IF NOT EXISTS estado VARCHAR(20) DEFAULT 'ABIERTO'
     `);
 
@@ -370,10 +370,10 @@ export const ensureCompetencySchema = async (): Promise<void> => {
 
     // Backfill sync_uuid for existing competencies
     const unmigratedRes = await client.query(`
-      SELECT id_colegio, "id_año", id_materia, id_periodo, descripcion, ARRAY_AGG(id_competencia) AS ids
+      SELECT id_colegio, id_anio, id_materia, id_periodo, descripcion, ARRAY_AGG(id_competencia) AS ids
       FROM public.competencias
       WHERE sync_uuid IS NULL
-      GROUP BY id_colegio, "id_año", id_materia, id_periodo, descripcion
+      GROUP BY id_colegio, id_anio, id_materia, id_periodo, descripcion
     `);
     for (const group of unmigratedRes.rows) {
       const uuid = randomUUID();
@@ -402,7 +402,7 @@ export interface TeachingContext {
 
 export interface CompetencyRow {
   id_competencia: number;
-  id_año: number;
+  id_anio: number;
   id_grupo: number;
   id_materia: number;
   id_periodo: number;
@@ -540,7 +540,7 @@ export const syncCompetencyAcrossGrade = async (
         );
       } else {
         syncedRes = await client.query<CompetencyRow>(
-          `INSERT INTO public.competencias (id_año, id_grupo, id_materia, id_periodo, descripcion, id_colegio, sync_uuid)
+          `INSERT INTO public.competencias (id_anio, id_grupo, id_materia, id_periodo, descripcion, id_colegio, sync_uuid)
            VALUES ($1, $2, $3, $4, $5, $6, $7)
            RETURNING *`,
           [context.idAnio, peerGroupId, context.idMateria, periodId, sharedDescription, context.idColegio, syncUuid]
@@ -550,7 +550,7 @@ export const syncCompetencyAcrossGrade = async (
     } else {
       // Creación: Insertar en todos los grupos paralelos
       syncedRes = await client.query<CompetencyRow>(
-        `INSERT INTO public.competencias (id_año, id_grupo, id_materia, id_periodo, descripcion, id_colegio, sync_uuid)
+        `INSERT INTO public.competencias (id_anio, id_grupo, id_materia, id_periodo, descripcion, id_colegio, sync_uuid)
          VALUES ($1, $2, $3, $4, $5, $6, $7)
          RETURNING *`,
         [context.idAnio, peerGroupId, context.idMateria, periodId, sharedDescription, context.idColegio, syncUuid]
@@ -585,7 +585,7 @@ export const harmonizeCompetenciesForSchoolYear = async (
   }>(
     `SELECT DISTINCT ON (c.sync_uuid) c.sync_uuid, c.id_grupo, c.id_materia, c.id_periodo, c.descripcion
      FROM public.competencias c
-     WHERE c.id_colegio = $1 AND c.id_año = $2 AND c.sync_uuid IS NOT NULL`,
+     WHERE c.id_colegio = $1 AND c.id_anio = $2 AND c.sync_uuid IS NOT NULL`,
     [schoolId, yearId]
   );
 
@@ -598,7 +598,7 @@ export const harmonizeCompetenciesForSchoolYear = async (
       );
       if (existCheck.rows.length === 0) {
         const insertRes = await client.query(
-          `INSERT INTO public.competencias (id_año, id_grupo, id_materia, id_periodo, descripcion, id_colegio, sync_uuid)
+          `INSERT INTO public.competencias (id_anio, id_grupo, id_materia, id_periodo, descripcion, id_colegio, sync_uuid)
            VALUES ($1, $2, $3, $4, $5, $6, $7)
            RETURNING id_competencia`,
           [yearId, peerGroupId, row.id_materia, row.id_periodo, row.descripcion, schoolId, row.sync_uuid]

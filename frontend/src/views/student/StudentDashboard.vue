@@ -73,7 +73,7 @@ const fetchStudentData = async () => {
         // Default to current calendar year match, or first in list
         const currentYearStr = new Date().getFullYear().toString()
         const matchingYear = academicYears.value.find((y: any) => y.calendario === currentYearStr)
-        selectedYearId.value = matchingYear ? matchingYear['id_año'] : academicYears.value[0]['id_año']
+        selectedYearId.value = matchingYear ? matchingYear['id_anio'] : academicYears.value[0]['id_anio']
         // loadPeriodsForYear will be triggered by the watcher
       } else {
         statsLoading.value = false
@@ -278,7 +278,7 @@ const hasObservations = computed(() => {
                 class="bg-transparent text-white text-sm font-bold outline-none cursor-pointer appearance-none pr-6"
                 style="background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22white%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C/polyline%3E%3C/svg%3E'); background-repeat: no-repeat; background-position: right center; background-size: 1.2em;"
               >
-                <option v-for="y in academicYears" :key="y['id_año']" :value="y['id_año']" class="text-slate-900">
+                <option v-for="y in academicYears" :key="y['id_anio']" :value="y['id_anio']" class="text-slate-900">
                   Año {{ y.calendario }}
                 </option>
               </select>

@@ -37,16 +37,16 @@ export const getStudentBoletin = async (req: Request, res: Response) => {
   try {
     // 1. Check if period is closed
     const periodRes = await pool.query(
-      `SELECT estado, nombre, porcentaje, "id_año", id_colegio, trimestre FROM periodo_academico WHERE id_periodo = $1`,
+      `SELECT estado, nombre, porcentaje, id_anio, id_colegio, trimestre FROM periodo_academico WHERE id_periodo = $1`,
       [id_periodo]
     );
     console.log('[getStudentBoletin] Period query result:', periodRes.rows);
     if (!periodRes.rows.length || periodRes.rows[0].estado !== 'CERRADO') {
       console.log('[getStudentBoletin] Rejection: Period is not closed or not found');
-      return res.status(400).json({ error: 'No se puede generar el boletín en un periodo abierto' });
+      return res.status(400).json({ error: 'No hay suficientes registros académicos para generar el boletín. Deberá esperar hasta el cierre de periodo.' });
     }
     const periodoDetails = periodRes.rows[0];
-    const idAnio = periodoDetails["id_año"] || periodoDetails["id_año".toLowerCase()];
+    const idAnio = periodoDetails.id_anio;
 
 
     // 2. Fetch Student Info (including school calendar type)
@@ -65,7 +65,7 @@ export const getStudentBoletin = async (req: Request, res: Response) => {
       LEFT JOIN jornada j ON j.id_jornada = gr.id_jornada
       LEFT JOIN grados g ON g.id_jornada = gr.id_jornada AND g.id_colegio = gr.id_colegio AND g.seccion = gr.id_seccion::varchar
       LEFT JOIN tipo_grado tg ON tg.id_tipo_grado = gr.id_tipo_grado
-      LEFT JOIN "año_lectivo" al ON al.id_colegio = c.id_colegio AND al."id_año" = $2
+      LEFT JOIN anio_lectivo al ON al.id_colegio = c.id_colegio AND al.id_anio = $2
       WHERE e.id_estudiante = $1
       LIMIT 1
     `, [id_estudiante, idAnio || new Date().getFullYear()]);
@@ -96,7 +96,7 @@ export const getStudentBoletin = async (req: Request, res: Response) => {
         COALESCE(ra.promedio, calc.promedio_calculado) AS calificacion,
         ev.nivel AS desempeno
       FROM detalle_grados dg
-      JOIN periodo_academico p ON p."id_año" = $2 AND p.id_colegio = dg.id_colegio
+      JOIN periodo_academico p ON p.id_anio = $2 AND p.id_colegio = dg.id_colegio
       LEFT JOIN resultado_academico ra ON ra.id_detallegrado = dg.id_detallegrado AND ra.id_periodo = p.id_periodo AND ra.id_estudiante = $1
       LEFT JOIN (
         SELECT am.id_detallegrado, am.id_periodo, ROUND(AVG(na.nota)::numeric, 2) as promedio_calculado

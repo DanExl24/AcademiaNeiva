@@ -25,9 +25,9 @@ const ensureTeacherStatusColumn = async () => {};
 
 const autoSwitchPeriodsForYear = async (client: any, schoolId: number, yearId: number): Promise<void> => {
   const yearRes = await client.query(
-    `SELECT "id_año", calendario, tipo_calendario
-     FROM "año_lectivo"
-     WHERE "id_año" = $1 AND id_colegio = $2`,
+    `SELECT id_anio, calendario, tipo_calendario
+     FROM anio_lectivo
+     WHERE id_anio = $1 AND id_colegio = $2`,
     [yearId, schoolId]
   );
   if (!yearRes.rows.length) return;
@@ -37,7 +37,7 @@ const autoSwitchPeriodsForYear = async (client: any, schoolId: number, yearId: n
   const periodsRes = await client.query(
     `SELECT id_periodo, nombre, estado, porcentaje, trimestre, mes_inicio, dia_inicio, mes_fin, dia_fin
      FROM periodo_academico
-     WHERE id_colegio = $1 AND "id_año" = $2
+     WHERE id_colegio = $1 AND id_anio = $2
      ORDER BY trimestre ASC, id_periodo ASC`,
     [schoolId, yearId]
   );
@@ -110,41 +110,41 @@ const autoSwitchPeriodsForYear = async (client: any, schoolId: number, yearId: n
 
 const ensureAcademicYearForSchool = async (schoolId: number): Promise<number> => {
   const existing = await pool.query(
-    `SELECT "id_año"
-     FROM "año_lectivo"
+    `SELECT id_anio
+     FROM anio_lectivo
      WHERE id_colegio = $1 AND estado = 'ABIERTO'
-     ORDER BY "id_año" DESC
+     ORDER BY id_anio DESC
      LIMIT 1`,
     [schoolId]
   );
 
   if (existing.rows.length > 0) {
-    return Number(existing.rows[0]["id_año"]);
+    return Number(existing.rows[0].id_anio);
   }
 
   // Fallback to highest year regardless of state if none are open
   const fallback = await pool.query(
-    `SELECT "id_año"
-     FROM "año_lectivo"
+    `SELECT id_anio
+     FROM anio_lectivo
      WHERE id_colegio = $1
-     ORDER BY "id_año" DESC
+     ORDER BY id_anio DESC
      LIMIT 1`,
     [schoolId]
   );
 
   if (fallback.rows.length > 0) {
-    return Number(fallback.rows[0]["id_año"]);
+    return Number(fallback.rows[0].id_anio);
   }
 
   const currentYear = new Date().getFullYear();
   const created = await pool.query(
-    `INSERT INTO "año_lectivo" (calendario, id_colegio, tipo_calendario, estado)
+    `INSERT INTO anio_lectivo (calendario, id_colegio, tipo_calendario, estado)
      VALUES ($1, $2, 'A', 'ABIERTO')
-     RETURNING "id_año"`,
+     RETURNING id_anio`,
     [String(currentYear), schoolId]
   );
 
-  return Number(created.rows[0]["id_año"]);
+  return Number(created.rows[0].id_anio);
 };
 
 const ensureSchoolSettingsTable = async () => {};
@@ -866,22 +866,22 @@ export const getAcademicSettingsData = async (req: Request, res: Response): Prom
 
     const [yearRes, academicYearsRes, defaultSettingsRes, periodsRes, scalesRes, assignmentsRes, competenciesRes, closureSummaryRes] = await Promise.all([
       pool.query(
-        `SELECT "id_año", calendario, tipo_calendario, estado
-         FROM "año_lectivo"
-         WHERE "id_año" = $1
+        `SELECT id_anio, calendario, tipo_calendario, estado
+         FROM anio_lectivo
+         WHERE id_anio = $1
            AND id_colegio = $2`,
         [currentYearId, schoolId]
       ),
       pool.query(
-        `SELECT "id_año", calendario, tipo_calendario, estado
-         FROM "año_lectivo"
+        `SELECT id_anio, calendario, tipo_calendario, estado
+         FROM anio_lectivo
          WHERE id_colegio = $1
-         ORDER BY "id_año" DESC`,
+         ORDER BY id_anio DESC`,
         [schoolId]
       ),
       ensureSchoolDefaultSettings(schoolId),
       pool.query(
-        `SELECT id_periodo, nombre, estado, porcentaje, trimestre, dia_inicio, dia_fin, mes_inicio, mes_fin, "id_año"
+        `SELECT id_periodo, nombre, estado, porcentaje, trimestre, dia_inicio, dia_fin, mes_inicio, mes_fin, id_anio
          FROM periodo_academico
          WHERE id_colegio = $1
          ORDER BY id_periodo`,
@@ -1036,7 +1036,7 @@ export const createAcademicPeriod = async (req: Request, res: Response): Promise
   const diaInicio = Number(req.body.dia_inicio);
   const mesFin = Number(req.body.mes_fin);
   const diaFin = Number(req.body.dia_fin);
-  const targetYearId = req.body.id_año ? Number(req.body.id_año) : null;
+  const targetYearId = req.body.id_anio ? Number(req.body.id_anio) : null;
   const estadoInput = req.body.estado;
   const estado = (estadoInput === 'ABIERTO' || estadoInput === 'CERRADO' || estadoInput === 'PENDIENTE') ? estadoInput : 'PENDIENTE';
   const { motivo_cambio } = req.body;
@@ -1073,7 +1073,7 @@ export const createAcademicPeriod = async (req: Request, res: Response): Promise
 
     // Get school year info for calendar type
     const yearRes = await client.query(
-      `SELECT tipo_calendario FROM "año_lectivo" WHERE "id_año" = $1 AND id_colegio = $2`,
+      `SELECT tipo_calendario FROM anio_lectivo WHERE id_anio = $1 AND id_colegio = $2`,
       [finalYearId, schoolId]
     );
     const calendarType = yearRes.rows[0]?.tipo_calendario || 'A';
@@ -1082,7 +1082,7 @@ export const createAcademicPeriod = async (req: Request, res: Response): Promise
     const otherPeriodsRes = await client.query(
       `SELECT id_periodo, nombre, mes_inicio, dia_inicio, mes_fin, dia_fin
        FROM periodo_academico
-       WHERE id_colegio = $1 AND "id_año" = $2`,
+       WHERE id_colegio = $1 AND id_anio = $2`,
       [schoolId, finalYearId]
     );
 
@@ -1124,7 +1124,7 @@ export const createAcademicPeriod = async (req: Request, res: Response): Promise
       const activePeriodRes = await client.query(
         `SELECT id_periodo, nombre, mes_inicio, mes_fin, dia_inicio, dia_fin
          FROM periodo_academico
-         WHERE id_colegio = $1 AND "id_año" = $2 AND estado = 'ABIERTO'
+         WHERE id_colegio = $1 AND id_anio = $2 AND estado = 'ABIERTO'
          LIMIT 1`,
         [schoolId, finalYearId]
       );
@@ -1147,7 +1147,7 @@ export const createAcademicPeriod = async (req: Request, res: Response): Promise
     const totalsRes = await client.query(
       `SELECT COALESCE(SUM(porcentaje), 0)::numeric AS total
        FROM periodo_academico
-       WHERE id_colegio = $1 AND "id_año" = $2`,
+       WHERE id_colegio = $1 AND id_anio = $2`,
       [schoolId, finalYearId]
     );
 
@@ -1164,7 +1164,7 @@ export const createAcademicPeriod = async (req: Request, res: Response): Promise
       `SELECT id_periodo
        FROM periodo_academico
        WHERE id_colegio = $1
-         AND "id_año" = $2
+         AND id_anio = $2
          AND UPPER(TRIM(nombre)) = UPPER(TRIM($3))`,
       [schoolId, finalYearId, nombre]
     );
@@ -1179,15 +1179,15 @@ export const createAcademicPeriod = async (req: Request, res: Response): Promise
     const maxTrimestreRes = await client.query(
       `SELECT COALESCE(MAX(trimestre), 0) as max_trim
        FROM periodo_academico
-       WHERE id_colegio = $1 AND "id_año" = $2`,
+       WHERE id_colegio = $1 AND id_anio = $2`,
       [schoolId, finalYearId]
     );
     const nextTrimestre = Number(maxTrimestreRes.rows[0].max_trim) + 1;
 
     const created = await pool.query(
-      `INSERT INTO periodo_academico (nombre, estado, porcentaje, mes_inicio, dia_inicio, mes_fin, dia_fin, "id_año", id_colegio, trimestre)
+      `INSERT INTO periodo_academico (nombre, estado, porcentaje, mes_inicio, dia_inicio, mes_fin, dia_fin, id_anio, id_colegio, trimestre)
        VALUES ($1, $2::estado_periodo, $3, $4, $5, $6, $7, $8, $9, $10)
-       RETURNING id_periodo, nombre, estado, porcentaje, mes_inicio, dia_inicio, mes_fin, dia_fin, "id_año", trimestre`,
+       RETURNING id_periodo, nombre, estado, porcentaje, mes_inicio, dia_inicio, mes_fin, dia_fin, id_anio, trimestre`,
       [nombre, estado, porcentaje, mesInicio, diaInicio, mesFin, diaFin, finalYearId, schoolId, nextTrimestre]
     );
 
@@ -1232,7 +1232,7 @@ export const createAcademicPeriod = async (req: Request, res: Response): Promise
 
 export const createAcademicYear = async (req: Request, res: Response): Promise<void> => {
   const schoolId = parseSchoolId(req.body.schoolId);
-  const yearId = Number(req.body.id_año);
+  const yearId = Number(req.body.id_anio);
   const calendario = String(req.body.calendario || "A").trim().toUpperCase();
 
   if (!schoolId || Number.isNaN(yearId) || yearId < 2000 || yearId > 2100) {
@@ -1252,8 +1252,8 @@ export const createAcademicYear = async (req: Request, res: Response): Promise<v
     const yearLabel = getAcademicYearLabel(yearId, calendario as "A" | "B");
 
     const duplicateRes = await client.query(
-      `SELECT "id_año"
-       FROM "año_lectivo"
+      `SELECT id_anio
+       FROM anio_lectivo
        WHERE calendario = $1
          AND id_colegio = $2`,
       [yearLabel, schoolId]
@@ -1266,13 +1266,13 @@ export const createAcademicYear = async (req: Request, res: Response): Promise<v
     }
 
     const createdYear = await client.query(
-      `INSERT INTO "año_lectivo" (calendario, id_colegio, tipo_calendario)
+      `INSERT INTO anio_lectivo (calendario, id_colegio, tipo_calendario)
        VALUES ($1, $2, $3)
-       RETURNING "id_año", calendario, tipo_calendario`,
+       RETURNING id_anio, calendario, tipo_calendario`,
       [yearLabel, schoolId, calendario]
     );
 
-    const newYearId = Number(createdYear.rows[0]["id_año"]);
+    const newYearId = Number(createdYear.rows[0].id_anio);
 
     // Auto-generate standard periods based on chosen calendar type
     const periodsTemplate = calendario === "A" ? [
@@ -1290,7 +1290,7 @@ export const createAcademicYear = async (req: Request, res: Response): Promise<v
     const generatedPeriods = [];
     for (const p of periodsTemplate) {
       const pRes = await client.query(
-        `INSERT INTO periodo_academico (nombre, estado, porcentaje, mes_inicio, dia_inicio, mes_fin, dia_fin, "id_año", id_colegio, trimestre)
+        `INSERT INTO periodo_academico (nombre, estado, porcentaje, mes_inicio, dia_inicio, mes_fin, dia_fin, id_anio, id_colegio, trimestre)
          VALUES ($1, 'CERRADO', $2, $3, $4, $5, $6, $7, $8, $9)
          RETURNING id_periodo, nombre, estado, porcentaje, mes_inicio, dia_inicio, mes_fin, dia_fin, trimestre`,
         [p.nombre, p.porcentaje, p.mes_inicio, p.dia_inicio, p.mes_fin, p.dia_fin, newYearId, schoolId, p.trimestre]
@@ -1303,7 +1303,7 @@ export const createAcademicYear = async (req: Request, res: Response): Promise<v
     const updatedPeriodsRes = await client.query(
       `SELECT id_periodo, nombre, estado, porcentaje, mes_inicio, dia_inicio, mes_fin, dia_fin, trimestre
        FROM periodo_academico
-       WHERE "id_año" = $1 AND id_colegio = $2
+       WHERE id_anio = $1 AND id_colegio = $2
        ORDER BY id_periodo`,
       [newYearId, schoolId]
     );
@@ -1341,7 +1341,7 @@ export const deleteAcademicYear = async (req: Request, res: Response): Promise<v
     const matriculaCheck = await client.query(
       `SELECT id_matricula
        FROM matricula
-       WHERE "id_año" = $1 AND id_colegio = $2
+       WHERE id_anio = $1 AND id_colegio = $2
        LIMIT 1`,
       [yearId, schoolId]
     );
@@ -1357,14 +1357,14 @@ export const deleteAcademicYear = async (req: Request, res: Response): Promise<v
     // Delete associated periods first
     await client.query(
       `DELETE FROM periodo_academico
-       WHERE "id_año" = $1 AND id_colegio = $2`,
+       WHERE id_anio = $1 AND id_colegio = $2`,
       [yearId, schoolId]
     );
 
     // Delete the year
     await client.query(
-      `DELETE FROM "año_lectivo"
-       WHERE "id_año" = $1 AND id_colegio = $2`,
+      `DELETE FROM anio_lectivo
+       WHERE id_anio = $1 AND id_colegio = $2`,
       [yearId, schoolId]
     );
 
@@ -1391,10 +1391,10 @@ export const updateAcademicYearStatus = async (req: Request, res: Response): Pro
 
   try {
     const resUpdate = await pool.query(
-      `UPDATE "año_lectivo"
+      `UPDATE anio_lectivo
        SET estado = $1
-       WHERE "id_año" = $2 AND id_colegio = $3
-       RETURNING "id_año", calendario, tipo_calendario, estado`,
+       WHERE id_anio = $2 AND id_colegio = $3
+       RETURNING id_anio, calendario, tipo_calendario, estado`,
       [nuevoEstado, yearId, schoolId]
     );
 
@@ -1600,7 +1600,7 @@ export const upsertCompetencyByAdmin = async (req: Request, res: Response): Prom
 
   try {
     const contextRes = await pool.query(
-      `SELECT p."id_año", p.estado
+      `SELECT p.id_anio, p.estado
        FROM periodo_academico p
        WHERE p.id_periodo = $1
          AND p.id_colegio = $2`,
@@ -1624,7 +1624,7 @@ export const upsertCompetencyByAdmin = async (req: Request, res: Response): Prom
         idGrupo: groupId,
         idMateria: subjectId,
         idColegio: schoolId,
-        idAnio: Number(contextRes.rows[0]["id_año"]),
+        idAnio: Number(contextRes.rows[0].id_anio),
       };
 
       await client.query("BEGIN");
@@ -1637,7 +1637,7 @@ export const upsertCompetencyByAdmin = async (req: Request, res: Response): Prom
           `SELECT id_competencia 
            FROM competencias 
            WHERE id_colegio = $1 
-             AND id_año = $2 
+             AND id_anio = $2 
              AND id_materia = $3 
              AND id_periodo = $4 
              AND id_grupo IN (
@@ -1646,7 +1646,7 @@ export const upsertCompetencyByAdmin = async (req: Request, res: Response): Prom
                JOIN grupos g2 ON g2.id_nivel = g1.id_nivel AND g2.id_tipo_grado = g1.id_tipo_grado
                WHERE g1.id_grupo = $5 AND g1.id_colegio = $1
              )`,
-          [schoolId, created.id_año, created.id_materia, created.id_periodo, created.id_grupo]
+          [schoolId, created.id_anio, created.id_materia, created.id_periodo, created.id_grupo]
         );
         const sisterCompIds = sisterCompsRes.rows.map(r => r.id_competencia);
 
@@ -1665,7 +1665,7 @@ export const upsertCompetencyByAdmin = async (req: Request, res: Response): Prom
              JOIN competencias c ON c.id_competencia = ea.id_competencia
              JOIN periodo_academico p ON p.id_periodo = c.id_periodo
              WHERE c.id_colegio = $1
-               AND c.id_año = $2
+               AND c.id_anio = $2
                AND c.id_materia = $3
                AND c.id_grupo IN (
                  SELECT g2.id_grupo
@@ -1675,7 +1675,7 @@ export const upsertCompetencyByAdmin = async (req: Request, res: Response): Prom
                )
                AND c.id_periodo != $5
                AND ea.id_evidencia_dba = ANY($6::int[])`,
-            [schoolId, created.id_año, created.id_materia, created.id_grupo, periodId, idEvidenciasDba]
+            [schoolId, created.id_anio, created.id_materia, created.id_grupo, periodId, idEvidenciasDba]
           );
 
           if (alreadyAssignedRes.rows.length > 0) {
@@ -1974,7 +1974,7 @@ export const updateAcademicPeriodPercentage = async (req: Request, res: Response
 
     // Get current period data
     const periodRes = await client.query(
-      `SELECT id_periodo, nombre, estado, porcentaje, mes_inicio, dia_inicio, mes_fin, dia_fin, "id_año"
+      `SELECT id_periodo, nombre, estado, porcentaje, mes_inicio, dia_inicio, mes_fin, dia_fin, id_anio
        FROM periodo_academico
        WHERE id_periodo = $1 AND id_colegio = $2`,
       [periodId, schoolId]
@@ -1990,8 +1990,8 @@ export const updateAcademicPeriodPercentage = async (req: Request, res: Response
 
     // Get school year info for calendar type
     const yearRes = await client.query(
-      `SELECT tipo_calendario FROM "año_lectivo" WHERE "id_año" = $1 AND id_colegio = $2`,
-      [period.id_año, schoolId]
+      `SELECT tipo_calendario FROM anio_lectivo WHERE id_anio = $1 AND id_colegio = $2`,
+      [period.id_anio, schoolId]
     );
     const calendarType = yearRes.rows[0]?.tipo_calendario || 'A';
 
@@ -1999,8 +1999,8 @@ export const updateAcademicPeriodPercentage = async (req: Request, res: Response
     const otherPeriodsRes = await client.query(
       `SELECT id_periodo, nombre, mes_inicio, dia_inicio, mes_fin, dia_fin, estado
        FROM periodo_academico
-       WHERE id_colegio = $1 AND "id_año" = $2 AND id_periodo != $3`,
-      [schoolId, period.id_año, periodId]
+       WHERE id_colegio = $1 AND id_anio = $2 AND id_periodo != $3`,
+      [schoolId, period.id_anio, periodId]
     );
 
     const getNormalizedDateVal = (month: number, day: number, calType: string) => {
@@ -2041,9 +2041,9 @@ export const updateAcademicPeriodPercentage = async (req: Request, res: Response
       const activePeriodRes = await client.query(
         `SELECT id_periodo, nombre, mes_inicio, mes_fin, dia_inicio, dia_fin
          FROM periodo_academico
-         WHERE id_colegio = $1 AND "id_año" = $2 AND estado = 'ABIERTO' AND id_periodo != $3
+         WHERE id_colegio = $1 AND id_anio = $2 AND estado = 'ABIERTO' AND id_periodo != $3
          LIMIT 1`,
-        [schoolId, period.id_año, periodId]
+        [schoolId, period.id_anio, periodId]
       );
 
       if (activePeriodRes.rows.length > 0) {
@@ -2065,8 +2065,8 @@ export const updateAcademicPeriodPercentage = async (req: Request, res: Response
     const totalsRes = await client.query(
       `SELECT COALESCE(SUM(porcentaje), 0)::numeric AS total
        FROM periodo_academico
-       WHERE id_colegio = $1 AND "id_año" = $2 AND id_periodo != $3`,
-      [schoolId, period.id_año, periodId]
+       WHERE id_colegio = $1 AND id_anio = $2 AND id_periodo != $3`,
+      [schoolId, period.id_anio, periodId]
     );
     const otherTotal = Number(totalsRes.rows[0].total);
     if (otherTotal + porcentaje > 100) {
@@ -2108,7 +2108,7 @@ export const updateAcademicPeriodPercentage = async (req: Request, res: Response
            mes_fin = $4,
            dia_fin = $5
        WHERE id_periodo = $6 AND id_colegio = $7
-       RETURNING id_periodo, nombre, estado, porcentaje, mes_inicio, dia_inicio, mes_fin, dia_fin, "id_año"`,
+       RETURNING id_periodo, nombre, estado, porcentaje, mes_inicio, dia_inicio, mes_fin, dia_fin, id_anio`,
       [porcentaje, mesInicio, diaInicio, mesFin, diaFin, periodId, schoolId]
     );
 
@@ -2164,7 +2164,7 @@ export const approveAcademicPeriod = async (req: Request, res: Response): Promis
 
     // 1. Get current period
     const periodRes = await client.query(
-      `SELECT id_periodo, nombre, estado, "id_año", trimestre
+      `SELECT id_periodo, nombre, estado, id_anio, trimestre
        FROM periodo_academico
        WHERE id_periodo = $1 AND id_colegio = $2`,
       [periodId, schoolId]
@@ -2187,10 +2187,10 @@ export const approveAcademicPeriod = async (req: Request, res: Response): Promis
     const previousPeriodRes = await client.query(
       `SELECT id_periodo, nombre, estado
        FROM periodo_academico
-       WHERE id_colegio = $1 AND "id_año" = $2 AND trimestre < $3
+       WHERE id_colegio = $1 AND id_anio = $2 AND trimestre < $3
        ORDER BY trimestre DESC
        LIMIT 1`,
-      [schoolId, period.id_año, period.trimestre]
+      [schoolId, period.id_anio, period.trimestre]
     );
 
     if (previousPeriodRes.rows.length > 0) {
@@ -2230,8 +2230,8 @@ export const approveAcademicPeriod = async (req: Request, res: Response): Promis
     await client.query(
       `UPDATE periodo_academico
        SET estado = 'CERRADO'
-       WHERE id_colegio = $1 AND "id_año" = $2 AND estado = 'ABIERTO'`,
-      [schoolId, period.id_año]
+       WHERE id_colegio = $1 AND id_anio = $2 AND estado = 'ABIERTO'`,
+      [schoolId, period.id_anio]
     );
 
     // 5. Activate this period
@@ -2851,8 +2851,8 @@ export const createSubject = async (req: Request, res: Response): Promise<void> 
         if (backup.competencies && Array.isArray(backup.competencies)) {
           for (const comp of backup.competencies) {
             await client.query(
-              'INSERT INTO competencias (descripcion, id_materia, id_periodo, "id_año", id_grupo, id_colegio) VALUES ($1, $2, $3, $4, $5, $6)',
-              [comp.descripcion, newSubjectId, comp.id_periodo, comp.id_año, comp.id_grupo, schoolId]
+              'INSERT INTO competencias (descripcion, id_materia, id_periodo, id_anio, id_grupo, id_colegio) VALUES ($1, $2, $3, $4, $5, $6)',
+              [comp.descripcion, newSubjectId, comp.id_periodo, comp.id_anio, comp.id_grupo, schoolId]
             );
           }
         }
@@ -2947,7 +2947,7 @@ export const deleteSubject = async (req: Request, res: Response): Promise<void> 
       `, [subjectId]);
 
       const competenciesBackupRes = await client.query(`
-        SELECT DISTINCT descripcion, id_periodo, id_año, id_grupo
+        SELECT DISTINCT descripcion, id_periodo, id_anio, id_grupo
         FROM competencias
         WHERE id_materia = $1
       `, [subjectId]);
@@ -3318,7 +3318,7 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
     let targetPeriodId = periodId ? Number(periodId) : null;
     if (!targetPeriodId) {
       const activePeriodRes = await pool.query(
-        `SELECT id_periodo FROM periodo_academico WHERE id_colegio = $1 AND "id_año" = $2 AND estado = 'ABIERTO' ORDER BY id_periodo DESC LIMIT 1`,
+        `SELECT id_periodo FROM periodo_academico WHERE id_colegio = $1 AND id_anio = $2 AND estado = 'ABIERTO' ORDER BY id_periodo DESC LIMIT 1`,
         [schoolId, targetYearId]
       );
       if (activePeriodRes.rows.length > 0) {
@@ -3326,7 +3326,7 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
       } else {
         // Fallback to the most recent period in this year even if not open
         const lastPeriodRes = await pool.query(
-          `SELECT id_periodo FROM periodo_academico WHERE id_colegio = $1 AND "id_año" = $2 ORDER BY id_periodo DESC LIMIT 1`,
+          `SELECT id_periodo FROM periodo_academico WHERE id_colegio = $1 AND id_anio = $2 ORDER BY id_periodo DESC LIMIT 1`,
           [schoolId, targetYearId]
         );
         targetPeriodId = lastPeriodRes.rows.length > 0 ? lastPeriodRes.rows[0].id_periodo : null;
@@ -3338,7 +3338,7 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
       studentsCountRes, teachersCountRes, disciplinaryRes, desertionRes,
       studentsByGradeRes, teachersByGradeRes, disciplinaryByGradeRes, desertionByGradeRes
     ] = await Promise.all([
-      pool.query(`SELECT COUNT(*) as total FROM matricula WHERE id_colegio = $1 AND "id_año" = $2 AND estado = 'ACTIVA'`, [schoolId, targetYearId]),
+      pool.query(`SELECT COUNT(*) as total FROM matricula WHERE id_colegio = $1 AND id_anio = $2 AND estado = 'ACTIVA'`, [schoolId, targetYearId]),
       pool.query("SELECT COUNT(*) as total FROM docente WHERE id_colegio = $1 AND estado = 'ACTIVO'", [schoolId]),
       pool.query(
         `SELECT COUNT(*) as total FROM observacion_estudiante 
@@ -3346,7 +3346,7 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
         targetPeriodId ? [schoolId, targetPeriodId] : [schoolId]
       ),
       pool.query(
-        `SELECT COUNT(*) as total FROM matricula WHERE id_colegio = $1 AND "id_año" = $2 AND estado = 'CANCELADA'`,
+        `SELECT COUNT(*) as total FROM matricula WHERE id_colegio = $1 AND id_anio = $2 AND estado = 'CANCELADA'`,
         [schoolId, targetYearId]
       ),
       pool.query(
@@ -3354,7 +3354,7 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
          FROM matricula m
          JOIN grupos g ON m.id_grupo = g.id_grupo
          JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
-         WHERE m.id_colegio = $1 AND m."id_año" = $2 AND m.estado = 'ACTIVA'
+         WHERE m.id_colegio = $1 AND m.id_anio = $2 AND m.estado = 'ACTIVA'
          GROUP BY tg.nombre`,
         [schoolId, targetYearId]
       ),
@@ -3371,7 +3371,7 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
         `SELECT tg.nombre as grade, COUNT(o.id_observacion)::int as total
          FROM observacion_estudiante o
          JOIN estudiante e ON o.id_estudiante = e.id_estudiante
-         JOIN matricula m ON e.id_estudiante = m.id_estudiante AND m."id_año" = $2
+         JOIN matricula m ON e.id_estudiante = m.id_estudiante AND m.id_anio = $2
          JOIN grupos g ON m.id_grupo = g.id_grupo
          JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
          WHERE o.id_colegio = $1 AND o.tipo = 'DISCIPLINARIA' AND m.estado = 'ACTIVA' ${targetPeriodId ? "AND o.id_periodo = $3" : ""}
@@ -3383,7 +3383,7 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
          FROM matricula m
          JOIN grupos g ON m.id_grupo = g.id_grupo
          JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
-         WHERE m.id_colegio = $1 AND m."id_año" = $2 AND m.estado = 'CANCELADA'
+         WHERE m.id_colegio = $1 AND m.id_anio = $2 AND m.estado = 'CANCELADA'
          GROUP BY tg.nombre`,
         [schoolId, targetYearId]
       )
@@ -3404,7 +3404,7 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
          tg.nombre as grade,
          (COUNT(*) FILTER (WHERE ra.estado = 'PRESENTE')::numeric / NULLIF(COUNT(*), 0) * 100) as rate
        FROM registro_asistencia ra
-       JOIN matricula m ON ra.id_estudiante = m.id_estudiante AND m."id_año" = $3
+       JOIN matricula m ON ra.id_estudiante = m.id_estudiante AND m.id_anio = $3
        JOIN grupos g ON m.id_grupo = g.id_grupo
        JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
        WHERE ra.id_colegio = $1 AND ra.fecha::date = $2::date AND m.estado = 'ACTIVA'
@@ -3608,7 +3608,7 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
        FROM resultado_academico ra
        JOIN periodo_academico p ON ra.id_periodo = p.id_periodo
        JOIN detalle_grados dg ON ra.id_detallegrado = dg.id_detallegrado
-       WHERE dg.id_colegio = $1 AND p."id_año" = $2
+       WHERE dg.id_colegio = $1 AND p.id_anio = $2
        GROUP BY p.id_periodo, p.nombre
        ORDER BY p.id_periodo`,
       [schoolId, targetYearId]
@@ -3630,7 +3630,7 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
        JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
        JOIN secciones s ON g.id_seccion = s.id_seccion
        JOIN jornada j ON g.id_jornada = j.id_jornada
-       WHERE dg.id_colegio = $1 AND p."id_año" = $2
+       WHERE dg.id_colegio = $1 AND p.id_anio = $2
        GROUP BY p.id_periodo, p.nombre, g.id_grupo, tg.nombre, s.nombre, j.nombre
         ORDER BY p.id_periodo, tg.nombre, LENGTH(s.nombre), s.nombre`,
       [schoolId, targetYearId]
@@ -3752,6 +3752,8 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
              cr.id_estudiante,
              e.nombre || ' ' || e.apellido as nombre_completo,
              dg.id_grupo,
+             tg.nombre as grado_nombre,
+             (tg.nombre || ' ' || s.nombre) as curso,
              COUNT(*) FILTER (WHERE cr.promedio < 3.0)::int as materias_reprobadas,
              ROUND(AVG(cr.promedio), 2)::numeric as promedio_general,
              JSON_AGG(
@@ -3761,8 +3763,11 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
            JOIN detalle_grados dg ON cr.id_detallegrado = dg.id_detallegrado
            JOIN materias m ON dg.id_materia = m.id_materia
            JOIN estudiante e ON cr.id_estudiante = e.id_estudiante
+           JOIN grupos g ON dg.id_grupo = g.id_grupo
+           JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
+           JOIN secciones s ON g.id_seccion = s.id_seccion
            WHERE dg.id_colegio = $1
-           GROUP BY cr.id_estudiante, e.nombre, e.apellido, dg.id_grupo
+           GROUP BY cr.id_estudiante, e.nombre, e.apellido, dg.id_grupo, tg.nombre, s.nombre
            HAVING bool_or(cr.promedio < 3.0)
            ORDER BY materias_reprobadas DESC, promedio_general ASC`,
           [schoolId, targetPeriodId]
@@ -3788,6 +3793,8 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
         id_estudiante: Number(r.id_estudiante),
         nombre_completo: r.nombre_completo,
         id_grupo: Number(r.id_grupo),
+        grado_nombre: r.grado_nombre,
+        curso: r.curso,
         materias_reprobadas: Number(r.materias_reprobadas),
         promedio_general: Number(r.promedio_general),
         detalles_materias: Array.isArray(r.detalles_materias) ? r.detalles_materias : []
@@ -4056,16 +4063,16 @@ export const getEnrollmentConfig = async (req: Request, res: Response): Promise<
 
   try {
     const result = await pool.query(
-      `SELECT id_configuracion, id_colegio, id_año, fecha_inicio, fecha_cierre, habilitada 
+      `SELECT id_configuracion, id_colegio, id_anio, fecha_inicio, fecha_cierre, habilitada 
        FROM configuracion_inscripcion 
-       WHERE id_colegio = $1 AND id_año = $2`,
+       WHERE id_colegio = $1 AND id_anio = $2`,
       [schoolId, yearId]
     );
 
     const approvedRes = await pool.query(
       `SELECT COUNT(*)::int AS count 
        FROM matricula 
-       WHERE id_colegio = $1 AND "id_año" = $2 AND estado IN ('ACTIVA', 'TRASLADADA')`,
+       WHERE id_colegio = $1 AND id_anio = $2 AND estado IN ('ACTIVA', 'TRASLADADA')`,
       [schoolId, yearId]
     );
     const hasApproved = approvedRes.rows[0].count > 0;
@@ -4079,7 +4086,7 @@ export const getEnrollmentConfig = async (req: Request, res: Response): Promise<
       res.json({
         id_configuracion: null,
         id_colegio: schoolId,
-        id_año: yearId,
+        id_anio: yearId,
         fecha_inicio: null,
         fecha_cierre: null,
         habilitada: true,
@@ -4093,9 +4100,9 @@ export const getEnrollmentConfig = async (req: Request, res: Response): Promise<
 };
 
 export const saveEnrollmentConfig = async (req: Request, res: Response): Promise<void> => {
-  const { id_colegio, id_año, fecha_inicio, fecha_cierre, habilitada, motivo_cambio } = req.body;
+  const { id_colegio, id_anio, fecha_inicio, fecha_cierre, habilitada, motivo_cambio } = req.body;
   
-  if (!id_colegio || !id_año || !fecha_inicio || !fecha_cierre) {
+  if (!id_colegio || !id_anio || !fecha_inicio || !fecha_cierre) {
     res.status(400).json({ error: "Todos los campos (colegio, año, fecha de inicio y cierre) son obligatorios." });
     return;
   }
@@ -4133,8 +4140,8 @@ export const saveEnrollmentConfig = async (req: Request, res: Response): Promise
     const approvedRes = await pool.query(
       `SELECT COUNT(*)::int AS count 
        FROM matricula 
-       WHERE id_colegio = $1 AND "id_año" = $2 AND estado IN ('ACTIVA', 'TRASLADADA')`,
-      [id_colegio, id_año]
+       WHERE id_colegio = $1 AND id_anio = $2 AND estado IN ('ACTIVA', 'TRASLADADA')`,
+      [id_colegio, id_anio]
     );
     const hasApproved = approvedRes.rows[0].count > 0;
 
@@ -4142,8 +4149,8 @@ export const saveEnrollmentConfig = async (req: Request, res: Response): Promise
     const existingRes = await pool.query(
       `SELECT fecha_inicio, fecha_cierre, habilitada 
        FROM configuracion_inscripcion 
-       WHERE id_colegio = $1 AND id_año = $2`,
-      [id_colegio, id_año]
+       WHERE id_colegio = $1 AND id_anio = $2`,
+      [id_colegio, id_anio]
     );
     const oldConfig = existingRes.rows[0] || null;
 
@@ -4162,15 +4169,15 @@ export const saveEnrollmentConfig = async (req: Request, res: Response): Promise
 
     // Save/Update config
     const result = await pool.query(
-      `INSERT INTO configuracion_inscripcion (id_colegio, id_año, fecha_inicio, fecha_cierre, habilitada)
+      `INSERT INTO configuracion_inscripcion (id_colegio, id_anio, fecha_inicio, fecha_cierre, habilitada)
        VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (id_colegio, id_año)
+       ON CONFLICT (id_colegio, id_anio)
        DO UPDATE SET 
          fecha_inicio = EXCLUDED.fecha_inicio, 
          fecha_cierre = EXCLUDED.fecha_cierre, 
          habilitada = EXCLUDED.habilitada
        RETURNING *`,
-      [id_colegio, id_año, fecha_inicio, fecha_cierre, habilitada !== undefined ? Boolean(habilitada) : true]
+      [id_colegio, id_anio, fecha_inicio, fecha_cierre, habilitada !== undefined ? Boolean(habilitada) : true]
     );
 
     const newConfig = result.rows[0];
@@ -4183,7 +4190,7 @@ export const saveEnrollmentConfig = async (req: Request, res: Response): Promise
          VALUES ($1, 'CONFIGURACION', 'MODIFICACION', 'Modificación de Fechas de Inscripción', $2, $3, $4, $5)`,
         [
           activeAuditoriaId, 
-          `Colegio ID: ${id_colegio}, Año ID: ${id_año}`, 
+          `Colegio ID: ${id_colegio}, Año ID: ${id_anio}`, 
           oldConfig ? JSON.stringify(oldConfig) : null, 
           JSON.stringify(newConfig), 
           motivo_cambio
@@ -4211,7 +4218,7 @@ export const createExtraordinaryEnrollment = async (req: Request, res: Response)
     correo_padre,
     id_nivel,
     id_grupo,
-    id_año,
+    id_anio,
     id_estudiante,
     motivo,
     motivo_extraordinaria,
@@ -4225,8 +4232,8 @@ export const createExtraordinaryEnrollment = async (req: Request, res: Response)
   const actualMotivo = motivo || motivo_extraordinaria;
   const actualObservaciones = observaciones || observaciones_extraordinaria;
 
-  if (!correo_padre || !id_nivel || !id_grupo || !id_año || !actualMotivo) {
-    res.status(400).json({ error: "Los campos correo_padre, id_nivel, id_grupo, id_año y motivo son obligatorios." });
+  if (!correo_padre || !id_nivel || !id_grupo || !id_anio || !actualMotivo) {
+    res.status(400).json({ error: "Los campos correo_padre, id_nivel, id_grupo, id_anio y motivo son obligatorios." });
     return;
   }
 
@@ -4253,8 +4260,8 @@ export const createExtraordinaryEnrollment = async (req: Request, res: Response)
       // Check if student already has an active or transferred enrollment for this year
       const activeEnrollmentRes = await client.query(
         `SELECT id_matricula FROM matricula 
-         WHERE id_estudiante = $1 AND id_colegio = $2 AND "id_año" = $3 AND estado IN ('ACTIVA', 'TRASLADADA')`,
-        [id_estudiante, schoolId, id_año]
+         WHERE id_estudiante = $1 AND id_colegio = $2 AND id_anio = $3 AND estado IN ('ACTIVA', 'TRASLADADA')`,
+        [id_estudiante, schoolId, id_anio]
       );
       if (activeEnrollmentRes.rows.length > 0) {
         res.status(400).json({ error: "El estudiante ya cuenta con una matrícula ACTIVA o TRASLADADA para este año lectivo." });
@@ -4265,7 +4272,7 @@ export const createExtraordinaryEnrollment = async (req: Request, res: Response)
     // Insert matricula
     const matRes = await client.query(
       `INSERT INTO matricula 
-         (id_estudiante, id_nivel, id_grupo, id_colegio, "id_año", estado, correo_padre, tiene_discapacidad, es_extranjero, tipo, motivo, observaciones, id_usuario_responsable, fecha_creacion)
+         (id_estudiante, id_nivel, id_grupo, id_colegio, id_anio, estado, correo_padre, tiene_discapacidad, es_extranjero, tipo, motivo, observaciones, id_usuario_responsable, fecha_creacion)
        VALUES ($1, $2, $3, $4, $5, 'PENDIENTE', $6, $7, $8, 'EXTRAORDINARIA', $9, $10, $11, NOW())
        RETURNING *`,
       [
@@ -4273,7 +4280,7 @@ export const createExtraordinaryEnrollment = async (req: Request, res: Response)
         id_nivel,
         id_grupo,
         schoolId,
-        id_año,
+        id_anio,
         correo_padre,
         tiene_discapacidad === true || tiene_discapacidad === 'true',
         es_extranjero === true || es_extranjero === 'true',
@@ -4515,7 +4522,7 @@ export const createReingresoEnrollment = async (req: Request, res: Response): Pr
     id_estudiante,
     id_nivel,
     id_grupo,
-    id_año,
+    id_anio,
     motivo,
     observaciones,
     tiene_discapacidad,
@@ -4523,8 +4530,8 @@ export const createReingresoEnrollment = async (req: Request, res: Response): Pr
     motivo_cambio
   } = req.body;
 
-  if (!id_estudiante || !id_nivel || !id_grupo || !id_año || !motivo) {
-    res.status(400).json({ error: "Los campos id_estudiante, id_nivel, id_grupo, id_año y motivo son obligatorios." });
+  if (!id_estudiante || !id_nivel || !id_grupo || !id_anio || !motivo) {
+    res.status(400).json({ error: "Los campos id_estudiante, id_nivel, id_grupo, id_anio y motivo son obligatorios." });
     return;
   }
 
@@ -4557,8 +4564,8 @@ export const createReingresoEnrollment = async (req: Request, res: Response): Pr
     // Check if there is already an active or pending enrollment for this student in the current year
     const existingEnrollmentRes = await client.query(
       `SELECT id_matricula, estado FROM matricula 
-       WHERE id_estudiante = $1 AND id_colegio = $2 AND "id_año" = $3 AND estado IN ('ACTIVA', 'TRASLADADA', 'PENDIENTE', 'CORRECCION')`,
-      [id_estudiante, schoolId, id_año]
+       WHERE id_estudiante = $1 AND id_colegio = $2 AND id_anio = $3 AND estado IN ('ACTIVA', 'TRASLADADA', 'PENDIENTE', 'CORRECCION')`,
+      [id_estudiante, schoolId, id_anio]
     );
     if (existingEnrollmentRes.rows.length > 0) {
       res.status(400).json({ error: "El estudiante ya cuenta con una matrícula activa, trasladada o pendiente para este año lectivo." });
@@ -4585,7 +4592,7 @@ export const createReingresoEnrollment = async (req: Request, res: Response): Pr
     // Insert matricula
     const matRes = await client.query(
       `INSERT INTO matricula 
-         (id_estudiante, id_nivel, id_grupo, id_colegio, "id_año", estado, correo_padre, tiene_discapacidad, es_extranjero, tipo, motivo, observaciones, id_usuario_responsable, fecha_creacion)
+         (id_estudiante, id_nivel, id_grupo, id_colegio, id_anio, estado, correo_padre, tiene_discapacidad, es_extranjero, tipo, motivo, observaciones, id_usuario_responsable, fecha_creacion)
        VALUES ($1, $2, $3, $4, $5, 'PENDIENTE', $6, $7, $8, 'REINGRESO', $9, $10, $11, NOW())
        RETURNING *`,
       [
@@ -4593,7 +4600,7 @@ export const createReingresoEnrollment = async (req: Request, res: Response): Pr
         id_nivel,
         id_grupo,
         schoolId,
-        id_año,
+        id_anio,
         correo_padre,
         tiene_discapacidad === true || tiene_discapacidad === 'true',
         es_extranjero === true || es_extranjero === 'true',
@@ -5062,7 +5069,7 @@ export const getDbaPlaneacionDisponibles = async (req: Request, res: Response): 
               JOIN grupos g2 ON g2.id_nivel = g1.id_nivel AND g2.id_tipo_grado = g1.id_tipo_grado
               WHERE g1.id_grupo = $3 AND g1.id_colegio = $1
             )
-            AND c.id_año = (SELECT "id_año" FROM "año_lectivo" WHERE id_colegio = $1 ORDER BY "id_año" DESC LIMIT 1)
+            AND c.id_anio = (SELECT id_anio FROM anio_lectivo WHERE id_colegio = $1 ORDER BY id_anio DESC LIMIT 1)
             AND (c.sync_uuid != (SELECT sync_uuid FROM competencias WHERE id_competencia = $4) OR c.sync_uuid IS NULL)
             AND ea.id_evidencia_dba IS NOT NULL
         `;
@@ -5082,7 +5089,7 @@ export const getDbaPlaneacionDisponibles = async (req: Request, res: Response): 
               JOIN grupos g2 ON g2.id_nivel = g1.id_nivel AND g2.id_tipo_grado = g1.id_tipo_grado
               WHERE g1.id_grupo = $3 AND g1.id_colegio = $1
             )
-            AND c.id_año = (SELECT "id_año" FROM "año_lectivo" WHERE id_colegio = $1 ORDER BY "id_año" DESC LIMIT 1)
+            AND c.id_anio = (SELECT id_anio FROM anio_lectivo WHERE id_colegio = $1 ORDER BY id_anio DESC LIMIT 1)
             AND ea.id_evidencia_dba IS NOT NULL
         `;
         queryParams = [schoolId, subjectId, groupId];
@@ -5135,7 +5142,7 @@ export const vincularEvidenciasDbaACompetencia = async (req: Request, res: Respo
 
     // 1. Obtener la competencia para verificar pertenencia y obtener el contexto (año, materia, periodo, grupo, sync_uuid)
     const compRes = await client.query(
-      `SELECT id_competencia, id_año, id_grupo, id_materia, id_periodo, id_colegio, sync_uuid 
+      `SELECT id_competencia, id_anio, id_grupo, id_materia, id_periodo, id_colegio, sync_uuid 
        FROM competencias 
        WHERE id_competencia = $1 AND id_colegio = $2`,
       [competencyId, schoolId]
@@ -5189,12 +5196,12 @@ export const vincularEvidenciasDbaACompetencia = async (req: Request, res: Respo
          JOIN competencias c ON c.id_competencia = ea.id_competencia
          JOIN periodo_academico p ON p.id_periodo = c.id_periodo
          WHERE c.id_colegio = $1
-           AND c.id_año = $2
+           AND c.id_anio = $2
            AND c.id_materia = $3
            AND c.id_grupo = ANY($4::int[])
            AND (c.sync_uuid != $5 OR c.sync_uuid IS NULL)
            AND ea.id_evidencia_dba = ANY($6::int[])`,
-        [schoolId, comp.id_año, comp.id_materia, peerGroupIds, comp.sync_uuid, idEvidenciasDba]
+        [schoolId, comp.id_anio, comp.id_materia, peerGroupIds, comp.sync_uuid, idEvidenciasDba]
       );
 
       if (alreadyAssignedRes.rows.length > 0) {

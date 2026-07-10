@@ -25,11 +25,11 @@ async function run() {
       // Query 1: period
       console.log('\n- Executing Query 1: period_academico check...');
       const periodRes = await pool.query(
-        `SELECT estado, nombre, porcentaje, "id_año", id_colegio, trimestre FROM periodo_academico WHERE id_periodo = $1`,
+        `SELECT estado, nombre, porcentaje, id_anio, id_colegio, trimestre FROM periodo_academico WHERE id_periodo = $1`,
         [period.id_periodo]
       );
       console.log('Period state result:', periodRes.rows[0]);
-      const idAnio = periodRes.rows[0]["id_año"];
+      const idAnio = periodRes.rows[0].id_anio;
 
       // Query 2: student info
       console.log('\n- Executing Query 2: student info join...');
@@ -48,7 +48,7 @@ async function run() {
         LEFT JOIN jornada j ON j.id_jornada = gr.id_jornada
         LEFT JOIN grados g ON g.id_jornada = gr.id_jornada AND g.id_colegio = gr.id_colegio AND g.seccion = gr.id_seccion::varchar
         LEFT JOIN tipo_grado tg ON tg.id_tipo_grado = gr.id_tipo_grado
-        LEFT JOIN "año_lectivo" al ON al.id_colegio = c.id_colegio AND al."id_año" = $2
+        LEFT JOIN anio_lectivo al ON al.id_colegio = c.id_colegio AND al.id_anio = $2
         WHERE e.id_estudiante = $1
         LIMIT 1
       `, [student.id_estudiante, idAnio]);
@@ -78,7 +78,7 @@ async function run() {
           COALESCE(ra.promedio, calc.promedio_calculado) AS calificacion,
           ev.nivel AS desempeno
         FROM detalle_grados dg
-        JOIN periodo_academico p ON p."id_año" = $2 AND p.id_colegio = dg.id_colegio
+        JOIN periodo_academico p ON p.id_anio = $2 AND p.id_colegio = dg.id_colegio
         LEFT JOIN resultado_academico ra ON ra.id_detallegrado = dg.id_detallegrado AND ra.id_periodo = p.id_periodo AND ra.id_estudiante = $1
         LEFT JOIN (
           SELECT am.id_detallegrado, am.id_periodo, ROUND(AVG(na.nota)::numeric, 2) as promedio_calculado

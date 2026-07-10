@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, computed } from 'vue'
 import { useAuthStore } from '../../stores/auth'
 import axios from 'axios'
 import { 
@@ -11,7 +11,8 @@ import {
   AlertTriangle,
   Lightbulb,
   User,
-  BookOpen
+  BookOpen,
+  HelpCircle
 } from 'lucide-vue-next'
 
 const auth = useAuthStore()
@@ -20,6 +21,7 @@ const studentId = ref<number | null>(null)
 const selectedYear = ref<number | null>(null)
 const selectedPeriod = ref<number | null>(null)
 const selectedType = ref<string>('all')
+const selectedFinding = ref<string>('all')
 
 const years = ref<any[]>([])
 const periods = ref<any[]>([])
@@ -48,7 +50,7 @@ const fetchInitialData = async () => {
     studentInfo.value = infoRes.data
     
     if (years.value.length > 0) {
-      selectedYear.value = years.value[0].id_año
+      selectedYear.value = years.value[0].id_anio
     }
   } catch (err) {
     console.error("Error fetching initial academic data:", err)
@@ -58,7 +60,7 @@ const fetchInitialData = async () => {
 const fetchPeriods = async () => {
   if (!studentId.value || !selectedYear.value) return
   try {
-    const res = await axios.get(`http://localhost:3000/api/student/periods/${studentId.value}/${selectedYear.value}`)
+    const res = await axios.get(`http://localhost:3000/api/student/all-periods/${studentId.value}/${selectedYear.value}`)
     periods.value = res.data
     if (periods.value.length > 0) {
       selectedPeriod.value = periods.value[periods.value.length - 1].id_periodo
@@ -93,6 +95,22 @@ onMounted(async () => {
 watch(selectedYear, fetchPeriods)
 watch(selectedPeriod, fetchObservations)
 watch(selectedType, fetchObservations)
+
+const filteredObservations = computed(() => {
+  let list = observations.value || []
+  
+  if (selectedFinding.value === 'fortalezas') {
+    return list.filter(obs => obs.fortalezas && obs.fortalezas.trim() !== '' && !obs.fortalezas.toLowerCase().includes('no se registraron'))
+  }
+  if (selectedFinding.value === 'debilidades') {
+    return list.filter(obs => obs.debilidades && obs.debilidades.trim() !== '' && !obs.debilidades.toLowerCase().includes('no se registraron'))
+  }
+  if (selectedFinding.value === 'recomendaciones') {
+    return list.filter(obs => obs.recomendaciones && obs.recomendaciones.trim() !== '' && !obs.recomendaciones.toLowerCase().includes('no se registraron') && !obs.recomendaciones.toLowerCase().includes('continuar con el proceso'))
+  }
+  
+  return list
+})
 
 const formatDate = (dateString: string) => {
   return new Date(dateString).toLocaleDateString('es-ES', { 
@@ -141,7 +159,7 @@ const getTypeLabel = (type: string) => {
         <div class="flex items-center gap-2 bg-white dark:bg-slate-900 px-4 py-2 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
           <Calendar :size="18" class="text-slate-400" />
           <select v-model="selectedYear" class="bg-transparent border-none text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-0 outline-none cursor-pointer">
-            <option v-for="y in years" :key="y.id_año" :value="y.id_año">Año {{ y.calendario }}</option>
+            <option v-for="y in years" :key="y.id_anio" :value="y.id_anio">Año {{ y.calendario }}</option>
           </select>
         </div>
 
@@ -149,7 +167,8 @@ const getTypeLabel = (type: string) => {
         <div class="flex items-center gap-2 bg-white dark:bg-slate-900 px-4 py-2 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
           <Filter :size="18" class="text-slate-400" />
           <select v-model="selectedPeriod" class="bg-transparent border-none text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-0 outline-none cursor-pointer" :disabled="periods.length === 0">
-            <option v-for="p in periods" :key="p.id_periodo" :value="p.id_periodo">{{ p.nombre }}</option>
+            <option v-if="periods.length === 0" disabled value="">No hay periodos disponibles</option>
+            <option v-for="p in periods" :key="p.id_periodo" :value="p.id_periodo">{{ p.nombre }}{{ p.estado === 'ABIERTO' ? ' - En Curso' : '' }}</option>
           </select>
         </div>
 
@@ -163,6 +182,17 @@ const getTypeLabel = (type: string) => {
             <option value="CONVIVENCIAL">Convivencial</option>
           </select>
         </div>
+
+        <!-- Hallazgos Filter -->
+        <div class="flex items-center gap-2 bg-white dark:bg-slate-900 px-4 py-2 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+          <Target :size="18" class="text-slate-400" />
+          <select v-model="selectedFinding" class="bg-transparent border-none text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-0 outline-none cursor-pointer">
+            <option value="all">Todos los hallazgos</option>
+            <option value="fortalezas">Fortalezas</option>
+            <option value="debilidades">Debilidades</option>
+            <option value="recomendaciones">Recomendaciones</option>
+          </select>
+        </div>
       </div>
     </div>
 
@@ -171,19 +201,19 @@ const getTypeLabel = (type: string) => {
       <div v-for="i in 2" :key="i" class="h-64 bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 animate-pulse"></div>
     </div>
 
-    <div v-else-if="observations.length === 0" class="flex flex-col items-center justify-center py-32 bg-white dark:bg-slate-900 rounded-3xl border border-dashed border-slate-200 dark:border-slate-800">
+    <div v-else-if="filteredObservations.length === 0" class="flex flex-col items-center justify-center py-32 bg-white dark:bg-slate-900 rounded-3xl border border-dashed border-slate-200 dark:border-slate-800">
       <div class="bg-indigo-50 dark:bg-slate-800 p-6 rounded-full mb-6 text-indigo-500">
         <SearchX :size="48" />
       </div>
       <h3 class="text-xl font-bold text-slate-800 dark:text-white">Sin observaciones</h3>
       <p class="text-slate-500 dark:text-slate-400 mt-2 text-center max-w-xs">
-        No se han registrado observaciones para este periodo académico aún.
+        {{ observations.length === 0 ? 'No se han registrado observaciones para este periodo académico aún.' : 'No se encontraron observaciones con los filtros aplicados.' }}
       </p>
     </div>
 
     <div v-else class="grid grid-cols-1 gap-8">
       <div 
-        v-for="obs in observations" 
+        v-for="obs in filteredObservations" 
         :key="obs.id_observacion"
         class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden hover:shadow-xl hover:border-indigo-100 dark:hover:border-indigo-900/30 transition-all duration-300"
       >
@@ -242,8 +272,11 @@ const getTypeLabel = (type: string) => {
               <Lightbulb :size="18" />
               <span class="text-[10px] font-black uppercase tracking-widest">Recomendaciones</span>
             </div>
-            <p class="text-sm text-slate-700 dark:text-slate-200 leading-relaxed font-bold italic">
-              "{{ obs.recomendaciones || 'Continuar con el proceso de aprendizaje de manera constante.' }}"
+            <p v-if="obs.recomendaciones" class="text-sm text-slate-700 dark:text-slate-200 leading-relaxed font-bold italic">
+              "{{ obs.recomendaciones }}"
+            </p>
+            <p v-else class="text-sm text-slate-500 dark:text-slate-400 leading-relaxed font-medium">
+              No se registraron recomendaciones específicas.
             </p>
           </div>
 
