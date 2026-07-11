@@ -248,6 +248,42 @@ const fetchActiveYear = async () => {
   }
 }
 
+const studentSanction = ref<{ hasta: string; motivo: string; tipo: string } | null>(null)
+
+const checkStudentSanction = async () => {
+  const role = auth.activeRole?.toLowerCase()
+  if (role !== 'estudiante' || !auth.user?.id) {
+    studentSanction.value = null
+    return
+  }
+
+  try {
+    const headers = { Authorization: `Bearer ${auth.token}` }
+    const idRes = await axios.get(`http://localhost:3000/api/student/user-id/${auth.user.id}`, { headers })
+    const studentId = idRes.data.id_estudiante
+    if (studentId) {
+      const infoRes = await axios.get(`http://localhost:3000/api/student/info/${studentId}`, { headers })
+      const info = infoRes.data
+      if (info.estado === 'SANCIONADO' && info.sancion_hasta) {
+        studentSanction.value = {
+          hasta: info.sancion_hasta,
+          motivo: info.sancion_motivo || '',
+          tipo: info.sancion_tipo || ''
+        }
+      } else {
+        studentSanction.value = null
+      }
+    }
+  } catch (error) {
+    console.error('Error checking student sanction:', error)
+    studentSanction.value = null
+  }
+}
+
+watch(() => [auth.activeRole, auth.user], () => {
+  checkStudentSanction()
+}, { immediate: true })
+
 const updateClock = () => {
   const now = new Date()
   currentTime.value = now.toLocaleTimeString('es-CO', {
@@ -720,6 +756,24 @@ onUnmounted(() => {
       <!-- Page Content -->
       <main :class="['flex-1 overflow-y-auto p-8 bg-gray-50 dark:bg-slate-950 transition-colors duration-300', isReadOnlySupervision ? 'supervision-readonly-mode' : '']">
         <div class="max-w-7xl mx-auto">
+          <!-- Active Sanction Banner for Students -->
+          <div v-if="studentSanction" class="mb-6 p-5 rounded-3xl bg-gradient-to-r from-amber-50 to-orange-50/50 dark:from-amber-950/20 dark:to-orange-950/10 border border-amber-200/60 dark:border-amber-900/40 shadow-sm flex items-start gap-4 relative overflow-hidden transition-all duration-300 animate-pulse-slow">
+            <div class="h-10 w-10 shrink-0 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+              <ShieldAlert :size="20" />
+            </div>
+            <div class="space-y-1">
+              <h4 class="text-xs font-black text-amber-700 dark:text-amber-400 uppercase tracking-wider leading-none flex items-center gap-2">
+                Sanción Académica / Disciplinaria Activa
+              </h4>
+              <p class="text-xs font-bold text-slate-700 dark:text-slate-350 leading-normal">
+                Estimado estudiante, se encuentra bajo sanción de tipo <span class="font-black text-amber-600 dark:text-amber-400 uppercase">{{ studentSanction.tipo.replace(/_/g, ' ') }}</span> hasta el día <span class="font-black text-slate-900 dark:text-white">{{ new Date(studentSanction.hasta).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }) }}</span>.
+              </p>
+              <p class="text-xs font-medium text-slate-500 dark:text-slate-400 italic mt-1.5 leading-relaxed bg-white/40 dark:bg-slate-900/40 p-3 rounded-2xl border border-slate-100/50 dark:border-slate-800/40">
+                Motivo: "{{ studentSanction.motivo }}"
+              </p>
+            </div>
+          </div>
+
           <router-view />
         </div>
       </main>

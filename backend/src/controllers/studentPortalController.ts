@@ -189,19 +189,44 @@ export const getGradeDetails = async (req: Request, res: Response) => {
 export const getStudentInfo = async (req: Request, res: Response) => {
   const { id_estudiante } = req.params;
   try {
+    // Auto-expire sanctions
+    await pool.query(`
+      UPDATE public.sancion SET estado = 'VENCIDA' WHERE estado = 'ACTIVA' AND fecha_fin < CURRENT_DATE
+    `);
+    await pool.query(`
+      UPDATE public.estudiante 
+      SET estado = 'ACTIVO' 
+      WHERE estado = 'SANCIONADO' 
+        AND id_estudiante NOT IN (SELECT id_estudiante FROM public.sancion WHERE estado = 'ACTIVA')
+    `);
+
     const result = await pool.query(`
       SELECT 
         e.id_estudiante, 
         e.nombre, 
         e.apellido, 
         e.codigo, 
+        e.estado,
         tg.nombre as grado, 
-        s.nombre as grupo
+        s.nombre as grupo,
+        sanc.fecha_fin as sancion_hasta,
+        sanc.motivo as sancion_motivo,
+        sanc.tipo_nombre as sancion_tipo
       FROM estudiante e
       LEFT JOIN matricula m ON m.id_estudiante = e.id_estudiante AND m.estado = 'ACTIVA'
       LEFT JOIN grupos gr ON gr.id_grupo = m.id_grupo
       LEFT JOIN secciones s ON s.id_seccion = gr.id_seccion
       LEFT JOIN tipo_grado tg ON tg.id_tipo_grado = gr.id_tipo_grado
+      LEFT JOIN LATERAL (
+        SELECT sa.fecha_fin, sa.motivo, ts.nombre as tipo_nombre
+        FROM public.sancion sa
+        JOIN public.tipo_sancion ts ON sa.id_tipo_sancion = ts.id_tipo_sancion
+        WHERE sa.id_estudiante = e.id_estudiante
+          AND sa.estado = 'ACTIVA'
+          AND CURRENT_DATE BETWEEN sa.fecha_inicio AND sa.fecha_fin
+        ORDER BY sa.fecha_fin DESC
+        LIMIT 1
+      ) sanc ON TRUE
       WHERE e.id_estudiante = $1
       LIMIT 1
     `, [id_estudiante]);

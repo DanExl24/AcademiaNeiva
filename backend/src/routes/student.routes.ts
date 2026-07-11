@@ -6,7 +6,8 @@ import {
   changeStudentGrade, 
   deleteStudent,
   getStudentSummary,
-  graduateStudent
+  graduateStudent,
+  getTipoSanciones
 } from "../controllers/studentController";
 import {
   getStudentAcademicYears,
@@ -28,6 +29,7 @@ import { verifyToken, requireDirectivo } from "../middleware/authMiddleware";
 const router = Router();
 
 // Administrative CRUD operations (require Directivo or Admin General)
+router.get("/sanctions/types", verifyToken, requireDirectivo, getTipoSanciones);
 router.get("/colegio/:idColegio", verifyToken, requireDirectivo, getAllStudents);
 router.get("/:id/summary", verifyToken, requireDirectivo, getStudentSummary);
 router.put("/:id", verifyToken, requireDirectivo, updateStudent);

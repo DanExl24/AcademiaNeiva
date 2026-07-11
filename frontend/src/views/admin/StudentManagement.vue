@@ -55,6 +55,12 @@ const statusModalOpen = ref(false)
 const newStatus = ref('')
 const statusMotivo = ref('')
 
+const sanctionTypes = ref<any[]>([])
+const selectedSanctionType = ref<number | null>(null)
+const sanctionStartDate = ref<string>(new Date().toISOString().split('T')[0])
+const sanctionEndDate = ref<string>('')
+const sanctionObservaciones = ref<string>('')
+
 const changeGradeModalOpen = ref(false)
 const selectedGroup = ref('')
 const motivoTraslado = ref('')
@@ -266,25 +272,70 @@ const saveStudent = async () => {
   }
 }
 
-const openStatusModal = (student: any, status: string) => {
+const openStatusModal = async (student: any, status: string) => {
   selectedStudent.value = student
   newStatus.value = status
   statusMotivo.value = ''
+  selectedSanctionType.value = null
+  sanctionStartDate.value = new Date().toISOString().split('T')[0]
+  sanctionEndDate.value = ''
+  sanctionObservaciones.value = ''
   statusModalOpen.value = true
+
+  if (status === 'SANCIONADO') {
+    try {
+      const headers = { Authorization: `Bearer ${auth.token}` }
+      const res = await axios.get('http://localhost:3000/api/student/sanctions/types', { headers })
+      sanctionTypes.value = res.data
+      if (res.data.length > 0) {
+        selectedSanctionType.value = res.data[0].id_tipo_sancion
+      }
+    } catch (error) {
+      console.error('Error fetching sanction types:', error)
+    }
+  }
 }
 
 const confirmStatusChange = async () => {
-  if ((newStatus.value === 'SANCIONADO' || newStatus.value === 'EXPULSADO') && statusMotivo.value.trim().length < 10) {
-    notify.addNotification('Debe ingresar un motivo de al menos 10 caracteres', 'error')
-    return
+  if (newStatus.value === 'SANCIONADO') {
+    if (!selectedSanctionType.value) {
+      notify.addNotification('Debe seleccionar un tipo de sanción', 'error')
+      return
+    }
+    if (!sanctionStartDate.value || !sanctionEndDate.value) {
+      notify.addNotification('Debe ingresar las fechas de inicio y fin', 'error')
+      return
+    }
+    if (new Date(sanctionEndDate.value) < new Date(sanctionStartDate.value)) {
+      notify.addNotification('La fecha de fin no puede ser anterior a la de inicio', 'error')
+      return
+    }
+    if (statusMotivo.value.trim().length < 10) {
+      notify.addNotification('Debe ingresar un motivo de al menos 10 caracteres', 'error')
+      return
+    }
+  } else if (newStatus.value === 'EXPULSADO') {
+    if (statusMotivo.value.trim().length < 10) {
+      notify.addNotification('Debe ingresar un motivo de al menos 10 caracteres', 'error')
+      return
+    }
   }
 
   try {
     const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.patch(`http://localhost:3000/api/student/${selectedStudent.value.id_estudiante}/status`, {
+    const payload: any = {
       estado: newStatus.value,
       motivo: statusMotivo.value
-    }, { headers })
+    }
+
+    if (newStatus.value === 'SANCIONADO') {
+      payload.id_tipo_sancion = selectedSanctionType.value
+      payload.fecha_inicio = sanctionStartDate.value
+      payload.fecha_fin = sanctionEndDate.value
+      payload.observaciones = sanctionObservaciones.value
+    }
+
+    await axios.patch(`http://localhost:3000/api/student/${selectedStudent.value.id_estudiante}/status`, payload, { headers })
     notify.addNotification(`Estado actualizado a ${newStatus.value}`, 'success')
     statusModalOpen.value = false
     fetchStudents()
@@ -540,6 +591,10 @@ const exportToSIMAT = () => {
             </td>
             <td class="px-8 py-5 text-right">
               <div class="flex items-center justify-end gap-2">
+                <!-- Revisar Sanción -->
+                <button v-if="s.estado === 'SANCIONADO'" @click="openDrawer(s.id_estudiante)" class="p-2 text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded-xl transition-all" title="Revisar Sanción">
+                  <ShieldAlert :size="16" />
+                </button>
                 <button @click="openEditModal(s)" class="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 rounded-xl transition-all" title="Editar datos">
                   <Edit2 :size="16" />
                 </button>
@@ -618,17 +673,64 @@ const exportToSIMAT = () => {
           </p>
 
           <!-- Reason Input for Sanction/Expulsion -->
-          <div v-if="newStatus === 'SANCIONADO' || newStatus === 'EXPULSADO'" class="mt-5 text-left">
-            <label class="block text-slate-500 text-xs font-black uppercase tracking-wider mb-2">Motivo del Cambio de Estado <span class="text-red-500">*</span></label>
-            <textarea 
-              v-model="statusMotivo" 
-              rows="3" 
-              placeholder="Describa el motivo detalladamente (mínimo 10 caracteres)..."
-              class="w-full bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-sm font-medium outline-none text-slate-900 dark:text-white focus:border-indigo-500 transition-all resize-none"
-            ></textarea>
-            <div class="flex justify-between items-center mt-1">
-              <span class="text-[10px] text-slate-400 font-bold">Mínimo 10 caracteres</span>
-              <span class="text-[10px] font-black" :class="statusMotivo.trim().length >= 10 ? 'text-emerald-500' : 'text-slate-400'">{{ statusMotivo.trim().length }}/10</span>
+          <div v-if="newStatus === 'SANCIONADO' || newStatus === 'EXPULSADO'" class="mt-5 text-left space-y-4">
+            
+            <!-- Sanction fields -->
+            <div v-if="newStatus === 'SANCIONADO'" class="space-y-3">
+              <div>
+                <label class="block text-slate-500 text-xs font-black uppercase tracking-wider mb-1">Tipo de Sanción <span class="text-red-500">*</span></label>
+                <select 
+                  v-model="selectedSanctionType" 
+                  class="w-full bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-sm font-bold outline-none text-slate-900 dark:text-white focus:border-indigo-500 transition-all"
+                >
+                  <option v-for="t in sanctionTypes" :key="t.id_tipo_sancion" :value="t.id_tipo_sancion">
+                    {{ t.nombre.replace(/_/g, ' ') }}
+                  </option>
+                </select>
+              </div>
+
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-slate-500 text-xs font-black uppercase tracking-wider mb-1">Fecha Inicio <span class="text-red-500">*</span></label>
+                  <input 
+                    type="date" 
+                    v-model="sanctionStartDate"
+                    class="w-full bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-sm font-bold outline-none text-slate-900 dark:text-white focus:border-indigo-500 transition-all"
+                  />
+                </div>
+                <div>
+                  <label class="block text-slate-500 text-xs font-black uppercase tracking-wider mb-1">Fecha Fin <span class="text-red-500">*</span></label>
+                  <input 
+                    type="date" 
+                    v-model="sanctionEndDate"
+                    class="w-full bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-sm font-bold outline-none text-slate-900 dark:text-white focus:border-indigo-500 transition-all"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-slate-500 text-xs font-black uppercase tracking-wider mb-1">Motivo <span class="text-red-500">*</span></label>
+              <textarea 
+                v-model="statusMotivo" 
+                rows="2" 
+                placeholder="Describa el motivo detalladamente (mínimo 10 caracteres)..."
+                class="w-full bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-sm font-bold outline-none text-slate-900 dark:text-white focus:border-indigo-500 transition-all resize-none"
+              ></textarea>
+              <div class="flex justify-between items-center mt-0.5">
+                <span class="text-[10px] text-slate-400 font-bold">Mínimo 10 caracteres</span>
+                <span class="text-[10px] font-black" :class="statusMotivo.trim().length >= 10 ? 'text-emerald-500' : 'text-slate-400'">{{ statusMotivo.trim().length }}/10</span>
+              </div>
+            </div>
+
+            <div v-if="newStatus === 'SANCIONADO'">
+              <label class="block text-slate-500 text-xs font-black uppercase tracking-wider mb-1">Observaciones / Descargo</label>
+              <textarea 
+                v-model="sanctionObservaciones" 
+                rows="2" 
+                placeholder="Observaciones de descargo (opcional)..."
+                class="w-full bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-sm font-bold outline-none text-slate-900 dark:text-white focus:border-indigo-500 transition-all resize-none"
+              ></textarea>
             </div>
           </div>
         </div>
@@ -636,8 +738,8 @@ const exportToSIMAT = () => {
           <button @click="statusModalOpen = false" class="flex-1 py-3 font-black text-slate-400 uppercase text-xs">Atrás</button>
           <button 
             @click="confirmStatusChange" 
-            :disabled="(newStatus === 'SANCIONADO' || newStatus === 'EXPULSADO') && statusMotivo.trim().length < 10"
-            :class="[(newStatus === 'SANCIONADO' || newStatus === 'EXPULSADO') && statusMotivo.trim().length < 10 ? 'opacity-40 cursor-not-allowed' : 'hover:bg-slate-800 dark:hover:bg-indigo-750']"
+            :disabled="((newStatus === 'SANCIONADO' || newStatus === 'EXPULSADO') && statusMotivo.trim().length < 10) || (newStatus === 'SANCIONADO' && (!sanctionEndDate || !selectedSanctionType))"
+            :class="[(((newStatus === 'SANCIONADO' || newStatus === 'EXPULSADO') && statusMotivo.trim().length < 10) || (newStatus === 'SANCIONADO' && (!sanctionEndDate || !selectedSanctionType))) ? 'opacity-40 cursor-not-allowed' : 'hover:bg-slate-800 dark:hover:bg-indigo-750']"
             class="flex-2 bg-slate-900 dark:bg-indigo-600 text-white rounded-xl font-black px-6 py-3 uppercase text-xs shadow-xl transition-all"
           >Confirmar</button>
         </div>
@@ -887,7 +989,57 @@ const exportToSIMAT = () => {
             </div>
 
             <!-- Sanction/Expulsion Info Card -->
-            <div v-if="(studentSummary.estado_estudiante === 'SANCIONADO' || studentSummary.estado_estudiante === 'EXPULSADO') && studentSummary.motivo_estado" class="bg-gradient-to-br from-red-50 to-red-100/30 dark:from-slate-900 dark:to-red-950/20 border-2 border-red-200/50 dark:border-red-950/60 rounded-3xl p-5 space-y-3 relative overflow-hidden">
+            <!-- Detailed Sanction Card -->
+            <div v-if="studentSummary.estado_estudiante === 'SANCIONADO' && studentSummary.sanction" class="bg-gradient-to-br from-amber-50 to-amber-100/30 dark:from-slate-900 dark:to-amber-950/20 border-2 border-amber-200/50 dark:border-amber-950/60 rounded-3xl p-5 space-y-3 relative overflow-hidden text-left">
+              <div class="absolute -right-4 -bottom-4 text-amber-200 dark:text-amber-900 opacity-20 pointer-events-none">
+                <ShieldAlert :size="80" />
+              </div>
+              <h4 class="text-[10px] font-black text-amber-600 dark:text-amber-450 uppercase tracking-widest flex items-center gap-1.5 leading-none">
+                <ShieldAlert :size="16" />
+                Sanción Académica / Disciplinaria Activa
+              </h4>
+              <div class="space-y-1">
+                <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Tipo de Sanción</span>
+                <p class="text-xs font-black text-amber-700 dark:text-amber-450 uppercase">
+                  {{ studentSummary.sanction.tipo_nombre.replace(/_/g, ' ') }}
+                </p>
+              </div>
+              <div class="grid grid-cols-2 gap-2">
+                <div class="space-y-0.5">
+                  <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Inicio</span>
+                  <p class="text-xs font-bold text-slate-800 dark:text-slate-200">
+                    {{ new Date(studentSummary.sanction.fecha_inicio).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' }) }}
+                  </p>
+                </div>
+                <div class="space-y-0.5">
+                  <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Fin</span>
+                  <p class="text-xs font-bold text-slate-800 dark:text-slate-200">
+                    {{ new Date(studentSummary.sanction.fecha_fin).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' }) }}
+                  </p>
+                </div>
+              </div>
+              <div class="space-y-0.5 pt-1.5 border-t border-amber-200/20">
+                <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Motivo</span>
+                <p class="text-xs font-bold text-slate-700 dark:text-slate-350 italic leading-relaxed">
+                  "{{ studentSummary.sanction.motivo }}"
+                </p>
+              </div>
+              <div v-if="studentSummary.sanction.observaciones" class="space-y-0.5 pt-1.5 border-t border-amber-200/20">
+                <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Observaciones / Descargo</span>
+                <p class="text-xs font-medium text-slate-650 dark:text-slate-400 leading-relaxed">
+                  {{ studentSummary.sanction.observaciones }}
+                </p>
+              </div>
+              <div class="space-y-0.5 pt-1.5 border-t border-amber-200/20">
+                <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Registrada por</span>
+                <p class="text-[10px] font-black text-slate-700 dark:text-slate-300">
+                  {{ studentSummary.sanction.directivo_nombre }}
+                </p>
+              </div>
+            </div>
+
+            <!-- Sanction/Expulsion Info Card (Fallback or Expelled) -->
+            <div v-if="(studentSummary.estado_estudiante === 'EXPULSADO' || (studentSummary.estado_estudiante === 'SANCIONADO' && !studentSummary.sanction)) && studentSummary.motivo_estado" class="bg-gradient-to-br from-red-50 to-red-100/30 dark:from-slate-900 dark:to-red-950/20 border-2 border-red-200/50 dark:border-red-950/60 rounded-3xl p-5 space-y-3 relative overflow-hidden text-left">
               <div class="absolute -right-4 -bottom-4 text-red-200 dark:text-red-900 opacity-20 pointer-events-none">
                 <AlertCircle :size="80" />
               </div>

@@ -114,26 +114,82 @@ export const updateStudent = async (req: Request, res: Response) => {
 };
 
 export const updateStudentStatus = async (req: Request, res: Response) => {
+  const client = await pool.connect();
   try {
-    const { id } = req.params;
-    const { estado, motivo } = req.body; // 'ACTIVO', 'SANCIONADO', 'EXPULSADO', 'RETIRADO'
+    await client.query("BEGIN");
+    const { id } = req.params; // id_estudiante
+    const { estado, motivo, id_tipo_sancion, fecha_inicio, fecha_fin, observaciones } = req.body;
 
-    if ((estado === 'SANCIONADO' || estado === 'EXPULSADO') && (!motivo || motivo.trim().length < 10)) {
-      return res.status(400).json({ error: "El motivo es requerido y debe tener al menos 10 caracteres para sanción o expulsión." });
+    if (!estado) {
+      return res.status(400).json({ error: "El estado es obligatorio" });
+    }
+
+    const currentUserId = (req as any).user?.id;
+    if (!currentUserId) {
+      return res.status(401).json({ error: "No autorizado" });
+    }
+
+    const directivoRes = await client.query("SELECT id FROM directivo WHERE id_usuario = $1", [currentUserId]);
+    const id_directivo = directivoRes.rows[0]?.id;
+    if (!id_directivo) {
+      return res.status(403).json({ error: "El usuario actual no está registrado como directivo" });
+    }
+
+    if (estado === 'SANCIONADO') {
+      if (!id_tipo_sancion) {
+        return res.status(400).json({ error: "El tipo de sanción es obligatorio" });
+      }
+      if (!fecha_inicio || !fecha_fin) {
+        return res.status(400).json({ error: "Las fechas de inicio y fin son obligatorias" });
+      }
+      if (new Date(fecha_fin) < new Date(fecha_inicio)) {
+        return res.status(400).json({ error: "La fecha de fin no puede ser anterior a la de inicio" });
+      }
+      if (!motivo || motivo.trim().length < 10) {
+        return res.status(400).json({ error: "El motivo es requerido y debe tener al menos 10 caracteres" });
+      }
+
+      // Insert new active sanction
+      await client.query(
+        `INSERT INTO public.sancion (id_estudiante, id_tipo_sancion, motivo, fecha_inicio, fecha_fin, estado, observaciones, id_directivo)
+         VALUES ($1, $2, $3, $4, $5, 'ACTIVA', $6, $7)`,
+        [id, id_tipo_sancion, motivo.trim(), fecha_inicio, fecha_fin, observaciones ? observaciones.trim() : null, id_directivo]
+      );
+    } else {
+      // If student is changed to ACTIVO, EXPULSADO, RETIRADO, etc., revoke any active sanctions
+      await client.query(
+        `UPDATE public.sancion 
+         SET estado = 'REVOCADA', observaciones = COALESCE(observaciones, '') || '\nSanción revocada por cambio de estado del estudiante.' 
+         WHERE id_estudiante = $1 AND estado = 'ACTIVA'`,
+        [id]
+      );
     }
 
     const motivoValue = (estado === 'SANCIONADO' || estado === 'EXPULSADO') ? motivo.trim() : null;
 
-    const result = await pool.query(
+    const result = await client.query(
       "UPDATE estudiante SET estado = $1, motivo_estado = $2 WHERE id_estudiante = $3 RETURNING *",
       [estado, motivoValue, id]
     );
 
     if (result.rowCount === 0) {
-      return res.status(404).json({ error: "Estudiante no encontrado" });
+      throw new Error("Estudiante no encontrado");
     }
 
+    await client.query("COMMIT");
     res.json(result.rows[0]);
+  } catch (error: any) {
+    await client.query("ROLLBACK");
+    res.status(500).json({ error: error.message });
+  } finally {
+    client.release();
+  }
+};
+
+export const getTipoSanciones = async (req: Request, res: Response) => {
+  try {
+    const result = await pool.query("SELECT * FROM tipo_sancion ORDER BY id_tipo_sancion ASC");
+    res.json(result.rows);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -328,8 +384,8 @@ export const getStudentSummary = async (req: Request, res: Response) => {
           CROSS JOIN (
             SELECT id_periodo 
             FROM periodo_academico 
-            WHERE id_colegio = $1 AND "id_año" = (
-              SELECT "id_año" FROM periodo_academico WHERE id_colegio = $1 AND (estado = 'ABIERTO' OR estado = 'CERRADO') ORDER BY id_periodo DESC LIMIT 1
+            WHERE id_colegio = $1 AND id_anio = (
+              SELECT id_anio FROM periodo_academico WHERE id_colegio = $1 AND (estado = 'ABIERTO' OR estado = 'CERRADO') ORDER BY id_periodo DESC LIMIT 1
             )
           ) p
           LEFT JOIN resultado_academico ra 
@@ -415,6 +471,27 @@ export const getStudentSummary = async (req: Request, res: Response) => {
       }
     }
 
+    // 10. Fetch active sanction details if student is SANCIONADO
+    let sanctionInfo = null;
+    if (student.estado === 'SANCIONADO') {
+      const sancRes = await pool.query(
+        `SELECT s.id_sancion, s.motivo, s.fecha_inicio, s.fecha_fin, s.estado, s.observaciones,
+                ts.nombre as tipo_nombre, ts.descripcion as tipo_descripcion,
+                u.nombre || ' ' || u.apellido as directivo_nombre
+         FROM public.sancion s
+         JOIN public.tipo_sancion ts ON s.id_tipo_sancion = ts.id_tipo_sancion
+         JOIN public.directivo d ON s.id_directivo = d.id
+         JOIN public.usuario u ON d.id_usuario = u.id_usuario
+         WHERE s.id_estudiante = $1 AND s.estado = 'ACTIVA'
+         ORDER BY s.id_sancion DESC
+         LIMIT 1`,
+        [id]
+      );
+      if (sancRes.rows.length > 0) {
+        sanctionInfo = sancRes.rows[0];
+      }
+    }
+
     res.json({
       id_estudiante: student.id_estudiante,
       nombre_completo: `${student.nombre} ${student.apellido}`,
@@ -439,7 +516,8 @@ export const getStudentSummary = async (req: Request, res: Response) => {
       failed_subjects_count: materiasReprobadas.length,
       failed_subjects: materiasReprobadas,
       ultima_actividad: ultimaActividad,
-      graduation: graduationInfo
+      graduation: graduationInfo,
+      sanction: sanctionInfo
     });
 
   } catch (error: any) {
@@ -519,8 +597,8 @@ export const graduateStudent = async (req: Request, res: Response): Promise<void
         CROSS JOIN (
           SELECT id_periodo 
           FROM periodo_academico 
-          WHERE id_colegio = $1 AND "id_año" = (
-            SELECT "id_año" FROM periodo_academico WHERE id_colegio = $1 AND (estado = 'ABIERTO' OR estado = 'CERRADO') ORDER BY id_periodo DESC LIMIT 1
+          WHERE id_colegio = $1 AND id_anio = (
+            SELECT id_anio FROM periodo_academico WHERE id_colegio = $1 AND (estado = 'ABIERTO' OR estado = 'CERRADO') ORDER BY id_periodo DESC LIMIT 1
           )
         ) p
         LEFT JOIN resultado_academico ra 

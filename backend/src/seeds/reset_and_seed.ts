@@ -449,6 +449,10 @@ async function insertStudentsAndParents(
   const yearId = yearsRes.rows[0]?.id_anio;
   if (!yearId) return;
 
+  // Get a directivo of the school
+  const directivoRes = await client.query<{ id: number }>('SELECT id FROM directivo WHERE id_colegio = $1 LIMIT 1', [school.id]);
+  const directivoId = directivoRes.rows[0]?.id;
+
   // Get groups for MAÑANA + A, B, C (42 groups: 3 per grade type)
   const groupsRes = await client.query<{ id_grupo: number; id_nivel: number }>(
     `SELECT g.id_grupo, g.id_nivel
@@ -557,6 +561,20 @@ async function insertStudentsAndParents(
         [firstName, lastName, `E-${school.id}-${globalStudentIdx}`, studentCode, 1, group.id_nivel, school.id, studentUserId, studentState, motivoEstado]
       );
       const idEstudiante = estRes.rows[0].id_estudiante;
+
+      if (studentState === "SANCIONADO" && directivoId) {
+        const typeRes = await client.query<{ id_tipo_sancion: number }>(
+          `SELECT id_tipo_sancion FROM tipo_sancion WHERE nombre = 'SUSPENSION_TEMPORAL' LIMIT 1`
+        );
+        const tipoSancionId = typeRes.rows[0]?.id_tipo_sancion;
+        if (tipoSancionId) {
+          await client.query(
+            `INSERT INTO sancion (id_estudiante, id_tipo_sancion, motivo, fecha_inicio, fecha_fin, estado, id_directivo)
+             VALUES ($1, $2, $3, CURRENT_DATE, CURRENT_DATE + INTERVAL '7 days', 'ACTIVA', $4)`,
+            [idEstudiante, tipoSancionId, motivoEstado, directivoId]
+          );
+        }
+      }
 
       // ── Link parent ──
       await client.query(
@@ -820,6 +838,14 @@ async function run(): Promise<void> {
     const addMotivoRevocacionMigrationSql = fs.readFileSync(path.join(__dirname, "../migrations/006_add_motivo_revocacion.sql"), "utf8");
     await client.query(addMotivoRevocacionMigrationSql);
 
+    console.log("📦 Aplicando migración 010 (motivo_estado en estudiante)...");
+    const addMotivoEstadoMigrationSql = fs.readFileSync(path.join(__dirname, "../migrations/010_add_student_motivo_estado.sql"), "utf8");
+    await client.query(addMotivoEstadoMigrationSql);
+
+    console.log("📦 Aplicando migración 011 (tablas de sanción)...");
+    const createSancionTablesMigrationSql = fs.readFileSync(path.join(__dirname, "../migrations/011_create_sancion_tables.sql"), "utf8");
+    await client.query(createSancionTablesMigrationSql);
+
     // ── Phase 2: Schema migrations ──
     console.log("🔧 Migrando columnas adicionales...");
     await client.query(`ALTER TABLE grados ADD COLUMN IF NOT EXISTS seccion VARCHAR(10) DEFAULT 'A';`);
@@ -881,6 +907,8 @@ async function run(): Promise<void> {
       "documento_matriculas",
       "matricula",
       // People
+      "sancion",
+      "tipo_sancion",
       "detalle_padrefamilia",
       "padre_familia",
       "estudiante",

@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict 6YKri3mgRMzn3ZdAO2ljGKX54n0MwmUS66FgEU9mOr0CJ6ZNpaOt7BvgCZuXH6b
+\restrict LYxnwYymgdPzSWjf1JJLnfg2j7bhcgub5uKGJGSkbm5Ir1RzKIDeWXvhoELyxlj
 
 -- Dumped from database version 18.4
 -- Dumped by pg_dump version 18.4
@@ -173,6 +173,19 @@ CREATE TYPE public.estado_resultado AS ENUM (
 
 
 ALTER TYPE public.estado_resultado OWNER TO postgres;
+
+--
+-- Name: estado_sancion; Type: TYPE; Schema: public; Owner: postgres
+--
+
+CREATE TYPE public.estado_sancion AS ENUM (
+    'ACTIVA',
+    'REVOCADA',
+    'VENCIDA'
+);
+
+
+ALTER TYPE public.estado_sancion OWNER TO postgres;
 
 --
 -- Name: estado_supervision; Type: TYPE; Schema: public; Owner: postgres
@@ -366,6 +379,40 @@ $$;
 
 
 ALTER FUNCTION public.fn_bloquear_periodo_cerrado() OWNER TO postgres;
+
+--
+-- Name: fn_sync_estudiante_sancion(); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.fn_sync_estudiante_sancion() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    -- Si la sanción está activa y vigente, poner al estudiante en SANCIONADO
+    IF NEW.estado = 'ACTIVA' AND CURRENT_DATE BETWEEN NEW.fecha_inicio AND NEW.fecha_fin THEN
+        UPDATE public.estudiante
+        SET estado = 'SANCIONADO'
+        WHERE id_estudiante = NEW.id_estudiante;
+    ELSE
+        -- Si no está activa, verificar si le queda alguna otra sanción activa hoy
+        IF NOT EXISTS (
+            SELECT 1 FROM public.sancion
+            WHERE id_estudiante = NEW.id_estudiante
+              AND estado = 'ACTIVA'
+              AND CURRENT_DATE BETWEEN fecha_inicio AND fecha_fin
+        ) THEN
+            -- Si no quedan otras sanciones activas, volver a ACTIVO
+            UPDATE public.estudiante
+            SET estado = 'ACTIVO'
+            WHERE id_estudiante = NEW.id_estudiante AND estado = 'SANCIONADO';
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION public.fn_sync_estudiante_sancion() OWNER TO postgres;
 
 --
 -- Name: proteger_acciones_auditoria(); Type: FUNCTION; Schema: public; Owner: postgres
@@ -2130,6 +2177,49 @@ ALTER SEQUENCE public.rol_id_rol_seq OWNED BY public.rol.id_rol;
 
 
 --
+-- Name: sancion; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.sancion (
+    id_sancion integer NOT NULL,
+    id_estudiante integer NOT NULL,
+    id_tipo_sancion integer NOT NULL,
+    motivo text NOT NULL,
+    fecha_inicio date DEFAULT CURRENT_DATE NOT NULL,
+    fecha_fin date NOT NULL,
+    estado public.estado_sancion DEFAULT 'ACTIVA'::public.estado_sancion,
+    observaciones text,
+    id_directivo integer NOT NULL,
+    creado_en timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_fechas_sancion CHECK ((fecha_fin >= fecha_inicio))
+);
+
+
+ALTER TABLE public.sancion OWNER TO postgres;
+
+--
+-- Name: sancion_id_sancion_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.sancion_id_sancion_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.sancion_id_sancion_seq OWNER TO postgres;
+
+--
+-- Name: sancion_id_sancion_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.sancion_id_sancion_seq OWNED BY public.sancion.id_sancion;
+
+
+--
 -- Name: secciones; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -2230,6 +2320,41 @@ ALTER SEQUENCE public.tipo_grado_tabla_id_tipo_grado_seq OWNER TO postgres;
 --
 
 ALTER SEQUENCE public.tipo_grado_tabla_id_tipo_grado_seq OWNED BY public.tipo_grado.id_tipo_grado;
+
+
+--
+-- Name: tipo_sancion; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.tipo_sancion (
+    id_tipo_sancion integer NOT NULL,
+    nombre character varying(100) NOT NULL,
+    descripcion text
+);
+
+
+ALTER TABLE public.tipo_sancion OWNER TO postgres;
+
+--
+-- Name: tipo_sancion_id_tipo_sancion_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.tipo_sancion_id_tipo_sancion_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.tipo_sancion_id_tipo_sancion_seq OWNER TO postgres;
+
+--
+-- Name: tipo_sancion_id_tipo_sancion_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.tipo_sancion_id_tipo_sancion_seq OWNED BY public.tipo_sancion.id_tipo_sancion;
 
 
 --
@@ -2719,6 +2844,13 @@ ALTER TABLE ONLY public.rol ALTER COLUMN id_rol SET DEFAULT nextval('public.rol_
 
 
 --
+-- Name: sancion id_sancion; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.sancion ALTER COLUMN id_sancion SET DEFAULT nextval('public.sancion_id_sancion_seq'::regclass);
+
+
+--
 -- Name: secciones id_seccion; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -2737,6 +2869,13 @@ ALTER TABLE ONLY public.tipo_documento ALTER COLUMN id_tipodocumento SET DEFAULT
 --
 
 ALTER TABLE ONLY public.tipo_grado ALTER COLUMN id_tipo_grado SET DEFAULT nextval('public.tipo_grado_tabla_id_tipo_grado_seq'::regclass);
+
+
+--
+-- Name: tipo_sancion id_tipo_sancion; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.tipo_sancion ALTER COLUMN id_tipo_sancion SET DEFAULT nextval('public.tipo_sancion_id_tipo_sancion_seq'::regclass);
 
 
 --
@@ -3210,6 +3349,14 @@ ALTER TABLE ONLY public.rol
 
 
 --
+-- Name: sancion sancion_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.sancion
+    ADD CONSTRAINT sancion_pkey PRIMARY KEY (id_sancion);
+
+
+--
 -- Name: secciones secciones_nombre_key; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -3239,6 +3386,22 @@ ALTER TABLE ONLY public.tipo_documento
 
 ALTER TABLE ONLY public.tipo_grado
     ADD CONSTRAINT tipo_grado_tabla_pkey PRIMARY KEY (id_tipo_grado);
+
+
+--
+-- Name: tipo_sancion tipo_sancion_nombre_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.tipo_sancion
+    ADD CONSTRAINT tipo_sancion_nombre_key UNIQUE (nombre);
+
+
+--
+-- Name: tipo_sancion tipo_sancion_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.tipo_sancion
+    ADD CONSTRAINT tipo_sancion_pkey PRIMARY KEY (id_tipo_sancion);
 
 
 --
@@ -3642,6 +3805,13 @@ CREATE TRIGGER trg_proteger_acciones BEFORE DELETE OR UPDATE ON public.auditoria
 --
 
 CREATE TRIGGER trg_proteger_auditoria BEFORE DELETE OR UPDATE ON public.auditoria_supervision FOR EACH ROW EXECUTE FUNCTION public.proteger_auditoria_finalizada();
+
+
+--
+-- Name: sancion trg_sync_estudiante_sancion; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE TRIGGER trg_sync_estudiante_sancion AFTER INSERT OR UPDATE ON public.sancion FOR EACH ROW EXECUTE FUNCTION public.fn_sync_estudiante_sancion();
 
 
 --
@@ -4389,6 +4559,30 @@ ALTER TABLE ONLY public.resultado_academico
 
 
 --
+-- Name: sancion sancion_id_directivo_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.sancion
+    ADD CONSTRAINT sancion_id_directivo_fkey FOREIGN KEY (id_directivo) REFERENCES public.directivo(id) ON DELETE CASCADE;
+
+
+--
+-- Name: sancion sancion_id_estudiante_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.sancion
+    ADD CONSTRAINT sancion_id_estudiante_fkey FOREIGN KEY (id_estudiante) REFERENCES public.estudiante(id_estudiante) ON DELETE CASCADE;
+
+
+--
+-- Name: sancion sancion_id_tipo_sancion_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.sancion
+    ADD CONSTRAINT sancion_id_tipo_sancion_fkey FOREIGN KEY (id_tipo_sancion) REFERENCES public.tipo_sancion(id_tipo_sancion);
+
+
+--
 -- Name: usuario usuario_baneado_por_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -4431,5 +4625,5 @@ REVOKE USAGE ON SCHEMA public FROM PUBLIC;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 6YKri3mgRMzn3ZdAO2ljGKX54n0MwmUS66FgEU9mOr0CJ6ZNpaOt7BvgCZuXH6b
+\unrestrict LYxnwYymgdPzSWjf1JJLnfg2j7bhcgub5uKGJGSkbm5Ir1RzKIDeWXvhoELyxlj
 
