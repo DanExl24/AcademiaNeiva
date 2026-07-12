@@ -209,6 +209,20 @@ async function insertDocumentTypes(client: PoolClient): Promise<void> {
   }
 }
 
+async function insertSanctionTypes(client: PoolClient): Promise<void> {
+  const sanctionTypes = [
+    { nombre: 'SUSPENSION_TEMPORAL', descripcion: 'El estudiante es suspendido de clases por un número específico de días.' },
+    { nombre: 'MATRICULA_CONDICIONAL', descripcion: 'El estudiante continúa con matrícula bajo compromiso de comportamiento.' },
+    { nombre: 'APERCIBIMIENTO', descripcion: 'Advertencia formal por escrito que precede a una sanción mayor.' }
+  ];
+  for (const st of sanctionTypes) {
+    await client.query(
+      `INSERT INTO tipo_sancion (nombre, descripcion) VALUES ($1, $2) ON CONFLICT (nombre) DO NOTHING`,
+      [st.nombre, st.descripcion]
+    );
+  }
+}
+
 async function insertSections(client: PoolClient): Promise<Record<string, number>> {
   const sectionIds: Record<string, number> = {};
   for (const name of sectionNames) {
@@ -942,6 +956,7 @@ async function run(): Promise<void> {
     console.log("📋 Insertando catálogos base...");
     const roleIds = await insertRoles(client);
     await insertDocumentTypes(client);
+    await insertSanctionTypes(client);
     const sectionIds = await insertSections(client);
 
     const directivoHash = await bcrypt.hash(DIRECTIVO_PASSWORD, 10);
