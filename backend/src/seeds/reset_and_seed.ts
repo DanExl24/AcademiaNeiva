@@ -213,7 +213,8 @@ async function insertSanctionTypes(client: PoolClient): Promise<void> {
   const sanctionTypes = [
     { nombre: 'SUSPENSION_TEMPORAL', descripcion: 'El estudiante es suspendido de clases por un número específico de días.' },
     { nombre: 'MATRICULA_CONDICIONAL', descripcion: 'El estudiante continúa con matrícula bajo compromiso de comportamiento.' },
-    { nombre: 'APERCIBIMIENTO', descripcion: 'Advertencia formal por escrito que precede a una sanción mayor.' }
+    { nombre: 'APERCIBIMIENTO', descripcion: 'Advertencia formal por escrito que precede a una sanción mayor.' },
+    { nombre: 'EXPULSION', descripcion: 'El estudiante es retirado permanentemente de la institución.' }
   ];
   for (const st of sanctionTypes) {
     await client.query(
@@ -590,6 +591,20 @@ async function insertStudentsAndParents(
         }
       }
 
+      if (studentState === "EXPULSADO" && directivoId) {
+        const typeRes = await client.query<{ id_tipo_sancion: number }>(
+          `SELECT id_tipo_sancion FROM tipo_sancion WHERE nombre = 'EXPULSION' LIMIT 1`
+        );
+        const tipoSancionId = typeRes.rows[0]?.id_tipo_sancion;
+        if (tipoSancionId) {
+          await client.query(
+            `INSERT INTO sancion (id_estudiante, id_tipo_sancion, motivo, fecha_inicio, fecha_fin, estado, id_directivo)
+             VALUES ($1, $2, $3, CURRENT_DATE, '9999-12-31', 'ACTIVA', $4)`,
+            [idEstudiante, tipoSancionId, motivoEstado, directivoId]
+          );
+        }
+      }
+
       // ── Link parent ──
       await client.query(
         `INSERT INTO detalle_padrefamilia (id_padrefamilia, id_estudiante, id_colegio) VALUES ($1, $2, $3)`,
@@ -859,6 +874,10 @@ async function run(): Promise<void> {
     console.log("📦 Aplicando migración 011 (tablas de sanción)...");
     const createSancionTablesMigrationSql = fs.readFileSync(path.join(__dirname, "../migrations/011_create_sancion_tables.sql"), "utf8");
     await client.query(createSancionTablesMigrationSql);
+
+    console.log("📦 Aplicando migración 012 (soporte de expulsión en sanciones)...");
+    const addExpulsionSanctionMigrationSql = fs.readFileSync(path.join(__dirname, "../migrations/012_add_expulsion_sanction.sql"), "utf8");
+    await client.query(addExpulsionSanctionMigrationSql);
 
     // ── Phase 2: Schema migrations ──
     console.log("🔧 Migrando columnas adicionales...");

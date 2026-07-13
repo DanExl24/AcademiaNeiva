@@ -3070,6 +3070,162 @@ export const deleteSubject = async (req: Request, res: Response): Promise<void> 
   }
 };
 
+export const getSubjectCurriculumDetails = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const subjectId = Number(req.params.id);
+    const schoolId = parseSchoolId(req.query.schoolId as string);
+
+    if (!subjectId || !schoolId) {
+      res.status(400).json({ error: "ID de materia y colegio son obligatorios" });
+      return;
+    }
+
+    // 1. Materia info
+    const subRes = await pool.query(
+      "SELECT * FROM materias WHERE id_materia = $1 AND id_colegio = $2",
+      [subjectId, schoolId]
+    );
+    if (subRes.rows.length === 0) {
+      res.status(404).json({ error: "Materia no encontrada" });
+      return;
+    }
+    const subject = subRes.rows[0];
+
+    // 2. Active academic year
+    const yearRes = await pool.query(
+      "SELECT id_anio, calendario FROM anio_lectivo WHERE id_colegio = $1 AND estado = 'ABIERTO' LIMIT 1",
+      [schoolId]
+    );
+    if (yearRes.rows.length === 0) {
+      res.status(400).json({ error: "No hay un año lectivo abierto para este colegio" });
+      return;
+    }
+    const activeYear = yearRes.rows[0];
+
+    // 3. Periods for the active year
+    const periodsRes = await pool.query(
+      "SELECT id_periodo, nombre, estado, porcentaje FROM periodo_academico WHERE id_anio = $1 ORDER BY id_periodo ASC",
+      [activeYear.id_anio]
+    );
+    const periods = periodsRes.rows;
+
+    // 4. Assignments for this subject
+    const assignmentsRes = await pool.query(
+      `SELECT dg.id_detallegrado, dg.id_docente, dg.id_grupo,
+              d.nombre || ' ' || d.apellido as docente_nombre,
+              ne.nombre as grado_nombre, sec.nombre as seccion_nombre, j.nombre as jornada_nombre
+       FROM detalle_grados dg
+       JOIN docente d ON dg.id_docente = d.id_docente
+       JOIN grupos g ON dg.id_grupo = g.id_grupo
+       JOIN nivel_escolar ne ON g.id_nivel = ne.id_nivel
+       JOIN secciones sec ON g.id_seccion = sec.id_seccion
+       JOIN jornada j ON g.id_jornada = j.id_jornada
+       WHERE dg.id_materia = $1 AND g.id_anio = $2 AND dg.id_colegio = $3
+       ORDER BY ne.nombre, sec.nombre, d.nombre`,
+      [subjectId, activeYear.id_anio, schoolId]
+    );
+    const assignments = assignmentsRes.rows;
+
+    // 5. Competencies and learning evidences for this subject in the active year
+    const compsRes = await pool.query(
+      `SELECT c.id_competencia, c.id_grupo, c.id_periodo, c.descripcion, c.nombre as competencia_nombre,
+              ne.nombre as grado_nombre, sec.nombre as seccion_nombre, p.nombre as periodo_nombre
+       FROM competencias c
+       JOIN grupos g ON c.id_grupo = g.id_grupo
+       JOIN nivel_escolar ne ON g.id_nivel = ne.id_nivel
+       JOIN secciones sec ON g.id_seccion = sec.id_seccion
+       JOIN periodo_academico p ON c.id_periodo = p.id_periodo
+       WHERE c.id_materia = $1 AND c.id_anio = $2 AND c.id_colegio = $3
+       ORDER BY p.id_periodo ASC, ne.nombre ASC, sec.nombre ASC`,
+      [subjectId, activeYear.id_anio, schoolId]
+    );
+    
+    const compIds = compsRes.rows.map(c => c.id_competencia);
+    let evidences: any[] = [];
+    if (compIds.length > 0) {
+      const evRes = await pool.query(
+        `SELECT ea.id_evidencia, ea.id_competencia, ea.descripcion, ea.orden, ea.id_evidencia_dba,
+                ed.codigo as dba_codigo, ed.descripcion as dba_descripcion
+         FROM evidencia_aprendizaje ea
+         LEFT JOIN evidencias_dba ed ON ea.id_evidencia_dba = ed.id_evidencia_dba
+         WHERE ea.id_competencia = ANY($1::int[]) AND ea.id_colegio = $2
+         ORDER BY ea.id_competencia ASC, ea.orden ASC`,
+        [compIds, schoolId]
+      );
+      evidences = evRes.rows;
+    }
+
+    const competencies = compsRes.rows.map(comp => ({
+      ...comp,
+      evidencias: evidences.filter(e => e.id_competencia === comp.id_competencia)
+    }));
+
+    // 6. School groups for the active year
+    const groupsRes = await pool.query(
+      `SELECT g.id_grupo, ne.nombre as grado_nombre, sec.nombre as seccion_nombre, j.nombre as jornada_nombre
+       FROM grupos g
+       JOIN nivel_escolar ne ON g.id_nivel = ne.id_nivel
+       JOIN secciones sec ON g.id_seccion = sec.id_seccion
+       JOIN jornada j ON g.id_jornada = j.id_jornada
+       WHERE g.id_colegio = $1 AND g.id_anio = $2
+       ORDER BY ne.nombre ASC, sec.nombre ASC`,
+      [schoolId, activeYear.id_anio]
+    );
+
+    res.json({
+      subject,
+      activeYear,
+      periods,
+      assignments,
+      competencies,
+      groups: groupsRes.rows
+    });
+  } catch (error: any) {
+    console.error("Error fetching subject curriculum details:", error);
+    res.status(500).json({ error: "Error en el servidor" });
+  }
+};
+
+export const deleteCompetencyByAdmin = async (req: Request, res: Response): Promise<void> => {
+  const competencyId = Number(req.params.id);
+  const schoolId = parseSchoolId(req.query.schoolId as string);
+
+  if (!competencyId || !schoolId) {
+    res.status(400).json({ error: "ID de competencia y colegio son obligatorios" });
+    return;
+  }
+
+  try {
+    const check = await pool.query(
+      `SELECT c.id_competencia, p.estado AS period_estado 
+       FROM competencias c
+       JOIN periodo_academico p ON p.id_periodo = c.id_periodo
+       WHERE c.id_competencia = $1 AND c.id_colegio = $2`,
+      [competencyId, schoolId]
+    );
+
+    if (check.rows.length === 0) {
+      res.status(404).json({ error: "Competencia no encontrada" });
+      return;
+    }
+
+    if (check.rows[0].period_estado === "CERRADO") {
+      res.status(409).json({ error: "No se puede eliminar una competencia en un periodo cerrado" });
+      return;
+    }
+
+    await pool.query(
+      `DELETE FROM competencias WHERE id_competencia = $1 AND id_colegio = $2`,
+      [competencyId, schoolId]
+    );
+
+    res.json({ success: true, message: "Competencia eliminada exitosamente" });
+  } catch (error: any) {
+    console.error("Error deleting competency:", error);
+    res.status(500).json({ error: "Error en el servidor" });
+  }
+};
+
 // ─── Evidencias de Aprendizaje ────────────────────────────────────────────────
 
 export const createEvidencia = async (req: Request, res: Response): Promise<void> => {

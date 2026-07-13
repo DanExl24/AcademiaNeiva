@@ -326,12 +326,34 @@ export class MatriculaService {
       }
     }
 
+    // Fetch expulsion sanction details if cancelled by expulsion
+    let expulsionInfo = null;
+    if (mat.estado === 'CANCELADA' && mat.motivo_cancelacion === 'EXPULSION' && mat.id_estudiante) {
+      const expRes = await pool.query(
+        `SELECT s.id_sancion, s.motivo, s.fecha_inicio, s.fecha_fin, s.estado, s.observaciones,
+                ts.nombre as tipo_nombre, ts.descripcion as tipo_descripcion,
+                u.nombre || ' ' || u.apellido as directivo_nombre
+         FROM public.sancion s
+         JOIN public.tipo_sancion ts ON s.id_tipo_sancion = ts.id_tipo_sancion
+         JOIN public.directivo d ON s.id_directivo = d.id
+         JOIN public.usuario u ON d.id_usuario = u.id_usuario
+         WHERE s.id_estudiante = $1 AND ts.nombre = 'EXPULSION'
+         ORDER BY s.id_sancion DESC
+         LIMIT 1`,
+        [mat.id_estudiante]
+      );
+      if (expRes.rows.length > 0) {
+        expulsionInfo = expRes.rows[0];
+      }
+    }
+
     return {
       ...mat,
       availableSections: sections.rows || [],
       documentos: docs.rows || [],
       existing_parent_user: existingParentUser,
-      renovacion
+      renovacion,
+      expulsion: expulsionInfo
     };
   }
 

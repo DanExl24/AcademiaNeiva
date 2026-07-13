@@ -591,8 +591,12 @@ const exportToSIMAT = () => {
             </td>
             <td class="px-8 py-5 text-right">
               <div class="flex items-center justify-end gap-2">
-                <!-- Revisar Sanción -->
-                <button v-if="s.estado === 'SANCIONADO'" @click="openDrawer(s.id_estudiante)" class="p-2 text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded-xl transition-all" title="Revisar Sanción">
+                <!-- Revisar Sanción / Expulsión -->
+                <button v-if="s.estado === 'SANCIONADO' || s.estado === 'EXPULSADO'" @click="openDrawer(s.id_estudiante)" 
+                  :class="s.estado === 'EXPULSADO' ? 'text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30' : 'text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30'"
+                  class="p-2 rounded-xl transition-all" 
+                  :title="s.estado === 'EXPULSADO' ? 'Revisar Expulsión' : 'Revisar Sanción'"
+                >
                   <ShieldAlert :size="16" />
                 </button>
                 <button @click="openEditModal(s)" class="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 rounded-xl transition-all" title="Editar datos">
@@ -1038,8 +1042,57 @@ const exportToSIMAT = () => {
               </div>
             </div>
 
-            <!-- Sanction/Expulsion Info Card (Fallback or Expelled) -->
-            <div v-if="(studentSummary.estado_estudiante === 'EXPULSADO' || (studentSummary.estado_estudiante === 'SANCIONADO' && !studentSummary.sanction)) && studentSummary.motivo_estado" class="bg-gradient-to-br from-red-50 to-red-100/30 dark:from-slate-900 dark:to-red-950/20 border-2 border-red-200/50 dark:border-red-950/60 rounded-3xl p-5 space-y-3 relative overflow-hidden text-left">
+            <!-- Detailed Expulsion Card -->
+            <div v-if="studentSummary.estado_estudiante === 'EXPULSADO' && studentSummary.sanction" class="bg-gradient-to-br from-red-50 to-red-100/30 dark:from-slate-950 dark:to-red-950/30 border-2 border-red-200/50 dark:border-red-950/60 rounded-3xl p-5 space-y-3 relative overflow-hidden text-left">
+              <div class="absolute -right-4 -bottom-4 text-red-200 dark:text-red-900 opacity-20 pointer-events-none">
+                <UserX :size="80" />
+              </div>
+              <h4 class="text-[10px] font-black text-red-600 dark:text-red-450 uppercase tracking-widest flex items-center gap-1.5 leading-none">
+                <UserX :size="16" />
+                Expulsión Académica / Disciplinaria
+              </h4>
+              <div class="space-y-1">
+                <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Tipo</span>
+                <p class="text-xs font-black text-red-700 dark:text-red-450 uppercase">
+                  EXPULSIÓN PERMANENTE
+                </p>
+              </div>
+              <div class="grid grid-cols-2 gap-2">
+                <div class="space-y-0.5">
+                  <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Fecha Efectiva</span>
+                  <p class="text-xs font-bold text-slate-800 dark:text-slate-200">
+                    {{ new Date(studentSummary.sanction.fecha_inicio).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' }) }}
+                  </p>
+                </div>
+                <div class="space-y-0.5">
+                  <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Vencimiento</span>
+                  <p class="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
+                    Indefinido
+                  </p>
+                </div>
+              </div>
+              <div class="space-y-0.5 pt-1.5 border-t border-red-200/20">
+                <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Motivo</span>
+                <p class="text-xs font-bold text-slate-700 dark:text-slate-350 italic leading-relaxed">
+                  "{{ studentSummary.sanction.motivo }}"
+                </p>
+              </div>
+              <div v-if="studentSummary.sanction.observaciones" class="space-y-0.5 pt-1.5 border-t border-red-200/20">
+                <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Observaciones / Descargo</span>
+                <p class="text-xs font-medium text-slate-650 dark:text-slate-400 leading-relaxed">
+                  {{ studentSummary.sanction.observaciones }}
+                </p>
+              </div>
+              <div class="space-y-0.5 pt-1.5 border-t border-red-200/20">
+                <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Registrada por</span>
+                <p class="text-[10px] font-black text-slate-700 dark:text-slate-300">
+                  {{ studentSummary.sanction.directivo_nombre }}
+                </p>
+              </div>
+            </div>
+
+            <!-- Sanction/Expulsion Info Card (Fallback) -->
+            <div v-if="((studentSummary.estado_estudiante === 'EXPULSADO' && !studentSummary.sanction) || (studentSummary.estado_estudiante === 'SANCIONADO' && !studentSummary.sanction)) && studentSummary.motivo_estado" class="bg-gradient-to-br from-red-50 to-red-100/30 dark:from-slate-900 dark:to-red-950/20 border-2 border-red-200/50 dark:border-red-950/60 rounded-3xl p-5 space-y-3 relative overflow-hidden text-left">
               <div class="absolute -right-4 -bottom-4 text-red-200 dark:text-red-900 opacity-20 pointer-events-none">
                 <AlertCircle :size="80" />
               </div>

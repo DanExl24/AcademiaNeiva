@@ -20,6 +20,7 @@ import {
   ChevronRight,
   BookOpen,
   User,
+  UserX,
   Mail,
   MapPin,
   Download,
@@ -109,7 +110,7 @@ const getStatusMeta = (status: string) => {
 const drawerOpen = ref(false)
 const detailLoading = ref(false)
 const matricula = ref<any>(null)
-const currentStep = ref(1)
+const currentStep = ref<number>(1)
 const selectedGradeId = ref<number | null>(null)
 const savingGrade = ref(false)
 const showNotifyModal = ref(false)
@@ -1085,6 +1086,55 @@ const rejectException = async (id: number) => {
                   </div>
                 </div>
 
+                <!-- Detailed Expulsion Card inside Enrollment Drawer -->
+                <div v-if="matricula.estado === 'CANCELADA' && matricula.expulsion" class="bg-gradient-to-br from-red-50 to-red-100/30 dark:from-slate-950 dark:to-red-950/30 border-2 border-red-200/50 dark:border-red-950/60 rounded-3xl p-5 space-y-3 relative overflow-hidden text-left font-sans">
+                  <div class="absolute -right-4 -bottom-4 text-red-200 dark:text-red-900 opacity-20 pointer-events-none">
+                    <UserX :size="80" />
+                  </div>
+                  <h4 class="text-[10px] font-black text-red-600 dark:text-red-450 uppercase tracking-widest flex items-center gap-1.5 leading-none">
+                    <XCircle :size="16" />
+                    Detalle de Expulsión del Alumno
+                  </h4>
+                  <div class="space-y-1">
+                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Estado de Matrícula</span>
+                    <p class="text-xs font-black text-red-700 dark:text-red-450 uppercase">
+                      CANCELADA POR EXPULSIÓN
+                    </p>
+                  </div>
+                  <div class="grid grid-cols-2 gap-2">
+                    <div class="space-y-0.5">
+                      <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Fecha Efectiva</span>
+                      <p class="text-xs font-bold text-slate-800 dark:text-slate-200">
+                        {{ new Date(matricula.expulsion.fecha_inicio).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' }) }}
+                      </p>
+                    </div>
+                    <div class="space-y-0.5">
+                      <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Vencimiento</span>
+                      <p class="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
+                        Indefinido
+                      </p>
+                    </div>
+                  </div>
+                  <div class="space-y-0.5 pt-1.5 border-t border-red-200/20">
+                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Motivo</span>
+                    <p class="text-xs font-bold text-slate-700 dark:text-slate-350 italic leading-relaxed">
+                      "{{ matricula.expulsion.motivo }}"
+                    </p>
+                  </div>
+                  <div v-if="matricula.expulsion.observaciones" class="space-y-0.5 pt-1.5 border-t border-red-200/20">
+                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Observaciones / Descargo</span>
+                    <p class="text-xs font-medium text-slate-650 dark:text-slate-400 leading-relaxed">
+                      {{ matricula.expulsion.observaciones }}
+                    </p>
+                  </div>
+                  <div class="space-y-0.5 pt-1.5 border-t border-red-200/20">
+                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Registrada por</span>
+                    <p class="text-[10px] font-black text-slate-700 dark:text-slate-300">
+                      {{ matricula.expulsion.directivo_nombre }}
+                    </p>
+                  </div>
+                </div>
+
                 <!-- Info card -->
                 <div class="bg-slate-50 dark:bg-slate-800/40 rounded-3xl p-6">
                   <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">Referencia de Solicitud</p>
@@ -1109,15 +1159,15 @@ const rejectException = async (id: number) => {
                   </label>
                 </div>
 
-                <!-- Section Selector -->
-                <div class="space-y-3">
+                <!-- Section Selector / Assigned Room display -->
+                <div v-if="!isReadonly" class="space-y-3">
                   <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Seleccionar Salón</p>
                   <div class="space-y-2">
                     <button
                       v-for="section in matricula.availableSections"
                       :key="section.id_grado"
                       @click="selectedGradeId = section.id_grado"
-                      :disabled="section.cupos_restantes <= 0 || isReadonly"
+                      :disabled="section.cupos_restantes <= 0"
                       :class="[
                         selectedGradeId === section.id_grado
                           ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/20 ring-2 ring-indigo-100 dark:ring-indigo-900'
@@ -1143,12 +1193,42 @@ const rejectException = async (id: number) => {
                   </div>
                 </div>
 
+                <!-- Static Room Assigned Card (for ACTIVA or TRASLADADA) -->
+                <div v-else-if="matricula.estado !== 'CANCELADA'" class="bg-indigo-50/30 dark:bg-indigo-950/10 border border-indigo-100/50 dark:border-indigo-900/50 rounded-3xl p-5">
+                  <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">Salón Asignado</p>
+                  <div class="flex items-center gap-3">
+                    <div class="bg-indigo-600 text-white h-11 w-11 rounded-xl flex items-center justify-center font-black text-lg">
+                      {{ matricula.seccion || 'A' }}
+                    </div>
+                    <div>
+                      <p class="font-black text-slate-900 dark:text-white text-sm">{{ matricula.tipo_grado }} ({{ matricula.seccion || 'A' }})</p>
+                      <p class="text-[10px] text-slate-400">{{ matricula.jornada }}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Room display for CANCELADA -->
+                <div v-else class="bg-slate-50 dark:bg-slate-850/50 rounded-3xl p-5 border border-slate-100 dark:border-slate-800">
+                  <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">Salón Asignado</p>
+                  <p class="text-xs font-bold text-slate-500 italic">Ninguno (Matrícula Cancelada)</p>
+                </div>
+
+                <!-- Navigation button -->
                 <button
+                  v-if="!isReadonly"
                   @click="assignRoom"
-                  :disabled="!selectedGradeId || savingGrade || isReadonly"
+                  :disabled="!selectedGradeId || savingGrade"
                   class="w-full py-4 bg-slate-900 dark:bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-600 dark:hover:bg-indigo-700 transition-all shadow-xl disabled:opacity-30 flex items-center justify-center gap-2"
                 >
-                  {{ matricula.estado === 'ACTIVA' ? 'Continuar' : 'Confirmar y Continuar' }}
+                  Confirmar y Continuar
+                  <ArrowLeft :size="18" class="rotate-180" />
+                </button>
+                <button
+                  v-else
+                  @click="currentStep = 2"
+                  class="w-full py-4 bg-slate-900 dark:bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-600 dark:hover:bg-indigo-700 transition-all shadow-xl flex items-center justify-center gap-2"
+                >
+                  Ver Documentos
                   <ArrowLeft :size="18" class="rotate-180" />
                 </button>
               </div>
@@ -1228,11 +1308,7 @@ const rejectException = async (id: number) => {
                   <div v-else class="text-slate-500 dark:text-slate-400 text-xs font-medium">Valida todos los documentos para continuar.</div>
 
                   <div class="flex gap-2">
-                    <button v-if="isReadonly" @click="currentStep = 3"
-                            class="px-5 py-2.5 bg-emerald-600 text-white rounded-xl font-black text-xs uppercase tracking-wide hover:bg-emerald-700 transition-all flex items-center gap-1.5 shadow-lg shadow-emerald-100 dark:shadow-none">
-                      Ver Resumen <ArrowLeft :size="14" class="rotate-180" />
-                    </button>
-                    <button v-else-if="['PENDIENTE', 'CORRECCION'].includes(matricula.estado) && allValidated" @click="currentStep = 3"
+                    <button v-if="['PENDIENTE', 'CORRECCION'].includes(matricula.estado) && allValidated" @click="currentStep = 3"
                             class="px-5 py-2.5 bg-indigo-600 text-white rounded-xl font-black text-xs uppercase tracking-wide hover:bg-indigo-700 transition-all flex items-center gap-1.5 shadow-lg shadow-indigo-100 dark:shadow-none">
                       Siguiente <ArrowLeft :size="14" class="rotate-180" />
                     </button>

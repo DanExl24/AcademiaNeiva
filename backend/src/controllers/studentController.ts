@@ -134,8 +134,7 @@ export const updateStudentStatus = async (req: Request, res: Response) => {
     if (!id_directivo) {
       return res.status(403).json({ error: "El usuario actual no está registrado como directivo" });
     }
-
-    if (estado === 'SANCIONADO') {
+    if (estado === 'SANCIONADO') {
       if (!id_tipo_sancion) {
         return res.status(400).json({ error: "El tipo de sanción es obligatorio" });
       }
@@ -155,8 +154,35 @@ export const updateStudentStatus = async (req: Request, res: Response) => {
          VALUES ($1, $2, $3, $4, $5, 'ACTIVA', $6, $7)`,
         [id, id_tipo_sancion, motivo.trim(), fecha_inicio, fecha_fin, observaciones ? observaciones.trim() : null, id_directivo]
       );
+    } else if (estado === 'EXPULSADO') {
+      if (!motivo || motivo.trim().length < 10) {
+        return res.status(400).json({ error: "El motivo de la expulsión es obligatorio y debe tener al menos 10 caracteres" });
+      }
+
+      // Revoke any existing active sanctions
+      await client.query(
+        `UPDATE public.sancion 
+         SET estado = 'REVOCADA', observaciones = COALESCE(observaciones, '') || '\nSanción revocada por expulsión del estudiante.' 
+         WHERE id_estudiante = $1 AND estado = 'ACTIVA'`,
+        [id]
+      );
+
+      // Find expulsion type ID
+      const typeRes = await client.query("SELECT id_tipo_sancion FROM tipo_sancion WHERE nombre = 'EXPULSION' LIMIT 1");
+      const expulsionTypeId = typeRes.rows[0]?.id_tipo_sancion;
+
+      if (!expulsionTypeId) {
+        return res.status(500).json({ error: "No se encontró el tipo de sanción EXPULSION en el sistema." });
+      }
+
+      // Insert active expulsion sanction with end date '9999-12-31'
+      await client.query(
+        `INSERT INTO public.sancion (id_estudiante, id_tipo_sancion, motivo, fecha_inicio, fecha_fin, estado, observaciones, id_directivo)
+         VALUES ($1, $2, $3, CURRENT_DATE, '9999-12-31', 'ACTIVA', NULL, $4)`,
+        [id, expulsionTypeId, motivo.trim(), id_directivo]
+      );
     } else {
-      // If student is changed to ACTIVO, EXPULSADO, RETIRADO, etc., revoke any active sanctions
+      // If student is changed to ACTIVO, RETIRADO, etc., revoke any active sanctions
       await client.query(
         `UPDATE public.sancion 
          SET estado = 'REVOCADA', observaciones = COALESCE(observaciones, '') || '\nSanción revocada por cambio de estado del estudiante.' 
@@ -471,9 +497,9 @@ export const getStudentSummary = async (req: Request, res: Response) => {
       }
     }
 
-    // 10. Fetch active sanction details if student is SANCIONADO
+    // 10. Fetch active sanction details if student is SANCIONADO or EXPULSADO
     let sanctionInfo = null;
-    if (student.estado === 'SANCIONADO') {
+    if (student.estado === 'SANCIONADO' || student.estado === 'EXPULSADO') {
       const sancRes = await pool.query(
         `SELECT s.id_sancion, s.motivo, s.fecha_inicio, s.fecha_fin, s.estado, s.observaciones,
                 ts.nombre as tipo_nombre, ts.descripcion as tipo_descripcion,

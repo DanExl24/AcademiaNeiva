@@ -24,6 +24,8 @@ import {
   reopenAcademicPeriod,
   reopenSubjectClosure,
   upsertCompetencyByAdmin,
+  getSubjectCurriculumDetails,
+  deleteCompetencyByAdmin,
   updateAcademicPeriodPercentage,
   getPeriodClosureDetails,
   updateManualScaleConfiguration,
@@ -93,6 +95,7 @@ router.patch("/groups/:id/rename", renameSingleCourse);
 router.patch("/grade-types/:id/bulk-rename", bulkRenameCourses);
 router.delete("/groups/:id", deleteGroup);
 router.get("/subjects/:schoolId", getSubjects);
+router.get("/subjects/:id/curriculum-details", getSubjectCurriculumDetails);
 router.get("/subjects/trash/:schoolId", getSubjectTrash);
 router.post("/subjects", createSubject);
 router.delete("/subjects/:id", deleteSubject);
@@ -110,6 +113,7 @@ router.post("/settings/periods", createAcademicPeriod);
 router.patch("/settings/periods/:id/percentage", updateAcademicPeriodPercentage);
 router.get("/settings/closure-details/:schoolId/:periodId", getPeriodClosureDetails);
 router.post("/settings/competencies", upsertCompetencyByAdmin);
+router.delete("/settings/competencies/:id", deleteCompetencyByAdmin);
 router.post("/settings/periods/:id/close", closeAcademicPeriod);
 router.post("/settings/periods/:id/approve", approveAcademicPeriod);
 router.post("/settings/periods/:id/reopen", reopenAcademicPeriod);

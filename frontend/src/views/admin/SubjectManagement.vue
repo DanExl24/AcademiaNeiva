@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import axios from 'axios'
-import { BookOpen, Plus, Trash2, Search, Info, Layers, GraduationCap } from 'lucide-vue-next'
+import { BookOpen, Plus, Trash2, Search, Info, Layers, GraduationCap, X, Edit, Calendar, PlusCircle } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 import { getCourseDisplayName } from '../../utils/courseHelper'
 
@@ -165,6 +165,182 @@ const confirmDelete = async (item: SubjectItem, force = false) => {
   }
 }
 
+// ─── Curriculum Detail State & Methods ───────────────────────────────────────
+const detailDrawerOpen = ref(false)
+const detailLoading = ref(false)
+const selectedSubjectId = ref<number | null>(null)
+const subjectDetails = ref<any>(null)
+const activeTab = ref('curriculum') // 'curriculum' | 'teachers'
+
+// Filters for curriculum
+const selectedPeriodId = ref<number | null>(null)
+
+const filteredCompetencies = computed(() => {
+  if (!subjectDetails.value?.competencies || !selectedPeriodId.value) return []
+  return subjectDetails.value.competencies.filter((c: any) => c.id_periodo === selectedPeriodId.value)
+})
+
+// Forms for adding/editing competencies and evidences
+const showCompetencyModal = ref(false)
+const competencyForm = ref({
+  id_competencia: null as number | null,
+  id_grupo: null as number | null,
+  id_periodo: null as number | null,
+  descripcion: ''
+})
+const savingCompetency = ref(false)
+
+const showEvidenceModal = ref(false)
+const evidenceForm = ref({
+  id_evidencia: null as number | null,
+  id_competencia: null as number | null,
+  descripcion: ''
+})
+const savingEvidence = ref(false)
+
+const openSubjectDetails = async (id: number) => {
+  selectedSubjectId.value = id
+  detailDrawerOpen.value = true
+  await fetchSubjectDetails()
+}
+
+const fetchSubjectDetails = async () => {
+  if (!selectedSubjectId.value || !schoolId.value) return
+  try {
+    detailLoading.value = true
+    const response = await axios.get(`http://localhost:3000/api/academic-admin/subjects/${selectedSubjectId.value}/curriculum-details`, {
+      params: { schoolId: schoolId.value }
+    })
+    subjectDetails.value = response.data
+    
+    // Set default filter period if not set
+    if (response.data.periods?.length > 0 && !selectedPeriodId.value) {
+      const openPeriod = response.data.periods.find((p: any) => p.estado === 'ABIERTO')
+      selectedPeriodId.value = openPeriod ? openPeriod.id_periodo : response.data.periods[0].id_periodo
+    }
+  } catch (error) {
+    console.error('Error fetching subject details:', error)
+    alert('Error al cargar los detalles de la asignatura.')
+    detailDrawerOpen.value = false
+  } finally {
+    detailLoading.value = false
+  }
+}
+
+// COMPETENCIES
+const openAddCompetency = () => {
+  competencyForm.value = {
+    id_competencia: null,
+    id_grupo: subjectDetails.value.groups?.[0]?.id_grupo || null,
+    id_periodo: selectedPeriodId.value || subjectDetails.value.periods?.[0]?.id_periodo || null,
+    descripcion: ''
+  }
+  showCompetencyModal.value = true
+}
+
+const openEditCompetency = (comp: any) => {
+  competencyForm.value = {
+    id_competencia: comp.id_competencia,
+    id_grupo: comp.id_grupo,
+    id_periodo: comp.id_periodo,
+    descripcion: comp.descripcion
+  }
+  showCompetencyModal.value = true
+}
+
+const saveCompetency = async () => {
+  if (!competencyForm.value.descripcion.trim()) {
+    alert('Escribe la descripción de la competencia.')
+    return
+  }
+  try {
+    savingCompetency.value = true
+    await axios.post('http://localhost:3000/api/academic-admin/settings/competencies', {
+      schoolId: schoolId.value,
+      groupId: competencyForm.value.id_grupo,
+      subjectId: selectedSubjectId.value,
+      periodId: competencyForm.value.id_periodo,
+      descripcion: competencyForm.value.descripcion.trim()
+    })
+    showCompetencyModal.value = false
+    await fetchSubjectDetails()
+  } catch (error: any) {
+    alert(error.response?.data?.error || 'Error al guardar la competencia')
+  } finally {
+    savingCompetency.value = false
+  }
+}
+
+const deleteCompetency = async (id: number) => {
+  if (!confirm('¿Estás seguro de que deseas eliminar esta competencia? Se eliminarán todas sus evidencias y notas asociadas.')) return
+  try {
+    await axios.delete(`http://localhost:3000/api/academic-admin/settings/competencies/${id}`, {
+      params: { schoolId: schoolId.value }
+    })
+    await fetchSubjectDetails()
+  } catch (error: any) {
+    alert(error.response?.data?.error || 'Error al eliminar la competencia')
+  }
+}
+
+// EVIDENCES
+const openAddEvidence = (competenciaId: number) => {
+  evidenceForm.value = {
+    id_evidencia: null,
+    id_competencia: competenciaId,
+    descripcion: ''
+  }
+  showEvidenceModal.value = true
+}
+
+const openEditEvidence = (ev: any) => {
+  evidenceForm.value = {
+    id_evidencia: ev.id_evidencia,
+    id_competencia: ev.id_competencia,
+    descripcion: ev.descripcion
+  }
+  showEvidenceModal.value = true
+}
+
+const saveEvidence = async () => {
+  if (!evidenceForm.value.descripcion.trim()) {
+    alert('Escribe la descripción de la evidencia.')
+    return
+  }
+  try {
+    savingEvidence.value = true
+    if (evidenceForm.value.id_evidencia) {
+      await axios.put(`http://localhost:3000/api/academic-admin/settings/evidencias/${evidenceForm.value.id_evidencia}`, {
+        schoolId: schoolId.value,
+        descripcion: evidenceForm.value.descripcion.trim()
+      })
+    } else {
+      await axios.post(`http://localhost:3000/api/academic-admin/settings/competencies/${evidenceForm.value.id_competencia}/evidencias`, {
+        schoolId: schoolId.value,
+        descripcion: evidenceForm.value.descripcion.trim()
+      })
+    }
+    showEvidenceModal.value = false
+    await fetchSubjectDetails()
+  } catch (error: any) {
+    alert(error.response?.data?.error || 'Error al guardar la evidencia')
+  } finally {
+    savingEvidence.value = false
+  }
+}
+
+const deleteEvidence = async (id: number) => {
+  if (!confirm('¿Estás seguro de que deseas eliminar esta evidencia?')) return
+  try {
+    await axios.delete(`http://localhost:3000/api/academic-admin/settings/evidencias/${id}`, {
+      params: { schoolId: schoolId.value }
+    })
+    await fetchSubjectDetails()
+  } catch (error: any) {
+    alert(error.response?.data?.error || 'Error al eliminar la evidencia')
+  }
+}
+
 onMounted(loadSubjects)
 </script>
 
@@ -227,7 +403,8 @@ onMounted(loadSubjects)
         <div 
           v-for="item in filteredSubjects" 
           :key="item.id_materia"
-          class="group bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-md hover:border-emerald-200 dark:hover:border-emerald-900 transition-all flex flex-col justify-between"
+          class="group bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-md hover:border-emerald-200 dark:hover:border-emerald-900 cursor-pointer transition-all flex flex-col justify-between"
+          @click="openSubjectDetails(item.id_materia)"
         >
           <div class="flex items-start justify-between mb-4">
             <div class="flex items-center gap-3">
@@ -236,7 +413,7 @@ onMounted(loadSubjects)
               </div>
               <h4 class="font-black text-slate-800 dark:text-white text-lg truncate max-w-[150px]">{{ item.nombre }}</h4>
             </div>
-            <button @click="deleteModal = item" class="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-xl transition-all">
+            <button @click.stop="deleteModal = item" class="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-xl transition-all">
               <Trash2 :size="18" />
             </button>
           </div>
@@ -472,6 +649,302 @@ onMounted(loadSubjects)
             <button @click="selectedTrashItem = null" class="w-full mt-8 py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-black rounded-2xl transition-all hover:translate-y-[-1px]">
               Cerrar Visor
             </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Subject Curriculum Details Drawer -->
+      <Transition
+        enter-active-class="transition-opacity duration-300 ease-out"
+        enter-from-class="opacity-0"
+        enter-to-class="opacity-100"
+        leave-active-class="transition-opacity duration-200 ease-in"
+        leave-from-class="opacity-100"
+        leave-to-class="opacity-0"
+      >
+        <div v-if="detailDrawerOpen" class="fixed inset-0 z-50 overflow-hidden font-sans">
+          <!-- Backdrop overlay -->
+          <div class="absolute inset-0 bg-slate-950/40 backdrop-blur-sm transition-opacity" @click="detailDrawerOpen = false"></div>
+
+          <div class="absolute inset-y-0 right-0 max-w-full flex pl-10">
+            <Transition
+              enter-active-class="transform transition duration-300 ease-out"
+              enter-from-class="translate-x-full"
+              enter-to-class="translate-x-0"
+              leave-active-class="transform transition duration-200 ease-in"
+              leave-from-class="translate-x-0"
+              leave-to-class="translate-x-full"
+            >
+              <div class="w-screen max-w-2xl bg-white dark:bg-slate-900 shadow-2xl flex flex-col">
+                
+                <!-- Drawer Header -->
+                <div class="px-6 py-6 bg-slate-50/50 dark:bg-slate-800/30 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                  <div class="flex items-center gap-3">
+                    <div class="p-3 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 rounded-xl">
+                      <BookOpen :size="24" />
+                    </div>
+                    <div>
+                      <h2 class="text-xl font-black text-slate-900 dark:text-white leading-tight">
+                        {{ subjectDetails?.subject?.nombre || 'Detalles de la Materia' }}
+                      </h2>
+                      <p class="text-xs font-bold text-slate-400 uppercase mt-0.5 tracking-wider">
+                        Año Lectivo {{ subjectDetails?.activeYear?.calendario || 'Activo' }}
+                      </p>
+                    </div>
+                  </div>
+                  <button @click="detailDrawerOpen = false" class="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all">
+                    <X :size="20" />
+                  </button>
+                </div>
+
+                <!-- Tabs -->
+                <div class="px-6 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 flex gap-4">
+                  <button
+                    @click="activeTab = 'curriculum'"
+                    :class="[activeTab === 'curriculum' ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-600', 'py-4 border-b-2 font-black text-xs uppercase tracking-widest transition-all']"
+                  >
+                    Estructura Curricular
+                  </button>
+                  <button
+                    @click="activeTab = 'teachers'"
+                    :class="[activeTab === 'teachers' ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-600', 'py-4 border-b-2 font-black text-xs uppercase tracking-widest transition-all']"
+                  >
+                    Docentes y Cursos ({{ subjectDetails?.assignments?.length || 0 }})
+                  </button>
+                </div>
+
+                <!-- Drawer Content -->
+                <div class="flex-1 overflow-y-auto min-h-0 bg-slate-50/30 dark:bg-slate-900/10 custom-scrollbar">
+                  <div v-if="detailLoading" class="p-8 text-center text-slate-400 font-bold">
+                    Cargando estructura...
+                  </div>
+
+                  <div v-else class="p-6">
+                    
+                    <!-- TAB 1: Estructura Curricular -->
+                    <div v-if="activeTab === 'curriculum'" class="space-y-6">
+                      <!-- Period filter / Quick Actions -->
+                      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div class="flex items-center gap-2">
+                          <Calendar :size="16" class="text-slate-400" />
+                          <select 
+                            v-model="selectedPeriodId" 
+                            class="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-800 rounded-xl p-2.5 text-xs font-black uppercase tracking-wider text-slate-700 dark:text-white outline-none"
+                          >
+                            <option v-for="p in subjectDetails?.periods" :key="p.id_periodo" :value="p.id_periodo">
+                              {{ p.nombre }} ({{ p.porcentaje }}%)
+                            </option>
+                          </select>
+                        </div>
+
+                        <button @click="openAddCompetency" class="px-4 py-2.5 bg-emerald-600 text-white rounded-xl font-bold text-xs uppercase tracking-wide flex items-center gap-1.5 hover:bg-emerald-700 transition-all shadow-md">
+                          <PlusCircle :size="14" />
+                          Agregar Competencia
+                        </button>
+                      </div>
+
+                      <!-- Competencies list -->
+                      <div class="space-y-4">
+                        <div v-if="!filteredCompetencies.length" class="text-center py-16 bg-white dark:bg-slate-800/40 border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl">
+                          <BookOpen :size="32" class="mx-auto text-slate-350 dark:text-slate-600 mb-2" />
+                          <p class="text-sm font-bold text-slate-400">No hay competencias definidas para este periodo.</p>
+                        </div>
+
+                        <div 
+                          v-for="comp in filteredCompetencies" 
+                          :key="comp.id_competencia"
+                          class="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-800/80 rounded-2xl overflow-hidden shadow-sm"
+                        >
+                          <!-- Competency Header -->
+                          <div class="p-4 bg-slate-50/50 dark:bg-slate-800/20 border-b border-slate-100 dark:border-slate-800/60 flex items-start justify-between gap-4">
+                            <div class="flex-1 space-y-1.5 text-left">
+                              <span class="inline-block px-2.5 py-0.5 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 rounded-md text-[9px] font-black uppercase tracking-wider">
+                                Curso: {{ comp.grado_nombre }} ({{ comp.seccion_nombre }})
+                              </span>
+                              <p class="text-sm font-bold text-slate-800 dark:text-slate-200">
+                                {{ comp.descripcion }}
+                              </p>
+                            </div>
+                            <!-- Actions -->
+                            <div class="flex items-center gap-1.5 shrink-0">
+                              <button @click="openEditCompetency(comp)" class="p-1.5 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-350 hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-emerald-950/40 rounded-lg transition-colors">
+                                <Edit :size="14" />
+                              </button>
+                              <button @click="deleteCompetency(comp.id_competencia)" class="p-1.5 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-350 hover:bg-red-55 hover:text-red-600 dark:hover:bg-red-950/40 rounded-lg transition-colors">
+                                <Trash2 :size="14" />
+                              </button>
+                            </div>
+                          </div>
+
+                          <!-- Evidences List -->
+                          <div class="p-4 bg-white dark:bg-slate-800/25 space-y-3">
+                            <div class="flex items-center justify-between px-1">
+                              <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Evidencias de Aprendizaje</span>
+                              <button @click="openAddEvidence(comp.id_competencia)" class="text-xs font-black text-emerald-600 dark:text-emerald-450 hover:underline flex items-center gap-1">
+                                <Plus :size="12" /> Añadir
+                              </button>
+                            </div>
+
+                            <div v-if="!comp.evidencias?.length" class="text-center py-6 bg-slate-50/20 dark:bg-slate-900/10 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
+                              <p class="text-xs font-bold text-slate-400 italic">No hay evidencias definidas.</p>
+                            </div>
+
+                            <div v-else class="divide-y divide-slate-50 dark:divide-slate-800/40">
+                              <div 
+                                v-for="(ev, idx) in comp.evidencias" 
+                                :key="ev.id_evidencia"
+                                class="py-3 flex items-start justify-between gap-3 text-left group/ev"
+                              >
+                                <div class="flex items-start gap-2.5">
+                                  <span class="mt-0.5 w-5 h-5 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-[10px] font-black text-slate-500">
+                                    {{ Number(idx) + 1 }}
+                                  </span>
+                                  <div>
+                                    <p class="text-xs font-bold text-slate-650 dark:text-slate-300">
+                                      {{ ev.descripcion }}
+                                    </p>
+                                    <span v-if="ev.dba_codigo" class="inline-block mt-1 text-[8px] font-black bg-purple-50 dark:bg-purple-950/30 text-purple-600 dark:text-purple-400 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                                      DBA: {{ ev.dba_codigo }}
+                                    </span>
+                                  </div>
+                                </div>
+                                <!-- Actions -->
+                                <div class="flex items-center gap-1 shrink-0 opacity-0 group-hover/ev:opacity-100 transition-opacity">
+                                  <button @click="openEditEvidence(ev)" class="p-1 text-slate-400 hover:text-emerald-600 rounded">
+                                    <Edit :size="12" />
+                                  </button>
+                                  <button @click="deleteEvidence(ev.id_evidencia)" class="p-1 text-slate-400 hover:text-red-600 rounded">
+                                    <Trash2 :size="12" />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- TAB 2: Docentes y Cursos (Asignaciones) -->
+                    <div v-if="activeTab === 'teachers'" class="space-y-4">
+                      <div v-if="!subjectDetails?.assignments?.length" class="text-center py-16 bg-white dark:bg-slate-850 rounded-2xl border border-slate-100 dark:border-slate-800">
+                        <GraduationCap :size="36" class="mx-auto text-slate-350 dark:text-slate-600 mb-2" />
+                        <p class="text-sm font-bold text-slate-400">Esta asignatura no tiene docentes asignados en este año lectivo.</p>
+                      </div>
+
+                      <div 
+                        v-for="asg in subjectDetails?.assignments" 
+                        :key="asg.id_detallegrado"
+                        class="p-4 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-800/80 rounded-2xl flex items-center justify-between gap-4"
+                      >
+                        <div class="flex items-center gap-3">
+                          <div class="h-10 w-10 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center rounded-xl font-black text-sm">
+                            {{ asg.docente_nombre.charAt(0).toUpperCase() }}
+                          </div>
+                          <div class="text-left">
+                            <h4 class="font-black text-slate-800 dark:text-white text-sm">{{ asg.docente_nombre }}</h4>
+                            <p class="text-xs font-bold text-indigo-500 uppercase mt-0.5 tracking-wider">
+                              {{ asg.grado_nombre }} ({{ asg.seccion_nombre }}) · {{ asg.jornada_nombre }}
+                            </p>
+                          </div>
+                        </div>
+                        <span class="px-2.5 py-1 bg-slate-50 dark:bg-slate-700/50 text-slate-500 dark:text-slate-400 rounded-lg text-[10px] font-black uppercase tracking-wider border border-slate-100 dark:border-slate-700">
+                          Asignado
+                        </span>
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
+
+                <!-- Footer -->
+                <div class="px-6 py-4 bg-slate-50/50 dark:bg-slate-800/30 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+                  <button @click="detailDrawerOpen = false" class="px-6 py-3.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl font-bold text-xs uppercase tracking-wider hover:bg-slate-800 transition-all">
+                    Cerrar panel
+                  </button>
+                </div>
+
+              </div>
+            </Transition>
+          </div>
+        </div>
+      </Transition>
+
+      <!-- Competency Add/Edit Modal -->
+      <div v-if="showCompetencyModal" class="fixed inset-0 z-[130] flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" @click="showCompetencyModal = false"></div>
+        <div class="relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-[32px] overflow-hidden border border-white/20 shadow-2xl animate-fade-in">
+          <div class="px-8 pt-8 pb-6 bg-slate-50/50 dark:bg-slate-800/30 border-b border-slate-100 dark:border-slate-800">
+            <h2 class="text-xl font-black text-slate-900 dark:text-white uppercase tracking-wider">
+              {{ competencyForm.id_competencia ? 'Editar Competencia' : 'Nueva Competencia' }}
+            </h2>
+            <p class="text-xs font-medium text-slate-500 mt-1">Ingresa los detalles académicos de la competencia para la materia.</p>
+          </div>
+
+          <div class="p-8 space-y-5">
+            <!-- Group selection (Disabled if editing) -->
+            <div class="space-y-1.5 text-left">
+              <label class="text-xs font-black text-slate-400 uppercase tracking-widest">Curso / Grupo</label>
+              <select 
+                v-model="competencyForm.id_grupo" 
+                :disabled="!!competencyForm.id_competencia"
+                class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-emerald-500/20 rounded-xl p-3 font-bold outline-none text-slate-900 dark:text-white"
+              >
+                <option v-for="g in subjectDetails?.groups" :key="g.id_grupo" :value="g.id_grupo">
+                  {{ g.grado_nombre }} ({{ g.seccion_nombre }}) · {{ g.jornada_nombre }}
+                </option>
+              </select>
+            </div>
+
+            <!-- Description -->
+            <div class="space-y-1.5 text-left">
+              <label class="text-xs font-black text-slate-400 uppercase tracking-widest">Descripción de la Competencia</label>
+              <textarea 
+                v-model="competencyForm.descripcion" 
+                rows="4"
+                placeholder="Ej. Resuelve y formula problemas utilizando las propiedades de las funciones reales..." 
+                class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-emerald-500/20 rounded-2xl p-4 font-bold outline-none text-slate-900 dark:text-white transition-all placeholder:text-slate-400"
+              ></textarea>
+            </div>
+
+            <div class="flex gap-3 pt-2">
+              <button @click="showCompetencyModal = false" class="flex-1 px-6 py-3.5 rounded-xl font-black text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all text-xs uppercase">Cancelar</button>
+              <button @click="saveCompetency" :disabled="savingCompetency" class="flex-[2] bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3.5 rounded-xl font-black transition-all disabled:opacity-50 text-xs uppercase tracking-wide">
+                {{ savingCompetency ? 'Guardando...' : 'Confirmar Guardado' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Learning Evidence Add/Edit Modal -->
+      <div v-if="showEvidenceModal" class="fixed inset-0 z-[130] flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" @click="showEvidenceModal = false"></div>
+        <div class="relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-[32px] overflow-hidden border border-white/20 shadow-2xl animate-fade-in">
+          <div class="px-8 pt-8 pb-6 bg-slate-50/50 dark:bg-slate-800/30 border-b border-slate-100 dark:border-slate-800">
+            <h2 class="text-xl font-black text-slate-900 dark:text-white uppercase tracking-wider">
+              {{ evidenceForm.id_evidencia ? 'Editar Evidencia' : 'Nueva Evidencia de Aprendizaje' }}
+            </h2>
+            <p class="text-xs font-medium text-slate-500 mt-1">Escribe la evidencia observable para comprobar el avance del estudiante.</p>
+          </div>
+
+          <div class="p-8 space-y-5">
+            <!-- Description -->
+            <div class="space-y-1.5 text-left">
+              <label class="text-xs font-black text-slate-400 uppercase tracking-widest">Descripción de la Evidencia</label>
+              <textarea 
+                v-model="evidenceForm.descripcion" 
+                rows="4"
+                placeholder="Ej. Identifica límites laterales a partir de la gráfica de una función..." 
+                class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-emerald-500/20 rounded-2xl p-4 font-bold outline-none text-slate-900 dark:text-white transition-all placeholder:text-slate-400"
+              ></textarea>
+            </div>
+
+            <div class="flex gap-3 pt-2">
+              <button @click="showEvidenceModal = false" class="flex-1 px-6 py-3.5 rounded-xl font-black text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all text-xs uppercase">Cancelar</button>
+              <button @click="saveEvidence" :disabled="savingEvidence" class="flex-[2] bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3.5 rounded-xl font-black transition-all disabled:opacity-50 text-xs uppercase tracking-wide">
+                {{ savingEvidence ? 'Guardando...' : 'Confirmar Guardado' }}
+              </button>
+            </div>
           </div>
         </div>
       </div>
