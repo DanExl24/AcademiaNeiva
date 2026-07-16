@@ -934,7 +934,11 @@ export const getAcademicSettingsData = async (req: Request, res: Response): Prom
              SELECT 1 
              FROM colegio_version_curricular cvc
              WHERE cvc.id_colegio = c.id_colegio
-               AND cvc.area = m.nombre
+               AND (
+                 cvc.area = m.nombre
+                 OR (tg.nombre = 'TRANSICION' AND cvc.area = 'Desarrollo Integral' AND m.nombre = 'Desarrollo Integral (Transición)')
+                 OR (tg.nombre = 'TRANSICION' AND cvc.area = 'Desarrollo Integral (Transición)' AND m.nombre = 'Desarrollo Integral')
+               )
                AND cvc.grado = tg.nombre
            ) AS usa_dba,
            CASE
@@ -2560,6 +2564,12 @@ export const assignTeacherCourseSubject = async (req: Request, res: Response): P
     );
 
     const context = contextRes.rows[0];
+    if (context.tipo_grado_nombre === "TRANSICION" && 
+        context.materia_nombre !== "Desarrollo Integral" && 
+        context.materia_nombre !== "Desarrollo Integral (Transición)") {
+      res.status(400).json({ error: "El grado Transición únicamente puede tener asignada la materia Desarrollo Integral." });
+      return;
+    }
     const courseName = `${context.tipo_grado_nombre} ${context.seccion_nombre} - ${context.jornada_nombre} - ${context.nivel_nombre}`;
 
     const existingRes = await pool.query(
@@ -3120,9 +3130,9 @@ export const getSubjectCurriculumDetails = async (req: Request, res: Response): 
        JOIN nivel_escolar ne ON g.id_nivel = ne.id_nivel
        JOIN secciones sec ON g.id_seccion = sec.id_seccion
        JOIN jornada j ON g.id_jornada = j.id_jornada
-       WHERE dg.id_materia = $1 AND g.id_anio = $2 AND dg.id_colegio = $3
+       WHERE dg.id_materia = $1 AND dg.id_colegio = $2
        ORDER BY ne.nombre, sec.nombre, d.nombre`,
-      [subjectId, activeYear.id_anio, schoolId]
+      [subjectId, schoolId]
     );
     const assignments = assignmentsRes.rows;
 
@@ -3145,9 +3155,10 @@ export const getSubjectCurriculumDetails = async (req: Request, res: Response): 
     if (compIds.length > 0) {
       const evRes = await pool.query(
         `SELECT ea.id_evidencia, ea.id_competencia, ea.descripcion, ea.orden, ea.id_evidencia_dba,
-                ed.codigo as dba_codigo, ed.descripcion as dba_descripcion
+                ('DBA ' || d.numero_dba) as dba_codigo, ed.descripcion as dba_descripcion
          FROM evidencia_aprendizaje ea
          LEFT JOIN evidencias_dba ed ON ea.id_evidencia_dba = ed.id_evidencia_dba
+         LEFT JOIN dba d ON ed.id_dba = d.id_dba
          WHERE ea.id_competencia = ANY($1::int[]) AND ea.id_colegio = $2
          ORDER BY ea.id_competencia ASC, ea.orden ASC`,
         [compIds, schoolId]
@@ -3167,9 +3178,9 @@ export const getSubjectCurriculumDetails = async (req: Request, res: Response): 
        JOIN nivel_escolar ne ON g.id_nivel = ne.id_nivel
        JOIN secciones sec ON g.id_seccion = sec.id_seccion
        JOIN jornada j ON g.id_jornada = j.id_jornada
-       WHERE g.id_colegio = $1 AND g.id_anio = $2
+       WHERE g.id_colegio = $1
        ORDER BY ne.nombre ASC, sec.nombre ASC`,
-      [schoolId, activeYear.id_anio]
+      [schoolId]
     );
 
     res.json({
@@ -5152,12 +5163,23 @@ export const getDbaPlaneacionDisponibles = async (req: Request, res: Response): 
   }
 
   try {
-    // 1. Obtener la versión curricular asignada
     const cvcRes = await pool.query(
       `SELECT cvc.version_curricular
        FROM colegio_version_curricular cvc
        WHERE cvc.id_colegio = $1
-         AND cvc.area = (SELECT nombre FROM materias WHERE id_materia = $2)
+         AND (
+           cvc.area = (SELECT nombre FROM materias WHERE id_materia = $2)
+           OR (
+             (SELECT tg2.nombre FROM grupos g2 JOIN tipo_grado tg2 ON tg2.id_tipo_grado = g2.id_tipo_grado WHERE g2.id_grupo = $3) = 'TRANSICION'
+             AND cvc.area = 'Desarrollo Integral'
+             AND (SELECT nombre FROM materias WHERE id_materia = $2) = 'Desarrollo Integral (Transición)'
+           )
+           OR (
+             (SELECT tg2.nombre FROM grupos g2 JOIN tipo_grado tg2 ON tg2.id_tipo_grado = g2.id_tipo_grado WHERE g2.id_grupo = $3) = 'TRANSICION'
+             AND cvc.area = 'Desarrollo Integral (Transición)'
+             AND (SELECT nombre FROM materias WHERE id_materia = $2) = 'Desarrollo Integral'
+           )
+         )
          AND cvc.grado = (
            SELECT tg.nombre 
            FROM grupos g 
@@ -5191,7 +5213,19 @@ export const getDbaPlaneacionDisponibles = async (req: Request, res: Response): 
                 ), '[]'::json
               ) AS evidencias
        FROM dba d
-       WHERE d.area = (SELECT nombre FROM materias WHERE id_materia = $1)
+       WHERE (
+         d.area = (SELECT nombre FROM materias WHERE id_materia = $1)
+         OR (
+           (SELECT tg.nombre FROM grupos g JOIN tipo_grado tg ON tg.id_tipo_grado = g.id_tipo_grado WHERE g.id_grupo = $2) = 'TRANSICION'
+           AND d.area = 'Desarrollo Integral'
+           AND (SELECT nombre FROM materias WHERE id_materia = $1) = 'Desarrollo Integral (Transición)'
+         )
+         OR (
+           (SELECT tg.nombre FROM grupos g JOIN tipo_grado tg ON tg.id_tipo_grado = g.id_tipo_grado WHERE g.id_grupo = $2) = 'TRANSICION'
+           AND d.area = 'Desarrollo Integral (Transición)'
+           AND (SELECT nombre FROM materias WHERE id_materia = $1) = 'Desarrollo Integral'
+         )
+       )
          AND d.grado = (
            SELECT tg.nombre 
            FROM grupos g 

@@ -172,12 +172,80 @@ const selectedSubjectId = ref<number | null>(null)
 const subjectDetails = ref<any>(null)
 const activeTab = ref('curriculum') // 'curriculum' | 'teachers'
 
+// Period check helper
+const isSelectedPeriodClosed = computed(() => {
+  if (!subjectDetails.value?.periods || !selectedPeriodId.value) return false
+  const period = subjectDetails.value.periods.find((p: any) => p.id_periodo === selectedPeriodId.value)
+  return period ? period.estado === 'CERRADO' : false
+})
+
 // Filters for curriculum
 const selectedPeriodId = ref<number | null>(null)
+const selectedCurriculumGroupId = ref<number | null>(null)
+const curriculumSearchQuery = ref('')
 
 const filteredCompetencies = computed(() => {
   if (!subjectDetails.value?.competencies || !selectedPeriodId.value) return []
-  return subjectDetails.value.competencies.filter((c: any) => c.id_periodo === selectedPeriodId.value)
+  let list = subjectDetails.value.competencies.filter((c: any) => c.id_periodo === selectedPeriodId.value)
+  
+  if (selectedCurriculumGroupId.value) {
+    list = list.filter((c: any) => c.id_grupo === selectedCurriculumGroupId.value)
+  }
+  
+  const q = curriculumSearchQuery.value.trim().toLowerCase()
+  if (q) {
+    list = list.filter((c: any) => 
+      c.descripcion.toLowerCase().includes(q) ||
+      (c.evidencias && c.evidencias.some((e: any) => e.descripcion.toLowerCase().includes(q)))
+    )
+  }
+  return list
+})
+
+// Filters for assignments (teachers & groups)
+const selectedTeacherId = ref<number | null>(null)
+const selectedAssignmentGroupId = ref<number | null>(null)
+const assignmentSearchQuery = ref('')
+
+const filteredAssignments = computed(() => {
+  if (!subjectDetails.value?.assignments) return []
+  let list = subjectDetails.value.assignments
+  
+  if (selectedTeacherId.value) {
+    list = list.filter((a: any) => a.id_docente === selectedTeacherId.value)
+  }
+  
+  if (selectedAssignmentGroupId.value) {
+    list = list.filter((a: any) => a.id_grupo === selectedAssignmentGroupId.value)
+  }
+  
+  const q = assignmentSearchQuery.value.trim().toLowerCase()
+  if (q) {
+    list = list.filter((a: any) => 
+      a.docente_nombre.toLowerCase().includes(q) ||
+      (a.grado_nombre + ' ' + a.seccion_nombre).toLowerCase().includes(q)
+    )
+  }
+  return list
+})
+
+// Unique lists for assignments filters
+const uniqueTeachers = computed(() => {
+  if (!subjectDetails.value?.assignments) return []
+  const map = new Map()
+  subjectDetails.value.assignments.forEach((a: any) => {
+    map.set(a.id_docente, a.docente_nombre)
+  })
+  return Array.from(map.entries()).map(([id, name]) => ({ id, name }))
+})
+
+const uniqueAssignmentGroups = computed(() => {
+  if (!subjectDetails.value?.assignments) return []
+  const map = new Map()
+  subjectDetails.value.assignments.forEach((a: any) => {
+    map.set(a.id_grupo, `${a.grado_nombre} (${a.seccion_nombre})`)
+  })
+  return Array.from(map.entries()).map(([id, name]) => ({ id, name }))
 })
 
 // Forms for adding/editing competencies and evidences
@@ -201,6 +269,15 @@ const savingEvidence = ref(false)
 const openSubjectDetails = async (id: number) => {
   selectedSubjectId.value = id
   detailDrawerOpen.value = true
+  
+  // Reset filters
+  selectedPeriodId.value = null
+  selectedCurriculumGroupId.value = null
+  curriculumSearchQuery.value = ''
+  selectedTeacherId.value = null
+  selectedAssignmentGroupId.value = null
+  assignmentSearchQuery.value = ''
+  
   await fetchSubjectDetails()
 }
 
@@ -737,10 +814,42 @@ onMounted(loadSubjects)
                           </select>
                         </div>
 
-                        <button @click="openAddCompetency" class="px-4 py-2.5 bg-emerald-600 text-white rounded-xl font-bold text-xs uppercase tracking-wide flex items-center gap-1.5 hover:bg-emerald-700 transition-all shadow-md">
+                        <button 
+                          v-if="!isSelectedPeriodClosed" 
+                          @click="openAddCompetency" 
+                          class="px-4 py-2.5 bg-emerald-600 text-white rounded-xl font-bold text-xs uppercase tracking-wide flex items-center gap-1.5 hover:bg-emerald-700 transition-all shadow-md"
+                        >
                           <PlusCircle :size="14" />
                           Agregar Competencia
                         </button>
+                        <div v-else class="px-4 py-2 bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-455 border border-amber-100 dark:border-amber-900 rounded-xl text-[10px] font-black uppercase tracking-widest leading-none flex items-center gap-1">
+                          <Info :size="14" /> Periodo Cerrado (Solo Lectura)
+                        </div>
+                      </div>
+
+                      <!-- Curriculum Search & Group Filters -->
+                      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
+                        <div class="space-y-1 text-left">
+                          <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Filtrar por Curso</label>
+                          <select 
+                            v-model="selectedCurriculumGroupId" 
+                            class="w-full bg-white dark:bg-slate-850 border border-slate-100 dark:border-slate-800 rounded-xl p-2 text-xs font-bold outline-none text-slate-900 dark:text-white"
+                          >
+                            <option :value="null">Todos los cursos</option>
+                            <option v-for="g in subjectDetails?.groups" :key="g.id_grupo" :value="g.id_grupo">
+                              {{ g.grado_nombre }} ({{ g.seccion_nombre }})
+                            </option>
+                          </select>
+                        </div>
+                        <div class="space-y-1 text-left">
+                          <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Buscar Competencia / Evidencia</label>
+                          <input 
+                            v-model="curriculumSearchQuery" 
+                            type="text" 
+                            placeholder="Buscar por texto..."
+                            class="w-full bg-white dark:bg-slate-850 border border-slate-100 dark:border-slate-800 rounded-xl p-2 text-xs font-bold outline-none text-slate-900 dark:text-white placeholder:text-slate-400"
+                          />
+                        </div>
                       </div>
 
                       <!-- Competencies list -->
@@ -766,7 +875,7 @@ onMounted(loadSubjects)
                               </p>
                             </div>
                             <!-- Actions -->
-                            <div class="flex items-center gap-1.5 shrink-0">
+                            <div v-if="!isSelectedPeriodClosed" class="flex items-center gap-1.5 shrink-0">
                               <button @click="openEditCompetency(comp)" class="p-1.5 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-350 hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-emerald-950/40 rounded-lg transition-colors">
                                 <Edit :size="14" />
                               </button>
@@ -780,7 +889,7 @@ onMounted(loadSubjects)
                           <div class="p-4 bg-white dark:bg-slate-800/25 space-y-3">
                             <div class="flex items-center justify-between px-1">
                               <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Evidencias de Aprendizaje</span>
-                              <button @click="openAddEvidence(comp.id_competencia)" class="text-xs font-black text-emerald-600 dark:text-emerald-450 hover:underline flex items-center gap-1">
+                              <button v-if="!isSelectedPeriodClosed" @click="openAddEvidence(comp.id_competencia)" class="text-xs font-black text-emerald-600 dark:text-emerald-450 hover:underline flex items-center gap-1">
                                 <Plus :size="12" /> Añadir
                               </button>
                             </div>
@@ -809,7 +918,7 @@ onMounted(loadSubjects)
                                   </div>
                                 </div>
                                 <!-- Actions -->
-                                <div class="flex items-center gap-1 shrink-0 opacity-0 group-hover/ev:opacity-100 transition-opacity">
+                                <div v-if="!isSelectedPeriodClosed" class="flex items-center gap-1 shrink-0 opacity-0 group-hover/ev:opacity-100 transition-opacity">
                                   <button @click="openEditEvidence(ev)" class="p-1 text-slate-400 hover:text-emerald-600 rounded">
                                     <Edit :size="12" />
                                   </button>
@@ -826,13 +935,50 @@ onMounted(loadSubjects)
 
                     <!-- TAB 2: Docentes y Cursos (Asignaciones) -->
                     <div v-if="activeTab === 'teachers'" class="space-y-4">
-                      <div v-if="!subjectDetails?.assignments?.length" class="text-center py-16 bg-white dark:bg-slate-850 rounded-2xl border border-slate-100 dark:border-slate-800">
+                      <!-- Filters & Search for Assignments -->
+                      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
+                        <div class="space-y-1 text-left">
+                          <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Filtrar por Docente</label>
+                          <select 
+                            v-model="selectedTeacherId" 
+                            class="w-full bg-white dark:bg-slate-850 border border-slate-100 dark:border-slate-800 rounded-xl p-2 text-xs font-bold outline-none text-slate-900 dark:text-white"
+                          >
+                            <option :value="null">Todos los docentes</option>
+                            <option v-for="t in uniqueTeachers" :key="t.id" :value="t.id">
+                              {{ t.name }}
+                            </option>
+                          </select>
+                        </div>
+                        <div class="space-y-1 text-left">
+                          <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Filtrar por Curso</label>
+                          <select 
+                            v-model="selectedAssignmentGroupId" 
+                            class="w-full bg-white dark:bg-slate-850 border border-slate-100 dark:border-slate-800 rounded-xl p-2 text-xs font-bold outline-none text-slate-900 dark:text-white"
+                          >
+                            <option :value="null">Todos los cursos</option>
+                            <option v-for="g in uniqueAssignmentGroups" :key="g.id" :value="g.id">
+                              {{ g.name }}
+                            </option>
+                          </select>
+                        </div>
+                        <div class="space-y-1 text-left">
+                          <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Buscador Rápido</label>
+                          <input 
+                            v-model="assignmentSearchQuery" 
+                            type="text" 
+                            placeholder="Buscar docente o curso..."
+                            class="w-full bg-white dark:bg-slate-850 border border-slate-100 dark:border-slate-800 rounded-xl p-2 text-xs font-bold outline-none text-slate-900 dark:text-white placeholder:text-slate-400"
+                          />
+                        </div>
+                      </div>
+
+                      <div v-if="!filteredAssignments.length" class="text-center py-16 bg-white dark:bg-slate-850 rounded-2xl border border-slate-100 dark:border-slate-800">
                         <GraduationCap :size="36" class="mx-auto text-slate-350 dark:text-slate-600 mb-2" />
-                        <p class="text-sm font-bold text-slate-400">Esta asignatura no tiene docentes asignados en este año lectivo.</p>
+                        <p class="text-sm font-bold text-slate-400">No se encontraron asignaciones con los filtros seleccionados.</p>
                       </div>
 
                       <div 
-                        v-for="asg in subjectDetails?.assignments" 
+                        v-for="asg in filteredAssignments" 
                         :key="asg.id_detallegrado"
                         class="p-4 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-800/80 rounded-2xl flex items-center justify-between gap-4"
                       >

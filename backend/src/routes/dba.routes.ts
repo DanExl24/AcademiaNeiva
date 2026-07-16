@@ -15,7 +15,9 @@ import {
   asignarVersionColegio,
   listarAsignaciones,
   estadisticasDBA,
-  importarDBAPDF
+  importarDBAPDF,
+  eliminarDBA,
+  listarCombinacionesDba
 } from "../controllers/dbaController";
 
 const router = Router();
@@ -28,6 +30,7 @@ const router = Router();
 router.get("/dba/versiones", verifyToken, requireAdminGeneral, listarVersiones);
 router.get("/dba/areas", verifyToken, requireAdminGeneral, listarAreas);
 router.get("/dba/estadisticas", verifyToken, requireAdminGeneral, estadisticasDBA);
+router.get("/dba/existentes", verifyToken, requireAdminGeneral, listarCombinacionesDba);
 
 // CRUD de DBA
 router.get("/dba", verifyToken, requireAdminGeneral, listarDBA);
@@ -35,6 +38,7 @@ router.get("/dba/:id", verifyToken, requireAdminGeneral, detalleDBA);
 router.post("/dba", verifyToken, requireAdminGeneral, crearDBA);
 router.put("/dba/:id", verifyToken, requireAdminGeneral, actualizarDBA);
 router.patch("/dba/:id/estado", verifyToken, requireAdminGeneral, cambiarEstadoDBA);
+router.delete("/dba/:id", verifyToken, requireAdminGeneral, eliminarDBA);
 
 // Importar PDF masivamente
 router.post("/dba/importar", verifyToken, requireAdminGeneral, upload.single("pdf"), importarDBAPDF);

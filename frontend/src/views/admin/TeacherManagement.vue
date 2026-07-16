@@ -245,6 +245,14 @@ const assignCourseSubject = async (replaceExisting = false) => {
   if (!assignmentForm.value.id_grupo || !assignmentForm.value.id_materia) {
     alert('Selecciona curso y materia.'); return
   }
+  const selectedGroup = groups.value.find((g: any) => g.id_grupo === Number(assignmentForm.value.id_grupo))
+  const selectedSubject = subjects.value.find((s: any) => s.id_materia === Number(assignmentForm.value.id_materia))
+  if (selectedGroup && selectedGroup.tipo_grado_nombre === 'TRANSICION') {
+    if (selectedSubject && selectedSubject.nombre !== 'Desarrollo Integral' && selectedSubject.nombre !== 'Desarrollo Integral (Transición)') {
+      alert('El grado Transición únicamente puede tener asignada la materia Desarrollo Integral.')
+      return
+    }
+  }
   try {
     savingAssignment.value = true
     await axios.post('http://localhost:3000/api/academic-admin/teacher-assignments', {

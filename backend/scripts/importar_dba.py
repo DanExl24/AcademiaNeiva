@@ -19,7 +19,9 @@ GRADE_MAP = {
     "8": "OCTAVO",
     "9": "NOVENO",
     "10": "DECIMO",
-    "11": "ONCE"
+    "11": "ONCE",
+    "transicion": "TRANSICION",
+    "transición": "TRANSICION"
 }
 
 def clean_text(text):
@@ -72,6 +74,7 @@ def parse_pdf(pdf_path, start_page, area_default="Ciencias Naturales", version_d
     """
     doc = fitz.open(pdf_path)
     dbas = []
+    is_english = "ingl" in area_default.lower() or "ingl" in pdf_path.lower()
     
     def get_rgb(color_int):
         r = (color_int >> 16) & 255
@@ -81,19 +84,22 @@ def parse_pdf(pdf_path, start_page, area_default="Ciencias Naturales", version_d
 
     def is_dark_color(color_int):
         r, g, b = get_rgb(color_int)
-        return r < 100 and g < 100 and b < 100
+        limit = 150 if current_grade == "TRANSICION" else 100
+        return r < limit and g < limit and b < limit
 
     def is_white_or_light_gray(color_int):
         r, g, b = get_rgb(color_int)
         return r > 240 and g > 240 and b > 240
 
     def parse_grade_from_text(text):
+        if re.search(r"transici[oó]n", text, re.IGNORECASE):
+            return "TRANSICION"
         match = re.search(r"Grado\s+(\d+)", text, re.IGNORECASE)
         if match:
             return GRADE_MAP.get(match.group(1))
         return None
 
-    current_grade = "PRIMERO"
+    current_grade = "TRANSICION" if ("transic" in pdf_path.lower() or "integral" in area_default.lower()) else "PRIMERO"
     
     # Detectar el color del tema dinámicamente escaneando las páginas a partir de start_page
     theme_color = None
@@ -135,7 +141,7 @@ def parse_pdf(pdf_path, start_page, area_default="Ciencias Naturales", version_d
             continue
             
         # Detectar el grado en esta página buscando en los spans superiores
-        top_spans = [s for s in spans if s['bbox'][1] < 100]
+        top_spans = [s for s in spans if s['bbox'][1] < 150]
         for s in top_spans:
             detected = parse_grade_from_text(s['text'])
             if detected:
@@ -199,21 +205,37 @@ def parse_pdf(pdf_path, start_page, area_default="Ciencias Naturales", version_d
                     i += 1
                     continue
                     
-                if state == "LOOKING_FOR_DBA":
-                    is_num = re.match(r"^(\d+)\.?$", text)
-                    is_theme_color = (color == theme_color or not is_dark_color(color)) and not is_white_or_light_gray(color)
-                    if is_num and is_theme_color:
-                        dba_num = int(is_num.group(1))
-                        current_dba = {
-                            "numero_dba": dba_num,
-                            "enunciado": "",
-                            "evidencias": [],
-                            "grado": current_grade,
-                            "area": area_default,
-                            "version": version_default
-                        }
-                        state = "READING_ENUNCIADO"
+                is_num = re.match(r"^(\d+)\.?$", text)
+                is_dba_number_format = False
+                if is_num:
+                    dba_num = int(is_num.group(1))
+                    if dba_num <= 100:
+                        is_theme_color = (color == theme_color or not is_dark_color(color)) and (not is_white_or_light_gray(color) or current_grade == "TRANSICION")
+                        is_english_num = is_english and (color == 5790043 or "condensed" in font)
+                        if is_theme_color or is_english_num:
+                            is_dba_number_format = True
+
+                if is_dba_number_format:
+                    if current_dba:
+                        if current_evidence:
+                            current_dba["evidencias"].append(clean_text(current_evidence))
+                            current_evidence = ""
+                        dbas.append(current_dba)
+                    current_dba = {
+                        "numero_dba": dba_num,
+                        "enunciado": "",
+                        "evidencias": [],
+                        "grado": current_grade,
+                        "area": area_default,
+                        "version": version_default
+                    }
+                    state = "READING_ENUNCIADO"
                     i += 1
+                    continue
+
+                if state == "LOOKING_FOR_DBA":
+                    i += 1
+                    continue
                     
                 elif state == "READING_ENUNCIADO":
                     is_theme_color = (color == theme_color or not is_dark_color(color)) and not is_white_or_light_gray(color)
