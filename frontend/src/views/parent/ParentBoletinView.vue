@@ -57,7 +57,7 @@ const fetchYears = async () => {
 const fetchPeriods = async () => {
   if (!selectedChildId.value || !selectedYear.value) return
   try {
-    const res = await axios.get(`http://localhost:3000/api/student/periods/${selectedChildId.value}/${selectedYear.value}`)
+    const res = await axios.get(`http://localhost:3000/api/student/all-periods/${selectedChildId.value}/${selectedYear.value}`)
     periods.value = res.data
     if (periods.value.length > 0) {
       selectedPeriodId.value = periods.value[periods.value.length - 1].id_periodo
@@ -151,8 +151,8 @@ watch(selectedYear, async (newVal) => {
                 v-model="selectedPeriodId"
                 class="w-full h-12 bg-slate-50 dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-xl px-4 font-bold text-sm text-slate-700 dark:text-slate-200 focus:border-indigo-500 transition-all cursor-pointer outline-none"
               >
-                <option v-if="periods.length === 0" disabled value="">No hay periodos</option>
-                <option v-for="p in periods" :key="p.id_periodo" :value="p.id_periodo">{{ p.nombre }}</option>
+                <option v-if="periods.length === 0" disabled value="">No hay periodos disponibles</option>
+                <option v-for="p in periods" :key="p.id_periodo" :value="p.id_periodo">{{ p.nombre }}{{ p.estado === 'ABIERTO' ? ' - En Curso' : '' }}</option>
               </select>
             </div>
           </div>

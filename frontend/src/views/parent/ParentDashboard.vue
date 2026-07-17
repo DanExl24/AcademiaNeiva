@@ -49,7 +49,7 @@ import BoletinExportModule from '../../components/boletines/BoletinExportModule.
 
 const auth = useAuthStore()
 const selectedChildId = ref<number | null>(null)
-const selectedPeriodId = ref<number | null>(null)
+const selectedPeriodId = ref<number | 'all' | null>(null)
 const loading = ref(true)
 const dashboardData = ref<any>({
   children: [],
@@ -141,6 +141,32 @@ const cumulativeStats = computed(() => {
     promedio: parseFloat((data.sum / data.count).toFixed(2))
   })).sort((a,b) => a.periodo.localeCompare(b.periodo))
 
+  // Aggregate subjects for all children to calculate averaged grades per unique subject
+  const materiasMap = new Map<string, { totalCalificacion: number; count: number; detalles: { estudiante: string; calificacion: number }[] }>()
+  
+  stats.forEach((s: any) => {
+    const child = dashboardData.value?.children?.find((c: any) => c.id_estudiante === s.id_estudiante)
+    const childName = child ? `${child.nombre}` : `Estudiante #${s.id_estudiante}`
+
+    s.grades?.forEach((g: any) => {
+      const current = materiasMap.get(g.materia) || { totalCalificacion: 0, count: 0, detalles: [] }
+      current.totalCalificacion += g.calificacion
+      current.count += 1
+      current.detalles.push({ estudiante: childName, calificacion: g.calificacion })
+      materiasMap.set(g.materia, current)
+    })
+  })
+
+  const globalGrades = Array.from(materiasMap.entries()).map(([materia, data]) => ({
+    materia,
+    calificacion: parseFloat((data.totalCalificacion / data.count).toFixed(2)),
+    detalles: data.detalles
+  }))
+
+  const sortedGlobalGrades = [...globalGrades].sort((a, b) => b.calificacion - a.calificacion)
+  const top_materias_mejores = sortedGlobalGrades.slice(0, 5)
+  const top_materias_peores = [...sortedGlobalGrades].reverse().slice(0, 5)
+
   return {
     id_estudiante: null,
     average: parseFloat(totalAvg.toFixed(2)),
@@ -149,7 +175,9 @@ const cumulativeStats = computed(() => {
     attendanceRate: Math.round(attRate),
     attendanceDetails: attTotal,
     pendingActivities: totalPending,
-    evolution: globalEvolution
+    evolution: globalEvolution,
+    top_materias_mejores,
+    top_materias_peores
   }
 })
 
@@ -205,24 +233,80 @@ const familyChartOptions = {
 
 // Evolution Chart: Active (Single or Family Avg)
 const lineChartData = computed(() => {
-  if (!activeStats.value) return { labels: [], datasets: [] }
-  const evolution = activeStats.value.evolution || []
-  return {
-    labels: evolution.map((e: any) => e.periodo),
-    datasets: [
-      {
-        label: selectedChildId.value === null ? 'Promedio Familiar' : 'Promedio Individual',
-        backgroundColor: 'rgba(79, 70, 229, 0.1)',
-        borderColor: '#4f46e5',
-        pointBackgroundColor: '#4f46e5',
+  const periodsList = dashboardData.value?.periods || []
+  if (periodsList.length === 0) return { labels: [], datasets: [] }
+  
+  const periodNames = periodsList.map((p: any) => p.nombre)
+
+  const colors = [
+    { border: '#4f46e5', bg: 'rgba(79, 70, 229, 0.03)' }, // Indigo
+    { border: '#10b981', bg: 'rgba(16, 185, 129, 0.03)' }, // Emerald
+    { border: '#f43f5e', bg: 'rgba(244, 63, 94, 0.03)' }, // Rose
+    { border: '#f59e0b', bg: 'rgba(245, 158, 11, 0.03)' }, // Amber
+    { border: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.03)' }  // Violet
+  ]
+
+  // If selectedChildId is null (All Children), render one line per child
+  if (selectedChildId.value === null) {
+    const stats = dashboardData.value?.studentStats || []
+    const datasets = stats.map((s: any, idx: number) => {
+      const child = dashboardData.value?.children?.find((c: any) => c.id_estudiante === s.id_estudiante)
+      const name = child ? child.nombre : `Hijo #${s.id_estudiante}`
+      const color = colors[idx % colors.length]
+
+      const data = periodNames.map(pName => {
+        const ev = s.evolution?.find((e: any) => e.periodo === pName)
+        return ev ? ev.promedio : null
+      })
+
+      return {
+        label: name,
+        backgroundColor: color.bg,
+        borderColor: color.border,
+        pointBackgroundColor: color.border,
         pointBorderColor: '#fff',
         pointHoverBackgroundColor: '#fff',
-        pointHoverBorderColor: '#4f46e5',
-        data: evolution.map((e: any) => e.promedio),
+        pointHoverBorderColor: color.border,
+        data,
         fill: true,
         tension: 0.4
       }
-    ]
+    })
+
+    return {
+      labels: periodNames,
+      datasets
+    }
+  } else {
+    // If a specific child is selected, render only their line
+    const s = dashboardData.value?.studentStats?.find((st: any) => st.id_estudiante === selectedChildId.value)
+    if (!s) return { labels: [], datasets: [] }
+
+    const child = dashboardData.value?.children?.find((c: any) => c.id_estudiante === selectedChildId.value)
+    const name = child ? child.nombre : 'Estudiante'
+    
+    const data = periodNames.map(pName => {
+      const ev = s.evolution?.find((e: any) => e.periodo === pName)
+      return ev ? ev.promedio : null
+    })
+
+    return {
+      labels: periodNames,
+      datasets: [
+        {
+          label: `Promedio de ${name}`,
+          backgroundColor: 'rgba(79, 70, 229, 0.05)',
+          borderColor: '#4f46e5',
+          pointBackgroundColor: '#4f46e5',
+          pointBorderColor: '#fff',
+          pointHoverBackgroundColor: '#fff',
+          pointHoverBorderColor: '#4f46e5',
+          data,
+          fill: true,
+          tension: 0.4
+        }
+      ]
+    }
   }
 })
 
@@ -230,7 +314,16 @@ const lineChartOptions = {
   responsive: true,
   maintainAspectRatio: false,
   plugins: {
-    legend: { display: false },
+    legend: { 
+      display: selectedChildId.value === null, // Display legend only in All Children mode
+      position: 'top' as const,
+      labels: {
+        usePointStyle: true,
+        boxWidth: 6,
+        padding: 15,
+        font: { weight: 'bold' as const, size: 10 }
+      }
+    },
     tooltip: {
       backgroundColor: '#1e293b',
       padding: 12,
@@ -268,6 +361,93 @@ const doughnutChartOptions = {
     legend: { position: 'bottom' as const, labels: { usePointStyle: true, padding: 20 } }
   },
   cutout: '70%'
+}
+
+// Top 5 Best / Worst Subjects Chart Logic
+const activeChartTab = ref<'best' | 'worst'>('best')
+
+const barChartData = computed(() => {
+  if (!activeStats.value) return { labels: [], datasets: [] }
+  
+  const isBest = activeChartTab.value === 'best'
+  const items = isBest 
+    ? activeStats.value.top_materias_mejores 
+    : activeStats.value.top_materias_peores
+
+  if (!items || !items.length) return { labels: [], datasets: [] }
+
+  return {
+    labels: items.map((i: any) => i.materia.length > 15 ? i.materia.substring(0, 15) + '...' : i.materia),
+    datasets: [{
+      label: isBest ? 'Mejores Promedios' : 'Peores Promedios',
+      data: items.map((i: any) => i.calificacion),
+      backgroundColor: isBest ? 'rgba(99, 102, 241, 0.85)' : 'rgba(244, 63, 94, 0.85)',
+      borderColor: isBest ? '#6366f1' : '#f43f5e',
+      borderWidth: 1.5,
+      borderRadius: 8,
+      borderSkipped: false
+    }]
+  }
+})
+
+const barChartOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: { display: false },
+    tooltip: {
+      backgroundColor: 'rgba(15, 23, 42, 0.95)',
+      titleFont: { size: 12, weight: 'bold' as const },
+      bodyFont: { size: 11 },
+      padding: 10,
+      cornerRadius: 8,
+      callbacks: {
+        label: (context: any) => {
+          const index = context.dataIndex
+          const isBest = activeChartTab.value === 'best'
+          const items = isBest 
+            ? activeStats.value?.top_materias_mejores 
+            : activeStats.value?.top_materias_peores
+
+          if (!items || !items[index]) return `Promedio: ${context.raw}`
+
+          const item = items[index]
+          // If we are looking at aggregated stats (All Children) and child details exist
+          if (item.detalles && item.detalles.length > 0) {
+            const lines = [`Promedio General: ${item.calificacion}`]
+            item.detalles.forEach((d: any) => {
+              lines.push(`${d.estudiante}: ${d.calificacion}`)
+            })
+            return lines
+          }
+          return `Promedio: ${item.calificacion}`
+        }
+      }
+    }
+  },
+  scales: {
+    x: {
+      grid: { display: false },
+      ticks: { color: '#94a3b8', font: { weight: 'bold' as const, size: 9 } }
+    },
+    y: {
+      min: 0,
+      max: 5,
+      grid: { color: 'rgba(148, 163, 184, 0.08)' },
+      ticks: { 
+        color: '#94a3b8', 
+        stepSize: 1, 
+        font: { weight: 'bold' as const, size: 9 },
+        callback: (value: any) => {
+          // Only show integer labels on Y axis
+          if (Math.floor(value) === value) {
+            return value
+          }
+          return ''
+        }
+      }
+    }
+  }
 }
 </script>
 
@@ -316,6 +496,7 @@ const doughnutChartOptions = {
                   v-model="selectedPeriodId"
                   class="bg-transparent text-white text-xs font-black uppercase tracking-wider px-4 py-2 outline-none cursor-pointer appearance-none"
                 >
+                  <option value="all" class="bg-slate-900 text-white">Todos los Periodos</option>
                   <option v-for="p in dashboardData.periods" :key="p.id_periodo" :value="p.id_periodo" class="bg-slate-900 text-white">
                     {{ p.nombre }}
                   </option>
@@ -409,7 +590,8 @@ const doughnutChartOptions = {
           </div>
         </div>
 
-        <div class="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-sm">
+        <!-- Gráfica de Evolución (Solo si se selecciona "Todos los periodos") -->
+        <div v-if="selectedPeriodId === 'all'" class="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-sm animate-in fade-in duration-500">
           <div class="flex items-center justify-between mb-8">
             <h3 class="text-xl font-black text-slate-800 dark:text-white flex items-center gap-3">
               <TrendingUp :size="24" class="text-indigo-600" />
@@ -422,6 +604,51 @@ const doughnutChartOptions = {
           </div>
           <div class="h-80 w-full">
             <Line :data="lineChartData" :options="lineChartOptions" />
+          </div>
+        </div>
+
+        <!-- Gráfica de Top 5 Materias (Solo si se selecciona un periodo individual) -->
+        <div v-else class="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col justify-between animate-in fade-in duration-500">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+            <div>
+              <h3 class="text-xl font-black text-slate-800 dark:text-white flex items-center gap-3">
+                <BarChart3 :size="24" class="text-indigo-600" />
+                Rendimiento por Materias
+              </h3>
+              <p class="text-xs text-slate-400 font-medium">Top 5 materias con promedios extremos en el periodo</p>
+            </div>
+            <!-- Tabs Mejores / Peores -->
+            <div class="flex bg-slate-50 dark:bg-slate-800 p-1.5 rounded-xl self-start sm:self-auto">
+              <button 
+                @click="activeChartTab = 'best'"
+                :class="[
+                  'px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all cursor-pointer',
+                  activeChartTab === 'best' 
+                    ? 'bg-indigo-600 text-white shadow-sm' 
+                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                ]"
+              >
+                Mejores
+              </button>
+              <button 
+                @click="activeChartTab = 'worst'"
+                :class="[
+                  'px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all cursor-pointer',
+                  activeChartTab === 'worst' 
+                    ? 'bg-rose-600 text-white shadow-sm' 
+                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                ]"
+              >
+                Peores
+              </button>
+            </div>
+          </div>
+          <div class="h-80 relative">
+            <div v-if="!activeStats || !activeStats.top_materias_mejores?.length" class="flex flex-col items-center justify-center h-full opacity-35">
+              <BarChart3 :size="48" />
+              <span class="text-xs font-bold uppercase tracking-widest mt-2">Sin datos disponibles</span>
+            </div>
+            <Bar v-else :data="barChartData" :options="barChartOptions" />
           </div>
         </div>
 
@@ -479,10 +706,10 @@ const doughnutChartOptions = {
 
            <div v-if="dashboardData.recentActivity.length === 0" class="py-20 text-center opacity-50 space-y-4">
               <FileText :size="48" class="mx-auto" />
-              <p class="text-sm font-bold">Sin actividad reportada aún.</p>
+              <p class="text-sm font-bold">Aún no hay actividad reciente.</p>
            </div>
 
-           <div v-else class="space-y-6">
+           <div v-else class="space-y-6 max-h-[400px] overflow-y-auto pr-2">
               <div v-for="(act, idx) in dashboardData.recentActivity" :key="idx" class="flex gap-4 group">
                  <div class="relative flex flex-col items-center">
                     <div :class="[

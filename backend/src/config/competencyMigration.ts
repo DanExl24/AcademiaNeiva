@@ -472,7 +472,8 @@ export const syncCompetencyAcrossGrade = async (
   context: TeachingContext,
   periodId: number,
   descripcion?: string,
-  competencyId?: number
+  competencyId?: number,
+  idDimension?: number | null
 ): Promise<CompetencyRow> => {
   const peerGroups = await getGradePeerGroups(client, context.idColegio, context.idGrupo);
   if (peerGroups.length === 0) {
@@ -533,27 +534,27 @@ export const syncCompetencyAcrossGrade = async (
       if (checkPeer.rows.length > 0) {
         syncedRes = await client.query<CompetencyRow>(
           `UPDATE public.competencias 
-           SET descripcion = $1 
-           WHERE sync_uuid = $2 AND id_grupo = $3
+           SET descripcion = $1, id_dimension = $2 
+           WHERE sync_uuid = $3 AND id_grupo = $4
            RETURNING *`,
-          [sharedDescription, syncUuid, peerGroupId]
+          [sharedDescription, idDimension !== undefined ? idDimension : null, syncUuid, peerGroupId]
         );
       } else {
         syncedRes = await client.query<CompetencyRow>(
-          `INSERT INTO public.competencias (id_anio, id_grupo, id_materia, id_periodo, descripcion, id_colegio, sync_uuid)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)
+          `INSERT INTO public.competencias (id_anio, id_grupo, id_materia, id_periodo, descripcion, id_colegio, sync_uuid, id_dimension)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
            RETURNING *`,
-          [context.idAnio, peerGroupId, context.idMateria, periodId, sharedDescription, context.idColegio, syncUuid]
+          [context.idAnio, peerGroupId, context.idMateria, periodId, sharedDescription, context.idColegio, syncUuid, idDimension !== undefined ? idDimension : null]
         );
         await ensureDefaultEvidencias(client, syncedRes.rows[0].id_competencia, context.idColegio);
       }
     } else {
       // Creación: Insertar en todos los grupos paralelos
       syncedRes = await client.query<CompetencyRow>(
-        `INSERT INTO public.competencias (id_anio, id_grupo, id_materia, id_periodo, descripcion, id_colegio, sync_uuid)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
+        `INSERT INTO public.competencias (id_anio, id_grupo, id_materia, id_periodo, descripcion, id_colegio, sync_uuid, id_dimension)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          RETURNING *`,
-        [context.idAnio, peerGroupId, context.idMateria, periodId, sharedDescription, context.idColegio, syncUuid]
+        [context.idAnio, peerGroupId, context.idMateria, periodId, sharedDescription, context.idColegio, syncUuid, idDimension !== undefined ? idDimension : null]
       );
       await ensureDefaultEvidencias(client, syncedRes.rows[0].id_competencia, context.idColegio);
     }

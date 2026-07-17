@@ -38,6 +38,9 @@ import {
   listarNotificacionesSistema,
   listarSupervisionesColegio,
   verAccionesSupervisionDirectivo,
+  // Configuración
+  obtenerConfiguracion,
+  actualizarConfiguracion,
 } from '../controllers/adminGeneralController';
 
 const router = Router();
@@ -100,5 +103,11 @@ router.get('/auditorias', verifyToken, requireAdminGeneral, listarAuditoriasAcci
 
 // Global Notifications logs query (Admin General)
 router.get('/notificaciones', verifyToken, requireAdminGeneral, listarNotificacionesSistema);
+
+// ─────────────────────────────────────────────────────────────
+// CONFIGURACIÓN DE PLATAFORMA (requiere Admin General)
+// ─────────────────────────────────────────────────────────────
+router.get('/configuracion', verifyToken, requireAdminGeneral, obtenerConfiguracion);
+router.put('/configuracion', verifyToken, requireAdminGeneral, actualizarConfiguracion);
 
 export default router;

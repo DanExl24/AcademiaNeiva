@@ -716,6 +716,28 @@ export const solicitarSupervision = async (req: AuthRequest, res: Response): Pro
 
     await client.query('BEGIN');
 
+    // Obtener límites configurados de duración
+    const configResult = await client.query(
+      `SELECT clave, valor FROM configuracion_plataforma 
+       WHERE clave IN ('supervision_duracion_minima_minutos', 'supervision_duracion_maxima_minutos')`
+    );
+    const configMap: Record<string, number> = {};
+    for (const row of configResult.rows) {
+      configMap[row.clave] = Number(row.valor);
+    }
+    const limiteMinimo = configMap['supervision_duracion_minima_minutos'] || 5;
+    const limiteMaximo = configMap['supervision_duracion_maxima_minutos'] || 300;
+
+    const duracionSolicitada = duracion_maxima_minutos ? Number(duracion_maxima_minutos) : limiteMinimo;
+
+    if (duracionSolicitada < limiteMinimo || duracionSolicitada > limiteMaximo) {
+      await client.query('ROLLBACK');
+      res.status(400).json({ 
+        error: `La duración debe estar entre ${limiteMinimo} y ${limiteMaximo} minutos` 
+      });
+      return;
+    }
+
     // Verificar que el colegio existe y está activo
     const colegio = await client.query(
       'SELECT id_colegio, nombre, estado FROM colegio WHERE id_colegio = $1',
@@ -747,7 +769,7 @@ export const solicitarSupervision = async (req: AuthRequest, res: Response): Pro
        (id_admin_general, id_colegio, motivo_solicitud, tipo_supervision, estado_supervision, duracion_maxima_minutos, ip_admin)
        VALUES ($1, $2, $3, $4, 'SOLICITADA', $5, $6)
        RETURNING *`,
-      [req.user!.id, id_colegio, motivo, tipo_supervision, duracion_maxima_minutos || 60, req.ip]
+      [req.user!.id, id_colegio, motivo, tipo_supervision, duracionSolicitada, req.ip]
     );
 
     // Notificar a todos los directivos del colegio
@@ -1783,5 +1805,114 @@ export const verAccionesSupervisionDirectivo = async (req: AuthRequest, res: Res
   } catch (error: any) {
     console.error('Error obteniendo acciones para directivo:', error);
     res.status(500).json({ error: 'Error al obtener acciones de la supervisión' });
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CONFIGURACIÓN DE PLATAFORMA
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /admin/configuracion
+ * Obtener todas las configuraciones de la plataforma.
+ */
+export const obtenerConfiguracion = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const result = await pool.query(
+      `SELECT clave, valor, descripcion, actualizado_por, fecha_actualizacion
+       FROM configuracion_plataforma
+       ORDER BY clave`
+    );
+
+    // Transformar a un objeto clave-valor para consumo más fácil en el frontend
+    const config: Record<string, { valor: string; descripcion: string | null; actualizado_por: number | null; fecha_actualizacion: string }> = {};
+    for (const row of result.rows) {
+      config[row.clave] = {
+        valor: row.valor,
+        descripcion: row.descripcion,
+        actualizado_por: row.actualizado_por,
+        fecha_actualizacion: row.fecha_actualizacion,
+      };
+    }
+
+    res.json(config);
+  } catch (error: any) {
+    console.error('Error obteniendo configuración:', error);
+    res.status(500).json({ error: 'Error al obtener configuración de la plataforma' });
+  }
+};
+
+/**
+ * PUT /admin/configuracion
+ * Actualizar configuraciones de la plataforma (duración mín/máx de supervisión).
+ */
+export const actualizarConfiguracion = async (req: AuthRequest, res: Response): Promise<void> => {
+  const client = await pool.connect();
+  try {
+    const { supervision_duracion_minima_minutos, supervision_duracion_maxima_minutos } = req.body;
+
+    // Validar que los valores existen
+    if (supervision_duracion_minima_minutos === undefined || supervision_duracion_maxima_minutos === undefined) {
+      res.status(400).json({ error: 'Se requieren supervision_duracion_minima_minutos y supervision_duracion_maxima_minutos' });
+      return;
+    }
+
+    const minVal = Number(supervision_duracion_minima_minutos);
+    const maxVal = Number(supervision_duracion_maxima_minutos);
+
+    // Validar que son números válidos
+    if (isNaN(minVal) || isNaN(maxVal) || !Number.isInteger(minVal) || !Number.isInteger(maxVal)) {
+      res.status(400).json({ error: 'Los valores deben ser números enteros' });
+      return;
+    }
+
+    // Validar rangos seguros
+    if (minVal < 1 || minVal > 60) {
+      res.status(400).json({ error: 'La duración mínima debe estar entre 1 y 60 minutos' });
+      return;
+    }
+
+    if (maxVal < 30 || maxVal > 1440) {
+      res.status(400).json({ error: 'La duración máxima debe estar entre 30 y 1440 minutos (24 horas)' });
+      return;
+    }
+
+    // Validar que mínima < máxima
+    if (minVal >= maxVal) {
+      res.status(400).json({ error: 'La duración mínima debe ser menor que la duración máxima' });
+      return;
+    }
+
+    await client.query('BEGIN');
+
+    // Actualizar duración mínima
+    await client.query(
+      `UPDATE configuracion_plataforma
+       SET valor = $1, actualizado_por = $2, fecha_actualizacion = NOW()
+       WHERE clave = 'supervision_duracion_minima_minutos'`,
+      [String(minVal), req.user!.id]
+    );
+
+    // Actualizar duración máxima
+    await client.query(
+      `UPDATE configuracion_plataforma
+       SET valor = $1, actualizado_por = $2, fecha_actualizacion = NOW()
+       WHERE clave = 'supervision_duracion_maxima_minutos'`,
+      [String(maxVal), req.user!.id]
+    );
+
+    await client.query('COMMIT');
+
+    res.json({
+      message: 'Configuración actualizada correctamente',
+      supervision_duracion_minima_minutos: minVal,
+      supervision_duracion_maxima_minutos: maxVal,
+    });
+  } catch (error: any) {
+    await client.query('ROLLBACK');
+    console.error('Error actualizando configuración:', error);
+    res.status(500).json({ error: 'Error al actualizar configuración' });
+  } finally {
+    client.release();
   }
 };

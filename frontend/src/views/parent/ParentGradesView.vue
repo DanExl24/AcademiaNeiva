@@ -73,7 +73,7 @@ const fetchYearsAndInfo = async () => {
 const fetchPeriods = async () => {
   if (!selectedChildId.value || !selectedYear.value) return
   try {
-    const res = await axios.get(`http://localhost:3000/api/student/periods/${selectedChildId.value}/${selectedYear.value}`)
+    const res = await axios.get(`http://localhost:3000/api/student/all-periods/${selectedChildId.value}/${selectedYear.value}`)
     periods.value = res.data
     if (periods.value.length > 0) {
       selectedPeriod.value = periods.value[periods.value.length - 1].id_periodo
@@ -205,8 +205,8 @@ const getPerformanceColor = (level: string) => {
         <div class="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700">
           <TrendingUp :size="18" class="text-slate-400" />
           <select v-model="selectedPeriod" class="bg-transparent border-none text-xs font-bold text-slate-700 dark:text-slate-200 focus:ring-0 outline-none cursor-pointer" :disabled="periods.length === 0">
-            <option v-if="periods.length === 0" disabled value="">No hay periodos cerrados</option>
-            <option v-for="p in periods" :key="p.id_periodo" :value="p.id_periodo">{{ p.nombre }}</option>
+            <option v-if="periods.length === 0" disabled value="">No hay periodos disponibles</option>
+            <option v-for="p in periods" :key="p.id_periodo" :value="p.id_periodo">{{ p.nombre }}{{ p.estado === 'ABIERTO' ? ' - En Curso' : '' }}</option>
           </select>
         </div>
       </div>
@@ -258,7 +258,7 @@ const getPerformanceColor = (level: string) => {
       </div>
       <h3 class="text-xl font-bold text-slate-800 dark:text-white">Sin información disponible</h3>
       <p class="text-slate-500 dark:text-slate-400 mt-2 max-w-sm text-center px-4 leading-relaxed italic">
-        Selecciona un hijo y un periodo académico cerrado para visualizar las calificaciones.
+        Selecciona un hijo y un periodo académico para visualizar las calificaciones.
       </p>
     </div>
 

@@ -322,6 +322,7 @@ export const getStudentAttendance = async (req: Request, res: Response) => {
         ra.fecha,
         ra.estado,
         ra.justificacion,
+        TO_CHAR(ra.hora_llegada, 'HH24:MI') as hora_llegada,
         m.nombre as materia,
         doc.nombre || ' ' || doc.apellido as docente
       FROM registro_asistencia ra
@@ -489,72 +490,126 @@ export const getParentDashboardData = async (req: Request, res: Response) => {
     const periods = allPeriodsRes.rows;
 
     // 3. Determine active period (either from query or auto-detected)
-    let id_periodo = req.query.id_periodo ? parseInt(req.query.id_periodo as string) : null;
+    let id_periodo: number | null = null;
     let activePeriod = null;
+    const periodQuery = req.query.id_periodo as string;
 
-    if (id_periodo) {
-      activePeriod = periods.find(p => p.id_periodo === id_periodo);
-    }
-
-    if (!activePeriod) {
-      // Periodo ABIERTO
-      activePeriod = periods.find(p => p.estado === 'ABIERTO');
-      
-      // Fallback a último CERRADO si no hay abierto
-      if (!activePeriod && periods.length > 0) {
-        activePeriod = periods[periods.length - 1];
+    if (periodQuery === 'all') {
+      id_periodo = null;
+      activePeriod = null;
+    } else {
+      id_periodo = periodQuery ? parseInt(periodQuery) : null;
+      if (id_periodo) {
+        activePeriod = periods.find(p => p.id_periodo === id_periodo);
       }
-      
-      id_periodo = activePeriod?.id_periodo;
+
+      if (!activePeriod) {
+        // Periodo ABIERTO
+        activePeriod = periods.find(p => p.estado === 'ABIERTO');
+        
+        // Fallback a último CERRADO si no hay abierto
+        if (!activePeriod && periods.length > 0) {
+          activePeriod = periods[periods.length - 1];
+        }
+        
+        id_periodo = activePeriod?.id_periodo || null;
+      }
     }
 
     // 4. Aggregate stats per child (only for the selected school)
     const statsPromises = filteredChildren.map(async (child) => {
       // Average and At Risk
-      const gradesRes = await pool.query(`
-        SELECT 
-          m.nombre as materia,
-          COALESCE(ra.promedio, calc.promedio_calculado, 0) as calificacion
-        FROM detalle_grados dg
-        JOIN materias m ON m.id_materia = dg.id_materia
-        LEFT JOIN resultado_academico ra ON ra.id_detallegrado = dg.id_detallegrado AND ra.id_periodo = $2 AND ra.id_estudiante = $1
-        LEFT JOIN (
-          SELECT am.id_detallegrado, na.id_estudiante, ROUND(AVG(na.nota)::numeric, 2) as promedio_calculado
-          FROM notas_actividad na
-          JOIN actividad_materia am ON am.id_actividadmateria = na.id_actividadmateria
-          WHERE am.id_periodo = $2 AND na.id_estudiante = $1
-          GROUP BY am.id_detallegrado, na.id_estudiante
-        ) calc ON calc.id_detallegrado = dg.id_detallegrado
-        WHERE dg.id_grupo = $3
-      `, [child.id_estudiante, id_periodo, child.id_grupo]);
+      let gradesRes;
+      if (id_periodo) {
+        gradesRes = await pool.query(`
+          SELECT 
+            m.nombre as materia,
+            COALESCE(ra.promedio, calc.promedio_calculado, 0) as calificacion
+          FROM detalle_grados dg
+          JOIN materias m ON m.id_materia = dg.id_materia
+          LEFT JOIN resultado_academico ra ON ra.id_detallegrado = dg.id_detallegrado AND ra.id_periodo = $2 AND ra.id_estudiante = $1
+          LEFT JOIN (
+            SELECT am.id_detallegrado, na.id_estudiante, ROUND(AVG(na.nota)::numeric, 2) as promedio_calculado
+            FROM notas_actividad na
+            JOIN actividad_materia am ON am.id_actividadmateria = na.id_actividadmateria
+            WHERE am.id_periodo = $2 AND na.id_estudiante = $1
+            GROUP BY am.id_detallegrado, na.id_estudiante
+          ) calc ON calc.id_detallegrado = dg.id_detallegrado
+          WHERE dg.id_grupo = $3
+        `, [child.id_estudiante, id_periodo, child.id_grupo]);
+      } else {
+        // Mode "Todos los periodos": calculate accumulative average for all activities in the current academic year
+        gradesRes = await pool.query(`
+          SELECT 
+            m.nombre as materia,
+            COALESCE(calc.promedio_calculado, 0) as calificacion
+          FROM detalle_grados dg
+          JOIN materias m ON m.id_materia = dg.id_materia
+          LEFT JOIN (
+            SELECT am.id_detallegrado, na.id_estudiante, ROUND(AVG(na.nota)::numeric, 2) as promedio_calculado
+            FROM notas_actividad na
+            JOIN actividad_materia am ON am.id_actividadmateria = na.id_actividadmateria
+            JOIN periodo_academico pa ON pa.id_periodo = am.id_periodo
+            WHERE pa.id_anio = $2 AND na.id_estudiante = $1 AND pa.estado != 'PENDIENTE'
+            GROUP BY am.id_detallegrado, na.id_estudiante
+          ) calc ON calc.id_detallegrado = dg.id_detallegrado
+          WHERE dg.id_grupo = $3
+        `, [child.id_estudiante, child.id_anio, child.id_grupo]);
+      }
 
       const grades = gradesRes.rows.map(r => ({ ...r, calificacion: parseFloat(r.calificacion) }));
       const avg = grades.length > 0 ? (grades.reduce((a, b) => a + b.calificacion, 0) / grades.length) : 0;
       const atRisk = grades.filter(g => g.calificacion < 3.0 && g.calificacion > 0);
 
-      // Attendance Filtered by Period Dates
-      const attRes = await pool.query(`
-        SELECT 
-          COUNT(*) filter (where estado = 'PRESENTE') as presentes,
-          COUNT(*) filter (where estado = 'AUSENTE') as ausentes,
-          COUNT(*) filter (where estado = 'TARDE') as tardes,
-          COUNT(*) as total
-        FROM registro_asistencia
-        WHERE id_estudiante = $1 AND id_colegio = $2
-        AND fecha BETWEEN $3 AND $4
-      `, [child.id_estudiante, child.id_colegio, activePeriod.fecha_inicio, activePeriod.fecha_fin]);
+      // Attendance Filtered by Period Dates or overall academic year
+      let attRes;
+      if (id_periodo && activePeriod) {
+        attRes = await pool.query(`
+          SELECT 
+            COUNT(*) filter (where estado = 'PRESENTE') as presentes,
+            COUNT(*) filter (where estado = 'AUSENTE') as ausentes,
+            COUNT(*) filter (where estado = 'TARDE') as tardes,
+            COUNT(*) as total
+          FROM registro_asistencia
+          WHERE id_estudiante = $1 AND id_colegio = $2
+          AND fecha BETWEEN $3 AND $4
+        `, [child.id_estudiante, child.id_colegio, activePeriod.fecha_inicio, activePeriod.fecha_fin]);
+      } else {
+        // Without period date bounds (takes all year attendance for the student)
+        attRes = await pool.query(`
+          SELECT 
+            COUNT(*) filter (where estado = 'PRESENTE') as presentes,
+            COUNT(*) filter (where estado = 'AUSENTE') as ausentes,
+            COUNT(*) filter (where estado = 'TARDE') as tardes,
+            COUNT(*) as total
+          FROM registro_asistencia
+          WHERE id_estudiante = $1 AND id_colegio = $2
+        `, [child.id_estudiante, child.id_colegio]);
+      }
       
       const attStats = attRes.rows[0];
       const attRate = attStats.total > 0 ? (parseInt(attStats.presentes) / parseInt(attStats.total)) * 100 : 100;
 
       // Pending Activities
-      const pendingRes = await pool.query(`
-        SELECT COUNT(*) as count
-        FROM actividad_materia am
-        JOIN detalle_grados dg ON dg.id_detallegrado = am.id_detallegrado
-        LEFT JOIN notas_actividad na ON na.id_actividadmateria = am.id_actividadmateria AND na.id_estudiante = $1
-        WHERE dg.id_grupo = $2 AND am.id_periodo = $3 AND na.nota IS NULL
-      `, [child.id_estudiante, child.id_grupo, id_periodo]);
+      let pendingRes;
+      if (id_periodo) {
+        pendingRes = await pool.query(`
+          SELECT COUNT(*) as count
+          FROM actividad_materia am
+          JOIN detalle_grados dg ON dg.id_detallegrado = am.id_detallegrado
+          LEFT JOIN notas_actividad na ON na.id_actividadmateria = am.id_actividadmateria AND na.id_estudiante = $1
+          WHERE dg.id_grupo = $2 AND am.id_periodo = $3 AND na.nota IS NULL
+        `, [child.id_estudiante, child.id_grupo, id_periodo]);
+      } else {
+        pendingRes = await pool.query(`
+          SELECT COUNT(*) as count
+          FROM actividad_materia am
+          JOIN detalle_grados dg ON dg.id_detallegrado = am.id_detallegrado
+          JOIN periodo_academico pa ON pa.id_periodo = am.id_periodo
+          LEFT JOIN notas_actividad na ON na.id_actividadmateria = am.id_actividadmateria AND na.id_estudiante = $1
+          WHERE dg.id_grupo = $2 AND pa.id_anio = $3 AND pa.estado != 'PENDIENTE' AND na.nota IS NULL
+        `, [child.id_estudiante, child.id_grupo, child.id_anio]);
+      }
 
       // Evolution (by period)
       const evolutionRes = await pool.query(`
@@ -566,6 +621,11 @@ export const getParentDashboardData = async (req: Request, res: Response) => {
         ORDER BY pa.trimestre ASC
       `, [child.id_estudiante, child.id_anio]);
 
+      // Sort to get top best and worst subjects
+      const sortedGrades = [...grades].sort((a, b) => b.calificacion - a.calificacion);
+      const top_materias_mejores = sortedGrades.slice(0, 5);
+      const top_materias_peores = [...sortedGrades].reverse().slice(0, 5);
+
       return {
         id_estudiante: child.id_estudiante,
         average: parseFloat(avg.toFixed(2)),
@@ -574,11 +634,14 @@ export const getParentDashboardData = async (req: Request, res: Response) => {
         attendanceRate: Math.round(attRate),
         pendingActivities: parseInt(pendingRes.rows[0].count),
         evolution: evolutionRes.rows,
+        grades,
+        top_materias_mejores,
+        top_materias_peores,
         attendanceDetails: {
-          presentes: parseInt(attStats.presentes),
-          ausentes: parseInt(attStats.ausentes),
-          tardes: parseInt(attStats.tardes),
-          total: parseInt(attStats.total)
+          presentes: parseInt(attStats.presentes || 0),
+          ausentes: parseInt(attStats.ausentes || 0),
+          tardes: parseInt(attStats.tardes || 0),
+          total: parseInt(attStats.total || 0)
         }
       };
     });
@@ -587,42 +650,80 @@ export const getParentDashboardData = async (req: Request, res: Response) => {
     const studentStats = await Promise.all(statsPromises);
     console.log(`[Dashboard] Calculated stats for ${studentStats.length} students`);
 
-    // 4. Recent Activity (use filtered studentIds)
+    // 5. Recent Activity (use filtered studentIds)
     const studentIds = filteredChildren.map(c => c.id_estudiante);
-    const recentActivityRes = await pool.query(`
-      (
-        SELECT 
-          'CALIFICACION' as tipo_actividad,
-          m.nombre as materia,
-          am.nombre as detalle,
-          na.nota::text as valor,
-          NULL::date as fecha,
-          e.nombre || ' ' || e.apellido as estudiante
-        FROM notas_actividad na
-        JOIN actividad_materia am ON am.id_actividadmateria = na.id_actividadmateria
-        JOIN detalle_grados dg ON dg.id_detallegrado = am.id_detallegrado
-        JOIN materias m ON m.id_materia = dg.id_materia
-        JOIN estudiante e ON e.id_estudiante = na.id_estudiante
-        WHERE na.id_estudiante = ANY($1)
-      )
-      UNION ALL
-      (
-        SELECT 
-          'OBSERVACION' as tipo_actividad,
-          m.nombre as materia,
-          oe.tipo as detalle,
-          oe.id_observacion::text as valor,
-          oe.fecha as fecha,
-          e.nombre || ' ' || e.apellido as estudiante
-        FROM observacion_estudiante oe
-        JOIN detalle_grados dg ON dg.id_detallegrado = oe.id_detallegrado
-        JOIN materias m ON m.id_materia = dg.id_materia
-        JOIN estudiante e ON e.id_estudiante = oe.id_estudiante
-        WHERE oe.id_estudiante = ANY($1)
-      )
-      ORDER BY fecha DESC
-      LIMIT 10
-    `, [studentIds]);
+    let recentActivityRes;
+    if (id_periodo) {
+      recentActivityRes = await pool.query(`
+        (
+          SELECT 
+            'CALIFICACION' as tipo_actividad,
+            m.nombre as materia,
+            am.nombre as detalle,
+            na.nota::text as valor,
+            NULL::date as fecha,
+            e.nombre || ' ' || e.apellido as estudiante
+          FROM notas_actividad na
+          JOIN actividad_materia am ON am.id_actividadmateria = na.id_actividadmateria
+          JOIN detalle_grados dg ON dg.id_detallegrado = am.id_detallegrado
+          JOIN materias m ON m.id_materia = dg.id_materia
+          JOIN estudiante e ON e.id_estudiante = na.id_estudiante
+          WHERE na.id_estudiante = ANY($1) AND am.id_periodo = $2
+        )
+        UNION ALL
+        (
+          SELECT 
+            'OBSERVACION' as tipo_actividad,
+            m.nombre as materia,
+            oe.tipo::text as detalle,
+            oe.id_observacion::text as valor,
+            oe.fecha as fecha,
+            e.nombre || ' ' || e.apellido as estudiante
+          FROM observacion_estudiante oe
+          JOIN detalle_grados dg ON dg.id_detallegrado = oe.id_detallegrado
+          JOIN materias m ON m.id_materia = dg.id_materia
+          JOIN estudiante e ON e.id_estudiante = oe.id_estudiante
+          WHERE oe.id_estudiante = ANY($1) AND oe.id_periodo = $2
+        )
+        ORDER BY fecha DESC
+        LIMIT 10
+      `, [studentIds, id_periodo]);
+    } else {
+      recentActivityRes = await pool.query(`
+        (
+          SELECT 
+            'CALIFICACION' as tipo_actividad,
+            m.nombre as materia,
+            am.nombre as detalle,
+            na.nota::text as valor,
+            NULL::date as fecha,
+            e.nombre || ' ' || e.apellido as estudiante
+          FROM notas_actividad na
+          JOIN actividad_materia am ON am.id_actividadmateria = na.id_actividadmateria
+          JOIN detalle_grados dg ON dg.id_detallegrado = am.id_detallegrado
+          JOIN materias m ON m.id_materia = dg.id_materia
+          JOIN estudiante e ON e.id_estudiante = na.id_estudiante
+          WHERE na.id_estudiante = ANY($1)
+        )
+        UNION ALL
+        (
+          SELECT 
+            'OBSERVACION' as tipo_actividad,
+            m.nombre as materia,
+            oe.tipo::text as detalle,
+            oe.id_observacion::text as valor,
+            oe.fecha as fecha,
+            e.nombre || ' ' || e.apellido as estudiante
+          FROM observacion_estudiante oe
+          JOIN detalle_grados dg ON dg.id_detallegrado = oe.id_detallegrado
+          JOIN materias m ON m.id_materia = dg.id_materia
+          JOIN estudiante e ON e.id_estudiante = oe.id_estudiante
+          WHERE oe.id_estudiante = ANY($1)
+        )
+        ORDER BY fecha DESC
+        LIMIT 10
+      `, [studentIds]);
+    }
 
     res.json({
       children,

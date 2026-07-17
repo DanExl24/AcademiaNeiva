@@ -103,6 +103,14 @@ const activitiesLoading = ref(false)
 // Búsqueda de estudiantes
 const studentSearch = ref('')
 
+const selectedPeriod = computed(() => {
+  return periods.value.find(p => p.id_periodo === selectedPeriodId.value)
+})
+
+const isPeriodClosed = computed(() => {
+  return selectedPeriod.value?.estado === 'CERRADO'
+})
+
 const filteredStudents = computed(() => {
   const allStudents = Array.isArray(students.value) ? students.value : []
   if (!studentSearch.value.trim()) return allStudents
@@ -848,7 +856,7 @@ onMounted(() => {
         <button 
           v-if="!auth.isMonitoring"
           @click="saveAllGrades"
-          :disabled="saving || activitiesLoading"
+          :disabled="saving || activitiesLoading || isPeriodClosed"
           class="bg-emerald-600 dark:bg-emerald-500 text-white px-8 py-3 rounded-2xl font-bold shadow-lg shadow-emerald-100 dark:shadow-none hover:bg-emerald-700 transition-all flex items-center gap-2 active:scale-95 disabled:opacity-50"
         >
           <Loader2 v-if="saving" class="w-5 h-5 animate-spin" />
@@ -870,7 +878,7 @@ onMounted(() => {
           <BookOpen :size="20" class="text-indigo-500" />
           Configurar Actividades
         </button>
-        <div v-if="auth.isMonitoring" class="text-amber-600 font-bold text-sm bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 px-5 py-3 rounded-2xl">
+        <div v-if="auth.isMonitoring || isPeriodClosed" class="text-amber-600 font-bold text-sm bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 px-5 py-3 rounded-2xl">
           Solo Lectura
         </div>
       </div>
@@ -930,8 +938,17 @@ onMounted(() => {
       <h3 class="text-xl font-bold text-slate-400 dark:text-slate-500">Selecciona grado, sección, jornada y materia para comenzar</h3>
     </div>
 
-    <!-- Main Content Grid -->
     <div v-else class="space-y-6 animate-in fade-in duration-500">
+      <!-- Read Only Period Warning -->
+      <div v-if="isPeriodClosed" class="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-3xl p-6 flex items-start gap-4 animate-in slide-in-from-top duration-300 transition-colors">
+        <AlertCircle class="w-6 h-6 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+        <div>
+          <h4 class="font-black text-amber-900 dark:text-amber-200">Planilla en Modo Solo Lectura</h4>
+          <p class="text-xs text-amber-700 dark:text-amber-450 mt-1">
+            El periodo académico <strong>"{{ selectedPeriod?.nombre }}"</strong> está cerrado institucionalmente y no admite modificaciones en las calificaciones, criterios o actividades.
+          </p>
+        </div>
+      </div>
       <!-- Competency top banner -->
       <div v-if="competency" class="bg-violet-50/60 dark:bg-violet-950/20 border border-violet-100/80 dark:border-violet-900 rounded-3xl p-6 flex flex-col md:flex-row md:items-center justify-between gap-5 transition-all shadow-sm">
         <div class="flex items-start gap-4">
@@ -1047,7 +1064,8 @@ onMounted(() => {
                     step="0.1"
                     v-model="gradesMatrix[st.id_estudiante][col.activity.id_actividadmateria]"
                     @blur="validateGradeInput(st.id_estudiante, col.activity.id_actividadmateria, 'activity', $event)"
-                    class="w-16 mx-auto bg-slate-50 dark:bg-slate-800 border-0 rounded-lg p-2 text-center font-bold text-sm text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
+                    :disabled="auth.isMonitoring || isPeriodClosed"
+                    class="w-16 mx-auto bg-slate-50 dark:bg-slate-800 border-0 rounded-lg p-2 text-center font-bold text-sm text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none disabled:opacity-75 disabled:cursor-not-allowed"
                   />
                   <input 
                     v-else-if="col.type === 'criterion' && criteriaGradesMatrix[st.id_estudiante]"
@@ -1055,7 +1073,8 @@ onMounted(() => {
                     step="0.1"
                     v-model="criteriaGradesMatrix[st.id_estudiante][col.criterion!.id_criterio]"
                     @blur="validateGradeInput(st.id_estudiante, col.criterion!.id_criterio, 'criterion', $event)"
-                    class="w-16 mx-auto bg-slate-50 dark:bg-slate-800 border-0 rounded-lg p-2 text-center font-bold text-sm text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
+                    :disabled="auth.isMonitoring || isPeriodClosed"
+                    class="w-16 mx-auto bg-slate-50 dark:bg-slate-800 border-0 rounded-lg p-2 text-center font-bold text-sm text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none disabled:opacity-75 disabled:cursor-not-allowed"
                   />
                   <div v-else-if="col.type === 'activity_total'" class="text-sm font-black text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/30 py-2 rounded-lg w-16 mx-auto border border-indigo-100 dark:border-indigo-900">
                     {{ calculateActivityGrade(st.id_estudiante, col.activity).toFixed(1) }}
@@ -1190,7 +1209,7 @@ onMounted(() => {
                         <div class="flex items-center gap-1.5 mt-1">
                           <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Peso:</span>
                           <input 
-                            v-if="!auth.isMonitoring"
+                            v-if="!auth.isMonitoring && !isPeriodClosed"
                             type="number" 
                             v-model.number="act.porcentaje" 
                             @blur="updateActivityWeight(act)"
@@ -1218,7 +1237,7 @@ onMounted(() => {
                       </div>
                       
                       <!-- Delete & Add Criterion buttons -->
-                      <div v-if="!auth.isMonitoring" class="flex gap-1">
+                      <div v-if="!auth.isMonitoring && !isPeriodClosed" class="flex gap-1">
                         <button @click="toggleAddCriterion(act.id_actividadmateria)" class="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-white dark:hover:bg-slate-700 rounded-lg transition-all" title="Añadir criterio">
                           <Plus :size="14" />
                         </button>
@@ -1234,7 +1253,7 @@ onMounted(() => {
                         <span class="font-medium text-slate-600 dark:text-slate-300 truncate pr-2">{{ crit.descripcion }}</span>
                         <div class="flex items-center gap-2 shrink-0">
                           <span class="font-black text-indigo-500">{{ crit.porcentaje }}%</span>
-                          <button v-if="!auth.isMonitoring" @click="removeCriterion(act, crit.id_criterio)" class="text-slate-300 hover:text-red-500 opacity-0 group-hover/crit:opacity-100 p-0.5">
+                          <button v-if="!auth.isMonitoring && !isPeriodClosed" @click="removeCriterion(act, crit.id_criterio)" class="text-slate-300 hover:text-red-500 opacity-0 group-hover/crit:opacity-100 p-0.5">
                             <X :size="12" />
                           </button>
                         </div>
@@ -1254,7 +1273,7 @@ onMounted(() => {
               </div>
 
               <!-- New Activity Button & Form -->
-              <div v-if="!auth.isMonitoring && totalPercentage < 100" class="border-t border-slate-100 dark:border-slate-800 pt-6">
+              <div v-if="!auth.isMonitoring && !isPeriodClosed && totalPercentage < 100" class="border-t border-slate-100 dark:border-slate-800 pt-6">
                 <button 
                   v-if="!showAddActivity"
                   @click="showAddActivity = true"

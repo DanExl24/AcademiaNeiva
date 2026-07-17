@@ -12,7 +12,8 @@ import {
   ensureSubjectOpen,
   getCurrentAllowedPeriodForSchool,
   ensureCurrentPeriodForSchool,
-  ensureCurrentPeriodOrRespond
+  ensureCurrentPeriodOrRespond,
+  getAllPeriodsForSchool
 } from "../utils/periodHelpers";
 
 const resolveTeachingContext = async (
@@ -56,9 +57,9 @@ export const getPeriods = async (req: Request, res: Response): Promise<void> => 
   const { schoolId } = req.params;
   console.log(`[DEV] getPeriods called - schoolId=${schoolId}`);
   try {
-    const currentPeriod = await getCurrentAllowedPeriodForSchool(Number(schoolId));
-    console.log(`[DEV] getPeriods - result: ${currentPeriod ? JSON.stringify(currentPeriod) : 'null (no open period)'}`);
-    res.json(currentPeriod ? [currentPeriod] : []);
+    const periods = await getAllPeriodsForSchool(Number(schoolId));
+    console.log(`[DEV] getPeriods - result count: ${periods.length}`);
+    res.json(periods);
   } catch (error: any) {
     console.error(`[DEV] getPeriods ERROR - schoolId=${schoolId}:`, error.message, error.detail || '');
     res.status(500).json({ error: "Error en el servidor" });
@@ -81,10 +82,7 @@ export const getActivities = async (req: Request, res: Response): Promise<void> 
       return;
     }
 
-    if (!(await ensureCurrentPeriodOrRespond(res, contextPreview.idColegio, periodId))) {
-      return;
-    }
-
+    // Permite lectura de periodos cerrados (solo se protegen escrituras)
     const context = contextPreview;
 
     const client = await pool.connect();

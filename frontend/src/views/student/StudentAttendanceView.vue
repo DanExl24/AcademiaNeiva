@@ -265,6 +265,7 @@ const formatDate = (dateString: string) => {
             <tr class="bg-slate-50/50 dark:bg-slate-800/50">
               <th class="px-8 py-5 text-[11px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Fecha</th>
               <th class="px-8 py-5 text-[11px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 text-center">Estado</th>
+              <th class="px-8 py-5 text-[11px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 text-center">Hora de Llegada</th>
               <th class="px-8 py-5 text-[11px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Materia</th>
               <th class="px-8 py-5 text-[11px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Docente</th>
               <th class="px-8 py-5 text-[11px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Justificación</th>
@@ -287,6 +288,11 @@ const formatDate = (dateString: string) => {
                   >
                     {{ item.estado }}
                   </span>
+                </div>
+              </td>
+              <td class="px-8 py-6">
+                <div class="text-center font-bold text-sm text-slate-700 dark:text-slate-300 font-mono">
+                  {{ item.hora_llegada || '—' }}
                 </div>
               </td>
               <td class="px-8 py-6">

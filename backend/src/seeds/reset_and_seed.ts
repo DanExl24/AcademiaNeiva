@@ -5,7 +5,7 @@ import { execSync } from "child_process";
 import { PoolClient } from "pg";
 import { ensureCompetencySchema } from "../config/competencyMigration";
 import { pool } from "../config/db";
-import { getPeriodRules } from "../config/academicCalendarDefaults";
+import { getPeriodRules, resolveCurrentAcademicPeriodOrder } from "../config/academicCalendarDefaults";
 
 // ─── TYPES ──────────────────────────────────────────────────────────────────────
 
@@ -322,6 +322,7 @@ async function insertSchoolAcademicStructure(
   const subjectIdsByName: Record<string, number> = {};
   const teacherIdsBySubject: Record<string, number> = {};
   const allGroupIds: number[] = [];
+  const groupGradesMap = new Map<number, string>();
 
   // --- Calendar type column ---
   await client.query(`ALTER TABLE colegio ADD COLUMN IF NOT EXISTS tipo_calendario CHAR(1) DEFAULT 'A';`);
@@ -356,12 +357,40 @@ async function insertSchoolAcademicStructure(
 
   // --- Periods ---
   const periodRules = getPeriodRules(school.tipo_calendario);
+  const currentDate = new Date();
+  const currentMonth = currentDate.getMonth() + 1; // 1-12
+
   for (const periodSeed of periodSeeds) {
     const monthRule = periodRules.find((r) => r.order === periodSeed.trimestre);
+    const startMonth = monthRule?.startMonth ?? 1;
+    const endMonth = monthRule?.endMonth ?? 12;
+
+    let calculadoEstado: 'CERRADO' | 'ABIERTO' | 'PENDIENTE' = 'PENDIENTE';
+
+    if (school.tipo_calendario === 'A') {
+      if (currentMonth > endMonth) {
+        calculadoEstado = 'CERRADO';
+      } else if (currentMonth >= startMonth && currentMonth <= endMonth) {
+        calculadoEstado = 'ABIERTO';
+      } else {
+        calculadoEstado = 'PENDIENTE';
+      }
+    } else {
+      // Calendario B
+      const currentOrder = resolveCurrentAcademicPeriodOrder(currentDate, 'B') ?? 2;
+      if (periodSeed.trimestre < currentOrder) {
+        calculadoEstado = 'CERRADO';
+      } else if (periodSeed.trimestre === currentOrder) {
+        calculadoEstado = 'ABIERTO';
+      } else {
+        calculadoEstado = 'PENDIENTE';
+      }
+    }
+
     await client.query(
       `INSERT INTO periodo_academico (nombre, estado, porcentaje, trimestre, id_anio, id_colegio, mes_inicio, mes_fin, dia_inicio, dia_fin)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-      [periodSeed.nombre, periodSeed.estado, periodSeed.porcentaje, periodSeed.trimestre, academicYearId, school.id,
+      [periodSeed.nombre, calculadoEstado, periodSeed.porcentaje, periodSeed.trimestre, academicYearId, school.id,
        monthRule?.startMonth ?? null, monthRule?.endMonth ?? null, 1, 28]
     );
   }
@@ -399,6 +428,14 @@ async function insertSchoolAcademicStructure(
     subjectIdsByName[teacher.subject] = subjectResult.rows[0].id_materia;
   }
 
+  // --- Materia especial: Desarrollo Integral (Preescolar) ---
+  const desIntegralResult = await client.query<{ id_materia: number }>(
+    `INSERT INTO materias (nombre, id_colegio) VALUES ($1, $2) RETURNING id_materia`,
+    ["Desarrollo Integral", school.id]
+  );
+  subjectIdsByName["Desarrollo Integral"] = desIntegralResult.rows[0].id_materia;
+  teacherIdsBySubject["Desarrollo Integral"] = teachersRes.rows[0].id_docente;
+
   // --- Grupos + Grados + Tipo Grado ---
   let teacherRotationIdx = 0;
   for (const levelSeed of levelSeeds) {
@@ -426,7 +463,9 @@ async function insertSchoolAcademicStructure(
              VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id_grupo`,
             [levelId, jornadaId, school.id, sectionId, CUPOS_POR_CURSO, gradeTypeId, titularId]
           );
-          allGroupIds.push(groupResult.rows[0].id_grupo);
+          const gid = groupResult.rows[0].id_grupo;
+          allGroupIds.push(gid);
+          groupGradesMap.set(gid, gradeName);
 
           await client.query(
             `INSERT INTO grados (nivel, tipo_grado, id_jornada, id_colegio, cupos_totales, seccion)
@@ -440,11 +479,21 @@ async function insertSchoolAcademicStructure(
 
   // --- Detalle Grados (assign all subjects+teachers to all groups) ---
   for (const groupId of allGroupIds) {
-    for (const teacher of teacherSeeds) {
+    const gradeName = groupGradesMap.get(groupId);
+    const isPreescolar = gradeName === "PREJARDIN" || gradeName === "JARDIN" || gradeName === "TRANSICION";
+
+    if (isPreescolar) {
       await client.query(
         `INSERT INTO detalle_grados (id_materia, id_docente, id_colegio, id_grupo) VALUES ($1, $2, $3, $4)`,
-        [subjectIdsByName[teacher.subject], teacherIdsBySubject[teacher.subject], school.id, groupId]
+        [subjectIdsByName["Desarrollo Integral"], teacherIdsBySubject["Desarrollo Integral"], school.id, groupId]
       );
+    } else {
+      for (const teacher of teacherSeeds) {
+        await client.query(
+          `INSERT INTO detalle_grados (id_materia, id_docente, id_colegio, id_grupo) VALUES ($1, $2, $3, $4)`,
+          [subjectIdsByName[teacher.subject], teacherIdsBySubject[teacher.subject], school.id, groupId]
+        );
+      }
     }
   }
 }
@@ -468,6 +517,18 @@ async function insertStudentsAndParents(
   const directivoRes = await client.query<{ id: number }>('SELECT id FROM directivo WHERE id_colegio = $1 LIMIT 1', [school.id]);
   const directivoId = directivoRes.rows[0]?.id;
 
+  // Fetch teachers of the school to map them as parents (60% target)
+  const teachersRes = await client.query<{ id_usuario: number; email: string; nombre: string; apellido: string }>(
+    `SELECT u.id_usuario, u.email, u.nombre, u.apellido 
+     FROM usuario u
+     JOIN docente d ON u.id_usuario = d.id_usuario
+     WHERE u.id_colegio = $1`,
+    [school.id]
+  );
+  const teachersList = teachersRes.rows;
+  const targetDocentesPadresCount = Math.ceil(teachersList.length * 0.6);
+  let docentesPadresIndex = 0;
+
   // Get groups for MAÑANA + A, B, C (42 groups: 3 per grade type)
   const groupsRes = await client.query<{ id_grupo: number; id_nivel: number }>(
     `SELECT g.id_grupo, g.id_nivel
@@ -490,11 +551,17 @@ async function insertStudentsAndParents(
   // Helper: flush parent credentials
   const flushParent = () => {
     if (currentParentId !== null && currentParentChildNames.length > 0) {
-      credentials.push({
-        colegio: school.nombre, seccion: "familia", rol: "PADRE",
-        nombre: `Padre ${parentIdx} ${school.nombre}`, correo: currentParentEmail,
-        password: "padre123", hijos: [...currentParentChildNames],
-      });
+      const existingCred = credentials.find((c) => c.correo === currentParentEmail);
+      if (existingCred) {
+        existingCred.rol = "DOCENTE / PADRE";
+        existingCred.hijos = [...currentParentChildNames];
+      } else {
+        credentials.push({
+          colegio: school.nombre, seccion: "familia", rol: "PADRE",
+          nombre: `Padre ${parentIdx} ${school.nombre}`, correo: currentParentEmail,
+          password: "padre123", hijos: [...currentParentChildNames],
+        });
+      }
     }
   };
 
@@ -530,21 +597,50 @@ async function insertStudentsAndParents(
       if ((globalStudentIdx - 1) % 2 === 0) {
         flushParent();
         parentIdx++;
-        currentParentEmail = `padre${parentIdx}.${school.id}@${school.domain}`;
         currentParentChildNames = [];
 
-        const pUserRes = await client.query<{ id_usuario: number }>(
-          `INSERT INTO usuario (email, password, nombre, apellido, id_colegio, activo)
-           VALUES ($1, $2, $3, $4, $5, true) RETURNING id_usuario`,
-          [currentParentEmail, parentHash, `Padre ${parentIdx}`, school.nombre, school.id]
-        );
-        const parentUserId = pUserRes.rows[0].id_usuario;
-        await client.query(`INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2)`, [parentUserId, roleIds.padre]);
+        let parentUserId: number;
+        let pName: string;
+        let pLastName: string;
+        let pDoc: string;
+
+        if (docentesPadresIndex < targetDocentesPadresCount) {
+          // Reutilizar un docente existente del colegio
+          const teacherUser = teachersList[docentesPadresIndex];
+          parentUserId = teacherUser.id_usuario;
+          currentParentEmail = teacherUser.email;
+          pName = teacherUser.nombre;
+          pLastName = teacherUser.apellido;
+          pDoc = `P-DOC-${school.id}-${docentesPadresIndex + 1}`;
+          docentesPadresIndex++;
+
+          // Asignar el rol de padre a este docente (si no lo tiene ya)
+          await client.query(
+            `INSERT INTO usuario_rol (id_usuario, id_rol) 
+             VALUES ($1, $2) 
+             ON CONFLICT (id_usuario, id_rol) DO NOTHING`,
+            [parentUserId, roleIds.padre]
+          );
+        } else {
+          // Crear un padre normal desde cero
+          currentParentEmail = `padre${parentIdx}.${school.id}@${school.domain}`;
+          pName = `Padre ${parentIdx}`;
+          pLastName = school.nombre;
+          pDoc = `P-${school.id}-${parentIdx}`;
+
+          const pUserRes = await client.query<{ id_usuario: number }>(
+            `INSERT INTO usuario (email, password, nombre, apellido, id_colegio, activo)
+             VALUES ($1, $2, $3, $4, $5, true) RETURNING id_usuario`,
+            [currentParentEmail, parentHash, pName, pLastName, school.id]
+          );
+          parentUserId = pUserRes.rows[0].id_usuario;
+          await client.query(`INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2)`, [parentUserId, roleIds.padre]);
+        }
 
         const pFamRes = await client.query<{ id_padrefamilia: number }>(
           `INSERT INTO padre_familia (nombre, apellido, documento, id_tipodocumento, id_colegio, id_usuario)
            VALUES ($1, $2, $3, $4, $5, $6) RETURNING id_padrefamilia`,
-          [`Padre ${parentIdx}`, school.nombre, `P-${school.id}-${parentIdx}`, DOCUMENT_TYPE_CC, school.id, parentUserId]
+          [pName, pLastName, pDoc, DOCUMENT_TYPE_CC, school.id, parentUserId]
         );
         currentParentId = pFamRes.rows[0].id_padrefamilia;
       }
@@ -689,6 +785,7 @@ async function insertSampleAttendance(client: PoolClient): Promise<void> {
           const rand = Math.random();
           let estado = "PRESENTE";
           let justificacion = null;
+          let hora_llegada = null;
 
           if (rand > 0.98) {
             estado = "JUSTIFICADA";
@@ -699,7 +796,15 @@ async function insertSampleAttendance(client: PoolClient): Promise<void> {
             estado = "TARDE";
           }
 
-          batchValues.push({ id_estudiante, id_detallegrado: dg.id_detallegrado, fecha: dateStr, estado, justificacion, id_colegio });
+          if (estado === "PRESENTE") {
+            const min = Math.floor(Math.random() * 16);
+            hora_llegada = `07:${String(min).padStart(2, "0")}`;
+          } else if (estado === "TARDE") {
+            const min = 16 + Math.floor(Math.random() * 30);
+            hora_llegada = `07:${String(min).padStart(2, "0")}`;
+          }
+
+          batchValues.push({ id_estudiante, id_detallegrado: dg.id_detallegrado, fecha: dateStr, estado, justificacion, id_colegio, hora_llegada });
 
           if (batchValues.length >= 200) {
             await flushAttendanceBatch(client, batchValues);
@@ -717,12 +822,12 @@ async function insertSampleAttendance(client: PoolClient): Promise<void> {
 
 async function flushAttendanceBatch(client: PoolClient, batch: any[]) {
   const values = batch
-    .map((_, i) => `($${i * 6 + 1}, $${i * 6 + 2}, $${i * 6 + 3}, $${i * 6 + 4}, $${i * 6 + 5}, $${i * 6 + 6})`)
+    .map((_, i) => `($${i * 7 + 1}, $${i * 7 + 2}, $${i * 7 + 3}, $${i * 7 + 4}, $${i * 7 + 5}, $${i * 7 + 6}, $${i * 7 + 7})`)
     .join(",");
-  const params = batch.flatMap((r) => [r.id_estudiante, r.id_detallegrado, r.fecha, r.estado, r.justificacion, r.id_colegio]);
+  const params = batch.flatMap((r) => [r.id_estudiante, r.id_detallegrado, r.fecha, r.estado, r.justificacion, r.id_colegio, r.hora_llegada]);
 
   await client.query(
-    `INSERT INTO registro_asistencia (id_estudiante, id_detallegrado, fecha, estado, justificacion, id_colegio) VALUES ${values}`,
+    `INSERT INTO registro_asistencia (id_estudiante, id_detallegrado, fecha, estado, justificacion, id_colegio, hora_llegada) VALUES ${values}`,
     params
   );
 }
@@ -879,6 +984,10 @@ async function run(): Promise<void> {
     const addExpulsionSanctionMigrationSql = fs.readFileSync(path.join(__dirname, "../migrations/012_add_expulsion_sanction.sql"), "utf8");
     await client.query(addExpulsionSanctionMigrationSql);
 
+    console.log("📦 Aplicando migración 013 (dimensiones preescolar y mapeo de DBA)...");
+    const addPreschoolDimensionsMigrationSql = fs.readFileSync(path.join(__dirname, "../migrations/013_dimensiones_preescolar.sql"), "utf8");
+    await client.query(addPreschoolDimensionsMigrationSql);
+
     // ── Phase 2: Schema migrations ──
     console.log("🔧 Migrando columnas adicionales...");
     await client.query(`ALTER TABLE grados ADD COLUMN IF NOT EXISTS seccion VARCHAR(10) DEFAULT 'A';`);
@@ -997,6 +1106,16 @@ async function run(): Promise<void> {
       adminGeneralResult.rows[0].id_usuario,
       roleIds.admin_general,
     ]);
+    
+    // Sembrar valores por defecto para la configuración de la plataforma (Duración de Supervisiones)
+    await client.query(`
+      INSERT INTO configuracion_plataforma (clave, valor)
+      VALUES 
+        ('supervision_duracion_minima_minutos', '5'),
+        ('supervision_duracion_maxima_minutos', '300')
+      ON CONFLICT (clave) DO NOTHING;
+    `);
+
     credentials.push({
       colegio: "General", seccion: "general", rol: "ADMIN_GENERAL",
       nombre: "Administrador General", correo: adminGeneralEmail, password: adminGeneralPassword,

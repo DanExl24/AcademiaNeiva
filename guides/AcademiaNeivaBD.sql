@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict LfhcXsMyRcv8ni5BONSsYbYrGjXyt12ZDIks3g6hXZa4dR7wSTuRkuI0txzaS25
+\restrict iDUZ1zF8JxN5NeObiMwLR2vniwtEMoRiJCCnNwe7GuYHOtO6iCBl3ZNhbbaIVvQ
 
 -- Dumped from database version 18.4
 -- Dumped by pg_dump version 18.4
@@ -387,12 +387,22 @@ ALTER FUNCTION public.fn_bloquear_periodo_cerrado() OWNER TO postgres;
 CREATE FUNCTION public.fn_sync_estudiante_sancion() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
+DECLARE
+    v_tipo character varying(100);
 BEGIN
-    -- Si la sanción está activa y vigente, poner al estudiante en SANCIONADO
+    SELECT nombre INTO v_tipo FROM public.tipo_sancion WHERE id_tipo_sancion = NEW.id_tipo_sancion;
+
+    -- Si la sanción está activa y vigente
     IF NEW.estado = 'ACTIVA' AND CURRENT_DATE BETWEEN NEW.fecha_inicio AND NEW.fecha_fin THEN
-        UPDATE public.estudiante
-        SET estado = 'SANCIONADO'
-        WHERE id_estudiante = NEW.id_estudiante;
+        IF v_tipo = 'EXPULSION' THEN
+            UPDATE public.estudiante
+            SET estado = 'EXPULSADO'
+            WHERE id_estudiante = NEW.id_estudiante;
+        ELSE
+            UPDATE public.estudiante
+            SET estado = 'SANCIONADO'
+            WHERE id_estudiante = NEW.id_estudiante;
+        END IF;
     ELSE
         -- Si no está activa, verificar si le queda alguna otra sanción activa hoy
         IF NOT EXISTS (
@@ -404,7 +414,7 @@ BEGIN
             -- Si no quedan otras sanciones activas, volver a ACTIVO
             UPDATE public.estudiante
             SET estado = 'ACTIVO'
-            WHERE id_estudiante = NEW.id_estudiante AND estado = 'SANCIONADO';
+            WHERE id_estudiante = NEW.id_estudiante AND estado IN ('SANCIONADO', 'EXPULSADO');
         END IF;
     END IF;
     RETURN NEW;
@@ -911,6 +921,21 @@ ALTER SEQUENCE public.configuracion_inscripcion_id_configuracion_seq OWNER TO po
 
 ALTER SEQUENCE public.configuracion_inscripcion_id_configuracion_seq OWNED BY public.configuracion_inscripcion.id_configuracion;
 
+
+--
+-- Name: configuracion_plataforma; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.configuracion_plataforma (
+    clave character varying(100) NOT NULL,
+    valor character varying(255) NOT NULL,
+    descripcion text,
+    actualizado_por integer,
+    fecha_actualizacion timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE public.configuracion_plataforma OWNER TO postgres;
 
 --
 -- Name: configuracion_sistema; Type: TABLE; Schema: public; Owner: postgres
@@ -2997,6 +3022,14 @@ ALTER TABLE ONLY public.configuracion_inscripcion
 
 
 --
+-- Name: configuracion_plataforma configuracion_plataforma_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.configuracion_plataforma
+    ADD CONSTRAINT configuracion_plataforma_pkey PRIMARY KEY (clave);
+
+
+--
 -- Name: configuracion_sistema configuracion_sistema_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -4625,5 +4658,5 @@ REVOKE USAGE ON SCHEMA public FROM PUBLIC;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict LfhcXsMyRcv8ni5BONSsYbYrGjXyt12ZDIks3g6hXZa4dR7wSTuRkuI0txzaS25
+\unrestrict iDUZ1zF8JxN5NeObiMwLR2vniwtEMoRiJCCnNwe7GuYHOtO6iCBl3ZNhbbaIVvQ
 

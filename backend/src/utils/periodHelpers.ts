@@ -107,3 +107,41 @@ export const ensureCurrentPeriodOrRespond = async (
 
   return true;
 };
+
+export const getAllPeriodsForSchool = async (schoolId: number) => {
+  const currentYearRes = await pool.query<{ id_anio: number }>(
+    `SELECT id_anio
+     FROM anio_lectivo
+     WHERE id_colegio = $1
+     ORDER BY id_anio DESC
+     LIMIT 1`,
+    [schoolId]
+  );
+
+  if (currentYearRes.rows.length === 0) {
+    return [];
+  }
+
+  const periodsRes = await pool.query<{
+    id_periodo: number;
+    nombre: string;
+    estado: "ABIERTO" | "CERRADO" | "PENDIENTE";
+    porcentaje: number;
+    id_anio: number;
+    trimestre: number | null;
+    dia_inicio: number | null;
+    dia_fin: number | null;
+    mes_inicio: number | null;
+    mes_fin: number | null;
+  }>(
+    `SELECT id_periodo, nombre, estado, porcentaje, id_anio, dia_inicio, dia_fin, mes_inicio, mes_fin, trimestre
+     FROM periodo_academico
+     WHERE id_colegio = $1
+       AND id_anio = $2
+       AND estado IN ('ABIERTO', 'CERRADO')
+     ORDER BY id_periodo`,
+    [schoolId, Number(currentYearRes.rows[0].id_anio)]
+  );
+
+  return periodsRes.rows;
+};

@@ -1,6 +1,6 @@
 # Credenciales generadas por reset_and_seed.ts
 
-> Fecha de generación: 2026-07-13T04:08:09.665Z
+> Fecha de generación: 2026-07-17T05:27:26.353Z
 >
 > Este archivo se regenera cada vez que ejecutes el seed de reseteo.
 
@@ -20,11 +20,11 @@
 | --- | --- | --- | --- | --- |
 | DIRECTIVO | Rector CEA School Empresarial de los Andes | rector@ceaschool.edu.co | directivo123 | - |
 | DIRECTIVO | Directivo CEA School Empresarial de los Andes | directivo@ceaschool.edu.co | directivo123 | - |
-| DOCENTE | Andrea Rojas 1 | matematicas.1@ceaschool.edu.co | docente123 | Matemáticas |
-| DOCENTE | Carlos Mendoza 1 | espanol.1@ceaschool.edu.co | docente123 | Español |
-| DOCENTE | Laura Pineda 1 | ingles.1@ceaschool.edu.co | docente123 | Inglés |
-| DOCENTE | Julián Perdomo 1 | cienciasnaturales.1@ceaschool.edu.co | docente123 | Ciencias Naturales |
-| DOCENTE | Diana Trujillo 1 | cienciassociales.1@ceaschool.edu.co | docente123 | Ciencias Sociales |
+| DOCENTE / PADRE | Andrea Rojas 1 | matematicas.1@ceaschool.edu.co | docente123 | Matemáticas |
+| DOCENTE / PADRE | Carlos Mendoza 1 | espanol.1@ceaschool.edu.co | docente123 | Español |
+| DOCENTE / PADRE | Laura Pineda 1 | ingles.1@ceaschool.edu.co | docente123 | Inglés |
+| DOCENTE / PADRE | Julián Perdomo 1 | cienciasnaturales.1@ceaschool.edu.co | docente123 | Ciencias Naturales |
+| DOCENTE / PADRE | Diana Trujillo 1 | cienciassociales.1@ceaschool.edu.co | docente123 | Ciencias Sociales |
 | DOCENTE | Mateo Luna 1 | educacionfisica.1@ceaschool.edu.co | docente123 | Educación Física |
 | DOCENTE | Paula Bastidas 1 | tecnologiaeinformatica.1@ceaschool.edu.co | docente123 | Tecnología e Informática |
 | DOCENTE | Santiago Sterling 1 | eticayvalores.1@ceaschool.edu.co | docente123 | Ética y Valores |
@@ -33,11 +33,6 @@
 
 | Rol | Correo | Contraseña | Hijos asociados |
 | --- | --- | --- | --- |
-| PADRE | padre1.1@ceaschool.edu.co | padre123 | Valentina García, Santiago García |
-| PADRE | padre2.1@ceaschool.edu.co | padre123 | Isabella García, Matías García |
-| PADRE | padre3.1@ceaschool.edu.co | padre123 | Sofía García, Samuel García |
-| PADRE | padre4.1@ceaschool.edu.co | padre123 | Gabriela García, Nicolás García |
-| PADRE | padre5.1@ceaschool.edu.co | padre123 | Mariana García, Sebastián García |
 | PADRE | padre6.1@ceaschool.edu.co | padre123 | Camila García, Alejandro García |
 | PADRE | padre7.1@ceaschool.edu.co | padre123 | Daniela García, Diego García |
 | PADRE | padre8.1@ceaschool.edu.co | padre123 | Luciana García, Andrés García |
@@ -353,11 +348,11 @@
 | --- | --- | --- | --- | --- |
 | DIRECTIVO | Rector Institución Educativa El Caguán | rector@iecaguan.edu.co | directivo123 | - |
 | DIRECTIVO | Directivo Institución Educativa El Caguán | directivo@iecaguan.edu.co | directivo123 | - |
-| DOCENTE | Andrea Rojas 2 | matematicas.2@iecaguan.edu.co | docente123 | Matemáticas |
-| DOCENTE | Carlos Mendoza 2 | espanol.2@iecaguan.edu.co | docente123 | Español |
-| DOCENTE | Laura Pineda 2 | ingles.2@iecaguan.edu.co | docente123 | Inglés |
-| DOCENTE | Julián Perdomo 2 | cienciasnaturales.2@iecaguan.edu.co | docente123 | Ciencias Naturales |
-| DOCENTE | Diana Trujillo 2 | cienciassociales.2@iecaguan.edu.co | docente123 | Ciencias Sociales |
+| DOCENTE / PADRE | Andrea Rojas 2 | matematicas.2@iecaguan.edu.co | docente123 | Matemáticas |
+| DOCENTE / PADRE | Carlos Mendoza 2 | espanol.2@iecaguan.edu.co | docente123 | Español |
+| DOCENTE / PADRE | Laura Pineda 2 | ingles.2@iecaguan.edu.co | docente123 | Inglés |
+| DOCENTE / PADRE | Julián Perdomo 2 | cienciasnaturales.2@iecaguan.edu.co | docente123 | Ciencias Naturales |
+| DOCENTE / PADRE | Diana Trujillo 2 | cienciassociales.2@iecaguan.edu.co | docente123 | Ciencias Sociales |
 | DOCENTE | Mateo Luna 2 | educacionfisica.2@iecaguan.edu.co | docente123 | Educación Física |
 | DOCENTE | Paula Bastidas 2 | tecnologiaeinformatica.2@iecaguan.edu.co | docente123 | Tecnología e Informática |
 | DOCENTE | Santiago Sterling 2 | eticayvalores.2@iecaguan.edu.co | docente123 | Ética y Valores |
@@ -366,11 +361,6 @@
 
 | Rol | Correo | Contraseña | Hijos asociados |
 | --- | --- | --- | --- |
-| PADRE | padre1.2@iecaguan.edu.co | padre123 | Valentina García, Santiago García |
-| PADRE | padre2.2@iecaguan.edu.co | padre123 | Isabella García, Matías García |
-| PADRE | padre3.2@iecaguan.edu.co | padre123 | Sofía García, Samuel García |
-| PADRE | padre4.2@iecaguan.edu.co | padre123 | Gabriela García, Nicolás García |
-| PADRE | padre5.2@iecaguan.edu.co | padre123 | Mariana García, Sebastián García |
 | PADRE | padre6.2@iecaguan.edu.co | padre123 | Camila García, Alejandro García |
 | PADRE | padre7.2@iecaguan.edu.co | padre123 | Daniela García, Diego García |
 | PADRE | padre8.2@iecaguan.edu.co | padre123 | Luciana García, Andrés García |
@@ -686,11 +676,11 @@
 | --- | --- | --- | --- | --- |
 | DIRECTIVO | Rector Colegio Heisenberg Neiva | rector@heisenberg.edu.co | directivo123 | - |
 | DIRECTIVO | Directivo Colegio Heisenberg Neiva | directivo@heisenberg.edu.co | directivo123 | - |
-| DOCENTE | Andrea Rojas 3 | matematicas.3@heisenberg.edu.co | docente123 | Matemáticas |
-| DOCENTE | Carlos Mendoza 3 | espanol.3@heisenberg.edu.co | docente123 | Español |
-| DOCENTE | Laura Pineda 3 | ingles.3@heisenberg.edu.co | docente123 | Inglés |
-| DOCENTE | Julián Perdomo 3 | cienciasnaturales.3@heisenberg.edu.co | docente123 | Ciencias Naturales |
-| DOCENTE | Diana Trujillo 3 | cienciassociales.3@heisenberg.edu.co | docente123 | Ciencias Sociales |
+| DOCENTE / PADRE | Andrea Rojas 3 | matematicas.3@heisenberg.edu.co | docente123 | Matemáticas |
+| DOCENTE / PADRE | Carlos Mendoza 3 | espanol.3@heisenberg.edu.co | docente123 | Español |
+| DOCENTE / PADRE | Laura Pineda 3 | ingles.3@heisenberg.edu.co | docente123 | Inglés |
+| DOCENTE / PADRE | Julián Perdomo 3 | cienciasnaturales.3@heisenberg.edu.co | docente123 | Ciencias Naturales |
+| DOCENTE / PADRE | Diana Trujillo 3 | cienciassociales.3@heisenberg.edu.co | docente123 | Ciencias Sociales |
 | DOCENTE | Mateo Luna 3 | educacionfisica.3@heisenberg.edu.co | docente123 | Educación Física |
 | DOCENTE | Paula Bastidas 3 | tecnologiaeinformatica.3@heisenberg.edu.co | docente123 | Tecnología e Informática |
 | DOCENTE | Santiago Sterling 3 | eticayvalores.3@heisenberg.edu.co | docente123 | Ética y Valores |
@@ -699,11 +689,6 @@
 
 | Rol | Correo | Contraseña | Hijos asociados |
 | --- | --- | --- | --- |
-| PADRE | padre1.3@heisenberg.edu.co | padre123 | Valentina García, Santiago García |
-| PADRE | padre2.3@heisenberg.edu.co | padre123 | Isabella García, Matías García |
-| PADRE | padre3.3@heisenberg.edu.co | padre123 | Sofía García, Samuel García |
-| PADRE | padre4.3@heisenberg.edu.co | padre123 | Gabriela García, Nicolás García |
-| PADRE | padre5.3@heisenberg.edu.co | padre123 | Mariana García, Sebastián García |
 | PADRE | padre6.3@heisenberg.edu.co | padre123 | Camila García, Alejandro García |
 | PADRE | padre7.3@heisenberg.edu.co | padre123 | Daniela García, Diego García |
 | PADRE | padre8.3@heisenberg.edu.co | padre123 | Luciana García, Andrés García |
@@ -1019,11 +1004,11 @@
 | --- | --- | --- | --- | --- |
 | DIRECTIVO | Rector Colegio Claretiano de Neiva | rector@claretianoneiva.edu.co | directivo123 | - |
 | DIRECTIVO | Directivo Colegio Claretiano de Neiva | directivo@claretianoneiva.edu.co | directivo123 | - |
-| DOCENTE | Andrea Rojas 4 | matematicas.4@claretianoneiva.edu.co | docente123 | Matemáticas |
-| DOCENTE | Carlos Mendoza 4 | espanol.4@claretianoneiva.edu.co | docente123 | Español |
-| DOCENTE | Laura Pineda 4 | ingles.4@claretianoneiva.edu.co | docente123 | Inglés |
-| DOCENTE | Julián Perdomo 4 | cienciasnaturales.4@claretianoneiva.edu.co | docente123 | Ciencias Naturales |
-| DOCENTE | Diana Trujillo 4 | cienciassociales.4@claretianoneiva.edu.co | docente123 | Ciencias Sociales |
+| DOCENTE / PADRE | Andrea Rojas 4 | matematicas.4@claretianoneiva.edu.co | docente123 | Matemáticas |
+| DOCENTE / PADRE | Carlos Mendoza 4 | espanol.4@claretianoneiva.edu.co | docente123 | Español |
+| DOCENTE / PADRE | Laura Pineda 4 | ingles.4@claretianoneiva.edu.co | docente123 | Inglés |
+| DOCENTE / PADRE | Julián Perdomo 4 | cienciasnaturales.4@claretianoneiva.edu.co | docente123 | Ciencias Naturales |
+| DOCENTE / PADRE | Diana Trujillo 4 | cienciassociales.4@claretianoneiva.edu.co | docente123 | Ciencias Sociales |
 | DOCENTE | Mateo Luna 4 | educacionfisica.4@claretianoneiva.edu.co | docente123 | Educación Física |
 | DOCENTE | Paula Bastidas 4 | tecnologiaeinformatica.4@claretianoneiva.edu.co | docente123 | Tecnología e Informática |
 | DOCENTE | Santiago Sterling 4 | eticayvalores.4@claretianoneiva.edu.co | docente123 | Ética y Valores |
@@ -1032,11 +1017,6 @@
 
 | Rol | Correo | Contraseña | Hijos asociados |
 | --- | --- | --- | --- |
-| PADRE | padre1.4@claretianoneiva.edu.co | padre123 | Valentina García, Santiago García |
-| PADRE | padre2.4@claretianoneiva.edu.co | padre123 | Isabella García, Matías García |
-| PADRE | padre3.4@claretianoneiva.edu.co | padre123 | Sofía García, Samuel García |
-| PADRE | padre4.4@claretianoneiva.edu.co | padre123 | Gabriela García, Nicolás García |
-| PADRE | padre5.4@claretianoneiva.edu.co | padre123 | Mariana García, Sebastián García |
 | PADRE | padre6.4@claretianoneiva.edu.co | padre123 | Camila García, Alejandro García |
 | PADRE | padre7.4@claretianoneiva.edu.co | padre123 | Daniela García, Diego García |
 | PADRE | padre8.4@claretianoneiva.edu.co | padre123 | Luciana García, Andrés García |
@@ -1352,11 +1332,11 @@
 | --- | --- | --- | --- | --- |
 | DIRECTIVO | Rector Colegio IDESA | rector@colegioidesa.edu.co | directivo123 | - |
 | DIRECTIVO | Directivo Colegio IDESA | directivo@colegioidesa.edu.co | directivo123 | - |
-| DOCENTE | Andrea Rojas 5 | matematicas.5@colegioidesa.edu.co | docente123 | Matemáticas |
-| DOCENTE | Carlos Mendoza 5 | espanol.5@colegioidesa.edu.co | docente123 | Español |
-| DOCENTE | Laura Pineda 5 | ingles.5@colegioidesa.edu.co | docente123 | Inglés |
-| DOCENTE | Julián Perdomo 5 | cienciasnaturales.5@colegioidesa.edu.co | docente123 | Ciencias Naturales |
-| DOCENTE | Diana Trujillo 5 | cienciassociales.5@colegioidesa.edu.co | docente123 | Ciencias Sociales |
+| DOCENTE / PADRE | Andrea Rojas 5 | matematicas.5@colegioidesa.edu.co | docente123 | Matemáticas |
+| DOCENTE / PADRE | Carlos Mendoza 5 | espanol.5@colegioidesa.edu.co | docente123 | Español |
+| DOCENTE / PADRE | Laura Pineda 5 | ingles.5@colegioidesa.edu.co | docente123 | Inglés |
+| DOCENTE / PADRE | Julián Perdomo 5 | cienciasnaturales.5@colegioidesa.edu.co | docente123 | Ciencias Naturales |
+| DOCENTE / PADRE | Diana Trujillo 5 | cienciassociales.5@colegioidesa.edu.co | docente123 | Ciencias Sociales |
 | DOCENTE | Mateo Luna 5 | educacionfisica.5@colegioidesa.edu.co | docente123 | Educación Física |
 | DOCENTE | Paula Bastidas 5 | tecnologiaeinformatica.5@colegioidesa.edu.co | docente123 | Tecnología e Informática |
 | DOCENTE | Santiago Sterling 5 | eticayvalores.5@colegioidesa.edu.co | docente123 | Ética y Valores |
@@ -1365,11 +1345,6 @@
 
 | Rol | Correo | Contraseña | Hijos asociados |
 | --- | --- | --- | --- |
-| PADRE | padre1.5@colegioidesa.edu.co | padre123 | Valentina García, Santiago García |
-| PADRE | padre2.5@colegioidesa.edu.co | padre123 | Isabella García, Matías García |
-| PADRE | padre3.5@colegioidesa.edu.co | padre123 | Sofía García, Samuel García |
-| PADRE | padre4.5@colegioidesa.edu.co | padre123 | Gabriela García, Nicolás García |
-| PADRE | padre5.5@colegioidesa.edu.co | padre123 | Mariana García, Sebastián García |
 | PADRE | padre6.5@colegioidesa.edu.co | padre123 | Camila García, Alejandro García |
 | PADRE | padre7.5@colegioidesa.edu.co | padre123 | Daniela García, Diego García |
 | PADRE | padre8.5@colegioidesa.edu.co | padre123 | Luciana García, Andrés García |

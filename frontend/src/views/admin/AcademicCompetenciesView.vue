@@ -39,6 +39,8 @@ interface CompetencyItem {
   seccion_nombre: string
   jornada_nombre: string
   usa_dba?: boolean
+  id_dimension?: number | null
+  dimension_nombre?: string | null
   evidencias: {
     id_evidencia: number
     descripcion: string
@@ -73,6 +75,7 @@ const formDbaSearch = ref('')
 const periods = ref<AcademicPeriod[]>([])
 const assignments = ref<AssignmentOption[]>([])
 const competencies = ref<CompetencyItem[]>([])
+const dimensions = ref<{ id_dimension: number; nombre: string }[]>([])
 
 const isPeriodClosed = (id_periodo: any): boolean => {
   if (!id_periodo) return false
@@ -91,6 +94,7 @@ const competencyForm = ref({
   gradeKey: '',
   subjectKey: '',
   descripcion: '',
+  id_dimension: '' as string | number,
 })
 
 const gradeChoices = computed(() => {
@@ -214,6 +218,7 @@ const loadData = async () => {
     periods.value = response.data.periods
     assignments.value = response.data.assignments
     competencies.value = response.data.competencies
+    dimensions.value = response.data.dimensions || []
   } catch (error) {
     console.error('Error loading academic competencies:', error)
   } finally {
@@ -227,6 +232,7 @@ const resetForm = () => {
     gradeKey: '',
     subjectKey: '',
     descripcion: '',
+    id_dimension: '',
   }
 }
 
@@ -291,6 +297,7 @@ const openEditModal = async (item: CompetencyItem) => {
     gradeKey: `${item.nivel_nombre}:${item.tipo_grado_nombre}`,
     subjectKey: String(item.id_materia),
     descripcion: item.descripcion,
+    id_dimension: item.id_dimension || '',
   }
   checkedFormDbaEvidences.value = item.evidencias
     ? item.evidencias.filter(e => e.id_evidencia_dba).map(e => e.id_evidencia_dba as number)
@@ -302,6 +309,12 @@ const openEditModal = async (item: CompetencyItem) => {
 const saveCompetency = async () => {
   if (!competencyForm.value.id_periodo || !competencyForm.value.gradeKey || !competencyForm.value.subjectKey || !competencyForm.value.descripcion.trim()) {
     notify.addNotification('Selecciona grado, materia, periodo y escribe la competencia.', 'warning')
+    return
+  }
+
+  const isPreescolar = competencyForm.value.gradeKey.startsWith('PREESCOLAR:')
+  if (isPreescolar && !competencyForm.value.id_dimension) {
+    notify.addNotification('Selecciona la dimensión o área de desarrollo para preescolar.', 'warning')
     return
   }
 
@@ -331,6 +344,7 @@ const saveCompetency = async () => {
       id_periodo: Number(competencyForm.value.id_periodo),
       descripcion: competencyForm.value.descripcion.trim(),
       id_evidencias_dba: checkedFormDbaEvidences.value,
+      id_dimension: competencyForm.value.id_dimension ? Number(competencyForm.value.id_dimension) : null,
     })
     competencyModal.value = false
     resetForm()
@@ -667,6 +681,9 @@ onMounted(loadData)
                   >
                     {{ item.estado === 'DEFINIDA' ? 'Definida' : 'Pendiente' }}
                   </span>
+                  <span v-if="item.dimension_nombre" class="rounded-full bg-indigo-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400">
+                    Dimensión: {{ item.dimension_nombre }}
+                  </span>
                   <span class="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-black text-slate-600 dark:bg-slate-800 dark:text-slate-400 uppercase tracking-widest">
                     {{ item.tipo_grado_nombre }}
                   </span>
@@ -810,6 +827,18 @@ onMounted(loadData)
                   </option>
                 </select>
               </label>
+              
+              <!-- Selector de Dimensiones para Preescolar -->
+              <label v-if="competencyForm.gradeKey && competencyForm.gradeKey.startsWith('PREESCOLAR:')" class="space-y-2 md:col-span-2">
+                <span class="block text-xs font-black text-slate-700 dark:text-slate-300 ml-1 uppercase tracking-widest">Dimensión / Área de Desarrollo</span>
+                <select v-model="competencyForm.id_dimension" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-3.5 font-bold text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500/20">
+                  <option value="">Selecciona una dimensión</option>
+                  <option v-for="dim in dimensions" :key="dim.id_dimension" :value="dim.id_dimension">
+                    {{ dim.nombre }}
+                  </option>
+                </select>
+              </label>
+
               <label class="space-y-2 md:col-span-2">
                 <span class="block text-xs font-black text-slate-700 dark:text-slate-300 ml-1 uppercase tracking-widest">Descripción pedagógica</span>
                 <textarea v-model="competencyForm.descripcion" rows="4" placeholder="Indica el aprendizaje esperado..." class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-bold text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500/20 resize-none" />

@@ -864,7 +864,7 @@ export const getAcademicSettingsData = async (req: Request, res: Response): Prom
       competencyClient.release();
     }
 
-    const [yearRes, academicYearsRes, defaultSettingsRes, periodsRes, scalesRes, assignmentsRes, competenciesRes, closureSummaryRes] = await Promise.all([
+    const [yearRes, academicYearsRes, defaultSettingsRes, periodsRes, scalesRes, assignmentsRes, competenciesRes, closureSummaryRes, dimensionsRes] = await Promise.all([
       pool.query(
         `SELECT id_anio, calendario, tipo_calendario, estado
          FROM anio_lectivo
@@ -930,6 +930,8 @@ export const getAcademicSettingsData = async (req: Request, res: Response): Prom
            c.id_materia,
            c.id_periodo,
            c.descripcion,
+           c.id_dimension,
+           dp.nombre AS dimension_nombre,
            EXISTS (
              SELECT 1 
              FROM colegio_version_curricular cvc
@@ -938,6 +940,7 @@ export const getAcademicSettingsData = async (req: Request, res: Response): Prom
                  cvc.area = m.nombre
                  OR (tg.nombre = 'TRANSICION' AND cvc.area = 'Desarrollo Integral' AND m.nombre = 'Desarrollo Integral (Transición)')
                  OR (tg.nombre = 'TRANSICION' AND cvc.area = 'Desarrollo Integral (Transición)' AND m.nombre = 'Desarrollo Integral')
+                 OR (tg.nombre = 'TRANSICION' AND cvc.area = 'Transición' AND m.nombre = 'Desarrollo Integral')
                )
                AND cvc.grado = tg.nombre
            ) AS usa_dba,
@@ -985,6 +988,7 @@ export const getAcademicSettingsData = async (req: Request, res: Response): Prom
          JOIN tipo_grado tg ON tg.id_tipo_grado = g.id_tipo_grado
          JOIN secciones s ON s.id_seccion = g.id_seccion
          JOIN jornada j ON j.id_jornada = g.id_jornada
+         LEFT JOIN dimensiones_preescolar dp ON dp.id_dimension = c.id_dimension
          WHERE c.id_colegio = $1
          ORDER BY p.id_periodo, ne.nombre, tg.nombre, m.nombre`,
         [schoolId, DEFAULT_COMPETENCY_TEXT]
@@ -1008,6 +1012,9 @@ export const getAcademicSettingsData = async (req: Request, res: Response): Prom
          ORDER BY p.id_periodo`,
         [schoolId]
       ),
+      pool.query(
+        `SELECT id_dimension, nombre FROM dimensiones_preescolar ORDER BY id_dimension`
+      ),
     ]);
 
     const periodsWithDefaults = periodsRes.rows.map((period, index) => ({
@@ -1025,6 +1032,7 @@ export const getAcademicSettingsData = async (req: Request, res: Response): Prom
       assignments: assignmentsRes.rows,
       competencies: competenciesRes.rows,
       closureSummary: closureSummaryRes.rows,
+      dimensions: dimensionsRes.rows,
     });
   } catch (error: any) {
     console.error("Error fetching academic settings:", error);
@@ -1596,6 +1604,7 @@ export const upsertCompetencyByAdmin = async (req: Request, res: Response): Prom
   const periodId = Number(req.body.id_periodo);
   const descripcion = String(req.body.descripcion || "").trim();
   const idEvidenciasDba = req.body.id_evidencias_dba;
+  const idDimension = req.body.id_dimension ? Number(req.body.id_dimension) : null;
 
   if (!schoolId || !groupId || !subjectId || !periodId || !descripcion) {
     res.status(400).json({ error: "Curso, materia, periodo y descripción son obligatorios" });
@@ -1632,7 +1641,7 @@ export const upsertCompetencyByAdmin = async (req: Request, res: Response): Prom
       };
 
       await client.query("BEGIN");
-      const created = await syncCompetencyAcrossGrade(client, context, periodId, descripcion);
+      const created = await syncCompetencyAcrossGrade(client, context, periodId, descripcion, undefined, idDimension);
 
       // Si se proporcionó id_evidencias_dba, vincularlas a las competencias de todo el grado
       if (idEvidenciasDba !== undefined && Array.isArray(idEvidenciasDba)) {
@@ -5163,6 +5172,28 @@ export const getDbaPlaneacionDisponibles = async (req: Request, res: Response): 
   }
 
   try {
+    // Obtener el grado del grupo para aplicar reglas especiales de preescolar
+    const gradeRes = await pool.query<{ nombre: string }>(
+      `SELECT tg.nombre 
+       FROM grupos g
+       JOIN tipo_grado tg ON tg.id_tipo_grado = g.id_tipo_grado
+       WHERE g.id_grupo = $1`,
+      [groupId]
+    );
+
+    if (gradeRes.rows.length === 0) {
+      res.status(404).json({ error: "Grupo no encontrado" });
+      return;
+    }
+
+    const gradeName = gradeRes.rows[0].nombre;
+
+    // Prejardín y Jardín no tienen DBA oficiales del MEN
+    if (gradeName === "PREJARDIN" || gradeName === "JARDIN") {
+      res.json({ dba: [], versionCurricular: null });
+      return;
+    }
+
     const cvcRes = await pool.query(
       `SELECT cvc.version_curricular
        FROM colegio_version_curricular cvc
@@ -5170,23 +5201,13 @@ export const getDbaPlaneacionDisponibles = async (req: Request, res: Response): 
          AND (
            cvc.area = (SELECT nombre FROM materias WHERE id_materia = $2)
            OR (
-             (SELECT tg2.nombre FROM grupos g2 JOIN tipo_grado tg2 ON tg2.id_tipo_grado = g2.id_tipo_grado WHERE g2.id_grupo = $3) = 'TRANSICION'
-             AND cvc.area = 'Desarrollo Integral'
-             AND (SELECT nombre FROM materias WHERE id_materia = $2) = 'Desarrollo Integral (Transición)'
-           )
-           OR (
-             (SELECT tg2.nombre FROM grupos g2 JOIN tipo_grado tg2 ON tg2.id_tipo_grado = g2.id_tipo_grado WHERE g2.id_grupo = $3) = 'TRANSICION'
-             AND cvc.area = 'Desarrollo Integral (Transición)'
+             $3 = 'TRANSICION'
+             AND cvc.area IN ('Desarrollo Integral', 'Transición', 'Desarrollo Integral (Transición)')
              AND (SELECT nombre FROM materias WHERE id_materia = $2) = 'Desarrollo Integral'
            )
          )
-         AND cvc.grado = (
-           SELECT tg.nombre 
-           FROM grupos g 
-           JOIN tipo_grado tg ON tg.id_tipo_grado = g.id_tipo_grado 
-           WHERE g.id_grupo = $3
-         )`,
-      [schoolId, subjectId, groupId]
+         AND cvc.grado = $3`,
+      [schoolId, subjectId, gradeName]
     );
 
     if (cvcRes.rows.length === 0) {
@@ -5216,26 +5237,16 @@ export const getDbaPlaneacionDisponibles = async (req: Request, res: Response): 
        WHERE (
          d.area = (SELECT nombre FROM materias WHERE id_materia = $1)
          OR (
-           (SELECT tg.nombre FROM grupos g JOIN tipo_grado tg ON tg.id_tipo_grado = g.id_tipo_grado WHERE g.id_grupo = $2) = 'TRANSICION'
-           AND d.area = 'Desarrollo Integral'
-           AND (SELECT nombre FROM materias WHERE id_materia = $1) = 'Desarrollo Integral (Transición)'
-         )
-         OR (
-           (SELECT tg.nombre FROM grupos g JOIN tipo_grado tg ON tg.id_tipo_grado = g.id_tipo_grado WHERE g.id_grupo = $2) = 'TRANSICION'
-           AND d.area = 'Desarrollo Integral (Transición)'
+           $4 = 'TRANSICION'
+           AND d.area IN ('Desarrollo Integral', 'Transición', 'Desarrollo Integral (Transición)')
            AND (SELECT nombre FROM materias WHERE id_materia = $1) = 'Desarrollo Integral'
          )
        )
-         AND d.grado = (
-           SELECT tg.nombre 
-           FROM grupos g 
-           JOIN tipo_grado tg ON tg.id_tipo_grado = g.id_tipo_grado 
-           WHERE g.id_grupo = $2
-         )
+         AND d.grado = $4
          AND d.version_curricular = $3
          AND d.estado = 'ACTIVO'
        ORDER BY d.numero_dba`,
-      [subjectId, groupId, versionCurricular]
+      [subjectId, groupId, versionCurricular, gradeName]
     );
 
     // 3. Obtener las evidencias ya asignadas a competencias (con detalle de a cuál pertenecen)

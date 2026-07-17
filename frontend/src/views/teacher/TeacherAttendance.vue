@@ -39,6 +39,7 @@ interface StudentAttendance {
   codigo: string
   estado: 'PRESENTE' | 'AUSENTE' | 'TARDE' | 'JUSTIFICADA' | null
   justificacion: string | null
+  hora_llegada: string | null
 }
 
 interface StudentHistory {
@@ -119,6 +120,7 @@ const fetchAttendance = async () => {
   if (!selectedCourse.value) return
   try {
     loading.value = true
+    currentPage.value = 1
     const response = await axios.get(`http://localhost:3000/api/teacher/attendance/${selectedCourse.value.id_detallegrado}/${selectedDate.value}`)
     students.value = response.data.students
     isEditable.value = response.data.editable
@@ -248,11 +250,47 @@ const filteredStudents = computed(() => {
   return students.value.filter(s => s.nombre.toLowerCase().includes(query) || s.codigo.toLowerCase().includes(query))
 })
 
+// Pagination
+const currentPage = ref(1)
+const itemsPerPage = ref(12)
+
+const paginatedStudents = computed(() => {
+  const startIndex = (currentPage.value - 1) * itemsPerPage.value
+  const endIndex = startIndex + itemsPerPage.value
+  return filteredStudents.value.slice(startIndex, endIndex)
+})
+
+const totalPages = computed(() => {
+  return Math.ceil(filteredStudents.value.length / itemsPerPage.value) || 1
+})
+
+watch(searchQuery, () => {
+  currentPage.value = 1
+})
+
 const filteredHistory = computed(() => {
   if (!searchQuery.value.trim()) return historyData.value
   const query = searchQuery.value.toLowerCase()
   return historyData.value.filter(s => s.nombre.toLowerCase().includes(query) || s.codigo.toLowerCase().includes(query))
 })
+
+// Default arrival time state & helpers
+const defaultTime = ref('07:00')
+
+const setTimeNow = () => {
+  const now = new Date()
+  const hh = String(now.getHours()).padStart(2, '0')
+  const mm = String(now.getMinutes()).padStart(2, '0')
+  defaultTime.value = `${hh}:${mm}`
+}
+
+const applyDefaultTimeToAll = () => {
+  students.value.forEach(student => {
+    if (student.estado === 'PRESENTE' || student.estado === 'TARDE') {
+      student.hora_llegada = defaultTime.value
+    }
+  })
+}
 
 // Quick status toggling
 const setStatus = (studentId: number, status: 'PRESENTE' | 'AUSENTE' | 'TARDE' | 'JUSTIFICADA') => {
@@ -262,10 +300,18 @@ const setStatus = (studentId: number, status: 'PRESENTE' | 'AUSENTE' | 'TARDE' |
     if (student.estado === status) {
       student.estado = null
       student.justificacion = null
+      student.hora_llegada = null
     } else {
       student.estado = status
       if (status !== 'JUSTIFICADA') {
         student.justificacion = null
+      }
+      if (status === 'PRESENTE' || status === 'TARDE') {
+        if (!student.hora_llegada) {
+          student.hora_llegada = defaultTime.value
+        }
+      } else {
+        student.hora_llegada = null
       }
     }
   }
@@ -277,6 +323,7 @@ const markAllPresent = () => {
   students.value.forEach(s => {
     s.estado = 'PRESENTE'
     s.justificacion = null
+    s.hora_llegada = defaultTime.value
   })
 }
 
@@ -288,7 +335,8 @@ const saveAllAttendance = async () => {
     const recordsToSave = students.value.map(s => ({
       id_estudiante: s.id_estudiante,
       estado: s.estado,
-      justificacion: s.justificacion
+      justificacion: s.justificacion,
+      hora_llegada: s.hora_llegada
     }))
 
     await axios.post('http://localhost:3000/api/teacher/attendance', {
@@ -590,60 +638,10 @@ onMounted(() => {
     </div>
 
     <!-- Main Container -->
-    <div v-else class="grid grid-cols-1 xl:grid-cols-4 gap-8">
+    <div v-else class="space-y-6">
       
-      <!-- Left sidebar: Status counts and quick options (Today tab only) -->
-      <div v-if="activeTab === 'today'" class="xl:col-span-1 space-y-6">
-        <div class="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm space-y-6 transition-colors">
-          <h3 class="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
-            Resumen del día
-          </h3>
-
-          <div class="grid grid-cols-2 gap-4">
-            <div class="bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900 rounded-2xl p-4 text-center">
-              <p class="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Presentes</p>
-              <p class="text-3xl font-black text-emerald-700 dark:text-emerald-300 mt-1">{{ stats.presente }}</p>
-            </div>
-            <div class="bg-rose-50/50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900 rounded-2xl p-4 text-center">
-              <p class="text-[10px] font-bold text-rose-500 dark:text-rose-400 uppercase tracking-wider">Ausentes</p>
-              <p class="text-3xl font-black text-rose-700 dark:text-rose-300 mt-1">{{ stats.ausente }}</p>
-            </div>
-            <div class="bg-amber-50/50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900 rounded-2xl p-4 text-center">
-              <p class="text-[10px] font-bold text-amber-500 dark:text-amber-400 uppercase tracking-wider">Retrasos</p>
-              <p class="text-3xl font-black text-amber-700 dark:text-amber-300 mt-1">{{ stats.tarde }}</p>
-            </div>
-            <div class="bg-blue-50/50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900 rounded-2xl p-4 text-center">
-              <p class="text-[10px] font-bold text-blue-500 dark:text-blue-400 uppercase tracking-wider">Justificadas</p>
-              <p class="text-3xl font-black text-blue-700 dark:text-blue-300 mt-1">{{ stats.justificada }}</p>
-            </div>
-          </div>
-
-          <div class="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-3">
-            <div class="flex justify-between items-center text-xs font-semibold text-slate-500 dark:text-slate-400">
-              <span>Sin registrar</span>
-              <span class="font-bold text-slate-700 dark:text-slate-200">{{ stats.sin_registro }}</span>
-            </div>
-            <div class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2">
-              <div 
-                class="bg-emerald-500 h-2 rounded-full transition-all duration-500" 
-                :style="{ width: `${students.length ? ((students.length - stats.sin_registro) / students.length) * 100 : 0}%` }"
-              ></div>
-            </div>
-          </div>
-        </div>
-
-        <button 
-          @click="markAllPresent"
-          :disabled="!isEditable || students.length === 0"
-          class="w-full bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 py-4 rounded-2xl font-bold text-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
-        >
-          <ThumbsUp :size="18" />
-          Marcar todos como Presente
-        </button>
-      </div>
-
-      <!-- Right content: Students grid (Today tab) or Table (History tab) -->
-      <div :class="[activeTab === 'today' ? 'xl:col-span-3' : 'xl:col-span-4']" class="space-y-6">
+      <!-- Content Wrapper -->
+      <div class="space-y-6">
         
         <!-- Search bar -->
         <div class="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center gap-4 transition-colors">
@@ -657,100 +655,226 @@ onMounted(() => {
         </div>
 
         <!-- Today Attendance Grid -->
-        <div v-if="activeTab === 'today'">
+        <div v-if="activeTab === 'today'" class="space-y-6">
+          
+          <!-- Resumen del día y Herramientas (Horizontal) -->
+          <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
+            <!-- Stats Grid -->
+            <div class="lg:col-span-3 grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div class="bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-100/70 dark:border-emerald-900 rounded-2xl p-3 flex items-center justify-between shadow-sm">
+                <div>
+                  <p class="text-[9px] font-black text-emerald-650 dark:text-emerald-400 uppercase tracking-widest">Presentes</p>
+                  <p class="text-xl font-black text-slate-800 dark:text-slate-100 mt-0.5">{{ stats.presente }}</p>
+                </div>
+                <div class="h-8 w-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-450 flex items-center justify-center">
+                  <Check :size="16" />
+                </div>
+              </div>
+              <div class="bg-rose-50/50 dark:bg-rose-950/20 border border-rose-100/70 dark:border-rose-900 rounded-2xl p-3 flex items-center justify-between shadow-sm">
+                <div>
+                  <p class="text-[9px] font-bold text-rose-500 dark:text-rose-400 uppercase tracking-widest">Ausentes</p>
+                  <p class="text-xl font-black text-slate-800 dark:text-slate-100 mt-0.5">{{ stats.ausente }}</p>
+                </div>
+                <div class="h-8 w-8 rounded-lg bg-rose-100 dark:bg-rose-900/50 text-rose-700 dark:text-rose-450 flex items-center justify-center">
+                  <X :size="16" />
+                </div>
+              </div>
+              <div class="bg-amber-50/50 dark:bg-amber-950/20 border border-amber-100/70 dark:border-amber-900 rounded-2xl p-3 flex items-center justify-between shadow-sm">
+                <div>
+                  <p class="text-[9px] font-bold text-amber-500 dark:text-amber-400 uppercase tracking-widest">Retrasos</p>
+                  <p class="text-xl font-black text-slate-800 dark:text-slate-100 mt-0.5">{{ stats.tarde }}</p>
+                </div>
+                <div class="h-8 w-8 rounded-lg bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-450 flex items-center justify-center">
+                  <Clock :size="16" />
+                </div>
+              </div>
+              <div class="bg-blue-50/50 dark:bg-blue-950/20 border border-blue-100/70 dark:border-blue-900 rounded-2xl p-3 flex items-center justify-between shadow-sm">
+                <div>
+                  <p class="text-[9px] font-bold text-blue-500 dark:text-blue-400 uppercase tracking-widest">Justificadas</p>
+                  <p class="text-xl font-black text-slate-800 dark:text-slate-100 mt-0.5">{{ stats.justificada }}</p>
+                </div>
+                <div class="h-8 w-8 rounded-lg bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-450 flex items-center justify-center">
+                  <Minus :size="16" />
+                </div>
+              </div>
+            </div>
+
+            <!-- Tools bar -->
+            <div class="lg:col-span-2 bg-white dark:bg-slate-900 p-3 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3 transition-colors">
+              <div class="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-150 dark:border-slate-700 w-full sm:w-auto">
+                <Clock :size="13" class="text-indigo-500 shrink-0" />
+                <input 
+                  v-model="defaultTime" 
+                  type="time" 
+                  :disabled="!isEditable"
+                  class="bg-transparent border-none text-xs font-bold text-slate-700 dark:text-slate-200 outline-none w-16" 
+                />
+                <button 
+                  @click="setTimeNow"
+                  :disabled="!isEditable"
+                  class="bg-white dark:bg-slate-750 hover:bg-slate-100 dark:hover:bg-slate-700 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-650 text-[9px] font-bold whitespace-nowrap transition-all"
+                >
+                  Actual
+                </button>
+              </div>
+              <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
+                <button 
+                  @click="applyDefaultTimeToAll"
+                  :disabled="!isEditable || students.length === 0"
+                  class="px-2.5 py-1.5 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 border border-indigo-200/50 dark:border-indigo-850 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 rounded-lg font-bold text-[10px] whitespace-nowrap transition-all"
+                >
+                  Aplicar Hora
+                </button>
+                <button 
+                  @click="markAllPresent"
+                  :disabled="!isEditable || students.length === 0"
+                  class="px-2.5 py-1.5 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200/50 dark:border-emerald-850 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 rounded-lg font-bold text-[10px] whitespace-nowrap transition-all flex items-center gap-1"
+                >
+                  <ThumbsUp :size="11" />
+                  Todos Pres
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Loading state -->
           <div v-if="loading" class="flex flex-col items-center justify-center p-20 bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm transition-colors">
             <Loader2 class="w-10 h-10 text-emerald-600 dark:text-emerald-500 animate-spin mb-4" />
             <p class="text-slate-500 dark:text-slate-400 font-bold text-sm">Cargando listado de estudiantes...</p>
           </div>
 
+          <!-- Empty state -->
           <div v-else-if="filteredStudents.length === 0" class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 p-20 text-center shadow-sm transition-colors">
             <p class="text-slate-400 dark:text-slate-500 font-bold">No se encontraron estudiantes para la búsqueda.</p>
           </div>
 
-          <div v-else class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-            <div 
-              v-for="student in filteredStudents" 
-              :key="student.id_estudiante" 
-              class="group p-6 rounded-3xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 hover:shadow-xl hover:shadow-emerald-50/50 dark:hover:shadow-none transition-all duration-300 flex flex-col justify-between space-y-4"
-            >
-              <div class="flex items-start justify-between">
-                <div class="flex items-center gap-4">
-                  <div class="h-12 w-12 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 shadow-inner flex items-center justify-center font-black group-hover:scale-110 transition-transform">
+          <!-- Students grid -->
+          <div v-else class="space-y-6">
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
+              <div 
+                v-for="student in paginatedStudents" 
+                :key="student.id_estudiante" 
+                class="group p-4 rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 hover:shadow-lg transition-all duration-300 flex flex-col justify-between h-[210px] space-y-2 relative"
+              >
+                <!-- Avatar & Name -->
+                <div class="flex items-center gap-3">
+                  <div class="h-9 w-9 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 shadow-inner flex items-center justify-center font-bold text-sm shrink-0">
                     {{ student.nombre.charAt(0) }}
                   </div>
-                  <div>
-                    <h3 class="font-black text-slate-800 dark:text-slate-200 text-md leading-tight">{{ student.nombre }}</h3>
-                    <p class="text-[10px] text-slate-400 dark:text-slate-500 font-bold font-mono mt-1">{{ student.codigo }}</p>
+                  <div class="min-w-0">
+                    <h3 class="font-bold text-slate-800 dark:text-slate-200 text-xs leading-tight truncate" :title="student.nombre">{{ student.nombre }}</h3>
+                    <p class="text-[9px] text-slate-400 dark:text-slate-500 font-bold font-mono mt-0.5">{{ student.codigo }}</p>
                   </div>
                 </div>
-              </div>
 
-              <!-- Justification Input when set to JUSTIFICADA -->
-              <div v-if="student.estado === 'JUSTIFICADA'" class="animate-in slide-in-from-top-2 duration-300">
-                <label class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block mb-1">Motivo de Justificación</label>
-                <div class="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 rounded-xl p-2 border border-slate-200/60 dark:border-slate-700/60">
-                  <FileText :size="16" class="text-slate-400 dark:text-slate-500 shrink-0" />
-                  <input 
-                    v-model="student.justificacion"
-                    type="text" 
-                    placeholder="Ej. Incapacidad médica, cita..."
+                <!-- Input conditional sections (Time or Justification) -->
+                <div class="grow flex flex-col justify-center">
+                  <!-- Justification Input when set to JUSTIFICADA -->
+                  <div v-if="student.estado === 'JUSTIFICADA'" class="animate-in slide-in-from-top-1 duration-200">
+                    <div class="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 rounded-lg p-1.5 border border-slate-200/60 dark:border-slate-700/60">
+                      <FileText :size="12" class="text-slate-400 dark:text-slate-500 shrink-0" />
+                      <input 
+                        v-model="student.justificacion"
+                        type="text" 
+                        placeholder="Motivo de inasistencia..."
+                        :disabled="!isEditable"
+                        class="w-full bg-transparent border-none text-[10px] font-semibold text-slate-700 dark:text-slate-200 focus:outline-none placeholder-slate-350 dark:placeholder-slate-650 truncate"
+                      />
+                    </div>
+                  </div>
+
+                  <!-- Arrival Time Input when set to PRESENTE or TARDE -->
+                  <div v-else-if="student.estado === 'PRESENTE' || student.estado === 'TARDE'" class="animate-in slide-in-from-top-1 duration-200">
+                    <div class="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 rounded-lg p-1.5 border border-slate-200/60 dark:border-slate-700/60">
+                      <Clock :size="12" class="text-slate-400 dark:text-slate-500 shrink-0" />
+                      <input 
+                        v-model="student.hora_llegada"
+                        type="time" 
+                        :disabled="!isEditable"
+                        class="w-full bg-transparent border-none text-[10px] font-bold text-slate-700 dark:text-slate-200 focus:outline-none cursor-pointer"
+                      />
+                    </div>
+                  </div>
+
+                  <!-- Empty state placeholder -->
+                  <div v-else class="flex items-center">
+                    <span class="text-[9px] text-slate-300 dark:text-slate-600 font-bold uppercase tracking-wider">Sin registrar</span>
+                  </div>
+                </div>
+
+                <!-- Action buttons -->
+                <div class="grid grid-cols-4 gap-1 pt-1.5 border-t border-slate-50 dark:border-slate-800/40">
+                  <button 
+                    @click="setStatus(student.id_estudiante, 'PRESENTE')"
                     :disabled="!isEditable"
-                    class="w-full bg-transparent border-none text-xs font-semibold text-slate-700 dark:text-slate-200 focus:outline-none placeholder-slate-350 dark:placeholder-slate-600"
-                  />
+                    :class="[
+                      student.estado === 'PRESENTE' ? 'bg-emerald-600 dark:bg-emerald-500 text-white font-black' : 'bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 hover:text-emerald-600 dark:hover:text-emerald-400',
+                      'flex flex-col items-center justify-center py-1 rounded-lg transition-all disabled:opacity-50 text-[8px]'
+                    ]"
+                    title="Presente"
+                  >
+                    <Check :size="12" />
+                    <span class="mt-0.5 scale-90">Pres</span>
+                  </button>
+                  <button 
+                    @click="setStatus(student.id_estudiante, 'AUSENTE')"
+                    :disabled="!isEditable"
+                    :class="[
+                      student.estado === 'AUSENTE' ? 'bg-rose-500 dark:bg-rose-600 text-white font-black' : 'bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 hover:text-rose-500 dark:hover:text-rose-400',
+                      'flex flex-col items-center justify-center py-1 rounded-lg transition-all disabled:opacity-50 text-[8px]'
+                    ]"
+                    title="Ausente"
+                  >
+                    <X :size="12" />
+                    <span class="mt-0.5 scale-90">Aus</span>
+                  </button>
+                  <button 
+                    @click="setStatus(student.id_estudiante, 'TARDE')"
+                    :disabled="!isEditable"
+                    :class="[
+                      student.estado === 'TARDE' ? 'bg-amber-500 dark:bg-amber-600 text-white font-black' : 'bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 hover:bg-amber-50 dark:hover:bg-amber-950/20 hover:text-amber-500 dark:hover:text-amber-400',
+                      'flex flex-col items-center justify-center py-1 rounded-lg transition-all disabled:opacity-50 text-[8px]'
+                    ]"
+                    title="Retraso"
+                  >
+                    <Clock :size="12" />
+                    <span class="mt-0.5 scale-90">Tarde</span>
+                  </button>
+                  <button 
+                    @click="setStatus(student.id_estudiante, 'JUSTIFICADA')"
+                    :disabled="!isEditable"
+                    :class="[
+                      student.estado === 'JUSTIFICADA' ? 'bg-blue-500 dark:bg-blue-600 text-white font-black' : 'bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 hover:bg-blue-50 dark:hover:bg-blue-950/20 hover:text-blue-500 dark:hover:text-blue-400',
+                      'flex flex-col items-center justify-center py-1 rounded-lg transition-all disabled:opacity-50 text-[8px]'
+                    ]"
+                    title="Justificada"
+                  >
+                    <Minus :size="12" />
+                    <span class="mt-0.5 scale-90">Just</span>
+                  </button>
                 </div>
               </div>
+            </div>
 
-              <!-- Button actions -->
-              <div class="grid grid-cols-4 gap-2">
-                <button 
-                  @click="setStatus(student.id_estudiante, 'PRESENTE')"
-                  :disabled="!isEditable"
-                  :class="[
-                    student.estado === 'PRESENTE' ? 'bg-emerald-600 dark:bg-emerald-500 text-white ring-4 ring-emerald-100 dark:ring-emerald-950' : 'bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/40 hover:text-emerald-600 dark:hover:text-emerald-400',
-                    'flex flex-col items-center justify-center p-3 rounded-2xl transition-all font-bold disabled:opacity-50 disabled:cursor-not-allowed'
-                  ]"
-                  title="Presente"
-                >
-                  <Check :size="18" />
-                  <span class="text-[9px] mt-1">Pres</span>
-                </button>
-                <button 
-                  @click="setStatus(student.id_estudiante, 'AUSENTE')"
-                  :disabled="!isEditable"
-                  :class="[
-                    student.estado === 'AUSENTE' ? 'bg-rose-500 dark:bg-rose-600 text-white ring-4 ring-rose-100 dark:ring-rose-950' : 'bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 hover:bg-rose-50 dark:hover:bg-rose-900/40 hover:text-rose-500 dark:hover:text-rose-400',
-                    'flex flex-col items-center justify-center p-3 rounded-2xl transition-all font-bold disabled:opacity-50 disabled:cursor-not-allowed'
-                  ]"
-                  title="Ausente"
-                >
-                  <X :size="18" />
-                  <span class="text-[9px] mt-1">Aus</span>
-                </button>
-                <button 
-                  @click="setStatus(student.id_estudiante, 'TARDE')"
-                  :disabled="!isEditable"
-                  :class="[
-                    student.estado === 'TARDE' ? 'bg-amber-500 dark:bg-amber-600 text-white ring-4 ring-amber-100 dark:ring-amber-950' : 'bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 hover:bg-amber-50 dark:hover:bg-amber-900/40 hover:text-amber-500 dark:hover:text-amber-400',
-                    'flex flex-col items-center justify-center p-3 rounded-2xl transition-all font-bold disabled:opacity-50 disabled:cursor-not-allowed'
-                  ]"
-                  title="Retraso"
-                >
-                  <Clock :size="18" />
-                  <span class="text-[9px] mt-1">Tarde</span>
-                </button>
-                <button 
-                  @click="setStatus(student.id_estudiante, 'JUSTIFICADA')"
-                  :disabled="!isEditable"
-                  :class="[
-                    student.estado === 'JUSTIFICADA' ? 'bg-blue-500 dark:bg-blue-600 text-white ring-4 ring-blue-100 dark:ring-blue-950' : 'bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 hover:bg-blue-50 dark:hover:bg-blue-900/40 hover:text-blue-500 dark:hover:text-blue-400',
-                    'flex flex-col items-center justify-center p-3 rounded-2xl transition-all font-bold disabled:opacity-50 disabled:cursor-not-allowed'
-                  ]"
-                  title="Justificada"
-                >
-                  <Minus :size="18" />
-                  <span class="text-[9px] mt-1">Just</span>
-                </button>
-              </div>
+            <!-- Pagination -->
+            <div v-if="totalPages > 1" class="flex items-center justify-center gap-4 pt-4 border-t border-slate-100 dark:border-slate-850">
+              <button 
+                @click="currentPage = Math.max(1, currentPage - 1)" 
+                :disabled="currentPage === 1"
+                class="px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-xl font-bold text-xs transition-all disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
+              >
+                Anterior
+              </button>
+              <span class="text-xs font-bold text-slate-500 dark:text-slate-400">
+                Página {{ currentPage }} de {{ totalPages }}
+              </span>
+              <button 
+                @click="currentPage = Math.min(totalPages, currentPage + 1)" 
+                :disabled="currentPage === totalPages"
+                class="px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-xl font-bold text-xs transition-all disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
+              >
+                Siguiente
+              </button>
             </div>
           </div>
         </div>

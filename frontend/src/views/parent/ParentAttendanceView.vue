@@ -77,7 +77,7 @@ const fetchYearsAndInfo = async () => {
 const fetchPeriods = async () => {
   if (!selectedChildId.value || !selectedYear.value) return
   try {
-    const res = await axios.get(`http://localhost:3000/api/student/periods/${selectedChildId.value}/${selectedYear.value}`)
+    const res = await axios.get(`http://localhost:3000/api/student/all-periods/${selectedChildId.value}/${selectedYear.value}`)
     periods.value = res.data
     if (periods.value.length > 0) {
       selectedPeriod.value = periods.value[periods.value.length - 1].id_periodo
@@ -243,8 +243,8 @@ const formatDate = (dateString: string) => {
         <div class="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700">
           <Filter :size="18" class="text-slate-400" />
           <select v-model="selectedPeriod" class="bg-transparent border-none text-xs font-bold text-slate-700 dark:text-slate-200 focus:ring-0 outline-none cursor-pointer" :disabled="periods.length === 0">
-            <option v-if="periods.length === 0" disabled value="">No hay periodos</option>
-            <option v-for="p in periods" :key="p.id_periodo" :value="p.id_periodo">{{ p.nombre }}</option>
+            <option v-if="periods.length === 0" disabled value="">No hay periodos disponibles</option>
+            <option v-for="p in periods" :key="p.id_periodo" :value="p.id_periodo">{{ p.nombre }}{{ p.estado === 'ABIERTO' ? ' - En Curso' : '' }}</option>
           </select>
         </div>
 
@@ -325,6 +325,7 @@ const formatDate = (dateString: string) => {
             <tr class="bg-slate-50/50 dark:bg-slate-800/50">
               <th class="px-8 py-5 text-[11px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Fecha</th>
               <th class="px-8 py-5 text-[11px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 text-center">Estado</th>
+              <th class="px-8 py-5 text-[11px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 text-center">Hora de Llegada</th>
               <th class="px-8 py-5 text-[11px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Materia</th>
               <th class="px-8 py-5 text-[11px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Docente</th>
               <th class="px-8 py-5 text-[11px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Justificación</th>
@@ -347,6 +348,11 @@ const formatDate = (dateString: string) => {
                   >
                     {{ item.estado }}
                   </span>
+                </div>
+              </td>
+              <td class="px-8 py-6">
+                <div class="text-center font-bold text-sm text-slate-700 dark:text-slate-300 font-mono">
+                  {{ item.hora_llegada || '—' }}
                 </div>
               </td>
               <td class="px-8 py-6">

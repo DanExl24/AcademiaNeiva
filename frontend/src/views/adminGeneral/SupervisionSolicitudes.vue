@@ -43,12 +43,33 @@ const selectedRequest = ref<Solicitud | null>(null)
 const adminPassword = ref('')
 const entryReason = ref('')
 
+const configLimits = ref({
+  minDuration: 5,
+  maxDuration: 300
+})
+
 const form = ref({
   id_colegio: '',
   tipo_supervision: 'SOLO_LECTURA',
   duracion_maxima_minutos: 60,
   motivo: ''
 })
+
+const fetchConfigLimits = async () => {
+  try {
+    const headers = { Authorization: `Bearer ${auth.token}` }
+    const res = await axios.get('http://localhost:3000/api/admin/configuracion', { headers })
+    const data = res.data
+    if (data.supervision_duracion_minima_minutos) {
+      configLimits.value.minDuration = Number(data.supervision_duracion_minima_minutos.valor)
+    }
+    if (data.supervision_duracion_maxima_minutos) {
+      configLimits.value.maxDuration = Number(data.supervision_duracion_maxima_minutos.valor)
+    }
+  } catch (error) {
+    console.error('Error fetching config limits:', error)
+  }
+}
 
 const fetchSchools = async () => {
   try {
@@ -78,6 +99,7 @@ const fetchRequests = async () => {
 }
 
 onMounted(() => {
+  fetchConfigLimits()
   fetchSchools()
   fetchRequests()
 })
@@ -86,7 +108,7 @@ const openRequest = () => {
   form.value = {
     id_colegio: activeSchools.value[0]?.id_colegio ? String(activeSchools.value[0].id_colegio) : '',
     tipo_supervision: 'SOLO_LECTURA',
-    duracion_maxima_minutos: 60,
+    duracion_maxima_minutos: configLimits.value.minDuration,
     motivo: ''
   }
   showRequestModal.value = true
@@ -305,7 +327,8 @@ const handleEnter = async () => {
 
               <div class="space-y-1">
                 <label class="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">Duración Autorizada (Minutos)</label>
-                <input v-model.number="form.duracion_maxima_minutos" type="number" min="5" max="300" class="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl p-3 text-sm font-bold outline-none text-slate-900 dark:text-white" />
+                <input v-model.number="form.duracion_maxima_minutos" type="number" :min="configLimits.minDuration" :max="configLimits.maxDuration" class="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl p-3 text-sm font-bold outline-none text-slate-900 dark:text-white" />
+                <p class="text-[10px] font-semibold text-slate-400 dark:text-slate-500 mt-1">Rango permitido: {{ configLimits.minDuration }} – {{ configLimits.maxDuration }} minutos</p>
               </div>
             </div>
 
