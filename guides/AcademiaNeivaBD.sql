@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict iDUZ1zF8JxN5NeObiMwLR2vniwtEMoRiJCCnNwe7GuYHOtO6iCBl3ZNhbbaIVvQ
+\restrict dxB82tmkg9I6Q1zmp3IBMNeWCIjzbspXESS9m419rL72bNufqe055ecGGl7cD8H
 
 -- Dumped from database version 18.4
 -- Dumped by pg_dump version 18.4
@@ -803,7 +803,8 @@ CREATE TABLE public.competencias (
     descripcion text DEFAULT 'Competencia pendiente por definir.'::text NOT NULL,
     id_colegio integer NOT NULL,
     nombre character varying(200),
-    sync_uuid uuid
+    sync_uuid uuid,
+    id_dimension integer
 );
 
 
@@ -1067,6 +1068,18 @@ CREATE TABLE public.dba (
 ALTER TABLE public.dba OWNER TO postgres;
 
 --
+-- Name: dba_dimensiones_preescolar; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.dba_dimensiones_preescolar (
+    id_dba integer NOT NULL,
+    id_dimension integer NOT NULL
+);
+
+
+ALTER TABLE public.dba_dimensiones_preescolar OWNER TO postgres;
+
+--
 -- Name: dba_id_dba_seq; Type: SEQUENCE; Schema: public; Owner: postgres
 --
 
@@ -1195,6 +1208,40 @@ ALTER SEQUENCE public.detalle_padrefamilia_id_detallepadrefamilia_seq OWNER TO p
 --
 
 ALTER SEQUENCE public.detalle_padrefamilia_id_detallepadrefamilia_seq OWNED BY public.detalle_padrefamilia.id_detallepadrefamilia;
+
+
+--
+-- Name: dimensiones_preescolar; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.dimensiones_preescolar (
+    id_dimension integer NOT NULL,
+    nombre character varying(100) NOT NULL
+);
+
+
+ALTER TABLE public.dimensiones_preescolar OWNER TO postgres;
+
+--
+-- Name: dimensiones_preescolar_id_dimension_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.dimensiones_preescolar_id_dimension_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.dimensiones_preescolar_id_dimension_seq OWNER TO postgres;
+
+--
+-- Name: dimensiones_preescolar_id_dimension_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.dimensiones_preescolar_id_dimension_seq OWNED BY public.dimensiones_preescolar.id_dimension;
 
 
 --
@@ -2059,7 +2106,8 @@ CREATE TABLE public.registro_asistencia (
     fecha timestamp with time zone NOT NULL,
     estado public.estado_asistencia DEFAULT 'PRESENTE'::public.estado_asistencia NOT NULL,
     id_colegio integer NOT NULL,
-    justificacion text
+    justificacion text,
+    hora_llegada time without time zone
 );
 
 
@@ -2701,6 +2749,13 @@ ALTER TABLE ONLY public.detalle_padrefamilia ALTER COLUMN id_detallepadrefamilia
 
 
 --
+-- Name: dimensiones_preescolar id_dimension; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.dimensiones_preescolar ALTER COLUMN id_dimension SET DEFAULT nextval('public.dimensiones_preescolar_id_dimension_seq'::regclass);
+
+
+--
 -- Name: directivo id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -3054,6 +3109,14 @@ ALTER TABLE ONLY public.criterio_evaluacion
 
 
 --
+-- Name: dba_dimensiones_preescolar dba_dimensiones_preescolar_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.dba_dimensiones_preescolar
+    ADD CONSTRAINT dba_dimensiones_preescolar_pkey PRIMARY KEY (id_dba, id_dimension);
+
+
+--
 -- Name: dba dba_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -3083,6 +3146,22 @@ ALTER TABLE ONLY public.detalle_grados
 
 ALTER TABLE ONLY public.detalle_padrefamilia
     ADD CONSTRAINT detalle_padrefamilia_pkey PRIMARY KEY (id_detallepadrefamilia);
+
+
+--
+-- Name: dimensiones_preescolar dimensiones_preescolar_nombre_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.dimensiones_preescolar
+    ADD CONSTRAINT dimensiones_preescolar_nombre_key UNIQUE (nombre);
+
+
+--
+-- Name: dimensiones_preescolar dimensiones_preescolar_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.dimensiones_preescolar
+    ADD CONSTRAINT dimensiones_preescolar_pkey PRIMARY KEY (id_dimension);
 
 
 --
@@ -3984,6 +4063,14 @@ ALTER TABLE ONLY public.competencias
 
 
 --
+-- Name: competencias competencias_id_dimension_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.competencias
+    ADD CONSTRAINT competencias_id_dimension_fkey FOREIGN KEY (id_dimension) REFERENCES public.dimensiones_preescolar(id_dimension) ON DELETE SET NULL;
+
+
+--
 -- Name: competencias competencias_id_grupo_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -4061,6 +4148,22 @@ ALTER TABLE ONLY public.criterio_evaluacion
 
 ALTER TABLE ONLY public.criterio_evaluacion
     ADD CONSTRAINT criterio_evaluacion_id_evidencia_fkey FOREIGN KEY (id_evidencia) REFERENCES public.evidencia_aprendizaje(id_evidencia) ON DELETE SET NULL;
+
+
+--
+-- Name: dba_dimensiones_preescolar dba_dimensiones_preescolar_id_dba_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.dba_dimensiones_preescolar
+    ADD CONSTRAINT dba_dimensiones_preescolar_id_dba_fkey FOREIGN KEY (id_dba) REFERENCES public.dba(id_dba) ON DELETE CASCADE;
+
+
+--
+-- Name: dba_dimensiones_preescolar dba_dimensiones_preescolar_id_dimension_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.dba_dimensiones_preescolar
+    ADD CONSTRAINT dba_dimensiones_preescolar_id_dimension_fkey FOREIGN KEY (id_dimension) REFERENCES public.dimensiones_preescolar(id_dimension) ON DELETE CASCADE;
 
 
 --
@@ -4658,5 +4761,5 @@ REVOKE USAGE ON SCHEMA public FROM PUBLIC;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict iDUZ1zF8JxN5NeObiMwLR2vniwtEMoRiJCCnNwe7GuYHOtO6iCBl3ZNhbbaIVvQ
+\unrestrict dxB82tmkg9I6Q1zmp3IBMNeWCIjzbspXESS9m419rL72bNufqe055ecGGl7cD8H
 

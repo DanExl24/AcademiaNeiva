@@ -12,7 +12,7 @@ db_name = os.environ.get("DB_NAME", "AcademiaNeiva")
 db_user = os.environ.get("DB_USER", "postgres")
 db_password = os.environ.get("DB_PASSWORD", "postgres")
 
-migration_path = r'c:\Users\alejo\Downloads\segundoProyecto\backend\src\migrations\007_dba_catalogo_global.sql'
+migration_path = r'c:\Users\alejo\Downloads\segundoProyecto\backend\src\migrations\014_soporte_tecnico.sql'
 
 print(f"Connecting to database {db_name} on {db_host}:{db_port}...")
 try:
@@ -37,7 +37,7 @@ try:
     # Verify tables
     cur.execute("""
         SELECT table_name FROM information_schema.tables 
-        WHERE table_schema = 'public' AND table_name IN ('dba', 'evidencias_dba', 'colegio_version_curricular')
+        WHERE table_schema = 'public' AND table_name IN ('tickets_soporte')
     """)
     tables = cur.fetchall()
     print("Created tables:", [t[0] for t in tables])

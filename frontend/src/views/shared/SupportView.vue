@@ -1,0 +1,853 @@
+<script setup lang="ts">
+import { ref, onMounted, computed } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
+import { useAuthStore } from '../../stores/auth'
+import { 
+  LifeBuoy, 
+  Send, 
+  CheckCircle2, 
+  User, 
+  Mail, 
+  Phone, 
+  HelpCircle, 
+  FileText, 
+  ArrowLeft,
+  School,
+  Loader2,
+  AlertCircle,
+  Filter,
+  Check,
+  RefreshCw,
+  Clock,
+  ShieldAlert
+} from 'lucide-vue-next'
+import axios from 'axios'
+
+const auth = useAuthStore()
+const router = useRouter()
+const route = useRoute()
+
+// Comprobar si es directivo o admin general
+const isStaff = computed(() => {
+  const role = auth.activeRole?.toUpperCase()
+  return role === 'DIRECTIVO' || role === 'ADMIN_GENERAL'
+})
+
+// Visitante/Docente/Padre/Estudiante Form states
+const name = ref('')
+const email = ref('')
+const phone = ref('')
+const category = ref('TECNICO')
+const subject = ref('')
+const description = ref('')
+const selectedSchoolId = ref<number | null>(null)
+
+// Data lists
+const schools = ref<any[]>([])
+const tickets = ref<any[]>([])
+const loading = ref(false)
+const loadingSchools = ref(false)
+const submitting = ref(false)
+const generatedTicketCode = ref<string | null>(null)
+const errorMsg = ref('')
+
+// Filter states for Staff
+const filterStatus = ref<'TODOS' | 'ABIERTO' | 'EN_PROCESO' | 'RESUELTO' | 'ESCALADO'>('TODOS')
+const searchQuery = ref('')
+const showEscalatedOnly = ref(false) // Para Directivos: ver escalados al Admin General
+
+// Modo Seguimiento de Tickets para el Usuario
+const showTrackingMode = ref(false)
+const trackingCodeInput = ref('')
+const trackingTicketData = ref<any>(null)
+const searchingTracking = ref(false)
+const trackingError = ref('')
+
+// Observaciones inline
+const observationsInputs = ref<Record<number, string>>({})
+const submittingObs = ref<Record<number, boolean>>({})
+
+const fetchSchools = async () => {
+  if (auth.isAuthenticated) return
+  try {
+    loadingSchools.value = true
+    const res = await axios.get('http://localhost:3000/api/matriculas')
+    schools.value = res.data || []
+  } catch (error) {
+    console.error('Error fetching schools:', error)
+  } finally {
+    loadingSchools.value = false
+  }
+}
+
+const fetchTickets = async () => {
+  if (!isStaff.value) return
+  try {
+    loading.value = true
+    const headers = { Authorization: `Bearer ${auth.token}` }
+    let url = 'http://localhost:3000/api/support/tickets'
+    if (showEscalatedOnly.value) {
+      url += '?escalados=true'
+    }
+    const res = await axios.get(url, { headers })
+    
+    // Al cargar tickets, inicializamos su array de observaciones si vienen serializadas
+    tickets.value = (res.data.tickets || []).map((t: any) => {
+      let obs = []
+      if (typeof t.observaciones === 'string') {
+        try {
+          obs = JSON.parse(t.observaciones)
+        } catch {
+          obs = []
+        }
+      } else if (Array.isArray(t.observaciones)) {
+        obs = t.observaciones
+      }
+      return { ...t, observaciones: obs }
+    })
+  } catch (error) {
+    console.error('Error fetching tickets:', error)
+    errorMsg.value = 'No se pudieron cargar los tickets de soporte de tu institución.'
+  } finally {
+    loading.value = false
+  }
+}
+
+const toggleEscalatedFilter = () => {
+  showEscalatedOnly.value = !showEscalatedOnly.value
+  fetchTickets()
+}
+
+const updateTicketStatus = async (ticketId: number, newStatus: string) => {
+  try {
+    const headers = { Authorization: `Bearer ${auth.token}` }
+    await axios.put(`http://localhost:3000/api/support/tickets/${ticketId}/status`, { estado: newStatus }, { headers })
+    
+    // Actualizar localmente el estado del ticket
+    const t = tickets.value.find(ticket => ticket.id_ticket === ticketId)
+    if (t) {
+      t.estado = newStatus
+      // Si el directivo lo marca como ESCALADO (si correspondiese), lo removemos de la lista local
+      if (newStatus === 'ESCALADO' && !showEscalatedOnly.value && auth.activeRole?.toUpperCase() === 'DIRECTIVO') {
+        tickets.value = tickets.value.filter(t => t.id_ticket !== ticketId)
+      }
+    }
+  } catch (error: any) {
+    alert(error.response?.data?.error || 'Error al actualizar el estado del ticket.')
+  }
+}
+
+const escalateTicketFrontend = async (ticketId: number) => {
+  if (!confirm('¿Estás seguro de que deseas escalar esta incidencia al Administrador General?')) return
+  try {
+    const headers = { Authorization: `Bearer ${auth.token}` }
+    await axios.post(`http://localhost:3000/api/support/tickets/${ticketId}/escalar`, {}, { headers })
+    alert('Incidencia escalada exitosamente al Administrador General.')
+    
+    // Remover localmente de la lista, ya que ahora es exclusiva del Admin General (o de ver escalados)
+    tickets.value = tickets.value.filter(t => t.id_ticket !== ticketId)
+  } catch (error: any) {
+    alert(error.response?.data?.error || 'Error al escalar la incidencia.')
+  }
+}
+
+const fetchTrackingTicket = async () => {
+  if (!trackingCodeInput.value.trim()) return
+  try {
+    searchingTracking.value = true
+    trackingError.value = ''
+    trackingTicketData.value = null
+
+    const res = await axios.get(`http://localhost:3000/api/support/tickets/track/${trackingCodeInput.value.trim()}`)
+    trackingTicketData.value = res.data.ticket
+  } catch (error: any) {
+    trackingError.value = error.response?.data?.error || 'Error al consultar el seguimiento. Valida que el código sea correcto.'
+  } finally {
+    searchingTracking.value = false
+  }
+}
+
+const saveObservation = async (ticketId: number) => {
+  const note = observationsInputs.value[ticketId]
+  if (!note || !note.trim()) return
+
+  try {
+    submittingObs.value[ticketId] = true
+    const headers = { Authorization: `Bearer ${auth.token}` }
+    const res = await axios.post(`http://localhost:3000/api/support/tickets/${ticketId}/observaciones`, {
+      observacion: note
+    }, { headers })
+
+    // Actualizar localmente el array de observaciones del ticket
+    const t = tickets.value.find(ticket => ticket.id_ticket === ticketId)
+    if (t) {
+      t.observaciones = res.data.observaciones || []
+    }
+    observationsInputs.value[ticketId] = ''
+    alert('Observación guardada y registrada exitosamente.')
+  } catch (error: any) {
+    alert(error.response?.data?.error || 'Error al registrar la observación.')
+  } finally {
+    submittingObs.value[ticketId] = false
+  }
+}
+
+onMounted(() => {
+  if (isStaff.value) {
+    fetchTickets()
+  } else {
+    fetchSchools()
+    if (auth.isAuthenticated && auth.user) {
+      name.value = auth.user.name || `${auth.user.nombre || ''} ${auth.user.apellido || ''}`.trim()
+      email.value = auth.user.email || ''
+      selectedSchoolId.value = auth.user.schoolId ? Number(auth.user.schoolId) : null
+    }
+
+    // Cargar parámetros de plantilla desde la URL si están presentes
+    if (route.query.tipo_incidencia) {
+      category.value = String(route.query.tipo_incidencia)
+    }
+    if (route.query.asunto) {
+      subject.value = String(route.query.asunto)
+    }
+    if (route.query.descripcion) {
+      description.value = String(route.query.descripcion)
+    }
+  }
+})
+
+const isFormValid = computed(() => {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  const hasContactInfo = auth.isAuthenticated ? true : (name.value.trim().length > 0 && emailRegex.test(email.value))
+  const hasSchool = auth.isAuthenticated ? true : selectedSchoolId.value !== null
+  return hasContactInfo && hasSchool && subject.value.trim().length > 0 && description.value.trim().length >= 10
+})
+
+const handleSubmit = async () => {
+  if (!isFormValid.value || submitting.value) return
+
+  try {
+    submitting.value = true
+    errorMsg.value = ''
+
+    const headers: any = {}
+    if (auth.token) {
+      headers.Authorization = `Bearer ${auth.token}`
+    }
+
+    const payload = {
+      nombre_remitente: name.value,
+      correo_remitente: email.value,
+      telefono: phone.value || null,
+      tipo_incidencia: category.value,
+      asunto: subject.value,
+      descripcion: description.value,
+      id_colegio: selectedSchoolId.value
+    }
+
+    const response = await axios.post('http://localhost:3000/api/support/tickets', payload, { headers })
+    generatedTicketCode.value = response.data.ticketCode
+    
+    subject.value = ''
+    description.value = ''
+    phone.value = ''
+  } catch (error: any) {
+    errorMsg.value = error.response?.data?.error || 'Error al enviar el ticket de soporte.'
+  } finally {
+    submitting.value = false
+  }
+}
+
+const goBack = () => {
+  if (auth.isAuthenticated) {
+    router.push('/dashboard')
+  } else {
+    router.push('/login')
+  }
+}
+
+// Staff filtering
+const filteredTickets = computed(() => {
+  let result = tickets.value
+
+  if (filterStatus.value !== 'TODOS') {
+    result = result.filter(t => t.estado === filterStatus.value)
+  }
+
+  if (searchQuery.value.trim()) {
+    const q = searchQuery.value.toLowerCase()
+    result = result.filter(t => 
+      t.asunto.toLowerCase().includes(q) ||
+      t.descripcion.toLowerCase().includes(q) ||
+      t.nombre_remitente.toLowerCase().includes(q) ||
+      t.correo_remitente.toLowerCase().includes(q) ||
+      `tkt-${new Date(t.fecha_creacion).getFullYear()}-${String(t.id_ticket).padStart(5, '0')}`.toLowerCase().includes(q)
+    )
+  }
+
+  return result
+})
+
+const getCategoryBadgeClass = (cat: string) => {
+  if (cat === 'TECNICO') return 'bg-rose-50 text-rose-700 border-rose-100 dark:bg-rose-950/20 dark:text-rose-455'
+  if (cat === 'CALIFICACIONES') return 'bg-violet-50 text-violet-700 border-violet-100 dark:bg-violet-950/20 dark:text-violet-400'
+  if (cat === 'ASISTENCIA') return 'bg-amber-50 text-amber-700 border-amber-100 dark:bg-amber-950/20 dark:text-amber-400'
+  if (cat === 'AUTENTICACION') return 'bg-cyan-50 text-cyan-700 border-cyan-100 dark:bg-cyan-950/20 dark:text-cyan-400'
+  return 'bg-slate-50 text-slate-700 border-slate-100 dark:bg-slate-800/40 dark:text-slate-400'
+}
+
+const getCategoryLabel = (cat: string) => {
+  if (cat === 'TECNICO') return 'Técnico / Error'
+  if (cat === 'CALIFICACIONES') return 'Notas / Periodos'
+  if (cat === 'ASISTENCIA') return 'Asistencia'
+  if (cat === 'AUTENTICACION') return 'Autenticación'
+  return 'General / Sugerencia'
+}
+
+const getTicketCode = (fecha: string, id: number) => {
+  return `TKT-${new Date(fecha).getFullYear()}-${String(id).padStart(5, '0')}`
+}
+
+const formatDate = (dateStr: string) => {
+  const date = new Date(dateStr)
+  return date.toLocaleDateString('es-CO', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+</script>
+
+<template>
+  <div class="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 sm:p-6 transition-colors duration-500 flex flex-col justify-center items-center">
+    
+    <!-- 1. STAFF VIEW: Tickets Management Dashboard -->
+    <div v-if="isStaff" class="w-full max-w-5xl bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-2xl p-6 sm:p-10 relative overflow-hidden transition-all duration-300">
+      
+      <!-- Back button -->
+      <button 
+        @click="goBack" 
+        class="absolute top-8 left-8 flex items-center gap-2 text-xs font-black text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors uppercase tracking-widest"
+      >
+        <ArrowLeft :size="16" />
+        Regresar
+      </button>
+
+      <!-- Header -->
+      <div class="mt-8 mb-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div class="space-y-2">
+          <div class="flex items-center gap-3">
+            <div class="w-12 h-12 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 rounded-2xl flex items-center justify-center shadow-inner">
+              <LifeBuoy class="w-6 h-6 animate-spin-slow" />
+            </div>
+            <div>
+              <h1 class="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Bandeja de Soporte</h1>
+              <p class="text-xs text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider">
+                Tickets recibidos de tu institución educativa
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <button 
+          @click="fetchTickets" 
+          :disabled="loading"
+          class="self-start md:self-auto flex items-center gap-2 px-4 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-750 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-bold transition-all disabled:opacity-50"
+        >
+          <RefreshCw :size="14" :class="{'animate-spin': loading}" />
+          Refrescar
+        </button>
+      </div>
+
+      <!-- Filters & Search Bar -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div class="md:col-span-2 flex gap-3">
+          <div class="flex-1 bg-slate-50 dark:bg-slate-800/40 px-4 py-3 rounded-2xl border border-slate-150/40 dark:border-slate-700/60 flex items-center gap-3">
+            <Filter class="text-slate-400 shrink-0" :size="18" />
+            <input 
+              v-model="searchQuery" 
+              type="text" 
+              placeholder="Buscar por código, asunto, remitente o correo..."
+              class="w-full bg-transparent border-none text-slate-850 dark:text-slate-200 placeholder-slate-400 focus:outline-none text-sm font-semibold"
+            />
+          </div>
+          <button 
+            v-if="auth.activeRole?.toUpperCase() === 'DIRECTIVO'"
+            @click="toggleEscalatedFilter"
+            class="px-4 py-3 text-xs font-black uppercase tracking-widest rounded-2xl border transition-all shrink-0 flex items-center gap-2"
+            :class="showEscalatedOnly ? 'bg-amber-600 border-amber-600 text-white shadow-md shadow-amber-100 dark:shadow-none' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-350 hover:bg-slate-100 dark:hover:bg-slate-750'"
+          >
+            <ShieldAlert :size="14" />
+            {{ showEscalatedOnly ? 'Ver Internos' : 'Ver Escalados' }}
+          </button>
+        </div>
+
+        <div class="bg-slate-50 dark:bg-slate-800/40 px-4 py-2 rounded-2xl border border-slate-150/40 dark:border-slate-700/60 flex items-center gap-2">
+          <span class="text-[10px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-widest whitespace-nowrap ml-1">Estado:</span>
+          <select 
+            v-model="filterStatus"
+            class="w-full bg-transparent border-none text-xs font-bold text-slate-700 dark:text-slate-350 outline-none focus:ring-0 cursor-pointer"
+          >
+            <option value="TODOS">Todos los estados</option>
+            <option value="ABIERTO">Abiertos</option>
+            <option value="EN_PROCESO">En Proceso</option>
+            <option value="RESUELTO">Resueltos</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Error status -->
+      <div v-if="errorMsg" class="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 rounded-2xl p-4 flex items-center gap-3 mb-6">
+        <AlertCircle class="w-5 h-5 text-red-650 dark:text-red-405 shrink-0" />
+        <p class="text-xs font-bold text-red-700 dark:text-red-405">{{ errorMsg }}</p>
+      </div>
+
+      <!-- Loading State -->
+      <div v-if="loading" class="flex flex-col items-center justify-center p-20 bg-slate-50/50 dark:bg-slate-800/10 border border-dashed border-slate-200 dark:border-slate-800 rounded-3xl transition-all">
+        <Loader2 class="w-10 h-10 text-indigo-600 dark:text-indigo-400 animate-spin mb-4" />
+        <p class="text-slate-550 dark:text-slate-400 font-bold text-sm">Consultando bandeja de soporte...</p>
+      </div>
+
+      <!-- Empty state -->
+      <div v-else-if="filteredTickets.length === 0" class="bg-slate-50/30 dark:bg-slate-800/10 border border-dashed border-slate-200 dark:border-slate-800 rounded-[2rem] p-16 text-center shadow-inner transition-colors duration-300">
+        <LifeBuoy :size="60" class="mx-auto text-slate-200 dark:text-slate-750 mb-4" />
+        <h3 class="text-lg font-black text-slate-800 dark:text-slate-200">No se encontraron tickets</h3>
+        <p class="text-slate-500 max-w-xs mx-auto mt-2 text-xs font-semibold leading-relaxed">
+          No hay solicitudes de soporte técnico registradas que coincidan con los filtros activos.
+        </p>
+      </div>
+
+      <!-- Tickets list grid -->
+      <div v-else class="space-y-4">
+        <div 
+          v-for="t in filteredTickets" 
+          :key="t.id_ticket"
+          class="p-6 bg-slate-50/50 dark:bg-slate-800/20 border border-slate-100 dark:border-slate-850 rounded-3xl hover:shadow-md transition-all duration-300"
+        >
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-slate-800/50">
+            <div class="flex items-center gap-3">
+              <span class="px-3 py-1 bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-300 border border-slate-200/40 dark:border-slate-700/60 rounded-xl font-mono text-xs font-black">
+                {{ getTicketCode(t.fecha_creacion, t.id_ticket) }}
+              </span>
+              <span 
+                class="px-2.5 py-1 text-[9px] font-black uppercase tracking-wider border rounded-full"
+                :class="getCategoryBadgeClass(t.tipo_incidencia)"
+              >
+                {{ getCategoryLabel(t.tipo_incidencia) }}
+              </span>
+            </div>
+
+            <!-- Interactive state selector for staff -->
+            <div class="flex items-center gap-2">
+              <span class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Estado:</span>
+              <select 
+                v-model="t.estado"
+                @change="updateTicketStatus(t.id_ticket, t.estado)"
+                class="px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-750 text-xs font-black uppercase tracking-wider rounded-xl cursor-pointer focus:outline-none"
+                :class="{
+                  'text-rose-600 dark:text-rose-455': t.estado === 'ABIERTO',
+                  'text-amber-605 dark:text-amber-500': t.estado === 'EN_PROCESO',
+                  'text-emerald-600 dark:text-emerald-400': t.estado === 'RESUELTO',
+                  'text-indigo-650 dark:text-indigo-400': t.estado === 'ESCALADO'
+                }"
+              >
+                <option value="ABIERTO">Abierto</option>
+                <option value="EN_PROCESO">En Proceso</option>
+                <option value="RESUELTO">Resuelto</option>
+                <option v-if="auth.activeRole?.toUpperCase() === 'ADMIN_GENERAL'" value="ESCALADO">Escalado</option>
+              </select>
+              <button 
+                v-if="auth.activeRole?.toUpperCase() === 'DIRECTIVO'"
+                @click="escalateTicketFrontend(t.id_ticket)"
+                class="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all"
+              >
+                Escalar
+              </button>
+            </div>
+          </div>
+
+          <!-- Description and details -->
+          <div class="py-4 space-y-3">
+            <h3 class="font-black text-slate-850 dark:text-slate-200 text-sm">{{ t.asunto }}</h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed font-semibold">
+              {{ t.descripcion }}
+            </p>
+          </div>
+
+          <!-- Sender Snapshot Info -->
+          <div class="pt-4 border-t border-slate-100 dark:border-slate-800/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs font-bold text-slate-655 dark:text-slate-400">
+            <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <div class="flex items-center gap-1.5">
+                <User :size="13" class="text-slate-400" />
+                <span>{{ t.nombre_remitente }}</span>
+              </div>
+              <div class="flex items-center gap-1.5">
+                <Mail :size="13" class="text-slate-400" />
+                <a :href="`mailto:${t.correo_remitente}`" class="hover:text-indigo-500 transition-colors">{{ t.correo_remitente }}</a>
+              </div>
+              <div v-if="t.telefono" class="flex items-center gap-1.5">
+                <Phone :size="13" class="text-slate-400" />
+                <span>{{ t.telefono }}</span>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-1.5 text-[10px] text-slate-400">
+              <Clock :size="12" />
+              <span>{{ formatDate(t.fecha_creacion) }}</span>
+            </div>
+          </div>
+
+          <!-- Observation Logs -->
+          <div v-if="t.observaciones && t.observaciones.length > 0" class="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800/40 space-y-3">
+            <span class="text-[9px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-widest">Historial de Observaciones:</span>
+            <div class="space-y-2">
+              <div v-for="(obs, idx) in t.observaciones" :key="idx" class="p-3 bg-indigo-50/10 dark:bg-slate-850/40 rounded-2xl border border-slate-150/40 dark:border-slate-800/10">
+                <div class="flex items-center justify-between text-[9px] text-slate-400 font-bold mb-1">
+                  <span>{{ obs.autor }}</span>
+                  <span>{{ formatDate(obs.fecha) }}</span>
+                </div>
+                <p class="text-xs text-slate-655 dark:text-slate-350 font-semibold italic">"{{ obs.texto }}"</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Observations Input -->
+          <div class="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800/40 space-y-2">
+            <span class="text-[9px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-widest">Agregar Nota de Observación:</span>
+            <div class="flex flex-col sm:flex-row gap-3">
+              <textarea 
+                v-model="observationsInputs[t.id_ticket]" 
+                placeholder="Escribe una observación para este ticket..."
+                rows="2"
+                class="w-full p-3 bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-750 text-xs font-semibold text-slate-700 dark:text-slate-200 rounded-xl focus:border-indigo-500 outline-none resize-none transition-all"
+              ></textarea>
+              <button 
+                @click="saveObservation(t.id_ticket)"
+                :disabled="submittingObs[t.id_ticket] || !observationsInputs[t.id_ticket]?.trim()"
+                class="px-4 py-2 bg-indigo-650 hover:bg-indigo-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center shrink-0"
+              >
+                <Loader2 v-if="submittingObs[t.id_ticket]" class="w-3 h-3 animate-spin mr-1" />
+                Guardar
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. GUEST/NORMAL VIEW: Contact support form -->
+    <div v-else class="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-2xl p-8 sm:p-12 relative overflow-hidden transition-all duration-300">
+      
+      <!-- Back button -->
+      <button 
+        @click="goBack" 
+        class="absolute top-8 left-8 flex items-center gap-2 text-xs font-black text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors uppercase tracking-widest"
+      >
+        <ArrowLeft :size="16" />
+        Regresar
+      </button>
+
+      <!-- Toggle Tracking/Contact switch -->
+      <button 
+        @click="showTrackingMode = !showTrackingMode; trackingTicketData = null; trackingError = ''" 
+        class="absolute top-8 right-8 flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+      >
+        {{ showTrackingMode ? 'Ir al Formulario' : 'Ver mis tickets / Seguimiento' }}
+      </button>
+
+      <!-- Seguimiento de Ticket -->
+      <div v-if="showTrackingMode" class="mt-8 space-y-8">
+        <div class="text-center max-w-md mx-auto space-y-3">
+          <div class="w-16 h-16 bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 rounded-2xl flex items-center justify-center mx-auto shadow-inner animate-pulse">
+            <LifeBuoy class="w-8 h-8" />
+          </div>
+          <h1 class="text-3xl font-black text-slate-900 dark:text-white tracking-tight">Seguimiento de Ticket</h1>
+          <p class="text-sm text-slate-500 dark:text-slate-400 leading-relaxed font-semibold">
+            Ingresa el código alfanumérico de tu ticket para consultar su estado actual y las observaciones del colegio.
+          </p>
+        </div>
+
+        <!-- Search Bar -->
+        <div class="max-w-md mx-auto space-y-4">
+          <div class="flex gap-3">
+            <input 
+              v-model="trackingCodeInput"
+              type="text"
+              placeholder="Ej: TKT-1B3X9H7Z"
+              class="w-full px-4 py-4 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-semibold text-slate-750 dark:text-slate-250 placeholder-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all outline-none"
+              @keyup.enter="fetchTrackingTicket"
+            />
+            <button 
+              @click="fetchTrackingTicket"
+              :disabled="searchingTracking || !trackingCodeInput.trim()"
+              class="px-6 py-4 bg-indigo-650 hover:bg-indigo-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all disabled:opacity-50 flex items-center gap-1.5 shrink-0 shadow-md"
+            >
+              <Loader2 v-if="searchingTracking" class="w-4 h-4 animate-spin" />
+              Buscar
+            </button>
+          </div>
+
+          <div v-if="trackingError" class="bg-rose-50 dark:bg-rose-950/20 border border-rose-200 text-rose-700 dark:text-rose-455 rounded-2xl p-4 flex items-center gap-3">
+            <AlertCircle class="w-5 h-5 text-rose-600 shrink-0" />
+            <p class="text-xs font-bold">{{ trackingError }}</p>
+          </div>
+        </div>
+
+        <!-- Tracking Results Card -->
+        <div v-if="trackingTicketData" class="max-w-xl mx-auto p-6 bg-slate-50/50 dark:bg-slate-800/20 border border-slate-100 dark:border-slate-850 rounded-[2rem] space-y-6 shadow-inner animate-in fade-in duration-300">
+          <div class="pb-4 border-b border-slate-100 dark:border-slate-800/50 flex items-center justify-between">
+            <span class="px-3 py-1 bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-300 border border-slate-200/40 dark:border-slate-700/60 rounded-xl font-mono text-xs font-black">
+              {{ trackingTicketData.codigo_ticket || `TKT-${new Date(trackingTicketData.fecha_creacion).getFullYear()}-${String(trackingTicketData.id_ticket).padStart(5, '0')}` }}
+            </span>
+            
+            <div class="flex items-center gap-2">
+              <span class="text-[10px] font-bold text-slate-400 dark:text-slate-555 uppercase tracking-widest">Estado:</span>
+              <span 
+                class="px-3 py-1 text-[10px] font-black uppercase tracking-wider border rounded-full"
+                :class="{
+                  'bg-rose-50 border-rose-100 text-rose-700': trackingTicketData.estado === 'ABIERTO',
+                  'bg-amber-50 border-amber-100 text-amber-700': trackingTicketData.estado === 'EN_PROCESO',
+                  'bg-emerald-50 border-emerald-100 text-emerald-700': trackingTicketData.estado === 'RESUELTO',
+                  'bg-indigo-50 border-indigo-100 text-indigo-700': trackingTicketData.estado === 'ESCALADO'
+                }"
+              >
+                {{ trackingTicketData.estado === 'ABIERTO' ? '🔴 Abierto' : 
+                   trackingTicketData.estado === 'EN_PROCESO' ? '🟡 En Proceso' : 
+                   trackingTicketData.estado === 'RESUELTO' ? '🟢 Resuelto' : '🔵 Escalado' }}
+              </span>
+            </div>
+          </div>
+
+          <div class="space-y-3">
+            <div>
+              <span class="text-[9px] font-bold text-slate-400 dark:text-slate-555 uppercase tracking-widest">Asunto:</span>
+              <p class="font-black text-slate-850 dark:text-slate-200 text-sm mt-0.5">{{ trackingTicketData.asunto }}</p>
+            </div>
+            <div>
+              <span class="text-[9px] font-bold text-slate-400 dark:text-slate-555 uppercase tracking-widest">Descripción de la Incidencia:</span>
+              <p class="text-xs text-slate-655 dark:text-slate-400 leading-relaxed mt-0.5 whitespace-pre-line">{{ trackingTicketData.descripcion }}</p>
+            </div>
+            <div class="grid grid-cols-2 gap-4 pt-2">
+              <div>
+                <span class="text-[9px] font-bold text-slate-400 dark:text-slate-555 uppercase tracking-widest">Colegio:</span>
+                <p class="text-xs font-black text-slate-700 dark:text-slate-300 mt-0.5">{{ trackingTicketData.colegio_nombre || 'General / Público' }}</p>
+              </div>
+              <div>
+                <span class="text-[9px] font-bold text-slate-400 dark:text-slate-555 uppercase tracking-widest">Fecha de Creación:</span>
+                <p class="text-xs font-black text-slate-700 dark:text-slate-300 mt-0.5">{{ formatDate(trackingTicketData.fecha_creacion) }}</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Observaciones del Colegio -->
+          <div class="pt-6 border-t border-slate-100 dark:border-slate-800/50 space-y-4">
+            <h3 class="text-xs font-black text-slate-850 dark:text-white uppercase tracking-wider">Observaciones del Colegio</h3>
+            
+            <div v-if="!trackingTicketData.observaciones || trackingTicketData.observaciones.length === 0" class="p-6 bg-slate-100/40 dark:bg-slate-800/10 border border-dashed border-slate-250 dark:border-slate-800 rounded-2xl text-center">
+              <p class="text-[11px] text-slate-400 font-semibold italic">El colegio aún no ha registrado notas u observaciones en esta solicitud.</p>
+            </div>
+            <div v-else class="space-y-3">
+              <div 
+                v-for="(obs, idx) in trackingTicketData.observaciones" 
+                :key="idx" 
+                class="p-4 bg-white dark:bg-slate-850 border border-slate-150/40 dark:border-slate-800 rounded-2xl shadow-sm"
+              >
+                <div class="flex items-center justify-between text-[9px] text-slate-400 font-bold mb-2">
+                  <span>{{ obs.autor }}</span>
+                  <span>{{ formatDate(obs.fecha) }}</span>
+                </div>
+                <p class="text-xs text-slate-700 dark:text-slate-300 font-semibold italic">"{{ obs.texto }}"</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main UI form flow -->
+      <div v-else-if="!generatedTicketCode" class="mt-8 space-y-8">
+        <div class="text-center max-w-md mx-auto space-y-3">
+          <div class="w-16 h-16 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
+            <LifeBuoy class="w-8 h-8 animate-pulse" />
+          </div>
+          <h1 class="text-3xl font-black text-slate-900 dark:text-white tracking-tight">Soporte Técnico</h1>
+          <p class="text-sm text-slate-500 dark:text-slate-400 leading-relaxed font-semibold">
+            ¿Tienes inconvenientes con la plataforma? Envíanos una solicitud y nuestro equipo te responderá al correo electrónico a la brevedad.
+          </p>
+        </div>
+
+        <form @submit.prevent="handleSubmit" class="space-y-6">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <!-- Nombre -->
+            <div class="space-y-2">
+              <label class="text-[10px] font-bold text-slate-450 dark:text-slate-500 uppercase tracking-widest ml-1">Tu Nombre Completo *</label>
+              <div class="relative">
+                <input 
+                  v-model="name"
+                  type="text" 
+                  required
+                  placeholder="Ej. Juan Pérez"
+                  :disabled="auth.isAuthenticated"
+                  class="w-full pl-11 pr-4 py-4 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-semibold text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all outline-none disabled:opacity-60"
+                />
+                <User class="w-5 h-5 text-slate-400 absolute left-4 top-4" />
+              </div>
+            </div>
+
+            <!-- Correo -->
+            <div class="space-y-2">
+              <label class="text-[10px] font-bold text-slate-450 dark:text-slate-500 uppercase tracking-widest ml-1">Tu Correo Electrónico *</label>
+              <div class="relative">
+                <input 
+                  v-model="email"
+                  type="email" 
+                  required
+                  placeholder="ejemplo@correo.com"
+                  :disabled="auth.isAuthenticated"
+                  class="w-full pl-11 pr-4 py-4 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-semibold text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all outline-none disabled:opacity-60"
+                />
+                <Mail class="w-5 h-5 text-slate-400 absolute left-4 top-4" />
+              </div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <!-- Teléfono -->
+            <div class="space-y-2">
+              <label class="text-[10px] font-bold text-slate-455 dark:text-slate-500 uppercase tracking-widest ml-1">Teléfono / Celular (Opcional)</label>
+              <div class="relative">
+                <input 
+                  v-model="phone"
+                  type="tel" 
+                  placeholder="Ej. +57 300 123 4567"
+                  class="w-full pl-11 pr-4 py-4 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-semibold text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all outline-none"
+                />
+                <Phone class="w-5 h-5 text-slate-400 absolute left-4 top-4" />
+              </div>
+            </div>
+
+            <!-- Tipo Incidencia -->
+            <div class="space-y-2">
+              <label class="text-[10px] font-bold text-slate-455 dark:text-slate-500 uppercase tracking-widest ml-1">Tipo de Incidencia *</label>
+              <div class="relative">
+                <select 
+                  v-model="category"
+                  class="w-full pl-11 pr-4 py-4 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-semibold text-slate-700 dark:text-slate-200 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all outline-none cursor-pointer"
+                >
+                  <option value="TECNICO">Problema Técnico / Error de Plataforma</option>
+                  <option value="CALIFICACIONES">Dudas sobre Calificaciones / Periodos</option>
+                  <option value="ASISTENCIA">Dudas sobre Asistencia</option>
+                  <option value="AUTENTICACION">Problemas de Inicio de Sesión / Contraseña</option>
+                  <option value="SOPORTE">Sugerencias / Otro</option>
+                </select>
+                <HelpCircle class="w-5 h-5 text-slate-400 absolute left-4 top-4" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Selector de Colegio (Solo para visitantes) -->
+          <div v-if="!auth.isAuthenticated" class="space-y-2">
+            <label class="text-[10px] font-bold text-slate-450 dark:text-slate-500 uppercase tracking-widest ml-1">Colegio de la Incidencia *</label>
+            <div class="relative">
+              <select 
+                v-model="selectedSchoolId"
+                required
+                class="w-full pl-11 pr-4 py-4 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-semibold text-slate-700 dark:text-slate-200 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all outline-none cursor-pointer disabled:opacity-50"
+                :disabled="loadingSchools"
+              >
+                <option :value="null" disabled>{{ loadingSchools ? 'Cargando colegios...' : 'Selecciona tu institución educativa' }}</option>
+                <option v-for="s in schools" :key="s.id_colegio" :value="s.id_colegio">{{ s.nombre }}</option>
+              </select>
+              <School class="w-5 h-5 text-slate-400 absolute left-4 top-4" />
+            </div>
+          </div>
+
+          <!-- Asunto -->
+          <div class="space-y-2">
+            <label class="text-[10px] font-bold text-slate-450 dark:text-slate-500 uppercase tracking-widest ml-1">Asunto de la Solicitud *</label>
+            <div class="relative">
+              <input 
+                v-model="subject"
+                type="text" 
+                required
+                placeholder="Breve resumen del problema..."
+                class="w-full pl-11 pr-4 py-4 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-semibold text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all outline-none"
+              />
+              <FileText class="w-5 h-5 text-slate-400 absolute left-4 top-4" />
+            </div>
+          </div>
+
+          <!-- Descripción -->
+          <div class="space-y-2">
+            <label class="text-[10px] font-bold text-slate-450 dark:text-slate-500 uppercase tracking-widest ml-1">Descripción del Problema * (Mín. 10 caracteres)</label>
+            <textarea 
+              v-model="description"
+              required
+              rows="4"
+              placeholder="Explica de manera detallada lo que ocurre..."
+              class="w-full bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-[1.5rem] p-4 text-sm font-semibold text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all outline-none resize-none"
+            ></textarea>
+          </div>
+
+          <!-- Error Message -->
+          <div v-if="errorMsg" class="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 rounded-2xl p-4 flex items-center gap-3 animate-in fade-in duration-300">
+            <AlertCircle class="w-5 h-5 text-red-655 dark:text-red-405 shrink-0" />
+            <p class="text-xs font-bold text-red-700 dark:text-red-455">{{ errorMsg }}</p>
+          </div>
+
+          <!-- Submit Button -->
+          <button 
+            type="submit" 
+            :disabled="!isFormValid || submitting"
+            class="w-full py-4 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2 shadow-lg shadow-indigo-150 dark:shadow-none disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Loader2 v-if="submitting" class="w-4 h-4 animate-spin" />
+            <Send v-else :size="16" />
+            {{ submitting ? 'Enviando...' : 'Enviar Ticket de Soporte' }}
+          </button>
+        </form>
+      </div>
+
+      <!-- Success screen flow -->
+      <div v-else class="mt-8 text-center space-y-8 animate-in zoom-in-95 duration-300">
+        <div class="w-20 h-20 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-650 dark:text-emerald-400 rounded-3xl flex items-center justify-center mx-auto shadow-inner">
+          <CheckCircle2 class="w-12 h-12" />
+        </div>
+        <div class="space-y-3">
+          <h2 class="text-3xl font-black text-slate-900 dark:text-white tracking-tight">¡Ticket Creado con Éxito!</h2>
+          <p class="text-slate-500 dark:text-slate-400 text-sm max-w-sm mx-auto font-semibold leading-relaxed">
+            Hemos registrado tu reporte en la base de datos de soporte. Toma nota del número de seguimiento:
+          </p>
+          <div class="inline-block bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-6 py-3 rounded-2xl font-mono text-lg font-black text-slate-800 dark:text-white tracking-wider shadow-inner">
+            {{ generatedTicketCode }}
+          </div>
+          <p class="text-xs text-slate-405 dark:text-slate-500 font-semibold pt-1">
+            Una copia de este ticket ha sido enviada al correo del administrador escolar.
+          </p>
+        </div>
+
+        <button 
+          @click="generatedTicketCode = null"
+          class="px-8 py-3.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-2xl font-bold text-xs uppercase tracking-widest transition-all"
+        >
+          Enviar Otro Reporte
+        </button>
+      </div>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.animate-spin-slow {
+  animation: spin 8s linear infinite;
+}
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+</style>

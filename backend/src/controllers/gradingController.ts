@@ -83,11 +83,51 @@ export const getActivities = async (req: Request, res: Response): Promise<void> 
     }
 
     // Permite lectura de periodos cerrados (solo se protegen escrituras)
-    const context = contextPreview;
-
-    const client = await pool.connect();
+    const context = contextPreview;    const client = await pool.connect();
     try {
-      const competencia = await ensureCompetencyForContext(client, context, periodId);
+      const competenciaBase = await ensureCompetencyForContext(client, context, periodId);
+
+      // Obtener todas las competencias del periodo/materia con sus evidencias anidadas y el número de DBA
+      const compsRes = await client.query<any>(
+        `SELECT c.*,
+                COALESCE(
+                  (SELECT json_agg(
+                     json_build_object(
+                       'id_evidencia', ea.id_evidencia,
+                       'id_evidencia_dba', ea.id_evidencia_dba,
+                       'descripcion', ea.descripcion,
+                       'orden', ea.orden,
+                       'numero_dba', d.numero_dba
+                     ) ORDER BY ea.orden, ea.id_evidencia
+                   )
+                   FROM evidencia_aprendizaje ea
+                   LEFT JOIN evidencias_dba edba ON edba.id_evidencia_dba = ea.id_evidencia_dba
+                   LEFT JOIN dba d ON d.id_dba = edba.id_dba
+                   WHERE ea.id_competencia = c.id_competencia
+                  ), '[]'::json
+                ) AS evidencias
+         FROM public.competencias c
+         WHERE c.id_anio = $1 AND c.id_grupo = $2 AND c.id_materia = $3 AND c.id_periodo = $4 AND c.id_colegio = $5
+         ORDER BY c.id_competencia ASC`,
+        [context.idAnio, context.idGrupo, context.idMateria, periodId, context.idColegio]
+      );
+      const allComps = compsRes.rows;
+
+      // Filtrar competencias que tengan descripciones válidas (no vacías)
+      const validComps = allComps.filter(c => c.descripcion && c.descripcion.trim());
+
+      // Unificar descripciones de las competencias
+      let competencia = competenciaBase;
+      if (validComps.length > 1) {
+        const descripcionUnificada = validComps
+          .map((c, idx) => `${idx + 1}. ${c.descripcion.trim()}`)
+          .join("\n\n");
+        competencia = {
+          ...competenciaBase,
+          descripcion: descripcionUnificada
+        };
+      }
+
       const activities = await client.query(
         `SELECT am.*,
                 COALESCE(
@@ -102,12 +142,14 @@ export const getActivities = async (req: Request, res: Response): Promise<void> 
         [context.idDetalleGrado, periodId]
       );
 
+      // Traer las evidencias de aprendizaje de todas las competencias de este periodo
       const evidencias = await client.query(
-        `SELECT id_evidencia, descripcion, orden
-         FROM evidencia_aprendizaje
-         WHERE id_competencia = $1
-         ORDER BY orden, id_evidencia`,
-        [competencia.id_competencia]
+        `SELECT ea.id_evidencia, ea.descripcion, ea.orden
+         FROM evidencia_aprendizaje ea
+         JOIN competencias c ON c.id_competencia = ea.id_competencia
+         WHERE c.id_anio = $1 AND c.id_grupo = $2 AND c.id_materia = $3 AND c.id_periodo = $4 AND c.id_colegio = $5
+         ORDER BY c.id_competencia ASC, ea.orden ASC, ea.id_evidencia ASC`,
+        [context.idAnio, context.idGrupo, context.idMateria, periodId, context.idColegio]
       );
 
       const activityIds = activities.rows.map(a => a.id_actividadmateria);
@@ -128,6 +170,7 @@ export const getActivities = async (req: Request, res: Response): Promise<void> 
         competencia,
         activities: activities.rows,
         evidencias: evidencias.rows,
+        competenciasList: validComps
       });
     } finally {
       client.release();
@@ -639,10 +682,6 @@ export const getGrades = async (req: Request, res: Response): Promise<void> => {
     const context = await resolveTeachingContext(gradeId, subjectId, periodId);
     if (!context) {
       res.status(404).json({ error: "No se encontró la asignación académica" });
-      return;
-    }
-
-    if (!(await ensureCurrentPeriodOrRespond(res, context.idColegio, periodId))) {
       return;
     }
 
@@ -1204,7 +1243,7 @@ export const getCourseEvidenciasDba = async (req: Request, res: Response): Promi
     }
 
     const planeadasRes = await pool.query(
-      `SELECT ea.id_evidencia, ea.id_evidencia_dba, ea.descripcion, ea.orden, d.numero_dba, d.id_dba, d.enunciado AS dba_enunciado
+      `SELECT ea.id_evidencia, ea.id_evidencia_dba, ea.descripcion, ea.orden, d.numero_dba, d.id_dba, d.enunciado AS dba_enunciado, ea.id_competencia
        FROM evidencia_aprendizaje ea
        JOIN competencias c ON c.id_competencia = ea.id_competencia
        JOIN evidencias_dba edba ON edba.id_evidencia_dba = ea.id_evidencia_dba
@@ -1294,6 +1333,7 @@ export const getCourseEvidenciasDba = async (req: Request, res: Response): Promi
         orden: number;
         tipo: 'PLANEADA' | 'EXTRA';
         evaluada_en_cerrado: boolean;
+        id_competencia: number | null;
       }>;
     }>();
 
@@ -1315,12 +1355,16 @@ export const getCourseEvidenciasDba = async (req: Request, res: Response): Promi
         continue;
       }
 
+      const planeadaInfo = planeadasRes.rows.find(p => Number(p.id_evidencia_dba) === Number(row.id_evidencia_dba));
+      const idCompetencia = planeadaInfo ? planeadaInfo.id_competencia : null;
+
       dbaMap.get(row.id_dba)!.evidencias.push({
         id_evidencia_dba: row.id_evidencia_dba,
         descripcion: row.descripcion,
         orden: row.orden,
         tipo: esPlaneada ? 'PLANEADA' : 'EXTRA',
         evaluada_en_cerrado: evaluadaEnCerrado,
+        id_competencia: idCompetencia
       });
     }
 
@@ -1342,6 +1386,7 @@ export const getCourseEvidenciasDba = async (req: Request, res: Response): Promi
           orden: pl.orden,
           tipo: 'PLANEADA',
           evaluada_en_cerrado: evaluadasEnCerradosIds.includes(pl.id_evidencia_dba),
+          id_competencia: pl.id_competencia
         });
       }
     }

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref, computed, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { useAuthStore } from '../../stores/auth'
 import { 
@@ -47,6 +48,7 @@ ChartJS.register(
 
 import BoletinExportModule from '../../components/boletines/BoletinExportModule.vue'
 
+const router = useRouter()
 const auth = useAuthStore()
 const selectedChildId = ref<number | null>(null)
 const selectedPeriodId = ref<number | 'all' | null>(null)
@@ -740,10 +742,10 @@ const barChartOptions = {
                  Si tienes dudas sobre el rendimiento académico o asistencia, solicita una cita con el docente titular.
               </p>
               <div class="pt-4 flex flex-col gap-3">
-                 <button class="w-full py-4 bg-white/10 hover:bg-white/20 border border-white/10 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all">
+                 <button @click="router.push('/dashboard/directorio')" class="w-full py-4 bg-white/10 hover:bg-white/20 border border-white/10 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all">
                     Directorio Institucional
                  </button>
-                 <button class="w-full py-4 bg-indigo-600 hover:bg-indigo-500 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all">
+                 <button @click="router.push('/dashboard/soporte')" class="w-full py-4 bg-indigo-600 hover:bg-indigo-500 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all">
                     Soporte Técnico
                  </button>
               </div>

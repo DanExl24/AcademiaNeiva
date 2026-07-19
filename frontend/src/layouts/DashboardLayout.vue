@@ -24,7 +24,8 @@ import {
   ShieldAlert,
   Users,
   Bell,
-  Settings
+  Settings,
+  LifeBuoy
 } from 'lucide-vue-next'
 import { useAuthStore } from '../stores/auth'
 import { useThemeStore } from '../stores/theme'
@@ -47,9 +48,10 @@ const switchRole = (newRole: string) => {
 
 const menuItems = computed(() => {
   const role = auth.activeRole?.toLowerCase()
+  let items: any[] = []
 
   if (role === 'admin_general') {
-    return [
+    items = [
       { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
       {
         name: 'Colegios',
@@ -97,52 +99,60 @@ const menuItems = computed(() => {
       { name: 'Configuración', icon: Settings, path: '/dashboard/configuracion' },
       { name: 'Catálogo DBA', icon: BookOpen, path: '/dashboard/catalogo-dba' }
     ]
-  }
-  
-  if (role === 'docente') {
-    return [
+  } else if (role === 'docente') {
+    items = [
       { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
       { name: 'Mis Cursos', icon: GraduationCap, path: '/dashboard/mis-cursos' },
       { name: 'Calificaciones', icon: ClipboardList, path: '/dashboard/calificaciones' },
       { name: 'Asistencia', icon: CalendarCheck, path: '/dashboard/asistencia' },
       { name: 'Observador', icon: Eye, path: '/dashboard/observador' },
-      { name: 'Cierre de Periodo', icon: Lock, path: '/dashboard/cierre-periodo' },
+      { name: 'Cierre de Periodo', icon: Lock, path: '/dashboard/cierre-periodo' }
     ]
-  }
-
-  if (role === 'padre') {
-    return [
+  } else if (role === 'padre') {
+    items = [
       { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
       { name: 'Calificaciones', icon: ClipboardList, path: '/dashboard/notas-hijos' },
       { name: 'Asistencia', icon: CalendarCheck, path: '/dashboard/asistencia-hijos' },
       { name: 'Observaciones', icon: MessageSquare, path: '/dashboard/observaciones-hijos' },
-      { name: 'Boletines', icon: FileText, path: '/dashboard/boletines-hijos' },
+      { name: 'Boletines', icon: FileText, path: '/dashboard/boletines-hijos' }
     ]
-  }
-
-  if (role === 'estudiante') {
-    return [
+  } else if (role === 'estudiante') {
+    items = [
       { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
       { name: 'Mis Notas', icon: BookOpen, path: '/dashboard/mis-notas' },
       { name: 'Mi Asistencia', icon: CalendarCheck, path: '/dashboard/mi-asistencia' },
       { name: 'Observaciones', icon: MessageSquare, path: '/dashboard/mi-observacion' },
-      { name: 'Mi Boletín', icon: FileText, path: '/dashboard/mi-boletin' },
+      { name: 'Mi Boletín', icon: FileText, path: '/dashboard/mi-boletin' }
+    ]
+  } else {
+    // Default (Admin/Directivo)
+    items = [
+      { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
+      { name: 'Mi Colegio', icon: School, path: '/dashboard/mi-colegio' },
+      { name: 'Gestión Matrículas', icon: ClipboardList, path: '/dashboard/gestion-matriculas' },
+      { name: 'Gestión Estudiantes', icon: GraduationCap, path: '/dashboard/gestion-estudiantes' },
+      { name: 'Gestión de Grados', icon: Layers3, path: '/dashboard/gestion-grados' },
+      { name: 'Gestión de Materias', icon: LibraryBig, path: '/dashboard/gestion-materias' },
+      { name: 'Docentes', icon: GraduationCap, path: '/dashboard/docentes' },
+      { name: 'Configuración Académica', icon: SlidersHorizontal, path: '/dashboard/configuracion-academica' },
+      { name: 'Boletines', icon: FileText, path: '/dashboard/boletines' },
+      { name: 'Supervisiones', icon: ShieldAlert, path: '/dashboard/supervisiones' }
     ]
   }
-  
-  // Default (Admin/Directivo)
-  return [
-    { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
-    { name: 'Mi Colegio', icon: School, path: '/dashboard/mi-colegio' },
-    { name: 'Gestión Matrículas', icon: ClipboardList, path: '/dashboard/gestion-matriculas' },
-    { name: 'Gestión Estudiantes', icon: GraduationCap, path: '/dashboard/gestion-estudiantes' },
-    { name: 'Gestión de Grados', icon: Layers3, path: '/dashboard/gestion-grados' },
-    { name: 'Gestión de Materias', icon: LibraryBig, path: '/dashboard/gestion-materias' },
-    { name: 'Docentes', icon: GraduationCap, path: '/dashboard/docentes' },
-    { name: 'Configuración Académica', icon: SlidersHorizontal, path: '/dashboard/configuracion-academica' },
-    { name: 'Boletines', icon: FileText, path: '/dashboard/boletines' },
-    { name: 'Supervisiones', icon: ShieldAlert, path: '/dashboard/supervisiones' }
-  ]
+
+  // Opciones comunes para todos los roles al final del sidebar
+  items.push(
+    { name: 'Directorio', icon: BookOpen, path: '/dashboard/directorio' },
+    { name: 'Soporte Técnico', icon: LifeBuoy, path: '/dashboard/soporte' }
+  )
+
+  if (role !== 'estudiante') {
+    items.push(
+      { name: 'Mi Cuenta', icon: Settings, path: '/dashboard/mi-cuenta' }
+    )
+  }
+
+  return items
 })
 
 const hasMultipleRoles = computed(() => (auth.user?.roles?.length || 0) > 1)

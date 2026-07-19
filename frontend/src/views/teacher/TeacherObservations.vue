@@ -16,7 +16,8 @@ import {
   Pencil,
   Calendar,
   MessageSquare,
-  Filter
+  Filter,
+  Users
 } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 import axios from 'axios'
@@ -86,6 +87,7 @@ const saving = ref(false)
 // Search and filter
 const searchQuery = ref('')
 const filterType = ref<'all' | 'fortaleza' | 'debilidad' | 'recomendacion'>('all')
+const selectedStudentFilterId = ref<number | null>(null)
 
 // Modal state
 const showModal = ref(false)
@@ -244,6 +246,10 @@ const stats = computed(() => {
 const filteredObservations = computed(() => {
   let result = observations.value
 
+  if (selectedStudentFilterId.value) {
+    result = result.filter(o => o.id_estudiante === selectedStudentFilterId.value)
+  }
+
   if (searchQuery.value.trim()) {
     const query = searchQuery.value.toLowerCase()
     result = result.filter(o =>
@@ -334,7 +340,7 @@ const openNewModal = () => {
   }
 
   formData.value = {
-    studentId: null,
+    studentId: selectedStudentFilterId.value,
     fortalezas: '',
     debilidades: '',
     recomendaciones: '',
@@ -431,8 +437,8 @@ const deleteObservation = async (id: number) => {
 }
 
 // Watchers
-watch([selectedGradeName, selectedSection, selectedJornada], () => {
-  selectedSubjectId.value = null
+watch([selectedGradeName, selectedSection, selectedJornada, selectedSubjectId], () => {
+  selectedStudentFilterId.value = null
 })
 
 // When grade changes, pre-fetch students so modal dropdown is ready
@@ -467,7 +473,7 @@ const paginatedObservations = computed(() => {
 })
 
 // Reset to page 1 on filter or search changes
-watch([selectedGradeName, selectedSection, selectedJornada, selectedSubjectId, selectedPeriodId, searchQuery, filterType], () => {
+watch([selectedGradeName, selectedSection, selectedJornada, selectedSubjectId, selectedPeriodId, searchQuery, filterType, selectedStudentFilterId], () => {
   currentPage.value = 1
 })
 
@@ -654,15 +660,29 @@ onMounted(() => {
       <!-- Right content: Observations List -->
       <div class="xl:col-span-3 space-y-6">
 
-        <!-- Search bar -->
-        <div class="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center gap-4 transition-colors">
-          <Search class="text-slate-400 dark:text-slate-500 shrink-0 ml-2" :size="20" />
-          <input
-            v-model="searchQuery"
-            type="text"
-            placeholder="Buscar por nombre de estudiante o contenido de observación..."
-            class="w-full bg-transparent border-none text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none text-sm font-semibold"
-          />
+        <!-- Search bar & Quick Student Selector -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="md:col-span-2 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center gap-4 transition-colors">
+            <Search class="text-slate-400 dark:text-slate-500 shrink-0 ml-2" :size="20" />
+            <input
+              v-model="searchQuery"
+              type="text"
+              placeholder="Buscar por nombre de estudiante o contenido..."
+              class="w-full bg-transparent border-none text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none text-sm font-semibold"
+            />
+          </div>
+          <div class="bg-white dark:bg-slate-900 px-4 py-3 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center gap-2 transition-colors">
+            <Users class="text-slate-450 dark:text-slate-500 shrink-0" :size="18" />
+            <select
+              v-model="selectedStudentFilterId"
+              class="w-full bg-transparent border-none text-xs font-bold text-slate-700 dark:text-slate-350 outline-none focus:ring-0 cursor-pointer"
+            >
+              <option :value="null">Todos los estudiantes</option>
+              <option v-for="s in students" :key="s.id_estudiante" :value="s.id_estudiante">
+                {{ s.nombre }} {{ s.apellido }}
+              </option>
+            </select>
+          </div>
         </div>
 
         <!-- Loading state -->

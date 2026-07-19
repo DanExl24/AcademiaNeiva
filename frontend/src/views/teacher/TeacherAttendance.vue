@@ -9,8 +9,9 @@ import {
   Minus, 
   Download, 
   Save, 
-  AlertCircle, 
-  Loader2, 
+  AlertCircle,
+  CheckCircle,
+  Loader2,
   History,
   Clock,
   ThumbsUp,
@@ -284,12 +285,62 @@ const setTimeNow = () => {
   defaultTime.value = `${hh}:${mm}`
 }
 
+const autosaveStatus = ref<'saved' | 'saving' | 'error'>('saved')
+const autosaveErrorMsg = ref('')
+
+const saveAllAttendance = async (silent = false) => {
+  if (!selectedCourse.value || !isEditable.value) return
+  if (saving.value && !silent) return
+  
+  try {
+    if (silent) {
+      autosaveStatus.value = 'saving'
+      autosaveErrorMsg.value = ''
+    } else {
+      saving.value = true
+    }
+
+    const recordsToSave = students.value.map(s => ({
+      id_estudiante: s.id_estudiante,
+      estado: s.estado,
+      justificacion: s.justificacion,
+      hora_llegada: s.hora_llegada
+    }))
+
+    await axios.post('http://localhost:3000/api/teacher/attendance', {
+      detailGradeId: selectedCourse.value.id_detallegrado,
+      date: selectedDate.value,
+      records: recordsToSave
+    })
+
+    if (silent) {
+      autosaveStatus.value = 'saved'
+    } else {
+      alert('Asistencia guardada exitosamente')
+      await fetchAttendance()
+    }
+  } catch (error: any) {
+    const errorMsg = error.response?.data?.error || 'Error al guardar asistencia'
+    if (silent) {
+      autosaveStatus.value = 'error'
+      autosaveErrorMsg.value = errorMsg
+    } else {
+      alert(errorMsg)
+    }
+  } finally {
+    if (!silent) {
+      saving.value = false
+    }
+  }
+}
+
 const applyDefaultTimeToAll = () => {
   students.value.forEach(student => {
     if (student.estado === 'PRESENTE' || student.estado === 'TARDE') {
       student.hora_llegada = defaultTime.value
     }
   })
+  saveAllAttendance(true)
 }
 
 // Quick status toggling
@@ -314,6 +365,7 @@ const setStatus = (studentId: number, status: 'PRESENTE' | 'AUSENTE' | 'TARDE' |
         student.hora_llegada = null
       }
     }
+    saveAllAttendance(true)
   }
 }
 
@@ -325,32 +377,7 @@ const markAllPresent = () => {
     s.justificacion = null
     s.hora_llegada = defaultTime.value
   })
-}
-
-// Save all
-const saveAllAttendance = async () => {
-  if (!selectedCourse.value || saving.value || !isEditable.value) return
-  try {
-    saving.value = true
-    const recordsToSave = students.value.map(s => ({
-      id_estudiante: s.id_estudiante,
-      estado: s.estado,
-      justificacion: s.justificacion,
-      hora_llegada: s.hora_llegada
-    }))
-
-    await axios.post('http://localhost:3000/api/teacher/attendance', {
-      detailGradeId: selectedCourse.value.id_detallegrado,
-      date: selectedDate.value,
-      records: recordsToSave
-    })
-    alert('Asistencia guardada exitosamente')
-    await fetchAttendance()
-  } catch (error: any) {
-    alert(error.response?.data?.error || 'Error al guardar asistencia')
-  } finally {
-    saving.value = false
-  }
+  saveAllAttendance(true)
 }
 
 // Print / Physical download format
@@ -527,10 +554,26 @@ onMounted(() => {
           <Download :size="20" />
           Exportar Historial (CSV)
         </button>
+        <!-- Autosave Indicator -->
+        <div v-if="selectedCourse && activeTab === 'today' && selectedDate === todayStr && !auth.isMonitoring && isEditable" class="flex items-center gap-2 px-4 py-2 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-100 dark:border-slate-850 h-[46px]">
+          <div v-if="autosaveStatus === 'saving'" class="flex items-center gap-1.5 text-[9px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest">
+            <Loader2 class="w-3.5 h-3.5 animate-spin" />
+            <span>Guardando...</span>
+          </div>
+          <div v-else-if="autosaveStatus === 'saved'" class="flex items-center gap-1.5 text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">
+            <CheckCircle class="w-3.5 h-3.5" />
+            <span>Guardado</span>
+          </div>
+          <div v-else-if="autosaveStatus === 'error'" class="flex items-center gap-1.5 text-[9px] font-black text-red-600 dark:text-red-400 uppercase tracking-widest" :title="autosaveErrorMsg">
+            <AlertCircle class="w-3.5 h-3.5" />
+            <span>Error</span>
+          </div>
+        </div>
+
         <!-- Save button hidden in monitoring mode -->
         <button 
           v-if="selectedCourse && activeTab === 'today' && selectedDate === todayStr && !auth.isMonitoring"
-          @click="saveAllAttendance"
+          @click="saveAllAttendance(false)"
           :disabled="saving || !isEditable"
           class="bg-emerald-600 dark:bg-emerald-500 text-white px-8 py-3 rounded-2xl font-bold shadow-lg shadow-emerald-100 dark:shadow-none hover:bg-emerald-700 dark:hover:bg-emerald-600 active:scale-95 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
@@ -778,6 +821,7 @@ onMounted(() => {
                         type="text" 
                         placeholder="Motivo de inasistencia..."
                         :disabled="!isEditable"
+                        @blur="saveAllAttendance(true)"
                         class="w-full bg-transparent border-none text-[10px] font-semibold text-slate-700 dark:text-slate-200 focus:outline-none placeholder-slate-350 dark:placeholder-slate-650 truncate"
                       />
                     </div>
@@ -791,6 +835,7 @@ onMounted(() => {
                         v-model="student.hora_llegada"
                         type="time" 
                         :disabled="!isEditable"
+                        @blur="saveAllAttendance(true)"
                         class="w-full bg-transparent border-none text-[10px] font-bold text-slate-700 dark:text-slate-200 focus:outline-none cursor-pointer"
                       />
                     </div>

@@ -2,6 +2,7 @@ import bcrypt from "bcrypt";
 import fs from "fs";
 import path from "path";
 import { execSync } from "child_process";
+import { randomUUID } from "crypto";
 import { PoolClient } from "pg";
 import { ensureCompetencySchema } from "../config/competencyMigration";
 import { pool } from "../config/db";
@@ -988,6 +989,14 @@ async function run(): Promise<void> {
     const addPreschoolDimensionsMigrationSql = fs.readFileSync(path.join(__dirname, "../migrations/013_dimensiones_preescolar.sql"), "utf8");
     await client.query(addPreschoolDimensionsMigrationSql);
 
+    console.log("📦 Aplicando migración 014 (tickets de soporte técnico)...");
+    const addSupportTicketsMigrationSql = fs.readFileSync(path.join(__dirname, "../migrations/014_soporte_tecnico.sql"), "utf8");
+    await client.query(addSupportTicketsMigrationSql);
+
+    console.log("📦 Aplicando migración 015 (observaciones y códigos de soporte)...");
+    const addObservationsSupportMigrationSql = fs.readFileSync(path.join(__dirname, "../migrations/015_observaciones_tickets.sql"), "utf8");
+    await client.query(addObservationsSupportMigrationSql);
+
     // ── Phase 2: Schema migrations ──
     console.log("🔧 Migrando columnas adicionales...");
     await client.query(`ALTER TABLE grados ADD COLUMN IF NOT EXISTS seccion VARCHAR(10) DEFAULT 'A';`);
@@ -1033,6 +1042,11 @@ async function run(): Promise<void> {
     // ── Phase 3: Truncate ALL data tables ──
     console.log("🗑️ Reseteando tablas existentes...");
     await truncateExistingTables(client, [
+      // DBA catalog & mappings (truncated first because of foreign keys)
+      "colegio_version_curricular",
+      "dba_dimensiones_preescolar",
+      "evidencias_dba",
+      "dba",
       // Academic data
       "resultado_academico",
       "notas_actividad",
@@ -1175,28 +1189,15 @@ async function run(): Promise<void> {
     await client.query("COMMIT");
     console.log("✅ Transacción principal completada.");
 
-    // ── Phase 11: Competency schema (outside transaction) ──
-    console.log("🧠 Sincronizando esquema de competencias...");
-    await ensureCompetencySchema();
+    // ── Phase 10.5: Seeding DBA Catalog and curriculums ──
+    await seedDbaCatalog();
 
-    // ── Phase 12: Evidence for competencies ──
-    console.log("📝 Generando evidencias de aprendizaje...");
-    const compClient = await pool.connect();
-    try {
-      const compRes = await compClient.query("SELECT id_competencia, id_colegio FROM competencias");
-      for (const comp of compRes.rows) {
-        await compClient.query(
-          `INSERT INTO evidencia_aprendizaje (id_competencia, descripcion, orden, id_colegio)
-           VALUES
-             ($1, 'Reconoce y aplica los conceptos fundamentales de la unidad temática.', 1, $2),
-             ($1, 'Demuestra capacidad analítica y pensamiento crítico en la resolución de problemas.', 2, $2),
-             ($1, 'Participa activamente y colabora con sus compañeros en el entorno de aprendizaje.', 3, $2)`,
-          [comp.id_competencia, comp.id_colegio]
-        );
-      }
-    } finally {
-      compClient.release();
-    }
+    // ── Phase 10.6: Seeding Competencies and Evidences based on DBA ──
+    await seedDbaCompetenciesAndEvidences();
+
+    // ── Phase 11: Competency schema (outside transaction) ──
+    console.log("🧠 Sincronizando esquema de competencias de respaldo...");
+    await ensureCompetencySchema();
 
     // ── Phase 13: Write credentials ──
     const credentialsPath = writeCredentialsFile(credentials);
@@ -1223,6 +1224,402 @@ async function run(): Promise<void> {
   } finally {
     client.release();
     await pool.end();
+  }
+}
+
+async function seedDbaCatalog(): Promise<void> {
+  console.log("\n🌱 Iniciando importación y siembra del catálogo de DBA...");
+
+  const dbaPdfs = [
+    { pdf: "../guides/DBA/DBA_matematicas.pdf", area: "Matemáticas", version: "2016", startPage: 8, script: "importar_dba.py" },
+    { pdf: "../guides/DBA/DBA_lenguaje.pdf", area: "Español", version: "2016", startPage: 8, script: "importar_dba.py" },
+    { pdf: "../guides/DBA/DBA_naturales.pdf", area: "Ciencias Naturales", version: "2016", startPage: 8, script: "importar_dba.py" },
+    { pdf: "../guides/DBA/DBA_sociales.pdf", area: "Ciencias Sociales", version: "2016", startPage: 8, script: "importar_dba.py" },
+    { pdf: "../guides/DBA/DBA_transicion.pdf", area: "Desarrollo Integral", version: "2016", startPage: 8, script: "importar_dba.py" },
+    { pdf: "../guides/DBA/dba_ingles_transicion_quinto.pdf", area: "Inglés", version: "2016", startPage: 8, script: "importar_dba_primaria_ingles.py" },
+    { pdf: "../guides/DBA/DBA_ingles_sexto_once.pdf", area: "Inglés", version: "2016", startPage: 15, script: "importar_dba.py" }
+  ];
+
+  // 1. Ejecutar importaciones de Python
+  for (const item of dbaPdfs) {
+    console.log(`⏳ Importando ${item.area} desde ${item.pdf} (pág. ${item.startPage})...`);
+    try {
+      const cmd = `python scripts/${item.script} --pdf ${item.pdf} --area "${item.area}" --version "${item.version}" --start-page ${item.startPage}`;
+      execSync(cmd, { stdio: "inherit", cwd: path.resolve(__dirname, "../..") });
+    } catch (err) {
+      console.error(`❌ Error importando ${item.pdf}:`, err);
+    }
+  }
+
+  // 2. Realizar consultas para reasignación y mapeo
+  const client = await pool.connect();
+  try {
+    // A. Reasignar DBA de inglés transición a la materia "Desarrollo Integral" sumando 100 a su número para evitar colisión de llave única con los DBA tradicionales de transición
+    console.log("🔄 Reasignando DBA de inglés Transición a la materia Desarrollo Integral...");
+    await client.query(`
+      UPDATE dba 
+      SET area = 'Desarrollo Integral',
+          numero_dba = numero_dba + 100
+      WHERE area = 'Inglés' AND grado = 'TRANSICION' AND version_curricular = '2016'
+    `);
+
+    // B. Obtener todos los colegios
+    const colegiosRes = await client.query<{ id_colegio: number }>("SELECT id_colegio FROM colegio");
+    
+    // C. Mapear versión curricular 2016
+    console.log("📋 Poblando colegio_version_curricular con versión 2016...");
+    const subjectsGrades = [
+      { area: "Matemáticas", grades: ["PRIMERO", "SEGUNDO", "TERCERO", "CUARTO", "QUINTO", "SEXTO", "SEPTIMO", "OCTAVO", "NOVENO", "DECIMO", "ONCE"] },
+      { area: "Español", grades: ["PRIMERO", "SEGUNDO", "TERCERO", "CUARTO", "QUINTO", "SEXTO", "SEPTIMO", "OCTAVO", "NOVENO", "DECIMO", "ONCE"] },
+      { area: "Ciencias Naturales", grades: ["PRIMERO", "SEGUNDO", "TERCERO", "CUARTO", "QUINTO", "SEXTO", "SEPTIMO", "OCTAVO", "NOVENO", "DECIMO", "ONCE"] },
+      { area: "Ciencias Sociales", grades: ["PRIMERO", "SEGUNDO", "TERCERO", "CUARTO", "QUINTO", "SEXTO", "SEPTIMO", "OCTAVO", "NOVENO", "DECIMO", "ONCE"] },
+      { area: "Inglés", grades: ["PRIMERO", "SEGUNDO", "TERCERO", "CUARTO", "QUINTO", "SEXTO", "SEPTIMO", "OCTAVO", "NOVENO", "DECIMO", "ONCE"] },
+      { area: "Desarrollo Integral", grades: ["TRANSICION"] }
+    ];
+
+    for (const school of colegiosRes.rows) {
+      for (const sg of subjectsGrades) {
+        for (const grade of sg.grades) {
+          await client.query(`
+            INSERT INTO colegio_version_curricular (id_colegio, area, grado, version_curricular)
+            VALUES ($1, $2, $3, '2016')
+            ON CONFLICT (id_colegio, area, grado) 
+            DO UPDATE SET version_curricular = EXCLUDED.version_curricular
+          `, [school.id_colegio, sg.area, grade]);
+        }
+      }
+    }
+    console.log("✅ Proceso de siembra de DBA completado exitosamente.");
+  } catch (err) {
+    console.error("❌ Error en base de datos al sembrar DBA:", err);
+  } finally {
+    client.release();
+  }
+}
+
+function distributeDbas(dbasCount: number, periodStates: string[]): number[] {
+  const K = periodStates.length;
+  const C = periodStates.filter(state => state === 'CERRADO').length;
+  
+  const counts = periodStates.map(() => 1);
+  let remaining = dbasCount - K;
+  
+  if (remaining > 0) {
+    const weights = periodStates.map(state => {
+      if (state === 'CERRADO') return 0.20;
+      return (1.0 - C * 0.20) / (K - C);
+    });
+    
+    const finalWeights = (C === 0 || C === K) ? periodStates.map(() => 1 / K) : weights;
+    
+    let assignedSum = 0;
+    const idealCounts = periodStates.map((_, idx) => {
+      return Math.max(1, Math.floor(dbasCount * finalWeights[idx]));
+    });
+    
+    assignedSum = idealCounts.reduce((a, b) => a + b, 0);
+    let diff = dbasCount - assignedSum;
+    
+    for (let idx = 0; idx < K; idx++) {
+      counts[idx] = idealCounts[idx];
+    }
+    
+    let i = 0;
+    while (diff > 0) {
+      counts[i % K]++;
+      diff--;
+      i++;
+    }
+    while (diff < 0) {
+      for (let idx = 0; idx < K; idx++) {
+        if (counts[idx] > 1) {
+          counts[idx]--;
+          diff++;
+          break;
+        }
+      }
+    }
+  } else if (remaining < 0) {
+    for (let idx = 0; idx < K; idx++) {
+      counts[idx] = idx < dbasCount ? 1 : 0;
+    }
+  }
+  
+  return counts;
+}
+
+async function seedDbaCompetenciesAndEvidences(): Promise<void> {
+  console.log("\n🧠 Generando competencias y evidencias basadas en DBA oficiales...");
+  const client = await pool.connect();
+
+  try {
+    // 1. Obtener catálogo de dimensiones de preescolar
+    const dimRes = await client.query<{ id_dimension: number; nombre: string }>(
+      "SELECT id_dimension, nombre FROM dimensiones_preescolar ORDER BY id_dimension"
+    );
+    const dimensiones = dimRes.rows;
+    const dimComunicativa = dimensiones.find(d => d.nombre === "Comunicativa");
+
+    // 2. Obtener todos los colegios y sus años lectivos
+    const schoolsRes = await client.query<{ id_colegio: number; nombre: string }>(
+      "SELECT id_colegio, nombre FROM colegio"
+    );
+
+    for (const school of schoolsRes.rows) {
+      console.log(`   Colegio: ${school.nombre}`);
+      
+      const yearRes = await client.query<{ id_anio: number }>(
+        "SELECT id_anio FROM anio_lectivo WHERE id_colegio = $1 ORDER BY id_anio DESC LIMIT 1",
+        [school.id_colegio]
+      );
+      const yearId = yearRes.rows[0]?.id_anio;
+      if (!yearId) continue;
+
+      // Obtener periodos del año lectivo, ordenados
+      const periodsRes = await client.query<{ id_periodo: number; nombre: string; estado: string; trimestre: number }>(
+        "SELECT id_periodo, nombre, estado, trimestre FROM periodo_academico WHERE id_anio = $1 ORDER BY trimestre ASC",
+        [yearId]
+      );
+      const periods = periodsRes.rows;
+      if (periods.length === 0) continue;
+
+      const periodStates = periods.map(p => p.estado);
+      const C = periodStates.filter(state => state === 'CERRADO').length;
+
+      // Obtener todos los grupos del colegio
+      const groupsRes = await client.query<{ id_grupo: number; id_nivel: number; id_tipo_grado: number; grade_name: string }>(
+        `SELECT g.id_grupo, g.id_nivel, g.id_tipo_grado, tg.nombre as grade_name
+         FROM grupos g
+         JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
+         WHERE g.id_colegio = $1`,
+         [school.id_colegio]
+      );
+
+      // Agrupar grupos por su grado (tipo_grado)
+      const groupsByGrade = new Map<string, typeof groupsRes.rows>();
+      for (const group of groupsRes.rows) {
+        if (!groupsByGrade.has(group.grade_name)) {
+          groupsByGrade.set(group.grade_name, []);
+        }
+        groupsByGrade.get(group.grade_name)!.push(group);
+      }
+
+      // Obtener las materias del colegio
+      const subjectsRes = await client.query<{ id_materia: number; nombre: string }>(
+        "SELECT id_materia, nombre FROM materias WHERE id_colegio = $1",
+        [school.id_colegio]
+      );
+      const subjects = subjectsRes.rows;
+
+      for (const [gradeName, gradeGroups] of groupsByGrade.entries()) {
+        const isPreescolar = gradeName === "PREJARDIN" || gradeName === "JARDIN" || gradeName === "TRANSICION";
+
+        if (isPreescolar) {
+          // Preescolar solo ve la materia "Desarrollo Integral"
+          const devSubject = subjects.find(s => s.nombre === "Desarrollo Integral");
+          if (!devSubject) continue;
+
+          if (gradeName === "PREJARDIN" || gradeName === "JARDIN") {
+            // Regla: Prejardín y Jardín no tienen DBA, pero es OBLIGATORIO asociar las competencias a las 6 dimensiones oficiales.
+            // Para cada periodo, crearemos una competencia por cada una de las 6 dimensiones.
+            for (const period of periods) {
+              for (const dim of dimensiones) {
+                const syncUuid = randomUUID();
+                const compDesc = `Desarrollo de habilidades y competencias integrales en la dimensión ${dim.nombre}.`;
+
+                for (const group of gradeGroups) {
+                  const compInsert = await client.query<{ id_competencia: number }>(
+                    `INSERT INTO competencias (id_anio, id_grupo, id_materia, id_periodo, descripcion, id_colegio, sync_uuid, id_dimension, nombre)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id_competencia`,
+                    [yearId, group.id_grupo, devSubject.id_materia, period.id_periodo, compDesc, school.id_colegio, syncUuid, dim.id_dimension, `Competencia Dimensión ${dim.nombre}`]
+                  );
+                  
+                  // Evidencias por defecto relacionadas con la dimensión
+                  await client.query(
+                    `INSERT INTO evidencia_aprendizaje (id_competencia, descripcion, orden, id_colegio)
+                     VALUES 
+                       ($1, $2, 1, $3),
+                       ($1, $2, 2, $3),
+                       ($1, $2, 3, $3)`,
+                    [
+                      compInsert.rows[0].id_competencia,
+                      `Identifica y explora elementos clave relacionados con la dimensión ${dim.nombre}.`,
+                      school.id_colegio
+                    ]
+                  );
+                }
+              }
+            }
+          } else if (gradeName === "TRANSICION") {
+            // Regla: Transición tiene DBA de Desarrollo Integral y DBA de Inglés Transición reasignado a Desarrollo Integral.
+            // La asignación de dimensiones para Transición es OPCIONAL.
+            const dbasRes = await client.query<{ id_dba: number; numero_dba: number; enunciado: string; area: string }>(
+              `SELECT id_dba, numero_dba, enunciado, area 
+               FROM dba 
+               WHERE area = 'Desarrollo Integral' AND grado = 'TRANSICION' AND version_curricular = '2016' AND estado = 'ACTIVO'
+               ORDER BY numero_dba ASC`
+            );
+            const dbas = dbasRes.rows;
+
+            if (dbas.length > 0) {
+              const counts = distributeDbas(dbas.length, periodStates);
+              let dbaIdx = 0;
+
+              for (let pIdx = 0; pIdx < periods.length; pIdx++) {
+                const period = periods[pIdx];
+                const dbaCountForPeriod = counts[pIdx];
+
+                for (let d = 0; d < dbaCountForPeriod; d++) {
+                  if (dbaIdx >= dbas.length) break;
+                  const dba = dbas[dbaIdx];
+                  dbaIdx++;
+
+                  const syncUuid = randomUUID();
+                  
+                  // Decidir opcionalidad de dimensión: 50% de las competencias llevan dimensión, el otro 50% no.
+                  // Si el DBA es de inglés (tiene numero_dba >= 100), la dimensión es Comunicativa
+                  let idDimension: number | null = null;
+                  if (dba.numero_dba >= 100) {
+                    if (dbaIdx % 2 === 0 && dimComunicativa) {
+                      idDimension = dimComunicativa.id_dimension;
+                    }
+                  } else {
+                    if (dbaIdx % 2 === 0) {
+                      idDimension = dimensiones[dbaIdx % dimensiones.length].id_dimension;
+                    }
+                  }
+
+                  for (const group of gradeGroups) {
+                    const compInsert = await client.query<{ id_competencia: number }>(
+                      `INSERT INTO competencias (id_anio, id_grupo, id_materia, id_periodo, descripcion, id_colegio, sync_uuid, id_dimension, nombre)
+                       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id_competencia`,
+                      [
+                        yearId,
+                        group.id_grupo,
+                        devSubject.id_materia,
+                        period.id_periodo,
+                        dba.enunciado,
+                        school.id_colegio,
+                        syncUuid,
+                        idDimension,
+                        `Competencia DBA #${dba.numero_dba}`
+                      ]
+                    );
+
+                    // Poblar evidencias oficiales del DBA
+                    const evRes = await client.query<{ id_evidencia_dba: number; descripcion: string; orden: number }>(
+                      "SELECT id_evidencia_dba, descripcion, orden FROM evidencias_dba WHERE id_dba = $1 AND estado = 'ACTIVO' ORDER BY orden ASC",
+                      [dba.id_dba]
+                    );
+                    const evidencias = evRes.rows;
+
+                    if (evidencias.length > 0) {
+                      for (const ev of evidencias) {
+                        await client.query(
+                          `INSERT INTO evidencia_aprendizaje (id_competencia, descripcion, orden, id_colegio, id_evidencia_dba)
+                           VALUES ($1, $2, $3, $4, $5)`,
+                          [compInsert.rows[0].id_competencia, ev.descripcion, ev.orden, school.id_colegio, ev.id_evidencia_dba]
+                        );
+                      }
+                    } else {
+                      await client.query(
+                        `INSERT INTO evidencia_aprendizaje (id_competencia, descripcion, orden, id_colegio)
+                         VALUES 
+                           ($1, 'Desarrolla las evidencias de aprendizaje propuestas para la competencia.', 1, $2),
+                           ($1, 'Muestra apropiación de las metas de aprendizaje de la unidad.', 2, $2),
+                           ($1, 'Aplica los desempeños esperados en el contexto institucional.', 3, $2)`,
+                        [compInsert.rows[0].id_competencia, school.id_colegio]
+                      );
+                    }
+                  }
+                }
+              }
+            }
+          }
+        } else {
+          // Primaria, Secundaria y Media
+          for (const subject of subjects) {
+            if (subject.nombre === "Desarrollo Integral") continue;
+
+            // Obtener DBAs para este grado y materia
+            const dbasRes = await client.query<{ id_dba: number; numero_dba: number; enunciado: string; area: string }>(
+              `SELECT id_dba, numero_dba, enunciado, area 
+               FROM dba 
+               WHERE area = $1 AND grado = $2 AND version_curricular = '2016' AND estado = 'ACTIVO'
+               ORDER BY numero_dba ASC`,
+              [subject.nombre, gradeName]
+            );
+            const dbas = dbasRes.rows;
+
+            if (dbas.length > 0) {
+              const counts = distributeDbas(dbas.length, periodStates);
+              let dbaIdx = 0;
+
+              for (let pIdx = 0; pIdx < periods.length; pIdx++) {
+                const period = periods[pIdx];
+                const dbaCountForPeriod = counts[pIdx];
+
+                for (let d = 0; d < dbaCountForPeriod; d++) {
+                  if (dbaIdx >= dbas.length) break;
+                  const dba = dbas[dbaIdx];
+                  dbaIdx++;
+
+                  const syncUuid = randomUUID();
+
+                  for (const group of gradeGroups) {
+                    const compInsert = await client.query<{ id_competencia: number }>(
+                      `INSERT INTO competencias (id_anio, id_grupo, id_materia, id_periodo, descripcion, id_colegio, sync_uuid, id_dimension, nombre)
+                       VALUES ($1, $2, $3, $4, $5, $6, $7, NULL, $8) RETURNING id_competencia`,
+                      [
+                        yearId,
+                        group.id_grupo,
+                        subject.id_materia,
+                        period.id_periodo,
+                        dba.enunciado,
+                        school.id_colegio,
+                        syncUuid,
+                        `Competencia DBA #${dba.numero_dba}`
+                      ]
+                    );
+
+                    // Poblar evidencias oficiales del DBA
+                    const evRes = await client.query<{ id_evidencia_dba: number; descripcion: string; orden: number }>(
+                      "SELECT id_evidencia_dba, descripcion, orden FROM evidencias_dba WHERE id_dba = $1 AND estado = 'ACTIVO' ORDER BY orden ASC",
+                      [dba.id_dba]
+                    );
+                    const evidencias = evRes.rows;
+
+                    if (evidencias.length > 0) {
+                      for (const ev of evidencias) {
+                        await client.query(
+                          `INSERT INTO evidencia_aprendizaje (id_competencia, descripcion, orden, id_colegio, id_evidencia_dba)
+                           VALUES ($1, $2, $3, $4, $5)`,
+                          [compInsert.rows[0].id_competencia, ev.descripcion, ev.orden, school.id_colegio, ev.id_evidencia_dba]
+                        );
+                      }
+                    } else {
+                      await client.query(
+                        `INSERT INTO evidencia_aprendizaje (id_competencia, descripcion, orden, id_colegio)
+                         VALUES 
+                           ($1, 'Comprende y asimila los conceptos temáticos planteados.', 1, $2),
+                           ($1, 'Resuelve problemas académicos y prácticos de forma autónoma.', 2, $2),
+                           ($1, 'Demuestra actitud colaborativa y participativa en el aula.', 3, $2)`,
+                        [compInsert.rows[0].id_competencia, school.id_colegio]
+                      );
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    console.log("✅ Siembra de competencias y evidencias basada en DBA completada exitosamente.");
+  } catch (err) {
+    console.error("❌ Error al sembrar competencias basadas en DBA:", err);
+  } finally {
+    client.release();
   }
 }
 

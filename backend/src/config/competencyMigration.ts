@@ -620,5 +620,18 @@ export const ensureCompetencyForContext = async (
   context: TeachingContext,
   periodId: number
 ): Promise<CompetencyRow> => {
+  // Buscar si ya existe alguna competencia registrada para este contexto de grupo, materia, periodo, año y colegio
+  const existRes = await client.query<CompetencyRow>(
+    `SELECT * FROM public.competencias 
+     WHERE id_anio = $1 AND id_grupo = $2 AND id_materia = $3 AND id_periodo = $4 AND id_colegio = $5
+     ORDER BY CASE WHEN descripcion = 'Competencia pendiente por definir.' THEN 1 ELSE 0 END ASC, id_competencia ASC
+     LIMIT 1`,
+    [context.idAnio, context.idGrupo, context.idMateria, periodId, context.idColegio]
+  );
+
+  if (existRes.rows.length > 0) {
+    return existRes.rows[0];
+  }
+
   return syncCompetencyAcrossGrade(client, context, periodId);
 };

@@ -7,6 +7,7 @@ import {
   Trash2, 
   AlertCircle, 
   Settings,
+  CheckCircle,
   Loader2,
   Search,
   X,
@@ -92,6 +93,7 @@ const activities = ref<Activity[]>([])
 const competency = ref<Competency | null>(null)
 const competencyDraft = ref('')
 const evidencias = ref<Evidencia[]>([])
+const competenciasList = ref<any[]>([])
 const students = ref<Student[]>([])
 const gradesMatrix = ref<Record<number, Record<number, any>>>({}) 
 const criteriaGradesMatrix = ref<Record<number, Record<number, any>>>({})
@@ -302,6 +304,7 @@ const fetchActivities = async () => {
     competency.value = response.data.competencia
     competencyDraft.value = response.data.competencia?.descripcion || ''
     evidencias.value = response.data.evidencias || []
+    competenciasList.value = response.data.competenciasList || []
     activities.value = response.data.activities || []
     await fetchDbaEvidences()
     await fetchGrades()
@@ -309,6 +312,7 @@ const fetchActivities = async () => {
     competency.value = null
     competencyDraft.value = ''
     evidencias.value = []
+    competenciasList.value = []
     activities.value = []
     dbaEvidencesInfo.value = null
   } finally {
@@ -324,6 +328,28 @@ const fetchStudents = async () => {
     students.value = response.data
     initializeMatrixForStudents()
   } catch (error: any) {
+  }
+}
+
+const autosaveStatus = ref<'saved' | 'saving' | 'error'>('saved')
+const autosaveErrorMsg = ref('')
+
+const autosaveGrade = async (studentId: number, id: number, type: 'activity' | 'criterion', val: number) => {
+  try {
+    autosaveStatus.value = 'saving'
+    autosaveErrorMsg.value = ''
+    
+    await axios.post('http://localhost:3000/api/teacher/grades', {
+      activityGrades: type === 'activity' ? [{ id_estudiante: studentId, id_actividadmateria: id, nota: val }] : [],
+      criteriaGrades: type === 'criterion' ? [{ id_estudiante: studentId, id_criterio: id, nota: val }] : [],
+      schoolId: schoolId.value
+    })
+    
+    autosaveStatus.value = 'saved'
+  } catch (error: any) {
+    autosaveStatus.value = 'error'
+    autosaveErrorMsg.value = error.response?.data?.error || 'Error al autoguardar nota'
+    console.error('Error in autosave:', error)
   }
 }
 
@@ -354,10 +380,13 @@ const validateGradeInput = (studentId: number, id: number, type: 'activity' | 'c
     criteriaGradesMatrix.value[studentId][id] = val
   }
   input.value = val.toString()
+
+  // Disparar autoguardado automático al perder el foco
+  autosaveGrade(studentId, id, type, val)
 }
 
 // Guardar todas las notas
-const saveAllGrades = async () => {
+const saveAllGrades = async (silent = false) => {
   if (saving.value) return
   
   const activityGradesToSave: any[] = []
@@ -374,7 +403,7 @@ const saveAllGrades = async () => {
       if (act && (!act.criterios || act.criterios.length === 0)) {
         const nota = gradesMatrix.value[sId][aId]
         if (nota !== undefined && nota !== '') {
-          const val = parseFloat(nota)
+          const val = parseFloat(nota.toString())
           if (isNaN(val) || val < gradeRange.value.min || val > gradeRange.value.max) {
             hasError = true
             return
@@ -395,7 +424,7 @@ const saveAllGrades = async () => {
       const cId = Number(criterioId)
       const nota = criteriaGradesMatrix.value[sId][cId]
       if (nota !== undefined && nota !== '') {
-        const val = parseFloat(nota)
+        const val = parseFloat(nota.toString())
         if (isNaN(val) || val < gradeRange.value.min || val > gradeRange.value.max) {
           hasError = true
           return
@@ -410,8 +439,10 @@ const saveAllGrades = async () => {
   })
 
   if (hasError) {
-    alert(`Todas las calificaciones deben estar dentro del rango institucional permitido: ${gradeRange.value.min} - ${gradeRange.value.max}`)
-    return
+    if (!silent) {
+      alert(`Todas las calificaciones deben estar dentro del rango institucional permitido: ${gradeRange.value.min} - ${gradeRange.value.max}`)
+    }
+    throw new Error('Calificaciones inválidas')
   }
 
   if (activityGradesToSave.length === 0 && criteriaGradesToSave.length === 0) return
@@ -423,9 +454,15 @@ const saveAllGrades = async () => {
       criteriaGrades: criteriaGradesToSave,
       schoolId: schoolId.value
     })
-    alert('Calificaciones guardadas exitosamente')
+    if (!silent) {
+      alert('Calificaciones guardadas exitosamente')
+    }
   } catch (error: any) {
-    alert(error.response?.data?.error || 'Error al guardar calificaciones')
+    const msg = error.response?.data?.error || 'Error al guardar calificaciones'
+    if (!silent) {
+      alert(msg)
+    }
+    throw new Error(msg)
   } finally {
     saving.value = false
   }
@@ -447,9 +484,16 @@ const addActivity = async () => {
   }
 
   try {
+    // 1. Guardar silenciosamente las notas en pantalla antes de proceder (previene reseteo a 0)
+    await saveAllGrades(true)
+
+    // 2. Resolver id_detallegrado usando id_grado (selectedGradeId)
+    const matchedCourse = myCourses.value.find(c => c.id_grado === selectedGradeId.value && c.id_materia === selectedSubjectId.value)
+    const idDetalleGrado = matchedCourse ? matchedCourse.id_detallegrado : null
+
     const payload: any = {
       id_competencia: competency.value?.id_competencia || null,
-      id_detallegrado: myCourses.value.find(c => c.id_grado === selectedGradeId.value && c.id_materia === selectedSubjectId.value)?.id_detallegrado || null,
+      id_detallegrado: idDetalleGrado,
       id_periodo: selectedPeriodId.value,
       nombre: newActivity.value.nombre,
       porcentaje: newActivity.value.porcentaje,
@@ -472,7 +516,10 @@ const addActivity = async () => {
     showAddActivity.value = false
     await fetchActivities()
   } catch (error: any) {
-    alert(error.response?.data?.error || 'Error al crear actividad')
+    // Si fue un error de validación interna de notas, no creamos la actividad y dejamos los cambios en pantalla
+    if (error.message !== 'Calificaciones inválidas') {
+      alert(error.response?.data?.error || error.message || 'Error al crear actividad')
+    }
   }
 }
 
@@ -610,6 +657,26 @@ const calculateFinal = (studentId: number) => {
   })
   
   return total.toFixed(1)
+}
+
+const getLinkedCompetencyIndex = (idCompetencia: number | null) => {
+  if (!idCompetencia) return null
+  const idx = competenciasList.value.findIndex(comp => Number(comp.id_competencia) === Number(idCompetencia))
+  return idx !== -1 ? idx + 1 : null
+}
+
+const getDbaNumberForCompetency = (comp: any) => {
+  if (!comp || !comp.evidencias || !Array.isArray(comp.evidencias)) return null
+  const firstWithDba = comp.evidencias.find((e: any) => e && e.numero_dba !== null && e.numero_dba !== undefined)
+  return firstWithDba ? firstWithDba.numero_dba : null
+}
+
+const getLinkedActivityForEvidence = (evIdDba: number | null) => {
+  if (!evIdDba) return null
+  const linkedAct = activities.value.find(act => 
+    act.evidencias_dba && Array.isArray(act.evidencias_dba) && act.evidencias_dba.map(Number).includes(Number(evIdDba))
+  )
+  return linkedAct ? linkedAct.nombre : null
 }
 
 const getScaleLevel = (grade: string | number) => {
@@ -853,9 +920,25 @@ onMounted(() => {
       
       <!-- Actions buttons -->
       <div v-if="selectedSubjectId && selectedPeriodId" class="flex flex-wrap items-center gap-3">
+        <!-- Autosave Indicator -->
+        <div v-if="!auth.isMonitoring && !isPeriodClosed" class="flex items-center gap-2 px-4 py-2 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-100 dark:border-slate-850 h-[46px]">
+          <div v-if="autosaveStatus === 'saving'" class="flex items-center gap-1.5 text-[9px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest">
+            <Loader2 class="w-3.5 h-3.5 animate-spin" />
+            <span>Guardando...</span>
+          </div>
+          <div v-else-if="autosaveStatus === 'saved'" class="flex items-center gap-1.5 text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">
+            <CheckCircle class="w-3.5 h-3.5" />
+            <span>Guardado</span>
+          </div>
+          <div v-else-if="autosaveStatus === 'error'" class="flex items-center gap-1.5 text-[9px] font-black text-red-600 dark:text-red-400 uppercase tracking-widest" :title="autosaveErrorMsg">
+            <AlertCircle class="w-3.5 h-3.5" />
+            <span>Error</span>
+          </div>
+        </div>
+
         <button 
           v-if="!auth.isMonitoring"
-          @click="saveAllGrades"
+          @click="saveAllGrades(false)"
           :disabled="saving || activitiesLoading || isPeriodClosed"
           class="bg-emerald-600 dark:bg-emerald-500 text-white px-8 py-3 rounded-2xl font-bold shadow-lg shadow-emerald-100 dark:shadow-none hover:bg-emerald-700 transition-all flex items-center gap-2 active:scale-95 disabled:opacity-50"
         >
@@ -957,7 +1040,7 @@ onMounted(() => {
           </div>
           <div>
             <span class="text-[10px] font-black text-violet-600 dark:text-violet-400 uppercase tracking-widest block">Competencia del Periodo</span>
-            <p class="text-sm font-semibold text-slate-700 dark:text-slate-200 mt-1 leading-relaxed max-w-4xl">{{ competency.descripcion }}</p>
+            <p class="text-sm font-semibold text-slate-700 dark:text-slate-200 mt-1 leading-relaxed max-w-4xl whitespace-pre-line">{{ competency.descripcion }}</p>
           </div>
         </div>
         <button 
@@ -1155,20 +1238,42 @@ onMounted(() => {
                 <AlertCircle class="w-8 h-8 text-slate-300 dark:text-slate-600 mb-2" />
                 <p class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase">Sin competencia definida</p>
               </div>
-              <div v-else class="space-y-3">
-                <div class="bg-violet-50 dark:bg-violet-950/20 border border-violet-100 dark:border-violet-900 rounded-2xl p-4">
-                  <p class="text-sm font-semibold text-violet-900 dark:text-violet-300 leading-relaxed">{{ competency.descripcion }}</p>
+              <div v-else class="space-y-4">
+                <!-- Si hay competencias estructuradas (agrupadas por DBA) -->
+                <div v-if="competenciasList.length" class="space-y-4">
+                  <div v-for="(comp, cIdx) in competenciasList" :key="comp.id_competencia" class="bg-violet-50 dark:bg-violet-950/20 border border-violet-100 dark:border-violet-900 rounded-2xl p-4 shadow-sm transition-all hover:shadow-md">
+                    <span class="text-[9px] font-black text-violet-600 dark:text-violet-400 uppercase tracking-widest block mb-1">
+                      Competencia #{{ cIdx + 1 }}{{ getDbaNumberForCompetency(comp) ? ` / DBA #${getDbaNumberForCompetency(comp)}` : '' }}
+                    </span>
+                    <p class="text-xs font-bold text-slate-800 dark:text-slate-200 leading-relaxed">{{ comp.descripcion }}</p>
+                    
+                    <div v-if="comp.evidencias && comp.evidencias.length" class="mt-3 pt-3 border-t border-violet-200/40 dark:border-violet-800/60">
+                      <h4 class="text-[9px] font-black text-violet-700 dark:text-violet-400 uppercase tracking-wider mb-2">Evidencias</h4>
+                      <ul class="space-y-1.5">
+                        <li v-for="ev in comp.evidencias" :key="ev.id_evidencia" class="flex items-start gap-2">
+                          <div class="w-1.5 h-1.5 rounded-full bg-violet-400 mt-1.5 shrink-0"></div>
+                          <span class="text-[10px] font-semibold text-violet-900/80 dark:text-violet-300/80 leading-relaxed">{{ ev.descripcion }}</span>
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Fallback tradicional si no se cargaron estructuradas -->
+                <div v-else class="bg-violet-50 dark:bg-violet-950/20 border border-violet-100 dark:border-violet-900 rounded-2xl p-4">
+                  <p class="text-sm font-semibold text-violet-900 dark:text-violet-300 leading-relaxed whitespace-pre-line">{{ competency.descripcion }}</p>
                   
                   <div v-if="evidencias.length" class="mt-4 pt-4 border-t border-violet-200/60 dark:border-violet-800/60">
                     <h4 class="text-[10px] font-black text-violet-900 dark:text-violet-400 uppercase tracking-wider mb-2">Evidencias Vinculadas</h4>
                     <ul class="space-y-1.5">
                       <li v-for="ev in evidencias" :key="ev.id_evidencia" class="flex items-start gap-2">
-                        <div class="w-1 h-1 rounded-full bg-violet-400 mt-1.5 shrink-0"></div>
-                        <span class="text-[11px] font-medium text-violet-800 dark:text-violet-300/80">{{ ev.descripcion }}</span>
+                        <div class="w-1.5 h-1.5 rounded-full bg-violet-400 mt-1.5 shrink-0"></div>
+                        <span class="text-[11px] font-medium text-violet-800 dark:text-violet-300/80 leading-relaxed">{{ ev.descripcion }}</span>
                       </li>
                     </ul>
                   </div>
                 </div>
+              </div>
                 <div class="flex items-center gap-2 px-1">
                   <div class="w-3.5 h-3.5 text-slate-400 shrink-0">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -1181,7 +1286,7 @@ onMounted(() => {
                   </p>
                 </div>
               </div>
-            </div>
+            
 
             <hr class="border-slate-100 dark:border-slate-800" />
 
@@ -1229,8 +1334,10 @@ onMounted(() => {
                                 {{ ev.tipo }}
                               </span>
                             </div>
-                            <div v-if="ev.tipo === 'PLANEADA' && competency" class="text-[9px] text-slate-400 dark:text-slate-500 italic pl-2">
-                              <span class="font-bold text-violet-600 dark:text-violet-400">Competencia:</span> {{ competency.descripcion }}
+                            <div v-if="ev.tipo === 'PLANEADA' && getLinkedCompetencyIndex(ev.id_competencia)" class="flex flex-wrap gap-1 mt-1 pl-2">
+                              <span class="px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-950/40 text-[8px] font-black text-violet-700 dark:text-violet-400 border border-violet-200/40 dark:border-violet-900 uppercase tracking-wider">
+                                Competencia {{ getLinkedCompetencyIndex(ev.id_competencia) }}{{ getDbaNumberForCompetency(competenciasList[getLinkedCompetencyIndex(ev.id_competencia) - 1]) ? ` / DBA ${getDbaNumberForCompetency(competenciasList[getLinkedCompetencyIndex(ev.id_competencia) - 1])}` : '' }}
+                              </span>
                             </div>
                           </div>
                         </div>
@@ -1313,18 +1420,23 @@ onMounted(() => {
                           </div>
                           
                           <div class="pl-4 space-y-1.5">
-                            <label v-for="ev in dbaItem.evidencias" :key="ev.id_evidencia_dba" class="flex flex-col gap-1 p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer border border-transparent hover:border-slate-100 dark:hover:border-slate-700">
+                            <label v-for="ev in dbaItem.evidencias" :key="ev.id_evidencia_dba" :class="getLinkedActivityForEvidence(ev.id_evidencia_dba) ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'" class="flex flex-col gap-1 p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 border border-transparent hover:border-slate-100 dark:hover:border-slate-700">
                               <div class="flex items-start gap-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400">
-                                <input type="checkbox" v-model="newActivity.evidencias_dba" :value="ev.id_evidencia_dba" class="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 shrink-0" />
+                                <input type="checkbox" v-model="newActivity.evidencias_dba" :value="ev.id_evidencia_dba" :disabled="!!getLinkedActivityForEvidence(ev.id_evidencia_dba)" class="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed" />
                                 <div class="flex flex-wrap items-center gap-1.5">
                                   <span>{{ ev.descripcion }}</span>
                                   <span :class="ev.tipo === 'PLANEADA' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400' : 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400'" class="rounded px-1.5 py-0.2 text-[8px] font-black uppercase">
                                     {{ ev.tipo }}
                                   </span>
+                                  <span v-if="getLinkedActivityForEvidence(ev.id_evidencia_dba)" class="bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-400 rounded px-1.5 py-0.5 text-[8px] font-bold border border-red-200/40 uppercase tracking-wide">
+                                    Asignada a: {{ getLinkedActivityForEvidence(ev.id_evidencia_dba) }}
+                                  </span>
                                 </div>
                               </div>
-                              <div v-if="ev.tipo === 'PLANEADA' && competency" class="pl-6 text-[10px] text-slate-400 dark:text-slate-500 italic">
-                                <span class="font-bold text-violet-600 dark:text-violet-400">Competencia:</span> {{ competency.descripcion }}
+                              <div v-if="ev.tipo === 'PLANEADA' && getLinkedCompetencyIndex(ev.id_competencia)" class="flex flex-wrap gap-1 mt-1 pl-6">
+                                <span class="px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-950/40 text-[8px] font-black text-violet-700 dark:text-violet-400 border border-violet-200/40 dark:border-violet-900 uppercase tracking-wider">
+                                  Competencia {{ getLinkedCompetencyIndex(ev.id_competencia) }}{{ getDbaNumberForCompetency(competenciasList[getLinkedCompetencyIndex(ev.id_competencia) - 1]) ? ` / DBA ${getDbaNumberForCompetency(competenciasList[getLinkedCompetencyIndex(ev.id_competencia) - 1])}` : '' }}
+                                </span>
                               </div>
                             </label>
                           </div>

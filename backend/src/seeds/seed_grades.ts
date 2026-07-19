@@ -244,6 +244,24 @@ async function runSeedGrades() {
         );
         const actividadId = actRes.rows[0].id_actividadmateria;
 
+        // Asociar evidencias del DBA a la actividad para coherencia curricular
+        if (competenciaId) {
+          const evDbaRes = await client.query<{ id_evidencia_dba: number }>(
+            `SELECT id_evidencia_dba 
+             FROM evidencia_aprendizaje 
+             WHERE id_competencia = $1 AND id_evidencia_dba IS NOT NULL`,
+            [competenciaId]
+          );
+
+          for (const evRow of evDbaRes.rows) {
+            await client.query(
+              `INSERT INTO actividad_evidencia_dba (id_actividadmateria, id_evidencia_dba)
+               VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+              [actividadId, evRow.id_evidencia_dba]
+            );
+          }
+        }
+
         const studentsInGroup = studentsRes.rows.filter((s: any) => s.id_grupo === dg.id_grupo);
         let studentsToGrade = studentsInGroup;
         if (gradePercentageOfStudents < 1.0) {

@@ -55,6 +55,11 @@ const router = createRouter({
       component: EnrollmentCorrection
     },
     {
+      path: '/soporte',
+      name: 'public-support',
+      component: () => import('../views/shared/SupportView.vue')
+    },
+    {
       path: '/dashboard',
       component: DashboardLayout,
       meta: { requiresAuth: true },
@@ -333,6 +338,21 @@ const router = createRouter({
           name: 'Catálogo DBA',
           component: () => import('../views/adminGeneral/DbaGlobalView.vue'),
           meta: { roles: ['admin_general'] }
+        },
+        {
+          path: 'soporte',
+          name: 'support',
+          component: () => import('../views/shared/SupportView.vue')
+        },
+        {
+          path: 'directorio',
+          name: 'directory',
+          component: () => import('../views/shared/DirectoryView.vue')
+        },
+        {
+          path: 'mi-cuenta',
+          name: 'my-account',
+          component: () => import('../views/shared/ProfileView.vue')
         }
       ]
     }

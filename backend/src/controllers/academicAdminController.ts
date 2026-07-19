@@ -5237,16 +5237,16 @@ export const getDbaPlaneacionDisponibles = async (req: Request, res: Response): 
        WHERE (
          d.area = (SELECT nombre FROM materias WHERE id_materia = $1)
          OR (
-           $4 = 'TRANSICION'
+           $3 = 'TRANSICION'
            AND d.area IN ('Desarrollo Integral', 'Transición', 'Desarrollo Integral (Transición)')
            AND (SELECT nombre FROM materias WHERE id_materia = $1) = 'Desarrollo Integral'
          )
        )
-         AND d.grado = $4
-         AND d.version_curricular = $3
+         AND d.grado = $3
+         AND d.version_curricular = $2
          AND d.estado = 'ACTIVO'
        ORDER BY d.numero_dba`,
-      [subjectId, groupId, versionCurricular, gradeName]
+      [subjectId, versionCurricular, gradeName]
     );
 
     // 3. Obtener las evidencias ya asignadas a competencias (con detalle de a cuál pertenecen)

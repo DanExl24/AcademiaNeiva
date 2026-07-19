@@ -374,3 +374,181 @@ export const verifySession = async (req: Request, res: Response): Promise<void> 
   }
 };
 
+export const updateProfileEmail = async (req: Request, res: Response): Promise<void> => {
+  const user = (req as any).user;
+  const { nuevo_email } = req.body;
+
+  if (!user) {
+    res.status(401).json({ error: "No autorizado." });
+    return;
+  }
+
+  if (!nuevo_email || !nuevo_email.includes("@")) {
+    res.status(400).json({ error: "Debe proporcionar un correo electrónico válido." });
+    return;
+  }
+
+  try {
+    const userId = Number(user.id);
+    
+    // Verificar si el correo ya está en uso por otro usuario
+    const checkRes = await pool.query(
+      'SELECT 1 FROM usuario WHERE email = $1 AND id_usuario != $2',
+      [nuevo_email.trim(), userId]
+    );
+
+    if (checkRes.rows.length > 0) {
+      res.status(400).json({ error: "El correo electrónico ya se encuentra registrado en el sistema." });
+      return;
+    }
+
+    // Actualizar correo
+    await pool.query(
+      'UPDATE usuario SET email = $1 WHERE id_usuario = $2',
+      [nuevo_email.trim(), userId]
+    );
+
+    res.json({ message: "Correo electrónico actualizado exitosamente." });
+  } catch (error) {
+    console.error("Error updating profile email:", error);
+    res.status(500).json({ error: "Error al actualizar el correo electrónico." });
+  }
+};
+
+export const updateProfilePassword = async (req: Request, res: Response): Promise<void> => {
+  const user = (req as any).user;
+  const { password_actual, nueva_password } = req.body;
+
+  if (!user) {
+    res.status(401).json({ error: "No autorizado." });
+    return;
+  }
+
+  if (!password_actual || !nueva_password || nueva_password.length < 6) {
+    res.status(400).json({ error: "Debe proporcionar la contraseña actual y una nueva contraseña de al menos 6 caracteres." });
+    return;
+  }
+
+  try {
+    const userId = Number(user.id);
+    
+    // Obtener contraseña actual hasheada
+    const userRes = await pool.query(
+      'SELECT password FROM usuario WHERE id_usuario = $1',
+      [userId]
+    );
+
+    if (userRes.rows.length === 0) {
+      res.status(404).json({ error: "Usuario no encontrado." });
+      return;
+    }
+
+    const dbPassword = userRes.rows[0].password;
+
+    // Verificar contraseña actual
+    const validPassword = await bcrypt.compare(password_actual, dbPassword);
+    if (!validPassword) {
+      res.status(400).json({ error: "La contraseña actual es incorrecta." });
+      return;
+    }
+
+    // Hashear y actualizar la nueva contraseña
+    const hashedNew = await bcrypt.hash(nueva_password, 10);
+    await pool.query(
+      'UPDATE usuario SET password = $1 WHERE id_usuario = $2',
+      [hashedNew, userId]
+    );
+
+    res.json({ message: "Contraseña actualizada exitosamente." });
+  } catch (error) {
+    console.error("Error updating profile password:", error);
+    res.status(500).json({ error: "Error al actualizar la contraseña." });
+  }
+};
+
+export const getUserProfile = async (req: Request, res: Response): Promise<void> => {
+  const user = (req as any).user;
+
+  if (!user) {
+    res.status(401).json({ error: "No autorizado." });
+    return;
+  }
+
+  try {
+    const userId = Number(user.id);
+    
+    // Obtener los datos básicos de la tabla usuario
+    const userRes = await pool.query(
+      `SELECT id_usuario, nombre, apellido, email, estado, fecha_creacion
+       FROM usuario WHERE id_usuario = $1`,
+      [userId]
+    );
+
+    if (userRes.rows.length === 0) {
+      res.status(404).json({ error: "Usuario no encontrado." });
+      return;
+    }
+
+    const basicUser = userRes.rows[0];
+    
+    // El rol lo tomamos del token del middleware (user.role)
+    const userRole = (user.role || '').toUpperCase();
+    
+    let documento = null;
+    let tipo_documento = null;
+
+    // Buscar documento y tipo según el rol del usuario en su respectiva tabla
+    if (userRole === 'DOCENTE') {
+      const docRes = await pool.query(
+        `SELECT d.documento, td.tipo AS tipo_documento 
+         FROM docente d 
+         LEFT JOIN tipo_documento td ON d.id_tipodocumento = td.id_tipodocumento 
+         WHERE d.id_usuario = $1`,
+        [userId]
+      );
+      if (docRes.rows.length > 0) {
+        documento = docRes.rows[0].documento;
+        tipo_documento = docRes.rows[0].tipo_documento;
+      }
+    } else if (userRole === 'PADRE') {
+      const docRes = await pool.query(
+        `SELECT p.documento, td.tipo AS tipo_documento 
+         FROM padre_familia p 
+         LEFT JOIN tipo_documento td ON p.id_tipodocumento = td.id_tipodocumento 
+         WHERE p.id_usuario = $1`,
+        [userId]
+      );
+      if (docRes.rows.length > 0) {
+        documento = docRes.rows[0].documento;
+        tipo_documento = docRes.rows[0].tipo_documento;
+      }
+    } else if (userRole === 'ESTUDIANTE') {
+      const docRes = await pool.query(
+        `SELECT e.documento, td.tipo AS tipo_documento 
+         FROM estudiante e 
+         LEFT JOIN tipo_documento td ON e.id_tipodocumento = td.id_tipodocumento 
+         WHERE e.id_usuario = $1`,
+        [userId]
+      );
+      if (docRes.rows.length > 0) {
+        documento = docRes.rows[0].documento;
+        tipo_documento = docRes.rows[0].tipo_documento;
+      }
+    }
+
+    // Retornamos el objeto unificado
+    res.json({
+      user: {
+        ...basicUser,
+        rol: userRole,
+        documento: documento || 'No Registrado',
+        tipo_documento: tipo_documento || 'No Registrado'
+      }
+    });
+  } catch (error) {
+    console.error("Error fetching user profile:", error);
+    res.status(500).json({ error: "Error al consultar los datos del perfil." });
+  }
+};
+
+
