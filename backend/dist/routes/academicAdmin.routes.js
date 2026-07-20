@@ -29,6 +29,7 @@ router.patch("/groups/:id/rename", academicAdminController_1.renameSingleCourse)
 router.patch("/grade-types/:id/bulk-rename", academicAdminController_1.bulkRenameCourses);
 router.delete("/groups/:id", academicAdminController_1.deleteGroup);
 router.get("/subjects/:schoolId", academicAdminController_1.getSubjects);
+router.get("/subjects/:id/curriculum-details", academicAdminController_1.getSubjectCurriculumDetails);
 router.get("/subjects/trash/:schoolId", academicAdminController_1.getSubjectTrash);
 router.post("/subjects", academicAdminController_1.createSubject);
 router.delete("/subjects/:id", academicAdminController_1.deleteSubject);
@@ -46,6 +47,7 @@ router.post("/settings/periods", academicAdminController_1.createAcademicPeriod)
 router.patch("/settings/periods/:id/percentage", academicAdminController_1.updateAcademicPeriodPercentage);
 router.get("/settings/closure-details/:schoolId/:periodId", academicAdminController_1.getPeriodClosureDetails);
 router.post("/settings/competencies", academicAdminController_1.upsertCompetencyByAdmin);
+router.delete("/settings/competencies/:id", academicAdminController_1.deleteCompetencyByAdmin);
 router.post("/settings/periods/:id/close", academicAdminController_1.closeAcademicPeriod);
 router.post("/settings/periods/:id/approve", academicAdminController_1.approveAcademicPeriod);
 router.post("/settings/periods/:id/reopen", academicAdminController_1.reopenAcademicPeriod);

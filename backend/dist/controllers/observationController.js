@@ -30,14 +30,14 @@ const checkEditability = async (detailGradeId, schoolId, periodId) => {
 };
 // Helper to check if a date falls within the period's trimester and dia_inicio/dia_fin range
 const checkDateInPeriod = async (periodId, dateInput) => {
-    const periodRes = await db_1.pool.query(`SELECT mes_inicio, dia_inicio, mes_fin, dia_fin, "id_año" 
+    const periodRes = await db_1.pool.query(`SELECT mes_inicio, dia_inicio, mes_fin, dia_fin, id_anio 
      FROM periodo_academico 
      WHERE id_periodo = $1`, [periodId]);
     if (periodRes.rows.length === 0) {
         return { valid: false, error: "Periodo académico no encontrado." };
     }
-    const { mes_inicio, dia_inicio, mes_fin, dia_fin, id_año } = periodRes.rows[0];
-    let year = id_año ? Number(id_año) : new Date().getFullYear();
+    const { mes_inicio, dia_inicio, mes_fin, dia_fin, id_anio } = periodRes.rows[0];
+    let year = id_anio ? Number(id_anio) : new Date().getFullYear();
     if (year < 2000) {
         year = new Date().getFullYear();
     }

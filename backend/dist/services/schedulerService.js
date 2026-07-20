@@ -41,7 +41,7 @@ class SchedulerService {
             // Obtener periodos pendientes con información del año lectivo
             const pendingPeriods = await client.query(`SELECT pa.*, al.calendario, al.tipo_calendario
          FROM periodo_academico pa
-         JOIN "año_lectivo" al ON pa.id_año = al.id_año
+         JOIN anio_lectivo al ON pa.id_anio = al.id_anio
          WHERE pa.estado = 'PENDIENTE'`);
             for (const pa of pendingPeriods.rows) {
                 if (!pa.mes_inicio || !pa.dia_inicio)
@@ -65,7 +65,7 @@ class SchedulerService {
                     else {
                         // Verificar si el periodo anterior (trimestre - 1) está CERRADO
                         const prevRes = await client.query(`SELECT estado FROM periodo_academico 
-               WHERE id_colegio = $1 AND "id_año" = $2 AND trimestre = $3`, [pa.id_colegio, pa.id_año, pa.trimestre - 1]);
+               WHERE id_colegio = $1 AND id_anio = $2 AND trimestre = $3`, [pa.id_colegio, pa.id_anio, pa.trimestre - 1]);
                         if (prevRes.rows.length > 0 && prevRes.rows[0].estado === 'CERRADO') {
                             canActivate = true;
                         }
@@ -78,7 +78,7 @@ class SchedulerService {
                         // 2. Por seguridad, asegurarse de que otros periodos del mismo año queden como cerrados
                         await client.query(`UPDATE periodo_academico 
                SET estado = 'CERRADO' 
-               WHERE id_colegio = $1 AND "id_año" = $2 AND id_periodo != $3 AND estado = 'ABIERTO'`, [pa.id_colegio, pa.id_año, pa.id_periodo]);
+               WHERE id_colegio = $1 AND id_anio = $2 AND id_periodo != $3 AND estado = 'ABIERTO'`, [pa.id_colegio, pa.id_anio, pa.id_periodo]);
                         await client.query('COMMIT');
                     }
                 }

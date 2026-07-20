@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.verAccionesSupervisionDirectivo = exports.listarSupervisionesColegio = exports.listarNotificacionesSistema = exports.listarAuditoriasAcciones = exports.obtenerStatsDashboard = exports.registrarAccionAuditoria = exports.exportarAuditoria = exports.historialSupervision = exports.verAccionesSupervision = exports.verificarSupervisionActiva = exports.revocarSupervision = exports.salirSupervision = exports.entrarSupervision = exports.aprobarSupervision = exports.solicitarSupervision = exports.eliminarDirectivo = exports.desvincularDirectivo = exports.actualizarDirectivo = exports.registrarDirectivo = exports.listarDirectivos = exports.eliminarUsuario = exports.forzarCierreSesion = exports.restablecerPassword = exports.cambiarEstadoUsuario = exports.detalleUsuario = exports.listarUsuarios = exports.eliminarColegio = exports.cambiarEstadoColegio = exports.uploadEscudo = exports.actualizarColegio = exports.registrarColegio = exports.detalleColegio = exports.listarColegios = void 0;
+exports.modificarCredencialesConTicket = exports.validarTicketParaUsuario = exports.actualizarConfiguracion = exports.obtenerConfiguracion = exports.verAccionesSupervisionDirectivo = exports.listarSupervisionesColegio = exports.listarNotificacionesSistema = exports.listarAuditoriasAcciones = exports.obtenerStatsDashboard = exports.registrarAccionAuditoria = exports.exportarAuditoria = exports.historialSupervision = exports.verAccionesSupervision = exports.verificarSupervisionActiva = exports.revocarSupervision = exports.salirSupervision = exports.entrarSupervision = exports.aprobarSupervision = exports.solicitarSupervision = exports.eliminarDirectivo = exports.desvincularDirectivo = exports.actualizarDirectivo = exports.registrarDirectivo = exports.listarDirectivos = exports.eliminarUsuario = exports.forzarCierreSesion = exports.restablecerPassword = exports.cambiarEstadoUsuario = exports.detalleUsuario = exports.listarUsuarios = exports.eliminarColegio = exports.cambiarEstadoColegio = exports.uploadEscudo = exports.actualizarColegio = exports.registrarColegio = exports.detalleColegio = exports.listarColegios = void 0;
 const db_1 = require("../config/db");
 const adminGeneralNotificationService_1 = require("../services/adminGeneralNotificationService");
 const bcrypt_1 = __importDefault(require("bcrypt"));
@@ -267,7 +267,8 @@ exports.eliminarColegio = eliminarColegio;
  */
 const listarUsuarios = async (req, res) => {
     try {
-        const { estado, rol, busqueda, id_colegio } = req.query;
+        const { estado, rol, id_colegio } = req.query;
+        const busqueda = req.query.busqueda || req.query.search;
         const page = req.query.page ? Number(req.query.page) : null;
         const limit = req.query.limit ? Number(req.query.limit) : null;
         let query = `
@@ -331,13 +332,21 @@ const detalleUsuario = async (req, res) => {
         const result = await db_1.pool.query(`SELECT u.id_usuario, u.email, u.nombre, u.apellido, u.estado, u.id_colegio,
               u.fecha_creacion, u.motivo_baneo, u.fecha_baneo, u.activo,
               c.nombre AS colegio_nombre,
-              array_agg(DISTINCT r.nombre) AS roles
+              array_agg(DISTINCT r.nombre) AS roles,
+              COALESCE(d.documento, pf.documento, e.documento) AS documento,
+              COALESCE(td_d.tipo, td_pf.tipo, td_e.tipo) AS tipo_documento
        FROM usuario u
        LEFT JOIN colegio c ON c.id_colegio = u.id_colegio
        LEFT JOIN usuario_rol ur ON ur.id_usuario = u.id_usuario
        LEFT JOIN rol r ON r.id_rol = ur.id_rol
+       LEFT JOIN public.docente d ON d.id_usuario = u.id_usuario
+       LEFT JOIN public.tipo_documento td_d ON td_d.id_tipodocumento = d.id_tipodocumento
+       LEFT JOIN public.padre_familia pf ON pf.id_usuario = u.id_usuario
+       LEFT JOIN public.tipo_documento td_pf ON td_pf.id_tipodocumento = pf.id_tipodocumento
+       LEFT JOIN public.estudiante e ON e.id_usuario = u.id_usuario
+       LEFT JOIN public.tipo_documento td_e ON td_e.id_tipodocumento = e.id_tipodocumento
        WHERE u.id_usuario = $1
-       GROUP BY u.id_usuario, c.nombre`, [id]);
+       GROUP BY u.id_usuario, c.nombre, d.documento, td_d.tipo, pf.documento, td_pf.tipo, e.documento, td_e.tipo`, [id]);
         if (result.rows.length === 0) {
             res.status(404).json({ error: 'Usuario no encontrado' });
             return;
@@ -606,6 +615,23 @@ const solicitarSupervision = async (req, res) => {
             return;
         }
         await client.query('BEGIN');
+        // Obtener límites configurados de duración
+        const configResult = await client.query(`SELECT clave, valor FROM configuracion_plataforma 
+       WHERE clave IN ('supervision_duracion_minima_minutos', 'supervision_duracion_maxima_minutos')`);
+        const configMap = {};
+        for (const row of configResult.rows) {
+            configMap[row.clave] = Number(row.valor);
+        }
+        const limiteMinimo = configMap['supervision_duracion_minima_minutos'] || 5;
+        const limiteMaximo = configMap['supervision_duracion_maxima_minutos'] || 300;
+        const duracionSolicitada = duracion_maxima_minutos ? Number(duracion_maxima_minutos) : limiteMinimo;
+        if (duracionSolicitada < limiteMinimo || duracionSolicitada > limiteMaximo) {
+            await client.query('ROLLBACK');
+            res.status(400).json({
+                error: `La duración debe estar entre ${limiteMinimo} y ${limiteMaximo} minutos`
+            });
+            return;
+        }
         // Verificar que el colegio existe y está activo
         const colegio = await client.query('SELECT id_colegio, nombre, estado FROM colegio WHERE id_colegio = $1', [id_colegio]);
         if (colegio.rows.length === 0) {
@@ -627,7 +653,7 @@ const solicitarSupervision = async (req, res) => {
         const result = await client.query(`INSERT INTO auditoria_supervision 
        (id_admin_general, id_colegio, motivo_solicitud, tipo_supervision, estado_supervision, duracion_maxima_minutos, ip_admin)
        VALUES ($1, $2, $3, $4, 'SOLICITADA', $5, $6)
-       RETURNING *`, [req.user.id, id_colegio, motivo, tipo_supervision, duracion_maxima_minutos || 60, req.ip]);
+       RETURNING *`, [req.user.id, id_colegio, motivo, tipo_supervision, duracionSolicitada, req.ip]);
         // Notificar a todos los directivos del colegio
         const directivos = await client.query(`SELECT d.id, u.email, u.nombre, u.apellido
        FROM directivo d
@@ -1465,3 +1491,373 @@ const verAccionesSupervisionDirectivo = async (req, res) => {
     }
 };
 exports.verAccionesSupervisionDirectivo = verAccionesSupervisionDirectivo;
+// ═══════════════════════════════════════════════════════════════════════════
+// CONFIGURACIÓN DE PLATAFORMA
+// ═══════════════════════════════════════════════════════════════════════════
+/**
+ * GET /admin/configuracion
+ * Obtener todas las configuraciones de la plataforma.
+ */
+const obtenerConfiguracion = async (req, res) => {
+    try {
+        const result = await db_1.pool.query(`SELECT clave, valor, descripcion, actualizado_por, fecha_actualizacion
+       FROM configuracion_plataforma
+       ORDER BY clave`);
+        // Transformar a un objeto clave-valor para consumo más fácil en el frontend
+        const config = {};
+        for (const row of result.rows) {
+            config[row.clave] = {
+                valor: row.valor,
+                descripcion: row.descripcion,
+                actualizado_por: row.actualizado_por,
+                fecha_actualizacion: row.fecha_actualizacion,
+            };
+        }
+        res.json(config);
+    }
+    catch (error) {
+        console.error('Error obteniendo configuración:', error);
+        res.status(500).json({ error: 'Error al obtener configuración de la plataforma' });
+    }
+};
+exports.obtenerConfiguracion = obtenerConfiguracion;
+/**
+ * PUT /admin/configuracion
+ * Actualizar configuraciones de la plataforma (duración mín/máx de supervisión).
+ */
+const actualizarConfiguracion = async (req, res) => {
+    const client = await db_1.pool.connect();
+    try {
+        const { supervision_duracion_minima_minutos, supervision_duracion_maxima_minutos } = req.body;
+        // Validar que los valores existen
+        if (supervision_duracion_minima_minutos === undefined || supervision_duracion_maxima_minutos === undefined) {
+            res.status(400).json({ error: 'Se requieren supervision_duracion_minima_minutos y supervision_duracion_maxima_minutos' });
+            return;
+        }
+        const minVal = Number(supervision_duracion_minima_minutos);
+        const maxVal = Number(supervision_duracion_maxima_minutos);
+        // Validar que son números válidos
+        if (isNaN(minVal) || isNaN(maxVal) || !Number.isInteger(minVal) || !Number.isInteger(maxVal)) {
+            res.status(400).json({ error: 'Los valores deben ser números enteros' });
+            return;
+        }
+        // Validar rangos seguros
+        if (minVal < 1 || minVal > 60) {
+            res.status(400).json({ error: 'La duración mínima debe estar entre 1 y 60 minutos' });
+            return;
+        }
+        if (maxVal < 30 || maxVal > 1440) {
+            res.status(400).json({ error: 'La duración máxima debe estar entre 30 y 1440 minutos (24 horas)' });
+            return;
+        }
+        // Validar que mínima < máxima
+        if (minVal >= maxVal) {
+            res.status(400).json({ error: 'La duración mínima debe ser menor que la duración máxima' });
+            return;
+        }
+        await client.query('BEGIN');
+        // Actualizar duración mínima
+        await client.query(`UPDATE configuracion_plataforma
+       SET valor = $1, actualizado_por = $2, fecha_actualizacion = NOW()
+       WHERE clave = 'supervision_duracion_minima_minutos'`, [String(minVal), req.user.id]);
+        // Actualizar duración máxima
+        await client.query(`UPDATE configuracion_plataforma
+       SET valor = $1, actualizado_por = $2, fecha_actualizacion = NOW()
+       WHERE clave = 'supervision_duracion_maxima_minutos'`, [String(maxVal), req.user.id]);
+        await client.query('COMMIT');
+        res.json({
+            message: 'Configuración actualizada correctamente',
+            supervision_duracion_minima_minutos: minVal,
+            supervision_duracion_maxima_minutos: maxVal,
+        });
+    }
+    catch (error) {
+        await client.query('ROLLBACK');
+        console.error('Error actualizando configuración:', error);
+        res.status(500).json({ error: 'Error al actualizar configuración' });
+    }
+    finally {
+        client.release();
+    }
+};
+exports.actualizarConfiguracion = actualizarConfiguracion;
+/**
+ * Helper interno para verificar si un ticket corresponde al usuario que se desea modificar.
+ * Retorna { valido: true, ticket: ... } o { valido: false, error: '...' }
+ */
+const verificarCorrespondenciaTicketUsuario = async (client, idUsuario, codigoTicket) => {
+    // 1. Obtener ticket de soporte
+    const ticketRes = await client.query(`SELECT id_ticket, id_usuario, correo_remitente, asunto, descripcion, observaciones, estado 
+     FROM tickets_soporte 
+     WHERE codigo_ticket = $1`, [String(codigoTicket).trim().toUpperCase()]);
+    if (ticketRes.rows.length === 0) {
+        return { valido: false, error: 'El código del ticket de soporte ingresado no existe.' };
+    }
+    const ticket = ticketRes.rows[0];
+    if (ticket.estado === 'RESUELTO') {
+        return { valido: false, error: 'El ticket de soporte ingresado ya se encuentra RESUELTO y cerrado.' };
+    }
+    // 2. Obtener datos actuales del usuario a modificar
+    const userRes = await client.query(`SELECT nombre, apellido, email, id_usuario 
+     FROM usuario 
+     WHERE id_usuario = $1`, [idUsuario]);
+    if (userRes.rows.length === 0) {
+        return { valido: false, error: 'El usuario destino no existe.' };
+    }
+    const targetUser = userRes.rows[0];
+    // Caso A: El id_usuario del ticket coincide directamente, o el correo del remitente coincide con el del usuario a modificar
+    const sameId = ticket.id_usuario && Number(ticket.id_usuario) === Number(targetUser.id_usuario);
+    const sameEmail = ticket.correo_remitente && String(ticket.correo_remitente).trim().toLowerCase() === String(targetUser.email).trim().toLowerCase();
+    if (sameId || sameEmail) {
+        return { valido: true, ticket };
+    }
+    // Caso B: El usuario es estudiante, y el remitente del ticket es su acudiente/padre
+    // Consultar si el targetUser tiene asignado el rol de ESTUDIANTE
+    const targetUserRoles = await client.query(`SELECT r.nombre 
+     FROM usuario_rol ur 
+     JOIN rol r ON ur.id_rol = r.id_rol 
+     WHERE ur.id_usuario = $1`, [targetUser.id_usuario]);
+    const hasStudentRole = targetUserRoles.rows.some((r) => String(r.nombre).toUpperCase() === 'ESTUDIANTE');
+    if (hasStudentRole && ticket.id_usuario) {
+        // Buscar id_estudiante y codigo estudiantil de la cuenta estudiante destino
+        const studentRes = await client.query(`SELECT id_estudiante, codigo 
+       FROM public.estudiante 
+       WHERE id_usuario = $1`, [targetUser.id_usuario]);
+        if (studentRes.rows.length > 0) {
+            const student = studentRes.rows[0];
+            const studentCode = String(student.codigo).trim();
+            // Buscar el id_padrefamilia asociado al remitente del ticket (ticket.id_usuario)
+            const parentRes = await client.query(`SELECT id_padrefamilia FROM public.padre_familia WHERE id_usuario = $1`, [ticket.id_usuario]);
+            if (parentRes.rows.length > 0) {
+                const parentId = parentRes.rows[0].id_padrefamilia;
+                // Verificar si existe la relación en detalle_padrefamilia
+                const relRes = await client.query(`SELECT id_detallepadrefamilia 
+           FROM public.detalle_padrefamilia 
+           WHERE id_padrefamilia = $1 AND id_estudiante = $2`, [parentId, student.id_estudiante]);
+                if (relRes.rows.length > 0) {
+                    // El remitente es su acudiente. Ahora validamos que el ticket contenga el código del estudiante en el asunto o descripción
+                    const inAsunto = String(ticket.asunto).toLowerCase().includes(studentCode.toLowerCase());
+                    const inDescripcion = String(ticket.descripcion).toLowerCase().includes(studentCode.toLowerCase());
+                    if (inAsunto || inDescripcion) {
+                        return { valido: true, ticket };
+                    }
+                    else {
+                        return {
+                            valido: false,
+                            error: `El remitente es el acudiente registrado, pero el ticket no incluye el código estudiantil (${studentCode}) para autorizar la modificación.`
+                        };
+                    }
+                }
+            }
+        }
+    }
+    // Caso C: El remitente es un Directivo del mismo colegio del usuario destino
+    if (ticket.id_usuario) {
+        const creatorRolesRes = await client.query(`SELECT r.nombre, u.id_colegio
+       FROM usuario_rol ur 
+       JOIN rol r ON ur.id_rol = r.id_rol 
+       JOIN usuario u ON u.id_usuario = ur.id_usuario
+       WHERE ur.id_usuario = $1`, [ticket.id_usuario]);
+        const creatorRoles = creatorRolesRes.rows.map((r) => String(r.nombre).toUpperCase());
+        const creatorSchoolId = creatorRolesRes.rows[0]?.id_colegio;
+        const isDirectivo = creatorRoles.includes('DIRECTIVO');
+        if (isDirectivo && creatorSchoolId && targetUser.id_colegio && Number(creatorSchoolId) === Number(targetUser.id_colegio)) {
+            // Obtener documento del usuario destino
+            const targetDocRes = await client.query(`SELECT d.documento FROM docente d WHERE d.id_usuario = $1
+         UNION
+         SELECT pf.documento FROM padre_familia pf WHERE pf.id_usuario = $1
+         UNION
+         SELECT e.documento FROM estudiante e WHERE e.id_usuario = $1
+         LIMIT 1`, [targetUser.id_usuario]);
+            const targetDoc = targetDocRes.rows[0]?.documento;
+            const emailMentioned = String(ticket.asunto).toLowerCase().includes(String(targetUser.email).toLowerCase()) ||
+                String(ticket.descripcion).toLowerCase().includes(String(targetUser.email).toLowerCase());
+            const docMentioned = targetDoc && (String(ticket.asunto).includes(String(targetDoc)) ||
+                String(ticket.descripcion).includes(String(targetDoc)));
+            if (emailMentioned || docMentioned) {
+                return { valido: true, ticket };
+            }
+            else {
+                return {
+                    valido: false,
+                    error: `El remitente del ticket es el Directivo de la institución, pero no se menciona el correo (${targetUser.email}) o identificación del usuario en el ticket.`
+                };
+            }
+        }
+    }
+    // Si no se cumple nada, la validación falla
+    return {
+        valido: false,
+        error: 'El remitente del ticket no corresponde a esta cuenta de usuario, a su acudiente autorizado con código estudiantil, ni a un Directivo de su misma institución.'
+    };
+};
+/**
+ * POST /admin/usuarios/:id/validar-ticket
+ * Valida si un código de ticket es apto para habilitar la edición de credenciales de un usuario.
+ */
+const validarTicketParaUsuario = async (req, res) => {
+    const id = String(req.params.id);
+    const { codigo_ticket } = req.body;
+    if (!codigo_ticket) {
+        res.status(400).json({ error: 'El código del ticket es requerido.' });
+        return;
+    }
+    const client = await db_1.pool.connect();
+    try {
+        const check = await verificarCorrespondenciaTicketUsuario(client, id, codigo_ticket);
+        if (!check.valido) {
+            res.status(400).json({ error: check.error });
+            return;
+        }
+        res.json({ success: true, message: 'Ticket validado correctamente. Edición autorizada.' });
+    }
+    catch (error) {
+        console.error('Error validando ticket para usuario:', error);
+        res.status(500).json({ error: 'Error interno del servidor al validar ticket.' });
+    }
+    finally {
+        client.release();
+    }
+};
+exports.validarTicketParaUsuario = validarTicketParaUsuario;
+/**
+ * PUT /admin/usuarios/:id/credenciales-con-ticket
+ * Modificar datos de identificación y roles de un usuario requiriendo ticket de soporte activo y correspondiente.
+ */
+const modificarCredencialesConTicket = async (req, res) => {
+    const id = String(req.params.id);
+    const { codigo_ticket, nombre, apellido, tipo_documento, documento, roles } = req.body;
+    if (!codigo_ticket || !nombre || !apellido || !tipo_documento || !documento || !Array.isArray(roles)) {
+        res.status(400).json({ error: 'Código de ticket, nombre, apellido, tipo de documento, documento y roles son requeridos.' });
+        return;
+    }
+    const client = await db_1.pool.connect();
+    try {
+        await client.query('BEGIN');
+        // 1. Validar correspondencia y estado del ticket
+        const check = await verificarCorrespondenciaTicketUsuario(client, id, codigo_ticket);
+        if (!check.valido) {
+            res.status(400).json({ error: check.error });
+            await client.query('ROLLBACK');
+            return;
+        }
+        const ticket = check.ticket;
+        // 2. Obtener datos actuales del usuario (antes)
+        const userQuery = await client.query("SELECT nombre, apellido, email, id_colegio FROM usuario WHERE id_usuario = $1", [id]);
+        if (userQuery.rows.length === 0) {
+            res.status(404).json({ error: 'El usuario no existe.' });
+            await client.query('ROLLBACK');
+            return;
+        }
+        const oldUser = userQuery.rows[0];
+        // Consultar roles actuales
+        const oldRolesRes = await client.query(`SELECT r.nombre 
+       FROM usuario_rol ur 
+       JOIN rol r ON ur.id_rol = r.id_rol 
+       WHERE ur.id_usuario = $1`, [id]);
+        const oldRoles = oldRolesRes.rows.map(r => String(r.nombre).toUpperCase());
+        // Consultar documento actual (intentar en docente, padre, estudiante)
+        let oldDoc = 'No Registrado';
+        let oldTipoDoc = 'No Registrado';
+        const docSearch = await client.query(`SELECT d.documento, td.tipo AS tipo_documento 
+       FROM docente d 
+       LEFT JOIN tipo_documento td ON d.id_tipodocumento = td.id_tipodocumento 
+       WHERE d.id_usuario = $1
+       UNION
+       SELECT pf.documento, td.tipo AS tipo_documento 
+       FROM padre_familia pf 
+       LEFT JOIN tipo_documento td ON pf.id_tipodocumento = td.id_tipodocumento 
+       WHERE pf.id_usuario = $1
+       UNION
+       SELECT e.documento, td.tipo AS tipo_documento 
+       FROM estudiante e 
+       LEFT JOIN tipo_documento td ON e.id_tipodocumento = td.id_tipodocumento 
+       WHERE e.id_usuario = $1
+       LIMIT 1`, [id]);
+        if (docSearch.rows.length > 0) {
+            oldDoc = docSearch.rows[0].documento || 'No Registrado';
+            oldTipoDoc = docSearch.rows[0].tipo_documento || 'No Registrado';
+        }
+        // Mapear tipo_documento string a id_tipodocumento entero
+        let idTipoDoc = 3; // Cédula de Ciudadanía por defecto
+        const tdDb = await client.query(`SELECT id_tipodocumento FROM tipo_documento 
+       WHERE tipo ILIKE $1 OR tipo ILIKE $2 LIMIT 1`, [tipo_documento.trim(), `%${tipo_documento.trim()}%`]);
+        if (tdDb.rows.length > 0) {
+            idTipoDoc = tdDb.rows[0].id_tipodocumento;
+        }
+        // 3. Actualizar tabla usuario
+        await client.query("UPDATE usuario SET nombre = $1, apellido = $2 WHERE id_usuario = $3", [nombre.trim(), apellido.trim(), id]);
+        // 4. Sincronizar roles en usuario_rol
+        const normalizedNewRoles = roles.map(r => String(r).toUpperCase());
+        // Obtener catálogo de roles de la BD
+        const allRolesDb = await client.query("SELECT id_rol, nombre FROM public.rol");
+        const roleMap = new Map();
+        allRolesDb.rows.forEach(r => roleMap.set(String(r.nombre).toUpperCase(), Number(r.id_rol)));
+        // Eliminar roles anteriores
+        await client.query("DELETE FROM usuario_rol WHERE id_usuario = $1", [id]);
+        // Insertar nuevos roles
+        for (const roleName of normalizedNewRoles) {
+            const roleId = roleMap.get(roleName);
+            if (roleId) {
+                await client.query("INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2) ON CONFLICT DO NOTHING", [id, roleId]);
+                // Inicializar o actualizar tabla del rol específico para evitar inconsistencias
+                if (roleName === 'DOCENTE') {
+                    await client.query(`INSERT INTO public.docente (id_usuario, documento, id_tipodocumento, nombre, apellido, id_colegio)
+             VALUES ($1, $2, $3, $4, $5, $6)
+             ON CONFLICT (id_usuario) DO UPDATE 
+             SET documento = EXCLUDED.documento, id_tipodocumento = EXCLUDED.id_tipodocumento, 
+                 nombre = EXCLUDED.nombre, apellido = EXCLUDED.apellido`, [id, documento.trim(), idTipoDoc, nombre.trim(), apellido.trim(), oldUser.id_colegio || 1]);
+                }
+                else if (roleName === 'PADRE') {
+                    await client.query(`INSERT INTO public.padre_familia (id_usuario, documento, id_tipodocumento, nombre, apellido, id_colegio)
+             VALUES ($1, $2, $3, $4, $5, $6)
+             ON CONFLICT (id_usuario) DO UPDATE 
+             SET documento = EXCLUDED.documento, id_tipodocumento = EXCLUDED.id_tipodocumento, 
+                 nombre = EXCLUDED.nombre, apellido = EXCLUDED.apellido`, [id, documento.trim(), idTipoDoc, nombre.trim(), apellido.trim(), oldUser.id_colegio]);
+                }
+                else if (roleName === 'ESTUDIANTE') {
+                    await client.query(`INSERT INTO public.estudiante (id_usuario, documento, id_tipodocumento, nombre, apellido, id_colegio, codigo)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)
+             ON CONFLICT (id_usuario) DO UPDATE 
+             SET documento = EXCLUDED.documento, id_tipodocumento = EXCLUDED.id_tipodocumento, 
+                 nombre = EXCLUDED.nombre, apellido = EXCLUDED.apellido`, [id, documento.trim(), idTipoDoc, nombre.trim(), apellido.trim(), oldUser.id_colegio || 1, `EST-${id}`]);
+                }
+            }
+        }
+        // 5. Redactar el diff de auditoría del cambio
+        const auditText = `El Administrador General modificó los datos de la cuenta vinculada bajo la orden de este ticket de soporte.
+Detalle de cambios (Antes ➔ Después):
+- Nombre Completo: '${oldUser.nombre} ${oldUser.apellido || ''}' ➔ '${nombre.trim()} ${apellido.trim()}'
+- Identificación: '${oldTipoDoc} #${oldDoc}' ➔ '${tipo_documento.trim()} #${documento.trim()}'
+- Roles Asignados: [${oldRoles.join(', ')}] ➔ [${normalizedNewRoles.join(', ')}]`;
+        // 6. Registrar la observación automática en el ticket
+        let currentObs = [];
+        try {
+            currentObs = typeof ticket.observaciones === 'string'
+                ? JSON.parse(ticket.observaciones || '[]')
+                : (ticket.observaciones || []);
+        }
+        catch {
+            currentObs = [];
+        }
+        currentObs.push({
+            id_usuario: Number(req.user.id),
+            nombre_usuario: 'Administrador General (Auditoría)',
+            tipo: 'ADMIN_GENERAL',
+            mensaje: auditText,
+            fecha_creacion: new Date().toISOString()
+        });
+        await client.query("UPDATE tickets_soporte SET observaciones = $1 WHERE id_ticket = $2", [JSON.stringify(currentObs), ticket.id_ticket]);
+        await client.query('COMMIT');
+        res.json({ message: 'Credenciales y roles actualizados con éxito y registrados en la auditoría del ticket.' });
+    }
+    catch (error) {
+        await client.query('ROLLBACK');
+        console.error('Error modifying credentials with ticket:', error);
+        res.status(550).json({ error: 'Error interno del servidor al actualizar credenciales.' });
+    }
+    finally {
+        client.release();
+    }
+};
+exports.modificarCredencialesConTicket = modificarCredencialesConTicket;

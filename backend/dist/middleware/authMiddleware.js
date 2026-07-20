@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.requireEstudiante = exports.requirePadre = exports.requireDocente = exports.requireDirectivo = exports.requireAdminGeneral = exports.verifyToken = void 0;
+exports.verifyTokenOptional = exports.requireEstudiante = exports.requirePadre = exports.requireDocente = exports.requireDirectivo = exports.requireAdminGeneral = exports.verifyToken = void 0;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const db_1 = require("../config/db");
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret';
@@ -216,3 +216,45 @@ const requireEstudiante = (req, res, next) => {
     next();
 };
 exports.requireEstudiante = requireEstudiante;
+/**
+ * Middleware que opcionalmente extrae el token JWT si existe, pero no bloquea el paso si es visitante.
+ */
+const verifyTokenOptional = async (req, res, next) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        next();
+        return;
+    }
+    const token = authHeader.split(' ')[1];
+    try {
+        const decoded = jsonwebtoken_1.default.verify(token, JWT_SECRET);
+        if (decoded.jti) {
+            const blacklistRes = await db_1.pool.query('SELECT 1 FROM token_blacklist WHERE jti = $1', [decoded.jti]);
+            if (blacklistRes.rows.length > 0) {
+                next();
+                return;
+            }
+        }
+        const userDbRes = await db_1.pool.query('SELECT estado, logged_out_at, rol FROM usuario WHERE id_usuario = $1', [decoded.id]);
+        if (userDbRes.rows.length > 0 && userDbRes.rows[0].estado === 'ACTIVO') {
+            const dbUser = userDbRes.rows[0];
+            const iat = decoded.iat * 1000;
+            if (dbUser.logged_out_at && new Date(dbUser.logged_out_at).getTime() > iat) {
+                next();
+                return;
+            }
+            req.user = {
+                id: decoded.id,
+                email: decoded.email,
+                role: decoded.role || dbUser.rol,
+                roles: decoded.roles || [dbUser.rol],
+                schoolId: decoded.schoolId || null
+            };
+        }
+    }
+    catch (error) {
+        // Si falla la verificación del token, se ignora silenciosamente para visitantes
+    }
+    next();
+};
+exports.verifyTokenOptional = verifyTokenOptional;

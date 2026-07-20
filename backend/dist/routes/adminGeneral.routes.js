@@ -27,6 +27,8 @@ router.get('/usuarios/:id', authMiddleware_1.verifyToken, authMiddleware_1.requi
 router.patch('/usuarios/:id/estado', authMiddleware_1.verifyToken, authMiddleware_1.requireAdminGeneral, adminGeneralController_1.cambiarEstadoUsuario);
 router.post('/usuarios/:id/restablecer-password', authMiddleware_1.verifyToken, authMiddleware_1.requireAdminGeneral, adminGeneralController_1.restablecerPassword);
 router.post('/usuarios/:id/cerrar-sesion', authMiddleware_1.verifyToken, authMiddleware_1.requireAdminGeneral, adminGeneralController_1.forzarCierreSesion);
+router.post('/usuarios/:id/validar-ticket', authMiddleware_1.verifyToken, authMiddleware_1.requireAdminGeneral, adminGeneralController_1.validarTicketParaUsuario);
+router.put('/usuarios/:id/credenciales-con-ticket', authMiddleware_1.verifyToken, authMiddleware_1.requireAdminGeneral, adminGeneralController_1.modificarCredencialesConTicket);
 router.delete('/usuarios/:id', authMiddleware_1.verifyToken, authMiddleware_1.requireAdminGeneral, adminGeneralController_1.eliminarUsuario);
 // ─────────────────────────────────────────────────────────────
 // DIRECTIVOS (requiere Admin General)
@@ -56,4 +58,9 @@ router.get('/supervision/:id/acciones-directivo', authMiddleware_1.verifyToken, 
 router.get('/auditorias', authMiddleware_1.verifyToken, authMiddleware_1.requireAdminGeneral, adminGeneralController_1.listarAuditoriasAcciones);
 // Global Notifications logs query (Admin General)
 router.get('/notificaciones', authMiddleware_1.verifyToken, authMiddleware_1.requireAdminGeneral, adminGeneralController_1.listarNotificacionesSistema);
+// ─────────────────────────────────────────────────────────────
+// CONFIGURACIÓN DE PLATAFORMA (requiere Admin General)
+// ─────────────────────────────────────────────────────────────
+router.get('/configuracion', authMiddleware_1.verifyToken, authMiddleware_1.requireAdminGeneral, adminGeneralController_1.obtenerConfiguracion);
+router.put('/configuracion', authMiddleware_1.verifyToken, authMiddleware_1.requireAdminGeneral, adminGeneralController_1.actualizarConfiguracion);
 exports.default = router;

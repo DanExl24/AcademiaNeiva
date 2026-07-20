@@ -13,4 +13,8 @@ router.post("/reset-password", passwordResetController_1.resetPassword);
 router.get("/check-document/:document", userController_1.checkDocument);
 router.get("/school-identity/:schoolId", authMiddleware_1.verifyToken, authController_1.getSchoolIdentity);
 router.get("/verify", authController_1.verifySession);
+// Endpoints de gestión de perfil de usuario logueado
+router.get("/profile", authMiddleware_1.verifyToken, authController_1.getUserProfile);
+router.put("/profile/email", authMiddleware_1.verifyToken, authController_1.updateProfileEmail);
+router.put("/profile/password", authMiddleware_1.verifyToken, authController_1.updateProfilePassword);
 exports.default = router;

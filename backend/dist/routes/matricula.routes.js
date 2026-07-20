@@ -30,26 +30,26 @@ router.get("/school/:schoolId/enrollment-config", async (req, res) => {
     try {
         const { schoolId } = req.params;
         // Find active year for school
-        const yearRes = await db_1.pool.query(`SELECT "id_año", calendario FROM "año_lectivo" WHERE id_colegio = $1 AND estado = 'ABIERTO' LIMIT 1`, [schoolId]);
+        const yearRes = await db_1.pool.query(`SELECT id_anio, calendario FROM anio_lectivo WHERE id_colegio = $1 AND estado = 'ABIERTO' LIMIT 1`, [schoolId]);
         if (yearRes.rows.length === 0) {
             res.json({ config: null, yearLabel: null });
             return;
         }
-        const yearId = yearRes.rows[0].id_año;
+        const yearId = yearRes.rows[0].id_anio;
         const yearLabel = yearRes.rows[0].calendario;
         const approvedRes = await db_1.pool.query(`SELECT COUNT(*)::int AS count 
        FROM matricula 
-       WHERE id_colegio = $1 AND "id_año" = $2 AND estado IN ('ACTIVA', 'TRASLADADA')`, [schoolId, yearId]);
+       WHERE id_colegio = $1 AND id_anio = $2 AND estado IN ('ACTIVA', 'TRASLADADA')`, [schoolId, yearId]);
         const hasApproved = approvedRes.rows[0].count > 0;
         const configRes = await db_1.pool.query(`SELECT id_configuracion, fecha_inicio, fecha_cierre, habilitada 
        FROM configuracion_inscripcion 
-       WHERE id_colegio = $1 AND id_año = $2`, [schoolId, yearId]);
+       WHERE id_colegio = $1 AND id_anio = $2`, [schoolId, yearId]);
         if (configRes.rows.length === 0) {
             res.json({
                 config: {
                     id_configuracion: null,
                     id_colegio: Number(schoolId),
-                    id_año: yearId,
+                    id_anio: yearId,
                     fecha_inicio: null,
                     fecha_cierre: null,
                     habilitada: true,

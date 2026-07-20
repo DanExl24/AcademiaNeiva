@@ -16,7 +16,7 @@ const resolveTeachingContext = async (gradeId, subjectId, periodId, userId) => {
        dg.id_grupo AS "idGrupo",
        dg.id_materia AS "idMateria",
        dg.id_colegio AS "idColegio",
-       p."id_año" AS "idAnio"
+       p.id_anio AS "idAnio"
      FROM detalle_grados dg
      JOIN periodo_academico p
        ON p.id_periodo = $3
@@ -33,9 +33,9 @@ const getPeriods = async (req, res) => {
     const { schoolId } = req.params;
     console.log(`[DEV] getPeriods called - schoolId=${schoolId}`);
     try {
-        const currentPeriod = await (0, periodHelpers_1.getCurrentAllowedPeriodForSchool)(Number(schoolId));
-        console.log(`[DEV] getPeriods - result: ${currentPeriod ? JSON.stringify(currentPeriod) : 'null (no open period)'}`);
-        res.json(currentPeriod ? [currentPeriod] : []);
+        const periods = await (0, periodHelpers_1.getAllPeriodsForSchool)(Number(schoolId));
+        console.log(`[DEV] getPeriods - result count: ${periods.length}`);
+        res.json(periods);
     }
     catch (error) {
         console.error(`[DEV] getPeriods ERROR - schoolId=${schoolId}:`, error.message, error.detail || '');
@@ -57,13 +57,46 @@ const getActivities = async (req, res) => {
             res.status(404).json({ error: "No se encontró la asignación académica" });
             return;
         }
-        if (!(await (0, periodHelpers_1.ensureCurrentPeriodOrRespond)(res, contextPreview.idColegio, periodId))) {
-            return;
-        }
+        // Permite lectura de periodos cerrados (solo se protegen escrituras)
         const context = contextPreview;
         const client = await db_1.pool.connect();
         try {
-            const competencia = await (0, competencyMigration_1.ensureCompetencyForContext)(client, context, periodId);
+            const competenciaBase = await (0, competencyMigration_1.ensureCompetencyForContext)(client, context, periodId);
+            // Obtener todas las competencias del periodo/materia con sus evidencias anidadas y el número de DBA
+            const compsRes = await client.query(`SELECT c.*,
+                COALESCE(
+                  (SELECT json_agg(
+                     json_build_object(
+                       'id_evidencia', ea.id_evidencia,
+                       'id_evidencia_dba', ea.id_evidencia_dba,
+                       'descripcion', ea.descripcion,
+                       'orden', ea.orden,
+                       'numero_dba', d.numero_dba
+                     ) ORDER BY ea.orden, ea.id_evidencia
+                   )
+                   FROM evidencia_aprendizaje ea
+                   LEFT JOIN evidencias_dba edba ON edba.id_evidencia_dba = ea.id_evidencia_dba
+                   LEFT JOIN dba d ON d.id_dba = edba.id_dba
+                   WHERE ea.id_competencia = c.id_competencia
+                  ), '[]'::json
+                ) AS evidencias
+         FROM public.competencias c
+         WHERE c.id_anio = $1 AND c.id_grupo = $2 AND c.id_materia = $3 AND c.id_periodo = $4 AND c.id_colegio = $5
+         ORDER BY c.id_competencia ASC`, [context.idAnio, context.idGrupo, context.idMateria, periodId, context.idColegio]);
+            const allComps = compsRes.rows;
+            // Filtrar competencias que tengan descripciones válidas (no vacías)
+            const validComps = allComps.filter(c => c.descripcion && c.descripcion.trim());
+            // Unificar descripciones de las competencias
+            let competencia = competenciaBase;
+            if (validComps.length > 1) {
+                const descripcionUnificada = validComps
+                    .map((c, idx) => `${idx + 1}. ${c.descripcion.trim()}`)
+                    .join("\n\n");
+                competencia = {
+                    ...competenciaBase,
+                    descripcion: descripcionUnificada
+                };
+            }
             const activities = await client.query(`SELECT am.*,
                 COALESCE(
                   (SELECT json_agg(aedba.id_evidencia_dba)
@@ -74,10 +107,12 @@ const getActivities = async (req, res) => {
          FROM actividad_materia am
          WHERE am.id_detallegrado = $1 AND am.id_periodo = $2
          ORDER BY am.id_actividadmateria ASC`, [context.idDetalleGrado, periodId]);
-            const evidencias = await client.query(`SELECT id_evidencia, descripcion, orden
-         FROM evidencia_aprendizaje
-         WHERE id_competencia = $1
-         ORDER BY orden, id_evidencia`, [competencia.id_competencia]);
+            // Traer las evidencias de aprendizaje de todas las competencias de este periodo
+            const evidencias = await client.query(`SELECT ea.id_evidencia, ea.descripcion, ea.orden
+         FROM evidencia_aprendizaje ea
+         JOIN competencias c ON c.id_competencia = ea.id_competencia
+         WHERE c.id_anio = $1 AND c.id_grupo = $2 AND c.id_materia = $3 AND c.id_periodo = $4 AND c.id_colegio = $5
+         ORDER BY c.id_competencia ASC, ea.orden ASC, ea.id_evidencia ASC`, [context.idAnio, context.idGrupo, context.idMateria, periodId, context.idColegio]);
             const activityIds = activities.rows.map(a => a.id_actividadmateria);
             let criterios = [];
             if (activityIds.length > 0) {
@@ -91,6 +126,7 @@ const getActivities = async (req, res) => {
                 competencia,
                 activities: activities.rows,
                 evidencias: evidencias.rows,
+                competenciasList: validComps
             });
         }
         finally {
@@ -112,7 +148,7 @@ const updateCompetency = async (req, res) => {
     }
     const client = await db_1.pool.connect();
     try {
-        const periodRes = await client.query(`SELECT c.id_periodo, c.id_materia, c.id_grupo, c.id_año, c.id_colegio
+        const periodRes = await client.query(`SELECT c.id_periodo, c.id_materia, c.id_grupo, c.id_anio, c.id_colegio
        FROM competencias
        WHERE id_competencia = $1`, [id]);
         if (periodRes.rows.length === 0) {
@@ -136,7 +172,7 @@ const updateCompetency = async (req, res) => {
             idGrupo: Number(periodRes.rows[0].id_grupo),
             idMateria: Number(periodRes.rows[0].id_materia),
             idColegio: Number(periodRes.rows[0].id_colegio),
-            idAnio: Number(periodRes.rows[0].id_año),
+            idAnio: Number(periodRes.rows[0].id_anio),
         };
         await client.query("BEGIN");
         const updated = await (0, competencyMigration_1.syncCompetencyAcrossGrade)(client, context, Number(periodRes.rows[0].id_periodo), descripcion.trim(), Number(id));
@@ -468,9 +504,6 @@ const getGrades = async (req, res) => {
         const context = await resolveTeachingContext(gradeId, subjectId, periodId);
         if (!context) {
             res.status(404).json({ error: "No se encontró la asignación académica" });
-            return;
-        }
-        if (!(await (0, periodHelpers_1.ensureCurrentPeriodOrRespond)(res, context.idColegio, periodId))) {
             return;
         }
         const grades = await db_1.pool.query(`SELECT n.*
@@ -880,7 +913,7 @@ const getCourseEvidenciasDba = async (req, res) => {
             planeadasParams.push(periodId);
             planeadasFilter = ` AND c.id_periodo = $${planeadasParams.length}`;
         }
-        const planeadasRes = await db_1.pool.query(`SELECT ea.id_evidencia, ea.id_evidencia_dba, ea.descripcion, ea.orden, d.numero_dba, d.id_dba, d.enunciado AS dba_enunciado
+        const planeadasRes = await db_1.pool.query(`SELECT ea.id_evidencia, ea.id_evidencia_dba, ea.descripcion, ea.orden, d.numero_dba, d.id_dba, d.enunciado AS dba_enunciado, ea.id_competencia
        FROM evidencia_aprendizaje ea
        JOIN competencias c ON c.id_competencia = ea.id_competencia
        JOIN evidencias_dba edba ON edba.id_evidencia_dba = ea.id_evidencia_dba
@@ -928,7 +961,7 @@ const getCourseEvidenciasDba = async (req, res) => {
          FROM evidencia_aprendizaje ea
          JOIN competencias c ON c.id_competencia = ea.id_competencia
          WHERE c.id_colegio = $1
-           AND c.id_año = (SELECT "id_año" FROM "año_lectivo" WHERE id_colegio = $1 ORDER BY "id_año" DESC LIMIT 1)
+           AND c.id_anio = (SELECT id_anio FROM anio_lectivo WHERE id_colegio = $1 ORDER BY id_anio DESC LIMIT 1)
            AND c.id_materia = $2
            AND c.id_grupo IN (
              SELECT g2.id_grupo
@@ -958,12 +991,15 @@ const getCourseEvidenciasDba = async (req, res) => {
             if (evaluadaEnCerrado && !esPlaneada) {
                 continue;
             }
+            const planeadaInfo = planeadasRes.rows.find(p => Number(p.id_evidencia_dba) === Number(row.id_evidencia_dba));
+            const idCompetencia = planeadaInfo ? planeadaInfo.id_competencia : null;
             dbaMap.get(row.id_dba).evidencias.push({
                 id_evidencia_dba: row.id_evidencia_dba,
                 descripcion: row.descripcion,
                 orden: row.orden,
                 tipo: esPlaneada ? 'PLANEADA' : 'EXTRA',
                 evaluada_en_cerrado: evaluadaEnCerrado,
+                id_competencia: idCompetencia
             });
         }
         // También incluir planeadas que no estaban en el catálogo filtrado (por seguridad)
@@ -984,6 +1020,7 @@ const getCourseEvidenciasDba = async (req, res) => {
                     orden: pl.orden,
                     tipo: 'PLANEADA',
                     evaluada_en_cerrado: evaluadasEnCerradosIds.includes(pl.id_evidencia_dba),
+                    id_competencia: pl.id_competencia
                 });
             }
         }

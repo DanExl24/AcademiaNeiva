@@ -3,10 +3,8 @@ import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
 import { 
-  User, 
   Mail, 
   Lock, 
-  FileText, 
   Send, 
   Users, 
   CheckCircle2, 
@@ -14,7 +12,6 @@ import {
   ArrowLeft,
   Loader2,
   ShieldAlert,
-  HelpCircle,
   KeyRound,
   Eye,
   EyeOff

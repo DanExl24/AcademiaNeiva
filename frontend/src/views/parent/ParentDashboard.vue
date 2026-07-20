@@ -256,7 +256,7 @@ const lineChartData = computed(() => {
       const name = child ? child.nombre : `Hijo #${s.id_estudiante}`
       const color = colors[idx % colors.length]
 
-      const data = periodNames.map(pName => {
+      const data = periodNames.map((pName: string) => {
         const ev = s.evolution?.find((e: any) => e.periodo === pName)
         return ev ? ev.promedio : null
       })
@@ -287,7 +287,7 @@ const lineChartData = computed(() => {
     const child = dashboardData.value?.children?.find((c: any) => c.id_estudiante === selectedChildId.value)
     const name = child ? child.nombre : 'Estudiante'
     
-    const data = periodNames.map(pName => {
+    const data = periodNames.map((pName: string) => {
       const ev = s.evolution?.find((e: any) => e.periodo === pName)
       return ev ? ev.promedio : null
     })

@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { ref } from 'vue'
 import { 
   School, 
   Users, 
@@ -8,22 +7,12 @@ import {
   ClipboardCheck, 
   ArrowRight,
   ShieldCheck,
-  Zap
+  Zap,
+  LifeBuoy,
+  HelpCircle
 } from 'lucide-vue-next'
 
-const schoolForm = ref({
-  name: '',
-  dane: '',
-  contact: '',
-  email: ''
-})
 
-const submitSchoolRequest = () => {
-  // Aquí se manejaría el registro del colegio
-  console.log('Solicitud enviada:', schoolForm.value)
-  alert('Solicitud enviada con éxito. Nuestro equipo se pondrá en contacto pronto.')
-  schoolForm.value = { name: '', dane: '', contact: '', email: '' }
-}
 
 const benefits = [
   {
@@ -79,7 +68,7 @@ const roles = [
         <div class="hidden md:flex md:items-center md:gap-8">
           <a href="#beneficios" class="text-sm font-medium text-gray-600 hover:text-indigo-600 transition-colors">Beneficios</a>
           <a href="#roles" class="text-sm font-medium text-gray-600 hover:text-indigo-600 transition-colors">Roles</a>
-          <a href="#registro" class="text-sm font-medium text-gray-600 hover:text-indigo-600 transition-colors">Registrar Colegio</a>
+          <router-link to="/soporte" class="text-sm font-medium text-gray-600 hover:text-indigo-600 transition-colors">Soporte</router-link>
           <router-link to="/login" class="rounded-full bg-indigo-600 px-6 py-2 text-sm font-semibold text-white shadow-md hover:bg-indigo-700 transition-all hover:shadow-indigo-200">
             Ingresar
           </router-link>
@@ -110,6 +99,9 @@ const roles = [
             </router-link>
             <router-link to="/matricula/seguimiento" class="text-lg font-semibold leading-6 text-indigo-600 hover:text-indigo-700 transition-colors">
               Consultar Estado <span aria-hidden="true">→</span>
+            </router-link>
+            <router-link to="/soporte" class="text-lg font-semibold leading-6 text-emerald-600 hover:text-emerald-700 transition-colors">
+              Soporte Técnico <span aria-hidden="true">→</span>
             </router-link>
           </div>
         </div>
@@ -187,55 +179,31 @@ const roles = [
       </div>
     </section>
 
-    <!-- Registro Section -->
-    <section id="registro" class="bg-gray-900 py-24 sm:py-32 relative overflow-hidden">
+    <!-- Soporte Section -->
+    <section id="soporte" class="bg-gray-900 py-24 sm:py-32 relative overflow-hidden">
       <!-- Decoración -->
       <div class="absolute -top-24 -right-24 h-96 w-96 rounded-full bg-indigo-600/20 blur-3xl"></div>
       
       <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div class="mx-auto max-w-2xl text-center mb-16">
-          <h2 class="text-3xl font-bold tracking-tight text-white sm:text-4xl">¿Eres un colegio en Neiva?</h2>
+        <div class="mx-auto max-w-2xl text-center">
+          <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-600/20 mb-6">
+            <LifeBuoy :size="32" class="text-indigo-400" />
+          </div>
+          <h2 class="text-3xl font-bold tracking-tight text-white sm:text-4xl">¿Necesitas ayuda?</h2>
           <p class="mt-4 text-lg leading-8 text-gray-400">
-            Regístrate para solicitar el acceso a la plataforma para tu institución educativa.
+            Si tienes problemas con la plataforma, inconvenientes de inicio de sesión, dudas sobre calificaciones o cualquier otra incidencia, nuestro equipo de soporte está disponible para ti.
+          </p>
+          <div class="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
+            <router-link to="/soporte" class="group flex items-center gap-2 rounded-full bg-indigo-500 px-8 py-4 text-lg font-semibold text-white shadow-xl hover:bg-indigo-400 transition-all">
+              <HelpCircle :size="20" />
+              Ir a Soporte Técnico
+              <ArrowRight :size="20" class="group-hover:translate-x-1 transition-transform" />
+            </router-link>
+          </div>
+          <p class="mt-6 text-sm text-gray-500">
+            También puedes consultar el estado de tu ticket con tu código de seguimiento.
           </p>
         </div>
-        
-        <form @submit.prevent="submitSchoolRequest" class="mx-auto max-w-xl bg-white/5 backdrop-blur-lg p-8 rounded-3xl border border-white/10 shadow-2xl">
-          <div class="grid grid-cols-1 gap-y-6 sm:grid-cols-2 sm:gap-x-8">
-            <div class="sm:col-span-2">
-              <label for="school-name" class="block text-sm font-semibold leading-6 text-white">Nombre del Colegio</label>
-              <div class="mt-2.5">
-                <input v-model="schoolForm.name" type="text" id="school-name" class="block w-full rounded-xl border-0 bg-white/5 px-3.5 py-2 text-white shadow-sm ring-1 ring-inset ring-white/10 focus:ring-2 focus:ring-inset focus:ring-indigo-500 sm:text-sm sm:leading-6" required placeholder="Ej: Colegio San Pedro">
-              </div>
-            </div>
-            <div>
-              <label for="dane" class="block text-sm font-semibold leading-6 text-white">Código DANE</label>
-              <div class="mt-2.5">
-                <input v-model="schoolForm.dane" type="text" id="dane" class="block w-full rounded-xl border-0 bg-white/5 px-3.5 py-2 text-white shadow-sm ring-1 ring-inset ring-white/10 focus:ring-2 focus:ring-inset focus:ring-indigo-500 sm:text-sm sm:leading-6" required placeholder="Código 12 dígitos">
-              </div>
-            </div>
-            <div>
-              <label for="contact" class="block text-sm font-semibold leading-6 text-white">Contacto (Tel/Cel)</label>
-              <div class="mt-2.5">
-                <input v-model="schoolForm.contact" type="tel" id="contact" class="block w-full rounded-xl border-0 bg-white/5 px-3.5 py-2 text-white shadow-sm ring-1 ring-inset ring-white/10 focus:ring-2 focus:ring-inset focus:ring-indigo-500 sm:text-sm sm:leading-6" required placeholder="3XX XXX XXXX">
-              </div>
-            </div>
-            <div class="sm:col-span-2">
-              <label for="email" class="block text-sm font-semibold leading-6 text-white">Correo Institucional</label>
-              <div class="mt-2.5">
-                <input v-model="schoolForm.email" type="email" id="email" class="block w-full rounded-xl border-0 bg-white/5 px-3.5 py-2 text-white shadow-sm ring-1 ring-inset ring-white/10 focus:ring-2 focus:ring-inset focus:ring-indigo-500 sm:text-sm sm:leading-6" required placeholder="secretaria@colegio.edu.co">
-              </div>
-            </div>
-          </div>
-          <div class="mt-10">
-            <button type="submit" class="block w-full rounded-xl bg-indigo-500 px-3.5 py-3 text-center text-sm font-semibold text-white shadow-sm hover:bg-indigo-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 transition-all active:scale-95">
-              Enviar Solicitud
-            </button>
-          </div>
-          <p class="mt-4 text-center text-xs text-gray-400">
-            * Su solicitud será revisada por el administrador global.
-          </p>
-        </form>
       </div>
     </section>
 
@@ -250,7 +218,7 @@ const roles = [
           <div class="flex gap-6 text-sm text-gray-500">
             <a href="#" class="hover:text-indigo-600 transition-colors">Términos</a>
             <a href="#" class="hover:text-indigo-600 transition-colors">Privacidad</a>
-            <a href="#" class="hover:text-indigo-600 transition-colors">Soporte</a>
+            <router-link to="/soporte" class="hover:text-indigo-600 transition-colors">Soporte</router-link>
           </div>
           <p class="text-sm text-gray-400">
             &copy; 2026 Academia Neiva. Todos los derechos reservados.

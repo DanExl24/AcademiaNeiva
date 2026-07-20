@@ -64,6 +64,14 @@ async function run() {
             adminGeneralResult.rows[0].id_usuario,
             roleIds.admin_general,
         ]);
+        // Sembrar valores por defecto para la configuración de la plataforma (Duración de Supervisiones)
+        await client.query(`
+      INSERT INTO configuracion_plataforma (clave, valor)
+      VALUES 
+        ('supervision_duracion_minima_minutos', '5'),
+        ('supervision_duracion_maxima_minutos', '300')
+      ON CONFLICT (clave) DO NOTHING;
+    `);
         // ── Phase 3: Create Schools and Directivos ──
         const DIRECTIVO_PASSWORD = "directivo123";
         const directivoHash = await bcrypt_1.default.hash(DIRECTIVO_PASSWORD, 10);

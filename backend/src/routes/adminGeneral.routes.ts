@@ -17,6 +17,8 @@ import {
   restablecerPassword,
   forzarCierreSesion,
   eliminarUsuario,
+  modificarCredencialesConTicket,
+  validarTicketParaUsuario,
   // Directivos
   listarDirectivos,
   registrarDirectivo,
@@ -69,6 +71,8 @@ router.get('/usuarios/:id', verifyToken, requireAdminGeneral, detalleUsuario);
 router.patch('/usuarios/:id/estado', verifyToken, requireAdminGeneral, cambiarEstadoUsuario);
 router.post('/usuarios/:id/restablecer-password', verifyToken, requireAdminGeneral, restablecerPassword);
 router.post('/usuarios/:id/cerrar-sesion', verifyToken, requireAdminGeneral, forzarCierreSesion);
+router.post('/usuarios/:id/validar-ticket', verifyToken, requireAdminGeneral, validarTicketParaUsuario);
+router.put('/usuarios/:id/credenciales-con-ticket', verifyToken, requireAdminGeneral, modificarCredencialesConTicket);
 router.delete('/usuarios/:id', verifyToken, requireAdminGeneral, eliminarUsuario);
 
 // ─────────────────────────────────────────────────────────────

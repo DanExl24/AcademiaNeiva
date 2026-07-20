@@ -139,15 +139,19 @@ export const getTickets = async (req: Request, res: Response) => {
       
       if (escalados === 'true') {
         // Directivo ve los escalados de su colegio
-        query += " WHERE t.id_colegio = $1 AND t.estado = 'ESCALADO'";
+        query += " WHERE t.id_colegio = $1 AND t.fecha_escalado IS NOT NULL";
       } else {
         // Directivo ve los de su colegio (excluyendo tickets escalados)
-        query += " WHERE t.id_colegio = $1 AND t.estado != 'ESCALADO'";
+        query += " WHERE t.id_colegio = $1 AND t.fecha_escalado IS NULL";
       }
       params.push(schoolId);
     } else if (userRole === 'ADMIN_GENERAL') {
-      // Admin General SOLO ve los tickets que están en estado ESCALADO
-      query += " WHERE t.estado = 'ESCALADO'";
+      // Admin General SOLO ve los tickets que están escalados
+      query += " WHERE t.fecha_escalado IS NOT NULL";
+    } else if (userRole === 'DOCENTE' || userRole === 'PADRE') {
+      // Docente o Padre ve únicamente los tickets creados por él
+      query += " WHERE t.id_usuario = $1";
+      params.push(user.id);
     } else {
       return res.status(403).json({ error: 'Acceso denegado.' });
     }
@@ -171,32 +175,92 @@ export const updateTicketStatus = async (req: Request, res: Response) => {
     return res.status(401).json({ error: 'No autorizado.' });
   }
 
-  if (!['ABIERTO', 'EN_PROCESO', 'RESUELTO', 'ESCALADO'].includes(estado)) {
+  if (!['ABIERTO', 'EN_PROCESO', 'RESUELTO'].includes(estado)) {
     return res.status(400).json({ error: 'Estado de ticket inválido.' });
   }
 
   try {
     const userRole = (user.role || '').toUpperCase();
-    const ticketRes = await pool.query('SELECT id_colegio FROM tickets_soporte WHERE id_ticket = $1', [id]);
+    const ticketRes = await pool.query('SELECT id_colegio, fecha_escalado, estado, observaciones FROM tickets_soporte WHERE id_ticket = $1', [id]);
     
     if (ticketRes.rows.length === 0) {
       return res.status(404).json({ error: 'Ticket no encontrado.' });
     }
 
+    const ticket = ticketRes.rows[0];
+
+    // Regla: Si el ticket actual está en estado RESUELTO, no permitir cambios de estado.
+    if (ticket.estado === 'RESUELTO') {
+      return res.status(400).json({ error: 'El ticket ya está RESUELTO y no puede modificarse su estado.' });
+    }
+
+    // RN-002: No se puede cambiar a ABIERTO si ya tiene observaciones o fue escalado.
+    if (estado === 'ABIERTO') {
+      let obsCount = 0;
+      try {
+        const obsList = typeof ticket.observaciones === 'string'
+          ? JSON.parse(ticket.observaciones || '[]')
+          : (ticket.observaciones || []);
+        obsCount = obsList.length;
+      } catch {
+        obsCount = 0;
+      }
+      if (obsCount > 0 || ticket.fecha_escalado) {
+        return res.status(400).json({ error: 'No se puede regresar al estado ABIERTO porque el ticket ya posee observaciones o fue escalado.' });
+      }
+    }
+
+    // RN-005 & RN-006: Solo el Administrador General puede modificar el estado de un ticket escalado.
+    if (ticket.fecha_escalado && userRole === 'DIRECTIVO') {
+      return res.status(403).json({ error: 'Solo el Administrador General puede modificar el estado de un ticket escalado.' });
+    }
+
     if (userRole === 'DIRECTIVO') {
       const userRes = await pool.query('SELECT id_colegio FROM usuario WHERE id_usuario = $1', [user.id]);
       const schoolId = userRes.rows[0]?.id_colegio;
-      if (Number(schoolId) !== Number(ticketRes.rows[0].id_colegio)) {
+      if (Number(schoolId) !== Number(ticket.id_colegio)) {
         return res.status(403).json({ error: 'Acceso denegado a este ticket de soporte.' });
       }
     } else if (userRole !== 'ADMIN_GENERAL') {
       return res.status(403).json({ error: 'Acceso denegado.' });
     }
 
-    await pool.query(
-      'UPDATE tickets_soporte SET estado = $1 WHERE id_ticket = $2',
-      [estado, id]
-    );
+    const oldEstado = ticket.estado;
+
+    // RN-009: Generar observación de auditoría de cambio de estado
+    if (oldEstado !== estado) {
+      const authorRes = await pool.query('SELECT nombre, apellido FROM usuario WHERE id_usuario = $1', [user.id]);
+      const authorName = authorRes.rows.length > 0 
+        ? `${authorRes.rows[0].nombre} ${authorRes.rows[0].apellido || ''}`.trim()
+        : 'Personal de soporte';
+
+      let currentObs = [];
+      try {
+        currentObs = typeof ticket.observaciones === 'string'
+          ? JSON.parse(ticket.observaciones || '[]')
+          : (ticket.observaciones || []);
+      } catch {
+        currentObs = [];
+      }
+
+      currentObs.push({
+        id_usuario: Number(user.id),
+        nombre_usuario: 'Sistema (Auditoría)',
+        tipo: 'SISTEMA',
+        mensaje: `El estado del ticket fue cambiado de ${oldEstado} a ${estado} por ${authorName}.`,
+        fecha_creacion: new Date().toISOString()
+      });
+
+      await pool.query(
+        'UPDATE tickets_soporte SET estado = $1, observaciones = $2 WHERE id_ticket = $3',
+        [estado, JSON.stringify(currentObs), id]
+      );
+    } else {
+      await pool.query(
+        'UPDATE tickets_soporte SET estado = $1 WHERE id_ticket = $2',
+        [estado, id]
+      );
+    }
 
     return res.json({ message: 'Estado del ticket actualizado exitosamente.' });
   } catch (error: any) {
@@ -219,25 +283,89 @@ export const escalateTicket = async (req: Request, res: Response) => {
       return res.status(403).json({ error: 'Acceso denegado.' });
     }
 
-    const ticketRes = await pool.query('SELECT id_colegio FROM tickets_soporte WHERE id_ticket = $1', [id]);
-    if (ticketRes.rows.length === 0) {
-      return res.status(404).json({ error: 'Ticket no encontrado.' });
-    }
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
 
-    if (userRole === 'DIRECTIVO') {
-      const userRes = await pool.query('SELECT id_colegio FROM usuario WHERE id_usuario = $1', [user.id]);
-      const schoolId = userRes.rows[0]?.id_colegio;
-      if (Number(schoolId) !== Number(ticketRes.rows[0].id_colegio)) {
-        return res.status(403).json({ error: 'Acceso denegado.' });
+      const ticketRes = await client.query(
+        'SELECT estado, observaciones, id_colegio FROM tickets_soporte WHERE id_ticket = $1 FOR UPDATE', 
+        [id]
+      );
+      
+      if (ticketRes.rows.length === 0) {
+        await client.query('ROLLBACK');
+        client.release();
+        return res.status(404).json({ error: 'Ticket no encontrado.' });
       }
+
+      const ticket = ticketRes.rows[0];
+
+      // Regla: Si el ticket actual está en estado RESUELTO, no permitir escalamiento.
+      if (ticket.estado === 'RESUELTO') {
+        await client.query('ROLLBACK');
+        client.release();
+        return res.status(400).json({ error: 'Un ticket RESUELTO no puede ser escalado.' });
+      }
+
+      if (userRole === 'DIRECTIVO') {
+        const userRes = await client.query('SELECT id_colegio FROM usuario WHERE id_usuario = $1', [user.id]);
+        const schoolId = userRes.rows[0]?.id_colegio;
+        if (Number(schoolId) !== Number(ticket.id_colegio)) {
+          await client.query('ROLLBACK');
+          client.release();
+          return res.status(403).json({ error: 'Acceso denegado.' });
+        }
+      }
+
+      // RN-004: Si el estado actual es ABIERTO, pasa automáticamente a EN_PROCESO
+      let nuevoEstado = ticket.estado;
+      if (ticket.estado === 'ABIERTO') {
+        nuevoEstado = 'EN_PROCESO';
+      }
+
+      // Obtener nombre del Directivo
+      const authorRes = await client.query('SELECT nombre, apellido FROM usuario WHERE id_usuario = $1', [user.id]);
+      const authorName = authorRes.rows.length > 0 
+        ? `${authorRes.rows[0].nombre} ${authorRes.rows[0].apellido || ''}`.trim()
+        : 'Directivo responsable';
+
+      // Parsear observaciones anteriores
+      let currentObs = [];
+      try {
+        currentObs = typeof ticket.observaciones === 'string'
+          ? JSON.parse(ticket.observaciones || '[]')
+          : (ticket.observaciones || []);
+      } catch {
+        currentObs = [];
+      }
+
+      // RN-009: Añadir la observación automática de auditoría
+      const auditText = `El Directivo ${authorName} escaló esta solicitud al Administrador General.`;
+      currentObs.push({
+        id_usuario: Number(user.id),
+        nombre_usuario: 'Sistema (Escalamiento)',
+        tipo: 'SISTEMA',
+        mensaje: auditText,
+        fecha_creacion: new Date().toISOString()
+      });
+
+      // Actualizar el ticket con fecha_escalado
+      await client.query(
+        `UPDATE tickets_soporte 
+         SET estado = $1, fecha_escalado = CURRENT_TIMESTAMP, observaciones = $2 
+         WHERE id_ticket = $3`,
+        [nuevoEstado, JSON.stringify(currentObs), id]
+      );
+
+      await client.query('COMMIT');
+      client.release();
+
+      return res.json({ message: 'Ticket de soporte escalado exitosamente al Administrador General.' });
+    } catch (error) {
+      await client.query('ROLLBACK');
+      client.release();
+      throw error;
     }
-
-    await pool.query(
-      "UPDATE tickets_soporte SET estado = 'ESCALADO' WHERE id_ticket = $1",
-      [id]
-    );
-
-    return res.json({ message: 'Ticket de soporte escalado exitosamente al Administrador General.' });
   } catch (error: any) {
     console.error('Error escalating support ticket:', error);
     return res.status(500).json({ error: 'Error al escalar el ticket de soporte.' });
@@ -263,10 +391,12 @@ export const getTicketByCode = async (req: Request, res: Response) => {
 
     const ticket = ticketRes.rows[0];
     
-    // Parsear observaciones
+    // Obtener observaciones ya parseadas
     let obsList = [];
     try {
-      obsList = JSON.parse(ticket.observaciones || '[]');
+      obsList = typeof ticket.observaciones === 'string'
+        ? JSON.parse(ticket.observaciones || '[]')
+        : (ticket.observaciones || []);
     } catch {
       obsList = [];
     }
@@ -303,9 +433,12 @@ export const addTicketObservation = async (req: Request, res: Response) => {
       return res.status(403).json({ error: 'Acceso denegado.' });
     }
 
-    const ticketRes = await pool.query('SELECT observaciones, id_colegio FROM tickets_soporte WHERE id_ticket = $1', [id]);
-    if (ticketRes.rows.length === 0) {
-      return res.status(404).json({ error: 'Ticket no encontrado.' });
+    const ticketRes = await pool.query('SELECT observaciones, id_colegio, estado FROM tickets_soporte WHERE id_ticket = $1', [id]);
+    const ticket = ticketRes.rows[0];
+
+    // Regla: Si el ticket actual está en estado RESUELTO, no permitir más observaciones.
+    if (ticket.estado === 'RESUELTO') {
+      return res.status(400).json({ error: 'El ticket ya está RESUELTO y no se permiten más observaciones.' });
     }
 
     if (userRole === 'DIRECTIVO') {
@@ -316,29 +449,42 @@ export const addTicketObservation = async (req: Request, res: Response) => {
       }
     }
 
-    // Definir autor
-    const autor = userRole === 'ADMIN_GENERAL' ? 'Administrador General' : 'Coordinación / Rectoría';
-    
+    // Obtener nombre completo del autor
+    const authorRes = await pool.query('SELECT nombre, apellido FROM usuario WHERE id_usuario = $1', [user.id]);
+    const authorName = authorRes.rows.length > 0 
+      ? `${authorRes.rows[0].nombre} ${authorRes.rows[0].apellido || ''}`.trim()
+      : 'Personal de soporte';
+
     // Parsear observaciones anteriores
     let currentObs = [];
     try {
-      currentObs = JSON.parse(ticketRes.rows[0].observaciones || '[]');
+      currentObs = typeof ticketRes.rows[0].observaciones === 'string'
+        ? JSON.parse(ticketRes.rows[0].observaciones || '[]')
+        : (ticketRes.rows[0].observaciones || []);
     } catch {
       currentObs = [];
     }
 
-    // Concatenar nueva observación
+    // Concatenar nueva observación estructurada con el directivo responsable
     const newObs = {
-      fecha: new Date().toISOString(),
-      autor,
-      texto: observacion.trim()
+      id_usuario: Number(user.id),
+      nombre_usuario: authorName,
+      tipo: userRole,
+      mensaje: observacion.trim(),
+      fecha_creacion: new Date().toISOString()
     };
     currentObs.push(newObs);
 
-    // Guardar en la BD
+    // RN-003: Cambiar estado a EN_PROCESO si estaba ABIERTO
+    let nuevoEstado = ticketRes.rows[0].estado;
+    if (ticketRes.rows[0].estado === 'ABIERTO') {
+      nuevoEstado = 'EN_PROCESO';
+    }
+
+    // Guardar en la BD tanto observaciones como el nuevo estado
     await pool.query(
-      'UPDATE tickets_soporte SET observaciones = $1 WHERE id_ticket = $2',
-      [JSON.stringify(currentObs), id]
+      'UPDATE tickets_soporte SET observaciones = $1, estado = $2 WHERE id_ticket = $3',
+      [JSON.stringify(currentObs), nuevoEstado, id]
     );
 
     return res.json({ 
@@ -348,5 +494,83 @@ export const addTicketObservation = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error adding ticket observation:', error);
     return res.status(500).json({ error: 'Error al registrar la observación del ticket.' });
+  }
+};
+
+// POST: Registrar observación de visitante (docente/padre) con reglas de ping-pong
+export const addVisitorObservation = async (req: Request, res: Response) => {
+  const codeStr = String(req.params.code || '');
+  const { observacion } = req.body;
+
+  if (!observacion || !observacion.trim()) {
+    return res.status(400).json({ error: 'La observación no puede estar vacía.' });
+  }
+
+  try {
+    const ticketRes = await pool.query(
+      'SELECT id_ticket, estado, observaciones, nombre_remitente FROM tickets_soporte WHERE codigo_ticket = $1', 
+      [codeStr.trim().toUpperCase()]
+    );
+
+    if (ticketRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Ticket no encontrado.' });
+    }
+
+    const ticket = ticketRes.rows[0];
+
+    // Regla: Si el ticket actual está en estado RESUELTO, no permitir observaciones.
+    if (ticket.estado === 'RESUELTO') {
+      return res.status(400).json({ error: 'El ticket ya está RESUELTO y no se permiten más observaciones.' });
+    }
+
+    // Parsear observaciones anteriores
+    let currentObs = [];
+    try {
+      currentObs = typeof ticket.observaciones === 'string'
+        ? JSON.parse(ticket.observaciones || '[]')
+        : (ticket.observaciones || []);
+    } catch {
+      currentObs = [];
+    }
+
+    // Regla de Turnos: El visitante SOLO puede responder si hay una observación del Directivo/Admin
+    if (currentObs.length === 0) {
+      return res.status(400).json({ error: 'No puedes responder a este ticket hasta que el colegio o administrador haya registrado una observación.' });
+    }
+
+    const lastObs = currentObs[currentObs.length - 1];
+    if (lastObs.tipo !== 'DIRECTIVO' && lastObs.tipo !== 'ADMIN_GENERAL') {
+      return res.status(400).json({ error: 'Debes esperar a que el personal del colegio o el administrador responda tu mensaje anterior antes de enviar otro.' });
+    }
+
+    // Concatenar observación del visitante
+    const newObs = {
+      id_usuario: null,
+      nombre_usuario: `${ticket.nombre_remitente} (Remitente)`,
+      tipo: 'REMITENTE',
+      mensaje: observacion.trim(),
+      fecha_creacion: new Date().toISOString()
+    };
+    currentObs.push(newObs);
+
+    // RN-003: Cambiar estado a EN_PROCESO si estaba ABIERTO
+    let nuevoEstado = ticket.estado;
+    if (ticket.estado === 'ABIERTO') {
+      nuevoEstado = 'EN_PROCESO';
+    }
+
+    // Guardar en la BD tanto observaciones como el nuevo estado
+    await pool.query(
+      'UPDATE tickets_soporte SET observaciones = $1, estado = $2 WHERE id_ticket = $3',
+      [JSON.stringify(currentObs), nuevoEstado, ticket.id_ticket]
+    );
+
+    return res.json({
+      message: 'Respuesta registrada exitosamente.',
+      observaciones: currentObs
+    });
+  } catch (error) {
+    console.error('Error adding visitor observation:', error);
+    return res.status(500).json({ error: 'Error al registrar tu respuesta.' });
   }
 };

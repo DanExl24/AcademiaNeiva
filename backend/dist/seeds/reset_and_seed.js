@@ -7,6 +7,7 @@ const bcrypt_1 = __importDefault(require("bcrypt"));
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const child_process_1 = require("child_process");
+const crypto_1 = require("crypto");
 const competencyMigration_1 = require("../config/competencyMigration");
 const db_1 = require("../config/db");
 const academicCalendarDefaults_1 = require("../config/academicCalendarDefaults");
@@ -87,12 +88,12 @@ async function createEnrollmentConfigTable(client) {
     CREATE TABLE IF NOT EXISTS configuracion_inscripcion (
       id_configuracion SERIAL PRIMARY KEY,
       id_colegio INTEGER NOT NULL REFERENCES colegio(id_colegio) ON DELETE CASCADE,
-      id_año INTEGER NOT NULL REFERENCES "año_lectivo"("id_año") ON DELETE CASCADE,
+      id_anio INTEGER NOT NULL REFERENCES anio_lectivo(id_anio) ON DELETE CASCADE,
       fecha_inicio TIMESTAMPTZ NOT NULL,
       fecha_cierre TIMESTAMPTZ NOT NULL,
       habilitada BOOLEAN NOT NULL DEFAULT TRUE,
       CONSTRAINT chk_fechas CHECK (fecha_cierre > fecha_inicio),
-      CONSTRAINT uq_colegio_anio UNIQUE (id_colegio, id_año)
+      CONSTRAINT uq_colegio_anio UNIQUE (id_colegio, id_anio)
     );
   `);
     await client.query(`
@@ -102,17 +103,17 @@ async function createEnrollmentConfigTable(client) {
 async function seedEnrollmentConfigs(client) {
     const schoolsRes = await client.query('SELECT id_colegio FROM colegio');
     for (const s of schoolsRes.rows) {
-        const yearRes = await client.query('SELECT "id_año" FROM "año_lectivo" WHERE id_colegio = $1', [s.id_colegio]);
+        const yearRes = await client.query('SELECT id_anio FROM anio_lectivo WHERE id_colegio = $1', [s.id_colegio]);
         if (yearRes.rows.length > 0) {
-            const yearId = yearRes.rows[0].id_año;
+            const yearId = yearRes.rows[0].id_anio;
             const startDate = new Date();
             startDate.setDate(startDate.getDate() - 5); // 5 days ago
             const endDate = new Date();
             endDate.setDate(endDate.getDate() + 15); // 15 days from now
             await client.query(`
-        INSERT INTO configuracion_inscripcion (id_colegio, id_año, fecha_inicio, fecha_cierre, habilitada)
+        INSERT INTO configuracion_inscripcion (id_colegio, id_anio, fecha_inicio, fecha_cierre, habilitada)
         VALUES ($1, $2, $3, $4, TRUE)
-        ON CONFLICT (id_colegio, id_año) DO NOTHING
+        ON CONFLICT (id_colegio, id_anio) DO NOTHING
       `, [s.id_colegio, yearId, startDate.toISOString(), endDate.toISOString()]);
         }
     }
@@ -147,6 +148,17 @@ async function insertDocumentTypes(client) {
     ];
     for (const dt of documentTypes) {
         await client.query(`INSERT INTO tipo_documento (id_tipodocumento, tipo) VALUES ($1, $2)`, [dt.id, dt.tipo]);
+    }
+}
+async function insertSanctionTypes(client) {
+    const sanctionTypes = [
+        { nombre: 'SUSPENSION_TEMPORAL', descripcion: 'El estudiante es suspendido de clases por un número específico de días.' },
+        { nombre: 'MATRICULA_CONDICIONAL', descripcion: 'El estudiante continúa con matrícula bajo compromiso de comportamiento.' },
+        { nombre: 'APERCIBIMIENTO', descripcion: 'Advertencia formal por escrito que precede a una sanción mayor.' },
+        { nombre: 'EXPULSION', descripcion: 'El estudiante es retirado permanentemente de la institución.' }
+    ];
+    for (const st of sanctionTypes) {
+        await client.query(`INSERT INTO tipo_sancion (nombre, descripcion) VALUES ($1, $2) ON CONFLICT (nombre) DO NOTHING`, [st.nombre, st.descripcion]);
     }
 }
 async function insertSections(client) {
@@ -207,13 +219,14 @@ async function insertSchoolAcademicStructure(client, school, sectionIds) {
     const subjectIdsByName = {};
     const teacherIdsBySubject = {};
     const allGroupIds = [];
+    const groupGradesMap = new Map();
     // --- Calendar type column ---
     await client.query(`ALTER TABLE colegio ADD COLUMN IF NOT EXISTS tipo_calendario CHAR(1) DEFAULT 'A';`);
     await client.query(`UPDATE colegio SET tipo_calendario = $1 WHERE id_colegio = $2`, [school.tipo_calendario, school.id]);
-    await client.query(`ALTER TABLE "año_lectivo" ADD COLUMN IF NOT EXISTS tipo_calendario CHAR(1) DEFAULT 'A';`);
+    await client.query(`ALTER TABLE anio_lectivo ADD COLUMN IF NOT EXISTS tipo_calendario CHAR(1) DEFAULT 'A';`);
     const yearLabel = school.tipo_calendario === "B" ? `${parseInt(CURRENT_YEAR) - 1}-${CURRENT_YEAR}` : CURRENT_YEAR;
-    const academicYearResult = await client.query(`INSERT INTO "año_lectivo" (calendario, id_colegio, tipo_calendario) VALUES ($1, $2, $3) RETURNING "id_año"`, [yearLabel, school.id, school.tipo_calendario]);
-    const academicYearId = academicYearResult.rows[0].id_año;
+    const academicYearResult = await client.query(`INSERT INTO anio_lectivo (calendario, id_colegio, tipo_calendario) VALUES ($1, $2, $3) RETURNING id_anio`, [yearLabel, school.id, school.tipo_calendario]);
+    const academicYearId = academicYearResult.rows[0].id_anio;
     // --- Levels ---
     for (const levelSeed of levelSeeds) {
         const levelResult = await client.query(`INSERT INTO nivel_escolar (nombre, id_colegio) VALUES ($1, $2) RETURNING id_nivel`, [levelSeed.nombre, school.id]);
@@ -227,10 +240,39 @@ async function insertSchoolAcademicStructure(client, school, sectionIds) {
     }
     // --- Periods ---
     const periodRules = (0, academicCalendarDefaults_1.getPeriodRules)(school.tipo_calendario);
+    const currentDate = new Date();
+    const currentMonth = currentDate.getMonth() + 1; // 1-12
     for (const periodSeed of periodSeeds) {
         const monthRule = periodRules.find((r) => r.order === periodSeed.trimestre);
-        await client.query(`INSERT INTO periodo_academico (nombre, estado, porcentaje, trimestre, "id_año", id_colegio, mes_inicio, mes_fin, dia_inicio, dia_fin)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`, [periodSeed.nombre, periodSeed.estado, periodSeed.porcentaje, periodSeed.trimestre, academicYearId, school.id,
+        const startMonth = monthRule?.startMonth ?? 1;
+        const endMonth = monthRule?.endMonth ?? 12;
+        let calculadoEstado = 'PENDIENTE';
+        if (school.tipo_calendario === 'A') {
+            if (currentMonth > endMonth) {
+                calculadoEstado = 'CERRADO';
+            }
+            else if (currentMonth >= startMonth && currentMonth <= endMonth) {
+                calculadoEstado = 'ABIERTO';
+            }
+            else {
+                calculadoEstado = 'PENDIENTE';
+            }
+        }
+        else {
+            // Calendario B
+            const currentOrder = (0, academicCalendarDefaults_1.resolveCurrentAcademicPeriodOrder)(currentDate, 'B') ?? 2;
+            if (periodSeed.trimestre < currentOrder) {
+                calculadoEstado = 'CERRADO';
+            }
+            else if (periodSeed.trimestre === currentOrder) {
+                calculadoEstado = 'ABIERTO';
+            }
+            else {
+                calculadoEstado = 'PENDIENTE';
+            }
+        }
+        await client.query(`INSERT INTO periodo_academico (nombre, estado, porcentaje, trimestre, id_anio, id_colegio, mes_inicio, mes_fin, dia_inicio, dia_fin)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`, [periodSeed.nombre, calculadoEstado, periodSeed.porcentaje, periodSeed.trimestre, academicYearId, school.id,
             monthRule?.startMonth ?? null, monthRule?.endMonth ?? null, 1, 28]);
     }
     // --- Escala de Valoración ---
@@ -250,6 +292,10 @@ async function insertSchoolAcademicStructure(client, school, sectionIds) {
         const subjectResult = await client.query(`INSERT INTO materias (nombre, id_colegio) VALUES ($1, $2) RETURNING id_materia`, [teacher.subject, school.id]);
         subjectIdsByName[teacher.subject] = subjectResult.rows[0].id_materia;
     }
+    // --- Materia especial: Desarrollo Integral (Preescolar) ---
+    const desIntegralResult = await client.query(`INSERT INTO materias (nombre, id_colegio) VALUES ($1, $2) RETURNING id_materia`, ["Desarrollo Integral", school.id]);
+    subjectIdsByName["Desarrollo Integral"] = desIntegralResult.rows[0].id_materia;
+    teacherIdsBySubject["Desarrollo Integral"] = teachersRes.rows[0].id_docente;
     // --- Grupos + Grados + Tipo Grado ---
     let teacherRotationIdx = 0;
     for (const levelSeed of levelSeeds) {
@@ -266,7 +312,9 @@ async function insertSchoolAcademicStructure(client, school, sectionIds) {
                     teacherRotationIdx++;
                     const groupResult = await client.query(`INSERT INTO grupos (id_nivel, id_jornada, id_colegio, id_seccion, cupos_totales, id_tipo_grado, id_docente)
              VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id_grupo`, [levelId, jornadaId, school.id, sectionId, CUPOS_POR_CURSO, gradeTypeId, titularId]);
-                    allGroupIds.push(groupResult.rows[0].id_grupo);
+                    const gid = groupResult.rows[0].id_grupo;
+                    allGroupIds.push(gid);
+                    groupGradesMap.set(gid, gradeName);
                     await client.query(`INSERT INTO grados (nivel, tipo_grado, id_jornada, id_colegio, cupos_totales, seccion)
              VALUES ($1, $2, $3, $4, $5, $6)`, [levelSeed.nombre, gradeName, jornadaId, school.id, CUPOS_POR_CURSO, sectionName]);
                 }
@@ -275,18 +323,36 @@ async function insertSchoolAcademicStructure(client, school, sectionIds) {
     }
     // --- Detalle Grados (assign all subjects+teachers to all groups) ---
     for (const groupId of allGroupIds) {
-        for (const teacher of teacherSeeds) {
-            await client.query(`INSERT INTO detalle_grados (id_materia, id_docente, id_colegio, id_grupo) VALUES ($1, $2, $3, $4)`, [subjectIdsByName[teacher.subject], teacherIdsBySubject[teacher.subject], school.id, groupId]);
+        const gradeName = groupGradesMap.get(groupId);
+        const isPreescolar = gradeName === "PREJARDIN" || gradeName === "JARDIN" || gradeName === "TRANSICION";
+        if (isPreescolar) {
+            await client.query(`INSERT INTO detalle_grados (id_materia, id_docente, id_colegio, id_grupo) VALUES ($1, $2, $3, $4)`, [subjectIdsByName["Desarrollo Integral"], teacherIdsBySubject["Desarrollo Integral"], school.id, groupId]);
+        }
+        else {
+            for (const teacher of teacherSeeds) {
+                await client.query(`INSERT INTO detalle_grados (id_materia, id_docente, id_colegio, id_grupo) VALUES ($1, $2, $3, $4)`, [subjectIdsByName[teacher.subject], teacherIdsBySubject[teacher.subject], school.id, groupId]);
+            }
         }
     }
 }
 // ─── INSERT STUDENTS AND PARENTS (5 per MAÑANA-A group) ─────────────────────────
 async function insertStudentsAndParents(client, school, roleIds, parentHash, studentHash, credentials) {
     // Get academic year
-    const yearsRes = await client.query('SELECT "id_año" FROM "año_lectivo" WHERE id_colegio = $1', [school.id]);
-    const yearId = yearsRes.rows[0]?.id_año;
+    const yearsRes = await client.query('SELECT id_anio FROM anio_lectivo WHERE id_colegio = $1', [school.id]);
+    const yearId = yearsRes.rows[0]?.id_anio;
     if (!yearId)
         return;
+    // Get a directivo of the school
+    const directivoRes = await client.query('SELECT id FROM directivo WHERE id_colegio = $1 LIMIT 1', [school.id]);
+    const directivoId = directivoRes.rows[0]?.id;
+    // Fetch teachers of the school to map them as parents (60% target)
+    const teachersRes = await client.query(`SELECT u.id_usuario, u.email, u.nombre, u.apellido 
+     FROM usuario u
+     JOIN docente d ON u.id_usuario = d.id_usuario
+     WHERE u.id_colegio = $1`, [school.id]);
+    const teachersList = teachersRes.rows;
+    const targetDocentesPadresCount = Math.ceil(teachersList.length * 0.6);
+    let docentesPadresIndex = 0;
     // Get groups for MAÑANA + A, B, C (42 groups: 3 per grade type)
     const groupsRes = await client.query(`SELECT g.id_grupo, g.id_nivel
      FROM grupos g
@@ -305,11 +371,18 @@ async function insertStudentsAndParents(client, school, roleIds, parentHash, stu
     // Helper: flush parent credentials
     const flushParent = () => {
         if (currentParentId !== null && currentParentChildNames.length > 0) {
-            credentials.push({
-                colegio: school.nombre, seccion: "familia", rol: "PADRE",
-                nombre: `Padre ${parentIdx} ${school.nombre}`, correo: currentParentEmail,
-                password: "padre123", hijos: [...currentParentChildNames],
-            });
+            const existingCred = credentials.find((c) => c.correo === currentParentEmail);
+            if (existingCred) {
+                existingCred.rol = "DOCENTE / PADRE";
+                existingCred.hijos = [...currentParentChildNames];
+            }
+            else {
+                credentials.push({
+                    colegio: school.nombre, seccion: "familia", rol: "PADRE",
+                    nombre: `Padre ${parentIdx} ${school.nombre}`, correo: currentParentEmail,
+                    password: "padre123", hijos: [...currentParentChildNames],
+                });
+            }
         }
     };
     for (const group of groups) {
@@ -319,15 +392,18 @@ async function insertStudentsAndParents(client, school, roleIds, parentHash, stu
             let studentState = "ACTIVO";
             let enrollmentState = "ACTIVA";
             let motivoCancelacion = null;
+            let motivoEstado = null;
             let userActive = true;
             if (globalStudentIdx % 20 === 5) {
                 studentState = "SANCIONADO";
+                motivoEstado = "Incumplimiento reiterado de las normas de convivencia escolar.";
                 // Sanctioned: still enrolled, can still log in
             }
             else if (globalStudentIdx % 20 === 10) {
                 studentState = "EXPULSADO";
                 enrollmentState = "CANCELADA";
                 motivoCancelacion = "EXPULSION";
+                motivoEstado = "Falta grave contra la integridad de la comunidad educativa.";
                 userActive = false; // Blocked from login
             }
             else if (globalStudentIdx % 20 === 15) {
@@ -340,14 +416,38 @@ async function insertStudentsAndParents(client, school, roleIds, parentHash, stu
             if ((globalStudentIdx - 1) % 2 === 0) {
                 flushParent();
                 parentIdx++;
-                currentParentEmail = `padre${parentIdx}.${school.id}@${school.domain}`;
                 currentParentChildNames = [];
-                const pUserRes = await client.query(`INSERT INTO usuario (email, password, nombre, apellido, id_colegio, activo)
-           VALUES ($1, $2, $3, $4, $5, true) RETURNING id_usuario`, [currentParentEmail, parentHash, `Padre ${parentIdx}`, school.nombre, school.id]);
-                const parentUserId = pUserRes.rows[0].id_usuario;
-                await client.query(`INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2)`, [parentUserId, roleIds.padre]);
+                let parentUserId;
+                let pName;
+                let pLastName;
+                let pDoc;
+                if (docentesPadresIndex < targetDocentesPadresCount) {
+                    // Reutilizar un docente existente del colegio
+                    const teacherUser = teachersList[docentesPadresIndex];
+                    parentUserId = teacherUser.id_usuario;
+                    currentParentEmail = teacherUser.email;
+                    pName = teacherUser.nombre;
+                    pLastName = teacherUser.apellido;
+                    pDoc = `P-DOC-${school.id}-${docentesPadresIndex + 1}`;
+                    docentesPadresIndex++;
+                    // Asignar el rol de padre a este docente (si no lo tiene ya)
+                    await client.query(`INSERT INTO usuario_rol (id_usuario, id_rol) 
+             VALUES ($1, $2) 
+             ON CONFLICT (id_usuario, id_rol) DO NOTHING`, [parentUserId, roleIds.padre]);
+                }
+                else {
+                    // Crear un padre normal desde cero
+                    currentParentEmail = `padre${parentIdx}.${school.id}@${school.domain}`;
+                    pName = `Padre ${parentIdx}`;
+                    pLastName = school.nombre;
+                    pDoc = `P-${school.id}-${parentIdx}`;
+                    const pUserRes = await client.query(`INSERT INTO usuario (email, password, nombre, apellido, id_colegio, activo)
+             VALUES ($1, $2, $3, $4, $5, true) RETURNING id_usuario`, [currentParentEmail, parentHash, pName, pLastName, school.id]);
+                    parentUserId = pUserRes.rows[0].id_usuario;
+                    await client.query(`INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2)`, [parentUserId, roleIds.padre]);
+                }
                 const pFamRes = await client.query(`INSERT INTO padre_familia (nombre, apellido, documento, id_tipodocumento, id_colegio, id_usuario)
-           VALUES ($1, $2, $3, $4, $5, $6) RETURNING id_padrefamilia`, [`Padre ${parentIdx}`, school.nombre, `P-${school.id}-${parentIdx}`, DOCUMENT_TYPE_CC, school.id, parentUserId]);
+           VALUES ($1, $2, $3, $4, $5, $6) RETURNING id_padrefamilia`, [pName, pLastName, pDoc, DOCUMENT_TYPE_CC, school.id, parentUserId]);
                 currentParentId = pFamRes.rows[0].id_padrefamilia;
             }
             // ── Student name from pools ──
@@ -365,13 +465,29 @@ async function insertStudentsAndParents(client, school, roleIds, parentHash, stu
             const studentUserId = sUserRes.rows[0].id_usuario;
             await client.query(`INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2)`, [studentUserId, roleIds.estudiante]);
             // ── Create student record with estado ──
-            const estRes = await client.query(`INSERT INTO estudiante (nombre, apellido, documento, codigo, id_tipodocumento, id_nivel, id_colegio, id_usuario, estado)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::estado_estudiante) RETURNING id_estudiante`, [firstName, lastName, `E-${school.id}-${globalStudentIdx}`, studentCode, 1, group.id_nivel, school.id, studentUserId, studentState]);
+            const estRes = await client.query(`INSERT INTO estudiante (nombre, apellido, documento, codigo, id_tipodocumento, id_nivel, id_colegio, id_usuario, estado, motivo_estado)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::estado_estudiante, $10) RETURNING id_estudiante`, [firstName, lastName, `E-${school.id}-${globalStudentIdx}`, studentCode, 1, group.id_nivel, school.id, studentUserId, studentState, motivoEstado]);
             const idEstudiante = estRes.rows[0].id_estudiante;
+            if (studentState === "SANCIONADO" && directivoId) {
+                const typeRes = await client.query(`SELECT id_tipo_sancion FROM tipo_sancion WHERE nombre = 'SUSPENSION_TEMPORAL' LIMIT 1`);
+                const tipoSancionId = typeRes.rows[0]?.id_tipo_sancion;
+                if (tipoSancionId) {
+                    await client.query(`INSERT INTO sancion (id_estudiante, id_tipo_sancion, motivo, fecha_inicio, fecha_fin, estado, id_directivo)
+             VALUES ($1, $2, $3, CURRENT_DATE, CURRENT_DATE + INTERVAL '7 days', 'ACTIVA', $4)`, [idEstudiante, tipoSancionId, motivoEstado, directivoId]);
+                }
+            }
+            if (studentState === "EXPULSADO" && directivoId) {
+                const typeRes = await client.query(`SELECT id_tipo_sancion FROM tipo_sancion WHERE nombre = 'EXPULSION' LIMIT 1`);
+                const tipoSancionId = typeRes.rows[0]?.id_tipo_sancion;
+                if (tipoSancionId) {
+                    await client.query(`INSERT INTO sancion (id_estudiante, id_tipo_sancion, motivo, fecha_inicio, fecha_fin, estado, id_directivo)
+             VALUES ($1, $2, $3, CURRENT_DATE, '9999-12-31', 'ACTIVA', $4)`, [idEstudiante, tipoSancionId, motivoEstado, directivoId]);
+                }
+            }
             // ── Link parent ──
             await client.query(`INSERT INTO detalle_padrefamilia (id_padrefamilia, id_estudiante, id_colegio) VALUES ($1, $2, $3)`, [currentParentId, idEstudiante, school.id]);
             // ── Enroll ──
-            await client.query(`INSERT INTO matricula (id_estudiante, id_nivel, id_colegio, "id_año", estado, correo_padre, id_grupo, motivo_cancelacion)
+            await client.query(`INSERT INTO matricula (id_estudiante, id_nivel, id_colegio, id_anio, estado, correo_padre, id_grupo, motivo_cancelacion)
          VALUES ($1, $2, $3, $4, $5::estado_matricula, $6, $7, $8)`, [idEstudiante, group.id_nivel, school.id, yearId, enrollmentState, currentParentEmail, group.id_grupo, motivoCancelacion]);
             // ── Credential (skip expelled) ──
             const rolLabel = studentState === "ACTIVO" ? "ESTUDIANTE"
@@ -397,18 +513,18 @@ async function insertSampleAttendance(client) {
     ];
     // Only enrolled + ACTIVA students
     const enrollmentRes = await client.query(`
-    SELECT m.id_estudiante, m.id_colegio, m.id_grupo, al."id_año"
+    SELECT m.id_estudiante, m.id_colegio, m.id_grupo, al.id_anio
     FROM matricula m
-    JOIN "año_lectivo" al ON m."id_año" = al."id_año"
+    JOIN anio_lectivo al ON m.id_anio = al.id_anio
     WHERE m.estado = 'ACTIVA'
   `);
     const batchValues = [];
     for (const enrollment of enrollmentRes.rows) {
-        const { id_estudiante, id_colegio, id_grupo, id_año } = enrollment;
+        const { id_estudiante, id_colegio, id_grupo, id_anio } = enrollment;
         const dgRes = await client.query(`SELECT id_detallegrado FROM detalle_grados WHERE id_grupo = $1 AND id_colegio = $2`, [id_grupo, id_colegio]);
         if (dgRes.rows.length === 0)
             continue;
-        const periodsRes = await client.query(`SELECT id_periodo, mes_inicio FROM periodo_academico WHERE id_colegio = $1 AND "id_año" = $2 AND estado = 'CERRADO'`, [id_colegio, id_año]);
+        const periodsRes = await client.query(`SELECT id_periodo, mes_inicio FROM periodo_academico WHERE id_colegio = $1 AND id_anio = $2 AND estado = 'CERRADO'`, [id_colegio, id_anio]);
         // Generate 5 sample dates per period (first 5 weekdays of the period's start month)
         for (const period of periodsRes.rows) {
             const mes = period.mes_inicio || 1;
@@ -424,6 +540,7 @@ async function insertSampleAttendance(client) {
                     const rand = Math.random();
                     let estado = "PRESENTE";
                     let justificacion = null;
+                    let hora_llegada = null;
                     if (rand > 0.98) {
                         estado = "JUSTIFICADA";
                         justificacion = justifications[Math.floor(Math.random() * justifications.length)];
@@ -434,7 +551,15 @@ async function insertSampleAttendance(client) {
                     else if (rand > 0.92) {
                         estado = "TARDE";
                     }
-                    batchValues.push({ id_estudiante, id_detallegrado: dg.id_detallegrado, fecha: dateStr, estado, justificacion, id_colegio });
+                    if (estado === "PRESENTE") {
+                        const min = Math.floor(Math.random() * 16);
+                        hora_llegada = `07:${String(min).padStart(2, "0")}`;
+                    }
+                    else if (estado === "TARDE") {
+                        const min = 16 + Math.floor(Math.random() * 30);
+                        hora_llegada = `07:${String(min).padStart(2, "0")}`;
+                    }
+                    batchValues.push({ id_estudiante, id_detallegrado: dg.id_detallegrado, fecha: dateStr, estado, justificacion, id_colegio, hora_llegada });
                     if (batchValues.length >= 200) {
                         await flushAttendanceBatch(client, batchValues);
                         batchValues.length = 0;
@@ -449,10 +574,10 @@ async function insertSampleAttendance(client) {
 }
 async function flushAttendanceBatch(client, batch) {
     const values = batch
-        .map((_, i) => `($${i * 6 + 1}, $${i * 6 + 2}, $${i * 6 + 3}, $${i * 6 + 4}, $${i * 6 + 5}, $${i * 6 + 6})`)
+        .map((_, i) => `($${i * 7 + 1}, $${i * 7 + 2}, $${i * 7 + 3}, $${i * 7 + 4}, $${i * 7 + 5}, $${i * 7 + 6}, $${i * 7 + 7})`)
         .join(",");
-    const params = batch.flatMap((r) => [r.id_estudiante, r.id_detallegrado, r.fecha, r.estado, r.justificacion, r.id_colegio]);
-    await client.query(`INSERT INTO registro_asistencia (id_estudiante, id_detallegrado, fecha, estado, justificacion, id_colegio) VALUES ${values}`, params);
+    const params = batch.flatMap((r) => [r.id_estudiante, r.id_detallegrado, r.fecha, r.estado, r.justificacion, r.id_colegio, r.hora_llegada]);
+    await client.query(`INSERT INTO registro_asistencia (id_estudiante, id_detallegrado, fecha, estado, justificacion, id_colegio, hora_llegada) VALUES ${values}`, params);
 }
 // ─── WRITE CREDENTIALS FILE ─────────────────────────────────────────────────────
 function writeCredentialsFile(credentials) {
@@ -574,6 +699,24 @@ async function run() {
         console.log("📦 Aplicando migración 006 (motivo de revocación)...");
         const addMotivoRevocacionMigrationSql = fs_1.default.readFileSync(path_1.default.join(__dirname, "../migrations/006_add_motivo_revocacion.sql"), "utf8");
         await client.query(addMotivoRevocacionMigrationSql);
+        console.log("📦 Aplicando migración 010 (motivo_estado en estudiante)...");
+        const addMotivoEstadoMigrationSql = fs_1.default.readFileSync(path_1.default.join(__dirname, "../migrations/010_add_student_motivo_estado.sql"), "utf8");
+        await client.query(addMotivoEstadoMigrationSql);
+        console.log("📦 Aplicando migración 011 (tablas de sanción)...");
+        const createSancionTablesMigrationSql = fs_1.default.readFileSync(path_1.default.join(__dirname, "../migrations/011_create_sancion_tables.sql"), "utf8");
+        await client.query(createSancionTablesMigrationSql);
+        console.log("📦 Aplicando migración 012 (soporte de expulsión en sanciones)...");
+        const addExpulsionSanctionMigrationSql = fs_1.default.readFileSync(path_1.default.join(__dirname, "../migrations/012_add_expulsion_sanction.sql"), "utf8");
+        await client.query(addExpulsionSanctionMigrationSql);
+        console.log("📦 Aplicando migración 013 (dimensiones preescolar y mapeo de DBA)...");
+        const addPreschoolDimensionsMigrationSql = fs_1.default.readFileSync(path_1.default.join(__dirname, "../migrations/013_dimensiones_preescolar.sql"), "utf8");
+        await client.query(addPreschoolDimensionsMigrationSql);
+        console.log("📦 Aplicando migración 014 (tickets de soporte técnico)...");
+        const addSupportTicketsMigrationSql = fs_1.default.readFileSync(path_1.default.join(__dirname, "../migrations/014_soporte_tecnico.sql"), "utf8");
+        await client.query(addSupportTicketsMigrationSql);
+        console.log("📦 Aplicando migración 015 (observaciones y códigos de soporte)...");
+        const addObservationsSupportMigrationSql = fs_1.default.readFileSync(path_1.default.join(__dirname, "../migrations/015_observaciones_tickets.sql"), "utf8");
+        await client.query(addObservationsSupportMigrationSql);
         // ── Phase 2: Schema migrations ──
         console.log("🔧 Migrando columnas adicionales...");
         await client.query(`ALTER TABLE grados ADD COLUMN IF NOT EXISTS seccion VARCHAR(10) DEFAULT 'A';`);
@@ -601,7 +744,7 @@ async function run() {
         // DROP the unique_titular_docente constraint (it prevents docentes from being titular of multiple groups)
         await client.query(`ALTER TABLE public.grupos DROP CONSTRAINT IF EXISTS unique_titular_docente;`);
         // Expand calendario column length
-        await client.query(`ALTER TABLE public."año_lectivo" ALTER COLUMN calendario TYPE VARCHAR(10);`);
+        await client.query(`ALTER TABLE public.anio_lectivo ALTER COLUMN calendario TYPE VARCHAR(10);`);
         // Add tipo column to observacion_estudiante
         await client.query(`
       DO $$ BEGIN
@@ -613,6 +756,11 @@ async function run() {
         // ── Phase 3: Truncate ALL data tables ──
         console.log("🗑️ Reseteando tablas existentes...");
         await truncateExistingTables(client, [
+            // DBA catalog & mappings (truncated first because of foreign keys)
+            "colegio_version_curricular",
+            "dba_dimensiones_preescolar",
+            "evidencias_dba",
+            "dba",
             // Academic data
             "resultado_academico",
             "notas_actividad",
@@ -629,6 +777,8 @@ async function run() {
             "documento_matriculas",
             "matricula",
             // People
+            "sancion",
+            "tipo_sancion",
             "detalle_padrefamilia",
             "padre_familia",
             "estudiante",
@@ -644,7 +794,7 @@ async function run() {
             "materias",
             "nivel_escolar",
             "periodo_academico",
-            "año_lectivo",
+            "anio_lectivo",
             "escala_valoracion",
             "configuracion_colegio",
             "configuracion_inscripcion",
@@ -661,6 +811,7 @@ async function run() {
         console.log("📋 Insertando catálogos base...");
         const roleIds = await insertRoles(client);
         await insertDocumentTypes(client);
+        await insertSanctionTypes(client);
         const sectionIds = await insertSections(client);
         const directivoHash = await bcrypt_1.default.hash(DIRECTIVO_PASSWORD, 10);
         const docenteHash = await bcrypt_1.default.hash(DOCENTE_PASSWORD, 10);
@@ -677,6 +828,14 @@ async function run() {
             adminGeneralResult.rows[0].id_usuario,
             roleIds.admin_general,
         ]);
+        // Sembrar valores por defecto para la configuración de la plataforma (Duración de Supervisiones)
+        await client.query(`
+      INSERT INTO configuracion_plataforma (clave, valor)
+      VALUES 
+        ('supervision_duracion_minima_minutos', '5'),
+        ('supervision_duracion_maxima_minutos', '300')
+      ON CONFLICT (clave) DO NOTHING;
+    `);
         credentials.push({
             colegio: "General", seccion: "general", rol: "ADMIN_GENERAL",
             nombre: "Administrador General", correo: adminGeneralEmail, password: adminGeneralPassword,
@@ -727,25 +886,13 @@ async function run() {
     `);
         await client.query("COMMIT");
         console.log("✅ Transacción principal completada.");
+        // ── Phase 10.5: Seeding DBA Catalog and curriculums ──
+        await seedDbaCatalog();
+        // ── Phase 10.6: Seeding Competencies and Evidences based on DBA ──
+        await seedDbaCompetenciesAndEvidences();
         // ── Phase 11: Competency schema (outside transaction) ──
-        console.log("🧠 Sincronizando esquema de competencias...");
+        console.log("🧠 Sincronizando esquema de competencias de respaldo...");
         await (0, competencyMigration_1.ensureCompetencySchema)();
-        // ── Phase 12: Evidence for competencies ──
-        console.log("📝 Generando evidencias de aprendizaje...");
-        const compClient = await db_1.pool.connect();
-        try {
-            const compRes = await compClient.query("SELECT id_competencia, id_colegio FROM competencias");
-            for (const comp of compRes.rows) {
-                await compClient.query(`INSERT INTO evidencia_aprendizaje (id_competencia, descripcion, orden, id_colegio)
-           VALUES
-             ($1, 'Reconoce y aplica los conceptos fundamentales de la unidad temática.', 1, $2),
-             ($1, 'Demuestra capacidad analítica y pensamiento crítico en la resolución de problemas.', 2, $2),
-             ($1, 'Participa activamente y colabora con sus compañeros en el entorno de aprendizaje.', 3, $2)`, [comp.id_competencia, comp.id_colegio]);
-            }
-        }
-        finally {
-            compClient.release();
-        }
         // ── Phase 13: Write credentials ──
         const credentialsPath = writeCredentialsFile(credentials);
         // ── Phase 14: Populate academic grades ──
@@ -772,6 +919,322 @@ async function run() {
     finally {
         client.release();
         await db_1.pool.end();
+    }
+}
+async function seedDbaCatalog() {
+    console.log("\n🌱 Iniciando importación y siembra del catálogo de DBA...");
+    const dbaPdfs = [
+        { pdf: "../guides/DBA/DBA_matematicas.pdf", area: "Matemáticas", version: "2016", startPage: 8, script: "importar_dba.py" },
+        { pdf: "../guides/DBA/DBA_lenguaje.pdf", area: "Español", version: "2016", startPage: 8, script: "importar_dba.py" },
+        { pdf: "../guides/DBA/DBA_naturales.pdf", area: "Ciencias Naturales", version: "2016", startPage: 8, script: "importar_dba.py" },
+        { pdf: "../guides/DBA/DBA_sociales.pdf", area: "Ciencias Sociales", version: "2016", startPage: 8, script: "importar_dba.py" },
+        { pdf: "../guides/DBA/DBA_transicion.pdf", area: "Desarrollo Integral", version: "2016", startPage: 8, script: "importar_dba.py" },
+        { pdf: "../guides/DBA/dba_ingles_transicion_quinto.pdf", area: "Inglés", version: "2016", startPage: 8, script: "importar_dba_primaria_ingles.py" },
+        { pdf: "../guides/DBA/DBA_ingles_sexto_once.pdf", area: "Inglés", version: "2016", startPage: 15, script: "importar_dba.py" }
+    ];
+    // 1. Ejecutar importaciones de Python
+    for (const item of dbaPdfs) {
+        console.log(`⏳ Importando ${item.area} desde ${item.pdf} (pág. ${item.startPage})...`);
+        try {
+            const cmd = `python scripts/${item.script} --pdf ${item.pdf} --area "${item.area}" --version "${item.version}" --start-page ${item.startPage}`;
+            (0, child_process_1.execSync)(cmd, { stdio: "inherit", cwd: path_1.default.resolve(__dirname, "../..") });
+        }
+        catch (err) {
+            console.error(`❌ Error importando ${item.pdf}:`, err);
+        }
+    }
+    // 2. Realizar consultas para reasignación y mapeo
+    const client = await db_1.pool.connect();
+    try {
+        // A. Reasignar DBA de inglés transición a la materia "Desarrollo Integral" sumando 100 a su número para evitar colisión de llave única con los DBA tradicionales de transición
+        console.log("🔄 Reasignando DBA de inglés Transición a la materia Desarrollo Integral...");
+        await client.query(`
+      UPDATE dba 
+      SET area = 'Desarrollo Integral',
+          numero_dba = numero_dba + 100
+      WHERE area = 'Inglés' AND grado = 'TRANSICION' AND version_curricular = '2016'
+    `);
+        // B. Obtener todos los colegios
+        const colegiosRes = await client.query("SELECT id_colegio FROM colegio");
+        // C. Mapear versión curricular 2016
+        console.log("📋 Poblando colegio_version_curricular con versión 2016...");
+        const subjectsGrades = [
+            { area: "Matemáticas", grades: ["PRIMERO", "SEGUNDO", "TERCERO", "CUARTO", "QUINTO", "SEXTO", "SEPTIMO", "OCTAVO", "NOVENO", "DECIMO", "ONCE"] },
+            { area: "Español", grades: ["PRIMERO", "SEGUNDO", "TERCERO", "CUARTO", "QUINTO", "SEXTO", "SEPTIMO", "OCTAVO", "NOVENO", "DECIMO", "ONCE"] },
+            { area: "Ciencias Naturales", grades: ["PRIMERO", "SEGUNDO", "TERCERO", "CUARTO", "QUINTO", "SEXTO", "SEPTIMO", "OCTAVO", "NOVENO", "DECIMO", "ONCE"] },
+            { area: "Ciencias Sociales", grades: ["PRIMERO", "SEGUNDO", "TERCERO", "CUARTO", "QUINTO", "SEXTO", "SEPTIMO", "OCTAVO", "NOVENO", "DECIMO", "ONCE"] },
+            { area: "Inglés", grades: ["PRIMERO", "SEGUNDO", "TERCERO", "CUARTO", "QUINTO", "SEXTO", "SEPTIMO", "OCTAVO", "NOVENO", "DECIMO", "ONCE"] },
+            { area: "Desarrollo Integral", grades: ["TRANSICION"] }
+        ];
+        for (const school of colegiosRes.rows) {
+            for (const sg of subjectsGrades) {
+                for (const grade of sg.grades) {
+                    await client.query(`
+            INSERT INTO colegio_version_curricular (id_colegio, area, grado, version_curricular)
+            VALUES ($1, $2, $3, '2016')
+            ON CONFLICT (id_colegio, area, grado) 
+            DO UPDATE SET version_curricular = EXCLUDED.version_curricular
+          `, [school.id_colegio, sg.area, grade]);
+                }
+            }
+        }
+        console.log("✅ Proceso de siembra de DBA completado exitosamente.");
+    }
+    catch (err) {
+        console.error("❌ Error en base de datos al sembrar DBA:", err);
+    }
+    finally {
+        client.release();
+    }
+}
+function distributeDbas(dbasCount, periodStates) {
+    const K = periodStates.length;
+    const C = periodStates.filter(state => state === 'CERRADO').length;
+    const counts = periodStates.map(() => 1);
+    let remaining = dbasCount - K;
+    if (remaining > 0) {
+        const weights = periodStates.map(state => {
+            if (state === 'CERRADO')
+                return 0.20;
+            return (1.0 - C * 0.20) / (K - C);
+        });
+        const finalWeights = (C === 0 || C === K) ? periodStates.map(() => 1 / K) : weights;
+        let assignedSum = 0;
+        const idealCounts = periodStates.map((_, idx) => {
+            return Math.max(1, Math.floor(dbasCount * finalWeights[idx]));
+        });
+        assignedSum = idealCounts.reduce((a, b) => a + b, 0);
+        let diff = dbasCount - assignedSum;
+        for (let idx = 0; idx < K; idx++) {
+            counts[idx] = idealCounts[idx];
+        }
+        let i = 0;
+        while (diff > 0) {
+            counts[i % K]++;
+            diff--;
+            i++;
+        }
+        while (diff < 0) {
+            for (let idx = 0; idx < K; idx++) {
+                if (counts[idx] > 1) {
+                    counts[idx]--;
+                    diff++;
+                    break;
+                }
+            }
+        }
+    }
+    else if (remaining < 0) {
+        for (let idx = 0; idx < K; idx++) {
+            counts[idx] = idx < dbasCount ? 1 : 0;
+        }
+    }
+    return counts;
+}
+async function seedDbaCompetenciesAndEvidences() {
+    console.log("\n🧠 Generando competencias y evidencias basadas en DBA oficiales...");
+    const client = await db_1.pool.connect();
+    try {
+        // 1. Obtener catálogo de dimensiones de preescolar
+        const dimRes = await client.query("SELECT id_dimension, nombre FROM dimensiones_preescolar ORDER BY id_dimension");
+        const dimensiones = dimRes.rows;
+        const dimComunicativa = dimensiones.find(d => d.nombre === "Comunicativa");
+        // 2. Obtener todos los colegios y sus años lectivos
+        const schoolsRes = await client.query("SELECT id_colegio, nombre FROM colegio");
+        for (const school of schoolsRes.rows) {
+            console.log(`   Colegio: ${school.nombre}`);
+            const yearRes = await client.query("SELECT id_anio FROM anio_lectivo WHERE id_colegio = $1 ORDER BY id_anio DESC LIMIT 1", [school.id_colegio]);
+            const yearId = yearRes.rows[0]?.id_anio;
+            if (!yearId)
+                continue;
+            // Obtener periodos del año lectivo, ordenados
+            const periodsRes = await client.query("SELECT id_periodo, nombre, estado, trimestre FROM periodo_academico WHERE id_anio = $1 ORDER BY trimestre ASC", [yearId]);
+            const periods = periodsRes.rows;
+            if (periods.length === 0)
+                continue;
+            const periodStates = periods.map(p => p.estado);
+            const C = periodStates.filter(state => state === 'CERRADO').length;
+            // Obtener todos los grupos del colegio
+            const groupsRes = await client.query(`SELECT g.id_grupo, g.id_nivel, g.id_tipo_grado, tg.nombre as grade_name
+         FROM grupos g
+         JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
+         WHERE g.id_colegio = $1`, [school.id_colegio]);
+            // Agrupar grupos por su grado (tipo_grado)
+            const groupsByGrade = new Map();
+            for (const group of groupsRes.rows) {
+                if (!groupsByGrade.has(group.grade_name)) {
+                    groupsByGrade.set(group.grade_name, []);
+                }
+                groupsByGrade.get(group.grade_name).push(group);
+            }
+            // Obtener las materias del colegio
+            const subjectsRes = await client.query("SELECT id_materia, nombre FROM materias WHERE id_colegio = $1", [school.id_colegio]);
+            const subjects = subjectsRes.rows;
+            for (const [gradeName, gradeGroups] of groupsByGrade.entries()) {
+                const isPreescolar = gradeName === "PREJARDIN" || gradeName === "JARDIN" || gradeName === "TRANSICION";
+                if (isPreescolar) {
+                    // Preescolar solo ve la materia "Desarrollo Integral"
+                    const devSubject = subjects.find(s => s.nombre === "Desarrollo Integral");
+                    if (!devSubject)
+                        continue;
+                    if (gradeName === "PREJARDIN" || gradeName === "JARDIN") {
+                        // Regla: Prejardín y Jardín no tienen DBA, pero es OBLIGATORIO asociar las competencias a las 6 dimensiones oficiales.
+                        // Para cada periodo, crearemos una competencia por cada una de las 6 dimensiones.
+                        for (const period of periods) {
+                            for (const dim of dimensiones) {
+                                const syncUuid = (0, crypto_1.randomUUID)();
+                                const compDesc = `Desarrollo de habilidades y competencias integrales en la dimensión ${dim.nombre}.`;
+                                for (const group of gradeGroups) {
+                                    const compInsert = await client.query(`INSERT INTO competencias (id_anio, id_grupo, id_materia, id_periodo, descripcion, id_colegio, sync_uuid, id_dimension, nombre)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id_competencia`, [yearId, group.id_grupo, devSubject.id_materia, period.id_periodo, compDesc, school.id_colegio, syncUuid, dim.id_dimension, `Competencia Dimensión ${dim.nombre}`]);
+                                    // Evidencias por defecto relacionadas con la dimensión
+                                    await client.query(`INSERT INTO evidencia_aprendizaje (id_competencia, descripcion, orden, id_colegio)
+                     VALUES 
+                       ($1, $2, 1, $3),
+                       ($1, $2, 2, $3),
+                       ($1, $2, 3, $3)`, [
+                                        compInsert.rows[0].id_competencia,
+                                        `Identifica y explora elementos clave relacionados con la dimensión ${dim.nombre}.`,
+                                        school.id_colegio
+                                    ]);
+                                }
+                            }
+                        }
+                    }
+                    else if (gradeName === "TRANSICION") {
+                        // Regla: Transición tiene DBA de Desarrollo Integral y DBA de Inglés Transición reasignado a Desarrollo Integral.
+                        // La asignación de dimensiones para Transición es OPCIONAL.
+                        const dbasRes = await client.query(`SELECT id_dba, numero_dba, enunciado, area 
+               FROM dba 
+               WHERE area = 'Desarrollo Integral' AND grado = 'TRANSICION' AND version_curricular = '2016' AND estado = 'ACTIVO'
+               ORDER BY numero_dba ASC`);
+                        const dbas = dbasRes.rows;
+                        if (dbas.length > 0) {
+                            const counts = distributeDbas(dbas.length, periodStates);
+                            let dbaIdx = 0;
+                            for (let pIdx = 0; pIdx < periods.length; pIdx++) {
+                                const period = periods[pIdx];
+                                const dbaCountForPeriod = counts[pIdx];
+                                for (let d = 0; d < dbaCountForPeriod; d++) {
+                                    if (dbaIdx >= dbas.length)
+                                        break;
+                                    const dba = dbas[dbaIdx];
+                                    dbaIdx++;
+                                    const syncUuid = (0, crypto_1.randomUUID)();
+                                    // Decidir opcionalidad de dimensión: 50% de las competencias llevan dimensión, el otro 50% no.
+                                    // Si el DBA es de inglés (tiene numero_dba >= 100), la dimensión es Comunicativa
+                                    let idDimension = null;
+                                    if (dba.numero_dba >= 100) {
+                                        if (dbaIdx % 2 === 0 && dimComunicativa) {
+                                            idDimension = dimComunicativa.id_dimension;
+                                        }
+                                    }
+                                    else {
+                                        if (dbaIdx % 2 === 0) {
+                                            idDimension = dimensiones[dbaIdx % dimensiones.length].id_dimension;
+                                        }
+                                    }
+                                    for (const group of gradeGroups) {
+                                        const compInsert = await client.query(`INSERT INTO competencias (id_anio, id_grupo, id_materia, id_periodo, descripcion, id_colegio, sync_uuid, id_dimension, nombre)
+                       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id_competencia`, [
+                                            yearId,
+                                            group.id_grupo,
+                                            devSubject.id_materia,
+                                            period.id_periodo,
+                                            dba.enunciado,
+                                            school.id_colegio,
+                                            syncUuid,
+                                            idDimension,
+                                            `Competencia DBA #${dba.numero_dba}`
+                                        ]);
+                                        // Poblar evidencias oficiales del DBA
+                                        const evRes = await client.query("SELECT id_evidencia_dba, descripcion, orden FROM evidencias_dba WHERE id_dba = $1 AND estado = 'ACTIVO' ORDER BY orden ASC", [dba.id_dba]);
+                                        const evidencias = evRes.rows;
+                                        if (evidencias.length > 0) {
+                                            for (const ev of evidencias) {
+                                                await client.query(`INSERT INTO evidencia_aprendizaje (id_competencia, descripcion, orden, id_colegio, id_evidencia_dba)
+                           VALUES ($1, $2, $3, $4, $5)`, [compInsert.rows[0].id_competencia, ev.descripcion, ev.orden, school.id_colegio, ev.id_evidencia_dba]);
+                                            }
+                                        }
+                                        else {
+                                            await client.query(`INSERT INTO evidencia_aprendizaje (id_competencia, descripcion, orden, id_colegio)
+                         VALUES 
+                           ($1, 'Desarrolla las evidencias de aprendizaje propuestas para la competencia.', 1, $2),
+                           ($1, 'Muestra apropiación de las metas de aprendizaje de la unidad.', 2, $2),
+                           ($1, 'Aplica los desempeños esperados en el contexto institucional.', 3, $2)`, [compInsert.rows[0].id_competencia, school.id_colegio]);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                else {
+                    // Primaria, Secundaria y Media
+                    for (const subject of subjects) {
+                        if (subject.nombre === "Desarrollo Integral")
+                            continue;
+                        // Obtener DBAs para este grado y materia
+                        const dbasRes = await client.query(`SELECT id_dba, numero_dba, enunciado, area 
+               FROM dba 
+               WHERE area = $1 AND grado = $2 AND version_curricular = '2016' AND estado = 'ACTIVO'
+               ORDER BY numero_dba ASC`, [subject.nombre, gradeName]);
+                        const dbas = dbasRes.rows;
+                        if (dbas.length > 0) {
+                            const counts = distributeDbas(dbas.length, periodStates);
+                            let dbaIdx = 0;
+                            for (let pIdx = 0; pIdx < periods.length; pIdx++) {
+                                const period = periods[pIdx];
+                                const dbaCountForPeriod = counts[pIdx];
+                                for (let d = 0; d < dbaCountForPeriod; d++) {
+                                    if (dbaIdx >= dbas.length)
+                                        break;
+                                    const dba = dbas[dbaIdx];
+                                    dbaIdx++;
+                                    const syncUuid = (0, crypto_1.randomUUID)();
+                                    for (const group of gradeGroups) {
+                                        const compInsert = await client.query(`INSERT INTO competencias (id_anio, id_grupo, id_materia, id_periodo, descripcion, id_colegio, sync_uuid, id_dimension, nombre)
+                       VALUES ($1, $2, $3, $4, $5, $6, $7, NULL, $8) RETURNING id_competencia`, [
+                                            yearId,
+                                            group.id_grupo,
+                                            subject.id_materia,
+                                            period.id_periodo,
+                                            dba.enunciado,
+                                            school.id_colegio,
+                                            syncUuid,
+                                            `Competencia DBA #${dba.numero_dba}`
+                                        ]);
+                                        // Poblar evidencias oficiales del DBA
+                                        const evRes = await client.query("SELECT id_evidencia_dba, descripcion, orden FROM evidencias_dba WHERE id_dba = $1 AND estado = 'ACTIVO' ORDER BY orden ASC", [dba.id_dba]);
+                                        const evidencias = evRes.rows;
+                                        if (evidencias.length > 0) {
+                                            for (const ev of evidencias) {
+                                                await client.query(`INSERT INTO evidencia_aprendizaje (id_competencia, descripcion, orden, id_colegio, id_evidencia_dba)
+                           VALUES ($1, $2, $3, $4, $5)`, [compInsert.rows[0].id_competencia, ev.descripcion, ev.orden, school.id_colegio, ev.id_evidencia_dba]);
+                                            }
+                                        }
+                                        else {
+                                            await client.query(`INSERT INTO evidencia_aprendizaje (id_competencia, descripcion, orden, id_colegio)
+                         VALUES 
+                           ($1, 'Comprende y asimila los conceptos temáticos planteados.', 1, $2),
+                           ($1, 'Resuelve problemas académicos y prácticos de forma autónoma.', 2, $2),
+                           ($1, 'Demuestra actitud colaborativa y participativa en el aula.', 3, $2)`, [compInsert.rows[0].id_competencia, school.id_colegio]);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        console.log("✅ Siembra de competencias y evidencias basada en DBA completada exitosamente.");
+    }
+    catch (err) {
+        console.error("❌ Error al sembrar competencias basadas en DBA:", err);
+    }
+    finally {
+        client.release();
     }
 }
 run();

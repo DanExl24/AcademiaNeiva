@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict dxB82tmkg9I6Q1zmp3IBMNeWCIjzbspXESS9m419rL72bNufqe055ecGGl7cD8H
+\restrict FwzGFnDgdJBMWgKotRToHhE084PWsqkO3I5MwMbNdyOYaP9XBwUCWXps54n6YS3
 
 -- Dumped from database version 18.4
 -- Dumped by pg_dump version 18.4
@@ -204,6 +204,20 @@ CREATE TYPE public.estado_supervision AS ENUM (
 ALTER TYPE public.estado_supervision OWNER TO postgres;
 
 --
+-- Name: estado_ticket_soporte; Type: TYPE; Schema: public; Owner: postgres
+--
+
+CREATE TYPE public.estado_ticket_soporte AS ENUM (
+    'ABIERTO',
+    'EN_PROCESO',
+    'RESUELTO',
+    'ESCALADO'
+);
+
+
+ALTER TYPE public.estado_ticket_soporte OWNER TO postgres;
+
+--
 -- Name: estado_usuario_sistema; Type: TYPE; Schema: public; Owner: postgres
 --
 
@@ -246,6 +260,21 @@ CREATE TYPE public.tipo_documento_identidad AS ENUM (
 
 
 ALTER TYPE public.tipo_documento_identidad OWNER TO postgres;
+
+--
+-- Name: tipo_incidencia_soporte; Type: TYPE; Schema: public; Owner: postgres
+--
+
+CREATE TYPE public.tipo_incidencia_soporte AS ENUM (
+    'TECNICO',
+    'CALIFICACIONES',
+    'ASISTENCIA',
+    'AUTENTICACION',
+    'SOPORTE'
+);
+
+
+ALTER TYPE public.tipo_incidencia_soporte OWNER TO postgres;
 
 --
 -- Name: tipo_jornada; Type: TYPE; Schema: public; Owner: postgres
@@ -2327,6 +2356,52 @@ ALTER SEQUENCE public.secciones_id_seccion_seq OWNED BY public.secciones.id_secc
 
 
 --
+-- Name: tickets_soporte; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.tickets_soporte (
+    id_ticket integer NOT NULL,
+    id_usuario integer,
+    nombre_remitente character varying(155) NOT NULL,
+    correo_remitente character varying(155) NOT NULL,
+    telefono character varying(50),
+    tipo_incidencia public.tipo_incidencia_soporte NOT NULL,
+    asunto character varying(255) NOT NULL,
+    descripcion text NOT NULL,
+    estado public.estado_ticket_soporte DEFAULT 'ABIERTO'::public.estado_ticket_soporte,
+    fecha_creacion timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+    id_colegio integer,
+    observaciones jsonb DEFAULT '[]'::jsonb,
+    codigo_ticket character varying(50),
+    fecha_escalado timestamp with time zone
+);
+
+
+ALTER TABLE public.tickets_soporte OWNER TO postgres;
+
+--
+-- Name: tickets_soporte_id_ticket_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.tickets_soporte_id_ticket_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.tickets_soporte_id_ticket_seq OWNER TO postgres;
+
+--
+-- Name: tickets_soporte_id_ticket_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.tickets_soporte_id_ticket_seq OWNED BY public.tickets_soporte.id_ticket;
+
+
+--
 -- Name: tipo_documento; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -2938,6 +3013,13 @@ ALTER TABLE ONLY public.secciones ALTER COLUMN id_seccion SET DEFAULT nextval('p
 
 
 --
+-- Name: tickets_soporte id_ticket; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.tickets_soporte ALTER COLUMN id_ticket SET DEFAULT nextval('public.tickets_soporte_id_ticket_seq'::regclass);
+
+
+--
 -- Name: tipo_documento id_tipodocumento; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -3485,6 +3567,22 @@ ALTER TABLE ONLY public.secciones
 
 
 --
+-- Name: tickets_soporte tickets_soporte_codigo_ticket_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.tickets_soporte
+    ADD CONSTRAINT tickets_soporte_codigo_ticket_key UNIQUE (codigo_ticket);
+
+
+--
+-- Name: tickets_soporte tickets_soporte_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.tickets_soporte
+    ADD CONSTRAINT tickets_soporte_pkey PRIMARY KEY (id_ticket);
+
+
+--
 -- Name: tipo_documento tipo_documento_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -3854,6 +3952,34 @@ CREATE INDEX idx_observacion_estudiante ON public.observacion_estudiante USING b
 --
 
 CREATE INDEX idx_password_reset_token ON public.password_reset_tokens USING btree (token);
+
+
+--
+-- Name: idx_tickets_codigo; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_tickets_codigo ON public.tickets_soporte USING btree (codigo_ticket);
+
+
+--
+-- Name: idx_tickets_colegio; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_tickets_colegio ON public.tickets_soporte USING btree (id_colegio);
+
+
+--
+-- Name: idx_tickets_estado; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_tickets_estado ON public.tickets_soporte USING btree (estado);
+
+
+--
+-- Name: idx_tickets_usuario; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_tickets_usuario ON public.tickets_soporte USING btree (id_usuario);
 
 
 --
@@ -4719,6 +4845,14 @@ ALTER TABLE ONLY public.sancion
 
 
 --
+-- Name: tickets_soporte tickets_soporte_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.tickets_soporte
+    ADD CONSTRAINT tickets_soporte_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio) ON DELETE CASCADE;
+
+
+--
 -- Name: usuario usuario_baneado_por_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -4761,5 +4895,5 @@ REVOKE USAGE ON SCHEMA public FROM PUBLIC;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict dxB82tmkg9I6Q1zmp3IBMNeWCIjzbspXESS9m419rL72bNufqe055ecGGl7cD8H
+\unrestrict FwzGFnDgdJBMWgKotRToHhE084PWsqkO3I5MwMbNdyOYaP9XBwUCWXps54n6YS3
 

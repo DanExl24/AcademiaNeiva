@@ -39,22 +39,22 @@ class MatriculaService {
         try {
             await client.query('BEGIN');
             // Fetch active year for the school
-            const yearRes = await client.query(`SELECT "id_año" FROM "año_lectivo" WHERE id_colegio = $1 AND estado = 'ABIERTO' LIMIT 1`, [id_colegio]);
+            const yearRes = await client.query(`SELECT id_anio FROM anio_lectivo WHERE id_colegio = $1 AND estado = 'ABIERTO' LIMIT 1`, [id_colegio]);
             if (yearRes.rows.length === 0) {
                 throw new Error("El colegio seleccionado no tiene un año lectivo activo abierto.");
             }
-            const activeYearId = yearRes.rows[0].id_año;
+            const activeYearId = yearRes.rows[0].id_anio;
             // Check if approved matriculas exist for this year
             const approvedRes = await client.query(`SELECT COUNT(*)::int AS count 
          FROM matricula 
-         WHERE id_colegio = $1 AND "id_año" = $2 AND estado IN ('ACTIVA', 'TRASLADADA')`, [id_colegio, activeYearId]);
+         WHERE id_colegio = $1 AND id_anio = $2 AND estado IN ('ACTIVA', 'TRASLADADA')`, [id_colegio, activeYearId]);
             if (approvedRes.rows[0].count > 0) {
                 throw new Error("Las inscripciones para este año académico ya han finalizado.");
             }
             // Validate enrollment configuration dates and state
             const configRes = await client.query(`SELECT fecha_inicio, fecha_cierre, habilitada 
          FROM configuracion_inscripcion 
-         WHERE id_colegio = $1 AND id_año = $2`, [id_colegio, activeYearId]);
+         WHERE id_colegio = $1 AND id_anio = $2`, [id_colegio, activeYearId]);
             if (configRes.rows.length === 0) {
                 throw new Error("Las inscripciones para esta institución aún no están configuradas.");
             }
@@ -73,7 +73,7 @@ class MatriculaService {
             }
             // 1. Insertar en tabla matricula original (id_estudiante es NULL)
             const matRes = await client.query(`INSERT INTO matricula 
-           (id_estudiante, id_nivel, id_grupo, id_colegio, "id_año", estado, correo_padre, tiene_discapacidad, es_extranjero)
+           (id_estudiante, id_nivel, id_grupo, id_colegio, id_anio, estado, correo_padre, tiene_discapacidad, es_extranjero)
          VALUES (NULL, NULL, $1, $2, $3, 'PENDIENTE', $4, $5, $6)
          RETURNING id_matricula, token_seguimiento`, [data.grade, id_colegio, activeYearId, parentEmail, hasDisability === 'true', isForeigner === 'true']);
             const idMatricula = matRes.rows[0].id_matricula;
@@ -214,16 +214,16 @@ class MatriculaService {
              LEFT JOIN usuario u ON e.id_usuario = u.id_usuario
              WHERE dp.id_padrefamilia = $1 AND e.id_colegio = $2`, [idPadre, mat.id_colegio]);
                     if (childrenRes.rows.length > 0) {
-                        const currentYearRes = await db_1.pool.query(`SELECT calendario FROM "año_lectivo" WHERE "id_año" = $1 LIMIT 1`, [mat.id_año]);
+                        const currentYearRes = await db_1.pool.query(`SELECT calendario FROM anio_lectivo WHERE id_anio = $1 LIMIT 1`, [mat.id_anio]);
                         if (currentYearRes.rows.length > 0) {
                             const currentYearStr = currentYearRes.rows[0].calendario;
                             const prevYearStr = String(Number(currentYearStr) - 1);
-                            const prevYearRes = await db_1.pool.query(`SELECT "id_año" FROM "año_lectivo" WHERE id_colegio = $1 AND calendario = $2 LIMIT 1`, [mat.id_colegio, prevYearStr]);
+                            const prevYearRes = await db_1.pool.query(`SELECT id_anio FROM anio_lectivo WHERE id_colegio = $1 AND calendario = $2 LIMIT 1`, [mat.id_colegio, prevYearStr]);
                             if (prevYearRes.rows.length > 0) {
-                                const prevYearId = prevYearRes.rows[0].id_año;
+                                const prevYearId = prevYearRes.rows[0].id_anio;
                                 for (const child of childrenRes.rows) {
                                     const prevEnrollmentRes = await db_1.pool.query(`SELECT id_matricula, estado FROM matricula 
-                     WHERE id_estudiante = $1 AND "id_año" = $2 AND estado IN ('ACTIVA', 'TRASLADADA') LIMIT 1`, [child.id_estudiante, prevYearId]);
+                     WHERE id_estudiante = $1 AND id_anio = $2 AND estado IN ('ACTIVA', 'TRASLADADA') LIMIT 1`, [child.id_estudiante, prevYearId]);
                                     if (prevEnrollmentRes.rows.length > 0) {
                                         const prevEnrollment = prevEnrollmentRes.rows[0];
                                         renovacion.is_renovacion = true;
@@ -255,12 +255,30 @@ class MatriculaService {
                 }
             }
         }
+        // Fetch expulsion sanction details if cancelled by expulsion
+        let expulsionInfo = null;
+        if (mat.estado === 'CANCELADA' && mat.motivo_cancelacion === 'EXPULSION' && mat.id_estudiante) {
+            const expRes = await db_1.pool.query(`SELECT s.id_sancion, s.motivo, s.fecha_inicio, s.fecha_fin, s.estado, s.observaciones,
+                ts.nombre as tipo_nombre, ts.descripcion as tipo_descripcion,
+                u.nombre || ' ' || u.apellido as directivo_nombre
+         FROM public.sancion s
+         JOIN public.tipo_sancion ts ON s.id_tipo_sancion = ts.id_tipo_sancion
+         JOIN public.directivo d ON s.id_directivo = d.id
+         JOIN public.usuario u ON d.id_usuario = u.id_usuario
+         WHERE s.id_estudiante = $1 AND ts.nombre = 'EXPULSION'
+         ORDER BY s.id_sancion DESC
+         LIMIT 1`, [mat.id_estudiante]);
+            if (expRes.rows.length > 0) {
+                expulsionInfo = expRes.rows[0];
+            }
+        }
         return {
             ...mat,
             availableSections: sections.rows || [],
             documentos: docs.rows || [],
             existing_parent_user: existingParentUser,
-            renovacion
+            renovacion,
+            expulsion: expulsionInfo
         };
     }
     static async assignGrade(idMatricula, idGrado) {

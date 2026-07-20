@@ -532,6 +532,7 @@ const getDbaEvidenceDetails = (act: Activity) => {
     numero_dba: number
     descripcion: string
     tipo: 'PLANEADA' | 'EXTRA'
+    id_competencia: number | null
   }> = []
 
   for (const id of act.evidencias_dba) {
@@ -544,7 +545,8 @@ const getDbaEvidenceDetails = (act: Activity) => {
             id_evidencia_dba: id,
             numero_dba: dbaItem.numero_dba,
             descripcion: match.descripcion,
-            tipo: match.tipo
+            tipo: match.tipo,
+            id_competencia: match.id_competencia || null
           })
           found = true
           break
@@ -559,7 +561,8 @@ const getDbaEvidenceDetails = (act: Activity) => {
           id_evidencia_dba: id,
           numero_dba: planeadaMatch.numero_dba,
           descripcion: planeadaMatch.descripcion,
-          tipo: 'PLANEADA'
+          tipo: 'PLANEADA',
+          id_competencia: planeadaMatch.id_competencia || null
         })
       } else {
         const extraMatch = dbaEvidencesInfo.value.extras?.find(e => e.id_evidencia_dba === id)
@@ -568,7 +571,8 @@ const getDbaEvidenceDetails = (act: Activity) => {
             id_evidencia_dba: id,
             numero_dba: extraMatch.numero_dba,
             descripcion: extraMatch.descripcion,
-            tipo: 'EXTRA'
+            tipo: 'EXTRA',
+            id_competencia: extraMatch.id_competencia || null
           })
         }
       }
@@ -1336,7 +1340,7 @@ onMounted(() => {
                             </div>
                             <div v-if="ev.tipo === 'PLANEADA' && getLinkedCompetencyIndex(ev.id_competencia)" class="flex flex-wrap gap-1 mt-1 pl-2">
                               <span class="px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-950/40 text-[8px] font-black text-violet-700 dark:text-violet-400 border border-violet-200/40 dark:border-violet-900 uppercase tracking-wider">
-                                Competencia {{ getLinkedCompetencyIndex(ev.id_competencia) }}{{ getDbaNumberForCompetency(competenciasList[getLinkedCompetencyIndex(ev.id_competencia) - 1]) ? ` / DBA ${getDbaNumberForCompetency(competenciasList[getLinkedCompetencyIndex(ev.id_competencia) - 1])}` : '' }}
+                                Competencia {{ getLinkedCompetencyIndex(ev.id_competencia) }}{{ getDbaNumberForCompetency(competenciasList[(getLinkedCompetencyIndex(ev.id_competencia) || 1) - 1]) ? ` / DBA ${getDbaNumberForCompetency(competenciasList[(getLinkedCompetencyIndex(ev.id_competencia) || 1) - 1])}` : '' }}
                               </span>
                             </div>
                           </div>
@@ -1435,7 +1439,7 @@ onMounted(() => {
                               </div>
                               <div v-if="ev.tipo === 'PLANEADA' && getLinkedCompetencyIndex(ev.id_competencia)" class="flex flex-wrap gap-1 mt-1 pl-6">
                                 <span class="px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-950/40 text-[8px] font-black text-violet-700 dark:text-violet-400 border border-violet-200/40 dark:border-violet-900 uppercase tracking-wider">
-                                  Competencia {{ getLinkedCompetencyIndex(ev.id_competencia) }}{{ getDbaNumberForCompetency(competenciasList[getLinkedCompetencyIndex(ev.id_competencia) - 1]) ? ` / DBA ${getDbaNumberForCompetency(competenciasList[getLinkedCompetencyIndex(ev.id_competencia) - 1])}` : '' }}
+                                  Competencia {{ getLinkedCompetencyIndex(ev.id_competencia) }}{{ getDbaNumberForCompetency(competenciasList[(getLinkedCompetencyIndex(ev.id_competencia) || 1) - 1]) ? ` / DBA ${getDbaNumberForCompetency(competenciasList[(getLinkedCompetencyIndex(ev.id_competencia) || 1) - 1])}` : '' }}
                                 </span>
                               </div>
                             </label>

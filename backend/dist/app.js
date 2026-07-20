@@ -17,6 +17,7 @@ const boletin_routes_1 = __importDefault(require("./routes/boletin.routes"));
 const student_routes_1 = __importDefault(require("./routes/student.routes"));
 const adminGeneral_routes_1 = __importDefault(require("./routes/adminGeneral.routes"));
 const dba_routes_1 = __importDefault(require("./routes/dba.routes"));
+const support_routes_1 = __importDefault(require("./routes/support.routes"));
 const app = (0, express_1.default)();
 // Rate Limiters
 const globalLimiter = (0, express_rate_limit_1.default)({
@@ -80,6 +81,7 @@ app.use("/api/boletines", boletin_routes_1.default);
 app.use("/api/student", student_routes_1.default);
 app.use("/api/admin", adminGeneral_routes_1.default);
 app.use("/api/admin", dba_routes_1.default);
+app.use("/api/support", support_routes_1.default);
 app.get("/", (req, res) => {
     res.json({ message: "API TS funcionando segura" });
 });

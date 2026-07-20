@@ -54,15 +54,16 @@ const getAttendanceByDate = async (req, res) => {
        JOIN matricula m ON e.id_estudiante = m.id_estudiante
        WHERE m.id_grupo = $1 AND m.estado IN ('ACTIVA', 'TRASLADADA')
        ORDER BY e.apellido, e.nombre`, [id_grupo]);
-        // Get attendance records for this date (including justificacion)
-        const attendanceRes = await db_1.pool.query(`SELECT id_estudiante, estado, justificacion 
+        // Get attendance records for this date (including justificacion and hora_llegada)
+        const attendanceRes = await db_1.pool.query(`SELECT id_estudiante, estado, justificacion, TO_CHAR(hora_llegada, 'HH24:MI') as hora_llegada 
        FROM registro_asistencia 
        WHERE id_detallegrado = $1 AND fecha::date = $2::date`, [detailGradeId, dateStr]);
         const attendanceMap = new Map();
         attendanceRes.rows.forEach(r => {
             attendanceMap.set(Number(r.id_estudiante), {
                 estado: r.estado,
-                justificacion: r.justificacion || null
+                justificacion: r.justificacion || null,
+                hora_llegada: r.hora_llegada || null
             });
         });
         const studentsWithAttendance = studentsRes.rows.map(s => {
@@ -73,7 +74,8 @@ const getAttendanceByDate = async (req, res) => {
                 documento: s.documento,
                 codigo: s.codigo,
                 estado: att ? att.estado : null,
-                justificacion: att ? att.justificacion : null
+                justificacion: att ? att.justificacion : null,
+                hora_llegada: att ? att.hora_llegada : null
             };
         });
         console.log(`[DEV] getAttendanceByDate - id_grupo=${id_grupo}, editable=${editable}, students=${studentsRes.rows.length}`);
@@ -140,21 +142,57 @@ const saveAttendance = async (req, res) => {
                 return;
             }
         }
+        // Encontrar la hora de llegada normal de referencia (PRESENTE)
+        let refPresentTime = null;
+        for (const r of records) {
+            if (r.estado === "PRESENTE" && r.hora_llegada) {
+                if (!refPresentTime || r.hora_llegada < refPresentTime) {
+                    refPresentTime = r.hora_llegada;
+                }
+            }
+        }
+        if (!refPresentTime) {
+            const dbPresentRes = await client.query(`SELECT MIN(TO_CHAR(hora_llegada, 'HH24:MI')) as min_hora 
+         FROM registro_asistencia 
+         WHERE id_detallegrado = $1 AND fecha::date = $2::date AND estado = 'PRESENTE'`, [detailGradeId, date]);
+            if (dbPresentRes.rows.length && dbPresentRes.rows[0].min_hora) {
+                refPresentTime = dbPresentRes.rows[0].min_hora;
+            }
+        }
         for (const record of records) {
             const studentId = Number(record.id_estudiante);
             const estado = record.estado;
             const justificacion = record.justificacion || null;
+            const hora_llegada = record.hora_llegada || null;
             if (!estado) {
                 // If estado is null/empty, delete any existing record
                 await client.query(`DELETE FROM registro_asistencia 
            WHERE id_detallegrado = $1 AND id_estudiante = $2 AND fecha::date = $3::date`, [detailGradeId, studentId, date]);
             }
             else {
+                // Validar tardanza
+                if (estado === "TARDE") {
+                    if (!hora_llegada) {
+                        await client.query("ROLLBACK");
+                        res.status(400).json({ error: "La hora de llegada es obligatoria para estudiantes con retraso (Tarde)." });
+                        client.release();
+                        return;
+                    }
+                    if (refPresentTime && hora_llegada <= refPresentTime) {
+                        await client.query("ROLLBACK");
+                        res.status(400).json({
+                            error: `La hora de llegada del estudiante con retraso (${hora_llegada}) debe ser posterior a la hora de ingreso normal (${refPresentTime}).`
+                        });
+                        client.release();
+                        return;
+                    }
+                }
                 // Delete first to avoid duplicates
                 await client.query(`DELETE FROM registro_asistencia 
            WHERE id_detallegrado = $1 AND id_estudiante = $2 AND fecha::date = $3::date`, [detailGradeId, studentId, date]);
-                await client.query(`INSERT INTO registro_asistencia (id_estudiante, id_detallegrado, fecha, estado, id_colegio, justificacion)
-           VALUES ($1, $2, $3::timestamp with time zone, $4, $5, $6)`, [studentId, detailGradeId, `${date}T12:00:00Z`, estado, schoolId, justificacion]);
+                const dbHoraLlegada = (estado === 'PRESENTE' || estado === 'TARDE') ? (hora_llegada || null) : null;
+                await client.query(`INSERT INTO registro_asistencia (id_estudiante, id_detallegrado, fecha, estado, id_colegio, justificacion, hora_llegada)
+           VALUES ($1, $2, $3::timestamp with time zone, $4, $5, $6, $7)`, [studentId, detailGradeId, `${date}T12:00:00Z`, estado, schoolId, justificacion, dbHoraLlegada]);
             }
         }
         await client.query("COMMIT");

@@ -16,7 +16,6 @@ import {
   Loader2,
   AlertCircle,
   Filter,
-  Check,
   RefreshCw,
   Clock,
   ShieldAlert
@@ -62,6 +61,84 @@ const trackingCodeInput = ref('')
 const trackingTicketData = ref<any>(null)
 const searchingTracking = ref(false)
 const trackingError = ref('')
+
+const myTickets = ref<any[] | null>(null)
+const myTicketsFilter = ref<'TODOS' | 'ABIERTO' | 'EN_PROCESO' | 'RESUELTO' | 'ESCALADOS'>('TODOS')
+
+const fetchMyTickets = async () => {
+  if (!auth.isAuthenticated || isStaff.value) return
+  try {
+    const headers = { Authorization: `Bearer ${auth.token}` }
+    const res = await axios.get('http://localhost:3000/api/support/tickets', { headers })
+    myTickets.value = (res.data.tickets || []).map((t: any) => {
+      let obs = []
+      if (typeof t.observaciones === 'string') {
+        try {
+          obs = JSON.parse(t.observaciones)
+        } catch {
+          obs = []
+        }
+      } else if (Array.isArray(t.observaciones)) {
+        obs = t.observaciones
+      }
+      return { ...t, observaciones: obs }
+    })
+  } catch (error) {
+    console.error('Error fetching my tickets:', error)
+  }
+}
+
+const filteredMyTickets = computed(() => {
+  if (!myTickets.value) return []
+  let result = myTickets.value
+  if (myTicketsFilter.value === 'ESCALADOS') {
+    result = result.filter(t => t.fecha_escalado !== null)
+  } else if (myTicketsFilter.value !== 'TODOS') {
+    result = result.filter(t => t.estado === myTicketsFilter.value)
+  }
+  return result
+})
+
+const selectMyTicket = (ticket: any) => {
+  trackingTicketData.value = ticket
+  visitorResponseInput.value = ''
+}
+const visitorResponseInput = ref('')
+const submittingVisitorObs = ref(false)
+
+const canVisitorRespond = computed(() => {
+  const ticket = trackingTicketData.value
+  if (!ticket) return false
+  if (ticket.estado === 'RESUELTO') return false
+  
+  const obs = ticket.observaciones || []
+  if (obs.length === 0) return false
+  
+  const lastObs = obs[obs.length - 1]
+  return lastObs.tipo === 'DIRECTIVO' || lastObs.tipo === 'ADMIN_GENERAL'
+})
+
+const submitVisitorResponse = async () => {
+  if (!trackingTicketData.value || !visitorResponseInput.value.trim()) return
+  try {
+    submittingVisitorObs.value = true
+    const code = trackingTicketData.value.codigo_ticket || getTicketCode(trackingTicketData.value)
+    const res = await axios.post(`http://localhost:3000/api/support/tickets/track/${code}/observaciones`, {
+      observacion: visitorResponseInput.value.trim()
+    })
+    trackingTicketData.value.observaciones = res.data.observaciones
+    // Si la última observación cambia de ABIERTO a EN_PROCESO, lo actualizamos localmente
+    if (trackingTicketData.value.estado === 'ABIERTO') {
+      trackingTicketData.value.estado = 'EN_PROCESO'
+    }
+    visitorResponseInput.value = ''
+    alert('Respuesta registrada exitosamente.')
+  } catch (error: any) {
+    alert(error.response?.data?.error || 'Error al registrar tu respuesta.')
+  } finally {
+    submittingVisitorObs.value = false
+  }
+}
 
 // Observaciones inline
 const observationsInputs = ref<Record<number, string>>({})
@@ -115,25 +192,35 @@ const fetchTickets = async () => {
 
 const toggleEscalatedFilter = () => {
   showEscalatedOnly.value = !showEscalatedOnly.value
+  filterStatus.value = 'TODOS'
   fetchTickets()
 }
 
 const updateTicketStatus = async (ticketId: number, newStatus: string) => {
+  const t = tickets.value.find(ticket => ticket.id_ticket === ticketId)
+  if (!t) return
+
+  if (newStatus === 'RESUELTO') {
+    const ok = confirm('¿Estás seguro de pasar el estado de este ticket a RESUELTO? Una vez resuelto, el ticket pasará a ser de solo lectura y no se podrán agregar más comentarios ni modificar su estado.');
+    if (!ok) {
+      fetchTickets()
+      return
+    }
+  }
+
   try {
     const headers = { Authorization: `Bearer ${auth.token}` }
     await axios.put(`http://localhost:3000/api/support/tickets/${ticketId}/status`, { estado: newStatus }, { headers })
     
     // Actualizar localmente el estado del ticket
-    const t = tickets.value.find(ticket => ticket.id_ticket === ticketId)
-    if (t) {
-      t.estado = newStatus
-      // Si el directivo lo marca como ESCALADO (si correspondiese), lo removemos de la lista local
-      if (newStatus === 'ESCALADO' && !showEscalatedOnly.value && auth.activeRole?.toUpperCase() === 'DIRECTIVO') {
-        tickets.value = tickets.value.filter(t => t.id_ticket !== ticketId)
-      }
+    t.estado = newStatus
+    // Si el directivo lo marca como ESCALADO (si correspondiese), lo removemos de la lista local
+    if (newStatus === 'ESCALADO' && !showEscalatedOnly.value && auth.activeRole?.toUpperCase() === 'DIRECTIVO') {
+      tickets.value = tickets.value.filter(ticket => ticket.id_ticket !== ticketId)
     }
   } catch (error: any) {
     alert(error.response?.data?.error || 'Error al actualizar el estado del ticket.')
+    fetchTickets()
   }
 }
 
@@ -198,9 +285,11 @@ onMounted(() => {
   } else {
     fetchSchools()
     if (auth.isAuthenticated && auth.user) {
-      name.value = auth.user.name || `${auth.user.nombre || ''} ${auth.user.apellido || ''}`.trim()
+      name.value = auth.user.name || ''
       email.value = auth.user.email || ''
       selectedSchoolId.value = auth.user.schoolId ? Number(auth.user.schoolId) : null
+      showTrackingMode.value = true
+      fetchMyTickets()
     }
 
     // Cargar parámetros de plantilla desde la URL si están presentes
@@ -251,6 +340,7 @@ const handleSubmit = async () => {
     subject.value = ''
     description.value = ''
     phone.value = ''
+    fetchMyTickets()
   } catch (error: any) {
     errorMsg.value = error.response?.data?.error || 'Error al enviar el ticket de soporte.'
   } finally {
@@ -281,7 +371,8 @@ const filteredTickets = computed(() => {
       t.descripcion.toLowerCase().includes(q) ||
       t.nombre_remitente.toLowerCase().includes(q) ||
       t.correo_remitente.toLowerCase().includes(q) ||
-      `tkt-${new Date(t.fecha_creacion).getFullYear()}-${String(t.id_ticket).padStart(5, '0')}`.toLowerCase().includes(q)
+      `tkt-${new Date(t.fecha_creacion).getFullYear()}-${String(t.id_ticket).padStart(5, '0')}`.toLowerCase().includes(q) ||
+      (t.codigo_ticket && t.codigo_ticket.toLowerCase().includes(q))
     )
   }
 
@@ -304,8 +395,9 @@ const getCategoryLabel = (cat: string) => {
   return 'General / Sugerencia'
 }
 
-const getTicketCode = (fecha: string, id: number) => {
-  return `TKT-${new Date(fecha).getFullYear()}-${String(id).padStart(5, '0')}`
+const getTicketCode = (t: any) => {
+  if (t.codigo_ticket) return t.codigo_ticket
+  return `TKT-${new Date(t.fecha_creacion).getFullYear()}-${String(t.id_ticket).padStart(5, '0')}`
 }
 
 const formatDate = (dateStr: string) => {
@@ -317,6 +409,22 @@ const formatDate = (dateStr: string) => {
     hour: '2-digit',
     minute: '2-digit'
   })
+}
+
+const getObservationAuthor = (obs: any) => {
+  if (obs.nombre_usuario) {
+    const roleText = obs.tipo ? ` (${obs.tipo === 'ADMIN_GENERAL' ? 'Admin General' : 'Directivo'})` : ''
+    return `${obs.nombre_usuario}${roleText}`
+  }
+  return obs.autor || 'Soporte / Sistema'
+}
+
+const getObservationDate = (obs: any) => {
+  return obs.fecha_creacion || obs.fecha
+}
+
+const getObservationText = (obs: any) => {
+  return obs.mensaje || obs.texto || ''
 }
 </script>
 
@@ -429,7 +537,7 @@ const formatDate = (dateStr: string) => {
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-slate-800/50">
             <div class="flex items-center gap-3">
               <span class="px-3 py-1 bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-300 border border-slate-200/40 dark:border-slate-700/60 rounded-xl font-mono text-xs font-black">
-                {{ getTicketCode(t.fecha_creacion, t.id_ticket) }}
+                {{ getTicketCode(t) }}
               </span>
               <span 
                 class="px-2.5 py-1 text-[9px] font-black uppercase tracking-wider border rounded-full"
@@ -439,10 +547,27 @@ const formatDate = (dateStr: string) => {
               </span>
             </div>
 
-            <!-- Interactive state selector for staff -->
+            <!-- Interactive state selector or static label for staff -->
             <div class="flex items-center gap-2">
-              <span class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Estado:</span>
+              <span class="text-[10px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-widest">Estado:</span>
+              
+              <!-- RN-005: Si está escalado y es un Directivo, o si el ticket está RESUELTO, mostrar solo texto plano -->
+              <span 
+                v-if="t.estado === 'RESUELTO' || (t.fecha_escalado && auth.activeRole?.toUpperCase() === 'DIRECTIVO')"
+                class="px-3 py-1.5 text-xs font-black uppercase tracking-wider rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100/50 dark:bg-slate-800/80"
+                :class="{
+                  'text-rose-600 dark:text-rose-455': t.estado === 'ABIERTO',
+                  'text-amber-605 dark:text-amber-500': t.estado === 'EN_PROCESO',
+                  'text-emerald-600 dark:text-emerald-400': t.estado === 'RESUELTO',
+                  'text-indigo-650 dark:text-indigo-400': t.estado === 'ESCALADO'
+                }"
+              >
+                {{ t.estado === 'ABIERTO' ? 'Abierto' : t.estado === 'EN_PROCESO' ? 'En Proceso' : t.estado === 'RESUELTO' ? 'Resuelto' : 'Escalado' }}
+              </span>
+
+              <!-- En otro caso, mostrar selector interactivo -->
               <select 
+                v-else
                 v-model="t.estado"
                 @change="updateTicketStatus(t.id_ticket, t.estado)"
                 class="px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-750 text-xs font-black uppercase tracking-wider rounded-xl cursor-pointer focus:outline-none"
@@ -453,13 +578,21 @@ const formatDate = (dateStr: string) => {
                   'text-indigo-650 dark:text-indigo-400': t.estado === 'ESCALADO'
                 }"
               >
-                <option value="ABIERTO">Abierto</option>
+                <option v-if="!t.fecha_escalado && (!t.observaciones || t.observaciones.length === 0)" value="ABIERTO">Abierto</option>
                 <option value="EN_PROCESO">En Proceso</option>
                 <option value="RESUELTO">Resuelto</option>
-                <option v-if="auth.activeRole?.toUpperCase() === 'ADMIN_GENERAL'" value="ESCALADO">Escalado</option>
               </select>
+
+              <!-- RN-005: Botón de escalamiento interactivo o deshabilitado -->
               <button 
-                v-if="auth.activeRole?.toUpperCase() === 'DIRECTIVO'"
+                v-if="auth.activeRole?.toUpperCase() === 'DIRECTIVO' && t.fecha_escalado"
+                disabled
+                class="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border border-slate-200/50 dark:border-slate-750 rounded-xl text-xs font-black uppercase tracking-wider cursor-not-allowed transition-all"
+              >
+                Escalado
+              </button>
+              <button 
+                v-else-if="auth.activeRole?.toUpperCase() === 'DIRECTIVO' && !t.fecha_escalado"
                 @click="escalateTicketFrontend(t.id_ticket)"
                 class="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all"
               >
@@ -505,16 +638,16 @@ const formatDate = (dateStr: string) => {
             <div class="space-y-2">
               <div v-for="(obs, idx) in t.observaciones" :key="idx" class="p-3 bg-indigo-50/10 dark:bg-slate-850/40 rounded-2xl border border-slate-150/40 dark:border-slate-800/10">
                 <div class="flex items-center justify-between text-[9px] text-slate-400 font-bold mb-1">
-                  <span>{{ obs.autor }}</span>
-                  <span>{{ formatDate(obs.fecha) }}</span>
+                  <span>{{ getObservationAuthor(obs) }}</span>
+                  <span>{{ formatDate(getObservationDate(obs)) }}</span>
                 </div>
-                <p class="text-xs text-slate-655 dark:text-slate-350 font-semibold italic">"{{ obs.texto }}"</p>
+                <p class="text-xs text-slate-655 dark:text-slate-350 font-semibold italic whitespace-pre-line">"{{ getObservationText(obs) }}"</p>
               </div>
             </div>
           </div>
 
-          <!-- Observations Input -->
-          <div class="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800/40 space-y-2">
+          <!-- Observations Input (Only visible when ticket is not RESUELTO) -->
+          <div v-if="t.estado !== 'RESUELTO'" class="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800/40 space-y-2">
             <span class="text-[9px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-widest">Agregar Nota de Observación:</span>
             <div class="flex flex-col sm:flex-row gap-3">
               <textarea 
@@ -558,107 +691,331 @@ const formatDate = (dateStr: string) => {
       </button>
 
       <!-- Seguimiento de Ticket -->
-      <div v-if="showTrackingMode" class="mt-8 space-y-8">
-        <div class="text-center max-w-md mx-auto space-y-3">
-          <div class="w-16 h-16 bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 rounded-2xl flex items-center justify-center mx-auto shadow-inner animate-pulse">
-            <LifeBuoy class="w-8 h-8" />
+      <div v-if="showTrackingMode" class="mt-8 space-y-6">
+        
+        <!-- Caso A: Usuario Autenticado (Docente/Padre) -->
+        <div v-if="auth.isAuthenticated" class="space-y-6">
+          <div class="text-center max-w-md mx-auto space-y-2">
+            <h1 class="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Mis Tickets de Soporte</h1>
+            <p class="text-xs text-slate-500 dark:text-slate-400 font-semibold">
+              Consulta el estado de tus solicitudes creadas o escribe una respuesta a las observaciones del colegio.
+            </p>
           </div>
-          <h1 class="text-3xl font-black text-slate-900 dark:text-white tracking-tight">Seguimiento de Ticket</h1>
-          <p class="text-sm text-slate-500 dark:text-slate-400 leading-relaxed font-semibold">
-            Ingresa el código alfanumérico de tu ticket para consultar su estado actual y las observaciones del colegio.
-          </p>
-        </div>
 
-        <!-- Search Bar -->
-        <div class="max-w-md mx-auto space-y-4">
-          <div class="flex gap-3">
-            <input 
-              v-model="trackingCodeInput"
-              type="text"
-              placeholder="Ej: TKT-1B3X9H7Z"
-              class="w-full px-4 py-4 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-semibold text-slate-750 dark:text-slate-250 placeholder-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all outline-none"
-              @keyup.enter="fetchTrackingTicket"
-            />
+          <!-- Si hay tickets, mostrar el split panel -->
+          <div v-if="myTickets && myTickets.length > 0" class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+            <!-- Columna Izquierda: Listado de Tickets -->
+            <div class="lg:col-span-5 space-y-4">
+              <!-- Filtro de Estados -->
+              <div class="bg-slate-50 dark:bg-slate-800/40 px-3 py-2 rounded-2xl border border-slate-150/40 dark:border-slate-700/65 flex items-center gap-2">
+                <span class="text-[9px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-widest whitespace-nowrap ml-1">Filtrar Estado:</span>
+                <select 
+                  v-model="myTicketsFilter"
+                  class="w-full bg-transparent border-none text-xs font-bold text-slate-700 dark:text-slate-350 outline-none focus:ring-0 cursor-pointer"
+                >
+                  <option value="TODOS">Todos mis tickets</option>
+                  <option value="ABIERTO">Abiertos</option>
+                  <option value="EN_PROCESO">En Proceso</option>
+                  <option value="RESUELTO">Resueltos</option>
+                  <option value="ESCALADOS">Escalados al Admin</option>
+                </select>
+              </div>
+
+              <!-- Lista de Tickets -->
+              <div class="space-y-3 max-h-[480px] overflow-y-auto pr-1">
+                <div 
+                  v-for="t in filteredMyTickets"
+                  :key="t.id_ticket"
+                  @click="selectMyTicket(t)"
+                  class="p-4 rounded-2xl border cursor-pointer transition-all text-left space-y-2"
+                  :class="trackingTicketData && trackingTicketData.id_ticket === t.id_ticket
+                    ? 'bg-indigo-50/30 dark:bg-indigo-950/20 border-indigo-500/50 shadow-md'
+                    : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800/60 hover:border-slate-200 dark:hover:border-slate-700'"
+                >
+                  <div class="flex items-center justify-between">
+                    <span class="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-750 dark:text-slate-300 rounded-lg font-mono text-[10px] font-black">
+                      {{ t.codigo_ticket || getTicketCode(t) }}
+                    </span>
+                    <div class="flex items-center gap-1.5">
+                      <span v-if="t.fecha_escalado" class="px-1.5 py-0.5 bg-indigo-50 dark:bg-indigo-950/40 text-[9px] font-black text-indigo-650 dark:text-indigo-400 rounded-md">Escalado</span>
+                      <span 
+                        class="px-1.5 py-0.5 text-[9px] font-black uppercase rounded-md"
+                        :class="{
+                          'bg-rose-50 text-rose-700': t.estado === 'ABIERTO',
+                          'bg-amber-50 text-amber-700': t.estado === 'EN_PROCESO',
+                          'bg-emerald-50 text-emerald-700': t.estado === 'RESUELTO',
+                          'bg-indigo-50 text-indigo-700': t.estado === 'ESCALADO'
+                        }"
+                      >
+                        {{ t.estado === 'ABIERTO' ? 'Abierto' : t.estado === 'EN_PROCESO' ? 'En Proceso' : t.estado === 'RESUELTO' ? 'Resuelto' : 'Escalado' }}
+                      </span>
+                    </div>
+                  </div>
+                  <h4 class="text-xs font-black text-slate-800 dark:text-slate-200 line-clamp-1">{{ t.asunto }}</h4>
+                  <p class="text-[10px] text-slate-455 dark:text-slate-500 font-semibold line-clamp-1 italic">"{{ t.descripcion }}"</p>
+                  <div class="flex items-center justify-between text-[9px] text-slate-400 font-bold pt-1 border-t border-slate-50 dark:border-slate-850">
+                    <span>{{ formatDate(t.fecha_creacion) }}</span>
+                    <span>{{ t.observaciones ? t.observaciones.length : 0 }} obs</span>
+                  </div>
+                </div>
+                
+                <div v-if="filteredMyTickets.length === 0" class="p-8 bg-slate-50/50 dark:bg-slate-800/10 border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl text-center">
+                  <p class="text-[11px] text-slate-400 font-bold italic">No se encontraron tickets con este filtro.</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Columna Derecha: Detalle de Ticket Seleccionado -->
+            <div class="lg:col-span-7">
+              <div v-if="trackingTicketData" class="p-6 bg-slate-50/50 dark:bg-slate-800/20 border border-slate-100 dark:border-slate-850 rounded-[2rem] space-y-6 shadow-inner animate-in fade-in duration-300">
+                
+                <!-- DETALLE DEL TICKET -->
+                <div class="pb-4 border-b border-slate-100 dark:border-slate-800/50 flex items-center justify-between">
+                  <span class="px-3 py-1 bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-300 border border-slate-200/40 dark:border-slate-700/60 rounded-xl font-mono text-xs font-black">
+                    {{ trackingTicketData.codigo_ticket || `TKT-${new Date(trackingTicketData.fecha_creacion).getFullYear()}-${String(trackingTicketData.id_ticket).padStart(5, '0')}` }}
+                  </span>
+                  
+                  <div class="flex items-center gap-2">
+                    <span class="text-[10px] font-bold text-slate-400 dark:text-slate-555 uppercase tracking-widest">Estado:</span>
+                    <span 
+                      class="px-3 py-1 text-[10px] font-black uppercase tracking-wider border rounded-full"
+                      :class="{
+                        'bg-rose-50 border-rose-100 text-rose-700': trackingTicketData.estado === 'ABIERTO',
+                        'bg-amber-50 border-amber-100 text-amber-700': trackingTicketData.estado === 'EN_PROCESO',
+                        'bg-emerald-50 border-emerald-100 text-emerald-700': trackingTicketData.estado === 'RESUELTO',
+                        'bg-indigo-50 border-indigo-100 text-indigo-700': trackingTicketData.estado === 'ESCALADO'
+                      }"
+                    >
+                      {{ trackingTicketData.estado === 'ABIERTO' ? '🔴 Abierto' : 
+                         trackingTicketData.estado === 'EN_PROCESO' ? '🟡 En Proceso' : 
+                         trackingTicketData.estado === 'RESUELTO' ? '🟢 Resuelto' : '🔵 Escalado' }}
+                    </span>
+                  </div>
+                </div>
+
+                <div class="space-y-3">
+                  <div>
+                    <span class="text-[9px] font-bold text-slate-400 dark:text-slate-555 uppercase tracking-widest">Asunto:</span>
+                    <p class="font-black text-slate-850 dark:text-slate-200 text-sm mt-0.5">{{ trackingTicketData.asunto }}</p>
+                  </div>
+                  <div>
+                    <span class="text-[9px] font-bold text-slate-400 dark:text-slate-555 uppercase tracking-widest">Descripción de la Incidencia:</span>
+                    <p class="text-xs text-slate-655 dark:text-slate-400 leading-relaxed mt-0.5 whitespace-pre-line">{{ trackingTicketData.descripcion }}</p>
+                  </div>
+                  <div class="grid grid-cols-2 gap-4 pt-2">
+                    <div>
+                      <span class="text-[9px] font-bold text-slate-400 dark:text-slate-555 uppercase tracking-widest">Colegio:</span>
+                      <p class="text-xs font-black text-slate-700 dark:text-slate-300 mt-0.5">{{ trackingTicketData.colegio_nombre || 'General / Público' }}</p>
+                    </div>
+                    <div>
+                      <span class="text-[9px] font-bold text-slate-400 dark:text-slate-555 uppercase tracking-widest">Fecha de Creación:</span>
+                      <p class="text-xs font-black text-slate-700 dark:text-slate-300 mt-0.5">{{ formatDate(trackingTicketData.fecha_creacion) }}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Observaciones del Colegio -->
+                <div class="pt-6 border-t border-slate-100 dark:border-slate-800/50 space-y-4">
+                  <h3 class="text-xs font-black text-slate-850 dark:text-white uppercase tracking-wider">Observaciones del Colegio</h3>
+                  
+                  <div v-if="!trackingTicketData.observaciones || trackingTicketData.observaciones.length === 0" class="p-6 bg-slate-100/40 dark:bg-slate-800/10 border border-dashed border-slate-250 dark:border-slate-800 rounded-2xl text-center">
+                    <p class="text-[11px] text-slate-400 font-semibold italic">El colegio aún no ha registrado notas u observaciones en esta solicitud.</p>
+                  </div>
+                  <div v-else class="space-y-3">
+                    <div 
+                      v-for="(obs, idx) in trackingTicketData.observaciones" 
+                      :key="idx" 
+                      class="p-4 bg-white dark:bg-slate-850 border border-slate-150/40 dark:border-slate-800 rounded-2xl shadow-sm"
+                    >
+                      <div class="flex items-center justify-between text-[9px] text-slate-400 font-bold mb-2">
+                        <span>{{ getObservationAuthor(obs) }}</span>
+                        <span>{{ formatDate(getObservationDate(obs)) }}</span>
+                      </div>
+                      <p class="text-xs text-slate-700 dark:text-slate-350 font-semibold italic whitespace-pre-line">"{{ getObservationText(obs) }}"</p>
+                    </div>
+                  </div>
+
+                  <!-- Visitor Response Block -->
+                  <div v-if="canVisitorRespond" class="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800/50 space-y-3">
+                    <span class="text-[9px] font-bold text-slate-400 dark:text-slate-555 uppercase tracking-widest block ml-1">Enviar una respuesta a este ticket:</span>
+                    <div class="flex flex-col sm:flex-row gap-3">
+                      <textarea 
+                        v-model="visitorResponseInput" 
+                        placeholder="Escribe tu respuesta aquí..."
+                        rows="2"
+                        class="w-full p-3 bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 rounded-2xl focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 outline-none resize-none transition-all"
+                      ></textarea>
+                      <button 
+                        @click="submitVisitorResponse"
+                        :disabled="submittingVisitorObs || !visitorResponseInput.trim()"
+                        class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-750 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center shrink-0"
+                      >
+                        <Loader2 v-if="submittingVisitorObs" class="w-3.5 h-3.5 animate-spin mr-1.5" />
+                        Enviar
+                      </button>
+                    </div>
+                  </div>
+                  <div v-else-if="trackingTicketData.estado !== 'RESUELTO'" class="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800/50 text-center">
+                    <p class="text-[10px] text-slate-400 dark:text-slate-550 font-bold italic leading-relaxed">
+                      Debes esperar a que el personal del colegio o el administrador responda tu mensaje antes de poder enviar otra respuesta.
+                    </p>
+                  </div>
+                </div>
+
+              </div>
+              <div v-else class="p-16 bg-slate-50/30 dark:bg-slate-800/10 border border-dashed border-slate-200 dark:border-slate-800 rounded-3xl text-center flex flex-col items-center justify-center min-h-[350px]">
+                <LifeBuoy class="w-10 h-10 text-slate-350 dark:text-slate-650 mb-3 animate-bounce" />
+                <p class="text-xs text-slate-400 font-bold italic">Selecciona uno de tus tickets del listado para ver su historial de observaciones y enviar respuestas.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Si no tiene tickets, mostrar mensaje vacío -->
+          <div v-else class="p-12 bg-slate-50/30 dark:bg-slate-800/10 border border-dashed border-slate-200 dark:border-slate-800 rounded-3xl text-center flex flex-col items-center justify-center">
+            <LifeBuoy class="w-12 h-12 text-slate-250 dark:text-slate-700 mb-4" />
+            <h3 class="text-sm font-black text-slate-600 dark:text-slate-400">Aún no tienes tickets de soporte</h3>
+            <p class="text-[11px] text-slate-400 dark:text-slate-500 font-semibold mt-1 max-w-xs mx-auto leading-relaxed">
+              Cuando envíes una solicitud de soporte, podrás consultar su estado y responder a las observaciones del colegio desde aquí.
+            </p>
             <button 
-              @click="fetchTrackingTicket"
-              :disabled="searchingTracking || !trackingCodeInput.trim()"
-              class="px-6 py-4 bg-indigo-650 hover:bg-indigo-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all disabled:opacity-50 flex items-center gap-1.5 shrink-0 shadow-md"
+              @click="showTrackingMode = false"
+              class="mt-4 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all"
             >
-              <Loader2 v-if="searchingTracking" class="w-4 h-4 animate-spin" />
-              Buscar
+              Crear un Ticket
             </button>
           </div>
-
-          <div v-if="trackingError" class="bg-rose-50 dark:bg-rose-950/20 border border-rose-200 text-rose-700 dark:text-rose-455 rounded-2xl p-4 flex items-center gap-3">
-            <AlertCircle class="w-5 h-5 text-rose-600 shrink-0" />
-            <p class="text-xs font-bold">{{ trackingError }}</p>
-          </div>
         </div>
 
-        <!-- Tracking Results Card -->
-        <div v-if="trackingTicketData" class="max-w-xl mx-auto p-6 bg-slate-50/50 dark:bg-slate-800/20 border border-slate-100 dark:border-slate-850 rounded-[2rem] space-y-6 shadow-inner animate-in fade-in duration-300">
-          <div class="pb-4 border-b border-slate-100 dark:border-slate-800/50 flex items-center justify-between">
-            <span class="px-3 py-1 bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-300 border border-slate-200/40 dark:border-slate-700/60 rounded-xl font-mono text-xs font-black">
-              {{ trackingTicketData.codigo_ticket || `TKT-${new Date(trackingTicketData.fecha_creacion).getFullYear()}-${String(trackingTicketData.id_ticket).padStart(5, '0')}` }}
-            </span>
-            
-            <div class="flex items-center gap-2">
-              <span class="text-[10px] font-bold text-slate-400 dark:text-slate-555 uppercase tracking-widest">Estado:</span>
-              <span 
-                class="px-3 py-1 text-[10px] font-black uppercase tracking-wider border rounded-full"
-                :class="{
-                  'bg-rose-50 border-rose-100 text-rose-700': trackingTicketData.estado === 'ABIERTO',
-                  'bg-amber-50 border-amber-100 text-amber-700': trackingTicketData.estado === 'EN_PROCESO',
-                  'bg-emerald-50 border-emerald-100 text-emerald-700': trackingTicketData.estado === 'RESUELTO',
-                  'bg-indigo-50 border-indigo-100 text-indigo-700': trackingTicketData.estado === 'ESCALADO'
-                }"
+        <!-- Caso B: Visitante Anónimo (Buscador Clásico) -->
+        <div v-else class="space-y-6">
+          <div class="text-center max-w-md mx-auto space-y-3">
+            <div class="w-16 h-16 bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 rounded-2xl flex items-center justify-center mx-auto shadow-inner animate-pulse">
+              <LifeBuoy class="w-8 h-8" />
+            </div>
+            <h1 class="text-3xl font-black text-slate-900 dark:text-white tracking-tight">Seguimiento de Ticket</h1>
+            <p class="text-sm text-slate-500 dark:text-slate-400 leading-relaxed font-semibold">
+              Ingresa el código alfanumérico de tu ticket para consultar su estado actual y las observaciones del colegio.
+            </p>
+          </div>
+
+          <!-- Search Bar -->
+          <div class="max-w-md mx-auto space-y-4">
+            <div class="flex gap-3">
+              <input 
+                v-model="trackingCodeInput"
+                type="text"
+                placeholder="Ej: TKT-1B3X9H7Z"
+                class="w-full px-4 py-4 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-semibold text-slate-750 dark:text-slate-250 placeholder-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all outline-none"
+                @keyup.enter="fetchTrackingTicket"
+              />
+              <button 
+                @click="fetchTrackingTicket"
+                :disabled="searchingTracking || !trackingCodeInput.trim()"
+                class="px-6 py-4 bg-indigo-650 hover:bg-indigo-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all disabled:opacity-50 flex items-center gap-1.5 shrink-0 shadow-md"
               >
-                {{ trackingTicketData.estado === 'ABIERTO' ? '🔴 Abierto' : 
-                   trackingTicketData.estado === 'EN_PROCESO' ? '🟡 En Proceso' : 
-                   trackingTicketData.estado === 'RESUELTO' ? '🟢 Resuelto' : '🔵 Escalado' }}
+                <Loader2 v-if="searchingTracking" class="w-4 h-4 animate-spin" />
+                Buscar
+              </button>
+            </div>
+
+            <div v-if="trackingError" class="bg-rose-50 dark:bg-rose-950/20 border border-rose-200 text-rose-700 dark:text-rose-455 rounded-2xl p-4 flex items-center gap-3">
+              <AlertCircle class="w-5 h-5 text-rose-600 shrink-0" />
+              <p class="text-xs font-bold">{{ trackingError }}</p>
+            </div>
+          </div>
+
+          <!-- Ficha de resultados del buscador -->
+          <div v-if="trackingTicketData" class="max-w-xl mx-auto p-6 bg-slate-50/50 dark:bg-slate-800/20 border border-slate-100 dark:border-slate-850 rounded-[2rem] space-y-6 shadow-inner animate-in fade-in duration-300">
+            <!-- DETALLE DEL TICKET -->
+            <div class="pb-4 border-b border-slate-100 dark:border-slate-800/50 flex items-center justify-between">
+              <span class="px-3 py-1 bg-slate-100 dark:bg-slate-800 text-slate-850 dark:text-slate-300 border border-slate-200/40 dark:border-slate-700/60 rounded-xl font-mono text-xs font-black">
+                {{ trackingTicketData.codigo_ticket || `TKT-${new Date(trackingTicketData.fecha_creacion).getFullYear()}-${String(trackingTicketData.id_ticket).padStart(5, '0')}` }}
               </span>
-            </div>
-          </div>
-
-          <div class="space-y-3">
-            <div>
-              <span class="text-[9px] font-bold text-slate-400 dark:text-slate-555 uppercase tracking-widest">Asunto:</span>
-              <p class="font-black text-slate-850 dark:text-slate-200 text-sm mt-0.5">{{ trackingTicketData.asunto }}</p>
-            </div>
-            <div>
-              <span class="text-[9px] font-bold text-slate-400 dark:text-slate-555 uppercase tracking-widest">Descripción de la Incidencia:</span>
-              <p class="text-xs text-slate-655 dark:text-slate-400 leading-relaxed mt-0.5 whitespace-pre-line">{{ trackingTicketData.descripcion }}</p>
-            </div>
-            <div class="grid grid-cols-2 gap-4 pt-2">
-              <div>
-                <span class="text-[9px] font-bold text-slate-400 dark:text-slate-555 uppercase tracking-widest">Colegio:</span>
-                <p class="text-xs font-black text-slate-700 dark:text-slate-300 mt-0.5">{{ trackingTicketData.colegio_nombre || 'General / Público' }}</p>
-              </div>
-              <div>
-                <span class="text-[9px] font-bold text-slate-400 dark:text-slate-555 uppercase tracking-widest">Fecha de Creación:</span>
-                <p class="text-xs font-black text-slate-700 dark:text-slate-300 mt-0.5">{{ formatDate(trackingTicketData.fecha_creacion) }}</p>
+              
+              <div class="flex items-center gap-2">
+                <span class="text-[10px] font-bold text-slate-400 dark:text-slate-555 uppercase tracking-widest">Estado:</span>
+                <span 
+                  class="px-3 py-1 text-[10px] font-black uppercase tracking-wider border rounded-full"
+                  :class="{
+                    'bg-rose-50 border-rose-100 text-rose-700': trackingTicketData.estado === 'ABIERTO',
+                    'bg-amber-50 border-amber-100 text-amber-700': trackingTicketData.estado === 'EN_PROCESO',
+                    'bg-emerald-50 border-emerald-100 text-emerald-700': trackingTicketData.estado === 'RESUELTO',
+                    'bg-indigo-50 border-indigo-100 text-indigo-700': trackingTicketData.estado === 'ESCALADO'
+                  }"
+                >
+                  {{ trackingTicketData.estado === 'ABIERTO' ? '🔴 Abierto' : 
+                     trackingTicketData.estado === 'EN_PROCESO' ? '🟡 En Proceso' : 
+                     trackingTicketData.estado === 'RESUELTO' ? '🟢 Resuelto' : '🔵 Escalado' }}
+                </span>
               </div>
             </div>
-          </div>
 
-          <!-- Observaciones del Colegio -->
-          <div class="pt-6 border-t border-slate-100 dark:border-slate-800/50 space-y-4">
-            <h3 class="text-xs font-black text-slate-850 dark:text-white uppercase tracking-wider">Observaciones del Colegio</h3>
-            
-            <div v-if="!trackingTicketData.observaciones || trackingTicketData.observaciones.length === 0" class="p-6 bg-slate-100/40 dark:bg-slate-800/10 border border-dashed border-slate-250 dark:border-slate-800 rounded-2xl text-center">
-              <p class="text-[11px] text-slate-400 font-semibold italic">El colegio aún no ha registrado notas u observaciones en esta solicitud.</p>
-            </div>
-            <div v-else class="space-y-3">
-              <div 
-                v-for="(obs, idx) in trackingTicketData.observaciones" 
-                :key="idx" 
-                class="p-4 bg-white dark:bg-slate-850 border border-slate-150/40 dark:border-slate-800 rounded-2xl shadow-sm"
-              >
-                <div class="flex items-center justify-between text-[9px] text-slate-400 font-bold mb-2">
-                  <span>{{ obs.autor }}</span>
-                  <span>{{ formatDate(obs.fecha) }}</span>
+            <div class="space-y-3">
+              <div>
+                <span class="text-[9px] font-bold text-slate-400 dark:text-slate-555 uppercase tracking-widest">Asunto:</span>
+                <p class="font-black text-slate-850 dark:text-slate-200 text-sm mt-0.5">{{ trackingTicketData.asunto }}</p>
+              </div>
+              <div>
+                <span class="text-[9px] font-bold text-slate-400 dark:text-slate-555 uppercase tracking-widest">Descripción de la Incidencia:</span>
+                <p class="text-xs text-slate-655 dark:text-slate-400 leading-relaxed mt-0.5 whitespace-pre-line">{{ trackingTicketData.descripcion }}</p>
+              </div>
+              <div class="grid grid-cols-2 gap-4 pt-2">
+                <div>
+                  <span class="text-[9px] font-bold text-slate-400 dark:text-slate-555 uppercase tracking-widest">Colegio:</span>
+                  <p class="text-xs font-black text-slate-700 dark:text-slate-300 mt-0.5">{{ trackingTicketData.colegio_nombre || 'General / Público' }}</p>
                 </div>
-                <p class="text-xs text-slate-700 dark:text-slate-300 font-semibold italic">"{{ obs.texto }}"</p>
+                <div>
+                  <span class="text-[9px] font-bold text-slate-400 dark:text-slate-555 uppercase tracking-widest">Fecha de Creación:</span>
+                  <p class="text-xs font-black text-slate-700 dark:text-slate-300 mt-0.5">{{ formatDate(trackingTicketData.fecha_creacion) }}</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Observaciones del Colegio -->
+            <div class="pt-6 border-t border-slate-100 dark:border-slate-800/50 space-y-4">
+              <h3 class="text-xs font-black text-slate-850 dark:text-white uppercase tracking-wider">Observaciones del Colegio</h3>
+              
+              <div v-if="!trackingTicketData.observaciones || trackingTicketData.observaciones.length === 0" class="p-6 bg-slate-100/40 dark:bg-slate-800/10 border border-dashed border-slate-250 dark:border-slate-800 rounded-2xl text-center">
+                <p class="text-[11px] text-slate-400 font-semibold italic">El colegio aún no ha registrado notas u observaciones en esta solicitud.</p>
+              </div>
+              <div v-else class="space-y-3">
+                <div 
+                  v-for="(obs, idx) in trackingTicketData.observaciones" 
+                  :key="idx" 
+                  class="p-4 bg-white dark:bg-slate-850 border border-slate-150/40 dark:border-slate-800 rounded-2xl shadow-sm"
+                >
+                  <div class="flex items-center justify-between text-[9px] text-slate-400 font-bold mb-2">
+                    <span>{{ getObservationAuthor(obs) }}</span>
+                    <span>{{ formatDate(getObservationDate(obs)) }}</span>
+                  </div>
+                  <p class="text-xs text-slate-700 dark:text-slate-350 font-semibold italic whitespace-pre-line">"{{ getObservationText(obs) }}"</p>
+                </div>
+              </div>
+
+              <!-- Visitor Response Block -->
+              <div v-if="canVisitorRespond" class="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800/50 space-y-3">
+                <span class="text-[9px] font-bold text-slate-400 dark:text-slate-555 uppercase tracking-widest block ml-1">Enviar una respuesta a este ticket:</span>
+                <div class="flex flex-col sm:flex-row gap-3">
+                  <textarea 
+                    v-model="visitorResponseInput" 
+                    placeholder="Escribe tu respuesta aquí..."
+                    rows="2"
+                    class="w-full p-3 bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 rounded-2xl focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 outline-none resize-none transition-all"
+                  ></textarea>
+                  <button 
+                    @click="submitVisitorResponse"
+                    :disabled="submittingVisitorObs || !visitorResponseInput.trim()"
+                    class="px-5 py-2.5 bg-indigo-650 hover:bg-indigo-700 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center shrink-0"
+                  >
+                    <Loader2 v-if="submittingVisitorObs" class="w-3.5 h-3.5 animate-spin mr-1.5" />
+                    Enviar
+                  </button>
+                </div>
+              </div>
+              <div v-else-if="trackingTicketData.estado !== 'RESUELTO'" class="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800/50 text-center">
+                <p class="text-[10px] text-slate-450 dark:text-slate-500 font-bold italic leading-relaxed">
+                  Debes esperar a que el personal del colegio o el administrador responda tu mensaje antes de poder enviar otra respuesta.
+                </p>
               </div>
             </div>
           </div>

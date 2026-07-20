@@ -6,6 +6,7 @@ const studentPortalController_1 = require("../controllers/studentPortalControlle
 const authMiddleware_1 = require("../middleware/authMiddleware");
 const router = (0, express_1.Router)();
 // Administrative CRUD operations (require Directivo or Admin General)
+router.get("/sanctions/types", authMiddleware_1.verifyToken, authMiddleware_1.requireDirectivo, studentController_1.getTipoSanciones);
 router.get("/colegio/:idColegio", authMiddleware_1.verifyToken, authMiddleware_1.requireDirectivo, studentController_1.getAllStudents);
 router.get("/:id/summary", authMiddleware_1.verifyToken, authMiddleware_1.requireDirectivo, studentController_1.getStudentSummary);
 router.put("/:id", authMiddleware_1.verifyToken, authMiddleware_1.requireDirectivo, studentController_1.updateStudent);

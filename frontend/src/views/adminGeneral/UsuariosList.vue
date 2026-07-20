@@ -5,7 +5,7 @@ import axios from 'axios'
 import { useAuthStore } from '../../stores/auth'
 import { 
   Users, Search, UserCheck, ShieldAlert, Key, LogOut, Trash2, Eye, 
-  Mail, School, Shield, Calendar, Lock, Clipboard, Check, Ban
+  Mail, School, Shield, Calendar, Lock, Clipboard, Check, Ban, Loader2
 } from 'lucide-vue-next'
 
 const auth = useAuthStore()
@@ -17,6 +17,7 @@ interface Usuario {
   nombre: string
   apellido: string
   rol_nombre: string
+  roles?: string[]
   colegio_nombre?: string
   id_colegio?: number
   estado: 'ACTIVO' | 'SUSPENDIDO' | 'BANEADO' | 'ELIMINADO'
@@ -25,6 +26,8 @@ interface Usuario {
   fecha_baneo?: string
   baneado_por_nombre?: string
   baneado_por_email?: string
+  documento?: string
+  tipo_documento?: string
 }
 
 interface ColegioBrief {
@@ -59,6 +62,115 @@ const banReason = ref('')
 const tempPassword = ref('')
 const copied = ref(false)
 
+// Modificación de credenciales con ticket de soporte
+const editingCredentials = ref(false)
+const ticketCodeVerification = ref('')
+const verifyingTicket = ref(false)
+const verificationError = ref('')
+const editableNombre = ref('')
+const editableApellido = ref('')
+const editableTipoDoc = ref('')
+const editableDocumento = ref('')
+const editableRoles = ref<string[]>([])
+const applyingChange = ref(false)
+
+const verifyTicketAndEnableEdit = async () => {
+  if (!ticketCodeVerification.value.trim() || !selectedUser.value) return
+  try {
+    verifyingTicket.value = true
+    verificationError.value = ''
+    
+    // Consultar el endpoint privado de validación del ticket para esta cuenta específica
+    const headers = { Authorization: `Bearer ${auth.token}` }
+    await axios.post(
+      `http://localhost:3000/api/admin/usuarios/${selectedUser.value.id_usuario}/validar-ticket`,
+      { codigo_ticket: ticketCodeVerification.value.trim() },
+      { headers }
+    )
+
+    // Inicializar campos editables si pasa la validación de correspondencia y estado
+    editableNombre.value = selectedUser.value.nombre
+    editableApellido.value = selectedUser.value.apellido || ''
+    
+    // Normalizar Tipo de Documento
+    const rawTipoDoc = String(selectedUser.value.tipo_documento || '').trim()
+    if (rawTipoDoc.includes('Cédula de Ciudadanía') || rawTipoDoc === 'CC') {
+      editableTipoDoc.value = 'CC'
+    } else if (rawTipoDoc.includes('Tarjeta de Identidad') || rawTipoDoc === 'TI') {
+      editableTipoDoc.value = 'TI'
+    } else if (rawTipoDoc.includes('Cédula de Extranjería') || rawTipoDoc === 'CE') {
+      editableTipoDoc.value = 'CE'
+    } else if (rawTipoDoc.includes('Registro Civil') || rawTipoDoc === 'RC') {
+      editableTipoDoc.value = 'RC'
+    } else if (rawTipoDoc.includes('PEP') || rawTipoDoc.includes('PPT') || rawTipoDoc === 'PEP') {
+      editableTipoDoc.value = 'PEP'
+    } else {
+      editableTipoDoc.value = 'CC'
+    }
+
+    editableDocumento.value = selectedUser.value.documento || ''
+    
+    // Normalizar Roles a mayúsculas
+    editableRoles.value = (selectedUser.value.roles || []).map((r: string) => {
+      let normalized = String(r).toUpperCase().trim();
+      if (normalized === 'ADMIN') return 'ADMIN_GENERAL';
+      if (normalized === 'PADRE_FAMILIA') return 'PADRE';
+      return normalized;
+    })
+    
+    editingCredentials.value = true
+  } catch (error: any) {
+    verificationError.value = error.response?.data?.error || 'Código de ticket inválido o no corresponde a esta cuenta.'
+  } finally {
+    verifyingTicket.value = false
+  }
+}
+
+const cancelEdit = () => {
+  editingCredentials.value = false
+  ticketCodeVerification.value = ''
+  verificationError.value = ''
+  editableNombre.value = ''
+  editableApellido.value = ''
+  editableTipoDoc.value = ''
+  editableDocumento.value = ''
+  editableRoles.value = []
+}
+
+const applyCredentialsChange = async () => {
+  if (!selectedUser.value || applyingChange.value) return
+  try {
+    applyingChange.value = true
+    const headers = { Authorization: `Bearer ${auth.token}` }
+    await axios.put(`http://localhost:3000/api/admin/usuarios/${selectedUser.value.id_usuario}/credenciales-con-ticket`, {
+      codigo_ticket: ticketCodeVerification.value.trim(),
+      nombre: editableNombre.value,
+      apellido: editableApellido.value,
+      tipo_documento: editableTipoDoc.value,
+      documento: editableDocumento.value,
+      roles: editableRoles.value
+    }, { headers })
+
+    alert('Credenciales y roles actualizados exitosamente.')
+    
+    // Actualizar localmente el usuario seleccionado
+    selectedUser.value.nombre = editableNombre.value
+    selectedUser.value.apellido = editableApellido.value
+    selectedUser.value.tipo_documento = editableTipoDoc.value
+    selectedUser.value.documento = editableDocumento.value
+    selectedUser.value.roles = [...editableRoles.value]
+    selectedUser.value.rol_nombre = editableRoles.value[0] || 'sin_rol'
+
+    cancelEdit()
+    showDetailsModal.value = false
+    await fetchUsers()
+  } catch (error: any) {
+    alert(error.response?.data?.error || 'Error al aplicar los cambios de credenciales.')
+  } finally {
+    applyingChange.value = false
+  }
+}
+
 const fetchSchools = async () => {
   try {
     const headers = { Authorization: `Bearer ${auth.token}` }
@@ -82,7 +194,11 @@ const fetchUsers = async () => {
         search: search.value || undefined
       }
     })
-    users.value = res.data
+    
+    users.value = (res.data || []).map((u: any) => ({
+      ...u,
+      rol_nombre: u.roles && u.roles[0] ? u.roles[0] : 'sin_rol'
+    }))
 
     // Refresh KPI counts
     stats.value = {
@@ -98,7 +214,15 @@ const fetchUsers = async () => {
   }
 }
 
-watch([selectedRole, selectedEstado, selectedSchool, search], () => {
+let debounceTimeout: any = null
+watch(search, () => {
+  if (debounceTimeout) clearTimeout(debounceTimeout)
+  debounceTimeout = setTimeout(() => {
+    fetchUsers()
+  }, 400)
+})
+
+watch([selectedRole, selectedEstado, selectedSchool], () => {
   fetchUsers()
 })
 
@@ -117,7 +241,12 @@ const openDetails = async (user: Usuario) => {
   try {
     const headers = { Authorization: `Bearer ${auth.token}` }
     const res = await axios.get(`http://localhost:3000/api/admin/usuarios/${user.id_usuario}`, { headers })
-    selectedUser.value = { ...user, ...res.data }
+    const data = res.data || {}
+    selectedUser.value = { 
+      ...user, 
+      ...data,
+      rol_nombre: data.roles && data.roles[0] ? data.roles[0] : (user.rol_nombre || 'sin_rol')
+    }
   } catch (error) {
     console.error('Error fetching user details:', error)
   }
@@ -339,9 +468,15 @@ const handleDelete = async (user: Usuario) => {
                 </div>
               </td>
               <td class="p-4">
-                <span class="bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider">
-                  {{ user.rol_nombre }}
-                </span>
+                <div class="flex flex-wrap gap-1">
+                  <span 
+                    v-for="r in user.roles || [user.rol_nombre]" 
+                    :key="r"
+                    class="bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider whitespace-nowrap"
+                  >
+                    {{ r }}
+                  </span>
+                </div>
               </td>
               <td class="p-4">
                 <span class="truncate max-w-[200px] block" :title="user.colegio_nombre || 'Global'">
@@ -432,12 +567,98 @@ const handleDelete = async (user: Usuario) => {
               <span class="px-3 py-1 rounded-full text-xs font-black bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-400 uppercase tracking-widest">{{ selectedUser.estado }}</span>
             </div>
 
-            <!-- Profile Info -->
-            <div class="grid grid-cols-2 gap-4 text-sm font-semibold text-slate-600 dark:text-slate-400">
+            <!-- Profile Info: Read Only -->
+            <div v-if="!editingCredentials" class="grid grid-cols-2 gap-4 text-sm font-semibold text-slate-600 dark:text-slate-400">
               <p class="flex items-center gap-2"><Mail :size="14" class="text-slate-400" /> <span class="font-medium text-slate-900 dark:text-white">{{ selectedUser.email }}</span></p>
-              <p class="flex items-center gap-2"><Shield :size="14" class="text-slate-400" /> Rol: <span class="font-bold text-slate-900 dark:text-white">{{ selectedUser.rol_nombre }}</span></p>
+              <div class="flex items-center gap-2 flex-wrap">
+                <Shield :size="14" class="text-slate-400" /> 
+                <span>Roles:</span>
+                <div class="flex flex-wrap gap-1">
+                  <span 
+                    v-for="r in selectedUser.roles || [selectedUser.rol_nombre]" 
+                    :key="r"
+                    class="bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider"
+                  >
+                    {{ r }}
+                  </span>
+                </div>
+              </div>
               <p class="flex items-center gap-2"><School :size="14" class="text-slate-400" /> Colegio: <span class="font-medium text-slate-900 dark:text-white">{{ selectedUser.colegio_nombre || 'Global (Administración)' }}</span></p>
               <p class="flex items-center gap-2"><Calendar :size="14" class="text-slate-400" /> Creación: <span class="font-medium text-slate-900 dark:text-white">{{ new Date(selectedUser.fecha_creacion).toLocaleDateString() }}</span></p>
+              <p v-if="selectedUser.tipo_documento && selectedUser.documento" class="col-span-2 flex items-center gap-2">
+                <Clipboard :size="14" class="text-slate-400" /> 
+                <span>Identificación: </span>
+                <span class="font-bold text-slate-900 dark:text-white">{{ selectedUser.tipo_documento }} #{{ selectedUser.documento }}</span>
+              </p>
+            </div>
+
+            <!-- Profile Info: Edit Mode -->
+            <div v-else class="space-y-4 bg-slate-50 dark:bg-slate-800/40 p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
+              <h3 class="text-xs font-black text-slate-850 dark:text-white uppercase tracking-wider border-b pb-2">Modificar Datos Críticos</h3>
+              <div class="grid grid-cols-2 gap-4">
+                <div class="space-y-1">
+                  <label class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">Nombre</label>
+                  <input v-model="editableNombre" type="text" class="w-full bg-white dark:bg-slate-850 px-3 py-2 text-xs rounded-xl border border-slate-255 dark:border-slate-700 outline-none text-slate-800 dark:text-white font-bold" />
+                </div>
+                <div class="space-y-1">
+                  <label class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">Apellido</label>
+                  <input v-model="editableApellido" type="text" class="w-full bg-white dark:bg-slate-850 px-3 py-2 text-xs rounded-xl border border-slate-255 dark:border-slate-700 outline-none text-slate-800 dark:text-white font-bold" />
+                </div>
+                <div class="space-y-1">
+                  <label class="text-[10px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-widest ml-1">Tipo de Documento</label>
+                  <select v-model="editableTipoDoc" class="w-full bg-white dark:bg-slate-850 px-3 py-2 text-xs rounded-xl border border-slate-255 dark:border-slate-700 outline-none text-slate-805 dark:text-white font-bold">
+                    <option value="CC">Cédula de Ciudadanía (CC)</option>
+                    <option value="TI">Tarjeta de Identidad (TI)</option>
+                    <option value="CE">Cédula de Extranjería (CE)</option>
+                    <option value="RC">Registro Civil (RC)</option>
+                    <option value="PEP">PEP</option>
+                  </select>
+                </div>
+                <div class="space-y-1">
+                  <label class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">Documento</label>
+                  <input v-model="editableDocumento" type="text" class="w-full bg-white dark:bg-slate-850 px-3 py-2 text-xs rounded-xl border border-slate-255 dark:border-slate-700 outline-none text-slate-800 dark:text-white font-mono font-bold" />
+                </div>
+              </div>
+
+              <!-- Roles checkbox list -->
+              <div class="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <label class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1 block">Roles Asignados</label>
+                <div class="flex flex-wrap gap-4 px-1 py-1">
+                  <label v-for="roleKey in ['ADMIN_GENERAL', 'DIRECTIVO', 'DOCENTE', 'PADRE', 'ESTUDIANTE']" :key="roleKey" class="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-350 cursor-pointer">
+                    <input type="checkbox" :value="roleKey" v-model="editableRoles" class="rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500 w-4 h-4" />
+                    <span>{{ roleKey }}</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <!-- Modificar credentials ticket authorization panel -->
+            <div v-if="!editingCredentials && selectedUser.estado !== 'ELIMINADO' && selectedUser.rol_nombre !== 'admin_general'" class="bg-indigo-50/20 dark:bg-slate-800/20 p-4 rounded-2xl border border-dashed border-indigo-200/50 dark:border-slate-800/80 space-y-3">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-black text-slate-700 dark:text-slate-300">¿Deseas modificar nombres, documentos o roles?</span>
+              </div>
+              <p class="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed font-semibold">
+                Para desbloquear la edición de credenciales inmutables y la asignación de roles, es obligatorio ingresar el código del ticket de soporte correspondiente.
+              </p>
+              
+              <div class="flex flex-col sm:flex-row gap-2 pt-1">
+                <input 
+                  v-model="ticketCodeVerification"
+                  type="text"
+                  placeholder="Código de ticket (Ej: TKT-1B3X9H7Z)"
+                  class="flex-1 bg-white dark:bg-slate-850 px-3 py-2 border border-slate-200 dark:border-slate-750 text-xs font-semibold text-slate-700 dark:text-slate-200 rounded-xl outline-none"
+                />
+                <button 
+                  @click="verifyTicketAndEnableEdit"
+                  :disabled="verifyingTicket || !ticketCodeVerification.trim()"
+                  class="px-4 py-2 bg-indigo-650 hover:bg-indigo-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-50 flex items-center justify-center gap-1.5 transition-all shrink-0"
+                >
+                  <Loader2 v-if="verifyingTicket" class="w-3 h-3 animate-spin" />
+                  Habilitar Edición
+                </button>
+              </div>
+              
+              <p v-if="verificationError" class="text-[10px] font-bold text-red-600 mt-1">{{ verificationError }}</p>
             </div>
 
             <!-- Ban / Suspension Logs -->
@@ -449,8 +670,30 @@ const handleDelete = async (user: Usuario) => {
             </div>
 
             <!-- Footer actions -->
-            <div class="flex justify-end pt-4 border-t border-slate-100 dark:border-slate-800 mt-6">
-              <button @click="showDetailsModal = false" class="px-6 py-3 bg-slate-900 dark:bg-white dark:text-slate-900 text-white rounded-2xl font-bold text-sm hover:translate-y-[-2px] transition-all">Cerrar</button>
+            <div class="flex justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800 mt-6">
+              <template v-if="editingCredentials">
+                <button 
+                  @click="cancelEdit" 
+                  class="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-600 dark:text-slate-300 rounded-xl font-bold text-xs transition-all"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  @click="applyCredentialsChange" 
+                  :disabled="applyingChange || !editableNombre.trim() || !editableApellido.trim() || !editableDocumento.trim() || editableRoles.length === 0"
+                  class="px-5 py-2.5 bg-indigo-650 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs shadow-md transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
+                >
+                  <Loader2 v-if="applyingChange" class="w-3.5 h-3.5 animate-spin" />
+                  Aplicar Cambios
+                </button>
+              </template>
+              <button 
+                v-else
+                @click="showDetailsModal = false" 
+                class="px-6 py-3 bg-slate-900 dark:bg-white dark:text-slate-900 text-white rounded-2xl font-bold text-sm hover:translate-y-[-2px] transition-all"
+              >
+                Cerrar
+              </button>
             </div>
           </div>
         </div>

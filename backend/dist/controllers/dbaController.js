@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.importarDBAPDF = exports.estadisticasDBA = exports.listarAsignaciones = exports.asignarVersionColegio = exports.listarAreas = exports.listarVersiones = exports.cambiarEstadoEvidencia = exports.actualizarEvidencia = exports.crearEvidencia = exports.cambiarEstadoDBA = exports.actualizarDBA = exports.crearDBA = exports.detalleDBA = exports.listarDBA = void 0;
+exports.listarCombinacionesDba = exports.eliminarDBA = exports.importarDBAPDF = exports.estadisticasDBA = exports.listarAsignaciones = exports.asignarVersionColegio = exports.listarAreas = exports.listarVersiones = exports.cambiarEstadoEvidencia = exports.actualizarEvidencia = exports.crearEvidencia = exports.cambiarEstadoDBA = exports.actualizarDBA = exports.crearDBA = exports.detalleDBA = exports.listarDBA = void 0;
 const db_1 = require("../config/db");
 const child_process_1 = require("child_process");
 const path_1 = __importDefault(require("path"));
@@ -330,46 +330,67 @@ const asignarVersionColegio = async (req, res) => {
             res.status(400).json({ error: "Todos los campos son obligatorios" });
             return;
         }
-        // Verificar que el colegio exista
-        const colCheck = await db_1.pool.query(`SELECT id_colegio FROM colegio WHERE id_colegio = $1`, [id_colegio]);
-        if (colCheck.rows.length === 0) {
-            res.status(404).json({ error: "Colegio no encontrado" });
-            return;
+        // 1. Resolver colegios
+        let schoolIds = [];
+        if (id_colegio === "TODOS" || id_colegio === "todos") {
+            const activeSchools = await db_1.pool.query("SELECT id_colegio FROM colegio WHERE estado = 'ACTIVO'");
+            schoolIds = activeSchools.rows.map(r => r.id_colegio);
         }
-        if (grado === "TODOS") {
-            // Verificar que existan DBA activos en el catálogo para esta combinación de área y versión
-            const dbaCheck = await db_1.pool.query(`SELECT DISTINCT grado FROM dba 
-         WHERE area = $1 AND version_curricular = $2 AND estado = 'ACTIVO'`, [area, version_curricular]);
-            if (dbaCheck.rows.length === 0) {
-                res.status(400).json({ error: "No existen DBA activos en el catálogo para esta combinación de área y versión" });
+        else {
+            const colCheck = await db_1.pool.query(`SELECT id_colegio FROM colegio WHERE id_colegio = $1`, [id_colegio]);
+            if (colCheck.rows.length === 0) {
+                res.status(404).json({ error: "Colegio no encontrado" });
                 return;
             }
-            const gradesToAssign = dbaCheck.rows.map(r => r.grado);
-            const insertedRows = [];
-            for (const g of gradesToAssign) {
-                const result = await db_1.pool.query(`INSERT INTO colegio_version_curricular (id_colegio, area, grado, version_curricular, fecha_asignacion)
-           VALUES ($1, $2, $3, $4, NOW())
-           ON CONFLICT (id_colegio, area, grado)
-           DO UPDATE SET version_curricular = EXCLUDED.version_curricular, fecha_asignacion = NOW()
-           RETURNING *`, [id_colegio, area, g, version_curricular]);
-                insertedRows.push(result.rows[0]);
+            schoolIds = [Number(id_colegio)];
+        }
+        // 2. Resolver áreas
+        let areasToAssign = [];
+        if (area === "TODAS" || area === "todas") {
+            const areaRes = await db_1.pool.query(`SELECT DISTINCT area FROM dba WHERE version_curricular = $1 AND estado = 'ACTIVO' ORDER BY area`, [version_curricular]);
+            if (areaRes.rows.length === 0) {
+                res.status(400).json({ error: "No existen DBA activos en el catálogo para esta versión curricular" });
+                return;
             }
-            res.json({ message: "Versión curricular asignada a todos los grados exitosamente", rows: insertedRows });
+            areasToAssign = areaRes.rows.map(r => r.area);
+        }
+        else {
+            areasToAssign = [area];
+        }
+        // 3. Resolver grados y realizar asignaciones
+        const insertedRows = [];
+        for (const currentArea of areasToAssign) {
+            let gradesToAssign = [];
+            if (grado === "TODOS") {
+                const dbaCheck = await db_1.pool.query(`SELECT DISTINCT grado FROM dba 
+           WHERE area = $1 AND version_curricular = $2 AND estado = 'ACTIVO'`, [currentArea, version_curricular]);
+                if (dbaCheck.rows.length === 0)
+                    continue;
+                gradesToAssign = dbaCheck.rows.map(r => r.grado);
+            }
+            else {
+                const dbaCheck = await db_1.pool.query(`SELECT 1 FROM dba 
+           WHERE area = $1 AND grado = $2 AND version_curricular = $3 AND estado = 'ACTIVO' LIMIT 1`, [currentArea, grado, version_curricular]);
+                if (dbaCheck.rows.length === 0)
+                    continue;
+                gradesToAssign = [grado];
+            }
+            for (const sId of schoolIds) {
+                for (const g of gradesToAssign) {
+                    const result = await db_1.pool.query(`INSERT INTO colegio_version_curricular (id_colegio, area, grado, version_curricular, fecha_asignacion)
+             VALUES ($1, $2, $3, $4, NOW())
+             ON CONFLICT (id_colegio, area, grado)
+             DO UPDATE SET version_curricular = EXCLUDED.version_curricular, fecha_asignacion = NOW()
+             RETURNING *`, [sId, currentArea, g, version_curricular]);
+                    insertedRows.push(result.rows[0]);
+                }
+            }
+        }
+        if (insertedRows.length === 0) {
+            res.status(400).json({ error: "No se encontraron combinaciones válidas de área/grado/versión para asignar" });
             return;
         }
-        // Verificar que exista esa versión/área/grado en los DBA antes de asignar
-        const dbaCheck = await db_1.pool.query(`SELECT 1 FROM dba 
-       WHERE area = $1 AND grado = $2 AND version_curricular = $3 AND estado = 'ACTIVO' LIMIT 1`, [area, grado, version_curricular]);
-        if (dbaCheck.rows.length === 0) {
-            res.status(400).json({ error: "No existen DBA activos en el catálogo para esta combinación de área, grado y versión" });
-            return;
-        }
-        const result = await db_1.pool.query(`INSERT INTO colegio_version_curricular (id_colegio, area, grado, version_curricular, fecha_asignacion)
-       VALUES ($1, $2, $3, $4, NOW())
-       ON CONFLICT (id_colegio, area, grado)
-       DO UPDATE SET version_curricular = EXCLUDED.version_curricular, fecha_asignacion = NOW()
-       RETURNING *`, [id_colegio, area, grado, version_curricular]);
-        res.json(result.rows[0]);
+        res.json({ message: `Versión curricular asignada exitosamente (${insertedRows.length} registros)`, rows: insertedRows });
     }
     catch (error) {
         console.error("Error al asignar versión curricular a colegio:", error);
@@ -454,7 +475,20 @@ const importarDBAPDF = async (req, res) => {
             return;
         }
         const startPageVal = start_page ? Number(start_page) : 8;
-        const scriptPath = path_1.default.join(__dirname, "../../scripts/importar_dba.py");
+        const overwriteVal = req.body.overwrite === 'true' || req.body.overwrite === true;
+        if (overwriteVal) {
+            console.log(`Sobreasecribiendo: Eliminando DBAs anteriores para el área "${area}" versión "${version_curricular}"`);
+            await db_1.pool.query("DELETE FROM dba WHERE UPPER(TRIM(area)) = UPPER(TRIM($1)) AND version_curricular = $2", [area, version_curricular]);
+        }
+        let scriptName = "importar_dba.py";
+        const lowerOrigName = file.originalname.toLowerCase();
+        const lowerArea = area.toLowerCase();
+        if (lowerOrigName.includes("transicion-y-primaria") ||
+            lowerOrigName.includes("transicion_y_primaria") ||
+            (lowerArea.includes("ingl") && version_curricular === "2016" && startPageVal === 8)) {
+            scriptName = "importar_dba_primaria_ingles.py";
+        }
+        const scriptPath = path_1.default.join(__dirname, `../../scripts/${scriptName}`);
         console.log(`Iniciando importación por Python: script=${scriptPath}, pdf=${file.path}, area=${area}, version=${version_curricular}, start_page=${startPageVal}`);
         // Spawn python child process
         const python = (0, child_process_1.spawn)("python", [
@@ -521,3 +555,45 @@ const importarDBAPDF = async (req, res) => {
     }
 };
 exports.importarDBAPDF = importarDBAPDF;
+// ============================================================================
+// 15. ELIMINAR DBA
+// ============================================================================
+const eliminarDBA = async (req, res) => {
+    const dbaId = Number(req.params.id);
+    if (!dbaId) {
+        res.status(400).json({ error: "ID de DBA inválido" });
+        return;
+    }
+    try {
+        // Verificar si el DBA existe
+        const dbaRes = await db_1.pool.query("SELECT id_dba, numero_dba FROM dba WHERE id_dba = $1", [dbaId]);
+        if (dbaRes.rows.length === 0) {
+            res.status(404).json({ error: "DBA no encontrado" });
+            return;
+        }
+        // Proceder a eliminar (la base de datos se encargará de cascada para evidencias y nulos)
+        await db_1.pool.query("DELETE FROM dba WHERE id_dba = $1", [dbaId]);
+        res.json({ message: `DBA #${dbaRes.rows[0].numero_dba} eliminado exitosamente.` });
+    }
+    catch (error) {
+        console.error("Error al eliminar DBA:", error);
+        res.status(500).json({ error: "Error al eliminar el DBA de la base de datos" });
+    }
+};
+exports.eliminarDBA = eliminarDBA;
+// ============================================================================
+// 16. LISTAR COMBINACIONES EXISTENTES (ÁREA Y VERSIÓN)
+// ============================================================================
+const listarCombinacionesDba = async (req, res) => {
+    try {
+        const result = await db_1.pool.query(`SELECT DISTINCT area, version_curricular 
+       FROM dba 
+       ORDER BY area, version_curricular`);
+        res.json(result.rows);
+    }
+    catch (error) {
+        console.error("Error al listar combinaciones de dba:", error);
+        res.status(500).json({ error: "Error al listar las materias y versiones existentes" });
+    }
+};
+exports.listarCombinacionesDba = listarCombinacionesDba;

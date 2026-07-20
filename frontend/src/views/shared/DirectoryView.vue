@@ -8,11 +8,9 @@ import {
   Mail, 
   MapPin, 
   Clock, 
-  MessageSquare, 
   ChevronDown, 
   BookOpen, 
-  HelpCircle, 
-  Award 
+  HelpCircle 
 } from 'lucide-vue-next'
 
 const auth = useAuthStore()
