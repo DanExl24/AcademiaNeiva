@@ -17,6 +17,11 @@ Bienvenido a la Base de Conocimiento oficial del sistema **AcademiaNeiva**. Esta
   - Modelo de Datos relacional, Triggers SQL, esquema de Seguridad JWT, convención de nombres y guía de instalación/despliegue.
   - **Guía de Onboarding para Nuevos Desarrolladores** (Día 1 a 3, patrones de diseño y cómo crear un módulo nuevo).
 
+- 📜 **[Especificación de Requisitos de Software IEEE Std 830-1998](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/AcademiaNeiva_Especificacion_IEEE830.md)**
+  - Documento formal conforme a la norma IEEE 830-1998 con guías inteligentes por sección.
+  - Catálogo de requisitos funcionales por módulo (`RF-XXX-00X`), requisitos no funcionales (rendimiento, seguridad, fiabilidad) y apéndices de trazabilidad SQL.
+
+
 ---
 
 ## 🗺️ Mapa de Módulos (`guides/modules/`)
