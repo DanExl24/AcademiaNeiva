@@ -255,7 +255,7 @@ export const updateCompetency = async (req: Request, res: Response): Promise<voi
 
 // Crear nueva actividad
 export const createActivity = async (req: Request, res: Response): Promise<void> => {
-  const { id_competencia, id_detallegrado, id_periodo, nombre, porcentaje, id_colegio, id_evidencia, evidencias_dba } = req.body;
+  const { id_competencia, id_detallegrado, id_periodo, nombre, porcentaje, id_colegio, id_evidencia, evidencias_dba, motivo_extra, justificacion_extra } = req.body;
 
   if (!id_evidencia && (!Array.isArray(evidencias_dba) || evidencias_dba.length === 0)) {
     res.status(400).json({ error: "La actividad debe estar asociada a una evidencia de aprendizaje" });
@@ -337,6 +337,47 @@ export const createActivity = async (req: Request, res: Response): Promise<void>
       return;
     }
 
+    // Validar si la evidencia es de otro periodo y requiere justificación
+    if (Array.isArray(evidencias_dba) && evidencias_dba.length > 0) {
+      const dgInfo = await client.query(
+        `SELECT id_grupo, id_materia FROM detalle_grados WHERE id_detallegrado = $1`,
+        [finalIdDetalleGrado]
+      );
+      if (dgInfo.rows.length > 0) {
+        const { id_grupo, id_materia } = dgInfo.rows[0];
+        const otherPeriodAssigned = await client.query(
+          `SELECT DISTINCT ea.id_evidencia_dba, p.nombre as periodo_nombre
+           FROM evidencia_aprendizaje ea
+           JOIN competencias c ON c.id_competencia = ea.id_competencia
+           JOIN periodo_academico p ON p.id_periodo = c.id_periodo
+           WHERE c.id_colegio = $1
+             AND c.id_materia = $2
+             AND c.id_grupo IN (
+               SELECT g2.id_grupo
+               FROM grupos g1
+               JOIN grupos g2 ON g2.id_nivel = g1.id_nivel AND g2.id_tipo_grado = g1.id_tipo_grado
+               WHERE g1.id_grupo = $3 AND g1.id_colegio = $1
+             )
+             AND c.id_periodo != $4
+             AND ea.id_evidencia_dba = ANY($5::int[])`,
+          [finalIdColegio, id_materia, id_grupo, finalIdPeriodo, evidencias_dba]
+        );
+
+        if (otherPeriodAssigned.rows.length > 0) {
+          if (!motivo_extra || typeof motivo_extra !== "string" || !motivo_extra.trim()) {
+            await client.query("ROLLBACK");
+            res.status(400).json({ error: "Debes seleccionar un motivo para evaluar evidencias planificadas en otros periodos." });
+            return;
+          }
+          if (motivo_extra === "OTRO" && (!justificacion_extra || typeof justificacion_extra !== "string" || !justificacion_extra.trim())) {
+            await client.query("ROLLBACK");
+            res.status(400).json({ error: "Debes escribir una justificación detallada para el motivo 'Otro'." });
+            return;
+          }
+        }
+      }
+    }
+
     // Resolver id_evidencia para compatibilidad con código antiguo
     let finalIdEvidencia = id_evidencia ? Number(id_evidencia) : null;
     if (!finalIdEvidencia && Array.isArray(evidencias_dba) && evidencias_dba.length > 0 && finalIdCompetencia) {
@@ -352,10 +393,20 @@ export const createActivity = async (req: Request, res: Response): Promise<void>
     }
 
     const newActivityRes = await client.query(
-      `INSERT INTO actividad_materia (id_competencia, id_evidencia, id_detallegrado, id_periodo, nombre, porcentaje, id_colegio)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO actividad_materia (id_competencia, id_evidencia, id_detallegrado, id_periodo, nombre, porcentaje, id_colegio, motivo_extra, justificacion_extra)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING *`,
-      [finalIdCompetencia, finalIdEvidencia, finalIdDetalleGrado, finalIdPeriodo, nombre, porcentaje, finalIdColegio]
+      [
+        finalIdCompetencia,
+        finalIdEvidencia,
+        finalIdDetalleGrado,
+        finalIdPeriodo,
+        nombre,
+        porcentaje,
+        finalIdColegio,
+        motivo_extra || null,
+        justificacion_extra || null,
+      ]
     );
     const newActivity = newActivityRes.rows[0];
 
@@ -387,7 +438,7 @@ export const createActivity = async (req: Request, res: Response): Promise<void>
 // Actualizar actividad
 export const updateActivity = async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params;
-  const { nombre, porcentaje, id_evidencia, evidencias_dba } = req.body;
+  const { nombre, porcentaje, id_evidencia, evidencias_dba, motivo_extra, justificacion_extra } = req.body;
 
   const client = await pool.connect();
   try {
@@ -446,6 +497,47 @@ export const updateActivity = async (req: Request, res: Response): Promise<void>
       return;
     }
 
+    // Validar si la evidencia es de otro periodo y requiere justificación
+    if (Array.isArray(evidencias_dba) && evidencias_dba.length > 0) {
+      const dgInfo = await client.query(
+        `SELECT id_grupo, id_materia FROM detalle_grados WHERE id_detallegrado = $1`,
+        [currentAct.id_detallegrado]
+      );
+      if (dgInfo.rows.length > 0) {
+        const { id_grupo, id_materia } = dgInfo.rows[0];
+        const otherPeriodAssigned = await client.query(
+          `SELECT DISTINCT ea.id_evidencia_dba, p.nombre as periodo_nombre
+           FROM evidencia_aprendizaje ea
+           JOIN competencias c ON c.id_competencia = ea.id_competencia
+           JOIN periodo_academico p ON p.id_periodo = c.id_periodo
+           WHERE c.id_colegio = $1
+             AND c.id_materia = $2
+             AND c.id_grupo IN (
+               SELECT g2.id_grupo
+               FROM grupos g1
+               JOIN grupos g2 ON g2.id_nivel = g1.id_nivel AND g2.id_tipo_grado = g1.id_tipo_grado
+               WHERE g1.id_grupo = $3 AND g1.id_colegio = $1
+             )
+             AND c.id_periodo != $4
+             AND ea.id_evidencia_dba = ANY($5::int[])`,
+          [currentAct.id_colegio, id_materia, id_grupo, currentAct.id_periodo, evidencias_dba]
+        );
+
+        if (otherPeriodAssigned.rows.length > 0) {
+          if (!motivo_extra || typeof motivo_extra !== "string" || !motivo_extra.trim()) {
+            await client.query("ROLLBACK");
+            res.status(400).json({ error: "Debes seleccionar un motivo para evaluar evidencias planificadas en otros periodos." });
+            return;
+          }
+          if (motivo_extra === "OTRO" && (!justificacion_extra || typeof justificacion_extra !== "string" || !justificacion_extra.trim())) {
+            await client.query("ROLLBACK");
+            res.status(400).json({ error: "Debes escribir una justificación detallada para el motivo 'Otro'." });
+            return;
+          }
+        }
+      }
+    }
+
     // Resolver id_evidencia para compatibilidad con código antiguo
     let finalIdEvidencia = id_evidencia ? Number(id_evidencia) : currentAct.id_evidencia;
     if (Array.isArray(evidencias_dba) && evidencias_dba.length > 0 && currentAct.id_competencia) {
@@ -466,10 +558,10 @@ export const updateActivity = async (req: Request, res: Response): Promise<void>
 
     const updatedRes = await client.query(
       `UPDATE actividad_materia
-       SET nombre = $1, porcentaje = $2, id_evidencia = $3
-       WHERE id_actividadmateria = $4
+       SET nombre = $1, porcentaje = $2, id_evidencia = $3, motivo_extra = $4, justificacion_extra = $5
+       WHERE id_actividadmateria = $6
        RETURNING *`,
-      [nombre, porcentaje, finalIdEvidencia, id]
+      [nombre, porcentaje, finalIdEvidencia, motivo_extra || null, justificacion_extra || null, id]
     );
     const updatedActivity = updatedRes.rows[0];
 
@@ -1296,12 +1388,18 @@ export const getCourseEvidenciasDba = async (req: Request, res: Response): Promi
     );
 
     // Obtener evidencias ya asociadas a competencias en otros periodos para la misma asignatura, año lectivo y grado/grupo
-    let planeadasOtrosPeriodosIds: number[] = [];
+    interface PlaneadaOtroPeriodo {
+      id_evidencia_dba: number;
+      id_periodo: number;
+      periodo_nombre: string;
+    }
+    let planeadasOtrosPeriodos: PlaneadaOtroPeriodo[] = [];
     if (periodId) {
       const otrosRes = await pool.query(
-        `SELECT DISTINCT ea.id_evidencia_dba
+        `SELECT DISTINCT ea.id_evidencia_dba, c.id_periodo, p.nombre as periodo_nombre
          FROM evidencia_aprendizaje ea
          JOIN competencias c ON c.id_competencia = ea.id_competencia
+         JOIN periodo_academico p ON p.id_periodo = c.id_periodo
          WHERE c.id_colegio = $1
            AND c.id_anio = (SELECT id_anio FROM anio_lectivo WHERE id_colegio = $1 ORDER BY id_anio DESC LIMIT 1)
            AND c.id_materia = $2
@@ -1315,12 +1413,12 @@ export const getCourseEvidenciasDba = async (req: Request, res: Response): Promi
            AND ea.id_evidencia_dba IS NOT NULL`,
         [schoolId, subjectId, gradeId, periodId]
       );
-      planeadasOtrosPeriodosIds = otrosRes.rows.map(r => Number(r.id_evidencia_dba));
+      planeadasOtrosPeriodos = otrosRes.rows.map(r => ({
+        id_evidencia_dba: Number(r.id_evidencia_dba),
+        id_periodo: Number(r.id_periodo),
+        periodo_nombre: r.periodo_nombre
+      }));
     }
-
-    const filteredCatalogRows = dbaEvsRes.rows.filter(
-      row => !planeadasOtrosPeriodosIds.includes(Number(row.id_evidencia_dba))
-    );
 
     // 5. Agrupar por DBA y clasificar cada evidencia
     const dbaMap = new Map<number, {
@@ -1334,10 +1432,12 @@ export const getCourseEvidenciasDba = async (req: Request, res: Response): Promi
         tipo: 'PLANEADA' | 'EXTRA';
         evaluada_en_cerrado: boolean;
         id_competencia: number | null;
+        planeada_otro_periodo_id?: number | null;
+        planeada_otro_periodo_nombre?: string | null;
       }>;
     }>();
 
-    for (const row of filteredCatalogRows) {
+    for (const row of dbaEvsRes.rows) {
       if (!dbaMap.has(row.id_dba)) {
         dbaMap.set(row.id_dba, {
           id_dba: row.id_dba,
@@ -1355,6 +1455,7 @@ export const getCourseEvidenciasDba = async (req: Request, res: Response): Promi
         continue;
       }
 
+      const otroPeriodo = planeadasOtrosPeriodos.find(p => p.id_evidencia_dba === row.id_evidencia_dba);
       const planeadaInfo = planeadasRes.rows.find(p => Number(p.id_evidencia_dba) === Number(row.id_evidencia_dba));
       const idCompetencia = planeadaInfo ? planeadaInfo.id_competencia : null;
 
@@ -1364,7 +1465,9 @@ export const getCourseEvidenciasDba = async (req: Request, res: Response): Promi
         orden: row.orden,
         tipo: esPlaneada ? 'PLANEADA' : 'EXTRA',
         evaluada_en_cerrado: evaluadaEnCerrado,
-        id_competencia: idCompetencia
+        id_competencia: idCompetencia,
+        planeada_otro_periodo_id: otroPeriodo ? otroPeriodo.id_periodo : null,
+        planeada_otro_periodo_nombre: otroPeriodo ? otroPeriodo.periodo_nombre : null
       });
     }
 
@@ -1396,9 +1499,16 @@ export const getCourseEvidenciasDba = async (req: Request, res: Response): Promi
 
     // Mantener compatibilidad: también enviar planeadas y extras planas
     const planeadasFlat = planeadasRes.rows;
-    const extrasFlat = filteredCatalogRows.filter(
-      r => !planeadasIds.includes(r.id_evidencia_dba) && !(evaluadasEnCerradosIds.includes(r.id_evidencia_dba))
-    );
+    const extrasFlat = dbaEvsRes.rows
+      .filter(r => !planeadasIds.includes(r.id_evidencia_dba) && !(evaluadasEnCerradosIds.includes(r.id_evidencia_dba)))
+      .map(row => {
+        const otroPeriodo = planeadasOtrosPeriodos.find(p => p.id_evidencia_dba === row.id_evidencia_dba);
+        return {
+          ...row,
+          planeada_otro_periodo_id: otroPeriodo ? otroPeriodo.id_periodo : null,
+          planeada_otro_periodo_nombre: otroPeriodo ? otroPeriodo.periodo_nombre : null
+        };
+      });
 
     res.json({
       usaDba: true,

@@ -181,15 +181,26 @@ const isSelectedPeriodClosed = computed(() => {
 
 // Filters for curriculum
 const selectedPeriodId = ref<number | null>(null)
-const selectedCurriculumGroupId = ref<number | null>(null)
+const selectedCurriculumGradeId = ref<number | null>(null)
 const curriculumSearchQuery = ref('')
+
+const uniqueCurriculumGrades = computed(() => {
+  if (!subjectDetails.value?.groups) return []
+  const map = new Map()
+  subjectDetails.value.groups.forEach((g: any) => {
+    if (g.id_tipo_grado && g.tipo_grado_nombre) {
+      map.set(g.id_tipo_grado, g.tipo_grado_nombre)
+    }
+  })
+  return Array.from(map.entries()).map(([id, name]) => ({ id, name }))
+})
 
 const filteredCompetencies = computed(() => {
   if (!subjectDetails.value?.competencies || !selectedPeriodId.value) return []
   let list = subjectDetails.value.competencies.filter((c: any) => c.id_periodo === selectedPeriodId.value)
   
-  if (selectedCurriculumGroupId.value) {
-    list = list.filter((c: any) => c.id_grupo === selectedCurriculumGroupId.value)
+  if (selectedCurriculumGradeId.value) {
+    list = list.filter((c: any) => c.id_tipo_grado === selectedCurriculumGradeId.value)
   }
   
   const q = curriculumSearchQuery.value.trim().toLowerCase()
@@ -205,6 +216,7 @@ const filteredCompetencies = computed(() => {
 // Filters for assignments (teachers & groups)
 const selectedTeacherId = ref<number | null>(null)
 const selectedAssignmentGroupId = ref<number | null>(null)
+const selectedAssignmentGradeId = ref<number | null>(null)
 const assignmentSearchQuery = ref('')
 
 const filteredAssignments = computed(() => {
@@ -213,6 +225,10 @@ const filteredAssignments = computed(() => {
   
   if (selectedTeacherId.value) {
     list = list.filter((a: any) => a.id_docente === selectedTeacherId.value)
+  }
+
+  if (selectedAssignmentGradeId.value) {
+    list = list.filter((a: any) => a.id_tipo_grado === selectedAssignmentGradeId.value)
   }
   
   if (selectedAssignmentGroupId.value) {
@@ -223,7 +239,7 @@ const filteredAssignments = computed(() => {
   if (q) {
     list = list.filter((a: any) => 
       a.docente_nombre.toLowerCase().includes(q) ||
-      (a.grado_nombre + ' ' + a.seccion_nombre).toLowerCase().includes(q)
+      (a.grado_nombre + ' ' + (a.tipo_grado_nombre || '') + ' ' + a.seccion_nombre).toLowerCase().includes(q)
     )
   }
   return list
@@ -239,11 +255,30 @@ const uniqueTeachers = computed(() => {
   return Array.from(map.entries()).map(([id, name]) => ({ id, name }))
 })
 
-const uniqueAssignmentGroups = computed(() => {
+const uniqueAssignmentGrades = computed(() => {
   if (!subjectDetails.value?.assignments) return []
   const map = new Map()
   subjectDetails.value.assignments.forEach((a: any) => {
-    map.set(a.id_grupo, `${a.grado_nombre} (${a.seccion_nombre})`)
+    if (a.id_tipo_grado && a.tipo_grado_nombre) {
+      map.set(a.id_tipo_grado, a.tipo_grado_nombre)
+    }
+  })
+  return Array.from(map.entries()).map(([id, name]) => ({ id, name }))
+})
+
+const uniqueAssignmentGroups = computed(() => {
+  if (!subjectDetails.value?.assignments) return []
+  let source = subjectDetails.value.assignments
+  // If a grade is selected, filter groups to only show groups of that grade
+  if (selectedAssignmentGradeId.value) {
+    source = source.filter((a: any) => a.id_tipo_grado === selectedAssignmentGradeId.value)
+  }
+  const map = new Map()
+  source.forEach((a: any) => {
+    const label = a.tipo_grado_nombre
+      ? `${a.grado_nombre} - ${a.tipo_grado_nombre} (${a.seccion_nombre})`
+      : `${a.grado_nombre} (${a.seccion_nombre})`
+    map.set(a.id_grupo, label)
   })
   return Array.from(map.entries()).map(([id, name]) => ({ id, name }))
 })
@@ -272,9 +307,10 @@ const openSubjectDetails = async (id: number) => {
   
   // Reset filters
   selectedPeriodId.value = null
-  selectedCurriculumGroupId.value = null
+  selectedCurriculumGradeId.value = null
   curriculumSearchQuery.value = ''
   selectedTeacherId.value = null
+  selectedAssignmentGradeId.value = null
   selectedAssignmentGroupId.value = null
   assignmentSearchQuery.value = ''
   
@@ -830,14 +866,14 @@ onMounted(loadSubjects)
                       <!-- Curriculum Search & Group Filters -->
                       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
                         <div class="space-y-1 text-left">
-                          <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Filtrar por Curso</label>
+                          <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Filtrar por Grado</label>
                           <select 
-                            v-model="selectedCurriculumGroupId" 
+                            v-model="selectedCurriculumGradeId" 
                             class="w-full bg-white dark:bg-slate-850 border border-slate-100 dark:border-slate-800 rounded-xl p-2 text-xs font-bold outline-none text-slate-900 dark:text-white"
                           >
-                            <option :value="null">Todos los cursos</option>
-                            <option v-for="g in subjectDetails?.groups" :key="g.id_grupo" :value="g.id_grupo">
-                              {{ g.grado_nombre }} ({{ g.seccion_nombre }})
+                            <option :value="null">Todos los grados</option>
+                            <option v-for="gr in uniqueCurriculumGrades" :key="gr.id" :value="gr.id">
+                              {{ gr.name }}
                             </option>
                           </select>
                         </div>
@@ -936,7 +972,7 @@ onMounted(loadSubjects)
                     <!-- TAB 2: Docentes y Cursos (Asignaciones) -->
                     <div v-if="activeTab === 'teachers'" class="space-y-4">
                       <!-- Filters & Search for Assignments -->
-                      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
+                      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
                         <div class="space-y-1 text-left">
                           <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Filtrar por Docente</label>
                           <select 
@@ -946,6 +982,19 @@ onMounted(loadSubjects)
                             <option :value="null">Todos los docentes</option>
                             <option v-for="t in uniqueTeachers" :key="t.id" :value="t.id">
                               {{ t.name }}
+                            </option>
+                          </select>
+                        </div>
+                        <div class="space-y-1 text-left">
+                          <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Filtrar por Grado</label>
+                          <select 
+                            v-model="selectedAssignmentGradeId"
+                            @change="selectedAssignmentGroupId = null"
+                            class="w-full bg-white dark:bg-slate-850 border border-slate-100 dark:border-slate-800 rounded-xl p-2 text-xs font-bold outline-none text-slate-900 dark:text-white"
+                          >
+                            <option :value="null">Todos los grados</option>
+                            <option v-for="gr in uniqueAssignmentGrades" :key="gr.id" :value="gr.id">
+                              {{ gr.name }}
                             </option>
                           </select>
                         </div>
@@ -989,7 +1038,7 @@ onMounted(loadSubjects)
                           <div class="text-left">
                             <h4 class="font-black text-slate-800 dark:text-white text-sm">{{ asg.docente_nombre }}</h4>
                             <p class="text-xs font-bold text-indigo-500 uppercase mt-0.5 tracking-wider">
-                              {{ asg.grado_nombre }} ({{ asg.seccion_nombre }}) · {{ asg.jornada_nombre }}
+                              {{ asg.grado_nombre }}{{ asg.tipo_grado_nombre ? ' - ' + asg.tipo_grado_nombre : '' }} ({{ asg.seccion_nombre }}) · {{ asg.jornada_nombre }}
                             </p>
                           </div>
                         </div>
@@ -1036,7 +1085,7 @@ onMounted(loadSubjects)
                 class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-emerald-500/20 rounded-xl p-3 font-bold outline-none text-slate-900 dark:text-white"
               >
                 <option v-for="g in subjectDetails?.groups" :key="g.id_grupo" :value="g.id_grupo">
-                  {{ g.grado_nombre }} ({{ g.seccion_nombre }}) · {{ g.jornada_nombre }}
+                  {{ g.grado_nombre }}{{ g.tipo_grado_nombre ? ' - ' + g.tipo_grado_nombre : '' }} ({{ g.seccion_nombre }}) · {{ g.jornada_nombre }}
                 </option>
               </select>
             </div>

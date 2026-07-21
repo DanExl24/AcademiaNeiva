@@ -408,6 +408,7 @@ export interface CompetencyRow {
   id_periodo: number;
   descripcion: string;
   id_colegio: number;
+  sync_uuid?: string | null;
 }
 
 export const DEFAULT_COMPETENCY_TEXT = DEFAULT_COMPETENCY_DESCRIPTION;

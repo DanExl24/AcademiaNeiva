@@ -1645,21 +1645,13 @@ export const upsertCompetencyByAdmin = async (req: Request, res: Response): Prom
 
       // Si se proporcionó id_evidencias_dba, vincularlas a las competencias de todo el grado
       if (idEvidenciasDba !== undefined && Array.isArray(idEvidenciasDba)) {
-        // Obtener las competencias hermanas para este grado/materia/año/periodo
+        // Obtener únicamente las competencias hermanas que pertenecen a esta misma competencia (mismo sync_uuid)
         const sisterCompsRes = await client.query(
           `SELECT id_competencia 
            FROM competencias 
            WHERE id_colegio = $1 
-             AND id_anio = $2 
-             AND id_materia = $3 
-             AND id_periodo = $4 
-             AND id_grupo IN (
-               SELECT g2.id_grupo
-               FROM grupos g1
-               JOIN grupos g2 ON g2.id_nivel = g1.id_nivel AND g2.id_tipo_grado = g1.id_tipo_grado
-               WHERE g1.id_grupo = $5 AND g1.id_colegio = $1
-             )`,
-          [schoolId, created.id_anio, created.id_materia, created.id_periodo, created.id_grupo]
+             AND (id_competencia = $2 OR (sync_uuid IS NOT NULL AND sync_uuid = $3))`,
+          [schoolId, created.id_competencia, created.sync_uuid]
         );
         const sisterCompIds = sisterCompsRes.rows.map(r => r.id_competencia);
 
@@ -1706,6 +1698,13 @@ export const upsertCompetencyByAdmin = async (req: Request, res: Response): Prom
           );
 
           if (officialEvsRes.rows.length > 0) {
+            // Eliminar evidencias por defecto generadas automáticamente (sin DBA) al vincular evidencias de DBA
+            await client.query(
+              `DELETE FROM evidencia_aprendizaje 
+               WHERE id_competencia = ANY($1::int[]) AND id_evidencia_dba IS NULL`,
+              [sisterCompIds]
+            );
+
             for (const targetCompId of sisterCompIds) {
               const existingRes = await client.query(
                 `SELECT id_evidencia, id_evidencia_dba FROM evidencia_aprendizaje 
@@ -3132,15 +3131,17 @@ export const getSubjectCurriculumDetails = async (req: Request, res: Response): 
     const assignmentsRes = await pool.query(
       `SELECT dg.id_detallegrado, dg.id_docente, dg.id_grupo,
               d.nombre || ' ' || d.apellido as docente_nombre,
-              ne.nombre as grado_nombre, sec.nombre as seccion_nombre, j.nombre as jornada_nombre
+              ne.nombre as grado_nombre, tg.nombre as tipo_grado_nombre, tg.id_tipo_grado,
+              sec.nombre as seccion_nombre, j.nombre as jornada_nombre
        FROM detalle_grados dg
        JOIN docente d ON dg.id_docente = d.id_docente
        JOIN grupos g ON dg.id_grupo = g.id_grupo
        JOIN nivel_escolar ne ON g.id_nivel = ne.id_nivel
+       JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
        JOIN secciones sec ON g.id_seccion = sec.id_seccion
        JOIN jornada j ON g.id_jornada = j.id_jornada
        WHERE dg.id_materia = $1 AND dg.id_colegio = $2
-       ORDER BY ne.nombre, sec.nombre, d.nombre`,
+       ORDER BY tg.nombre, ne.nombre, sec.nombre, d.nombre`,
       [subjectId, schoolId]
     );
     const assignments = assignmentsRes.rows;
@@ -3148,14 +3149,16 @@ export const getSubjectCurriculumDetails = async (req: Request, res: Response): 
     // 5. Competencies and learning evidences for this subject in the active year
     const compsRes = await pool.query(
       `SELECT c.id_competencia, c.id_grupo, c.id_periodo, c.descripcion, c.nombre as competencia_nombre,
-              ne.nombre as grado_nombre, sec.nombre as seccion_nombre, p.nombre as periodo_nombre
+              ne.nombre as grado_nombre, tg.id_tipo_grado, tg.nombre as tipo_grado_nombre,
+              sec.nombre as seccion_nombre, p.nombre as periodo_nombre
        FROM competencias c
        JOIN grupos g ON c.id_grupo = g.id_grupo
        JOIN nivel_escolar ne ON g.id_nivel = ne.id_nivel
+       JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
        JOIN secciones sec ON g.id_seccion = sec.id_seccion
        JOIN periodo_academico p ON c.id_periodo = p.id_periodo
        WHERE c.id_materia = $1 AND c.id_anio = $2 AND c.id_colegio = $3
-       ORDER BY p.id_periodo ASC, ne.nombre ASC, sec.nombre ASC`,
+       ORDER BY p.id_periodo ASC, tg.nombre ASC, ne.nombre ASC, sec.nombre ASC`,
       [subjectId, activeYear.id_anio, schoolId]
     );
     
@@ -3182,13 +3185,15 @@ export const getSubjectCurriculumDetails = async (req: Request, res: Response): 
 
     // 6. School groups for the active year
     const groupsRes = await pool.query(
-      `SELECT g.id_grupo, ne.nombre as grado_nombre, sec.nombre as seccion_nombre, j.nombre as jornada_nombre
+      `SELECT g.id_grupo, ne.nombre as grado_nombre, tg.id_tipo_grado, tg.nombre as tipo_grado_nombre,
+              sec.nombre as seccion_nombre, j.nombre as jornada_nombre
        FROM grupos g
        JOIN nivel_escolar ne ON g.id_nivel = ne.id_nivel
+       JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
        JOIN secciones sec ON g.id_seccion = sec.id_seccion
        JOIN jornada j ON g.id_jornada = j.id_jornada
        WHERE g.id_colegio = $1
-       ORDER BY ne.nombre ASC, sec.nombre ASC`,
+       ORDER BY tg.nombre ASC, ne.nombre ASC, sec.nombre ASC`,
       [schoolId]
     );
 
@@ -3206,7 +3211,7 @@ export const getSubjectCurriculumDetails = async (req: Request, res: Response): 
   }
 };
 
-export const deleteCompetencyByAdmin = async (req: Request, res: Response): Promise<void> => {
+export const checkCompetenciaUsage = async (req: Request, res: Response): Promise<void> => {
   const competencyId = Number(req.params.id);
   const schoolId = parseSchoolId(req.query.schoolId as string);
 
@@ -3216,8 +3221,72 @@ export const deleteCompetencyByAdmin = async (req: Request, res: Response): Prom
   }
 
   try {
-    const check = await pool.query(
-      `SELECT c.id_competencia, p.estado AS period_estado 
+    const compRes = await pool.query(
+      `SELECT c.id_competencia, c.sync_uuid, c.descripcion
+       FROM competencias c
+       WHERE c.id_competencia = $1 AND c.id_colegio = $2`,
+      [competencyId, schoolId]
+    );
+
+    if (compRes.rows.length === 0) {
+      res.status(404).json({ error: "Competencia no encontrada" });
+      return;
+    }
+
+    const { sync_uuid, descripcion } = compRes.rows[0];
+
+    const usageRes = await pool.query(
+      `SELECT 
+         COALESCE(u.nombre || ' ' || COALESCE(u.apellido, ''), 'Docente Asignado') AS docente_nombre,
+         m.nombre AS materia_nombre,
+         ne.nombre || ' - ' || tg.nombre || ' (' || s.nombre || ')' AS grupo_nombre,
+         COUNT(DISTINCT am.id_actividadmateria) AS total_actividades,
+         COUNT(DISTINCT nc.id_nota_criterio) AS total_notas
+       FROM competencias c
+       JOIN actividad_materia am ON am.id_competencia = c.id_competencia
+       LEFT JOIN detalle_grados dg ON dg.id_detallegrado = am.id_detallegrado
+       LEFT JOIN materias m ON m.id_materia = c.id_materia
+       LEFT JOIN grupos g ON g.id_grupo = c.id_grupo
+       LEFT JOIN nivel_escolar ne ON ne.id_nivel = g.id_nivel
+       LEFT JOIN tipo_grado tg ON tg.id_tipo_grado = g.id_tipo_grado
+       LEFT JOIN secciones s ON s.id_seccion = g.id_seccion
+       LEFT JOIN docente d ON d.id_docente = dg.id_docente
+       LEFT JOIN usuario u ON u.id_usuario = d.id_usuario
+       LEFT JOIN criterio_evaluacion ce ON ce.id_actividadmateria = am.id_actividadmateria
+       LEFT JOIN nota_criterio nc ON nc.id_criterio = ce.id_criterio
+       WHERE c.id_colegio = $1
+         AND (c.id_competencia = $2 OR ($3::uuid IS NOT NULL AND c.sync_uuid = $3::uuid))
+       GROUP BY u.nombre, u.apellido, m.nombre, ne.nombre, tg.nombre, s.nombre`,
+      [schoolId, competencyId, sync_uuid || null]
+    );
+
+    res.json({
+      isUsed: usageRes.rows.length > 0,
+      descripcion,
+      teachersUsage: usageRes.rows
+    });
+  } catch (error: any) {
+    console.error("Error checking competency usage:", error);
+    res.status(500).json({ error: "Error en el servidor al verificar uso de competencia" });
+  }
+};
+
+export const deleteCompetencyByAdmin = async (req: Request, res: Response): Promise<void> => {
+  const competencyId = Number(req.params.id);
+  const schoolId = parseSchoolId(req.query.schoolId as string);
+
+  if (!competencyId || !schoolId) {
+    res.status(400).json({ error: "ID de competencia y colegio son obligatorios" });
+    return;
+  }
+
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    const check = await client.query(
+      `SELECT c.id_competencia, c.sync_uuid, p.estado AS period_estado 
        FROM competencias c
        JOIN periodo_academico p ON p.id_periodo = c.id_periodo
        WHERE c.id_competencia = $1 AND c.id_colegio = $2`,
@@ -3225,24 +3294,55 @@ export const deleteCompetencyByAdmin = async (req: Request, res: Response): Prom
     );
 
     if (check.rows.length === 0) {
+      await client.query("ROLLBACK");
       res.status(404).json({ error: "Competencia no encontrada" });
       return;
     }
 
     if (check.rows[0].period_estado === "CERRADO") {
+      await client.query("ROLLBACK");
       res.status(409).json({ error: "No se puede eliminar una competencia en un periodo cerrado" });
       return;
     }
 
-    await pool.query(
-      `DELETE FROM competencias WHERE id_competencia = $1 AND id_colegio = $2`,
-      [competencyId, schoolId]
-    );
+    const { sync_uuid } = check.rows[0];
 
-    res.json({ success: true, message: "Competencia eliminada exitosamente" });
+    const targetCompIdsRes = await client.query(
+      `SELECT id_competencia FROM competencias 
+       WHERE id_colegio = $1 AND (id_competencia = $2 OR (sync_uuid IS NOT NULL AND sync_uuid = $3))`,
+      [schoolId, competencyId, sync_uuid]
+    );
+    const compIds = targetCompIdsRes.rows.map(r => r.id_competencia);
+
+    if (compIds.length > 0) {
+      // 1. Delete associated evidencia_aprendizaje
+      await client.query(
+        `DELETE FROM evidencia_aprendizaje WHERE id_competencia = ANY($1::int[])`,
+        [compIds]
+      );
+
+      // 2. Unlink activities in actividad_materia (set id_competencia = NULL)
+      await client.query(
+        `UPDATE actividad_materia SET id_competencia = NULL WHERE id_competencia = ANY($1::int[])`,
+        [compIds]
+      );
+
+      // 3. Delete competencies
+      await client.query(
+        `DELETE FROM competencias WHERE id_competencia = ANY($1::int[]) AND id_colegio = $2`,
+        [compIds, schoolId]
+      );
+    }
+
+    await client.query("COMMIT");
+
+    res.json({ success: true, message: "Competencia y relaciones eliminadas exitosamente" });
   } catch (error: any) {
+    await client.query("ROLLBACK");
     console.error("Error deleting competency:", error);
-    res.status(500).json({ error: "Error en el servidor" });
+    res.status(500).json({ error: "Error en el servidor al eliminar competencia" });
+  } finally {
+    client.release();
   }
 };
 
@@ -5249,59 +5349,77 @@ export const getDbaPlaneacionDisponibles = async (req: Request, res: Response): 
       [subjectId, versionCurricular, gradeName]
     );
 
-    // 3. Obtener las evidencias ya asignadas a competencias (con detalle de a cuál pertenecen)
+    // 3. Obtener las evidencias ya asignadas a competencias (separando propia vs otras)
     let assignedMap: Map<number, { competencia_descripcion: string; periodo_nombre: string }> = new Map();
+    let ownAssignedSet: Set<number> = new Set();
+
     if (groupId && subjectId) {
-      let queryStr = "";
-      let queryParams: any[] = [];
-
       if (competencyId) {
-        // Al editar: obtener evidencias asignadas a OTRAS competencias (con sync_uuid diferente)
-        queryStr = `
-          SELECT DISTINCT ea.id_evidencia_dba, c.descripcion AS competencia_descripcion, p.nombre AS periodo_nombre
-          FROM evidencia_aprendizaje ea
-          JOIN competencias c ON c.id_competencia = ea.id_competencia
-          JOIN periodo_academico p ON p.id_periodo = c.id_periodo
-          WHERE c.id_colegio = $1
-            AND c.id_materia = $2
-            AND c.id_grupo IN (
-              SELECT g2.id_grupo
-              FROM grupos g1
-              JOIN grupos g2 ON g2.id_nivel = g1.id_nivel AND g2.id_tipo_grado = g1.id_tipo_grado
-              WHERE g1.id_grupo = $3 AND g1.id_colegio = $1
-            )
-            AND c.id_anio = (SELECT id_anio FROM anio_lectivo WHERE id_colegio = $1 ORDER BY id_anio DESC LIMIT 1)
-            AND (c.sync_uuid != (SELECT sync_uuid FROM competencias WHERE id_competencia = $4) OR c.sync_uuid IS NULL)
-            AND ea.id_evidencia_dba IS NOT NULL
-        `;
-        queryParams = [schoolId, subjectId, groupId, competencyId];
-      } else {
-        // Al crear: obtener TODAS las evidencias ya vinculadas en cualquier competencia
-        queryStr = `
-          SELECT DISTINCT ea.id_evidencia_dba, c.descripcion AS competencia_descripcion, p.nombre AS periodo_nombre
-          FROM evidencia_aprendizaje ea
-          JOIN competencias c ON c.id_competencia = ea.id_competencia
-          JOIN periodo_academico p ON p.id_periodo = c.id_periodo
-          WHERE c.id_colegio = $1
-            AND c.id_materia = $2
-            AND c.id_grupo IN (
-              SELECT g2.id_grupo
-              FROM grupos g1
-              JOIN grupos g2 ON g2.id_nivel = g1.id_nivel AND g2.id_tipo_grado = g1.id_tipo_grado
-              WHERE g1.id_grupo = $3 AND g1.id_colegio = $1
-            )
-            AND c.id_anio = (SELECT id_anio FROM anio_lectivo WHERE id_colegio = $1 ORDER BY id_anio DESC LIMIT 1)
-            AND ea.id_evidencia_dba IS NOT NULL
-        `;
-        queryParams = [schoolId, subjectId, groupId];
-      }
+        // Evidencias asociadas a la MISMA competencia que se está editando
+        const ownRes = await pool.query(
+          `SELECT DISTINCT ea.id_evidencia_dba
+           FROM evidencia_aprendizaje ea
+           JOIN competencias c ON c.id_competencia = ea.id_competencia
+           WHERE c.id_colegio = $1
+             AND (c.id_competencia = $2 OR (c.sync_uuid IS NOT NULL AND c.sync_uuid = (SELECT sync_uuid FROM competencias WHERE id_competencia = $2)))
+             AND ea.id_evidencia_dba IS NOT NULL`,
+          [schoolId, competencyId]
+        );
+        for (const row of ownRes.rows) {
+          ownAssignedSet.add(Number(row.id_evidencia_dba));
+        }
 
-      const assignedRes = await pool.query(queryStr, queryParams);
-      for (const row of assignedRes.rows) {
-        assignedMap.set(Number(row.id_evidencia_dba), {
-          competencia_descripcion: row.competencia_descripcion,
-          periodo_nombre: row.periodo_nombre,
-        });
+        // Evidencias asociadas a OTRAS competencias
+        const otherRes = await pool.query(
+          `SELECT DISTINCT ea.id_evidencia_dba, c.descripcion AS competencia_descripcion, p.nombre AS periodo_nombre
+           FROM evidencia_aprendizaje ea
+           JOIN competencias c ON c.id_competencia = ea.id_competencia
+           JOIN periodo_academico p ON p.id_periodo = c.id_periodo
+           WHERE c.id_colegio = $1
+             AND c.id_materia = $2
+             AND c.id_grupo IN (
+               SELECT g2.id_grupo
+               FROM grupos g1
+               JOIN grupos g2 ON g2.id_nivel = g1.id_nivel AND g2.id_tipo_grado = g1.id_tipo_grado
+               WHERE g1.id_grupo = $3 AND g1.id_colegio = $1
+             )
+             AND c.id_anio = (SELECT id_anio FROM anio_lectivo WHERE id_colegio = $1 ORDER BY id_anio DESC LIMIT 1)
+             AND (c.sync_uuid != (SELECT sync_uuid FROM competencias WHERE id_competencia = $4) OR c.sync_uuid IS NULL)
+             AND (c.id_competencia != $4)
+             AND ea.id_evidencia_dba IS NOT NULL`,
+          [schoolId, subjectId, groupId, competencyId]
+        );
+        for (const row of otherRes.rows) {
+          assignedMap.set(Number(row.id_evidencia_dba), {
+            competencia_descripcion: row.competencia_descripcion,
+            periodo_nombre: row.periodo_nombre,
+          });
+        }
+      } else {
+        // Al crear: obtener TODAS las evidencias vinculadas
+        const assignedRes = await pool.query(
+          `SELECT DISTINCT ea.id_evidencia_dba, c.descripcion AS competencia_descripcion, p.nombre AS periodo_nombre
+           FROM evidencia_aprendizaje ea
+           JOIN competencias c ON c.id_competencia = ea.id_competencia
+           JOIN periodo_academico p ON p.id_periodo = c.id_periodo
+           WHERE c.id_colegio = $1
+             AND c.id_materia = $2
+             AND c.id_grupo IN (
+               SELECT g2.id_grupo
+               FROM grupos g1
+               JOIN grupos g2 ON g2.id_nivel = g1.id_nivel AND g2.id_tipo_grado = g1.id_tipo_grado
+               WHERE g1.id_grupo = $3 AND g1.id_colegio = $1
+             )
+             AND c.id_anio = (SELECT id_anio FROM anio_lectivo WHERE id_colegio = $1 ORDER BY id_anio DESC LIMIT 1)
+             AND ea.id_evidencia_dba IS NOT NULL`,
+          [schoolId, subjectId, groupId]
+        );
+        for (const row of assignedRes.rows) {
+          assignedMap.set(Number(row.id_evidencia_dba), {
+            competencia_descripcion: row.competencia_descripcion,
+            periodo_nombre: row.periodo_nombre,
+          });
+        }
       }
     }
 
@@ -5309,10 +5427,13 @@ export const getDbaPlaneacionDisponibles = async (req: Request, res: Response): 
     const annotatedDba = dbaRes.rows.map(dba => {
       if (Array.isArray(dba.evidencias)) {
         dba.evidencias = dba.evidencias.map((ev: any) => {
-          const assignment = assignedMap.get(Number(ev.id_evidencia_dba));
+          const evId = Number(ev.id_evidencia_dba);
+          const isOwn = ownAssignedSet.has(evId);
+          const assignment = assignedMap.get(evId);
           return {
             ...ev,
-            asignada: !!assignment,
+            asignada_a_esta_competencia: isOwn,
+            asignada: isOwn || !!assignment,
             asignada_a: assignment || null,
           };
         });
@@ -5447,6 +5568,13 @@ export const vincularEvidenciasDbaACompetencia = async (req: Request, res: Respo
       res.status(400).json({ error: "Ninguna de las evidencias DBA especificadas es válida o está activa" });
       return;
     }
+
+    // Eliminar evidencias por defecto generadas automáticamente (sin DBA) al vincular evidencias de DBA
+    await client.query(
+      `DELETE FROM evidencia_aprendizaje 
+       WHERE id_competencia = ANY($1::int[]) AND id_evidencia_dba IS NULL`,
+      [sisterCompIds]
+    );
 
     // Para cada competencia del grado (sincronización vertical):
     for (const targetCompId of sisterCompIds) {

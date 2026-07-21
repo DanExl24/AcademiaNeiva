@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import axios from 'axios'
-import { ArrowLeft, BookOpenCheck, PenSquare, Plus, Search, Sparkles, Check, Trash2, X } from 'lucide-vue-next'
+import { ArrowLeft, BookOpenCheck, PenSquare, Plus, Search, Sparkles, Check, Trash2, X, AlertTriangle, RefreshCw } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 import { useNotificationStore } from '../../stores/notifications'
 import { getCourseDisplayName } from '../../utils/courseHelper'
@@ -72,6 +72,9 @@ const checkedFormDbaEvidences = ref<number[]>([])
 const showFormDba = ref(false)
 const formDbaSearch = ref('')
 
+const editingCompetencyIsUsed = ref(false)
+const editingCompetencyOriginalEvidences = ref<number[]>([])
+
 const periods = ref<AcademicPeriod[]>([])
 const assignments = ref<AssignmentOption[]>([])
 const competencies = ref<CompetencyItem[]>([])
@@ -88,6 +91,144 @@ const selectedPeriod = ref('')
 const selectedGrade = ref('')
 const selectedSubject = ref('')
 const selectedStatus = ref('')
+
+// Diagnostic DBA state
+interface DiagnosticData {
+  totalDba: number
+  unusedDbaCount: number
+  unusedDbas: string[]
+  totalEvidences: number
+  freeEvidencesCount: number
+}
+
+const diagnosticData = ref<DiagnosticData | null>(null)
+const loadingDiagnostic = ref(false)
+
+const fetchDiagnostic = async () => {
+  if (!selectedGrade.value || !selectedSubject.value || !schoolId.value) {
+    diagnosticData.value = null
+    return
+  }
+
+  const [nivel, tipoGrado] = selectedGrade.value.split(':')
+  const sampleAssignment = assignments.value.find(a => 
+    a.nivel_nombre === nivel && 
+    a.tipo_grado_nombre === tipoGrado && 
+    String(a.id_materia) === selectedSubject.value
+  )
+
+  if (!sampleAssignment) {
+    diagnosticData.value = null
+    return
+  }
+
+  try {
+    loadingDiagnostic.value = true
+    const res = await axios.get(`http://localhost:3000/api/academic-admin/settings/dba-planeacion/disponibles/${schoolId.value}`, {
+      params: {
+        id_grupo: sampleAssignment.id_grupo,
+        id_materia: sampleAssignment.id_materia
+      }
+    })
+
+    const dbaList: any[] = res.data.dba || []
+    let totalEvidences = 0
+    let freeEvidencesCount = 0
+    let unusedDbaCount = 0
+    const unusedDbas: string[] = []
+
+    for (const dba of dbaList) {
+      let dbaHasPlannedEvidence = false
+      if (Array.isArray(dba.evidencias)) {
+        for (const ev of dba.evidencias) {
+          totalEvidences++
+          if (ev.asignada) {
+            dbaHasPlannedEvidence = true
+          } else {
+            freeEvidencesCount++
+          }
+        }
+      }
+      if (!dbaHasPlannedEvidence) {
+        unusedDbaCount++
+        unusedDbas.push(`DBA #${dba.numero_dba}`)
+      }
+    }
+
+    diagnosticData.value = {
+      totalDba: dbaList.length,
+      unusedDbaCount,
+      unusedDbas,
+      totalEvidences,
+      freeEvidencesCount
+    }
+  } catch (error) {
+    console.error('Error fetching DBA diagnostic:', error)
+    diagnosticData.value = null
+  } finally {
+    loadingDiagnostic.value = false
+  }
+}
+
+watch([selectedGrade, selectedSubject], fetchDiagnostic)
+
+// Delete Competency Warning Modal State
+const showDeleteModal = ref(false)
+const competenciaToDelete = ref<CompetencyItem | null>(null)
+const loadingDeleteCheck = ref(false)
+const deleteUsageInfo = ref<{
+  isUsed: boolean
+  descripcion: string
+  teachersUsage: {
+    docente_nombre: string
+    materia_nombre: string
+    grupo_nombre: string
+    total_actividades: number
+    total_notas: number
+  }[]
+} | null>(null)
+
+const promptDeleteCompetencia = async (item: CompetencyItem) => {
+  competenciaToDelete.value = item
+  showDeleteModal.value = true
+  loadingDeleteCheck.value = true
+  deleteUsageInfo.value = null
+
+  try {
+    const res = await axios.get(`http://localhost:3000/api/academic-admin/settings/competencies/${item.id_competencia}/usage-check`, {
+      params: { schoolId: schoolId.value }
+    })
+    deleteUsageInfo.value = res.data
+  } catch (error) {
+    console.error('Error checking competency usage:', error)
+    notify.addNotification('No se pudo verificar el uso de la competencia', 'error')
+  } finally {
+    loadingDeleteCheck.value = false
+  }
+}
+
+const confirmDeleteCompetencia = async () => {
+  if (!competenciaToDelete.value) return
+
+  try {
+    saving.value = true
+    await axios.delete(`http://localhost:3000/api/academic-admin/settings/competencies/${competenciaToDelete.value.id_competencia}`, {
+      params: { schoolId: schoolId.value }
+    })
+    notify.addNotification('Competencia eliminada exitosamente', 'success')
+    showDeleteModal.value = false
+    competenciaToDelete.value = null
+    deleteUsageInfo.value = null
+    await loadData()
+    if (selectedGrade.value && selectedSubject.value) {
+      await fetchDiagnostic()
+    }
+  } catch (error: any) {
+    notify.addNotification(error.response?.data?.error || 'Error al eliminar la competencia', 'error')
+  } finally {
+    saving.value = false
+  }
+}
 
 const competencyForm = ref({
   id_periodo: '',
@@ -236,7 +377,7 @@ const resetForm = () => {
   }
 }
 
-const onFormContextChange = async () => {
+const onFormContextChange = async (competencyId?: number) => {
   const gradeKey = competencyForm.value.gradeKey
   const subjectKey = competencyForm.value.subjectKey
 
@@ -268,7 +409,8 @@ const onFormContextChange = async () => {
       params: {
         id_grupo: target.id_grupo,
         id_materia: target.id_materia,
-        id_periodo: competencyForm.value.id_periodo || undefined
+        id_periodo: competencyForm.value.id_periodo || undefined,
+        id_competencia: competencyId || undefined
       }
     })
     availableFormDba.value = res.data.dba || []
@@ -288,6 +430,8 @@ const openCreateModal = () => {
   formDbaVersion.value = null
   checkedFormDbaEvidences.value = []
   showFormDba.value = false
+  editingCompetencyIsUsed.value = false
+  editingCompetencyOriginalEvidences.value = []
   competencyModal.value = true
 }
 
@@ -302,8 +446,22 @@ const openEditModal = async (item: CompetencyItem) => {
   checkedFormDbaEvidences.value = item.evidencias
     ? item.evidencias.filter(e => e.id_evidencia_dba).map(e => e.id_evidencia_dba as number)
     : []
+  
+  editingCompetencyOriginalEvidences.value = [...checkedFormDbaEvidences.value]
+  editingCompetencyIsUsed.value = false
+  
   competencyModal.value = true
-  await onFormContextChange()
+  
+  try {
+    const res = await axios.get(`http://localhost:3000/api/academic-admin/settings/competencies/${item.id_competencia}/usage-check`, {
+      params: { schoolId: schoolId.value }
+    })
+    editingCompetencyIsUsed.value = res.data.isUsed
+  } catch (error) {
+    console.error('Error checking competency usage:', error)
+  }
+
+  await onFormContextChange(item.id_competencia)
 }
 
 const saveCompetency = async () => {
@@ -524,6 +682,66 @@ const filteredFormDba = computed(() => {
     .filter(Boolean)
 })
 
+const originalDbaId = computed(() => {
+  if (editingCompetencyOriginalEvidences.value.length === 0 || !availableFormDba.value) return null
+  for (const dba of availableFormDba.value) {
+    if (dba.evidencias?.some((ev: any) => editingCompetencyOriginalEvidences.value.includes(ev.id_evidencia_dba))) {
+      return dba.id_dba
+    }
+  }
+  return null
+})
+
+const isCheckboxDisabled = (dbaId: number, evId: number): boolean => {
+  if (!editingCompetencyIsUsed.value) return false
+  
+  // 1. Si ya estaba asignada originalmente a esta competencia, no permitir deseleccionar (no quitar evidencias)
+  if (editingCompetencyOriginalEvidences.value.includes(evId)) {
+    return true
+  }
+  
+  // 2. Si pertenece a un DBA distinto del original, no permitir seleccionar (no cambiar de DBA)
+  if (originalDbaId.value !== null && dbaId !== originalDbaId.value) {
+    return true
+  }
+  
+  return false
+}
+
+const completedDbaSuggestions = computed(() => {
+  if (!showFormDba.value || availableFormDba.value.length === 0) return []
+
+  const suggestions: { id_dba: number; numero_dba: number; enunciado: string }[] = []
+
+  for (const dbaItem of availableFormDba.value) {
+    if (!dbaItem.evidencias || dbaItem.evidencias.length === 0) continue
+
+    // 1. Todas las evidencias del DBA deben estar completamente libres (ninguna asignada previamente a otra competencia)
+    const hasAnyAssigned = dbaItem.evidencias.some((ev: any) => ev.asignada)
+    if (hasAnyAssigned) continue
+
+    // 2. El usuario debe haber marcado el 100% de las evidencias de este DBA en el formulario actual
+    const allChecked = dbaItem.evidencias.every((ev: any) =>
+      checkedFormDbaEvidences.value.includes(ev.id_evidencia_dba)
+    )
+
+    if (allChecked) {
+      suggestions.push({
+        id_dba: dbaItem.id_dba,
+        numero_dba: dbaItem.numero_dba,
+        enunciado: dbaItem.enunciado
+      })
+    }
+  }
+
+  return suggestions
+})
+
+const applyDbaEnunciado = (enunciado: string) => {
+  competencyForm.value.descripcion = enunciado
+  notify.addNotification('Enunciado del DBA asignado a la descripción', 'info')
+}
+
 onMounted(loadData)
 </script>
 
@@ -659,7 +877,35 @@ onMounted(loadData)
           </button>
         </div>
 
-        <div v-if="filteredCompetencies.length === 0" class="p-12 text-center">
+        <!-- Diagnostic Banner DBA -->
+        <div v-if="diagnosticData && (diagnosticData.unusedDbaCount > 0 || diagnosticData.freeEvidencesCount > 0)" class="mb-8 rounded-3xl border border-amber-200 bg-amber-50/80 p-6 dark:bg-amber-950/20 dark:border-amber-900/40 shadow-sm animate-in fade-in duration-300">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div class="flex items-start gap-4">
+              <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-500/20 border border-amber-500/30 text-amber-600 dark:text-amber-400 shrink-0">
+                <Sparkles class="h-6 w-6" />
+              </div>
+              <div class="space-y-1">
+                <h4 class="text-base font-black text-amber-950 dark:text-amber-200">
+                  Diagnóstico de Cobertura DBA para el Grado Seleccionado
+                </h4>
+                <div class="text-xs font-semibold text-amber-900/90 dark:text-amber-300/90 space-y-1">
+                  <p v-if="diagnosticData.unusedDbaCount > 0">
+                    ⚠️ <strong>{{ diagnosticData.unusedDbaCount }} {{ diagnosticData.unusedDbaCount === 1 ? 'DBA oficial' : 'DBAs oficiales' }}</strong> no {{ diagnosticData.unusedDbaCount === 1 ? 'posee' : 'poseen' }} ninguna evidencia planeada aún: <span class="font-black text-amber-950 dark:text-amber-100">{{ diagnosticData.unusedDbas.join(', ') }}</span>.
+                  </p>
+                  <p v-if="diagnosticData.freeEvidencesCount > 0">
+                    💡 <strong>{{ diagnosticData.freeEvidencesCount }} {{ diagnosticData.freeEvidencesCount === 1 ? 'evidencia' : 'evidencias' }} de aprendizaje</strong> {{ diagnosticData.freeEvidencesCount === 1 ? 'permanece libre / disponible' : 'permanecen libres / disponibles' }} para vincular a competencias.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <button @click="fetchDiagnostic" class="text-amber-600 hover:text-amber-800 p-2 dark:text-amber-400">
+              <RefreshCw class="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+
+        <!-- Zero state -->
+        <div v-if="filteredCompetencies.length === 0" class="px-6 py-16 text-center">
           <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-600">
             <Sparkles class="h-7 w-7" />
           </div>
@@ -695,18 +941,29 @@ onMounted(loadData)
                 <p class="mt-2 text-sm font-semibold text-slate-500 dark:text-slate-400 max-w-2xl leading-relaxed">Operativa para todos los cursos de este grado durante el periodo.</p>
               </div>
 
-              <button
-                v-if="!isPeriodClosed(item.id_periodo)"
-                type="button"
-                @click="openEditModal(item)"
-                class="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-slate-200 px-5 py-3 text-xs font-black text-slate-700 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 dark:border-slate-700 dark:text-slate-400 dark:hover:text-emerald-400 dark:hover:bg-emerald-900/30 uppercase tracking-widest"
-              >
-                <PenSquare class="h-4 w-4" />
-                Editar
-              </button>
-              <span v-else class="inline-flex min-h-11 items-center justify-center rounded-2xl bg-slate-100 px-5 py-3 text-xs font-black uppercase text-slate-400 dark:bg-slate-800 dark:text-slate-500 tracking-wider">
-                Periodo Cerrado
-              </span>
+              <div class="flex items-center gap-2">
+                <button
+                  v-if="!isPeriodClosed(item.id_periodo)"
+                  type="button"
+                  @click="openEditModal(item)"
+                  class="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-slate-200 px-5 py-3 text-xs font-black text-slate-700 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 dark:border-slate-700 dark:text-slate-400 dark:hover:text-emerald-400 dark:hover:bg-emerald-900/30 uppercase tracking-widest"
+                >
+                  <PenSquare class="h-4 w-4" />
+                  Editar
+                </button>
+                <button
+                  v-if="!isPeriodClosed(item.id_periodo)"
+                  type="button"
+                  @click="promptDeleteCompetencia(item)"
+                  class="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-rose-50/50 px-4 py-3 text-xs font-black text-rose-700 transition hover:bg-rose-100 hover:border-rose-300 dark:border-rose-900/40 dark:bg-rose-950/20 dark:text-rose-400 dark:hover:bg-rose-900/40 uppercase tracking-widest"
+                >
+                  <Trash2 class="h-4 w-4" />
+                  Eliminar
+                </button>
+                <span v-else class="inline-flex min-h-11 items-center justify-center rounded-2xl bg-slate-100 px-5 py-3 text-xs font-black uppercase text-slate-400 dark:bg-slate-800 dark:text-slate-500 tracking-wider">
+                  Periodo Cerrado
+                </span>
+              </div>
             </div>
 
             <div class="mt-6 rounded-3xl border border-slate-100 bg-slate-50 p-6 dark:bg-slate-800 dark:border-slate-700 shadow-inner">
@@ -844,6 +1101,31 @@ onMounted(loadData)
                 <textarea v-model="competencyForm.descripcion" rows="4" placeholder="Indica el aprendizaje esperado..." class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-bold text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500/20 resize-none" />
               </label>
 
+              <!-- Sugerencia Automática de Enunciado DBA -->
+              <div 
+                v-for="sug in completedDbaSuggestions" 
+                :key="sug.id_dba"
+                class="md:col-span-2 rounded-2xl border border-emerald-300 bg-emerald-500/10 p-4 dark:bg-emerald-950/30 dark:border-emerald-700/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 duration-300"
+              >
+                <div class="flex items-start gap-3">
+                  <Sparkles class="h-5 w-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                  <div class="space-y-0.5">
+                    <p class="text-xs font-black text-emerald-950 dark:text-emerald-200">
+                      ¡Has seleccionado todas las evidencias del DBA #{{ sug.numero_dba }}!
+                    </p>
+                    <p class="text-[11px] font-medium text-emerald-800 dark:text-emerald-300 line-clamp-2 italic">"{{ sug.enunciado }}"</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  @click="applyDbaEnunciado(sug.enunciado)"
+                  class="shrink-0 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-black text-white hover:bg-emerald-500 transition-all uppercase tracking-wider shadow-sm flex items-center gap-1.5"
+                >
+                  <Check class="h-3.5 w-3.5" />
+                  Usar Enunciado
+                </button>
+              </div>
+
               <!-- Vinculación de Evidencias DBA desde el modal de creación -->
               <div v-if="showFormDba" class="md:col-span-2 space-y-4">
                 <div class="flex items-center justify-between border-t border-slate-100 pt-4 dark:border-slate-800">
@@ -899,7 +1181,9 @@ onMounted(loadData)
                             'flex items-start gap-2.5 rounded-xl border p-3 transition-colors',
                             ev.asignada
                               ? 'border-amber-200/50 bg-amber-50/30 cursor-not-allowed dark:bg-amber-950/10 dark:border-amber-900/30'
-                              : 'border-slate-200/40 bg-white hover:bg-emerald-50/20 cursor-pointer dark:bg-slate-900 dark:border-slate-800'
+                              : isCheckboxDisabled(dbaItem.id_dba, ev.id_evidencia_dba)
+                                ? 'border-slate-100 bg-slate-100/50 cursor-not-allowed dark:bg-slate-800/10 dark:border-slate-800 opacity-60'
+                                : 'border-slate-200/40 bg-white hover:bg-emerald-50/20 cursor-pointer dark:bg-slate-900 dark:border-slate-800'
                           ]"
                         >
                           <input
@@ -907,7 +1191,8 @@ onMounted(loadData)
                             type="checkbox"
                             v-model="checkedFormDbaEvidences"
                             :value="ev.id_evidencia_dba"
-                            class="mt-0.5 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                            :disabled="isCheckboxDisabled(dbaItem.id_dba, ev.id_evidencia_dba)"
+                            class="mt-0.5 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed"
                           />
                           <div v-else class="mt-0.5 h-4 w-4 rounded border border-amber-300 bg-amber-100 flex items-center justify-center shrink-0 dark:bg-amber-900/30 dark:border-amber-700">
                             <svg class="h-2.5 w-2.5 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" /></svg>
@@ -922,6 +1207,15 @@ onMounted(loadData)
                               </span>
                               <span class="text-[9px] font-semibold text-amber-600/70 dark:text-amber-400/50 truncate max-w-[200px]" :title="ev.asignada_a.competencia_descripcion">
                                 {{ ev.asignada_a.competencia_descripcion }}
+                              </span>
+                            </div>
+                            <!-- Alertas de bloqueo por actividades -->
+                            <div v-if="editingCompetencyIsUsed" class="mt-1.5 flex items-center gap-1.5 flex-wrap">
+                              <span v-if="editingCompetencyOriginalEvidences.includes(ev.id_evidencia_dba)" class="rounded-full bg-red-50 dark:bg-red-950/20 px-2 py-0.5 text-[8px] font-black uppercase text-red-700 dark:text-red-400 tracking-wider">
+                                Bloqueada (Tiene Actividades)
+                              </span>
+                              <span v-else-if="originalDbaId !== null && dbaItem.id_dba !== originalDbaId" class="rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-[8px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider">
+                                Bloqueada (DBA Distinto)
                               </span>
                             </div>
                           </div>
@@ -1025,19 +1319,21 @@ onMounted(loadData)
                       Evidencias Oficiales:
                     </h4>
                     <div class="grid grid-cols-1 gap-3">
-                      <!-- Evidencia LIBRE (seleccionable) -->
+                      <!-- Evidencia (seleccionable si es libre o pertenece a esta competencia) -->
                       <label
                         v-for="ev in dbaItem.evidencias"
                         :key="ev.id_evidencia_dba"
                         :class="[
                           'flex items-start gap-3 rounded-2xl border p-4 transition-colors',
-                          ev.asignada
+                          ev.asignada && !ev.asignada_a_esta_competencia
                             ? 'border-amber-200/60 bg-amber-50/40 cursor-not-allowed dark:bg-amber-950/10 dark:border-amber-900/30'
+                            : ev.asignada_a_esta_competencia
+                            ? 'border-emerald-200 bg-emerald-50/50 cursor-pointer dark:bg-emerald-950/20 dark:border-emerald-900/40'
                             : 'border-slate-200/50 bg-white hover:bg-emerald-50/20 cursor-pointer dark:bg-slate-900 dark:border-slate-800'
                         ]"
                       >
                         <input
-                          v-if="!ev.asignada"
+                          v-if="!ev.asignada || ev.asignada_a_esta_competencia"
                           type="checkbox"
                           v-model="checkedDbaEvidences"
                           :value="ev.id_evidencia_dba"
@@ -1047,15 +1343,20 @@ onMounted(loadData)
                           <svg class="h-3 w-3 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" /></svg>
                         </div>
                         <div class="flex-1 min-w-0">
-                          <span :class="ev.asignada ? 'text-amber-800/70 dark:text-amber-400/70' : 'text-slate-700 dark:text-slate-300'" class="text-xs font-semibold leading-relaxed block">
+                          <span :class="ev.asignada && !ev.asignada_a_esta_competencia ? 'text-amber-800/70 dark:text-amber-400/70' : 'text-slate-700 dark:text-slate-300'" class="text-xs font-semibold leading-relaxed block">
                             {{ ev.descripcion }}
                           </span>
-                          <div v-if="ev.asignada && ev.asignada_a" class="mt-2 flex items-center gap-2 flex-wrap">
+                          <div v-if="ev.asignada && ev.asignada_a && !ev.asignada_a_esta_competencia" class="mt-2 flex items-center gap-2 flex-wrap">
                             <span class="rounded-full bg-amber-100 px-2.5 py-0.5 text-[9px] font-black uppercase text-amber-700 tracking-wider dark:bg-amber-900/40 dark:text-amber-400">
                               Asignada · {{ ev.asignada_a.periodo_nombre }}
                             </span>
                             <span class="text-[10px] font-semibold text-amber-600/80 dark:text-amber-400/60 truncate max-w-xs" :title="ev.asignada_a.competencia_descripcion">
                               {{ ev.asignada_a.competencia_descripcion }}
+                            </span>
+                          </div>
+                          <div v-else-if="ev.asignada_a_esta_competencia" class="mt-2 flex items-center gap-2 flex-wrap">
+                            <span class="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[9px] font-black uppercase text-emerald-700 tracking-wider dark:bg-emerald-950/60 dark:text-emerald-300">
+                              Vinculada a esta competencia (Editable)
                             </span>
                           </div>
                         </div>
@@ -1083,6 +1384,98 @@ onMounted(loadData)
             >
               <Check class="h-4 w-4" />
               {{ saving ? 'Guardando...' : 'Guardar Vinculación' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal de Confirmación y Advertencia de Eliminación de Competencia -->
+    <div v-if="showDeleteModal" class="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in duration-300">
+      <div class="relative w-full max-w-2xl rounded-[32px] border border-slate-200 bg-white shadow-2xl dark:bg-slate-900 dark:border-slate-800 overflow-hidden">
+        <!-- Header -->
+        <div class="flex items-center justify-between border-b border-slate-100 bg-rose-500/10 p-6 md:px-8 dark:border-slate-800">
+          <div class="flex items-center gap-3">
+            <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-500 text-white shadow-md">
+              <Trash2 class="h-6 w-6" />
+            </div>
+            <div>
+              <h3 class="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Confirmar Eliminación de Competencia</h3>
+              <p class="text-xs font-semibold text-rose-600 dark:text-rose-400">Verificación de impacto y docentes involucrados</p>
+            </div>
+          </div>
+          <button @click="showDeleteModal = false" class="rounded-full p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"><X class="h-6 w-6" /></button>
+        </div>
+
+        <!-- Body -->
+        <div class="p-6 md:p-8 space-y-6">
+          <div v-if="loadingDeleteCheck" class="py-10 text-center space-y-3">
+            <RefreshCw class="h-8 w-8 text-rose-500 animate-spin mx-auto" />
+            <p class="text-xs font-bold text-slate-500">Verificando uso por docentes y calificaciones registradas...</p>
+          </div>
+
+          <template v-else-if="deleteUsageInfo">
+            <!-- Competency Description -->
+            <div class="p-4 rounded-2xl bg-slate-50 border border-slate-100 dark:bg-slate-800/40 dark:border-slate-800">
+              <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Competencia a Eliminar:</p>
+              <p class="text-sm font-bold text-slate-900 dark:text-white mt-1 italic">"{{ deleteUsageInfo.descripcion }}"</p>
+            </div>
+
+            <!-- Usage Warning -->
+            <div v-if="deleteUsageInfo.isUsed" class="space-y-4">
+              <div class="p-4 rounded-2xl bg-rose-50 border border-rose-200 dark:bg-rose-950/30 dark:border-rose-900/40 space-y-2">
+                <h4 class="text-xs font-black text-rose-800 dark:text-rose-300 uppercase tracking-widest flex items-center gap-2">
+                  <AlertTriangle class="h-4 w-4 text-rose-600" />
+                  ¡ADVERTENCIA CRÍTICA DE DESVINCULACIÓN DE NOTAS!
+                </h4>
+                <p class="text-xs font-semibold text-rose-900/90 dark:text-rose-200 leading-relaxed">
+                  Esta competencia ya ha sido utilizada por docentes para evaluar estudiantes. Si confirmas la eliminación, el sistema iniciará una <strong>transacción segura</strong> que desvinculará las notas y actividades de esta competencia.
+                </p>
+              </div>
+
+              <!-- Teachers list -->
+              <div class="space-y-2">
+                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Docentes y Cursos Afectados:</p>
+                <div class="max-h-48 overflow-y-auto space-y-2 custom-scrollbar pr-1">
+                  <div 
+                    v-for="(t, idx) in deleteUsageInfo.teachersUsage" 
+                    :key="idx"
+                    class="p-3 rounded-xl bg-slate-50 border border-slate-200/80 dark:bg-slate-800/60 dark:border-slate-700/60 flex items-center justify-between text-xs font-bold"
+                  >
+                    <div>
+                      <p class="text-slate-900 dark:text-white">{{ t.docente_nombre }}</p>
+                      <p class="text-[10px] font-semibold text-slate-500">{{ t.materia_nombre }} · {{ t.grupo_nombre }}</p>
+                    </div>
+                    <div class="text-right">
+                      <span class="rounded-lg bg-rose-100 text-rose-700 px-2 py-1 text-[10px] font-black dark:bg-rose-950 dark:text-rose-300">
+                        {{ t.total_notas }} {{ t.total_notas === 1 ? 'nota' : 'notas' }} / {{ t.total_actividades }} {{ t.total_actividades === 1 ? 'actividad' : 'actividades' }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div v-else class="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-900/30 text-xs font-bold text-emerald-800 dark:text-emerald-300">
+              ✓ Esta competencia no tiene actividades ni notas registradas. Puede eliminarse limpiamente.
+            </div>
+          </template>
+
+          <!-- Actions -->
+          <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+            <button 
+              @click="showDeleteModal = false"
+              class="rounded-xl px-5 py-2.5 text-xs font-black text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 uppercase tracking-wider"
+            >
+              Cancelar
+            </button>
+            <button 
+              @click="confirmDeleteCompetencia"
+              :disabled="saving"
+              class="rounded-xl bg-rose-600 px-6 py-2.5 text-xs font-black text-white hover:bg-rose-500 uppercase tracking-wider shadow-md transition disabled:opacity-50 flex items-center gap-2"
+            >
+              <Trash2 class="h-4 w-4" />
+              {{ deleteUsageInfo?.isUsed ? 'Sí, Eliminar y Desvincular' : 'Sí, Eliminar Competencia' }}
             </button>
           </div>
         </div>

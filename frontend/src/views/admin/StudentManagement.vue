@@ -50,6 +50,8 @@ const filteredGrades = computed(() => {
 const studentModalOpen = ref(false)
 const isEditing = ref(false)
 const selectedStudent = ref<any>(null)
+const isSupervision = computed(() => auth.activeRole === 'admin_general')
+const justification = ref('')
 
 const statusModalOpen = ref(false)
 const newStatus = ref('')
@@ -252,14 +254,23 @@ const openEditModal = (student: any) => {
   isEditing.value = true
   selectedStudent.value = student
   studentForm.value = { ...student }
+  justification.value = ''
   studentModalOpen.value = true
 }
 
 const saveStudent = async () => {
   try {
     if (isEditing.value) {
+      if (isSupervision.value && !justification.value.trim()) {
+        notify.addNotification('Por favor ingrese la justificación del cambio para la auditoría.', 'warning')
+        return
+      }
       const headers = { Authorization: `Bearer ${auth.token}` }
-      await axios.put(`http://localhost:3000/api/student/${selectedStudent.value.id_estudiante}`, studentForm.value, { headers })
+      const payload = {
+        ...studentForm.value,
+        motivo_cambio: isSupervision.value ? justification.value : undefined
+      }
+      await axios.put(`http://localhost:3000/api/student/${selectedStudent.value.id_estudiante}`, payload, { headers })
       notify.addNotification('Estudiante actualizado exitosamente', 'success')
     } else {
       // Create student is usually done via Enrollment - but we could add a direct one if needed
@@ -646,15 +657,27 @@ const exportToSIMAT = () => {
             </div>
           </div>
           <div class="grid grid-cols-2 gap-4">
-             <div class="space-y-1">
+            <div class="space-y-1">
               <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Documento</label>
               <input v-model="studentForm.documento" type="text" class="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl p-3 text-sm font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/20" />
             </div>
             <div class="space-y-1">
-              <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Código</label>
+               <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Código</label>
               <input v-model="studentForm.codigo" type="text" class="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl p-3 text-sm font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/20" />
             </div>
           </div>
+
+          <!-- Justificación del Cambio (Modo Supervisión) -->
+          <div v-if="isSupervision" class="space-y-2 bg-amber-50/50 dark:bg-amber-950/15 border border-amber-200/50 dark:border-amber-900/30 p-5 rounded-2xl">
+            <span class="text-xs font-black text-amber-800 dark:text-amber-400 uppercase tracking-wider flex items-center gap-1"><ShieldAlert :size="14" /> Justificación del Cambio (Auditoría) *</span>
+            <textarea 
+              v-model="justification" 
+              placeholder="Por favor detalla el motivo formal de esta modificación como administrador supervisor..." 
+              rows="2"
+              class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded-xl p-3 text-xs font-bold outline-none text-slate-950 dark:text-white resize-none"
+            ></textarea>
+          </div>
+
           <div class="flex gap-3 pt-4">
              <button @click="studentModalOpen = false" class="flex-1 py-3.5 rounded-2xl font-black text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all text-sm uppercase tracking-widest">Cancelar</button>
              <button @click="saveStudent" class="flex-2 bg-indigo-600 text-white py-3.5 rounded-2xl font-black shadow-lg shadow-indigo-100 dark:shadow-none hover:bg-indigo-700 transition-all text-sm uppercase tracking-widest">Guardar Cambios</button>

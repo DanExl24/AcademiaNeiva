@@ -14,7 +14,9 @@ import {
   ClipboardList,
   Download,
   BookOpen,
-  Users
+  Users,
+  Eye,
+  AlertTriangle
 } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 import axios from 'axios'
@@ -132,7 +134,9 @@ const newActivity = ref({
   nombre: '',
   porcentaje: 0,
   id_evidencia: null as number | null,
-  evidencias_dba: [] as number[]
+  evidencias_dba: [] as number[],
+  motivo_extra: '',
+  justificacion_extra: ''
 })
 
 const dbaEvidencesInfo = ref<{
@@ -143,9 +147,23 @@ const dbaEvidencesInfo = ref<{
   dba?: any[]
 } | null>(null)
 
+const selectedEvidencesNeedJustification = computed(() => {
+  if (!newActivity.value.evidencias_dba || newActivity.value.evidencias_dba.length === 0 || !dbaEvidencesInfo.value?.dba) return false
+  for (const id of newActivity.value.evidencias_dba) {
+    for (const dbaItem of dbaEvidencesInfo.value.dba) {
+      const ev = dbaItem.evidencias?.find((e: any) => e.id_evidencia_dba === id)
+      if (ev && ev.tipo === 'EXTRA' && ev.planeada_otro_periodo_nombre) {
+        return true
+      }
+    }
+  }
+  return false
+})
+
 // Drawer y filtros
 const isDrawerOpen = ref(false)
-const dbaEvidenceFilter = ref<'TODAS' | 'PLANEADAS' | 'EXTRAS'>('TODAS')
+const showWarningModal = ref(false)
+const showExtraModal = ref(false)
 
 const openDrawer = () => {
   console.log('openDrawer triggered')
@@ -157,21 +175,48 @@ const closeDrawer = () => {
   isDrawerOpen.value = false
 }
 
-const filteredDbaItems = computed(() => {
+const plannedDbaItems = computed(() => {
   if (!dbaEvidencesInfo.value || !dbaEvidencesInfo.value.dba) return []
-  const filter = dbaEvidenceFilter.value
   return dbaEvidencesInfo.value.dba.map(dbaItem => {
-    const filteredEvs = dbaItem.evidencias.filter((ev: any) => {
-      if (filter === 'PLANEADAS') return ev.tipo === 'PLANEADA'
-      if (filter === 'EXTRAS') return ev.tipo === 'EXTRA'
-      return true
-    })
+    const filteredEvs = dbaItem.evidencias.filter((ev: any) => ev.tipo === 'PLANEADA')
     return {
       ...dbaItem,
       evidencias: filteredEvs
     }
   }).filter(dbaItem => dbaItem.evidencias.length > 0)
 })
+
+const extraDbaItems = computed(() => {
+  if (!dbaEvidencesInfo.value || !dbaEvidencesInfo.value.dba) return []
+  return dbaEvidencesInfo.value.dba.map(dbaItem => {
+    const filteredEvs = dbaItem.evidencias.filter((ev: any) => ev.tipo === 'EXTRA')
+    return {
+      ...dbaItem,
+      evidencias: filteredEvs
+    }
+  }).filter(dbaItem => dbaItem.evidencias.length > 0)
+})
+
+const selectedExtraEvidencesList = computed(() => {
+  if (!newActivity.value.evidencias_dba || newActivity.value.evidencias_dba.length === 0 || !dbaEvidencesInfo.value?.dba) return []
+  const list: any[] = []
+  for (const id of newActivity.value.evidencias_dba) {
+    for (const dbaItem of dbaEvidencesInfo.value.dba) {
+      const ev = dbaItem.evidencias?.find((e: any) => e.id_evidencia_dba === id)
+      if (ev && ev.tipo === 'EXTRA') {
+        list.push({
+          id_evidencia_dba: ev.id_evidencia_dba,
+          descripcion: ev.descripcion,
+          planeada_otro_periodo_nombre: ev.planeada_otro_periodo_nombre,
+          numero_dba: dbaItem.numero_dba
+        })
+      }
+    }
+  }
+  return list
+})
+
+const selectedExtraEvidencesCount = computed(() => selectedExtraEvidencesList.value.length)
 
 // Cargar cursos asignados
 const fetchMyCourses = async () => {
@@ -476,6 +521,17 @@ const addActivity = async () => {
       alert('Debes seleccionar al menos una evidencia del DBA, un nombre y un porcentaje.')
       return
     }
+
+    if (selectedEvidencesNeedJustification.value) {
+      if (!newActivity.value.motivo_extra) {
+        alert('Debes seleccionar un motivo para evaluar evidencias planificadas en otros periodos.')
+        return
+      }
+      if (newActivity.value.motivo_extra === 'OTRO' && !newActivity.value.justificacion_extra.trim()) {
+        alert('Debes escribir una justificación detallada para el motivo "Otro".')
+        return
+      }
+    }
   } else {
     if (!newActivity.value.nombre || newActivity.value.porcentaje <= 0 || !newActivity.value.id_evidencia) {
       alert('Debes seleccionar una evidencia de aprendizaje, un nombre y un porcentaje.')
@@ -507,12 +563,25 @@ const addActivity = async () => {
 
     if (isDba) {
       payload.evidencias_dba = newActivity.value.evidencias_dba
+      if (selectedEvidencesNeedJustification.value) {
+        payload.motivo_extra = newActivity.value.motivo_extra
+        if (newActivity.value.motivo_extra === 'OTRO') {
+          payload.justificacion_extra = newActivity.value.justificacion_extra
+        }
+      }
     } else {
       payload.id_evidencia = newActivity.value.id_evidencia
     }
 
     await axios.post('http://localhost:3000/api/teacher/activities', payload)
-    newActivity.value = { nombre: '', porcentaje: 0, id_evidencia: null, evidencias_dba: [] }
+    newActivity.value = {
+      nombre: '',
+      porcentaje: 0,
+      id_evidencia: null,
+      evidencias_dba: [],
+      motivo_extra: '',
+      justificacion_extra: ''
+    }
     showAddActivity.value = false
     await fetchActivities()
   } catch (error: any) {
@@ -1396,24 +1465,18 @@ onMounted(() => {
 
                 <div v-else class="p-5 bg-indigo-50/30 dark:bg-indigo-950/20 rounded-2xl border border-indigo-100 dark:border-indigo-900 space-y-4 animate-in zoom-in-95">
                   <div v-if="dbaEvidencesInfo?.usaDba" class="space-y-4">
-                    <!-- Modern Select Filter for DBA Evidences -->
                     <div class="flex flex-col gap-2">
                       <div class="flex items-center justify-between">
-                        <label class="text-[10px] font-black text-indigo-500 dark:text-indigo-400 uppercase tracking-widest ml-1">Evidencias DBA *</label>
-                        <select v-model="dbaEvidenceFilter" class="bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-600 dark:text-slate-300 focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer">
-                          <option value="TODAS">Todas</option>
-                          <option value="PLANEADAS">Planeadas</option>
-                          <option value="EXTRAS">Extras</option>
-                        </select>
+                        <label class="text-[10px] font-black text-indigo-500 dark:text-indigo-400 uppercase tracking-widest ml-1">Evidencias DBA Planeadas *</label>
                       </div>
                       
-                      <!-- DBA Scrollable Selector -->
+                      <!-- DBA Scrollable Selector (Only planned) -->
                       <div class="space-y-4 max-h-60 overflow-y-auto border border-slate-200 dark:border-slate-750 rounded-xl p-3 bg-white dark:bg-slate-900">
-                        <div v-if="filteredDbaItems.length === 0" class="text-xs text-slate-400 dark:text-slate-500 italic py-2 text-center">
-                          No hay evidencias que coincidan con el filtro.
+                        <div v-if="plannedDbaItems.length === 0" class="text-xs text-slate-400 dark:text-slate-500 italic py-4 text-center">
+                          No hay evidencias planeadas para este periodo por el directivo.
                         </div>
                         
-                        <div v-for="dbaItem in filteredDbaItems" :key="dbaItem.id_dba" class="space-y-2 pb-3 border-b border-slate-100 dark:border-slate-800 last:border-0 last:pb-0">
+                        <div v-for="dbaItem in plannedDbaItems" :key="dbaItem.id_dba" class="space-y-2 pb-3 border-b border-slate-100 dark:border-slate-800 last:border-0 last:pb-0">
                           <div class="flex items-start gap-2">
                             <span class="rounded bg-indigo-50 text-indigo-700 px-1.5 py-0.5 text-[9px] font-black dark:bg-indigo-950/40 dark:text-indigo-400 shrink-0">
                               DBA #{{ dbaItem.numero_dba }}
@@ -1429,15 +1492,15 @@ onMounted(() => {
                                 <input type="checkbox" v-model="newActivity.evidencias_dba" :value="ev.id_evidencia_dba" :disabled="!!getLinkedActivityForEvidence(ev.id_evidencia_dba)" class="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed" />
                                 <div class="flex flex-wrap items-center gap-1.5">
                                   <span>{{ ev.descripcion }}</span>
-                                  <span :class="ev.tipo === 'PLANEADA' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400' : 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400'" class="rounded px-1.5 py-0.2 text-[8px] font-black uppercase">
-                                    {{ ev.tipo }}
+                                  <span class="rounded px-1.5 py-0.2 text-[8px] font-black uppercase bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400">
+                                    PLANEADA
                                   </span>
                                   <span v-if="getLinkedActivityForEvidence(ev.id_evidencia_dba)" class="bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-400 rounded px-1.5 py-0.5 text-[8px] font-bold border border-red-200/40 uppercase tracking-wide">
                                     Asignada a: {{ getLinkedActivityForEvidence(ev.id_evidencia_dba) }}
                                   </span>
                                 </div>
                               </div>
-                              <div v-if="ev.tipo === 'PLANEADA' && getLinkedCompetencyIndex(ev.id_competencia)" class="flex flex-wrap gap-1 mt-1 pl-6">
+                              <div v-if="getLinkedCompetencyIndex(ev.id_competencia)" class="flex flex-wrap gap-1 mt-1 pl-6">
                                 <span class="px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-950/40 text-[8px] font-black text-violet-700 dark:text-violet-400 border border-violet-200/40 dark:border-violet-900 uppercase tracking-wider">
                                   Competencia {{ getLinkedCompetencyIndex(ev.id_competencia) }}{{ getDbaNumberForCompetency(competenciasList[(getLinkedCompetencyIndex(ev.id_competencia) || 1) - 1]) ? ` / DBA ${getDbaNumberForCompetency(competenciasList[(getLinkedCompetencyIndex(ev.id_competencia) || 1) - 1])}` : '' }}
                                 </span>
@@ -1446,6 +1509,57 @@ onMounted(() => {
                           </div>
                         </div>
                       </div>
+
+                      <!-- Botón para ver todas/extra evidencias -->
+                      <div class="mt-1">
+                        <button 
+                          type="button" 
+                          @click="showWarningModal = true"
+                          class="w-full flex items-center justify-center gap-1.5 py-3 bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-xl border border-slate-200 dark:border-slate-700 text-[10px] font-black uppercase tracking-wider transition-all"
+                        >
+                          <Eye :size="13" />
+                          Ver todas las evidencias para este curso
+                        </button>
+                      </div>
+
+                      <!-- Resumen de evidencias extra seleccionadas -->
+                      <div v-if="selectedExtraEvidencesCount > 0" class="mt-2 p-4 bg-blue-50/30 dark:bg-blue-950/10 rounded-2xl border border-blue-100 dark:border-blue-900/50 space-y-3">
+                        <p class="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest leading-none">
+                          Evidencias Extra Seleccionadas ({{ selectedExtraEvidencesCount }})
+                        </p>
+                        <ul class="space-y-1.5">
+                          <li v-for="ev in selectedExtraEvidencesList" :key="ev.id_evidencia_dba" class="text-xs font-semibold text-slate-600 dark:text-slate-350 leading-relaxed flex items-start gap-2">
+                            <span class="rounded bg-blue-50 text-blue-700 px-1 py-0.5 text-[8px] font-black dark:bg-blue-950/40 dark:text-blue-400 mt-0.5 shrink-0">DBA #{{ ev.numero_dba }}</span>
+                            <div class="flex-1 min-w-0">
+                              <span>{{ ev.descripcion }}</span>
+                              <span v-if="ev.planeada_otro_periodo_nombre" class="ml-1.5 rounded px-1.5 py-0.2 text-[8px] font-black uppercase bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 border border-amber-200/30">
+                                Planeada en: {{ ev.planeada_otro_periodo_nombre }}
+                              </span>
+                            </div>
+                          </li>
+                        </ul>
+
+                        <!-- Motivo y Justificación -->
+                        <div class="pt-3 border-t border-slate-200/40 dark:border-slate-800 space-y-3">
+                          <div class="space-y-1">
+                            <label class="text-[9px] font-black text-indigo-500 dark:text-indigo-400 uppercase tracking-widest ml-1">Motivo del uso EXTRA *</label>
+                            <select v-model="newActivity.motivo_extra" class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2.5 text-xs font-bold outline-none text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500">
+                              <option value="">Selecciona un motivo</option>
+                              <option value="RECUPERACION_REFUERZO">Recuperación o refuerzo</option>
+                              <option value="ADELANTO_CURRICULAR">Adelanto curricular</option>
+                              <option value="INTEGRACION_ASIGNATURA">Integración con otra asignatura</option>
+                              <option value="CALENDARIO_INSTITUCIONAL">Ajuste por calendario institucional</option>
+                              <option value="NECESIDAD_PEDAGOGICA">Necesidad pedagógica detectada</option>
+                              <option value="OTRO">Otro (requiere descripción)</option>
+                            </select>
+                          </div>
+                          <div v-if="newActivity.motivo_extra === 'OTRO'" class="space-y-1">
+                            <label class="text-[9px] font-black text-indigo-500 dark:text-indigo-400 uppercase tracking-widest ml-1">Descripción de la justificación *</label>
+                            <textarea v-model="newActivity.justificacion_extra" rows="3" placeholder="Describe brevemente el por qué deseas evaluar esta evidencia..." class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-bold outline-none text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500"></textarea>
+                          </div>
+                        </div>
+                      </div>
+
                     </div>
                   </div>
                   
@@ -1480,6 +1594,76 @@ onMounted(() => {
               </div>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal 1: Advertencia de Evidencias Extra -->
+    <div v-if="showWarningModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+      <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 max-w-md w-full shadow-2xl space-y-4 animate-in zoom-in-95 duration-200">
+        <div class="flex items-center gap-3 text-amber-500 dark:text-amber-400">
+          <div class="p-2.5 bg-amber-50 dark:bg-amber-950/40 rounded-2xl">
+            <AlertTriangle :size="24" />
+          </div>
+          <h3 class="text-base font-black uppercase tracking-wide text-slate-850 dark:text-white">Advertencia de Evidencias</h3>
+        </div>
+        <p class="text-xs font-semibold text-slate-600 dark:text-slate-400 leading-relaxed">
+          Las evidencias que se mostrarán ya fueron planeadas en periodos anteriores/futuros, o no tienen alguna planeación. Si elige vincular una de estas evidencias con el registro de notas, el estado de la evidencia pasará a <span class="text-blue-600 font-extrabold uppercase">EXTRA</span> para este periodo académico.
+        </p>
+        <div class="flex gap-2 pt-2">
+          <button @click="showWarningModal = false" class="flex-1 py-3 text-xs font-black uppercase text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors border border-slate-200 dark:border-slate-800 rounded-2xl">Cancelar</button>
+          <button @click="showWarningModal = false; showExtraModal = true" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-2xl text-xs font-black uppercase active:scale-95 transition-all shadow-lg shadow-indigo-100 dark:shadow-none">Entendido, continuar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal 2: Catálogo de Evidencias Extras/Sin Planear -->
+    <div v-if="showExtraModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+      <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 max-w-lg w-full shadow-2xl flex flex-col max-h-[85vh] space-y-4 animate-in zoom-in-95 duration-200">
+        <div class="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+          <h3 class="text-sm font-black uppercase tracking-wider text-slate-850 dark:text-white">Evidencias Extras disponibles</h3>
+          <button @click="showExtraModal = false" class="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors rounded-xl hover:bg-slate-100 dark:hover:bg-slate-855"><X :size="16" /></button>
+        </div>
+
+        <div class="flex-1 overflow-y-auto pr-1 space-y-4 custom-scrollbar">
+          <div v-if="extraDbaItems.length === 0" class="text-xs text-slate-400 dark:text-slate-500 italic py-8 text-center">
+            No hay más evidencias disponibles en el catálogo de DBA para este curso.
+          </div>
+
+          <div v-for="dbaItem in extraDbaItems" :key="dbaItem.id_dba" class="space-y-2 pb-3 border-b border-slate-100 dark:border-slate-800 last:border-0 last:pb-0">
+            <div class="flex items-start gap-2">
+              <span class="rounded bg-blue-50 text-blue-700 px-1.5 py-0.5 text-[9px] font-black dark:bg-blue-950/40 dark:text-blue-400 shrink-0">
+                DBA #{{ dbaItem.numero_dba }}
+              </span>
+              <p class="text-xs font-bold text-slate-700 dark:text-slate-350 leading-normal">
+                {{ dbaItem.enunciado }}
+              </p>
+            </div>
+            
+            <div class="pl-4 space-y-1.5">
+              <label v-for="ev in dbaItem.evidencias" :key="ev.id_evidencia_dba" :class="getLinkedActivityForEvidence(ev.id_evidencia_dba) ? 'opacity-60 cursor-not-allowed bg-slate-50/50 dark:bg-slate-900/10' : 'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50'" class="flex flex-col gap-1 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800 transition-all">
+                <div class="flex items-start gap-2 text-xs font-bold text-slate-650 dark:text-slate-300">
+                  <input type="checkbox" v-model="newActivity.evidencias_dba" :value="ev.id_evidencia_dba" :disabled="!!getLinkedActivityForEvidence(ev.id_evidencia_dba)" class="mt-0.5 rounded border-slate-350 text-indigo-650 focus:ring-indigo-500 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed" />
+                  <div class="flex flex-wrap items-center gap-1.5">
+                    <span>{{ ev.descripcion }}</span>
+                    <span class="rounded px-1.5 py-0.2 text-[8px] font-black uppercase bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400">
+                      EXTRA
+                    </span>
+                    <span v-if="ev.planeada_otro_periodo_nombre" class="rounded px-1.5 py-0.2 text-[8px] font-black uppercase bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 border border-amber-200/30">
+                      Planeada en: {{ ev.planeada_otro_periodo_nombre }}
+                    </span>
+                    <span v-if="getLinkedActivityForEvidence(ev.id_evidencia_dba)" class="bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-400 rounded px-1.5 py-0.5 text-[8px] font-bold border border-red-200/40 uppercase tracking-wide">
+                      Asignada a: {{ getLinkedActivityForEvidence(ev.id_evidencia_dba) }}
+                    </span>
+                  </div>
+                </div>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+          <button @click="showExtraModal = false" class="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-2xl text-xs font-black uppercase active:scale-95 transition-all shadow-lg shadow-indigo-100 dark:shadow-none">Confirmar Selección</button>
         </div>
       </div>
     </div>

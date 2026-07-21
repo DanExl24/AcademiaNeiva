@@ -26,6 +26,7 @@ import {
   upsertCompetencyByAdmin,
   getSubjectCurriculumDetails,
   deleteCompetencyByAdmin,
+  checkCompetenciaUsage,
   updateAcademicPeriodPercentage,
   getPeriodClosureDetails,
   updateManualScaleConfiguration,
@@ -58,7 +59,8 @@ import {
 } from "../controllers/academicAdminController";
 import {
   obtenerReporteCoherenciaCurricular,
-  obtenerReporteCoberturaDba
+  obtenerReporteCoberturaDba,
+  obtenerCatalogoDbaDirectivo
 } from "../controllers/dbaReportsController";
 import { upload } from "../config/multer";
 import { verifyToken, requireDirectivo } from "../middleware/authMiddleware";
@@ -113,6 +115,7 @@ router.post("/settings/periods", createAcademicPeriod);
 router.patch("/settings/periods/:id/percentage", updateAcademicPeriodPercentage);
 router.get("/settings/closure-details/:schoolId/:periodId", getPeriodClosureDetails);
 router.post("/settings/competencies", upsertCompetencyByAdmin);
+router.get("/settings/competencies/:id/usage-check", checkCompetenciaUsage);
 router.delete("/settings/competencies/:id", deleteCompetencyByAdmin);
 router.post("/settings/periods/:id/close", closeAcademicPeriod);
 router.post("/settings/periods/:id/approve", approveAcademicPeriod);
@@ -132,6 +135,7 @@ router.get("/settings/dba-planeacion/disponibles/:schoolId", getDbaPlaneacionDis
 router.post("/settings/competencias/:competenciaId/vincular-evidencias-dba", vincularEvidenciasDbaACompetencia);
 router.get("/settings/dba-reportes/coherencia/:schoolId", obtenerReporteCoherenciaCurricular);
 router.get("/settings/dba-reportes/cobertura/:schoolId", obtenerReporteCoberturaDba);
+router.get("/settings/dba-catalogo/:schoolId", obtenerCatalogoDbaDirectivo);
 
 // Dashboard Analítico
 router.get("/dashboard/:schoolId", getDirectivoDashboard);

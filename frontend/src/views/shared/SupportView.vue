@@ -584,6 +584,7 @@ const getObservationText = (obs: any) => {
               </select>
 
               <!-- RN-005: Botón de escalamiento interactivo o deshabilitado -->
+              <!-- Caso 1: Ya fue escalado (cualquier estado) -->
               <button 
                 v-if="auth.activeRole?.toUpperCase() === 'DIRECTIVO' && t.fecha_escalado"
                 disabled
@@ -591,6 +592,14 @@ const getObservationText = (obs: any) => {
               >
                 Escalado
               </button>
+              <!-- Caso 2: Resuelto sin escalar -->
+              <span 
+                v-else-if="auth.activeRole?.toUpperCase() === 'DIRECTIVO' && !t.fecha_escalado && t.estado === 'RESUELTO'"
+                class="px-3 py-1.5 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 border border-emerald-200/50 dark:border-emerald-800/50 rounded-xl text-xs font-black uppercase tracking-wider"
+              >
+                No Escalado
+              </span>
+              <!-- Caso 3: No resuelto y sin escalar → botón activo -->
               <button 
                 v-else-if="auth.activeRole?.toUpperCase() === 'DIRECTIVO' && !t.fecha_escalado"
                 @click="escalateTicketFrontend(t.id_ticket)"

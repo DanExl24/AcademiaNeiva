@@ -13,7 +13,9 @@ export interface AuthRequest extends Request {
     schoolId: number | null;
     schoolIds?: number[];
     jti?: string;
+    supervisionId?: number | null;
   };
+  auditLogged?: boolean;
 }
 
 /**
@@ -76,7 +78,8 @@ export const verifyToken = async (req: AuthRequest, res: Response, next: NextFun
       roles: decoded.roles || [decoded.role],
       schoolId: decoded.schoolId || null,
       schoolIds: decoded.schoolIds || [],
-      jti: decoded.jti
+      jti: decoded.jti,
+      supervisionId: null
     };
 
     // Si el usuario es administrador general, verificar supervisión activa
@@ -168,9 +171,11 @@ export const verifyToken = async (req: AuthRequest, res: Response, next: NextFun
           }
 
           req.user.schoolId = null;
+          req.user.supervisionId = null;
         } else {
           // Supervisión activa y no expirada -> Asignar id_colegio de la supervisión
           req.user.schoolId = supervision.id_colegio;
+          req.user.supervisionId = supervision.id_auditoria;
 
           // Bloquear escrituras si el modo es SOLO_LECTURA
           if (supervision.tipo_supervision === 'SOLO_LECTURA') {
@@ -179,6 +184,61 @@ export const verifyToken = async (req: AuthRequest, res: Response, next: NextFun
               res.status(403).json({ error: 'Acceso denegado. Estás en modo supervisión de SOLO LECTURA.' });
               return;
             }
+          }
+
+          // Registrar lecturas y exportaciones asíncronamente
+          if (req.method === 'GET') {
+            const auditDetails = getAuditLogDetails(req.originalUrl);
+            if (auditDetails) {
+              pool.query(
+                `INSERT INTO auditoria_acciones_realizadas
+                 (id_auditoria, modulo, tipo_accion, accion, recurso_afectado)
+                 VALUES ($1, $2, $3, $4, $5)`,
+                [
+                  supervision.id_auditoria,
+                  auditDetails.modulo,
+                  auditDetails.tipo_accion,
+                  auditDetails.accion,
+                  auditDetails.recurso_afectado
+                ]
+              ).catch((err: any) => {
+                console.error('Error logging automatic GET action in active supervision:', err);
+              });
+            }
+          } else {
+            // Para peticiones modificadoras, registrar en el evento 'finish' si no fueron auditadas manualmente
+            res.on('finish', () => {
+              if (res.statusCode >= 200 && res.statusCode < 400 && !req.auditLogged) {
+                req.auditLogged = true;
+                const auditDetails = getAuditLogDetails(req.originalUrl);
+                const modulo = auditDetails?.modulo || getModuloFromUrl(req.originalUrl);
+                const tipo_accion = getTipoAccionFromMethod(req.method);
+                const accion = `${getAccionPrefixFromMethod(req.method)} en módulo ${modulo}`;
+                const recurso_afectado = `Petición ${req.method} a la ruta: ${req.originalUrl}`;
+                
+                const valor_antiguo = tipo_accion === 'MODIFICACION' ? {} : null;
+                const valor_nuevo = tipo_accion === 'MODIFICACION' ? req.body : null;
+                const motivo_cambio = req.body.motivo_cambio || req.body.motivo || 'Acción general realizada bajo modo supervisión';
+
+                pool.query(
+                  `INSERT INTO auditoria_acciones_realizadas
+                   (id_auditoria, modulo, tipo_accion, accion, recurso_afectado, valor_antiguo, valor_nuevo, motivo_cambio)
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+                  [
+                    supervision.id_auditoria,
+                    modulo,
+                    tipo_accion,
+                    accion,
+                    recurso_afectado,
+                    valor_antiguo ? JSON.stringify(valor_antiguo) : null,
+                    valor_nuevo ? JSON.stringify(valor_nuevo) : null,
+                    motivo_cambio
+                  ]
+                ).catch((err: any) => {
+                  console.error('Error logging automatic modifying action in active supervision:', err);
+                });
+              }
+            });
           }
         }
       }
@@ -336,4 +396,105 @@ export const verifyTokenOptional = async (req: AuthRequest, res: Response, next:
   }
   next();
 };
+
+function getAuditLogDetails(url: string) {
+  if (url.includes('/supervision/') || url.includes('/notificaciones') || url.includes('/dashboard/stats')) {
+    return null;
+  }
+  
+  let modulo = '';
+  let tipo_accion: 'LECTURA' | 'EXPORTACION' = 'LECTURA';
+  let accion = '';
+  let recurso_afectado = '';
+
+  if (url.startsWith('/api/boletines')) {
+    modulo = 'BOLETINES';
+    if (url.includes('/student/')) {
+      tipo_accion = 'EXPORTACION';
+      const parts = url.split('/');
+      const studentId = parts[4] || 'N/A';
+      const periodId = parts[5] || 'N/A';
+      accion = 'Generación de Boletín de Estudiante';
+      recurso_afectado = `Boletín Estudiante ID: ${studentId}, Periodo ID: ${periodId}`;
+    } else if (url.includes('/grade/')) {
+      tipo_accion = 'EXPORTACION';
+      const parts = url.split('/');
+      const grupoId = parts[4] || 'N/A';
+      const periodId = parts[5] || 'N/A';
+      accion = 'Generación de Boletines por Grado';
+      recurso_afectado = `Boletines Grado ID: ${grupoId}, Periodo ID: ${periodId}`;
+    } else {
+      accion = 'Consulta de Boletines';
+      recurso_afectado = `Consulta: ${url}`;
+    }
+  } else if (url.startsWith('/api/student')) {
+    modulo = 'ESTUDIANTES';
+    if (url.includes('/summary')) {
+      const parts = url.split('/');
+      const id = parts[3] || 'N/A';
+      accion = 'Lectura de Ficha de Estudiante';
+      recurso_afectado = `Ficha Resumen Estudiante ID: ${id}`;
+    } else if (url.includes('/colegio/')) {
+      const parts = url.split('/');
+      const colegioId = parts[4] || 'N/A';
+      accion = 'Consulta de Listado de Estudiantes';
+      recurso_afectado = `Listado Estudiantes Colegio ID: ${colegioId}`;
+    } else {
+      accion = 'Consulta de Datos de Estudiante';
+      recurso_afectado = `Consulta: ${url}`;
+    }
+  } else if (url.startsWith('/api/academic-admin')) {
+    modulo = 'CONFIGURACION';
+    accion = 'Consulta de Configuración Académica';
+    recurso_afectado = `Consulta: ${url}`;
+  } else if (url.startsWith('/api/matriculas') || url.startsWith('/api/matricula')) {
+    modulo = 'MATRICULAS';
+    accion = 'Consulta de Matrículas';
+    recurso_afectado = `Consulta: ${url}`;
+  } else if (url.startsWith('/api/teacher')) {
+    modulo = 'DOCENTES';
+    accion = 'Consulta de Docentes';
+    recurso_afectado = `Consulta: ${url}`;
+  } else if (url.startsWith('/api/grados')) {
+    modulo = 'GRADOS';
+    accion = 'Consulta de Grados';
+    recurso_afectado = `Consulta: ${url}`;
+  } else if (url.startsWith('/api/dba')) {
+    modulo = 'DBA';
+    accion = 'Consulta de DBA';
+    recurso_afectado = `Consulta: ${url}`;
+  } else if (url.startsWith('/api/support')) {
+    modulo = 'SOPORTE';
+    accion = 'Consulta de Soporte';
+    recurso_afectado = `Consulta: ${url}`;
+  }
+
+  return modulo ? { modulo, tipo_accion, accion, recurso_afectado } : null;
+}
+
+function getModuloFromUrl(url: string): string {
+  if (url.startsWith('/api/student')) return 'ESTUDIANTES';
+  if (url.startsWith('/api/boletines')) return 'BOLETINES';
+  if (url.startsWith('/api/academic-admin')) return 'CONFIGURACION';
+  if (url.startsWith('/api/matriculas') || url.startsWith('/api/matricula')) return 'MATRICULAS';
+  if (url.startsWith('/api/teacher')) return 'DOCENTES';
+  if (url.startsWith('/api/grados')) return 'GRADOS';
+  if (url.startsWith('/api/dba')) return 'DBA';
+  if (url.startsWith('/api/support')) return 'SOPORTE';
+  return 'GENERAL';
+}
+
+function getTipoAccionFromMethod(method: string): 'CREACION' | 'MODIFICACION' | 'ELIMINACION' | 'LECTURA' {
+  if (method === 'POST') return 'CREACION';
+  if (method === 'DELETE') return 'ELIMINACION';
+  if (method === 'PUT' || method === 'PATCH') return 'MODIFICACION';
+  return 'LECTURA';
+}
+
+function getAccionPrefixFromMethod(method: string): string {
+  if (method === 'POST') return 'Creación de registro';
+  if (method === 'DELETE') return 'Eliminación de registro';
+  if (method === 'PUT' || method === 'PATCH') return 'Modificación de registro';
+  return 'Consulta';
+}
 

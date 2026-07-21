@@ -47,6 +47,7 @@ router.post("/settings/periods", academicAdminController_1.createAcademicPeriod)
 router.patch("/settings/periods/:id/percentage", academicAdminController_1.updateAcademicPeriodPercentage);
 router.get("/settings/closure-details/:schoolId/:periodId", academicAdminController_1.getPeriodClosureDetails);
 router.post("/settings/competencies", academicAdminController_1.upsertCompetencyByAdmin);
+router.get("/settings/competencies/:id/usage-check", academicAdminController_1.checkCompetenciaUsage);
 router.delete("/settings/competencies/:id", academicAdminController_1.deleteCompetencyByAdmin);
 router.post("/settings/periods/:id/close", academicAdminController_1.closeAcademicPeriod);
 router.post("/settings/periods/:id/approve", academicAdminController_1.approveAcademicPeriod);
@@ -64,6 +65,7 @@ router.get("/settings/dba-planeacion/disponibles/:schoolId", academicAdminContro
 router.post("/settings/competencias/:competenciaId/vincular-evidencias-dba", academicAdminController_1.vincularEvidenciasDbaACompetencia);
 router.get("/settings/dba-reportes/coherencia/:schoolId", dbaReportsController_1.obtenerReporteCoherenciaCurricular);
 router.get("/settings/dba-reportes/cobertura/:schoolId", dbaReportsController_1.obtenerReporteCoberturaDba);
+router.get("/settings/dba-catalogo/:schoolId", dbaReportsController_1.obtenerCatalogoDbaDirectivo);
 // Dashboard Analítico
 router.get("/dashboard/:schoolId", academicAdminController_1.getDirectivoDashboard);
 // Matrícula Extraordinaria

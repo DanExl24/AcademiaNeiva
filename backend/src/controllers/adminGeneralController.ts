@@ -1220,7 +1220,12 @@ export const verAccionesSupervision = async (req: AuthRequest, res: Response): P
       [id]
     );
 
-    res.json(result.rows);
+    const mapped = result.rows.map((row: any) => ({
+      ...row,
+      recurso_afectado: transformResourceForExport(row.recurso_afectado).descripcion
+    }));
+
+    res.json(mapped);
   } catch (error: any) {
     console.error('Error obteniendo acciones:', error);
     res.status(500).json({ error: 'Error al obtener acciones de la supervisión' });
@@ -1239,12 +1244,15 @@ export const historialSupervision = async (req: AuthRequest, res: Response): Pro
              c.nombre AS colegio_nombre,
              u.nombre AS admin_nombre, u.email AS admin_email,
              ud.nombre AS directivo_nombre, ud.apellido AS directivo_apellido,
+             udr.nombre AS directivo_revocador_nombre, udr.apellido AS directivo_revocador_apellido,
              (SELECT COUNT(*) FROM auditoria_acciones_realizadas acc WHERE acc.id_auditoria = a.id_auditoria) AS total_acciones
       FROM auditoria_supervision a
       JOIN colegio c ON c.id_colegio = a.id_colegio
       JOIN usuario u ON u.id_usuario = a.id_admin_general
       LEFT JOIN directivo d ON d.id = a.id_directivo_aprobador
       LEFT JOIN usuario ud ON ud.id_usuario = d.id_usuario
+      LEFT JOIN directivo dr ON dr.id = a.revocado_por
+      LEFT JOIN usuario udr ON udr.id_usuario = dr.id_usuario
       WHERE a.eliminado = FALSE
     `;
     const params: any[] = [];
@@ -1321,9 +1329,21 @@ export const exportarAuditoria = async (req: AuthRequest, res: Response): Promis
 
     await client.query('COMMIT');
 
+    const mappedAcciones = acciones.rows.map((row: any) => {
+      const cleanResource = transformResourceForExport(row.recurso_afectado);
+      return {
+        ...row,
+        recurso_afectado: cleanResource.descripcion,
+        detalles_tecnicos: cleanResource.endpoint ? {
+          endpoint: cleanResource.endpoint,
+          query: cleanResource.query || null
+        } : null
+      };
+    });
+
     res.json({
       auditoria: auditoria.rows[0],
-      acciones: acciones.rows,
+      acciones: mappedAcciones,
       exportado_en: new Date().toISOString(),
       exportado_por: req.user!.email,
     });
@@ -1335,6 +1355,73 @@ export const exportarAuditoria = async (req: AuthRequest, res: Response): Promis
     client.release();
   }
 };
+
+function transformResourceForExport(recurso: string): { descripcion: string; endpoint?: string; query?: any } {
+  if (!recurso) {
+    return { descripcion: 'No especificado' };
+  }
+
+  let url = '';
+
+  if (recurso.startsWith('Consulta: /')) {
+    url = recurso.substring(10);
+  } else if (recurso.startsWith('Petición ') && recurso.includes(' a la ruta: ')) {
+    const parts = recurso.split(' a la ruta: ');
+    url = parts[1] || '';
+  } else if (recurso.includes('?')) {
+    url = recurso;
+  } else if (recurso.startsWith('/api/')) {
+    url = recurso;
+  }
+
+  if (url) {
+    const [path, queryString] = url.split('?');
+    
+    const query: any = {};
+    if (queryString) {
+      const pairs = queryString.split('&');
+      for (const pair of pairs) {
+        const [key, val] = pair.split('=');
+        if (key) {
+          query[decodeURIComponent(key)] = val ? decodeURIComponent(val) : true;
+        }
+      }
+    }
+
+    const descripcion = getCleanFriendlyName(path);
+
+    return {
+      descripcion,
+      endpoint: path,
+      query: Object.keys(query).length > 0 ? query : undefined
+    };
+  }
+
+  return { descripcion: recurso };
+}
+
+function getCleanFriendlyName(path: string): string {
+  if (path.includes('/dashboard')) return 'Dashboard académico';
+  if (path.includes('/settings')) return 'Configuración académica';
+  if (path.includes('/boletines/student')) return 'Boletín individual de estudiante';
+  if (path.includes('/boletines/grade')) return 'Boletines de grado';
+  if (path.includes('/boletines')) return 'Generador de boletines';
+  if (path.includes('/student/colegio')) return 'Listado general de estudiantes';
+  if (path.includes('/student/sanctions/types')) return 'Tipos de sanciones disciplinarias';
+  if (path.endsWith('/summary') && path.includes('/student/')) return 'Ficha resumen de estudiante';
+  if (path.endsWith('/status') && path.includes('/student/')) return 'Estado y sanción de estudiante';
+  if (path.endsWith('/change-grade') && path.includes('/student/')) return 'Traslado de grado de estudiante';
+  if (path.endsWith('/graduate') && path.includes('/student/')) return 'Graduación de estudiante';
+  if (path.includes('/student')) return 'Ficha de estudiante';
+  if (path.includes('/teacher') || path.includes('/docentes')) return 'Gestión de docentes';
+  if (path.includes('/grados')) return 'Configuración de grados';
+  if (path.includes('/dba')) return 'Derechos básicos de aprendizaje (DBA)';
+  if (path.includes('/support')) return 'Soporte técnico';
+  if (path.includes('/matricula') || path.includes('/matriculas')) return 'Gestión de matrículas';
+  if (path.includes('/academic-admin')) return 'Configuración curricular';
+  
+  return 'Recurso del sistema';
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // REGISTRO DE ACCIONES DE AUDITORÍA (helper para uso interno)
@@ -1672,9 +1759,13 @@ export const listarAuditoriasAcciones = async (req: AuthRequest, res: Response):
     }
 
     const result = await pool.query(query, params);
+    const mapped = result.rows.map((row: any) => ({
+      ...row,
+      recurso_afectado: transformResourceForExport(row.recurso_afectado).descripcion
+    }));
     res.setHeader("x-total-count", String(totalCount));
     res.setHeader("Access-Control-Expose-Headers", "x-total-count");
-    res.json(result.rows);
+    res.json(mapped);
   } catch (error: any) {
     console.error('Error obteniendo auditorías:', error);
     res.status(500).json({ error: 'Error al obtener bitácora de auditoría' });
@@ -1688,22 +1779,34 @@ export const listarAuditoriasAcciones = async (req: AuthRequest, res: Response):
 export const listarNotificacionesSistema = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const supervisionRes = await pool.query(`
-      SELECT ns.id_notificacion, ns.tipo_notificacion as tipo, ns.mensaje, ns.fecha_notificacion as fecha,
-             'SUPERVISION' as origen, c.nombre as colegio_nombre, u.nombre || ' ' || COALESCE(u.apellido, '') as directivo_nombre
+      SELECT MIN(ns.id_notificacion) as id_notificacion, 
+             ns.tipo_notificacion as tipo, 
+             ns.mensaje, 
+             ns.fecha_notificacion as fecha,
+             'SUPERVISION' as origen, 
+             c.nombre as colegio_nombre, 
+             string_agg(u.nombre || ' ' || COALESCE(u.apellido, ''), ', ') as directivo_nombre
       FROM notificacion_supervision ns
       JOIN directivo d ON ns.id_directivo = d.id
       JOIN usuario u ON d.id_usuario = u.id_usuario
       JOIN auditoria_supervision aus ON ns.id_auditoria = aus.id_auditoria
       JOIN colegio c ON aus.id_colegio = c.id_colegio
+      GROUP BY ns.tipo_notificacion, ns.mensaje, ns.fecha_notificacion, c.nombre
     `);
 
     const colegioRes = await pool.query(`
-      SELECT nc.id_notificacion, nc.tipo, nc.mensaje, nc.fecha_notificacion as fecha,
-             'COLEGIO' as origen, c.nombre as colegio_nombre, u.nombre || ' ' || COALESCE(u.apellido, '') as directivo_nombre
+      SELECT MIN(nc.id_notificacion) as id_notificacion, 
+             nc.tipo, 
+             nc.mensaje, 
+             nc.fecha_notificacion as fecha,
+             'COLEGIO' as origen, 
+             c.nombre as colegio_nombre, 
+             string_agg(u.nombre || ' ' || COALESCE(u.apellido, ''), ', ') as directivo_nombre
       FROM notificacion_colegio nc
       JOIN directivo d ON nc.id_directivo = d.id
       JOIN usuario u ON d.id_usuario = u.id_usuario
       JOIN colegio c ON nc.id_colegio = c.id_colegio
+      GROUP BY nc.tipo, nc.mensaje, nc.fecha_notificacion, c.nombre
     `);
 
     const allNotificaciones = [...supervisionRes.rows, ...colegioRes.rows];
@@ -1810,7 +1913,12 @@ export const verAccionesSupervisionDirectivo = async (req: AuthRequest, res: Res
       [id]
     );
 
-    res.json(result.rows);
+    const mapped = result.rows.map((row: any) => ({
+      ...row,
+      recurso_afectado: transformResourceForExport(row.recurso_afectado).descripcion
+    }));
+
+    res.json(mapped);
   } catch (error: any) {
     console.error('Error obteniendo acciones para directivo:', error);
     res.status(500).json({ error: 'Error al obtener acciones de la supervisión' });

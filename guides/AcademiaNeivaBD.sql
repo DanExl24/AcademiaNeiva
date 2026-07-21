@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict FwzGFnDgdJBMWgKotRToHhE084PWsqkO3I5MwMbNdyOYaP9XBwUCWXps54n6YS3
+\restrict p2VtdcHW1LeeuF5uOlG3oMiw4s8M5Ay6C47BoKqXlP1tVTKJV25TZNS5zaEEi6R
 
 -- Dumped from database version 18.4
 -- Dumped by pg_dump version 18.4
@@ -551,7 +551,9 @@ CREATE TABLE public.actividad_materia (
     id_colegio integer NOT NULL,
     id_competencia integer,
     id_evidencia integer,
-    fecha_creacion timestamp with time zone DEFAULT now()
+    fecha_creacion timestamp with time zone DEFAULT now(),
+    motivo_extra character varying(100) DEFAULT NULL::character varying,
+    justificacion_extra text
 );
 
 
@@ -4895,5 +4897,5 @@ REVOKE USAGE ON SCHEMA public FROM PUBLIC;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict FwzGFnDgdJBMWgKotRToHhE084PWsqkO3I5MwMbNdyOYaP9XBwUCWXps54n6YS3
+\unrestrict p2VtdcHW1LeeuF5uOlG3oMiw4s8M5Ay6C47BoKqXlP1tVTKJV25TZNS5zaEEi6R
 

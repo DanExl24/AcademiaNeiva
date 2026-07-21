@@ -21,6 +21,9 @@ interface Supervision {
   fecha_salida: string
   directivo_nombre?: string
   directivo_apellido?: string
+  directivo_revocador_nombre?: string
+  directivo_revocador_apellido?: string
+  motivo_revocacion?: string
   admin_nombre?: string
   admin_email?: string
   total_acciones?: number
@@ -242,11 +245,18 @@ const handleExport = async (sup: Supervision) => {
               <p class="font-medium text-slate-700 dark:text-slate-300 mt-1 leading-relaxed">{{ sup.motivo_solicitud }}</p>
             </div>
 
+            <!-- Revocation details -->
+            <div v-if="sup.estado_supervision === 'REVOCADA'" class="text-xs space-y-1.5 bg-red-50/50 dark:bg-red-950/10 p-3 rounded-2xl border border-red-200/20 dark:border-red-900/30">
+              <span class="font-black text-red-600 dark:text-red-400 uppercase tracking-wider text-[10px]">Motivo de la Revocación</span>
+              <p class="font-medium text-red-950 dark:text-red-300 leading-relaxed">{{ sup.motivo_revocacion || 'No especificado' }}</p>
+              <p class="text-[10px] text-slate-400 dark:text-slate-500 font-bold">Revocado por: <span class="text-slate-600 dark:text-slate-300">{{ sup.directivo_revocador_nombre }} {{ sup.directivo_revocador_apellido || '' }}</span></p>
+            </div>
+
             <!-- Meta details -->
             <div class="grid grid-cols-2 gap-3 text-xs font-semibold text-slate-500 dark:text-slate-400 border-t border-slate-50 dark:border-slate-800/40 pt-4">
-              <p class="flex items-center gap-1"><Calendar :size="13" /> Entrada: <span class="font-bold text-slate-800 dark:text-slate-300">{{ new Date(sup.fecha_entrada).toLocaleDateString() }} {{ new Date(sup.fecha_entrada).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) }}</span></p>
-              <p class="flex items-center gap-1"><Clock :size="13" /> Salida: <span class="font-bold text-slate-800 dark:text-slate-300">{{ new Date(sup.fecha_salida).toLocaleDateString() }} {{ new Date(sup.fecha_salida).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) }}</span></p>
-              <p class="col-span-2">Aprobó: <span class="font-bold text-slate-800 dark:text-slate-300">{{ sup.directivo_nombre }} {{ sup.directivo_apellido || '' }}</span></p>
+              <p class="flex items-center gap-1"><Calendar :size="13" /> Entrada: <span class="font-bold text-slate-800 dark:text-slate-300">{{ sup.fecha_entrada ? new Date(sup.fecha_entrada).toLocaleDateString() : 'N/A' }} {{ sup.fecha_entrada ? new Date(sup.fecha_entrada).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '' }}</span></p>
+              <p class="flex items-center gap-1"><Clock :size="13" /> Salida: <span class="font-bold text-slate-800 dark:text-slate-300">{{ sup.fecha_salida ? new Date(sup.fecha_salida).toLocaleDateString() : 'N/A' }} {{ sup.fecha_salida ? new Date(sup.fecha_salida).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '' }}</span></p>
+              <p class="col-span-2">Aprobó: <span class="font-bold text-slate-800 dark:text-slate-300">{{ sup.directivo_nombre || 'N/A' }} {{ sup.directivo_apellido || '' }}</span></p>
             </div>
           </div>
 

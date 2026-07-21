@@ -91,11 +91,25 @@ export const getAllStudents = async (req: Request, res: Response) => {
 };
 
 export const updateStudent = async (req: Request, res: Response) => {
+  const client = await pool.connect();
   try {
     const { id } = req.params;
-    const { nombre, apellido, documento, id_tipodocumento, codigo } = req.body;
+    const { nombre, apellido, documento, id_tipodocumento, codigo, motivo_cambio } = req.body;
 
-    const result = await pool.query(
+    await client.query("BEGIN");
+
+    // Fetch old student state
+    const oldStudentRes = await client.query(
+      `SELECT nombre, apellido, documento, id_tipodocumento, codigo, id_usuario FROM estudiante WHERE id_estudiante = $1`,
+      [id]
+    );
+    if (oldStudentRes.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "Estudiante no encontrado" });
+    }
+    const oldStudent = oldStudentRes.rows[0];
+
+    const result = await client.query(
       `UPDATE estudiante 
        SET nombre = $1, apellido = $2, documento = $3, id_tipodocumento = $4, codigo = $5
        WHERE id_estudiante = $6
@@ -103,13 +117,40 @@ export const updateStudent = async (req: Request, res: Response) => {
       [nombre, apellido, documento, id_tipodocumento, codigo, id]
     );
 
-    if (result.rowCount === 0) {
-      return res.status(404).json({ error: "Estudiante no encontrado" });
+    const updatedStudent = result.rows[0];
+
+    // Audit logging
+    const activeAuditoriaId = (req as any).user?.supervisionId;
+    if (activeAuditoriaId) {
+      (req as any).auditLogged = true;
+      await client.query(
+        `INSERT INTO auditoria_acciones_realizadas
+         (id_auditoria, modulo, tipo_accion, accion, recurso_afectado, id_usuario_afectado, valor_antiguo, valor_nuevo, motivo_cambio)
+         VALUES ($1, 'ESTUDIANTES', 'MODIFICACION', 'Modificación de datos básicos del estudiante', $2, $3, $4, $5, $6)`,
+        [
+          activeAuditoriaId,
+          `Estudiante ID: ${id} (${nombre} ${apellido})`,
+          oldStudent.id_usuario,
+          JSON.stringify({
+            nombre: oldStudent.nombre,
+            apellido: oldStudent.apellido,
+            documento: oldStudent.documento,
+            id_tipodocumento: oldStudent.id_tipodocumento,
+            codigo: oldStudent.codigo
+          }),
+          JSON.stringify({ nombre, apellido, documento, id_tipodocumento, codigo }),
+          motivo_cambio || 'Modificación de datos básicos del estudiante'
+        ]
+      );
     }
 
-    res.json(result.rows[0]);
+    await client.query("COMMIT");
+    res.json(updatedStudent);
   } catch (error: any) {
+    await client.query("ROLLBACK");
     res.status(500).json({ error: error.message });
+  } finally {
+    client.release();
   }
 };
 
@@ -118,23 +159,37 @@ export const updateStudentStatus = async (req: Request, res: Response) => {
   try {
     await client.query("BEGIN");
     const { id } = req.params; // id_estudiante
-    const { estado, motivo, id_tipo_sancion, fecha_inicio, fecha_fin, observaciones } = req.body;
+    const { estado, motivo, id_tipo_sancion, fecha_inicio, fecha_fin, observaciones, motivo_cambio } = req.body;
 
     if (!estado) {
+      await client.query("ROLLBACK");
       return res.status(400).json({ error: "El estado es obligatorio" });
     }
 
     const currentUserId = (req as any).user?.id;
     if (!currentUserId) {
+      await client.query("ROLLBACK");
       return res.status(401).json({ error: "No autorizado" });
     }
+
+    // Fetch old student state
+    const oldStudentRes = await client.query(
+      "SELECT estado, motivo_estado, id_usuario FROM estudiante WHERE id_estudiante = $1",
+      [id]
+    );
+    if (oldStudentRes.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "Estudiante no encontrado" });
+    }
+    const oldStudent = oldStudentRes.rows[0];
 
     const directivoRes = await client.query("SELECT id FROM directivo WHERE id_usuario = $1", [currentUserId]);
     const id_directivo = directivoRes.rows[0]?.id;
     if (!id_directivo) {
+      await client.query("ROLLBACK");
       return res.status(403).json({ error: "El usuario actual no está registrado como directivo" });
     }
-    if (estado === 'SANCIONADO') {
+    if (estado === 'SANCIONADO') {
       if (!id_tipo_sancion) {
         return res.status(400).json({ error: "El tipo de sanción es obligatorio" });
       }
@@ -202,6 +257,25 @@ export const updateStudentStatus = async (req: Request, res: Response) => {
       throw new Error("Estudiante no encontrado");
     }
 
+    // Audit logging
+    const activeAuditoriaId = (req as any).user?.supervisionId;
+    if (activeAuditoriaId) {
+      (req as any).auditLogged = true;
+      await client.query(
+        `INSERT INTO auditoria_acciones_realizadas
+         (id_auditoria, modulo, tipo_accion, accion, recurso_afectado, id_usuario_afectado, valor_antiguo, valor_nuevo, motivo_cambio)
+         VALUES ($1, 'ESTUDIANTES', 'MODIFICACION', 'Cambio de estado del estudiante', $2, $3, $4, $5, $6)`,
+        [
+          activeAuditoriaId,
+          `Estudiante ID: ${id}`,
+          oldStudent.id_usuario,
+          JSON.stringify({ estado: oldStudent.estado, motivo_estado: oldStudent.motivo_estado }),
+          JSON.stringify({ estado, motivo_estado: motivoValue }),
+          motivo_cambio || motivo || 'Cambio de estado del estudiante'
+        ]
+      );
+    }
+
     await client.query("COMMIT");
     res.json(result.rows[0]);
   } catch (error: any) {
@@ -226,9 +300,10 @@ export const changeStudentGrade = async (req: Request, res: Response) => {
   try {
     await client.query("BEGIN");
     const { id } = req.params;
-    const { id_grupo, id_nivel, motivo } = req.body;
+    const { id_grupo, id_nivel, motivo, motivo_cambio } = req.body;
 
     if (!motivo) {
+      await client.query("ROLLBACK");
       return res.status(400).json({ error: "El motivo del traslado es obligatorio" });
     }
 
@@ -273,6 +348,16 @@ export const changeStudentGrade = async (req: Request, res: Response) => {
     );
     const new_grade_name = newGradeRes.rows[0]?.nombre + " - " + newGradeRes.rows[0]?.seccion;
 
+    // Fetch old grading level and group
+    const oldGradingRes = await client.query(
+      `SELECT e.id_nivel, m.id_grupo, e.id_usuario
+       FROM estudiante e
+       LEFT JOIN matricula m ON e.id_estudiante = m.id_estudiante AND m.estado = 'ACTIVA'
+       WHERE e.id_estudiante = $1`,
+      [id]
+    );
+    const oldGrading = oldGradingRes.rows[0];
+
     // 1. Actualizar el nivel en la ficha del estudiante
     await client.query(
       "UPDATE estudiante SET id_nivel = $1 WHERE id_estudiante = $2",
@@ -286,6 +371,25 @@ export const changeStudentGrade = async (req: Request, res: Response) => {
        WHERE id_estudiante = $3 AND estado = 'ACTIVA'`,
       [id_grupo, id_nivel, id]
     );
+
+    // Audit logging
+    const activeAuditoriaId = (req as any).user?.supervisionId;
+    if (activeAuditoriaId && oldGrading) {
+      (req as any).auditLogged = true;
+      await client.query(
+        `INSERT INTO auditoria_acciones_realizadas
+         (id_auditoria, modulo, tipo_accion, accion, recurso_afectado, id_usuario_afectado, valor_antiguo, valor_nuevo, motivo_cambio)
+         VALUES ($1, 'ESTUDIANTES', 'MODIFICACION', 'Traslado de grado del estudiante', $2, $3, $4, $5, $6)`,
+        [
+          activeAuditoriaId,
+          `Estudiante ID: ${id} (${student_name} ${student_lastname})`,
+          oldGrading.id_usuario,
+          JSON.stringify({ id_nivel: oldGrading.id_nivel, id_grupo: oldGrading.id_grupo }),
+          JSON.stringify({ id_nivel, id_grupo }),
+          motivo_cambio || motivo || 'Traslado de grado del estudiante'
+        ]
+      );
+    }
 
     await client.query("COMMIT");
 
@@ -311,20 +415,47 @@ export const changeStudentGrade = async (req: Request, res: Response) => {
 };
 
 export const deleteStudent = async (req: Request, res: Response) => {
+  const client = await pool.connect();
   try {
     const { id } = req.params;
-    // Realizamos una eliminación lógica cambiando el estado a RETIRADO en lugar de borrar físicamente
-    // si el usuario así lo prefiere, o borrado físico si no tiene registros académicos.
-    // Para simplificar y mantener integridad, el usuario pidió "Expulsar (No eliminar)".
-    // Aquí implementaremos el borrado físico solo si el administrador realmente lo solicita y no hay conflictos.
-    const result = await pool.query("DELETE FROM estudiante WHERE id_estudiante = $1", [id]);
-    
-    if (result.rowCount === 0) {
+    const { motivo_cambio } = req.body;
+    await client.query("BEGIN");
+
+    // Fetch student info
+    const studentRes = await client.query(
+      "SELECT id_usuario, nombre, apellido, documento, codigo, id_colegio FROM estudiante WHERE id_estudiante = $1",
+      [id]
+    );
+    if (studentRes.rowCount === 0) {
+      await client.query("ROLLBACK");
       return res.status(404).json({ error: "Estudiante no encontrado" });
     }
+    const student = studentRes.rows[0];
+
+    const result = await client.query("DELETE FROM estudiante WHERE id_estudiante = $1", [id]);
     
+    // Audit deletion
+    const activeAuditoriaId = (req as any).user?.supervisionId;
+    if (activeAuditoriaId) {
+      (req as any).auditLogged = true;
+      await client.query(
+        `INSERT INTO auditoria_acciones_realizadas
+         (id_auditoria, modulo, tipo_accion, accion, recurso_afectado, id_usuario_afectado, valor_antiguo, valor_nuevo, motivo_cambio)
+         VALUES ($1, 'ESTUDIANTES', 'ELIMINACION', 'Eliminación física de estudiante', $2, $3, $4, NULL, $5)`,
+        [
+          activeAuditoriaId,
+          `Estudiante ID: ${id} (${student.nombre} ${student.apellido})`,
+          student.id_usuario,
+          JSON.stringify(student),
+          motivo_cambio || 'Eliminación física del estudiante'
+        ]
+      );
+    }
+
+    await client.query("COMMIT");
     res.json({ message: "Estudiante eliminado exitosamente" });
   } catch (error: any) {
+    await client.query("ROLLBACK");
     if (error.code === '23503') {
       res.status(400).json({ 
         error: "No se puede eliminar el estudiante porque tiene registros académicos asociados. Use 'Retirar' o 'Expulsar' en su lugar." 
@@ -332,6 +463,8 @@ export const deleteStudent = async (req: Request, res: Response) => {
     } else {
       res.status(500).json({ error: error.message });
     }
+  } finally {
+    client.release();
   }
 };
 
@@ -699,6 +832,25 @@ export const graduateStudent = async (req: Request, res: Response): Promise<void
        SET fecha_graduacion = EXCLUDED.fecha_graduacion, observaciones = EXCLUDED.observaciones, id_usuario_registro = EXCLUDED.id_usuario_registro`,
       [id, gradDate, observaciones || null, registrar_por || null]
     );
+
+    // Audit log for active supervision
+    const activeAuditoriaId = (req as any).user?.supervisionId;
+    if (activeAuditoriaId) {
+      (req as any).auditLogged = true;
+      await client.query(
+        `INSERT INTO auditoria_acciones_realizadas
+         (id_auditoria, modulo, tipo_accion, accion, recurso_afectado, id_usuario_afectado, valor_antiguo, valor_nuevo, motivo_cambio)
+         VALUES ($1, 'ESTUDIANTES', 'MODIFICACION', 'Graduación de estudiante', $2, $3, $4, $5, $6)`,
+        [
+          activeAuditoriaId,
+          `Estudiante ID: ${id} (${student.nombre} ${student.apellido})`,
+          student.id_usuario,
+          JSON.stringify({ estado: 'ACTIVO', matricula_estado: 'ACTIVA' }),
+          JSON.stringify({ estado: 'GRADUADO', matricula_estado: 'CULMINADA' }),
+          observaciones || 'Graduación de estudiante'
+        ]
+      );
+    }
 
     // RN-05: Audit log
     console.log(`[AUDIT] Estudiante ${student.nombre} ${student.apellido} (ID: ${id}) cambiado a estado GRADUADO por usuario ID ${registrar_por || 'sistema'} en fecha ${gradDate.toISOString()}.`);
