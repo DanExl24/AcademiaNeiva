@@ -23,7 +23,8 @@ export const submitEnrollment = async (req: Request, res: Response) => {
 export const getPendingMatriculas = async (req: Request, res: Response) => {
   try {
     const { idColegio } = req.params;
-    const matriculas = await MatriculaService.getAllPending(Number(idColegio));
+    const { yearId } = req.query;
+    const matriculas = await MatriculaService.getAllPending(Number(idColegio), yearId ? Number(yearId) : undefined);
     res.json(matriculas);
   } catch (error: any) {
     res.status(500).json({ error: error.message });

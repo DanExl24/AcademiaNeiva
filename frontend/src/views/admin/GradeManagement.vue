@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import axios from 'axios'
-import { Layers3, Plus, Search, School2, Trash2, Info, Pencil, Tag, RefreshCw } from 'lucide-vue-next'
+import { Layers3, Plus, Search, School2, Trash2, Info, Pencil, Tag, RefreshCw, Lock } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 import { useNotificationStore } from '../../stores/notifications'
+import { useAcademicYearStore } from '../../stores/academicYear'
 import { getCourseDisplayName, getNextSectionName } from '../../utils/courseHelper'
 
 interface Nivel {

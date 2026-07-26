@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict p2VtdcHW1LeeuF5uOlG3oMiw4s8M5Ay6C47BoKqXlP1tVTKJV25TZNS5zaEEi6R
+\restrict I8iVAeMf2XDBbBTSgIWFlgpfWtkrZPbuPgCu8Xo0K4NzKOnJpCeVLYe7JMURZjz
 
 -- Dumped from database version 18.4
 -- Dumped by pg_dump version 18.4
@@ -4441,12 +4441,7 @@ ALTER TABLE ONLY public.evidencia_aprendizaje
 
 
 --
--- Name: evidencia_aprendizaje evidencia_aprendizaje_id_evidencia_dba_fkey; Type: FKRevisa este IEEE y genera una tabla con:
-
-información respaldada por la documentación;
-información inferida;
-información inventada o no verificable;
-posibles contradicciones. CONSTRAINT; Schema: public; Owner: postgres
+-- Name: evidencia_aprendizaje evidencia_aprendizaje_id_evidencia_dba_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.evidencia_aprendizaje
@@ -4904,5 +4899,5 @@ REVOKE USAGE ON SCHEMA public FROM PUBLIC;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict p2VtdcHW1LeeuF5uOlG3oMiw4s8M5Ay6C47BoKqXlP1tVTKJV25TZNS5zaEEi6R
+\unrestrict I8iVAeMf2XDBbBTSgIWFlgpfWtkrZPbuPgCu8Xo0K4NzKOnJpCeVLYe7JMURZjz
 

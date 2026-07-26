@@ -115,8 +115,12 @@ router.get("/pending/:idColegio", verifyToken, requireDirectivo, getPendingMatri
 
 router.get("/filtered/:idColegio", verifyToken, requireDirectivo, async (req, res) => {
   try {
-    const { estado } = req.query;
-    const result = await MatriculaService.getFiltered(Number(req.params.idColegio), estado as string);
+    const { estado, yearId } = req.query;
+    const result = await MatriculaService.getFiltered(
+      Number(req.params.idColegio), 
+      estado as string, 
+      yearId ? Number(yearId) : undefined
+    );
     res.json(result);
   } catch (e: any) {
     res.status(500).json({ error: e.message });

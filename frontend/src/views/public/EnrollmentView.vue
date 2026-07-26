@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue'
 import axios from 'axios'
 import { useNotificationStore } from '../../stores/notifications'
+import { isValidEmail } from '../../utils/validationHelper'
 import { 
   School, 
   ArrowLeft, 
@@ -11,8 +12,7 @@ import {
   Camera,
   AlertCircle,
   Calendar,
-  CalendarDays,
-  Clock
+  CalendarDays
 } from 'lucide-vue-next'
 
 const step = ref(1)
@@ -262,6 +262,10 @@ const nextStep = () => {
   if (step.value === 1) {
     if (!schoolId.value || !level.value || !grade.value || !formData.value.parentEmail) {
       notify.addNotification('Por favor completa todos los campos obligatorios.', 'warning')
+      return
+    }
+    if (!isValidEmail(formData.value.parentEmail)) {
+      notify.addNotification('Por favor ingresa un correo electrónico válido (ejemplo: usuario@correo.com).', 'warning')
       return
     }
     if (!isEnrollmentOpen.value) {

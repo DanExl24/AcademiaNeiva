@@ -16,6 +16,10 @@ export class MatriculaService {
   static async createEnrollment(data: any, files: any) {
     const { level, hasDisability, isForeigner, parentEmail, id_colegio } = data;
 
+    if (!parentEmail || !/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(String(parentEmail).trim())) {
+      throw new Error("El correo electrónico del acudiente no es válido.");
+    }
+
     // --- Validación de documentos ---
     const isHigher = level === 'SECUNDARIA' || level === 'MEDIA';
     const isPre    = level === 'PREESCOLAR';
@@ -123,8 +127,8 @@ export class MatriculaService {
     }
   }
 
-  /** MR02 – Ver matrículas filtradas por estado */
-  static async getFiltered(idColegio: number, estado: string) {
+  /** MR02 – Ver matrículas filtradas por estado y año lectivo */
+  static async getFiltered(idColegio: number, estado: string, yearId?: number) {
     let query = `
       SELECT m.*, 
              (SELECT COUNT(*) FROM documento_matriculas WHERE id_matricula = m.id_matricula AND estado = 'PENDIENTE') > 0 as has_pending_docs
@@ -133,9 +137,14 @@ export class MatriculaService {
     `;
     const params: any[] = [idColegio];
 
+    if (yearId) {
+      params.push(yearId);
+      query += ` AND m.id_anio = $${params.length}`;
+    }
+
     if (estado !== 'ALL') {
-      query += ` AND m.estado = $2`;
       params.push(estado);
+      query += ` AND m.estado = $${params.length}`;
     }
 
     query += ` ORDER BY m.id_matricula DESC`;
@@ -143,14 +152,16 @@ export class MatriculaService {
     return res.rows;
   }
 
-  /** MR02 – Ver todas las matrículas pendientes */
-  static async getAllPending(idColegio: number) {
-    const res = await pool.query(
-      `SELECT * FROM matricula
-       WHERE id_colegio = $1 AND estado = 'PENDIENTE'
-       ORDER BY id_matricula DESC`,
-      [idColegio]
-    );
+  /** MR02 – Ver todas las matrículas pendientes por año lectivo */
+  static async getAllPending(idColegio: number, yearId?: number) {
+    let query = `SELECT * FROM matricula WHERE id_colegio = $1 AND estado = 'PENDIENTE'`;
+    const params: any[] = [idColegio];
+    if (yearId) {
+      params.push(yearId);
+      query += ` AND id_anio = $${params.length}`;
+    }
+    query += ` ORDER BY id_matricula DESC`;
+    const res = await pool.query(query, params);
     return res.rows;
   }
 
@@ -238,16 +249,25 @@ export class MatriculaService {
       }
     }
 
-    // Renovación check
-    let renovacion = {
+    // Renovación check — detecta todos los hijos elegibles del padre
+    let renovacion: {
+      is_renovacion: boolean;
+      parent_name: string | null;
+      candidates: any[];
+      // autoselected when only 1 candidate (backward compat)
+      student: any | null;
+      error_message: string | null;
+    } = {
       is_renovacion: false,
-      student: null as any,
-      error_message: null as string | null
+      parent_name: null,
+      candidates: [],
+      student: null,
+      error_message: null
     };
 
     if ((mat.estado === 'PENDIENTE' || mat.estado === 'CORRECCION' || mat.estado === 'RECHAZADA') && !mat.id_estudiante && mat.correo_padre) {
       const parentUserRes = await pool.query(
-        `SELECT u.id_usuario FROM usuario u 
+        `SELECT u.id_usuario, u.nombre, u.apellido FROM usuario u 
          JOIN usuario_rol ur ON u.id_usuario = ur.id_usuario
          JOIN rol r ON ur.id_rol = r.id_rol
          WHERE u.email = $1 AND r.nombre = 'padre' LIMIT 1`,
@@ -255,6 +275,7 @@ export class MatriculaService {
       );
       if (parentUserRes.rows.length > 0) {
         const idUsuarioPadre = parentUserRes.rows[0].id_usuario;
+        const parentFullName = `${parentUserRes.rows[0].nombre} ${parentUserRes.rows[0].apellido}`.trim();
         
         const parentRes = await pool.query(
           `SELECT id_padrefamilia FROM padre_familia WHERE id_usuario = $1 LIMIT 1`,
@@ -264,11 +285,19 @@ export class MatriculaService {
           const idPadre = parentRes.rows[0].id_padrefamilia;
           
           const childrenRes = await pool.query(
-            `SELECT e.*, u.email as student_email 
+            `SELECT e.id_estudiante, e.nombre, e.apellido, e.documento, e.id_tipodocumento,
+                    e.estado, e.codigo,
+                    tg.nombre as grado_nombre, ne.nombre as nivel_nombre,
+                    u.email as student_email 
              FROM estudiante e
              JOIN detalle_padrefamilia dp ON e.id_estudiante = dp.id_estudiante
              LEFT JOIN usuario u ON e.id_usuario = u.id_usuario
-             WHERE dp.id_padrefamilia = $1 AND e.id_colegio = $2`,
+             LEFT JOIN matricula m ON m.id_estudiante = e.id_estudiante AND m.id_colegio = e.id_colegio AND m.estado IN ('ACTIVA','TRASLADADA')
+             LEFT JOIN grupos g ON m.id_grupo = g.id_grupo
+             LEFT JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
+             LEFT JOIN nivel_escolar ne ON g.id_nivel = ne.id_nivel
+             WHERE dp.id_padrefamilia = $1 AND e.id_colegio = $2
+             ORDER BY e.apellido, e.nombre`,
             [idPadre, mat.id_colegio]
           );
           
@@ -286,38 +315,68 @@ export class MatriculaService {
                 [mat.id_colegio, prevYearStr]
               );
               
-              if (prevYearRes.rows.length > 0) {
-                const prevYearId = prevYearRes.rows[0].id_anio;
+              const prevYearId = prevYearRes.rows.length > 0 ? prevYearRes.rows[0].id_anio : null;
+              
+              // Build candidate list for EVERY child, including those not from prev year
+              const candidates: any[] = [];
+              
+              for (const child of childrenRes.rows) {
+                let prevEnrollmentStatus: string | null = null;
                 
-                for (const child of childrenRes.rows) {
+                if (prevYearId) {
                   const prevEnrollmentRes = await pool.query(
-                    `SELECT id_matricula, estado FROM matricula 
+                    `SELECT estado FROM matricula 
                      WHERE id_estudiante = $1 AND id_anio = $2 AND estado IN ('ACTIVA', 'TRASLADADA') LIMIT 1`,
                     [child.id_estudiante, prevYearId]
                   );
-                  
                   if (prevEnrollmentRes.rows.length > 0) {
-                    const prevEnrollment = prevEnrollmentRes.rows[0];
-                    renovacion.is_renovacion = true;
-                    renovacion.student = child;
-                    
-                    const status = child.estado;
-                    if (status === 'EXPULSADO') {
-                      renovacion.error_message = 'El estudiante se encuentra en estado EXPULSADO y no puede realizar renovación.';
-                    } else if (status === 'GRADUADO') {
-                      renovacion.error_message = 'El estudiante ya se encuentra graduado y no puede matricularse nuevamente.';
-                    } else if (status === 'SANCIONADO') {
-                      renovacion.error_message = 'El estudiante se encuentra en estado SUSPENDIDO/SANCIONADO. No se puede renovar la matrícula hasta que la sanción sea levantada.';
-                    } else if (prevEnrollment.estado === 'TRASLADADA') {
-                      renovacion.error_message = 'El estudiante se encuentra en estado de TRASLADO y no puede renovar matrícula en la institución de origen.';
-                    } else if (status !== 'ACTIVO') {
-                      renovacion.error_message = `El estudiante se encuentra en estado ${status} (No activo).`;
-                    }
-                    
-                    if (!renovacion.error_message) {
-                      break;
-                    }
+                    prevEnrollmentStatus = prevEnrollmentRes.rows[0].estado;
                   }
+                }
+
+                // Determine eligibility and error reason
+                let candidateError: string | null = null;
+                if (child.estado === 'EXPULSADO') {
+                  candidateError = 'Estudiante en estado EXPULSADO — no puede renovar.';
+                } else if (child.estado === 'GRADUADO') {
+                  candidateError = 'Estudiante graduado — no puede matricularse nuevamente.';
+                } else if (child.estado === 'SANCIONADO') {
+                  candidateError = 'Estudiante sancionado — la sanción debe levantarse antes de renovar.';
+                } else if (prevEnrollmentStatus === 'TRASLADADA') {
+                  candidateError = 'Estudiante en estado de TRASLADO — no puede renovar en la institución de origen.';
+                }
+
+                // Check for duplicate enrollment in current year
+                const currentEnrollmentRes = await pool.query(
+                  `SELECT id_matricula FROM matricula 
+                   WHERE id_estudiante = $1 AND id_anio = $2 AND estado IN ('ACTIVA', 'TRASLADADA') LIMIT 1`,
+                  [child.id_estudiante, mat.id_anio]
+                );
+                if (currentEnrollmentRes.rows.length > 0) {
+                  candidateError = `Estudiante ya tiene matrícula activa para ${currentYearStr}.`;
+                }
+
+                candidates.push({
+                  ...child,
+                  prev_enrollment_status: prevEnrollmentStatus,
+                  error_message: candidateError,
+                  eligible: !candidateError
+                });
+              }
+
+              if (candidates.length > 0) {
+                renovacion.is_renovacion = true;
+                renovacion.parent_name = parentFullName;
+                renovacion.candidates = candidates;
+
+                // Backward compatibility: autoselect if exactly 1 eligible candidate
+                const eligibles = candidates.filter(c => c.eligible);
+                if (eligibles.length === 1) {
+                  renovacion.student = eligibles[0];
+                } else if (eligibles.length === 0 && candidates.length === 1) {
+                  // Only one candidate but blocked
+                  renovacion.student = candidates[0];
+                  renovacion.error_message = candidates[0].error_message;
                 }
               }
             }
@@ -457,6 +516,27 @@ export class MatriculaService {
 
   /** MR04 – Finalizar registro: crea estudiante y padre, actualiza matricula */
   static async finalizeEnrollment(idMatricula: number, data: any) {
+    // --- Backend Field Text Validations ---
+    if (!data.student || !data.student.nombre || !/^[a-zA-ZáéíóúñÁÉÍÓÚÑ\s]{2,}$/.test(data.student.nombre.trim())) {
+      throw new Error('Nombres de estudiante no válidos. Solo se permiten letras (mínimo 2).');
+    }
+    if (!data.student || !data.student.apellido || !/^[a-zA-ZáéíóúñÁÉÍÓÚÑ\s]{2,}$/.test(data.student.apellido.trim())) {
+      throw new Error('Apellidos de estudiante no válidos. Solo se permiten letras (mínimo 2).');
+    }
+    if (!data.student || !data.student.documento || !/^[a-zA-Z0-9-]{4,}$/.test(data.student.documento.trim())) {
+      throw new Error('Documento de estudiante no válido. Mínimo 4 caracteres alfanuméricos.');
+    }
+
+    if (!data.parent || !data.parent.nombre || !/^[a-zA-ZáéíóúñÁÉÍÓÚÑ\s]{2,}$/.test(data.parent.nombre.trim())) {
+      throw new Error('Nombres de acudiente no válidos. Solo se permiten letras (mínimo 2).');
+    }
+    if (!data.parent || !data.parent.apellido || !/^[a-zA-ZáéíóúñÁÉÍÓÚÑ\s]{2,}$/.test(data.parent.apellido.trim())) {
+      throw new Error('Apellidos de acudiente no válidos. Solo se permiten letras (mínimo 2).');
+    }
+    if (!data.parent || !data.parent.documento || !/^[a-zA-Z0-9-]{4,}$/.test(data.parent.documento.trim())) {
+      throw new Error('Documento de acudiente no válido. Mínimo 4 caracteres alfanuméricos.');
+    }
+
     const client = await pool.connect();
     try {
       await client.query('BEGIN');

@@ -72,3 +72,77 @@ Este documento detalla las reglas de negocio técnicas y funcionales del módulo
 - **Endpoints relacionados:** 
   - `PATCH /api/academic-admin/settings/periods/:id/percentage`
 - **Historias de usuario relacionadas:** HU-CON-002
+
+---
+
+## Estructura de Años Lectivos y Concurrencia de Fechas
+
+### RN-CONF-006: Exclusividad del Año Lectivo Activo
+- **Descripción:** Solo puede existir **un (1) año lectivo en estado `ABIERTO`** por colegio a la vez. Al crear un nuevo año en estado `ABIERTO` o al modificar el estado de un año existente a `ABIERTO`, cualquier otro año activo en la misma institución pasa automáticamente a estado `CERRADO`.
+- **Motivo:** Garantiza que todo el colegio (matriculados, asistencias, evaluaciones y dashboards) concentre su ciclo operativo en un único marco lectivo de referencia.
+- **Módulos afectados:** Configuración Académica, Matrículas, Calificaciones, Dashboard.
+- **Archivos donde se implementa:** 
+  - [academicAdminController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdminController.ts) (`createAcademicYear`, `updateAcademicYearStatus`)
+- **Endpoints relacionados:** 
+  - `POST /api/academic-admin/settings/years`
+  - `PATCH /api/academic-admin/settings/years/:id/status`
+- **Historias de usuario relacionadas:** HU-CON-007
+
+---
+
+### RN-CONF-007: Coherencia y Rango de Fechas del Año Lectivo
+- **Descripción:** Todo año lectivo registrado en la tabla `anio_lectivo` debe contar con `fecha_inicio` y `fecha_fin` válidas, cumpliendo estrictamente que `fecha_fin > fecha_inicio`.
+- **Motivo:** Define la ventana institucional oficial para las vigencias de inscripciones, matrículas y periodos académicos.
+- **Módulos afectados:** Configuración Académica, Inscripciones y Matrículas.
+- **Archivos donde se implementa:** 
+  - [academicAdminController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdminController.ts) (`createAcademicYear`)
+  - [AcademiaNeivaBD.sql](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/AcademiaNeivaBD.sql)
+- **Endpoints relacionados:** 
+  - `POST /api/academic-admin/settings/years`
+- **Historias de usuario relacionadas:** HU-CON-007
+
+---
+
+### RN-CONF-008: Prohibición de Solapamiento entre Años Lectivos
+- **Descripción:** Las fechas de vigencia (`fecha_inicio` a `fecha_fin`) de un año lectivo NO pueden cruzarse ni solaparse con el rango de fechas de ningún otro año lectivo configurado en el mismo colegio. Si se detecta un choque (`fecha_inicio <= new_fin AND fecha_fin >= new_inicio`), la solicitud es rechazada en backend (error HTTP `400`) y bloqueada en el modal frontend con la alerta `⚠️ Solapamiento de Fechas Detectado`.
+- **Motivo:** Evita conflictos de vigencia y colisión de fechas entre periodos de distintos años lectivos.
+- **Módulos afectados:** Configuración Académica.
+- **Archivos donde se implementa:** 
+  - [academicAdminController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdminController.ts) (`createAcademicYear`)
+  - [AcademicPeriodsView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/AcademicPeriodsView.vue) (`dateOverlapWarning`, `watch`)
+- **Endpoints relacionados:** 
+  - `POST /api/academic-admin/settings/years`
+- **Historias de usuario relacionadas:** HU-CON-008
+
+---
+
+### RN-CONF-009: Concurrencia Estricta entre Años Lectivos y Periodos Académicos
+- **Descripción:** Ningún periodo académico asociado a un año lectivo puede poseer fechas de inicio o fin que queden fuera del rango `fecha_inicio` al `fecha_fin` de dicho año:
+  - El **Primer Periodo** del año inicia **exactamente en la `fecha_inicio`** del año lectivo.
+  - El **Cuarto Periodo** del año finaliza **exactamente en la `fecha_fin`** del año lectivo.
+  - Los 4 trimestres se distribuyen de forma equitativa e ininterrumpida entre el inicio y el fin del año lectivo.
+- **Motivo:** Mantiene la subordinación y coherencia matemática estricta de las fechas de evaluación con el calendario escolar institucional.
+- **Módulos afectados:** Configuración Académica, Evaluación.
+- **Archivos donde se implementa:** 
+  - [academicAdminController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdminController.ts) (`createAcademicYear`, `updateAcademicYearCalendarType`, `createAcademicPeriod`)
+  - [reset_and_seed.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/seeds/reset_and_seed.ts) (`computeQuarterPeriodsForDates`)
+- **Endpoints relacionados:** 
+  - `POST /api/academic-admin/settings/years`
+  - `PATCH /api/academic-admin/settings/years/:id/calendar-type`
+  - `POST /api/academic-admin/settings/periods`
+- **Historias de usuario relacionadas:** HU-CON-007, HU-CON-010
+
+---
+
+### RN-CONF-010: Formato y Modificación de Tipo de Calendario en Modo Editor
+- **Descripción:**
+  - El nombre/etiqueta del año lectivo se basa en una entrada numérica (ej. `2026`). Si el año es de **Calendario B**, el sistema genera automáticamente el rango numérico (ej. `2025-2026`).
+  - La alteración del tipo de calendario (A o B) en un año registrado solo se permite si el directivo ha activado el **Modo Editor** (`editorModeActive = true`) y si el año lectivo no posee registros académicos o matrículas activas de alumnos.
+- **Motivo:** Evita modificaciones accidentales de la estructura temporal de la institución en años en curso.
+- **Módulos afectados:** Configuración Académica.
+- **Archivos donde se implementa:** 
+  - [academicAdminController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdminController.ts) (`updateAcademicYearCalendarType`)
+  - [AcademicPeriodsView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/AcademicPeriodsView.vue) (`changeYearCalendarType`, `computedCalendarioLabel`)
+- **Endpoints relacionados:** 
+  - `PATCH /api/academic-admin/settings/years/:id/calendar-type`
+- **Historias de usuario relacionadas:** HU-CON-007, HU-CON-009

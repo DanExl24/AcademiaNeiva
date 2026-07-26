@@ -10,6 +10,7 @@ import {
   School,
   GraduationCap,
   CalendarCheck,
+  Calendar,
   Eye,
   Lock,
   Layers3,
@@ -726,26 +727,28 @@ onUnmounted(() => {
         </h2>
         
         <div class="flex items-center gap-6">
-          <!-- Año Lectivo y Hora Actual -->
-          <div class="hidden md:flex items-center gap-4 text-xs font-semibold text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/40 px-4 py-2 rounded-2xl border border-slate-100 dark:border-slate-800/50">
-            <div class="flex items-center gap-2 border-r border-slate-200 dark:border-slate-700/60 pr-4">
-              <span class="text-indigo-500 dark:text-indigo-400 font-bold uppercase tracking-widest text-[9px]">Año:</span>
+          <!-- Selector Prominente de Año Lectivo y Hora -->
+          <div class="hidden md:flex items-center gap-3">
+            <div class="flex items-center gap-2 bg-gradient-to-r from-indigo-500/10 via-indigo-600/15 to-indigo-700/10 dark:from-indigo-950/40 dark:to-indigo-900/40 px-3.5 py-1.5 rounded-2xl border-2 border-indigo-200 dark:border-indigo-800/80 shadow-sm transition-all hover:border-indigo-400">
+              <Calendar :size="18" class="text-indigo-600 dark:text-indigo-400 shrink-0" />
+              <span class="text-xs font-black text-indigo-950 dark:text-indigo-200 uppercase tracking-wider hidden lg:inline">Año Lectivo:</span>
               <select 
                 v-if="yearStore.availableYears.length > 0"
                 :value="yearStore.selectedYearId"
                 @change="onHeaderYearChange"
-                class="font-extrabold text-indigo-700 dark:text-indigo-300 bg-indigo-50/80 dark:bg-indigo-950/60 px-2.5 py-1 rounded-xl border border-indigo-200/60 dark:border-indigo-800/60 outline-none cursor-pointer focus:ring-2 focus:ring-indigo-500 transition-all text-xs"
+                class="font-black text-sm text-white bg-indigo-600 dark:bg-indigo-700 hover:bg-indigo-700 dark:hover:bg-indigo-600 px-3 py-1 rounded-xl border border-indigo-500 shadow-sm outline-none cursor-pointer focus:ring-4 focus:ring-indigo-300 dark:focus:ring-indigo-900 transition-all"
               >
-                <option v-for="y in yearStore.availableYears" :key="y.id_anio" :value="y.id_anio">
-                  {{ y.calendario }}{{ y.estado === 'CERRADO' ? ' (Cerrado)' : '' }}
+                <option v-for="y in yearStore.availableYears" :key="y.id_anio" :value="y.id_anio" class="bg-slate-900 text-white font-bold">
+                  Año {{ y.calendario }}{{ y.estado === 'CERRADO' ? ' 🔒 (Cerrado)' : ' ✨ (Activo)' }}
                 </option>
               </select>
-              <span v-else class="font-extrabold text-slate-700 dark:text-slate-200 bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded-lg border border-indigo-100/30 dark:border-indigo-900/20">
-                ...
+              <span v-else class="font-black text-xs text-indigo-600 dark:text-indigo-300 animate-pulse px-2">
+                Cargando años...
               </span>
             </div>
-            <div class="flex items-center gap-1.5 font-mono">
-              <span class="text-emerald-500 dark:text-emerald-400 font-bold uppercase tracking-widest text-[9px]">Hora:</span>
+
+            <div class="flex items-center gap-1.5 font-mono text-xs bg-slate-50 dark:bg-slate-800/40 px-3 py-2 rounded-2xl border border-slate-100 dark:border-slate-800/50">
+              <span class="text-emerald-500 dark:text-emerald-400 font-black uppercase tracking-widest text-[9px]">Hora:</span>
               <span class="font-bold text-slate-700 dark:text-slate-200">
                 {{ currentTime }}
               </span>

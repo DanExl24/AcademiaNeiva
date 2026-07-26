@@ -30,6 +30,8 @@ Este módulo centraliza la planeación y parametrización temporal de cada insti
 | Registrar nuevo año lectivo | `POST` | `/api/academic-admin/settings/years` | Directivo |
 | Cambiar estado de año lectivo | `PATCH` | `/api/academic-admin/settings/years/:id/status` | Directivo |
 | Eliminar año lectivo | `DELETE` | `/api/academic-admin/settings/years/:id` | Directivo |
+| Cambiar tipo de calendario del año lectivo | `PATCH` | `/api/academic-admin/settings/years/:id/calendar-type` | Directivo |
+| Eliminar periodo académico sin notas | `DELETE` | `/api/academic-admin/settings/periods/:id` | Directivo |
 | Crear periodo académico | `POST` | `/api/academic-admin/settings/periods` | Directivo |
 | Modificar peso porcentual del periodo | `PATCH` | `/api/academic-admin/settings/periods/:id/percentage` | Directivo |
 | Obtener detalles del cierre de periodo | `GET` | `/api/academic-admin/settings/closure-details/:schoolId/:periodId` | Directivo |
@@ -50,17 +52,16 @@ Este módulo centraliza la planeación y parametrización temporal de cada insti
 - **RN-CONF-001 (Ciclo de Vida de los Periodos):** Los periodos académicos transicionan de manera secuencial a través de tres estados regulados por la columna `estado` (de tipo enum `estado_periodo`):
   - `PENDIENTE`: Periodo planificado pero no iniciado. Permite planeación curricular de competencias y evidencias.
   - `ABIERTO`: Periodo lectivo vigente. Habilita a los docentes a registrar actividades, criterios y notas en tiempo real.
-  - `CERRADO`: Periodo finalizado y consolidado. Bloquea estrictamente toda operación de escritura.
-- **RN-CONF-002 (Protección Estricta de Datos en Periodo CERRADO):** Para blindar las calificaciones oficiales frente a cambios retroactivos, se aplica una validación backend y de base de datos redundante. Si un periodo está `CERRADO`, se rechaza con error `409 Conflict` o excepción SQL cualquier intento de:
-  - Crear, editar o eliminar competencias curriculares y evidencias de aprendizaje.
-  - Vincular o desvincular evidencias del catálogo DBA.
-  - Crear, editar o eliminar actividades académicas o criterios de evaluación.
-  - Insertar, actualizar o borrar notas de estudiantes (`notas_actividad`, `nota_criterio`).
-- **RN-CONF-003 (Activación Automática de Periodos por Scheduler):** El backend corre un servicio programador (`schedulerService.ts`) cada hora. Este servicio promueve automáticamente un periodo de `PENDIENTE` a `ABIERTO` si:
-  - La fecha actual es igual o posterior a la fecha de inicio del periodo.
-  - El periodo inmediatamente anterior (trimestre anterior) del mismo año ya se encuentra en estado `CERRADO`.
-  - Adicionalmente, por seguridad, el scheduler fuerza a `CERRADO` cualquier otro periodo del mismo año que haya quedado abierto por error.
-- **RN-CONF-004 (Configuración de Escalas de Calificación):** Un colegio puede operar sus escalas en modo `AUTOMATICO` o `MANUAL` (definido en `configuracion_colegio`). El modo automático divide equitativamente el rango de nota mínima a nota máxima en las cuatro escalas requeridas (Bajo, Básico, Alto, Superior), mientras que el modo manual permite al directivo establecer límites personalizados.
+  - `CERRADO`: Periodo finalizado y consolidado. Bloquea strictly toda operación de escritura.
+- **RN-CONF-002 (Protección Estricta de Datos en Periodo CERRADO):** Para blindar las calificaciones oficiales frente a cambios retroactivos, se aplica una validación backend y de base de datos redundante. Si un periodo está `CERRADO`, se rechaza con error `409 Conflict` o excepción SQL cualquier intento de modificación de notas, actividades o asistencias.
+- **RN-CONF-003 (Activación Automática de Periodos por Scheduler):** El backend corre un servicio programador (`schedulerService.ts`) cada hora. Este servicio promueve automáticamente un periodo de `PENDIENTE` a `ABIERTO` si la fecha actual alcanza la fecha de inicio del periodo y el trimestre anterior ya se encuentra `CERRADO`.
+- **RN-CONF-004 (Configuración de Escalas de Calificación):** Un colegio puede operar sus escalas en modo `AUTOMATICO` o `MANUAL` (definido en `configuracion_colegio`).
+- **RN-CONF-005 (Límite del 100% en Suma de Ponderaciones):** La sumatoria de las ponderaciones porcentuales de los periodos asociados a un año lectivo en el mismo colegio no puede superar el 100%.
+- **RN-CONF-006 (Exclusividad del Año Lectivo Activo):** Solo se permite **un (1) año lectivo en estado `ABIERTO`** por colegio a la vez. Al activar un nuevo año, cualquier otro año activo pasa automáticamente a `CERRADO`.
+- **RN-CONF-007 (Coherencia y Rango de Fechas del Año Lectivo):** Todo año lectivo define `fecha_inicio` y `fecha_fin` cumpliendo `fecha_fin > fecha_inicio`.
+- **RN-CONF-008 (Prohibición de Solapamiento entre Años Lectivos):** Las fechas de vigencia de un año lectivo NO pueden cruzarse con las fechas de ningún otro año lectivo del mismo colegio.
+- **RN-CONF-009 (Concurrencia Estricta entre Años Lectivos y Periodos):** Ningún periodo puede tener fechas fuera del rango de su año lectivo. El Primer Periodo inicia con la `fecha_inicio` del año y el Cuarto Periodo termina con la `fecha_fin` del año.
+- **RN-CONF-010 (Formato Numérico y Tipo de Calendario en Modo Editor):** La edición del tipo de calendario de un año registrado requiere la activación explícita del Modo Editor y que el año no posea alumnos matriculados o notas registradas.
 
 ---
 
@@ -88,6 +89,18 @@ Este módulo centraliza la planeación y parametrización temporal de cada insti
 ---
 
 ## 6. Modelo de Datos
+
+### Tabla: `anio_lectivo`
+
+| Columna | Tipo | Descripción |
+|---|---|---|
+| `id_anio` | SERIAL PK | Identificador único del año lectivo. |
+| `calendario` | VARCHAR(10) | Etiqueta o rango del año (ej. `2026` o `2025-2026`). |
+| `id_colegio` | INT FK | Colegio al que pertenece el año lectivo. |
+| `tipo_calendario` | CHAR(1) | Tipo de calendario escolar (`A` o `B`). |
+| `estado` | `estado_periodo` | Estado del año lectivo (`ABIERTO` o `CERRADO`). |
+| `fecha_inicio` | DATE | Fecha oficial de inicio de la vigencia del año. |
+| `fecha_fin` | DATE | Fecha oficial de cierre de la vigencia del año. |
 
 ### Tabla: `periodo_academico`
 

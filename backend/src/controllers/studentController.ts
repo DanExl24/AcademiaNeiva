@@ -5,7 +5,27 @@ import { NotificationService } from "../services/notificationService";
 export const getAllStudents = async (req: Request, res: Response) => {
   try {
     const { idColegio } = req.params;
-    const { estado, id_nivel, id_tipo_grado, id_jornada, grado, busqueda } = req.query;
+    const { estado, id_nivel, id_tipo_grado, id_jornada, grado, busqueda, yearId } = req.query;
+
+    const params: any[] = [idColegio];
+    let paramCount = 1;
+    let yearCondition = '';
+
+    if (yearId) {
+      paramCount++;
+      params.push(yearId);
+      yearCondition = ` AND m.id_anio = $${paramCount}`;
+    }
+
+    // When filtering by a specific year, estado_vigente reflects whether the student
+    // has an active enrollment that year. Without a year filter, it mirrors e.estado.
+    const estadoVigenteExpr = yearId
+      ? `CASE
+           WHEN m.id_matricula IS NOT NULL AND e.estado::text NOT IN ('EXPULSADO','RETIRADO','GRADUADO') THEN e.estado::text
+           WHEN e.estado::text IN ('EXPULSADO','RETIRADO','GRADUADO','SANCIONADO') THEN e.estado::text
+           ELSE 'INACTIVO'
+         END`
+      : `e.estado::text`;
 
     let query = `
       SELECT e.*, 
@@ -13,18 +33,20 @@ export const getAllStudents = async (req: Request, res: Response) => {
              td.tipo as tipo_documento_nombre,
              n.nombre as nivel_nombre,
              m.id_grupo,
+             m.id_matricula as matricula_id,
              m.estado AS matricula_estado,
              tg.nombre as grado_nombre,
              s.nombre as seccion_nombre,
              j.nombre as jornada_nombre,
              pf.nombre as acudiente_nombre,
              pf.apellido as acudiente_apellido,
-             pf.documento as acudiente_documento
+             pf.documento as acudiente_documento,
+             (${estadoVigenteExpr}) AS estado_vigente
       FROM estudiante e
       LEFT JOIN usuario u ON e.id_usuario = u.id_usuario
       LEFT JOIN tipo_documento td ON e.id_tipodocumento = td.id_tipodocumento
       LEFT JOIN nivel_escolar n ON e.id_nivel = n.id_nivel
-      LEFT JOIN matricula m ON e.id_estudiante = m.id_estudiante AND m.estado = 'ACTIVA'
+      LEFT JOIN matricula m ON e.id_estudiante = m.id_estudiante AND m.estado = 'ACTIVA'${yearCondition}
       LEFT JOIN grupos g ON m.id_grupo = g.id_grupo
       LEFT JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
       LEFT JOIN secciones s ON g.id_seccion = s.id_seccion
@@ -37,13 +59,26 @@ export const getAllStudents = async (req: Request, res: Response) => {
       WHERE e.id_colegio = $1
     `;
 
-    const params: any[] = [idColegio];
-    let paramCount = 1;
-
     if (estado && estado !== 'TODOS') {
-      paramCount++;
-      query += ` AND e.estado = $${paramCount}`;
-      params.push(estado);
+      // When filtering by estado, match against estado_vigente logic
+      if (estado === 'INACTIVO') {
+        // Students with no active matricula in the selected year (and not permanently inactive)
+        if (yearId) {
+          query += ` AND m.id_matricula IS NULL AND e.estado::text NOT IN ('EXPULSADO','RETIRADO','GRADUADO','SANCIONADO')`;
+        } else {
+          // Without year filter INACTIVO has no meaning; return empty
+          query += ` AND 1=0`;
+        }
+      } else if (estado === 'ACTIVO' && yearId) {
+        // ACTIVO with a year filter = student has estado ACTIVO *and* an active enrollment this year
+        paramCount++;
+        query += ` AND e.estado = $${paramCount} AND m.id_matricula IS NOT NULL`;
+        params.push(estado);
+      } else {
+        paramCount++;
+        query += ` AND e.estado = $${paramCount}`;
+        params.push(estado);
+      }
     }
 
     const levelId = id_nivel || grado;
@@ -90,6 +125,21 @@ export const getAllStudents = async (req: Request, res: Response) => {
   }
 };
 
+const checkClosedYearForStudent = async (client: any, studentId: number) => {
+  const checkRes = await client.query(
+    `SELECT al.estado, al.calendario
+     FROM matricula m
+     JOIN anio_lectivo al ON m.id_anio = al.id_anio
+     WHERE m.id_estudiante = $1 AND m.estado = 'ACTIVA'
+     ORDER BY m.id_matricula DESC LIMIT 1`,
+    [studentId]
+  );
+  if (checkRes.rows.length > 0 && checkRes.rows[0].estado === 'CERRADO') {
+    return checkRes.rows[0].calendario;
+  }
+  return null;
+};
+
 export const updateStudent = async (req: Request, res: Response) => {
   const client = await pool.connect();
   try {
@@ -97,6 +147,14 @@ export const updateStudent = async (req: Request, res: Response) => {
     const { nombre, apellido, documento, id_tipodocumento, codigo, motivo_cambio } = req.body;
 
     await client.query("BEGIN");
+
+    const closedYearLabel = await checkClosedYearForStudent(client, Number(id));
+    if (closedYearLabel) {
+      await client.query("ROLLBACK");
+      return res.status(403).json({ 
+        error: `El año lectivo ${closedYearLabel} se encuentra CERRADO. Los datos son de solo lectura y no se permiten modificaciones.` 
+      });
+    }
 
     // Fetch old student state
     const oldStudentRes = await client.query(
@@ -160,6 +218,14 @@ export const updateStudentStatus = async (req: Request, res: Response) => {
     await client.query("BEGIN");
     const { id } = req.params; // id_estudiante
     const { estado, motivo, id_tipo_sancion, fecha_inicio, fecha_fin, observaciones, motivo_cambio } = req.body;
+
+    const closedYearLabel = await checkClosedYearForStudent(client, Number(id));
+    if (closedYearLabel) {
+      await client.query("ROLLBACK");
+      return res.status(403).json({ 
+        error: `El año lectivo ${closedYearLabel} se encuentra CERRADO. Los datos son de solo lectura y no se permiten modificaciones.` 
+      });
+    }
 
     if (!estado) {
       await client.query("ROLLBACK");

@@ -209,7 +209,20 @@ const months = [
   { id: 12, name: 'Diciembre' },
 ]
 
-const selectedYearId = ref<number | null>(null)
+import { useAcademicYearStore } from '../../stores/academicYear'
+
+const yearStore = useAcademicYearStore()
+const selectedYearId = ref<number | null>(yearStore.selectedYearId)
+
+watch(() => yearStore.selectedYearId, (newVal) => {
+  if (newVal) selectedYearId.value = newVal
+}, { immediate: true })
+
+watch(selectedYearId, (newVal) => {
+  if (newVal && newVal !== yearStore.selectedYearId) {
+    yearStore.setSelectedYearId(newVal)
+  }
+})
 
 const selectedYearObj = computed(() =>
   academicYears.value.find(y => y.id_anio === selectedYearId.value)

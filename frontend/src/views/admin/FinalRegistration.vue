@@ -3,6 +3,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 import { useNotificationStore } from '../../stores/notifications'
+import { sanitizeLettersOnly, sanitizeDocumentNumber } from '../../utils/validationHelper'
 import { 
   ArrowLeft,
   Save,
@@ -12,7 +13,10 @@ import {
   ChevronLeft,
   FileText,
   GraduationCap,
-  XCircle
+  XCircle,
+  Users,
+  UserCheck,
+  AlertTriangle
 } from 'lucide-vue-next'
 
 const route = useRoute()
@@ -23,6 +27,26 @@ const idMatricula = Number(route.params.id)
 const matricula = ref<any>(null)
 const loading = ref(true)
 const step = ref(1) // 1: Student, 2: Parent
+
+// Selected candidate for multi-child flow
+const selectedCandidate = ref<any>(null)
+const candidatePicked = computed(() => !!selectedCandidate.value)
+
+// Computed: resolve which student is active for this enrollment
+const activeStudent = computed(() => {
+  if (selectedCandidate.value) return selectedCandidate.value
+  if (matricula.value?.renovacion?.student) return matricula.value.renovacion.student
+  return null
+})
+
+// Is multi-child picker needed?
+const needsCandidatePicker = computed(() => {
+  const ren = matricula.value?.renovacion
+  if (!ren?.is_renovacion) return false
+  const eligibles = (ren.candidates || []).filter((c: any) => c.eligible)
+  // Show picker if there are multiple candidates OR multiple eligible ones
+  return (ren.candidates || []).length > 1 && !candidatePicked.value && !ren.student
+})
 
 const studentData = ref({
   nombre: '',
@@ -49,8 +73,8 @@ const fetchDetails = async () => {
     const response = await axios.get(`http://localhost:3000/api/matriculas/${idMatricula}`)
     matricula.value = response.data
 
-    // Pre-populate student data
-    if (response.data.renovacion?.is_renovacion) {
+    // Pre-populate student data from autoselected candidate
+    if (response.data.renovacion?.student) {
       const st = response.data.renovacion.student
       studentData.value.nombre = st.nombre
       studentData.value.apellido = st.apellido
@@ -87,6 +111,21 @@ const fetchDetails = async () => {
 
 onMounted(fetchDetails)
 
+const selectCandidate = (candidate: any) => {
+  if (!candidate.eligible) return
+  selectedCandidate.value = candidate
+  // Pre-fill form with selected candidate data
+  studentData.value.nombre = candidate.nombre
+  studentData.value.apellido = candidate.apellido
+  studentData.value.documento = candidate.documento
+  studentData.value.id_tipodocumento = candidate.id_tipodocumento || 1
+}
+
+const clearCandidateSelection = () => {
+  selectedCandidate.value = null
+  studentData.value = { nombre: '', apellido: '', documento: '', id_tipodocumento: 1 }
+}
+
 const nextDoc = () => {
   if (currentDocIndex.value < matricula.value.documentos.length - 1) {
     currentDocIndex.value++
@@ -100,15 +139,54 @@ const prevDoc = () => {
 }
 
 const handleFinalize = async () => {
+  // If multi-child picker and no selection yet, block
+  if (matricula.value?.renovacion?.is_renovacion && 
+      (matricula.value?.renovacion?.candidates || []).length > 1 &&
+      !selectedCandidate.value && !matricula.value?.renovacion?.student) {
+    notify.addNotification('Debes seleccionar cuál hijo es el que se está renovando.', 'warning')
+    return
+  }
+
+  // Field text validations
+  if (!studentData.value.nombre.trim() || studentData.value.nombre.trim().length < 2) {
+    notify.addNotification('Por favor ingresa nombres válidos para el estudiante (mínimo 2 letras).', 'warning')
+    return
+  }
+  if (!studentData.value.apellido.trim() || studentData.value.apellido.trim().length < 2) {
+    notify.addNotification('Por favor ingresa apellidos válidos para el estudiante (mínimo 2 letras).', 'warning')
+    return
+  }
+  if (!studentData.value.documento.trim() || studentData.value.documento.trim().length < 4) {
+    notify.addNotification('Por favor ingresa un número de documento válido para el estudiante (mínimo 4 caracteres).', 'warning')
+    return
+  }
+  if (!parentData.value.nombre.trim() || parentData.value.nombre.trim().length < 2) {
+    notify.addNotification('Por favor ingresa nombres válidos para el acudiente (mínimo 2 letras).', 'warning')
+    return
+  }
+  if (!parentData.value.apellido.trim() || parentData.value.apellido.trim().length < 2) {
+    notify.addNotification('Por favor ingresa apellidos válidos para el acudiente (mínimo 2 letras).', 'warning')
+    return
+  }
+  if (!parentData.value.documento.trim() || parentData.value.documento.trim().length < 4) {
+    notify.addNotification('Por favor ingresa un número de documento válido para el acudiente (mínimo 4 caracteres).', 'warning')
+    return
+  }
+
   try {
+    // Resolve id_estudiante: prefer explicit selection, then autoselected student, then reingreso
+    const resolvedIdEstudiante = 
+      selectedCandidate.value?.id_estudiante ||
+      matricula.value?.renovacion?.student?.id_estudiante ||
+      matricula.value?.id_estudiante ||
+      null
+
     const payload = {
       student: studentData.value,
       parent: parentData.value,
       id_grado: Number(route.query.gradeId),
       existing_parent_user_id: matricula.value?.existing_parent_user?.id_usuario || null,
-      id_estudiante: matricula.value?.renovacion?.is_renovacion 
-        ? matricula.value.renovacion.student.id_estudiante 
-        : (matricula.value?.id_estudiante || null)
+      id_estudiante: resolvedIdEstudiante
     }
     await axios.post(`http://localhost:3000/api/matriculas/finalize/${idMatricula}`, payload)
     notify.addNotification('Registro finalizado y matrícula activada exitosamente', 'success')
@@ -147,7 +225,7 @@ const verifyDocument = async () => {
 }
 
 const formatUrl = (url: string) => {
-  const filename = url.split(/[\\/]/).pop()
+  const filename = url.split(/[\\\/]/).pop()
   return `http://localhost:3000/uploads/${filename}`
 }
 
@@ -162,6 +240,14 @@ const documentLabels: Record<string, string> = {
   visa: 'Visa / PPT',
   certificadoDiscapacidad: 'Diagnóstico Médico',
   certificadosEscolaridad: 'Certificados de Escolaridad'
+}
+
+const getStatusColor = (estado: string) => {
+  if (estado === 'ACTIVO') return 'bg-emerald-100 text-emerald-700 border-emerald-200'
+  if (estado === 'EXPULSADO' || estado === 'RETIRADO') return 'bg-red-100 text-red-700 border-red-200'
+  if (estado === 'SANCIONADO') return 'bg-amber-100 text-amber-700 border-amber-200'
+  if (estado === 'GRADUADO') return 'bg-indigo-100 text-indigo-700 border-indigo-200'
+  return 'bg-slate-100 text-slate-700 border-slate-200'
 }
 </script>
 
@@ -180,23 +266,91 @@ const documentLabels: Record<string, string> = {
           <p class="text-gray-500 mt-2">Completa los datos personales para activar la matrícula.</p>
         </div>
 
-        <!-- Banners for Renovación and Reingreso -->
-        <div v-if="matricula?.renovacion?.is_renovacion" class="mb-8 font-sans">
-          <div v-if="matricula.renovacion.error_message" class="p-5 bg-red-50 border border-red-200 rounded-3xl flex items-start gap-4">
-            <div class="p-2.5 bg-red-600 text-white rounded-xl shrink-0"><XCircle :size="20" /></div>
+        <!-- ===== RENOVACIÓN: Multi-child Candidate Picker ===== -->
+        <div v-if="matricula?.renovacion?.is_renovacion" class="mb-8 font-sans space-y-4">
+
+          <!-- Parent detected banner -->
+          <div class="p-4 bg-sky-50 border border-sky-200 rounded-2xl flex items-center gap-3">
+            <div class="p-2 bg-sky-600 text-white rounded-xl shrink-0"><Users :size="18" /></div>
             <div>
-              <p class="font-black text-red-900 text-sm">Bloqueo de Renovación Académica</p>
-              <p class="text-red-700 text-xs mt-1 font-semibold">{{ matricula.renovacion.error_message }}</p>
+              <p class="font-black text-sky-900 text-sm">Acudiente registrado detectado</p>
+              <p class="text-sky-700 text-xs mt-0.5 font-medium">
+                <strong>{{ matricula.renovacion.parent_name }}</strong> ya tiene hijos registrados en este colegio. Verifica cuál corresponde a esta matrícula.
+              </p>
             </div>
           </div>
-          <div v-else class="p-5 bg-emerald-50 border border-emerald-200 rounded-3xl flex items-start gap-4">
-            <div class="p-2.5 bg-emerald-600 text-white rounded-xl shrink-0"><CheckCircle :size="20" /></div>
-            <div>
-              <p class="font-black text-emerald-900 text-sm">Renovación Automática Detectada</p>
-              <p class="text-emerald-700 text-xs mt-0.5 font-semibold">El estudiante estuvo activo en el año lectivo anterior. Los datos personales han sido pre-cargados.</p>
+
+          <!-- CASE A: Multiple children → show picker -->
+          <div v-if="needsCandidatePicker">
+            <p class="text-xs font-black uppercase tracking-widest text-gray-500 mb-3">Selecciona el hijo que se está renovando</p>
+            <div class="space-y-3">
+              <button
+                v-for="candidate in matricula.renovacion.candidates"
+                :key="candidate.id_estudiante"
+                @click="selectCandidate(candidate)"
+                :disabled="!candidate.eligible"
+                :class="[
+                  'w-full text-left p-4 rounded-2xl border-2 transition-all',
+                  !candidate.eligible
+                    ? 'border-red-200 bg-red-50 opacity-60 cursor-not-allowed'
+                    : 'border-gray-200 bg-white hover:border-indigo-400 hover:bg-indigo-50 cursor-pointer'
+                ]"
+              >
+                <div class="flex items-center gap-3">
+                  <div :class="['p-2 rounded-xl shrink-0', candidate.eligible ? 'bg-indigo-100 text-indigo-600' : 'bg-red-100 text-red-500']">
+                    <UserCheck v-if="candidate.eligible" :size="18" />
+                    <AlertTriangle v-else :size="18" />
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <p class="font-black text-gray-900 text-sm">{{ candidate.apellido }}, {{ candidate.nombre }}</p>
+                    <p class="text-xs text-gray-500 font-medium">
+                      Doc: {{ candidate.documento }} 
+                      <span v-if="candidate.grado_nombre" class="ml-2">· {{ candidate.nivel_nombre }} {{ candidate.grado_nombre }}</span>
+                    </p>
+                    <p v-if="candidate.error_message" class="text-xs text-red-600 font-semibold mt-0.5">{{ candidate.error_message }}</p>
+                  </div>
+                  <span :class="['px-2 py-0.5 rounded-lg text-[10px] font-black uppercase border', getStatusColor(candidate.estado)]">
+                    {{ candidate.estado }}
+                  </span>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          <!-- CASE B: Single autoselected candidate (existing behavior) -->
+          <div v-else-if="activeStudent">
+            <!-- Selected from picker -->
+            <div v-if="candidatePicked" class="p-4 bg-indigo-50 border-2 border-indigo-300 rounded-2xl flex items-center justify-between gap-3">
+              <div class="flex items-center gap-3">
+                <div class="p-2 bg-indigo-600 text-white rounded-xl shrink-0"><UserCheck :size="18" /></div>
+                <div>
+                  <p class="font-black text-indigo-900 text-sm">{{ activeStudent.apellido }}, {{ activeStudent.nombre }}</p>
+                  <p class="text-indigo-700 text-xs font-medium">Doc: {{ activeStudent.documento }}</p>
+                </div>
+              </div>
+              <button v-if="(matricula.renovacion.candidates || []).length > 1" @click="clearCandidateSelection()" class="text-xs text-indigo-600 font-bold hover:underline">Cambiar</button>
+            </div>
+
+            <!-- Autoselected (only 1 candidate) -->
+            <div v-else>
+              <div v-if="matricula.renovacion.error_message" class="p-5 bg-red-50 border border-red-200 rounded-2xl flex items-start gap-4">
+                <div class="p-2.5 bg-red-600 text-white rounded-xl shrink-0"><XCircle :size="20" /></div>
+                <div>
+                  <p class="font-black text-red-900 text-sm">Bloqueo de Renovación Académica</p>
+                  <p class="text-red-700 text-xs mt-1 font-semibold">{{ matricula.renovacion.error_message }}</p>
+                </div>
+              </div>
+              <div v-else class="p-5 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-start gap-4">
+                <div class="p-2.5 bg-emerald-600 text-white rounded-xl shrink-0"><CheckCircle :size="20" /></div>
+                <div>
+                  <p class="font-black text-emerald-900 text-sm">Renovación Automática — {{ activeStudent.apellido }}, {{ activeStudent.nombre }}</p>
+                  <p class="text-emerald-700 text-xs mt-0.5 font-semibold">Datos del año anterior pre-cargados. Verifica y confirma.</p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
+        <!-- ===== FIN Renovación ===== -->
 
         <div v-else-if="matricula?.tipo === 'REINGRESO'" class="mb-8 font-sans">
           <div class="p-5 bg-violet-50 border border-violet-200 rounded-3xl flex items-start gap-4">
@@ -209,6 +363,7 @@ const documentLabels: Record<string, string> = {
             </div>
           </div>
         </div>
+
 
         <!-- Stepper -->
         <div class="flex items-center gap-8 mb-12">
@@ -228,12 +383,12 @@ const documentLabels: Record<string, string> = {
           <div class="grid grid-cols-2 gap-6">
             <div class="space-y-2">
               <label class="text-sm font-bold text-gray-700">Nombres</label>
-              <input v-model="studentData.nombre" type="text" placeholder="Ej: Juan Andrés" :disabled="matricula?.renovacion?.is_renovacion"
+              <input v-model="studentData.nombre" @input="studentData.nombre = sanitizeLettersOnly(studentData.nombre)" type="text" placeholder="Ej: Juan Andrés" :disabled="matricula?.renovacion?.is_renovacion"
                 class="w-full rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-4 transition-all disabled:opacity-60 disabled:cursor-not-allowed">
             </div>
             <div class="space-y-2">
               <label class="text-sm font-bold text-gray-700">Apellidos</label>
-              <input v-model="studentData.apellido" type="text" placeholder="Ej: Pérez García" :disabled="matricula?.renovacion?.is_renovacion"
+              <input v-model="studentData.apellido" @input="studentData.apellido = sanitizeLettersOnly(studentData.apellido)" type="text" placeholder="Ej: Pérez García" :disabled="matricula?.renovacion?.is_renovacion"
                 class="w-full rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-4 transition-all disabled:opacity-60 disabled:cursor-not-allowed">
             </div>
           </div>
@@ -249,7 +404,7 @@ const documentLabels: Record<string, string> = {
             </div>
             <div class="space-y-2">
               <label class="text-sm font-bold text-gray-700">Número de Documento</label>
-              <input v-model="studentData.documento" type="text" placeholder="Ej: 1075..." :disabled="matricula?.renovacion?.is_renovacion"
+              <input v-model="studentData.documento" @input="studentData.documento = sanitizeDocumentNumber(studentData.documento)" type="text" placeholder="Ej: 1075..." :disabled="matricula?.renovacion?.is_renovacion"
                 class="w-full rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-4 transition-all disabled:opacity-60 disabled:cursor-not-allowed">
             </div>
           </div>
@@ -290,13 +445,13 @@ const documentLabels: Record<string, string> = {
           <div class="grid grid-cols-2 gap-6">
             <div class="space-y-2">
               <label class="text-sm font-bold text-gray-700">Nombres del Padre</label>
-              <input v-model="parentData.nombre" type="text" placeholder="Ej: Carlos Mario"
+              <input v-model="parentData.nombre" @input="parentData.nombre = sanitizeLettersOnly(parentData.nombre)" type="text" placeholder="Ej: Carlos Mario"
                 :disabled="!!matricula?.existing_parent_user"
                 class="w-full rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-4 transition-all disabled:opacity-60 disabled:cursor-not-allowed">
             </div>
             <div class="space-y-2">
               <label class="text-sm font-bold text-gray-700">Apellidos del Padre</label>
-              <input v-model="parentData.apellido" type="text" placeholder="Ej: Pérez Motta"
+              <input v-model="parentData.apellido" @input="parentData.apellido = sanitizeLettersOnly(parentData.apellido)" type="text" placeholder="Ej: Pérez Motta"
                 :disabled="!!matricula?.existing_parent_user"
                 class="w-full rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-4 transition-all disabled:opacity-60 disabled:cursor-not-allowed">
             </div>
@@ -312,7 +467,7 @@ const documentLabels: Record<string, string> = {
             <div class="space-y-2">
               <label class="text-sm font-bold text-gray-700">Número de Documento</label>
               <div class="relative">
-                <input v-model="parentData.documento" type="text" placeholder="Ej: 1214..." @blur="verifyDocument"
+                <input v-model="parentData.documento" @input="parentData.documento = sanitizeDocumentNumber(parentData.documento)" type="text" placeholder="Ej: 1214..." @blur="verifyDocument"
                   class="w-full rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-4 transition-all"
                   :class="{'border-indigo-300 bg-indigo-50': docMatchInfo}">
                 <div v-if="checkingDocument" class="absolute right-4 top-4">

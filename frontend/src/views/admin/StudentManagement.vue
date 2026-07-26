@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import {
@@ -17,16 +17,19 @@ import {
   Mail,
   BookOpen,
   Activity,
-  Award
+  Award,
+  Lock
 } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 import { useNotificationStore } from '../../stores/notifications'
+import { useAcademicYearStore } from '../../stores/academicYear'
 import { getCourseDisplayName } from '../../utils/courseHelper'
 
 const router = useRouter()
 
 const auth = useAuthStore()
 const notify = useNotificationStore()
+const yearStore = useAcademicYearStore()
 
 // --- State ---
 const students = ref<any[]>([])
@@ -201,7 +204,8 @@ const fetchStudents = async () => {
         id_nivel: filterNivel.value,
         id_tipo_grado: filterGrado.value,
         id_jornada: filterJornada.value,
-        busqueda: searchQuery.value
+        busqueda: searchQuery.value,
+        yearId: yearStore.selectedYearId || undefined
       }
     })
     students.value = response.data
@@ -237,14 +241,18 @@ onMounted(() => {
   fetchMetadata()
 })
 
+watch(() => yearStore.selectedYearId, () => {
+  fetchStudents()
+})
 
-// Stats
+// Stats — use estado_vigente when available (backend computes it based on year filter)
 const stats = computed(() => ({
   total: students.value.length,
-  active: students.value.filter(s => s.estado === 'ACTIVO').length,
-  sanctioned: students.value.filter(s => s.estado === 'SANCIONADO').length,
-  expelled: students.value.filter(s => s.estado === 'EXPULSADO').length,
-  graduated: students.value.filter(s => s.estado === 'GRADUADO').length,
+  active: students.value.filter(s => (s.estado_vigente || s.estado) === 'ACTIVO').length,
+  inactive: students.value.filter(s => (s.estado_vigente || s.estado) === 'INACTIVO').length,
+  sanctioned: students.value.filter(s => (s.estado_vigente || s.estado) === 'SANCIONADO').length,
+  expelled: students.value.filter(s => (s.estado_vigente || s.estado) === 'EXPULSADO').length,
+  graduated: students.value.filter(s => (s.estado_vigente || s.estado) === 'GRADUADO').length,
 }))
 
 // --- Actions ---
@@ -383,6 +391,7 @@ const confirmGradeChange = async () => {
 
 const getStatusClass = (estado: string) => {
   if (estado === 'ACTIVO') return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400'
+  if (estado === 'INACTIVO') return 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
   if (estado === 'SANCIONADO') return 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400'
   if (estado === 'EXPULSADO') return 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400'
   if (estado === 'GRADUADO') return 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400'
@@ -428,7 +437,7 @@ const exportToSIMAT = () => {
       s.email || 'Sin correo',
       `"${acudienteFull.replace(/"/g, '""')}"`,
       s.acudiente_documento || '',
-      s.estado
+      s.estado_vigente || s.estado
     ]
   })
 
@@ -475,8 +484,21 @@ const exportToSIMAT = () => {
       </button>
     </div>
 
+    <!-- Closed Year Warning Banner -->
+    <div v-if="yearStore.isClosedYear" class="bg-amber-50 dark:bg-amber-950/40 border-2 border-amber-300 dark:border-amber-800/80 rounded-3xl p-5 flex items-center gap-4 text-amber-950 dark:text-amber-200 shadow-sm animate-in fade-in duration-300">
+      <div class="p-3 bg-amber-500 text-white rounded-2xl shrink-0 shadow-md">
+        <Lock :size="24" />
+      </div>
+      <div class="flex-1">
+        <h3 class="text-sm font-black uppercase tracking-wider">Año Lectivo {{ yearStore.selectedYear?.calendario }} — CERRADO (Solo Lectura)</h3>
+        <p class="text-xs text-amber-800 dark:text-amber-300 font-medium mt-0.5">
+          Este año académico se encuentra cerrado. Todos los datos de alumnos, matrículas, sanciones y cursos se presentan en modo de consulta histórica y no pueden ser modificados.
+        </p>
+      </div>
+    </div>
+
     <!-- Stats -->
-    <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+    <div class="grid grid-cols-2 md:grid-cols-6 gap-4">
       <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-5 flex items-center gap-4">
         <div class="p-2.5 bg-indigo-50 dark:bg-indigo-950/30 rounded-xl text-indigo-600 dark:text-indigo-400"><Users :size="20" /></div>
         <div>
@@ -489,6 +511,13 @@ const exportToSIMAT = () => {
         <div>
           <p class="text-2xl font-black text-slate-900 dark:text-white">{{ stats.active }}</p>
           <p class="text-[10px] font-black uppercase text-slate-400 tracking-widest">Activos</p>
+        </div>
+      </div>
+      <div v-if="yearStore.selectedYearId" class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-5 flex items-center gap-4">
+        <div class="p-2.5 bg-slate-100 dark:bg-slate-800 rounded-xl text-slate-500 dark:text-slate-400"><UserX :size="20" /></div>
+        <div>
+          <p class="text-2xl font-black text-slate-900 dark:text-white">{{ stats.inactive }}</p>
+          <p class="text-[10px] font-black uppercase text-slate-400 tracking-widest">Sin Matrícula</p>
         </div>
       </div>
       <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-5 flex items-center gap-4">
@@ -530,6 +559,7 @@ const exportToSIMAT = () => {
         <select v-model="filterStatus" @change="fetchStudents" class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl px-5 py-2 text-sm font-bold outline-none text-slate-900 dark:text-white">
           <option value="TODOS">Todos los Estados</option>
           <option value="ACTIVO">Activos</option>
+          <option value="INACTIVO">Sin Matrícula / Inactivos</option>
           <option value="SANCIONADO">Sancionados</option>
           <option value="EXPULSADO">Expulsados</option>
           <option value="RETIRADO">Retirados</option>
@@ -593,15 +623,27 @@ const exportToSIMAT = () => {
               <span v-else class="text-[10px] font-bold text-red-400 uppercase tracking-widest italic">Sin grupo asignado</span>
             </td>
             <td class="px-8 py-5">
-              <span :class="[getStatusClass(s.estado), 'px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest block w-fit']">
-                {{ s.estado }}
+              <span :class="[getStatusClass(s.estado_vigente || s.estado), 'px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest block w-fit']">
+                {{ s.estado_vigente || s.estado }}
               </span>
               <p v-if="s.motivo_estado" class="text-[10px] text-red-500 dark:text-red-400 font-semibold italic mt-1 max-w-[200px] leading-tight" :title="s.motivo_estado">
                 {{ s.motivo_estado }}
               </p>
             </td>
             <td class="px-8 py-5 text-right">
-              <div class="flex items-center justify-end gap-2">
+              <div v-if="yearStore.isClosedYear" class="flex items-center justify-end gap-2">
+                <button v-if="s.estado === 'SANCIONADO' || s.estado === 'EXPULSADO'" @click="openDrawer(s.id_estudiante)" 
+                  :class="s.estado === 'EXPULSADO' ? 'text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30' : 'text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30'"
+                  class="p-2 rounded-xl transition-all" 
+                  :title="s.estado === 'EXPULSADO' ? 'Revisar Expulsión' : 'Revisar Sanción'"
+                >
+                  <ShieldAlert :size="16" />
+                </button>
+                <span class="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 text-slate-400 rounded-lg text-[10px] font-black uppercase tracking-widest inline-flex items-center gap-1">
+                  <Lock :size="12" /> Solo Lectura
+                </span>
+              </div>
+              <div v-else class="flex items-center justify-end gap-2">
                 <!-- Revisar Sanción / Expulsión -->
                 <button v-if="s.estado === 'SANCIONADO' || s.estado === 'EXPULSADO'" @click="openDrawer(s.id_estudiante)" 
                   :class="s.estado === 'EXPULSADO' ? 'text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30' : 'text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30'"

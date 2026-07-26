@@ -10,7 +10,8 @@ export interface AcademicYear {
 }
 
 export const useAcademicYearStore = defineStore('academicYear', () => {
-  const selectedYearId = ref<number | null>(null)
+  const savedId = localStorage.getItem('selectedAcademicYearId')
+  const selectedYearId = ref<number | null>(savedId ? Number(savedId) : null)
   const availableYears = ref<AcademicYear[]>([])
   const loading = ref(false)
 
@@ -18,6 +19,9 @@ export const useAcademicYearStore = defineStore('academicYear', () => {
     if (!selectedYearId.value) return null
     return availableYears.value.find(y => (y.id_anio || y.id_año) === selectedYearId.value) || null
   })
+
+  const isClosedYear = computed(() => selectedYear.value?.estado === 'CERRADO')
+  const isReadonlyYear = computed(() => isClosedYear.value)
 
   const loadYearsForSchool = async (schoolId: number, token?: string) => {
     if (!schoolId) return
@@ -31,19 +35,17 @@ export const useAcademicYearStore = defineStore('academicYear', () => {
       }))
       availableYears.value = years
 
-      // If no year selected yet, set to active year or newest year
-      if (!selectedYearId.value) {
-        if (res.data.activeYear) {
-          selectedYearId.value = res.data.activeYear.id_anio ?? res.data.activeYear.id_año
-        } else if (years.length > 0) {
-          selectedYearId.value = years[0].id_anio
-        }
-      } else {
-        // Verify current selectedYearId exists in loaded years
-        const exists = years.some(y => y.id_anio === selectedYearId.value)
-        if (!exists && years.length > 0) {
-          selectedYearId.value = years[0].id_anio
-        }
+      // Check if previously saved ID exists in loaded years
+      const currentSaved = selectedYearId.value
+      const exists = years.some(y => y.id_anio === currentSaved)
+
+      if (currentSaved && exists) {
+        // Keep user selection
+      } else if (res.data.activeYear) {
+        const activeId = res.data.activeYear.id_anio ?? res.data.activeYear.id_año
+        setSelectedYearId(activeId)
+      } else if (years.length > 0) {
+        setSelectedYearId(years[0].id_anio)
       }
     } catch (err) {
       console.error('Error loading academic years in store:', err)
@@ -54,12 +56,15 @@ export const useAcademicYearStore = defineStore('academicYear', () => {
 
   const setSelectedYearId = (id: number) => {
     selectedYearId.value = id
+    localStorage.setItem('selectedAcademicYearId', String(id))
   }
 
   return {
     selectedYearId,
     availableYears,
     selectedYear,
+    isClosedYear,
+    isReadonlyYear,
     loading,
     loadYearsForSchool,
     setSelectedYearId

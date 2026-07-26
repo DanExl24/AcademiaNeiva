@@ -33,9 +33,12 @@ import { useNotificationStore } from '../../stores/notifications'
 import { useRouter } from 'vue-router'
 import { getCourseDisplayName } from '../../utils/courseHelper'
 
+import { useAcademicYearStore } from '../../stores/academicYear'
+
 const auth = useAuthStore()
 const notify = useNotificationStore()
 const router = useRouter()
+const yearStore = useAcademicYearStore()
 
 // ─── List State ───────────────────────────────────────────────────────────────
 const enrollments = ref<any[]>([])
@@ -48,7 +51,10 @@ const fetchEnrollments = async () => {
   try {
     const idColegio = auth.user?.schoolId || 1
     const response = await axios.get(`http://localhost:3000/api/matriculas/filtered/${idColegio}`, {
-      params: { estado: 'ALL' }
+      params: { 
+        estado: 'ALL',
+        yearId: yearStore.selectedYearId || undefined
+      }
     })
     enrollments.value = response.data
   } catch (error) {
@@ -59,6 +65,10 @@ const fetchEnrollments = async () => {
 }
 
 onMounted(fetchEnrollments)
+
+watch(() => yearStore.selectedYearId, () => {
+  fetchEnrollments()
+})
 
 const tabs = [
   { status: 'PENDIENTE',   label: 'Por Revisar',    color: 'amber'   },

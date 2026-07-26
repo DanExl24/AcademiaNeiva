@@ -22,6 +22,10 @@ import {
   Download
 } from 'lucide-vue-next'
 
+import * as pdfjsLib from 'pdfjs-dist'
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`
+
 const route = useRoute()
 const router = useRouter()
 const notify = useNotificationStore()
@@ -31,6 +35,7 @@ const matricula = ref<any>(null)
 const loading = ref(true)
 const selectedGradeId = ref<number | null>(null)
 const savingGrade = ref(false)
+const pdfPagesMap = ref<Record<number, string[]>>({})
 
 const documentLabels: Record<string, string> = {
   registroCivil: 'Registro Civil',
@@ -45,11 +50,44 @@ const documentLabels: Record<string, string> = {
   certificadosEscolaridad: 'Certificado de Escolaridad (Años anteriores)'
 }
 
+const renderAllPdfDocuments = async () => {
+  if (!matricula.value || !matricula.value.documentos) return
+  for (const doc of matricula.value.documentos) {
+    if (doc.url && doc.url.toLowerCase().endsWith('.pdf')) {
+      try {
+        const fullUrl = formatUrl(doc.url)
+        const loadingTask = pdfjsLib.getDocument(fullUrl)
+        const pdf = await loadingTask.promise
+        const pages: string[] = []
+
+        for (let i = 1; i <= Math.min(pdf.numPages, 5); i++) {
+          const page = await pdf.getPage(i)
+          const viewport = page.getViewport({ scale: 1.5 })
+          const canvas = document.createElement('canvas')
+          const context = canvas.getContext('2d')
+          if (!context) continue
+
+          canvas.height = viewport.height
+          canvas.width = viewport.width
+
+          await page.render({ canvasContext: context, viewport }).promise
+          pages.push(canvas.toDataURL('image/png'))
+        }
+
+        pdfPagesMap.value[doc.id_documento] = pages
+      } catch (err) {
+        console.error(`Error procesando páginas de PDF para doc ${doc.id_documento}:`, err)
+      }
+    }
+  }
+}
+
 const fetchDetails = async () => {
   try {
     const response = await axios.get(`http://localhost:3000/api/matriculas/${route.params.id}`)
     matricula.value = response.data
     selectedGradeId.value = response.data.id_grado
+    renderAllPdfDocuments()
   } catch {
     notify.addNotification('Error al cargar la solicitud', 'error')
     router.push('/dashboard/gestion-matriculas')
@@ -96,13 +134,25 @@ const cancelEnrollment = async () => {
   }
 }
 
-const assignRoom = () => {
+const assignRoom = async () => {
   if (!selectedGradeId.value) return
   const selected = matricula.value.availableSections.find((s: any) => s.id_grado === selectedGradeId.value)
   if (selected) {
-    matricula.value.seccion = selected.seccion
-    matricula.value.id_grado = selected.id_grado
-    notify.addNotification(`Salón ${selected.seccion} seleccionado temporalmente`, 'info')
+    savingGrade.value = true
+    try {
+      await axios.post(`http://localhost:3000/api/matriculas/assign-grade/${route.params.id}`, {
+        idGrado: selected.id_grado
+      })
+      matricula.value.seccion = selected.seccion
+      matricula.value.id_grado = selected.id_grado
+      matricula.value.id_grupo = selected.id_grado
+      notify.addNotification(`Salón ${selected.seccion} asignado y guardado correctamente`, 'success')
+    } catch (e) {
+      console.error('Error al guardar salón:', e)
+      notify.addNotification('No se pudo guardar la asignación del salón en el servidor', 'error')
+    } finally {
+      savingGrade.value = false
+    }
   }
   currentStep.value = 2
 }
@@ -796,10 +846,17 @@ const downloadEnrollmentPDF = async () => {
           <div v-if="doc.url && !doc.url.toLowerCase().endsWith('.pdf')" style="text-align: center; padding: 10px;">
             <img :src="formatUrl(doc.url)" crossorigin="anonymous" style="max-width: 100%; max-height: 820px; object-fit: contain; border-radius: 12px; border: 1px solid #e2e8f0;" />
           </div>
-          <div v-else-if="doc.url && doc.url.toLowerCase().endsWith('.pdf')" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 80px 40px; border: 2px dashed #cbd5e1; border-radius: 20px; margin: 40px 0; background: #f8fafc;">
-            <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-            <p style="font-size: 16px; font-weight: 800; color: #334155; margin: 20px 0 6px 0;">{{ documentLabels[doc.tipo_documento] || doc.tipo_documento }}</p>
-            <p style="font-size: 11px; font-weight: 600; color: #94a3b8; margin: 0;">Documento PDF adjunto digitalmente — Ver en plataforma</p>
+          <div v-else-if="doc.url && doc.url.toLowerCase().endsWith('.pdf')">
+            <div v-if="pdfPagesMap[doc.id_documento] && pdfPagesMap[doc.id_documento].length > 0" style="text-align: center; padding: 10px;">
+              <div v-for="(pageImg, pIdx) in pdfPagesMap[doc.id_documento]" :key="pIdx" style="margin-bottom: 20px;">
+                <img :src="pageImg" style="max-width: 100%; max-height: 820px; object-fit: contain; border-radius: 12px; border: 1px solid #e2e8f0;" />
+              </div>
+            </div>
+            <div v-else style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 80px 40px; border: 2px dashed #cbd5e1; border-radius: 20px; margin: 40px 0; background: #f8fafc;">
+              <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+              <p style="font-size: 16px; font-weight: 800; color: #334155; margin: 20px 0 6px 0;">{{ documentLabels[doc.tipo_documento] || doc.tipo_documento }}</p>
+              <p style="font-size: 11px; font-weight: 600; color: #94a3b8; margin: 0;">Documento PDF adjunto digitalmente — Ver en plataforma</p>
+            </div>
           </div>
           <div v-else style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 80px 40px; border: 2px dashed #fef3c7; border-radius: 20px; margin: 40px 0; background: #fffbeb;">
             <p style="font-size: 14px; font-weight: 700; color: #b45309;">Documento pendiente de carga</p>

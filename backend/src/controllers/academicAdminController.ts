@@ -815,6 +815,14 @@ export const getSubjects = async (req: Request, res: Response): Promise<void> =>
   }
 
   try {
+    const { yearId } = req.query;
+    let yearFilter = '';
+    const queryParams: any[] = [schoolId];
+    if (yearId) {
+      queryParams.push(yearId);
+      yearFilter = ` AND c.id_anio = $${queryParams.length}`;
+    }
+
     const subjectsRes = await pool.query(
       `SELECT
          m.id_materia,
@@ -823,11 +831,11 @@ export const getSubjects = async (req: Request, res: Response): Promise<void> =>
          COUNT(DISTINCT c.id_competencia)::int AS competencias_count
        FROM materias m
        LEFT JOIN detalle_grados dg ON dg.id_materia = m.id_materia
-       LEFT JOIN competencias c ON c.id_materia = m.id_materia
+       LEFT JOIN competencias c ON c.id_materia = m.id_materia${yearFilter}
        WHERE m.id_colegio = $1
        GROUP BY m.id_materia, m.nombre
        ORDER BY m.nombre`,
-      [schoolId]
+      queryParams
     );
 
     res.json(subjectsRes.rows);
@@ -990,8 +998,9 @@ export const getAcademicSettingsData = async (req: Request, res: Response): Prom
          JOIN jornada j ON j.id_jornada = g.id_jornada
          LEFT JOIN dimensiones_preescolar dp ON dp.id_dimension = c.id_dimension
          WHERE c.id_colegio = $1
+           AND c.id_anio = $3
          ORDER BY p.id_periodo, ne.nombre, tg.nombre, m.nombre`,
-        [schoolId, DEFAULT_COMPETENCY_TEXT]
+        [schoolId, DEFAULT_COMPETENCY_TEXT, currentYearId]
       ),
       pool.query(
         `SELECT

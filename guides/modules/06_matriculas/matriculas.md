@@ -55,6 +55,7 @@ Este módulo gestiona el proceso de registro, validación y matrícula de nuevos
 - **RN-MAT-004 (Validación de Documentos por Item):** Los documentos adjuntos (registro civil, etc.) se validan individualmente. Si al menos uno es marcado como `RECHAZADO`, la matrícula pasa a estado `CORRECCION` y se bloquea la oficialización hasta que el solicitante resuelva la inconsistencia.
 - **RN-MAT-005 (Oficialización y Creación de Estudiante):** Al presionar "Finalizar", el estado de la matrícula pasa a `ACTIVA` (o `APROBADA`), y el sistema inserta automáticamente el registro del estudiante en la tabla `estudiante`, generándole un código único y una cuenta de usuario para ingresar al portal.
 - **RN-MAT-006 (Rate Limiting de Envío):** Límite de 20 solicitudes de envío de matrícula por IP cada 15 minutos para proteger el almacenamiento del servidor contra abusos de archivos cargados.
+- **RN-MAT-007 (Persistencia Continua de Asignación de Salón):** La selección de salón/sección realizada por el directivo se persiste de inmediato en la base de datos (`POST /api/matriculas/assign-grade/:id`). Si una solicitud es enviada a corrección por inconsistencias en los documentos, el salón y las parametrizaciones previamente establecidas por el directivo se conservan intactas, evitando tener que volver a elegir el curso cuando el acudiente reenvíe los archivos subsanados.
 
 ---
 
@@ -123,13 +124,18 @@ Este módulo gestiona el proceso de registro, validación y matrícula de nuevos
 ## 8. Validaciones Implementadas
 
 ### Backend
-- Validación de que el tamaño de los archivos adjuntos no exceda el límite definido por Multer (típicamente 5MB).
-- Aseguramiento de que no se puedan oficializar matrículas que posean documentos en estado `RECHAZADO`.
-- Control estricto de cupos disponibles en el grupo asignado antes de confirmar la matrícula.
+- **Validación de Texto en Campos Nombres/Apellidos**: Exige patrones estrictos de solo letras (incluyendo tildes y eñe `^[a-zA-ZáéíóúñÁÉÍÓÚÑ\s]{2,}$`) para nombres y apellidos de estudiante y acudiente.
+- **Validación de Número de Documento**: Exige formato alfanumérico limpio sin espacios o símbolos (`^[a-zA-Z0-9-]{4,}$`) con mínimo 4 caracteres.
+- **Validación de Formato de Correo Electrónico**: Exige estructura regex válida (`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`) para el correo del acudiente.
+- **Límite de Archivos**: Validación de que el tamaño de los archivos adjuntos no exceda 2MB por documento.
+- **Integridad de Oficialización**: Bloqueo de oficialización para solicitudes con documentos en estado `RECHAZADO`.
+- **Control de Cupos**: Verificación estricta de cupos disponibles en el grupo asignado.
 
 ### Frontend
-- Validación visual de la existencia de archivos obligatorios antes del envío del formulario.
-- Desactivación de botones de acción administrativa basados en el estado actual de la matrícula.
+- **Filtrado en Tiempo Real (`@input`)**: Utiliza `validationHelper.ts` (`sanitizeLettersOnly`, `sanitizeDocumentNumber`) para impedir la escritura de números o símbolos en nombres y apellidos, o espacios y caracteres inválidos en números de documento.
+- **Validación de Correo**: Verifica `isValidEmail` antes de avanzar al paso de carga de documentos en la solicitud pública.
+- **Validación de Documentación Obligatoria**: Bloqueo visual de avance si faltan archivos requeridos para el nivel seleccionado.
+- **Desactivación de Acciones Directivas**: Control de estados de botones para evitar doble clic o envío incompleto.
 
 ---
 
