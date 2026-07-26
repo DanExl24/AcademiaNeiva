@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import axios from 'axios'
 import { useAuthStore } from '../../stores/auth'
+import { useAcademicYearStore } from '../../stores/academicYear'
 import { 
   ArrowLeft, 
   CalendarDays, 
@@ -15,7 +16,8 @@ import {
 } from 'lucide-vue-next'
 
 interface AcademicYear {
-  id_año: number
+  id_anio: number
+  id_año?: number
   calendario: string | null
   estado?: string
 }
@@ -23,7 +25,7 @@ interface AcademicYear {
 interface EnrollmentConfig {
   id_configuracion: number | null
   id_colegio: number
-  id_año: number
+  id_anio: number
   fecha_inicio: string | null
   fecha_cierre: string | null
   habilitada: boolean
@@ -31,6 +33,7 @@ interface EnrollmentConfig {
 }
 
 const auth = useAuthStore()
+const yearStore = useAcademicYearStore()
 const schoolId = computed(() => Number(auth.user?.schoolId || auth.supervision?.id_colegio || 0))
 const isSupervision = computed(() => auth.activeRole === 'admin_general')
 
@@ -38,13 +41,18 @@ const loading = ref(true)
 const loadingConfig = ref(false)
 const saving = ref(false)
 
-const academicYears = ref<AcademicYear[]>([])
-const selectedYearId = ref<number | null>(null)
+const academicYears = computed(() => yearStore.availableYears)
+const selectedYearId = computed({
+  get: () => yearStore.selectedYearId,
+  set: (val: number | null) => {
+    if (val) yearStore.setSelectedYearId(val)
+  }
+})
 
 const config = ref<EnrollmentConfig>({
   id_configuracion: null,
   id_colegio: 0,
-  id_año: 0,
+  id_anio: 0,
   fecha_inicio: null,
   fecha_cierre: null,
   habilitada: true,
@@ -67,15 +75,9 @@ const loadYears = async () => {
   if (!schoolId.value) return
   try {
     loading.value = true
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const response = await axios.get(`http://localhost:3000/api/academic-admin/settings/${schoolId.value}`, { headers })
-    academicYears.value = response.data.academicYears || []
-    
-    // Set default to current year
-    if (response.data.currentYear) {
-      selectedYearId.value = response.data.currentYear.id_año
-    } else if (academicYears.value.length > 0) {
-      selectedYearId.value = academicYears.value[0].id_año
+    await yearStore.loadYearsForSchool(schoolId.value, auth.token)
+    if (selectedYearId.value) {
+      await loadConfig()
     }
   } catch (error) {
     console.error('Error loading academic years:', error)
@@ -113,7 +115,7 @@ const loadConfig = async () => {
       config.value = {
         id_configuracion: null,
         id_colegio: schoolId.value,
-        id_año: selectedYearId.value,
+        id_anio: selectedYearId.value,
         fecha_inicio: null,
         fecha_cierre: null,
         habilitada: true,
@@ -162,6 +164,20 @@ const handleSave = async () => {
     return
   }
 
+  const selectedYearObj = academicYears.value.find(y => (y.id_anio || y.id_año) === selectedYearId.value)
+  if (selectedYearObj && selectedYearObj.calendario) {
+    const yearMatches = selectedYearObj.calendario.match(/\d{4}/g)
+    if (yearMatches && yearMatches.length > 0) {
+      const allowedYears = yearMatches.map(y => parseInt(y))
+      const startYear = start.getFullYear()
+      const endYear = end.getFullYear()
+      if (!allowedYears.includes(startYear) || !allowedYears.includes(endYear)) {
+        showMessage(`Las fechas de inicio y cierre deben corresponder al año lectivo ${selectedYearObj.calendario}.`, 'error')
+        return
+      }
+    }
+  }
+
   if (isSupervision.value && !justification.value.trim()) {
     showMessage('Por favor escribe la justificación para registrar esta modificación en la auditoría.', 'warning')
     return
@@ -173,7 +189,7 @@ const handleSave = async () => {
     const headers = { Authorization: `Bearer ${auth.token}` }
     const payload = {
       id_colegio: schoolId.value,
-      id_año: selectedYearId.value,
+      id_anio: selectedYearId.value,
       fecha_inicio: start.toISOString(),
       fecha_cierre: end.toISOString(),
       habilitada: localHabilitada.value,
@@ -221,14 +237,14 @@ onMounted(() => {
           </p>
         </div>
 
-        <div v-if="selectedYearId" class="flex flex-col gap-2 min-w-[200px]">
+        <div v-if="academicYears.length > 0" class="flex flex-col gap-2 min-w-[200px]">
           <label class="text-xs font-black text-slate-400 uppercase tracking-widest">Seleccionar Año Lectivo</label>
           <select 
             v-model="selectedYearId" 
             class="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-violet-500 transition-all cursor-pointer"
           >
-            <option v-for="y in academicYears" :key="y.id_año" :value="y.id_año">
-              Año: {{ y.calendario || y.id_año }}
+            <option v-for="y in academicYears" :key="y.id_anio || y.id_año" :value="y.id_anio || y.id_año">
+              Año: {{ y.calendario || (y.id_anio || y.id_año) }}
             </option>
           </select>
         </div>

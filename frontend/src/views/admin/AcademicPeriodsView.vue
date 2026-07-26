@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import axios from 'axios'
 import { ArrowLeft, BookMarked, PenSquare, Plus, Info, Trash2, Play, Lock, ShieldAlert, Check } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
@@ -9,6 +9,8 @@ interface AcademicYear {
   calendario: string | null
   tipo_calendario?: string | null
   estado?: string
+  fecha_inicio?: string | null
+  fecha_fin?: string | null
 }
 
 interface AcademicPeriod {
@@ -120,10 +122,77 @@ const periodEdit = ref({
   dia_fin: '',
 })
 
+const yearModal = ref(false)
+
 const academicYearForm = ref({
-  id_anio: '',
-  calendario: 'A',
+  year_number: '2026',
+  tipo_calendario: 'A',
+  fecha_inicio: '2026-01-15',
+  fecha_fin: '2026-11-30',
 })
+
+const computedCalendarioLabel = computed(() => {
+  const y = Number(academicYearForm.value.year_number) || 2026
+  if (academicYearForm.value.tipo_calendario === 'B') {
+    return `${y - 1}-${y}`
+  }
+  return `${y}`
+})
+
+const dateOverlapWarning = computed(() => {
+  if (!academicYearForm.value.fecha_inicio || !academicYearForm.value.fecha_fin) return null
+  const fStart = academicYearForm.value.fecha_inicio
+  const fEnd = academicYearForm.value.fecha_fin
+
+  const overlappingYear = academicYears.value.find(y => {
+    if (!y.fecha_inicio || !y.fecha_fin) return false
+    const yStart = String(y.fecha_inicio).split('T')[0]
+    const yEnd = String(y.fecha_fin).split('T')[0]
+    return fStart <= yEnd && fEnd >= yStart
+  })
+
+  if (overlappingYear) {
+    const yStart = String(overlappingYear.fecha_inicio).split('T')[0]
+    const yEnd = String(overlappingYear.fecha_fin).split('T')[0]
+    return `Las fechas de vigencia (${fStart} al ${fEnd}) se cruzan con el año lectivo '${overlappingYear.calendario}' (${yStart} al ${yEnd}).`
+  }
+  return null
+})
+
+watch(
+  [() => academicYearForm.value.year_number, () => academicYearForm.value.tipo_calendario, () => academicYears.value],
+  ([newYearNum, newCalType]) => {
+    const y = Number(newYearNum) || 2026
+    let propStart = newCalType === 'B' ? `${y - 1}-09-01` : `${y}-01-15`
+    let propEnd = newCalType === 'B' ? `${y}-06-30` : `${y}-11-30`
+
+    // Find any existing year that overlaps with proposed dates
+    const overlapping = academicYears.value.filter(existingYear => {
+      if (!existingYear.fecha_inicio || !existingYear.fecha_fin) return false
+      const yStart = String(existingYear.fecha_inicio).split('T')[0]
+      const yEnd = String(existingYear.fecha_fin).split('T')[0]
+      return propStart <= yEnd && propEnd >= yStart
+    })
+
+    if (overlapping.length > 0) {
+      // Find latest end date among overlapping years to suggest next available date
+      const latestEndStr = overlapping.map(o => String(o.fecha_fin).split('T')[0]).sort().pop()
+      if (latestEndStr) {
+        const latestEndDate = new Date(latestEndStr)
+        latestEndDate.setDate(latestEndDate.getDate() + 1)
+        const adjustedStartStr = latestEndDate.toISOString().split('T')[0]
+        
+        if (adjustedStartStr < propEnd) {
+          propStart = adjustedStartStr
+        }
+      }
+    }
+
+    academicYearForm.value.fecha_inicio = propStart
+    academicYearForm.value.fecha_fin = propEnd
+  },
+  { immediate: true, deep: true }
+)
 
 const months = [
   { id: 1, name: 'Enero' },
@@ -261,31 +330,153 @@ const approvePeriod = async (period: AcademicPeriod) => {
 
 const createAcademicYear = async () => {
   if (yearSaving.value) return
-  if (!academicYearForm.value.id_anio) {
-    alert('Ingresa el año lectivo que deseas configurar.')
+  if (!academicYearForm.value.year_number) {
+    alert('Ingresa el año lectivo (número, ej. 2026).')
     return
   }
+  if (dateOverlapWarning.value) {
+    alert(`No es posible crear el año lectivo:\n\n${dateOverlapWarning.value}`)
+    return
+  }
+
+  const finalLabel = computedCalendarioLabel.value
 
   try {
     yearSaving.value = true
     const response = await axios.post('http://localhost:3000/api/academic-admin/settings/years', {
       schoolId: schoolId.value,
-      id_anio: Number(academicYearForm.value.id_anio),
-      calendario: academicYearForm.value.calendario,
+      calendario: finalLabel,
+      tipo_calendario: academicYearForm.value.tipo_calendario,
+      fecha_inicio: academicYearForm.value.fecha_inicio,
+      fecha_fin: academicYearForm.value.fecha_fin,
     })
     
-    // Store message and periods to display in modal
-    yearSuccessMessage.value = response.data.message
-    yearSuccessPeriods.value = response.data.periods || []
-    showYearSuccessAlert.value = true
-    selectedYearId.value = response.data.id_anio
+    alert(response.data.message || 'Año lectivo creado correctamente.')
+    if (response.data.id_anio) {
+      selectedYearId.value = response.data.id_anio
+    }
 
-    academicYearForm.value = { id_anio: '', calendario: 'A' }
+    yearModal.value = false
+    academicYearForm.value = { year_number: '2026', tipo_calendario: 'A', fecha_inicio: '2026-01-15', fecha_fin: '2026-11-30' }
     await loadData()
   } catch (error: any) {
     alert(error.response?.data?.error || 'No fue posible crear el año lectivo')
   } finally {
     yearSaving.value = false
+  }
+}
+
+const formatYearDates = (year: AcademicYear) => {
+  if (year.fecha_inicio && year.fecha_fin) {
+    const start = String(year.fecha_inicio).split('T')[0]
+    const end = String(year.fecha_fin).split('T')[0]
+    return `${start} al ${end}`
+  }
+  const cal = year.calendario || '2026'
+  const matches = cal.match(/\d{4}/g)
+  const endYear = matches ? matches[matches.length - 1] : '2026'
+  const startYear = matches && matches.length > 1 ? matches[0] : (year.tipo_calendario === 'B' ? String(Number(endYear) - 1) : endYear)
+  if (year.tipo_calendario === 'B') {
+    return `${startYear}-09-01 al ${endYear}-06-30`
+  }
+  return `${startYear}-01-15 al ${endYear}-11-30`
+}
+
+const changingCalendarYearId = ref<number | null>(null)
+
+const changeYearCalendarType = async (year: AcademicYear, newType: string) => {
+  if (!editorModeActive.value) {
+    alert('Debes activar el Modo Editor para cambiar el tipo de calendario de un año lectivo.')
+    return
+  }
+  if (changingCalendarYearId.value) return
+  if (year.tipo_calendario === newType) return
+
+  const confirmMsg = `¿Desea cambiar el calendario del año lectivo a Calendario ${newType}? Esto actualizará las fechas oficiales de sus periodos.`
+  if (!confirm(confirmMsg)) return
+
+  try {
+    changingCalendarYearId.value = year.id_anio
+    const response = await axios.patch(`http://localhost:3000/api/academic-admin/settings/years/${year.id_anio}/calendar-type`, {
+      schoolId: schoolId.value,
+      tipo_calendario: newType
+    })
+
+    alert(response.data.message || 'Tipo de calendario actualizado correctamente.')
+    await loadData()
+  } catch (error: any) {
+    alert(error.response?.data?.error || 'No fue posible cambiar el tipo de calendario')
+    await loadData()
+  } finally {
+    changingCalendarYearId.value = null
+  }
+}
+
+const standardPeriodPresets = [
+  {
+    nombre: 'Primer Periodo',
+    trimestre: 1,
+    porcentaje: 25,
+    calendarioA: { mes_inicio: 1, dia_inicio: 15, mes_fin: 4, dia_fin: 4 },
+    calendarioB: { mes_inicio: 9, dia_inicio: 1, mes_fin: 11, dia_fin: 15 }
+  },
+  {
+    nombre: 'Segundo Periodo',
+    trimestre: 2,
+    porcentaje: 25,
+    calendarioA: { mes_inicio: 4, dia_inicio: 5, mes_fin: 6, dia_fin: 23 },
+    calendarioB: { mes_inicio: 11, dia_inicio: 16, mes_fin: 1, dia_fin: 29 }
+  },
+  {
+    nombre: 'Tercer Periodo',
+    trimestre: 3,
+    porcentaje: 25,
+    calendarioA: { mes_inicio: 6, dia_inicio: 24, mes_fin: 9, dia_fin: 11 },
+    calendarioB: { mes_inicio: 1, dia_inicio: 30, mes_fin: 4, dia_fin: 14 }
+  },
+  {
+    nombre: 'Cuarto Periodo',
+    trimestre: 4,
+    porcentaje: 25,
+    calendarioA: { mes_inicio: 9, dia_inicio: 12, mes_fin: 11, dia_fin: 30 },
+    calendarioB: { mes_inicio: 4, dia_inicio: 15, mes_fin: 6, dia_fin: 30 }
+  }
+]
+
+const availablePresets = computed(() => {
+  const existingNames = filteredPeriods.value.map(p => p.nombre.toLowerCase().trim())
+  return standardPeriodPresets.filter(preset => !existingNames.includes(preset.nombre.toLowerCase().trim()))
+})
+
+const onPresetSelected = (presetNombre: string) => {
+  const preset = standardPeriodPresets.find(p => p.nombre === presetNombre)
+  if (!preset) return
+  const isB = selectedYearObj.value?.tipo_calendario === 'B'
+  const dates = isB ? preset.calendarioB : preset.calendarioA
+  
+  newPeriod.value = {
+    nombre: preset.nombre,
+    porcentaje: String(preset.porcentaje),
+    mes_inicio: String(dates.mes_inicio),
+    dia_inicio: String(dates.dia_inicio),
+    mes_fin: String(dates.mes_fin),
+    dia_fin: String(dates.dia_fin)
+  }
+}
+
+const deletePeriod = async (period: AcademicPeriod) => {
+  if (!confirm(`¿Está seguro de eliminar el periodo "${period.nombre}"?`)) return
+  try {
+    loading.value = true
+    await axios.delete(`http://localhost:3000/api/academic-admin/settings/periods/${period.id_periodo}`, {
+      data: { schoolId: schoolId.value }
+    })
+    alert(`Periodo ${period.nombre} eliminado correctamente.`)
+    await loadData()
+  } catch (error: any) {
+    alert(error.response?.data?.error || 'No fue posible eliminar el periodo académico')
+  } finally {
+    loading.value = false
   }
 }
 
@@ -326,37 +517,27 @@ onMounted(loadData)
                 <p class="text-sm text-slate-500 dark:text-slate-400">Registra los años lectivos configurados. El más reciente queda como referencia activa.</p>
               </div>
             </div>
-            <button
-              type="button"
-              @click="editorModeActive ? editorModeActive = false : showEditorWarningModal = true"
-              :class="[
-                editorModeActive 
-                  ? 'bg-rose-500 hover:bg-rose-600 text-white shadow-rose-200/50' 
-                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700',
-                'inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black transition-all shadow-md dark:shadow-none shrink-0 uppercase tracking-wider'
-              ]"
-            >
-              <ShieldAlert class="h-4 w-4" />
-              {{ editorModeActive ? 'Salir Editor' : 'Modo Editor' }}
-            </button>
-          </div>
-
-          <div class="grid grid-cols-1 gap-6 border-b border-slate-100 p-6 md:grid-cols-[1fr_140px_auto] dark:border-slate-800">
-            <label class="space-y-2">
-              <span class="block text-sm font-black text-slate-700 dark:text-slate-300">Año lectivo</span>
-              <input v-model="academicYearForm.id_anio" type="number" min="2000" max="2100" placeholder="2026" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-semibold outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white" />
-            </label>
-            <label class="space-y-2">
-              <span class="block text-sm font-black text-slate-700 dark:text-slate-300">Calendario</span>
-              <select v-model="academicYearForm.calendario" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-semibold outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white">
-                <option value="A">Calendario A</option>
-                <option value="B">Calendario B</option>
-              </select>
-            </label>
-            <div class="flex items-end">
-              <button type="button" @click="createAcademicYear" :disabled="yearSaving" class="inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-sky-600 px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-sky-500 disabled:opacity-50 dark:bg-sky-500 dark:hover:bg-sky-400">
+            <div class="flex items-center gap-2">
+              <button
+                type="button"
+                @click="yearModal = true"
+                class="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-black transition-all shadow-md shrink-0 uppercase tracking-wider dark:bg-sky-500 dark:hover:bg-sky-400"
+              >
                 <Plus class="h-4 w-4" />
-                {{ yearSaving ? 'Creando...' : 'Agregar año' }}
+                Agregar año
+              </button>
+              <button
+                type="button"
+                @click="editorModeActive ? editorModeActive = false : showEditorWarningModal = true"
+                :class="[
+                  editorModeActive 
+                    ? 'bg-rose-500 hover:bg-rose-600 text-white shadow-rose-200/50' 
+                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700',
+                  'inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black transition-all shadow-md dark:shadow-none shrink-0 uppercase tracking-wider'
+                ]"
+              >
+                <ShieldAlert class="h-4 w-4" />
+                {{ editorModeActive ? 'Salir Editor' : 'Modo Editor' }}
               </button>
             </div>
           </div>
@@ -389,7 +570,26 @@ onMounted(loadData)
                     {{ year.estado === 'CERRADO' ? 'Cerrado' : 'Abierto' }}
                   </span>
                 </div>
-                <p class="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-400">Calendario: {{ year.tipo_calendario || 'Sin definir' }}</p>
+                <div class="flex items-center gap-2 mt-1.5" @click.stop>
+                  <span class="text-xs font-bold text-slate-500 dark:text-slate-400">Calendario:</span>
+                  <select 
+                    :value="year.tipo_calendario || 'A'" 
+                    @change="changeYearCalendarType(year, ($event.target as HTMLSelectElement).value)"
+                    :disabled="!editorModeActive || changingCalendarYearId === year.id_anio"
+                    :title="!editorModeActive ? 'Debes activar el Modo Editor para cambiar el tipo de calendario' : ''"
+                    :class="[
+                      !editorModeActive ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer focus:ring-2 focus:ring-sky-500',
+                      'text-xs font-black bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1 outline-none text-slate-700 dark:text-slate-200 transition-all'
+                    ]"
+                  >
+                    <option value="A">Calendario A</option>
+                    <option value="B">Calendario B</option>
+                  </select>
+                </div>
+                <p class="text-xs font-bold text-slate-500 mt-2 dark:text-slate-400 flex items-center gap-1.5">
+                  <span class="text-slate-400 dark:text-slate-500 font-semibold">📅 Vigencia:</span>
+                  <span class="font-extrabold text-slate-700 dark:text-slate-200">{{ formatYearDates(year) }}</span>
+                </p>
               </div>
 
               <div class="flex items-center gap-3 shrink-0" @click.stop>
@@ -492,8 +692,18 @@ onMounted(loadData)
                   type="button"
                   @click="periodEditModal = period; periodEdit.porcentaje = String(period.porcentaje); periodEdit.mes_inicio = String(period.mes_inicio); periodEdit.dia_inicio = String(period.dia_inicio); periodEdit.mes_fin = String(period.mes_fin); periodEdit.dia_fin = String(period.dia_fin)"
                   class="inline-flex items-center justify-center rounded-2xl bg-slate-100 p-3 text-slate-600 transition-all hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-white"
+                  title="Editar periodo"
                 >
                   <PenSquare class="h-4 w-4" />
+                </button>
+
+                <button
+                  type="button"
+                  @click="deletePeriod(period)"
+                  class="inline-flex items-center justify-center rounded-2xl bg-rose-50 p-3 text-rose-600 transition-all hover:bg-rose-100 dark:bg-rose-950/20 dark:text-rose-400 dark:hover:bg-rose-950/40"
+                  title="Eliminar periodo académico"
+                >
+                  <Trash2 class="h-4 w-4" />
                 </button>
               </div>
             </div>
@@ -585,6 +795,89 @@ onMounted(loadData)
       </section>
     </template>
 
+    <!-- Modal Create Academic Year -->
+    <div v-if="yearModal" class="fixed inset-0 z-[100] flex min-h-screen w-screen items-center justify-center bg-slate-950/80 p-4 backdrop-blur-md transition-all">
+      <div class="w-full max-w-xl rounded-[32px] bg-white shadow-2xl overflow-hidden dark:bg-slate-900 border dark:border-slate-800">
+        <div class="border-b border-slate-100 px-8 py-7 dark:border-slate-800">
+          <h2 class="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Agregar Año Lectivo</h2>
+          <p class="mt-2 text-sm font-semibold text-slate-500 dark:text-slate-400 leading-relaxed">
+            Ingresa el año lectivo en formato numérico (ej. 2026). Si seleccionas Calendario B, el sistema configurará automáticamente la etiqueta de rango de años (ej. 2025-2026).
+          </p>
+        </div>
+        <div class="px-8 py-8 space-y-6">
+          <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+            <label class="space-y-2">
+              <span class="block text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Año Lectivo (Número)</span>
+              <input 
+                v-model="academicYearForm.year_number" 
+                type="number" 
+                min="2000" 
+                max="2100" 
+                placeholder="Ej. 2026" 
+                class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-black outline-none text-lg dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-sky-500/20" 
+              />
+            </label>
+            
+            <label class="space-y-2">
+              <span class="block text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Tipo de Calendario</span>
+              <select 
+                v-model="academicYearForm.tipo_calendario" 
+                class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-extrabold outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-sky-500/20"
+              >
+                <option value="A">Calendario A</option>
+                <option value="B">Calendario B</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="rounded-2xl bg-sky-50/80 p-4 border border-sky-100 flex items-center justify-between dark:bg-sky-950/20 dark:border-sky-900/30">
+            <span class="text-xs font-black text-sky-800 dark:text-sky-300 uppercase tracking-wider">Etiqueta Resultante:</span>
+            <span class="px-3.5 py-1.5 rounded-xl bg-sky-600 text-white font-black text-sm shadow-sm dark:bg-sky-500">
+              {{ computedCalendarioLabel }}
+            </span>
+          </div>
+
+          <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+            <label class="space-y-2">
+              <span class="block text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Fecha de Inicio</span>
+              <input 
+                v-model="academicYearForm.fecha_inicio" 
+                type="date" 
+                class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-semibold outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-sky-500/20" 
+              />
+            </label>
+
+            <label class="space-y-2">
+              <span class="block text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Fecha de Fin</span>
+              <input 
+                v-model="academicYearForm.fecha_fin" 
+                type="date" 
+                class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-semibold outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-sky-500/20" 
+              />
+            </label>
+          </div>
+
+          <div v-if="dateOverlapWarning" class="rounded-2xl bg-rose-50 p-4 border border-rose-200 flex items-start gap-3 dark:bg-rose-950/30 dark:border-rose-900/40">
+            <ShieldAlert class="h-5 w-5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+            <div class="text-xs font-bold text-rose-800 dark:text-rose-300">
+              <span class="block font-black text-rose-900 dark:text-rose-200 uppercase tracking-wider mb-0.5">⚠️ Solapamiento de Fechas Detectado</span>
+              {{ dateOverlapWarning }}
+            </div>
+          </div>
+
+          <div class="mt-10 flex flex-col gap-4 sm:flex-row sm:justify-end">
+            <button type="button" @click="yearModal = false" class="rounded-2xl border border-slate-200 px-8 py-4 text-sm font-black text-slate-700 hover:bg-slate-50 transition-all dark:border-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 uppercase tracking-widest">
+              Cancelar
+            </button>
+            <button type="button" @click="createAcademicYear" :disabled="yearSaving || !!dateOverlapWarning" class="inline-flex min-h-14 items-center justify-center gap-3 rounded-2xl bg-sky-600 px-10 py-4 text-sm font-black text-white shadow-lg shadow-sky-200/50 dark:shadow-none hover:bg-sky-500 transition-all disabled:opacity-50 uppercase tracking-widest dark:bg-sky-500 dark:hover:bg-sky-400">
+              <Plus class="h-4 w-4" />
+              {{ yearSaving ? 'Creando...' : 'Crear año lectivo' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Modal Create Period -->
     <div v-if="periodModal" class="fixed inset-0 z-[100] flex min-h-screen w-screen items-center justify-center bg-slate-950/80 p-4 backdrop-blur-md transition-all">
       <div class="w-full max-w-2xl rounded-[32px] bg-white shadow-2xl overflow-hidden dark:bg-slate-900 border dark:border-slate-800">
@@ -593,6 +886,21 @@ onMounted(loadData)
           <p class="mt-2 text-sm font-semibold text-slate-500 dark:text-slate-400 leading-relaxed">El porcentaje agregado no puede romper el total global del año.</p>
         </div>
         <div class="px-8 py-8">
+          <div v-if="availablePresets.length > 0" class="mb-6 rounded-2xl bg-orange-50/70 p-4 border border-orange-100 dark:bg-orange-950/20 dark:border-orange-900/30">
+            <label class="space-y-1.5 block">
+              <span class="block text-xs font-black text-orange-800 dark:text-orange-300 uppercase tracking-wider">⚡ Cargar periodo predefinido</span>
+              <select 
+                @change="onPresetSelected(($event.target as HTMLSelectElement).value)"
+                class="w-full rounded-xl border border-orange-200 bg-white p-3 text-sm font-black text-slate-800 outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-orange-500/20"
+              >
+                <option value="">-- Seleccionar periodo disponible --</option>
+                <option v-for="preset in availablePresets" :key="preset.trimestre" :value="preset.nombre">
+                  {{ preset.nombre }} ({{ selectedYearObj?.tipo_calendario === 'B' ? 'Calendario B' : 'Calendario A' }})
+                </option>
+              </select>
+            </label>
+          </div>
+
           <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
             <label class="space-y-2">
               <span class="block text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Nombre del periodo</span>

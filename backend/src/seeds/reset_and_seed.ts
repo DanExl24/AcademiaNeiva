@@ -43,7 +43,7 @@ type CredentialEntry = {
 // ─── CONSTANTS ──────────────────────────────────────────────────────────────────
 
 const DOCUMENT_TYPE_CC = 3;
-const CURRENT_YEAR = "2026";
+const CURRENT_YEAR = "2025";
 const DIRECTIVO_PASSWORD = "directivo123";
 const DOCENTE_PASSWORD = "docente123";
 const CUPOS_POR_CURSO = 30;
@@ -148,18 +148,23 @@ async function createEnrollmentConfigTable(client: PoolClient): Promise<void> {
 async function seedEnrollmentConfigs(client: PoolClient): Promise<void> {
   const schoolsRes = await client.query('SELECT id_colegio FROM colegio');
   for (const s of schoolsRes.rows) {
-    const yearRes = await client.query('SELECT id_anio FROM anio_lectivo WHERE id_colegio = $1', [s.id_colegio]);
-    if (yearRes.rows.length > 0) {
-      const yearId = yearRes.rows[0].id_anio;
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - 5); // 5 days ago
-      const endDate = new Date();
-      endDate.setDate(endDate.getDate() + 15); // 15 days from now
+    const yearRes = await client.query('SELECT id_anio, calendario FROM anio_lectivo WHERE id_colegio = $1', [s.id_colegio]);
+    for (const yearRow of yearRes.rows) {
+      const yearId = yearRow.id_anio;
+      const calStr = yearRow.calendario || '2026';
+      const yearMatch = calStr.match(/\d{4}/g);
+      const targetYearNum = yearMatch ? parseInt(yearMatch[yearMatch.length - 1]) : 2026;
+
+      const startDate = new Date(`${targetYearNum}-07-20T00:00:00Z`);
+      const endDate = new Date(`${targetYearNum}-08-25T23:59:59Z`);
       
       await client.query(`
         INSERT INTO configuracion_inscripcion (id_colegio, id_anio, fecha_inicio, fecha_cierre, habilitada)
         VALUES ($1, $2, $3, $4, TRUE)
-        ON CONFLICT (id_colegio, id_anio) DO NOTHING
+        ON CONFLICT (id_colegio, id_anio) DO UPDATE SET
+          fecha_inicio = EXCLUDED.fecha_inicio,
+          fecha_cierre = EXCLUDED.fecha_cierre,
+          habilitada = EXCLUDED.habilitada
       `, [s.id_colegio, yearId, startDate.toISOString(), endDate.toISOString()]);
     }
   }
@@ -331,9 +336,12 @@ async function insertSchoolAcademicStructure(
   await client.query(`ALTER TABLE anio_lectivo ADD COLUMN IF NOT EXISTS tipo_calendario CHAR(1) DEFAULT 'A';`);
 
   const yearLabel = school.tipo_calendario === "B" ? `${parseInt(CURRENT_YEAR) - 1}-${CURRENT_YEAR}` : CURRENT_YEAR;
+  const fInicio2025 = school.tipo_calendario === "B" ? "2024-09-01" : "2025-01-15";
+  const fFin2025 = school.tipo_calendario === "B" ? "2025-06-30" : "2025-11-30";
+
   const academicYearResult = await client.query<{ id_anio: number }>(
-    `INSERT INTO anio_lectivo (calendario, id_colegio, tipo_calendario) VALUES ($1, $2, $3) RETURNING id_anio`,
-    [yearLabel, school.id, school.tipo_calendario]
+    `INSERT INTO anio_lectivo (calendario, id_colegio, tipo_calendario, fecha_inicio, fecha_fin) VALUES ($1, $2, $3, $4, $5) RETURNING id_anio`,
+    [yearLabel, school.id, school.tipo_calendario, fInicio2025, fFin2025]
   );
   const academicYearId = academicYearResult.rows[0].id_anio;
 
@@ -356,43 +364,60 @@ async function insertSchoolAcademicStructure(
     jornadaIdsByName[jornadaName] = result.rows[0].id_jornada;
   }
 
-  // --- Periods ---
-  const periodRules = getPeriodRules(school.tipo_calendario);
-  const currentDate = new Date();
-  const currentMonth = currentDate.getMonth() + 1; // 1-12
+  // Helper to divide academic year into 4 quarters strictly within fecha_inicio and fecha_fin
+  const computeQuarterPeriodsForDates = (startDateStr: string, endDateStr: string) => {
+    const startDate = new Date(startDateStr);
+    const endDate = new Date(endDateStr);
+    const quarterMs = (endDate.getTime() - startDate.getTime()) / 4;
+    const periodNames = ["Primer Periodo", "Segundo Periodo", "Tercer Periodo", "Cuarto Periodo"];
 
-  for (const periodSeed of periodSeeds) {
-    const monthRule = periodRules.find((r) => r.order === periodSeed.trimestre);
-    const startMonth = monthRule?.startMonth ?? 1;
-    const endMonth = monthRule?.endMonth ?? 12;
+    const periods = [];
+    for (let i = 0; i < 4; i++) {
+      const qStart = new Date(startDate.getTime() + Math.round(i * quarterMs));
+      const qEnd = i === 3 
+        ? new Date(endDate.getTime()) 
+        : new Date(startDate.getTime() + Math.round((i + 1) * quarterMs) - (24 * 60 * 60 * 1000));
 
-    let calculadoEstado: 'CERRADO' | 'ABIERTO' | 'PENDIENTE' = 'PENDIENTE';
-
-    if (school.tipo_calendario === 'A') {
-      if (currentMonth > endMonth) {
-        calculadoEstado = 'CERRADO';
-      } else if (currentMonth >= startMonth && currentMonth <= endMonth) {
-        calculadoEstado = 'ABIERTO';
-      } else {
-        calculadoEstado = 'PENDIENTE';
-      }
-    } else {
-      // Calendario B
-      const currentOrder = resolveCurrentAcademicPeriodOrder(currentDate, 'B') ?? 2;
-      if (periodSeed.trimestre < currentOrder) {
-        calculadoEstado = 'CERRADO';
-      } else if (periodSeed.trimestre === currentOrder) {
-        calculadoEstado = 'ABIERTO';
-      } else {
-        calculadoEstado = 'PENDIENTE';
-      }
+      periods.push({
+        nombre: periodNames[i],
+        trimestre: i + 1,
+        mes_inicio: qStart.getUTCMonth() + 1,
+        dia_inicio: qStart.getUTCDate(),
+        mes_fin: qEnd.getUTCMonth() + 1,
+        dia_fin: qEnd.getUTCDate(),
+      });
     }
+    return periods;
+  };
 
+  // --- Periods for 2025 (all closed for historical data) ---
+  const qPeriods2025 = computeQuarterPeriodsForDates(fInicio2025, fFin2025);
+  for (const qp of qPeriods2025) {
     await client.query(
       `INSERT INTO periodo_academico (nombre, estado, porcentaje, trimestre, id_anio, id_colegio, mes_inicio, mes_fin, dia_inicio, dia_fin)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-      [periodSeed.nombre, calculadoEstado, periodSeed.porcentaje, periodSeed.trimestre, academicYearId, school.id,
-       monthRule?.startMonth ?? null, monthRule?.endMonth ?? null, 1, 28]
+       VALUES ($1, 'CERRADO', 25.00, $2, $3, $4, $5, $6, $7, $8)`,
+      [qp.nombre, qp.trimestre, academicYearId, school.id, qp.mes_inicio, qp.mes_fin, qp.dia_inicio, qp.dia_fin]
+    );
+  }
+
+  // --- Year 2026 (Clean current academic year for testing return-to-classes) ---
+  const yearLabel2026 = school.tipo_calendario === "B" ? "2025-2026" : "2026";
+  const fInicio2026 = school.tipo_calendario === "B" ? "2025-09-01" : "2026-01-15";
+  const fFin2026 = school.tipo_calendario === "B" ? "2026-06-30" : "2026-11-30";
+
+  const academicYearResult2026 = await client.query<{ id_anio: number }>(
+    `INSERT INTO anio_lectivo (calendario, id_colegio, tipo_calendario, estado, fecha_inicio, fecha_fin) VALUES ($1, $2, $3, 'ABIERTO', $4, $5) RETURNING id_anio`,
+    [yearLabel2026, school.id, school.tipo_calendario, fInicio2026, fFin2026]
+  );
+  const academicYearId2026 = academicYearResult2026.rows[0].id_anio;
+
+  const qPeriods2026 = computeQuarterPeriodsForDates(fInicio2026, fFin2026);
+  for (const qp of qPeriods2026) {
+    const estado2026 = qp.trimestre === 1 ? 'ABIERTO' : 'PENDIENTE';
+    await client.query(
+      `INSERT INTO periodo_academico (nombre, estado, porcentaje, trimestre, id_anio, id_colegio, mes_inicio, mes_fin, dia_inicio, dia_fin)
+       VALUES ($1, $2, 25.00, $3, $4, $5, $6, $7, $8, $9)`,
+      [qp.nombre, estado2026, qp.trimestre, academicYearId2026, school.id, qp.mes_inicio, qp.mes_fin, qp.dia_inicio, qp.dia_fin]
     );
   }
 
@@ -509,8 +534,11 @@ async function insertStudentsAndParents(
   studentHash: string,
   credentials: CredentialEntry[]
 ): Promise<void> {
-  // Get academic year
-  const yearsRes = await client.query<{ id_anio: number }>('SELECT id_anio FROM anio_lectivo WHERE id_colegio = $1', [school.id]);
+  // Get academic year 2025 (target 2025 for heavy student data)
+  const yearsRes = await client.query<{ id_anio: number }>(
+    "SELECT id_anio FROM anio_lectivo WHERE id_colegio = $1 AND (calendario = '2025' OR calendario = '2024-2025') ORDER BY id_anio ASC LIMIT 1",
+    [school.id]
+  );
   const yearId = yearsRes.rows[0]?.id_anio;
   if (!yearId) return;
 
@@ -1369,7 +1397,7 @@ async function seedDbaCompetenciesAndEvidences(): Promise<void> {
       console.log(`   Colegio: ${school.nombre}`);
       
       const yearRes = await client.query<{ id_anio: number }>(
-        "SELECT id_anio FROM anio_lectivo WHERE id_colegio = $1 ORDER BY id_anio DESC LIMIT 1",
+        "SELECT id_anio FROM anio_lectivo WHERE id_colegio = $1 AND (calendario = '2025' OR calendario = '2024-2025') ORDER BY id_anio ASC LIMIT 1",
         [school.id_colegio]
       );
       const yearId = yearRes.rows[0]?.id_anio;

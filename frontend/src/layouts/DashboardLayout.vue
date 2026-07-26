@@ -29,10 +29,12 @@ import {
 } from 'lucide-vue-next'
 import { useAuthStore } from '../stores/auth'
 import { useThemeStore } from '../stores/theme'
+import { useAcademicYearStore } from '../stores/academicYear'
 import { useRouter } from 'vue-router'
 
 const auth = useAuthStore()
 const theme = useThemeStore()
+const yearStore = useAcademicYearStore()
 const router = useRouter()
 const isCollapsed = ref(false)
 
@@ -241,20 +243,16 @@ const fetchSchoolIdentity = async () => {
 
 watch(() => [auth.user?.schoolId, auth.supervision?.id_colegio], () => {
   fetchSchoolIdentity()
+  const sId = auth.user?.schoolId || auth.supervision?.id_colegio
+  if (sId) {
+    yearStore.loadYearsForSchool(sId, auth.token)
+  }
 }, { immediate: true })
 
-
-const fetchActiveYear = async () => {
-  const schoolId = auth.user?.schoolId
-  if (!schoolId) return
-  try {
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const response = await axios.get(`http://localhost:3000/api/academic-admin/settings/${schoolId}`, { headers })
-    if (response.data?.activeYear) {
-      activeYear.value = response.data.activeYear.calendario
-    }
-  } catch (error) {
-    console.error('Error fetching active year:', error)
+const onHeaderYearChange = (e: Event) => {
+  const val = Number((e.target as HTMLSelectElement).value)
+  if (val) {
+    yearStore.setSelectedYearId(val)
   }
 }
 
@@ -535,7 +533,6 @@ watch(() => auth.isSupervising, (supervising) => {
 }, { immediate: true })
 
 onMounted(() => {
-  fetchActiveYear()
   updateClock()
   clockInterval = setInterval(updateClock, 1000)
 })
@@ -731,10 +728,20 @@ onUnmounted(() => {
         <div class="flex items-center gap-6">
           <!-- Año Lectivo y Hora Actual -->
           <div class="hidden md:flex items-center gap-4 text-xs font-semibold text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/40 px-4 py-2 rounded-2xl border border-slate-100 dark:border-slate-800/50">
-            <div class="flex items-center gap-1.5 border-r border-slate-200 dark:border-slate-700/60 pr-4">
+            <div class="flex items-center gap-2 border-r border-slate-200 dark:border-slate-700/60 pr-4">
               <span class="text-indigo-500 dark:text-indigo-400 font-bold uppercase tracking-widest text-[9px]">Año:</span>
-              <span class="font-extrabold text-slate-700 dark:text-slate-200 bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded-lg border border-indigo-100/30 dark:border-indigo-900/20">
-                {{ activeYear || '...' }}
+              <select 
+                v-if="yearStore.availableYears.length > 0"
+                :value="yearStore.selectedYearId"
+                @change="onHeaderYearChange"
+                class="font-extrabold text-indigo-700 dark:text-indigo-300 bg-indigo-50/80 dark:bg-indigo-950/60 px-2.5 py-1 rounded-xl border border-indigo-200/60 dark:border-indigo-800/60 outline-none cursor-pointer focus:ring-2 focus:ring-indigo-500 transition-all text-xs"
+              >
+                <option v-for="y in yearStore.availableYears" :key="y.id_anio" :value="y.id_anio">
+                  {{ y.calendario }}{{ y.estado === 'CERRADO' ? ' (Cerrado)' : '' }}
+                </option>
+              </select>
+              <span v-else class="font-extrabold text-slate-700 dark:text-slate-200 bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded-lg border border-indigo-100/30 dark:border-indigo-900/20">
+                ...
               </span>
             </div>
             <div class="flex items-center gap-1.5 font-mono">

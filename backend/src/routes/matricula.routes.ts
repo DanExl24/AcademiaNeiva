@@ -44,7 +44,7 @@ router.get("/school/:schoolId/enrollment-config", async (req, res) => {
     
     // Find active year for school
     const yearRes = await pool.query(
-      `SELECT id_anio, calendario FROM anio_lectivo WHERE id_colegio = $1 AND estado = 'ABIERTO' LIMIT 1`,
+      `SELECT id_anio, calendario FROM anio_lectivo WHERE id_colegio = $1 AND estado = 'ABIERTO' ORDER BY id_anio DESC LIMIT 1`,
       [schoolId]
     );
     if (yearRes.rows.length === 0) {

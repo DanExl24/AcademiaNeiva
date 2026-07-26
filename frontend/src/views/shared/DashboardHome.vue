@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
 import { useAuthStore } from '../../stores/auth'
+import { useAcademicYearStore } from '../../stores/academicYear'
 import axios from 'axios'
 import { getCourseDisplayName } from '../../utils/courseHelper'
 import { 
@@ -133,9 +134,15 @@ const dashboardData = ref({
   }
 })
 
+const yearStore = useAcademicYearStore()
 const allPeriods = ref<any[]>([])
-const academicYears = ref<any[]>([])
-const selectedYearId = ref<number | null>(null)
+const academicYears = computed(() => yearStore.availableYears)
+const selectedYearId = computed({
+  get: () => yearStore.selectedYearId,
+  set: (val: number | null) => {
+    if (val) yearStore.setSelectedYearId(val)
+  }
+})
 const selectedPeriodId = ref<number | null>(null)
 
 // Only show periods for the selected year and hide PENDIENTE ones
@@ -610,15 +617,10 @@ const fetchDashboard = async () => {
 const loadPeriods = async () => {
   if (!schoolId.value) return
   try {
+    await yearStore.loadYearsForSchool(schoolId.value, auth.token)
     const headers = { Authorization: `Bearer ${auth.token}` }
     const response = await axios.get(`http://localhost:3000/api/academic-admin/settings/${schoolId.value}`, { headers })
     allPeriods.value = response.data.periods
-    academicYears.value = response.data.academicYears || []
-
-    // Default to the active year
-    if (!selectedYearId.value && response.data.activeYear) {
-      selectedYearId.value = response.data.activeYear['id_anio']
-    }
 
     // Set active period by default if none selected
     if (!selectedPeriodId.value) {

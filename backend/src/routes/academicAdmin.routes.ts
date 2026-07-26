@@ -40,6 +40,8 @@ import {
   getDirectivoDashboard,
   deleteAcademicYear,
   updateAcademicYearStatus,
+  deleteAcademicPeriod,
+  updateAcademicYearCalendarType,
   getMySchoolData,
   updateMySchoolIdentity,
   resetMySchoolIdentity,
@@ -109,9 +111,11 @@ router.delete("/teacher-assignments/:id", deleteTeacherAssignment);
 router.post("/settings/years", createAcademicYear);
 router.delete("/settings/years/:id", deleteAcademicYear);
 router.patch("/settings/years/:id/status", updateAcademicYearStatus);
+router.patch("/settings/years/:id/calendar-type", updateAcademicYearCalendarType);
 router.put("/settings/defaults", updateSchoolDefaultSettings);
 router.put("/settings/scales/manual", updateManualScaleConfiguration);
 router.post("/settings/periods", createAcademicPeriod);
+router.delete("/settings/periods/:id", deleteAcademicPeriod);
 router.patch("/settings/periods/:id/percentage", updateAcademicPeriodPercentage);
 router.get("/settings/closure-details/:schoolId/:periodId", getPeriodClosureDetails);
 router.post("/settings/competencies", upsertCompetencyByAdmin);

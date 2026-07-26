@@ -591,6 +591,8 @@ CREATE TABLE public.anio_lectivo (
     id_colegio integer CONSTRAINT "año_lectivo_id_colegio_not_null" NOT NULL,
     tipo_calendario character(1) DEFAULT 'A'::bpchar,
     estado public.estado_periodo DEFAULT 'ABIERTO'::public.estado_periodo,
+    fecha_inicio date,
+    fecha_fin date,
     CONSTRAINT chk_calendario CHECK (((calendario)::text ~ '^[0-9]{4}(-[0-9]{4})?$'::text))
 );
 
@@ -4439,7 +4441,12 @@ ALTER TABLE ONLY public.evidencia_aprendizaje
 
 
 --
--- Name: evidencia_aprendizaje evidencia_aprendizaje_id_evidencia_dba_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: evidencia_aprendizaje evidencia_aprendizaje_id_evidencia_dba_fkey; Type: FKRevisa este IEEE y genera una tabla con:
+
+información respaldada por la documentación;
+información inferida;
+información inventada o no verificable;
+posibles contradicciones. CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.evidencia_aprendizaje

@@ -10,3 +10,8 @@ export const pool = new Pool({
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
 });
+
+pool.query(`
+  ALTER TABLE public.anio_lectivo ADD COLUMN IF NOT EXISTS fecha_inicio DATE;
+  ALTER TABLE public.anio_lectivo ADD COLUMN IF NOT EXISTS fecha_fin DATE;
+`).catch((err: any) => console.error("Error adding fecha_inicio/fecha_fin to anio_lectivo:", err));

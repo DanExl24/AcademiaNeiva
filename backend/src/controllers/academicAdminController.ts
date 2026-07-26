@@ -25,12 +25,12 @@ const ensureTeacherStatusColumn = async () => {};
 
 const autoSwitchPeriodsForYear = async (client: any, schoolId: number, yearId: number): Promise<void> => {
   const yearRes = await client.query(
-    `SELECT id_anio, calendario, tipo_calendario
+    `SELECT id_anio, calendario, tipo_calendario, estado
      FROM anio_lectivo
      WHERE id_anio = $1 AND id_colegio = $2`,
     [yearId, schoolId]
   );
-  if (!yearRes.rows.length) return;
+  if (!yearRes.rows.length || yearRes.rows[0].estado === 'CERRADO') return;
   const yearRow = yearRes.rows[0];
   const calendarType = yearRow.tipo_calendario || 'A';
 
@@ -1083,12 +1083,43 @@ export const createAcademicPeriod = async (req: Request, res: Response): Promise
     await ensureAcademicPeriodPendingStatus();
     const finalYearId = targetYearId || await ensureAcademicYearForSchool(schoolId);
 
-    // Get school year info for calendar type
+    // Get school year info for calendar type and date boundaries
     const yearRes = await client.query(
-      `SELECT tipo_calendario FROM anio_lectivo WHERE id_anio = $1 AND id_colegio = $2`,
+      `SELECT id_anio, calendario, tipo_calendario, fecha_inicio, fecha_fin FROM anio_lectivo WHERE id_anio = $1 AND id_colegio = $2`,
       [finalYearId, schoolId]
     );
-    const calendarType = yearRes.rows[0]?.tipo_calendario || 'A';
+    const yearRow = yearRes.rows[0];
+    const calendarType = yearRow?.tipo_calendario || 'A';
+
+    if (yearRow && yearRow.fecha_inicio && yearRow.fecha_fin) {
+      const yearStart = new Date(yearRow.fecha_inicio);
+      const yearEnd = new Date(yearRow.fecha_fin);
+      
+      const startYearNum = yearStart.getUTCFullYear();
+      const endYearNum = yearEnd.getUTCFullYear();
+
+      let pStartYear = startYearNum;
+      if (calendarType === 'B' && mesInicio < (yearStart.getUTCMonth() + 1)) {
+        pStartYear = endYearNum;
+      }
+      const pStartDate = new Date(Date.UTC(pStartYear, mesInicio - 1, diaInicio));
+
+      let pEndYear = startYearNum;
+      if (calendarType === 'B' && mesFin < (yearStart.getUTCMonth() + 1)) {
+        pEndYear = endYearNum;
+      }
+      const pEndDate = new Date(Date.UTC(pEndYear, mesFin - 1, diaFin));
+
+      if (pStartDate < yearStart || pEndDate > yearEnd) {
+        await client.query("ROLLBACK");
+        const formatYStart = yearStart.toISOString().split('T')[0];
+        const formatYEnd = yearEnd.toISOString().split('T')[0];
+        res.status(400).json({
+          error: `Las fechas del periodo no pueden estar fuera del rango de fechas del año lectivo (${formatYStart} al ${formatYEnd}).`
+        });
+        return;
+      }
+    }
 
     // Validate ranges don't overlap with other periods
     const otherPeriodsRes = await client.query(
@@ -1244,16 +1275,51 @@ export const createAcademicPeriod = async (req: Request, res: Response): Promise
 
 export const createAcademicYear = async (req: Request, res: Response): Promise<void> => {
   const schoolId = parseSchoolId(req.body.schoolId);
-  const yearId = Number(req.body.id_anio);
-  const calendario = String(req.body.calendario || "A").trim().toUpperCase();
+  const calendarioInput = String(req.body.calendario || "").trim();
+  const tipo_calendario = String(req.body.tipo_calendario || "A").trim().toUpperCase();
+  const fecha_inicio = req.body.fecha_inicio ? String(req.body.fecha_inicio).trim() : null;
+  const fecha_fin = req.body.fecha_fin ? String(req.body.fecha_fin).trim() : null;
 
-  if (!schoolId || Number.isNaN(yearId) || yearId < 2000 || yearId > 2100) {
-    res.status(400).json({ error: "El año lectivo es inválido" });
+  if (!schoolId) {
+    res.status(400).json({ error: "Identificador de colegio inválido" });
     return;
   }
 
-  if (calendario !== "A" && calendario !== "B") {
-    res.status(400).json({ error: "El tipo de calendario debe ser A o B" });
+  if (!calendarioInput || !/^[0-9]{4}(-[0-9]{4})?$/.test(calendarioInput)) {
+    res.status(400).json({ error: "El nombre del año lectivo debe ser un año (ej. 2026) o un rango de dos años (ej. 2026-2027)." });
+    return;
+  }
+
+  if (tipo_calendario !== "A" && tipo_calendario !== "B") {
+    res.status(400).json({ error: "El tipo de calendario debe ser A o B." });
+    return;
+  }
+
+  const yearMatch = calendarioInput.match(/\d{4}/g);
+  const endYearNum = yearMatch ? parseInt(yearMatch[yearMatch.length - 1]) : 2026;
+  const startYearNum = yearMatch && yearMatch.length > 1 ? parseInt(yearMatch[0]) : (tipo_calendario === 'B' ? endYearNum - 1 : endYearNum);
+
+  let effectiveFechaInicio = fecha_inicio;
+  let effectiveFechaFin = fecha_fin;
+
+  if (!effectiveFechaInicio) {
+    effectiveFechaInicio = tipo_calendario === 'B' ? `${startYearNum}-09-01` : `${startYearNum}-01-15`;
+  }
+  if (!effectiveFechaFin) {
+    effectiveFechaFin = tipo_calendario === 'B' ? `${endYearNum}-06-30` : `${endYearNum}-11-30`;
+  }
+
+  const startDate = new Date(effectiveFechaInicio);
+  const endDate = new Date(effectiveFechaFin);
+
+  if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+    res.status(400).json({ error: "Las fechas de inicio y fin deben tener un formato válido (AAAA-MM-DD)." });
+    return;
+  }
+
+  // Validacion 2: La fecha de fin debe ser mayor que la de inicio
+  if (endDate <= startDate) {
+    res.status(400).json({ error: "La fecha de fin debe ser mayor que la fecha de inicio del año lectivo." });
     return;
   }
 
@@ -1261,56 +1327,77 @@ export const createAcademicYear = async (req: Request, res: Response): Promise<v
   try {
     await client.query("BEGIN");
 
-    const yearLabel = getAcademicYearLabel(yearId, calendario as "A" | "B");
-
+    // Validacion 3: No deben existir dos años lectivos con el mismo nombre
     const duplicateRes = await client.query(
-      `SELECT id_anio
-       FROM anio_lectivo
-       WHERE calendario = $1
-         AND id_colegio = $2`,
-      [yearLabel, schoolId]
+      `SELECT id_anio FROM anio_lectivo WHERE calendario = $1 AND id_colegio = $2`,
+      [calendarioInput, schoolId]
     );
 
     if (duplicateRes.rows.length > 0) {
       await client.query("ROLLBACK");
-      res.status(409).json({ error: "Ese año lectivo ya está configurado para el colegio" });
+      res.status(409).json({ error: `Ya existe un año lectivo configurado con el nombre '${calendarioInput}' para este colegio.` });
       return;
     }
 
+    // Validacion 4: Evitar que dos años lectivos se solapen en fechas
+    const overlapRes = await client.query(
+      `SELECT id_anio, calendario, fecha_inicio, fecha_fin 
+       FROM anio_lectivo 
+       WHERE id_colegio = $1 
+         AND fecha_inicio IS NOT NULL 
+         AND fecha_fin IS NOT NULL
+         AND (fecha_inicio <= $2 AND fecha_fin >= $3)`,
+      [schoolId, effectiveFechaFin, effectiveFechaInicio]
+    );
+
+    if (overlapRes.rows.length > 0) {
+      const overYear = overlapRes.rows[0];
+      const formatStart = overYear.fecha_inicio instanceof Date ? overYear.fecha_inicio.toISOString().split('T')[0] : overYear.fecha_inicio;
+      const formatEnd = overYear.fecha_fin instanceof Date ? overYear.fecha_fin.toISOString().split('T')[0] : overYear.fecha_fin;
+      await client.query("ROLLBACK");
+      res.status(400).json({
+        error: `El rango de fechas (${effectiveFechaInicio} a ${effectiveFechaFin}) se solapa con el año lectivo '${overYear.calendario}' (${formatStart} a ${formatEnd}).`
+      });
+      return;
+    }
+
+    // Validacion 1: No puede haber dos años lectivos activos.
+    await client.query(
+      `UPDATE anio_lectivo SET estado = 'CERRADO' WHERE id_colegio = $1 AND estado = 'ABIERTO'`,
+      [schoolId]
+    );
+
     const createdYear = await client.query(
-      `INSERT INTO anio_lectivo (calendario, id_colegio, tipo_calendario)
-       VALUES ($1, $2, $3)
-       RETURNING id_anio, calendario, tipo_calendario`,
-      [yearLabel, schoolId, calendario]
+      `INSERT INTO anio_lectivo (calendario, id_colegio, tipo_calendario, estado, fecha_inicio, fecha_fin)
+       VALUES ($1, $2, $3, 'ABIERTO', $4, $5)
+       RETURNING id_anio, calendario, tipo_calendario, estado, fecha_inicio, fecha_fin`,
+      [calendarioInput, schoolId, tipo_calendario, effectiveFechaInicio, effectiveFechaFin]
     );
 
     const newYearId = Number(createdYear.rows[0].id_anio);
 
-    // Auto-generate standard periods based on chosen calendar type
-    const periodsTemplate = calendario === "A" ? [
-      { nombre: "Primer Periodo", porcentaje: 25, trimestre: 1, mes_inicio: 2, dia_inicio: 1, mes_fin: 3, dia_fin: 28 },
-      { nombre: "Segundo Periodo", porcentaje: 25, trimestre: 2, mes_inicio: 4, dia_inicio: 1, mes_fin: 6, dia_fin: 28 },
-      { nombre: "Tercer Periodo", porcentaje: 25, trimestre: 3, mes_inicio: 7, dia_inicio: 1, mes_fin: 9, dia_fin: 28 },
-      { nombre: "Cuarto Periodo", porcentaje: 25, trimestre: 4, mes_inicio: 10, dia_inicio: 1, mes_fin: 12, dia_fin: 28 }
-    ] : [
-      { nombre: "Primer Periodo", porcentaje: 25, trimestre: 1, mes_inicio: 8, dia_inicio: 1, mes_fin: 10, dia_fin: 15 },
-      { nombre: "Segundo Periodo", porcentaje: 25, trimestre: 2, mes_inicio: 10, dia_inicio: 16, mes_fin: 12, dia_fin: 15 },
-      { nombre: "Tercer Periodo", porcentaje: 25, trimestre: 3, mes_inicio: 1, dia_inicio: 15, mes_fin: 3, dia_fin: 31 },
-      { nombre: "Cuarto Periodo", porcentaje: 25, trimestre: 4, mes_inicio: 4, dia_inicio: 1, mes_fin: 6, dia_fin: 15 }
-    ];
+    // Auto-distribuir los 4 periodos acomodados exactamente al rango fecha_inicio a fecha_fin
+    const quarterMs = (endDate.getTime() - startDate.getTime()) / 4;
+    const periodNames = ["Primer Periodo", "Segundo Periodo", "Tercer Periodo", "Cuarto Periodo"];
 
-    const generatedPeriods = [];
-    for (const p of periodsTemplate) {
-      const pRes = await client.query(
+    for (let i = 0; i < 4; i++) {
+      const qStart = new Date(startDate.getTime() + Math.round(i * quarterMs));
+      const qEnd = i === 3 
+        ? new Date(endDate.getTime()) 
+        : new Date(startDate.getTime() + Math.round((i + 1) * quarterMs) - (24 * 60 * 60 * 1000));
+
+      const mes_inicio = qStart.getUTCMonth() + 1;
+      const dia_inicio = qStart.getUTCDate();
+      const mes_fin = qEnd.getUTCMonth() + 1;
+      const dia_fin = qEnd.getUTCDate();
+      const estadoP = i === 0 ? 'ABIERTO' : 'PENDIENTE';
+
+      await client.query(
         `INSERT INTO periodo_academico (nombre, estado, porcentaje, mes_inicio, dia_inicio, mes_fin, dia_fin, id_anio, id_colegio, trimestre)
-         VALUES ($1, 'CERRADO', $2, $3, $4, $5, $6, $7, $8, $9)
-         RETURNING id_periodo, nombre, estado, porcentaje, mes_inicio, dia_inicio, mes_fin, dia_fin, trimestre`,
-        [p.nombre, p.porcentaje, p.mes_inicio, p.dia_inicio, p.mes_fin, p.dia_fin, newYearId, schoolId, p.trimestre]
+         VALUES ($1, $2, 25.00, $3, $4, $5, $6, $7, $8, $9)`,
+        [periodNames[i], estadoP, mes_inicio, dia_inicio, mes_fin, dia_fin, newYearId, schoolId, i + 1]
       );
-      generatedPeriods.push(pRes.rows[0]);
     }
-
-    await autoSwitchPeriodsForYear(client, schoolId, newYearId);
 
     const updatedPeriodsRes = await client.query(
       `SELECT id_periodo, nombre, estado, porcentaje, mes_inicio, dia_inicio, mes_fin, dia_fin, trimestre
@@ -1325,12 +1412,12 @@ export const createAcademicYear = async (req: Request, res: Response): Promise<v
     res.status(201).json({
       ...createdYear.rows[0],
       periods: updatedPeriodsRes.rows,
-      message: `Año lectivo ${yearLabel} creado con Calendario ${calendario}. Se han generado automáticamente sus 4 periodos estándar.`
+      message: `Año lectivo ${calendarioInput} creado correctamente. Sus 4 periodos se han acomodado automáticamente a las fechas (${effectiveFechaInicio} al ${effectiveFechaFin}).`
     });
   } catch (error: any) {
     await client.query("ROLLBACK");
-    console.error("Error creating academic year:", error);
-    res.status(500).json({ error: "Error en el servidor" });
+    console.error("Error al crear año lectivo:", error);
+    res.status(500).json({ error: error.message || "Error al crear el año lectivo." });
   } finally {
     client.release();
   }
@@ -1402,11 +1489,18 @@ export const updateAcademicYearStatus = async (req: Request, res: Response): Pro
   }
 
   try {
+    if (nuevoEstado === "ABIERTO") {
+      await pool.query(
+        `UPDATE anio_lectivo SET estado = 'CERRADO' WHERE id_colegio = $1 AND id_anio != $2 AND estado = 'ABIERTO'`,
+        [schoolId, yearId]
+      );
+    }
+
     const resUpdate = await pool.query(
       `UPDATE anio_lectivo
        SET estado = $1
        WHERE id_anio = $2 AND id_colegio = $3
-       RETURNING id_anio, calendario, tipo_calendario, estado`,
+       RETURNING id_anio, calendario, tipo_calendario, estado, fecha_inicio, fecha_fin`,
       [nuevoEstado, yearId, schoolId]
     );
 
@@ -3590,8 +3684,17 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
       targetYearId = await ensureAcademicYearForSchool(schoolId);
     }
 
-    // 1. Get active period within the target year if not provided
+    // 1. Get active period within the target year if not provided or if invalid for targetYearId
     let targetPeriodId = periodId ? Number(periodId) : null;
+    if (targetPeriodId) {
+      const validCheck = await pool.query(
+        `SELECT id_periodo FROM periodo_academico WHERE id_periodo = $1 AND id_anio = $2 AND id_colegio = $3`,
+        [targetPeriodId, targetYearId, schoolId]
+      );
+      if (validCheck.rows.length === 0) {
+        targetPeriodId = null;
+      }
+    }
     if (!targetPeriodId) {
       const activePeriodRes = await pool.query(
         `SELECT id_periodo FROM periodo_academico WHERE id_colegio = $1 AND id_anio = $2 AND estado = 'ABIERTO' ORDER BY id_periodo DESC LIMIT 1`,
@@ -3729,15 +3832,12 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
     // 4. Academic Performance & Risk (Live calculation fallback)
     let performanceMetrics: { average: number; atRisk: number } = { average: 0, atRisk: 0 };
     
-    // Shared CTE template that calculates live projected grades when official results are not yet available
-    // NOTE: This produces a query prefix of the form:
-    //   WITH current_results AS ( ... )
-    // It is designed to be prefixed before a SELECT statement.
     const buildLiveCTE = (extraCTEs = '') => `
       WITH current_results AS (
         SELECT ra.id_estudiante, ra.id_detallegrado, ra.id_periodo, ra.promedio
         FROM resultado_academico ra
         JOIN detalle_grados dg_ra ON ra.id_detallegrado = dg_ra.id_detallegrado
+        JOIN matricula m ON ra.id_estudiante = m.id_estudiante AND m.id_anio = ${targetYearId} AND m.estado = 'ACTIVA'
         WHERE dg_ra.id_colegio = $1 AND ra.id_periodo = $2
 
         UNION ALL
@@ -3746,6 +3846,7 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
                ROUND(SUM(na.nota * am.porcentaje / 100.0)::numeric, 2) as promedio
         FROM notas_actividad na
         JOIN actividad_materia am ON na.id_actividadmateria = am.id_actividadmateria
+        JOIN matricula m ON na.id_estudiante = m.id_estudiante AND m.id_anio = ${targetYearId} AND m.estado = 'ACTIVA'
         WHERE am.id_periodo = $2 AND am.id_colegio = $1
         AND NOT EXISTS (
           SELECT 1 FROM resultado_academico ra3
@@ -4389,6 +4490,31 @@ export const saveEnrollmentConfig = async (req: Request, res: Response): Promise
   if (end <= start) {
     res.status(400).json({ error: "La fecha de cierre debe ser posterior a la fecha de inicio." });
     return;
+  }
+
+  // Validate that enrollment dates match the year of the target academic year
+  try {
+    const yearInfoRes = await pool.query(
+      `SELECT calendario FROM anio_lectivo WHERE id_anio = $1 AND id_colegio = $2`,
+      [id_anio, id_colegio]
+    );
+    if (yearInfoRes.rows.length > 0) {
+      const calStr = yearInfoRes.rows[0].calendario || '';
+      const yearMatch = calStr.match(/\d{4}/g);
+      if (yearMatch && yearMatch.length > 0) {
+        const allowedYears = yearMatch.map((y: string) => parseInt(y));
+        const startYear = start.getFullYear();
+        const endYear = end.getFullYear();
+        if (!allowedYears.includes(startYear) || !allowedYears.includes(endYear)) {
+          res.status(400).json({ 
+            error: `Las fechas de inscripción deben corresponder al año lectivo ${calStr} (año en fecha de inicio: ${startYear}, en cierre: ${endYear}).` 
+          });
+          return;
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Error validating academic year dates:", err);
   }
 
   try {
@@ -5632,6 +5758,153 @@ export const vincularEvidenciasDbaACompetencia = async (req: Request, res: Respo
     await client.query("ROLLBACK");
     console.error("Error al vincular evidencias de DBA a competencia:", error);
     res.status(500).json({ error: "Error interno en el servidor" });
+  } finally {
+    client.release();
+  }
+};
+
+export const deleteAcademicPeriod = async (req: Request, res: Response): Promise<void> => {
+  const periodId = Number(req.params.id);
+  const schoolId = parseSchoolId(req.body?.schoolId || req.query?.schoolId);
+
+  if (!periodId || !schoolId) {
+    res.status(400).json({ error: "Identificador de periodo o colegio inválido." });
+    return;
+  }
+
+  try {
+    const periodRes = await pool.query(
+      `SELECT id_periodo, nombre, id_anio FROM periodo_academico WHERE id_periodo = $1 AND id_colegio = $2`,
+      [periodId, schoolId]
+    );
+
+    if (periodRes.rows.length === 0) {
+      res.status(404).json({ error: "Periodo académico no encontrado." });
+      return;
+    }
+
+    const [raRes, naRes, obsRes, attRes] = await Promise.all([
+      pool.query(`SELECT COUNT(*)::int as count FROM resultado_academico WHERE id_periodo = $1`, [periodId]),
+      pool.query(`SELECT COUNT(*)::int as count FROM actividad_materia WHERE id_periodo = $1`, [periodId]),
+      pool.query(`SELECT COUNT(*)::int as count FROM observacion_estudiante WHERE id_periodo = $1 AND id_colegio = $2`, [periodId, schoolId]),
+      pool.query(`SELECT COUNT(*)::int as count FROM registro_asistencia WHERE id_periodo = $1 AND id_colegio = $2`, [periodId, schoolId])
+    ]);
+
+    const totalRecords = raRes.rows[0].count + naRes.rows[0].count + obsRes.rows[0].count + attRes.rows[0].count;
+
+    if (totalRecords > 0) {
+      res.status(400).json({ 
+        error: "No es posible eliminar este periodo académico porque ya contiene calificaciones, actividades, asistencias u observaciones registradas." 
+      });
+      return;
+    }
+
+    await pool.query(`DELETE FROM periodo_academico WHERE id_periodo = $1 AND id_colegio = $2`, [periodId, schoolId]);
+
+    res.json({ message: "Periodo académico eliminado correctamente." });
+  } catch (error: any) {
+    console.error("Error al eliminar periodo académico:", error);
+    res.status(500).json({ error: "Error interno al eliminar el periodo académico." });
+  }
+};
+
+export const updateAcademicYearCalendarType = async (req: Request, res: Response): Promise<void> => {
+  const yearId = Number(req.params.id);
+  const { tipo_calendario, schoolId: bodySchoolId, fecha_inicio, fecha_fin } = req.body;
+  const schoolId = parseSchoolId(bodySchoolId);
+
+  if (!yearId || !schoolId || !['A', 'B'].includes(tipo_calendario)) {
+    res.status(400).json({ error: "Parámetros inválidos (año, colegio o tipo de calendario)." });
+    return;
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const yearRes = await client.query(
+      `SELECT id_anio, calendario, tipo_calendario, fecha_inicio, fecha_fin FROM anio_lectivo WHERE id_anio = $1 AND id_colegio = $2`,
+      [yearId, schoolId]
+    );
+
+    if (yearRes.rows.length === 0) {
+      await client.query("ROLLBACK");
+      res.status(404).json({ error: "Año lectivo no encontrado." });
+      return;
+    }
+
+    const currentYearRow = yearRes.rows[0];
+
+    const matriculasRes = await client.query(
+      `SELECT COUNT(*)::int as count FROM matricula WHERE id_anio = $1 AND id_colegio = $2`,
+      [yearId, schoolId]
+    );
+
+    if (matriculasRes.rows[0].count > 0) {
+      await client.query("ROLLBACK");
+      res.status(400).json({ 
+        error: "No es posible cambiar el tipo de calendario de este año lectivo porque ya cuenta con estudiantes matriculados o datos académicos." 
+      });
+      return;
+    }
+
+    const fInicio = fecha_inicio || (currentYearRow.fecha_inicio ? (currentYearRow.fecha_inicio instanceof Date ? currentYearRow.fecha_inicio.toISOString().split('T')[0] : currentYearRow.fecha_inicio) : null);
+    const fFin = fecha_fin || (currentYearRow.fecha_fin ? (currentYearRow.fecha_fin instanceof Date ? currentYearRow.fecha_fin.toISOString().split('T')[0] : currentYearRow.fecha_fin) : null);
+
+    await client.query(
+      `UPDATE anio_lectivo SET tipo_calendario = $1, fecha_inicio = COALESCE($2, fecha_inicio), fecha_fin = COALESCE($3, fecha_fin) WHERE id_anio = $4 AND id_colegio = $5`,
+      [tipo_calendario, fInicio, fFin, yearId, schoolId]
+    );
+
+    if (fInicio && fFin) {
+      const startDate = new Date(fInicio);
+      const endDate = new Date(fFin);
+      const quarterMs = (endDate.getTime() - startDate.getTime()) / 4;
+      const periodNames = ["Primer Periodo", "Segundo Periodo", "Tercer Periodo", "Cuarto Periodo"];
+
+      for (let i = 0; i < 4; i++) {
+        const qStart = new Date(startDate.getTime() + Math.round(i * quarterMs));
+        const qEnd = i === 3 
+          ? new Date(endDate.getTime()) 
+          : new Date(startDate.getTime() + Math.round((i + 1) * quarterMs) - (24 * 60 * 60 * 1000));
+
+        const mes_inicio = qStart.getUTCMonth() + 1;
+        const dia_inicio = qStart.getUTCDate();
+        const mes_fin = qEnd.getUTCMonth() + 1;
+        const dia_fin = qEnd.getUTCDate();
+
+        const existingP = await client.query(
+          `SELECT id_periodo FROM periodo_academico WHERE id_anio = $1 AND id_colegio = $2 AND trimestre = $3`,
+          [yearId, schoolId, i + 1]
+        );
+
+        if (existingP.rows.length > 0) {
+          await client.query(
+            `UPDATE periodo_academico 
+             SET nombre = $1, mes_inicio = $2, dia_inicio = $3, mes_fin = $4, dia_fin = $5
+             WHERE id_periodo = $6`,
+            [periodNames[i], mes_inicio, dia_inicio, mes_fin, dia_fin, existingP.rows[0].id_periodo]
+          );
+        } else {
+          await client.query(
+            `INSERT INTO periodo_academico (nombre, estado, porcentaje, trimestre, id_anio, id_colegio, mes_inicio, mes_fin, dia_inicio, dia_fin)
+             VALUES ($1, 'PENDIENTE', 25.00, $2, $3, $4, $5, $6, $7, $8)`,
+            [periodNames[i], i + 1, yearId, schoolId, mes_inicio, dia_inicio, mes_fin, dia_fin]
+          );
+        }
+      }
+    }
+
+    await client.query("COMMIT");
+    res.json({
+      message: `Tipo de calendario actualizado a Calendario ${tipo_calendario} y periodos reconfigurados.`,
+      id_anio: yearId,
+      tipo_calendario,
+    });
+  } catch (error: any) {
+    await client.query("ROLLBACK");
+    console.error("Error al cambiar tipo de calendario:", error);
+    res.status(500).json({ error: "Error al actualizar el tipo de calendario del año lectivo." });
   } finally {
     client.release();
   }

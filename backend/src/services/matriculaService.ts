@@ -38,7 +38,7 @@ export class MatriculaService {
 
       // Fetch active year for the school
       const yearRes = await client.query(
-        `SELECT id_anio FROM anio_lectivo WHERE id_colegio = $1 AND estado = 'ABIERTO' LIMIT 1`,
+        `SELECT id_anio FROM anio_lectivo WHERE id_colegio = $1 AND estado = 'ABIERTO' ORDER BY id_anio DESC LIMIT 1`,
         [id_colegio]
       );
       if (yearRes.rows.length === 0) {

@@ -9,7 +9,10 @@ import {
   CheckCircle2, 
   FileText,
   Camera,
-  AlertCircle
+  AlertCircle,
+  Calendar,
+  CalendarDays,
+  Clock
 } from 'lucide-vue-next'
 
 const step = ref(1)
@@ -89,6 +92,34 @@ const fetchEnrollmentConfig = async () => {
     loadingConfig.value = false
   }
 }
+
+const formattedFechaInicio = computed(() => {
+  if (!enrollmentConfig.value?.fecha_inicio) return 'No configurada'
+  const d = new Date(enrollmentConfig.value.fecha_inicio)
+  if (isNaN(d.getTime())) return 'No configurada'
+  return d.toLocaleString('es-CO', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true
+  })
+})
+
+const formattedFechaCierre = computed(() => {
+  if (!enrollmentConfig.value?.fecha_cierre) return 'No configurada'
+  const d = new Date(enrollmentConfig.value.fecha_cierre)
+  if (isNaN(d.getTime())) return 'No configurada'
+  return d.toLocaleString('es-CO', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true
+  })
+})
 
 const isEnrollmentOpen = computed(() => {
   if (!schoolId.value) return true
@@ -338,17 +369,58 @@ const submitEnrollment = async () => {
               <p class="text-gray-500 mt-2">Este formulario es para la carga inicial de documentos y reserva de cupo.</p>
             </div>
 
-            <!-- Banner de Estado de Inscripciones -->
-            <div v-if="schoolId && !loadingConfig" class="p-5 rounded-2xl border flex items-start gap-3 shadow-sm transition-all"
+            <!-- Banner y Tarjeta Informativa de Fechas de Inscripción -->
+            <div v-if="schoolId && !loadingConfig && enrollmentConfig" 
+              class="rounded-3xl border p-6 space-y-4 shadow-sm transition-all"
               :class="[
                 isEnrollmentOpen 
-                  ? 'bg-emerald-50 border-emerald-200 text-emerald-800' 
-                  : 'bg-rose-50 border-rose-200 text-rose-800'
+                  ? 'bg-gradient-to-br from-emerald-50/90 to-teal-50/60 border-emerald-200 text-emerald-950' 
+                  : 'bg-gradient-to-br from-rose-50/90 to-amber-50/60 border-rose-200 text-rose-950'
               ]"
             >
-              <component :is="isEnrollmentOpen ? CheckCircle2 : AlertCircle" class="h-5 w-5 shrink-0 mt-0.5" />
-              <div class="text-sm font-bold leading-normal">
-                {{ enrollmentStatusMessage }}
+              <div class="flex items-start gap-3">
+                <component :is="isEnrollmentOpen ? CheckCircle2 : AlertCircle" class="h-6 w-6 shrink-0 mt-0.5" :class="isEnrollmentOpen ? 'text-emerald-600' : 'text-rose-600'" />
+                <div class="space-y-1">
+                  <h4 class="text-base font-extrabold flex flex-wrap items-center gap-2">
+                    <span>Estado de Inscripciones — Año Lectivo {{ yearLabel || '' }}</span>
+                    <span :class="[
+                      isEnrollmentOpen ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800',
+                      'px-2.5 py-0.5 rounded-full text-xs font-black uppercase tracking-wider'
+                    ]">
+                      {{ isEnrollmentOpen ? 'Abiertas' : 'Cerradas / Inactivas' }}
+                    </span>
+                  </h4>
+                  <p class="text-sm font-medium opacity-90 leading-relaxed">
+                    {{ enrollmentStatusMessage }}
+                  </p>
+                </div>
+              </div>
+
+              <!-- Fechas de Inicio y Cierre -->
+              <div v-if="enrollmentConfig.fecha_inicio && enrollmentConfig.fecha_cierre" class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3 border-t border-black/5">
+                <div class="flex items-center gap-3 bg-white/80 backdrop-blur-sm p-3.5 rounded-2xl border border-black/5 shadow-xs">
+                  <div class="p-2.5 rounded-xl bg-indigo-50 text-indigo-600 shrink-0">
+                    <Calendar :size="18" />
+                  </div>
+                  <div>
+                    <span class="block text-[11px] font-black uppercase tracking-wider text-gray-400">Apertura de Inscripciones</span>
+                    <span class="text-sm font-bold text-gray-800">
+                      {{ formattedFechaInicio }}
+                    </span>
+                  </div>
+                </div>
+
+                <div class="flex items-center gap-3 bg-white/80 backdrop-blur-sm p-3.5 rounded-2xl border border-black/5 shadow-xs">
+                  <div class="p-2.5 rounded-xl bg-indigo-50 text-indigo-600 shrink-0">
+                    <CalendarDays :size="18" />
+                  </div>
+                  <div>
+                    <span class="block text-[11px] font-black uppercase tracking-wider text-gray-400">Cierre de Inscripciones</span>
+                    <span class="text-sm font-bold text-gray-800">
+                      {{ formattedFechaCierre }}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
 
