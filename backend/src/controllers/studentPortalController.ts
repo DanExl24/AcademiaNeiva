@@ -430,8 +430,10 @@ export const getParentDashboardData = async (req: Request, res: Response) => {
   }
 
   try {
-    // 1. Get children basic info and current enrollment
-    const childrenRes = await pool.query(`
+    const targetYearId = req.query.yearId ? Number(req.query.yearId) : null;
+
+    // 1. Get children basic info and enrollment for selected year
+    const childrenQuery = `
       SELECT 
         e.id_estudiante, 
         e.nombre, 
@@ -445,12 +447,14 @@ export const getParentDashboardData = async (req: Request, res: Response) => {
       FROM padre_familia pf
       JOIN detalle_padrefamilia dpf ON dpf.id_padrefamilia = pf.id_padrefamilia
       JOIN estudiante e ON e.id_estudiante = dpf.id_estudiante
-      LEFT JOIN matricula m ON m.id_estudiante = e.id_estudiante AND m.estado = 'ACTIVA'
+      LEFT JOIN matricula m ON m.id_estudiante = e.id_estudiante ${targetYearId ? 'AND m.id_anio = $2' : ''}
       LEFT JOIN grupos gr ON gr.id_grupo = m.id_grupo
       LEFT JOIN secciones s ON s.id_seccion = gr.id_seccion
       LEFT JOIN tipo_grado tg ON tg.id_tipo_grado = gr.id_tipo_grado
       WHERE pf.id_usuario = $1
-    `, [userId]);
+    `;
+    const childrenParams = targetYearId ? [userId, targetYearId] : [userId];
+    const childrenRes = await pool.query(childrenQuery, childrenParams);
 
     const children = childrenRes.rows;
     if (children.length === 0) {
@@ -476,8 +480,8 @@ export const getParentDashboardData = async (req: Request, res: Response) => {
       });
     }
 
-    // 2. Get all available periods for the picker for the selected school
-    const allPeriodsRes = await pool.query(`
+    // 2. Get available periods for the selected year and school
+    const periodsQuery = `
       SELECT 
         pa.id_periodo, pa.nombre, pa.trimestre, pa.estado,
         (al.calendario || '-' || lpad(pa.mes_inicio::text, 2, '0') || '-' || lpad(pa.dia_inicio::text, 2, '0'))::date as fecha_inicio,
@@ -485,8 +489,11 @@ export const getParentDashboardData = async (req: Request, res: Response) => {
       FROM periodo_academico pa
       JOIN anio_lectivo al ON al.id_anio = pa.id_anio
       WHERE pa.id_colegio = $1 AND pa.estado != 'PENDIENTE'
+      ${targetYearId ? 'AND pa.id_anio = $2' : ''}
       ORDER BY pa.trimestre ASC
-    `, [schoolId]);
+    `;
+    const periodsParams = targetYearId ? [schoolId, targetYearId] : [schoolId];
+    const allPeriodsRes = await pool.query(periodsQuery, periodsParams);
     const periods = allPeriodsRes.rows;
 
     // 3. Determine active period (either from query or auto-detected)

@@ -20,8 +20,9 @@ export const getTeacherCourses = async (req: Request, res: Response): Promise<vo
     const idDocente = docenteRes.rows[0].id_docente;
     console.log(`[DEV] getTeacherCourses - id_docente=${idDocente}`);
 
-    const result = await pool.query(
-      `SELECT 
+    const yearId = req.query.yearId ? Number(req.query.yearId) : null;
+    let query = `
+      SELECT 
         dg.id_detallegrado,
         g.id_grupo as id_grado, 
         tg.nombre as grado_nombre, 
@@ -37,9 +38,13 @@ export const getTeacherCourses = async (req: Request, res: Response): Promise<vo
        JOIN secciones s ON g.id_seccion = s.id_seccion
        JOIN jornada j ON g.id_jornada = j.id_jornada
        JOIN materias m ON dg.id_materia = m.id_materia
-       WHERE dg.id_docente = $1`,
-      [idDocente]
-    );
+       WHERE dg.id_docente = $1`;
+    const params = [idDocente];
+    if (yearId) {
+      query += ` AND dg.id_anio = $2`;
+      params.push(yearId);
+    }
+    const result = await pool.query(query, params);
 
     console.log(`[DEV] getTeacherCourses - returning ${result.rows.length} course(s) for id_docente=${idDocente}`);
     res.json(result.rows);

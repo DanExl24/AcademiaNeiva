@@ -43,7 +43,6 @@ const activeStudent = computed(() => {
 const needsCandidatePicker = computed(() => {
   const ren = matricula.value?.renovacion
   if (!ren?.is_renovacion) return false
-  const eligibles = (ren.candidates || []).filter((c: any) => c.eligible)
   // Show picker if there are multiple candidates OR multiple eligible ones
   return (ren.candidates || []).length > 1 && !candidatePicked.value && !ren.student
 })

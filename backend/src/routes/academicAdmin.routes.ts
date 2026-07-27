@@ -4,6 +4,8 @@ import {
   createGroup,
   createSubject,
   createTeacher,
+  updateTeacher,
+  deleteTeacher,
   createAcademicPeriod,
   approveAcademicPeriod,
   createAcademicYear,
@@ -105,6 +107,8 @@ router.post("/subjects", createSubject);
 router.delete("/subjects/:id", deleteSubject);
 router.get("/teachers/:schoolId", getTeacherManagementData);
 router.post("/teachers", createTeacher);
+router.put("/teachers/:id", updateTeacher);
+router.delete("/teachers/:id", deleteTeacher);
 router.patch("/teachers/:id/status", updateTeacherStatus);
 router.post("/teacher-assignments", assignTeacherCourseSubject);
 router.delete("/teacher-assignments/:id", deleteTeacherAssignment);

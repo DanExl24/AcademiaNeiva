@@ -108,18 +108,22 @@ export const ensureCurrentPeriodOrRespond = async (
   return true;
 };
 
-export const getAllPeriodsForSchool = async (schoolId: number) => {
-  const currentYearRes = await pool.query<{ id_anio: number }>(
-    `SELECT id_anio
-     FROM anio_lectivo
-     WHERE id_colegio = $1
-     ORDER BY id_anio DESC
-     LIMIT 1`,
-    [schoolId]
-  );
+export const getAllPeriodsForSchool = async (schoolId: number, targetYearId?: number) => {
+  let yearIdToUse = targetYearId;
+  if (!yearIdToUse) {
+    const currentYearRes = await pool.query<{ id_anio: number }>(
+      `SELECT id_anio
+       FROM anio_lectivo
+       WHERE id_colegio = $1
+       ORDER BY CASE WHEN estado = 'ABIERTO' THEN 0 ELSE 1 END, id_anio DESC
+       LIMIT 1`,
+      [schoolId]
+    );
 
-  if (currentYearRes.rows.length === 0) {
-    return [];
+    if (currentYearRes.rows.length === 0) {
+      return [];
+    }
+    yearIdToUse = currentYearRes.rows[0].id_anio;
   }
 
   const periodsRes = await pool.query<{
@@ -138,9 +142,8 @@ export const getAllPeriodsForSchool = async (schoolId: number) => {
      FROM periodo_academico
      WHERE id_colegio = $1
        AND id_anio = $2
-       AND estado IN ('ABIERTO', 'CERRADO')
      ORDER BY id_periodo`,
-    [schoolId, Number(currentYearRes.rows[0].id_anio)]
+    [schoolId, yearIdToUse]
   );
 
   return periodsRes.rows;

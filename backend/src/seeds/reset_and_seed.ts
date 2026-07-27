@@ -55,13 +55,11 @@ const schools: SchoolSeed[] = [
   { id: 1, nombre: "CEA School Empresarial de los Andes", tipo: "Privado", sede: "Sede Principal", contacto: 3183118044, correo: "rectoria@cea.edu.co", dane: "341001005652", domain: "ceaschool.edu.co", tipo_calendario: "A" },
   { id: 2, nombre: "Institución Educativa El Caguán", tipo: "Oficial", sede: "Sede Principal", contacto: 3180000000, correo: "iecaguan@alcaldianeiva.gov.co", dane: "441001002747", domain: "iecaguan.edu.co", tipo_calendario: "A" },
   { id: 3, nombre: "Colegio Heisenberg Neiva", tipo: "Privado", sede: "Sede Principal", contacto: 3169100003, correo: "colegioheisenberg@hotmail.com", dane: "DANE-H-001", domain: "heisenberg.edu.co", tipo_calendario: "A" },
-  { id: 4, nombre: "Colegio Claretiano de Neiva", tipo: "Privado", sede: "Sede Principal", contacto: 3161720175, correo: "admisiones@claretianoneiva.edu.co", dane: "DANE-C-002", domain: "claretianoneiva.edu.co", tipo_calendario: "A" },
-  { id: 5, nombre: "Colegio IDESA", tipo: "Privado", sede: "Sede Principal", contacto: 3153077861, correo: "info@colegioidesa.com.co", dane: "DANE-I-003", domain: "colegioidesa.edu.co", tipo_calendario: "A" },
 ];
 
 // ─── ACADEMIC CATALOGS ──────────────────────────────────────────────────────────
 
-const sectionNames = ["A", "B", "C"];
+const sectionNames = ["A", "B"];
 const jornadaNames = ["MAÑANA", "TARDE", "UNICA"];
 
 const periodSeeds = [
@@ -340,7 +338,7 @@ async function insertSchoolAcademicStructure(
   const fFin2025 = school.tipo_calendario === "B" ? "2025-06-30" : "2025-11-30";
 
   const academicYearResult = await client.query<{ id_anio: number }>(
-    `INSERT INTO anio_lectivo (calendario, id_colegio, tipo_calendario, fecha_inicio, fecha_fin) VALUES ($1, $2, $3, $4, $5) RETURNING id_anio`,
+    `INSERT INTO anio_lectivo (calendario, id_colegio, tipo_calendario, estado, fecha_inicio, fecha_fin) VALUES ($1, $2, $3, 'CERRADO', $4, $5) RETURNING id_anio`,
     [yearLabel, school.id, school.tipo_calendario, fInicio2025, fFin2025]
   );
   const academicYearId = academicYearResult.rows[0].id_anio;
@@ -510,14 +508,14 @@ async function insertSchoolAcademicStructure(
 
     if (isPreescolar) {
       await client.query(
-        `INSERT INTO detalle_grados (id_materia, id_docente, id_colegio, id_grupo) VALUES ($1, $2, $3, $4)`,
-        [subjectIdsByName["Desarrollo Integral"], teacherIdsBySubject["Desarrollo Integral"], school.id, groupId]
+        `INSERT INTO detalle_grados (id_materia, id_docente, id_colegio, id_grupo, id_anio) VALUES ($1, $2, $3, $4, $5)`,
+        [subjectIdsByName["Desarrollo Integral"], teacherIdsBySubject["Desarrollo Integral"], school.id, groupId, academicYearId]
       );
     } else {
       for (const teacher of teacherSeeds) {
         await client.query(
-          `INSERT INTO detalle_grados (id_materia, id_docente, id_colegio, id_grupo) VALUES ($1, $2, $3, $4)`,
-          [subjectIdsByName[teacher.subject], teacherIdsBySubject[teacher.subject], school.id, groupId]
+          `INSERT INTO detalle_grados (id_materia, id_docente, id_colegio, id_grupo, id_anio) VALUES ($1, $2, $3, $4, $5)`,
+          [subjectIdsByName[teacher.subject], teacherIdsBySubject[teacher.subject], school.id, groupId, academicYearId]
         );
       }
     }

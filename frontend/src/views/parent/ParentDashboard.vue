@@ -47,9 +47,11 @@ ChartJS.register(
 )
 
 import BoletinExportModule from '../../components/boletines/BoletinExportModule.vue'
+import { useAcademicYearStore } from '../../stores/academicYear'
 
 const router = useRouter()
 const auth = useAuthStore()
+const yearStore = useAcademicYearStore()
 const selectedChildId = ref<number | null>(null)
 const selectedPeriodId = ref<number | 'all' | null>(null)
 const loading = ref(true)
@@ -66,6 +68,7 @@ const fetchDashboardData = async () => {
     const id_usuario = auth.user?.id
     const params: any = {}
     if (selectedPeriodId.value) params.id_periodo = selectedPeriodId.value
+    if (yearStore.selectedYearId) params.yearId = yearStore.selectedYearId
 
     // Use full URL to avoid Vite SPA fallback issues
     const response = await axios.get(`http://localhost:3000/api/student/parent-dashboard/${id_usuario}`, { params })
@@ -77,11 +80,6 @@ const fetchDashboardData = async () => {
     }
 
     dashboardData.value = response.data
-    
-    // Only auto-select if selectedChildId has never been set (truly first load)
-    // We use a flag or check if it's exactly undefined/uninitialized
-    // But since we initialized it to null, we just leave it alone if it's null (Todos)
-    // Removed old auto-select logic that checked for !selectedChildId.value
     
     if (!selectedPeriodId.value && dashboardData.value?.activePeriod) {
       selectedPeriodId.value = dashboardData.value.activePeriod.id_periodo
@@ -95,6 +93,10 @@ const fetchDashboardData = async () => {
 
 // Watch for period changes
 watch(selectedPeriodId, () => {
+  fetchDashboardData()
+})
+
+watch(() => yearStore.selectedYearId, () => {
   fetchDashboardData()
 })
 

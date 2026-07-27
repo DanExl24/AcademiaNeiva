@@ -17,7 +17,10 @@ import {
   HelpCircle
 } from 'lucide-vue-next'
 
+import { useAcademicYearStore } from '../../stores/academicYear'
+
 const auth = useAuthStore()
+const yearStore = useAcademicYearStore()
 const loading = ref(true)
 const fetchingAttendance = ref(false)
 
@@ -33,6 +36,12 @@ const selectedPeriod = ref<number | null>(null)
 
 const subjects = ref<any[]>([])
 const selectedSubject = ref<number | string>('all')
+
+watch(() => yearStore.selectedYearId, (newYearId) => {
+  if (newYearId && newYearId !== selectedYear.value) {
+    selectedYear.value = newYearId
+  }
+}, { immediate: true })
 const selectedStatus = ref<string>('all')
 const selectedDate = ref<string>('')
 const attendanceData = ref<{ records: any[], stats: any } | null>(null)

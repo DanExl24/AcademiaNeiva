@@ -55,9 +55,10 @@ const resolveTeachingContext = async (
 // Obtener periodos del colegio
 export const getPeriods = async (req: Request, res: Response): Promise<void> => {
   const { schoolId } = req.params;
-  console.log(`[DEV] getPeriods called - schoolId=${schoolId}`);
+  const targetYearId = req.query.yearId ? Number(req.query.yearId) : undefined;
+  console.log(`[DEV] getPeriods called - schoolId=${schoolId}, yearId=${targetYearId}`);
   try {
-    const periods = await getAllPeriodsForSchool(Number(schoolId));
+    const periods = await getAllPeriodsForSchool(Number(schoolId), targetYearId);
     console.log(`[DEV] getPeriods - result count: ${periods.length}`);
     res.json(periods);
   } catch (error: any) {
@@ -118,7 +119,7 @@ export const getActivities = async (req: Request, res: Response): Promise<void> 
 
       // Unificar descripciones de las competencias
       let competencia = competenciaBase;
-      if (validComps.length > 1) {
+      if (competenciaBase && validComps.length > 1) {
         const descripcionUnificada = validComps
           .map((c, idx) => `${idx + 1}. ${c.descripcion.trim()}`)
           .join("\n\n");

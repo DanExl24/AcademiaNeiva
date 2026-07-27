@@ -125,7 +125,6 @@ const isEnrollmentOpen = computed(() => {
   if (!schoolId.value) return true
   if (!enrollmentConfig.value) return false
   if (!enrollmentConfig.value.habilitada) return false
-  if (enrollmentConfig.value.hasApproved) return false
   
   const now = new Date()
   const start = new Date(enrollmentConfig.value.fecha_inicio)
@@ -144,9 +143,6 @@ const enrollmentStatusMessage = computed(() => {
   if (!schoolId.value) return ''
   if (!enrollmentConfig.value) {
     return 'Las inscripciones para esta institución aún no han sido configuradas por las directivas.'
-  }
-  if (enrollmentConfig.value.hasApproved) {
-    return `Las inscripciones para el año lectivo ${yearLabel.value || ''} ya han finalizado.`
   }
   if (!enrollmentConfig.value.habilitada) {
     return 'Las inscripciones están deshabilitadas temporalmente por la institución.'
@@ -292,7 +288,11 @@ const nextStep = () => {
 }
 const prevStep = () => step.value--
 
+const submitting = ref(false)
+
 const submitEnrollment = async () => {
+  if (submitting.value) return   // guard against double-click
+  submitting.value = true
   try {
     const formDataPayload = new FormData()
     
@@ -324,6 +324,7 @@ const submitEnrollment = async () => {
   } catch (error) {
     console.error('Error al enviar:', error)
     notify.addNotification('Hubo un error al enviar el formulario. Por favor intenta de nuevo.', 'error')
+    submitting.value = false   // re-enable only on error so user can retry
   }
 }
 </script>
@@ -569,8 +570,13 @@ const submitEnrollment = async () => {
             
             <div class="mt-12 flex flex-col sm:flex-row items-center justify-center gap-4">
               <button @click="prevStep" class="w-full sm:w-auto text-gray-500 font-bold px-12 py-4">Revisar</button>
-              <button @click="submitEnrollment" class="w-full sm:w-auto bg-indigo-600 text-white px-16 py-5 rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-2xl active:scale-95 text-lg">
-                Enviar Solicitud
+              <button
+                @click="submitEnrollment"
+                :disabled="submitting"
+                class="w-full sm:w-auto bg-indigo-600 text-white px-16 py-5 rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-2xl active:scale-95 text-lg disabled:opacity-60 disabled:cursor-not-allowed disabled:pointer-events-none flex items-center justify-center gap-3"
+              >
+                <span v-if="submitting" class="inline-block w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                {{ submitting ? 'Enviando...' : 'Enviar Solicitud' }}
               </button>
             </div>
           </div>

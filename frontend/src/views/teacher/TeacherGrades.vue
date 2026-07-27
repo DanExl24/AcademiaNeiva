@@ -19,7 +19,10 @@ import {
   AlertTriangle
 } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
+import { useAcademicYearStore } from '../../stores/academicYear'
 import axios from 'axios'
+
+const yearStore = useAcademicYearStore()
 
 interface Course {
   id_grado: number
@@ -223,7 +226,8 @@ const fetchMyCourses = async () => {
   // In monitoring mode, load the observed teacher's courses
   const teacherId = auth.isMonitoring ? auth.monitoringUser?.id : auth.user?.id
   try {
-    const response = await axios.get(`http://localhost:3000/api/teacher/courses/${teacherId}`)
+    const params = yearStore.selectedYearId ? { yearId: yearStore.selectedYearId } : {}
+    const response = await axios.get(`http://localhost:3000/api/teacher/courses/${teacherId}`, { params })
     myCourses.value = response.data
     
     if (route.query.gradoId) {
@@ -246,7 +250,8 @@ const fetchMyCourses = async () => {
 const fetchPeriods = async () => {
   if (!schoolId.value) return
   try {
-    const response = await axios.get(`http://localhost:3000/api/teacher/periods/${schoolId.value}`)
+    const params = yearStore.selectedYearId ? { yearId: yearStore.selectedYearId } : {}
+    const response = await axios.get(`http://localhost:3000/api/teacher/periods/${schoolId.value}`, { params })
     periods.value = response.data
     const openPeriod = periods.value.find(p => p.estado === 'ABIERTO')
     if (openPeriod) {
@@ -255,6 +260,14 @@ const fetchPeriods = async () => {
   } catch (error) {
   }
 }
+
+watch(() => yearStore.selectedYearId, async () => {
+  await fetchMyCourses()
+  await fetchPeriods()
+  if (selectedGradeId.value && selectedSubjectId.value && selectedPeriodId.value) {
+    await fetchGrades()
+  }
+})
 
 const fetchGradeRange = async () => {
   if (!schoolId.value) return

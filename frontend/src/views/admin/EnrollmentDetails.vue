@@ -56,7 +56,7 @@ const renderAllPdfDocuments = async () => {
     if (doc.url && doc.url.toLowerCase().endsWith('.pdf')) {
       try {
         const fullUrl = formatUrl(doc.url)
-        const loadingTask = pdfjsLib.getDocument(fullUrl)
+        const loadingTask = pdfjsLib.getDocument({ url: fullUrl } as any)
         const pdf = await loadingTask.promise
         const pages: string[] = []
 
@@ -70,7 +70,7 @@ const renderAllPdfDocuments = async () => {
           canvas.height = viewport.height
           canvas.width = viewport.width
 
-          await page.render({ canvasContext: context, viewport }).promise
+          await (page.render({ canvasContext: context, viewport, canvas } as any)).promise
           pages.push(canvas.toDataURL('image/png'))
         }
 

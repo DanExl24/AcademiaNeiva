@@ -18,11 +18,20 @@ const children = ref<any[]>([])
 const selectedChildId = ref<number | null>(null)
 const selectedChildName = ref('')
 
+import { useAcademicYearStore } from '../../stores/academicYear'
+
+const yearStore = useAcademicYearStore()
 const years = ref<any[]>([])
 const selectedYear = ref<number | null>(null)
 
 const periods = ref<any[]>([])
 const selectedPeriodId = ref<number | null>(null)
+
+watch(() => yearStore.selectedYearId, (newYearId) => {
+  if (newYearId && newYearId !== selectedYear.value) {
+    selectedYear.value = newYearId
+  }
+}, { immediate: true })
 
 const fetchChildren = async () => {
   try {

@@ -13,11 +13,14 @@ import {
   FileText
 } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
+import { useAcademicYearStore } from '../../stores/academicYear'
+import { watch } from 'vue'
 import axios from 'axios'
 import { useRouter } from 'vue-router'
 import { getCourseDisplayName } from '../../utils/courseHelper'
 
 const auth = useAuthStore()
+const yearStore = useAcademicYearStore()
 const router = useRouter()
 const viewMode = ref('grades') // 'grades' o 'subjects'
 const loading = ref(true)
@@ -49,7 +52,8 @@ const fetchCourses = async () => {
       return
     }
     
-    const response = await axios.get(`http://localhost:3000/api/teacher/courses/${userId}`)
+    const params = yearStore.selectedYearId ? { yearId: yearStore.selectedYearId } : {}
+    const response = await axios.get(`http://localhost:3000/api/teacher/courses/${userId}`, { params })
     rawData.value = response.data
   } catch (error: any) {
   } finally {
@@ -60,6 +64,8 @@ const fetchCourses = async () => {
 onMounted(() => {
   fetchCourses()
 })
+
+watch(() => yearStore.selectedYearId, fetchCourses)
 
 // Extraer grados únicos para el filtro
 const uniqueGrades = computed(() => {

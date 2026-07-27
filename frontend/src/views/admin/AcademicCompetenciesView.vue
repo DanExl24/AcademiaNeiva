@@ -49,7 +49,10 @@ interface CompetencyItem {
   }[]
 }
 
+import { useAcademicYearStore } from '../../stores/academicYear'
+
 const auth = useAuthStore()
+const yearStore = useAcademicYearStore()
 const notify = useNotificationStore()
 const schoolId = computed(() => Number(auth.user?.schoolId || 0))
 
@@ -355,7 +358,11 @@ const loadData = async () => {
 
   try {
     loading.value = true
-    const response = await axios.get(`http://localhost:3000/api/academic-admin/settings/${schoolId.value}`)
+    const params: any = {}
+    if (yearStore.selectedYearId) {
+      params.yearId = yearStore.selectedYearId
+    }
+    const response = await axios.get(`http://localhost:3000/api/academic-admin/settings/${schoolId.value}`, { params })
     periods.value = response.data.periods
     assignments.value = response.data.assignments
     competencies.value = response.data.competencies
@@ -377,7 +384,8 @@ const resetForm = () => {
   }
 }
 
-const onFormContextChange = async (competencyId?: number) => {
+const onFormContextChange = async (arg?: number | Event) => {
+  const competencyId = typeof arg === 'number' ? arg : undefined
   const gradeKey = competencyForm.value.gradeKey
   const subjectKey = competencyForm.value.subjectKey
 
@@ -742,7 +750,12 @@ const applyDbaEnunciado = (enunciado: string) => {
   notify.addNotification('Enunciado del DBA asignado a la descripción', 'info')
 }
 
-onMounted(loadData)
+onMounted(() => {
+  yearStore.loadYearsForSchool(schoolId.value, auth.token || undefined)
+  loadData()
+})
+
+watch(() => yearStore.selectedYearId, loadData)
 </script>
 
 <template>

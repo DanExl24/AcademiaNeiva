@@ -41,13 +41,22 @@ ChartJS.register(
   ArcElement
 )
 
+import { useAcademicYearStore } from '../../stores/academicYear'
+
 const auth = useAuthStore()
+const yearStore = useAcademicYearStore()
 const studentId = ref<number | null>(null)
 const selectedPeriodId = ref<number | null>(null)
 const selectedYearId = ref<number | null>(null)
 const academicYears = ref<any[]>([])
 const periods = ref<any[]>([])
 const loading = ref(true)
+
+watch(() => yearStore.selectedYearId, (newYearId) => {
+  if (newYearId && newYearId !== selectedYearId.value) {
+    selectedYearId.value = newYearId
+  }
+}, { immediate: true })
 
 // Stats state
 const dashboardStats = ref<any>(null)

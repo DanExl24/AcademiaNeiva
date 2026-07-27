@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import axios from 'axios'
 import {
   Briefcase,
@@ -15,11 +15,13 @@ import {
   BookOpen,
   ChevronRight,
   Eye,
-  Download
+  Download,
+  Edit2
 } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 import { useRouter } from 'vue-router'
 import { getCourseDisplayName } from '../../utils/courseHelper'
+import { useAcademicYearStore } from '../../stores/academicYear'
 
 interface DocumentType {
   id_tipodocumento: number
@@ -75,6 +77,7 @@ interface ConflictTeacher {
 
 const auth = useAuthStore()
 const router = useRouter()
+const yearStore = useAcademicYearStore()
 const schoolId = computed(() => Number(auth.user?.schoolId || 0))
 
 const loading = ref(true)
@@ -196,7 +199,9 @@ const handleKeydown = (e: KeyboardEvent) => {
 }
 
 const fetchData = async () => {
-  const response = await axios.get(`http://localhost:3000/api/academic-admin/teachers/${schoolId.value}`)
+  const params: Record<string, any> = {}
+  if (yearStore.selectedYearId) params.yearId = yearStore.selectedYearId
+  const response = await axios.get(`http://localhost:3000/api/academic-admin/teachers/${schoolId.value}`, { params })
   documentTypes.value = response.data.documentTypes
   teachers.value = response.data.teachers
   subjects.value = response.data.subjects
@@ -216,8 +221,13 @@ const loadData = async () => {
   }
 }
 
-const createTeacher = async () => {
-  if (savingTeacher.value) return
+const createTeacher = async (addRoleIfParent: boolean | any = false) => {
+  if (yearStore.isReadonlyYear) {
+    alert('Acción no permitida: El año académico seleccionado se encuentra CERRADO.')
+    return
+  }
+  const isParentFlag = addRoleIfParent === true;
+  if (savingTeacher.value && !isParentFlag) return
   const p = newTeacher.value
   if (!p.nombre.trim() || !p.apellido.trim() || !p.documento.trim() || !p.id_tipodocumento || !p.email.trim() || !p.password.trim()) {
     alert('Completa todos los campos antes de crear el docente.')
@@ -229,18 +239,110 @@ const createTeacher = async () => {
       schoolId: schoolId.value, nombre: p.nombre, apellido: p.apellido,
       documento: p.documento, id_tipodocumento: Number(p.id_tipodocumento),
       email: p.email, password: p.password,
+      addRoleIfParent: isParentFlag
     })
     newTeacher.value = { nombre: '', apellido: '', documento: '', id_tipodocumento: '', email: '', password: '' }
     createTeacherModal.value = false
     await loadData()
   } catch (error: any) {
-    alert(error.response?.data?.error || 'No fue posible crear el docente')
+    if (error.response?.status === 409 && error.response?.data?.isParent) {
+      const confirmAdd = confirm(`${error.response.data.message}`)
+      if (confirmAdd) {
+        await createTeacher(true)
+        return
+      }
+    } else {
+      alert(error.response?.data?.error || 'No fue posible crear el docente')
+    }
   } finally {
     savingTeacher.value = false
   }
 }
 
+const editTeacherModal = ref(false)
+const editTeacherForm = ref({
+  id_docente: 0,
+  nombre: '',
+  apellido: '',
+  documento: '',
+  id_tipodocumento: '',
+  email: ''
+})
+
+const openEditTeacherModal = () => {
+  if (!selectedTeacher.value) return
+  const t = selectedTeacher.value
+  editTeacherForm.value = {
+    id_docente: t.id_docente,
+    nombre: t.nombre,
+    apellido: t.apellido,
+    documento: t.documento,
+    id_tipodocumento: String(t.id_tipodocumento),
+    email: t.email
+  }
+  editTeacherModal.value = true
+}
+
+const updateTeacher = async () => {
+  if (yearStore.isReadonlyYear) {
+    alert('Acción no permitida: El año académico seleccionado se encuentra CERRADO.')
+    return
+  }
+  const f = editTeacherForm.value
+  if (!f.nombre.trim() || !f.apellido.trim() || !f.documento.trim() || !f.id_tipodocumento || !f.email.trim()) {
+    alert('Completa todos los campos.')
+    return
+  }
+
+  try {
+    loading.value = true
+    await axios.put(`http://localhost:3000/api/academic-admin/teachers/${f.id_docente}`, {
+      schoolId: schoolId.value,
+      nombre: f.nombre.trim(),
+      apellido: f.apellido.trim(),
+      documento: f.documento.trim(),
+      id_tipodocumento: Number(f.id_tipodocumento),
+      email: f.email.trim()
+    })
+    alert('Docente actualizado con éxito.')
+    editTeacherModal.value = false
+    drawerOpen.value = false
+    await loadData()
+  } catch (error: any) {
+    alert(error.response?.data?.error || 'No fue posible actualizar el docente')
+  } finally {
+    loading.value = false
+  }
+}
+
+const deleteTeacher = async (teacher: TeacherItem) => {
+  if (yearStore.isReadonlyYear) {
+    alert('Acción no permitida: El año académico seleccionado se encuentra CERRADO.')
+    return
+  }
+  const confirmDelete = confirm(`¿Estás seguro de que deseas ELIMINAR permanentemente al docente "${teacher.nombre} ${teacher.apellido}"? Esta acción borrará todas sus asignaciones académicas y su usuario asociado de forma irreversible.`)
+  if (!confirmDelete) return
+
+  try {
+    loading.value = true
+    await axios.delete(`http://localhost:3000/api/academic-admin/teachers/${teacher.id_docente}`, {
+      params: { schoolId: schoolId.value }
+    })
+    alert('Docente eliminado con éxito.')
+    drawerOpen.value = false
+    await loadData()
+  } catch (error: any) {
+    alert(error.response?.data?.error || 'No fue posible eliminar el docente')
+  } finally {
+    loading.value = false
+  }
+}
+
 const assignCourseSubject = async (replaceExisting = false) => {
+  if (yearStore.isReadonlyYear) {
+    alert('Acción no permitida: El año académico seleccionado se encuentra CERRADO.')
+    return
+  }
   if (!selectedTeacher.value || savingAssignment.value) return
   if (!assignmentForm.value.id_grupo || !assignmentForm.value.id_materia) {
     alert('Selecciona curso y materia.'); return
@@ -284,6 +386,10 @@ const confirmReplaceAssignment = async () => {
 }
 
 const removeAssignment = async () => {
+  if (yearStore.isReadonlyYear) {
+    alert('Acción no permitida: El año académico seleccionado se encuentra CERRADO.')
+    return
+  }
   if (!deleteAssignmentModal.value || deletingAssignment.value) return
   try {
     deletingAssignment.value = true
@@ -300,6 +406,10 @@ const removeAssignment = async () => {
 }
 
 const submitTeacherStatus = async () => {
+  if (yearStore.isReadonlyYear) {
+    alert('Acción no permitida: El año académico seleccionado se encuentra CERRADO.')
+    return
+  }
   if (!selectedTeacher.value || !statusModal.value || updatingStatus.value) return
   try {
     updatingStatus.value = true
@@ -369,6 +479,11 @@ onMounted(() => {
   loadData()
   document.addEventListener('keydown', handleKeydown)
 })
+
+watch(() => yearStore.selectedYearId, () => {
+  loadData()
+  drawerOpen.value = false
+})
 </script>
 
 <template>
@@ -393,7 +508,11 @@ onMounted(() => {
           <Download :size="18" />
           Exportar Excel (CSV)
         </button>
-        <button @click="createTeacherModal = true" class="flex items-center gap-2 px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm transition-all shadow-lg shadow-blue-100/60 dark:shadow-none whitespace-nowrap active:scale-95">
+        <button 
+          v-if="!yearStore.isReadonlyYear"
+          @click="createTeacherModal = true" 
+          class="flex items-center gap-2 px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm transition-all shadow-lg shadow-blue-100/60 dark:shadow-none whitespace-nowrap active:scale-95"
+        >
           <Plus :size="18" />
           Nuevo Docente
         </button>
@@ -551,8 +670,8 @@ onMounted(() => {
             <div class="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar">
 
               <!-- Status Controls -->
-              <div v-if="selectedTeacher">
-                <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Cambio de Estado</p>
+              <div v-if="selectedTeacher && !yearStore.isReadonlyYear">
+                <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Acciones de Gestión de Docente</p>
                 <div class="flex flex-wrap gap-2">
                   <button
                     @click="statusModal = { estado: selectedTeacher.estado === 'ACTIVO' ? 'INACTIVO' : 'ACTIVO' }; statusReason = ''"
@@ -568,15 +687,27 @@ onMounted(() => {
                   <button
                     v-if="selectedTeacher.estado !== 'DESVINCULADO'"
                     @click="statusModal = { estado: 'DESVINCULADO' }; statusReason = ''"
-                    class="bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-950/20 dark:text-red-400 dark:hover:bg-red-950/40 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wide transition-all"
+                    class="bg-red-50 text-red-650 hover:bg-red-100 dark:bg-red-950/20 dark:text-red-400 dark:hover:bg-red-950/40 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wide transition-all"
                   >
                     Desvincular
+                  </button>
+                  <button
+                    @click="openEditTeacherModal"
+                    class="bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-950/20 dark:text-blue-400 dark:hover:bg-blue-950/40 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wide transition-all"
+                  >
+                    Editar Datos
+                  </button>
+                  <button
+                    @click="deleteTeacher(selectedTeacher)"
+                    class="bg-rose-50 text-rose-700 hover:bg-rose-100 dark:bg-rose-950/20 dark:text-rose-400 dark:hover:bg-rose-950/40 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wide transition-all"
+                  >
+                    Eliminar Docente
                   </button>
                 </div>
               </div>
 
               <!-- Assignment Form -->
-              <div class="bg-slate-50 dark:bg-slate-800/40 rounded-3xl p-6 space-y-5">
+              <div v-if="!yearStore.isReadonlyYear" class="bg-slate-50 dark:bg-slate-800/40 rounded-3xl p-6 space-y-5">
                 <div class="flex items-center gap-3">
                   <div class="p-2.5 bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 rounded-xl"><GraduationCap :size="20" /></div>
                   <div>
@@ -662,6 +793,7 @@ onMounted(() => {
                       <p class="text-[10px] font-bold text-indigo-500 uppercase tracking-widest mt-0.5">{{ getCourseDisplayName({ tipo_grado_nombre: assignment.tipo_grado_nombre, seccion_nombre: assignment.seccion_nombre }) }} · {{ assignment.jornada_nombre }}</p>
                     </div>
                     <button
+                      v-if="!yearStore.isReadonlyYear"
                       @click="deleteAssignmentModal = assignment"
                       class="p-2 text-slate-300 dark:text-slate-700 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-xl transition-all opacity-0 group-hover:opacity-100"
                     >
@@ -718,6 +850,50 @@ onMounted(() => {
             <button @click="createTeacherModal = false" class="flex-1 py-4 rounded-xl font-black text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all text-sm uppercase tracking-widest">Cancelar</button>
             <button @click="createTeacher" :disabled="savingTeacher" class="flex-[2] bg-blue-600 text-white py-4 rounded-xl font-black shadow-xl shadow-blue-100 dark:shadow-none hover:bg-blue-700 transition-all disabled:opacity-50 text-sm uppercase tracking-widest">
               {{ savingTeacher ? 'Registrando...' : 'Crear Docente' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Edit Teacher Modal -->
+    <div v-if="editTeacherModal" class="fixed inset-0 z-[300] flex items-center justify-center p-4">
+      <div class="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" @click="editTeacherModal = false"></div>
+      <div class="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-[32px] shadow-2xl overflow-hidden">
+        <div class="px-8 pt-8 pb-6 border-b border-slate-100 dark:border-slate-800">
+          <h2 class="text-xl font-black text-slate-900 dark:text-white flex items-center gap-3"><Edit2 :size="22" class="text-blue-600" />Modificar Datos de Docente</h2>
+          <p class="text-slate-400 dark:text-slate-500 text-sm font-medium mt-1">Actualiza los datos personales y de acceso del docente.</p>
+        </div>
+        <div class="p-8 space-y-5">
+          <div class="grid grid-cols-2 gap-4">
+            <label class="space-y-1.5">
+              <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nombres</span>
+              <input v-model="editTeacherForm.nombre" type="text" placeholder="Ej. Laura Elena" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-bold outline-none text-slate-900 dark:text-white" />
+            </label>
+            <label class="space-y-1.5">
+              <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Apellidos</span>
+              <input v-model="editTeacherForm.apellido" type="text" placeholder="Ej. Gómez" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-bold outline-none text-slate-900 dark:text-white" />
+            </label>
+            <label class="space-y-1.5">
+              <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tipo Doc.</span>
+              <select v-model="editTeacherForm.id_tipodocumento" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-bold outline-none text-slate-900 dark:text-white">
+                <option value="">Seleccionar...</option>
+                <option v-for="type in documentTypes" :key="type.id_tipodocumento" :value="type.id_tipodocumento">{{ type.tipo }}</option>
+              </select>
+            </label>
+            <label class="space-y-1.5">
+              <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Número</span>
+              <input v-model="editTeacherForm.documento" type="text" placeholder="Documento de identidad" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-bold outline-none text-slate-900 dark:text-white" />
+            </label>
+            <label class="col-span-2 space-y-1.5">
+              <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Email Institucional</span>
+              <input v-model="editTeacherForm.email" type="email" placeholder="docente@institucion.edu" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-bold outline-none text-slate-900 dark:text-white" />
+            </label>
+          </div>
+          <div class="flex gap-3 pt-2">
+            <button @click="editTeacherModal = false" class="flex-1 py-4 rounded-xl font-black text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all text-sm uppercase tracking-widest">Cancelar</button>
+            <button @click="updateTeacher" class="flex-[2] bg-blue-600 text-white py-4 rounded-xl font-black shadow-xl shadow-blue-100 dark:shadow-none hover:bg-blue-700 transition-all text-sm uppercase tracking-widest">
+              Guardar Cambios
             </button>
           </div>
         </div>

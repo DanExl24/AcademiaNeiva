@@ -12,12 +12,21 @@ import {
 import BoletinExportModule from '../../components/boletines/BoletinExportModule.vue'
 
 const auth = useAuthStore()
+import { useAcademicYearStore } from '../../stores/academicYear'
+
+const yearStore = useAcademicYearStore()
 const studentId = ref<number | null>(null)
 const selectedYear = ref<number | null>(null)
 const selectedPeriodId = ref<number | null>(null)
 const years = ref<any[]>([])
 const periods = ref<any[]>([])
 const loading = ref(true)
+
+watch(() => yearStore.selectedYearId, (newYearId) => {
+  if (newYearId && newYearId !== selectedYear.value) {
+    selectedYear.value = newYearId
+  }
+}, { immediate: true })
 
 const fetchStudentId = async () => {
   try {

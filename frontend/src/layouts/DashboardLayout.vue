@@ -179,7 +179,6 @@ const stopMonitoring = () => {
   }
 }
 
-const activeYear = ref<string>('')
 const currentTime = ref<string>('')
 const schoolName = ref('AcademiaNeiva')
 const schoolEscudo = ref<string | null>(null)
@@ -217,25 +216,31 @@ const clearThemeColors = () => {
   document.documentElement.style.removeProperty('--color-secondary-rgb')
 }
 
-const fetchSchoolIdentity = async () => {
-  const sId = auth.user?.schoolId || auth.supervision?.id_colegio || null
-  if (!sId) {
+const updateTheme = (color1?: string, color2?: string) => {
+  if (color1 && color2) {
+    applyThemeColors(color1, color2)
+  } else {
     clearThemeColors()
+  }
+}
+
+const fetchSchoolIdentity = async () => {
+  const schoolId = auth.user?.schoolId || auth.supervision?.id_colegio
+  if (!schoolId) {
     schoolName.value = 'AcademiaNeiva'
     schoolEscudo.value = null
+    clearThemeColors()
     return
   }
 
   try {
     const headers = auth.token ? { Authorization: `Bearer ${auth.token}` } : {}
-    const response = await axios.get(`http://localhost:3000/api/auth/school-identity/${sId}`, { headers })
-    if (response.data) {
-      schoolName.value = response.data.nombre || 'Mi Colegio'
-      schoolEscudo.value = response.data.escudo_url ? `http://localhost:3000${response.data.escudo_url}` : null
-      
-      const primary = response.data.color_primario || '#4f46e5'
-      const secondary = response.data.color_secundario || '#0f172a'
-      applyThemeColors(primary, secondary)
+    const res = await axios.get(`http://localhost:3000/api/academic-admin/my-school/${schoolId}`, { headers })
+    const school = res.data.school || res.data
+    if (school) {
+      schoolName.value = school.nombre || 'AcademiaNeiva'
+      schoolEscudo.value = school.escudo_url || null
+      updateTheme(school.color_primario, school.color_secundario)
     }
   } catch (error) {
     console.error('Error fetching school identity:', error)
@@ -246,16 +251,9 @@ watch(() => [auth.user?.schoolId, auth.supervision?.id_colegio], () => {
   fetchSchoolIdentity()
   const sId = auth.user?.schoolId || auth.supervision?.id_colegio
   if (sId) {
-    yearStore.loadYearsForSchool(sId, auth.token)
+    yearStore.loadYearsForSchool(sId, auth.token || undefined)
   }
 }, { immediate: true })
-
-const onHeaderYearChange = (e: Event) => {
-  const val = Number((e.target as HTMLSelectElement).value)
-  if (val) {
-    yearStore.setSelectedYearId(val)
-  }
-}
 
 const studentSanction = ref<{ hasta: string; motivo: string; tipo: string } | null>(null)
 
@@ -533,10 +531,33 @@ watch(() => auth.isSupervising, (supervising) => {
   }
 }, { immediate: true })
 
+const currentSchoolId = computed(() => {
+  if (auth.isSupervising && auth.supervision?.colegio_id) {
+    return Number(auth.supervision.colegio_id)
+  }
+  return Number(auth.selectedSchoolId || auth.user?.schoolId || auth.user?.schoolIds?.[0] || 0)
+})
+
+const loadYearStore = async () => {
+  if (currentSchoolId.value) {
+    await yearStore.loadYearsForSchool(currentSchoolId.value, auth.token || undefined)
+  }
+}
+
+function onHeaderYearChange(e: Event) {
+  const target = e.target as HTMLSelectElement
+  if (target?.value) {
+    yearStore.setSelectedYearId(Number(target.value))
+  }
+}
+
 onMounted(() => {
   updateClock()
   clockInterval = setInterval(updateClock, 1000)
+  loadYearStore()
 })
+
+watch(currentSchoolId, loadYearStore, { immediate: true })
 
 onUnmounted(() => {
   if (clockInterval) clearInterval(clockInterval)

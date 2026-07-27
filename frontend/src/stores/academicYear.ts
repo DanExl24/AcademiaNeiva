@@ -28,7 +28,7 @@ export const useAcademicYearStore = defineStore('academicYear', () => {
     loading.value = true
     try {
       const headers = token ? { Authorization: `Bearer ${token}` } : {}
-      const res = await axios.get(`http://localhost:3000/api/academic-admin/settings/${schoolId}`, { headers })
+      const res = await axios.get(`http://localhost:3000/api/academic-admin/settings/${schoolId}?keys=years`, { headers })
       const years: AcademicYear[] = (res.data.academicYears || []).map((y: any) => ({
         ...y,
         id_anio: y.id_anio ?? y.id_año

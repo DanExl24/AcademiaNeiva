@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import axios from 'axios'
 import { BookOpen, Plus, Trash2, Search, Info, Layers, GraduationCap, X, Edit, Calendar, PlusCircle } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
+import { useAcademicYearStore } from '../../stores/academicYear'
 import { getCourseDisplayName } from '../../utils/courseHelper'
 
 interface SubjectItem {
@@ -20,6 +21,7 @@ interface TrashItem {
 }
 
 const auth = useAuthStore()
+const yearStore = useAcademicYearStore()
 const schoolId = computed(() => Number(auth.user?.schoolId || 0))
 
 const loading = ref(true)
@@ -49,8 +51,9 @@ const loadSubjects = async () => {
   if (!schoolId.value) return
   try {
     loading.value = true
+    const params = yearStore.selectedYearId ? { yearId: yearStore.selectedYearId } : {}
     const [subRes, trashRes] = await Promise.all([
-      axios.get(`http://localhost:3000/api/academic-admin/subjects/${schoolId.value}`),
+      axios.get(`http://localhost:3000/api/academic-admin/subjects/${schoolId.value}`, { params }),
       axios.get(`http://localhost:3000/api/academic-admin/subjects/trash/${schoolId.value}`)
     ])
     subjects.value = subRes.data
@@ -61,6 +64,13 @@ const loadSubjects = async () => {
     loading.value = false
   }
 }
+
+onMounted(() => {
+  yearStore.loadYearsForSchool(schoolId.value, auth.token || undefined)
+  loadSubjects()
+})
+
+watch(() => yearStore.selectedYearId, loadSubjects)
 
 const createSubject = async () => {
   if (saving.value) return

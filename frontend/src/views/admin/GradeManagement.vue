@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import axios from 'axios'
-import { Layers3, Plus, Search, School2, Trash2, Info, Pencil, Tag, RefreshCw, Lock } from 'lucide-vue-next'
+import { Layers3, Plus, Search, School2, Trash2, Info, Pencil, Tag, RefreshCw } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 import { useNotificationStore } from '../../stores/notifications'
 import { useAcademicYearStore } from '../../stores/academicYear'
 import { getCourseDisplayName, getNextSectionName } from '../../utils/courseHelper'
+
+const yearStore = useAcademicYearStore()
 
 interface Nivel {
   id_nivel: number
@@ -255,9 +257,10 @@ const closeEditCuposModal = () => {
 }
 
 const fetchCatalogs = async () => {
+  const params = yearStore.selectedYearId ? { yearId: yearStore.selectedYearId } : {}
   const [catalogsRes, gradesRes] = await Promise.all([
     axios.get('http://localhost:3000/api/academic-admin/catalogs'),
-    axios.get(`http://localhost:3000/api/academic-admin/grades/${schoolId.value}`),
+    axios.get(`http://localhost:3000/api/academic-admin/grades/${schoolId.value}`, { params }),
   ])
 
   secciones.value = catalogsRes.data.secciones
@@ -478,7 +481,12 @@ const confirmBulkRename = async () => {
 }
 
 
-onMounted(loadData)
+onMounted(() => {
+  yearStore.loadYearsForSchool(schoolId.value, auth.token || undefined)
+  loadData()
+})
+
+watch(() => yearStore.selectedYearId, loadData)
 </script>
 
 <template>

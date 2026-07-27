@@ -222,6 +222,7 @@ watch(selectedYearId, (newVal) => {
   if (newVal && newVal !== yearStore.selectedYearId) {
     yearStore.setSelectedYearId(newVal)
   }
+  loadData()
 })
 
 const selectedYearObj = computed(() =>
@@ -241,7 +242,12 @@ const loadData = async () => {
   if (!schoolId.value) return
   try {
     loading.value = true
-    const response = await axios.get(`http://localhost:3000/api/academic-admin/settings/${schoolId.value}`)
+    const params: any = {}
+    const activeYearId = selectedYearId.value || yearStore.selectedYearId
+    if (activeYearId) {
+      params.yearId = activeYearId
+    }
+    const response = await axios.get(`http://localhost:3000/api/academic-admin/settings/${schoolId.value}`, { params })
     currentYear.value = response.data.currentYear
     academicYears.value = response.data.academicYears || []
     periods.value = response.data.periods
@@ -324,7 +330,7 @@ const updatePeriodPercentage = async () => {
 }
 
 const approvePeriod = async (period: AcademicPeriod) => {
-  const confirmApprove = confirm(`¿Está seguro de aprobar y activar el periodo "${period.nombre}"? Esta acción cerrará el periodo actual si está abierto.`)
+  const confirmApprove = confirm(`¿Está seguro de aprobar y activar el periodo "${period.nombre}"?`)
   if (!confirmApprove) return
 
   try {
@@ -338,6 +344,67 @@ const approvePeriod = async (period: AcademicPeriod) => {
     alert(error.response?.data?.error || 'No fue posible aprobar el periodo')
   } finally {
     loading.value = false
+  }
+}
+
+const closingPeriodId = ref<number | null>(null)
+const reopeningPeriodId = ref<number | null>(null)
+
+const closePeriod = async (period: AcademicPeriod, force = false) => {
+  if (closingPeriodId.value) return
+  
+  if (!force) {
+    const confirmClose = confirm(`¿Está seguro de cerrar el periodo "${period.nombre}"? Los docentes no podrán registrar calificaciones para este periodo.`)
+    if (!confirmClose) return
+  }
+
+  try {
+    closingPeriodId.value = period.id_periodo
+    await axios.post(`http://localhost:3000/api/academic-admin/settings/periods/${period.id_periodo}/close`, {
+      schoolId: schoolId.value,
+      force
+    })
+    alert(`Periodo "${period.nombre}" cerrado correctamente.`)
+    await loadData()
+  } catch (error: any) {
+    if (error.response?.status === 409 && error.response?.data?.pending) {
+      const pendingCount = error.response.data.pending.length
+      const forceConfirm = confirm(`No se puede cerrar el periodo porque hay ${pendingCount} asignación(es) académica(s) pendiente(s) de cerrar por los docentes.\n\n¿Desea forzar el cierre de todas formas?`)
+      if (forceConfirm) {
+        await closePeriod(period, true)
+      }
+      return
+    }
+    alert(error.response?.data?.error || 'No fue posible cerrar el periodo')
+  } finally {
+    closingPeriodId.value = null
+  }
+}
+
+const reopenPeriod = async (period: AcademicPeriod) => {
+  if (reopeningPeriodId.value) return
+
+  const warningMsg = `⚠️ ADVERTENCIA: Al reabrir el periodo "${period.nombre}", todos los docentes y directivos del colegio podrán ingresar y modificar calificaciones de este periodo de manera global.\n\nEsta acción requiere justificación obligatoria.\n\n¿Desea continuar?`
+  if (!confirm(warningMsg)) return
+
+  const motivo = prompt(`Escriba el motivo de la reapertura del periodo (Obligatorio):`)
+  if (!motivo || !motivo.trim()) {
+    alert('Acción cancelada. Se requiere ingresar un motivo válido para reabrir el periodo.')
+    return
+  }
+
+  try {
+    reopeningPeriodId.value = period.id_periodo
+    await axios.post(`http://localhost:3000/api/academic-admin/settings/periods/${period.id_periodo}/reopen`, {
+      schoolId: schoolId.value,
+      motivo: motivo.trim()
+    })
+    alert(`Periodo "${period.nombre}" reabierto correctamente.`)
+    await loadData()
+  } catch (error: any) {
+    alert(error.response?.data?.error || 'No fue posible reabrir el periodo')
+  } finally {
+    reopeningPeriodId.value = null
   }
 }
 
@@ -699,6 +766,30 @@ onMounted(loadData)
                 >
                   <Check class="h-4 w-4" />
                   Aprobar
+                </button>
+
+                <button
+                  v-if="period.estado === 'ABIERTO'"
+                  type="button"
+                  @click="closePeriod(period)"
+                  :disabled="closingPeriodId === period.id_periodo"
+                  class="inline-flex items-center justify-center gap-1.5 rounded-2xl bg-rose-50 px-3.5 py-3 text-xs font-black text-rose-700 hover:bg-rose-100 transition-all dark:bg-rose-950/20 dark:text-rose-400 dark:hover:bg-rose-950/40 disabled:opacity-50"
+                  title="Cerrar periodo"
+                >
+                  <Lock class="h-4 w-4" />
+                  Cerrar
+                </button>
+
+                <button
+                  v-if="period.estado === 'CERRADO'"
+                  type="button"
+                  @click="reopenPeriod(period)"
+                  :disabled="reopeningPeriodId === period.id_periodo"
+                  class="inline-flex items-center justify-center gap-1.5 rounded-2xl bg-sky-50 px-3.5 py-3 text-xs font-black text-sky-700 hover:bg-sky-100 transition-all dark:bg-sky-950/20 dark:text-sky-400 dark:hover:bg-sky-950/40 disabled:opacity-50"
+                  title="Reabrir periodo"
+                >
+                  <Play class="h-4 w-4" />
+                  Reabrir
                 </button>
 
                 <button

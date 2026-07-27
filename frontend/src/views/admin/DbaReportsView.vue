@@ -15,7 +15,6 @@ import {
   BookOpen
 } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
-import { getCourseDisplayName } from '../../utils/courseHelper'
 
 interface PeriodOption {
   id_periodo: number
@@ -28,7 +27,7 @@ interface GroupOption {
   nivel_nombre: string
   tipo_grado_nombre: string
   seccion_nombre: string
-  jornada_nombre: string
+  jornada_nombre?: string
 }
 
 interface SubjectOption {
@@ -65,6 +64,8 @@ interface CoherenciaRow {
   numero_dba: number
   dba_enunciado: string
   estado_coherencia: 'PLANEADA' | 'EXTRA'
+  motivo_extra?: string
+  justificacion_extra?: string
 }
 
 interface CoberturaResumen {
@@ -84,6 +85,7 @@ interface CoberturaDetalle {
   id_evidencia_dba: number
   evidencia_descripcion: string
   evidencia_orden: number
+  es_planeada?: boolean
   evaluaciones: {
     actividad_nombre: string
     actividad_porcentaje: number
@@ -550,7 +552,7 @@ const getCoherenceProgressBarClass = (pct: number) => {
   return 'bg-rose-500'
 }
 
-const formatMotivoExtra = (motivo: string) => {
+const formatMotivoExtra = (motivo?: string) => {
   if (!motivo) return 'No especificado'
   const map: Record<string, string> = {
     'RECUPERACION_REFUERZO': 'Recuperación o refuerzo',

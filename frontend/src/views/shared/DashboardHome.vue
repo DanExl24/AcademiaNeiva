@@ -617,9 +617,8 @@ const fetchDashboard = async () => {
 const loadPeriods = async () => {
   if (!schoolId.value) return
   try {
-    await yearStore.loadYearsForSchool(schoolId.value, auth.token)
     const headers = { Authorization: `Bearer ${auth.token}` }
-    const response = await axios.get(`http://localhost:3000/api/academic-admin/settings/${schoolId.value}`, { headers })
+    const response = await axios.get(`http://localhost:3000/api/academic-admin/settings/${schoolId.value}?keys=periods`, { headers })
     allPeriods.value = response.data.periods
 
     // Set active period by default if none selected
@@ -651,7 +650,7 @@ const checkEnrollmentDates = async () => {
     const headers = { Authorization: `Bearer ${auth.token}` }
     const response = await axios.get(`http://localhost:3000/api/matriculas/school/${schoolId.value}/enrollment-config`, { headers })
     const data = response.data
-    if (data && data.config && data.config.habilitada && !data.config.hasApproved) {
+    if (data && data.config && data.config.habilitada) {
       const now = new Date()
       const start = new Date(data.config.fecha_inicio)
       const end = new Date(data.config.fecha_cierre)

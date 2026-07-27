@@ -18,7 +18,10 @@ import {
 } from 'lucide-vue-next'
 import BoletinExportModule from '../../components/boletines/BoletinExportModule.vue'
 
+import { useAcademicYearStore } from '../../stores/academicYear'
+
 const auth = useAuthStore()
+const yearStore = useAcademicYearStore()
 const loading = ref(true)
 const fetchingObs = ref(false)
 
@@ -32,6 +35,12 @@ const selectedYear = ref<number | null>(null)
 const periods = ref<any[]>([])
 const selectedPeriod = ref<number | null>(null)
 const selectedType = ref<string>('all')
+
+watch(() => yearStore.selectedYearId, (newYearId) => {
+  if (newYearId && newYearId !== selectedYear.value) {
+    selectedYear.value = newYearId
+  }
+}, { immediate: true })
 
 const observations = ref<any[]>([])
 

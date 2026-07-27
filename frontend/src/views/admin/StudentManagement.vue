@@ -18,7 +18,8 @@ import {
   BookOpen,
   Activity,
   Award,
-  Lock
+  Lock,
+  Trash2
 } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 import { useNotificationStore } from '../../stores/notifications'
@@ -288,6 +289,24 @@ const saveStudent = async () => {
     fetchStudents()
   } catch (error) {
     notify.addNotification('Error al guardar estudiante', 'error')
+  }
+}
+
+const deleteStudent = async (student: any) => {
+  if (yearStore.isReadonlyYear) {
+    alert('Acción no permitida: El año académico seleccionado se encuentra CERRADO.')
+    return
+  }
+  const confirmDelete = confirm(`¿Estás seguro de que deseas ELIMINAR permanentemente al estudiante "${student.nombre} ${student.apellido}"? Esta acción borrará su matrícula, calificaciones y usuario asociado de forma irreversible.`)
+  if (!confirmDelete) return
+
+  try {
+    const headers = { Authorization: `Bearer ${auth.token}` }
+    await axios.delete(`http://localhost:3000/api/student/${student.id_estudiante}`, { headers })
+    notify.addNotification('Estudiante eliminado exitosamente.', 'success')
+    fetchStudents()
+  } catch (error: any) {
+    notify.addNotification(error.response?.data?.error || 'Error al eliminar el estudiante', 'error')
   }
 }
 
@@ -669,6 +688,9 @@ const exportToSIMAT = () => {
                 </button>
                 <button v-if="s.estado !== 'ACTIVO' && s.estado !== 'RETIRADO' && s.estado !== 'GRADUADO'" @click="openStatusModal(s, 'ACTIVO')" class="p-2 text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 rounded-xl transition-all" title="Reactivar">
                   <UserCheck :size="16" />
+                </button>
+                <button @click="deleteStudent(s)" class="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-xl transition-all" title="Eliminar Estudiante">
+                  <Trash2 :size="16" />
                 </button>
               </div>
             </td>

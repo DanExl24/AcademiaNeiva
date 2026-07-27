@@ -15,13 +15,6 @@ import {
   Unlock
 } from 'lucide-vue-next'
 
-interface AcademicYear {
-  id_anio: number
-  id_año?: number
-  calendario: string | null
-  estado?: string
-}
-
 interface EnrollmentConfig {
   id_configuracion: number | null
   id_colegio: number
@@ -75,7 +68,10 @@ const loadYears = async () => {
   if (!schoolId.value) return
   try {
     loading.value = true
-    await yearStore.loadYearsForSchool(schoolId.value, auth.token)
+    await yearStore.loadYearsForSchool(schoolId.value, auth.token || undefined)
+    if (!selectedYearId.value && yearStore.selectedYearId) {
+      selectedYearId.value = yearStore.selectedYearId
+    }
     if (selectedYearId.value) {
       await loadConfig()
     }
@@ -86,6 +82,12 @@ const loadYears = async () => {
     loading.value = false
   }
 }
+
+watch(() => yearStore.selectedYearId, (newVal) => {
+  if (newVal && newVal !== selectedYearId.value) {
+    selectedYearId.value = newVal
+  }
+})
 
 const formatForInput = (dateStr: string | null) => {
   if (!dateStr) return ''
@@ -267,20 +269,6 @@ onMounted(() => {
       <span class="text-sm font-semibold">{{ message.text }}</span>
     </div>
 
-    <!-- Warnings: Approved enrollments restrict editing dates -->
-    <div v-if="config.hasApproved" class="bg-rose-50 border border-rose-200 text-rose-800 dark:bg-rose-950/20 dark:border-rose-900/50 dark:text-rose-400 p-6 rounded-3xl flex items-start gap-4 shadow-sm">
-      <div class="p-3 bg-rose-100 dark:bg-rose-900/40 rounded-2xl text-rose-600 dark:text-rose-400">
-        <Lock :size="24" />
-      </div>
-      <div>
-        <h3 class="text-base font-black">Rango de Fechas Bloqueado</h3>
-        <p class="mt-1 text-sm font-semibold opacity-90 leading-relaxed">
-          Ya existen solicitudes de matrícula **aprobadas** para este año lectivo. No está permitido cambiar las fechas de inicio y cierre.
-          Aún puedes habilitar o deshabilitar manualmente el módulo para el registro de nuevas solicitudes.
-        </p>
-      </div>
-    </div>
-
     <!-- Main Config Card -->
     <div class="rounded-3xl border border-slate-100 bg-white shadow-sm dark:bg-slate-900 dark:border-slate-800 transition-colors overflow-hidden">
       <div class="p-8 sm:p-10 space-y-8">
@@ -300,10 +288,8 @@ onMounted(() => {
               <input 
                 type="datetime-local" 
                 v-model="localFechaInicio"
-                :disabled="config.hasApproved"
-                class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-violet-500 transition-all disabled:opacity-50"
+                class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-violet-500 transition-all"
               />
-              <Lock v-if="config.hasApproved" :size="16" class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400" />
             </div>
             <p class="text-xs text-slate-400 dark:text-slate-500 leading-normal">
               A partir de este día y hora, los acudientes podrán acceder al formulario público y registrarse.
@@ -320,10 +306,8 @@ onMounted(() => {
               <input 
                 type="datetime-local" 
                 v-model="localFechaCierre"
-                :disabled="config.hasApproved"
-                class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-violet-500 transition-all disabled:opacity-50"
+                class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-violet-500 transition-all"
               />
-              <Lock v-if="config.hasApproved" :size="16" class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400" />
             </div>
             <p class="text-xs text-slate-400 dark:text-slate-500 leading-normal">
               Una vez alcanzada esta fecha, el formulario público se cerrará automáticamente bloqueando nuevas solicitudes.

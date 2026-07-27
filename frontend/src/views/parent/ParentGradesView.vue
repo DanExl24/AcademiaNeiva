@@ -16,7 +16,10 @@ import {
 } from 'lucide-vue-next'
 import BoletinExportModule from '../../components/boletines/BoletinExportModule.vue'
 
+import { useAcademicYearStore } from '../../stores/academicYear'
+
 const auth = useAuthStore()
+const yearStore = useAcademicYearStore()
 const router = useRouter()
 const loading = ref(true)
 const fetchingGrades = ref(false)
@@ -32,6 +35,12 @@ const periods = ref<any[]>([])
 const selectedPeriod = ref<number | null>(null)
 
 const academicData = ref<any>(null)
+
+watch(() => yearStore.selectedYearId, (newYearId) => {
+  if (newYearId && newYearId !== selectedYear.value) {
+    selectedYear.value = newYearId
+  }
+}, { immediate: true })
 
 const fetchChildren = async () => {
   try {

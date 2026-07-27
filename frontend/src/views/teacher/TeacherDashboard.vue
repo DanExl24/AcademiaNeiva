@@ -23,11 +23,14 @@ import {
 } from 'chart.js'
 import { Bar } from 'vue-chartjs'
 import { useThemeStore } from '../../stores/theme'
+import { useAcademicYearStore } from '../../stores/academicYear'
+import { watch } from 'vue'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
 
 const theme = useThemeStore()
 const auth = useAuthStore()
+const yearStore = useAcademicYearStore()
 
 const loading = ref(true)
 const dashboardData = ref({
@@ -115,7 +118,8 @@ const fetchDashboard = async () => {
     if (!userId) {
       return
     }
-    const response = await axios.get(`http://localhost:3000/api/teacher/dashboard/${userId}`)
+    const params = yearStore.selectedYearId ? { yearId: yearStore.selectedYearId } : {}
+    const response = await axios.get(`http://localhost:3000/api/teacher/dashboard/${userId}`, { params })
     dashboardData.value = response.data
   } catch (error: any) {
   } finally {
@@ -123,10 +127,11 @@ const fetchDashboard = async () => {
   }
 }
 
-
 onMounted(() => {
   fetchDashboard()
 })
+
+watch(() => yearStore.selectedYearId, fetchDashboard)
 
 const getAlertIcon = (type: string) => {
   switch (type) {

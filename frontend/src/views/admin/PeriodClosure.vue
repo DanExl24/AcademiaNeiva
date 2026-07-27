@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import axios from 'axios'
-import { ArrowLeft, CheckCircle2, Lock, Unlock, FileX, SlidersHorizontal, AlertCircle, Search, ChevronDown } from 'lucide-vue-next'
+import { ArrowLeft, CheckCircle2, Lock, Unlock, SlidersHorizontal, AlertCircle, Search } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 import { getCourseDisplayName } from '../../utils/courseHelper'
 
+import { useAcademicYearStore } from '../../stores/academicYear'
+
 const auth = useAuthStore()
+const yearStore = useAcademicYearStore()
 const schoolId = computed(() => Number(auth.user?.schoolId || 0))
 
 const loading = ref(true)
@@ -16,60 +19,44 @@ const selectedPeriodId = ref<number | null>(null)
 const periodDetails = ref<any>(null)
 const teachers = ref<any[]>([])
 
-const expandedTeachers = ref(new Set<number>())
-const toggleTeacher = (id: number) => {
-  if (expandedTeachers.value.has(id)) {
-    expandedTeachers.value.delete(id)
-  } else {
-    expandedTeachers.value.add(id)
-  }
-}
-
 const filterStatus = ref<'TODOS' | 'PENDIENTE' | 'CERRADO'>('TODOS')
-
 const searchQuery = ref('')
-const filteredTeachers = computed(() => {
-  if (!teachers.value) return []
-  const q = (searchQuery.value || '').toLowerCase()
-  
-  return teachers.value.map(t => {
-    let filteredAsig = t.asignaciones;
-    if (filterStatus.value !== 'TODOS') {
-      filteredAsig = filteredAsig.filter((a: any) => a.estado === filterStatus.value)
-    }
 
-    const teacherMatch = t.docente_nombre.toLowerCase().includes(q) || (t.docente_email && t.docente_email.toLowerCase().includes(q))
-    
-    if (!teacherMatch && q) {
-      filteredAsig = filteredAsig.filter((a: any) => 
-        a.materia_nombre.toLowerCase().includes(q) ||
-        (a.grado && a.grado.toLowerCase().includes(q))
-      )
+const filteredAssignments = computed(() => {
+  const list: any[] = []
+  if (!teachers.value) return []
+  
+  teachers.value.forEach(t => {
+    if (t.asignaciones) {
+      t.asignaciones.forEach((a: any) => {
+        list.push({
+          id_detallegrado: a.id_detallegrado,
+          id_docente: t.id_docente,
+          docente_nombre: t.docente_nombre,
+          docente_email: t.docente_email,
+          materia_nombre: a.materia_nombre,
+          grado: a.grado,
+          estado: a.estado
+        })
+      })
     }
-    
-    if (filteredAsig.length === 0 && (!teacherMatch || filterStatus.value !== 'TODOS' || q)) {
-      return null;
-    }
-    
-    const materiasMap = new Map<string, any[]>()
-    filteredAsig.forEach((a: any) => {
-      if (!materiasMap.has(a.materia_nombre)) {
-        materiasMap.set(a.materia_nombre, [])
-      }
-      materiasMap.get(a.materia_nombre)!.push(a)
-    })
-    
-    const materias = Array.from(materiasMap.entries()).map(([nombre, cursos]) => ({
-      nombre,
-      cursos
-    }))
-    
-    return {
-      ...t,
-      filteredMaterias: materias,
-      visibleAsigCount: filteredAsig.length
-    }
-  }).filter(t => t !== null)
+  })
+
+  let res = list
+  if (filterStatus.value !== 'TODOS') {
+    res = res.filter(a => a.estado === filterStatus.value)
+  }
+
+  const q = searchQuery.value.toLowerCase().trim()
+  if (q) {
+    res = res.filter(a => 
+      a.docente_nombre.toLowerCase().includes(q) ||
+      a.materia_nombre.toLowerCase().includes(q) ||
+      a.grado.toLowerCase().includes(q)
+    )
+  }
+
+  return res
 })
 
 const closingPeriod = ref(false)
@@ -80,11 +67,21 @@ const loadInitialData = async () => {
   if (!schoolId.value) return
   try {
     loading.value = true
-    const response = await axios.get(`http://localhost:3000/api/academic-admin/settings/${schoolId.value}`)
+    const params: any = {}
+    if (yearStore.selectedYearId) {
+      params.yearId = yearStore.selectedYearId
+    }
+    const response = await axios.get(`http://localhost:3000/api/academic-admin/settings/${schoolId.value}`, { params })
     periods.value = (response.data.periods || []).filter((p: any) => p.estado !== 'PENDIENTE')
     const openPeriod = periods.value.find(p => p.estado === 'ABIERTO')
     if (openPeriod) {
       selectedPeriodId.value = openPeriod.id_periodo
+    } else if (periods.value.length > 0) {
+      selectedPeriodId.value = periods.value[0].id_periodo
+    } else {
+      selectedPeriodId.value = null
+      periodDetails.value = null
+      teachers.value = []
     }
   } catch (error) {
     console.error('Error loading periods:', error)
@@ -92,6 +89,10 @@ const loadInitialData = async () => {
     loading.value = false
   }
 }
+
+watch(() => yearStore.selectedYearId, () => {
+  loadInitialData()
+})
 
 const loadClosureDetails = async () => {
   if (!schoolId.value || !selectedPeriodId.value) return
@@ -380,102 +381,75 @@ onMounted(() => {
               </div>
             </div>
             
-            <div v-if="filteredTeachers.length === 0" class="text-center py-16 bg-white dark:bg-slate-800 rounded-[2rem] border border-slate-100 dark:border-slate-700 shadow-sm">
+            <div v-if="filteredAssignments.length === 0" class="text-center py-16 bg-white dark:bg-slate-800 rounded-[2rem] border border-slate-100 dark:border-slate-700 shadow-sm">
               <Search class="w-12 h-12 text-slate-200 dark:text-slate-600 mx-auto mb-4" />
               <h3 class="text-lg font-bold text-slate-600 dark:text-slate-300">No se encontraron resultados</h3>
-              <p class="text-slate-500 dark:text-slate-400 text-sm mt-1">Intenta ajustando tu término de búsqueda. "{{ searchQuery }}"</p>
+              <p class="text-slate-500 dark:text-slate-400 text-sm mt-1">Intenta ajustando tu término de búsqueda o filtros. "{{ searchQuery }}"</p>
             </div>
 
-            <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              <!-- Teacher Cards -->
-              <div 
-                v-for="teacher in filteredTeachers" 
-                :key="teacher.id_docente"
-                class="rounded-[24px] border bg-white dark:bg-slate-800 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden flex flex-col"
-                :class="teacher.cerradas === teacher.total_asignaciones ? 'border-emerald-100 dark:border-emerald-900' : (teacher.cerradas === 0 ? 'border-rose-100/60 dark:border-rose-900/60' : 'border-amber-100/60 dark:border-amber-900/60')"
-              >
-                <div class="p-5 border-b border-slate-100/60 dark:border-slate-700/60 cursor-pointer select-none group" 
-                     :class="teacher.cerradas === teacher.total_asignaciones ? 'bg-emerald-50/40 dark:bg-emerald-900/20 hover:bg-emerald-50/80 dark:hover:bg-emerald-900/40' : 'bg-white dark:bg-slate-800 hover:bg-slate-50/50 dark:hover:bg-slate-700/50'"
-                     @click="toggleTeacher(teacher.id_docente)"
-                >
-                  <div class="flex items-start justify-between mb-3">
-                    <div class="overflow-hidden pr-3">
-                      <h3 class="font-black text-slate-900 dark:text-slate-100 border-b border-transparent truncate text-base group-hover:text-rose-600 dark:group-hover:text-rose-400 transition-colors" :title="teacher.docente_nombre">
-                        {{ teacher.docente_nombre.split(' ')[0] }} {{ teacher.docente_nombre.split(' ')[2] || teacher.docente_nombre.split(' ')[1] }}
-                      </h3>
-                      <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 truncate font-medium">{{ teacher.docente_email }}</p>
-                    </div>
-                    <div class="flex items-center gap-3">
-                      <div 
-                        class="rounded-xl px-2.5 py-1 text-[11px] font-black shrink-0 shadow-sm"
-                        :class="[
-                          teacher.cerradas === teacher.total_asignaciones ? 'bg-emerald-100 dark:bg-emerald-900 text-emerald-700 dark:text-emerald-300' : 
-                          (teacher.cerradas === 0 ? 'bg-rose-100 dark:bg-rose-900 text-rose-700 dark:text-rose-300' : 'bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300')
-                        ]"
-                      >
-                        {{ filterStatus !== 'TODOS' ? teacher.visibleAsigCount : teacher.cerradas + '/' + teacher.total_asignaciones }}
-                      </div>
-                      <div class="w-8 h-8 rounded-full bg-white dark:bg-slate-700 flex items-center justify-center border border-slate-100 dark:border-slate-600 shadow-sm transition-transform duration-300 group-hover:border-rose-200 dark:group-hover:border-rose-800 group-hover:text-rose-600 dark:group-hover:text-rose-400" :class="{'rotate-180 bg-rose-50 dark:bg-rose-900/50 border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-400': expandedTeachers.has(teacher.id_docente)}">
-                        <ChevronDown class="w-4 h-4 text-slate-400 dark:text-slate-500 group-hover:text-rose-500 dark:group-hover:text-rose-400 transition-colors" />
-                      </div>
-                    </div>
-                  </div>
-                  <!-- Progress Bar -->
-                  <div v-if="filterStatus === 'TODOS'" class="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden">
-                    <div class="h-1.5 rounded-full transition-all duration-1000 ease-out" 
-                         :class="teacher.cerradas === teacher.total_asignaciones ? 'bg-emerald-400' : (teacher.cerradas === 0 ? 'bg-rose-400' : 'bg-amber-400')"
-                         :style="`width: ${(teacher.total_asignaciones > 0 ? (teacher.cerradas / teacher.total_asignaciones) * 100 : 0)}%`">
-                    </div>
-                  </div>
-                </div>
-                
-                <div v-show="expandedTeachers.has(teacher.id_docente)" class="p-4 bg-slate-50/50 dark:bg-slate-900/50 flex-1 flex flex-col gap-3 border-t border-slate-100/50 dark:border-slate-700/50">
-                  <div 
-                    v-for="materia in teacher.filteredMaterias" 
-                    :key="materia.nombre"
-                    class="bg-white dark:bg-slate-800 rounded-[16px] shadow-sm ring-1 ring-slate-100 dark:ring-slate-700 overflow-hidden text-sm transition-all hover:ring-slate-200 dark:hover:ring-slate-600"
+            <div v-else class="overflow-x-auto bg-white dark:bg-slate-800 rounded-3xl border border-slate-100 dark:border-slate-700 shadow-sm transition-all">
+              <table class="w-full text-left border-collapse">
+                <thead>
+                  <tr class="border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/50">
+                    <th class="p-5 text-xs font-black uppercase text-slate-400 dark:text-slate-500 tracking-wider">Docente</th>
+                    <th class="p-5 text-xs font-black uppercase text-slate-400 dark:text-slate-500 tracking-wider">Asignatura / Materia</th>
+                    <th class="p-5 text-xs font-black uppercase text-slate-400 dark:text-slate-500 tracking-wider">Curso / Grupo</th>
+                    <th class="p-5 text-xs font-black uppercase text-slate-400 dark:text-slate-500 tracking-wider text-center">Estado</th>
+                    <th class="p-5 text-xs font-black uppercase text-slate-400 dark:text-slate-500 tracking-wider text-right">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-50 dark:divide-slate-700/50">
+                  <tr 
+                    v-for="asig in filteredAssignments" 
+                    :key="asig.id_detallegrado"
+                    class="hover:bg-slate-50/50 dark:hover:bg-slate-700/30 transition-colors group"
                   >
-                    <div class="bg-slate-50/80 dark:bg-slate-900/80 px-3.5 py-2.5 font-bold text-slate-700 dark:text-slate-300 border-b border-slate-100/80 dark:border-slate-700/80 text-[13px] flex items-center gap-2">
-                       <span class="w-1.5 h-1.5 rounded-full bg-slate-400/60 dark:bg-slate-500/60"></span>
-                       <span class="truncate tracking-tight" :title="materia.nombre">{{ materia.nombre }}</span>
-                    </div>
-                    <div class="p-1.5 flex flex-col gap-0.5">
-                      <div 
-                        v-for="curso in materia.cursos" 
-                        :key="curso.id_detallegrado"
-                        class="flex items-center justify-between px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-xl transition-colors group"
-                      >
-                        <div class="flex items-center gap-3 overflow-hidden">
-                          <div class="rounded-full bg-white dark:bg-slate-900 p-0.5 shadow-sm">
-                            <CheckCircle2 v-if="curso.estado === 'CERRADO'" class="w-4 h-4 text-emerald-500 shrink-0" />
-                            <FileX v-else class="w-4 h-4 text-rose-400 shrink-0" />
-                          </div>
-                          <div class="truncate">
-                            <p class="text-[12px] font-bold text-slate-600 dark:text-slate-400 truncate group-hover:text-slate-900 dark:group-hover:text-slate-200 transition-colors">{{ curso.grado }}</p>
-                          </div>
-                        </div>
-                        <div class="flex items-center gap-2">
-                          <span 
-                            class="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-md shrink-0 ring-1 ring-inset"
-                            :class="curso.estado === 'CERRADO' ? 'text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 ring-emerald-500/20' : 'text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/30 ring-rose-500/20'"
-                          >
-                            {{ curso.estado }}
-                          </span>
-                          <button
-                            v-if="curso.estado === 'CERRADO'"
-                            @click.stop="attemptReopenSubject(curso)"
-                            :disabled="reopeningSubject === curso.id_detallegrado"
-                            class="p-1 px-1.5 flex items-center justify-center rounded bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-amber-100 dark:hover:bg-amber-900/60 hover:text-amber-700 dark:hover:text-amber-400 transition"
-                            title="Deshacer el cierre de esta materia para el profesor"
-                          >
-                            <Unlock class="w-3.5 h-3.5" />
-                          </button>
-                        </div>
+                    <td class="p-5">
+                      <div class="font-extrabold text-slate-900 dark:text-slate-100">
+                        {{ asig.docente_nombre }}
                       </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+                      <div class="text-xs text-slate-400 dark:text-slate-500 font-semibold mt-0.5">
+                        {{ asig.docente_email }}
+                      </div>
+                    </td>
+                    <td class="p-5">
+                      <span class="font-bold text-slate-700 dark:text-slate-300">
+                        {{ asig.materia_nombre }}
+                      </span>
+                    </td>
+                    <td class="p-5">
+                      <span class="font-black text-indigo-600 dark:text-indigo-400 bg-indigo-50/60 dark:bg-indigo-950/30 rounded-xl px-3 py-1.5 text-xs border border-indigo-100/30">
+                        {{ asig.grado }}
+                      </span>
+                    </td>
+                    <td class="p-5 text-center">
+                      <span 
+                        class="text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-full ring-1 ring-inset"
+                        :class="asig.estado === 'CERRADO' ? 'text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 ring-emerald-500/20' : 'text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/30 ring-rose-500/20'"
+                      >
+                        {{ asig.estado }}
+                      </span>
+                    </td>
+                    <td class="p-5 text-right">
+                      <div class="flex justify-end items-center gap-2">
+                        <button
+                          v-if="asig.estado === 'CERRADO'"
+                          @click="attemptReopenSubject(asig)"
+                          :disabled="reopeningSubject === asig.id_detallegrado"
+                          class="inline-flex items-center justify-center gap-1.5 rounded-2xl bg-amber-50 px-4 py-2 text-xs font-black text-amber-700 hover:bg-amber-100 transition-all dark:bg-amber-950/20 dark:text-amber-400 dark:hover:bg-amber-950/40 disabled:opacity-50 border border-amber-200/30 cursor-pointer"
+                          title="Habilitar docente para modificar e ingresar calificaciones"
+                        >
+                          <Unlock class="w-3.5 h-3.5" />
+                          <span>Habilitar</span>
+                        </button>
+                        <span v-else class="text-xs font-bold text-slate-400 dark:text-slate-500 italic pr-3 select-none">
+                          No requiere acción
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
         </div>

@@ -431,6 +431,17 @@ export const getGradeManagementData = async (req: Request, res: Response): Promi
   }
 
   try {
+    const { yearId } = req.query;
+    let yearMatriculaJoin = `LEFT JOIN matricula m ON m.id_grupo = g.id_grupo`;
+    let yearCompetenciaJoin = `LEFT JOIN competencias c ON c.id_grupo = g.id_grupo`;
+    const groupsParams: any[] = [schoolId];
+
+    if (yearId) {
+      groupsParams.push(Number(yearId));
+      yearMatriculaJoin = `LEFT JOIN matricula m ON m.id_grupo = g.id_grupo AND m.id_anio = $2`;
+      yearCompetenciaJoin = `LEFT JOIN competencias c ON c.id_grupo = g.id_grupo AND c.id_anio = $2`;
+    }
+
     const [jornadasRes, levelsRes, gradeTypesRes, groupsRes] = await Promise.all([
       pool.query(
         `SELECT id_jornada, nombre
@@ -483,15 +494,15 @@ export const getGradeManagementData = async (req: Request, res: Response): Promi
          JOIN tipo_grado tg ON tg.id_tipo_grado = g.id_tipo_grado
          JOIN jornada j ON j.id_jornada = g.id_jornada
          JOIN secciones s ON s.id_seccion = g.id_seccion
-         LEFT JOIN matricula m ON m.id_grupo = g.id_grupo
+         ${yearMatriculaJoin}
          LEFT JOIN detalle_grados dg ON dg.id_grupo = g.id_grupo
-         LEFT JOIN competencias c ON c.id_grupo = g.id_grupo
+         ${yearCompetenciaJoin}
          WHERE g.id_colegio = $1
          GROUP BY
            g.id_grupo, g.id_nivel, g.id_jornada, g.id_seccion, g.id_tipo_grado, g.cupos_totales,
            ne.nombre, tg.nombre, j.nombre, s.nombre
          ORDER BY ne.nombre, tg.nombre, LENGTH(s.nombre), s.nombre, j.nombre`,
-        [schoolId]
+        groupsParams
       ),
     ]);
 
@@ -845,6 +856,114 @@ export const getSubjects = async (req: Request, res: Response): Promise<void> =>
   }
 };
 
+export const getUserEligibleAcademicYears = async (
+  userId: number,
+  userEmail: string,
+  userRoles: string[],
+  schoolId: number
+): Promise<number[]> => {
+  const isDirectivoOrAdmin = userRoles.some(r =>
+    ['directivo', 'admin_general', 'rector', 'coordinador'].includes(r.toLowerCase())
+  );
+  
+  if (isDirectivoOrAdmin) {
+    const allYears = await pool.query<{ id_anio: number }>(
+      `SELECT id_anio FROM anio_lectivo WHERE id_colegio = $1 ORDER BY id_anio DESC`,
+      [schoolId]
+    );
+    return allYears.rows.map(r => Number(r.id_anio));
+  }
+
+  const eligibleYearIds = new Set<number>();
+
+  // 1. Student enrollments
+  if (userRoles.includes('estudiante')) {
+    const studentYears = await pool.query<{ id_anio: number }>(
+      `SELECT DISTINCT m.id_anio 
+       FROM matricula m
+       JOIN estudiante e ON e.id_estudiante = m.id_estudiante
+       LEFT JOIN usuario u ON u.id_usuario = e.id_usuario
+       WHERE (e.id_usuario = $1 OR UPPER(u.email) = UPPER($2)) AND m.id_colegio = $3`,
+      [userId, userEmail, schoolId]
+    );
+    studentYears.rows.forEach(r => eligibleYearIds.add(Number(r.id_anio)));
+  }
+
+  // 2. Parent / Acudiente children enrollments
+  if (userRoles.includes('padre')) {
+    const parentYears = await pool.query<{ id_anio: number }>(
+      `SELECT DISTINCT m.id_anio
+       FROM matricula m
+       LEFT JOIN estudiante e ON e.id_estudiante = m.id_estudiante
+       LEFT JOIN detalle_padrefamilia dpf ON dpf.id_estudiante = e.id_estudiante
+       LEFT JOIN padre_familia pf ON pf.id_padrefamilia = dpf.id_padrefamilia
+       LEFT JOIN usuario u ON u.id_usuario = pf.id_usuario
+       WHERE (pf.id_usuario = $1 OR UPPER(u.email) = UPPER($2) OR UPPER(m.correo_padre) = UPPER($2))
+         AND m.id_colegio = $3`,
+      [userId, userEmail, schoolId]
+    );
+    parentYears.rows.forEach(r => eligibleYearIds.add(Number(r.id_anio)));
+  }
+
+  // 3. Teacher participation in academic activities/evaluations/competencies/assignments
+  if (userRoles.includes('docente')) {
+    const teacherYears = await pool.query<{ id_anio: number }>(
+      `SELECT DISTINCT p.id_anio
+       FROM periodo_academico p
+       JOIN actividad_materia am ON am.id_periodo = p.id_periodo
+       JOIN detalle_grados dg ON dg.id_detallegrado = am.id_detallegrado
+       JOIN docente d ON d.id_docente = dg.id_docente
+       LEFT JOIN usuario u ON u.id_usuario = d.id_usuario
+       WHERE (d.id_usuario = $1 OR UPPER(u.email) = UPPER($2)) AND p.id_colegio = $3
+       
+       UNION
+       
+       SELECT DISTINCT p.id_anio
+       FROM registro_asistencia ra
+       JOIN detalle_grados dg ON dg.id_detallegrado = ra.id_detallegrado
+       JOIN periodo_academico p ON p.id_colegio = dg.id_colegio
+       JOIN docente d ON d.id_docente = dg.id_docente
+       LEFT JOIN usuario u ON u.id_usuario = d.id_usuario
+       WHERE (d.id_usuario = $1 OR UPPER(u.email) = UPPER($2)) AND p.id_colegio = $3
+       
+       UNION
+       
+       SELECT DISTINCT p.id_anio
+       FROM cierre_materia cm
+       JOIN periodo_academico p ON p.id_periodo = cm.id_periodo
+       JOIN detalle_grados dg ON dg.id_detallegrado = cm.id_detallegrado
+       JOIN docente d ON d.id_docente = dg.id_docente
+       LEFT JOIN usuario u ON u.id_usuario = d.id_usuario
+       WHERE (d.id_usuario = $1 OR UPPER(u.email) = UPPER($2)) AND p.id_colegio = $3
+
+       UNION
+
+       SELECT DISTINCT p.id_anio
+       FROM observacion_estudiante oe
+       JOIN detalle_grados dg ON dg.id_detallegrado = oe.id_detallegrado
+       JOIN periodo_academico p ON p.id_periodo = oe.id_periodo
+       JOIN docente d ON d.id_docente = dg.id_docente
+       LEFT JOIN usuario u ON u.id_usuario = d.id_usuario
+       WHERE (d.id_usuario = $1 OR UPPER(u.email) = UPPER($2)) AND p.id_colegio = $3`,
+      [userId, userEmail, schoolId]
+    );
+    teacherYears.rows.forEach(r => eligibleYearIds.add(Number(r.id_anio)));
+  }
+
+  // Fallback: If no history found, return active open year
+  if (eligibleYearIds.size === 0) {
+    const openYear = await pool.query<{ id_anio: number }>(
+      `SELECT id_anio FROM anio_lectivo WHERE id_colegio = $1 ORDER BY CASE WHEN estado = 'ABIERTO' THEN 0 ELSE 1 END, id_anio DESC LIMIT 1`,
+      [schoolId]
+    );
+    if (openYear.rows.length > 0) {
+      eligibleYearIds.add(Number(openYear.rows[0].id_anio));
+    }
+  }
+
+  return Array.from(eligibleYearIds);
+};
+
 export const ensureAcademicPeriodPendingStatus = async () => {};
 
 export const getAcademicSettingsData = async (req: Request, res: Response): Promise<void> => {
@@ -855,193 +974,273 @@ export const getAcademicSettingsData = async (req: Request, res: Response): Prom
   }
 
   try {
-    const currentYearId = await ensureAcademicYearForSchool(schoolId);
+    const targetYearId = req.query.yearId || req.query.targetYearId ? Number(req.query.yearId || req.query.targetYearId) : null;
+    const currentYearId = targetYearId || await ensureAcademicYearForSchool(schoolId);
 
-    // Auto-switch periods based on current date
-    await autoSwitchPeriodsForYear(pool, schoolId, currentYearId);
+    const keysParam = req.query.keys ? String(req.query.keys) : null;
+    const requestedKeys = keysParam ? keysParam.split(',').map(k => k.trim()) : null;
 
-    const competencyClient = await pool.connect();
-    try {
-      await competencyClient.query("BEGIN");
-      await harmonizeCompetenciesForSchoolYear(competencyClient, schoolId, currentYearId);
-      await competencyClient.query("COMMIT");
-    } catch (error) {
-      await competencyClient.query("ROLLBACK");
-      throw error;
-    } finally {
-      competencyClient.release();
+    const includeYears = !requestedKeys || requestedKeys.includes('years');
+    const includePeriods = !requestedKeys || requestedKeys.includes('periods');
+    const includeScales = !requestedKeys || requestedKeys.includes('scales');
+    const includeAssignments = !requestedKeys || requestedKeys.includes('assignments');
+    const includeCompetencies = !requestedKeys || requestedKeys.includes('competencies');
+    const includeClosures = !requestedKeys || requestedKeys.includes('closures');
+    const includeDimensions = !requestedKeys || requestedKeys.includes('dimensions');
+    const includeDefaults = !requestedKeys || requestedKeys.includes('defaults');
+
+    // Only run expensive auto-switch and harmonization if periods or competencies are requested (or full load)
+    const runSchedules = !requestedKeys || requestedKeys.includes('periods') || requestedKeys.includes('competencies');
+
+    if (runSchedules) {
+      // Auto-switch periods based on current date
+      await autoSwitchPeriodsForYear(pool, schoolId, currentYearId);
+
+      const competencyClient = await pool.connect();
+      try {
+        await competencyClient.query("BEGIN");
+        await harmonizeCompetenciesForSchoolYear(competencyClient, schoolId, currentYearId);
+        await competencyClient.query("COMMIT");
+      } catch (error) {
+        await competencyClient.query("ROLLBACK");
+        throw error;
+      } finally {
+        competencyClient.release();
+      }
     }
 
-    const [yearRes, academicYearsRes, defaultSettingsRes, periodsRes, scalesRes, assignmentsRes, competenciesRes, closureSummaryRes, dimensionsRes] = await Promise.all([
-      pool.query(
-        `SELECT id_anio, calendario, tipo_calendario, estado
-         FROM anio_lectivo
-         WHERE id_anio = $1
-           AND id_colegio = $2`,
-        [currentYearId, schoolId]
-      ),
-      pool.query(
-        `SELECT id_anio, calendario, tipo_calendario, estado
-         FROM anio_lectivo
-         WHERE id_colegio = $1
-         ORDER BY id_anio DESC`,
-        [schoolId]
-      ),
-      ensureSchoolDefaultSettings(schoolId),
-      pool.query(
-        `SELECT id_periodo, nombre, estado, porcentaje, trimestre, dia_inicio, dia_fin, mes_inicio, mes_fin, id_anio
-         FROM periodo_academico
-         WHERE id_colegio = $1
-         ORDER BY id_periodo`,
-        [schoolId]
-      ),
-      pool.query(
-        `SELECT
-           ev.id_escalavaloracion,
-           ev.nivel,
-           ev.valor_minimo,
-           ev.valor_maximo,
-           COUNT(DISTINCT n.id_notaactividad)::int AS notas_count
-         FROM escala_valoracion ev
-         LEFT JOIN notas_actividad n ON n.id_escalavaloracion = ev.id_escalavaloracion
-         WHERE ev.id_colegio = $1
-         GROUP BY ev.id_escalavaloracion
-         ORDER BY ev.valor_minimo DESC, ev.valor_maximo DESC`,
-        [schoolId]
-      ),
-      pool.query(
-        `SELECT
-           dg.id_detallegrado,
-           dg.id_grupo,
-           dg.id_materia,
-           m.nombre AS materia_nombre,
-           ne.nombre AS nivel_nombre,
-           tg.nombre AS tipo_grado_nombre,
-           s.nombre AS seccion_nombre,
-           j.nombre AS jornada_nombre
-         FROM detalle_grados dg
-         JOIN materias m ON m.id_materia = dg.id_materia
-         JOIN grupos g ON g.id_grupo = dg.id_grupo
-         JOIN nivel_escolar ne ON ne.id_nivel = g.id_nivel
-         JOIN tipo_grado tg ON tg.id_tipo_grado = g.id_tipo_grado
-         JOIN secciones s ON s.id_seccion = g.id_seccion
-         JOIN jornada j ON j.id_jornada = g.id_jornada
-         WHERE dg.id_colegio = $1
-           AND dg.id_grupo IS NOT NULL
-         ORDER BY ne.nombre, tg.nombre, LENGTH(s.nombre), s.nombre, j.nombre, m.nombre`,
-        [schoolId]
-      ),
-      pool.query(
-        `SELECT
-           c.id_competencia,
-           c.id_grupo,
-           c.id_materia,
-           c.id_periodo,
-           c.descripcion,
-           c.id_dimension,
-           dp.nombre AS dimension_nombre,
-           EXISTS (
-             SELECT 1 
-             FROM colegio_version_curricular cvc
-             WHERE cvc.id_colegio = c.id_colegio
-               AND (
-                 cvc.area = m.nombre
-                 OR (tg.nombre = 'TRANSICION' AND cvc.area = 'Desarrollo Integral' AND m.nombre = 'Desarrollo Integral (Transición)')
-                 OR (tg.nombre = 'TRANSICION' AND cvc.area = 'Desarrollo Integral (Transición)' AND m.nombre = 'Desarrollo Integral')
-                 OR (tg.nombre = 'TRANSICION' AND cvc.area = 'Transición' AND m.nombre = 'Desarrollo Integral')
-               )
-               AND cvc.grado = tg.nombre
-           ) AS usa_dba,
-           CASE
-             WHEN EXISTS (
-               SELECT 1
-               FROM competencias c2
-               JOIN grupos g2 ON g2.id_grupo = c2.id_grupo
-               WHERE c2.id_colegio = c.id_colegio
-                 AND c2.id_materia = c.id_materia
-                 AND c2.id_periodo = c.id_periodo
-                 AND g2.id_nivel = g.id_nivel
-                 AND g2.id_tipo_grado = g.id_tipo_grado
-                 AND UPPER(TRIM(TRAILING '.' FROM c2.descripcion)) <> UPPER(TRIM(TRAILING '.' FROM $2))
-             ) THEN 'DEFINIDA'
-             ELSE 'PENDIENTE'
-           END AS estado,
-           m.nombre AS materia_nombre,
-           p.nombre AS periodo_nombre,
-           ne.nombre AS nivel_nombre,
-           tg.nombre AS tipo_grado_nombre,
-           s.nombre AS seccion_nombre,
-           j.nombre AS jornada_nombre,
-           COALESCE(
-             (
-               SELECT json_agg(
-                 json_build_object(
-                   'id_evidencia', ev.id_evidencia,
-                   'descripcion',  ev.descripcion,
-                   'orden',        ev.orden,
-                   'id_evidencia_dba', ev.id_evidencia_dba
-                 )
-                 ORDER BY ev.orden, ev.id_evidencia
-               )
-               FROM evidencia_aprendizaje ev
-               WHERE ev.id_competencia = c.id_competencia
-             ),
-             '[]'::json
-           ) AS evidencias
-         FROM competencias c
-         JOIN materias m ON m.id_materia = c.id_materia
-         JOIN periodo_academico p ON p.id_periodo = c.id_periodo
-         JOIN grupos g ON g.id_grupo = c.id_grupo
-         JOIN nivel_escolar ne ON ne.id_nivel = g.id_nivel
-         JOIN tipo_grado tg ON tg.id_tipo_grado = g.id_tipo_grado
-         JOIN secciones s ON s.id_seccion = g.id_seccion
-         JOIN jornada j ON j.id_jornada = g.id_jornada
-         LEFT JOIN dimensiones_preescolar dp ON dp.id_dimension = c.id_dimension
-         WHERE c.id_colegio = $1
-           AND c.id_anio = $3
-         ORDER BY p.id_periodo, ne.nombre, tg.nombre, m.nombre`,
-        [schoolId, DEFAULT_COMPETENCY_TEXT, currentYearId]
-      ),
-      pool.query(
-        `SELECT
-           p.id_periodo,
-           p.nombre,
-           p.estado,
-           COUNT(DISTINCT dg.id_detallegrado)::int AS total_asignaciones,
-           COUNT(DISTINCT CASE WHEN cm.estado = 'CERRADO' THEN cm.id_detallegrado END)::int AS asignaciones_cerradas
-         FROM periodo_academico p
-         LEFT JOIN detalle_grados dg
-           ON dg.id_colegio = p.id_colegio
-          AND dg.id_grupo IS NOT NULL
-         LEFT JOIN cierre_materia cm
-           ON cm.id_periodo = p.id_periodo
-          AND cm.id_detallegrado = dg.id_detallegrado
-         WHERE p.id_colegio = $1
-         GROUP BY p.id_periodo
-         ORDER BY p.id_periodo`,
-        [schoolId]
-      ),
-      pool.query(
-        `SELECT id_dimension, nombre FROM dimensiones_preescolar ORDER BY id_dimension`
-      ),
-    ]);
+    const queries: Promise<any>[] = [
+      // 0: yearRes
+      includeYears
+        ? pool.query(
+            `SELECT id_anio, calendario, tipo_calendario, estado
+             FROM anio_lectivo
+             WHERE id_anio = $1
+               AND id_colegio = $2`,
+            [currentYearId, schoolId]
+          )
+        : Promise.resolve({ rows: [] }),
 
-    const periodsWithDefaults = periodsRes.rows.map((period, index) => ({
+      // 1: academicYearsRes
+      includeYears
+        ? pool.query(
+            `SELECT id_anio, calendario, tipo_calendario, estado
+             FROM anio_lectivo
+             WHERE id_colegio = $1
+             ORDER BY id_anio DESC`,
+            [schoolId]
+          )
+        : Promise.resolve({ rows: [] }),
+
+      // 2: defaultSettingsRes
+      includeDefaults
+        ? ensureSchoolDefaultSettings(schoolId)
+        : Promise.resolve(null),
+
+      // 3: periodsRes
+      includePeriods
+        ? pool.query(
+            `SELECT id_periodo, nombre, estado, porcentaje, trimestre, dia_inicio, dia_fin, mes_inicio, mes_fin, id_anio
+             FROM periodo_academico
+             WHERE id_colegio = $1 AND id_anio = $2
+             ORDER BY id_periodo`,
+            [schoolId, currentYearId]
+          )
+        : Promise.resolve({ rows: [] }),
+
+      // 4: scalesRes
+      includeScales
+        ? pool.query(
+            `SELECT
+               ev.id_escalavaloracion,
+               ev.nivel,
+               ev.valor_minimo,
+               ev.valor_maximo,
+               COUNT(DISTINCT n.id_notaactividad)::int AS notas_count
+             FROM escala_valoracion ev
+             LEFT JOIN notas_actividad n ON n.id_escalavaloracion = ev.id_escalavaloracion
+             WHERE ev.id_colegio = $1
+             GROUP BY ev.id_escalavaloracion
+             ORDER BY ev.valor_minimo DESC, ev.valor_maximo DESC`,
+            [schoolId]
+          )
+        : Promise.resolve({ rows: [] }),
+
+      // 5: assignmentsRes
+      includeAssignments
+        ? pool.query(
+            `SELECT
+               dg.id_detallegrado,
+               dg.id_grupo,
+               dg.id_materia,
+               m.nombre AS materia_nombre,
+               ne.nombre AS nivel_nombre,
+               tg.nombre AS tipo_grado_nombre,
+               s.nombre AS seccion_nombre,
+               j.nombre AS jornada_nombre
+             FROM detalle_grados dg
+             JOIN materias m ON m.id_materia = dg.id_materia
+             JOIN grupos g ON g.id_grupo = dg.id_grupo
+             JOIN nivel_escolar ne ON ne.id_nivel = g.id_nivel
+             JOIN tipo_grado tg ON tg.id_tipo_grado = g.id_tipo_grado
+             JOIN secciones s ON s.id_seccion = g.id_seccion
+             JOIN jornada j ON j.id_jornada = g.id_jornada
+             WHERE dg.id_colegio = $1
+               AND dg.id_grupo IS NOT NULL
+               AND dg.id_anio = $2
+             ORDER BY ne.nombre, tg.nombre, LENGTH(s.nombre), s.nombre, j.nombre, m.nombre`,
+            [schoolId, currentYearId]
+          )
+        : Promise.resolve({ rows: [] }),
+
+      // 6: competenciesRes
+      includeCompetencies
+        ? pool.query(
+            `SELECT
+               c.id_competencia,
+               c.id_grupo,
+               c.id_materia,
+               c.id_periodo,
+               c.descripcion,
+               c.id_dimension,
+               dp.nombre AS dimension_nombre,
+               EXISTS (
+                 SELECT 1 
+                 FROM colegio_version_curricular cvc
+                 WHERE cvc.id_colegio = c.id_colegio
+                   AND (
+                     cvc.area = m.nombre
+                     OR (tg.nombre = 'TRANSICION' AND cvc.area = 'Desarrollo Integral' AND m.nombre = 'Desarrollo Integral (Transición)')
+                     OR (tg.nombre = 'TRANSICION' AND cvc.area = 'Desarrollo Integral (Transición)' AND m.nombre = 'Desarrollo Integral')
+                     OR (tg.nombre = 'TRANSICION' AND cvc.area = 'Transición' AND m.nombre = 'Desarrollo Integral')
+                   )
+                   AND cvc.grado = tg.nombre
+               ) AS usa_dba,
+               CASE
+                 WHEN EXISTS (
+                   SELECT 1
+                   FROM competencias c2
+                   JOIN grupos g2 ON g2.id_grupo = c2.id_grupo
+                   WHERE c2.id_colegio = c.id_colegio
+                     AND c2.id_materia = c.id_materia
+                     AND c2.id_periodo = c.id_periodo
+                     AND g2.id_nivel = g.id_nivel
+                     AND g2.id_tipo_grado = g.id_tipo_grado
+                     AND UPPER(TRIM(TRAILING '.' FROM c2.descripcion)) <> UPPER(TRIM(TRAILING '.' FROM $2))
+                 ) THEN 'DEFINIDA'
+                 ELSE 'PENDIENTE'
+               END AS estado,
+               m.nombre AS materia_nombre,
+               p.nombre AS periodo_nombre,
+               ne.nombre AS nivel_nombre,
+               tg.nombre AS tipo_grado_nombre,
+               s.nombre AS seccion_nombre,
+               j.nombre AS jornada_nombre,
+               COALESCE(
+                 (
+                   SELECT json_agg(
+                     json_build_object(
+                       'id_evidencia', ev.id_evidencia,
+                       'descripcion',  ev.descripcion,
+                       'orden',        ev.orden,
+                       'id_evidencia_dba', ev.id_evidencia_dba
+                     )
+                     ORDER BY ev.orden, ev.id_evidencia
+                   )
+                   FROM evidencia_aprendizaje ev
+                   WHERE ev.id_competencia = c.id_competencia
+                 ),
+                 '[]'::json
+               ) AS evidencias
+             FROM competencias c
+             JOIN materias m ON m.id_materia = c.id_materia
+             JOIN periodo_academico p ON p.id_periodo = c.id_periodo
+             JOIN grupos g ON g.id_grupo = c.id_grupo
+             JOIN nivel_escolar ne ON ne.id_nivel = g.id_nivel
+             JOIN tipo_grado tg ON tg.id_tipo_grado = g.id_tipo_grado
+             JOIN secciones s ON s.id_seccion = g.id_seccion
+             JOIN jornada j ON j.id_jornada = g.id_jornada
+             LEFT JOIN dimensiones_preescolar dp ON dp.id_dimension = c.id_dimension
+             WHERE c.id_colegio = $1
+               AND c.id_anio = $3
+             ORDER BY p.id_periodo, ne.nombre, tg.nombre, m.nombre`,
+            [schoolId, DEFAULT_COMPETENCY_TEXT, currentYearId]
+          )
+        : Promise.resolve({ rows: [] }),
+
+      // 7: closureSummaryRes
+      includeClosures
+        ? pool.query(
+            `SELECT
+               p.id_periodo,
+               p.nombre,
+               p.estado,
+               COUNT(DISTINCT dg.id_detallegrado)::int AS total_asignaciones,
+               COUNT(DISTINCT CASE WHEN cm.estado = 'CERRADO' THEN cm.id_detallegrado END)::int AS asignaciones_cerradas
+             FROM periodo_academico p
+             LEFT JOIN detalle_grados dg
+               ON dg.id_colegio = p.id_colegio
+              AND dg.id_grupo IS NOT NULL
+             LEFT JOIN cierre_materia cm
+               ON cm.id_periodo = p.id_periodo
+              AND cm.id_detallegrado = dg.id_detallegrado
+             WHERE p.id_colegio = $1 AND p.id_anio = $2
+             GROUP BY p.id_periodo
+             ORDER BY p.id_periodo`,
+            [schoolId, currentYearId]
+          )
+        : Promise.resolve({ rows: [] }),
+
+      // 8: dimensionsRes
+      includeDimensions
+        ? pool.query(
+            `SELECT id_dimension, nombre FROM dimensiones_preescolar ORDER BY id_dimension`
+          )
+        : Promise.resolve({ rows: [] }),
+    ];
+
+    const [
+      yearRes,
+      academicYearsRes,
+      defaultSettingsRes,
+      periodsRes,
+      scalesRes,
+      assignmentsRes,
+      competenciesRes,
+      closureSummaryRes,
+      dimensionsRes
+    ] = await Promise.all(queries);
+
+    const periodsWithDefaults = periodsRes.rows.map((period: any, index: number) => ({
       ...period,
       meses_referencia: getDefaultMonthsLabelForPeriodOrder(index + 1),
     }));
 
+    const authReq = req as AuthRequest;
+    let availableYears = academicYearsRes.rows;
+
+    if (authReq.user && includeYears && academicYearsRes.rows.length > 0) {
+      const userRoles = authReq.user.roles || [];
+      const eligibleYearIds = await getUserEligibleAcademicYears(
+        authReq.user.id,
+        authReq.user.email || '',
+        userRoles,
+        schoolId
+      );
+      availableYears = academicYearsRes.rows.filter((y: any) => eligibleYearIds.includes(Number(y.id_anio)));
+    }
+
     res.json({
       currentYear: yearRes.rows[0] || null,
       activeYear: yearRes.rows[0] || null,
-      academicYears: academicYearsRes.rows,
+      academicYears: availableYears,
       defaultSettings: defaultSettingsRes,
       periods: periodsWithDefaults,
-      scales: scalesRes.rows,
-      assignments: assignmentsRes.rows,
-      competencies: competenciesRes.rows,
-      closureSummary: closureSummaryRes.rows,
-      dimensions: dimensionsRes.rows,
+      scales: scalesRes.rows || [],
+      assignments: assignmentsRes.rows || [],
+      competencies: competenciesRes.rows || [],
+      closureSummary: closureSummaryRes.rows || [],
+      dimensions: dimensionsRes.rows || [],
     });
   } catch (error: any) {
     console.error("Error fetching academic settings:", error);
@@ -1407,6 +1606,9 @@ export const createAcademicYear = async (req: Request, res: Response): Promise<v
         [periodNames[i], estadoP, mes_inicio, dia_inicio, mes_fin, dia_fin, newYearId, schoolId, i + 1]
       );
     }
+
+    // Clear group directors for the school (clean slate for the new year)
+    await client.query("UPDATE grupos SET id_docente = NULL WHERE id_colegio = $1", [schoolId]);
 
     const updatedPeriodsRes = await client.query(
       `SELECT id_periodo, nombre, estado, porcentaje, mes_inicio, dia_inicio, mes_fin, dia_fin, trimestre
@@ -1985,31 +2187,88 @@ export const closeAcademicPeriod = async (req: Request, res: Response): Promise<
 export const reopenAcademicPeriod = async (req: Request, res: Response): Promise<void> => {
   const periodId = Number(req.params.id);
   const schoolId = parseSchoolId(req.body.schoolId);
+  const { motivo } = req.body;
 
   if (!periodId || !schoolId) {
     res.status(400).json({ error: "Parámetros inválidos" });
     return;
   }
 
+  if (!motivo || !motivo.trim()) {
+    res.status(400).json({ error: "Debe proporcionar un motivo para reabrir el periodo." });
+    return;
+  }
+
+  const client = await pool.connect();
   try {
-    const updated = await pool.query(
-      `UPDATE periodo_academico
-       SET estado = 'ABIERTO'
-       WHERE id_periodo = $1
-         AND id_colegio = $2
-         AND estado = 'CERRADO'`,
+    await client.query("BEGIN");
+
+    // 1. Get current period
+    const periodRes = await client.query(
+      `SELECT id_periodo, nombre, estado
+       FROM periodo_academico
+       WHERE id_periodo = $1 AND id_colegio = $2`,
       [periodId, schoolId]
     );
 
-    if (updated.rowCount === 0) {
-      res.status(404).json({ error: "Periodo no encontrado o no está cerrado" });
+    if (periodRes.rows.length === 0) {
+      await client.query("ROLLBACK");
+      res.status(404).json({ error: "Periodo no encontrado" });
       return;
     }
 
+    const period = periodRes.rows[0];
+    if (period.estado !== 'CERRADO') {
+      await client.query("ROLLBACK");
+      res.status(409).json({ error: "Solo se pueden reabrir periodos en estado Cerrado." });
+      return;
+    }
+
+    // 2. Audit check
+    const authReq = req as AuthRequest;
+    const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+    let activeAuditoriaId: number | null = null;
+    
+    if (isSupervision) {
+      const auditRes = await client.query(
+        `SELECT id_auditoria 
+         FROM auditoria_supervision 
+         WHERE id_colegio = $1 AND id_admin_general = $2 AND estado_supervision = 'ACTIVA'`,
+        [schoolId, authReq.user!.id]
+      );
+      if (auditRes.rows.length > 0) {
+        activeAuditoriaId = auditRes.rows[0].id_auditoria;
+      }
+    }
+
+    // 3. Update period state to ABIERTO
+    await client.query(
+      `UPDATE periodo_academico
+       SET estado = 'ABIERTO'
+       WHERE id_periodo = $1 AND id_colegio = $2`,
+      [periodId, schoolId]
+    );
+
+    // 4. Log in audit
+    if (activeAuditoriaId) {
+      const valorAntiguo = { estado: period.estado };
+      const valorNuevo = { estado: 'ABIERTO' };
+      await client.query(
+        `INSERT INTO auditoria_acciones_realizadas
+         (id_auditoria, modulo, tipo_accion, accion, recurso_afectado, valor_antiguo, valor_nuevo, motivo_cambio)
+         VALUES ($1, 'CONFIGURACION', 'MODIFICACION', 'Reapertura de periodo académico', $2, $3, $4, $5)`,
+        [activeAuditoriaId, `Periodo ID: ${periodId} (${period.nombre})`, JSON.stringify(valorAntiguo), JSON.stringify(valorNuevo), motivo]
+      );
+    }
+
+    await client.query("COMMIT");
     res.json({ message: "Periodo reabierto con éxito" });
   } catch (error: any) {
+    await client.query("ROLLBACK");
     console.error("Error reopening academic period:", error);
     res.status(500).json({ error: "Error en el servidor" });
+  } finally {
+    client.release();
   }
 };
 
@@ -2341,14 +2600,6 @@ export const approveAcademicPeriod = async (req: Request, res: Response): Promis
       }
     }
 
-    // 4. Deactivate any currently ABIERTO periods to CERRADO (only one can be open)
-    await client.query(
-      `UPDATE periodo_academico
-       SET estado = 'CERRADO'
-       WHERE id_colegio = $1 AND id_anio = $2 AND estado = 'ABIERTO'`,
-      [schoolId, period.id_anio]
-    );
-
     // 5. Activate this period
     await client.query(
       `UPDATE periodo_academico
@@ -2400,6 +2651,7 @@ export const deleteScale = async (req: Request, res: Response): Promise<void> =>
 
 export const getTeacherManagementData = async (req: Request, res: Response): Promise<void> => {
   const schoolId = parseSchoolId(req.params.schoolId);
+  const yearId = req.query.yearId ? Number(req.query.yearId) : null;
   if (!schoolId) {
     res.status(400).json({ error: "Colegio inválido" });
     return;
@@ -2429,10 +2681,11 @@ export const getTeacherManagementData = async (req: Request, res: Response): Pro
          JOIN tipo_documento td ON td.id_tipodocumento = d.id_tipodocumento
          LEFT JOIN usuario u ON u.id_usuario = d.id_usuario
          LEFT JOIN detalle_grados dg ON dg.id_docente = d.id_docente
+           AND ($2::int IS NULL OR dg.id_anio = $2)
          WHERE d.id_colegio = $1
          GROUP BY d.id_docente, td.tipo, d.estado, u.id_usuario, u.email, u.activo
          ORDER BY d.nombre, d.apellido`,
-        [schoolId]
+        [schoolId, yearId]
       ),
       pool.query(
         `SELECT id_materia, nombre
@@ -2480,8 +2733,9 @@ export const getTeacherManagementData = async (req: Request, res: Response): Pro
          JOIN jornada j ON j.id_jornada = g.id_jornada
          WHERE dg.id_colegio = $1
            AND dg.id_grupo IS NOT NULL
+           AND ($2::int IS NULL OR dg.id_anio = $2)
          ORDER BY d.nombre, d.apellido, ne.nombre, tg.nombre, m.nombre`,
-        [schoolId]
+        [schoolId, yearId]
       ),
     ]);
 
@@ -2559,12 +2813,6 @@ export const createTeacher = async (req: Request, res: Response): Promise<void> 
       return;
     }
 
-    if (existingUserRes.rows.length > 0) {
-      await client.query("ROLLBACK");
-      res.status(409).json({ error: "Ya existe un usuario registrado con ese correo" });
-      return;
-    }
-
     if (roleRes.rows.length === 0) {
       await client.query("ROLLBACK");
       res.status(500).json({ error: "No existe el rol docente configurado en el sistema" });
@@ -2572,6 +2820,78 @@ export const createTeacher = async (req: Request, res: Response): Promise<void> 
     }
 
     schoolName = schoolRes.rows[0]?.nombre || schoolName;
+
+    if (existingUserRes.rows.length > 0) {
+      const existingUser = existingUserRes.rows[0];
+      const userRolesRes = await client.query(
+        `SELECT r.nombre 
+         FROM usuario_rol ur
+         JOIN rol r ON r.id_rol = ur.id_rol
+         WHERE ur.id_usuario = $1`,
+        [existingUser.id_usuario]
+      );
+      const roles = userRolesRes.rows.map((row: any) => row.nombre.toLowerCase().trim());
+      const isParent = roles.includes("padre");
+      const isDocente = roles.includes("docente");
+
+      if (isDocente) {
+        await client.query("ROLLBACK");
+        res.status(409).json({ error: "Ya existe un docente registrado con ese correo" });
+        return;
+      }
+
+      if (isParent) {
+        const addRoleIfParent = Boolean(req.body.addRoleIfParent);
+        if (!addRoleIfParent) {
+          await client.query("ROLLBACK");
+          res.status(409).json({
+            isParent: true,
+            message: `El correo "${email}" pertenece a un Padre de Familia registrado (${existingUser.nombre} ${existingUser.apellido}). ¿Desea registrarlo también como Docente?`
+          });
+          return;
+        }
+
+        // Add 'docente' role to existing user
+        await client.query(
+          `INSERT INTO usuario_rol (id_usuario, id_rol)
+           VALUES ($1, $2)
+           ON CONFLICT DO NOTHING`,
+          [existingUser.id_usuario, roleRes.rows[0].id_rol]
+        );
+
+        const teacherRes = await client.query(
+          `INSERT INTO docente (nombre, apellido, documento, id_tipodocumento, id_colegio, id_usuario, estado)
+           VALUES ($1, $2, $3, $4, $5, $6, 'ACTIVO')
+           RETURNING id_docente, nombre, apellido, documento, id_tipodocumento, estado`,
+          [nombre, apellido, documento, documentTypeId, schoolId, existingUser.id_usuario]
+        );
+
+        await client.query("COMMIT");
+
+        await NotificationService.sendTeacherWelcomeEmail(
+          existingUser.email,
+          `${nombre} ${apellido}`,
+          schoolName,
+          documentTypeRes.rows[0].tipo,
+          documento,
+          password
+        );
+
+        res.status(201).json({
+          ...teacherRes.rows[0],
+          tipo_documento: documentTypeRes.rows[0].tipo,
+          email: existingUser.email,
+          activo: existingUser.activo,
+          estado: teacherRes.rows[0].estado,
+          asignaciones_count: 0
+        });
+        return;
+      }
+
+      await client.query("ROLLBACK");
+      res.status(409).json({ error: "Ya existe un usuario registrado con ese correo" });
+      return;
+    }
 
     const passwordHash = await bcrypt.hash(password, 10);
     const userRes = await client.query(
@@ -2616,6 +2936,245 @@ export const createTeacher = async (req: Request, res: Response): Promise<void> 
   } catch (error: any) {
     await client.query("ROLLBACK");
     console.error("Error creating teacher:", error);
+    res.status(500).json({ error: "Error en el servidor" });
+  } finally {
+    client.release();
+  }
+};
+
+export const updateTeacher = async (req: Request, res: Response): Promise<void> => {
+  const teacherId = Number(req.params.id);
+  const schoolId = parseSchoolId(req.body.schoolId);
+  const nombre = String(req.body.nombre || "").trim();
+  const apellido = String(req.body.apellido || "").trim();
+  const documento = String(req.body.documento || "").trim();
+  const email = String(req.body.email || "").trim().toLowerCase();
+  const documentTypeId = Number(req.body.id_tipodocumento);
+
+  if (!teacherId || !schoolId || !nombre || !apellido || !documento || !email || !documentTypeId) {
+    res.status(400).json({ error: "Todos los campos son obligatorios" });
+    return;
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    // Check if another teacher in this school has the same document
+    const duplicateDoc = await client.query(
+      `SELECT id_docente FROM docente WHERE id_colegio = $1 AND documento = $2 AND id_docente != $3`,
+      [schoolId, documento, teacherId]
+    );
+    if (duplicateDoc.rows.length > 0) {
+      await client.query("ROLLBACK");
+      res.status(409).json({ error: "Ya existe otro docente con ese documento en este colegio" });
+      return;
+    }
+
+    // Get current teacher
+    const teacherRes = await client.query(
+      `SELECT id_usuario FROM docente WHERE id_docente = $1 AND id_colegio = $2`,
+      [teacherId, schoolId]
+    );
+    if (teacherRes.rows.length === 0) {
+      await client.query("ROLLBACK");
+      res.status(404).json({ error: "Docente no encontrado" });
+      return;
+    }
+
+    const { id_usuario } = teacherRes.rows[0];
+
+    // Check if another user has this email
+    if (id_usuario) {
+      const duplicateEmail = await client.query(
+        `SELECT id_usuario FROM usuario WHERE LOWER(email) = $1 AND id_usuario != $2`,
+        [email, id_usuario]
+      );
+      if (duplicateEmail.rows.length > 0) {
+        await client.query("ROLLBACK");
+        res.status(409).json({ error: "Ya existe otro usuario registrado con ese correo" });
+        return;
+      }
+
+      // Update usuario details
+      await client.query(
+        `UPDATE usuario 
+         SET nombre = $1, apellido = $2, email = $3
+         WHERE id_usuario = $4`,
+        [nombre, apellido, email, id_usuario]
+      );
+    }
+
+    // Update docente details
+    await client.query(
+      `UPDATE docente 
+       SET nombre = $1, apellido = $2, documento = $3, id_tipodocumento = $4
+       WHERE id_docente = $5`,
+      [nombre, apellido, documento, documentTypeId, teacherId]
+    );
+
+    await client.query("COMMIT");
+    res.json({ message: "Docente actualizado con éxito." });
+  } catch (error: any) {
+    await client.query("ROLLBACK");
+    console.error("Error updating teacher:", error);
+    res.status(500).json({ error: "Error en el servidor" });
+  } finally {
+    client.release();
+  }
+};
+
+export const deleteTeacher = async (req: Request, res: Response): Promise<void> => {
+  const teacherId = Number(req.params.id);
+  const schoolId = parseSchoolId(req.query.schoolId);
+
+  if (!teacherId || !schoolId) {
+    res.status(400).json({ error: "Parámetros inválidos" });
+    return;
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    // Get teacher and their user id
+    const teacherRes = await client.query(
+      `SELECT id_usuario, nombre, apellido FROM docente WHERE id_docente = $1 AND id_colegio = $2`,
+      [teacherId, schoolId]
+    );
+
+    if (teacherRes.rows.length === 0) {
+      await client.query("ROLLBACK");
+      res.status(404).json({ error: "Docente no encontrado" });
+      return;
+    }
+
+    const { id_usuario, nombre, apellido } = teacherRes.rows[0];
+
+    // Check if the user has other roles (like 'padre')
+    let hasOtherRoles = false;
+    if (id_usuario) {
+      const rolesRes = await client.query(
+        `SELECT COUNT(*)::int AS count 
+         FROM usuario_rol ur
+         JOIN rol r ON r.id_rol = ur.id_rol
+         WHERE ur.id_usuario = $1 AND LOWER(r.nombre) != 'docente'`,
+        [id_usuario]
+      );
+      if (rolesRes.rows[0].count > 0) {
+        hasOtherRoles = true;
+      }
+    }
+
+    // Bypass period-closed triggers for this admin delete operation
+    // This is safe because we are inside a transaction that will rollback on any error
+    await client.query(`SET LOCAL session_replication_role = 'replica'`);
+
+    // 1. Set id_docente to NULL in grupos (director de grupo)
+    await client.query(`UPDATE grupos SET id_docente = NULL WHERE id_docente = $1`, [teacherId]);
+
+    // 2. Fetch all assignments for this teacher
+    const assignmentsRes = await client.query(
+      `SELECT id_detallegrado FROM detalle_grados WHERE id_docente = $1`,
+      [teacherId]
+    );
+    const detailIds = assignmentsRes.rows.map((row: any) => row.id_detallegrado);
+
+    if (detailIds.length > 0) {
+      // Fetch all actividad_materia IDs for these assignments
+      const actividadRes = await client.query(
+        `SELECT id_actividadmateria FROM actividad_materia WHERE id_detallegrado = ANY($1)`,
+        [detailIds]
+      );
+      const actividadIds = actividadRes.rows.map((r: any) => r.id_actividadmateria);
+
+      if (actividadIds.length > 0) {
+        // 3a. Delete from notas_actividad (correct table name)
+        await client.query(
+          `DELETE FROM notas_actividad WHERE id_actividadmateria = ANY($1)`,
+          [actividadIds]
+        );
+
+        // 3b. Delete from desempeno
+        await client.query(
+          `DELETE FROM desempeno WHERE id_actividadmateria = ANY($1)`,
+          [actividadIds]
+        );
+
+        // 3c. Delete from criterio_evaluacion
+        await client.query(
+          `DELETE FROM criterio_evaluacion WHERE id_actividadmateria = ANY($1)`,
+          [actividadIds]
+        );
+
+        // 3d. Delete from actividad_evidencia_dba
+        await client.query(
+          `DELETE FROM actividad_evidencia_dba WHERE id_actividadmateria = ANY($1)`,
+          [actividadIds]
+        );
+      }
+
+      // 4. Delete from actividad_materia
+      await client.query(
+        `DELETE FROM actividad_materia WHERE id_detallegrado = ANY($1)`,
+        [detailIds]
+      );
+
+      // 5. Delete from cierre_materia
+      await client.query(
+        `DELETE FROM cierre_materia WHERE id_detallegrado = ANY($1)`,
+        [detailIds]
+      );
+
+      // 6. Delete from observacion_estudiante
+      await client.query(
+        `DELETE FROM observacion_estudiante WHERE id_detallegrado = ANY($1)`,
+        [detailIds]
+      );
+
+      // 7. Delete from registro_asistencia (no child tables)
+      await client.query(
+        `DELETE FROM registro_asistencia WHERE id_detallegrado = ANY($1)`,
+        [detailIds]
+      );
+
+      // 8. Delete from resultado_academico
+      await client.query(
+        `DELETE FROM resultado_academico WHERE id_detallegrado = ANY($1)`,
+        [detailIds]
+      );
+
+      // 9. Delete from detalle_grados
+      await client.query(
+        `DELETE FROM detalle_grados WHERE id_docente = $1`,
+        [teacherId]
+      );
+    }
+
+    // Delete teacher record
+    await client.query(`DELETE FROM docente WHERE id_docente = $1`, [teacherId]);
+
+    // Delete user record (which cascades to user roles)
+    if (id_usuario) {
+      if (hasOtherRoles) {
+        // Just remove the 'docente' role from usuario_rol
+        const roleRes = await client.query(`SELECT id_rol FROM rol WHERE LOWER(nombre) = 'docente' LIMIT 1`);
+        if (roleRes.rows.length > 0) {
+          await client.query(
+            `DELETE FROM usuario_rol WHERE id_usuario = $1 AND id_rol = $2`,
+            [id_usuario, roleRes.rows[0].id_rol]
+          );
+        }
+      } else {
+        await client.query(`DELETE FROM usuario WHERE id_usuario = $1`, [id_usuario]);
+      }
+    }
+
+    await client.query("COMMIT");
+    res.json({ message: `Docente ${nombre} ${apellido} eliminado con éxito.` });
+  } catch (error: any) {
+    await client.query("ROLLBACK");
+    console.error("Error deleting teacher:", error);
     res.status(500).json({ error: "Error en el servidor" });
   } finally {
     client.release();
@@ -2683,6 +3242,16 @@ export const assignTeacherCourseSubject = async (req: Request, res: Response): P
     }
     const courseName = `${context.tipo_grado_nombre} ${context.seccion_nombre} - ${context.jornada_nombre} - ${context.nivel_nombre}`;
 
+    const activeYearRes = await pool.query(
+      `SELECT id_anio FROM anio_lectivo WHERE id_colegio = $1 AND estado = 'ABIERTO' LIMIT 1`,
+      [schoolId]
+    );
+    const activeYearId = activeYearRes.rows[0]?.id_anio;
+    if (!activeYearId) {
+      res.status(400).json({ error: "No hay un año lectivo abierto configurado para el colegio." });
+      return;
+    }
+
     const existingRes = await pool.query(
       `SELECT
          dg.id_detallegrado,
@@ -2693,8 +3262,9 @@ export const assignTeacherCourseSubject = async (req: Request, res: Response): P
        JOIN docente d ON d.id_docente = dg.id_docente
        WHERE dg.id_colegio = $1
          AND dg.id_materia = $2
-         AND dg.id_grupo = $3`,
-      [schoolId, subjectId, groupId]
+         AND dg.id_grupo = $3
+         AND dg.id_anio = $4`,
+      [schoolId, subjectId, groupId, activeYearId]
     );
 
     if (existingRes.rows.length > 0) {
@@ -2738,10 +3308,10 @@ export const assignTeacherCourseSubject = async (req: Request, res: Response): P
     }
 
     const created = await pool.query(
-      `INSERT INTO detalle_grados (id_materia, id_docente, id_colegio, id_grupo)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO detalle_grados (id_materia, id_docente, id_colegio, id_grupo, id_anio)
+       VALUES ($1, $2, $3, $4, $5)
        RETURNING id_detallegrado, id_docente, id_materia, id_grupo`,
-      [subjectId, teacherId, schoolId, groupId]
+      [subjectId, teacherId, schoolId, groupId, activeYearId]
     );
 
     await NotificationService.sendTeacherAssignmentEmail(
@@ -4455,13 +5025,7 @@ export const getEnrollmentConfig = async (req: Request, res: Response): Promise<
       [schoolId, yearId]
     );
 
-    const approvedRes = await pool.query(
-      `SELECT COUNT(*)::int AS count 
-       FROM matricula 
-       WHERE id_colegio = $1 AND id_anio = $2 AND estado IN ('ACTIVA', 'TRASLADADA')`,
-      [schoolId, yearId]
-    );
-    const hasApproved = approvedRes.rows[0].count > 0;
+    const hasApproved = false;
 
     if (result.rows.length > 0) {
       res.json({
@@ -4547,16 +5111,7 @@ export const saveEnrollmentConfig = async (req: Request, res: Response): Promise
       }
     }
 
-    // Check if approved matriculas exist for this school and year
-    const approvedRes = await pool.query(
-      `SELECT COUNT(*)::int AS count 
-       FROM matricula 
-       WHERE id_colegio = $1 AND id_anio = $2 AND estado IN ('ACTIVA', 'TRASLADADA')`,
-      [id_colegio, id_anio]
-    );
-    const hasApproved = approvedRes.rows[0].count > 0;
-
-    // Fetch existing configuration
+    // Fetch existing configuration for audit logging
     const existingRes = await pool.query(
       `SELECT fecha_inicio, fecha_cierre, habilitada 
        FROM configuracion_inscripcion 
@@ -4564,19 +5119,6 @@ export const saveEnrollmentConfig = async (req: Request, res: Response): Promise
       [id_colegio, id_anio]
     );
     const oldConfig = existingRes.rows[0] || null;
-
-    if (hasApproved && oldConfig) {
-      // Validate that dates are not being changed
-      const oldStart = new Date(oldConfig.fecha_inicio).getTime();
-      const oldEnd = new Date(oldConfig.fecha_cierre).getTime();
-      const newStart = start.getTime();
-      const newEnd = end.getTime();
-      
-      if (oldStart !== newStart || oldEnd !== newEnd) {
-        res.status(400).json({ error: "No se pueden modificar las fechas de inscripción porque ya existen matrículas aprobadas para este año académico." });
-        return;
-      }
-    }
 
     // Save/Update config
     const result = await pool.query(

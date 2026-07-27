@@ -50,17 +50,6 @@ export class MatriculaService {
       }
       const activeYearId = yearRes.rows[0].id_anio;
 
-      // Check if approved matriculas exist for this year
-      const approvedRes = await client.query(
-        `SELECT COUNT(*)::int AS count 
-         FROM matricula 
-         WHERE id_colegio = $1 AND id_anio = $2 AND estado IN ('ACTIVA', 'TRASLADADA')`,
-        [id_colegio, activeYearId]
-      );
-      if (approvedRes.rows[0].count > 0) {
-        throw new Error("Las inscripciones para este año académico ya han finalizado.");
-      }
-
       // Validate enrollment configuration dates and state
       const configRes = await client.query(
         `SELECT fecha_inicio, fecha_cierre, habilitada 
@@ -88,6 +77,28 @@ export class MatriculaService {
       if (now > end) {
         throw new Error(`Las inscripciones ya cerraron. Finalizaron el ${end.toLocaleDateString('es-CO')}.`);
       }
+
+      // ─── Duplicate guard ─────────────────────────────────────────────────
+      // Block re-submission if a non-cancelled enrollment already exists for
+      // this parent email + school + active year combination.
+      const dupRes = await client.query(
+        `SELECT id_matricula, estado
+         FROM matricula
+         WHERE id_colegio = $1
+           AND id_anio   = $2
+           AND correo_padre = $3
+           AND estado NOT IN ('CANCELADA', 'RECHAZADA')
+         LIMIT 1`,
+        [id_colegio, activeYearId, parentEmail]
+      );
+      if (dupRes.rows.length > 0) {
+        const existingState = dupRes.rows[0].estado;
+        throw new Error(
+          `Ya existe una solicitud de matrícula en estado "${existingState}" para este correo en el año lectivo activo. ` +
+          `Por favor revisa el estado de tu solicitud con el token de seguimiento recibido.`
+        );
+      }
+      // ─────────────────────────────────────────────────────────────────────
 
       // 1. Insertar en tabla matricula original (id_estudiante es NULL)
       const matRes = await client.query(

@@ -14,10 +14,13 @@ import {
 } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
+import { useAcademicYearStore } from '../../stores/academicYear'
+import { watch } from 'vue'
 import axios from 'axios'
 import { getCourseDisplayName } from '../../utils/courseHelper'
 
 const auth = useAuthStore()
+const yearStore = useAcademicYearStore()
 const router = useRouter()
 const loading = ref(true)
 const courses = ref<any[]>([])
@@ -78,11 +81,16 @@ const clearFilters = () => {
 
 const fetchPeriods = async () => {
   try {
-    const response = await axios.get(`http://localhost:3000/api/teacher/periods/${auth.user?.schoolId}`)
+    const params = yearStore.selectedYearId ? { yearId: yearStore.selectedYearId } : {}
+    const response = await axios.get(`http://localhost:3000/api/teacher/periods/${auth.user?.schoolId}`, { params })
     periods.value = response.data
     const openPeriod = periods.value.find((p: any) => p.estado === 'ABIERTO')
     if (openPeriod) {
       activePeriodId.value = openPeriod.id_periodo
+    } else if (periods.value.length > 0) {
+      activePeriodId.value = periods.value[periods.value.length - 1].id_periodo
+    } else {
+      activePeriodId.value = null
     }
   } catch (error) {
   }
@@ -99,7 +107,8 @@ const fetchCoursesWithStatus = async () => {
     if (!userId) return
 
     loading.value = true
-    const response = await axios.get(`http://localhost:3000/api/teacher/courses/${userId}`)
+    const params = yearStore.selectedYearId ? { yearId: yearStore.selectedYearId } : {}
+    const response = await axios.get(`http://localhost:3000/api/teacher/courses/${userId}`, { params })
     const rawCourses = response.data
     
     const coursesWithStatus = await Promise.all(rawCourses.map(async (course: any) => {
@@ -125,6 +134,11 @@ const fetchCoursesWithStatus = async () => {
     loading.value = false
   }
 }
+
+watch(() => yearStore.selectedYearId, async () => {
+  await fetchPeriods()
+  await fetchCoursesWithStatus()
+})
 
 const handleClosePeriod = async (course: any) => {
   if (!confirm(`¿Estás seguro de cerrar el periodo para ${course.materia_nombre} en ${course.grado_nombre}?`)) {

@@ -15,7 +15,10 @@ import {
   Filter
 } from 'lucide-vue-next'
 
+import { useAcademicYearStore } from '../../stores/academicYear'
+
 const auth = useAuthStore()
+const yearStore = useAcademicYearStore()
 const loading = ref(true)
 const studentId = ref<number | null>(null)
 const selectedYear = ref<number | null>(null)
@@ -29,6 +32,12 @@ const periods = ref<any[]>([])
 const subjects = ref<any[]>([])
 const attendanceData = ref<{ records: any[], stats: any } | null>(null)
 const studentInfo = ref<any>(null)
+
+watch(() => yearStore.selectedYearId, (newYearId) => {
+  if (newYearId && newYearId !== selectedYear.value) {
+    selectedYear.value = newYearId
+  }
+}, { immediate: true })
 
 const fetchStudentId = async () => {
   try {

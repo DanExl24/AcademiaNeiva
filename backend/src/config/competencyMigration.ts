@@ -620,7 +620,7 @@ export const ensureCompetencyForContext = async (
   client: PoolClient,
   context: TeachingContext,
   periodId: number
-): Promise<CompetencyRow> => {
+): Promise<CompetencyRow | null> => {
   // Buscar si ya existe alguna competencia registrada para este contexto de grupo, materia, periodo, año y colegio
   const existRes = await client.query<CompetencyRow>(
     `SELECT * FROM public.competencias 
@@ -634,5 +634,6 @@ export const ensureCompetencyForContext = async (
     return existRes.rows[0];
   }
 
-  return syncCompetencyAcrossGrade(client, context, periodId);
+  // Do not auto-create a default competency. Return null so the competencies list starts completely empty.
+  return null;
 };

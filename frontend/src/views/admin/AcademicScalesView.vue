@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import axios from 'axios'
 import { ArrowLeft, PenSquare, Scale, SlidersHorizontal } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
@@ -19,7 +19,10 @@ interface ValuationScale {
   notas_count: number
 }
 
+import { useAcademicYearStore } from '../../stores/academicYear'
+
 const auth = useAuthStore()
+const yearStore = useAcademicYearStore()
 const schoolId = computed(() => Number(auth.user?.schoolId || 0))
 
 const loading = ref(true)
@@ -53,7 +56,11 @@ const loadData = async () => {
   if (!schoolId.value) return
   try {
     loading.value = true
-    const response = await axios.get(`http://localhost:3000/api/academic-admin/settings/${schoolId.value}`)
+    const params: any = {}
+    if (yearStore.selectedYearId) {
+      params.yearId = yearStore.selectedYearId
+    }
+    const response = await axios.get(`http://localhost:3000/api/academic-admin/settings/${schoolId.value}`, { params })
     scales.value = response.data.scales || []
     defaultSettings.value = response.data.defaultSettings || null
     
@@ -79,6 +86,13 @@ const loadData = async () => {
     loading.value = false
   }
 }
+
+onMounted(() => {
+  yearStore.loadYearsForSchool(schoolId.value, auth.token || undefined)
+  loadData()
+})
+
+watch(() => yearStore.selectedYearId, loadData)
 
 const saveDefaultSettings = async (bypassConfirm = false) => {
   if (defaultsSaving.value) return
