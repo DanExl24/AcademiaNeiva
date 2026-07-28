@@ -58,3 +58,69 @@ sequenceDiagram
 ### Postcondiciones
 - El estudiante es dado de alta de manera oficial en la institución y cuenta con credenciales activas para el ingreso a su portal personal.
 - La matrícula queda registrada como `'ACTIVA'` y vinculada permanentemente para el año lectivo en curso.
+
+---
+
+## Caso de Uso 2: Proceso de Reingreso de Estudiante Retirado y Renovación Documental
+
+### Actores
+- **Directivo Escolar** (Coordinador / Rector)
+- **Padre de Familia / Acudiente**
+
+### Precondiciones
+- El estudiante se encuentra en estado `RETIRADO` en el sistema.
+- Existe un Año Lectivo activo habilitado con grupos y cupos creados.
+
+### Flujo Principal (Paso a Paso)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Directivo
+    actor Padre as Padre de Familia / Acudiente
+    participant Sistema
+    
+    Directivo->>Sistema: Ingresa a la consola de Gestión de Reingresos
+    Directivo->>Sistema: Selecciona el expediente del estudiante retirado
+    Sistema-->>Directivo: Muestra datos del alumno, acudiente e historial de retiro
+    
+    Directivo->>Sistema: Configura Destino (Año Lectivo, Nivel, Grado, Salón con cupos)
+    Sistema->>Sistema: Valida disponibilidad de cupos en el grupo seleccionado
+    
+    Directivo->>Sistema: Define matriz documental (VIGENTE vs RENOVAR)
+    Directivo->>Sistema: Presiona "Enviar Enlace de Reingreso"
+    
+    Sistema->>Sistema: Crea matrícula 'PENDIENTE_RENOVACION' (tipo REINGRESO)
+    Sistema->>Sistema: Pasa ticket de incidencia a 'EN_PROCESO' (Irreversible)
+    Sistema->>Sistema: Genera token UUID y envía email al acudiente
+    Sistema-->>Directivo: Muestra confirmación de envío exitoso
+    
+    Padre->>Sistema: Accede al enlace con token desde el correo
+    Padre->>Sistema: Sube los documentos requeridos marcados como 'RENOVAR'
+    Sistema->>Sistema: Conserva estado 'PENDIENTE_RENOVACION' y actualiza archivos
+    
+    Directivo->>Sistema: Ingresa a Gestión de Matrículas y revisa documentos
+    Directivo->>Sistema: Valida documentos y presiona "Siguiente"
+    Directivo->>Sistema: Presiona "Procesar Registro / Renovación"
+    
+    Sistema->>Sistema: Transiciona matrícula a 'ACTIVA'
+    Sistema->>Sistema: Cambia estado de estudiante a 'ACTIVO'
+    Sistema-->>Directivo: Confirma reingreso oficializado del estudiante
+```
+
+1. **Selección del Expediente:** El directivo ingresa a la vista de **Gestión de Reingresos** (`ReingresoManagement.vue`) y selecciona al estudiante retirado de la lista o desde un ticket de soporte de reingreso.
+2. **Carga de Historial:** El sistema presenta el perfil del alumno, los datos de su acudiente registrado y su motivo de retiro.
+3. **Configuración de Destino:** El directivo especifica el Año Lectivo Activo, Nivel Escolar, Grado y Grupo/Salón de destino. El selector de salones calcula en tiempo real los cupos disponibles e impide la asignación a cursos sin espacio.
+4. **Matriz Documental:** El directivo marca los documentos que se encuentran vigentes (`VIGENTE`) y aquellos que requieren renovación por parte del acudiente (`RENOVAR`).
+5. **Apertura de Reingreso y Notificación:** El directivo presiona "Enviar Enlace de Reingreso". El sistema crea la matrícula en estado `PENDIENTE_RENOVACION` con tipo `REINGRESO`, actualiza el ticket asociado a `EN_PROCESO` de forma irreversible, y envía un correo electrónico al acudiente con las instrucciones y el token de seguimiento.
+6. **Subsanación por el Acudiente:** El acudiente accede mediante el token recibido por email, sube los archivos requeridos y confirma el envío. La matrícula conserva su estado `PENDIENTE_RENOVACION`.
+7. **Revisión y Oficialización:** El directivo abre la matrícula desde la consola de matrículas, valida los documentos renovados, avanza al paso 3 ("Siguiente") y presiona "Procesar Registro / Renovación". El sistema pasa la matrícula a `ACTIVA` y reactiva la ficha del estudiante a `ACTIVO`.
+
+### Flujos Alternativos / Excepciones
+- **Excepción 3a (Estudiante Inexistente o Sin Antecedentes):** Si el acudiente abrió un ticket de reingreso pero el alumno no figura en los registros de retirados, el directivo presiona "Notificar Antecedente No Encontrado". El sistema envía un correo al acudiente y cierra la incidencia.
+- **Excepción 5a (Ticket de Reingreso Irreversible):** Si el directivo intenta cambiar el estado de un ticket de reingreso a `EN_PROCESO`, la interfaz muestra una alerta informando que la acción notificará al padre y no se podrá revertir a `ABIERTO`.
+
+### Postcondiciones
+- El alumno es reintegrado oficialmente en el nuevo grupo escolar con matrícula `ACTIVA` y expediente reactivado.
+- Se conserva la trazabilidad histórica de su retiro y su reingreso.
+

@@ -181,3 +181,59 @@ Este documento contiene las historias de usuario implementadas para el módulo d
   - [EnrollmentManagement.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/EnrollmentManagement.vue)
 - **Controllers/Services relacionados:** 
   - [academicAdminController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdminController.ts) (`createExtraordinaryEnrollment`, `approveExtraordinaryEnrollment`)
+
+---
+
+# HU-MAT-008: Gestión y Configuración de Reingreso de Estudiante Retirado
+
+## Historia
+**Como** directivo del colegio  
+**Quiero** consultar el expediente de un estudiante previamente retirado y configurar su destino de reingreso  
+**Para** aperturar su matrícula en estado PENDIENTE_RENOVACION y enviarle la matriz documental al acudiente.
+
+## Criterios de Aceptación
+- Solo se permite tramitar reingreso para estudiantes en estado `RETIRADO`. Alumnos expulsados o graduados están inhabilitados.
+- El directivo visualiza el historial escolar previo del alumno y el acudiente asociado.
+- Configura el Año Lectivo, Nivel Escolar, Grado y Grupo/Salón de destino verificando en tiempo real la disponibilidad de cupos.
+- Ajusta la matriz documental indicando cuáles archivos siguen `VIGENTES` y cuáles requieren `RENOVAR`.
+- Al enviar, el sistema crea la matrícula `PENDIENTE_RENOVACION` (tipo `REINGRESO`) y notifica al acudiente por correo electrónico con su token de seguimiento.
+
+## Detalles Técnicos
+- **Prioridad:** Alta
+- **Roles involucrados:** Directivo
+- **Reglas de negocio relacionadas:** RN-MAT-008, RN-MAT-010, RN-MAT-011, RN-MAT-012
+- **Endpoints relacionados:** 
+  - `GET /api/reingreso/student-history/:id_estudiante`
+  - `GET /api/reingreso/groups`
+  - `POST /api/reingreso/send-parent-link`
+- **Componentes frontend relacionados:** 
+  - [ReingresoManagement.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/ReingresoManagement.vue)
+- **Controllers/Services relacionados:** 
+  - [reingresoController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/reingresoController.ts) (`sendParentReingresoLink`, `getStudentHistoryForReingreso`)
+
+---
+
+# HU-MAT-009: Atención de Ticket de Reingreso y Transición Irreversible
+
+## Historia
+**Como** directivo del colegio  
+**Quiero** procesar una solicitud de reingreso recibida desde la bandeja de soporte/tickets  
+**Para** notificar al acudiente que el trámite se está ejecutando y vincularlo a la consola de reingreso.
+
+## Criterios de Aceptación
+- Al cambiar un ticket de incidencia de `REINGRESO` al estado `EN_PROCESO`, el sistema despliega una advertencia notificando que la acción no se puede revertir.
+- Al confirmar, el ticket pasa a `EN_PROCESO`, envía un correo electrónico al acudiente informando que el proceso ya inició y bloquea la opción de retornar el ticket a `ABIERTO`.
+- El directivo puede ser redirigido directamente a la vista de Gestión de Reingresos con el contexto del estudiante.
+
+## Detalles Técnicos
+- **Prioridad:** Alta
+- **Roles involucrados:** Directivo
+- **Reglas de negocio relacionadas:** RN-MAT-009, RN-SOP-005
+- **Endpoints relacionados:** 
+  - `PUT /api/support/tickets/:id/status`
+- **Componentes frontend relacionados:** 
+  - [SupportView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/shared/SupportView.vue)
+  - [ReingresoManagement.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/ReingresoManagement.vue)
+- **Controllers/Services relacionados:** 
+  - [supportController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/supportController.ts) (`updateTicketStatus`)
+

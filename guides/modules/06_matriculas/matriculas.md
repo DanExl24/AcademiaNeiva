@@ -1,14 +1,14 @@
 # 📋 Módulo de Matrículas e Inscripciones
 
 **Sistema:** Academia Neiva  
-**Módulo:** Gestión de Inscripciones y Matrículas de Estudiantes  
-**Última actualización:** 2026-07-20
+**Módulo:** Gestión de Inscripciones, Matrículas de Estudiantes y Reingresos  
+**Última actualización:** 2026-07-28
 
 ---
 
 ## 1. Descripción Funcional
 
-Este módulo gestiona el proceso de registro, validación y matrícula de nuevos estudiantes en los colegios de la plataforma. Proporciona una interfaz pública para que los aspirantes o padres de familia envíen solicitudes de matrícula adjuntando los documentos de soporte requeridos (registro civil, certificado de salud, etc.). Asimismo, ofrece una consola administrativa para que los directivos evalúen la documentación, notifiquen inconsistencias a subsanar, asignen grupos de forma manual o automática, y finalicen o cancelen el proceso de matrícula oficializando al estudiante en el sistema.
+Este módulo gestiona el proceso completo de registro, validación y matrícula de estudiantes en la plataforma, abarcando inscripciones ordinarias, extraordinarias y **trámites de reingreso de estudiantes retirados**. Proporciona una interfaz pública para que los aspirantes o padres de familia envíen solicitudes de matrícula adjuntando los documentos de soporte requeridos (registro civil, certificado de salud, etc.). Asimismo, ofrece una consola administrativa para que los directivos evalúen la documentación, notifiquen inconsistencias a subsanar, asignen grupos comprobando cupos en tiempo real, gestionen solicitudes de reingreso y finalicen o cancelen el proceso de matrícula oficializando al estudiante en el sistema.
 
 ---
 
@@ -16,8 +16,8 @@ Este módulo gestiona el proceso de registro, validación y matrícula de nuevos
 
 | Rol | Alcance |
 |---|---|
-| **Público / Visitante** | Consulta de colegios, consulta de configuración de inscripciones, envío de solicitudes de matrícula, seguimiento de solicitudes mediante token UUID y corrección de documentos rechazados. |
-| **Directivo** | Gestión completa del flujo de matrículas del colegio: listar solicitudes por estado, verificar documentos adjuntos, asignar grados y grupos, reportar inconsistencias, aprobar matrículas extraordinarias y de reingreso, y finalizar o cancelar matrículas. |
+| **Público / Visitante** | Consulta de colegios, consulta de configuración de inscripciones, envío de solicitudes de matrícula, seguimiento de solicitudes mediante token UUID, apertura de tickets de incidencia de reingreso y corrección de documentos rechazados. |
+| **Directivo** | Gestión completa del flujo de matrículas del colegio: listar solicitudes por estado, verificar documentos adjuntos, asignar grados y grupos con cupos en tiempo real, reportar inconsistencias, tramitar reingresos de estudiantes retirados, configurar destino y matriz documental, autorizar matrículas extraordinarias y de reingreso, y finalizar o cancelar matrículas. |
 
 ---
 
@@ -41,9 +41,10 @@ Este módulo gestiona el proceso de registro, validación y matrícula de nuevos
 | Registrar matrícula extraordinaria | `POST` | `/api/academic-admin/matriculas/extraordinaria` | Directivo |
 | Aprobar matrícula extraordinaria | `POST` | `/api/academic-admin/matriculas/extraordinaria/:id/aprobar` | Directivo |
 | Rechazar matrícula extraordinaria | `POST` | `/api/academic-admin/matriculas/extraordinaria/:id/rechazar` | Directivo |
-| Registrar reingreso de estudiante | `POST` | `/api/academic-admin/matriculas/reingreso` | Directivo |
-| Aprobar reingreso | `POST` | `/api/academic-admin/matriculas/reingreso/:id/aprobar` | Directivo |
-| Rechazar reingreso | `POST` | `/api/academic-admin/matriculas/reingreso/:id/rechazar` | Directivo |
+| Obtener expediente del alumno retirado para reingreso | `GET` | `/api/reingreso/student-history/:id_estudiante` | Directivo |
+| Obtener salones y cupos en tiempo real para reingreso | `GET` | `/api/reingreso/groups` | Directivo |
+| Enviar enlace de reingreso y configurar destino al acudiente | `POST` | `/api/reingreso/send-parent-link` | Directivo |
+| Notificar antecedente no encontrado a acudiente | `POST` | `/api/reingreso/notify-non-existent/:id_ticket` | Directivo |
 
 ---
 
@@ -51,11 +52,16 @@ Este módulo gestiona el proceso de registro, validación y matrícula de nuevos
 
 - **RN-MAT-001 (Control de Fechas de Inscripción):** Las solicitudes de matrícula regular solo pueden enviarse si la fecha actual se encuentra dentro del rango configurado por el colegio (`fecha_inicio` y `fecha_cierre`) y las inscripciones están habilitadas en `configuracion_inscripcion`.
 - **RN-MAT-002 (Bypass de Cupos en Extraordinaria):** Las matrículas extraordinarias permiten el registro de estudiantes incluso si las fechas de inscripción regular han expirado, bajo aprobación explícita de los directivos.
-- **RN-MAT-003 (Token de Seguimiento Seguro):** Cada solicitud genera un token UUID único (`token_seguimiento`). El aspirante puede consultar el estado de su trámite e incluso subir correcciones de documentos a través de este token sin necesidad de autenticarse en el sistema.
+- **RN-MAT-003 (Token de Seguimiento Seguro):** Cada solicitud genera un token UUID único (`token_seguimiento`). El aspirante o acudiente puede consultar el estado de su trámite e incluso subir correcciones de documentos a través de este token sin necesidad de autenticarse en el sistema.
 - **RN-MAT-004 (Validación de Documentos por Item):** Los documentos adjuntos (registro civil, etc.) se validan individualmente. Si al menos uno es marcado como `RECHAZADO`, la matrícula pasa a estado `CORRECCION` y se bloquea la oficialización hasta que el solicitante resuelva la inconsistencia.
 - **RN-MAT-005 (Oficialización y Creación de Estudiante):** Al presionar "Finalizar", el estado de la matrícula pasa a `ACTIVA` (o `APROBADA`), y el sistema inserta automáticamente el registro del estudiante en la tabla `estudiante`, generándole un código único y una cuenta de usuario para ingresar al portal.
 - **RN-MAT-006 (Rate Limiting de Envío):** Límite de 20 solicitudes de envío de matrícula por IP cada 15 minutos para proteger el almacenamiento del servidor contra abusos de archivos cargados.
 - **RN-MAT-007 (Persistencia Continua de Asignación de Salón):** La selección de salón/sección realizada por el directivo se persiste de inmediato en la base de datos (`POST /api/matriculas/assign-grade/:id`). Si una solicitud es enviada a corrección por inconsistencias en los documentos, el salón y las parametrizaciones previamente establecidas por el directivo se conservan intactas, evitando tener que volver a elegir el curso cuando el acudiente reenvíe los archivos subsanados.
+- **RN-MAT-008 (Elegibilidad Exclusiva de Reingreso):** Únicamente los estudiantes en estado `RETIRADO` (o estudiantes activos cuyo trámite lo pasa a `RETIRADO`) son elegibles para tramitar reingreso. Alumnos en estado `EXPULSADO` o `GRADUADO` están estrictamente bloqueados por el sistema.
+- **RN-MAT-009 (Irreversibilidad de Incidencias de Reingreso a Estado EN_PROCESO):** Cuando un directivo marca un ticket de soporte de tipo incidencia `REINGRESO` como `EN_PROCESO`, el sistema requiere confirmación (advirtiendo que la acción no se puede revertir), envía un correo electrónico al acudiente informando que el trámite se está ejecutando, y bloquea que el ticket pueda regresar a estado `ABIERTO`.
+- **RN-MAT-010 (Matriz Documental de Renovación):** En el proceso de reingreso, el sistema presenta la matriz documental del alumno retirado. Los documentos previamente cargados que se encuentren vigentes se marcan como `VIGENTE` (`VALIDADO`), solicitando al acudiente actualizar únicamente los documentos vencidos o requeridos (`PENDIENTE`).
+- **RN-MAT-011 (Configuración de Destino y Validación de Cupos en Tiempo Real):** Al procesar un reingreso, el directivo debe configurar el Año Lectivo, Nivel, Grado y Grupo/Salón de destino. El selector de salones calcula en tiempo real `cupos_totales - matrículas activas/trasladadas` e impide seleccionar cursos sin cupo disponible.
+- **RN-MAT-012 (Auditoría del Motivo de Retiro):** Todo estudiante pasado a estado `RETIRADO` registra de forma obligatoria su motivo de retiro en la tabla `estudiante` (`motivo_estado`) y en `matricula` (`detalles_cancelacion`). Dicho motivo se muestra en el expediente del alumno en Reingresos y en las fichas de gestión de estudiantes.
 
 ---
 
@@ -65,10 +71,11 @@ Este módulo gestiona el proceso de registro, validación y matrícula de nuevos
 
 | Tipo | Archivo |
 |---|---|
-| **Controller** | [matriculaController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/matriculaController.ts) — `submitEnrollment`, `getPendingMatriculas`, `getMatriculaDetails`, `validateDocument`, `assignGrade`, `notifyInconsistencies`, `finalizeEnrollment`, `cancelEnrollment`, `toggleTransfer` |
-| **Controller Admin (Extraordinario/Reingreso)** | [academicAdminController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdminController.ts) — `createExtraordinaryEnrollment`, `approveExtraordinaryEnrollment`, `rejectExtraordinaryEnrollment`, `createReingresoEnrollment`, `approveReingresoEnrollment`, `rejectReingresoEnrollment` |
+| **Controller Matrículas** | [matriculaController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/matriculaController.ts) — `submitEnrollment`, `getPendingMatriculas`, `getMatriculaDetails`, `validateDocument`, `assignGrade`, `notifyInconsistencies`, `finalizeEnrollment`, `cancelEnrollment`, `toggleTransfer` |
+| **Controller Reingresos** | [reingresoController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/reingresoController.ts) — `getStudentHistoryForReingreso`, `getReingresoGroups`, `sendParentReingresoLink`, `notifyNonExistentStudent` |
+| **Controller Admin (Extraordinario)** | [academicAdminController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdminController.ts) — `createExtraordinaryEnrollment`, `approveExtraordinaryEnrollment`, `rejectExtraordinaryEnrollment` |
 | **Service** | [matriculaService.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/services/matriculaService.ts) — Operaciones de base de datos de matrículas y documentos |
-| **Routes** | [matricula.routes.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/routes/matricula.routes.ts), [academicAdmin.routes.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/routes/academicAdmin.routes.ts) |
+| **Routes** | [matricula.routes.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/routes/matricula.routes.ts), [reingreso.routes.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/routes/reingreso.routes.ts), [academicAdmin.routes.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/routes/academicAdmin.routes.ts) |
 
 ### Frontend
 
@@ -77,7 +84,8 @@ Este módulo gestiona el proceso de registro, validación y matrícula de nuevos
 | **Vista Pública de Envío** | [EnrollmentView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/public/EnrollmentView.vue) |
 | **Vista Pública de Corrección** | [EnrollmentCorrection.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/public/EnrollmentCorrection.vue) |
 | **Vista Pública de Seguimiento** | [MatriculaTrackingView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/public/MatriculaTrackingView.vue) |
-| **Vista Gestión Directivo** | [EnrollmentManagement.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/EnrollmentManagement.vue), [EnrollmentDetails.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/EnrollmentDetails.vue), [FinalRegistration.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/FinalRegistration.vue) |
+| **Vista Gestión Directivo (Matrículas)** | [EnrollmentManagement.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/EnrollmentManagement.vue), [EnrollmentDetails.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/EnrollmentDetails.vue), [FinalRegistration.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/FinalRegistration.vue) |
+| **Vista Gestión Directivo (Reingresos)** | [ReingresoManagement.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/ReingresoManagement.vue) |
 
 ---
 
@@ -88,15 +96,16 @@ Este módulo gestiona el proceso de registro, validación y matrícula de nuevos
 | Columna | Tipo | Descripción |
 |---|---|---|
 | `id_matricula` | SERIAL PK | Identificador interno único. |
-| `id_estudiante` | INT FK | Referencia al estudiante oficializado (inicialmente NULL). |
+| `id_estudiante` | INT FK | Referencia al estudiante oficializado. |
 | `id_nivel` | INT FK | Nivel escolar de inscripción. |
 | `id_colegio` | INT FK | Colegio de destino. |
 | `id_anio` | INT FK | Año lectivo de la matrícula. |
-| `estado` | `estado_matricula` | `PENDIENTE`, `ACTIVA`, `CANCELADA`, `TRASLADADA`, `RECHAZADA`, `CORRECCION`, `APROBADA`, `CULMINADA`. |
+| `estado` | `estado_matricula` | `PENDIENTE`, `PENDIENTE_RENOVACION`, `ACTIVA`, `CANCELADA`, `TRASLADADA`, `RECHAZADA`, `CORRECCION`, `APROBADA`, `CULMINADA`. |
 | `correo_padre` | VARCHAR(100) | Correo de contacto para notificaciones y subsanaciones. |
 | `token_seguimiento` | UUID | Token para el acceso público de consulta y edición. |
 | `id_grupo` | INT FK | Grupo asignado al estudiante. |
 | `motivo_cancelacion` | VARCHAR(100) | Motivo de retiro o cancelación de matrícula. |
+| `detalles_cancelacion` | TEXT | Explicación o detalle del retiro del alumno. |
 | `es_traslado` | BOOLEAN | Indica si la matrícula proviene de un traslado de otra escuela. |
 | `tipo` | VARCHAR(50) | Tipo de proceso (`REGULAR`, `EXTRAORDINARIA`, `REINGRESO`). |
 
@@ -109,40 +118,30 @@ Este módulo gestiona el proceso de registro, validación y matrícula de nuevos
 | `tipo_documento` | VARCHAR(100) | Tipo de archivo (`REGISTRO_CIVIL`, `FOTO`, `RECUENTOS_VACUNAS`, etc.). |
 | `url` | TEXT | Enlace al archivo subido en el servidor. |
 | `estado` | `estado_documento` | Estado del documento (`PENDIENTE`, `VALIDADO`, `RECHAZADO`). |
+| `estado_renovacion` | VARCHAR(50) | Estado de renovación en reingreso (`VIGENTE`, `RENOVAR`). |
 | `fecha` | TIMESTAMPTZ | Fecha de carga del archivo. |
 
 ---
 
 ## 7. Conexiones con Otros Módulos
 
-- **→ Estructura Escolar**: Consulta los grupos con cupos disponibles para la asignación de grado del aspirante.
-- **→ Estudiantes y Estados**: La aprobación final inserta automáticamente un registro activo en `estudiante` y genera su respectivo `usuario`.
-- **→ Notificaciones**: El sistema envía alertas de subsanación por correo al padre de familia si un documento es rechazado.
+- **→ Estructura Escolar**: Consulta los grupos con cupos disponibles (`cupos_totales - matrículas activas`) para la asignación de curso.
+- **→ Estudiantes y Estados**: La oficialización activa al estudiante y registra los motivos de retiro (`motivo_estado`).
+- **→ Soporte y Tickets**: Los tickets de tipo `REINGRESO` se enlazan con la consola de Reingreso, transicionando a `EN_PROCESO` de forma irreversible y notificando al padre.
+- **→ Notificaciones**: Envía emails automáticos de confirmación, subsanación y notificación de reingreso al acudiente.
 
 ---
 
 ## 8. Validaciones Implementadas
 
 ### Backend
-- **Validación de Texto en Campos Nombres/Apellidos**: Exige patrones estrictos de solo letras (incluyendo tildes y eñe `^[a-zA-ZáéíóúñÁÉÍÓÚÑ\s]{2,}$`) para nombres y apellidos de estudiante y acudiente.
-- **Validación de Número de Documento**: Exige formato alfanumérico limpio sin espacios o símbolos (`^[a-zA-Z0-9-]{4,}$`) con mínimo 4 caracteres.
-- **Validación de Formato de Correo Electrónico**: Exige estructura regex válida (`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`) para el correo del acudiente.
-- **Límite de Archivos**: Validación de que el tamaño de los archivos adjuntos no exceda 2MB por documento.
-- **Integridad de Oficialización**: Bloqueo de oficialización para solicitudes con documentos en estado `RECHAZADO`.
-- **Control de Cupos**: Verificación estricta de cupos disponibles en el grupo asignado.
+- **Elegibilidad de Reingreso**: Bloqueo estricto para estudiantes con estado `EXPULSADO` o `GRADUADO`.
+- **Transición Irreversible de Tickets**: Al pasar ticket de reingreso a `EN_PROCESO`, impide regresar a `ABIERTO`.
+- **Cálculo de Cupos en Tiempo Real**: Verificación de cupos disponibles en el grupo asignado.
+- **Validación de Texto y Formatos**: Limpieza y regex para nombres, documentos y correos electrónicos.
 
 ### Frontend
-- **Filtrado en Tiempo Real (`@input`)**: Utiliza `validationHelper.ts` (`sanitizeLettersOnly`, `sanitizeDocumentNumber`) para impedir la escritura de números o símbolos en nombres y apellidos, o espacios y caracteres inválidos en números de documento.
-- **Validación de Correo**: Verifica `isValidEmail` antes de avanzar al paso de carga de documentos en la solicitud pública.
-- **Validación de Documentación Obligatoria**: Bloqueo visual de avance si faltan archivos requeridos para el nivel seleccionado.
-- **Desactivación de Acciones Directivas**: Control de estados de botones para evitar doble clic o envío incompleto.
+- **Configuración de Destino Dinámica**: Carga reactiva de niveles, grados y salones filtrados por colegio y año lectivo.
+- **Mantenimiento del Estado PENDIENTE_RENOVACION al Corregir Docs**: Preserva el estado de la matrícula de renovación durante la subsanación por el acudiente.
+- **Desactivación de Controles en Aulas Sin Cupos**: Deshabilita la opción de selección para salones con cupos agotados.
 
----
-
-## 9. Decisiones de Diseño
-
-| Decisión | Justificación |
-|---|---|
-| **Uso de Token UUID para Correcciones** | Permite a padres de familia subsanar errores en documentos sin necesidad de crearles una cuenta de usuario completa con roles y contraseñas. |
-| **Separación de Matrícula y Estudiante** | Mantiene la base de datos de estudiantes "limpia" únicamente con los alumnos matriculados y oficializados, evitando registros basura de aspirantes que no completaron el proceso. |
-| **Subida de Archivos Estática Local** | Almacena los archivos en un directorio local (`uploads/`) y los sirve estáticamente, reduciendo la dependencia de servicios en la nube para entornos institucionales internos. |

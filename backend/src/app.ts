@@ -13,6 +13,7 @@ import studentRoutes from "./routes/student.routes";
 import adminGeneralRoutes from "./routes/adminGeneral.routes";
 import dbaRoutes from "./routes/dba.routes";
 import supportRoutes from "./routes/support.routes";
+import reingresoRoutes from "./routes/reingreso.routes";
 
 const app = express();
 
@@ -88,6 +89,7 @@ app.use("/api/student", studentRoutes);
 app.use("/api/admin", adminGeneralRoutes);
 app.use("/api/admin", dbaRoutes);
 app.use("/api/support", supportRoutes);
+app.use("/api/reingreso", reingresoRoutes);
 
 app.get("/", (req, res) => {
   res.json({ message: "API TS funcionando segura" });

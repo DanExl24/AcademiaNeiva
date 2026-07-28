@@ -287,11 +287,24 @@ export class NotificationService {
         
         <p style="font-size: 18px; font-weight: 600;">Hola, ${parentName},</p>
         <p style="line-height: 1.6;">Nos complace informarte que la solicitud de matrícula extraordinaria ha sido aprobada por la dirección de la institución.</p>
+        
+        <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 16px; padding: 20px; margin: 25px 0; text-align: center;">
+          <p style="margin: 0; color: #166534; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;">🔑 Tu Token Único de Seguimiento</p>
+          <p style="margin: 8px 0 0 0; color: #047857; font-size: 20px; font-family: monospace; font-weight: 800; letter-spacing: 1px;">${token}</p>
+          <p style="margin: 6px 0 0 0; color: #15803d; font-size: 12px;">Conserva este token para consultar el estado de tu trámite en cualquier momento.</p>
+        </div>
+
         <p style="line-height: 1.6;">Para continuar con el proceso, debes ingresar al siguiente enlace para cargar la documentación requerida y reservar tu cupo:</p>
 
-        <div style="text-align: center; margin-top: 40px;">
+        <div style="text-align: center; margin-top: 30px;">
           <a href="http://localhost:5173/matricula/corregir/${token}" style="background-color: #10b981; color: white; padding: 16px 32px; border-radius: 12px; text-decoration: none; font-weight: 700; display: inline-block; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
             Cargar Documentación
+          </a>
+        </div>
+
+        <div style="text-align: center; margin-top: 15px;">
+          <a href="http://localhost:5173/matriculas/tracking?token=${token}" style="color: #059669; font-size: 13px; font-weight: 600; text-decoration: underline;">
+            🔍 Consultar estado de la matrícula en cualquier momento
           </a>
         </div>
 
@@ -352,6 +365,53 @@ export class NotificationService {
       console.log(`Email de aprobación de reingreso enviado con éxito a ${to}`);
     } catch (error) {
       console.error('Error enviando email de aprobación de reingreso:', error);
+    }
+  }
+
+  static async sendNonExistentStudentEmail(to: string, senderName: string, motivo: string) {
+    if (!to) {
+      console.error('❌ Error: No se puede enviar email de notificación de estudiante no existente porque no hay destinatario (to)');
+      return;
+    }
+    const html = `
+      <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #1f2937;">
+        <div style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); padding: 40px; border-radius: 24px; text-align: center; color: white; margin-bottom: 30px;">
+          <h1 style="margin: 0; font-size: 24px; font-weight: 800;">Información sobre Solicitud de Reingreso</h1>
+          <p style="opacity: 0.9; margin-top: 10px; font-size: 16px;">Academia Neiva - Dirección Académica</p>
+        </div>
+        
+        <p style="font-size: 18px; font-weight: 600;">Estimado(a) ${senderName},</p>
+        <p style="line-height: 1.6;">Le informamos que tras verificar nuestros registros institucionales, no se encontraron antecedentes del estudiante en nuestra base de datos activa o histórica de retirados.</p>
+        
+        <div style="background-color: #fffbebfb; border-left: 4px solid #f59e0b; padding: 15px; margin: 20px 0; border-radius: 4px;">
+          <p style="margin: 0; font-weight: 600;">Observación institucional:</p>
+          <p style="margin: 5px 0 0 0;">${motivo}</p>
+        </div>
+
+        <p style="line-height: 1.6;">Por lo tanto, no es posible aplicar un trámite de reingreso. Si desea ingresar al colegio, le invitamos a realizar el proceso de <strong>Matrícula Regular de Estudiante Nuevo</strong> a través de nuestra plataforma pública.</p>
+
+        <div style="text-align: center; margin-top: 30px;">
+          <a href="http://localhost:5173/matricula" style="background-color: #3b82f6; color: white; padding: 14px 28px; border-radius: 12px; text-decoration: none; font-weight: 700; display: inline-block;">
+            Ir al Formulario de Matrícula Regular
+          </a>
+        </div>
+
+        <div style="margin-top: 50px; padding-top: 20px; border-top: 1px solid #f3f4f6; text-align: center; color: #9ca3af; font-size: 12px;">
+          <p>© 2024 Academia Neiva. Todos los derechos reservados.</p>
+        </div>
+      </div>
+    `;
+
+    try {
+      await transporter.sendMail({
+        from: `"Academia Neiva" <${process.env.SMTP_USER}>`,
+        to,
+        subject: 'Respuesta a Solicitud de Reingreso — Registros no encontrados',
+        html,
+      });
+      console.log(`Email de estudiante no existente enviado con éxito a ${to}`);
+    } catch (error) {
+      console.error('Error enviando email de estudiante no existente:', error);
     }
   }
 
@@ -551,6 +611,48 @@ export class NotificationService {
       console.log(`Email de confirmación de matrícula enviado con éxito a ${to}`);
     } catch (error) {
       console.error('Error enviando email de confirmación de matrícula:', error);
+    }
+  }
+
+  static async sendReingresoInProcessEmail(
+    to: string,
+    recipientName: string,
+    ticketCode: string,
+    studentName?: string
+  ) {
+    if (!to) return;
+    const html = `
+      <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #1f2937;">
+        <div style="background: linear-gradient(135deg, #d97706 0%, #b45309 100%); padding: 40px; border-radius: 24px; text-align: center; color: white; margin-bottom: 30px;">
+          <h1 style="margin: 0; font-size: 26px; font-weight: 800;">Solicitud de Reingreso en Proceso</h1>
+          <p style="opacity: 0.9; margin-top: 10px; font-size: 15px;">Academia Neiva - Gestión de Reingresos</p>
+        </div>
+        
+        <p style="font-size: 16px; font-weight: 600;">Hola, ${recipientName},</p>
+        <p style="line-height: 1.6;">Te informamos que tu solicitud de reingreso estudiantil (Ticket <strong>${ticketCode}</strong>) ${studentName ? `para el alumno <strong>${studentName}</strong>` : ''} ha entrado formalmente en <strong>PROCESO DE REVISIÓN Y GESTIÓN</strong> por parte de la directiva institucional.</p>
+        <p style="line-height: 1.6;">En breve recibirás las instrucciones y el enlace personalizado para completar la actualización documental requerida.</p>
+
+        <div style="background-color: #fffbeb; border-radius: 12px; padding: 20px; margin: 25px 0; border: 1px solid #fde68a;">
+          <p style="margin: 0; color: #92400e; font-size: 13px; font-weight: 700;">📌 Estado del Ticket: EN PROCESO</p>
+          <p style="margin: 5px 0 0 0; color: #b45309; font-size: 12px;">Este proceso ya está activo y no se detendrá hasta culminar la revisión del reingreso.</p>
+        </div>
+
+        <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #f3f4f6; text-align: center; color: #9ca3af; font-size: 12px;">
+          <p>© 2024 Academia Neiva. Todos los derechos reservados.</p>
+        </div>
+      </div>
+    `;
+
+    try {
+      await transporter.sendMail({
+        from: `"Academia Neiva" <${process.env.SMTP_USER}>`,
+        to,
+        subject: `Actualización Reingreso: Ticket ${ticketCode} en Proceso`,
+        html,
+      });
+      console.log(`Email de reingreso en proceso enviado a ${to}`);
+    } catch (error) {
+      console.error('Error enviando email de reingreso en proceso:', error);
     }
   }
 }

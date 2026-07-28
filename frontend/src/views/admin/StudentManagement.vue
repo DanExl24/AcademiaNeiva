@@ -8,6 +8,7 @@ import {
   ShieldAlert,
   UserCheck,
   UserX,
+  UserMinus,
   ArrowRight,
   GraduationCap,
   Edit2,
@@ -352,9 +353,9 @@ const confirmStatusChange = async () => {
       notify.addNotification('Debe ingresar un motivo de al menos 10 caracteres', 'error')
       return
     }
-  } else if (newStatus.value === 'EXPULSADO') {
-    if (statusMotivo.value.trim().length < 10) {
-      notify.addNotification('Debe ingresar un motivo de al menos 10 caracteres', 'error')
+  } else if (newStatus.value === 'EXPULSADO' || newStatus.value === 'RETIRADO') {
+    if (statusMotivo.value.trim().length < 5) {
+      notify.addNotification('Debe ingresar un motivo de retiro de al menos 5 caracteres', 'error')
       return
     }
   }
@@ -680,6 +681,9 @@ const exportToSIMAT = () => {
                 <button v-if="s.estado === 'ACTIVO' && s.grado_nombre === 'ONCE'" @click="openGraduationModal(s)" class="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 rounded-xl transition-all" title="Graduar Estudiante">
                   <Award :size="16" />
                 </button>
+                <button v-if="s.estado === 'ACTIVO'" @click="openStatusModal(s, 'RETIRADO')" class="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded-xl transition-all" title="Retirar Estudiante">
+                  <UserMinus :size="16" />
+                </button>
                 <button v-if="s.estado === 'ACTIVO'" @click="openStatusModal(s, 'SANCIONADO')" class="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded-xl transition-all" title="Sancionar">
                   <ShieldAlert :size="16" />
                 </button>
@@ -763,8 +767,8 @@ const exportToSIMAT = () => {
             ¿Estás seguro de que deseas cambiar el estado de <span class="font-black text-slate-900 dark:text-white">{{ selectedStudent.nombre }}</span> a <span class="font-black uppercase" :class="newStatus === 'ACTIVO' ? 'text-emerald-600' : 'text-red-500'">{{ newStatus }}</span>?
           </p>
 
-          <!-- Reason Input for Sanction/Expulsion -->
-          <div v-if="newStatus === 'SANCIONADO' || newStatus === 'EXPULSADO'" class="mt-5 text-left space-y-4">
+          <!-- Reason Input for Sanction/Expulsion/Retiro -->
+          <div v-if="newStatus === 'SANCIONADO' || newStatus === 'EXPULSADO' || newStatus === 'RETIRADO'" class="mt-5 text-left space-y-4">
             
             <!-- Sanction fields -->
             <div v-if="newStatus === 'SANCIONADO'" class="space-y-3">
@@ -829,8 +833,8 @@ const exportToSIMAT = () => {
           <button @click="statusModalOpen = false" class="flex-1 py-3 font-black text-slate-400 uppercase text-xs">Atrás</button>
           <button 
             @click="confirmStatusChange" 
-            :disabled="((newStatus === 'SANCIONADO' || newStatus === 'EXPULSADO') && statusMotivo.trim().length < 10) || (newStatus === 'SANCIONADO' && (!sanctionEndDate || !selectedSanctionType))"
-            :class="[(((newStatus === 'SANCIONADO' || newStatus === 'EXPULSADO') && statusMotivo.trim().length < 10) || (newStatus === 'SANCIONADO' && (!sanctionEndDate || !selectedSanctionType))) ? 'opacity-40 cursor-not-allowed' : 'hover:bg-slate-800 dark:hover:bg-indigo-750']"
+            :disabled="((newStatus === 'SANCIONADO' || newStatus === 'EXPULSADO' || newStatus === 'RETIRADO') && statusMotivo.trim().length < 5) || (newStatus === 'SANCIONADO' && (!sanctionEndDate || !selectedSanctionType))"
+            :class="[(((newStatus === 'SANCIONADO' || newStatus === 'EXPULSADO' || newStatus === 'RETIRADO') && statusMotivo.trim().length < 5) || (newStatus === 'SANCIONADO' && (!sanctionEndDate || !selectedSanctionType))) ? 'opacity-40 cursor-not-allowed' : 'hover:bg-slate-800 dark:hover:bg-indigo-750']"
             class="flex-2 bg-slate-900 dark:bg-indigo-600 text-white rounded-xl font-black px-6 py-3 uppercase text-xs shadow-xl transition-all"
           >Confirmar</button>
         </div>
@@ -1178,14 +1182,14 @@ const exportToSIMAT = () => {
               </div>
             </div>
 
-            <!-- Sanction/Expulsion Info Card (Fallback) -->
-            <div v-if="((studentSummary.estado_estudiante === 'EXPULSADO' && !studentSummary.sanction) || (studentSummary.estado_estudiante === 'SANCIONADO' && !studentSummary.sanction)) && studentSummary.motivo_estado" class="bg-gradient-to-br from-red-50 to-red-100/30 dark:from-slate-900 dark:to-red-950/20 border-2 border-red-200/50 dark:border-red-950/60 rounded-3xl p-5 space-y-3 relative overflow-hidden text-left">
-              <div class="absolute -right-4 -bottom-4 text-red-200 dark:text-red-900 opacity-20 pointer-events-none">
+            <!-- Sanction/Expulsion/Retiro Info Card (Fallback) -->
+            <div v-if="((studentSummary.estado_estudiante === 'EXPULSADO' && !studentSummary.sanction) || (studentSummary.estado_estudiante === 'SANCIONADO' && !studentSummary.sanction) || (studentSummary.estado_estudiante === 'RETIRADO')) && studentSummary.motivo_estado" class="bg-gradient-to-br from-amber-50 to-red-100/30 dark:from-slate-900 dark:to-red-950/20 border-2 border-amber-200/50 dark:border-red-950/60 rounded-3xl p-5 space-y-3 relative overflow-hidden text-left">
+              <div class="absolute -right-4 -bottom-4 text-amber-200 dark:text-red-900 opacity-20 pointer-events-none">
                 <AlertCircle :size="80" />
               </div>
-              <h4 class="text-[10px] font-black text-red-600 dark:text-red-450 uppercase tracking-widest flex items-center gap-1.5 leading-none">
+              <h4 class="text-[10px] font-black text-amber-600 dark:text-amber-450 uppercase tracking-widest flex items-center gap-1.5 leading-none">
                 <AlertCircle :size="16" />
-                Motivo de {{ studentSummary.estado_estudiante === 'SANCIONADO' ? 'Sanción' : 'Expulsión' }}
+                Motivo de {{ studentSummary.estado_estudiante === 'SANCIONADO' ? 'Sanción' : studentSummary.estado_estudiante === 'RETIRADO' ? 'Retiro' : 'Expulsión' }}
               </h4>
               <div class="space-y-1">
                 <p class="text-xs font-semibold text-slate-750 dark:text-slate-350 italic leading-relaxed">

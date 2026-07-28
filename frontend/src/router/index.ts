@@ -7,6 +7,7 @@ import DashboardHomeDispatcher from '../views/shared/DashboardHomeDispatcher.vue
 import EnrollmentManagement from '../views/admin/EnrollmentManagement.vue'
 import EnrollmentDetails from '../views/admin/EnrollmentDetails.vue'
 import FinalRegistration from '../views/admin/FinalRegistration.vue'
+import ReingresoManagement from '../views/admin/ReingresoManagement.vue'
 import EnrollmentCorrection from '../views/public/EnrollmentCorrection.vue'
 import DashboardLayout from '../layouts/DashboardLayout.vue'
 import GradeManagement from '../views/admin/GradeManagement.vue'
@@ -85,6 +86,12 @@ const router = createRouter({
           path: 'gestion-matriculas/:id/registro',
           name: 'Finalizar Registro',
           component: FinalRegistration,
+          meta: { roles: ['directivo'] }
+        },
+        {
+          path: 'gestion-reingresos',
+          name: 'Gestión de Reingresos',
+          component: ReingresoManagement,
           meta: { roles: ['directivo'] }
         },
         {

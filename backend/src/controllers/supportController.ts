@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { pool } from '../config/db';
+import { NotificationService } from '../services/notificationService';
 
 // Helper: Decodificar Base36 de precisión arbitraria
 function parseBase36(str: string): bigint {
@@ -36,7 +37,7 @@ function encodeTicketCode(idTicket: number, idColegio: number | null, documento:
 }
 
 export const createTicket = async (req: Request, res: Response) => {
-  const { nombre_remitente, correo_remitente, telefono, tipo_incidencia, asunto, descripcion, id_colegio, estado } = req.body;
+  const { nombre_remitente, correo_remitente, telefono, tipo_incidencia, asunto, descripcion, id_colegio, estado, id_estudiante } = req.body;
   const user = (req as any).user; // Si está autenticado
 
   try {
@@ -89,10 +90,10 @@ export const createTicket = async (req: Request, res: Response) => {
     // Insertamos el ticket
     const insertRes = await pool.query(
       `INSERT INTO tickets_soporte 
-       (id_usuario, nombre_remitente, correo_remitente, telefono, tipo_incidencia, asunto, descripcion, id_colegio, estado)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       (id_usuario, nombre_remitente, correo_remitente, telefono, tipo_incidencia, asunto, descripcion, id_colegio, estado, id_estudiante)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING id_ticket`,
-      [finalUserId, finalSenderName, finalSenderEmail, telefono || null, tipo_incidencia, asunto, descripcion, finalSchoolId, ticketStatus]
+      [finalUserId, finalSenderName, finalSenderEmail, telefono || null, tipo_incidencia, asunto, descripcion, finalSchoolId, ticketStatus, id_estudiante ? Number(id_estudiante) : null]
     );
 
     const idTicket = insertRes.rows[0].id_ticket;
@@ -127,7 +128,18 @@ export const getTickets = async (req: Request, res: Response) => {
 
   try {
     const userRole = (user.role || '').toUpperCase();
-    let query = 'SELECT t.*, c.nombre as colegio_nombre FROM tickets_soporte t LEFT JOIN colegio c ON t.id_colegio = c.id_colegio';
+    let query = `
+      SELECT t.*, 
+             c.nombre AS colegio_nombre,
+             e.nombre AS estudiante_nombre,
+             e.apellido AS estudiante_apellido,
+             e.documento AS estudiante_documento,
+             e.codigo AS estudiante_codigo,
+             e.estado AS estudiante_estado
+      FROM tickets_soporte t 
+      LEFT JOIN colegio c ON t.id_colegio = c.id_colegio
+      LEFT JOIN estudiante e ON t.id_estudiante = e.id_estudiante
+    `;
     const params: any[] = [];
 
     if (userRole === 'DIRECTIVO') {
@@ -149,9 +161,9 @@ export const getTickets = async (req: Request, res: Response) => {
       // Admin General SOLO ve los tickets que están escalados
       query += " WHERE t.fecha_escalado IS NOT NULL";
     } else if (userRole === 'DOCENTE' || userRole === 'PADRE') {
-      // Docente o Padre ve únicamente los tickets creados por él
-      query += " WHERE t.id_usuario = $1";
-      params.push(user.id);
+      // Docente o Padre ve únicamente los tickets creados por él (por ID o por correo)
+      query += " WHERE (t.id_usuario = $1 OR (t.correo_remitente IS NOT NULL AND LOWER(t.correo_remitente) = LOWER($2)))";
+      params.push(user.id, user.email || '');
     } else {
       return res.status(403).json({ error: 'Acceso denegado.' });
     }
@@ -194,8 +206,12 @@ export const updateTicketStatus = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'El ticket ya está RESUELTO y no puede modificarse su estado.' });
     }
 
-    // RN-002: No se puede cambiar a ABIERTO si ya tiene observaciones o fue escalado.
+    // RN-002: No se puede cambiar a ABIERTO si el ticket estaba EN_PROCESO, si es de tipo REINGRESO, ya tiene observaciones o fue escalado.
     if (estado === 'ABIERTO') {
+      if (ticket.estado === 'EN_PROCESO' || ticket.tipo_incidencia === 'REINGRESO') {
+        return res.status(400).json({ error: 'Un ticket de reingreso o que se encuentra EN PROCESO no puede ser revertido al estado ABIERTO.' });
+      }
+
       let obsCount = 0;
       try {
         const obsList = typeof ticket.observaciones === 'string'
@@ -260,6 +276,15 @@ export const updateTicketStatus = async (req: Request, res: Response) => {
         'UPDATE tickets_soporte SET estado = $1 WHERE id_ticket = $2',
         [estado, id]
       );
+    }
+
+    if (oldEstado !== 'EN_PROCESO' && estado === 'EN_PROCESO') {
+      NotificationService.sendReingresoInProcessEmail(
+        ticket.correo_remitente,
+        ticket.nombre_remitente,
+        ticket.codigo_ticket || `TKT-${ticket.id_ticket}`,
+        ticket.estudiante_nombre ? `${ticket.estudiante_nombre} ${ticket.estudiante_apellido || ''}`.trim() : undefined
+      ).catch((err: any) => console.error('Error enviando correo de ticket en proceso:', err));
     }
 
     return res.json({ message: 'Estado del ticket actualizado exitosamente.' });
@@ -378,9 +403,16 @@ export const getTicketByCode = async (req: Request, res: Response) => {
 
   try {
     const ticketRes = await pool.query(
-      `SELECT t.*, c.nombre as colegio_nombre 
+      `SELECT t.*, 
+              c.nombre AS colegio_nombre,
+              e.nombre AS estudiante_nombre,
+              e.apellido AS estudiante_apellido,
+              e.documento AS estudiante_documento,
+              e.codigo AS estudiante_codigo,
+              e.estado AS estudiante_estado
        FROM tickets_soporte t 
        LEFT JOIN colegio c ON t.id_colegio = c.id_colegio 
+       LEFT JOIN estudiante e ON t.id_estudiante = e.id_estudiante
        WHERE t.codigo_ticket = $1`,
       [code.trim().toUpperCase()]
     );

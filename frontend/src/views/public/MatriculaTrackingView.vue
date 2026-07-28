@@ -79,6 +79,26 @@ const fetchTracking = async (tokenVal: string) => {
   }
 }
 
+const getRenewalStatusLabel = (state?: string) => {
+  switch (state) {
+    case 'VIGENTE': return '✅ VIGENTE (Conservado en archivo)'
+    case 'RECOMENDADO_ACTUALIZAR': return '⚠️ SE RECOMIENDA ACTUALIZAR'
+    case 'OBLIGATORIO_ACTUALIZAR': return '❌ REQUERIDO ACTUALIZAR'
+    case 'DESACTUALIZADO_POR_FECHA': return '❌ VENCIDO / REQUIERE NUEVA TARJETA'
+    default: return null
+  }
+}
+
+const getRenewalStatusClass = (state?: string) => {
+  switch (state) {
+    case 'VIGENTE': return 'bg-emerald-50 text-emerald-800 border-emerald-300'
+    case 'RECOMENDADO_ACTUALIZAR': return 'bg-amber-50 text-amber-800 border-amber-300'
+    case 'OBLIGATORIO_ACTUALIZAR': return 'bg-rose-50 text-rose-800 border-rose-300'
+    case 'DESACTUALIZADO_POR_FECHA': return 'bg-purple-50 text-purple-800 border-purple-300'
+    default: return 'bg-gray-100 text-gray-700 border-gray-300'
+  }
+}
+
 onMounted(() => {
   const queryToken = route.query.token as string
   if (queryToken) {
@@ -217,7 +237,7 @@ onMounted(() => {
                 </div>
               </div>
               
-              <div>
+              <div class="flex flex-col sm:flex-row sm:items-center gap-2">
                 <span v-if="doc.estado === 'VALIDADO'" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-200">
                   <CheckCircle2 :size="12" />
                   <span>Validado</span>
@@ -229,6 +249,13 @@ onMounted(() => {
                 <span v-else class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-yellow-50 text-yellow-700 border border-yellow-200">
                   <AlertTriangle :size="12" />
                   <span>Pendiente</span>
+                </span>
+
+                <span 
+                  v-if="doc.estado_renovacion"
+                  :class="[getRenewalStatusClass(doc.estado_renovacion), 'px-2.5 py-1 rounded-full text-[10px] font-bold border']"
+                >
+                  {{ getRenewalStatusLabel(doc.estado_renovacion) }}
                 </span>
               </div>
             </div>

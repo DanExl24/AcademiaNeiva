@@ -142,8 +142,10 @@ export class MatriculaService {
   static async getFiltered(idColegio: number, estado: string, yearId?: number) {
     let query = `
       SELECT m.*, 
+             e.motivo_estado AS student_motivo_estado,
              (SELECT COUNT(*) FROM documento_matriculas WHERE id_matricula = m.id_matricula AND estado = 'PENDIENTE') > 0 as has_pending_docs
       FROM matricula m
+      LEFT JOIN estudiante e ON m.id_estudiante = e.id_estudiante
       WHERE m.id_colegio = $1
     `;
     const params: any[] = [idColegio];
@@ -180,7 +182,7 @@ export class MatriculaService {
   static async getDetails(idMatricula: number) {
     const matRes = await pool.query(
       `SELECT m.*, ne.nombre as grado_nivel, tg.nombre as tipo_grado, s.nombre as seccion, g.id_jornada, j.nombre as jornada,
-              e.nombre as student_firstname, e.apellido as student_lastname, e.codigo as student_code, e.documento as student_document, e.id_tipodocumento as student_id_tipodocumento,
+              e.nombre as student_firstname, e.apellido as student_lastname, e.codigo as student_code, e.documento as student_document, e.id_tipodocumento as student_id_tipodocumento, e.motivo_estado as student_motivo_estado,
               pf.nombre as parent_firstname, pf.apellido as parent_lastname, pf.documento as parent_document, pf.id_tipodocumento as parent_id_tipodocumento,
               col.escudo_url, col.nombre as school_name,
               (g.cupos_totales - (SELECT COUNT(*) FROM matricula WHERE id_grupo = g.id_grupo AND estado IN ('ACTIVA', 'TRASLADADA'))) as cupos_restantes
@@ -513,8 +515,14 @@ export class MatriculaService {
         );
       }
 
-      // Set to CORRECCION so the Admin can filter these quickly
-      await client.query("UPDATE matricula SET estado = 'CORRECCION' WHERE id_matricula = $1", [idMatricula]);
+      // Mantener el estado PENDIENTE_RENOVACION si se trata de un proceso de reingreso; en otro caso cambiar a CORRECCION
+      const currentMat = await client.query('SELECT estado FROM matricula WHERE id_matricula = $1', [idMatricula]);
+      const currentEstado = currentMat.rows[0]?.estado;
+
+      if (currentEstado !== 'PENDIENTE_RENOVACION') {
+        await client.query("UPDATE matricula SET estado = 'CORRECCION' WHERE id_matricula = $1", [idMatricula]);
+      }
+
       await client.query('COMMIT');
       return { success: true };
     } catch (e) {

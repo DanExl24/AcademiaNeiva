@@ -312,7 +312,22 @@ export const updateStudentStatus = async (req: Request, res: Response) => {
       );
     }
 
-    const motivoValue = (estado === 'SANCIONADO' || estado === 'EXPULSADO') ? motivo.trim() : null;
+    if (estado === 'RETIRADO') {
+      if (!motivo || !motivo.trim()) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({ error: "El motivo del retiro es obligatorio." });
+      }
+      await client.query(
+        `UPDATE matricula 
+         SET estado = 'CANCELADA', 
+             motivo_cancelacion = 'Retiro de Estudiante', 
+             detalles_cancelacion = $1 
+         WHERE id_estudiante = $2 AND estado IN ('ACTIVA', 'PENDIENTE', 'PENDIENTE_RENOVACION')`,
+        [motivo.trim(), id]
+      );
+    }
+
+    const motivoValue = (estado === 'SANCIONADO' || estado === 'EXPULSADO' || estado === 'RETIRADO') ? motivo.trim() : null;
 
     const result = await client.query(
       "UPDATE estudiante SET estado = $1, motivo_estado = $2 WHERE id_estudiante = $3 RETURNING *",

@@ -71,34 +71,36 @@ watch(() => yearStore.selectedYearId, () => {
 })
 
 const tabs = [
-  { status: 'PENDIENTE',   label: 'Por Revisar',    color: 'amber'   },
-  { status: 'RECHAZADA',   label: 'En Corrección',  color: 'orange'  },
-  { status: 'CORRECCION',  label: 'Docs Corregidos',color: 'purple'  },
-  { status: 'ACTIVA',      label: 'Aprobadas',      color: 'emerald' },
-  { status: 'TRASLADADA',  label: 'Traslados',      color: 'blue'    },
-  { status: 'CANCELADA',   label: 'Canceladas',     color: 'red'     },
+  { status: 'PENDIENTE',            label: 'Por Revisar',          color: 'amber'   },
+  { status: 'PENDIENTE_RENOVACION', label: 'Pendiente Reingreso', color: 'teal'    },
+  { status: 'RECHAZADA',            label: 'En Corrección',        color: 'orange'  },
+  { status: 'CORRECCION',           label: 'Docs Corregidos',      color: 'purple'  },
+  { status: 'ACTIVA',               label: 'Aprobadas',            color: 'emerald' },
+  { status: 'TRASLADADA',           label: 'Traslados',            color: 'blue'    },
+  { status: 'CANCELADA',            label: 'Canceladas',           color: 'red'     },
 ]
 
 const stats = computed(() => ({
-  pending:     enrollments.value.filter(e => e.estado === 'PENDIENTE').length,
-  rejected:    enrollments.value.filter(e => e.estado === 'RECHAZADA' || e.estado === 'APROBADA').length,
-  corrected:   enrollments.value.filter(e => e.estado === 'CORRECCION').length,
-  active:      enrollments.value.filter(e => e.estado === 'ACTIVA').length,
-  transferred: enrollments.value.filter(e => e.estado === 'TRASLADADA').length,
-  cancelled:   enrollments.value.filter(e => e.estado === 'CANCELADA').length,
+  pending:           enrollments.value.filter(e => e.estado === 'PENDIENTE').length,
+  pendingRenovacion: enrollments.value.filter(e => e.estado === 'PENDIENTE_RENOVACION').length,
+  rejected:          enrollments.value.filter(e => e.estado === 'RECHAZADA').length,
+  corrected:         enrollments.value.filter(e => e.estado === 'CORRECCION').length,
+  active:            enrollments.value.filter(e => e.estado === 'ACTIVA' || e.estado === 'APROBADA').length,
+  transferred:       enrollments.value.filter(e => e.estado === 'TRASLADADA').length,
+  cancelled:         enrollments.value.filter(e => e.estado === 'CANCELADA').length,
 }))
 
 const filteredEnrollments = computed(() => {
   let list = enrollments.value.filter(en => {
-    if (filterStatus.value === 'RECHAZADA') {
-      return en.estado === 'RECHAZADA' || en.estado === 'APROBADA'
+    if (filterStatus.value === 'ACTIVA') {
+      return en.estado === 'ACTIVA' || en.estado === 'APROBADA'
     }
     return en.estado === filterStatus.value
   })
   const q = searchQuery.value.trim().toLowerCase()
   if (q) {
     list = list.filter(en =>
-      en.correo_padre.toLowerCase().includes(q) ||
+      (en.correo_padre && en.correo_padre.toLowerCase().includes(q)) ||
       String(en.id_matricula).includes(q)
     )
   }
@@ -106,13 +108,14 @@ const filteredEnrollments = computed(() => {
 })
 
 const getStatusMeta = (status: string) => {
-  if (status === 'PENDIENTE')  return { label: 'Por Revisar',     bg: 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400' }
-  if (status === 'RECHAZADA')  return { label: 'En Corrección',   bg: 'bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-400' }
-  if (status === 'APROBADA')   return { label: 'Excepción Aprobada', bg: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400' }
-  if (status === 'CORRECCION') return { label: 'Docs Corregidos', bg: 'bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-400' }
-  if (status === 'ACTIVA')     return { label: 'Aprobada',        bg: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400' }
-  if (status === 'TRASLADADA') return { label: 'Traslado',        bg: 'bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400' }
-  if (status === 'CANCELADA')  return { label: 'Cancelada',       bg: 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400' }
+  if (status === 'PENDIENTE')            return { label: 'Por Revisar',          bg: 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400' }
+  if (status === 'PENDIENTE_RENOVACION') return { label: 'Pendiente Reingreso',  bg: 'bg-teal-100 text-teal-700 dark:bg-teal-950/40 dark:text-teal-400' }
+  if (status === 'RECHAZADA')            return { label: 'En Corrección',        bg: 'bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-400' }
+  if (status === 'APROBADA')             return { label: 'Aprobada',             bg: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400' }
+  if (status === 'CORRECCION')           return { label: 'Docs Corregidos',      bg: 'bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-400' }
+  if (status === 'ACTIVA')               return { label: 'Aprobada',             bg: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400' }
+  if (status === 'TRASLADADA')           return { label: 'Traslado',             bg: 'bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400' }
+  if (status === 'CANCELADA')            return { label: 'Cancelada',            bg: 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400' }
   return { label: status, bg: 'bg-slate-100 text-slate-600' }
 }
 
@@ -589,14 +592,14 @@ const rejectException = async (id: number) => {
         <button @click="showExtraordinaryModal = true" class="px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black text-xs uppercase tracking-wide transition-all shadow-lg shadow-indigo-100 dark:shadow-none flex items-center gap-2">
           <Plus :size="16" /> Nueva Matrícula Extraordinaria
         </button>
-        <button @click="openReingresoModal" class="px-5 py-3 bg-violet-600 hover:bg-violet-700 text-white rounded-2xl font-black text-xs uppercase tracking-wide transition-all shadow-lg shadow-violet-100 dark:shadow-none flex items-center gap-2">
-          <Plus :size="16" /> Nuevo Reingreso de Estudiante
+        <button @click="router.push('/dashboard/gestion-reingresos')" class="px-5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-black text-xs uppercase tracking-wide transition-all shadow-lg shadow-emerald-100 dark:shadow-none flex items-center gap-2">
+          🔄 Panel de Reingresos
         </button>
       </div>
     </div>
 
     <!-- Stats Row -->
-    <div class="grid grid-cols-3 md:grid-cols-6 gap-3">
+    <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-3">
       <button
         v-for="(tab, i) in tabs" :key="tab.status"
         @click="filterStatus = tab.status"
@@ -608,13 +611,14 @@ const rejectException = async (id: number) => {
         ]"
       >
         <p class="text-2xl font-black text-slate-900 dark:text-white">
-          {{ [stats.pending, stats.rejected, stats.corrected, stats.active, stats.transferred, stats.cancelled][i] }}
+          {{ [stats.pending, stats.pendingRenovacion, stats.rejected, stats.corrected, stats.active, stats.transferred, stats.cancelled][i] }}
         </p>
         <p class="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-0.5">{{ tab.label }}</p>
         <div :class="[
           filterStatus === tab.status ? 'w-full' : 'w-0',
           'h-0.5 rounded-full mt-2 transition-all duration-300',
           tab.color === 'amber'   ? 'bg-amber-500' :
+          tab.color === 'teal'    ? 'bg-teal-500' :
           tab.color === 'orange'  ? 'bg-orange-500' :
           tab.color === 'purple'  ? 'bg-purple-500' :
           tab.color === 'emerald' ? 'bg-emerald-500' :
@@ -1074,7 +1078,7 @@ const rejectException = async (id: number) => {
                     </div>
                     <div>
                       <p :class="[matricula.estado === 'ACTIVA' ? 'text-emerald-900 dark:text-emerald-300' : 'text-blue-900 dark:text-blue-300', 'font-black text-sm']">
-                        {{ matricula.estado === 'ACTIVA' ? 'Matrícula Aprobada (Activa)' : 'Matrícula por Traslado' }}
+                        {{ matricula.estado === 'ACTIVA' ? 'Matrícula Aprobada (Activa)' : matricula.estado === 'TRASLADADA' ? 'Matrícula por Traslado' : 'Matrícula Procesada' }}
                       </p>
                       <p :class="[matricula.estado === 'ACTIVA' ? 'text-emerald-700 dark:text-emerald-400' : 'text-blue-700 dark:text-blue-400', 'text-xs font-medium']">
                         Procesada exitosamente.
@@ -1091,8 +1095,12 @@ const rejectException = async (id: number) => {
                   <div class="p-2.5 bg-red-600 text-white rounded-2xl"><XCircle :size="20" /></div>
                   <div>
                     <p class="font-black text-red-900 dark:text-red-300 text-sm">Matrícula Cancelada</p>
-                    <p class="text-xs font-bold text-red-700 dark:text-red-400 mt-1">{{ matricula.motivo_cancelacion || 'Sin motivo especificado.' }}</p>
-                    <p v-if="matricula.detalles_cancelacion" class="text-[10px] text-red-600 dark:text-red-500 mt-1">{{ matricula.detalles_cancelacion }}</p>
+                    <p class="text-xs font-bold text-red-700 dark:text-red-400 mt-1">
+                      Motivo: {{ matricula.detalles_cancelacion || matricula.motivo_cancelacion || matricula.student_motivo_estado || 'Sin motivo especificado.' }}
+                    </p>
+                    <p v-if="matricula.motivo_cancelacion && matricula.detalles_cancelacion && matricula.motivo_cancelacion !== 'Retiro de Estudiante'" class="text-[10px] text-red-600 dark:text-red-500 mt-1">
+                      Categoría: {{ matricula.motivo_cancelacion }}
+                    </p>
                   </div>
                 </div>
 
@@ -1157,17 +1165,6 @@ const rejectException = async (id: number) => {
                   </div>
                 </div>
 
-                <!-- Transfer toggle -->
-                <div class="bg-indigo-50/50 dark:bg-indigo-950/10 rounded-3xl p-5 border border-indigo-100 dark:border-indigo-900 flex items-center justify-between gap-4">
-                  <div>
-                    <p class="font-black text-indigo-900 dark:text-indigo-300 text-sm">Matrícula por Traslado</p>
-                    <p class="text-[10px] text-indigo-700 dark:text-indigo-400 mt-0.5">Estudiante proveniente de otra institución.</p>
-                  </div>
-                  <label class="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" v-model="matricula.es_traslado" @change="toggleTransfer" class="sr-only peer" :disabled="isReadonly" />
-                    <div class="w-12 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
-                  </label>
-                </div>
 
                 <!-- Section Selector / Assigned Room display -->
                 <div v-if="!isReadonly" class="space-y-3">
@@ -1318,11 +1315,11 @@ const rejectException = async (id: number) => {
                   <div v-else class="text-slate-500 dark:text-slate-400 text-xs font-medium">Valida todos los documentos para continuar.</div>
 
                   <div class="flex gap-2">
-                    <button v-if="['PENDIENTE', 'CORRECCION'].includes(matricula.estado) && allValidated" @click="currentStep = 3"
+                    <button v-if="!isReadonly && allValidated" @click="currentStep = 3"
                             class="px-5 py-2.5 bg-indigo-600 text-white rounded-xl font-black text-xs uppercase tracking-wide hover:bg-indigo-700 transition-all flex items-center gap-1.5 shadow-lg shadow-indigo-100 dark:shadow-none">
                       Siguiente <ArrowLeft :size="14" class="rotate-180" />
                     </button>
-                    <button v-else-if="['PENDIENTE','RECHAZADA','CORRECCION'].includes(matricula.estado)" @click="handleSave"
+                    <button v-else-if="!isReadonly" @click="handleSave"
                             class="px-5 py-2.5 bg-slate-900 dark:bg-slate-700 text-white rounded-xl font-black text-xs uppercase tracking-wide hover:bg-indigo-600 transition-all flex items-center gap-1.5">
                       <Save :size="14" />Guardar
                     </button>
@@ -1354,7 +1351,7 @@ const rejectException = async (id: number) => {
                     @click="router.push({ path: `/dashboard/gestion-matriculas/${matricula.id_matricula}/registro`, query: { gradeId: matricula.id_grado } })"
                     class="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 dark:shadow-none flex items-center justify-center gap-2"
                   >
-                    Crear Estudiante en el Sistema <ArrowLeft :size="18" class="rotate-180" />
+                    {{ (matricula.renovacion?.is_renovacion || matricula.id_estudiante || matricula.estado === 'PENDIENTE_RENOVACION') ? 'Procesar Registro / Renovación' : 'Crear Estudiante en el Sistema' }} <ArrowLeft :size="18" class="rotate-180" />
                   </button>
                   <button @click="currentStep = 2" class="w-full py-3.5 bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded-2xl font-bold hover:bg-slate-100 dark:hover:bg-slate-700 transition-all text-sm">
                     Volver a Documentos

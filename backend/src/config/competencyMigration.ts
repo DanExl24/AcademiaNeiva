@@ -361,11 +361,11 @@ export const ensureCompetencySchema = async (): Promise<void> => {
       await client.query(instMigrationSql);
     }
 
-    // Ejecutar migración de independencia de actividades (Fase 3)
-    const indMigrationPath = path.join(__dirname, "../migrations/009_dba_independencia_actividades.sql");
-    if (fs.existsSync(indMigrationPath)) {
-      const indMigrationSql = fs.readFileSync(indMigrationPath, "utf8");
-      await client.query(indMigrationSql);
+    // Ejecutar migración de reingreso y versionamiento de documentos (019)
+    const reingresoMigrationPath = path.join(__dirname, "../migrations/019_reingreso_and_document_versioning.sql");
+    if (fs.existsSync(reingresoMigrationPath)) {
+      const reingresoMigrationSql = fs.readFileSync(reingresoMigrationPath, "utf8");
+      await client.query(reingresoMigrationSql);
     }
 
     // Backfill sync_uuid for existing competencies

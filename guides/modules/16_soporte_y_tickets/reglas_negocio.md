@@ -149,3 +149,17 @@ Este documento detalla las reglas de negocio técnicas y funcionales del módulo
   - `GET /api/support/tickets`
   - `PUT /api/support/tickets/:id/status`
 - **Historias de usuario relacionadas:** HU-SOP-004
+
+---
+
+### RN-SOP-012: Irreversibilidad y Notificación Automática en Tickets de Incidencia de Reingreso
+- **Descripción:** Al cambiar un ticket de incidencia de tipo `REINGRESO` al estado `'EN_PROCESO'`, el sistema exige confirmación explícita del directivo notificando que la acción es irreversible. Al procesarse, se despacha un correo automático al acudiente informándole que el trámite de reingreso ya se está ejecutando, y se bloquea cualquier intento posterior de retornar el ticket al estado `'ABIERTO'`.
+- **Motivo:** Mantiene informado de forma inmediata al acudiente sobre el avance de la solicitud y evita inconsistencias operativas al no permitir retroceder un flujo de reingreso ya iniciado.
+- **Módulos afectados:** Soporte y Tickets, Matrículas e Inscripciones.
+- **Archivos donde se implementa:** 
+  - [supportController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/supportController.ts) (`updateTicketStatus`)
+  - [SupportView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/shared/SupportView.vue) (Confirmación modal previa al cambio de estado)
+- **Endpoints relacionados:** 
+  - `PUT /api/support/tickets/:id/status`
+- **Historias de usuario relacionadas:** HU-MAT-009, HU-SOP-005
+

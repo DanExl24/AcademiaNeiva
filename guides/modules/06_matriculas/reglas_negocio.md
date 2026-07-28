@@ -99,3 +99,72 @@ Este documento detalla las reglas de negocio técnicas y funcionales del módulo
   - [matriculaController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/matriculaController.ts) (Validación de `colegioId` contra token de sesión)
 - **Endpoints relacionados:** Todos los endpoints administrativos del módulo.
 - **Historias de usuario relacionadas:** HU-MAT-004, HU-MAT-005, HU-MAT-006
+
+---
+
+## Flujo de Reingresos de Estudiantes Retirados
+
+### RN-MAT-008: Elegibilidad Exclusiva de Reingreso
+- **Descripción:** Solo los estudiantes con estado `RETIRADO` (o alumnos en estado activo que pasan a `RETIRADO` para iniciar trámite) son elegibles para reingresar a la institución. Los alumnos con estado `EXPULSADO` o `GRADUADO` están totalmente inhabilitados y bloqueados por el sistema.
+- **Motivo:** Garantiza que sanciones de expulsión permanente y estados de graduados se respeten sin excepciones.
+- **Módulos afectados:** Matrículas e Inscripciones, Estudiantes y Estados.
+- **Archivos donde se implementa:** 
+  - [reingresoController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/reingresoController.ts) (`sendParentReingresoLink`, `getStudentHistoryForReingreso`)
+- **Endpoints relacionados:** 
+  - `POST /api/reingreso/send-parent-link`
+- **Historias de usuario relacionadas:** HU-MAT-008
+
+---
+
+### RN-MAT-009: Irreversibilidad y Notificación de Tickets de Incidencia de Reingreso
+- **Descripción:** Cuando un directivo promueve un ticket de soporte de incidencia de reingreso al estado `EN_PROCESO`, el sistema solicita confirmación advirtiendo que la acción es irreversible, envía un correo electrónico automático al acudiente informando la ejecución del trámite, e impide estrictamente retornar el ticket a estado `ABIERTO`.
+- **Motivo:** Asegura la trazabilidad en la atención de solicitudes de reingreso solicitadas por los acudientes y la notificación inmediata.
+- **Módulos afectados:** Matrículas e Inscripciones, Soporte y Tickets.
+- **Archivos donde se implementa:** 
+  - [supportController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/supportController.ts) (`updateTicketStatus`)
+  - [SupportView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/shared/SupportView.vue) (Alerta de confirmación al cambiar a EN_PROCESO)
+- **Endpoints relacionados:** 
+  - `PUT /api/support/tickets/:id/status`
+- **Historias de usuario relacionadas:** HU-MAT-009, HU-SOP-005
+
+---
+
+### RN-MAT-010: Matriz Documental de Renovación
+- **Descripción:** Al iniciar un reingreso, el sistema genera la matriz documental del alumno retirado. Conserva los documentos previamente cargados en años pasados que sigan en estado `VIGENTE` (`VALIDADO`) y marca como `PENDIENTE` únicamente aquellos que requieran renovación o actualización por parte del acudiente.
+- **Motivo:** Agiliza el proceso administrativo al no exigir de nuevo documentos institucionales que no expiran.
+- **Módulos afectados:** Matrículas e Inscripciones.
+- **Archivos donde se implementa:** 
+  - [reingresoController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/reingresoController.ts) (`sendParentReingresoLink`)
+  - [ReingresoManagement.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/ReingresoManagement.vue)
+- **Endpoints relacionados:** 
+  - `POST /api/reingreso/send-parent-link`
+- **Historias de usuario relacionadas:** HU-MAT-008
+
+---
+
+### RN-MAT-011: Configuración de Destino y Control de Cupos en Tiempo Real
+- **Descripción:** El formulario "Configuración de Destino" exige la selección de Año Lectivo Activo, Nivel Escolar, Grado y Grupo/Salón de destino. El selector de salones calcula en tiempo real `cupos_totales - (matriculas activas/trasladadas)` e inhabilita cursos sin cupo disponible.
+- **Motivo:** Evita el sobrecupo y asegura que el alumno reingresado sea asignado a un aula con espacio físico comprobado.
+- **Módulos afectados:** Matrículas e Inscripciones, Estructura Escolar.
+- **Archivos donde se implementa:** 
+  - [reingresoController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/reingresoController.ts) (`getReingresoGroups`)
+  - [ReingresoManagement.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/ReingresoManagement.vue)
+- **Endpoints relacionados:** 
+  - `GET /api/reingreso/groups`
+- **Historias de usuario relacionadas:** HU-MAT-008
+
+---
+
+### RN-MAT-012: Auditoría del Motivo de Retiro
+- **Descripción:** Al marcar a un estudiante en estado `RETIRADO`, es obligatorio especificar la causa del retiro. Esta información se persiste en la columna `motivo_estado` de la tabla `estudiante` y `detalles_cancelacion` de la tabla `matricula`, estando siempre visible en el expediente del alumno en Reingresos y en la Gestión de Estudiantes.
+- **Motivo:** Mantiene un registro auditable del porqué de la desvinculación escolar para comités académicos e inspección.
+- **Módulos afectados:** Matrículas e Inscripciones, Estudiantes y Estados.
+- **Archivos donde se implementa:** 
+  - [studentController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/studentController.ts) (`updateStudentStatus`)
+  - [matriculaService.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/services/matriculaService.ts) (`getFiltered`, `getDetails`)
+  - [StudentManagement.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/StudentManagement.vue)
+  - [ReingresoManagement.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/ReingresoManagement.vue)
+- **Endpoints relacionados:** 
+  - `PATCH /api/student/:id/status`
+- **Historias de usuario relacionadas:** HU-MAT-008
+

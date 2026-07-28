@@ -57,88 +57,6 @@ const showEscalatedOnly = ref(false) // Para Directivos: ver escalados al Admin 
 
 // Modo Seguimiento de Tickets para el Usuario
 const showTrackingMode = ref(false)
-const trackingCodeInput = ref('')
-const trackingTicketData = ref<any>(null)
-const searchingTracking = ref(false)
-const trackingError = ref('')
-
-const myTickets = ref<any[] | null>(null)
-const myTicketsFilter = ref<'TODOS' | 'ABIERTO' | 'EN_PROCESO' | 'RESUELTO' | 'ESCALADOS'>('TODOS')
-
-const fetchMyTickets = async () => {
-  if (!auth.isAuthenticated || isStaff.value) return
-  try {
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get('http://localhost:3000/api/support/tickets', { headers })
-    myTickets.value = (res.data.tickets || []).map((t: any) => {
-      let obs = []
-      if (typeof t.observaciones === 'string') {
-        try {
-          obs = JSON.parse(t.observaciones)
-        } catch {
-          obs = []
-        }
-      } else if (Array.isArray(t.observaciones)) {
-        obs = t.observaciones
-      }
-      return { ...t, observaciones: obs }
-    })
-  } catch (error) {
-    console.error('Error fetching my tickets:', error)
-  }
-}
-
-const filteredMyTickets = computed(() => {
-  if (!myTickets.value) return []
-  let result = myTickets.value
-  if (myTicketsFilter.value === 'ESCALADOS') {
-    result = result.filter(t => t.fecha_escalado !== null)
-  } else if (myTicketsFilter.value !== 'TODOS') {
-    result = result.filter(t => t.estado === myTicketsFilter.value)
-  }
-  return result
-})
-
-const selectMyTicket = (ticket: any) => {
-  trackingTicketData.value = ticket
-  visitorResponseInput.value = ''
-}
-const visitorResponseInput = ref('')
-const submittingVisitorObs = ref(false)
-
-const canVisitorRespond = computed(() => {
-  const ticket = trackingTicketData.value
-  if (!ticket) return false
-  if (ticket.estado === 'RESUELTO') return false
-  
-  const obs = ticket.observaciones || []
-  if (obs.length === 0) return false
-  
-  const lastObs = obs[obs.length - 1]
-  return lastObs.tipo === 'DIRECTIVO' || lastObs.tipo === 'ADMIN_GENERAL'
-})
-
-const submitVisitorResponse = async () => {
-  if (!trackingTicketData.value || !visitorResponseInput.value.trim()) return
-  try {
-    submittingVisitorObs.value = true
-    const code = trackingTicketData.value.codigo_ticket || getTicketCode(trackingTicketData.value)
-    const res = await axios.post(`http://localhost:3000/api/support/tickets/track/${code}/observaciones`, {
-      observacion: visitorResponseInput.value.trim()
-    })
-    trackingTicketData.value.observaciones = res.data.observaciones
-    // Si la última observación cambia de ABIERTO a EN_PROCESO, lo actualizamos localmente
-    if (trackingTicketData.value.estado === 'ABIERTO') {
-      trackingTicketData.value.estado = 'EN_PROCESO'
-    }
-    visitorResponseInput.value = ''
-    alert('Respuesta registrada exitosamente.')
-  } catch (error: any) {
-    alert(error.response?.data?.error || 'Error al registrar tu respuesta.')
-  } finally {
-    submittingVisitorObs.value = false
-  }
-}
 
 // Observaciones inline
 const observationsInputs = ref<Record<number, string>>({})
@@ -199,6 +117,14 @@ const toggleEscalatedFilter = () => {
 const updateTicketStatus = async (ticketId: number, newStatus: string) => {
   const t = tickets.value.find(ticket => ticket.id_ticket === ticketId)
   if (!t) return
+
+  if (newStatus === 'EN_PROCESO' && (t.tipo_incidencia === 'REINGRESO' || t.estado === 'ABIERTO')) {
+    const okProcess = confirm('⚠️ ADVERTENCIA: Esta acción NO se puede revertir.\n\nAl cambiar el estado del ticket a EN PROCESO, se enviará automáticamente un correo electrónico al acudiente notificándole que el trámite de reingreso ha comenzado. Este ticket ya NO podrá volver al estado ABIERTO.\n\n¿Deseas continuar?')
+    if (!okProcess) {
+      fetchTickets()
+      return
+    }
+  }
 
   if (newStatus === 'RESUELTO') {
     const ok = confirm('¿Estás seguro de pasar el estado de este ticket a RESUELTO? Una vez resuelto, el ticket pasará a ser de solo lectura y no se podrán agregar más comentarios ni modificar su estado.');
@@ -279,6 +205,127 @@ const saveObservation = async (ticketId: number) => {
   }
 }
 
+const handleNotifyNonExistent = async (ticketId: number) => {
+  const motivo = prompt('Ingresa la observación para notificar que el estudiante no fue encontrado en los registros:')
+  if (motivo === null) return
+  try {
+    const headers = { Authorization: `Bearer ${auth.token}` }
+    await axios.post(`http://localhost:3000/api/reingreso/notify-nonexistent/${ticketId}`, { motivo }, { headers })
+    alert('Notificación enviada exitosamente al usuario y ticket resuelto.')
+    fetchTickets()
+  } catch (err: any) {
+    alert(err.response?.data?.error || 'Error al enviar notificación')
+  }
+}
+
+const myChildren = ref<any[]>([])
+const selectedChildIdForTicket = ref<number | null>(null)
+const myTickets = ref<any[]>([])
+const myTicketsFilter = ref('TODOS')
+const trackingCodeInput = ref('')
+const searchingTracking = ref(false)
+const trackingError = ref('')
+const trackingTicketData = ref<any>(null)
+const visitorResponseInput = ref('')
+const submittingVisitorObs = ref<boolean>(false)
+
+const fetchMyChildren = async () => {
+  if (!auth.isAuthenticated || !auth.user?.id) return
+  try {
+    const res = await axios.get(`http://localhost:3000/api/student/parent-children/${auth.user.id}`)
+    myChildren.value = res.data || []
+    if (myChildren.value.length > 0) {
+      selectedChildIdForTicket.value = myChildren.value[0].id_estudiante
+    }
+  } catch (err) {
+    console.error('Error cargando hijos del acudiente:', err)
+  }
+}
+
+const fetchMyTickets = async () => {
+  if (!auth.token) return
+  try {
+    loading.value = true
+    const headers = { Authorization: `Bearer ${auth.token}` }
+    const res = await axios.get('http://localhost:3000/api/support/tickets', { headers })
+    myTickets.value = (res.data.tickets || []).map((t: any) => {
+      let obs = []
+      if (typeof t.observaciones === 'string') {
+        try {
+          obs = JSON.parse(t.observaciones)
+        } catch {
+          obs = []
+        }
+      } else if (Array.isArray(t.observaciones)) {
+        obs = t.observaciones
+      }
+      return { ...t, observaciones: obs }
+    })
+
+    if (myTickets.value.length > 0 && !trackingTicketData.value) {
+      selectMyTicket(myTickets.value[0])
+    }
+  } catch (err) {
+    console.error('Error cargando mis tickets:', err)
+  } finally {
+    loading.value = false
+  }
+}
+
+const filteredMyTickets = computed(() => {
+  let list = myTickets.value
+  if (myTicketsFilter.value === 'ESCALADOS') {
+    list = list.filter((t: any) => t.fecha_escalado)
+  } else if (myTicketsFilter.value !== 'TODOS') {
+    list = list.filter((t: any) => t.estado === myTicketsFilter.value)
+  }
+
+  if (trackingCodeInput.value.trim()) {
+    const q = trackingCodeInput.value.trim().toLowerCase()
+    list = list.filter((t: any) => 
+      (t.codigo_ticket && t.codigo_ticket.toLowerCase().includes(q)) ||
+      t.asunto.toLowerCase().includes(q) ||
+      t.descripcion.toLowerCase().includes(q)
+    )
+  }
+
+  return list
+})
+
+const selectMyTicket = (t: any) => {
+  trackingTicketData.value = t
+  visitorResponseInput.value = ''
+}
+
+const canVisitorRespond = computed(() => {
+  if (!trackingTicketData.value) return false
+  if (trackingTicketData.value.estado === 'RESUELTO') return false
+  const obs = trackingTicketData.value.observaciones || []
+  if (obs.length === 0) return true
+  const lastObs = obs[obs.length - 1]
+  return lastObs.tipo === 'ADMIN_GENERAL' || lastObs.tipo === 'DIRECTIVO' || lastObs.autor
+})
+
+const submitVisitorResponse = async () => {
+  if (!trackingTicketData.value || !visitorResponseInput.value.trim()) return
+  try {
+    submittingVisitorObs.value = true
+    const ticketId = trackingTicketData.value.id_ticket
+    const headers = auth.token ? { Authorization: `Bearer ${auth.token}` } : {}
+    const res = await axios.post(`http://localhost:3000/api/support/tickets/${ticketId}/observaciones`, {
+      observacion: visitorResponseInput.value.trim()
+    }, { headers })
+
+    trackingTicketData.value.observaciones = res.data.observaciones || []
+    visitorResponseInput.value = ''
+    alert('Respuesta enviada exitosamente.')
+  } catch (err: any) {
+    alert(err.response?.data?.error || 'Error al enviar respuesta')
+  } finally {
+    submittingVisitorObs.value = false
+  }
+}
+
 onMounted(() => {
   if (isStaff.value) {
     fetchTickets()
@@ -290,6 +337,7 @@ onMounted(() => {
       selectedSchoolId.value = auth.user.schoolId ? Number(auth.user.schoolId) : null
       showTrackingMode.value = true
       fetchMyTickets()
+      fetchMyChildren()
     }
 
     // Cargar parámetros de plantilla desde la URL si están presentes
@@ -331,7 +379,8 @@ const handleSubmit = async () => {
       tipo_incidencia: category.value,
       asunto: subject.value,
       descripcion: description.value,
-      id_colegio: selectedSchoolId.value
+      id_colegio: selectedSchoolId.value,
+      id_estudiante: category.value === 'REINGRESO' ? selectedChildIdForTicket.value : null
     }
 
     const response = await axios.post('http://localhost:3000/api/support/tickets', payload, { headers })
@@ -340,6 +389,8 @@ const handleSubmit = async () => {
     subject.value = ''
     description.value = ''
     phone.value = ''
+    alert(`Ticket de soporte creado exitosamente con el código: ${response.data.ticketCode}`)
+    showTrackingMode.value = true
     fetchMyTickets()
   } catch (error: any) {
     errorMsg.value = error.response?.data?.error || 'Error al enviar el ticket de soporte.'
@@ -380,6 +431,7 @@ const filteredTickets = computed(() => {
 })
 
 const getCategoryBadgeClass = (cat: string) => {
+  if (cat === 'REINGRESO') return 'bg-emerald-50 text-emerald-700 border-emerald-100 dark:bg-emerald-950/20 dark:text-emerald-400'
   if (cat === 'TECNICO') return 'bg-rose-50 text-rose-700 border-rose-100 dark:bg-rose-950/20 dark:text-rose-455'
   if (cat === 'CALIFICACIONES') return 'bg-violet-50 text-violet-700 border-violet-100 dark:bg-violet-950/20 dark:text-violet-400'
   if (cat === 'ASISTENCIA') return 'bg-amber-50 text-amber-700 border-amber-100 dark:bg-amber-950/20 dark:text-amber-400'
@@ -388,6 +440,7 @@ const getCategoryBadgeClass = (cat: string) => {
 }
 
 const getCategoryLabel = (cat: string) => {
+  if (cat === 'REINGRESO') return 'Reingreso Estudiantil'
   if (cat === 'TECNICO') return 'Técnico / Error'
   if (cat === 'CALIFICACIONES') return 'Notas / Periodos'
   if (cat === 'ASISTENCIA') return 'Asistencia'
@@ -578,10 +631,29 @@ const getObservationText = (obs: any) => {
                   'text-indigo-650 dark:text-indigo-400': t.estado === 'ESCALADO'
                 }"
               >
-                <option v-if="!t.fecha_escalado && (!t.observaciones || t.observaciones.length === 0)" value="ABIERTO">Abierto</option>
+                <option v-if="!t.fecha_escalado && (!t.observaciones || t.observaciones.length === 0) && t.estado !== 'EN_PROCESO' && t.tipo_incidencia !== 'REINGRESO'" value="ABIERTO">Abierto</option>
                 <option value="EN_PROCESO">En Proceso</option>
                 <option value="RESUELTO">Resuelto</option>
               </select>
+
+              <!-- Acciones Especiales para Reingreso (Directivo) -->
+              <button 
+                v-if="auth.activeRole?.toUpperCase() === 'DIRECTIVO' && t.tipo_incidencia === 'REINGRESO' && t.estado !== 'RESUELTO'"
+                @click="router.push(`/dashboard/gestion-reingresos?ticketId=${t.id_ticket}${t.id_estudiante ? '&studentId=' + t.id_estudiante : ''}`)"
+                class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md flex items-center gap-1.5"
+                title="Abrir panel especializado de reingreso para este ticket"
+              >
+                🔄 Procesar Reingreso
+              </button>
+
+              <button 
+                v-if="auth.activeRole?.toUpperCase() === 'DIRECTIVO' && t.tipo_incidencia === 'REINGRESO' && t.estado !== 'RESUELTO'"
+                @click="handleNotifyNonExistent(t.id_ticket)"
+                class="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md flex items-center gap-1.5"
+                title="Notificar por correo que el estudiante no fue hallado"
+              >
+                ⚠️ Estudiante No Existe
+              </button>
 
               <!-- RN-005: Botón de escalamiento interactivo o deshabilitado -->
               <!-- Caso 1: Ya fue escalado (cualquier estado) -->
@@ -616,6 +688,18 @@ const getObservationText = (obs: any) => {
             <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed font-semibold">
               {{ t.descripcion }}
             </p>
+
+            <!-- Ficha del Estudiante Seleccionado para Reingreso -->
+            <div v-if="t.estudiante_nombre" class="p-3.5 bg-emerald-500/10 dark:bg-emerald-950/20 border border-emerald-500/30 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+              <div>
+                <span class="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest block mb-0.5">🎓 Estudiante Seleccionado para Reingreso</span>
+                <span class="font-bold text-slate-800 dark:text-slate-100">{{ t.estudiante_nombre }} {{ t.estudiante_apellido }}</span>
+                <span class="text-slate-500 dark:text-slate-400 text-[11px] block font-mono">Doc: {{ t.estudiante_documento }} | Cód: {{ t.estudiante_codigo || 'N/A' }}</span>
+              </div>
+              <span class="px-2.5 py-1 text-[10px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-lg self-start sm:self-auto">
+                Estado: {{ t.estudiante_estado || 'RETIRADO' }}
+              </span>
+            </div>
           </div>
 
           <!-- Sender Snapshot Info -->
@@ -680,7 +764,11 @@ const getObservationText = (obs: any) => {
     </div>
 
     <!-- 2. GUEST/NORMAL VIEW: Contact support form -->
-    <div v-else class="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-2xl p-8 sm:p-12 relative overflow-hidden transition-all duration-300">
+    <div 
+      v-else 
+      :class="showTrackingMode ? 'max-w-5xl' : 'max-w-2xl'"
+      class="w-full bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-2xl p-6 sm:p-10 relative overflow-hidden transition-all duration-300"
+    >
       
       <!-- Back button -->
       <button 
@@ -715,6 +803,16 @@ const getObservationText = (obs: any) => {
           <div v-if="myTickets && myTickets.length > 0" class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
             <!-- Columna Izquierda: Listado de Tickets -->
             <div class="lg:col-span-5 space-y-4">
+              <!-- Buscador por Código o Palabra clave -->
+              <div class="bg-slate-50 dark:bg-slate-800/40 px-3 py-2 rounded-2xl border border-slate-150/40 dark:border-slate-700/65 flex items-center gap-2">
+                <input 
+                  v-model="trackingCodeInput"
+                  type="text"
+                  placeholder="Buscar por código (ej: TKT-...) o asunto..."
+                  class="w-full bg-transparent border-none text-xs font-semibold text-slate-700 dark:text-slate-200 outline-none placeholder-slate-400"
+                />
+              </div>
+
               <!-- Filtro de Estados -->
               <div class="bg-slate-50 dark:bg-slate-800/40 px-3 py-2 rounded-2xl border border-slate-150/40 dark:border-slate-700/65 flex items-center gap-2">
                 <span class="text-[9px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-widest whitespace-nowrap ml-1">Filtrar Estado:</span>
@@ -820,6 +918,17 @@ const getObservationText = (obs: any) => {
                       <span class="text-[9px] font-bold text-slate-400 dark:text-slate-555 uppercase tracking-widest">Fecha de Creación:</span>
                       <p class="text-xs font-black text-slate-700 dark:text-slate-300 mt-0.5">{{ formatDate(trackingTicketData.fecha_creacion) }}</p>
                     </div>
+                  </div>
+
+                  <!-- Ficha del Estudiante Seleccionado para Reingreso (Para el Acudiente) -->
+                  <div v-if="trackingTicketData.estudiante_nombre" class="p-4 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/50 rounded-2xl space-y-1">
+                    <span class="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest block">🎓 Estudiante Seleccionado para Reingreso:</span>
+                    <p class="text-xs font-black text-slate-850 dark:text-slate-100">
+                      {{ trackingTicketData.estudiante_nombre }} {{ trackingTicketData.estudiante_apellido }}
+                    </p>
+                    <p class="text-[11px] text-slate-500 dark:text-slate-400 font-mono">
+                      Documento: {{ trackingTicketData.estudiante_documento }} | Código: {{ trackingTicketData.estudiante_codigo || 'N/A' }} | Estado: {{ trackingTicketData.estudiante_estado || 'RETIRADO' }}
+                    </p>
                   </div>
                 </div>
 
@@ -1102,6 +1211,7 @@ const getObservationText = (obs: any) => {
                   class="w-full pl-11 pr-4 py-4 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-semibold text-slate-700 dark:text-slate-200 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all outline-none cursor-pointer"
                 >
                   <option value="TECNICO">Problema Técnico / Error de Plataforma</option>
+                  <option value="REINGRESO">Solicitud de Reingreso Estudiantil</option>
                   <option value="CALIFICACIONES">Dudas sobre Calificaciones / Periodos</option>
                   <option value="ASISTENCIA">Dudas sobre Asistencia</option>
                   <option value="AUTENTICACION">Problemas de Inicio de Sesión / Contraseña</option>
@@ -1110,6 +1220,22 @@ const getObservationText = (obs: any) => {
                 <HelpCircle class="w-5 h-5 text-slate-400 absolute left-4 top-4" />
               </div>
             </div>
+          </div>
+
+          <!-- Selector de Hijo para Reingreso (Si es Padre autenticado y elige REINGRESO) -->
+          <div v-if="category === 'REINGRESO' && myChildren.length > 0" class="space-y-2 bg-emerald-500/10 p-4 rounded-2xl border border-emerald-500/30">
+            <label class="text-xs font-bold text-emerald-400 uppercase tracking-widest block">👤 Seleccionar Estudiante / Hijo a Reingresar *</label>
+            <select 
+              v-model="selectedChildIdForTicket"
+              class="w-full px-4 py-3 bg-slate-900 border border-emerald-500/50 rounded-xl text-sm font-semibold text-slate-100 focus:outline-none focus:border-emerald-400 transition"
+            >
+              <option v-for="child in myChildren" :key="child.id_estudiante" :value="child.id_estudiante">
+                {{ child.nombre }} {{ child.apellido }} (Doc: {{ child.documento }}) — Estado actual: {{ child.estado }}
+              </option>
+            </select>
+            <p class="text-[11px] text-slate-400 italic">
+              El directivo recibirá directamente el expediente de este estudiante para procesar la matriz de reingreso.
+            </p>
           </div>
 
           <!-- Selector de Colegio (Solo para visitantes) -->

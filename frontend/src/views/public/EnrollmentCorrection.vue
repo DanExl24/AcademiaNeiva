@@ -107,6 +107,26 @@ const getStatusClass = (estado: string) => {
   if (estado === 'RECHAZADO') return 'bg-red-100 text-red-700 border-red-200'
   return 'bg-amber-100 text-amber-700 border-amber-200'
 }
+
+const getRenewalStatusLabel = (state?: string) => {
+  switch (state) {
+    case 'VIGENTE': return '✅ VIGENTE (Conservado en archivo)'
+    case 'RECOMENDADO_ACTUALIZAR': return '⚠️ SE RECOMIENDA ACTUALIZAR'
+    case 'OBLIGATORIO_ACTUALIZAR': return '❌ REQUERIDO ACTUALIZAR'
+    case 'DESACTUALIZADO_POR_FECHA': return '❌ VENCIDO / REQUIERE NUEVA TARJETA'
+    default: return null
+  }
+}
+
+const getRenewalStatusClass = (state?: string) => {
+  switch (state) {
+    case 'VIGENTE': return 'bg-emerald-50 text-emerald-800 border-emerald-300'
+    case 'RECOMENDADO_ACTUALIZAR': return 'bg-amber-50 text-amber-800 border-amber-300'
+    case 'OBLIGATORIO_ACTUALIZAR': return 'bg-rose-50 text-rose-800 border-rose-300'
+    case 'DESACTUALIZADO_POR_FECHA': return 'bg-purple-50 text-purple-800 border-purple-300'
+    default: return 'bg-gray-100 text-gray-700 border-gray-300'
+  }
+}
 </script>
 
 <template>
@@ -157,10 +177,18 @@ const getStatusClass = (estado: string) => {
               </div>
               <div>
                 <h3 class="font-bold text-gray-900">{{ docLabels[doc.tipo_documento] || doc.tipo_documento }}</h3>
-                <div class="flex items-center gap-2 mt-1">
-                  <span :class="[getStatusClass(doc.estado), 'px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border']">
-                    {{ doc.estado }}
+                <div class="flex flex-wrap items-center gap-2 mt-1.5">
+                  <span :class="[getStatusClass(doc.estado), 'px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase border']">
+                    {{ doc.estado === 'VALIDADO' ? '✅ VALIDADO' : doc.estado === 'RECHAZADO' ? '❌ RECHAZADO' : '⏳ PENDIENTE' }}
                   </span>
+
+                  <span 
+                    v-if="doc.estado_renovacion"
+                    :class="[getRenewalStatusClass(doc.estado_renovacion), 'px-2.5 py-0.5 rounded-full text-[10px] font-bold border']"
+                  >
+                    {{ getRenewalStatusLabel(doc.estado_renovacion) }}
+                  </span>
+
                   <span v-if="newFiles[doc.tipo_documento]" class="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-bold uppercase">
                     CORREGIDO
                   </span>

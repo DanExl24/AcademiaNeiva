@@ -494,7 +494,12 @@ const downloadEnrollmentPDF = async () => {
           <div class="p-2.5 bg-red-600 text-white rounded-2xl"><XCircle :size="20" /></div>
           <div>
             <p class="font-black text-red-900 dark:text-red-300 text-sm">Matrícula Cancelada</p>
-            <p class="text-xs text-red-700 dark:text-red-400 mt-1">{{ matricula.motivo_cancelacion }}</p>
+            <p class="text-xs font-bold text-red-700 dark:text-red-400 mt-1">
+              Motivo: {{ matricula.detalles_cancelacion || matricula.motivo_cancelacion || matricula.student_motivo_estado || 'Sin motivo especificado.' }}
+            </p>
+            <p v-if="matricula.motivo_cancelacion && matricula.detalles_cancelacion && matricula.motivo_cancelacion !== 'Retiro de Estudiante'" class="text-[10px] text-red-600 dark:text-red-500 mt-1">
+              Categoría: {{ matricula.motivo_cancelacion }}
+            </p>
           </div>
         </div>
 
@@ -516,17 +521,6 @@ const downloadEnrollmentPDF = async () => {
             <span :class="[getStatusMeta(matricula.estado).bg, 'px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest']">{{ getStatusMeta(matricula.estado).label }}</span>
           </div>
 
-          <!-- Transfer toggle -->
-          <div class="bg-indigo-50/50 dark:bg-indigo-950/10 rounded-2xl p-4 border border-indigo-100 dark:border-indigo-900 flex items-center justify-between gap-4">
-            <div>
-              <p class="font-black text-indigo-900 dark:text-indigo-300 text-sm">Matrícula por Traslado</p>
-              <p class="text-[10px] text-indigo-700 dark:text-indigo-400 mt-0.5">Estudiante de otra institución.</p>
-            </div>
-            <label class="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" v-model="matricula.es_traslado" @change="toggleTransfer" class="sr-only peer" :disabled="isReadonly" />
-              <div class="w-12 h-6 bg-slate-200 dark:bg-slate-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
-            </label>
-          </div>
 
           <!-- Section selector -->
           <div class="space-y-2">
@@ -623,8 +617,8 @@ const downloadEnrollmentPDF = async () => {
             <div v-else class="text-slate-500 dark:text-slate-400 text-xs font-medium">Valida todos los documentos para continuar.</div>
             <div class="flex gap-2">
               <button v-if="isReadonly" @click="currentStep = 3" class="px-5 py-2.5 bg-emerald-600 text-white rounded-xl font-black text-xs uppercase tracking-wide hover:bg-emerald-700 transition-all flex items-center gap-1.5">Ver Resumen <ArrowLeft :size="14" class="rotate-180" /></button>
-              <button v-else-if="matricula.estado === 'PENDIENTE' && allValidated" @click="currentStep = 3" class="px-5 py-2.5 bg-indigo-600 text-white rounded-xl font-black text-xs uppercase hover:bg-indigo-700 transition-all flex items-center gap-1.5">Siguiente <ArrowLeft :size="14" class="rotate-180" /></button>
-              <button v-else-if="['PENDIENTE','RECHAZADA'].includes(matricula.estado)" @click="handleSave" class="px-5 py-2.5 bg-slate-900 dark:bg-slate-700 text-white rounded-xl font-black text-xs uppercase hover:bg-indigo-600 transition-all flex items-center gap-1.5"><Save :size="14" />Guardar</button>
+              <button v-else-if="allValidated" @click="currentStep = 3" class="px-5 py-2.5 bg-indigo-600 text-white rounded-xl font-black text-xs uppercase hover:bg-indigo-700 transition-all flex items-center gap-1.5">Siguiente <ArrowLeft :size="14" class="rotate-180" /></button>
+              <button v-else @click="handleSave" class="px-5 py-2.5 bg-slate-900 dark:bg-slate-700 text-white rounded-xl font-black text-xs uppercase hover:bg-indigo-600 transition-all flex items-center gap-1.5"><Save :size="14" />Guardar</button>
             </div>
           </div>
         </div>
@@ -646,7 +640,7 @@ const downloadEnrollmentPDF = async () => {
         <div class="space-y-3">
           <button @click="router.push({ path: `/dashboard/gestion-matriculas/${route.params.id}/registro`, query: { gradeId: matricula.id_grado } })"
                   class="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 dark:shadow-none flex items-center justify-center gap-2">
-            Crear Estudiante en el Sistema <ArrowLeft :size="18" class="rotate-180" />
+            {{ (matricula.renovacion?.is_renovacion || matricula.id_estudiante || matricula.estado === 'PENDIENTE_RENOVACION') ? 'Procesar Registro / Renovación' : 'Crear Estudiante en el Sistema' }} <ArrowLeft :size="18" class="rotate-180" />
           </button>
           <button @click="currentStep = 2" class="w-full py-3.5 bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded-2xl font-bold hover:bg-slate-100 dark:hover:bg-slate-700 transition-all text-sm">Volver a Documentos</button>
         </div>

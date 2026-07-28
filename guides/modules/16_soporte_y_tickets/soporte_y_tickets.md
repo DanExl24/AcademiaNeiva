@@ -54,6 +54,7 @@ Este módulo proporciona un canal de comunicación centralizado, seguro y audita
   - La marca de escalado es inalterable, conservando el hecho histórico.
 - **RN-TKT-005 (Código Base36 Ofuscado):** Los códigos de ticket públicos (ej. `TKT-1B3X9H7Z`) se generan mediante codificación Base36 sobre un entero de 22 dígitos derivado de: Año (4d) + ID Colegio (3d) + Documento/Teléfono (10d) + ID Ticket (5d). Esto previene ataques de enumeración y scraping.
 - **RN-TKT-006 (Auditoría de Eventos de Sistema):** Todo cambio de estado, escalamiento o alteración crítica genera automáticamente una nota con tipo `'SISTEMA'`. Estas notas son inalterables y no pueden ser borradas.
+- **RN-TKT-007 (Irreversibilidad de Tickets de Incidencia de Reingreso):** Los tickets con categoría de incidencia `REINGRESO` que se pasen al estado `'EN_PROCESO'` advierten al directivo de la acción irreversible, envían un correo automático al acudiente informando el inicio del trámite y bloquean su retorno a `'ABIERTO'`.
 
 ---
 

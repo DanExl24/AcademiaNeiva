@@ -470,6 +470,13 @@ const barChartOptions = {
             </h1>
             
             <div class="flex flex-wrap items-center gap-4">
+              <button 
+                @click="router.push('/soporte?tipo_incidencia=REINGRESO')"
+                class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all shadow-lg flex items-center gap-2"
+              >
+                🔄 Solicitar Reingreso Estudiantil
+              </button>
+
               <!-- Child Switcher -->
       <div v-if="dashboardData?.children?.length > 1" class="flex flex-wrap items-center gap-2 bg-white/5 p-2 rounded-2xl border border-white/10">
         <button 
