@@ -136,7 +136,10 @@ router.get("/:id", protectIfIntegerId, async (req, res) => {
   }
 });
 
-router.patch("/document/:idDocumento", verifyToken, requireDirectivo, validateDocument);
+import { validateDto } from "../middleware/validateDto";
+import { ValidateDocumentSchema, FinalizeEnrollmentSchema } from "../dtos/matricula.dto";
+
+router.patch("/document/:idDocumento", verifyToken, requireDirectivo, validateDto(ValidateDocumentSchema), validateDocument);
 router.post("/assign-grade/:id", verifyToken, requireDirectivo, assignGrade);
 router.post("/notify-inconsistencies/:id", verifyToken, requireDirectivo, notifyInconsistencies);
 router.post("/update-documents/:token", upload.fields([
@@ -158,7 +161,7 @@ router.post("/update-documents/:token", upload.fields([
     res.status(500).json({ error: e.message });
   }
 });
-router.post("/finalize/:id", verifyToken, requireDirectivo, finalizeEnrollment);
+router.post("/finalize/:id", verifyToken, requireDirectivo, validateDto(FinalizeEnrollmentSchema), finalizeEnrollment);
 router.post("/cancel/:id", verifyToken, requireDirectivo, cancelEnrollment);
 router.patch("/transfer-status/:id", verifyToken, requireDirectivo, toggleTransfer);
 

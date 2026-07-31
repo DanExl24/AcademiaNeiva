@@ -147,11 +147,21 @@
             </div>
           </div>
 
-          <!-- Target Enrollment Configuration -->
+        </div>
+
+        <!-- Right Column: Target Configuration & Document Renewal Matrix Management -->
+        <div class="lg:col-span-2 space-y-6">
+
+          <!-- Target Enrollment Configuration (Horizontal Layout at top) -->
           <div v-if="student" class="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-none space-y-4">
-            <h2 class="text-base font-bold text-slate-800 dark:text-slate-200">🎯 Configuración de Destino</h2>
+            <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <h2 class="text-base font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                <span>🎯 Configuración de Destino</span>
+              </h2>
+              <span class="text-xs text-slate-500 dark:text-slate-400 font-semibold">Parámetros de reingreso y salón asignado</span>
+            </div>
             
-            <div class="space-y-3 text-xs">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
               <div>
                 <label class="font-bold text-slate-500 dark:text-slate-400 block mb-1">Año Lectivo Activo</label>
                 <select v-model="targetForm.id_anio" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-3 text-slate-800 dark:text-slate-200 font-bold">
@@ -162,7 +172,7 @@
               </div>
 
               <div>
-                <label class="font-bold text-slate-500 dark:text-slate-400 block mb-1">Nivel Escolar de Destino</label>
+                <label class="font-bold text-slate-500 dark:text-slate-400 block mb-1">Nivel Escolar</label>
                 <select v-model="targetForm.id_nivel" @change="onLevelChange" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-3 text-slate-800 dark:text-slate-200 font-bold">
                   <option v-for="n in levels" :key="n.id_nivel" :value="n.id_nivel">
                     {{ n.nombre }}
@@ -171,9 +181,9 @@
               </div>
 
               <div>
-                <label class="font-bold text-slate-500 dark:text-slate-400 block mb-1">Grado de Destino</label>
+                <label class="font-bold text-slate-500 dark:text-slate-400 block mb-1">Grado Destino</label>
                 <select v-model="targetForm.id_tipo_grado" @change="onGradeChange" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-3 text-slate-800 dark:text-slate-200 font-bold">
-                  <option value="" disabled>-- Selecciona un grado --</option>
+                  <option value="" disabled>-- Selecciona grado --</option>
                   <option v-for="gr in availableGrados" :key="gr.id_tipo_grado" :value="gr.id_tipo_grado">
                     {{ gr.grado_nombre }}
                   </option>
@@ -183,13 +193,15 @@
               <div>
                 <label class="font-bold text-slate-500 dark:text-slate-400 block mb-1">Grupo / Salón Asignado</label>
                 <select v-model="targetForm.id_grupo" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-3 text-slate-800 dark:text-slate-200 font-bold">
-                  <option value="" disabled>-- Selecciona un grupo --</option>
+                  <option value="" disabled>-- Selecciona grupo --</option>
                   <option v-for="g in availableSections" :key="g.id_grupo" :value="g.id_grupo">
-                    {{ g.seccion_nombre }} (Cupos: {{ g.cupos_disponibles }} disponibles de {{ g.cupos_totales }})
+                    {{ g.seccion_nombre }} (Cupos: {{ g.cupos_disponibles }} de {{ g.cupos_totales }})
                   </option>
                 </select>
               </div>
+            </div>
 
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs pt-1">
               <div>
                 <label class="font-bold text-slate-500 dark:text-slate-400 block mb-1">Correo de Notificación del Acudiente</label>
                 <input 
@@ -202,20 +214,15 @@
 
               <div>
                 <label class="font-bold text-slate-500 dark:text-slate-400 block mb-1">Observaciones para el Acudiente</label>
-                <textarea 
+                <input 
+                  type="text" 
                   v-model="targetForm.observaciones" 
-                  rows="2"
                   placeholder="Ej: Reingreso autorizado tras comité académico..."
                   class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-3 text-slate-800 dark:text-slate-200 font-semibold"
-                ></textarea>
+                />
               </div>
             </div>
           </div>
-
-        </div>
-
-        <!-- Right Column: Document Renewal Matrix Management -->
-        <div class="lg:col-span-2 space-y-6">
           <div class="bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-none space-y-6">
             
             <div class="flex items-center justify-between">
@@ -326,11 +333,12 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 import { useAuthStore } from '../../stores/auth'
+import type { SendReingresoPayload } from '../../types/reingreso.types'
 
 const route = useRoute()
 const router = useRouter()
@@ -339,18 +347,18 @@ const auth = useAuthStore()
 const ticketId = ref(route.query.ticketId || null)
 const selectedStudentId = ref(route.query.studentId ? Number(route.query.studentId) : '')
 
-const allStudents = ref([])
+const allStudents = ref<any[]>([])
 const searchQuery = ref('')
-const ticketContext = ref(null)
-const suggestedStudents = ref([])
+const ticketContext = ref<any>(null)
+const suggestedStudents = ref<any[]>([])
 
-const student = ref(null)
-const lastEnrollment = ref(null)
-const parent = ref(null)
-const documents = ref([])
-const levels = ref([])
-const groups = ref([])
-const academicYears = ref([])
+const student = ref<any>(null)
+const lastEnrollment = ref<any>(null)
+const parent = ref<any>(null)
+const documents = ref<any[]>([])
+const levels = ref<any[]>([])
+const groups = ref<any[]>([])
+const academicYears = ref<any[]>([])
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -404,7 +412,7 @@ const onGradeChange = () => {
 const filteredStudentsList = computed(() => {
   if (!searchQuery.value.trim()) return allStudents.value
   const q = searchQuery.value.toLowerCase()
-  return allStudents.value.filter(s => 
+  return allStudents.value.filter((s: any) => 
     s.nombre.toLowerCase().includes(q) ||
     s.apellido.toLowerCase().includes(q) ||
     s.documento.toLowerCase().includes(q) ||
@@ -412,8 +420,8 @@ const filteredStudentsList = computed(() => {
   )
 })
 
-const validCount = computed(() => documents.value.filter(d => d.estado_renovacion === 'VIGENTE').length)
-const requiredCount = computed(() => documents.value.filter(d => d.estado_renovacion !== 'VIGENTE').length)
+const validCount = computed(() => documents.value.filter((d: any) => d.estado_renovacion === 'VIGENTE').length)
+const requiredCount = computed(() => documents.value.filter((d: any) => d.estado_renovacion !== 'VIGENTE').length)
 
 onMounted(async () => {
   await fetchAllStudents()
@@ -430,7 +438,7 @@ const fetchAllStudents = async () => {
   try {
     const res = await axios.get('http://localhost:3000/api/student/colegio/' + getSchoolId(), getAuthHeaders())
     const all = res.data || []
-    allStudents.value = all.filter(s => s.estado === 'RETIRADO')
+    allStudents.value = all.filter((s: any) => s.estado === 'RETIRADO')
   } catch (err) {
     console.error('Error cargando estudiantes:', err)
   }
@@ -454,7 +462,7 @@ const loadTicketContext = async () => {
   }
 }
 
-const selectSuggestedStudent = async (studentId) => {
+const selectSuggestedStudent = async (studentId: any) => {
   selectedStudentId.value = Number(studentId)
   await loadStudentHistory()
 }
@@ -494,25 +502,35 @@ const loadGroups = async () => {
 const loadStudentHistory = async () => {
   if (!selectedStudentId.value) return
   loading.value = true
+  
+  // Reset fields to avoid stale values from previously selected student
+  targetForm.correo_padre = ''
+  targetForm.observaciones = ''
+  targetForm.id_tipo_grado = ''
+  targetForm.id_grupo = ''
+
   try {
     const res = await axios.get(`http://localhost:3000/api/reingreso/student-history/${selectedStudentId.value}`, getAuthHeaders())
     student.value = res.data.student
     lastEnrollment.value = res.data.lastEnrollment
     parent.value = res.data.parent
-    documents.value = (res.data.documents || []).map(d => ({
+    documents.value = (res.data.documents || []).map((d: any) => ({
       ...d,
       estado_renovacion: d.estado_renovacion_sugerido || 'VIGENTE'
     }))
 
-    if (parent.value && parent.value.email && !targetForm.correo_padre) {
+    if (parent.value && parent.value.email) {
       targetForm.correo_padre = parent.value.email
+    } else if (ticketContext.value && ticketContext.value.correo_remitente) {
+      targetForm.correo_padre = ticketContext.value.correo_remitente
     }
 
     if (lastEnrollment.value && lastEnrollment.value.id_nivel) {
       targetForm.id_nivel = lastEnrollment.value.id_nivel
-      await loadGroups()
     }
-  } catch (err) {
+
+    await loadGroups()
+  } catch (err: any) {
     alert(err.response?.data?.error || 'Error al cargar expediente del estudiante')
     student.value = null
   } finally {
@@ -528,15 +546,15 @@ const submitReingresoLink = async () => {
 
   submitting.value = true
   try {
-    const payload = {
+    const payload: SendReingresoPayload = {
       id_estudiante: Number(selectedStudentId.value),
-      id_nivel: targetForm.id_nivel,
-      id_grupo: targetForm.id_grupo,
-      id_anio: targetForm.id_anio,
-      id_ticket: ticketId.value || null,
+      id_nivel: Number(targetForm.id_nivel),
+      id_grupo: Number(targetForm.id_grupo),
+      id_anio: Number(targetForm.id_anio),
+      id_ticket: ticketId.value ? Number(ticketId.value) : null,
       correo_padre: targetForm.correo_padre,
       observaciones: targetForm.observaciones,
-      document_config: documents.value.map(d => ({
+      document_config: documents.value.map((d: any) => ({
         tipo_documento: d.tipo_documento,
         estado_renovacion: d.estado_renovacion,
         url: d.url
@@ -546,7 +564,7 @@ const submitReingresoLink = async () => {
     const res = await axios.post('http://localhost:3000/api/reingreso/send-parent-link', payload, getAuthHeaders())
     alert(res.data.message || 'Enlace de reingreso enviado con éxito.')
     router.push('/dashboard/matriculas')
-  } catch (err) {
+  } catch (err: any) {
     alert(err.response?.data?.error || 'Error al enviar enlace de reingreso')
   } finally {
     submitting.value = false
@@ -558,14 +576,14 @@ const getSchoolId = () => {
   return user.schoolId || 1
 }
 
-const formatDocType = (type) => {
+const formatDocType = (type: string) => {
   if (!type) return 'Documento'
   return type
     .replace(/([A-Z])/g, ' $1')
-    .replace(/^./, str => str.toUpperCase())
+    .replace(/^./, (str: string) => str.toUpperCase())
 }
 
-const getBadgeClass = (state) => {
+const getBadgeClass = (state: string) => {
   switch (state) {
     case 'VIGENTE': return 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300'
     case 'RECOMENDADO_ACTUALIZAR': return 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300'

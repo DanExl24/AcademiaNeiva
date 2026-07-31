@@ -1,5 +1,6 @@
 ---
-trigger: always_on
+trigger: model_decision
+description: Preguntas sobre la estructura o esquema de la Base de Datos vigente en el sistema
 ---
 
 Para entender perfectamente la base de datos del sistema

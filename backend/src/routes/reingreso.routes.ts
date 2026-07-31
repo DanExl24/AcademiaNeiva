@@ -26,10 +26,13 @@ router.get("/student-history/:idEstudiante", getStudentHistoryForReingreso);
 // Obtener contexto de ticket y estudiantes sugeridos
 router.get("/ticket-context/:ticketId", getTicketContextForReingreso);
 
+import { validateDto } from "../middleware/validateDto";
+import { SendParentReingresoLinkSchema, NotifyNonExistentStudentSchema } from "../dtos/reingreso.dto";
+
 // Guardar matriz de renovación configurada por el directivo y enviar enlace al acudiente
-router.post("/send-parent-link", sendReingresoParentLink);
+router.post("/send-parent-link", validateDto(SendParentReingresoLinkSchema), sendReingresoParentLink);
 
 // Notificar a un solicitante público que el estudiante no existe en los registros del colegio
-router.post("/notify-nonexistent/:id", notifyNonExistentStudent);
+router.post("/notify-nonexistent/:id", validateDto(NotifyNonExistentStudentSchema), notifyNonExistentStudent);
 
 export default router;
