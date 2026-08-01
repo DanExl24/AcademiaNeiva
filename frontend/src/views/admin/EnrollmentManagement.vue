@@ -707,50 +707,6 @@ const approveException = async (id: number) => {
     notify.addNotification(error.response?.data?.error || 'Error al aprobar solicitud', 'error')
   }
 }
-
-const correctException = async (id: number) => {
-  const obs = prompt('Indica las observaciones o inconsistencias a corregir por parte del acudiente:')
-  if (obs === null) return
-  if (!obs.trim()) {
-    notify.addNotification('Debes especificar las observaciones para solicitar corrección.', 'error')
-    return
-  }
-
-  try {
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const endpoint = matricula.value?.tipo === 'REINGRESO'
-      ? `http://localhost:3000/api/academic-admin/matriculas/reingreso/${id}/corregir`
-      : `http://localhost:3000/api/academic-admin/matriculas/extraordinaria/${id}/corregir`;
-    const response = await axios.post(endpoint, { observaciones: obs.trim() }, { headers })
-    notify.addNotification(response.data.message || 'Solicitud enviada a corrección exitosamente', 'success')
-    closeDrawer()
-    fetchEnrollments()
-  } catch (error: any) {
-    notify.addNotification(error.response?.data?.error || 'Error al solicitar corrección', 'error')
-  }
-}
-
-const rejectException = async (id: number) => {
-  const motivo = prompt('Indica el motivo de la cancelación de la solicitud:')
-  if (motivo === null) return
-  if (!motivo.trim()) {
-    notify.addNotification('Debes especificar el motivo para cancelar la solicitud.', 'error')
-    return
-  }
-
-  try {
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const endpoint = matricula.value?.tipo === 'REINGRESO'
-      ? `http://localhost:3000/api/academic-admin/matriculas/reingreso/${id}/rechazar`
-      : `http://localhost:3000/api/academic-admin/matriculas/extraordinaria/${id}/rechazar`;
-    const response = await axios.post(endpoint, { motivo: motivo.trim() }, { headers })
-    notify.addNotification(response.data.message || 'Solicitud cancelada exitosamente', 'success')
-    closeDrawer()
-    fetchEnrollments()
-  } catch (error: any) {
-    notify.addNotification(error.response?.data?.error || 'Error al cancelar solicitud', 'error')
-  }
-}
 </script>
 
 <template>

@@ -382,6 +382,13 @@ export const ensureCompetencySchema = async (): Promise<void> => {
       await client.query(extraMatriculaIncidenciaSql);
     }
 
+    // Ejecutar migración 022 (id_tipodocumento, documento, telefono en usuario)
+    const addUsuarioDocTelPath = path.join(__dirname, "../migrations/022_add_usuario_documento_telefono.sql");
+    if (fs.existsSync(addUsuarioDocTelPath)) {
+      const addUsuarioDocTelSql = fs.readFileSync(addUsuarioDocTelPath, "utf8");
+      await client.query(addUsuarioDocTelSql);
+    }
+
     // Backfill sync_uuid for existing competencies
     const unmigratedRes = await client.query(`
       SELECT id_colegio, id_anio, id_materia, id_periodo, descripcion, ARRAY_AGG(id_competencia) AS ids

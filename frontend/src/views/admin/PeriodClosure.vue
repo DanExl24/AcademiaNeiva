@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import axios from 'axios'
-import { ArrowLeft, CheckCircle2, Lock, Unlock, SlidersHorizontal, AlertCircle, Search } from 'lucide-vue-next'
+import { 
+  ArrowLeft, CheckCircle2, Lock, Unlock, SlidersHorizontal, AlertCircle, Search,
+  Filter, X, LayoutGrid, Table, Zap, Check, RotateCcw, User
+} from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 import { getCourseDisplayName } from '../../utils/courseHelper'
-
 import { useAcademicYearStore } from '../../stores/academicYear'
 
 const auth = useAuthStore()
@@ -19,12 +21,21 @@ const selectedPeriodId = ref<number | null>(null)
 const periodDetails = ref<any>(null)
 const teachers = ref<any[]>([])
 
+// Filter states
 const filterStatus = ref<'TODOS' | 'PENDIENTE' | 'CERRADO'>('TODOS')
-const searchQuery = ref('')
+const selectedGrade = ref<string>('')
+const selectedShift = ref<string>('')
+const selectedSubject = ref<string>('')
+const selectedTeacherId = ref<number | null>(null)
+const presetIncompleteOnly = ref<boolean>(false)
+const presetCompleteOnly = ref<boolean>(false)
+const searchQuery = ref<string>('')
+const viewMode = ref<'table' | 'byTeacher' | 'byGrade'>('table')
 
-const filteredAssignments = computed(() => {
+// Flattened assignments array with extra metadata
+const allAssignments = computed(() => {
   const list: any[] = []
-  if (!teachers.value) return []
+  if (!teachers.value) return list
   
   teachers.value.forEach(t => {
     if (t.asignaciones) {
@@ -34,29 +45,225 @@ const filteredAssignments = computed(() => {
           id_docente: t.id_docente,
           docente_nombre: t.docente_nombre,
           docente_email: t.docente_email,
+          docente_cerradas: t.cerradas,
+          docente_total: t.total_asignaciones,
+          docente_completado: t.cerradas === t.total_asignaciones,
           materia_nombre: a.materia_nombre,
+          grado_nombre: a.grado_nombre,
+          seccion_nombre: a.seccion_nombre,
+          jornada_nombre: a.jornada_nombre || (a.grado.split('·')[1] || '').trim(),
+          curso_nombre: a.curso_nombre || (a.grado.split('·')[0] || '').trim(),
           grado: a.grado,
           estado: a.estado
         })
       })
     }
   })
+  return list
+})
 
-  let res = list
+// Unique dropdown options derived from current dataset
+const availableGrades = computed(() => {
+  const set = new Set<string>()
+  allAssignments.value.forEach(a => {
+    if (a.curso_nombre) set.add(a.curso_nombre)
+  })
+  return Array.from(set).sort()
+})
+
+const availableShifts = computed(() => {
+  const set = new Set<string>()
+  allAssignments.value.forEach(a => {
+    if (a.jornada_nombre) set.add(a.jornada_nombre)
+  })
+  return Array.from(set).sort()
+})
+
+const availableSubjects = computed(() => {
+  const set = new Set<string>()
+  allAssignments.value.forEach(a => {
+    if (a.materia_nombre) set.add(a.materia_nombre)
+  })
+  return Array.from(set).sort()
+})
+
+const availableTeachers = computed(() => {
+  const map = new Map<number, string>()
+  allAssignments.value.forEach(a => {
+    map.set(a.id_docente, a.docente_nombre)
+  })
+  return Array.from(map.entries()).map(([id, nombre]) => ({ id, nombre })).sort((a, b) => a.nombre.localeCompare(b.nombre))
+})
+
+// Active filters count
+const activeFiltersCount = computed(() => {
+  let count = 0
+  if (filterStatus.value !== 'TODOS') count++
+  if (selectedGrade.value) count++
+  if (selectedShift.value) count++
+  if (selectedSubject.value) count++
+  if (selectedTeacherId.value !== null) count++
+  if (presetIncompleteOnly.value) count++
+  if (presetCompleteOnly.value) count++
+  if (searchQuery.value.trim()) count++
+  return count
+})
+
+const hasActiveFilters = computed(() => activeFiltersCount.value > 0)
+
+const clearAllFilters = () => {
+  filterStatus.value = 'TODOS'
+  selectedGrade.value = ''
+  selectedShift.value = ''
+  selectedSubject.value = ''
+  selectedTeacherId.value = null
+  presetIncompleteOnly.value = false
+  presetCompleteOnly.value = false
+  searchQuery.value = ''
+}
+
+// Preset Toggles
+const toggleIncompletePreset = () => {
+  if (presetIncompleteOnly.value) {
+    presetIncompleteOnly.value = false
+  } else {
+    presetIncompleteOnly.value = true
+    presetCompleteOnly.value = false
+  }
+}
+
+const toggleCompletePreset = () => {
+  if (presetCompleteOnly.value) {
+    presetCompleteOnly.value = false
+  } else {
+    presetCompleteOnly.value = true
+    presetIncompleteOnly.value = false
+  }
+}
+
+// Stat Card Click Handlers
+const selectStatusFromCard = (status: 'TODOS' | 'PENDIENTE' | 'CERRADO') => {
+  filterStatus.value = status
+}
+
+// Main Filtered Assignments logic
+const filteredAssignments = computed(() => {
+  let res = [...allAssignments.value]
+
+  // Filter by Status (TODOS, PENDIENTE, CERRADO)
   if (filterStatus.value !== 'TODOS') {
     res = res.filter(a => a.estado === filterStatus.value)
   }
 
+  // Filter by Grade / Course
+  if (selectedGrade.value) {
+    res = res.filter(a => a.curso_nombre === selectedGrade.value)
+  }
+
+  // Filter by Shift / Jornada
+  if (selectedShift.value) {
+    res = res.filter(a => a.jornada_nombre === selectedShift.value)
+  }
+
+  // Filter by Subject / Materia
+  if (selectedSubject.value) {
+    res = res.filter(a => a.materia_nombre === selectedSubject.value)
+  }
+
+  // Filter by Teacher
+  if (selectedTeacherId.value !== null) {
+    res = res.filter(a => a.id_docente === selectedTeacherId.value)
+  }
+
+  // Preset: Solo docentes con materias pendientes
+  if (presetIncompleteOnly.value) {
+    res = res.filter(a => !a.docente_completado)
+  }
+
+  // Preset: Solo docentes 100% al día
+  if (presetCompleteOnly.value) {
+    res = res.filter(a => a.docente_completado)
+  }
+
+  // Text search
   const q = searchQuery.value.toLowerCase().trim()
   if (q) {
     res = res.filter(a => 
       a.docente_nombre.toLowerCase().includes(q) ||
+      a.docente_email.toLowerCase().includes(q) ||
       a.materia_nombre.toLowerCase().includes(q) ||
       a.grado.toLowerCase().includes(q)
     )
   }
 
   return res
+})
+
+// Grouped by Teacher view model
+const groupedByTeacher = computed(() => {
+  const map = new Map<number, {
+    id_docente: number
+    docente_nombre: string
+    docente_email: string
+    total: number
+    cerradas: number
+    pendientes: number
+    asignaciones: any[]
+  }>()
+
+  filteredAssignments.value.forEach(asig => {
+    if (!map.has(asig.id_docente)) {
+      map.set(asig.id_docente, {
+        id_docente: asig.id_docente,
+        docente_nombre: asig.docente_nombre,
+        docente_email: asig.docente_email,
+        total: 0,
+        cerradas: 0,
+        pendientes: 0,
+        asignaciones: []
+      })
+    }
+    const t = map.get(asig.id_docente)!
+    t.asignaciones.push(asig)
+    t.total++
+    if (asig.estado === 'CERRADO') t.cerradas++
+    else t.pendientes++
+  })
+
+  return Array.from(map.values()).sort((a, b) => b.pendientes - a.pendientes || a.docente_nombre.localeCompare(b.docente_nombre))
+})
+
+// Grouped by Grade view model
+const groupedByGrade = computed(() => {
+  const map = new Map<string, {
+    curso_nombre: string
+    jornada_nombre: string
+    total: number
+    cerradas: number
+    pendientes: number
+    asignaciones: any[]
+  }>()
+
+  filteredAssignments.value.forEach(asig => {
+    const key = asig.grado
+    if (!map.has(key)) {
+      map.set(key, {
+        curso_nombre: asig.curso_nombre,
+        jornada_nombre: asig.jornada_nombre,
+        total: 0,
+        cerradas: 0,
+        pendientes: 0,
+        asignaciones: []
+      })
+    }
+    const g = map.get(key)!
+    g.asignaciones.push(asig)
+    g.total++
+    if (asig.estado === 'CERRADO') g.cerradas++
+    else g.pendientes++
+  })
+
+  return Array.from(map.values()).sort((a, b) => b.pendientes - a.pendientes || a.curso_nombre.localeCompare(b.curso_nombre))
 })
 
 const closingPeriod = ref(false)
@@ -138,6 +345,10 @@ const totalClosed = computed(() => {
   return count
 })
 
+const totalAssignmentsCount = computed(() => {
+  return teachers.value.reduce((sum, t) => sum + t.total_asignaciones, 0)
+})
+
 const attemptClosePeriod = async (force = false) => {
   if (!selectedPeriodId.value) return
   try {
@@ -150,7 +361,6 @@ const attemptClosePeriod = async (force = false) => {
     forceCloseModal.value = false
     closePeriodPending.value = []
     
-    // Refresh periods and details
     if (periodDetails.value) {
       periodDetails.value.estado = 'CERRADO'
     }
@@ -200,7 +410,7 @@ const reopeningSubject = ref<number | null>(null)
 
 const attemptReopenSubject = async (curso: any) => {
   if (!selectedPeriodId.value) return
-  if (!confirm(`¿Estás seguro de que deseas DESHACER el cierre de ${curso.grado}? El docente podrá volver a modificar e ingresar notas.`)) return
+  if (!confirm(`¿Estás seguro de que deseas DESHACER el cierre de ${curso.grado || curso.materia_nombre}? El docente podrá volver a modificar e ingresar notas.`)) return
   
   try {
     reopeningSubject.value = curso.id_detallegrado
@@ -224,6 +434,7 @@ onMounted(() => {
 <template>
   <div class="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
     
+    <!-- Header -->
     <div class="flex items-center gap-4">
       <router-link to="/dashboard/configuracion-academica" class="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 shadow-sm transition hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200 border border-slate-100 dark:border-slate-800">
         <ArrowLeft class="h-5 w-5" />
@@ -240,6 +451,7 @@ onMounted(() => {
 
     <template v-else>
       <div class="rounded-3xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
+        <!-- Selector Header -->
         <div class="border-b border-slate-100 dark:border-slate-800 p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div class="flex items-center gap-3">
             <div class="rounded-2xl bg-rose-50 dark:bg-rose-950/30 p-3 text-rose-600 dark:text-rose-400">
@@ -261,24 +473,56 @@ onMounted(() => {
           </select>
         </div>
 
-        <div v-if="selectedPeriodId && !detailsLoading" class="p-6 md:p-8 bg-slate-50/50 dark:bg-slate-900/50">
+        <div v-if="selectedPeriodId && !detailsLoading" class="p-6 md:p-8 bg-slate-50/50 dark:bg-slate-900/50 space-y-6">
           
-          <div v-if="periodDetails" class="mb-8 flex flex-col lg:flex-row gap-6 justify-between items-start lg:items-center">
-            <div class="flex gap-4">
-              <div class="flex flex-col rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-5 py-4 shadow-sm">
-                <span class="text-[11px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Total asignaciones</span>
-                <span class="text-2xl font-black text-slate-900 dark:text-white">{{ teachers.reduce((sum, t) => sum + t.total_asignaciones, 0) }}</span>
-              </div>
-              <div class="flex flex-col rounded-2xl border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/30 px-5 py-4 shadow-sm text-rose-900 dark:text-rose-100">
-                <span class="text-[11px] font-black uppercase tracking-widest text-rose-500 dark:text-rose-400">Módulos cerrados</span>
-                <span class="text-2xl font-black text-rose-700 dark:text-rose-300">{{ totalClosed }}</span>
-              </div>
-              <div class="flex flex-col rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 px-5 py-4 shadow-sm text-amber-900 dark:text-amber-100">
-                <span class="text-[11px] font-black uppercase tracking-widest text-amber-500 dark:text-amber-400">Faltantes</span>
-                <span class="text-2xl font-black text-amber-700 dark:text-amber-300">{{ totalPending }}</span>
-              </div>
+          <!-- Top Interactive KPI Stat Cards & Status Actions -->
+          <div v-if="periodDetails" class="flex flex-col lg:flex-row gap-6 justify-between items-start lg:items-center">
+            <!-- Interactive KPI Cards -->
+            <div class="grid grid-cols-3 gap-3 w-full lg:w-auto">
+              <!-- Total Card -->
+              <button 
+                @click="selectStatusFromCard('TODOS')"
+                class="flex flex-col text-left rounded-2xl border px-4 py-3 shadow-sm transition-all cursor-pointer hover:scale-[1.02]"
+                :class="[
+                  filterStatus === 'TODOS' && !presetIncompleteOnly && !presetCompleteOnly
+                    ? 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-900 ring-2 ring-slate-900/20'
+                    : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white hover:border-slate-300'
+                ]"
+              >
+                <span class="text-[10px] font-black uppercase tracking-widest opacity-60">Total</span>
+                <span class="text-2xl font-black mt-1">{{ totalAssignmentsCount }}</span>
+              </button>
+
+              <!-- Cerrados Card -->
+              <button 
+                @click="selectStatusFromCard('CERRADO')"
+                class="flex flex-col text-left rounded-2xl border px-4 py-3 shadow-sm transition-all cursor-pointer hover:scale-[1.02]"
+                :class="[
+                  filterStatus === 'CERRADO' 
+                    ? 'border-emerald-600 bg-emerald-600 text-white ring-2 ring-emerald-500/20'
+                    : 'border-emerald-200 dark:border-emerald-900 bg-emerald-50/80 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-200 hover:border-emerald-300'
+                ]"
+              >
+                <span class="text-[10px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-300" :class="filterStatus === 'CERRADO' ? 'text-white' : ''">Cerrados</span>
+                <span class="text-2xl font-black mt-1 text-emerald-700 dark:text-emerald-300" :class="filterStatus === 'CERRADO' ? 'text-white' : ''">{{ totalClosed }}</span>
+              </button>
+
+              <!-- Faltantes Card -->
+              <button 
+                @click="selectStatusFromCard('PENDIENTE')"
+                class="flex flex-col text-left rounded-2xl border px-4 py-3 shadow-sm transition-all cursor-pointer hover:scale-[1.02]"
+                :class="[
+                  filterStatus === 'PENDIENTE' 
+                    ? 'border-amber-600 bg-amber-600 text-white ring-2 ring-amber-500/20'
+                    : 'border-amber-200 dark:border-amber-900 bg-amber-50/80 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 hover:border-amber-300'
+                ]"
+              >
+                <span class="text-[10px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-300" :class="filterStatus === 'PENDIENTE' ? 'text-white' : ''">Faltantes</span>
+                <span class="text-2xl font-black mt-1 text-amber-700 dark:text-amber-300" :class="filterStatus === 'PENDIENTE' ? 'text-white' : ''">{{ totalPending }}</span>
+              </button>
             </div>
 
+            <!-- Status Badge and Period Actions -->
             <div class="flex items-center gap-4">
               <div class="flex items-center gap-2 mr-2">
                 <span class="h-3 w-3 rounded-full bg-emerald-500" v-if="periodDetails.estado === 'ABIERTO'"></span>
@@ -347,47 +591,234 @@ onMounted(() => {
           </div>
 
           <div v-else class="space-y-6">
-            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <h2 class="text-lg font-black text-slate-900 dark:text-white px-1">Progreso por Docente</h2>
+
+            <!-- FILTER CONTROL PANEL -->
+            <div class="bg-white dark:bg-slate-800 rounded-3xl p-5 md:p-6 border border-slate-100 dark:border-slate-700 shadow-sm space-y-4">
               
-              <div class="flex flex-col sm:flex-row items-center gap-3">
-                <div class="flex bg-slate-100/80 dark:bg-slate-800/80 p-1 rounded-2xl w-full sm:w-auto">
-                  <button 
-                    @click="filterStatus = 'TODOS'"
-                    class="px-4 py-2 rounded-xl text-[13px] font-bold transition-all w-full sm:w-auto"
-                    :class="filterStatus === 'TODOS' ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'"
-                  >Todos</button>
-                  <button 
-                    @click="filterStatus = 'PENDIENTE'"
-                    class="px-4 py-2 rounded-xl text-[13px] font-bold transition-all w-full sm:w-auto"
-                    :class="filterStatus === 'PENDIENTE' ? 'bg-amber-500 text-white shadow-sm' : 'text-amber-600/70 dark:text-amber-500/70 hover:text-amber-700 dark:hover:text-amber-400'"
-                  >Pendientes</button>
-                  <button 
-                    @click="filterStatus = 'CERRADO'"
-                    class="px-4 py-2 rounded-xl text-[13px] font-bold transition-all w-full sm:w-auto"
-                    :class="filterStatus === 'CERRADO' ? 'bg-emerald-500 text-white shadow-sm' : 'text-emerald-600/70 dark:text-emerald-500/70 hover:text-emerald-700 dark:hover:text-emerald-400'"
-                  >Cerrados</button>
+              <!-- Row 1: Header title, View mode toggles & Status tabs -->
+              <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-3 border-b border-slate-100 dark:border-slate-700/60">
+                <div class="flex items-center gap-2">
+                  <Filter class="w-5 h-5 text-slate-500 dark:text-slate-400" />
+                  <h3 class="text-base font-black text-slate-900 dark:text-white">Filtros Interactivos de Control</h3>
+                  <span v-if="hasActiveFilters" class="ml-2 px-2.5 py-0.5 text-xs font-black bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400 rounded-full">
+                    {{ activeFiltersCount }} {{ activeFiltersCount === 1 ? 'activo' : 'activos' }}
+                  </span>
                 </div>
 
-                <div class="flex items-center gap-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl px-4 py-2 hover:border-slate-300 dark:hover:border-slate-600 transition-colors focus-within:ring-4 focus-within:ring-rose-500/10 focus-within:border-rose-300 dark:focus-within:border-rose-500 w-full md:w-80">
-                  <Search class="w-4 h-4 text-slate-400 dark:text-slate-500 shrink-0" />
+                <div class="flex flex-wrap items-center gap-3">
+                  <!-- View Mode Selector -->
+                  <div class="flex bg-slate-100 dark:bg-slate-900 p-1 rounded-2xl">
+                    <button 
+                      @click="viewMode = 'table'"
+                      class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all"
+                      :class="viewMode === 'table' ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'"
+                      title="Vista en tabla de asignaciones"
+                    >
+                      <Table class="w-3.5 h-3.5" />
+                      <span>Tabla</span>
+                    </button>
+                    <button 
+                      @click="viewMode = 'byTeacher'"
+                      class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all"
+                      :class="viewMode === 'byTeacher' ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'"
+                      title="Vista agrupada por docente"
+                    >
+                      <User class="w-3.5 h-3.5" />
+                      <span>Por Docente</span>
+                    </button>
+                    <button 
+                      @click="viewMode = 'byGrade'"
+                      class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all"
+                      :class="viewMode === 'byGrade' ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'"
+                      title="Vista agrupada por curso / grado"
+                    >
+                      <LayoutGrid class="w-3.5 h-3.5" />
+                      <span>Por Grado</span>
+                    </button>
+                  </div>
+
+                  <!-- Status Filter Tabs -->
+                  <div class="flex bg-slate-100/80 dark:bg-slate-900/80 p-1 rounded-2xl">
+                    <button 
+                      @click="filterStatus = 'TODOS'"
+                      class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all"
+                      :class="filterStatus === 'TODOS' ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'"
+                    >Todos</button>
+                    <button 
+                      @click="filterStatus = 'PENDIENTE'"
+                      class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all"
+                      :class="filterStatus === 'PENDIENTE' ? 'bg-amber-500 text-white shadow-sm' : 'text-amber-600/70 hover:text-amber-700 dark:hover:text-amber-400'"
+                    >Pendientes</button>
+                    <button 
+                      @click="filterStatus = 'CERRADO'"
+                      class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all"
+                      :class="filterStatus === 'CERRADO' ? 'bg-emerald-500 text-white shadow-sm' : 'text-emerald-600/70 hover:text-emerald-700 dark:hover:text-emerald-400'"
+                    >Cerrados</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Row 2: Multi-dimensional Select Controls & Search -->
+              <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                
+                <!-- Search bar -->
+                <div class="sm:col-span-2 md:col-span-2 lg:col-span-2 flex items-center gap-2 bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700 rounded-2xl px-3.5 py-2 hover:border-slate-300 transition-colors focus-within:ring-4 focus-within:ring-rose-500/10 focus-within:border-rose-300">
+                  <Search class="w-4 h-4 text-slate-400 shrink-0" />
                   <input 
                     v-model="searchQuery" 
                     type="text" 
-                    placeholder="Buscar docente o materia..."
-                    class="bg-transparent border-none outline-none w-full text-sm font-semibold text-slate-700 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 py-1"
+                    placeholder="Buscar por docente, materia o curso..."
+                    class="bg-transparent border-none outline-none w-full text-xs font-semibold text-slate-700 dark:text-slate-200 placeholder:text-slate-400 py-1"
                   />
+                  <button v-if="searchQuery" @click="searchQuery = ''" class="text-slate-400 hover:text-slate-600">
+                    <X class="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                <!-- Grade Filter Dropdown -->
+                <div>
+                  <select 
+                    v-model="selectedGrade"
+                    class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none focus:border-rose-300 transition-colors"
+                  >
+                    <option value="">Todos los cursos</option>
+                    <option v-for="g in availableGrades" :key="g" :value="g">{{ g }}</option>
+                  </select>
+                </div>
+
+                <!-- Shift Filter Dropdown -->
+                <div>
+                  <select 
+                    v-model="selectedShift"
+                    class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none focus:border-rose-300 transition-colors"
+                  >
+                    <option value="">Todas las jornadas</option>
+                    <option v-for="s in availableShifts" :key="s" :value="s">{{ s }}</option>
+                  </select>
+                </div>
+
+                <!-- Subject Filter Dropdown -->
+                <div>
+                  <select 
+                    v-model="selectedSubject"
+                    class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none focus:border-rose-300 transition-colors"
+                  >
+                    <option value="">Todas las materias</option>
+                    <option v-for="m in availableSubjects" :key="m" :value="m">{{ m }}</option>
+                  </select>
                 </div>
               </div>
-            </div>
-            
-            <div v-if="filteredAssignments.length === 0" class="text-center py-16 bg-white dark:bg-slate-800 rounded-[2rem] border border-slate-100 dark:border-slate-700 shadow-sm">
-              <Search class="w-12 h-12 text-slate-200 dark:text-slate-600 mx-auto mb-4" />
-              <h3 class="text-lg font-bold text-slate-600 dark:text-slate-300">No se encontraron resultados</h3>
-              <p class="text-slate-500 dark:text-slate-400 text-sm mt-1">Intenta ajustando tu término de búsqueda o filtros. "{{ searchQuery }}"</p>
+
+              <!-- Row 3: Presets & Clear Filters -->
+              <div class="flex flex-wrap items-center justify-between gap-3 pt-2">
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class="text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider mr-1">Presets:</span>
+                  
+                  <!-- Preset 1: Solo Docentes Incompletos -->
+                  <button 
+                    @click="toggleIncompletePreset"
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer"
+                    :class="presetIncompleteOnly ? 'bg-amber-500 text-white border-amber-500 shadow-sm' : 'bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100'"
+                  >
+                    <Zap class="w-3.5 h-3.5 text-amber-300" :class="presetIncompleteOnly ? 'text-white' : ''" />
+                    <span>Solo Docentes Incompletos</span>
+                  </button>
+
+                  <!-- Preset 2: Docentes 100% al dia -->
+                  <button 
+                    @click="toggleCompletePreset"
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer"
+                    :class="presetCompleteOnly ? 'bg-emerald-500 text-white border-emerald-500 shadow-sm' : 'bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100'"
+                  >
+                    <Check class="w-3.5 h-3.5 text-emerald-300" :class="presetCompleteOnly ? 'text-white' : ''" />
+                    <span>100% al Día</span>
+                  </button>
+
+                  <!-- Specific Teacher Selector -->
+                  <select 
+                    v-model="selectedTeacherId"
+                    class="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none focus:border-rose-300"
+                  >
+                    <option :value="null">Todos los docentes</option>
+                    <option v-for="t in availableTeachers" :key="t.id" :value="t.id">{{ t.nombre }}</option>
+                  </select>
+                </div>
+
+                <!-- Clear Filters Button -->
+                <button 
+                  v-if="hasActiveFilters"
+                  @click="clearAllFilters"
+                  class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 border border-rose-200/50 hover:bg-rose-100 transition-all cursor-pointer"
+                >
+                  <RotateCcw class="w-3.5 h-3.5" />
+                  <span>Limpiar Filtros</span>
+                </button>
+              </div>
+
+              <!-- Active Filter Chips Bar -->
+              <div v-if="hasActiveFilters" class="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-700/60">
+                <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Filtros aplicados:</span>
+                
+                <span v-if="filterStatus !== 'TODOS'" class="inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-700 px-2.5 py-1 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200">
+                  Estado: {{ filterStatus }}
+                  <X @click="filterStatus = 'TODOS'" class="w-3 h-3 cursor-pointer hover:text-rose-500" />
+                </span>
+
+                <span v-if="selectedGrade" class="inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-700 px-2.5 py-1 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200">
+                  Curso: {{ selectedGrade }}
+                  <X @click="selectedGrade = ''" class="w-3 h-3 cursor-pointer hover:text-rose-500" />
+                </span>
+
+                <span v-if="selectedShift" class="inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-700 px-2.5 py-1 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200">
+                  Jornada: {{ selectedShift }}
+                  <X @click="selectedShift = ''" class="w-3 h-3 cursor-pointer hover:text-rose-500" />
+                </span>
+
+                <span v-if="selectedSubject" class="inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-700 px-2.5 py-1 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200">
+                  Materia: {{ selectedSubject }}
+                  <X @click="selectedSubject = ''" class="w-3 h-3 cursor-pointer hover:text-rose-500" />
+                </span>
+
+                <span v-if="selectedTeacherId !== null" class="inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-700 px-2.5 py-1 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200">
+                  Docente: {{ availableTeachers.find(t => t.id === selectedTeacherId)?.nombre }}
+                  <X @click="selectedTeacherId = null" class="w-3 h-3 cursor-pointer hover:text-rose-500" />
+                </span>
+
+                <span v-if="presetIncompleteOnly" class="inline-flex items-center gap-1 bg-amber-100 dark:bg-amber-950/60 px-2.5 py-1 rounded-lg text-xs font-bold text-amber-800 dark:text-amber-300">
+                  Incompletos
+                  <X @click="presetIncompleteOnly = false" class="w-3 h-3 cursor-pointer hover:text-rose-500" />
+                </span>
+
+                <span v-if="presetCompleteOnly" class="inline-flex items-center gap-1 bg-emerald-100 dark:bg-emerald-950/60 px-2.5 py-1 rounded-lg text-xs font-bold text-emerald-800 dark:text-emerald-300">
+                  100% al Día
+                  <X @click="presetCompleteOnly = false" class="w-3 h-3 cursor-pointer hover:text-rose-500" />
+                </span>
+
+                <span v-if="searchQuery" class="inline-flex items-center gap-1 bg-indigo-50 dark:bg-indigo-950/60 px-2.5 py-1 rounded-lg text-xs font-bold text-indigo-700 dark:text-indigo-300">
+                  "{{ searchQuery }}"
+                  <X @click="searchQuery = ''" class="w-3 h-3 cursor-pointer hover:text-rose-500" />
+                </span>
+              </div>
             </div>
 
-            <div v-else class="overflow-x-auto bg-white dark:bg-slate-800 rounded-3xl border border-slate-100 dark:border-slate-700 shadow-sm transition-all">
+            <!-- Empty Results View -->
+            <div v-if="filteredAssignments.length === 0" class="text-center py-16 bg-white dark:bg-slate-800 rounded-[2rem] border border-slate-100 dark:border-slate-700 shadow-sm">
+              <Search class="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
+              <h3 class="text-lg font-bold text-slate-600 dark:text-slate-300">No se encontraron resultados</h3>
+              <p class="text-slate-500 dark:text-slate-400 text-sm mt-1 max-w-md mx-auto">
+                No hay asignaciones que coincidan con la combinación de filtros seleccionados. Pruebe limpiando algunos filtros.
+              </p>
+              <button @click="clearAllFilters" class="mt-4 inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-rose-600 text-white font-bold text-xs hover:bg-rose-500 transition-colors">
+                <RotateCcw class="w-4 h-4" />
+                <span>Limpiar todos los filtros</span>
+              </button>
+            </div>
+
+            <!-- MODE 1: FLAT DETAILED TABLE VIEW -->
+            <div v-else-if="viewMode === 'table'" class="overflow-x-auto bg-white dark:bg-slate-800 rounded-3xl border border-slate-100 dark:border-slate-700 shadow-sm transition-all">
+              <div class="p-4 bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center text-xs font-bold text-slate-500">
+                <span>Mostrando {{ filteredAssignments.length }} asignaciones</span>
+              </div>
               <table class="w-full text-left border-collapse">
                 <thead>
                   <tr class="border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/50">
@@ -451,6 +882,153 @@ onMounted(() => {
                 </tbody>
               </table>
             </div>
+
+            <!-- MODE 2: GROUPED BY TEACHER CARDS -->
+            <div v-else-if="viewMode === 'byTeacher'" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div 
+                v-for="tGroup in groupedByTeacher" 
+                :key="tGroup.id_docente"
+                class="bg-white dark:bg-slate-800 rounded-3xl p-6 border border-slate-100 dark:border-slate-700 shadow-sm flex flex-col justify-between space-y-4 hover:border-slate-200 transition-all"
+              >
+                <div>
+                  <!-- Teacher Card Header -->
+                  <div class="flex items-start justify-between gap-3 mb-3">
+                    <div>
+                      <h4 class="font-extrabold text-slate-900 dark:text-white text-base">{{ tGroup.docente_nombre }}</h4>
+                      <p class="text-xs text-slate-400 dark:text-slate-500 font-semibold">{{ tGroup.docente_email }}</p>
+                    </div>
+                    <span 
+                      class="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider"
+                      :class="tGroup.pendientes === 0 ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300' : 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'"
+                    >
+                      {{ tGroup.pendientes === 0 ? '100% Completo' : `${tGroup.pendientes} Pendientes` }}
+                    </span>
+                  </div>
+
+                  <!-- Progress Bar -->
+                  <div class="space-y-1.5 mb-4">
+                    <div class="flex justify-between text-xs font-bold text-slate-500">
+                      <span>Progreso de Cierre</span>
+                      <span>{{ tGroup.cerradas }} / {{ tGroup.total }} materias ({{ Math.round((tGroup.cerradas / tGroup.total) * 100) }}%)</span>
+                    </div>
+                    <div class="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden">
+                      <div 
+                        class="h-full rounded-full transition-all duration-500"
+                        :class="tGroup.cerradas === tGroup.total ? 'bg-emerald-500' : 'bg-amber-500'"
+                        :style="{ width: `${(tGroup.cerradas / tGroup.total) * 100}%` }"
+                      ></div>
+                    </div>
+                  </div>
+
+                  <!-- Assigned Subjects List -->
+                  <div class="space-y-2 max-h-48 overflow-y-auto pr-1">
+                    <div 
+                      v-for="asig in tGroup.asignaciones" 
+                      :key="asig.id_detallegrado"
+                      class="flex items-center justify-between p-3 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-700/50 text-xs"
+                    >
+                      <div>
+                        <p class="font-black text-slate-800 dark:text-slate-200">{{ asig.materia_nombre }}</p>
+                        <p class="text-[11px] text-slate-400 font-semibold">{{ asig.grado }}</p>
+                      </div>
+                      
+                      <div class="flex items-center gap-2">
+                        <span 
+                          class="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider"
+                          :class="asig.estado === 'CERRADO' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400' : 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400'"
+                        >
+                          {{ asig.estado }}
+                        </span>
+
+                        <button
+                          v-if="asig.estado === 'CERRADO'"
+                          @click="attemptReopenSubject(asig)"
+                          :disabled="reopeningSubject === asig.id_detallegrado"
+                          class="p-1.5 rounded-xl bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 hover:bg-amber-200 transition-colors"
+                          title="Habilitar materia"
+                        >
+                          <Unlock class="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- MODE 3: GROUPED BY GRADE CARDS -->
+            <div v-else-if="viewMode === 'byGrade'" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div 
+                v-for="gGroup in groupedByGrade" 
+                :key="gGroup.curso_nombre + gGroup.jornada_nombre"
+                class="bg-white dark:bg-slate-800 rounded-3xl p-6 border border-slate-100 dark:border-slate-700 shadow-sm flex flex-col justify-between space-y-4 hover:border-slate-200 transition-all"
+              >
+                <div>
+                  <!-- Grade Card Header -->
+                  <div class="flex items-start justify-between gap-3 mb-3">
+                    <div>
+                      <h4 class="font-extrabold text-slate-900 dark:text-white text-base">{{ gGroup.curso_nombre }}</h4>
+                      <p class="text-xs text-slate-400 dark:text-slate-500 font-semibold">Jornada: {{ gGroup.jornada_nombre }}</p>
+                    </div>
+                    <span 
+                      class="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider"
+                      :class="gGroup.pendientes === 0 ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300' : 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300'"
+                    >
+                      {{ gGroup.pendientes === 0 ? 'Listo para Boletines' : `${gGroup.pendientes} Incompletas` }}
+                    </span>
+                  </div>
+
+                  <!-- Progress Bar -->
+                  <div class="space-y-1.5 mb-4">
+                    <div class="flex justify-between text-xs font-bold text-slate-500">
+                      <span>Estado Consolidación del Grado</span>
+                      <span>{{ gGroup.cerradas }} / {{ gGroup.total }} materias ({{ Math.round((gGroup.cerradas / gGroup.total) * 100) }}%)</span>
+                    </div>
+                    <div class="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden">
+                      <div 
+                        class="h-full rounded-full transition-all duration-500"
+                        :class="gGroup.cerradas === gGroup.total ? 'bg-emerald-500' : 'bg-indigo-500'"
+                        :style="{ width: `${(gGroup.cerradas / gGroup.total) * 100}%` }"
+                      ></div>
+                    </div>
+                  </div>
+
+                  <!-- Grade Subjects Breakdown -->
+                  <div class="space-y-2 max-h-48 overflow-y-auto pr-1">
+                    <div 
+                      v-for="asig in gGroup.asignaciones" 
+                      :key="asig.id_detallegrado"
+                      class="flex items-center justify-between p-3 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-700/50 text-xs"
+                    >
+                      <div>
+                        <p class="font-black text-slate-800 dark:text-slate-200">{{ asig.materia_nombre }}</p>
+                        <p class="text-[11px] text-slate-400 font-semibold">Docente: {{ asig.docente_nombre }}</p>
+                      </div>
+                      
+                      <div class="flex items-center gap-2">
+                        <span 
+                          class="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider"
+                          :class="asig.estado === 'CERRADO' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400' : 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400'"
+                        >
+                          {{ asig.estado }}
+                        </span>
+
+                        <button
+                          v-if="asig.estado === 'CERRADO'"
+                          @click="attemptReopenSubject(asig)"
+                          :disabled="reopeningSubject === asig.id_detallegrado"
+                          class="p-1.5 rounded-xl bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 hover:bg-amber-200 transition-colors"
+                          title="Habilitar materia"
+                        >
+                          <Unlock class="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
           </div>
         </div>
         <div v-else-if="detailsLoading" class="p-16 text-center text-slate-400 font-bold">

@@ -14,7 +14,8 @@ import {
   ShieldAlert,
   KeyRound,
   Eye,
-  EyeOff
+  EyeOff,
+  Phone
 } from 'lucide-vue-next'
 import axios from 'axios'
 
@@ -25,18 +26,24 @@ const router = useRouter()
 const activeRole = computed(() => auth.activeRole?.toUpperCase() || '')
 const isDirectivo = computed(() => activeRole.value === 'DIRECTIVO')
 const isAdmin = computed(() => activeRole.value === 'ADMIN_GENERAL')
+const isStudent = computed(() => activeRole.value === 'ESTUDIANTE')
 const isParentOrTeacher = computed(() => activeRole.value === 'PADRE' || activeRole.value === 'DOCENTE')
 
 // State
 const profileData = ref<any>(null)
 const loadingProfile = ref(true)
 const submittingEmail = ref(false)
+const submittingPhone = ref(false)
 const submittingPassword = ref(false)
 const submittingDirectivoMessage = ref(false)
 const submittingRequest = ref(false)
 
 const emailForm = ref({
   email: ''
+})
+
+const phoneForm = ref({
+  telefono: ''
 })
 
 const passwordForm = ref({
@@ -53,6 +60,8 @@ const showConfirmPass = ref(false)
 // Mensajes de feedback
 const emailSuccess = ref('')
 const emailError = ref('')
+const phoneSuccess = ref('')
+const phoneError = ref('')
 const passwordSuccess = ref('')
 const passwordError = ref('')
 const requestSuccess = ref('')
@@ -82,6 +91,7 @@ const fetchProfile = async () => {
     const res = await axios.get('http://localhost:3000/api/auth/profile', { headers })
     profileData.value = res.data.user
     emailForm.value.email = res.data.user.email || ''
+    phoneForm.value.telefono = res.data.user.telefono || ''
   } catch (error) {
     console.error('Error fetching profile:', error)
   } finally {
@@ -132,6 +142,28 @@ const handleUpdateEmail = async () => {
     emailError.value = error.response?.data?.error || 'Error al actualizar el correo.'
   } finally {
     submittingEmail.value = false
+  }
+}
+
+const handleUpdatePhone = async () => {
+  try {
+    submittingPhone.value = true
+    phoneSuccess.value = ''
+    phoneError.value = ''
+
+    const headers = { Authorization: `Bearer ${auth.token}` }
+    await axios.put('http://localhost:3000/api/auth/profile/phone', {
+      telefono: phoneForm.value.telefono
+    }, { headers })
+
+    phoneSuccess.value = 'Teléfono de contacto actualizado con éxito.'
+    if (profileData.value) {
+      profileData.value.telefono = phoneForm.value.telefono
+    }
+  } catch (error: any) {
+    phoneError.value = error.response?.data?.error || 'Error al actualizar el teléfono.'
+  } finally {
+    submittingPhone.value = false
   }
 }
 
@@ -350,8 +382,39 @@ const goBack = () => {
                 </div>
               </div>
 
+              <!-- Phone form -->
+              <form @submit.prevent="handleUpdatePhone" class="space-y-3">
+                <div class="space-y-2">
+                  <div class="flex items-center justify-between">
+                    <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Teléfono / Celular de Contacto</label>
+                    <span v-if="isStudent" class="text-[10px] font-bold text-slate-400 italic">Opcional</span>
+                  </div>
+                  <div class="relative">
+                    <input 
+                      v-model="phoneForm.telefono"
+                      type="text" 
+                      placeholder="Ej. +57 300 123 4567"
+                      class="w-full pl-11 pr-4 py-3.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-semibold text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all outline-none"
+                    />
+                    <Phone class="w-5 h-5 text-slate-400 absolute left-4 top-3.5" />
+                  </div>
+                </div>
+
+                <div v-if="phoneSuccess" class="text-emerald-600 dark:text-emerald-400 text-xs font-bold ml-1">{{ phoneSuccess }}</div>
+                <div v-if="phoneError" class="text-rose-600 dark:text-rose-455 text-xs font-bold ml-1">{{ phoneError }}</div>
+
+                <button 
+                  type="submit" 
+                  :disabled="submittingPhone || phoneForm.telefono === (profileData.telefono || '')"
+                  class="px-5 py-3 bg-slate-900 hover:bg-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all disabled:opacity-50 flex items-center gap-2 cursor-pointer"
+                >
+                  <Loader2 v-if="submittingPhone" class="w-3.5 h-3.5 animate-spin" />
+                  Guardar Teléfono
+                </button>
+              </form>
+
               <!-- Email change form -->
-              <form @submit.prevent="handleUpdateEmail" class="space-y-4">
+              <form @submit.prevent="handleUpdateEmail" class="space-y-4 pt-2 border-t border-slate-100 dark:border-slate-800">
                 <div class="space-y-2">
                   <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Correo Electrónico</label>
                   <div class="relative">
@@ -371,7 +434,7 @@ const goBack = () => {
                 <button 
                   type="submit" 
                   :disabled="submittingEmail || emailForm.email === profileData.email"
-                  class="px-6 py-3.5 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all disabled:opacity-50 flex items-center gap-2"
+                  class="px-6 py-3.5 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all disabled:opacity-50 flex items-center gap-2 cursor-pointer"
                 >
                   <Loader2 v-if="submittingEmail" class="w-3.5 h-3.5 animate-spin" />
                   Guardar Correo

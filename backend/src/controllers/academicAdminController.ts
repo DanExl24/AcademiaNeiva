@@ -4426,6 +4426,10 @@ export const getPeriodClosureDetails = async (req: Request, res: Response): Prom
       teacher.asignaciones.push({
         id_detallegrado: row.id_detallegrado,
         materia_nombre: row.materia_nombre,
+        grado_nombre: row.grado_nombre,
+        seccion_nombre: row.seccion_nombre,
+        jornada_nombre: row.jornada_nombre,
+        curso_nombre: `${row.grado_nombre} ${row.seccion_nombre}`,
         grado: `${row.grado_nombre} ${row.seccion_nombre} · ${row.jornada_nombre}`,
         estado: row.estado_cierre
       });

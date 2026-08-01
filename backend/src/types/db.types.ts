@@ -616,16 +616,19 @@ export interface Usuario {
   activo: Generated<boolean | null>;
   apellido: string | null;
   baneado_por: number | null;
+  documento: string | null;
   email: string;
   estado: Generated<EstadoUsuarioSistema>;
   fecha_baneo: Timestamp | null;
   fecha_creacion: Generated<Timestamp | null>;
   id_colegio: number | null;
+  id_tipodocumento: number | null;
   id_usuario: Generated<number>;
   logged_out_at: Timestamp | null;
   motivo_baneo: string | null;
   nombre: string;
   password: string;
+  telefono: string | null;
 }
 
 export interface UsuarioRol {

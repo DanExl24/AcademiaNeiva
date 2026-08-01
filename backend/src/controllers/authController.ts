@@ -466,6 +466,32 @@ export const updateProfilePassword = async (req: Request, res: Response): Promis
   }
 };
 
+export const updateProfilePhone = async (req: Request, res: Response): Promise<void> => {
+  const user = (req as any).user;
+  const { telefono } = req.body;
+
+  if (!user) {
+    res.status(401).json({ error: "No autorizado." });
+    return;
+  }
+
+  try {
+    const userId = Number(user.id);
+    const newPhone = telefono ? String(telefono).trim() : null;
+
+    // Actualizar teléfono en la tabla usuario
+    await pool.query(
+      'UPDATE usuario SET telefono = $1 WHERE id_usuario = $2',
+      [newPhone, userId]
+    );
+
+    res.json({ message: "Teléfono de contacto actualizado exitosamente." });
+  } catch (error) {
+    console.error("Error updating profile phone:", error);
+    res.status(500).json({ error: "Error al actualizar el teléfono." });
+  }
+};
+
 export const getUserProfile = async (req: Request, res: Response): Promise<void> => {
   const user = (req as any).user;
 
@@ -477,10 +503,27 @@ export const getUserProfile = async (req: Request, res: Response): Promise<void>
   try {
     const userId = Number(user.id);
     
-    // Obtener los datos básicos de la tabla usuario
+    // Obtener datos unificados del usuario
     const userRes = await pool.query(
-      `SELECT id_usuario, nombre, apellido, email, estado, fecha_creacion
-       FROM usuario WHERE id_usuario = $1`,
+      `SELECT 
+         u.id_usuario, 
+         u.nombre, 
+         u.apellido, 
+         u.email, 
+         u.estado, 
+         u.fecha_creacion,
+         COALESCE(u.documento, d.documento, pf.documento, e.documento) AS documento,
+         COALESCE(td_u.tipo, td_d.tipo, td_pf.tipo, td_e.tipo) AS tipo_documento,
+         u.telefono AS telefono
+       FROM usuario u
+       LEFT JOIN tipo_documento td_u ON u.id_tipodocumento = td_u.id_tipodocumento
+       LEFT JOIN docente d ON d.id_usuario = u.id_usuario 
+       LEFT JOIN tipo_documento td_d ON d.id_tipodocumento = td_d.id_tipodocumento 
+       LEFT JOIN padre_familia pf ON pf.id_usuario = u.id_usuario 
+       LEFT JOIN tipo_documento td_pf ON pf.id_tipodocumento = td_pf.id_tipodocumento 
+       LEFT JOIN estudiante e ON e.id_usuario = u.id_usuario 
+       LEFT JOIN tipo_documento td_e ON e.id_tipodocumento = td_e.id_tipodocumento 
+       WHERE u.id_usuario = $1`,
       [userId]
     );
 
@@ -489,60 +532,21 @@ export const getUserProfile = async (req: Request, res: Response): Promise<void>
       return;
     }
 
-    const basicUser = userRes.rows[0];
-    
-    // El rol lo tomamos del token del middleware (user.role)
+    const userData = userRes.rows[0];
     const userRole = (user.role || '').toUpperCase();
-    
-    let documento = null;
-    let tipo_documento = null;
 
-    // Buscar documento y tipo según el rol del usuario en su respectiva tabla
-    if (userRole === 'DOCENTE') {
-      const docRes = await pool.query(
-        `SELECT d.documento, td.tipo AS tipo_documento 
-         FROM docente d 
-         LEFT JOIN tipo_documento td ON d.id_tipodocumento = td.id_tipodocumento 
-         WHERE d.id_usuario = $1`,
-        [userId]
-      );
-      if (docRes.rows.length > 0) {
-        documento = docRes.rows[0].documento;
-        tipo_documento = docRes.rows[0].tipo_documento;
-      }
-    } else if (userRole === 'PADRE') {
-      const docRes = await pool.query(
-        `SELECT p.documento, td.tipo AS tipo_documento 
-         FROM padre_familia p 
-         LEFT JOIN tipo_documento td ON p.id_tipodocumento = td.id_tipodocumento 
-         WHERE p.id_usuario = $1`,
-        [userId]
-      );
-      if (docRes.rows.length > 0) {
-        documento = docRes.rows[0].documento;
-        tipo_documento = docRes.rows[0].tipo_documento;
-      }
-    } else if (userRole === 'ESTUDIANTE') {
-      const docRes = await pool.query(
-        `SELECT e.documento, td.tipo AS tipo_documento 
-         FROM estudiante e 
-         LEFT JOIN tipo_documento td ON e.id_tipodocumento = td.id_tipodocumento 
-         WHERE e.id_usuario = $1`,
-        [userId]
-      );
-      if (docRes.rows.length > 0) {
-        documento = docRes.rows[0].documento;
-        tipo_documento = docRes.rows[0].tipo_documento;
-      }
-    }
-
-    // Retornamos el objeto unificado
     res.json({
       user: {
-        ...basicUser,
+        id_usuario: userData.id_usuario,
+        nombre: userData.nombre,
+        apellido: userData.apellido,
+        email: userData.email,
+        estado: userData.estado,
+        fecha_creacion: userData.fecha_creacion,
         rol: userRole,
-        documento: documento || 'No Registrado',
-        tipo_documento: tipo_documento || 'No Registrado'
+        documento: userData.documento || 'No Registrado',
+        tipo_documento: userData.tipo_documento || 'No Registrado',
+        telefono: userData.telefono || null
       }
     });
   } catch (error) {
