@@ -432,13 +432,15 @@ export const getGradeManagementData = async (req: Request, res: Response): Promi
 
   try {
     const { yearId } = req.query;
-    let yearMatriculaJoin = `LEFT JOIN matricula m ON m.id_grupo = g.id_grupo`;
+    let yearMatriculaJoin = `LEFT JOIN matricula m ON m.id_grupo = g.id_grupo AND m.estado NOT IN ('CANCELADA', 'RECHAZADA')`;
+    let yearDetalleJoin = `LEFT JOIN detalle_grados dg ON dg.id_grupo = g.id_grupo`;
     let yearCompetenciaJoin = `LEFT JOIN competencias c ON c.id_grupo = g.id_grupo`;
     const groupsParams: any[] = [schoolId];
 
     if (yearId) {
       groupsParams.push(Number(yearId));
-      yearMatriculaJoin = `LEFT JOIN matricula m ON m.id_grupo = g.id_grupo AND m.id_anio = $2`;
+      yearMatriculaJoin = `LEFT JOIN matricula m ON m.id_grupo = g.id_grupo AND m.id_anio = $2 AND m.estado NOT IN ('CANCELADA', 'RECHAZADA')`;
+      yearDetalleJoin = `LEFT JOIN detalle_grados dg ON dg.id_grupo = g.id_grupo AND dg.id_anio = $2`;
       yearCompetenciaJoin = `LEFT JOIN competencias c ON c.id_grupo = g.id_grupo AND c.id_anio = $2`;
     }
 
@@ -495,7 +497,7 @@ export const getGradeManagementData = async (req: Request, res: Response): Promi
          JOIN jornada j ON j.id_jornada = g.id_jornada
          JOIN secciones s ON s.id_seccion = g.id_seccion
          ${yearMatriculaJoin}
-         LEFT JOIN detalle_grados dg ON dg.id_grupo = g.id_grupo
+         ${yearDetalleJoin}
          ${yearCompetenciaJoin}
          WHERE g.id_colegio = $1
          GROUP BY
@@ -2676,6 +2678,14 @@ export const getTeacherManagementData = async (req: Request, res: Response): Pro
            u.id_usuario,
            u.email,
            COALESCE(u.activo, true) AS activo,
+           (
+             SELECT u_parent.email
+             FROM padre_familia pf
+             JOIN usuario u_parent ON u_parent.id_usuario = pf.id_usuario
+             WHERE pf.documento = d.documento
+                OR pf.id_usuario = d.id_usuario
+             LIMIT 1
+           ) AS email_padre,
            COUNT(DISTINCT dg.id_detallegrado)::int AS asignaciones_count
          FROM docente d
          JOIN tipo_documento td ON td.id_tipodocumento = d.id_tipodocumento
@@ -2752,6 +2762,167 @@ export const getTeacherManagementData = async (req: Request, res: Response): Pro
   }
 };
 
+export const getGroupMembers = async (req: Request, res: Response): Promise<void> => {
+  const schoolId = parseSchoolId(req.query.schoolId || req.body.schoolId);
+  const groupId = Number(req.params.groupId);
+  const yearId = req.query.yearId ? Number(req.query.yearId) : null;
+
+  if (!schoolId || !groupId) {
+    res.status(400).json({ error: "Parámetros inválidos" });
+    return;
+  }
+
+  try {
+    const groupRes = await pool.query(
+      `SELECT
+         g.id_grupo,
+         g.cupos_totales,
+         ne.nombre AS nivel_nombre,
+         tg.nombre AS tipo_grado_nombre,
+         j.nombre AS jornada_nombre,
+         s.nombre AS seccion_nombre
+       FROM grupos g
+       JOIN tipo_grado tg ON tg.id_tipo_grado = g.id_tipo_grado
+       JOIN nivel_escolar ne ON ne.id_nivel = g.id_nivel
+       JOIN jornada j ON j.id_jornada = g.id_jornada
+       JOIN secciones s ON s.id_seccion = g.id_seccion
+       WHERE g.id_grupo = $1 AND g.id_colegio = $2`,
+      [groupId, schoolId]
+    );
+
+    if (groupRes.rows.length === 0) {
+      res.status(404).json({ error: "Curso no encontrado" });
+      return;
+    }
+
+    let studentQuery = `
+      SELECT
+        e.id_estudiante,
+        e.nombre,
+        e.apellido,
+        e.codigo AS codigo_estudiantil,
+        e.documento,
+        td.tipo AS tipo_documento,
+        m.id_matricula,
+        m.estado AS estado_matricula,
+        m.tipo AS tipo_matricula,
+        u.email
+      FROM matricula m
+      JOIN estudiante e ON e.id_estudiante = m.id_estudiante
+      LEFT JOIN tipo_documento td ON td.id_tipodocumento = e.id_tipodocumento
+      LEFT JOIN usuario u ON u.id_usuario = e.id_usuario
+      WHERE m.id_grupo = $1
+        AND m.estado NOT IN ('CANCELADA', 'RECHAZADA')
+    `;
+    const studentParams: any[] = [groupId];
+
+    if (yearId) {
+      studentParams.push(yearId);
+      studentQuery += ` AND m.id_anio = $2`;
+    }
+
+    studentQuery += ` ORDER BY e.apellido, e.nombre`;
+    const studentsRes = await pool.query(studentQuery, studentParams);
+
+    let teacherQuery = `
+      SELECT
+        dg.id_detallegrado,
+        mat.id_materia,
+        mat.nombre AS materia_nombre,
+        doc.id_docente,
+        doc.nombre AS docente_nombre,
+        doc.apellido AS docente_apellido,
+        doc.documento AS docente_documento,
+        u.email AS docente_email
+      FROM detalle_grados dg
+      JOIN materias mat ON mat.id_materia = dg.id_materia
+      JOIN docente doc ON doc.id_docente = dg.id_docente
+      LEFT JOIN usuario u ON u.id_usuario = doc.id_usuario
+      WHERE dg.id_grupo = $1
+    `;
+    const teacherParams: any[] = [groupId];
+
+    if (yearId) {
+      teacherParams.push(yearId);
+      teacherQuery += ` AND dg.id_anio = $2`;
+    }
+
+    teacherQuery += ` ORDER BY mat.nombre`;
+    const teachersRes = await pool.query(teacherQuery, teacherParams);
+
+    res.json({
+      group: groupRes.rows[0],
+      students: studentsRes.rows,
+      teachers: teachersRes.rows,
+    });
+  } catch (error) {
+    console.error("Error fetching group members:", error);
+    res.status(500).json({ error: "Error en el servidor al obtener integrantes del curso" });
+  }
+};
+
+export const lookupUserIdentity = async (req: Request, res: Response): Promise<void> => {
+  const schoolId = parseSchoolId(req.query.schoolId);
+  const documento = String(req.query.documento || "").trim();
+  const email = String(req.query.email || "").trim().toLowerCase();
+
+  if (!documento && !email) {
+    res.json({ found: false });
+    return;
+  }
+
+  try {
+    let query = `
+      SELECT u.id_usuario, u.email,
+             COALESCE(u.nombre, d.nombre, pf.nombre) AS nombre,
+             COALESCE(u.apellido, d.apellido, pf.apellido) AS apellido,
+             COALESCE(d.documento, pf.documento) AS documento,
+             COALESCE(d.id_tipodocumento, pf.id_tipodocumento) AS id_tipodocumento
+      FROM usuario u
+      LEFT JOIN docente d ON d.id_usuario = u.id_usuario
+      LEFT JOIN padre_familia pf ON pf.id_usuario = u.id_usuario
+      WHERE 1=1
+    `;
+    const params: any[] = [];
+
+    if (documento) {
+      params.push(documento);
+      query += ` AND (d.documento = $${params.length} OR pf.documento = $${params.length})`;
+    } else if (email) {
+      params.push(email);
+      query += ` AND LOWER(u.email) = $${params.length}`;
+    }
+
+    if (schoolId) {
+      params.push(schoolId);
+      query += ` AND (u.id_colegio = $${params.length} OR pf.id_colegio = $${params.length} OR d.id_colegio = $${params.length})`;
+    }
+    query += ` LIMIT 1`;
+
+    const result = await pool.query(query, params);
+    if (result.rows.length === 0) {
+      res.json({ found: false });
+      return;
+    }
+
+    const row = result.rows[0];
+    res.json({
+      found: true,
+      user: {
+        id_usuario: row.id_usuario,
+        nombre: row.nombre,
+        apellido: row.apellido,
+        documento: row.documento,
+        id_tipodocumento: row.id_tipodocumento,
+        email: row.email
+      }
+    });
+  } catch (error) {
+    console.error("Error in lookupUserIdentity:", error);
+    res.status(500).json({ error: "Error en el servidor" });
+  }
+};
+
 export const createTeacher = async (req: Request, res: Response): Promise<void> => {
   const schoolId = parseSchoolId(req.body.schoolId);
   const nombre = String(req.body.nombre || "").trim();
@@ -2783,9 +2954,16 @@ export const createTeacher = async (req: Request, res: Response): Promise<void> 
       [schoolId, documento]
     );
     const existingUserRes = await client.query(
-      `SELECT id_usuario
-       FROM usuario
-       WHERE LOWER(email) = $1`,
+      `SELECT u.id_usuario, u.email, COALESCE(u.activo, true) AS activo,
+              COALESCE(u.nombre, d.nombre, pf.nombre) AS nombre,
+              COALESCE(u.apellido, d.apellido, pf.apellido) AS apellido,
+              COALESCE(d.documento, pf.documento) AS documento,
+              COALESCE(d.id_tipodocumento, pf.id_tipodocumento) AS id_tipodocumento
+       FROM usuario u
+       LEFT JOIN docente d ON d.id_usuario = u.id_usuario
+       LEFT JOIN padre_familia pf ON pf.id_usuario = u.id_usuario
+       WHERE LOWER(u.email) = $1
+       LIMIT 1`,
       [email]
     );
     const roleRes = await client.query(
@@ -2809,7 +2987,7 @@ export const createTeacher = async (req: Request, res: Response): Promise<void> 
 
     if (existingTeacherRes.rows.length > 0) {
       await client.query("ROLLBACK");
-      res.status(409).json({ error: "Ya existe un docente con ese documento en este colegio" });
+      res.status(409).json({ error: "Ya existe un docente registrado con ese documento de identidad en esta institución" });
       return;
     }
 
@@ -2836,17 +3014,36 @@ export const createTeacher = async (req: Request, res: Response): Promise<void> 
 
       if (isDocente) {
         await client.query("ROLLBACK");
-        res.status(409).json({ error: "Ya existe un docente registrado con ese correo" });
+        res.status(409).json({ error: "Ya existe un docente registrado con ese correo electrónico" });
+        return;
+      }
+
+      // Validar que el número de documento ingresado coincida con la identidad del usuario existente
+      if (existingUser.documento && existingUser.documento.trim() !== documento.trim()) {
+        await client.query("ROLLBACK");
+        res.status(400).json({
+          error: `El correo "${email}" pertenece al usuario registrado "${existingUser.nombre || nombre} ${existingUser.apellido || apellido}" cuyo documento es "${existingUser.documento}". No se puede registrar un docente con un documento diferente (${documento}) usando el mismo correo.`
+        });
+        return;
+      }
+
+      if (existingUser.id_tipodocumento && Number(existingUser.id_tipodocumento) !== documentTypeId) {
+        await client.query("ROLLBACK");
+        res.status(400).json({
+          error: `El correo "${email}" pertenece al usuario registrado "${existingUser.nombre || nombre} ${existingUser.apellido || apellido}". El tipo de documento ingresado no coincide con el registrado en el sistema.`
+        });
         return;
       }
 
       if (isParent) {
         const addRoleIfParent = Boolean(req.body.addRoleIfParent);
+        const parentFullName = `${existingUser.nombre || nombre} ${existingUser.apellido || apellido}`.trim();
+
         if (!addRoleIfParent) {
           await client.query("ROLLBACK");
           res.status(409).json({
             isParent: true,
-            message: `El correo "${email}" pertenece a un Padre de Familia registrado (${existingUser.nombre} ${existingUser.apellido}). ¿Desea registrarlo también como Docente?`
+            message: `El correo "${email}" pertenece a un Padre de Familia registrado (${parentFullName}). ¿Desea vincular esta cuenta existente también como Docente?`
           });
           return;
         }
@@ -2859,21 +3056,26 @@ export const createTeacher = async (req: Request, res: Response): Promise<void> 
           [existingUser.id_usuario, roleRes.rows[0].id_rol]
         );
 
+        const finalNombre = existingUser.nombre || nombre;
+        const finalApellido = existingUser.apellido || apellido;
+        const finalDocumento = existingUser.documento || documento;
+        const finalTipoDoc = existingUser.id_tipodocumento || documentTypeId;
+
         const teacherRes = await client.query(
           `INSERT INTO docente (nombre, apellido, documento, id_tipodocumento, id_colegio, id_usuario, estado)
            VALUES ($1, $2, $3, $4, $5, $6, 'ACTIVO')
            RETURNING id_docente, nombre, apellido, documento, id_tipodocumento, estado`,
-          [nombre, apellido, documento, documentTypeId, schoolId, existingUser.id_usuario]
+          [finalNombre, finalApellido, finalDocumento, finalTipoDoc, schoolId, existingUser.id_usuario]
         );
 
         await client.query("COMMIT");
 
         await NotificationService.sendTeacherWelcomeEmail(
           existingUser.email,
-          `${nombre} ${apellido}`,
+          parentFullName,
           schoolName,
           documentTypeRes.rows[0].tipo,
-          documento,
+          finalDocumento,
           password
         );
 
@@ -5412,16 +5614,26 @@ export const rejectExtraordinaryEnrollment = async (req: Request, res: Response)
 
     const mat = matRes.rows[0];
     if (mat.tipo !== 'EXTRAORDINARIA' || mat.estado !== 'PENDIENTE') {
-      res.status(400).json({ error: "Solo se pueden rechazar excepciones de matrículas extraordinarias en estado PENDIENTE." });
+      res.status(400).json({ error: "Solo se pueden cancelar excepciones de matrículas extraordinarias en estado PENDIENTE." });
       return;
     }
 
-    // Update state to RECHAZADA
+    const finalMotivo = motivo_cambio || req.body.motivo || 'Solicitud de matrícula extraordinaria cancelada por la institución';
+
+    // Update state to CANCELADA
     const updatedRes = await client.query(
-      "UPDATE matricula SET estado = 'RECHAZADA' WHERE id_matricula = $1 RETURNING *",
-      [id]
+      "UPDATE matricula SET estado = 'CANCELADA', motivo_cancelacion = $1, detalles_cancelacion = $1 WHERE id_matricula = $2 RETURNING *",
+      [finalMotivo, id]
     );
     const updatedMat = updatedRes.rows[0];
+
+    // Notification: Send cancellation email to parent
+    await NotificationService.sendCancellationEmail(
+      mat.correo_padre,
+      'Acudiente',
+      finalMotivo,
+      finalMotivo
+    );
 
     // Supervision Logging if admin_general
     const isSupervised = authReq.user?.roles.includes("admin_general");
@@ -5436,20 +5648,20 @@ export const rejectExtraordinaryEnrollment = async (req: Request, res: Response)
         await client.query(
           `INSERT INTO auditoria_acciones_realizadas
            (id_auditoria, modulo, tipo_accion, accion, recurso_afectado, valor_antiguo, valor_nuevo, motivo_cambio)
-           VALUES ($1, 'MATRICULAS', 'MODIFICACION', 'Rechazo de Excepción de Matrícula Extraordinaria', $2, $3, $4, $5)`,
+           VALUES ($1, 'MATRICULAS', 'MODIFICACION', 'Cancelación de Excepción de Matrícula Extraordinaria', $2, $3, $4, $5)`,
           [
             activeAuditoriaId,
             `Matricula ID: ${id}`,
             JSON.stringify(mat),
             JSON.stringify(updatedMat),
-            motivo_cambio || 'Acción bajo supervisión de Admin General'
+            motivo_cambio || finalMotivo
           ]
         );
       }
     }
 
     await client.query("COMMIT");
-    res.json({ message: "Excepción rechazada exitosamente.", matricula: updatedMat });
+    res.json({ message: "Excepción cancelada exitosamente.", matricula: updatedMat });
   } catch (error: any) {
     await client.query("ROLLBACK");
     console.error("Error in rejectExtraordinaryEnrollment:", error);
@@ -5708,7 +5920,7 @@ export const approveReingresoEnrollment = async (req: Request, res: Response): P
 export const rejectReingresoEnrollment = async (req: Request, res: Response): Promise<void> => {
   const authReq = req as any;
   const { id } = req.params;
-  const { motivo_cambio } = req.body;
+  const { motivo, observaciones, motivo_cambio } = req.body;
   const schoolId = authReq.user?.schoolId;
 
   if (!schoolId) {
@@ -5731,17 +5943,35 @@ export const rejectReingresoEnrollment = async (req: Request, res: Response): Pr
     }
 
     const mat = matRes.rows[0];
-    if (mat.tipo !== 'REINGRESO' || mat.estado !== 'PENDIENTE') {
-      res.status(400).json({ error: "Solo se pueden rechazar solicitudes de reingreso en estado PENDIENTE." });
+    if (mat.tipo !== 'REINGRESO' || (mat.estado !== 'PENDIENTE' && mat.estado !== 'CORRECCION')) {
+      res.status(400).json({ error: "Solo se pueden rechazar solicitudes de reingreso en estado PENDIENTE o CORRECCION." });
       return;
     }
 
-    // Update state to RECHAZADA
+    const finalMotivo = motivo || observaciones || motivo_cambio || 'Solicitud de reingreso no aprobada';
+
+    // Update state to CANCELADA
     const updatedRes = await client.query(
-      "UPDATE matricula SET estado = 'RECHAZADA' WHERE id_matricula = $1 RETURNING *",
-      [id]
+      "UPDATE matricula SET estado = 'CANCELADA', observaciones = $1, motivo_cancelacion = $2, detalles_cancelacion = $3 WHERE id_matricula = $4 RETURNING *",
+      [finalMotivo, finalMotivo, finalMotivo, id]
     );
     const updatedMat = updatedRes.rows[0];
+
+    // If linked to a support ticket, mark ticket as RESUELTO
+    if (mat.id_ticket) {
+      await client.query(
+        "UPDATE tickets_soporte SET estado = 'RESUELTO', observaciones = $1 WHERE id_ticket = $2",
+        [`Solicitud de reingreso cancelada por directivo: ${finalMotivo}`, mat.id_ticket]
+      );
+    }
+
+    // Notification: Send cancellation email to parent
+    await NotificationService.sendCancellationEmail(
+      mat.correo_padre,
+      'Acudiente',
+      finalMotivo,
+      finalMotivo
+    );
 
     // Supervision Logging if admin_general
     const isSupervised = authReq.user?.roles.includes("admin_general");
@@ -5762,17 +5992,79 @@ export const rejectReingresoEnrollment = async (req: Request, res: Response): Pr
             `Matricula ID: ${id}`,
             JSON.stringify(mat),
             JSON.stringify(updatedMat),
-            motivo_cambio || 'Acción bajo supervisión de Admin General'
+            motivo_cambio || finalMotivo
           ]
         );
       }
     }
 
     await client.query("COMMIT");
-    res.json({ message: "Solicitud de reingreso rechazada exitosamente.", matricula: updatedMat });
+    res.json({ message: "Solicitud de reingreso rechazada exitosamente y correo enviado al acudiente.", matricula: updatedMat });
   } catch (error: any) {
     await client.query("ROLLBACK");
     console.error("Error in rejectReingresoEnrollment:", error);
+    res.status(500).json({ error: "Error en el servidor" });
+  } finally {
+    client.release();
+  }
+};
+
+export const correctReingresoEnrollment = async (req: Request, res: Response): Promise<void> => {
+  const authReq = req as any;
+  const { id } = req.params;
+  const { observaciones, motivo_cambio } = req.body;
+  const schoolId = authReq.user?.schoolId;
+
+  if (!schoolId) {
+    res.status(400).json({ error: "No se pudo identificar el colegio del directivo" });
+    return;
+  }
+
+  const finalObservaciones = (observaciones || motivo_cambio || '').trim();
+  if (!finalObservaciones) {
+    res.status(400).json({ error: "Debe especificar las observaciones o correcciones requeridas al acudiente." });
+    return;
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const matRes = await client.query(
+      "SELECT * FROM matricula WHERE id_matricula = $1 AND id_colegio = $2",
+      [id, schoolId]
+    );
+    if (matRes.rows.length === 0) {
+      res.status(404).json({ error: "Matrícula no encontrada" });
+      return;
+    }
+
+    const mat = matRes.rows[0];
+    if (mat.tipo !== 'REINGRESO') {
+      res.status(400).json({ error: "Solo aplica a solicitudes de reingreso." });
+      return;
+    }
+
+    // Update state to CORRECCION
+    const updatedRes = await client.query(
+      "UPDATE matricula SET estado = 'CORRECCION', observaciones = $1 WHERE id_matricula = $2 RETURNING *",
+      [finalObservaciones, id]
+    );
+    const updatedMat = updatedRes.rows[0];
+
+    // Notification: Send email to parent with link to correct/upload documents
+    await NotificationService.sendRejectionEmail(
+      mat.correo_padre,
+      'Acudiente',
+      finalObservaciones,
+      mat.token_seguimiento
+    );
+
+    await client.query("COMMIT");
+    res.json({ message: "Solicitud enviada a corrección exitosamente y notificación enviada al acudiente.", matricula: updatedMat });
+  } catch (error: any) {
+    await client.query("ROLLBACK");
+    console.error("Error in correctReingresoEnrollment:", error);
     res.status(500).json({ error: "Error en el servidor" });
   } finally {
     client.release();

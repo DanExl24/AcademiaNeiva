@@ -20,7 +20,7 @@ export const useAcademicYearStore = defineStore('academicYear', () => {
     return availableYears.value.find(y => (y.id_anio || y.id_año) === selectedYearId.value) || null
   })
 
-  const isClosedYear = computed(() => selectedYear.value?.estado === 'CERRADO')
+  const isClosedYear = computed(() => selectedYear.value ? (selectedYear.value.estado === 'CERRADO' || selectedYear.value.estado === 'INACTIVO') : false)
   const isReadonlyYear = computed(() => isClosedYear.value)
 
   const loadYearsForSchool = async (schoolId: number, token?: string) => {

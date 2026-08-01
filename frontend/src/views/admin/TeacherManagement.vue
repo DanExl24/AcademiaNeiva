@@ -16,7 +16,8 @@ import {
   ChevronRight,
   Eye,
   Download,
-  Edit2
+  Edit2,
+  UserCheck
 } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 import { useRouter } from 'vue-router'
@@ -37,6 +38,7 @@ interface TeacherItem {
   id_tipodocumento: number
   tipo_documento: string
   email: string
+  email_padre?: string
   activo: boolean
   estado: 'ACTIVO' | 'INACTIVO' | 'DESVINCULADO'
   asignaciones_count: number
@@ -207,6 +209,64 @@ const fetchData = async () => {
   subjects.value = response.data.subjects
   groups.value = response.data.groups
   assignments.value = response.data.assignments
+}
+
+const isAutoFilledUser = ref(false)
+const autoFilledUserName = ref('')
+const existingUserEmail = ref('')
+const lookingUpUser = ref(false)
+
+const isDifferentEmailSuggestion = computed(() => {
+  if (!isAutoFilledUser.value || !existingUserEmail.value || !newTeacher.value.email) return false
+  return newTeacher.value.email.trim().toLowerCase() !== existingUserEmail.value.trim().toLowerCase()
+})
+
+const handleAutoLookup = async () => {
+  const doc = newTeacher.value.documento.trim()
+  const email = newTeacher.value.email.trim()
+
+  if (!doc && !email) {
+    isAutoFilledUser.value = false
+    autoFilledUserName.value = ''
+    existingUserEmail.value = ''
+    return
+  }
+
+  try {
+    lookingUpUser.value = true
+    const params: any = { schoolId: schoolId.value }
+    if (doc) params.documento = doc
+    else if (email) params.email = email
+
+    const res = await axios.get('http://localhost:3000/api/academic-admin/users/lookup', {
+      params,
+      headers: { Authorization: `Bearer ${auth.token}` }
+    })
+
+    if (res.data && res.data.found && res.data.user) {
+      const u = res.data.user
+      existingUserEmail.value = u.email || ''
+
+      if (u.nombre) newTeacher.value.nombre = u.nombre
+      if (u.apellido) newTeacher.value.apellido = u.apellido
+      if (!newTeacher.value.email) {
+        newTeacher.value.email = u.email
+      }
+      if (u.id_tipodocumento) newTeacher.value.id_tipodocumento = String(u.id_tipodocumento)
+      if (u.documento) newTeacher.value.documento = u.documento
+
+      isAutoFilledUser.value = true
+      autoFilledUserName.value = `${u.nombre} ${u.apellido}`
+    } else {
+      isAutoFilledUser.value = false
+      autoFilledUserName.value = ''
+      existingUserEmail.value = ''
+    }
+  } catch (e) {
+    console.error('Error auto-looking up user identity:', e)
+  } finally {
+    lookingUpUser.value = false
+  }
 }
 
 const loadData = async () => {
@@ -597,6 +657,9 @@ watch(() => yearStore.selectedYearId, () => {
 
         <h4 class="font-black text-slate-900 dark:text-white leading-tight pr-5">{{ teacher.nombre }} {{ teacher.apellido }}</h4>
         <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{{ teacher.tipo_documento }} {{ teacher.documento }}</p>
+        <p v-if="teacher.email_padre" class="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 mt-1 flex items-center gap-1">
+          <Users :size="10" /> Padre: {{ teacher.email_padre }}
+        </p>
 
         <div class="mt-4 flex items-center justify-between">
           <div class="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 rounded-lg px-2.5 py-1.5">
@@ -646,6 +709,11 @@ watch(() => yearStore.selectedYearId, () => {
                   </div>
                   <div class="flex items-center gap-3 mt-1.5 text-blue-100 dark:text-blue-300 text-xs font-medium">
                     <span class="flex items-center gap-1"><Mail :size="12" /> {{ selectedTeacher.email }}</span>
+                  </div>
+                  <div v-if="selectedTeacher.email_padre" class="mt-1.5 inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-white/20 dark:bg-white/15 backdrop-blur-md rounded-full text-white text-[11px] font-bold shadow-sm">
+                    <Users :size="12" class="text-blue-100" />
+                    <span>Correo Padre:</span>
+                    <span class="underline underline-offset-2">{{ selectedTeacher.email_padre }}</span>
                   </div>
                   <p class="text-blue-200 dark:text-blue-400 text-[10px] font-black uppercase mt-1 tracking-widest">{{ selectedTeacher.tipo_documento }} {{ selectedTeacher.documento }}</p>
                 </div>
@@ -817,6 +885,31 @@ watch(() => yearStore.selectedYearId, () => {
           <p class="text-slate-400 dark:text-slate-500 text-sm font-medium mt-1">Completa los datos personales y las credenciales de acceso inicial.</p>
         </div>
         <div class="p-8 space-y-5">
+          <!-- Banner de Usuario Encontrado / Precargado -->
+          <div v-if="isAutoFilledUser" class="space-y-2">
+            <div class="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-2xl p-3.5 flex items-center gap-3 animate-in fade-in duration-200">
+              <div class="p-2 bg-emerald-500 text-white rounded-xl shrink-0">
+                <UserCheck :size="18" />
+              </div>
+              <p class="text-xs font-bold text-emerald-900 dark:text-emerald-300 leading-relaxed">
+                👤 Usuario encontrado en el sistema: <strong>{{ autoFilledUserName }}</strong>. Se han precargado automáticamente sus nombres, apellidos y tipo de documento.
+              </p>
+            </div>
+
+            <!-- Advertencia/Sugerencia si se ingresa un correo diferente -->
+            <div v-if="isDifferentEmailSuggestion" class="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-2xl p-3.5 flex items-center gap-3 animate-in fade-in duration-200">
+              <div class="p-2 bg-blue-600 text-white rounded-xl shrink-0">
+                <Info :size="18" />
+              </div>
+              <div class="text-xs text-blue-950 dark:text-blue-200 leading-relaxed">
+                <p class="font-black uppercase tracking-wider text-[10px]">💡 Cuenta Institucional Independiente:</p>
+                <p class="font-medium mt-0.5">
+                  <strong>{{ autoFilledUserName }}</strong> tiene registrada la cuenta de Padre con el correo <strong>{{ existingUserEmail }}</strong>. El nuevo correo <strong>{{ newTeacher.email }}</strong> se creará como su cuenta de acceso exclusiva para sus funciones de Docente.
+                </p>
+              </div>
+            </div>
+          </div>
+
           <div class="grid grid-cols-2 gap-4">
             <label class="space-y-1.5">
               <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nombres</span>
@@ -835,11 +928,11 @@ watch(() => yearStore.selectedYearId, () => {
             </label>
             <label class="space-y-1.5">
               <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Número</span>
-              <input v-model="newTeacher.documento" type="text" placeholder="Documento de identidad" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-bold outline-none text-slate-900 dark:text-white" />
+              <input v-model="newTeacher.documento" @blur="handleAutoLookup" type="text" placeholder="Documento de identidad" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-bold outline-none text-slate-900 dark:text-white" />
             </label>
             <label class="col-span-2 space-y-1.5">
               <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Email Institucional</span>
-              <input v-model="newTeacher.email" type="email" placeholder="docente@institucion.edu" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-bold outline-none text-slate-900 dark:text-white" />
+              <input v-model="newTeacher.email" @blur="handleAutoLookup" type="email" placeholder="docente@institucion.edu" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-bold outline-none text-slate-900 dark:text-white" />
             </label>
             <label class="col-span-2 space-y-1.5">
               <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Contraseña Temporal</span>

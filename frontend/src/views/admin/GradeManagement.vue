@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import axios from 'axios'
-import { Layers3, Plus, Search, School2, Trash2, Info, Pencil, Tag, RefreshCw } from 'lucide-vue-next'
+import { Layers3, Plus, Search, School2, Trash2, Info, Pencil, Tag, RefreshCw, Lock, Calendar, Eye, Users, GraduationCap, Mail, X } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 import { useNotificationStore } from '../../stores/notifications'
 import { useAcademicYearStore } from '../../stores/academicYear'
@@ -126,6 +126,23 @@ const visibleGradeTypes = computed(() => {
   )
 })
 
+type CupoFilterOption = 'TODOS' | 'CON_CUPOS' | 'SIN_CUPOS' | 'BAJA_OCUPACION' | 'ALTA_OCUPACION' | 'MENOS_10' | 'ENTRE_10_25' | 'MAS_25'
+
+const cupoFilter = ref<CupoFilterOption>('TODOS')
+
+const getCupoFilterLabel = (val: CupoFilterOption): string => {
+  switch (val) {
+    case 'CON_CUPOS': return 'Con cupos disponibles'
+    case 'SIN_CUPOS': return 'Cupos llenos (100%)'
+    case 'BAJA_OCUPACION': return 'Baja ocupación (< 50%)'
+    case 'ALTA_OCUPACION': return 'Alta ocupación (≥ 80%)'
+    case 'MENOS_10': return '< 10 estudiantes'
+    case 'ENTRE_10_25': return '10 a 25 estudiantes'
+    case 'MAS_25': return '> 25 estudiantes'
+    default: return 'Todos los cupos'
+  }
+}
+
 const visibleGroups = computed(() => {
   let list = grupos.value
 
@@ -143,6 +160,26 @@ const visibleGroups = computed(() => {
       item.jornada_nombre.toLowerCase().includes(term) ||
       item.seccion_nombre.toLowerCase().includes(term)
     )
+  }
+
+  // Filter by cupos / occupation
+  if (cupoFilter.value !== 'TODOS') {
+    list = list.filter(item => {
+      const count = item.matriculas_count || 0
+      const total = item.cupos_totales || 30
+      const pct = total > 0 ? (count / total) * 100 : 0
+
+      switch (cupoFilter.value) {
+        case 'CON_CUPOS': return count < total
+        case 'SIN_CUPOS': return count >= total
+        case 'BAJA_OCUPACION': return pct < 50
+        case 'ALTA_OCUPACION': return pct >= 80
+        case 'MENOS_10': return count < 10
+        case 'ENTRE_10_25': return count >= 10 && count <= 25
+        case 'MAS_25': return count > 25
+        default: return true
+      }
+    })
   }
 
   // Sort list naturally
@@ -224,7 +261,18 @@ const toggleGradeSelection = (id: number) => {
   }
 }
 
+const onYearChange = (e: Event) => {
+  const target = e.target as HTMLSelectElement
+  if (target && target.value) {
+    yearStore.setSelectedYearId(Number(target.value))
+  }
+}
+
 const openCreateModal = (mode: 'grade' | 'course') => {
+  if (yearStore.isClosedYear) {
+    notify.addNotification('El año lectivo seleccionado se encuentra cerrado. Todas las acciones están en modo solo lectura.', 'warning')
+    return
+  }
   createModal.value = mode
 }
 
@@ -233,10 +281,18 @@ const closeCreateModal = () => {
 }
 
 const openDeleteGradeModal = (item: TipoGrado) => {
+  if (yearStore.isClosedYear) {
+    notify.addNotification('El año lectivo seleccionado se encuentra cerrado. No se puede eliminar.', 'warning')
+    return
+  }
   deleteModal.value = { kind: 'grade', item }
 }
 
 const openDeleteCourseModal = (item: Grupo) => {
+  if (yearStore.isClosedYear) {
+    notify.addNotification('El año lectivo seleccionado se encuentra cerrado. No se puede eliminar.', 'warning')
+    return
+  }
   deleteModal.value = { kind: 'course', item }
 }
 
@@ -246,8 +302,34 @@ const closeDeleteModal = () => {
 }
 
 const openEditCuposModal = (group: Grupo) => {
+  if (yearStore.isClosedYear) {
+    notify.addNotification('El año lectivo seleccionado se encuentra cerrado. No se pueden editar cupos.', 'warning')
+    return
+  }
   selectedGroup.value = { ...group }
   editCuposModal.value = true
+}
+
+const openRenameModal = (group: Grupo) => {
+  if (yearStore.isClosedYear) {
+    notify.addNotification('El año lectivo seleccionado se encuentra cerrado. No se puede renombrar.', 'warning')
+    return
+  }
+  renameTarget.value = group
+  renameName.value = group.seccion_nombre
+  renameModal.value = true
+}
+
+const openBulkRenameModal = (gradeType: TipoGrado) => {
+  if (yearStore.isClosedYear) {
+    notify.addNotification('El año lectivo seleccionado se encuentra cerrado. No se pueden renombrar cursos.', 'warning')
+    return
+  }
+  bulkTarget.value = gradeType
+  bulkPrefijo.value = gradeType.nombre
+  bulkSeparador.value = '-'
+  bulkOrdinalType.value = 'NUMERO'
+  bulkModal.value = true
 }
 
 const closeEditCuposModal = () => {
@@ -401,11 +483,7 @@ const updateGroupCupos = async () => {
   }
 }
 
-const openRenameModal = (group: Grupo) => {
-  renameTarget.value = group
-  renameName.value = group.seccion_nombre
-  renameModal.value = true
-}
+
 
 const closeRenameModal = () => {
   if (renaming.value) return
@@ -440,13 +518,7 @@ const confirmRename = async () => {
   }
 }
 
-const openBulkRenameModal = (grade: TipoGrado) => {
-  bulkTarget.value = grade
-  bulkPrefijo.value = ''
-  bulkSeparador.value = '-'
-  bulkOrdinalType.value = 'NUMERO'
-  bulkModal.value = true
-}
+
 
 const closeBulkModal = () => {
   if (bulkRenaming.value) return
@@ -480,18 +552,110 @@ const confirmBulkRename = async () => {
   }
 }
 
+// Group Members Modal (Estudiantes y Docentes)
+interface MemberStudent {
+  id_estudiante: number
+  nombre: string
+  apellido: string
+  codigo_estudiantil: string
+  documento: string
+  tipo_documento: string
+  estado_matricula: string
+  tipo_matricula: string
+  email: string
+}
 
-onMounted(() => {
-  yearStore.loadYearsForSchool(schoolId.value, auth.token || undefined)
+interface MemberTeacher {
+  id_detallegrado: number
+  id_materia: number
+  materia_nombre: string
+  id_docente: number
+  docente_nombre: string
+  docente_apellido: string
+  docente_documento: string
+  docente_email: string
+}
+
+interface GroupDetails {
+  group: {
+    id_grupo: number
+    cupos_totales: number
+    nivel_nombre: string
+    tipo_grado_nombre: string
+    jornada_nombre: string
+    seccion_nombre: string
+  }
+  students: MemberStudent[]
+  teachers: MemberTeacher[]
+}
+
+const membersModalOpen = ref(false)
+const loadingMembers = ref(false)
+const membersData = ref<GroupDetails | null>(null)
+const activeMembersTab = ref<'students' | 'teachers'>('students')
+const membersSearchTerm = ref('')
+
+const openCourseMembersModal = async (group: Grupo) => {
+  try {
+    membersModalOpen.value = true
+    loadingMembers.value = true
+    membersData.value = null
+    activeMembersTab.value = 'students'
+    membersSearchTerm.value = ''
+
+    const res = await axios.get(`http://localhost:3000/api/academic-admin/groups/${group.id_grupo}/members`, {
+      params: {
+        schoolId: schoolId.value,
+        yearId: yearStore.selectedYearId
+      },
+      headers: { Authorization: `Bearer ${auth.token}` }
+    })
+
+    membersData.value = res.data
+  } catch (error: any) {
+    console.error('Error fetching course members:', error)
+    notify.addNotification('No se pudieron cargar los integrantes del curso', 'error')
+  } finally {
+    loadingMembers.value = false
+  }
+}
+
+const filteredStudents = computed(() => {
+  if (!membersData.value) return []
+  const term = membersSearchTerm.value.trim().toLowerCase()
+  if (!term) return membersData.value.students
+  return membersData.value.students.filter(s =>
+    `${s.nombre} ${s.apellido}`.toLowerCase().includes(term) ||
+    (s.codigo_estudiantil && s.codigo_estudiantil.toLowerCase().includes(term)) ||
+    (s.documento && s.documento.toLowerCase().includes(term))
+  )
+})
+
+const filteredTeachers = computed(() => {
+  if (!membersData.value) return []
+  const term = membersSearchTerm.value.trim().toLowerCase()
+  if (!term) return membersData.value.teachers
+  return membersData.value.teachers.filter(t =>
+    t.materia_nombre.toLowerCase().includes(term) ||
+    `${t.docente_nombre} ${t.docente_apellido}`.toLowerCase().includes(term) ||
+    (t.docente_email && t.docente_email.toLowerCase().includes(term))
+  )
+}   )
+
+
+onMounted(async () => {
+  await yearStore.loadYearsForSchool(schoolId.value, auth.token || undefined)
   loadData()
 })
 
-watch(() => yearStore.selectedYearId, loadData)
+watch(() => yearStore.selectedYearId, () => {
+  loadData()
+})
 </script>
 
 <template>
   <div class="max-w-[1400px] mx-auto space-y-6">
-    <!-- Clean Header -->
+    <!-- Clean Header with Year Selector -->
     <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden transition-all duration-300">
       <div class="px-8 py-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div class="flex items-center gap-4">
@@ -504,16 +668,52 @@ watch(() => yearStore.selectedYearId, loadData)
           </div>
         </div>
         
-        <div class="flex items-center gap-3">
-          <button @click="openCreateModal('grade')" class="flex items-center gap-2 px-5 py-3 bg-slate-900 dark:bg-slate-800 text-white rounded-xl font-bold text-sm hover:bg-slate-800 dark:hover:bg-slate-700 transition-all shadow-lg shadow-slate-200 dark:shadow-none">
+        <div class="flex flex-wrap items-center gap-3">
+          <!-- Year Selector Dropdown -->
+          <div class="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl px-4 py-2.5 shadow-sm">
+            <Calendar :size="18" class="text-indigo-600 dark:text-indigo-400" />
+            <span class="text-xs font-black text-slate-400 uppercase tracking-wider">Año:</span>
+            <select 
+              :value="yearStore.selectedYearId" 
+              @change="onYearChange"
+              class="bg-transparent text-sm font-black text-slate-900 dark:text-white outline-none cursor-pointer"
+            >
+              <option v-for="y in yearStore.availableYears" :key="y.id_anio" :value="y.id_anio">
+                {{ y.calendario }} {{ y.estado === 'CERRADO' ? '(Cerrado / Inactivo)' : '(Vigente)' }}
+              </option>
+            </select>
+          </div>
+
+          <button 
+            v-if="!yearStore.isClosedYear"
+            @click="openCreateModal('grade')" 
+            class="flex items-center gap-2 px-5 py-3 bg-slate-900 dark:bg-slate-800 text-white rounded-xl font-bold text-sm hover:bg-slate-800 dark:hover:bg-slate-700 transition-all shadow-lg shadow-slate-200 dark:shadow-none"
+          >
             <Plus :size="18" />
             Nuevo Grado
           </button>
-          <button @click="openCreateModal('course')" class="flex items-center gap-2 px-5 py-3 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 dark:shadow-none">
+          <button 
+            v-if="!yearStore.isClosedYear"
+            @click="openCreateModal('course')" 
+            class="flex items-center gap-2 px-5 py-3 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 dark:shadow-none"
+          >
             <School2 :size="18" />
             Nuevo Curso
           </button>
         </div>
+      </div>
+    </div>
+
+    <!-- Closed Year Warning Banner -->
+    <div v-if="yearStore.isClosedYear" class="bg-amber-50 dark:bg-amber-950/40 border-2 border-amber-300 dark:border-amber-800/80 rounded-3xl p-5 flex items-center gap-4 text-amber-950 dark:text-amber-200 shadow-sm animate-in fade-in duration-300">
+      <div class="p-3 bg-amber-500 text-white rounded-2xl shrink-0 shadow-md">
+        <Lock :size="24" />
+      </div>
+      <div class="flex-1">
+        <h3 class="text-sm font-black uppercase tracking-wider">Año Lectivo {{ yearStore.selectedYear?.calendario }} — CERRADO (Solo Lectura)</h3>
+        <p class="text-xs text-amber-800 dark:text-amber-300 font-medium mt-0.5">
+          Este año académico se encuentra cerrado. Toda la estructura de niveles, grados y cursos se presenta en modo de consulta histórica y no se pueden realizar modificaciones.
+        </p>
       </div>
     </div>
 
@@ -618,15 +818,41 @@ watch(() => yearStore.selectedYearId, loadData)
                 </button>
               </div>
             </div>
-            <div class="relative w-64">
-              <Search class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" :size="14" />
-              <input 
-                v-model="searchTerm" 
-                type="text" 
-                placeholder="Filtrar cursos..."
-                class="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl py-2.5 pl-9 pr-4 text-xs font-medium outline-none text-slate-900 dark:text-white shadow-inner"
-              />
+            <div class="flex items-center gap-2.5 flex-wrap">
+              <!-- Capacity / Student Filter Dropdown -->
+              <div class="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 shadow-sm">
+                <Users :size="14" class="text-indigo-600 dark:text-indigo-400 shrink-0" />
+                <select
+                  v-model="cupoFilter"
+                  class="bg-transparent text-xs font-bold text-slate-800 dark:text-slate-200 outline-none cursor-pointer"
+                >
+                  <option value="TODOS">Todos los cupos</option>
+                  <option value="CON_CUPOS">🟢 Con cupos disponibles</option>
+                  <option value="SIN_CUPOS">🔴 Cupos llenos (100%)</option>
+                  <option value="BAJA_OCUPACION">📉 Baja ocupación (&lt; 50%)</option>
+                  <option value="ALTA_OCUPACION">📈 Alta ocupación (≥ 80%)</option>
+                  <option value="MENOS_10">👥 &lt; 10 estudiantes</option>
+                  <option value="ENTRE_10_25">👥 10 a 25 estudiantes</option>
+                  <option value="MAS_25">👥 &gt; 25 estudiantes</option>
+                </select>
+              </div>
+
+              <div class="relative w-52">
+                <Search class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" :size="14" />
+                <input 
+                  v-model="searchTerm" 
+                  type="text" 
+                  placeholder="Filtrar cursos..."
+                  class="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl py-2 pl-9 pr-4 text-xs font-medium outline-none text-slate-900 dark:text-white shadow-inner"
+                />
+              </div>
             </div>
+          </div>
+
+          <!-- Active Cupo Filter Bar Banner -->
+          <div v-if="cupoFilter !== 'TODOS'" class="px-6 py-2 bg-indigo-50/80 dark:bg-indigo-950/40 border-b border-indigo-100/60 dark:border-indigo-900/60 flex items-center justify-between text-xs font-bold text-indigo-700 dark:text-indigo-300">
+            <span>Filtro de cupos activo: {{ getCupoFilterLabel(cupoFilter) }} — {{ visibleGroups.length }} cursos encontrados</span>
+            <button @click="cupoFilter = 'TODOS'" class="underline hover:text-indigo-900 dark:hover:text-white text-[11px]">Restablecer</button>
           </div>
 
           <div class="flex-1 overflow-y-auto p-6 bg-slate-50/30 dark:bg-slate-950/10 custom-scrollbar">
@@ -648,7 +874,7 @@ watch(() => yearStore.selectedYearId, loadData)
                     <h4 class="font-black text-slate-900 dark:text-white text-lg leading-tight">{{ getCourseDisplayName(item) }}</h4>
                     <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">{{ item.tipo_grado_nombre }} | {{ item.jornada_nombre }} | {{ item.nivel_nombre }}</p>
                   </div>
-                  <div class="flex items-center gap-1">
+                  <div v-if="!yearStore.isClosedYear" class="flex items-center gap-1">
                     <button @click="openRenameModal(item)" class="p-2 text-slate-300 hover:text-indigo-500 transition-colors" title="Renombrar Curso">
                       <Tag :size="16" />
                     </button>
@@ -690,6 +916,14 @@ watch(() => yearStore.selectedYearId, loadData)
                     {{ item.cupos_totales }} CUPOS
                   </div>
                 </div>
+
+                <button
+                  @click="openCourseMembersModal(item)"
+                  class="w-full mt-3 flex items-center justify-center gap-2 py-2.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-300 rounded-xl font-black text-xs transition-all border border-indigo-100/60 dark:border-indigo-900/60 shadow-sm active:scale-98"
+                >
+                  <Eye :size="15" />
+                  Ver Integrantes (Estudiantes & Docentes)
+                </button>
               </div>
             </div>
           </div>
@@ -988,6 +1222,152 @@ watch(() => yearStore.selectedYearId, loadData)
                 {{ bulkRenaming ? 'Aplicando...' : 'Aplicar Renombre' }}
               </button>
             </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Course Members Modal -->
+    <Teleport to="body">
+      <div v-if="membersModalOpen" class="fixed inset-0 z-[300] flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-slate-950/50 backdrop-blur-sm" @click="membersModalOpen = false"></div>
+        <div class="relative w-full max-w-3xl bg-white dark:bg-slate-900 rounded-[32px] shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+          
+          <!-- Modal Header -->
+          <div class="px-8 py-6 border-b border-slate-100 dark:border-slate-800 bg-gradient-to-r from-indigo-600 to-blue-700 dark:from-indigo-950 dark:to-slate-900 flex items-center justify-between text-white">
+            <div>
+              <div class="flex items-center gap-2 flex-wrap">
+                <h2 class="text-xl font-black uppercase tracking-tight">
+                  {{ membersData ? getCourseDisplayName(membersData.group) : 'Cargando...' }}
+                </h2>
+                <span v-if="membersData" class="px-3 py-0.5 bg-white/20 dark:bg-white/10 rounded-full text-[10px] font-black uppercase tracking-wider">
+                  {{ membersData.group.jornada_nombre }} | {{ membersData.group.nivel_nombre }}
+                </span>
+              </div>
+              <p class="text-xs text-indigo-100 dark:text-slate-400 font-medium mt-1">
+                Integrantes registrados en el curso para el Año Lectivo {{ yearStore.selectedYear?.calendario }}
+              </p>
+            </div>
+            <button @click="membersModalOpen = false" class="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all">
+              <X :size="20" />
+            </button>
+          </div>
+
+          <!-- Modal Body -->
+          <div class="p-6 flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-5">
+            
+            <!-- Loading State -->
+            <div v-if="loadingMembers" class="py-16 flex flex-col items-center justify-center text-slate-400 font-bold">
+              <div class="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+              Cargando estudiantes y docentes del curso...
+            </div>
+
+            <template v-else-if="membersData">
+              <!-- Tab Controls & Search -->
+              <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div class="flex items-center gap-2 bg-slate-100 dark:bg-slate-800/80 p-1.5 rounded-2xl w-full sm:w-auto">
+                  <button
+                    @click="activeMembersTab = 'students'"
+                    :class="[
+                      activeMembersTab === 'students' ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-md' : 'text-slate-500 hover:text-slate-900 dark:hover:text-white',
+                      'flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black transition-all uppercase tracking-wide'
+                    ]"
+                  >
+                    <GraduationCap :size="16" />
+                    Estudiantes ({{ membersData.students.length }})
+                  </button>
+                  <button
+                    @click="activeMembersTab = 'teachers'"
+                    :class="[
+                      activeMembersTab === 'teachers' ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-md' : 'text-slate-500 hover:text-slate-900 dark:hover:text-white',
+                      'flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black transition-all uppercase tracking-wide'
+                    ]"
+                  >
+                    <Users :size="16" />
+                    Docentes & Materias ({{ membersData.teachers.length }})
+                  </button>
+                </div>
+
+                <div class="relative w-full sm:w-64">
+                  <Search class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" :size="16" />
+                  <input
+                    v-model="membersSearchTerm"
+                    type="text"
+                    :placeholder="activeMembersTab === 'students' ? 'Buscar estudiante...' : 'Buscar materia o docente...'"
+                    class="w-full bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl py-2.5 pl-10 pr-4 text-xs font-semibold outline-none text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                  />
+                </div>
+              </div>
+
+              <!-- TAB 1: STUDENTS -->
+              <div v-if="activeMembersTab === 'students'" class="space-y-3">
+                <div v-if="filteredStudents.length === 0" class="py-12 text-center text-slate-400">
+                  <GraduationCap :size="48" class="mx-auto mb-3 opacity-20" />
+                  <p class="font-bold text-sm">No hay estudiantes matriculados en este curso.</p>
+                </div>
+
+                <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div
+                    v-for="st in filteredStudents"
+                    :key="st.id_estudiante"
+                    class="bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 flex items-center gap-3 hover:border-indigo-200 dark:hover:border-indigo-800 transition-all"
+                  >
+                    <div class="h-11 w-11 bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 rounded-xl flex items-center justify-center font-black text-sm shrink-0">
+                      {{ st.nombre.charAt(0) }}{{ st.apellido.charAt(0) }}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <h4 class="font-black text-slate-900 dark:text-white text-sm truncate">{{ st.nombre }} {{ st.apellido }}</h4>
+                      <p class="text-[10px] font-bold text-slate-400 truncate">
+                        <span v-if="st.codigo_estudiantil" class="text-indigo-600 dark:text-indigo-400 font-black">{{ st.codigo_estudiantil }}</span>
+                        <span v-if="st.codigo_estudiantil && st.documento"> • </span>
+                        <span v-if="st.documento">{{ st.tipo_documento || 'DOC' }}: {{ st.documento }}</span>
+                      </p>
+                      <div class="flex items-center gap-2 mt-1">
+                        <span class="px-2 py-0.5 bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 rounded-md text-[9px] font-black uppercase">
+                          {{ st.estado_matricula || 'APROBADA' }}
+                        </span>
+                        <span v-if="st.tipo_matricula" class="px-2 py-0.5 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 rounded-md text-[9px] font-black uppercase">
+                          {{ st.tipo_matricula }}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- TAB 2: TEACHERS -->
+              <div v-if="activeMembersTab === 'teachers'" class="space-y-3">
+                <div v-if="filteredTeachers.length === 0" class="py-12 text-center text-slate-400">
+                  <Users :size="48" class="mx-auto mb-3 opacity-20" />
+                  <p class="font-bold text-sm">No hay docentes asignados a materias en este curso.</p>
+                </div>
+
+                <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div
+                    v-for="tc in filteredTeachers"
+                    :key="tc.id_detallegrado"
+                    class="bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 space-y-3 hover:border-indigo-200 dark:hover:border-indigo-800 transition-all"
+                  >
+                    <div class="flex items-center justify-between">
+                      <span class="px-3 py-1 bg-indigo-600 text-white rounded-lg text-xs font-black uppercase tracking-wide">
+                        {{ tc.materia_nombre }}
+                      </span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                      <div class="h-10 w-10 bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 rounded-xl flex items-center justify-center font-black text-xs shrink-0">
+                        {{ tc.docente_nombre.charAt(0) }}{{ tc.docente_apellido.charAt(0) }}
+                      </div>
+                      <div class="flex-1 min-w-0">
+                        <h5 class="font-black text-slate-900 dark:text-white text-xs truncate">{{ tc.docente_nombre }} {{ tc.docente_apellido }}</h5>
+                        <p v-if="tc.docente_email" class="text-[10px] font-medium text-slate-400 truncate flex items-center gap-1 mt-0.5">
+                          <Mail :size="10" /> {{ tc.docente_email }}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </template>
           </div>
         </div>
       </div>

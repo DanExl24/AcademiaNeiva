@@ -18,9 +18,11 @@ import {
   getAcademicCatalogs,
   getAcademicSettingsData,
   getGradeManagementData,
+  getGroupMembers,
   getSubjects,
   getSubjectTrash,
   getTeacherManagementData,
+  lookupUserIdentity,
   assignTeacherCourseSubject,
   closeAcademicPeriod,
   reopenAcademicPeriod,
@@ -56,6 +58,7 @@ import {
   createReingresoEnrollment,
   approveReingresoEnrollment,
   rejectReingresoEnrollment,
+  correctReingresoEnrollment,
   renameSingleCourse,
   bulkRenameCourses,
   getDbaPlaneacionDisponibles,
@@ -93,6 +96,7 @@ router.post("/my-school/:schoolId/identidad/reset", resetMySchoolIdentity);
 router.post("/my-school/:schoolId/identidad/upload-escudo", upload.single("escudo"), uploadMySchoolEscudo);
 
 router.get("/grades/:schoolId", getGradeManagementData);
+router.get("/groups/:groupId/members", getGroupMembers);
 router.post("/grade-types", createGradeType);
 router.delete("/grade-types/:id", deleteGradeType);
 router.post("/groups", createGroup);
@@ -106,6 +110,7 @@ router.get("/subjects/trash/:schoolId", getSubjectTrash);
 router.post("/subjects", createSubject);
 router.delete("/subjects/:id", deleteSubject);
 router.get("/teachers/:schoolId", getTeacherManagementData);
+router.get("/users/lookup", lookupUserIdentity);
 router.post("/teachers", createTeacher);
 router.put("/teachers/:id", updateTeacher);
 router.delete("/teachers/:id", deleteTeacher);
@@ -156,6 +161,7 @@ router.post("/matriculas/extraordinaria/:id/rechazar", rejectExtraordinaryEnroll
 // Reingreso
 router.post("/matriculas/reingreso", createReingresoEnrollment);
 router.post("/matriculas/reingreso/:id/aprobar", approveReingresoEnrollment);
+router.post("/matriculas/reingreso/:id/corregir", correctReingresoEnrollment);
 router.post("/matriculas/reingreso/:id/rechazar", rejectReingresoEnrollment);
 
 export default router;

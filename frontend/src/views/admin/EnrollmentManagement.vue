@@ -27,7 +27,6 @@ import {
   X,
   ArrowLeft,
   Plus,
-  Filter,
   FileSpreadsheet,
   RefreshCw,
   SlidersHorizontal,
@@ -197,10 +196,10 @@ const filteredEnrollments = computed(() => {
 })
 
 const getStatusMeta = (status: string) => {
-  if (status === 'PENDIENTE')  return { label: 'Por Revisar',     bg: 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400' }
-  if (status === 'RECHAZADA')  return { label: 'En Corrección',   bg: 'bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-400' }
+  if (status === 'PENDIENTE')  return { label: 'Por Revisar',     bg: 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400' }
+  if (status === 'CORRECCION') return { label: 'En Corrección',   bg: 'bg-orange-100 text-orange-800 dark:bg-orange-950/40 dark:text-orange-400' }
+  if (status === 'RECHAZADA')  return { label: 'Rechazada',       bg: 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400' }
   if (status === 'APROBADA')   return { label: 'Aprobada',        bg: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400' }
-  if (status === 'CORRECCION') return { label: 'Docs Corregidos', bg: 'bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-400' }
   if (status === 'ACTIVA')     return { label: 'Aprobada',        bg: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400' }
   if (status === 'TRASLADADA') return { label: 'Traslado',        bg: 'bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400' }
   if (status === 'CANCELADA')  return { label: 'Cancelada',       bg: 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400' }
@@ -225,9 +224,45 @@ const selectedGradeId = ref<number | null>(null)
 const savingGrade = ref(false)
 const showNotifyModal = ref(false)
 const showPendingModal = ref(false)
+// ─── Correction Modal State ───────────────────────────────────────────────────
+const showCorrectionModal = ref(false)
+const correctionObservations = ref('')
+const submittingCorrection = ref(false)
+
+const openCorrectionModal = () => {
+  correctionObservations.value = ''
+  showCorrectionModal.value = true
+}
+
+const confirmCorrection = async () => {
+  if (!matricula.value) return
+  if (!correctionObservations.value.trim()) {
+    notify.addNotification('Por favor, indica las observaciones o documentos a corregir.', 'error')
+    return
+  }
+  const id = matricula.value.id_matricula
+  submittingCorrection.value = true
+  try {
+    const headers = { Authorization: `Bearer ${auth.token}` }
+    const endpoint = matricula.value.tipo === 'REINGRESO'
+      ? `http://localhost:3000/api/academic-admin/matriculas/reingreso/${id}/corregir`
+      : `http://localhost:3000/api/academic-admin/matriculas/extraordinaria/${id}/corregir`;
+
+    await axios.post(endpoint, { observaciones: correctionObservations.value.trim() }, { headers })
+    notify.addNotification('Solicitud enviada a corrección exitosamente.', 'success')
+    showCorrectionModal.value = false
+    closeDrawer()
+    fetchEnrollments()
+  } catch (error: any) {
+    notify.addNotification(error.response?.data?.error || 'Error al solicitar corrección', 'error')
+  } finally {
+    submittingCorrection.value = false
+  }
+}
+
 // ─── Cancel Modal State ───────────────────────────────────────────────────────
 const showCancelModal = ref(false)
-const cancelMotivo = ref('Retiro Voluntario')
+const cancelMotivo = ref('Solicitud de Reingreso Rechazada / Cancelada')
 const cancelDetalles = ref('')
 const cancelStudentState = ref<'RETIRADO' | 'EXPULSADO'>('RETIRADO')
 const cancelling = ref(false)
@@ -401,20 +436,32 @@ const notifyInconsistencies = async () => {
 
 
 const cancelEnrollment = async () => {
-  if (!cancelMotivo.value) return
+  if (!matricula.value) return
+  const id = matricula.value.id_matricula
+  const fullReason = `${cancelMotivo.value}${cancelDetalles.value ? ': ' + cancelDetalles.value : ''}`
+
   cancelling.value = true
   try {
-    await axios.post(`http://localhost:3000/api/matriculas/cancel/${matricula.value.id_matricula}`, {
-      motivo: cancelMotivo.value,
-      detalles: cancelDetalles.value,
-      estado_estudiante: cancelStudentState.value
-    })
-    notify.addNotification('Matrícula cancelada exitosamente', 'success')
+    if (matricula.value.tipo === 'REINGRESO') {
+      const headers = { Authorization: `Bearer ${auth.token}` }
+      await axios.post(`http://localhost:3000/api/academic-admin/matriculas/reingreso/${id}/rechazar`, { motivo: fullReason }, { headers })
+    } else if (matricula.value.tipo === 'EXTRAORDINARIA' && matricula.value.estado === 'PENDIENTE') {
+      const headers = { Authorization: `Bearer ${auth.token}` }
+      await axios.post(`http://localhost:3000/api/academic-admin/matriculas/extraordinaria/${id}/rechazar`, { motivo: fullReason }, { headers })
+    } else {
+      await axios.post(`http://localhost:3000/api/matriculas/cancel/${id}`, {
+        motivo: cancelMotivo.value,
+        detalles: cancelDetalles.value,
+        estado_estudiante: cancelStudentState.value
+      })
+    }
+
+    notify.addNotification('Solicitud de matrícula cancelada exitosamente', 'success')
     showCancelModal.value = false
-    await openDrawer(matricula.value.id_matricula)
+    closeDrawer()
     fetchEnrollments()
   } catch (error: any) {
-    notify.addNotification(error.response?.data?.error || 'Error al cancelar', 'error')
+    notify.addNotification(error.response?.data?.error || 'Error al cancelar la solicitud', 'error')
   } finally {
     cancelling.value = false
   }
@@ -646,6 +693,7 @@ const submitExtraordinary = async () => {
 
 
 const approveException = async (id: number) => {
+  if (!confirm('¿Deseas aprobar esta solicitud? Se enviará una notificación por correo al acudiente.')) return;
   try {
     const headers = { Authorization: `Bearer ${auth.token}` }
     const endpoint = matricula.value?.tipo === 'REINGRESO'
@@ -660,18 +708,47 @@ const approveException = async (id: number) => {
   }
 }
 
+const correctException = async (id: number) => {
+  const obs = prompt('Indica las observaciones o inconsistencias a corregir por parte del acudiente:')
+  if (obs === null) return
+  if (!obs.trim()) {
+    notify.addNotification('Debes especificar las observaciones para solicitar corrección.', 'error')
+    return
+  }
+
+  try {
+    const headers = { Authorization: `Bearer ${auth.token}` }
+    const endpoint = matricula.value?.tipo === 'REINGRESO'
+      ? `http://localhost:3000/api/academic-admin/matriculas/reingreso/${id}/corregir`
+      : `http://localhost:3000/api/academic-admin/matriculas/extraordinaria/${id}/corregir`;
+    const response = await axios.post(endpoint, { observaciones: obs.trim() }, { headers })
+    notify.addNotification(response.data.message || 'Solicitud enviada a corrección exitosamente', 'success')
+    closeDrawer()
+    fetchEnrollments()
+  } catch (error: any) {
+    notify.addNotification(error.response?.data?.error || 'Error al solicitar corrección', 'error')
+  }
+}
+
 const rejectException = async (id: number) => {
+  const motivo = prompt('Indica el motivo de la cancelación de la solicitud:')
+  if (motivo === null) return
+  if (!motivo.trim()) {
+    notify.addNotification('Debes especificar el motivo para cancelar la solicitud.', 'error')
+    return
+  }
+
   try {
     const headers = { Authorization: `Bearer ${auth.token}` }
     const endpoint = matricula.value?.tipo === 'REINGRESO'
       ? `http://localhost:3000/api/academic-admin/matriculas/reingreso/${id}/rechazar`
       : `http://localhost:3000/api/academic-admin/matriculas/extraordinaria/${id}/rechazar`;
-    const response = await axios.post(endpoint, {}, { headers })
-    notify.addNotification(response.data.message || 'Solicitud rechazada exitosamente', 'success')
+    const response = await axios.post(endpoint, { motivo: motivo.trim() }, { headers })
+    notify.addNotification(response.data.message || 'Solicitud cancelada exitosamente', 'success')
     closeDrawer()
     fetchEnrollments()
   } catch (error: any) {
-    notify.addNotification(error.response?.data?.error || 'Error al rechazar solicitud', 'error')
+    notify.addNotification(error.response?.data?.error || 'Error al cancelar solicitud', 'error')
   }
 }
 </script>
@@ -1069,13 +1146,18 @@ const rejectException = async (id: number) => {
                   </div>
                 </div>
 
-                <!-- Exception approval actions -->
-                <div class="flex flex-col sm:flex-row gap-3 pt-4">
-                  <button @click="rejectException(matricula.id_matricula)" class="flex-1 py-4 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-red-100 transition-all border border-red-100 dark:border-red-900">
-                    Rechazar Solicitud
+                <!-- Exception approval, correction and cancellation actions -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-4">
+                  <button @click="showCancelModal = true" class="py-3.5 px-3 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 rounded-2xl font-black text-xs uppercase tracking-wider hover:bg-red-100 dark:hover:bg-red-900/40 transition-all border border-red-200/60 dark:border-red-900/60 flex items-center justify-center gap-1.5">
+                    <XCircle :size="15" /> Cancelar Solicitud
                   </button>
-                  <button @click="approveException(matricula.id_matricula)" class="flex-[2] py-4 bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-xl">
-                    Aprobar Solicitud
+
+                  <button @click="openCorrectionModal" class="py-3.5 px-3 bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 rounded-2xl font-black text-xs uppercase tracking-wider hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-all border border-amber-200/60 dark:border-amber-900/60 flex items-center justify-center gap-1.5">
+                    <AlertTriangle :size="15" /> Mandar a Correcciones
+                  </button>
+
+                  <button @click="approveException(matricula.id_matricula)" class="py-3.5 px-3 bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase tracking-wider hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-200/50 dark:shadow-none flex items-center justify-center gap-1.5">
+                    <CheckCircle :size="15" /> Aprobar Solicitud
                   </button>
                 </div>
               </div>
@@ -1287,13 +1369,15 @@ const rejectException = async (id: number) => {
                   </button>
                 </div>
 
-                <!-- Cancelled banner -->
-                <div v-if="matricula.estado === 'CANCELADA'" class="p-5 bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900 rounded-3xl flex items-start gap-4">
+                <!-- Cancelled or Rejected banner -->
+                <div v-if="matricula.estado === 'CANCELADA' || matricula.estado === 'RECHAZADA'" class="p-5 bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900 rounded-3xl flex items-start gap-4">
                   <div class="p-2.5 bg-red-600 text-white rounded-2xl"><XCircle :size="20" /></div>
                   <div>
-                    <p class="font-black text-red-900 dark:text-red-300 text-sm">Matrícula Cancelada</p>
+                    <p class="font-black text-red-900 dark:text-red-300 text-sm">
+                      {{ matricula.estado === 'RECHAZADA' ? 'Solicitud Rechazada / Denegada' : 'Matrícula Cancelada' }}
+                    </p>
                     <p class="text-xs font-bold text-red-700 dark:text-red-400 mt-1">
-                      Motivo: {{ matricula.detalles_cancelacion || matricula.motivo_cancelacion || matricula.student_motivo_estado || 'Sin motivo especificado.' }}
+                      Motivo: {{ matricula.observaciones || matricula.detalles_cancelacion || matricula.motivo_cancelacion || matricula.student_motivo_estado || 'Sin motivo especificado.' }}
                     </p>
                     <p v-if="matricula.motivo_cancelacion && matricula.detalles_cancelacion && matricula.motivo_cancelacion !== 'Retiro de Estudiante'" class="text-[10px] text-red-600 dark:text-red-500 mt-1">
                       Categoría: {{ matricula.motivo_cancelacion }}
@@ -1613,7 +1697,30 @@ const rejectException = async (id: number) => {
       </div>
     </div>
 
-    <!-- ── Cancel Enrollment Modal ───────────────────────────────── -->
+    <!-- ── Send to Corrections Modal ──────────────────────────── -->
+    <div v-if="showCorrectionModal" class="fixed inset-0 z-[300] flex items-center justify-center p-4">
+      <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" @click="showCorrectionModal = false"></div>
+      <div class="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-[28px] shadow-2xl overflow-hidden">
+        <div class="p-8 text-center">
+          <div class="w-14 h-14 bg-amber-50 dark:bg-amber-950/20 text-amber-500 rounded-2xl flex items-center justify-center mx-auto mb-5"><AlertTriangle :size="28" /></div>
+          <h3 class="text-lg font-black text-slate-900 dark:text-white uppercase">Mandar a Correcciones</h3>
+          <p class="text-slate-500 dark:text-slate-400 text-sm mt-2">Detalla las observaciones o documentos que el acudiente debe corregir.</p>
+        </div>
+        <div class="px-8 pb-8 space-y-4">
+          <div class="space-y-1.5">
+            <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Observaciones para el Acudiente *</label>
+            <textarea v-model="correctionObservations" rows="4" placeholder="Ej: Por favor adjuntar certificado del último año firmado por el colegio anterior..." class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-semibold outline-none text-slate-900 dark:text-white"></textarea>
+          </div>
+          <div class="flex gap-3 pt-1">
+            <button @click="showCorrectionModal = false" :disabled="submittingCorrection" class="flex-1 py-3 rounded-xl font-black text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all text-xs uppercase">Cancelar</button>
+            <button @click="confirmCorrection" :disabled="submittingCorrection || !correctionObservations.trim()" class="flex-[2] bg-amber-500 text-white py-3 rounded-xl font-black text-xs uppercase flex items-center justify-center gap-2 hover:bg-amber-600 transition-all disabled:opacity-50">
+              <span v-if="submittingCorrection" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+              <span v-else>Enviar a Corrección</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
     <div v-if="showCancelModal" class="fixed inset-0 z-[300] flex items-center justify-center p-4">
       <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" @click="showCancelModal = false"></div>
       <div class="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-[28px] shadow-2xl overflow-hidden">

@@ -369,6 +369,47 @@ export class NotificationService {
     }
   }
 
+  static async sendReingresoRejectionEmail(to: string, parentName: string, reason: string) {
+    if (!to) {
+      console.error('❌ Error: No se puede enviar email de rechazo de reingreso porque no hay destinatario (to)');
+      return;
+    }
+    const html = `
+      <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #1f2937;">
+        <div style="background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%); padding: 40px; border-radius: 24px; text-align: center; color: white; margin-bottom: 30px;">
+          <h1 style="margin: 0; font-size: 26px; font-weight: 800;">Solicitud de Reingreso No Aprobada</h1>
+          <p style="opacity: 0.9; margin-top: 10px; font-size: 16px;">Academia Neiva - Dirección Académica</p>
+        </div>
+        
+        <p style="font-size: 18px; font-weight: 600;">Estimado(a) ${parentName},</p>
+        <p style="line-height: 1.6;">Le informamos que tras la evaluación del comité académico de la institución, la solicitud de reingreso estudiantil ha sido <strong style="color: #dc2626;">DENEGADA / RECHAZADA</strong>.</p>
+        
+        <div style="background-color: #fef2f2; border-left: 4px solid #dc2626; padding: 20px; margin: 25px 0; border-radius: 8px;">
+          <p style="margin: 0; color: #991b1b; font-weight: 700; font-size: 13px; text-transform: uppercase;">Motivo institucional del rechazo:</p>
+          <p style="margin: 8px 0 0 0; color: #7f1d1d; font-size: 15px;">${reason}</p>
+        </div>
+
+        <p style="line-height: 1.6;">Si considera que requiere atención adicional o desea presentar recursos de reposición, por favor contacte directamente a la secretaría del colegio.</p>
+
+        <div style="margin-top: 50px; padding-top: 20px; border-top: 1px solid #f3f4f6; text-align: center; color: #9ca3af; font-size: 12px;">
+          <p>© 2024 Academia Neiva. Todos los derechos reservados.</p>
+        </div>
+      </div>
+    `;
+
+    try {
+      await transporter.sendMail({
+        from: `"Academia Neiva" <${process.env.SMTP_USER}>`,
+        to,
+        subject: 'Respuesta a Solicitud de Reingreso — Solicitud Denegada',
+        html,
+      });
+      console.log(`Email de rechazo de reingreso enviado a ${to}`);
+    } catch (error) {
+      console.error('Error enviando email de rechazo de reingreso:', error);
+    }
+  }
+
   static async sendNonExistentStudentEmail(to: string, senderName: string, motivo: string) {
     if (!to) {
       console.error('❌ Error: No se puede enviar email de notificación de estudiante no existente porque no hay destinatario (to)');
