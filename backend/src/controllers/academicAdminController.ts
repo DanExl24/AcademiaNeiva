@@ -5158,35 +5158,32 @@ export const saveEnrollmentConfig = async (req: Request, res: Response): Promise
   }
 };
 
-export const createExtraordinaryEnrollment = async (req: Request, res: Response): Promise<void> => {
+export const createExtraordinaryEnrollment = async (req: Request, res: Response) => {
   const authReq = req as any;
-  const schoolId = authReq.user?.schoolId;
+  const schoolId = authReq.user?.id_colegio;
 
   if (!schoolId) {
-    res.status(400).json({ error: "No se pudo identificar el colegio del directivo" });
+    res.status(400).json({ error: "No se encontró el colegio del usuario autenticado." });
     return;
   }
 
   const {
+    id_ticket,
     correo_padre,
-    id_nivel,
-    id_grupo,
-    id_anio,
     id_estudiante,
     motivo,
     motivo_extraordinaria,
     observaciones,
     observaciones_extraordinaria,
     tiene_discapacidad,
-    es_extranjero,
-    motivo_cambio
+    es_extranjero
   } = req.body;
 
   const actualMotivo = motivo || motivo_extraordinaria;
   const actualObservaciones = observaciones || observaciones_extraordinaria;
 
-  if (!correo_padre || !id_nivel || !id_grupo || !id_anio || !actualMotivo) {
-    res.status(400).json({ error: "Los campos correo_padre, id_nivel, id_grupo, id_anio y motivo son obligatorios." });
+  if (!id_ticket) {
+    res.status(400).json({ error: "Una matrícula extraordinaria SOLO puede crearse si existe un ticket con tipo de incidencia MATRICULA_EXTRAORDINARIA." });
     return;
   }
 
@@ -5194,140 +5191,114 @@ export const createExtraordinaryEnrollment = async (req: Request, res: Response)
   try {
     await client.query("BEGIN");
 
-    // Verificar si el periodo de inscripción ordinario está actualmente activo/vigente
-    const configRes = await client.query(
-      `SELECT fecha_inicio, fecha_cierre, habilitada 
-       FROM configuracion_inscripcion 
-       WHERE id_colegio = $1 AND id_anio = $2`,
-      [schoolId, id_anio]
+    // 1. Validar ticket de soporte
+    const ticketRes = await client.query(
+      "SELECT * FROM tickets_soporte WHERE id_ticket = $1 AND id_colegio = $2",
+      [id_ticket, schoolId]
     );
 
-    if (configRes.rows.length > 0) {
-      const { fecha_inicio, fecha_cierre, habilitada } = configRes.rows[0];
-      if (habilitada === true && fecha_inicio && fecha_cierre) {
-        const now = new Date();
-        const start = new Date(fecha_inicio);
-        const end = new Date(fecha_cierre);
-        end.setHours(23, 59, 59, 999);
-
-        if (now >= start && now <= end) {
-          await client.query("ROLLBACK");
-          res.status(400).json({ 
-            error: "No se permite la matrícula extraordinaria mientras el periodo de inscripción ordinario esté vigente. Las matrículas extraordinarias solo se autorizan cuando las fechas de inscripción ordinaria han caducado." 
-          });
-          return;
-        }
-      }
+    if (ticketRes.rows.length === 0) {
+      await client.query("ROLLBACK");
+      res.status(404).json({ error: "Ticket de soporte no encontrado en esta institución." });
+      return;
     }
 
-    // If existing student is provided, check their status
+    const ticket = ticketRes.rows[0];
+    if (ticket.tipo_incidencia !== 'MATRICULA_EXTRAORDINARIA') {
+      await client.query("ROLLBACK");
+      res.status(400).json({ error: "El ticket seleccionado debe ser de tipo MATRICULA_EXTRAORDINARIA." });
+      return;
+    }
+
+    const finalCorreoPadre = (correo_padre || ticket.correo_remitente || '').trim();
+    if (!finalCorreoPadre) {
+      await client.query("ROLLBACK");
+      res.status(400).json({ error: "No se pudo determinar el correo del acudiente desde el ticket de soporte." });
+      return;
+    }
+
+    // 2. Obtener el año lectivo activo de la institución (sin exigir selección manual de grado ni año al directivo)
+    const activeYearRes = await client.query(
+      "SELECT id_anio FROM anio_lectivo WHERE id_colegio = $1 AND estado = 'ACTIVO' LIMIT 1",
+      [schoolId]
+    );
+
+    if (activeYearRes.rows.length === 0) {
+      await client.query("ROLLBACK");
+      res.status(400).json({ error: "No hay un año lectivo ACTIVO configurado en la institución." });
+      return;
+    }
+    const finalAnioId = activeYearRes.rows[0].id_anio;
+
+    // 3. Validar estado del estudiante si es existente
     if (id_estudiante) {
       const studentRes = await client.query(
         "SELECT estado FROM estudiante WHERE id_estudiante = $1 AND id_colegio = $2",
         [id_estudiante, schoolId]
       );
       if (studentRes.rows.length === 0) {
+        await client.query("ROLLBACK");
         res.status(400).json({ error: "El estudiante especificado no pertenece a esta institución." });
         return;
       }
       const studentStatus = studentRes.rows[0].estado;
       if (studentStatus === 'EXPULSADO' || studentStatus === 'GRADUADO') {
-        res.status(400).json({ error: `El estudiante se encuentra en estado ${studentStatus} y no puede ser matriculado` });
-        return;
-      }
-
-      // Check if student already has an active or transferred enrollment for this year
-      const activeEnrollmentRes = await client.query(
-        `SELECT id_matricula FROM matricula 
-         WHERE id_estudiante = $1 AND id_colegio = $2 AND id_anio = $3 AND estado IN ('ACTIVA', 'TRASLADADA')`,
-        [id_estudiante, schoolId, id_anio]
-      );
-      if (activeEnrollmentRes.rows.length > 0) {
-        res.status(400).json({ error: "El estudiante ya cuenta con una matrícula ACTIVA o TRASLADADA para este año lectivo." });
+        await client.query("ROLLBACK");
+        res.status(400).json({ error: `El estudiante se encuentra en estado ${studentStatus} y no puede ser matriculado.` });
         return;
       }
     }
 
-    // Insert matricula
+    // 4. Crear la matrícula extraordinaria con token único
+    const tokenSeguimiento = randomUUID();
     const matRes = await client.query(
       `INSERT INTO matricula 
-         (id_estudiante, id_nivel, id_grupo, id_colegio, id_anio, estado, correo_padre, tiene_discapacidad, es_extranjero, tipo, motivo, observaciones, id_usuario_responsable, fecha_creacion)
-       VALUES ($1, $2, $3, $4, $5, 'PENDIENTE', $6, $7, $8, 'EXTRAORDINARIA', $9, $10, $11, NOW())
+         (id_estudiante, id_colegio, id_anio, estado, correo_padre, tiene_discapacidad, es_extranjero, tipo, motivo, observaciones, id_usuario_responsable, id_ticket, token_seguimiento, fecha_creacion)
+       VALUES ($1, $2, $3, 'PENDIENTE', $4, $5, $6, 'EXTRAORDINARIA', $7, $8, $9, $10, $11, NOW())
        RETURNING *`,
       [
         id_estudiante || null,
-        id_nivel,
-        id_grupo,
         schoolId,
-        id_anio,
-        correo_padre,
+        finalAnioId,
+        finalCorreoPadre,
         tiene_discapacidad === true || tiene_discapacidad === 'true',
         es_extranjero === true || es_extranjero === 'true',
-        actualMotivo,
+        actualMotivo || 'Autorización de Matrícula Extraordinaria por Ticket de Soporte',
         actualObservaciones || null,
-        authReq.user!.id
+        authReq.user!.id,
+        id_ticket,
+        tokenSeguimiento
       ]
     );
 
     const newMat = matRes.rows[0];
-    const idMatricula = newMat.id_matricula;
 
-    // Retrieve level name to determine required documents
-    const levelRes = await client.query('SELECT nombre FROM nivel_escolar WHERE id_nivel = $1', [id_nivel]);
-    if (levelRes.rows.length === 0) throw new Error("Nivel escolar no válido");
-    const levelName = levelRes.rows[0].nombre;
-
-    const ALWAYS_REQUIRED = ['documentoPadre', 'salud', 'foto', 'reciboPublico'];
-    const REQUIRED_FOR_LOWER_LEVELS = ['registroCivil', 'vacunas'];
-    const REQUIRED_NOT_INFANT = ['documentoIdentidad', 'certificadosEscolaridad'];
-
-    const isHigher = levelName === 'SECUNDARIA' || levelName === 'MEDIA';
-    const isPre    = levelName === 'PREESCOLAR';
-
-    const requiredDocs: string[] = [...ALWAYS_REQUIRED];
-    if (!isHigher) requiredDocs.push(...REQUIRED_FOR_LOWER_LEVELS);
-    if (!isPre)    requiredDocs.push(...REQUIRED_NOT_INFANT);
-    if (es_extranjero === true || es_extranjero === 'true') requiredDocs.push('visa');
-    if (tiene_discapacidad === true || tiene_discapacidad === 'true') requiredDocs.push('certificadoDiscapacidad');
-
-    for (const doc of requiredDocs) {
-      await client.query(
-        `INSERT INTO documento_matriculas (id_matricula, tipo_documento, url, estado, fecha, id_colegio)
-         VALUES ($1, $2, 'PENDIENTE', 'PENDIENTE', NOW(), $3)`,
-        [idMatricula, doc, schoolId]
-      );
-    }
-
-    // Supervision Logging if admin_general
-    const isSupervised = authReq.user?.roles.includes("admin_general");
-    if (isSupervised) {
-      const auditRes = await client.query(
-        `SELECT id_auditoria FROM auditoria_supervision 
-         WHERE id_colegio = $1 AND id_admin_general = $2 AND estado_supervision = 'ACTIVA' LIMIT 1`,
-        [schoolId, authReq.user!.id]
-      );
-      if (auditRes.rows.length > 0) {
-        const activeAuditoriaId = auditRes.rows[0].id_auditoria;
-        await client.query(
-          `INSERT INTO auditoria_acciones_realizadas
-           (id_auditoria, modulo, tipo_accion, accion, recurso_afectado, valor_antiguo, valor_nuevo, motivo_cambio)
-           VALUES ($1, 'MATRICULAS', 'CREACION', 'Creación de Matrícula Extraordinaria', $2, NULL, $3, $4)`,
-          [
-            activeAuditoriaId,
-            `Matricula ID: ${idMatricula}`,
-            JSON.stringify(newMat),
-            motivo_cambio || 'Acción bajo supervisión de Admin General'
-          ]
-        );
-      }
-    }
+    // 5. Actualizar el estado del ticket a EN_PROCESO
+    await client.query(
+      `UPDATE tickets_soporte 
+       SET estado = 'EN_PROCESO', respuesta = 'Matrícula Extraordinaria en curso' 
+       WHERE id_ticket = $1`,
+      [id_ticket]
+    );
 
     await client.query("COMMIT");
-    res.json({ message: "Matrícula extraordinaria creada exitosamente", matricula: newMat });
+
+    // 6. Notificar al padre con el token de seguimiento
+    await NotificationService.sendExtraordinaryApprovalEmail(
+      finalCorreoPadre,
+      ticket.nombre_remitente || 'Acudiente',
+      tokenSeguimiento
+    );
+
+    res.json({
+      message: "Matrícula extraordinaria autorizada exitosamente. Enlace enviado al acudiente.",
+      matricula: newMat,
+      token: tokenSeguimiento
+    });
   } catch (error: any) {
     await client.query("ROLLBACK");
-    console.error("Error in createExtraordinaryEnrollment:", error);
-    res.status(500).json({ error: "Error en el servidor" });
+    console.error("Error en createExtraordinaryEnrollment:", error);
+    res.status(500).json({ error: "Error interno al crear matrícula extraordinaria" });
   } finally {
     client.release();
   }

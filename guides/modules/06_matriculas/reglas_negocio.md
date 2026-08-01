@@ -19,17 +19,19 @@ Este documento detalla las reglas de negocio técnicas y funcionales del módulo
 
 ---
 
-### RN-MAT-002: Habilitación de Matrícula Extraordinaria (Caducidad Ordinaria)
+### RN-MAT-002: Habilitación de Matrícula Extraordinaria por Ticket de Soporte
 
-- **Descripción:** La creación de una solicitud de tipo `EXTRAORDINARIA` únicamente está autorizada cuando el periodo de inscripción ordinario ha caducado (fecha actual mayor a `fecha_cierre`) o la configuración ordinaria se encuentra deshabilitada (`habilitada = false`). Mientras la inscripción ordinaria se mantenga vigente, la opción de matrícula extraordinaria permanece inhabilitada tanto en la interfaz del directivo como en la validación backend. Las matrículas extraordinarias requieren la aprobación explícita de directivos.
-- **Motivo:** Garantiza que el flujo ordinario sea el canal exclusivo durante el calendario escolar regular y reserva el mecanismo extraordinario estrictamente para ingresos extemporáneos fuera de rango.
-- **Módulos afectados:** Matrículas e Inscripciones.
+- **Descripción:** Una solicitud de tipo `EXTRAORDINARIA` se origina **exclusivamente desde un Ticket de Soporte** que posea el tipo de incidencia `MATRICULA_EXTRAORDINARIA`. El directivo autoriza la solicitud seleccionando la modalidad del estudiante (**Estudiante Existente** o **Estudiante Totalmente Nuevo**) y el sistema precarga el correo del solicitante desde el ticket sin exigir la selección manual de grado ni año en la primera etapa. Al autorizarla, se genera un `token_seguimiento` y se le envía el enlace al acudiente. **El acudiente puede diligenciar y enviar el formulario de inscripción a través de este token único incluso si las fechas de inscripción ordinaria están cerradas o deshabilitadas institucionalmente.**
+- **Motivo:** Garantiza un control estricto de excepciones institucionales bajo trazabilidad de soporte y permite ingresos extemporáneos sin reabrir públicamente las fechas generales del colegio.
+- **Módulos afectados:** Matrículas, Inscripciones y Mesa de Soporte.
 - **Archivos donde se implementa:**
-  - [academicAdminController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdminController.ts) (`createExtraordinaryEnrollment`, `approveExtraordinaryEnrollment`)
-  - [EnrollmentManagement.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/EnrollmentManagement.vue) (`checkOrdinaryEnrollmentStatus`, `openExtraordinaryModal`)
+  - [academicAdminController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdminController.ts) (`createExtraordinaryEnrollment`)
+  - [supportController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/supportController.ts)
+  - [SupportView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/shared/SupportView.vue) (`openExtraordinaryModal`, `submitExtraordinaryEnrollment`)
+  - [EnrollmentView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/public/EnrollmentView.vue) (`isExtraordinaryToken`)
 - **Endpoints relacionados:**
   - `POST /api/academic-admin/matriculas/extraordinaria`
-  - `POST /api/academic-admin/matriculas/extraordinaria/:id/aprobar`
+  - `GET /api/matriculas/public/by-token/:token`
 - **Historias de usuario relacionadas:** HU-MAT-007
 
 ---

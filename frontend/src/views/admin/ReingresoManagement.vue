@@ -278,7 +278,7 @@
                     <td class="py-4 px-4 font-mono">
                       <div class="flex items-center gap-2">
                         <span class="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg text-[11px] font-bold border border-slate-200 dark:border-slate-700">v{{ doc.version || 1 }}</span>
-                        <a v-if="doc.url && doc.url !== 'PENDIENTE'" :href="doc.url" target="_blank" class="text-emerald-600 dark:text-emerald-400 font-bold hover:underline">
+                        <a v-if="doc.url && doc.url !== 'PENDIENTE'" :href="formatUrl(doc.url)" target="_blank" class="text-emerald-600 dark:text-emerald-400 font-bold hover:underline">
                           Ver archivo ↗
                         </a>
                         <span v-else class="text-slate-400 italic">No adjunto</span>
@@ -581,6 +581,13 @@ const formatDocType = (type: string) => {
   return type
     .replace(/([A-Z])/g, ' $1')
     .replace(/^./, (str: string) => str.toUpperCase())
+}
+
+const formatUrl = (url: string) => {
+  if (!url || url === 'PENDIENTE') return '#'
+  if (url.startsWith('http')) return url
+  const filename = url.split(/[\\/]/).pop()
+  return `http://localhost:3000/uploads/${filename}`
 }
 
 const getBadgeClass = (state: string) => {

@@ -24,15 +24,21 @@ export const validateDto = (schema: ZodTypeAny) => {
     } catch (error) {
       if (error instanceof ZodError) {
         const issues = error.issues || (error as any).errors || [];
+        const details = issues.map((err: any) => ({
+          field: String(err.path.join('.')).replace(/^(body|query|params)\./, ''),
+          message: err.message
+        }));
+
+        console.error(`\x1b[31m[DTO Validation Error] ${req.method} ${req.originalUrl}\x1b[0m`);
+        console.error(JSON.stringify(details, null, 2));
+
         res.status(400).json({
           error: 'Error de validación en la solicitud (DTO inválido)',
-          details: issues.map((err: any) => ({
-            field: String(err.path.join('.')).replace(/^(body|query|params)\./, ''),
-            message: err.message
-          }))
+          details
         });
         return;
       }
+      console.error(`\x1b[31m[Validation Error] ${req.method} ${req.originalUrl}:\x1b[0m`, error);
       next(error);
     }
   };

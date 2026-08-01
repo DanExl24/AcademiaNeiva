@@ -46,7 +46,10 @@ const fetchYears = async () => {
     const res = await axios.get(`http://localhost:3000/api/student/years/${studentId.value}`)
     years.value = res.data
     if (years.value.length > 0) {
-      selectedYear.value = years.value[0].id_anio
+      const currentYearStr = new Date().getFullYear().toString()
+      const matchingYear = years.value.find((y: any) => y.calendario === currentYearStr)
+      selectedYear.value = matchingYear ? matchingYear.id_anio : years.value[0].id_anio
+      await fetchPeriods()
     }
   } catch (err) {
     console.error("Error fetching years:", err)

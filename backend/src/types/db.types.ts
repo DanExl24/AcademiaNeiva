@@ -57,7 +57,7 @@ export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
 export type TipoAccionAuditoria = "CREACION" | "ELIMINACION" | "EXPORTACION" | "LECTURA" | "MODIFICACION";
 
-export type TipoIncidenciaSoporte = "ASISTENCIA" | "AUTENTICACION" | "CALIFICACIONES" | "REINGRESO" | "SOPORTE" | "TECNICO";
+export type TipoIncidenciaSoporte = "ASISTENCIA" | "AUTENTICACION" | "CALIFICACIONES" | "MATRICULA_EXTRAORDINARIA" | "REINGRESO" | "SOPORTE" | "TECNICO";
 
 export type TipoJornada = "MAÑANA" | "NOCTURNA" | "TARDE" | "UNICA";
 

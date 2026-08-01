@@ -59,7 +59,10 @@ const fetchInitialData = async () => {
     studentInfo.value = infoRes.data
     
     if (years.value.length > 0) {
-      selectedYear.value = years.value[0].id_anio
+      const currentYearStr = new Date().getFullYear().toString()
+      const matchingYear = years.value.find((y: any) => y.calendario === currentYearStr)
+      selectedYear.value = matchingYear ? matchingYear.id_anio : years.value[0].id_anio
+      await fetchPeriods()
     }
   } catch (err) {
     console.error("Error fetching initial academic data:", err)

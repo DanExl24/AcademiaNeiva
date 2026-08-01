@@ -375,6 +375,13 @@ export const ensureCompetencySchema = async (): Promise<void> => {
       await client.query(normalizeMatriculaSql);
     }
 
+    // Ejecutar migración 021 (MATRICULA_EXTRAORDINARIA en tipo_incidencia_soporte)
+    const extraMatriculaIncidenciaPath = path.join(__dirname, "../migrations/021_add_matricula_extraordinaria_to_tipo_incidencia.sql");
+    if (fs.existsSync(extraMatriculaIncidenciaPath)) {
+      const extraMatriculaIncidenciaSql = fs.readFileSync(extraMatriculaIncidenciaPath, "utf8");
+      await client.query(extraMatriculaIncidenciaSql);
+    }
+
     // Backfill sync_uuid for existing competencies
     const unmigratedRes = await client.query(`
       SELECT id_colegio, id_anio, id_materia, id_periodo, descripcion, ARRAY_AGG(id_competencia) AS ids

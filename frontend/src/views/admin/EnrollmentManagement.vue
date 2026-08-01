@@ -245,6 +245,39 @@ const documentLabels: Record<string, string> = {
   certificadosEscolaridad: 'Certificado de Escolaridad (Años anteriores)',
 }
 
+const getDocLabel = (type: string) => {
+  if (!type) return 'Documento'
+  const key = type.trim()
+  if (documentLabels[key]) return documentLabels[key]
+  return key
+    .replace(/([A-Z])/g, ' $1')
+    .replace(/^./, (str: string) => str.toUpperCase())
+}
+
+const getRenewalBadgeClass = (state?: string) => {
+  switch (state) {
+    case 'VIGENTE': return 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300'
+    case 'RECOMENDADO_ACTUALIZAR': return 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300'
+    case 'OBLIGATORIO_ACTUALIZAR':
+    case 'RENOVAR':
+      return 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300'
+    case 'DESACTUALIZADO_POR_FECHA': return 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300'
+    default: return 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
+  }
+}
+
+const formatRenewalStateLabel = (state?: string) => {
+  switch (state) {
+    case 'VIGENTE': return 'VIGENTE (Conservar)'
+    case 'RECOMENDADO_ACTUALIZAR': return 'RECOMENDADO ACTUALIZAR'
+    case 'OBLIGATORIO_ACTUALIZAR':
+    case 'RENOVAR':
+      return 'OBLIGATORIO ACTUALIZAR'
+    case 'DESACTUALIZADO_POR_FECHA': return 'DESACTUALIZADO POR FECHA'
+    default: return state || ''
+  }
+}
+
 const studentSummary = ref<any>(null)
 
 const openDrawer = async (id: number) => {
@@ -1249,8 +1282,8 @@ const rejectException = async (id: number) => {
                       </p>
                     </div>
                   </div>
-                  <button @click="showCancelModal = true" class="px-4 py-2 bg-red-600 text-white rounded-xl font-black text-xs uppercase tracking-wide hover:bg-red-700 transition-all shrink-0">
-                    Cancelar
+                  <button v-if="matricula.estado !== 'CANCELADA' && matricula.estado !== 'CULMINADA'" @click="showCancelModal = true" class="px-4 py-2 bg-red-600 text-white rounded-xl font-black text-xs uppercase tracking-wide hover:bg-red-700 transition-all shrink-0 flex items-center gap-1">
+                    <XCircle :size="14" /> Cancelar / Denegar
                   </button>
                 </div>
 
@@ -1439,8 +1472,19 @@ const rejectException = async (id: number) => {
                         <FileText :size="18" class="text-indigo-500" />
                       </div>
                       <div>
-                        <p class="font-black text-slate-900 dark:text-white text-sm">{{ documentLabels[doc.tipo_documento] || doc.tipo_documento }}</p>
-                        <span :class="[getDocStatusClass(doc.estado), 'text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full']">{{ doc.estado }}</span>
+                        <div class="flex items-center gap-2 flex-wrap">
+                          <p class="font-black text-slate-900 dark:text-white text-sm">{{ getDocLabel(doc.tipo_documento) }}</p>
+                          <span :class="[getDocStatusClass(doc.estado), 'text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full']">{{ doc.estado }}</span>
+                          <span v-if="doc.estado_renovacion" :class="[getRenewalBadgeClass(doc.estado_renovacion), 'text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md border']">
+                            {{ formatRenewalStateLabel(doc.estado_renovacion) }}
+                          </span>
+                        </div>
+                        <div v-if="doc.url_anterior" class="flex items-center gap-2 mt-1 text-[11px]">
+                          <span class="text-slate-400 font-bold">Archivo anterior (v{{ doc.version_anterior || 1 }}):</span>
+                          <a :href="formatUrl(doc.url_anterior)" target="_blank" class="text-indigo-600 dark:text-indigo-400 font-bold hover:underline flex items-center gap-1">
+                            <FileText :size="12" /> Ver archivo antiguo ↗
+                          </a>
+                        </div>
                       </div>
                     </div>
                     <div class="flex items-center gap-2 shrink-0">
@@ -1478,7 +1522,11 @@ const rejectException = async (id: number) => {
                   </div>
                   <div v-else class="text-slate-500 dark:text-slate-400 text-xs font-medium">Valida todos los documentos para continuar.</div>
 
-                  <div class="flex gap-2">
+                  <div class="flex gap-2 flex-wrap">
+                    <button v-if="!isReadonly" @click="showCancelModal = true"
+                            class="px-4 py-2.5 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900 rounded-xl font-black text-xs uppercase tracking-wide hover:bg-red-100 transition-all flex items-center gap-1.5">
+                      <XCircle :size="14" /> Denegar Solicitud
+                    </button>
                     <button v-if="!isReadonly && allValidated" @click="currentStep = 3"
                             class="px-5 py-2.5 bg-indigo-600 text-white rounded-xl font-black text-xs uppercase tracking-wide hover:bg-indigo-700 transition-all flex items-center gap-1.5 shadow-lg shadow-indigo-100 dark:shadow-none">
                       Siguiente <ArrowLeft :size="14" class="rotate-180" />

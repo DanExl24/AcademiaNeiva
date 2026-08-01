@@ -83,7 +83,7 @@ const fetchStudentData = async () => {
         const currentYearStr = new Date().getFullYear().toString()
         const matchingYear = academicYears.value.find((y: any) => y.calendario === currentYearStr)
         selectedYearId.value = matchingYear ? matchingYear['id_anio'] : academicYears.value[0]['id_anio']
-        // loadPeriodsForYear will be triggered by the watcher
+        await loadPeriodsForYear()
       } else {
         statsLoading.value = false
       }

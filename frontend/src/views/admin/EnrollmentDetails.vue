@@ -253,6 +253,26 @@ const downloadEnrollmentPDF = async () => {
     isExportingPDF.value = false
   }
 }
+
+const getRenewalBadgeClass = (state?: string) => {
+  switch (state) {
+    case 'VIGENTE': return 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300'
+    case 'RECOMENDADO_ACTUALIZAR': return 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300'
+    case 'OBLIGATORIO_ACTUALIZAR': return 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300'
+    case 'DESACTUALIZADO_POR_FECHA': return 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300'
+    default: return 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
+  }
+}
+
+const formatRenewalStateLabel = (state?: string) => {
+  switch (state) {
+    case 'VIGENTE': return 'VIGENTE (Conservar)'
+    case 'RECOMENDADO_ACTUALIZAR': return 'RECOMENDADO ACTUALIZAR'
+    case 'OBLIGATORIO_ACTUALIZAR': return 'OBLIGATORIO ACTUALIZAR'
+    case 'DESACTUALIZADO_POR_FECHA': return 'DESACTUALIZADO POR FECHA'
+    default: return state || ''
+  }
+}
 </script>
 
 <template>
@@ -576,8 +596,19 @@ const downloadEnrollmentPDF = async () => {
               <div class="flex items-center gap-3 flex-1">
                 <div class="p-2.5 bg-white dark:bg-slate-700 border border-slate-100 dark:border-slate-600 rounded-xl shadow-sm"><FileText :size="18" class="text-indigo-500" /></div>
                 <div>
-                  <p class="font-black text-slate-900 dark:text-white text-sm">{{ documentLabels[doc.tipo_documento] || doc.tipo_documento }}</p>
-                  <span :class="[getDocStatusClass(doc.estado), 'text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full']">{{ doc.estado }}</span>
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <p class="font-black text-slate-900 dark:text-white text-sm">{{ documentLabels[doc.tipo_documento] || doc.tipo_documento }}</p>
+                    <span :class="[getDocStatusClass(doc.estado), 'text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full']">{{ doc.estado }}</span>
+                    <span v-if="doc.estado_renovacion" :class="[getRenewalBadgeClass(doc.estado_renovacion), 'text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md border']">
+                      {{ formatRenewalStateLabel(doc.estado_renovacion) }}
+                    </span>
+                  </div>
+                  <div v-if="doc.url_anterior" class="flex items-center gap-2 mt-1 text-[11px]">
+                    <span class="text-slate-400 font-bold">Archivo anterior (v{{ doc.version_anterior || 1 }}):</span>
+                    <a :href="formatUrl(doc.url_anterior)" target="_blank" class="text-indigo-600 dark:text-indigo-400 font-bold hover:underline flex items-center gap-1">
+                      <FileText :size="12" /> Ver archivo antiguo ↗
+                    </a>
+                  </div>
                 </div>
               </div>
               <div class="flex items-center gap-2 shrink-0">

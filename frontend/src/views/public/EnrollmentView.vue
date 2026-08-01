@@ -67,7 +67,33 @@ const fetchGrados = async () => {
 }
 
 import { onMounted, watch } from 'vue'
-onMounted(fetchInitialData)
+import { useRoute } from 'vue-router'
+
+const route = useRoute()
+const isExtraordinaryToken = ref(false)
+const extraordinaryTokenValue = ref<string | null>(null)
+
+onMounted(async () => {
+  await fetchInitialData()
+  const token = (route.query.token || route.params.token) as string
+  if (token) {
+    try {
+      const res = await axios.get(`http://localhost:3000/api/matriculas/public/by-token/${token}`)
+      if (res.data && res.data.tipo === 'EXTRAORDINARIA') {
+        isExtraordinaryToken.value = true
+        extraordinaryTokenValue.value = token
+        if (res.data.correo_padre) {
+          formData.value.parentEmail = res.data.correo_padre
+        }
+        if (res.data.id_colegio) {
+          schoolId.value = String(res.data.id_colegio)
+        }
+      }
+    } catch (e) {
+      console.log('No es un token de inscripción extraordinaria válido')
+    }
+  }
+})
 
 const enrollmentConfig = ref<any>(null)
 const yearLabel = ref<string | null>(null)
@@ -122,6 +148,7 @@ const formattedFechaCierre = computed(() => {
 })
 
 const isEnrollmentOpen = computed(() => {
+  if (isExtraordinaryToken.value) return true
   if (!schoolId.value) return true
   if (!enrollmentConfig.value) return false
   if (!enrollmentConfig.value.habilitada) return false
@@ -133,13 +160,16 @@ const isEnrollmentOpen = computed(() => {
 })
 
 const submitButtonText = computed(() => {
-  if (schoolId.value && enrollmentConfig.value && !enrollmentConfig.value.habilitada) {
+  if (!isExtraordinaryToken.value && schoolId.value && enrollmentConfig.value && !enrollmentConfig.value.habilitada) {
     return 'DESHABILITADO'
   }
   return 'Cargar Documentos'
 })
 
 const enrollmentStatusMessage = computed(() => {
+  if (isExtraordinaryToken.value) {
+    return '⚡ Acceso Habilitado por Autorización de Matrícula Extraordinaria.'
+  }
   if (!schoolId.value) return ''
   if (!enrollmentConfig.value) {
     return 'Las inscripciones para esta institución aún no han sido configuradas por las directivas.'
@@ -303,6 +333,10 @@ const submitEnrollment = async () => {
     formDataPayload.append('grade', grade.value)
     formDataPayload.append('hasDisability', String(formData.value.hasDisability))
     formDataPayload.append('isForeigner', String(formData.value.isForeigner))
+
+    if (extraordinaryTokenValue.value) {
+      formDataPayload.append('token', extraordinaryTokenValue.value)
+    }
 
     // Archivos
     for (const [key, file] of Object.entries(files.value)) {

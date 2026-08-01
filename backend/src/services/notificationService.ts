@@ -197,8 +197,9 @@ export class NotificationService {
 
           <div style="background-color: #e0e7ff; border-radius: 16px; padding: 25px; margin: 30px 0; border: 1px solid #c7d2fe;">
             <h2 style="font-size: 16px; color: #3730a3; margin-top: 0; text-transform: uppercase; letter-spacing: 0.05em;">Acceso para el Estudiante</h2>
-            <p style="margin-bottom: 10px;">El estudiante podrá ingresar al sistema utilizando su código estudiantil.</p>
-            <p style="margin: 5px 0; font-size: 20px; font-weight: bold; color: #4338ca;">Código Estudiantil: ${studentCode}</p>
+            <p style="margin-bottom: 10px;">El estudiante podrá ingresar al sistema en la pantalla de inicio de sesión con los siguientes datos:</p>
+            <p style="margin: 5px 0; font-size: 16px; font-weight: bold; color: #4338ca;">Usuario / Código Estudiantil: ${studentCode}</p>
+            <p style="margin: 5px 0; font-size: 16px; font-weight: bold; color: #4338ca;">Contraseña inicial: ${studentCode}</p>
           </div>
 
           <div style="text-align: center; margin-top: 40px;">

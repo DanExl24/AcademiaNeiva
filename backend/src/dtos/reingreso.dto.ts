@@ -11,7 +11,13 @@ export const SendParentReingresoLinkSchema = z.object({
     observaciones: z.string().optional().nullable(),
     document_config: z.array(z.object({
       tipo_documento: z.string(),
-      estado_renovacion: z.enum(['VIGENTE', 'RENOVAR']),
+      estado_renovacion: z.enum([
+        'VIGENTE',
+        'RENOVAR',
+        'RECOMENDADO_ACTUALIZAR',
+        'OBLIGATORIO_ACTUALIZAR',
+        'DESACTUALIZADO_POR_FECHA'
+      ]),
       url: z.string().optional().nullable()
     })).optional()
   })
