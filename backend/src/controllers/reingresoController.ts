@@ -29,9 +29,9 @@ export const getStudentHistoryForReingreso = async (req: Request, res: Response)
 
     const student = studentRes.rows[0];
 
-    if (student.estado !== 'RETIRADO') {
+    if (student.estado === 'EXPULSADO' || student.estado === 'GRADUADO') {
       res.status(400).json({ 
-        error: `El estudiante se encuentra en estado '${student.estado}'. Únicamente se permite tramitar reingreso para estudiantes en estado 'RETIRADO'.` 
+        error: `El estudiante se encuentra en estado '${student.estado}' y no es elegible para reingreso.` 
       });
       return;
     }
@@ -233,7 +233,7 @@ export const sendReingresoParentLink = async (req: Request, res: Response): Prom
     // Check duplicate active/pending enrollment
     const dupRes = await client.query(
       `SELECT id_matricula FROM matricula 
-       WHERE id_estudiante = $1 AND id_colegio = $2 AND id_anio = $3 AND estado IN ('ACTIVA', 'PENDIENTE', 'PENDIENTE_RENOVACION', 'CORRECCION')`,
+       WHERE id_estudiante = $1 AND id_colegio = $2 AND id_anio = $3 AND estado IN ('ACTIVA', 'PENDIENTE', 'CORRECCION')`,
       [id_estudiante, schoolId, id_anio]
     );
 
@@ -242,11 +242,11 @@ export const sendReingresoParentLink = async (req: Request, res: Response): Prom
       return;
     }
 
-    // Insert matricula with PENDIENTE_RENOVACION status
+    // Insert matricula with PENDIENTE status and REINGRESO type
     const matRes = await client.query(
       `INSERT INTO matricula 
          (id_estudiante, id_nivel, id_grupo, id_colegio, id_anio, estado, correo_padre, tipo, observaciones, id_usuario_responsable, id_ticket, fecha_creacion)
-       VALUES ($1, $2, $3, $4, $5, 'PENDIENTE_RENOVACION', $6, 'REINGRESO', $7, $8, $9, NOW())
+       VALUES ($1, $2, $3, $4, $5, 'PENDIENTE', $6, 'REINGRESO', $7, $8, $9, NOW())
        RETURNING *`,
       [
         id_estudiante,
@@ -427,7 +427,7 @@ export const getReingresoGroups = async (req: Request, res: Response): Promise<v
        LEFT JOIN (
          SELECT id_grupo, COUNT(*)::int AS cnt 
          FROM matricula 
-         WHERE estado IN ('ACTIVA', 'PENDIENTE_RENOVACION', 'PENDIENTE') 
+         WHERE estado IN ('ACTIVA', 'PENDIENTE') 
          GROUP BY id_grupo
        ) m_cnt ON g.id_grupo = m_cnt.id_grupo
        WHERE g.id_colegio = $1 AND g.id_nivel = $2

@@ -322,7 +322,7 @@ export const updateStudentStatus = async (req: Request, res: Response) => {
          SET estado = 'CANCELADA', 
              motivo_cancelacion = 'Retiro de Estudiante', 
              detalles_cancelacion = $1 
-         WHERE id_estudiante = $2 AND estado IN ('ACTIVA', 'PENDIENTE', 'PENDIENTE_RENOVACION')`,
+         WHERE id_estudiante = $2 AND estado IN ('ACTIVA', 'PENDIENTE')`,
         [motivo.trim(), id]
       );
     }

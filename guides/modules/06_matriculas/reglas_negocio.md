@@ -7,24 +7,27 @@ Este documento detalla las reglas de negocio técnicas y funcionales del módulo
 ## Control de Plazos y Fechas
 
 ### RN-MAT-001: Validación de Rango de Fechas Ordinarias
+
 - **Descripción:** El envío de una solicitud de matrícula regular por la interfaz pública se bloqueará si la fecha actual está fuera del rango de fechas (`fecha_inicio` y `fecha_cierre`) configurado en `configuracion_inscripcion` para el año lectivo activo de la institución.
 - **Motivo:** Regula el periodo oficial de admisiones del colegio e impide registros fuera de los plazos establecidos.
 - **Módulos afectados:** Matrículas e Inscripciones.
-- **Archivos donde se implementa:** 
+- **Archivos donde se implementa:**
   - [matriculaController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/matriculaController.ts) (`submitEnrollment` - verificación de fecha actual en rango)
-- **Endpoints relacionados:** 
+- **Endpoints relacionados:**
   - `POST /api/matriculas/submit`
 - **Historias de usuario relacionadas:** HU-MAT-001
 
 ---
 
-### RN-MAT-002: Aprobación de Matrícula Extraordinaria (Bypass de Plazos)
-- **Descripción:** Las solicitudes de tipo `EXTRAORDINARIA` omiten por completo la validación de rango de fechas de inscripción y permiten el registro extemporáneo, pero requieren la aprobación y firma digital de directivos.
-- **Motivo:** Permite dar de alta a estudiantes que ingresan a mitad de año o por traslados excepcionales sin vulnerar la regla general.
+### RN-MAT-002: Habilitación de Matrícula Extraordinaria (Caducidad Ordinaria)
+
+- **Descripción:** La creación de una solicitud de tipo `EXTRAORDINARIA` únicamente está autorizada cuando el periodo de inscripción ordinario ha caducado (fecha actual mayor a `fecha_cierre`) o la configuración ordinaria se encuentra deshabilitada (`habilitada = false`). Mientras la inscripción ordinaria se mantenga vigente, la opción de matrícula extraordinaria permanece inhabilitada tanto en la interfaz del directivo como en la validación backend. Las matrículas extraordinarias requieren la aprobación explícita de directivos.
+- **Motivo:** Garantiza que el flujo ordinario sea el canal exclusivo durante el calendario escolar regular y reserva el mecanismo extraordinario estrictamente para ingresos extemporáneos fuera de rango.
 - **Módulos afectados:** Matrículas e Inscripciones.
-- **Archivos donde se implementa:** 
+- **Archivos donde se implementa:**
   - [academicAdminController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdminController.ts) (`createExtraordinaryEnrollment`, `approveExtraordinaryEnrollment`)
-- **Endpoints relacionados:** 
+  - [EnrollmentManagement.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/EnrollmentManagement.vue) (`checkOrdinaryEnrollmentStatus`, `openExtraordinaryModal`)
+- **Endpoints relacionados:**
   - `POST /api/academic-admin/matriculas/extraordinaria`
   - `POST /api/academic-admin/matriculas/extraordinaria/:id/aprobar`
 - **Historias de usuario relacionadas:** HU-MAT-007
@@ -34,13 +37,14 @@ Este documento detalla las reglas de negocio técnicas y funcionales del módulo
 ## Flujo de Validación de Documentos
 
 ### RN-MAT-003: Acceso por Token de Seguimiento Seguro
+
 - **Descripción:** Los aspirantes pueden consultar el estado de su matrícula y actualizar documentos de reemplazo a través de su `token_seguimiento` de tipo UUID sin necesidad de iniciar sesión.
 - **Motivo:** Evita tener que crear cuentas de usuario con privilegios o contraseñas en el sistema a solicitantes que aún no pertenecen oficialmente al plantel.
 - **Módulos afectados:** Matrículas e Inscripciones.
-- **Archivos donde se implementa:** 
+- **Archivos donde se implementa:**
   - [matriculaService.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/services/matriculaService.ts) (`getByToken`, `updateDocumentsByToken`)
   - [matricula.routes.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/routes/matricula.routes.ts) (Rutas excluidas de la protección obligatoria de sesión para integer ID)
-- **Endpoints relacionados:** 
+- **Endpoints relacionados:**
   - `GET /api/matriculas/:id` (cuando se pasa token UUID)
   - `POST /api/matriculas/update-documents/:token`
 - **Historias de usuario relacionadas:** HU-MAT-002, HU-MAT-003
@@ -48,13 +52,14 @@ Este documento detalla las reglas de negocio técnicas y funcionales del módulo
 ---
 
 ### RN-MAT-004: Bloqueo de Aprobación por Documento Rechazado
+
 - **Descripción:** Si al menos uno de los archivos de soporte cargados por el aspirante en `documento_matriculas` es marcado en estado `RECHAZADO` por el directivo, la matrícula transiciona automáticamente al estado `CORRECCION` y se bloquea la opción de asignación de grupo y oficialización.
 - **Motivo:** Garantiza que ningún estudiante sea matriculado con documentación inválida o incompleta.
 - **Módulos afectados:** Matrículas e Inscripciones.
-- **Archivos donde se implementa:** 
+- **Archivos donde se implementa:**
   - [matriculaController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/matriculaController.ts) (`validateDocument`)
   - [matriculaService.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/services/matriculaService.ts) (Validación en métodos de aprobación)
-- **Endpoints relacionados:** 
+- **Endpoints relacionados:**
   - `PATCH /api/matriculas/document/:idDocumento`
 - **Historias de usuario relacionadas:** HU-MAT-003, HU-MAT-004
 
@@ -63,28 +68,30 @@ Este documento detalla las reglas de negocio técnicas y funcionales del módulo
 ## Oficialización de Matrícula
 
 ### RN-MAT-005: Creación en Cascada de Alumno y Cuenta de Portal
+
 - **Descripción:** Al finalizar la matrícula aprobada (`finalizeEnrollment`), el sistema realizará las siguientes acciones en una sola transacción:
   1. Cambia el estado de la matrícula a `ACTIVA`.
   2. Inserta los datos del estudiante en la tabla `estudiante` con estado `ACTIVO`.
   3. Inserta un nuevo registro de credencial en `usuario` con el rol `estudiante` y lo marca como activo.
 - **Motivo:** Garantiza la consistencia en el alta de alumnos en el plantel escolar y habilita de forma instantánea el portal estudiantil para el alumno matriculado.
 - **Módulos afectados:** Matrículas e Inscripciones, Estudiantes y Estados, Autenticación y Sesiones.
-- **Archivos donde se implementa:** 
+- **Archivos donde se implementa:**
   - [matriculaController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/matriculaController.ts) (`finalizeEnrollment`)
-- **Endpoints relacionados:** 
+- **Endpoints relacionados:**
   - `POST /api/matriculas/finalize/:id`
 - **Historias de usuario relacionadas:** HU-MAT-006
 
 ---
 
 ### RN-MAT-006: Límite de Tamaño de Carga de Archivos
+
 - **Descripción:** El sistema restringe la subida de archivos adjuntos de matrícula a un tamaño máximo de 5MB por archivo y a extensiones específicas de imagen o PDF.
 - **Motivo:** Protege el espacio de almacenamiento del servidor Express frente a archivos excesivamente pesados que puedan degradar el rendimiento o denegar el servicio.
 - **Módulos afectados:** Matrículas e Inscripciones.
-- **Archivos donde se implementa:** 
+- **Archivos donde se implementa:**
   - [multer.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/config/multer.ts) (Configuración de limits en Multer)
   - [matricula.routes.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/routes/matricula.routes.ts) (Middleware `upload.fields`)
-- **Endpoints relacionados:** 
+- **Endpoints relacionados:**
   - `POST /api/matriculas/submit`
   - `POST /api/matriculas/update-documents/:token`
 - **Historias de usuario relacionadas:** HU-MAT-001, HU-MAT-003
@@ -92,10 +99,11 @@ Este documento detalla las reglas de negocio técnicas y funcionales del módulo
 ---
 
 ### RN-MAT-007: Aislamiento por Inquilino (Multi-Tenant)
+
 - **Descripción:** Los directivos escolares solo pueden visualizar, evaluar, asignar cupos y oficializar solicitudes de matrícula que pertenezcan a su mismo `id_colegio`.
 - **Motivo:** Salvaguarda la privacidad y confidencialidad de la información de admisiones de cada plantel escolar en un entorno compartido.
 - **Módulos afectados:** Matrículas e Inscripciones.
-- **Archivos donde se implementa:** 
+- **Archivos donde se implementa:**
   - [matriculaController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/matriculaController.ts) (Validación de `colegioId` contra token de sesión)
 - **Endpoints relacionados:** Todos los endpoints administrativos del módulo.
 - **Historias de usuario relacionadas:** HU-MAT-004, HU-MAT-005, HU-MAT-006
@@ -105,66 +113,89 @@ Este documento detalla las reglas de negocio técnicas y funcionales del módulo
 ## Flujo de Reingresos de Estudiantes Retirados
 
 ### RN-MAT-008: Elegibilidad Exclusiva de Reingreso
+
 - **Descripción:** Solo los estudiantes con estado `RETIRADO` (o alumnos en estado activo que pasan a `RETIRADO` para iniciar trámite) son elegibles para reingresar a la institución. Los alumnos con estado `EXPULSADO` o `GRADUADO` están totalmente inhabilitados y bloqueados por el sistema.
 - **Motivo:** Garantiza que sanciones de expulsión permanente y estados de graduados se respeten sin excepciones.
 - **Módulos afectados:** Matrículas e Inscripciones, Estudiantes y Estados.
-- **Archivos donde se implementa:** 
+- **Archivos donde se implementa:**
   - [reingresoController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/reingresoController.ts) (`sendParentReingresoLink`, `getStudentHistoryForReingreso`)
-- **Endpoints relacionados:** 
+- **Endpoints relacionados:**
   - `POST /api/reingreso/send-parent-link`
 - **Historias de usuario relacionadas:** HU-MAT-008
 
 ---
 
 ### RN-MAT-009: Irreversibilidad y Notificación de Tickets de Incidencia de Reingreso
+
 - **Descripción:** Cuando un directivo promueve un ticket de soporte de incidencia de reingreso al estado `EN_PROCESO`, el sistema solicita confirmación advirtiendo que la acción es irreversible, envía un correo electrónico automático al acudiente informando la ejecución del trámite, e impide estrictamente retornar el ticket a estado `ABIERTO`.
 - **Motivo:** Asegura la trazabilidad en la atención de solicitudes de reingreso solicitadas por los acudientes y la notificación inmediata.
 - **Módulos afectados:** Matrículas e Inscripciones, Soporte y Tickets.
-- **Archivos donde se implementa:** 
+- **Archivos donde se implementa:**
   - [supportController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/supportController.ts) (`updateTicketStatus`)
   - [SupportView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/shared/SupportView.vue) (Alerta de confirmación al cambiar a EN_PROCESO)
-- **Endpoints relacionados:** 
+- **Endpoints relacionados:**
   - `PUT /api/support/tickets/:id/status`
 - **Historias de usuario relacionadas:** HU-MAT-009, HU-SOP-005
 
 ---
 
 ### RN-MAT-010: Matriz Documental de Renovación
+
 - **Descripción:** Al iniciar un reingreso, el sistema genera la matriz documental del alumno retirado. Conserva los documentos previamente cargados en años pasados que sigan en estado `VIGENTE` (`VALIDADO`) y marca como `PENDIENTE` únicamente aquellos que requieran renovación o actualización por parte del acudiente.
 - **Motivo:** Agiliza el proceso administrativo al no exigir de nuevo documentos institucionales que no expiran.
 - **Módulos afectados:** Matrículas e Inscripciones.
-- **Archivos donde se implementa:** 
+- **Archivos donde se implementa:**
   - [reingresoController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/reingresoController.ts) (`sendParentReingresoLink`)
   - [ReingresoManagement.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/ReingresoManagement.vue)
-- **Endpoints relacionados:** 
+- **Endpoints relacionados:**
   - `POST /api/reingreso/send-parent-link`
 - **Historias de usuario relacionadas:** HU-MAT-008
 
 ---
 
 ### RN-MAT-011: Configuración de Destino y Control de Cupos en Tiempo Real
+
 - **Descripción:** El formulario "Configuración de Destino" exige la selección de Año Lectivo Activo, Nivel Escolar, Grado y Grupo/Salón de destino. El selector de salones calcula en tiempo real `cupos_totales - (matriculas activas/trasladadas)` e inhabilita cursos sin cupo disponible.
 - **Motivo:** Evita el sobrecupo y asegura que el alumno reingresado sea asignado a un aula con espacio físico comprobado.
 - **Módulos afectados:** Matrículas e Inscripciones, Estructura Escolar.
-- **Archivos donde se implementa:** 
+- **Archivos donde se implementa:**
   - [reingresoController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/reingresoController.ts) (`getReingresoGroups`)
   - [ReingresoManagement.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/ReingresoManagement.vue)
-- **Endpoints relacionados:** 
+- **Endpoints relacionados:**
   - `GET /api/reingreso/groups`
 - **Historias de usuario relacionadas:** HU-MAT-008
 
 ---
 
 ### RN-MAT-012: Auditoría del Motivo de Retiro
+
 - **Descripción:** Al marcar a un estudiante en estado `RETIRADO`, es obligatorio especificar la causa del retiro. Esta información se persiste en la columna `motivo_estado` de la tabla `estudiante` y `detalles_cancelacion` de la tabla `matricula`, estando siempre visible en el expediente del alumno en Reingresos y en la Gestión de Estudiantes.
 - **Motivo:** Mantiene un registro auditable del porqué de la desvinculación escolar para comités académicos e inspección.
 - **Módulos afectados:** Matrículas e Inscripciones, Estudiantes y Estados.
-- **Archivos donde se implementa:** 
+- **Archivos donde se implementa:**
   - [studentController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/studentController.ts) (`updateStudentStatus`)
   - [matriculaService.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/services/matriculaService.ts) (`getFiltered`, `getDetails`)
   - [StudentManagement.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/StudentManagement.vue)
   - [ReingresoManagement.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/ReingresoManagement.vue)
-- **Endpoints relacionados:** 
+- **Endpoints relacionados:**
   - `PATCH /api/student/:id/status`
 - **Historias de usuario relacionadas:** HU-MAT-008
+
+---
+
+### RN-MAT-013: Definición del Estado Final del Estudiante al Cancelar Matrícula
+
+- **Descripción:** Al cancelar formalmente una matrícula (`estado = 'CANCELADA'`), el directivo debe seleccionar explícitamente el estado final que asumirá el estudiante en la institución:
+  1. `RETIRADO`: Desvinculación escolar por retiro voluntario, impago o traslado. Mantiene al alumno elegible para futuros trámites de Reingreso (RN-MAT-008).
+  2. `EXPULSADO`: Expulsión definitiva por sanción disciplinaria gravísima. Inhabilita automáticamente cualquier trámite futuro de Reingreso.
+  *(Nota: Las suspensiones temporales no deben cancelar matrículas y se manejan exclusivamente mediante el módulo disciplinario de Sanciones).*
+- **Motivo:** Evita el uso de estados genéricos e imprecisos, preserva la integridad del historial académico y asegura el cumplimiento automatizado del bloqueo de reingresos para alumnos expulsados.
+- **Módulos afectados:** Matrículas e Inscripciones, Estudiantes y Estados.
+- **Archivos donde se implementa:**
+  - [matriculaService.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/services/matriculaService.ts) (`cancelEnrollment`)
+  - [matricula.dto.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/dtos/matricula.dto.ts) (`CancelEnrollmentSchema`)
+  - [EnrollmentManagement.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/EnrollmentManagement.vue)
+- **Endpoints relacionados:**
+  - `POST /api/matriculas/cancel/:id`
+- **Historias de usuario relacionadas:** HU-MAT-005, HU-MAT-008
 

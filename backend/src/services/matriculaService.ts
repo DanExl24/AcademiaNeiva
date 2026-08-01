@@ -1,4 +1,6 @@
 import { pool } from "../config/db";
+import { db } from "../config/kysely";
+import { sql } from "kysely";
 import { NotificationService } from "./notificationService";
 import bcrypt from "bcrypt";
 
@@ -138,31 +140,46 @@ export class MatriculaService {
     }
   }
 
-  /** MR02 – Ver matrículas filtradas por estado y año lectivo */
+  /** MR02 – Ver matrículas filtradas por estado y año lectivo (Kysely Type-Safe Query) */
   static async getFiltered(idColegio: number, estado: string, yearId?: number) {
-    let query = `
-      SELECT m.*, 
-             e.motivo_estado AS student_motivo_estado,
-             (SELECT COUNT(*) FROM documento_matriculas WHERE id_matricula = m.id_matricula AND estado = 'PENDIENTE') > 0 as has_pending_docs
-      FROM matricula m
-      LEFT JOIN estudiante e ON m.id_estudiante = e.id_estudiante
-      WHERE m.id_colegio = $1
-    `;
-    const params: any[] = [idColegio];
+    let query = db
+      .selectFrom('matricula as m')
+      .leftJoin('estudiante as e', 'm.id_estudiante', 'e.id_estudiante')
+      .leftJoin('nivel_escolar as n', 'm.id_nivel', 'n.id_nivel')
+      .leftJoin('grupos as g', 'm.id_grupo', 'g.id_grupo')
+      .leftJoin('tipo_grado as tg', 'g.id_tipo_grado', 'tg.id_tipo_grado')
+      .leftJoin('secciones as s', 'g.id_seccion', 's.id_seccion')
+      .select([
+        'm.id_matricula',
+        'm.id_estudiante',
+        'm.id_nivel',
+        'm.id_grupo',
+        'm.id_colegio',
+        'm.id_anio',
+        'm.estado',
+        'm.tipo',
+        'm.correo_padre',
+        'm.token_seguimiento',
+        'm.es_traslado',
+        'e.nombre as student_nombre',
+        'e.apellido as student_apellido',
+        'e.documento as student_documento',
+        'e.motivo_estado as student_motivo_estado',
+        'n.nombre as nivel_nombre',
+        sql<string>`CONCAT(tg.nombre, ' - ', s.nombre)`.as('grado_nombre'),
+        sql<boolean>`(SELECT COUNT(*) FROM documento_matriculas WHERE id_matricula = m.id_matricula AND estado = 'PENDIENTE') > 0`.as('has_pending_docs')
+      ])
+      .where('m.id_colegio', '=', idColegio);
 
     if (yearId) {
-      params.push(yearId);
-      query += ` AND m.id_anio = $${params.length}`;
+      query = query.where('m.id_anio', '=', yearId);
     }
 
     if (estado !== 'ALL') {
-      params.push(estado);
-      query += ` AND m.estado = $${params.length}`;
+      query = query.where('m.estado', '=', estado as any);
     }
 
-    query += ` ORDER BY m.id_matricula DESC`;
-    const res = await pool.query(query, params);
-    return res.rows;
+    return await query.orderBy('m.id_matricula', 'desc').execute();
   }
 
   /** MR02 – Ver todas las matrículas pendientes por año lectivo */
@@ -515,11 +532,11 @@ export class MatriculaService {
         );
       }
 
-      // Mantener el estado PENDIENTE_RENOVACION si se trata de un proceso de reingreso; en otro caso cambiar a CORRECCION
-      const currentMat = await client.query('SELECT estado FROM matricula WHERE id_matricula = $1', [idMatricula]);
+      // Mantener el estado PENDIENTE si se trata de un proceso de reingreso o carga inicial; en otro caso cambiar a CORRECCION
+      const currentMat = await client.query('SELECT estado, tipo FROM matricula WHERE id_matricula = $1', [idMatricula]);
       const currentEstado = currentMat.rows[0]?.estado;
 
-      if (currentEstado !== 'PENDIENTE_RENOVACION') {
+      if (currentEstado !== 'PENDIENTE') {
         await client.query("UPDATE matricula SET estado = 'CORRECCION' WHERE id_matricula = $1", [idMatricula]);
       }
 
@@ -768,30 +785,42 @@ export class MatriculaService {
     return { success: true };
   }
 
-  static async cancelEnrollment(idMatricula: number, data: { motivo: string, detalles: string }) {
+  static async cancelEnrollment(idMatricula: number, data: { motivo: string, detalles?: string | null, estado_estudiante?: 'RETIRADO' | 'EXPULSADO' }) {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
       
-      const matRes = await client.query('SELECT correo_padre, estado FROM matricula WHERE id_matricula = $1', [idMatricula]);
+      const matRes = await client.query('SELECT id_estudiante, correo_padre, estado FROM matricula WHERE id_matricula = $1', [idMatricula]);
       if (matRes.rows.length === 0) throw new Error('Matrícula no encontrada');
       const mat = matRes.rows[0];
       
-      if (mat.estado !== 'ACTIVA' && mat.estado !== 'TRASLADADA') {
-        throw new Error('Solo se pueden cancelar matrículas que estén aprobadas o trasladadas');
+      if (mat.estado === 'CANCELADA' || mat.estado === 'CULMINADA') {
+        throw new Error('La matrícula ya se encuentra cancelada o culminada');
       }
+
+      const targetStudentState = data.estado_estudiante === 'EXPULSADO' ? 'EXPULSADO' : 'RETIRADO';
 
       await client.query(
         `UPDATE matricula 
          SET estado = 'CANCELADA', motivo_cancelacion = $1, detalles_cancelacion = $2
          WHERE id_matricula = $3`,
-        [data.motivo, data.detalles, idMatricula]
+        [data.motivo, data.detalles || null, idMatricula]
       );
+
+      // Si el estudiante ya está creado u oficializado, actualizar su estado en la tabla estudiante
+      if (mat.id_estudiante) {
+        await client.query(
+          `UPDATE estudiante 
+           SET estado = $1, motivo_estado = $2 
+           WHERE id_estudiante = $3`,
+          [targetStudentState, data.motivo, mat.id_estudiante]
+        );
+      }
 
       await client.query('COMMIT');
 
       // Notificar al padre
-      await NotificationService.sendCancellationEmail(mat.correo_padre, 'Padre de Familia', data.motivo, data.detalles);
+      await NotificationService.sendCancellationEmail(mat.correo_padre, 'Padre de Familia', data.motivo, data.detalles || data.motivo);
 
       return { success: true };
     } catch (e) {

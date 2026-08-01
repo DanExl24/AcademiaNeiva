@@ -311,7 +311,7 @@
             <!-- Submit Action Footer -->
             <div v-if="student" class="pt-6 border-t border-slate-200/80 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
               <p class="text-xs text-slate-500 dark:text-slate-400 font-semibold">
-                Al presionar enviar, la matrícula cambiará a estado <span class="text-emerald-600 dark:text-emerald-400 font-bold">PENDIENTE_RENOVACION</span> y se le enviará el link al acudiente.
+                Al presionar enviar, la matrícula quedará registrada en estado <span class="text-emerald-600 dark:text-emerald-400 font-bold">PENDIENTE</span> (Tipo: <span class="text-teal-600 dark:text-teal-400 font-bold">REINGRESO</span>) y se enviará el enlace al acudiente.
               </p>
               
               <button 
@@ -563,7 +563,7 @@ const submitReingresoLink = async () => {
 
     const res = await axios.post('http://localhost:3000/api/reingreso/send-parent-link', payload, getAuthHeaders())
     alert(res.data.message || 'Enlace de reingreso enviado con éxito.')
-    router.push('/dashboard/matriculas')
+    router.push('/dashboard/gestion-matriculas')
   } catch (err: any) {
     alert(err.response?.data?.error || 'Error al enviar enlace de reingreso')
   } finally {

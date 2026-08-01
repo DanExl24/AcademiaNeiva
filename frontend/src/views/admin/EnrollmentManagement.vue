@@ -26,7 +26,12 @@ import {
   Download,
   X,
   ArrowLeft,
-  Plus
+  Plus,
+  Filter,
+  FileSpreadsheet,
+  RefreshCw,
+  SlidersHorizontal,
+  Layers
 } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 import { useNotificationStore } from '../../stores/notifications'
@@ -71,52 +76,144 @@ watch(() => yearStore.selectedYearId, () => {
 })
 
 const tabs = [
-  { status: 'PENDIENTE',            label: 'Por Revisar',          color: 'amber'   },
-  { status: 'PENDIENTE_RENOVACION', label: 'Pendiente Reingreso', color: 'teal'    },
-  { status: 'RECHAZADA',            label: 'En Corrección',        color: 'orange'  },
-  { status: 'CORRECCION',           label: 'Docs Corregidos',      color: 'purple'  },
-  { status: 'ACTIVA',               label: 'Aprobadas',            color: 'emerald' },
-  { status: 'TRASLADADA',           label: 'Traslados',            color: 'blue'    },
-  { status: 'CANCELADA',            label: 'Canceladas',           color: 'red'     },
+  { status: 'PENDIENTE',  label: 'Por Revisar',    color: 'amber'   },
+  { status: 'RECHAZADA',  label: 'En Corrección',  color: 'orange'  },
+  { status: 'CORRECCION', label: 'Docs Corregidos', color: 'purple'  },
+  { status: 'ACTIVA',     label: 'Aprobadas',      color: 'emerald' },
+  { status: 'TRASLADADA', label: 'Traslados',      color: 'blue'    },
+  { status: 'CANCELADA',  label: 'Canceladas',     color: 'red'     },
 ]
 
 const stats = computed(() => ({
-  pending:           enrollments.value.filter(e => e.estado === 'PENDIENTE').length,
-  pendingRenovacion: enrollments.value.filter(e => e.estado === 'PENDIENTE_RENOVACION').length,
-  rejected:          enrollments.value.filter(e => e.estado === 'RECHAZADA').length,
-  corrected:         enrollments.value.filter(e => e.estado === 'CORRECCION').length,
-  active:            enrollments.value.filter(e => e.estado === 'ACTIVA' || e.estado === 'APROBADA').length,
-  transferred:       enrollments.value.filter(e => e.estado === 'TRASLADADA').length,
-  cancelled:         enrollments.value.filter(e => e.estado === 'CANCELADA').length,
+  pending:     enrollments.value.filter(e => e.estado === 'PENDIENTE').length,
+  rejected:    enrollments.value.filter(e => e.estado === 'RECHAZADA').length,
+  corrected:   enrollments.value.filter(e => e.estado === 'CORRECCION').length,
+  active:      enrollments.value.filter(e => e.estado === 'ACTIVA' || e.estado === 'APROBADA').length,
+  transferred: enrollments.value.filter(e => e.estado === 'TRASLADADA').length,
+  cancelled:   enrollments.value.filter(e => e.estado === 'CANCELADA').length,
 }))
+
+const filterTipo = ref<string>('TODOS')
+const filterNivel = ref<number | 'TODOS'>('TODOS')
+const onlyPendingDocs = ref<boolean>(false)
+
+const availableLevels = computed(() => {
+  const map = new Map<number, string>()
+  for (const e of enrollments.value) {
+    if (e.id_nivel && e.nivel_nombre) {
+      map.set(e.id_nivel, e.nivel_nombre)
+    }
+  }
+  return Array.from(map.entries()).map(([id, nombre]) => ({ id, nombre }))
+})
+
+const isAnySecondaryFilterActive = computed(() => {
+  return filterTipo.value !== 'TODOS' || filterNivel.value !== 'TODOS' || onlyPendingDocs.value || searchQuery.value.trim() !== ''
+})
+
+const resetFilters = () => {
+  filterTipo.value = 'TODOS'
+  filterNivel.value = 'TODOS'
+  onlyPendingDocs.value = false
+  searchQuery.value = ''
+}
+
+const exportToCSV = () => {
+  if (!filteredEnrollments.value.length) {
+    notify.addNotification('No hay matrículas para exportar con los filtros actuales', 'info')
+    return
+  }
+
+  const headers = ['ID Matrícula', 'Tipo', 'Estado', 'Correo Acudiente', 'Estudiante', 'Documento Estudiante', 'Nivel', 'Grado / Curso', 'Docs Pendientes']
+  const rows = filteredEnrollments.value.map(en => [
+    en.id_matricula,
+    en.tipo || 'REGULAR',
+    en.estado,
+    en.correo_padre || '',
+    en.student_nombre ? `${en.student_nombre} ${en.student_apellido || ''}` : 'N/A',
+    en.student_documento || 'N/A',
+    en.nivel_nombre || 'N/A',
+    en.grado_nombre || (en.id_grado ? `ID ${en.id_grado}` : 'N/A'),
+    en.has_pending_docs ? 'SÍ' : 'NO'
+  ])
+
+  const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + 
+    [headers.join(','), ...rows.map(e => e.map(val => `"${String(val).replace(/"/g, '""')}"`).join(','))].join('\n')
+
+  const encodedUri = encodeURI(csvContent)
+  const link = document.createElement('a')
+  link.setAttribute('href', encodedUri)
+  link.setAttribute('download', `reporte_matriculas_${new Date().toISOString().slice(0, 10)}.csv`)
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+
+  notify.addNotification(`Reporte exportado (${filteredEnrollments.value.length} matrículas)`, 'success')
+}
 
 const filteredEnrollments = computed(() => {
   let list = enrollments.value.filter(en => {
+    // Status filter
     if (filterStatus.value === 'ACTIVA') {
-      return en.estado === 'ACTIVA' || en.estado === 'APROBADA'
+      if (en.estado !== 'ACTIVA' && en.estado !== 'APROBADA') return false
+    } else if (filterStatus.value !== 'TODOS' && en.estado !== filterStatus.value) {
+      return false
     }
-    return en.estado === filterStatus.value
+
+    // Tipo filter
+    if (filterTipo.value !== 'TODOS' && (en.tipo || 'REGULAR').toUpperCase() !== filterTipo.value) {
+      return false
+    }
+
+    // Nivel filter
+    if (filterNivel.value !== 'TODOS' && en.id_nivel !== Number(filterNivel.value)) {
+      return false
+    }
+
+    // Only Pending Docs filter
+    if (onlyPendingDocs.value && !en.has_pending_docs) {
+      return false
+    }
+
+    return true
   })
+
+  // Search Query filter
   const q = searchQuery.value.trim().toLowerCase()
   if (q) {
-    list = list.filter(en =>
-      (en.correo_padre && en.correo_padre.toLowerCase().includes(q)) ||
-      String(en.id_matricula).includes(q)
-    )
+    list = list.filter(en => {
+      const matchMail = en.correo_padre && en.correo_padre.toLowerCase().includes(q)
+      const matchId = String(en.id_matricula).includes(q)
+      const matchNombre = en.student_nombre && en.student_nombre.toLowerCase().includes(q)
+      const matchApellido = en.student_apellido && en.student_apellido.toLowerCase().includes(q)
+      const matchFull = en.student_nombre && en.student_apellido && `${en.student_nombre} ${en.student_apellido}`.toLowerCase().includes(q)
+      const matchDoc = en.student_documento && String(en.student_documento).toLowerCase().includes(q)
+
+      return matchMail || matchId || matchNombre || matchApellido || matchFull || matchDoc
+    })
   }
+
   return list
 })
 
 const getStatusMeta = (status: string) => {
-  if (status === 'PENDIENTE')            return { label: 'Por Revisar',          bg: 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400' }
-  if (status === 'PENDIENTE_RENOVACION') return { label: 'Pendiente Reingreso',  bg: 'bg-teal-100 text-teal-700 dark:bg-teal-950/40 dark:text-teal-400' }
-  if (status === 'RECHAZADA')            return { label: 'En Corrección',        bg: 'bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-400' }
-  if (status === 'APROBADA')             return { label: 'Aprobada',             bg: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400' }
-  if (status === 'CORRECCION')           return { label: 'Docs Corregidos',      bg: 'bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-400' }
-  if (status === 'ACTIVA')               return { label: 'Aprobada',             bg: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400' }
-  if (status === 'TRASLADADA')           return { label: 'Traslado',             bg: 'bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400' }
-  if (status === 'CANCELADA')            return { label: 'Cancelada',            bg: 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400' }
+  if (status === 'PENDIENTE')  return { label: 'Por Revisar',     bg: 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400' }
+  if (status === 'RECHAZADA')  return { label: 'En Corrección',   bg: 'bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-400' }
+  if (status === 'APROBADA')   return { label: 'Aprobada',        bg: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400' }
+  if (status === 'CORRECCION') return { label: 'Docs Corregidos', bg: 'bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-400' }
+  if (status === 'ACTIVA')     return { label: 'Aprobada',        bg: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400' }
+  if (status === 'TRASLADADA') return { label: 'Traslado',        bg: 'bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400' }
+  if (status === 'CANCELADA')  return { label: 'Cancelada',       bg: 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400' }
   return { label: status, bg: 'bg-slate-100 text-slate-600' }
+}
+
+const getTipoMeta = (tipo?: string) => {
+  const t = tipo?.toUpperCase() || 'REGULAR'
+  if (t === 'REINGRESO')      return { label: 'Reingreso', bg: 'bg-purple-100 text-purple-800 dark:bg-purple-950/40 dark:text-purple-400' }
+  if (t === 'RENOVACION')     return { label: 'Renovación', bg: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-400' }
+  if (t === 'EXTRAORDINARIA') return { label: 'Extraordinaria', bg: 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400' }
+  if (t === 'TRASLADO')       return { label: 'Traslado', bg: 'bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-400' }
+  return { label: 'Regular', bg: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300' }
 }
 
 // ─── Drawer / Detail State ────────────────────────────────────────────────────
@@ -128,9 +225,11 @@ const selectedGradeId = ref<number | null>(null)
 const savingGrade = ref(false)
 const showNotifyModal = ref(false)
 const showPendingModal = ref(false)
+// ─── Cancel Modal State ───────────────────────────────────────────────────────
 const showCancelModal = ref(false)
 const cancelMotivo = ref('Retiro Voluntario')
 const cancelDetalles = ref('')
+const cancelStudentState = ref<'RETIRADO' | 'EXPULSADO'>('RETIRADO')
 const cancelling = ref(false)
 
 const documentLabels: Record<string, string> = {
@@ -266,24 +365,16 @@ const notifyInconsistencies = async () => {
   }
 }
 
-const toggleTransfer = async () => {
-  try {
-    await axios.patch(`http://localhost:3000/api/matriculas/transfer-status/${matricula.value.id_matricula}`, {
-      es_traslado: matricula.value.es_traslado
-    })
-    notify.addNotification('Estado de traslado actualizado', 'success')
-  } catch {
-    notify.addNotification('Error al actualizar estado de traslado', 'error')
-    matricula.value.es_traslado = !matricula.value.es_traslado
-  }
-}
+
 
 const cancelEnrollment = async () => {
   if (!cancelMotivo.value) return
   cancelling.value = true
   try {
     await axios.post(`http://localhost:3000/api/matriculas/cancel/${matricula.value.id_matricula}`, {
-      motivo: cancelMotivo.value, detalles: cancelDetalles.value
+      motivo: cancelMotivo.value,
+      detalles: cancelDetalles.value,
+      estado_estudiante: cancelStudentState.value
     })
     notify.addNotification('Matrícula cancelada exitosamente', 'success')
     showCancelModal.value = false
@@ -353,28 +444,10 @@ const extraordinaryForm = ref({
   observaciones: '',
 })
 
-// Reingreso
-const showReingresoModal = ref(false)
-const reingresoLoading = ref(false)
-const reingresoForm = ref({
-  id_estudiante: null as number | null,
-  id_nivel: null as number | null,
-  id_grupo: null as number | null,
-  id_anio: null as number | null,
-  tiene_discapacidad: false,
-  es_extranjero: false,
-  motivo: 'Se retiró voluntariamente',
-  observaciones: '',
-})
-
 const catalogNiveles = ref<any[]>([])
 const catalogGrupos = ref<any[]>([])
 const catalogYears = ref<any[]>([])
 const institutionStudents = ref<any[]>([])
-
-const retiredStudents = computed(() => {
-  return institutionStudents.value.filter(s => s.estado === 'RETIRADO')
-})
 
 const fetchExtraordinaryCatalogs = async () => {
   try {
@@ -398,8 +471,50 @@ const fetchExtraordinaryCatalogs = async () => {
   }
 }
 
+const isOrdinaryPeriodOpen = ref(false)
+const ordinaryClosureDate = ref<string | null>(null)
+
+const checkOrdinaryEnrollmentStatus = async () => {
+  try {
+    const idColegio = auth.user?.schoolId || 1
+    const res = await axios.get(`http://localhost:3000/api/matriculas/school/${idColegio}/enrollment-config`)
+    if (res.data?.config) {
+      const cfg = res.data.config
+      if (cfg.habilitada && cfg.fecha_inicio && cfg.fecha_cierre) {
+        const now = new Date()
+        const start = new Date(cfg.fecha_inicio)
+        const end = new Date(cfg.fecha_cierre)
+        end.setHours(23, 59, 59, 999)
+        
+        if (now >= start && now <= end) {
+          isOrdinaryPeriodOpen.value = true
+          ordinaryClosureDate.value = new Date(cfg.fecha_cierre).toLocaleDateString('es-CO')
+        } else {
+          isOrdinaryPeriodOpen.value = false
+        }
+      } else {
+        isOrdinaryPeriodOpen.value = false
+      }
+    }
+  } catch (err) {
+    console.error('Error al consultar configuración de matrícula:', err)
+  }
+}
+
+const openExtraordinaryModal = () => {
+  if (isOrdinaryPeriodOpen.value) {
+    notify.addNotification(
+      `Las matrículas extraordinarias están inhabilitadas: El periodo de inscripción ordinario se encuentra VIGENTE (Cierra el ${ordinaryClosureDate.value || 'calendario regular'}). Solo se autorizan cuando las fechas ordinarias hayan caducado.`,
+      'error'
+    )
+    return
+  }
+  showExtraordinaryModal.value = true
+}
+
 onMounted(async () => {
   await fetchExtraordinaryCatalogs()
+  await checkOrdinaryEnrollmentStatus()
 })
 
 const getYearId = (y: any) => y.id_anio || y['id_anio'] || y.id_ao;
@@ -411,9 +526,6 @@ watch(catalogYears, (years) => {
     if (!extraordinaryForm.value.id_anio) {
       extraordinaryForm.value.id_anio = activeYearId
     }
-    if (!reingresoForm.value.id_anio) {
-      reingresoForm.value.id_anio = activeYearId
-    }
   }
 })
 
@@ -422,10 +534,7 @@ const filteredExtraordinaryGroups = computed(() => {
   return catalogGrupos.value.filter(g => g.id_nivel === extraordinaryForm.value.id_nivel)
 })
 
-const filteredReingresoGroups = computed(() => {
-  if (!reingresoForm.value.id_nivel) return []
-  return catalogGrupos.value.filter(g => g.id_nivel === reingresoForm.value.id_nivel)
-})
+
 
 const onStudentSelected = () => {
   const selectedStudentId = extraordinaryForm.value.id_estudiante
@@ -447,33 +556,16 @@ const onStudentSelected = () => {
   }
 }
 
-const openReingresoModal = () => {
-  reingresoForm.value = {
-    id_estudiante: null,
-    id_nivel: null,
-    id_grupo: null,
-    id_anio: catalogYears.value.find(y => y.estado === 'ABIERTO') ? getYearId(catalogYears.value.find(y => y.estado === 'ABIERTO')) : null,
-    tiene_discapacidad: false,
-    es_extranjero: false,
-    motivo: 'Se retiró voluntariamente',
-    observaciones: '',
-  }
-  showReingresoModal.value = true
-}
 
-const onReingresoStudentSelected = () => {
-  const selectedStudentId = reingresoForm.value.id_estudiante
-  if (selectedStudentId) {
-    const student = institutionStudents.value.find(s => s.id_estudiante === selectedStudentId)
-    if (student) {
-      if (student.id_nivel) {
-        reingresoForm.value.id_nivel = student.id_nivel
-      }
-    }
-  }
-}
 
 const submitExtraordinary = async () => {
+  if (isOrdinaryPeriodOpen.value) {
+    notify.addNotification(
+      `No se permite registrar matrícula extraordinaria mientras el periodo ordinario esté vigente (Cierra el ${ordinaryClosureDate.value || 'calendario regular'}).`,
+      'error'
+    )
+    return
+  }
   if (!extraordinaryForm.value.correo_padre || !extraordinaryForm.value.id_nivel || !extraordinaryForm.value.id_grupo || !extraordinaryForm.value.id_anio || !extraordinaryForm.value.motivo) {
     notify.addNotification('Por favor, rellene todos los campos obligatorios.', 'error')
     return
@@ -518,31 +610,7 @@ const submitExtraordinary = async () => {
   }
 }
 
-const submitReingreso = async () => {
-  if (!reingresoForm.value.id_estudiante || !reingresoForm.value.id_nivel || !reingresoForm.value.id_grupo || !reingresoForm.value.id_anio || !reingresoForm.value.motivo) {
-    notify.addNotification('Por favor, rellene todos los campos obligatorios.', 'error')
-    return
-  }
-  reingresoLoading.value = true
-  try {
-    const payload = {
-      ...reingresoForm.value,
-      id_estudiante: Number(reingresoForm.value.id_estudiante),
-      id_nivel: Number(reingresoForm.value.id_nivel),
-      id_grupo: Number(reingresoForm.value.id_grupo),
-      id_anio: Number(reingresoForm.value.id_anio),
-    }
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.post('http://localhost:3000/api/academic-admin/matriculas/reingreso', payload, { headers })
-    notify.addNotification('Solicitud de reingreso creada exitosamente.', 'success')
-    showReingresoModal.value = false
-    fetchEnrollments()
-  } catch (error: any) {
-    notify.addNotification(error.response?.data?.error || 'Error al crear solicitud de reingreso', 'error')
-  } finally {
-    reingresoLoading.value = false
-  }
-}
+
 
 const approveException = async (id: number) => {
   try {
@@ -588,18 +656,33 @@ const rejectException = async (id: number) => {
           <p class="text-slate-400 dark:text-slate-500 text-sm font-medium">Supervisa y valida las solicitudes de ingreso a la institución.</p>
         </div>
       </div>
-      <div class="flex flex-wrap gap-2 self-start sm:self-center">
-        <button @click="showExtraordinaryModal = true" class="px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black text-xs uppercase tracking-wide transition-all shadow-lg shadow-indigo-100 dark:shadow-none flex items-center gap-2">
-          <Plus :size="16" /> Nueva Matrícula Extraordinaria
-        </button>
-        <button @click="router.push('/dashboard/gestion-reingresos')" class="px-5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-black text-xs uppercase tracking-wide transition-all shadow-lg shadow-emerald-100 dark:shadow-none flex items-center gap-2">
+      <div class="flex flex-wrap gap-2 self-start sm:self-center items-center">
+        <div class="flex flex-col items-end">
+          <button 
+            @click="openExtraordinaryModal" 
+            :disabled="isOrdinaryPeriodOpen"
+            :title="isOrdinaryPeriodOpen ? `Inhabilitado: Periodo Ordinario Vigente (Cierra: ${ordinaryClosureDate})` : 'Nueva Matrícula Extraordinaria'"
+            :class="[
+              isOrdinaryPeriodOpen 
+                ? 'opacity-50 cursor-not-allowed bg-slate-400 hover:bg-slate-400 dark:bg-slate-800 text-slate-200 shadow-none' 
+                : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-100 dark:shadow-none',
+              'px-5 py-3 rounded-2xl font-black text-xs uppercase tracking-wide transition-all flex items-center gap-2'
+            ]"
+          >
+            <Plus :size="16" /> Nueva Matrícula Extraordinaria
+          </button>
+          <span v-if="isOrdinaryPeriodOpen" class="text-[10px] font-bold text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1">
+            🔒 Inhabilitado: Inscripción Ordinaria Vigente (Cierra: {{ ordinaryClosureDate }})
+          </span>
+        </div>
+        <button @click="router.push('/dashboard/gestion-reingresos')" class="px-5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-black text-xs uppercase tracking-wide transition-all shadow-lg shadow-emerald-100 dark:shadow-none flex items-center gap-2 self-start">
           🔄 Panel de Reingresos
         </button>
       </div>
     </div>
 
     <!-- Stats Row -->
-    <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-3">
+    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
       <button
         v-for="(tab, i) in tabs" :key="tab.status"
         @click="filterStatus = tab.status"
@@ -611,7 +694,7 @@ const rejectException = async (id: number) => {
         ]"
       >
         <p class="text-2xl font-black text-slate-900 dark:text-white">
-          {{ [stats.pending, stats.pendingRenovacion, stats.rejected, stats.corrected, stats.active, stats.transferred, stats.cancelled][i] }}
+          {{ [stats.pending, stats.rejected, stats.corrected, stats.active, stats.transferred, stats.cancelled][i] }}
         </p>
         <p class="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-0.5">{{ tab.label }}</p>
         <div :class="[
@@ -627,14 +710,86 @@ const rejectException = async (id: number) => {
       </button>
     </div>
 
-    <!-- Search -->
-    <div class="relative">
-      <Search class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" :size="18" />
-      <input
-        v-model="searchQuery" type="text"
-        placeholder="Buscar por correo del padre o número de matrícula..."
-        class="w-full bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl py-4 pl-12 pr-4 text-sm font-semibold outline-none text-slate-900 dark:text-white shadow-sm focus:ring-2 focus:ring-indigo-500/10 transition-all"
-      />
+    <!-- Secondary Controls & Filter Bar -->
+    <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 space-y-4 shadow-sm">
+      <div class="flex flex-col md:flex-row items-center justify-between gap-4">
+        <!-- Search Input -->
+        <div class="relative w-full md:w-96">
+          <Search class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" :size="16" />
+          <input
+            v-model="searchQuery"
+            type="text"
+            placeholder="Buscar por correo, estudiante, doc o ID..."
+            class="w-full bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 rounded-xl py-2.5 pl-10 pr-4 text-xs font-semibold outline-none text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 transition"
+          />
+        </div>
+
+        <!-- Filter Selects & Actions -->
+        <div class="flex flex-wrap items-center gap-2 w-full md:w-auto justify-end">
+          <!-- Tipo Filter -->
+          <div class="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 rounded-xl px-3 py-1.5 text-xs font-semibold">
+            <SlidersHorizontal :size="14" class="text-slate-400" />
+            <select v-model="filterTipo" class="bg-transparent text-slate-700 dark:text-slate-200 outline-none cursor-pointer font-bold">
+              <option value="TODOS">Todos los Tipos</option>
+              <option value="REGULAR">Regular</option>
+              <option value="RENOVACION">Renovación</option>
+              <option value="REINGRESO">Reingreso</option>
+              <option value="EXTRAORDINARIA">Extraordinaria</option>
+              <option value="TRASLADO">Traslado</option>
+            </select>
+          </div>
+
+          <!-- Nivel Filter -->
+          <div v-if="availableLevels.length > 0" class="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 rounded-xl px-3 py-1.5 text-xs font-semibold">
+            <Layers :size="14" class="text-slate-400" />
+            <select v-model="filterNivel" class="bg-transparent text-slate-700 dark:text-slate-200 outline-none cursor-pointer font-bold">
+              <option value="TODOS">Todos los Niveles</option>
+              <option v-for="lvl in availableLevels" :key="lvl.id" :value="lvl.id">{{ lvl.nombre }}</option>
+            </select>
+          </div>
+
+          <!-- Pending Docs Toggle -->
+          <button
+            @click="onlyPendingDocs = !onlyPendingDocs"
+            :class="[
+              onlyPendingDocs 
+                ? 'bg-amber-500 text-white shadow-md shadow-amber-500/20 border-amber-500' 
+                : 'bg-slate-50 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 border-slate-200/80 dark:border-slate-700/60 hover:bg-slate-100',
+              'flex items-center gap-1.5 border rounded-xl px-3 py-2 text-xs font-bold transition shrink-0'
+            ]"
+          >
+            <AlertTriangle :size="14" :class="onlyPendingDocs ? 'text-white' : 'text-amber-500'" />
+            <span>Docs Diferidos</span>
+          </button>
+
+          <!-- Clear Filters -->
+          <button
+            v-if="isAnySecondaryFilterActive"
+            @click="resetFilters"
+            class="flex items-center gap-1 px-3 py-2 bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-950/60 rounded-xl text-xs font-bold transition"
+            title="Limpiar Filtros"
+          >
+            <RefreshCw :size="14" />
+            <span>Limpiar</span>
+          </button>
+
+          <!-- Export CSV Button -->
+          <button
+            @click="exportToCSV"
+            class="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition shadow-md shadow-emerald-600/20 shrink-0"
+            title="Exportar lista a CSV"
+          >
+            <FileSpreadsheet :size="14" />
+            <span>CSV</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Result Counter Footer inside Filter Bar -->
+      <div class="flex items-center justify-between text-[11px] font-semibold text-slate-400 dark:text-slate-500 pt-2 border-t border-slate-100 dark:border-slate-800">
+        <span>Mostrando <strong class="text-slate-700 dark:text-slate-200">{{ filteredEnrollments.length }}</strong> de {{ enrollments.length }} matrículas</span>
+        <span v-if="isAnySecondaryFilterActive" class="text-indigo-600 dark:text-indigo-400 font-bold">Filtros secundarios activos</span>
+      </div>
     </div>
 
     <!-- List -->
@@ -655,9 +810,9 @@ const rejectException = async (id: number) => {
         <table class="w-full text-left">
           <thead class="bg-slate-50 dark:bg-slate-800/50">
             <tr class="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400 dark:text-slate-500">
-              <th class="px-6 py-4">ID / Token</th>
-              <th class="px-6 py-4">Correo Padre</th>
-              <th class="px-6 py-4">Grado</th>
+              <th class="px-6 py-4">ID / Tipo</th>
+              <th class="px-6 py-4">Estudiante / Acudiente</th>
+              <th class="px-6 py-4">Nivel / Grado</th>
               <th class="px-6 py-4">Estado</th>
               <th class="px-6 py-4 text-right">Gestionar</th>
             </tr>
@@ -671,16 +826,25 @@ const rejectException = async (id: number) => {
               <td class="px-6 py-4">
                 <div class="flex items-center gap-1.5 font-sans">
                   <p class="font-black text-slate-900 dark:text-white text-sm">#{{ en.id_matricula }}</p>
-                  <span v-if="en.tipo === 'EXTRAORDINARIA'" class="bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400 text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded">Extraordinaria</span>
-                  <span v-else-if="en.tipo === 'REINGRESO'" class="bg-purple-100 text-purple-800 dark:bg-purple-950/40 dark:text-purple-400 text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded">Reingreso</span>
+                  <span :class="[getTipoMeta(en.tipo).bg, 'text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded']">
+                    {{ getTipoMeta(en.tipo).label }}
+                  </span>
                 </div>
                 <p class="text-[10px] text-slate-400 font-mono">{{ en.token_seguimiento?.substring(0,10) }}...</p>
               </td>
               <td class="px-6 py-4">
-                <p class="font-semibold text-slate-700 dark:text-slate-300 text-sm">{{ en.correo_padre }}</p>
+                <p v-if="en.student_nombre" class="font-bold text-slate-900 dark:text-white text-sm leading-tight">
+                  {{ en.student_nombre }} {{ en.student_apellido || '' }}
+                </p>
+                <p class="text-xs font-semibold text-slate-500 dark:text-slate-400">{{ en.correo_padre }}</p>
+                <p v-if="en.student_documento" class="text-[10px] text-slate-400 font-mono">Doc: {{ en.student_documento }}</p>
               </td>
               <td class="px-6 py-4">
-                <p class="text-xs font-bold text-indigo-500 uppercase">ID {{ en.id_grado }}</p>
+                <p v-if="en.grado_nombre" class="text-xs font-bold text-indigo-600 dark:text-indigo-400">
+                  {{ en.grado_nombre }}
+                </p>
+                <p v-else class="text-xs font-bold text-indigo-500 uppercase">ID {{ en.id_grado }}</p>
+                <p v-if="en.nivel_nombre" class="text-[10px] text-slate-400 font-medium">{{ en.nivel_nombre }}</p>
               </td>
               <td class="px-6 py-4">
                 <div class="flex flex-col gap-1.5">
@@ -1351,7 +1515,7 @@ const rejectException = async (id: number) => {
                     @click="router.push({ path: `/dashboard/gestion-matriculas/${matricula.id_matricula}/registro`, query: { gradeId: matricula.id_grado } })"
                     class="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 dark:shadow-none flex items-center justify-center gap-2"
                   >
-                    {{ (matricula.renovacion?.is_renovacion || matricula.id_estudiante || matricula.estado === 'PENDIENTE_RENOVACION') ? 'Procesar Registro / Renovación' : 'Crear Estudiante en el Sistema' }} <ArrowLeft :size="18" class="rotate-180" />
+                    {{ (matricula.renovacion?.is_renovacion || matricula.id_estudiante || matricula.tipo === 'REINGRESO' || matricula.tipo === 'RENOVACION') ? 'Procesar Registro / Renovación' : 'Crear Estudiante en el Sistema' }} <ArrowLeft :size="18" class="rotate-180" />
                   </button>
                   <button @click="currentStep = 2" class="w-full py-3.5 bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded-2xl font-bold hover:bg-slate-100 dark:hover:bg-slate-700 transition-all text-sm">
                     Volver a Documentos
@@ -1412,12 +1576,44 @@ const rejectException = async (id: number) => {
         </div>
         <div class="px-8 pb-8 space-y-4">
           <div class="space-y-1.5">
+            <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Estado Final del Estudiante</label>
+            <div class="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                @click="cancelStudentState = 'RETIRADO'"
+                :class="[
+                  cancelStudentState === 'RETIRADO'
+                    ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-500 text-amber-700 dark:text-amber-400 font-black ring-1 ring-amber-500'
+                    : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 font-semibold',
+                  'p-3 rounded-xl border text-xs text-left transition flex flex-col justify-between gap-1'
+                ]"
+              >
+                <span>RETIRADO</span>
+                <span class="text-[9px] font-medium opacity-80">Permite futuro reingreso</span>
+              </button>
+              <button
+                type="button"
+                @click="cancelStudentState = 'EXPULSADO'"
+                :class="[
+                  cancelStudentState === 'EXPULSADO'
+                    ? 'bg-red-50 dark:bg-red-950/30 border-red-500 text-red-700 dark:text-red-400 font-black ring-1 ring-red-500'
+                    : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 font-semibold',
+                  'p-3 rounded-xl border text-xs text-left transition flex flex-col justify-between gap-1'
+                ]"
+              >
+                <span>EXPULSADO</span>
+                <span class="text-[9px] font-medium opacity-80">Expulsión permanente</span>
+              </button>
+            </div>
+          </div>
+          <div class="space-y-1.5">
             <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Motivo</label>
             <select v-model="cancelMotivo" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3 text-sm font-bold outline-none text-slate-900 dark:text-white">
-              <option>Inconsistencias Graves en Documentos</option>
               <option>Retiro Voluntario</option>
+              <option>Inconsistencias Graves en Documentos</option>
               <option>Falta de Pago / Costos</option>
               <option>Traslado a Otra Institución</option>
+              <option>Expulsión Disciplinaria</option>
               <option>Otro</option>
             </select>
           </div>
@@ -1546,112 +1742,7 @@ const rejectException = async (id: number) => {
       </div>
     </div>
 
-    <!-- ── Nuevo Reingreso de Estudiante Modal ─────────────────── -->
-    <div v-if="showReingresoModal" class="fixed inset-0 z-[300] flex items-center justify-center p-4">
-      <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" @click="showReingresoModal = false"></div>
-      <div class="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-[28px] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-        
-        <!-- Modal Header -->
-        <div class="px-8 py-6 bg-gradient-to-r from-violet-600 to-indigo-700 text-white shrink-0 flex justify-between items-center">
-          <div>
-            <h3 class="text-lg font-black uppercase tracking-wider text-white">Nuevo Reingreso de Estudiante</h3>
-            <p class="text-xs text-indigo-100 mt-1">Registra la solicitud de reingreso para un estudiante previamente retirado o desertor.</p>
-          </div>
-          <button @click="showReingresoModal = false" class="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all">
-            <X :size="20" />
-          </button>
-        </div>
 
-        <!-- Modal Body (Scrollable) -->
-        <div class="p-8 space-y-5 overflow-y-auto custom-scrollbar flex-1">
-          
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <!-- Student Selector -->
-            <div class="space-y-1.5 col-span-2 text-left">
-              <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Estudiante Retirado *</label>
-              <select v-model="reingresoForm.id_estudiante" @change="onReingresoStudentSelected" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-semibold outline-none text-slate-900 dark:text-white transition-all focus:border-violet-400">
-                <option :value="null">-- Seleccione el Estudiante --</option>
-                <option v-for="student in retiredStudents" :key="student.id_estudiante" :value="student.id_estudiante">
-                  {{ student.nombre }} {{ student.apellido }} (Doc: {{ student.documento }} / Cód: {{ student.codigo }})
-                </option>
-              </select>
-            </div>
-
-            <!-- Academic Year -->
-            <div class="space-y-1.5 text-left">
-              <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Año Lectivo *</label>
-              <select v-model="reingresoForm.id_anio" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-semibold outline-none text-slate-900 dark:text-white transition-all focus:border-violet-400">
-                <option v-for="year in catalogYears" :key="getYearId(year)" :value="getYearId(year)">
-                  Año {{ year.calendario }}
-                </option>
-              </select>
-            </div>
-
-            <!-- Level Selection -->
-            <div class="space-y-1.5 text-left">
-              <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nivel Escolar *</label>
-              <select v-model="reingresoForm.id_nivel" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-semibold outline-none text-slate-900 dark:text-white transition-all focus:border-violet-400">
-                <option v-for="nivel in catalogNiveles" :key="nivel.id_nivel" :value="nivel.id_nivel">
-                  {{ nivel.nombre }}
-                </option>
-              </select>
-            </div>
-
-            <!-- Group Selection -->
-            <div class="space-y-1.5 col-span-2 text-left">
-              <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Grado / Grupo Asignado *</label>
-              <select v-model="reingresoForm.id_grupo" :disabled="!reingresoForm.id_nivel" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-semibold outline-none text-slate-900 dark:text-white transition-all focus:border-violet-400 disabled:opacity-50 disabled:cursor-not-allowed">
-                <option :value="null">-- Seleccione el Grupo --</option>
-                <option v-for="g in filteredReingresoGroups" :key="g.id_grupo" :value="g.id_grupo">
-                  {{ getCourseDisplayName({ tipo_grado_nombre: g.tipo_grado_nombre, seccion_nombre: g.seccion_nombre }) }} ({{ g.jornada_nombre }}) - Cupos Disp: {{ g.cupos_totales - g.matriculas_count }}
-                </option>
-              </select>
-            </div>
-
-            <!-- Checkboxes for foreign/disabled -->
-            <div class="flex items-center gap-6 col-span-2 py-2">
-              <label class="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" v-model="reingresoForm.tiene_discapacidad" class="rounded text-violet-600 focus:ring-violet-500" />
-                <span class="text-xs font-semibold text-slate-700 dark:text-slate-300">Tiene discapacidad</span>
-              </label>
-              <label class="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" v-model="reingresoForm.es_extranjero" class="rounded text-violet-600 focus:ring-violet-500" />
-                <span class="text-xs font-semibold text-slate-700 dark:text-slate-300">Es extranjero</span>
-              </label>
-            </div>
-
-            <!-- Reason Selector -->
-            <div class="space-y-1.5 col-span-2 text-left">
-              <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Motivo del Reingreso *</label>
-              <select v-model="reingresoForm.motivo" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-semibold outline-none text-slate-900 dark:text-white transition-all focus:border-violet-400">
-                <option>Desertó el año pasado</option>
-                <option>Se retiró voluntariamente</option>
-                <option>Se ausentó un año o más</option>
-                <option>Quiere volver al colegio</option>
-                <option>Otro</option>
-              </select>
-            </div>
-
-            <!-- Observations (textarea) -->
-            <div class="space-y-1.5 col-span-2 text-left">
-              <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 font-sans">Observaciones o Notas Académicas</label>
-              <textarea v-model="reingresoForm.observaciones" rows="2" placeholder="Notas sobre el estado académico del estudiante o condiciones particulares de reingreso..." class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-semibold outline-none text-slate-900 dark:text-white transition-all focus:border-violet-400"></textarea>
-            </div>
-          </div>
-
-        </div>
-
-        <!-- Modal Footer -->
-        <div class="bg-slate-50 dark:bg-slate-800/50 px-8 py-6 flex gap-3 shrink-0">
-          <button @click="showReingresoModal = false" :disabled="reingresoLoading" class="flex-1 py-3.5 rounded-xl font-black text-slate-400 hover:bg-white dark:hover:bg-slate-700 transition-all text-xs uppercase">Cancelar</button>
-          <button @click="submitReingreso" :disabled="reingresoLoading" class="flex-[2] bg-violet-600 text-white py-3.5 rounded-xl font-black text-xs uppercase flex items-center justify-center gap-2 hover:bg-violet-700 transition-all disabled:opacity-50">
-            <span v-if="reingresoLoading" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-            <span v-else>Solicitar Reingreso</span>
-          </button>
-        </div>
-
-      </div>
-    </div>
   </Teleport>
 
   <!-- Hidden Printable Ficha de Matricula Template -->

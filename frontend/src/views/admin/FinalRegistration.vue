@@ -180,10 +180,13 @@ const handleFinalize = async () => {
       matricula.value?.id_estudiante ||
       null
 
+    const parsedGradeId = Number(route.query.gradeId)
+    const validGradeId = (!isNaN(parsedGradeId) && parsedGradeId > 0) ? parsedGradeId : (matricula.value?.id_grupo || undefined)
+
     const payload = {
       student: studentData.value,
       parent: parentData.value,
-      id_grado: Number(route.query.gradeId),
+      id_grado: validGradeId,
       existing_parent_user_id: matricula.value?.existing_parent_user?.id_usuario || null,
       id_estudiante: resolvedIdEstudiante
     }

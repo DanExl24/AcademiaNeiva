@@ -100,14 +100,14 @@ Este módulo gestiona el proceso completo de registro, validación y matrícula 
 | `id_nivel` | INT FK | Nivel escolar de inscripción. |
 | `id_colegio` | INT FK | Colegio de destino. |
 | `id_anio` | INT FK | Año lectivo de la matrícula. |
-| `estado` | `estado_matricula` | `PENDIENTE`, `PENDIENTE_RENOVACION`, `ACTIVA`, `CANCELADA`, `TRASLADADA`, `RECHAZADA`, `CORRECCION`, `APROBADA`, `CULMINADA`. |
+| `estado` | `estado_matricula` | ENUM: `PENDIENTE`, `CORRECCION`, `APROBADA`, `ACTIVA`, `RECHAZADA`, `CANCELADA`, `TRASLADADA`, `CULMINADA`. |
 | `correo_padre` | VARCHAR(100) | Correo de contacto para notificaciones y subsanaciones. |
 | `token_seguimiento` | UUID | Token para el acceso público de consulta y edición. |
 | `id_grupo` | INT FK | Grupo asignado al estudiante. |
 | `motivo_cancelacion` | VARCHAR(100) | Motivo de retiro o cancelación de matrícula. |
 | `detalles_cancelacion` | TEXT | Explicación o detalle del retiro del alumno. |
 | `es_traslado` | BOOLEAN | Indica si la matrícula proviene de un traslado de otra escuela. |
-| `tipo` | VARCHAR(50) | Tipo de proceso (`REGULAR`, `EXTRAORDINARIA`, `REINGRESO`). |
+| `tipo` | `tipo_matricula` | ENUM: `REGULAR`, `RENOVACION`, `REINGRESO`, `EXTRAORDINARIA`, `TRASLADO`. |
 
 ### Tabla: `documento_matriculas`
 

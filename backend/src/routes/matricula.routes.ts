@@ -13,6 +13,8 @@ import {
 } from "../controllers/matriculaController";
 import { upload } from "../config/multer";
 import { verifyToken, requireDirectivo } from "../middleware/authMiddleware";
+import { validateDto } from "../middleware/validateDto";
+import { SubmitEnrollmentSchema, ValidateDocumentSchema, FinalizeEnrollmentSchema, CancelEnrollmentSchema } from "../dtos/matricula.dto";
 
 import { pool } from "../config/db";
 
@@ -135,10 +137,6 @@ router.get("/:id", protectIfIntegerId, async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
-
-import { validateDto } from "../middleware/validateDto";
-import { ValidateDocumentSchema, FinalizeEnrollmentSchema } from "../dtos/matricula.dto";
-
 router.patch("/document/:idDocumento", verifyToken, requireDirectivo, validateDto(ValidateDocumentSchema), validateDocument);
 router.post("/assign-grade/:id", verifyToken, requireDirectivo, assignGrade);
 router.post("/notify-inconsistencies/:id", verifyToken, requireDirectivo, notifyInconsistencies);
@@ -162,7 +160,7 @@ router.post("/update-documents/:token", upload.fields([
   }
 });
 router.post("/finalize/:id", verifyToken, requireDirectivo, validateDto(FinalizeEnrollmentSchema), finalizeEnrollment);
-router.post("/cancel/:id", verifyToken, requireDirectivo, cancelEnrollment);
+router.post("/cancel/:id", verifyToken, requireDirectivo, validateDto(CancelEnrollmentSchema), cancelEnrollment);
 router.patch("/transfer-status/:id", verifyToken, requireDirectivo, toggleTransfer);
 
 export default router;

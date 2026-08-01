@@ -368,6 +368,13 @@ export const ensureCompetencySchema = async (): Promise<void> => {
       await client.query(reingresoMigrationSql);
     }
 
+    // Ejecutar migración de normalización de tipo y estado de matrícula (020 - Idempotente)
+    const normalizeMatriculaPath = path.join(__dirname, "../migrations/020_normalize_matricula_estado_and_tipo.sql");
+    if (fs.existsSync(normalizeMatriculaPath)) {
+      const normalizeMatriculaSql = fs.readFileSync(normalizeMatriculaPath, "utf8");
+      await client.query(normalizeMatriculaSql);
+    }
+
     // Backfill sync_uuid for existing competencies
     const unmigratedRes = await client.query(`
       SELECT id_colegio, id_anio, id_materia, id_periodo, descripcion, ARRAY_AGG(id_competencia) AS ids

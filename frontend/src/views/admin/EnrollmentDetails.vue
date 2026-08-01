@@ -105,17 +105,7 @@ const isReadonly = computed(() =>
   matricula.value && ['ACTIVA', 'TRASLADADA', 'CANCELADA'].includes(matricula.value.estado)
 )
 
-const toggleTransfer = async () => {
-  try {
-    await axios.patch(`http://localhost:3000/api/matriculas/transfer-status/${route.params.id}`, {
-      es_traslado: matricula.value.es_traslado
-    })
-    notify.addNotification('Estado de traslado actualizado', 'success')
-  } catch {
-    notify.addNotification('Error al actualizar estado de traslado', 'error')
-    matricula.value.es_traslado = !matricula.value.es_traslado
-  }
-}
+
 
 const cancelEnrollment = async () => {
   if (!cancelMotivo.value) return
@@ -640,7 +630,7 @@ const downloadEnrollmentPDF = async () => {
         <div class="space-y-3">
           <button @click="router.push({ path: `/dashboard/gestion-matriculas/${route.params.id}/registro`, query: { gradeId: matricula.id_grado } })"
                   class="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 dark:shadow-none flex items-center justify-center gap-2">
-            {{ (matricula.renovacion?.is_renovacion || matricula.id_estudiante || matricula.estado === 'PENDIENTE_RENOVACION') ? 'Procesar Registro / Renovación' : 'Crear Estudiante en el Sistema' }} <ArrowLeft :size="18" class="rotate-180" />
+            {{ (matricula.renovacion?.is_renovacion || matricula.id_estudiante || matricula.tipo === 'REINGRESO' || matricula.tipo === 'RENOVACION') ? 'Procesar Registro / Renovación' : 'Crear Estudiante en el Sistema' }} <ArrowLeft :size="18" class="rotate-180" />
           </button>
           <button @click="currentStep = 2" class="w-full py-3.5 bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded-2xl font-bold hover:bg-slate-100 dark:hover:bg-slate-700 transition-all text-sm">Volver a Documentos</button>
         </div>

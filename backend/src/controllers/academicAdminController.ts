@@ -5194,6 +5194,32 @@ export const createExtraordinaryEnrollment = async (req: Request, res: Response)
   try {
     await client.query("BEGIN");
 
+    // Verificar si el periodo de inscripción ordinario está actualmente activo/vigente
+    const configRes = await client.query(
+      `SELECT fecha_inicio, fecha_cierre, habilitada 
+       FROM configuracion_inscripcion 
+       WHERE id_colegio = $1 AND id_anio = $2`,
+      [schoolId, id_anio]
+    );
+
+    if (configRes.rows.length > 0) {
+      const { fecha_inicio, fecha_cierre, habilitada } = configRes.rows[0];
+      if (habilitada === true && fecha_inicio && fecha_cierre) {
+        const now = new Date();
+        const start = new Date(fecha_inicio);
+        const end = new Date(fecha_cierre);
+        end.setHours(23, 59, 59, 999);
+
+        if (now >= start && now <= end) {
+          await client.query("ROLLBACK");
+          res.status(400).json({ 
+            error: "No se permite la matrícula extraordinaria mientras el periodo de inscripción ordinario esté vigente. Las matrículas extraordinarias solo se autorizan cuando las fechas de inscripción ordinaria han caducado." 
+          });
+          return;
+        }
+      }
+    }
+
     // If existing student is provided, check their status
     if (id_estudiante) {
       const studentRes = await client.query(
