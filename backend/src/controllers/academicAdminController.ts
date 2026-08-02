@@ -4,6 +4,7 @@ import { pool } from "../config/db";
 import bcrypt from "bcrypt";
 import { randomUUID } from "crypto";
 import { NotificationService } from "../services/notificationService";
+import { normalizeGradeName, isDuplicateOrSimilarGrade } from "../utils/gradeNormalization";
 import { getDefaultMonthsLabelForPeriodOrder, getAcademicYearLabel } from "../config/academicCalendarDefaults";
 import {
   DEFAULT_COMPETENCY_TEXT,
@@ -523,10 +524,16 @@ export const getGradeManagementData = async (req: Request, res: Response): Promi
 export const createGradeType = async (req: Request, res: Response): Promise<void> => {
   const schoolId = parseSchoolId(req.body.schoolId);
   const levelId = Number(req.body.id_nivel);
-  const nombre = String(req.body.nombre || "").trim().toUpperCase();
+  const rawNombre = String(req.body.nombre || "").trim();
 
-  if (!schoolId || !levelId || !nombre) {
+  if (!schoolId || !levelId || !rawNombre) {
     res.status(400).json({ error: "Nivel y nombre del grado son obligatorios" });
+    return;
+  }
+
+  const nombreNormalized = normalizeGradeName(rawNombre);
+  if (!nombreNormalized) {
+    res.status(400).json({ error: "Nombre de grado inválido" });
     return;
   }
 
@@ -541,16 +548,23 @@ export const createGradeType = async (req: Request, res: Response): Promise<void
       return;
     }
 
-    const duplicateRes = await pool.query(
-      `SELECT id_tipo_grado
-       FROM tipo_grado
-       WHERE id_nivel = $1
-         AND UPPER(TRIM(nombre)) = $2`,
-      [levelId, nombre]
+    // Obtener todos los grados existentes en la institución para validación estricta de duplicados y variaciones
+    const existingGradesRes = await pool.query(
+      `SELECT tg.id_tipo_grado, tg.nombre, tg.id_nivel
+       FROM tipo_grado tg
+       JOIN nivel_escolar ne ON ne.id_nivel = tg.id_nivel
+       WHERE ne.id_colegio = $1`,
+      [schoolId]
     );
 
-    if (duplicateRes.rows.length > 0) {
-      res.status(409).json({ error: "Ya existe un grado con ese nombre en el nivel seleccionado" });
+    const duplicate = existingGradesRes.rows.find((g: { id_tipo_grado: number; nombre: string; id_nivel: number }) => {
+      return isDuplicateOrSimilarGrade(g.nombre, rawNombre);
+    });
+
+    if (duplicate) {
+      res.status(409).json({ 
+        error: `El nombre de grado '${rawNombre}' es equivalente o similar al grado existente '${duplicate.nombre}' en la institución. No se permiten grados duplicados o con variaciones ortográficas.` 
+      });
       return;
     }
 
@@ -558,13 +572,13 @@ export const createGradeType = async (req: Request, res: Response): Promise<void
       `INSERT INTO tipo_grado (nombre, id_nivel)
        VALUES ($1, $2)
        RETURNING id_tipo_grado, nombre, id_nivel`,
-      [nombre, levelId]
+      [rawNombre.toUpperCase(), levelId]
     );
 
     res.status(201).json(created.rows[0]);
   } catch (error: any) {
     console.error("Error creating grade type:", error);
-    res.status(500).json({ error: "Error en el servidor" });
+    res.status(500).json({ error: "Error en el servidor al registrar el grado" });
   }
 };
 
@@ -6100,24 +6114,38 @@ export const renameSingleCourse = async (req: Request, res: Response): Promise<v
 
     const { id_seccion } = groupRes.rows[0];
 
-    // Check how many groups share this section
-    const shareRes = await client.query(
-      `SELECT COUNT(*)::int AS total FROM grupos WHERE id_seccion = $1 AND id_colegio = $2`,
-      [id_seccion, schoolId]
+    // 1. Buscar si ya existe una sección con este nombre en el catálogo general 'secciones'
+    const existingSecRes = await client.query(
+      `SELECT id_seccion FROM secciones WHERE UPPER(nombre) = UPPER($1)`,
+      [nombre]
     );
-    const shared = shareRes.rows[0].total;
 
-    if (shared <= 1) {
-      // Only this group uses the section → rename directly
-      await client.query(`UPDATE secciones SET nombre = $1 WHERE id_seccion = $2`, [nombre, id_seccion]);
+    if (existingSecRes.rows.length > 0) {
+      // La sección ya existe -> simplemente vincular el grupo a la sección existente
+      const targetSeccionId = existingSecRes.rows[0].id_seccion;
+      if (targetSeccionId !== id_seccion) {
+        await client.query(`UPDATE grupos SET id_seccion = $1 WHERE id_grupo = $2`, [targetSeccionId, idGrupo]);
+      }
     } else {
-      // Section is shared → create a new section and reassign
-      const newSecRes = await client.query(
-        `INSERT INTO secciones (nombre) VALUES ($1) RETURNING id_seccion`,
-        [nombre]
+      // La sección no existe aún -> verificar si la sección actual es compartida por otros grupos
+      const shareRes = await client.query(
+        `SELECT COUNT(*)::int AS total FROM grupos WHERE id_seccion = $1 AND id_colegio = $2`,
+        [id_seccion, schoolId]
       );
-      const newSeccionId = newSecRes.rows[0].id_seccion;
-      await client.query(`UPDATE grupos SET id_seccion = $1 WHERE id_grupo = $2`, [newSeccionId, idGrupo]);
+      const shared = shareRes.rows[0].total;
+
+      if (shared <= 1) {
+        // Solo este grupo usa la sección actual -> renombrar directamente la sección
+        await client.query(`UPDATE secciones SET nombre = $1 WHERE id_seccion = $2`, [nombre, id_seccion]);
+      } else {
+        // La sección actual es compartida -> crear la nueva sección e independizar el grupo
+        const newSecRes = await client.query(
+          `INSERT INTO secciones (nombre) VALUES ($1) RETURNING id_seccion`,
+          [nombre]
+        );
+        const newSeccionId = newSecRes.rows[0].id_seccion;
+        await client.query(`UPDATE grupos SET id_seccion = $1 WHERE id_grupo = $2`, [newSeccionId, idGrupo]);
+      }
     }
 
     await client.query("COMMIT");
@@ -6125,7 +6153,7 @@ export const renameSingleCourse = async (req: Request, res: Response): Promise<v
   } catch (error: any) {
     await client.query("ROLLBACK");
     console.error("Error in renameSingleCourse:", error);
-    res.status(500).json({ error: "Error en el servidor" });
+    res.status(500).json({ error: "Error en el servidor al renombrar el curso." });
   } finally {
     client.release();
   }

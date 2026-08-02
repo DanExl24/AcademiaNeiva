@@ -239,7 +239,12 @@ const fetchSchoolIdentity = async () => {
     const school = res.data.school || res.data
     if (school) {
       schoolName.value = school.nombre || 'AcademiaNeiva'
-      schoolEscudo.value = school.escudo_url || null
+      if (school.escudo_url && typeof school.escudo_url === 'string' && school.escudo_url.trim()) {
+        const rawUrl = school.escudo_url.trim()
+        schoolEscudo.value = rawUrl.startsWith('http') ? rawUrl : `http://localhost:3000${rawUrl}`
+      } else {
+        schoolEscudo.value = null
+      }
       updateTheme(school.color_primario, school.color_secundario)
     }
   } catch (error) {
@@ -581,7 +586,7 @@ onUnmounted(() => {
       <!-- Logo Area -->
       <div class="h-16 flex items-center px-5 border-b border-gray-100 dark:border-slate-800 gap-3">
         <div class="w-8 h-8 rounded-lg overflow-hidden shrink-0 flex items-center justify-center bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-800">
-          <img v-if="schoolEscudo" :src="schoolEscudo" class="w-full h-full object-contain" alt="Escudo" />
+          <img v-if="schoolEscudo" :src="schoolEscudo" class="w-full h-full object-contain" alt="Escudo" @error="schoolEscudo = null" />
           <School v-else class="text-indigo-600 flex-shrink-0" :size="20" />
         </div>
         <span v-if="!isCollapsed" class="font-bold text-gray-900 dark:text-white truncate text-xs leading-tight max-w-[150px]">{{ schoolName }}</span>

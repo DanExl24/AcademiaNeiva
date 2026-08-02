@@ -697,4 +697,46 @@ export class NotificationService {
       console.error('Error enviando email de reingreso en proceso:', error);
     }
   }
+
+  static async sendEmailChangeCode(
+    to: string,
+    userName: string,
+    code: string
+  ) {
+    if (!to) return;
+    const html = `
+      <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #1f2937;">
+        <div style="background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%); padding: 40px; border-radius: 24px; text-align: center; color: white; margin-bottom: 30px;">
+          <h1 style="margin: 0; font-size: 26px; font-weight: 800;">Código de Verificación</h1>
+          <p style="opacity: 0.9; margin-top: 10px; font-size: 15px;">Confirmación de Cambio de Correo Electrónico</p>
+        </div>
+        
+        <p style="font-size: 16px; font-weight: 600;">Hola, ${userName},</p>
+        <p style="line-height: 1.6;">Has solicitado actualizar la dirección de correo electrónico asociada a tu cuenta institucional en <strong>Academia Neiva</strong>.</p>
+        
+        <div style="background-color: #f8fafc; border-radius: 20px; padding: 30px; margin: 25px 0; border: 2px dashed #6366f1; text-align: center;">
+          <p style="margin: 0; color: #64748b; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em;">Tu código de seguridad</p>
+          <p style="margin: 15px 0 0 0; color: #4338ca; font-size: 42px; font-weight: 900; letter-spacing: 0.25em;">${code}</p>
+        </div>
+
+        <p style="line-height: 1.6; font-size: 13px; color: #64748b;">Este código es válido durante los próximos <strong>15 minutos</strong>. Si tú no realizaste esta solicitud, por favor ignora este mensaje y tu correo no cambiará.</p>
+
+        <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #f3f4f6; text-align: center; color: #9ca3af; font-size: 12px;">
+          <p>© Academia Neiva. Todos los derechos reservados.</p>
+        </div>
+      </div>
+    `;
+
+    try {
+      await transporter.sendMail({
+        from: `"Academia Neiva" <${process.env.SMTP_USER}>`,
+        to,
+        subject: `Código de Verificación: ${code} - Cambio de Correo`,
+        html,
+      });
+      console.log(`Email de verificación de cambio de correo enviado a ${to}`);
+    } catch (error) {
+      console.error('Error enviando email de verificación de cambio de correo:', error);
+    }
+  }
 }

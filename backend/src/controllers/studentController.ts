@@ -338,6 +338,18 @@ export const updateStudentStatus = async (req: Request, res: Response) => {
       throw new Error("Estudiante no encontrado");
     }
 
+    // Si el estudiante pasa a estado ACTIVO, resolver los tickets de soporte asociados a sus matrículas de reingreso
+    if (estado === 'ACTIVO') {
+      await client.query(
+        `UPDATE tickets_soporte
+         SET estado = 'RESUELTO'
+         WHERE id_ticket IN (
+           SELECT id_ticket FROM matricula WHERE id_estudiante = $1 AND id_ticket IS NOT NULL
+         ) AND estado = 'EN_PROCESO'`,
+        [id]
+      );
+    }
+
     // Audit logging
     const activeAuditoriaId = (req as any).user?.supervisionId;
     if (activeAuditoriaId) {

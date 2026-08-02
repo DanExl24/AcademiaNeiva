@@ -389,6 +389,13 @@ export const ensureCompetencySchema = async (): Promise<void> => {
       await client.query(addUsuarioDocTelSql);
     }
 
+    // Ejecutar migración 023 (email_change_tokens)
+    const emailChangeTokensPath = path.join(__dirname, "../migrations/023_email_change_tokens.sql");
+    if (fs.existsSync(emailChangeTokensPath)) {
+      const emailChangeTokensSql = fs.readFileSync(emailChangeTokensPath, "utf8");
+      await client.query(emailChangeTokensSql);
+    }
+
     // Backfill sync_uuid for existing competencies
     const unmigratedRes = await client.query(`
       SELECT id_colegio, id_anio, id_materia, id_periodo, descripcion, ARRAY_AGG(id_competencia) AS ids

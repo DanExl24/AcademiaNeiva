@@ -252,6 +252,53 @@ const bulkPrefijoError = computed(() => {
   return ''
 })
 
+const normalizeClientGrade = (str: string): string => {
+  if (!str) return ''
+  let text = str.toUpperCase().trim()
+  text = text.normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+  text = text.replace(/\b(GRADO|GRADOS|NIVEL|NIVELES|CURSO|CURSOS|ANO|ANIO|SISTEMA)\b/g, '').trim()
+  text = text.replace(/[\°\º\.\-\_\#\,\:]/g, '').trim()
+  const ordinalMap: Record<string, string> = {
+    '1': 'PRIMERO', '1RO': 'PRIMERO', '1ER': 'PRIMERO',
+    '2': 'SEGUNDO', '2DO': 'SEGUNDO',
+    '3': 'TERCERO', '3RO': 'TERCERO', '3ER': 'TERCERO',
+    '4': 'CUARTO', '4TO': 'CUARTO',
+    '5': 'QUINTO', '5TO': 'QUINTO',
+    '6': 'SEXTO', '6TO': 'SEXTO',
+    '7': 'SEPTIMO', '7MO': 'SEPTIMO',
+    '8': 'OCTAVO', '8VO': 'OCTAVO',
+    '9': 'NOVENO', '9NO': 'NOVENO',
+    '10': 'DECIMO', '10MO': 'DECIMO',
+    '11': 'ONCE', '11VO': 'ONCE', 'UNDECIMO': 'ONCE',
+    '12': 'DOCE', '12VO': 'DOCE', 'DUODECIMO': 'DOCE',
+    'PARVULO': 'PARVULOS', 'PARVULOS': 'PARVULOS',
+    'PREJARDIN': 'PREJARDIN', 'PREKINDER': 'PREJARDIN',
+    'JARDIN': 'JARDIN', 'KINDER': 'JARDIN',
+    'TRANSICION': 'TRANSICION'
+  }
+  const words = text.split(/\s+/).filter(Boolean)
+  text = words.map(w => ordinalMap[w] || w).join('')
+  return text.replace(/([A-Z])\1+/g, '$1')
+}
+
+const gradeNameValidationError = computed(() => {
+  const input = newGradeType.value.nombre.trim()
+  if (!input) return ''
+
+  const normInput = normalizeClientGrade(input)
+  if (!normInput) return ''
+
+  const existingMatch = tiposGrado.value.find(g => {
+    return normalizeClientGrade(g.nombre) === normInput
+  })
+
+  if (existingMatch) {
+    return `⚠️ El nombre '${input}' es equivalente o muy similar al grado '${existingMatch.nombre}' ya registrado.`
+  }
+
+  return ''
+})
+
 
 const toggleGradeSelection = (id: number) => {
   if (selectedGradeId.value === id) {
@@ -956,12 +1003,15 @@ watch(() => yearStore.selectedYearId, () => {
               <div class="space-y-2">
                 <label class="text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Nombre Descriptivo</label>
                 <input v-model="newGradeType.nombre" type="text" placeholder="Ej. Grado Sexto" class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 rounded-2xl p-4 font-bold outline-none text-slate-900 dark:text-white placeholder:text-slate-400" />
+                <div v-if="gradeNameValidationError" class="text-xs font-bold text-amber-600 dark:text-amber-400 ml-1 mt-1">
+                  {{ gradeNameValidationError }}
+                </div>
               </div>
             </div>
 
             <div class="flex gap-3 pt-2">
               <button @click="closeCreateModal" class="flex-1 px-6 py-4 rounded-2xl font-black text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all">Cancelar</button>
-              <button @click="createGradeType" :disabled="savingGrade" class="flex-[2] bg-slate-900 dark:bg-white dark:text-slate-900 text-white px-6 py-4 rounded-2xl font-black shadow-xl shadow-slate-200 dark:shadow-none hover:translate-y-[-2px] active:translate-y-0 transition-all disabled:opacity-50">
+              <button @click="createGradeType" :disabled="savingGrade || !!gradeNameValidationError" class="flex-[2] bg-slate-900 dark:bg-white dark:text-slate-900 text-white px-6 py-4 rounded-2xl font-black shadow-xl shadow-slate-200 dark:shadow-none hover:translate-y-[-2px] active:translate-y-0 transition-all disabled:opacity-50">
                 {{ savingGrade ? 'Registrando...' : 'Confirmar Registro' }}
               </button>
             </div>

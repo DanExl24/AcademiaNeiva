@@ -3,6 +3,7 @@ import { pool } from "../config/db";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
+import { NotificationService } from "../services/notificationService";
 
 const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret";
 
@@ -374,7 +375,7 @@ export const verifySession = async (req: Request, res: Response): Promise<void> 
   }
 };
 
-export const updateProfileEmail = async (req: Request, res: Response): Promise<void> => {
+export const requestEmailChange = async (req: Request, res: Response): Promise<void> => {
   const user = (req as any).user;
   const { nuevo_email } = req.body;
 
@@ -383,35 +384,144 @@ export const updateProfileEmail = async (req: Request, res: Response): Promise<v
     return;
   }
 
-  if (!nuevo_email || !nuevo_email.includes("@")) {
+  const targetEmail = (nuevo_email || '').trim().toLowerCase();
+  if (!targetEmail || !targetEmail.includes("@")) {
     res.status(400).json({ error: "Debe proporcionar un correo electrónico válido." });
     return;
   }
 
   try {
     const userId = Number(user.id);
-    
-    // Verificar si el correo ya está en uso por otro usuario
-    const checkRes = await pool.query(
-      'SELECT 1 FROM usuario WHERE email = $1 AND id_usuario != $2',
-      [nuevo_email.trim(), userId]
+
+    // 1. Obtener datos del usuario
+    const userRes = await pool.query(
+      'SELECT email, nombre, apellido FROM usuario WHERE id_usuario = $1',
+      [userId]
     );
 
-    if (checkRes.rows.length > 0) {
-      res.status(400).json({ error: "El correo electrónico ya se encuentra registrado en el sistema." });
+    if (userRes.rows.length === 0) {
+      res.status(404).json({ error: "Usuario no encontrado." });
       return;
     }
 
-    // Actualizar correo
-    await pool.query(
-      'UPDATE usuario SET email = $1 WHERE id_usuario = $2',
-      [nuevo_email.trim(), userId]
+    const currentEmail = (userRes.rows[0].email || '').trim().toLowerCase();
+    const userName = `${userRes.rows[0].nombre} ${userRes.rows[0].apellido || ''}`.trim();
+
+    if (currentEmail === targetEmail) {
+      res.status(400).json({ error: "El nuevo correo electrónico es idéntico al actual." });
+      return;
+    }
+
+    // 2. Verificar que el nuevo correo no esté registrado por otro usuario
+    const checkRes = await pool.query(
+      'SELECT 1 FROM usuario WHERE LOWER(email) = $1 AND id_usuario != $2',
+      [targetEmail, userId]
     );
 
-    res.json({ message: "Correo electrónico actualizado exitosamente." });
+    if (checkRes.rows.length > 0) {
+      res.status(400).json({ error: "El correo electrónico ya se encuentra registrado en la plataforma por otra cuenta." });
+      return;
+    }
+
+    // 3. Generar código numérico de 6 dígitos aleatorio
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // Expiración en 15 minutos
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+
+    // Inactivar tokens anteriores no usados de este usuario
+    await pool.query(
+      'UPDATE email_change_tokens SET used = TRUE WHERE id_usuario = $1 AND used = FALSE',
+      [userId]
+    );
+
+    // Insertar nuevo token
+    await pool.query(
+      `INSERT INTO email_change_tokens (id_usuario, nuevo_email, codigo, expires_at)
+       VALUES ($1, $2, $3, $4)`,
+      [userId, targetEmail, code, expiresAt]
+    );
+
+    // 4. Enviar email con el código de 6 dígitos al NUEVO correo electrónico
+    await NotificationService.sendEmailChangeCode(targetEmail, userName, code);
+
+    res.json({ 
+      message: `Código de verificación enviado exitosamente al correo ${targetEmail}. Por favor ingresa los 6 dígitos para confirmar el cambio.` 
+    });
   } catch (error) {
-    console.error("Error updating profile email:", error);
-    res.status(500).json({ error: "Error al actualizar el correo electrónico." });
+    console.error("Error requesting email change:", error);
+    res.status(500).json({ error: "Error al generar la solicitud de cambio de correo." });
+  }
+};
+
+export const verifyEmailChange = async (req: Request, res: Response): Promise<void> => {
+  const user = (req as any).user;
+  const { nuevo_email, codigo } = req.body;
+
+  if (!user) {
+    res.status(401).json({ error: "No autorizado." });
+    return;
+  }
+
+  const targetEmail = (nuevo_email || '').trim().toLowerCase();
+  const inputCode = (codigo || '').trim();
+
+  if (!targetEmail || !inputCode) {
+    res.status(400).json({ error: "Correo electrónico y código de verificación son requeridos." });
+    return;
+  }
+
+  try {
+    const userId = Number(user.id);
+
+    // 1. Buscar token activo matching id_usuario, nuevo_email y codigo
+    const tokenRes = await pool.query(
+      `SELECT id, expires_at 
+       FROM email_change_tokens 
+       WHERE id_usuario = $1 
+         AND LOWER(nuevo_email) = $2 
+         AND codigo = $3 
+         AND used = FALSE 
+         AND expires_at > NOW()
+       ORDER BY created_at DESC 
+       LIMIT 1`,
+      [userId, targetEmail, inputCode]
+    );
+
+    if (tokenRes.rows.length === 0) {
+      res.status(400).json({ error: "El código de verificación es incorrecto o ha expirado. Por favor solicita uno nuevo." });
+      return;
+    }
+
+    const tokenId = tokenRes.rows[0].id;
+
+    // 2. Verificar por seguridad que el correo no se haya ocupado mientras tanto
+    const checkRes = await pool.query(
+      'SELECT 1 FROM usuario WHERE LOWER(email) = $1 AND id_usuario != $2',
+      [targetEmail, userId]
+    );
+
+    if (checkRes.rows.length > 0) {
+      res.status(400).json({ error: "El correo electrónico ya se encuentra registrado por otro usuario." });
+      return;
+    }
+
+    // 3. Actualizar correo en la tabla usuario
+    await pool.query(
+      'UPDATE usuario SET email = $1 WHERE id_usuario = $2',
+      [targetEmail, userId]
+    );
+
+    // 4. Marcar token como usado
+    await pool.query(
+      'UPDATE email_change_tokens SET used = TRUE WHERE id = $1',
+      [tokenId]
+    );
+
+    res.json({ message: "Correo electrónico verificado y actualizado exitosamente." });
+  } catch (error) {
+    console.error("Error verifying email change:", error);
+    res.status(500).json({ error: "Error al verificar el código de cambio de correo." });
   }
 };
 

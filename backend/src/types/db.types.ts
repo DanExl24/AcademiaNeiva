@@ -254,6 +254,16 @@ export interface DbaDimensionesPreescolar {
   id_dimension: number;
 }
 
+export interface EmailChangeTokens {
+  codigo: string;
+  created_at: Generated<Timestamp | null>;
+  expires_at: Timestamp;
+  id: Generated<number>;
+  id_usuario: number;
+  nuevo_email: string;
+  used: Generated<boolean | null>;
+}
+
 export interface Desempeno {
   descripcion: string;
   id_actividadmateria: number;
@@ -722,6 +732,7 @@ export interface DB {
   directivo: Directivo;
   docente: Docente;
   documento_matriculas: DocumentoMatriculas;
+  email_change_tokens: EmailChangeTokens;
   escala_valoracion: EscalaValoracion;
   estudiante: Estudiante;
   evidencia_aprendizaje: EvidenciaAprendizaje;

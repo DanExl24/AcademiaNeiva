@@ -12,6 +12,7 @@ import {
   ArrowLeft,
   Loader2,
   ShieldAlert,
+  ShieldCheck,
   KeyRound,
   Eye,
   EyeOff,
@@ -41,6 +42,12 @@ const submittingRequest = ref(false)
 const emailForm = ref({
   email: ''
 })
+
+// 2-Step Email Change State
+const emailStep = ref<1 | 2>(1)
+const pendingNewEmail = ref('')
+const verificationCode = ref('')
+const submittingCode = ref(false)
 
 const phoneForm = ref({
   telefono: ''
@@ -120,29 +127,74 @@ onMounted(() => {
   }
 })
 
-const handleUpdateEmail = async () => {
+const handleRequestEmailCode = async () => {
+  if (!emailForm.value.email || emailForm.value.email === profileData.value?.email) {
+    emailError.value = 'Ingresa un nuevo correo electrónico diferente al actual.'
+    return
+  }
+
   try {
     submittingEmail.value = true
     emailSuccess.value = ''
     emailError.value = ''
     
     const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.put('http://localhost:3000/api/auth/profile/email', {
+    const res = await axios.post('http://localhost:3000/api/auth/profile/request-email-change', {
       nuevo_email: emailForm.value.email
     }, { headers })
 
-    emailSuccess.value = 'Correo electrónico actualizado con éxito.'
-    
-    // Actualizar el correo en el store de auth
-    if (auth.user) {
-      auth.user.email = emailForm.value.email
-      localStorage.setItem('user', JSON.stringify(auth.user))
-    }
+    pendingNewEmail.value = emailForm.value.email
+    emailStep.value = 2
+    verificationCode.value = ''
+    emailSuccess.value = res.data.message || 'Código de 6 dígitos enviado al nuevo correo.'
   } catch (error: any) {
-    emailError.value = error.response?.data?.error || 'Error al actualizar el correo.'
+    emailError.value = error.response?.data?.error || 'Error al solicitar el código de verificación.'
   } finally {
     submittingEmail.value = false
   }
+}
+
+const handleVerifyEmailCode = async () => {
+  if (!verificationCode.value || verificationCode.value.trim().length !== 6) {
+    emailError.value = 'El código debe tener exactamente 6 dígitos numéricos.'
+    return
+  }
+
+  try {
+    submittingCode.value = true
+    emailSuccess.value = ''
+    emailError.value = ''
+
+    const headers = { Authorization: `Bearer ${auth.token}` }
+    const res = await axios.post('http://localhost:3000/api/auth/profile/verify-email-change', {
+      nuevo_email: pendingNewEmail.value,
+      codigo: verificationCode.value.trim()
+    }, { headers })
+
+    emailSuccess.value = res.data.message || 'Correo actualizado exitosamente.'
+    if (profileData.value) {
+      profileData.value.email = pendingNewEmail.value
+    }
+    if (auth.user) {
+      auth.user.email = pendingNewEmail.value
+      localStorage.setItem('user', JSON.stringify(auth.user))
+    }
+
+    emailStep.value = 1
+    verificationCode.value = ''
+  } catch (error: any) {
+    emailError.value = error.response?.data?.error || 'Error al verificar el código de confirmación.'
+  } finally {
+    submittingCode.value = false
+  }
+}
+
+const cancelEmailChange = () => {
+  emailStep.value = 1
+  verificationCode.value = ''
+  emailForm.value.email = profileData.value?.email || ''
+  emailSuccess.value = ''
+  emailError.value = ''
 }
 
 const handleUpdatePhone = async () => {
@@ -413,33 +465,96 @@ const goBack = () => {
                 </button>
               </form>
 
-              <!-- Email change form -->
-              <form @submit.prevent="handleUpdateEmail" class="space-y-4 pt-2 border-t border-slate-100 dark:border-slate-800">
-                <div class="space-y-2">
-                  <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Correo Electrónico</label>
-                  <div class="relative">
-                    <input 
-                      v-model="emailForm.email"
-                      type="email" 
-                      required
-                      class="w-full pl-11 pr-4 py-4 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-semibold text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all outline-none"
-                    />
-                    <Mail class="w-5 h-5 text-slate-400 absolute left-4 top-4" />
+              <!-- Email change form (2-Step Verification) -->
+              <div class="space-y-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+                
+                <!-- STEP 1: Enter New Email & Request Code -->
+                <form v-if="emailStep === 1" @submit.prevent="handleRequestEmailCode" class="space-y-3">
+                  <div class="space-y-2">
+                    <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Correo Electrónico</label>
+                    <div class="relative">
+                      <input 
+                        v-model="emailForm.email"
+                        type="email" 
+                        required
+                        class="w-full pl-11 pr-4 py-3.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-semibold text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all outline-none"
+                      />
+                      <Mail class="w-5 h-5 text-slate-400 absolute left-4 top-3.5" />
+                    </div>
                   </div>
-                </div>
 
-                <div v-if="emailSuccess" class="text-emerald-600 dark:text-emerald-400 text-xs font-bold ml-1">{{ emailSuccess }}</div>
-                <div v-if="emailError" class="text-rose-600 dark:text-rose-455 text-xs font-bold ml-1">{{ emailError }}</div>
+                  <div v-if="emailSuccess" class="text-emerald-600 dark:text-emerald-400 text-xs font-bold ml-1">{{ emailSuccess }}</div>
+                  <div v-if="emailError" class="text-rose-600 dark:text-rose-455 text-xs font-bold ml-1">{{ emailError }}</div>
 
-                <button 
-                  type="submit" 
-                  :disabled="submittingEmail || emailForm.email === profileData.email"
-                  class="px-6 py-3.5 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all disabled:opacity-50 flex items-center gap-2 cursor-pointer"
-                >
-                  <Loader2 v-if="submittingEmail" class="w-3.5 h-3.5 animate-spin" />
-                  Guardar Correo
-                </button>
-              </form>
+                  <button 
+                    type="submit" 
+                    :disabled="submittingEmail || emailForm.email === profileData.email"
+                    class="px-5 py-3 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all disabled:opacity-50 flex items-center gap-2 cursor-pointer"
+                  >
+                    <Loader2 v-if="submittingEmail" class="w-3.5 h-3.5 animate-spin" />
+                    <span>Enviar Código de Verificación</span>
+                  </button>
+                </form>
+
+                <!-- STEP 2: Enter 6-Digit Code to Confirm -->
+                <form v-else @submit.prevent="handleVerifyEmailCode" class="p-4 bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200/60 dark:border-indigo-900/50 rounded-2xl space-y-4 animate-in fade-in duration-200">
+                  <div class="flex items-start gap-3">
+                    <div class="p-2 bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 rounded-xl shrink-0 mt-0.5">
+                      <ShieldCheck class="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 class="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider">Verificación de Seguridad</h4>
+                      <p class="text-xs font-semibold text-slate-600 dark:text-slate-300 mt-1">
+                        Hemos enviado un código de 6 dígitos a <span class="font-extrabold text-indigo-600 dark:text-indigo-400">{{ pendingNewEmail }}</span>. Revisa tu bandeja de entrada.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div class="space-y-2">
+                    <label class="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest ml-1">Código de 6 dígitos</label>
+                    <input 
+                      v-model="verificationCode"
+                      type="text" 
+                      maxlength="6"
+                      placeholder="000000"
+                      required
+                      class="w-full text-center tracking-[0.4em] font-black text-xl py-3.5 bg-white dark:bg-slate-900 border border-indigo-300 dark:border-indigo-700 rounded-xl text-indigo-700 dark:text-indigo-300 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                    />
+                  </div>
+
+                  <div v-if="emailSuccess" class="text-emerald-700 dark:text-emerald-300 text-xs font-bold ml-1">{{ emailSuccess }}</div>
+                  <div v-if="emailError" class="text-rose-600 dark:text-rose-400 text-xs font-bold ml-1">{{ emailError }}</div>
+
+                  <div class="flex flex-wrap items-center gap-2 pt-1">
+                    <button 
+                      type="submit" 
+                      :disabled="submittingCode || verificationCode.trim().length !== 6"
+                      class="px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all disabled:opacity-50 flex items-center gap-2 cursor-pointer shadow-sm"
+                    >
+                      <Loader2 v-if="submittingCode" class="w-3.5 h-3.5 animate-spin" />
+                      <span>Confirmar y Cambiar Correo</span>
+                    </button>
+
+                    <button 
+                      @click="handleRequestEmailCode"
+                      type="button"
+                      :disabled="submittingEmail"
+                      class="px-3.5 py-3 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold hover:bg-slate-50 transition cursor-pointer"
+                    >
+                      Reenviar
+                    </button>
+
+                    <button 
+                      @click="cancelEmailChange"
+                      type="button"
+                      class="px-3.5 py-3 text-rose-600 hover:underline text-xs font-bold cursor-pointer ml-auto"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </form>
+
+              </div>
             </div>
           </div>
 

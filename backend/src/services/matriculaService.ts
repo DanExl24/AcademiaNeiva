@@ -787,6 +787,22 @@ export class MatriculaService {
         [idEstudiante, idMatricula, finalGradeId, finalEstado]
       );
 
+      // Si la matrícula está vinculada a un ticket de soporte (ej. Reingreso), actualizar el ticket a RESUELTO
+      if (mat.rows[0].id_ticket) {
+        await client.query(
+          `UPDATE tickets_soporte SET estado = 'RESUELTO' WHERE id_ticket = $1`,
+          [mat.rows[0].id_ticket]
+        );
+      }
+
+      // Asegurar que el estudiante quede en estado ACTIVO en el plantel
+      if (idEstudiante) {
+        await client.query(
+          `UPDATE estudiante SET estado = 'ACTIVO', motivo_estado = NULL WHERE id_estudiante = $1`,
+          [idEstudiante]
+        );
+      }
+
       // Supervision Logging if admin_general
       const isRenovacion = !!data.id_estudiante;
       const isReingreso = mat.rows[0].tipo === 'REINGRESO';

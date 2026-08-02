@@ -1,10 +1,10 @@
 import { Router } from "express";
-import { login, studentLogin, getSchoolIdentity, verifySession, updateProfileEmail, updateProfilePassword, updateProfilePhone, getUserProfile } from "../controllers/authController";
+import { login, studentLogin, getSchoolIdentity, verifySession, requestEmailChange, verifyEmailChange, updateProfilePassword, updateProfilePhone, getUserProfile } from "../controllers/authController";
 import { checkDocument } from "../controllers/userController";
 import { forgotPassword, resetPassword } from "../controllers/passwordResetController";
 import { verifyToken } from "../middleware/authMiddleware";
 import { validateDto } from "../middleware/validateDto";
-import { updatePhoneSchema } from "../dtos/profile.dto";
+import { updatePhoneSchema, requestEmailChangeSchema, verifyEmailChangeSchema } from "../dtos/profile.dto";
 
 const router = Router();
 
@@ -18,7 +18,8 @@ router.get("/verify", verifySession);
 
 // Endpoints de gestión de perfil de usuario logueado
 router.get("/profile", verifyToken, getUserProfile);
-router.put("/profile/email", verifyToken, updateProfileEmail);
+router.post("/profile/request-email-change", verifyToken, validateDto(requestEmailChangeSchema), requestEmailChange);
+router.post("/profile/verify-email-change", verifyToken, validateDto(verifyEmailChangeSchema), verifyEmailChange);
 router.put("/profile/phone", verifyToken, validateDto(updatePhoneSchema), updateProfilePhone);
 router.put("/profile/password", verifyToken, updateProfilePassword);
 
