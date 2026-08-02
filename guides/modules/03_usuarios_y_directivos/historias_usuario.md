@@ -128,3 +128,67 @@ Este documento contiene las historias de usuario implementadas para el módulo d
   - [UsuariosList.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/adminGeneral/UsuariosList.vue) (Formulario de edición de credenciales)
 - **Controllers/Services relacionados:** 
   - [adminGeneralController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/adminGeneralController.ts) (`validarTicketParaUsuario`, `modificarCredencialesConTicket`)
+
+---
+
+# HU-DIR-006: Crear Usuario Directamente desde el Panel de Admin General
+
+## Historia
+**Como** Administrador General  
+**Quiero** registrar una cuenta de usuario (Directivo, Docente, Padre de Familia o Admin General) directamente desde el panel de usuarios  
+**Para** incorporar al personal institucional y a los acudientes de forma ágil, sin depender del proceso de matrícula.
+
+## Criterios de Aceptación
+- El formulario permite seleccionar el rol: `Directivo`, `Docente`, `Padre de Familia` o `Admin General`.
+- El rol `Estudiante` **no está disponible** en este formulario — los estudiantes se registran exclusivamente a través del proceso de Matrícula Institucional.
+- Para los roles `Directivo`, `Docente` y `Padre`, debe seleccionarse obligatoriamente una Institución Educativa (colegio).
+- El correo electrónico es obligatorio para todos los roles creados aquí.
+- El sistema provee un generador de contraseñas aleatorias seguras para que el admin comparta la credencial inicial con el nuevo usuario.
+- Al crear el usuario, el backend registra automáticamente el perfil correspondiente en la tabla de rol (`directivo`, `docente` o `padre_familia`).
+- El admin puede ingresar documento de identidad, tipo de documento y teléfono de forma opcional.
+- Si el correo ya está registrado en el sistema, la operación se rechaza con mensaje de error claro.
+- La acción queda registrada en la auditoría de supervisión del Admin General si hay una sesión activa.
+
+## Detalles Técnicos
+- **Prioridad:** Alta
+- **Roles involucrados:** Administrador General
+- **Reglas de negocio relacionadas:** RN-DIR-006, RN-DIR-008
+- **Endpoints relacionados:** 
+  - `POST /api/admin/usuarios`
+- **Componentes frontend relacionados:** 
+  - [UsuariosList.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/adminGeneral/UsuariosList.vue) (Botón "Crear Usuario" y modal de registro)
+- **Controllers/Services relacionados:** 
+  - [adminGeneralController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/adminGeneralController.ts) (`crearUsuarioByAdminGeneral`)
+  - [adminUser.dto.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/dtos/adminUser.dto.ts) (validación Zod)
+
+---
+
+# HU-AUT-006: Cambiar Correo Electrónico con Verificación por Código
+
+## Historia
+**Como** usuario autenticado (Directivo, Docente o Padre de Familia)  
+**Quiero** cambiar mi correo electrónico desde mi perfil  
+**Para** mantener mis datos de contacto actualizados de forma segura.
+
+## Criterios de Aceptación
+- El usuario ingresa su nuevo correo en el formulario de perfil y solicita el cambio.
+- El sistema envía un código de verificación de un solo uso al **nuevo correo electrónico** ingresado.
+- El usuario tiene un tiempo límite para ingresar el código y confirmar el cambio.
+- Si el código es correcto y no ha expirado, el sistema actualiza el correo en la tabla `usuario`.
+- Si el código es incorrecto o expirado, el cambio es rechazado y se mantiene el correo anterior.
+- El cambio de correo **no puede realizarse** simplemente guardando el formulario sin completar la verificación.
+- Los estudiantes que no tienen correo asignado (`email IS NULL`) no pueden usar este flujo.
+
+## Detalles Técnicos
+- **Prioridad:** Alta
+- **Roles involucrados:** Directivo, Docente, Padre de Familia, Admin General
+- **Reglas de negocio relacionadas:** RN-DIR-007
+- **Endpoints relacionados:** 
+  - `POST /api/auth/solicitar-cambio-email`
+  - `POST /api/auth/confirmar-cambio-email`
+- **Componentes frontend relacionados:** 
+  - [ProfileView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/shared/ProfileView.vue) (Sección de cambio de correo)
+- **Controllers/Services relacionados:** 
+  - [notificationService.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/services/notificationService.ts) (Envío de código)
+  - [authController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/authController.ts) (Verificación y aplicación)
+  - Tabla BD: `email_change_tokens`

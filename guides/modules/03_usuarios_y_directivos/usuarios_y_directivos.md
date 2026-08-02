@@ -2,7 +2,7 @@
 
 **Sistema:** Academia Neiva  
 **Módulo:** Administración global de usuarios y directivos  
-**Última actualización:** 2026-07-20
+**Última actualización:** 2026-08-02
 
 ---
 
@@ -28,6 +28,7 @@ Este módulo permite al Administrador General gestionar todas las cuentas de usu
 |---|---|---|
 | Listar usuarios globales | `GET` | `/api/admin/usuarios` |
 | Detalle de usuario | `GET` | `/api/admin/usuarios/:id` |
+| **Crear usuario** | `POST` | `/api/admin/usuarios` |
 | Cambiar estado de usuario | `PATCH` | `/api/admin/usuarios/:id/estado` |
 | Restablecer password | `POST` | `/api/admin/usuarios/:id/restablecer-password` |
 | Forzar cierre de sesión | `POST` | `/api/admin/usuarios/:id/cerrar-sesion` |
@@ -61,6 +62,9 @@ Este módulo permite al Administrador General gestionar todas las cuentas de usu
 - **RN-USR-003 (Modificación con ticket):** Para modificar credenciales sensibles de un usuario (email, documento), el Admin General debe asociar un ticket de soporte resuelto como trazabilidad de la solicitud.
 - **RN-USR-004 (Directivos vinculados a colegio):** Un directivo siempre está asociado a un `id_colegio`. La desvinculación no elimina al usuario sino que lo marca como inactivo en la tabla `directivo`.
 - **RN-USR-005 (Cargos de directivos):** Los directivos tienen cargos típicos como `RECTOR` o `COORDINADOR` que determinan sus permisos dentro del colegio.
+- **RN-USR-006 (Creación directa sin Matrícula):** El Admin General puede crear usuarios de rol `directivo`, `docente`, `padre` y `admin_general` directamente. El rol `estudiante` está excluido — solo puede crearse vía Matrícula Institucional.
+- **RN-USR-007 (Cambio de email con código de verificación):** El correo electrónico solo puede modificarse completando un flujo de verificación por código enviado al nuevo correo. Ver tabla `email_change_tokens`.
+- **RN-USR-008 (Email nullable para estudiantes):** El campo `email` en `usuario` es `NULL`able. Estudiantes sin correo almacenan `NULL`. El índice `UNIQUE` sigue activo (en PostgreSQL `NULL ≠ NULL`).
 
 ---
 
@@ -91,7 +95,7 @@ Este módulo permite al Administrador General gestionar todas las cuentas de usu
 | Columna | Tipo | Descripción |
 |---|---|---|
 | `id_usuario` | SERIAL PK | Identificador único |
-| `email` | VARCHAR | Correo electrónico |
+| `email` | VARCHAR / NULL | Correo electrónico. **NULL permitido para estudiantes.** Obligatorio para otros roles. |
 | `password` | VARCHAR | Hash bcrypt |
 | `nombre` | VARCHAR | Nombre del usuario |
 | `apellido` | VARCHAR | Apellido del usuario |
@@ -151,3 +155,6 @@ CREATE TYPE public.tipo_documento_identidad AS ENUM ('TI', 'CC', 'CE', 'RC', 'PA
 | **Tabla `directivo` separada de `usuario`** | Permite vincular/desvincular directivos sin eliminar la cuenta de usuario subyacente |
 | **Credenciales con ticket** | Garantiza trazabilidad legal: toda modificación de datos sensibles tiene un ticket de soporte como evidencia auditora |
 | **`logged_out_at` en tabla usuario** | Alternativa eficiente a borrar todos los tokens: un solo UPDATE invalida cualquier token emitido antes de esa fecha |
+| **Estudiantes NO creados por Admin General** | Los estudiantes requieren asignación a grado, grupo, año académico y vinculación con padre — todo esto lo gestiona la Matrícula Institucional. Crear estudiantes directamente omitiría estas validaciones críticas |
+| **`email` nullable en `usuario`** | Estudiantes menores de edad o sin acceso a correo pueden existir en el sistema sin email ficticio. PostgreSQL permite múltiples `NULL` en columnas `UNIQUE`, manteniendo la integridad de datos |
+| **Verificación por código para cambio de email** | Previene el secuestro de cuenta mediante cambio de correo por un atacante con sesión abierta. Asegura que el nuevo correo es accesible por el dueño real |

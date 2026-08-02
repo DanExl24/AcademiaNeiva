@@ -83,3 +83,17 @@ Este documento detalla las reglas de negocio técnicas y funcionales del módulo
 - **Endpoints relacionados:** 
   - `PATCH /api/academic-admin/grade-types/:id/bulk-rename`
 - **Historias de usuario relacionadas:** HU-EST-004
+
+---
+
+### RN-EST-007: Validación Estricta de Nombres de Grados (Anti-Duplicados Fonéticos)
+- **Descripción:** Al crear un nuevo tipo de grado, el sistema normaliza el nombre ingresado antes de compararlo contra los grados existentes del colegio. La normalización incluye: eliminar acentos, remover prefijos comunes (`GRADO`, `NIVEL`), convertir ordinales numéricos (`6°`, `6`) a su forma escrita (`SEXTO`), y colapsar letras consecutivas duplicadas (`SEXXTO` → `SEXTO`). Si el nombre normalizado coincide con algún grado ya registrado en el mismo colegio, la operación se rechaza con HTTP 409.
+- **Motivo:** Evita que existan múltiples tipos de grado que representen el mismo nivel pero con nombres ortográficamente distintos (ej. `SEXTO`, `6°`, `GRADO SEXTO`, `SEXXTO`), lo cual generaría inconsistencias en matrículas, asignaciones académicas y reportes. El control es tanto en backend (fuente de verdad) como en el cliente (validación en tiempo real).
+- **Módulos afectados:** Estructura Escolar, Matrículas, Configuración Académica.
+- **Archivos donde se implementa:** 
+  - [gradeNormalization.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/utils/gradeNormalization.ts) (`normalizeGradeName`, `isDuplicateOrSimilarGrade`)
+  - [academicAdminController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdminController.ts) (`createGradeType`)
+  - [GradeManagement.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/GradeManagement.vue) (validación en tiempo real en el cliente)
+- **Endpoints relacionados:** 
+  - `POST /api/academic-admin/grade-types`
+- **Historias de usuario relacionadas:** HU-EST-007
