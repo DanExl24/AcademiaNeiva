@@ -105,6 +105,21 @@ export const useAuthStore = defineStore('auth', () => {
     setActiveRole('estudiante')
   }
 
+  function startParentMonitoring(parent: MonitoredTeacher) {
+    // Guardar el rol actual para poder restaurarlo después
+    previousRole.value = activeRole.value
+    localStorage.setItem('previousRole', activeRole.value || '')
+    
+    monitoringUser.value = parent
+    localStorage.setItem('monitoringUser', JSON.stringify(parent))
+
+    monitoringType.value = 'padre'
+    localStorage.setItem('monitoringType', 'padre')
+    
+    // Cambiar automáticamente a rol padre para ver su panel
+    setActiveRole('padre')
+  }
+
   function stopMonitoring() {
     monitoringUser.value = null
     localStorage.removeItem('monitoringUser')
@@ -202,6 +217,7 @@ export const useAuthStore = defineStore('auth', () => {
     setSelectedSchoolId,
     startMonitoring,
     startStudentMonitoring,
+    startParentMonitoring,
     stopMonitoring,
     startSupervision,
     stopSupervision,

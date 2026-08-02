@@ -48,7 +48,7 @@ const attendanceData = ref<{ records: any[], stats: any } | null>(null)
 
 const fetchChildren = async () => {
   try {
-    const userId = auth.user?.id
+    const userId = (auth.isMonitoring && auth.monitoringUser?.id) ? auth.monitoringUser.id : auth.user?.id
     if (!userId) return
     const res = await axios.get(`http://localhost:3000/api/student/parent-children/${userId}`)
     children.value = res.data

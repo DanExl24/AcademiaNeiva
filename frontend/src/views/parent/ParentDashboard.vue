@@ -65,7 +65,7 @@ const dashboardData = ref<any>({
 
 const fetchDashboardData = async () => {
   try {
-    const id_usuario = auth.user?.id
+    const id_usuario = (auth.isMonitoring && auth.monitoringUser?.id) ? auth.monitoringUser.id : auth.user?.id
     const params: any = {}
     if (selectedPeriodId.value) params.id_periodo = selectedPeriodId.value
     if (yearStore.selectedYearId) params.yearId = yearStore.selectedYearId
@@ -97,6 +97,10 @@ watch(selectedPeriodId, () => {
 })
 
 watch(() => yearStore.selectedYearId, () => {
+  fetchDashboardData()
+})
+
+watch(() => auth.monitoringUser, () => {
   fetchDashboardData()
 })
 

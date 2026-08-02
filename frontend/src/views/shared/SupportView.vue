@@ -537,8 +537,30 @@ const getObservationText = (obs: any) => {
 <template>
   <div class="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 sm:p-6 transition-colors duration-500 flex flex-col justify-center items-center">
     
+    <!-- 0. BLOCKED VIEW: When in Monitoring Mode -->
+    <div v-if="auth.isMonitoring" class="max-w-lg w-full bg-white dark:bg-slate-900 rounded-2xl p-8 border border-slate-200 dark:border-slate-800 shadow-xl text-center space-y-5">
+      <div class="w-16 h-16 bg-amber-50 dark:bg-amber-950/50 rounded-2xl flex items-center justify-center mx-auto text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-900/50">
+        <ShieldAlert class="w-8 h-8" />
+      </div>
+      <div>
+        <h2 class="text-xl font-bold text-slate-900 dark:text-white">Soporte Técnico Bloqueado</h2>
+        <p class="text-xs font-semibold text-amber-600 dark:text-amber-400 mt-1">Modo Monitoreo Activo</p>
+      </div>
+      <p class="text-sm text-slate-600 dark:text-slate-300">
+        No está permitido crear ni enviar tickets de soporte técnico en nombre de un docente o acudiente mientras estás en Modo Monitoreo.
+      </p>
+      <div class="pt-2">
+        <button
+          @click="router.push('/dashboard')"
+          class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold text-xs transition-colors shadow-md"
+        >
+          Volver al Dashboard
+        </button>
+      </div>
+    </div>
+
     <!-- 1. STAFF VIEW: Tickets Management Dashboard -->
-    <div v-if="isStaff" class="w-full max-w-5xl bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-2xl p-6 sm:p-10 relative overflow-hidden transition-all duration-300">
+    <div v-else-if="isStaff" class="w-full max-w-5xl bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-2xl p-6 sm:p-10 relative overflow-hidden transition-all duration-300">
       
       <!-- Back button -->
       <button 

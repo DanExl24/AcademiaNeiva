@@ -14,6 +14,7 @@ import adminGeneralRoutes from "./routes/adminGeneral.routes";
 import dbaRoutes from "./routes/dba.routes";
 import supportRoutes from "./routes/support.routes";
 import reingresoRoutes from "./routes/reingreso.routes";
+import parentRoutes from "./routes/parent.routes";
 
 const app = express();
 
@@ -90,6 +91,7 @@ app.use("/api/admin", adminGeneralRoutes);
 app.use("/api/admin", dbaRoutes);
 app.use("/api/support", supportRoutes);
 app.use("/api/reingreso", reingresoRoutes);
+app.use("/api/parents", parentRoutes);
 
 app.get("/", (req, res) => {
   res.json({ message: "API TS funcionando segura" });

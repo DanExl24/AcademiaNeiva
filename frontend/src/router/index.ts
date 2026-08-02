@@ -119,6 +119,12 @@ const router = createRouter({
           meta: { roles: ['directivo'] }
         },
         {
+          path: 'padres-familia',
+          name: 'Padres de Familia',
+          component: () => import('../views/admin/ParentManagement.vue'),
+          meta: { roles: ['directivo'] }
+        },
+        {
           path: 'configuracion-academica',
           name: 'Configuración Académica',
           component: AcademicSettings,

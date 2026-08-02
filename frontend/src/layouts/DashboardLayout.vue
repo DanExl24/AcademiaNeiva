@@ -134,6 +134,7 @@ const menuItems = computed(() => {
       { name: 'Mi Colegio', icon: School, path: '/dashboard/mi-colegio' },
       { name: 'Gestión Matrículas', icon: ClipboardList, path: '/dashboard/gestion-matriculas' },
       { name: 'Gestión Estudiantes', icon: GraduationCap, path: '/dashboard/gestion-estudiantes' },
+      { name: 'Padres de Familia', icon: Users, path: '/dashboard/padres-familia' },
       { name: 'Gestión de Grados', icon: Layers3, path: '/dashboard/gestion-grados' },
       { name: 'Gestión de Materias', icon: LibraryBig, path: '/dashboard/gestion-materias' },
       { name: 'Docentes', icon: GraduationCap, path: '/dashboard/docentes' },
@@ -145,9 +146,14 @@ const menuItems = computed(() => {
 
   // Opciones comunes para todos los roles al final del sidebar
   items.push(
-    { name: 'Directorio', icon: BookOpen, path: '/dashboard/directorio' },
-    { name: 'Soporte Técnico', icon: LifeBuoy, path: '/dashboard/soporte' }
+    { name: 'Directorio', icon: BookOpen, path: '/dashboard/directorio' }
   )
+
+  if (!auth.isMonitoring) {
+    items.push(
+      { name: 'Soporte Técnico', icon: LifeBuoy, path: '/dashboard/soporte' }
+    )
+  }
 
   if (role !== 'estudiante') {
     items.push(
@@ -171,9 +177,12 @@ const handleLogout = () => {
 
 const stopMonitoring = () => {
   const isStudent = auth.monitoringType === 'estudiante'
+  const isParent = auth.monitoringType === 'padre'
   auth.stopMonitoring()
   if (isStudent) {
     router.push('/dashboard/gestion-estudiantes')
+  } else if (isParent) {
+    router.push('/dashboard/padres-familia')
   } else {
     router.push('/dashboard/docentes')
   }
