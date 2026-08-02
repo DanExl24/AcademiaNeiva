@@ -5,7 +5,8 @@ import axios from 'axios'
 import { useAuthStore } from '../../stores/auth'
 import { 
   Users, Search, UserCheck, ShieldAlert, Key, LogOut, Trash2, Eye, 
-  Mail, School, Shield, Calendar, Lock, Clipboard, Check, Ban, Loader2
+  Mail, School, Shield, Calendar, Lock, Clipboard, Check, Ban, Loader2,
+  UserPlus, RefreshCw
 } from 'lucide-vue-next'
 
 const auth = useAuthStore()
@@ -55,7 +56,100 @@ const stats = ref({
 const showDetailsModal = ref(false)
 const showBanModal = ref(false)
 const showResetModal = ref(false)
+const showCreateUserModal = ref(false)
+const creatingUser = ref(false)
+const createError = ref('')
 const resetting = ref(false)
+
+const newUser = ref({
+  rol: 'directivo',
+  email: '',
+  password: '',
+  nombre: '',
+  apellido: '',
+  id_colegio: '' as number | '',
+  tipo_documento: 'CC',
+  documento: '',
+  telefono: ''
+})
+
+const generateRandomPassword = () => {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#'
+  let pass = ''
+  for (let i = 0; i < 10; i++) {
+    pass += chars.charAt(Math.floor(Math.random() * chars.length))
+  }
+  newUser.value.password = pass
+}
+
+const openCreateUserModal = () => {
+  createError.value = ''
+  newUser.value = {
+    rol: 'directivo',
+    email: '',
+    password: '',
+    nombre: '',
+    apellido: '',
+    id_colegio: selectedSchool.value ? Number(selectedSchool.value) : '',
+    tipo_documento: 'CC',
+    documento: '',
+    telefono: ''
+  }
+  generateRandomPassword()
+  showCreateUserModal.value = true
+}
+
+const submitCreateUser = async () => {
+  if (creatingUser.value) return
+  createError.value = ''
+
+  if (newUser.value.rol !== 'admin_general' && !newUser.value.id_colegio) {
+    createError.value = 'Debe seleccionar una institución educativa.'
+    return
+  }
+
+  if (!newUser.value.email.trim()) {
+    createError.value = 'El correo electrónico es obligatorio.'
+    return
+  }
+
+  if (!newUser.value.password || newUser.value.password.length < 6) {
+    createError.value = 'La contraseña debe tener al menos 6 caracteres.'
+    return
+  }
+
+  if (!newUser.value.nombre.trim()) {
+    createError.value = 'El nombre es obligatorio.'
+    return
+  }
+
+  try {
+    creatingUser.value = true
+    const headers = { Authorization: `Bearer ${auth.token}` }
+    await axios.post(
+      'http://localhost:3000/api/admin/usuarios',
+      {
+        rol: newUser.value.rol,
+        email: newUser.value.email.trim(),
+        password: newUser.value.password,
+        nombre: newUser.value.nombre.trim(),
+        apellido: newUser.value.apellido.trim() || undefined,
+        id_colegio: newUser.value.id_colegio ? Number(newUser.value.id_colegio) : null,
+        tipo_documento: newUser.value.tipo_documento || null,
+        documento: newUser.value.documento.trim() || null,
+        telefono: newUser.value.telefono.trim() || null
+      },
+      { headers }
+    )
+
+    showCreateUserModal.value = false
+    await fetchUsers()
+  } catch (error: any) {
+    createError.value = error.response?.data?.error || 'Error al crear el usuario'
+  } finally {
+    creatingUser.value = false
+  }
+}
 
 const selectedUser = ref<Usuario | null>(null)
 const banReason = ref('')
@@ -350,6 +444,14 @@ const handleDelete = async (user: Usuario) => {
             <p class="text-slate-500 dark:text-slate-400 font-medium">Control administrativo de cuentas de usuarios registrados.</p>
           </div>
         </div>
+
+        <button 
+          @click="openCreateUserModal" 
+          class="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white px-6 py-3.5 rounded-2xl font-black shadow-lg shadow-indigo-500/20 transition-all cursor-pointer text-sm"
+        >
+          <UserPlus :size="18" />
+          <span>Crear Usuario</span>
+        </button>
       </div>
     </div>
 
@@ -756,6 +858,120 @@ const handleDelete = async (user: Usuario) => {
           
           <div class="bg-slate-50 dark:bg-slate-800/50 p-6 flex justify-center border-t border-slate-100 dark:border-slate-800">
             <button @click="showResetModal = false" class="w-full bg-slate-900 dark:bg-white dark:text-slate-900 text-white px-6 py-3 rounded-xl font-bold hover:translate-y-[-1px] transition-all text-xs">Aceptar y Cerrar</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Create User Modal -->
+      <div v-if="showCreateUserModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" @click="showCreateUserModal = false"></div>
+        <div class="relative w-full max-w-xl bg-white dark:bg-slate-900 rounded-[32px] shadow-2xl overflow-hidden border border-slate-100 dark:border-slate-800 my-8 max-h-[90vh] flex flex-col">
+          <div class="px-8 pt-6 pb-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/50">
+            <div>
+              <h2 class="text-xl font-black text-slate-900 dark:text-white flex items-center gap-2">
+                <UserPlus :size="20" class="text-indigo-600 dark:text-indigo-400" />
+                Crear Nuevo Usuario
+              </h2>
+              <p class="text-slate-500 dark:text-slate-400 text-xs font-medium mt-0.5">Registra cuentas institucionales y globales en la plataforma.</p>
+            </div>
+            <button @click="showCreateUserModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xl font-bold p-2">✕</button>
+          </div>
+
+          <div class="p-8 overflow-y-auto space-y-4">
+            <div v-if="createError" class="p-4 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/50 rounded-2xl text-xs font-bold text-red-600 dark:text-red-400">
+              {{ createError }}
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+              <!-- Rol -->
+              <div class="col-span-2 space-y-1.5">
+                <label class="text-xs font-black text-slate-700 dark:text-slate-300 ml-1">Rol de Usuario</label>
+                <select v-model="newUser.rol" class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 rounded-2xl p-3.5 font-bold outline-none text-sm text-slate-900 dark:text-white">
+                  <option value="directivo">Directivo / Administrador de Colegio</option>
+                  <option value="docente">Docente</option>
+                  <option value="padre">Padre de Familia / Acudiente</option>
+                  <option value="admin_general">Admin General (Superadmin)</option>
+                </select>
+                <p class="text-[11px] font-bold text-amber-700 dark:text-amber-400 mt-1.5 ml-1">
+                  ⚠️ Los estudiantes se registran únicamente a través del proceso oficial de Matrícula Institucional.
+                </p>
+              </div>
+
+              <!-- Institución Educativa -->
+              <div v-if="newUser.rol !== 'admin_general'" class="col-span-2 space-y-1.5">
+                <label class="text-xs font-black text-slate-700 dark:text-slate-300 ml-1">Institución Educativa (Colegio)</label>
+                <select v-model="newUser.id_colegio" class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 rounded-2xl p-3.5 font-bold outline-none text-sm text-slate-900 dark:text-white">
+                  <option value="">Selecciona un colegio</option>
+                  <option v-for="school in schools" :key="school.id_colegio" :value="school.id_colegio">{{ school.nombre }}</option>
+                </select>
+              </div>
+
+
+
+              <!-- Nombres -->
+              <div class="space-y-1.5">
+                <label class="text-xs font-black text-slate-700 dark:text-slate-300 ml-1">Nombres</label>
+                <input v-model="newUser.nombre" type="text" placeholder="Ej. Juan Carlos" class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 rounded-2xl p-3.5 font-bold outline-none text-sm text-slate-900 dark:text-white" />
+              </div>
+
+              <!-- Apellidos -->
+              <div class="space-y-1.5">
+                <label class="text-xs font-black text-slate-700 dark:text-slate-300 ml-1">Apellidos</label>
+                <input v-model="newUser.apellido" type="text" placeholder="Ej. Pérez Gómez" class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 rounded-2xl p-3.5 font-bold outline-none text-sm text-slate-900 dark:text-white" />
+              </div>
+
+              <!-- Email -->
+              <div class="col-span-2 space-y-1.5">
+                <div class="flex justify-between items-center">
+                  <label class="text-xs font-black text-slate-700 dark:text-slate-300 ml-1">Correo Electrónico</label>
+                  <span v-if="newUser.rol === 'estudiante'" class="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">(Opcional para Estudiantes)</span>
+                </div>
+                <input v-model="newUser.email" type="email" placeholder="ejemplo@academianeiva.edu.co" class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 rounded-2xl p-3.5 font-bold outline-none text-sm text-slate-900 dark:text-white" />
+              </div>
+
+              <!-- Password -->
+              <div class="col-span-2 space-y-1.5">
+                <div class="flex justify-between items-center">
+                  <label class="text-xs font-black text-slate-700 dark:text-slate-300 ml-1">Contraseña de Acceso</label>
+                  <button type="button" @click="generateRandomPassword" class="text-[11px] font-black text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 flex items-center gap-1">
+                    <RefreshCw :size="12" /> Generar Aleatoria
+                  </button>
+                </div>
+                <input v-model="newUser.password" type="text" class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 rounded-2xl p-3.5 font-mono font-bold outline-none text-sm text-slate-900 dark:text-white" />
+              </div>
+
+              <!-- Tipo Doc -->
+              <div class="space-y-1.5">
+                <label class="text-xs font-black text-slate-700 dark:text-slate-300 ml-1">Tipo de Documento</label>
+                <select v-model="newUser.tipo_documento" class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 rounded-2xl p-3.5 font-bold outline-none text-sm text-slate-900 dark:text-white">
+                  <option value="CC">Cédula de Ciudadanía (CC)</option>
+                  <option value="TI">Tarjeta de Identidad (TI)</option>
+                  <option value="CE">Cédula de Extranjería (CE)</option>
+                  <option value="PASAPORTE">Pasaporte</option>
+                  <option value="PEP">PEP</option>
+                </select>
+              </div>
+
+              <!-- Documento -->
+              <div class="space-y-1.5">
+                <label class="text-xs font-black text-slate-700 dark:text-slate-300 ml-1">Número de Documento</label>
+                <input v-model="newUser.documento" type="text" placeholder="Ej. 1075123456" class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 rounded-2xl p-3.5 font-bold outline-none text-sm text-slate-900 dark:text-white" />
+              </div>
+
+              <!-- Telefono -->
+              <div class="col-span-2 space-y-1.5">
+                <label class="text-xs font-black text-slate-700 dark:text-slate-300 ml-1">Teléfono de Contacto</label>
+                <input v-model="newUser.telefono" type="text" placeholder="Ej. 3101234567" class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 rounded-2xl p-3.5 font-bold outline-none text-sm text-slate-900 dark:text-white" />
+              </div>
+            </div>
+          </div>
+
+          <div class="p-6 bg-slate-50 dark:bg-slate-800/50 flex gap-3 border-t border-slate-100 dark:border-slate-800">
+            <button @click="showCreateUserModal = false" class="flex-1 px-4 py-3.5 rounded-2xl font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all text-sm">Cancelar</button>
+            <button @click="submitCreateUser" :disabled="creatingUser" class="flex-[2] bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white px-6 py-3.5 rounded-2xl font-black shadow-lg shadow-indigo-500/20 transition-all text-sm disabled:opacity-50 flex items-center justify-center gap-2">
+              <Loader2 v-if="creatingUser" class="animate-spin" :size="18" />
+              <span>{{ creatingUser ? 'Registrando...' : 'Confirmar y Crear Usuario' }}</span>
+            </button>
           </div>
         </div>
       </div>

@@ -2414,4 +2414,134 @@ Detalle de cambios (Antes ➔ Después):
   }
 };
 
+export const crearUsuarioByAdminGeneral = async (req: AuthRequest, res: Response): Promise<void> => {
+  const {
+    rol,
+    email,
+    password,
+    nombre,
+    apellido,
+    id_colegio,
+    tipo_documento,
+    documento,
+    telefono
+  } = (req.body?.body ?? req.body) as any;
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // 1. Obtener ID del rol
+    const rolRes = await client.query('SELECT id_rol FROM rol WHERE LOWER(nombre) = LOWER($1)', [rol]);
+    if (rolRes.rows.length === 0) {
+      res.status(400).json({ error: `El rol '${rol}' no existe en el sistema.` });
+      await client.query('ROLLBACK');
+      return;
+    }
+    const idRol = rolRes.rows[0].id_rol;
+
+    // 2. Determinar correo electrónico final
+    // Para estudiantes, el correo es opcional y puede quedar en NULL
+    const trimmedEmail = (email || '').trim().toLowerCase();
+    const finalEmail: string | null = trimmedEmail || null;
+
+    // 3. Verificar duplicado de correo si se ingresó uno
+    // (NULL no viola la restricción UNIQUE en PostgreSQL: NULL ≠ NULL)
+    if (finalEmail) {
+      const dupCheck = await client.query('SELECT id_usuario FROM usuario WHERE LOWER(email) = LOWER($1)', [finalEmail]);
+      if (dupCheck.rows.length > 0) {
+        res.status(409).json({ error: `El correo electrónico '${email}' ya se encuentra registrado.` });
+        await client.query('ROLLBACK');
+        return;
+      }
+    }
+
+    // 4. Encriptar contraseña
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // 5. Insertar usuario base
+    const userRes = await client.query(
+      `INSERT INTO usuario (email, password, nombre, apellido, id_colegio, activo, tipo_documento, documento, telefono, estado)
+       VALUES ($1, $2, $3, $4, $5, true, $6, $7, $8, 'ACTIVO')
+       RETURNING id_usuario, email, nombre, apellido, id_colegio, activo, fecha_creacion`,
+      [
+        finalEmail,
+        hashedPassword,
+        nombre.trim(),
+        (apellido || '').trim() || null,
+        id_colegio || null,
+        tipo_documento || null,
+        documento || null,
+        telefono || null
+      ]
+    );
+
+    const newUserId = userRes.rows[0].id_usuario;
+
+    // 6. Asignar rol en usuario_rol
+    await client.query(
+      'INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+      [newUserId, idRol]
+    );
+
+    // 7. Crear perfil específico según el rol
+    if (rol === 'directivo' && id_colegio) {
+      await client.query(
+        `INSERT INTO directivo (id_usuario, id_colegio, cargo, fecha_vinculacion)
+         VALUES ($1, $2, 'Directivo Institucional', NOW())`,
+        [newUserId, id_colegio]
+      );
+    } else if (rol === 'docente' && id_colegio) {
+      await client.query(
+        `INSERT INTO docente (id_usuario, id_colegio, nombre, apellido, documento, estado)
+         VALUES ($1, $2, $3, $4, $5, 'ACTIVO') ON CONFLICT DO NOTHING`,
+        [newUserId, id_colegio, nombre.trim(), (apellido || '').trim() || '', documento || '']
+      );
+    } else if (rol === 'padre' && id_colegio) {
+      await client.query(
+        `INSERT INTO padre_familia (id_usuario, id_colegio, nombre, apellido, documento)
+         VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING`,
+        [newUserId, id_colegio, nombre.trim(), (apellido || '').trim() || '', documento || '']
+      );
+    }
+
+    // 8. Registro de Auditoría de Supervisión si aplica
+    const authReq = req as any;
+    const activeAuditoriaId = authReq.user?.supervisionId;
+    if (activeAuditoriaId) {
+      await client.query(
+        `INSERT INTO auditoria_acciones_realizadas
+         (id_auditoria, modulo, tipo_accion, accion, recurso_afectado, id_usuario_afectado, valor_nuevo, motivo_cambio)
+         VALUES ($1, 'USUARIOS', 'CREACION', 'Creación directa de usuario por Admin General', $2, $3, $4, $5)`,
+        [
+          activeAuditoriaId,
+          `Usuario ID: ${newUserId}`,
+          newUserId,
+          JSON.stringify({ email: finalEmail, nombre, apellido, rol, id_colegio }),
+          'Creación de cuenta por administración global'
+        ]
+      );
+    }
+
+    await client.query('COMMIT');
+    res.status(201).json({
+      message: `Usuario ${nombre} ${apellido || ''} (${rol}) creado exitosamente.`,
+      user: {
+        id_usuario: newUserId,
+        email: finalEmail,
+        nombre,
+        apellido,
+        rol,
+        id_colegio
+      }
+    });
+  } catch (error: any) {
+    await client.query('ROLLBACK');
+    console.error('Error creating user by Admin General:', error);
+    res.status(500).json({ error: 'Error interno del servidor al crear usuario.' });
+  } finally {
+    client.release();
+  }
+};
+
 

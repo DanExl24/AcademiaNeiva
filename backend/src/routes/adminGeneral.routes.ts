@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { upload } from '../config/multer';
 import { verifyToken, requireAdminGeneral, requireDirectivo } from '../middleware/authMiddleware';
+import { validateDto } from '../middleware/validateDto';
+import { createAdminUserSchema } from '../dtos/adminUser.dto';
 import {
   // Colegios
   listarColegios,
@@ -13,6 +15,7 @@ import {
   // Usuarios
   listarUsuarios,
   detalleUsuario,
+  crearUsuarioByAdminGeneral,
   cambiarEstadoUsuario,
   restablecerPassword,
   forzarCierreSesion,
@@ -67,6 +70,7 @@ router.delete('/colegios/:id', verifyToken, requireAdminGeneral, eliminarColegio
 // USUARIOS (requiere Admin General)
 // ─────────────────────────────────────────────────────────────
 router.get('/usuarios', verifyToken, requireAdminGeneral, listarUsuarios);
+router.post('/usuarios', verifyToken, requireAdminGeneral, validateDto(createAdminUserSchema), crearUsuarioByAdminGeneral as any);
 router.get('/usuarios/:id', verifyToken, requireAdminGeneral, detalleUsuario);
 router.patch('/usuarios/:id/estado', verifyToken, requireAdminGeneral, cambiarEstadoUsuario);
 router.post('/usuarios/:id/restablecer-password', verifyToken, requireAdminGeneral, restablecerPassword);
