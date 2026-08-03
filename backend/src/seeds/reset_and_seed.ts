@@ -259,8 +259,8 @@ async function insertSchool(
   // --- Rector ---
   const rectorEmail = `rector@${school.domain}`;
   const rectorRes = await client.query<{ id_usuario: number }>(
-    `INSERT INTO usuario (email, password, nombre, apellido, id_colegio, activo)
-     VALUES ($1, $2, $3, $4, $5, true) RETURNING id_usuario`,
+    `INSERT INTO usuario (email, password, nombre, apellido, id_colegio, activo, fecha_creacion)
+     VALUES ($1, $2, $3, $4, $5, true, '2025-01-15 08:00:00-05') RETURNING id_usuario`,
     [rectorEmail, directivoHash, "Rector", school.nombre, school.id]
   );
   const rectorUserId = rectorRes.rows[0].id_usuario;
@@ -275,8 +275,8 @@ async function insertSchool(
   // --- Coordinador ---
   const directivoEmail = `directivo@${school.domain}`;
   const directivoResult = await client.query<{ id_usuario: number }>(
-    `INSERT INTO usuario (email, password, nombre, apellido, id_colegio, activo)
-     VALUES ($1, $2, $3, $4, $5, true) RETURNING id_usuario`,
+    `INSERT INTO usuario (email, password, nombre, apellido, id_colegio, activo, fecha_creacion)
+     VALUES ($1, $2, $3, $4, $5, true, '2025-01-15 08:00:00-05') RETURNING id_usuario`,
     [directivoEmail, directivoHash, "Directivo", school.nombre, school.id]
   );
   const directivoUserId = directivoResult.rows[0].id_usuario;
@@ -296,8 +296,8 @@ async function insertSchool(
     const fullLastName = `${teacher.lastName} ${school.id}`;
 
     const userResult = await client.query<{ id_usuario: number }>(
-      `INSERT INTO usuario (email, password, nombre, apellido, id_colegio, activo)
-       VALUES ($1, $2, $3, $4, $5, true) RETURNING id_usuario`,
+      `INSERT INTO usuario (email, password, nombre, apellido, id_colegio, activo, fecha_creacion)
+       VALUES ($1, $2, $3, $4, $5, true, '2025-01-15 08:00:00-05') RETURNING id_usuario`,
       [email, docenteHash, teacher.firstName, fullLastName, school.id]
     );
     const teacherUserId = userResult.rows[0].id_usuario;
@@ -411,7 +411,14 @@ async function insertSchoolAcademicStructure(
 
   const qPeriods2026 = computeQuarterPeriodsForDates(fInicio2026, fFin2026);
   for (const qp of qPeriods2026) {
-    const estado2026 = qp.trimestre === 1 ? 'ABIERTO' : 'PENDIENTE';
+    let estado2026: 'CERRADO' | 'ABIERTO' | 'PENDIENTE' = 'PENDIENTE';
+    if (qp.trimestre === 1 || qp.trimestre === 2) {
+      estado2026 = 'CERRADO';
+    } else if (qp.trimestre === 3) {
+      estado2026 = 'ABIERTO';
+    } else {
+      estado2026 = 'PENDIENTE';
+    }
     await client.query(
       `INSERT INTO periodo_academico (nombre, estado, porcentaje, trimestre, id_anio, id_colegio, mes_inicio, mes_fin, dia_inicio, dia_fin)
        VALUES ($1, $2, 25.00, $3, $4, $5, $6, $7, $8, $9)`,
@@ -501,22 +508,24 @@ async function insertSchoolAcademicStructure(
     }
   }
 
-  // --- Detalle Grados (assign all subjects+teachers to all groups) ---
+  // --- Detalle Grados (assign all subjects+teachers to all groups for BOTH 2025 & 2026) ---
   for (const groupId of allGroupIds) {
     const gradeName = groupGradesMap.get(groupId);
     const isPreescolar = gradeName === "PREJARDIN" || gradeName === "JARDIN" || gradeName === "TRANSICION";
 
-    if (isPreescolar) {
-      await client.query(
-        `INSERT INTO detalle_grados (id_materia, id_docente, id_colegio, id_grupo, id_anio) VALUES ($1, $2, $3, $4, $5)`,
-        [subjectIdsByName["Desarrollo Integral"], teacherIdsBySubject["Desarrollo Integral"], school.id, groupId, academicYearId]
-      );
-    } else {
-      for (const teacher of teacherSeeds) {
+    for (const yId of [academicYearId, academicYearId2026]) {
+      if (isPreescolar) {
         await client.query(
           `INSERT INTO detalle_grados (id_materia, id_docente, id_colegio, id_grupo, id_anio) VALUES ($1, $2, $3, $4, $5)`,
-          [subjectIdsByName[teacher.subject], teacherIdsBySubject[teacher.subject], school.id, groupId, academicYearId]
+          [subjectIdsByName["Desarrollo Integral"], teacherIdsBySubject["Desarrollo Integral"], school.id, groupId, yId]
         );
+      } else {
+        for (const teacher of teacherSeeds) {
+          await client.query(
+            `INSERT INTO detalle_grados (id_materia, id_docente, id_colegio, id_grupo, id_anio) VALUES ($1, $2, $3, $4, $5)`,
+            [subjectIdsByName[teacher.subject], teacherIdsBySubject[teacher.subject], school.id, groupId, yId]
+          );
+        }
       }
     }
   }
@@ -656,8 +665,8 @@ async function insertStudentsAndParents(
           pDoc = `P-${school.id}-${parentIdx}`;
 
           const pUserRes = await client.query<{ id_usuario: number }>(
-            `INSERT INTO usuario (email, password, nombre, apellido, id_colegio, activo)
-             VALUES ($1, $2, $3, $4, $5, true) RETURNING id_usuario`,
+            `INSERT INTO usuario (email, password, nombre, apellido, id_colegio, activo, fecha_creacion)
+             VALUES ($1, $2, $3, $4, $5, true, '2025-01-15 08:00:00-05') RETURNING id_usuario`,
             [currentParentEmail, parentHash, pName, pLastName, school.id]
           );
           parentUserId = pUserRes.rows[0].id_usuario;
@@ -685,8 +694,8 @@ async function insertStudentsAndParents(
 
       // ── Create student user ──
       const sUserRes = await client.query<{ id_usuario: number }>(
-        `INSERT INTO usuario (email, password, nombre, apellido, id_colegio, activo)
-         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id_usuario`,
+        `INSERT INTO usuario (email, password, nombre, apellido, id_colegio, activo, fecha_creacion)
+         VALUES ($1, $2, $3, $4, $5, $6, '2025-01-15 08:00:00-05') RETURNING id_usuario`,
         [studentEmail, studentHash, firstName, lastName, school.id, userActive]
       );
       const studentUserId = sUserRes.rows[0].id_usuario;
@@ -1637,6 +1646,43 @@ async function seedDbaCompetenciesAndEvidences(): Promise<void> {
                 }
               }
             }
+          }
+        }
+      }
+      
+      // ─── 2026 DEFAULT COMPETENCIES FOR CLOSED PERIODS (Period 1 and Period 2) ───
+      const year2026Res = await client.query<{ id_anio: number }>(
+        "SELECT id_anio FROM anio_lectivo WHERE id_colegio = $1 AND (calendario = '2026' OR calendario = '2025-2026') ORDER BY id_anio ASC LIMIT 1",
+        [school.id_colegio]
+      );
+      const yearId2026 = year2026Res.rows[0]?.id_anio;
+      if (yearId2026) {
+        const closedPeriods2026Res = await client.query<{ id_periodo: number }>(
+          "SELECT id_periodo FROM periodo_academico WHERE id_anio = $1 AND estado = 'CERRADO' ORDER BY trimestre ASC",
+          [yearId2026]
+        );
+        const dg2026Res = await client.query<{ id_grupo: number; id_materia: number }>(
+          "SELECT DISTINCT id_grupo, id_materia FROM detalle_grados WHERE id_colegio = $1 AND id_anio = $2",
+          [school.id_colegio, yearId2026]
+        );
+
+        for (const period of closedPeriods2026Res.rows) {
+          for (const dg of dg2026Res.rows) {
+            const syncUuid = randomUUID();
+            await client.query(
+              `INSERT INTO competencias (id_anio, id_grupo, id_materia, id_periodo, descripcion, id_colegio, sync_uuid, nombre)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT DO NOTHING`,
+              [
+                yearId2026,
+                dg.id_grupo,
+                dg.id_materia,
+                period.id_periodo,
+                "Competencia pendiente por definir.",
+                school.id_colegio,
+                syncUuid,
+                "Competencia Predeterminada"
+              ]
+            );
           }
         }
       }

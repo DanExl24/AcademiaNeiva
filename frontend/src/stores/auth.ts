@@ -34,7 +34,7 @@ export const useAuthStore = defineStore('auth', () => {
   // Modo monitoreo: directivo observando el panel de un docente o estudiante (solo lectura)
   const monitoringUser = ref<MonitoredTeacher | null>(JSON.parse(localStorage.getItem('monitoringUser') || 'null'))
   const previousRole = ref<string | null>(localStorage.getItem('previousRole'))
-  const monitoringType = ref<'docente' | 'estudiante' | null>(localStorage.getItem('monitoringType') as any || null)
+  const monitoringType = ref<'docente' | 'estudiante' | 'padre' | null>(localStorage.getItem('monitoringType') as any || null)
   const isMonitoring = computed(() => !!monitoringUser.value)
 
   // Modo supervisión: admin general observando/editando el panel de rector de un colegio
@@ -234,11 +234,17 @@ axios.interceptors.request.use(
         config.headers.Authorization = `Bearer ${store.token}`
       }
       
-      if (store.isSupervising && store.supervision?.tipo_supervision === 'SOLO_LECTURA') {
+      if (store.isMonitoring) {
+        config.headers['X-Monitoring-Mode'] = 'true'
+      }
+
+      const isReadOnlyMode = store.isMonitoring || (store.isSupervising && store.supervision?.tipo_supervision === 'SOLO_LECTURA')
+      
+      if (isReadOnlyMode) {
         const method = config.method?.toUpperCase()
-        const isExitRoute = config.url?.includes('/salir') || false
+        const isExitRoute = config.url?.includes('/salir') || config.url?.includes('/stop-monitoring') || false
         if (method && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) && !isExitRoute) {
-          return Promise.reject(new Error('Acceso denegado. Estás en modo supervisión de SOLO LECTURA.'))
+          return Promise.reject(new Error('Acceso denegado. El Modo Monitoreo es estrictamente de SOLO LECTURA.'))
         }
       }
     } catch (e) {

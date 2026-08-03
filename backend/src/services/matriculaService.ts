@@ -98,24 +98,9 @@ export class MatriculaService {
           throw new Error(`Las inscripciones ya cerraron. Finalizaron el ${end.toLocaleDateString('es-CO')}.`);
         }
 
-        // Duplicate guard for standard enrollments
-        const dupRes = await client.query(
-          `SELECT id_matricula, estado
-           FROM matricula
-           WHERE id_colegio = $1
-             AND id_anio   = $2
-             AND correo_padre = $3
-             AND estado NOT IN ('CANCELADA', 'RECHAZADA')
-           LIMIT 1`,
-          [id_colegio, activeYearId, parentEmail]
-        );
-        if (dupRes.rows.length > 0) {
-          const existingState = dupRes.rows[0].estado;
-          throw new Error(
-            `Ya existe una solicitud de matrícula en estado "${existingState}" para este correo en el año lectivo activo. ` +
-            `Por favor revisa el estado de tu solicitud con el token de seguimiento recibido.`
-          );
-        }
+        // Note: No duplicate guard by correo_padre alone — a parent may enroll
+        // multiple children in the same academic year. The directivo reviews
+        // and approves/rejects each request individually.
 
         // Insertar nueva matrícula regular
         const matRes = await client.query(

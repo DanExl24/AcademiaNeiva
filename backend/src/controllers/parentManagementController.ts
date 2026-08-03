@@ -22,7 +22,8 @@ export const getParentsManagementData = async (req: Request, res: Response): Pro
     id_nivel,
     id_tipo_grado,
     cantHijos,
-    estadoMatricula
+    estadoMatricula,
+    yearId
   } = req.query;
 
   const id_colegio = parseSchoolId(schoolId);
@@ -32,7 +33,8 @@ export const getParentsManagementData = async (req: Request, res: Response): Pro
   }
 
   try {
-    const params: any[] = [id_colegio];
+    const selectedYearId = yearId ? Number(yearId) : null;
+    const params: any[] = [id_colegio, selectedYearId];
     let whereClauses = [];
 
     if (busqueda && typeof busqueda === "string" && busqueda.trim()) {
@@ -150,7 +152,7 @@ export const getParentsManagementData = async (req: Request, res: Response): Pro
         LEFT JOIN detalle_padrefamilia dpf ON dpf.id_padrefamilia = pf.id_padrefamilia
         LEFT JOIN estudiante e ON e.id_estudiante = dpf.id_estudiante
         LEFT JOIN nivel_escolar ne ON ne.id_nivel = e.id_nivel
-        LEFT JOIN matricula m ON m.id_estudiante = e.id_estudiante
+        LEFT JOIN matricula m ON (m.id_estudiante = e.id_estudiante AND ($2::int IS NULL OR m.id_anio = $2::int))
         LEFT JOIN grupos g ON g.id_grupo = m.id_grupo
         LEFT JOIN tipo_grado tg ON tg.id_tipo_grado = g.id_tipo_grado
         WHERE pf.id_colegio = $1
@@ -201,6 +203,7 @@ export const getParentsManagementData = async (req: Request, res: Response): Pro
 export const getParentDetail = async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params;
   const parentId = parseInt(id as string);
+  const selectedYearId = req.query.yearId ? Number(req.query.yearId) : null;
 
   if (isNaN(parentId)) {
     res.status(400).json({ error: "ID de padre de familia invalido" });
@@ -261,7 +264,11 @@ export const getParentDetail = async (req: Request, res: Response): Promise<void
          al.calendario AS anio_lectivo
        FROM detalle_padrefamilia dpf
        JOIN estudiante e ON e.id_estudiante = dpf.id_estudiante
-       LEFT JOIN matricula m ON m.id_estudiante = e.id_estudiante AND m.estado IN ('ACTIVA', 'CULMINADA')
+       LEFT JOIN matricula m ON (
+         m.id_estudiante = e.id_estudiante 
+         AND m.estado IN ('ACTIVA', 'CULMINADA')
+         AND ($2::int IS NULL OR m.id_anio = $2::int)
+       )
        LEFT JOIN grupos g ON g.id_grupo = m.id_grupo
        LEFT JOIN tipo_grado tg ON tg.id_tipo_grado = g.id_tipo_grado
        LEFT JOIN secciones sec ON sec.id_seccion = g.id_seccion
@@ -270,7 +277,7 @@ export const getParentDetail = async (req: Request, res: Response): Promise<void
        LEFT JOIN anio_lectivo al ON al.id_anio = m.id_anio
        WHERE dpf.id_padrefamilia = $1
        ORDER BY e.apellido ASC, e.nombre ASC`,
-      [parentId]
+      [parentId, selectedYearId]
     );
 
     const children = childrenRes.rows;

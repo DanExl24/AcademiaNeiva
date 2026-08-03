@@ -70,7 +70,13 @@ onMounted(() => {
   loadSubjects()
 })
 
-watch(() => yearStore.selectedYearId, loadSubjects)
+watch(() => yearStore.selectedYearId, () => {
+  loadSubjects()
+  if (detailDrawerOpen.value && selectedSubjectId.value) {
+    selectedPeriodId.value = null
+    fetchSubjectDetails()
+  }
+})
 
 const createSubject = async () => {
   if (saving.value) return
@@ -327,12 +333,18 @@ const openSubjectDetails = async (id: number) => {
   await fetchSubjectDetails()
 }
 
+const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+
 const fetchSubjectDetails = async () => {
   if (!selectedSubjectId.value || !schoolId.value) return
   try {
     detailLoading.value = true
-    const response = await axios.get(`http://localhost:3000/api/academic-admin/subjects/${selectedSubjectId.value}/curriculum-details`, {
-      params: { schoolId: schoolId.value }
+    const params: Record<string, any> = { schoolId: schoolId.value }
+    if (yearStore.selectedYearId) {
+      params.yearId = yearStore.selectedYearId
+    }
+    const response = await axios.get(`${apiBase}/api/academic-admin/subjects/${selectedSubjectId.value}/curriculum-details`, {
+      params
     })
     subjectDetails.value = response.data
     

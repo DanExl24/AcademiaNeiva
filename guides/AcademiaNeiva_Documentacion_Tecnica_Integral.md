@@ -325,3 +325,4 @@ Para consultar el detalle exhaustivo de historias de usuario, reglas de negocio 
 - 📄 **[Módulo 14: Cierre y Boletines](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/modules/14_cierre_y_boletines/cierre_y_boletines.md)**
 - 🕵️ **[Módulo 15: Supervisión y Auditoría](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/modules/15_supervision_y_auditoria/supervision_y_auditoria.md)**
 - 🎟️ **[Módulo 16: Soporte y Tickets](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/modules/16_soporte_y_tickets/soporte_y_tickets.md)**
+- 👨‍👩‍👧‍👦 **[Módulo 17: Gestión de Padres de Familia](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/modules/17_gestion_padres/gestion_padres.md)**

@@ -3,17 +3,18 @@ import { pool } from "../config/db";
 
 // Helper to check if period/class is editable
 const checkEditability = async (detailGradeId: number, schoolId: number): Promise<{ editable: boolean; error?: string; periodId?: number }> => {
-  // 1. Get open period
+  // 1. Get open period in open academic year
   const periodRes = await pool.query(
-    `SELECT id_periodo, nombre 
-     FROM periodo_academico 
-     WHERE id_colegio = $1 AND estado = 'ABIERTO' 
+    `SELECT pa.id_periodo, pa.nombre 
+     FROM periodo_academico pa
+     JOIN anio_lectivo al ON al.id_anio = pa.id_anio
+     WHERE pa.id_colegio = $1 AND pa.estado = 'ABIERTO' AND al.estado = 'ABIERTO'
      LIMIT 1`,
     [schoolId]
   );
 
   if (periodRes.rows.length === 0) {
-    return { editable: false, error: "No hay un periodo académico abierto para esta institución." };
+    return { editable: false, error: "No hay un periodo académico y año lectivo abierto para esta institución." };
   }
 
   const periodId = periodRes.rows[0].id_periodo;

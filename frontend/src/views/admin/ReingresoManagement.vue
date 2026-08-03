@@ -593,7 +593,7 @@ const formatUrl = (target: any) => {
   }
   if (typeof target === 'string') {
     if (target.startsWith('http')) return target
-    const found = documentMatrix.value?.find((d: any) => d.url === target)
+    const found = documents.value?.find((d: any) => d.url === target)
     if (found && found.id_documento) {
       return `http://localhost:3000/api/matriculas/documentos/${found.id_documento}/archivo`
     }

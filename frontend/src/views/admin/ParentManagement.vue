@@ -7,22 +7,13 @@ import {
   UserCheck,
   Mail,
   GraduationCap,
-  ChevronRight,
   X,
   Edit2,
-  AlertTriangle,
-  Award,
-  Calendar,
-  BookOpen,
-  Info,
   ShieldAlert,
-  PhoneCall,
   Eye,
   Filter,
   RotateCcw,
-  SlidersHorizontal,
-  CheckCircle2,
-  AlertCircle
+  SlidersHorizontal
 } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 import { useAcademicYearStore } from '../../stores/academicYear'
@@ -153,12 +144,15 @@ const totalChildrenLinked = computed(() =>
 )
 const parentsWithAccount = computed(() => parents.value.filter(p => p.email).length)
 
+const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+
 const loadParents = async () => {
   if (!schoolId.value) return
   try {
     loading.value = true
     const params: Record<string, any> = {}
 
+    if (yearStore.selectedYearId) params.yearId = yearStore.selectedYearId
     if (filterBusqueda.value.trim()) params.busqueda = filterBusqueda.value.trim()
     if (filterEstadoCuenta.value !== 'TODOS') params.estadoCuenta = filterEstadoCuenta.value
     if (filterAlertaHijo.value !== 'TODOS') params.alertaHijo = filterAlertaHijo.value
@@ -168,7 +162,7 @@ const loadParents = async () => {
     if (filterEstadoMatricula.value !== 'TODOS') params.estadoMatricula = filterEstadoMatricula.value
     if (filterSoloDocentes.value) params.soloDocentes = 'true'
 
-    const res = await axios.get(`http://localhost:3000/api/parents/school/${schoolId.value}`, {
+    const res = await axios.get(`${apiBase}/api/parents/school/${schoolId.value}`, {
       params,
       headers: { Authorization: `Bearer ${auth.token}` }
     })
@@ -185,6 +179,10 @@ const loadParents = async () => {
   }
 }
 
+watch(() => yearStore.selectedYearId, () => {
+  loadParents()
+})
+
 let searchTimeout: any = null
 const onSearchInput = () => {
   clearTimeout(searchTimeout)
@@ -200,7 +198,8 @@ const openDrawer = async (parentId: number) => {
   selectedParentDetail.value = null
 
   try {
-    const res = await axios.get(`http://localhost:3000/api/parents/${parentId}/detail`, {
+    const res = await axios.get(`${apiBase}/api/parents/${parentId}/detail`, {
+      params: { yearId: yearStore.selectedYearId },
       headers: { Authorization: `Bearer ${auth.token}` }
     })
     selectedParentDetail.value = res.data

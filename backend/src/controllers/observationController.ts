@@ -7,9 +7,12 @@ const checkEditability = async (
   schoolId: number,
   periodId: number
 ): Promise<{ editable: boolean; error?: string }> => {
-  // 1. Check period is open
+  // 1. Check period and academic year are open
   const periodRes = await pool.query(
-    `SELECT estado FROM periodo_academico WHERE id_periodo = $1 AND id_colegio = $2`,
+    `SELECT pa.estado AS periodo_estado, al.estado AS anio_estado 
+     FROM periodo_academico pa
+     JOIN anio_lectivo al ON al.id_anio = pa.id_anio
+     WHERE pa.id_periodo = $1 AND pa.id_colegio = $2`,
     [periodId, schoolId]
   );
 
@@ -17,8 +20,17 @@ const checkEditability = async (
     return { editable: false, error: "Periodo académico no encontrado." };
   }
 
-  if (periodRes.rows[0].estado !== "ABIERTO") {
-    const isPending = periodRes.rows[0].estado === "PENDIENTE";
+  const { periodo_estado, anio_estado } = periodRes.rows[0];
+
+  if (anio_estado === "CERRADO") {
+    return {
+      editable: false,
+      error: "El año lectivo correspondiente se encuentra CERRADO. No se permiten modificaciones.",
+    };
+  }
+
+  if (periodo_estado !== "ABIERTO") {
+    const isPending = periodo_estado === "PENDIENTE";
     return {
       editable: false,
       error: isPending

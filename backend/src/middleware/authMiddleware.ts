@@ -82,6 +82,16 @@ export const verifyToken = async (req: AuthRequest, res: Response, next: NextFun
       supervisionId: null
     };
 
+    // Bloquear modificaciones si la petición viene de Modo Monitoreo
+    const isMonitoringHeader = req.headers['x-monitoring-mode'] === 'true' || req.headers['x-monitoring-mode'] === '1';
+    if (isMonitoringHeader) {
+      const isExitRoute = req.originalUrl.includes('/stop-monitoring') || req.originalUrl.endsWith('/salir');
+      if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method) && !isExitRoute) {
+        res.status(403).json({ error: 'Acceso denegado. El Modo Monitoreo es estrictamente de SOLO LECTURA.' });
+        return;
+      }
+    }
+
     // Si el usuario es administrador general, verificar supervisión activa
     if (req.user.roles.includes('admin_general')) {
       const supervisionRes = await pool.query(

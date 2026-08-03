@@ -1,6 +1,6 @@
 # Credenciales generadas por reset_and_seed.ts
 
-> Fecha de generación: 2026-07-27T04:26:02.191Z
+> Fecha de generación: 2026-08-03T22:03:36.251Z
 >
 > Este archivo se regenera cada vez que ejecutes el seed de reseteo.
 
@@ -98,41 +98,6 @@
 | PADRE | padre68.1@ceaschool.edu.co | padre123 | Luciana López, Andrés López |
 | PADRE | padre69.1@ceaschool.edu.co | padre123 | Sara López, Tomás López |
 | PADRE | padre70.1@ceaschool.edu.co | padre123 | Paula López, David López |
-| PADRE | padre71.1@ceaschool.edu.co | padre123 | Ana María López, Juan López |
-| PADRE | padre72.1@ceaschool.edu.co | padre123 | Laura López, Felipe López |
-| PADRE | padre73.1@ceaschool.edu.co | padre123 | María José López, Carlos López |
-| PADRE | padre74.1@ceaschool.edu.co | padre123 | Natalia López, Emilio López |
-| PADRE | padre75.1@ceaschool.edu.co | padre123 | Juliana López, Miguel López |
-| PADRE | padre76.1@ceaschool.edu.co | padre123 | Catalina López, José López |
-| PADRE | padre77.1@ceaschool.edu.co | padre123 | Manuela López, Ricardo López |
-| PADRE | padre78.1@ceaschool.edu.co | padre123 | Valeria López, Daniel López |
-| PADRE | padre79.1@ceaschool.edu.co | padre123 | Antonella López, Eduardo López |
-| PADRE | padre80.1@ceaschool.edu.co | padre123 | Salomé López, Martín López |
-| PADRE | padre81.1@ceaschool.edu.co | padre123 | Valentina Hernández, Santiago Hernández |
-| PADRE | padre82.1@ceaschool.edu.co | padre123 | Isabella Hernández, Matías Hernández |
-| PADRE | padre83.1@ceaschool.edu.co | padre123 | Sofía Hernández, Samuel Hernández |
-| PADRE | padre84.1@ceaschool.edu.co | padre123 | Gabriela Hernández, Nicolás Hernández |
-| PADRE | padre85.1@ceaschool.edu.co | padre123 | Mariana Hernández, Sebastián Hernández |
-| PADRE | padre86.1@ceaschool.edu.co | padre123 | Camila Hernández, Alejandro Hernández |
-| PADRE | padre87.1@ceaschool.edu.co | padre123 | Daniela Hernández, Diego Hernández |
-| PADRE | padre88.1@ceaschool.edu.co | padre123 | Luciana Hernández, Andrés Hernández |
-| PADRE | padre89.1@ceaschool.edu.co | padre123 | Sara Hernández, Tomás Hernández |
-| PADRE | padre90.1@ceaschool.edu.co | padre123 | Paula Hernández, David Hernández |
-| PADRE | padre91.1@ceaschool.edu.co | padre123 | Ana María Hernández, Juan Hernández |
-| PADRE | padre92.1@ceaschool.edu.co | padre123 | Laura Hernández, Felipe Hernández |
-| PADRE | padre93.1@ceaschool.edu.co | padre123 | María José Hernández, Carlos Hernández |
-| PADRE | padre94.1@ceaschool.edu.co | padre123 | Natalia Hernández, Emilio Hernández |
-| PADRE | padre95.1@ceaschool.edu.co | padre123 | Juliana Hernández, Miguel Hernández |
-| PADRE | padre96.1@ceaschool.edu.co | padre123 | Catalina Hernández, José Hernández |
-| PADRE | padre97.1@ceaschool.edu.co | padre123 | Manuela Hernández, Ricardo Hernández |
-| PADRE | padre98.1@ceaschool.edu.co | padre123 | Valeria Hernández, Daniel Hernández |
-| PADRE | padre99.1@ceaschool.edu.co | padre123 | Antonella Hernández, Eduardo Hernández |
-| PADRE | padre100.1@ceaschool.edu.co | padre123 | Salomé Hernández, Martín Hernández |
-| PADRE | padre101.1@ceaschool.edu.co | padre123 | Valentina González, Santiago González |
-| PADRE | padre102.1@ceaschool.edu.co | padre123 | Isabella González, Matías González |
-| PADRE | padre103.1@ceaschool.edu.co | padre123 | Sofía González, Samuel González |
-| PADRE | padre104.1@ceaschool.edu.co | padre123 | Gabriela González, Nicolás González |
-| PADRE | padre105.1@ceaschool.edu.co | padre123 | Mariana González, Sebastián González |
 
 ### 🎓 Estudiantes (login: código estudiantil + contraseña)
 
@@ -271,72 +236,6 @@
 | EST-1-138 | Tomás López | estudiante123 | ✅ ACTIVO |
 | EST-1-139 | Paula López | estudiante123 | ✅ ACTIVO |
 | EST-1-140 | David López | estudiante123 | ✅ ACTIVO |
-| EST-1-141 | Ana María López | estudiante123 | ✅ ACTIVO |
-| EST-1-142 | Juan López | estudiante123 | ✅ ACTIVO |
-| EST-1-143 | Laura López | estudiante123 | ✅ ACTIVO |
-| EST-1-144 | Felipe López | estudiante123 | ✅ ACTIVO |
-| EST-1-145 | María José López | estudiante123 | ⚠️ SANCIONADO |
-| EST-1-146 | Carlos López | estudiante123 | ✅ ACTIVO |
-| EST-1-147 | Natalia López | estudiante123 | ✅ ACTIVO |
-| EST-1-148 | Emilio López | estudiante123 | ✅ ACTIVO |
-| EST-1-149 | Juliana López | estudiante123 | ✅ ACTIVO |
-| EST-1-151 | Catalina López | estudiante123 | ✅ ACTIVO |
-| EST-1-152 | José López | estudiante123 | ✅ ACTIVO |
-| EST-1-153 | Manuela López | estudiante123 | ✅ ACTIVO |
-| EST-1-154 | Ricardo López | estudiante123 | ✅ ACTIVO |
-| EST-1-155 | Valeria López | estudiante123 | 🔴 RETIRADO |
-| EST-1-156 | Daniel López | estudiante123 | ✅ ACTIVO |
-| EST-1-157 | Antonella López | estudiante123 | ✅ ACTIVO |
-| EST-1-158 | Eduardo López | estudiante123 | ✅ ACTIVO |
-| EST-1-159 | Salomé López | estudiante123 | ✅ ACTIVO |
-| EST-1-160 | Martín López | estudiante123 | ✅ ACTIVO |
-| EST-1-161 | Valentina Hernández | estudiante123 | ✅ ACTIVO |
-| EST-1-162 | Santiago Hernández | estudiante123 | ✅ ACTIVO |
-| EST-1-163 | Isabella Hernández | estudiante123 | ✅ ACTIVO |
-| EST-1-164 | Matías Hernández | estudiante123 | ✅ ACTIVO |
-| EST-1-165 | Sofía Hernández | estudiante123 | ⚠️ SANCIONADO |
-| EST-1-166 | Samuel Hernández | estudiante123 | ✅ ACTIVO |
-| EST-1-167 | Gabriela Hernández | estudiante123 | ✅ ACTIVO |
-| EST-1-168 | Nicolás Hernández | estudiante123 | ✅ ACTIVO |
-| EST-1-169 | Mariana Hernández | estudiante123 | ✅ ACTIVO |
-| EST-1-171 | Camila Hernández | estudiante123 | ✅ ACTIVO |
-| EST-1-172 | Alejandro Hernández | estudiante123 | ✅ ACTIVO |
-| EST-1-173 | Daniela Hernández | estudiante123 | ✅ ACTIVO |
-| EST-1-174 | Diego Hernández | estudiante123 | ✅ ACTIVO |
-| EST-1-175 | Luciana Hernández | estudiante123 | 🔴 RETIRADO |
-| EST-1-176 | Andrés Hernández | estudiante123 | ✅ ACTIVO |
-| EST-1-177 | Sara Hernández | estudiante123 | ✅ ACTIVO |
-| EST-1-178 | Tomás Hernández | estudiante123 | ✅ ACTIVO |
-| EST-1-179 | Paula Hernández | estudiante123 | ✅ ACTIVO |
-| EST-1-180 | David Hernández | estudiante123 | ✅ ACTIVO |
-| EST-1-181 | Ana María Hernández | estudiante123 | ✅ ACTIVO |
-| EST-1-182 | Juan Hernández | estudiante123 | ✅ ACTIVO |
-| EST-1-183 | Laura Hernández | estudiante123 | ✅ ACTIVO |
-| EST-1-184 | Felipe Hernández | estudiante123 | ✅ ACTIVO |
-| EST-1-185 | María José Hernández | estudiante123 | ⚠️ SANCIONADO |
-| EST-1-186 | Carlos Hernández | estudiante123 | ✅ ACTIVO |
-| EST-1-187 | Natalia Hernández | estudiante123 | ✅ ACTIVO |
-| EST-1-188 | Emilio Hernández | estudiante123 | ✅ ACTIVO |
-| EST-1-189 | Juliana Hernández | estudiante123 | ✅ ACTIVO |
-| EST-1-191 | Catalina Hernández | estudiante123 | ✅ ACTIVO |
-| EST-1-192 | José Hernández | estudiante123 | ✅ ACTIVO |
-| EST-1-193 | Manuela Hernández | estudiante123 | ✅ ACTIVO |
-| EST-1-194 | Ricardo Hernández | estudiante123 | ✅ ACTIVO |
-| EST-1-195 | Valeria Hernández | estudiante123 | 🔴 RETIRADO |
-| EST-1-196 | Daniel Hernández | estudiante123 | ✅ ACTIVO |
-| EST-1-197 | Antonella Hernández | estudiante123 | ✅ ACTIVO |
-| EST-1-198 | Eduardo Hernández | estudiante123 | ✅ ACTIVO |
-| EST-1-199 | Salomé Hernández | estudiante123 | ✅ ACTIVO |
-| EST-1-200 | Martín Hernández | estudiante123 | ✅ ACTIVO |
-| EST-1-201 | Valentina González | estudiante123 | ✅ ACTIVO |
-| EST-1-202 | Santiago González | estudiante123 | ✅ ACTIVO |
-| EST-1-203 | Isabella González | estudiante123 | ✅ ACTIVO |
-| EST-1-204 | Matías González | estudiante123 | ✅ ACTIVO |
-| EST-1-205 | Sofía González | estudiante123 | ⚠️ SANCIONADO |
-| EST-1-206 | Samuel González | estudiante123 | ✅ ACTIVO |
-| EST-1-207 | Gabriela González | estudiante123 | ✅ ACTIVO |
-| EST-1-208 | Nicolás González | estudiante123 | ✅ ACTIVO |
-| EST-1-209 | Mariana González | estudiante123 | ✅ ACTIVO |
 
 ---
 
@@ -426,41 +325,6 @@
 | PADRE | padre68.2@iecaguan.edu.co | padre123 | Luciana López, Andrés López |
 | PADRE | padre69.2@iecaguan.edu.co | padre123 | Sara López, Tomás López |
 | PADRE | padre70.2@iecaguan.edu.co | padre123 | Paula López, David López |
-| PADRE | padre71.2@iecaguan.edu.co | padre123 | Ana María López, Juan López |
-| PADRE | padre72.2@iecaguan.edu.co | padre123 | Laura López, Felipe López |
-| PADRE | padre73.2@iecaguan.edu.co | padre123 | María José López, Carlos López |
-| PADRE | padre74.2@iecaguan.edu.co | padre123 | Natalia López, Emilio López |
-| PADRE | padre75.2@iecaguan.edu.co | padre123 | Juliana López, Miguel López |
-| PADRE | padre76.2@iecaguan.edu.co | padre123 | Catalina López, José López |
-| PADRE | padre77.2@iecaguan.edu.co | padre123 | Manuela López, Ricardo López |
-| PADRE | padre78.2@iecaguan.edu.co | padre123 | Valeria López, Daniel López |
-| PADRE | padre79.2@iecaguan.edu.co | padre123 | Antonella López, Eduardo López |
-| PADRE | padre80.2@iecaguan.edu.co | padre123 | Salomé López, Martín López |
-| PADRE | padre81.2@iecaguan.edu.co | padre123 | Valentina Hernández, Santiago Hernández |
-| PADRE | padre82.2@iecaguan.edu.co | padre123 | Isabella Hernández, Matías Hernández |
-| PADRE | padre83.2@iecaguan.edu.co | padre123 | Sofía Hernández, Samuel Hernández |
-| PADRE | padre84.2@iecaguan.edu.co | padre123 | Gabriela Hernández, Nicolás Hernández |
-| PADRE | padre85.2@iecaguan.edu.co | padre123 | Mariana Hernández, Sebastián Hernández |
-| PADRE | padre86.2@iecaguan.edu.co | padre123 | Camila Hernández, Alejandro Hernández |
-| PADRE | padre87.2@iecaguan.edu.co | padre123 | Daniela Hernández, Diego Hernández |
-| PADRE | padre88.2@iecaguan.edu.co | padre123 | Luciana Hernández, Andrés Hernández |
-| PADRE | padre89.2@iecaguan.edu.co | padre123 | Sara Hernández, Tomás Hernández |
-| PADRE | padre90.2@iecaguan.edu.co | padre123 | Paula Hernández, David Hernández |
-| PADRE | padre91.2@iecaguan.edu.co | padre123 | Ana María Hernández, Juan Hernández |
-| PADRE | padre92.2@iecaguan.edu.co | padre123 | Laura Hernández, Felipe Hernández |
-| PADRE | padre93.2@iecaguan.edu.co | padre123 | María José Hernández, Carlos Hernández |
-| PADRE | padre94.2@iecaguan.edu.co | padre123 | Natalia Hernández, Emilio Hernández |
-| PADRE | padre95.2@iecaguan.edu.co | padre123 | Juliana Hernández, Miguel Hernández |
-| PADRE | padre96.2@iecaguan.edu.co | padre123 | Catalina Hernández, José Hernández |
-| PADRE | padre97.2@iecaguan.edu.co | padre123 | Manuela Hernández, Ricardo Hernández |
-| PADRE | padre98.2@iecaguan.edu.co | padre123 | Valeria Hernández, Daniel Hernández |
-| PADRE | padre99.2@iecaguan.edu.co | padre123 | Antonella Hernández, Eduardo Hernández |
-| PADRE | padre100.2@iecaguan.edu.co | padre123 | Salomé Hernández, Martín Hernández |
-| PADRE | padre101.2@iecaguan.edu.co | padre123 | Valentina González, Santiago González |
-| PADRE | padre102.2@iecaguan.edu.co | padre123 | Isabella González, Matías González |
-| PADRE | padre103.2@iecaguan.edu.co | padre123 | Sofía González, Samuel González |
-| PADRE | padre104.2@iecaguan.edu.co | padre123 | Gabriela González, Nicolás González |
-| PADRE | padre105.2@iecaguan.edu.co | padre123 | Mariana González, Sebastián González |
 
 ### 🎓 Estudiantes (login: código estudiantil + contraseña)
 
@@ -599,72 +463,6 @@
 | EST-2-138 | Tomás López | estudiante123 | ✅ ACTIVO |
 | EST-2-139 | Paula López | estudiante123 | ✅ ACTIVO |
 | EST-2-140 | David López | estudiante123 | ✅ ACTIVO |
-| EST-2-141 | Ana María López | estudiante123 | ✅ ACTIVO |
-| EST-2-142 | Juan López | estudiante123 | ✅ ACTIVO |
-| EST-2-143 | Laura López | estudiante123 | ✅ ACTIVO |
-| EST-2-144 | Felipe López | estudiante123 | ✅ ACTIVO |
-| EST-2-145 | María José López | estudiante123 | ⚠️ SANCIONADO |
-| EST-2-146 | Carlos López | estudiante123 | ✅ ACTIVO |
-| EST-2-147 | Natalia López | estudiante123 | ✅ ACTIVO |
-| EST-2-148 | Emilio López | estudiante123 | ✅ ACTIVO |
-| EST-2-149 | Juliana López | estudiante123 | ✅ ACTIVO |
-| EST-2-151 | Catalina López | estudiante123 | ✅ ACTIVO |
-| EST-2-152 | José López | estudiante123 | ✅ ACTIVO |
-| EST-2-153 | Manuela López | estudiante123 | ✅ ACTIVO |
-| EST-2-154 | Ricardo López | estudiante123 | ✅ ACTIVO |
-| EST-2-155 | Valeria López | estudiante123 | 🔴 RETIRADO |
-| EST-2-156 | Daniel López | estudiante123 | ✅ ACTIVO |
-| EST-2-157 | Antonella López | estudiante123 | ✅ ACTIVO |
-| EST-2-158 | Eduardo López | estudiante123 | ✅ ACTIVO |
-| EST-2-159 | Salomé López | estudiante123 | ✅ ACTIVO |
-| EST-2-160 | Martín López | estudiante123 | ✅ ACTIVO |
-| EST-2-161 | Valentina Hernández | estudiante123 | ✅ ACTIVO |
-| EST-2-162 | Santiago Hernández | estudiante123 | ✅ ACTIVO |
-| EST-2-163 | Isabella Hernández | estudiante123 | ✅ ACTIVO |
-| EST-2-164 | Matías Hernández | estudiante123 | ✅ ACTIVO |
-| EST-2-165 | Sofía Hernández | estudiante123 | ⚠️ SANCIONADO |
-| EST-2-166 | Samuel Hernández | estudiante123 | ✅ ACTIVO |
-| EST-2-167 | Gabriela Hernández | estudiante123 | ✅ ACTIVO |
-| EST-2-168 | Nicolás Hernández | estudiante123 | ✅ ACTIVO |
-| EST-2-169 | Mariana Hernández | estudiante123 | ✅ ACTIVO |
-| EST-2-171 | Camila Hernández | estudiante123 | ✅ ACTIVO |
-| EST-2-172 | Alejandro Hernández | estudiante123 | ✅ ACTIVO |
-| EST-2-173 | Daniela Hernández | estudiante123 | ✅ ACTIVO |
-| EST-2-174 | Diego Hernández | estudiante123 | ✅ ACTIVO |
-| EST-2-175 | Luciana Hernández | estudiante123 | 🔴 RETIRADO |
-| EST-2-176 | Andrés Hernández | estudiante123 | ✅ ACTIVO |
-| EST-2-177 | Sara Hernández | estudiante123 | ✅ ACTIVO |
-| EST-2-178 | Tomás Hernández | estudiante123 | ✅ ACTIVO |
-| EST-2-179 | Paula Hernández | estudiante123 | ✅ ACTIVO |
-| EST-2-180 | David Hernández | estudiante123 | ✅ ACTIVO |
-| EST-2-181 | Ana María Hernández | estudiante123 | ✅ ACTIVO |
-| EST-2-182 | Juan Hernández | estudiante123 | ✅ ACTIVO |
-| EST-2-183 | Laura Hernández | estudiante123 | ✅ ACTIVO |
-| EST-2-184 | Felipe Hernández | estudiante123 | ✅ ACTIVO |
-| EST-2-185 | María José Hernández | estudiante123 | ⚠️ SANCIONADO |
-| EST-2-186 | Carlos Hernández | estudiante123 | ✅ ACTIVO |
-| EST-2-187 | Natalia Hernández | estudiante123 | ✅ ACTIVO |
-| EST-2-188 | Emilio Hernández | estudiante123 | ✅ ACTIVO |
-| EST-2-189 | Juliana Hernández | estudiante123 | ✅ ACTIVO |
-| EST-2-191 | Catalina Hernández | estudiante123 | ✅ ACTIVO |
-| EST-2-192 | José Hernández | estudiante123 | ✅ ACTIVO |
-| EST-2-193 | Manuela Hernández | estudiante123 | ✅ ACTIVO |
-| EST-2-194 | Ricardo Hernández | estudiante123 | ✅ ACTIVO |
-| EST-2-195 | Valeria Hernández | estudiante123 | 🔴 RETIRADO |
-| EST-2-196 | Daniel Hernández | estudiante123 | ✅ ACTIVO |
-| EST-2-197 | Antonella Hernández | estudiante123 | ✅ ACTIVO |
-| EST-2-198 | Eduardo Hernández | estudiante123 | ✅ ACTIVO |
-| EST-2-199 | Salomé Hernández | estudiante123 | ✅ ACTIVO |
-| EST-2-200 | Martín Hernández | estudiante123 | ✅ ACTIVO |
-| EST-2-201 | Valentina González | estudiante123 | ✅ ACTIVO |
-| EST-2-202 | Santiago González | estudiante123 | ✅ ACTIVO |
-| EST-2-203 | Isabella González | estudiante123 | ✅ ACTIVO |
-| EST-2-204 | Matías González | estudiante123 | ✅ ACTIVO |
-| EST-2-205 | Sofía González | estudiante123 | ⚠️ SANCIONADO |
-| EST-2-206 | Samuel González | estudiante123 | ✅ ACTIVO |
-| EST-2-207 | Gabriela González | estudiante123 | ✅ ACTIVO |
-| EST-2-208 | Nicolás González | estudiante123 | ✅ ACTIVO |
-| EST-2-209 | Mariana González | estudiante123 | ✅ ACTIVO |
 
 ---
 
@@ -754,41 +552,6 @@
 | PADRE | padre68.3@heisenberg.edu.co | padre123 | Luciana López, Andrés López |
 | PADRE | padre69.3@heisenberg.edu.co | padre123 | Sara López, Tomás López |
 | PADRE | padre70.3@heisenberg.edu.co | padre123 | Paula López, David López |
-| PADRE | padre71.3@heisenberg.edu.co | padre123 | Ana María López, Juan López |
-| PADRE | padre72.3@heisenberg.edu.co | padre123 | Laura López, Felipe López |
-| PADRE | padre73.3@heisenberg.edu.co | padre123 | María José López, Carlos López |
-| PADRE | padre74.3@heisenberg.edu.co | padre123 | Natalia López, Emilio López |
-| PADRE | padre75.3@heisenberg.edu.co | padre123 | Juliana López, Miguel López |
-| PADRE | padre76.3@heisenberg.edu.co | padre123 | Catalina López, José López |
-| PADRE | padre77.3@heisenberg.edu.co | padre123 | Manuela López, Ricardo López |
-| PADRE | padre78.3@heisenberg.edu.co | padre123 | Valeria López, Daniel López |
-| PADRE | padre79.3@heisenberg.edu.co | padre123 | Antonella López, Eduardo López |
-| PADRE | padre80.3@heisenberg.edu.co | padre123 | Salomé López, Martín López |
-| PADRE | padre81.3@heisenberg.edu.co | padre123 | Valentina Hernández, Santiago Hernández |
-| PADRE | padre82.3@heisenberg.edu.co | padre123 | Isabella Hernández, Matías Hernández |
-| PADRE | padre83.3@heisenberg.edu.co | padre123 | Sofía Hernández, Samuel Hernández |
-| PADRE | padre84.3@heisenberg.edu.co | padre123 | Gabriela Hernández, Nicolás Hernández |
-| PADRE | padre85.3@heisenberg.edu.co | padre123 | Mariana Hernández, Sebastián Hernández |
-| PADRE | padre86.3@heisenberg.edu.co | padre123 | Camila Hernández, Alejandro Hernández |
-| PADRE | padre87.3@heisenberg.edu.co | padre123 | Daniela Hernández, Diego Hernández |
-| PADRE | padre88.3@heisenberg.edu.co | padre123 | Luciana Hernández, Andrés Hernández |
-| PADRE | padre89.3@heisenberg.edu.co | padre123 | Sara Hernández, Tomás Hernández |
-| PADRE | padre90.3@heisenberg.edu.co | padre123 | Paula Hernández, David Hernández |
-| PADRE | padre91.3@heisenberg.edu.co | padre123 | Ana María Hernández, Juan Hernández |
-| PADRE | padre92.3@heisenberg.edu.co | padre123 | Laura Hernández, Felipe Hernández |
-| PADRE | padre93.3@heisenberg.edu.co | padre123 | María José Hernández, Carlos Hernández |
-| PADRE | padre94.3@heisenberg.edu.co | padre123 | Natalia Hernández, Emilio Hernández |
-| PADRE | padre95.3@heisenberg.edu.co | padre123 | Juliana Hernández, Miguel Hernández |
-| PADRE | padre96.3@heisenberg.edu.co | padre123 | Catalina Hernández, José Hernández |
-| PADRE | padre97.3@heisenberg.edu.co | padre123 | Manuela Hernández, Ricardo Hernández |
-| PADRE | padre98.3@heisenberg.edu.co | padre123 | Valeria Hernández, Daniel Hernández |
-| PADRE | padre99.3@heisenberg.edu.co | padre123 | Antonella Hernández, Eduardo Hernández |
-| PADRE | padre100.3@heisenberg.edu.co | padre123 | Salomé Hernández, Martín Hernández |
-| PADRE | padre101.3@heisenberg.edu.co | padre123 | Valentina González, Santiago González |
-| PADRE | padre102.3@heisenberg.edu.co | padre123 | Isabella González, Matías González |
-| PADRE | padre103.3@heisenberg.edu.co | padre123 | Sofía González, Samuel González |
-| PADRE | padre104.3@heisenberg.edu.co | padre123 | Gabriela González, Nicolás González |
-| PADRE | padre105.3@heisenberg.edu.co | padre123 | Mariana González, Sebastián González |
 
 ### 🎓 Estudiantes (login: código estudiantil + contraseña)
 
@@ -927,72 +690,6 @@
 | EST-3-138 | Tomás López | estudiante123 | ✅ ACTIVO |
 | EST-3-139 | Paula López | estudiante123 | ✅ ACTIVO |
 | EST-3-140 | David López | estudiante123 | ✅ ACTIVO |
-| EST-3-141 | Ana María López | estudiante123 | ✅ ACTIVO |
-| EST-3-142 | Juan López | estudiante123 | ✅ ACTIVO |
-| EST-3-143 | Laura López | estudiante123 | ✅ ACTIVO |
-| EST-3-144 | Felipe López | estudiante123 | ✅ ACTIVO |
-| EST-3-145 | María José López | estudiante123 | ⚠️ SANCIONADO |
-| EST-3-146 | Carlos López | estudiante123 | ✅ ACTIVO |
-| EST-3-147 | Natalia López | estudiante123 | ✅ ACTIVO |
-| EST-3-148 | Emilio López | estudiante123 | ✅ ACTIVO |
-| EST-3-149 | Juliana López | estudiante123 | ✅ ACTIVO |
-| EST-3-151 | Catalina López | estudiante123 | ✅ ACTIVO |
-| EST-3-152 | José López | estudiante123 | ✅ ACTIVO |
-| EST-3-153 | Manuela López | estudiante123 | ✅ ACTIVO |
-| EST-3-154 | Ricardo López | estudiante123 | ✅ ACTIVO |
-| EST-3-155 | Valeria López | estudiante123 | 🔴 RETIRADO |
-| EST-3-156 | Daniel López | estudiante123 | ✅ ACTIVO |
-| EST-3-157 | Antonella López | estudiante123 | ✅ ACTIVO |
-| EST-3-158 | Eduardo López | estudiante123 | ✅ ACTIVO |
-| EST-3-159 | Salomé López | estudiante123 | ✅ ACTIVO |
-| EST-3-160 | Martín López | estudiante123 | ✅ ACTIVO |
-| EST-3-161 | Valentina Hernández | estudiante123 | ✅ ACTIVO |
-| EST-3-162 | Santiago Hernández | estudiante123 | ✅ ACTIVO |
-| EST-3-163 | Isabella Hernández | estudiante123 | ✅ ACTIVO |
-| EST-3-164 | Matías Hernández | estudiante123 | ✅ ACTIVO |
-| EST-3-165 | Sofía Hernández | estudiante123 | ⚠️ SANCIONADO |
-| EST-3-166 | Samuel Hernández | estudiante123 | ✅ ACTIVO |
-| EST-3-167 | Gabriela Hernández | estudiante123 | ✅ ACTIVO |
-| EST-3-168 | Nicolás Hernández | estudiante123 | ✅ ACTIVO |
-| EST-3-169 | Mariana Hernández | estudiante123 | ✅ ACTIVO |
-| EST-3-171 | Camila Hernández | estudiante123 | ✅ ACTIVO |
-| EST-3-172 | Alejandro Hernández | estudiante123 | ✅ ACTIVO |
-| EST-3-173 | Daniela Hernández | estudiante123 | ✅ ACTIVO |
-| EST-3-174 | Diego Hernández | estudiante123 | ✅ ACTIVO |
-| EST-3-175 | Luciana Hernández | estudiante123 | 🔴 RETIRADO |
-| EST-3-176 | Andrés Hernández | estudiante123 | ✅ ACTIVO |
-| EST-3-177 | Sara Hernández | estudiante123 | ✅ ACTIVO |
-| EST-3-178 | Tomás Hernández | estudiante123 | ✅ ACTIVO |
-| EST-3-179 | Paula Hernández | estudiante123 | ✅ ACTIVO |
-| EST-3-180 | David Hernández | estudiante123 | ✅ ACTIVO |
-| EST-3-181 | Ana María Hernández | estudiante123 | ✅ ACTIVO |
-| EST-3-182 | Juan Hernández | estudiante123 | ✅ ACTIVO |
-| EST-3-183 | Laura Hernández | estudiante123 | ✅ ACTIVO |
-| EST-3-184 | Felipe Hernández | estudiante123 | ✅ ACTIVO |
-| EST-3-185 | María José Hernández | estudiante123 | ⚠️ SANCIONADO |
-| EST-3-186 | Carlos Hernández | estudiante123 | ✅ ACTIVO |
-| EST-3-187 | Natalia Hernández | estudiante123 | ✅ ACTIVO |
-| EST-3-188 | Emilio Hernández | estudiante123 | ✅ ACTIVO |
-| EST-3-189 | Juliana Hernández | estudiante123 | ✅ ACTIVO |
-| EST-3-191 | Catalina Hernández | estudiante123 | ✅ ACTIVO |
-| EST-3-192 | José Hernández | estudiante123 | ✅ ACTIVO |
-| EST-3-193 | Manuela Hernández | estudiante123 | ✅ ACTIVO |
-| EST-3-194 | Ricardo Hernández | estudiante123 | ✅ ACTIVO |
-| EST-3-195 | Valeria Hernández | estudiante123 | 🔴 RETIRADO |
-| EST-3-196 | Daniel Hernández | estudiante123 | ✅ ACTIVO |
-| EST-3-197 | Antonella Hernández | estudiante123 | ✅ ACTIVO |
-| EST-3-198 | Eduardo Hernández | estudiante123 | ✅ ACTIVO |
-| EST-3-199 | Salomé Hernández | estudiante123 | ✅ ACTIVO |
-| EST-3-200 | Martín Hernández | estudiante123 | ✅ ACTIVO |
-| EST-3-201 | Valentina González | estudiante123 | ✅ ACTIVO |
-| EST-3-202 | Santiago González | estudiante123 | ✅ ACTIVO |
-| EST-3-203 | Isabella González | estudiante123 | ✅ ACTIVO |
-| EST-3-204 | Matías González | estudiante123 | ✅ ACTIVO |
-| EST-3-205 | Sofía González | estudiante123 | ⚠️ SANCIONADO |
-| EST-3-206 | Samuel González | estudiante123 | ✅ ACTIVO |
-| EST-3-207 | Gabriela González | estudiante123 | ✅ ACTIVO |
-| EST-3-208 | Nicolás González | estudiante123 | ✅ ACTIVO |
-| EST-3-209 | Mariana González | estudiante123 | ✅ ACTIVO |
 
 ---
 

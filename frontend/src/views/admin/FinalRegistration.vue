@@ -235,7 +235,7 @@ const formatUrl = (target: any) => {
     return `http://localhost:3000/api/matriculas/documentos/${target}/archivo`
   }
   if (typeof target === 'string') {
-    const found = matriculaDetails.value?.documentos?.find((d: any) => d.url === target || d.url_anterior === target)
+    const found = matricula.value?.documentos?.find((d: any) => d.url === target || d.url_anterior === target)
     if (found && found.id_documento) {
       return `http://localhost:3000/api/matriculas/documentos/${found.id_documento}/archivo`
     }

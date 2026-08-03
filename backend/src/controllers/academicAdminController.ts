@@ -2705,8 +2705,23 @@ export const getTeacherManagementData = async (req: Request, res: Response): Pro
          JOIN tipo_documento td ON td.id_tipodocumento = d.id_tipodocumento
          LEFT JOIN usuario u ON u.id_usuario = d.id_usuario
          LEFT JOIN detalle_grados dg ON dg.id_docente = d.id_docente
-           AND ($2::int IS NULL OR dg.id_anio = $2)
          WHERE d.id_colegio = $1
+            AND (
+              $2::int IS NULL OR
+              EXISTS (
+                SELECT 1 FROM detalle_grados dg_sel 
+                WHERE dg_sel.id_docente = d.id_docente AND dg_sel.id_anio = $2
+              ) OR
+              (
+                (u.fecha_creacion IS NULL OR EXTRACT(YEAR FROM u.fecha_creacion) <= COALESCE((SELECT SUBSTRING(calendario FROM '^[0-9]{4}')::int FROM anio_lectivo WHERE id_anio = $2), 9999))
+                AND NOT EXISTS (
+                  SELECT 1 FROM detalle_grados dg_future
+                  JOIN anio_lectivo al_f ON al_f.id_anio = dg_future.id_anio
+                  WHERE dg_future.id_docente = d.id_docente 
+                    AND SUBSTRING(al_f.calendario FROM '^[0-9]{4}')::int > COALESCE((SELECT SUBSTRING(calendario FROM '^[0-9]{4}')::int FROM anio_lectivo WHERE id_anio = $2), 9999)
+                )
+              )
+            )
          GROUP BY d.id_docente, td.tipo, d.estado, u.id_usuario, u.email, u.activo
          ORDER BY d.nombre, d.apellido`,
         [schoolId, yearId]
@@ -3964,23 +3979,33 @@ export const deleteSubject = async (req: Request, res: Response): Promise<void> 
           details: impact
         }
       });
-    } else {
-      await client.query("DELETE FROM materias WHERE id_materia = $1", [subjectId]);
-      res.json({ message: "Materia eliminada correctamente" });
-    }
-  } catch (error: any) {
-    await client.query("ROLLBACK");
-    console.error("Error deleting subject:", error);
-    res.status(500).json({ error: "Error en el servidor" });
-  } finally {
-    client.release();
+
+    res.json({
+      message: "Materia y todas sus relaciones eliminadas correctamente",
+      report: {
+        subjectName,
+        timestamp: new Date().toISOString(),
+        details: impact
+      }
+    });
+  } else {
+    await client.query("DELETE FROM materias WHERE id_materia = $1", [subjectId]);
+    res.json({ message: "Materia eliminada correctamente" });
   }
+} catch (error: any) {
+  await client.query("ROLLBACK");
+  console.error("Error deleting subject:", error);
+  res.status(500).json({ error: "Error en el servidor" });
+} finally {
+  client.release();
+}
 };
 
 export const getSubjectCurriculumDetails = async (req: Request, res: Response): Promise<void> => {
   try {
     const subjectId = Number(req.params.id);
     const schoolId = parseSchoolId(req.query.schoolId as string);
+    const yearId = req.query.yearId ? Number(req.query.yearId) : null;
 
     if (!subjectId || !schoolId) {
       res.status(400).json({ error: "ID de materia y colegio son obligatorios" });
@@ -3998,25 +4023,49 @@ export const getSubjectCurriculumDetails = async (req: Request, res: Response): 
     }
     const subject = subRes.rows[0];
 
-    // 2. Active academic year
-    const yearRes = await pool.query(
-      "SELECT id_anio, calendario FROM anio_lectivo WHERE id_colegio = $1 AND estado = 'ABIERTO' LIMIT 1",
-      [schoolId]
-    );
-    if (yearRes.rows.length === 0) {
-      res.status(400).json({ error: "No hay un año lectivo abierto para este colegio" });
+    // 2. Target academic year (specified by yearId, or default to open year, or fallback to latest year)
+    let activeYear = null;
+    if (yearId) {
+      const yearRes = await pool.query(
+        "SELECT id_anio, calendario, estado FROM anio_lectivo WHERE id_anio = $1 AND id_colegio = $2",
+        [yearId, schoolId]
+      );
+      if (yearRes.rows.length > 0) {
+        activeYear = yearRes.rows[0];
+      }
+    }
+
+    if (!activeYear) {
+      const yearRes = await pool.query(
+        "SELECT id_anio, calendario, estado FROM anio_lectivo WHERE id_colegio = $1 AND estado = 'ABIERTO' ORDER BY id_anio DESC LIMIT 1",
+        [schoolId]
+      );
+      if (yearRes.rows.length > 0) {
+        activeYear = yearRes.rows[0];
+      } else {
+        const fallbackRes = await pool.query(
+          "SELECT id_anio, calendario, estado FROM anio_lectivo WHERE id_colegio = $1 ORDER BY id_anio DESC LIMIT 1",
+          [schoolId]
+        );
+        if (fallbackRes.rows.length > 0) {
+          activeYear = fallbackRes.rows[0];
+        }
+      }
+    }
+
+    if (!activeYear) {
+      res.status(400).json({ error: "No hay un año lectivo disponible para este colegio" });
       return;
     }
-    const activeYear = yearRes.rows[0];
 
-    // 3. Periods for the active year
+    // 3. Periods for the target year
     const periodsRes = await pool.query(
       "SELECT id_periodo, nombre, estado, porcentaje FROM periodo_academico WHERE id_anio = $1 ORDER BY id_periodo ASC",
       [activeYear.id_anio]
     );
     const periods = periodsRes.rows;
 
-    // 4. Assignments for this subject
+    // 4. Assignments for this subject in the target year
     const assignmentsRes = await pool.query(
       `SELECT dg.id_detallegrado, dg.id_docente, dg.id_grupo,
               d.nombre || ' ' || d.apellido as docente_nombre,
@@ -4029,13 +4078,13 @@ export const getSubjectCurriculumDetails = async (req: Request, res: Response): 
        JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
        JOIN secciones sec ON g.id_seccion = sec.id_seccion
        JOIN jornada j ON g.id_jornada = j.id_jornada
-       WHERE dg.id_materia = $1 AND dg.id_colegio = $2
+       WHERE dg.id_materia = $1 AND dg.id_colegio = $2 AND dg.id_anio = $3
        ORDER BY tg.nombre, ne.nombre, sec.nombre, d.nombre`,
-      [subjectId, schoolId]
+      [subjectId, schoolId, activeYear.id_anio]
     );
     const assignments = assignmentsRes.rows;
 
-    // 5. Competencies and learning evidences for this subject in the active year
+    // 5. Competencies and learning evidences for this subject in the target year
     const compsRes = await pool.query(
       `SELECT c.id_competencia, c.id_grupo, c.id_periodo, c.descripcion, c.nombre as competencia_nombre,
               ne.nombre as grado_nombre, tg.id_tipo_grado, tg.nombre as tipo_grado_nombre,
@@ -4072,7 +4121,7 @@ export const getSubjectCurriculumDetails = async (req: Request, res: Response): 
       evidencias: evidences.filter(e => e.id_competencia === comp.id_competencia)
     }));
 
-    // 6. School groups for the active year
+    // 6. School groups
     const groupsRes = await pool.query(
       `SELECT g.id_grupo, ne.nombre as grado_nombre, tg.id_tipo_grado, tg.nombre as tipo_grado_nombre,
               sec.nombre as seccion_nombre, j.nombre as jornada_nombre
@@ -4096,7 +4145,7 @@ export const getSubjectCurriculumDetails = async (req: Request, res: Response): 
     });
   } catch (error: any) {
     console.error("Error fetching subject curriculum details:", error);
-    res.status(500).json({ error: "Error en el servidor" });
+    res.status(500).json({ error: error.message });
   }
 };
 

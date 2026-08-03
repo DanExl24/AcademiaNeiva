@@ -169,6 +169,7 @@ const showWarningModal = ref(false)
 const showExtraModal = ref(false)
 
 const openDrawer = () => {
+  if (auth.isMonitoring || isPeriodClosed.value) return
   console.log('openDrawer triggered')
   isDrawerOpen.value = true
 }
@@ -1130,6 +1131,7 @@ onMounted(() => {
           </div>
         </div>
         <button 
+          v-if="!auth.isMonitoring && !isPeriodClosed"
           @click="openDrawer"
           class="shrink-0 bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-violet-700 dark:text-violet-300 font-bold px-6 py-3 rounded-2xl transition-all flex items-center gap-2 active:scale-95 border border-violet-100 dark:border-violet-850 text-xs shadow-sm self-start md:self-auto"
         >
@@ -1171,6 +1173,7 @@ onMounted(() => {
           <p class="text-base font-bold text-slate-700 dark:text-slate-300">No hay actividades creadas para este periodo</p>
           <p class="text-sm text-slate-500 dark:text-slate-400 mt-1 mb-6">Crea actividades y asigna evidencias DBA para comenzar a calificar.</p>
           <button 
+            v-if="!auth.isMonitoring && !isPeriodClosed"
             @click="openDrawer"
             class="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 py-3.5 rounded-2xl transition-all shadow-lg shadow-indigo-100 dark:shadow-none active:scale-95"
           >

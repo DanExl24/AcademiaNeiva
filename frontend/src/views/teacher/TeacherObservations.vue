@@ -698,7 +698,7 @@ onMounted(() => {
           </div>
           <p class="text-slate-400 dark:text-slate-500 font-bold">{{ observations.length === 0 ? 'No hay observaciones registradas en este periodo.' : 'No se encontraron observaciones con el filtro actual.' }}</p>
           <button
-            v-if="isEditable && observations.length === 0"
+            v-if="isEditable && observations.length === 0 && !auth.isMonitoring"
             @click="openNewModal"
             class="mt-6 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-900 hover:bg-amber-100 dark:hover:bg-amber-900/40 px-6 py-3 rounded-2xl font-bold text-sm transition-all inline-flex items-center gap-2"
           >
@@ -743,7 +743,7 @@ onMounted(() => {
               </div>
 
               <!-- Actions -->
-              <div v-if="isEditable" class="flex items-center gap-1.5 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+              <div v-if="isEditable && !auth.isMonitoring" class="flex items-center gap-1.5 sm:opacity-0 group-hover:opacity-100 transition-opacity">
                 <button
                   @click="openEditModal(obs)"
                   class="bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 p-2 rounded-lg transition-all border border-transparent dark:border-slate-700"

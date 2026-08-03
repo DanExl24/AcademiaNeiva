@@ -110,6 +110,7 @@ Este documento está estructurado en tres secciones principales: la Sección 1 d
 14. **Cierre y Boletines (BOL)**: Consolidados finales e impresión masiva de boletines PDF.
 15. **Supervisión y Auditoría (SUP)**: Acceso del Admin General con re-autenticación del Rector y logs JSONB.
 16. **Soporte y Tickets (SOP)**: Mesa de ayuda pública con código Base36 y regla de turnos (ping-pong).
+17. **Gestión de Padres de Familia (PAD)**: Consola directiva con tarjetas métricas, alertas de acudientes, drawer de hijos, identificación de doble rol (`Padre + Docente`), revocación de sesión (`logged_out_at`) y Modo Monitoreo Espejo.
 
 ## 2.3 Características de los Usuarios
 
@@ -239,6 +240,11 @@ Este documento está estructurado en tres secciones principales: la Sección 1 d
 - **RF-SOP-002 (HU-SOP-004)**: Los tickets aplicarán la regla del turno de respuesta (ping-pong), deshabilitando la respuesta continua del mismo remitente.
 - **RF-SOP-003 (HU-SOP-005)**: El Directivo puede escalar tickets complejos al Administrador General registrando el timestamp en `fecha_escalado`.
 
+### 3.2.17 Módulo 17: Gestión de Padres de Familia
+- **RF-PAD-001 (HU-PAD-001)**: El Directivo puede buscar, filtrar por grado/alertas y visualizar acudientes con estado estandarizado a `Activo`/`Inactivo`.
+- **RF-PAD-002 (HU-PAD-003)**: Al inactivar la cuenta de un padre de familia, el sistema revoca inmediatamente su sesión mediante la actualización atómica de `usuario.logged_out_at`.
+- **RF-PAD-003 (HU-PAD-004)**: El Directivo puede auditar el portal del acudiente en Modo Monitoreo restringiendo el acceso al módulo de Soporte Técnico.
+
 ---
 
 ## 3.3 Requisitos No Funcionales
@@ -296,3 +302,4 @@ Este documento está estructurado en tres secciones principales: la Sección 1 d
 | **BOL** | Cierre y Boletines | `resultado_academico`, `cierre_materia` | `boletinController.ts` |
 | **SUP** | Supervisión y Auditoría | `auditoria_supervision`, `auditoria_acciones_realizadas` | `adminGeneralController.ts` |
 | **SOP** | Soporte y Tickets | `ticket_soporte`, `nota_ticket_soporte` | `supportController.ts` |
+| **PAD** | Gestión de Padres de Familia | `padre_familia`, `detalle_padrefamilia` | `parentManagementController.ts` |

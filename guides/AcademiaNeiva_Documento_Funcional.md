@@ -242,6 +242,14 @@ Para interpretar correctamente el funcionamiento del sistema, es indispensable d
 
 ---
 
+### 👨‍👩‍👧‍👦 17. Gestión de Padres de Familia
+- **Descripción:** Consola administrativa para la gestión, auditoría y monitoreo en tiempo real de los acudientes y familias del colegio.
+- **Responsabilidad:** Tarjetas métricas de control, filtros de alertas estudiantiles, visualización en drawer del acudiente e hijos asociados, identificación de doble rol (`Padre + Docente`), activación/inactivación de cuenta con revocación de sesión (`logged_out_at`) y seguimiento remoto en Modo Monitoreo Espejo.
+- **Actor Principal:** Directivo.
+- **Documentación Completa:** [Módulo 17 — Gestión de Padres de Familia](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/modules/17_gestion_padres/gestion_padres.md) | [Historias de Usuario](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/modules/17_gestion_padres/historias_usuario.md) | [Reglas de Negocio](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/modules/17_gestion_padres/reglas_negocio.md)
+
+---
+
 ## 5. Reglas de Negocio Globales
 
 1. **Aislamiento Multi-Tenant Absoluto**: Toda consulta o modificación sobre la base de datos debe estar aislada por el campo `id_colegio`. Un colegio jamás puede acceder a la información de otro plantel.

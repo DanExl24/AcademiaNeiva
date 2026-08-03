@@ -1,0 +1,22 @@
+# Dependencias y compilados
+node_modules
+dist
+uploads
+
+# Control de versiones y configuraciones locales
+.git
+.gitignore
+.env*
+.vscode
+
+# Archivos de depuración y diagnósticos temporales
+debug-*.ts
+check_tables.ts
+test-api.ts
+scratch.ts
+scratch
+generated
+
+# Logs y reportes
+*.log
+*.txt

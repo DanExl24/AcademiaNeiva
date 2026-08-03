@@ -1,0 +1,64 @@
+services:
+  frontend:
+    container_name: academia-frontend-dev
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:3000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    networks:
+      - academia-internal
+    restart: unless-stopped
+
+  backend:
+    container_name: academia-backend-dev
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    env_file:
+      - ./backend/.env
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - DB_NAME=AcademiaNeiva
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    depends_on:
+      - postgres
+    networks:
+      - academia-internal
+    restart: unless-stopped
+
+  postgres:
+    container_name: academia-postgres-dev
+    image: postgres:16
+    env_file:
+      - ./backend/.env_postgres
+    environment:
+      - TZ=America/Bogota
+      - PGTZ=America/Bogota
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data_dev:/var/lib/postgresql/data
+      - ./backend/init_scripts:/docker-entrypoint-initdb.d
+    networks:
+      - academia-internal
+    restart: always
+
+volumes:
+  postgres_data_dev:
+
+networks:
+  academia-internal:
+    driver: bridge

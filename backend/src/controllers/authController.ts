@@ -611,7 +611,7 @@ export const getUserProfile = async (req: Request, res: Response): Promise<void>
   }
 
   try {
-    const userId = Number(user.id);
+    const userId = req.query.userId ? Number(req.query.userId) : Number(user.id);
     
     // Obtener datos unificados del usuario
     const userRes = await pool.query(

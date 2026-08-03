@@ -275,10 +275,16 @@ const filteredHistory = computed(() => {
   return historyData.value.filter(s => s.nombre.toLowerCase().includes(query) || s.codigo.toLowerCase().includes(query))
 })
 
+// Check overall editability (false when period closed or in monitoring mode)
+const canEditAttendance = computed(() => {
+  return isEditable.value && !auth.isMonitoring
+})
+
 // Default arrival time state & helpers
 const defaultTime = ref('07:00')
 
 const setTimeNow = () => {
+  if (!canEditAttendance.value) return
   const now = new Date()
   const hh = String(now.getHours()).padStart(2, '0')
   const mm = String(now.getMinutes()).padStart(2, '0')
@@ -289,7 +295,7 @@ const autosaveStatus = ref<'saved' | 'saving' | 'error'>('saved')
 const autosaveErrorMsg = ref('')
 
 const saveAllAttendance = async (silent = false) => {
-  if (!selectedCourse.value || !isEditable.value) return
+  if (!selectedCourse.value || !canEditAttendance.value) return
   if (saving.value && !silent) return
   
   try {
@@ -335,6 +341,7 @@ const saveAllAttendance = async (silent = false) => {
 }
 
 const applyDefaultTimeToAll = () => {
+  if (!canEditAttendance.value) return
   students.value.forEach(student => {
     if (student.estado === 'PRESENTE' || student.estado === 'TARDE') {
       student.hora_llegada = defaultTime.value
@@ -345,7 +352,7 @@ const applyDefaultTimeToAll = () => {
 
 // Quick status toggling
 const setStatus = (studentId: number, status: 'PRESENTE' | 'AUSENTE' | 'TARDE' | 'JUSTIFICADA') => {
-  if (!isEditable.value) return
+  if (!canEditAttendance.value) return
   const student = students.value.find(s => s.id_estudiante === studentId)
   if (student) {
     if (student.estado === status) {
@@ -371,7 +378,7 @@ const setStatus = (studentId: number, status: 'PRESENTE' | 'AUSENTE' | 'TARDE' |
 
 // Mark all as present
 const markAllPresent = () => {
-  if (!isEditable.value) return
+  if (!canEditAttendance.value) return
   students.value.forEach(s => {
     s.estado = 'PRESENTE'
     s.justificacion = null
@@ -749,12 +756,12 @@ onMounted(() => {
                 <input 
                   v-model="defaultTime" 
                   type="time" 
-                  :disabled="!isEditable"
+                  :disabled="!canEditAttendance"
                   class="bg-transparent border-none text-xs font-bold text-slate-700 dark:text-slate-200 outline-none w-16" 
                 />
                 <button 
                   @click="setTimeNow"
-                  :disabled="!isEditable"
+                  :disabled="!canEditAttendance"
                   class="bg-white dark:bg-slate-750 hover:bg-slate-100 dark:hover:bg-slate-700 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-650 text-[9px] font-bold whitespace-nowrap transition-all"
                 >
                   Actual
@@ -763,14 +770,14 @@ onMounted(() => {
               <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
                 <button 
                   @click="applyDefaultTimeToAll"
-                  :disabled="!isEditable || students.length === 0"
+                  :disabled="!canEditAttendance || students.length === 0"
                   class="px-2.5 py-1.5 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 border border-indigo-200/50 dark:border-indigo-850 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 rounded-lg font-bold text-[10px] whitespace-nowrap transition-all"
                 >
                   Aplicar Hora
                 </button>
                 <button 
                   @click="markAllPresent"
-                  :disabled="!isEditable || students.length === 0"
+                  :disabled="!canEditAttendance || students.length === 0"
                   class="px-2.5 py-1.5 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200/50 dark:border-emerald-850 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 rounded-lg font-bold text-[10px] whitespace-nowrap transition-all flex items-center gap-1"
                 >
                   <ThumbsUp :size="11" />
@@ -820,7 +827,7 @@ onMounted(() => {
                         v-model="student.justificacion"
                         type="text" 
                         placeholder="Motivo de inasistencia..."
-                        :disabled="!isEditable"
+                        :disabled="!canEditAttendance"
                         @blur="saveAllAttendance(true)"
                         class="w-full bg-transparent border-none text-[10px] font-semibold text-slate-700 dark:text-slate-200 focus:outline-none placeholder-slate-350 dark:placeholder-slate-650 truncate"
                       />
@@ -834,7 +841,7 @@ onMounted(() => {
                       <input 
                         v-model="student.hora_llegada"
                         type="time" 
-                        :disabled="!isEditable"
+                        :disabled="!canEditAttendance"
                         @blur="saveAllAttendance(true)"
                         class="w-full bg-transparent border-none text-[10px] font-bold text-slate-700 dark:text-slate-200 focus:outline-none cursor-pointer"
                       />
@@ -851,7 +858,7 @@ onMounted(() => {
                 <div class="grid grid-cols-4 gap-1 pt-1.5 border-t border-slate-50 dark:border-slate-800/40">
                   <button 
                     @click="setStatus(student.id_estudiante, 'PRESENTE')"
-                    :disabled="!isEditable"
+                    :disabled="!canEditAttendance"
                     :class="[
                       student.estado === 'PRESENTE' ? 'bg-emerald-600 dark:bg-emerald-500 text-white font-black' : 'bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 hover:text-emerald-600 dark:hover:text-emerald-400',
                       'flex flex-col items-center justify-center py-1 rounded-lg transition-all disabled:opacity-50 text-[8px]'
@@ -863,7 +870,7 @@ onMounted(() => {
                   </button>
                   <button 
                     @click="setStatus(student.id_estudiante, 'AUSENTE')"
-                    :disabled="!isEditable"
+                    :disabled="!canEditAttendance"
                     :class="[
                       student.estado === 'AUSENTE' ? 'bg-rose-500 dark:bg-rose-600 text-white font-black' : 'bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 hover:text-rose-500 dark:hover:text-rose-400',
                       'flex flex-col items-center justify-center py-1 rounded-lg transition-all disabled:opacity-50 text-[8px]'
@@ -875,7 +882,7 @@ onMounted(() => {
                   </button>
                   <button 
                     @click="setStatus(student.id_estudiante, 'TARDE')"
-                    :disabled="!isEditable"
+                    :disabled="!canEditAttendance"
                     :class="[
                       student.estado === 'TARDE' ? 'bg-amber-500 dark:bg-amber-600 text-white font-black' : 'bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 hover:bg-amber-50 dark:hover:bg-amber-950/20 hover:text-amber-500 dark:hover:text-amber-400',
                       'flex flex-col items-center justify-center py-1 rounded-lg transition-all disabled:opacity-50 text-[8px]'
@@ -887,7 +894,7 @@ onMounted(() => {
                   </button>
                   <button 
                     @click="setStatus(student.id_estudiante, 'JUSTIFICADA')"
-                    :disabled="!isEditable"
+                    :disabled="!canEditAttendance"
                     :class="[
                       student.estado === 'JUSTIFICADA' ? 'bg-blue-500 dark:bg-blue-600 text-white font-black' : 'bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 hover:bg-blue-50 dark:hover:bg-blue-950/20 hover:text-blue-500 dark:hover:text-blue-400',
                       'flex flex-col items-center justify-center py-1 rounded-lg transition-all disabled:opacity-50 text-[8px]'

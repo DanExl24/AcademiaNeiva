@@ -4,7 +4,7 @@ import axios from 'axios'
 import { useAuthStore } from '../../stores/auth'
 import { 
   School, Hash, MapPin, Mail, Phone, Calendar, Users, Upload,
-  Palette, RefreshCw, Check, Undo, HelpCircle, ShieldAlert, FileText, Sliders
+  Palette, RefreshCw, Check, Undo, HelpCircle, ShieldAlert, FileText, Sliders, AlertCircle
 } from 'lucide-vue-next'
 
 const auth = useAuthStore()

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
 import { 
@@ -94,8 +94,14 @@ const resettingPasswordIndex = ref<number | null>(null)
 const fetchProfile = async () => {
   try {
     loadingProfile.value = true
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get('http://localhost:3000/api/auth/profile', { headers })
+    const headers: Record<string, string> = { Authorization: `Bearer ${auth.token}` }
+    const targetUserId = auth.isMonitoring && auth.monitoringUser ? (auth.monitoringUser.id || auth.monitoringUser.id_usuario) : null
+    const params: Record<string, any> = {}
+    if (targetUserId) {
+      params.userId = targetUserId
+      headers['X-Monitoring-Mode'] = 'true'
+    }
+    const res = await axios.get('http://localhost:3000/api/auth/profile', { headers, params })
     profileData.value = res.data.user
     emailForm.value.email = res.data.user.email || ''
     phoneForm.value.telefono = res.data.user.telefono || ''
@@ -119,6 +125,10 @@ const fetchAllUsers = async () => {
     loadingUsers.value = false
   }
 }
+
+watch(() => auth.monitoringUser, () => {
+  fetchProfile()
+})
 
 onMounted(() => {
   fetchProfile()
@@ -385,7 +395,7 @@ const goBack = () => {
           <!-- Action buttons based on Role -->
           <div class="flex flex-wrap gap-3">
             <button 
-              v-if="isDirectivo"
+              v-if="isDirectivo && !auth.isMonitoring"
               @click="showDirectivoModal = true"
               class="px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-md shadow-indigo-100 dark:shadow-none"
             >
@@ -393,7 +403,7 @@ const goBack = () => {
             </button>
 
             <button 
-              v-if="isParentOrTeacher"
+              v-if="isParentOrTeacher && !auth.isMonitoring"
               @click="handleRequestCredentialsChange"
               :disabled="submittingRequest"
               class="px-5 py-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-black uppercase tracking-widest transition-all"
@@ -402,6 +412,14 @@ const goBack = () => {
               Pedir Cambio de Credenciales
             </button>
           </div>
+        </div>
+
+        <!-- Monitoring Mode Read-Only Banner -->
+        <div v-if="auth.isMonitoring" class="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-2xl p-4 flex items-center gap-3">
+          <ShieldAlert class="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0" />
+          <p class="text-xs font-bold text-amber-800 dark:text-amber-300">
+            Modo Monitoreo — Visualizando información de la cuenta de {{ profileData?.nombre }} {{ profileData?.apellido }} en Solo Lectura.
+          </p>
         </div>
 
         <!-- Success/Error global alerts -->
@@ -446,7 +464,8 @@ const goBack = () => {
                       v-model="phoneForm.telefono"
                       type="text" 
                       placeholder="Ej. +57 300 123 4567"
-                      class="w-full pl-11 pr-4 py-3.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-semibold text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all outline-none"
+                      :disabled="auth.isMonitoring"
+                      class="w-full pl-11 pr-4 py-3.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-semibold text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all outline-none disabled:opacity-75 disabled:cursor-not-allowed"
                     />
                     <Phone class="w-5 h-5 text-slate-400 absolute left-4 top-3.5" />
                   </div>
@@ -456,6 +475,7 @@ const goBack = () => {
                 <div v-if="phoneError" class="text-rose-600 dark:text-rose-455 text-xs font-bold ml-1">{{ phoneError }}</div>
 
                 <button 
+                  v-if="!auth.isMonitoring"
                   type="submit" 
                   :disabled="submittingPhone || phoneForm.telefono === (profileData.telefono || '')"
                   class="px-5 py-3 bg-slate-900 hover:bg-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all disabled:opacity-50 flex items-center gap-2 cursor-pointer"
@@ -477,7 +497,8 @@ const goBack = () => {
                         v-model="emailForm.email"
                         type="email" 
                         required
-                        class="w-full pl-11 pr-4 py-3.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-semibold text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all outline-none"
+                        :disabled="auth.isMonitoring"
+                        class="w-full pl-11 pr-4 py-3.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-semibold text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all outline-none disabled:opacity-75 disabled:cursor-not-allowed"
                       />
                       <Mail class="w-5 h-5 text-slate-400 absolute left-4 top-3.5" />
                     </div>
@@ -487,6 +508,7 @@ const goBack = () => {
                   <div v-if="emailError" class="text-rose-600 dark:text-rose-455 text-xs font-bold ml-1">{{ emailError }}</div>
 
                   <button 
+                    v-if="!auth.isMonitoring"
                     type="submit" 
                     :disabled="submittingEmail || emailForm.email === profileData.email"
                     class="px-5 py-3 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all disabled:opacity-50 flex items-center gap-2 cursor-pointer"
@@ -497,7 +519,7 @@ const goBack = () => {
                 </form>
 
                 <!-- STEP 2: Enter 6-Digit Code to Confirm -->
-                <form v-else @submit.prevent="handleVerifyEmailCode" class="p-4 bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200/60 dark:border-indigo-900/50 rounded-2xl space-y-4 animate-in fade-in duration-200">
+                <form v-else-if="!auth.isMonitoring" @submit.prevent="handleVerifyEmailCode" class="p-4 bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200/60 dark:border-indigo-900/50 rounded-2xl space-y-4 animate-in fade-in duration-200">
                   <div class="flex items-start gap-3">
                     <div class="p-2 bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 rounded-xl shrink-0 mt-0.5">
                       <ShieldCheck class="w-5 h-5" />
@@ -562,7 +584,13 @@ const goBack = () => {
           <div class="space-y-6">
             <h2 class="text-sm font-black text-slate-800 dark:text-white uppercase tracking-wider">Cambiar Contraseña</h2>
             
-            <form @submit.prevent="handleUpdatePassword" class="space-y-4">
+            <div v-if="auth.isMonitoring" class="p-6 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-850 text-center space-y-2">
+              <Lock class="w-8 h-8 text-slate-400 mx-auto" />
+              <p class="text-xs font-bold text-slate-600 dark:text-slate-300">Cambio de contraseña bloqueado en Modo Monitoreo.</p>
+              <p class="text-[10px] text-slate-400 font-semibold">Solo el usuario propietario puede actualizar sus credenciales de acceso.</p>
+            </div>
+
+            <form v-else @submit.prevent="handleUpdatePassword" class="space-y-4">
               <!-- Actual -->
               <div class="space-y-2">
                 <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Contraseña Actual</label>

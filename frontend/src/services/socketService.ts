@@ -1,6 +1,12 @@
 import { io, Socket } from 'socket.io-client'
 
-const SOCKET_URL = 'http://localhost:3000'
+const getSocketUrl = () => {
+  const envUrl = import.meta.env.VITE_API_URL
+  if (envUrl) return envUrl.replace(/\/api$/, '')
+  return 'http://localhost:3000'
+}
+
+const SOCKET_URL = getSocketUrl()
 
 let socket: Socket | null = null
 
