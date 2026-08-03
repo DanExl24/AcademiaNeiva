@@ -226,9 +226,23 @@ const verifyDocument = async () => {
   }
 }
 
-const formatUrl = (url: string) => {
-  const filename = url.split(/[\\\/]/).pop()
-  return `http://localhost:3000/uploads/${filename}`
+const formatUrl = (target: any) => {
+  if (!target) return '#'
+  if (typeof target === 'object' && target.id_documento) {
+    return `http://localhost:3000/api/matriculas/documentos/${target.id_documento}/archivo`
+  }
+  if (typeof target === 'number') {
+    return `http://localhost:3000/api/matriculas/documentos/${target}/archivo`
+  }
+  if (typeof target === 'string') {
+    const found = matriculaDetails.value?.documentos?.find((d: any) => d.url === target || d.url_anterior === target)
+    if (found && found.id_documento) {
+      return `http://localhost:3000/api/matriculas/documentos/${found.id_documento}/archivo`
+    }
+    const filename = target.split(/[\\/]/).pop()
+    return `http://localhost:3000/uploads/${filename}`
+  }
+  return '#'
 }
 
 const documentLabels: Record<string, string> = {

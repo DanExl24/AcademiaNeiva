@@ -583,11 +583,24 @@ const formatDocType = (type: string) => {
     .replace(/^./, (str: string) => str.toUpperCase())
 }
 
-const formatUrl = (url: string) => {
-  if (!url || url === 'PENDIENTE') return '#'
-  if (url.startsWith('http')) return url
-  const filename = url.split(/[\\/]/).pop()
-  return `http://localhost:3000/uploads/${filename}`
+const formatUrl = (target: any) => {
+  if (!target || target === 'PENDIENTE') return '#'
+  if (typeof target === 'object' && target.id_documento) {
+    return `http://localhost:3000/api/matriculas/documentos/${target.id_documento}/archivo`
+  }
+  if (typeof target === 'number') {
+    return `http://localhost:3000/api/matriculas/documentos/${target}/archivo`
+  }
+  if (typeof target === 'string') {
+    if (target.startsWith('http')) return target
+    const found = documentMatrix.value?.find((d: any) => d.url === target)
+    if (found && found.id_documento) {
+      return `http://localhost:3000/api/matriculas/documentos/${found.id_documento}/archivo`
+    }
+    const filename = target.split(/[\\/]/).pop()
+    return `http://localhost:3000/uploads/${filename}`
+  }
+  return '#'
 }
 
 const getBadgeClass = (state: string) => {

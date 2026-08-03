@@ -370,7 +370,24 @@ const getDocStatusClass = (estado: string) => {
   return 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400'
 }
 
-const formatUrl = (url: string) => `http://localhost:3000/uploads/${url.split(/[\\/]/).pop()}`
+const formatUrl = (target: any) => {
+  if (!target) return '#'
+  if (typeof target === 'object' && target.id_documento) {
+    return `http://localhost:3000/api/matriculas/documentos/${target.id_documento}/archivo`
+  }
+  if (typeof target === 'number') {
+    return `http://localhost:3000/api/matriculas/documentos/${target}/archivo`
+  }
+  if (typeof target === 'string') {
+    const found = matricula.value?.documentos?.find((d: any) => d.url === target || d.url_anterior === target)
+    if (found && found.id_documento) {
+      return `http://localhost:3000/api/matriculas/documentos/${found.id_documento}/archivo`
+    }
+    const filename = target.split(/[\\/]/).pop()
+    return `http://localhost:3000/uploads/${filename}`
+  }
+  return '#'
+}
 
 const formatDate = (date: string | null) => {
   if (!date) return 'Sin fecha'

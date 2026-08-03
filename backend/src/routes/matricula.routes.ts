@@ -9,7 +9,8 @@ import {
   notifyInconsistencies,
   finalizeEnrollment,
   cancelEnrollment,
-  toggleTransfer
+  toggleTransfer,
+  downloadDocumentFile
 } from "../controllers/matriculaController";
 import { upload } from "../config/multer";
 import { verifyToken, requireDirectivo } from "../middleware/authMiddleware";
@@ -162,5 +163,7 @@ router.post("/update-documents/:token", upload.fields([
 router.post("/finalize/:id", verifyToken, requireDirectivo, validateDto(FinalizeEnrollmentSchema), finalizeEnrollment);
 router.post("/cancel/:id", verifyToken, requireDirectivo, validateDto(CancelEnrollmentSchema), cancelEnrollment);
 router.patch("/transfer-status/:id", verifyToken, requireDirectivo, toggleTransfer);
+
+router.get("/documentos/:idDocumento/archivo", downloadDocumentFile);
 
 export default router;

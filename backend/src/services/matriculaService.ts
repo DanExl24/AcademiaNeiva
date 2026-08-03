@@ -140,10 +140,21 @@ export class MatriculaService {
       // 2. Guardar documentos en tabla documento_matriculas
       for (const [key, fileArray] of Object.entries(files)) {
         const file = (fileArray as any[])[0];
+        const filename = file.originalname || file.filename || `${key}.pdf`;
         await client.query(
-          `INSERT INTO documento_matriculas (id_matricula, tipo_documento, url, estado, fecha, id_colegio)
-           VALUES ($1, $2, $3, 'PENDIENTE', NOW(), $4)`,
-          [idMatricula, key, file.filename, id_colegio]
+          `INSERT INTO documento_matriculas 
+             (id_matricula, tipo_documento, url, estado, fecha, id_colegio, contenido, mime_type, nombre_original, tamano_bytes)
+           VALUES ($1, $2, $3, 'PENDIENTE', NOW(), $4, $5, $6, $7, $8)`,
+          [
+            idMatricula, 
+            key, 
+            filename, 
+            id_colegio, 
+            file.buffer || null, 
+            file.mimetype || null, 
+            file.originalname || filename, 
+            file.size || null
+          ]
         );
       }
 
@@ -263,7 +274,7 @@ export class MatriculaService {
     console.log('Found sections count:', sections.rows.length);
 
     const docs = await pool.query(
-      `SELECT d.*, 
+      `SELECT d.id_documento, d.id_matricula, d.id_colegio, d.tipo_documento, d.url, d.estado, d.fecha, d.version, d.fecha_expedicion, d.estado_renovacion, d.mime_type, d.nombre_original, d.tamano_bytes, 
               (SELECT prev.url FROM documento_matriculas prev 
                JOIN matricula prev_m ON prev.id_matricula = prev_m.id_matricula
                WHERE m.id_estudiante IS NOT NULL 
@@ -538,7 +549,10 @@ export class MatriculaService {
     if (mat.rows.length === 0) throw new Error('Solicitud no encontrada');
     
     const docs = await pool.query(
-      `SELECT * FROM documento_matriculas WHERE id_matricula = $1`, [mat.rows[0].id_matricula]
+      `SELECT id_documento, id_matricula, id_colegio, tipo_documento, url, estado, fecha, version, fecha_expedicion, estado_renovacion, mime_type, nombre_original, tamano_bytes
+       FROM documento_matriculas 
+       WHERE id_matricula = $1 
+       ORDER BY id_documento ASC`, [mat.rows[0].id_matricula]
     );
     return {
       ...mat.rows[0],
@@ -564,12 +578,22 @@ export class MatriculaService {
 
       for (const [key, fileArray] of Object.entries(files)) {
         const file = (fileArray as any[])[0];
+        const filename = file.originalname || file.filename || `${key}.pdf`;
         // Actualizar el documento existente y resetear estado a PENDIENTE
         await client.query(
           `UPDATE documento_matriculas 
-           SET url = $1, estado = 'PENDIENTE', fecha = NOW()
-           WHERE id_matricula = $2 AND tipo_documento = $3`,
-          [file.filename, idMatricula, key]
+           SET url = $1, estado = 'PENDIENTE', fecha = NOW(),
+               contenido = $2, mime_type = $3, nombre_original = $4, tamano_bytes = $5
+           WHERE id_matricula = $6 AND tipo_documento = $7`,
+          [
+            filename,
+            file.buffer || null,
+            file.mimetype || null,
+            file.originalname || filename,
+            file.size || null,
+            idMatricula,
+            key
+          ]
         );
       }
 

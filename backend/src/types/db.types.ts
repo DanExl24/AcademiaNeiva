@@ -315,6 +315,7 @@ export interface Docente {
 }
 
 export interface DocumentoMatriculas {
+  contenido?: Buffer | null;
   estado: Generated<EstadoDocumento>;
   estado_renovacion: Generated<EstadoRenovacionDocumento | null>;
   fecha: Timestamp;
@@ -322,6 +323,9 @@ export interface DocumentoMatriculas {
   id_colegio: number;
   id_documento: Generated<number>;
   id_matricula: number;
+  mime_type?: string | null;
+  nombre_original?: string | null;
+  tamano_bytes?: number | null;
   tipo_documento: string;
   url: string;
   version: Generated<number>;

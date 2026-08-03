@@ -1,5 +1,8 @@
 import { Request, Response } from "express";
 import { MatriculaService } from "../services/matriculaService";
+import { pool } from "../config/db";
+import path from "path";
+import fs from "fs";
 
 export const submitEnrollment = async (req: Request, res: Response) => {
   try {
@@ -105,4 +108,60 @@ export const toggleTransfer = async (req: Request, res: Response) => {
     res.status(500).json({ error: error.message });
   }
 };
+
+export const downloadDocumentFile = async (req: Request, res: Response) => {
+  try {
+    const { idDocumento } = req.params;
+    const queryRes = await pool.query(
+      `SELECT id_documento, contenido, mime_type, nombre_original, url 
+       FROM documento_matriculas 
+       WHERE id_documento = $1`,
+      [idDocumento]
+    );
+
+    if (queryRes.rows.length === 0) {
+      res.status(404).json({ error: "Documento no encontrado" });
+      return;
+    }
+
+    const doc = queryRes.rows[0];
+
+    // If file binary bytea exists in DB
+    if (doc.contenido && Buffer.isBuffer(doc.contenido)) {
+      const filename = doc.nombre_original || doc.url || `documento-${idDocumento}`;
+      let contentType = doc.mime_type;
+
+      if (!contentType) {
+        const ext = path.extname(filename).toLowerCase();
+        if (ext === '.pdf') contentType = 'application/pdf';
+        else if (ext === '.png') contentType = 'image/png';
+        else if (ext === '.jpg' || ext === '.jpeg') contentType = 'image/jpeg';
+        else if (ext === '.svg') contentType = 'image/svg+xml';
+        else contentType = 'application/octet-stream';
+      }
+
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+      res.send(doc.contenido);
+      return;
+    }
+
+    // Fallback for legacy files stored on local disk
+    if (doc.url && doc.url !== 'PENDIENTE') {
+      const diskFilename = path.basename(doc.url);
+      const filePath = path.join(__dirname, '../../uploads', diskFilename);
+
+      if (fs.existsSync(filePath)) {
+        res.sendFile(filePath);
+        return;
+      }
+    }
+
+    res.status(404).json({ error: "El archivo adjunto no existe o está pendiente de carga" });
+  } catch (error: any) {
+    console.error("Error al descargar documento:", error);
+    res.status(500).json({ error: "Error en el servidor al obtener el archivo" });
+  }
+};
+
 
