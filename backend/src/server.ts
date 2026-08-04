@@ -17,8 +17,8 @@ async function startServer() {
     const httpServer = http.createServer(app);
     socketManager.init(httpServer);
 
-    httpServer.listen(PORT, () => {
-      console.log(`Servidor corriendo en puerto ${PORT}`);
+    httpServer.listen(Number(PORT), "0.0.0.0", () => {
+      console.log(`Servidor corriendo en puerto ${PORT} (0.0.0.0)`);
     });
   } catch (error) {
     console.error("No se pudo preparar el esquema de competencias:", error);
