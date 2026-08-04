@@ -4,9 +4,7 @@ services:
     build:
       context: ./frontend
       args:
-        - VITE_API_URL=https://api.academianeiva.adsoproject.dev/
-    ports:
-      - "8080:80"
+        - VITE_API_URL=https://api-academianeiva.adsoproject.dev/
     networks:
       - proxy-network
     restart: always
@@ -15,8 +13,6 @@ services:
     container_name: academia-backend
     build:
       context: ./backend
-    ports:
-      - "3000:3000"
     environment:
       - TZ=America/Bogota
       - DB_HOST=postgres
