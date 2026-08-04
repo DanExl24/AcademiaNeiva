@@ -5,7 +5,11 @@ import re
 import os
 import argparse
 import sys
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
 # Mapeo de grados del MEN (numéricos/ordinales) a los valores del sistema AcademiaNeiva
 GRADE_MAP = {
@@ -294,8 +298,10 @@ def main():
     
     args = parser.parse_args()
 
-    # Cargar variables de entorno si existe .env en el directorio actual o backend
-    load_dotenv()
+    try:
+        load_dotenv()
+    except NameError:
+        pass
     db_host = os.environ.get("DB_HOST", args.db_host)
     db_port = os.environ.get("DB_PORT", args.db_port)
     db_name = os.environ.get("DB_NAME", args.db_name)
@@ -341,8 +347,8 @@ def main():
         duplicados_omitidos = 0
 
         for dba in dbas:
-            # Validar e insertar DBA
             try:
+                cur.execute("SAVEPOINT sp_dba")
                 # Comprobar duplicado
                 cur.execute(
                     """SELECT id_dba FROM dba 
@@ -380,9 +386,11 @@ def main():
                     )
                     evidencias_insertadas += 1
 
+                cur.execute("RELEASE SAVEPOINT sp_dba")
+
             except Exception as e:
                 print(f"Error procesando DBA #{dba['numero_dba']} para {dba['grado']}: {e}")
-                conn.rollback()
+                cur.execute("ROLLBACK TO SAVEPOINT sp_dba")
                 continue
         
         conn.commit()

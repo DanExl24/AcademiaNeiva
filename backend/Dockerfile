@@ -14,13 +14,15 @@ RUN npm run build
 # STAGE 2: Runtime
 FROM node:22-alpine AS runtime
 
+RUN apk add --no-cache tzdata
+
 WORKDIR /app
 
 COPY package*.json ./
 
 COPY --from=builder /app/dist ./dist
 
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev && mkdir -p /app/uploads
 
 EXPOSE 3000
 

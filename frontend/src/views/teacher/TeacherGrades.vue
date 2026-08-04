@@ -253,16 +253,27 @@ const fetchPeriods = async () => {
   try {
     const params = yearStore.selectedYearId ? { yearId: yearStore.selectedYearId } : {}
     const response = await axios.get(`http://localhost:3000/api/teacher/periods/${schoolId.value}`, { params })
-    periods.value = response.data
-    const openPeriod = periods.value.find(p => p.estado === 'ABIERTO')
-    if (openPeriod) {
-      selectedPeriodId.value = openPeriod.id_periodo
+    periods.value = (response.data || []).filter((p: any) => p.estado !== 'PENDIENTE')
+    
+    const exists = periods.value.some(p => p.id_periodo === selectedPeriodId.value)
+    if (!exists) {
+      const openPeriod = periods.value.find(p => p.estado === 'ABIERTO')
+      if (openPeriod) {
+        selectedPeriodId.value = openPeriod.id_periodo
+      } else if (periods.value.length > 0) {
+        selectedPeriodId.value = periods.value[0].id_periodo
+      } else {
+        selectedPeriodId.value = null
+      }
     }
   } catch (error) {
+    periods.value = []
+    selectedPeriodId.value = null
   }
 }
 
 watch(() => yearStore.selectedYearId, async () => {
+  selectedPeriodId.value = null
   await fetchMyCourses()
   await fetchPeriods()
   if (selectedGradeId.value && selectedSubjectId.value && selectedPeriodId.value) {

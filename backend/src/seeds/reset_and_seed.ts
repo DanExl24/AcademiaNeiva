@@ -780,18 +780,21 @@ async function insertSampleAttendance(client: PoolClient): Promise<void> {
     "Cita médica", "Calamidad doméstica", "Gripe común", "Evento institucional", "Retraso transporte",
   ];
 
-  // Only enrolled + ACTIVA students
+  // Only enrolled + ACTIVA students for year 2025
   const enrollmentRes = await client.query(`
-    SELECT m.id_estudiante, m.id_colegio, m.id_grupo, al.id_anio
+    SELECT m.id_estudiante, m.id_colegio, m.id_grupo, al.id_anio, al.calendario
     FROM matricula m
     JOIN anio_lectivo al ON m.id_anio = al.id_anio
-    WHERE m.estado = 'ACTIVA'
+    WHERE m.estado = 'ACTIVA' AND (al.calendario = '2025' OR al.calendario = '2024-2025')
   `);
 
   const batchValues: any[] = [];
 
   for (const enrollment of enrollmentRes.rows) {
-    const { id_estudiante, id_colegio, id_grupo, id_anio } = enrollment;
+    const { id_estudiante, id_colegio, id_grupo, id_anio, calendario } = enrollment;
+
+    const yearMatch = calendario ? calendario.match(/\d{4}/g) : null;
+    const targetYearNum = yearMatch ? parseInt(yearMatch[yearMatch.length - 1]) : 2025;
 
     const dgRes = await client.query(
       `SELECT id_detallegrado FROM detalle_grados WHERE id_grupo = $1 AND id_colegio = $2`,
@@ -810,12 +813,12 @@ async function insertSampleAttendance(client: PoolClient): Promise<void> {
       let daysGenerated = 0;
 
       for (let d = 1; d <= 28 && daysGenerated < 5; d++) {
-        const date = new Date(2026, mes - 1, d);
+        const date = new Date(targetYearNum, mes - 1, d);
         const dow = date.getDay();
         if (dow === 0 || dow === 6) continue; // skip weekends
         daysGenerated++;
 
-        const dateStr = `2026-${String(mes).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+        const dateStr = `${targetYearNum}-${String(mes).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 
         for (const dg of dgRes.rows) {
           const rand = Math.random();
@@ -1266,13 +1269,13 @@ async function seedDbaCatalog(): Promise<void> {
   console.log("\n🌱 Iniciando importación y siembra del catálogo de DBA...");
 
   const dbaPdfs = [
-    { pdf: "../guides/DBA/DBA_matematicas.pdf", area: "Matemáticas", version: "2016", startPage: 8, script: "importar_dba.py" },
-    { pdf: "../guides/DBA/DBA_lenguaje.pdf", area: "Español", version: "2016", startPage: 8, script: "importar_dba.py" },
-    { pdf: "../guides/DBA/DBA_naturales.pdf", area: "Ciencias Naturales", version: "2016", startPage: 8, script: "importar_dba.py" },
-    { pdf: "../guides/DBA/DBA_sociales.pdf", area: "Ciencias Sociales", version: "2016", startPage: 8, script: "importar_dba.py" },
-    { pdf: "../guides/DBA/DBA_transicion.pdf", area: "Desarrollo Integral", version: "2016", startPage: 8, script: "importar_dba.py" },
-    { pdf: "../guides/DBA/dba_ingles_transicion_quinto.pdf", area: "Inglés", version: "2016", startPage: 8, script: "importar_dba_primaria_ingles.py" },
-    { pdf: "../guides/DBA/DBA_ingles_sexto_once.pdf", area: "Inglés", version: "2016", startPage: 15, script: "importar_dba.py" }
+    { pdf: "guides/DBA/DBA_matematicas.pdf", area: "Matemáticas", version: "2016", startPage: 8, script: "importar_dba.py" },
+    { pdf: "guides/DBA/DBA_lenguaje.pdf", area: "Español", version: "2016", startPage: 8, script: "importar_dba.py" },
+    { pdf: "guides/DBA/DBA_naturales.pdf", area: "Ciencias Naturales", version: "2016", startPage: 8, script: "importar_dba.py" },
+    { pdf: "guides/DBA/DBA_sociales.pdf", area: "Ciencias Sociales", version: "2016", startPage: 8, script: "importar_dba.py" },
+    { pdf: "guides/DBA/DBA_transicion.pdf", area: "Desarrollo Integral", version: "2016", startPage: 8, script: "importar_dba.py" },
+    { pdf: "guides/DBA/dba_ingles_transicion_quinto.pdf", area: "Inglés", version: "2016", startPage: 8, script: "importar_dba_primaria_ingles.py" },
+    { pdf: "guides/DBA/DBA_ingles_sexto_once.pdf", area: "Inglés", version: "2016", startPage: 15, script: "importar_dba.py" }
   ];
 
   // 1. Ejecutar importaciones de Python

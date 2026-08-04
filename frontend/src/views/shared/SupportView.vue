@@ -352,9 +352,9 @@ const canVisitorRespond = computed(() => {
   if (!trackingTicketData.value) return false
   if (trackingTicketData.value.estado === 'RESUELTO') return false
   const obs = trackingTicketData.value.observaciones || []
-  if (obs.length === 0) return true
+  if (obs.length === 0) return false
   const lastObs = obs[obs.length - 1]
-  return lastObs.tipo === 'ADMIN_GENERAL' || lastObs.tipo === 'DIRECTIVO' || lastObs.autor
+  return lastObs.tipo === 'ADMIN_GENERAL' || lastObs.tipo === 'DIRECTIVO'
 })
 
 const submitVisitorResponse = async () => {

@@ -20,6 +20,7 @@ import {
   ChevronLeft
 } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
+import { useAcademicYearStore } from '../../stores/academicYear'
 import axios from 'axios'
 import { getCourseDisplayName } from '../../utils/courseHelper'
 
@@ -56,11 +57,11 @@ interface StudentHistory {
 
 const route = useRoute()
 const auth = useAuthStore()
+const yearStore = useAcademicYearStore()
 
 // Local timezone safe today date format (YYYY-MM-DD)
 const todayStr = computed(() => new Date().toLocaleDateString('en-CA'))
 
-// Selectors
 // Selectors
 const selectedGradeName = ref<string | null>(null)
 const selectedSection = ref<string | null>(null)
@@ -84,9 +85,11 @@ const searchQuery = ref('')
 // Load assigned courses
 const fetchMyCourses = async () => {
   // In monitoring mode, load the observed teacher's courses
-  const teacherId = auth.isMonitoring ? auth.monitoringUser?.id : auth.user?.id
+  const teacherId = auth.isMonitoring ? auth.monitoringUser?.id : (auth.user?.id_usuario || auth.user?.id)
+  if (!teacherId) return
   try {
-    const response = await axios.get(`http://localhost:3000/api/teacher/courses/${teacherId}`)
+    const params = yearStore.selectedYearId ? { yearId: yearStore.selectedYearId } : {}
+    const response = await axios.get(`http://localhost:3000/api/teacher/courses/${teacherId}`, { params })
     myCourses.value = response.data
     
     if (route.query.gradoId) {
@@ -198,6 +201,17 @@ watch(activeTab, (newTab) => {
   }
 })
 
+watch(() => yearStore.selectedYearId, () => {
+  selectedGradeName.value = null
+  selectedSection.value = null
+  selectedJornada.value = null
+  selectedSubjectId.value = null
+  students.value = []
+  historyData.value = []
+  recordedDates.value = []
+  fetchMyCourses()
+})
+
 // Dropdowns compute
 const gradeOptions = computed(() => {
   const grades = myCourses.value.map(c => c.grado_nombre)
@@ -294,10 +308,27 @@ const setTimeNow = () => {
 const autosaveStatus = ref<'saved' | 'saving' | 'error'>('saved')
 const autosaveErrorMsg = ref('')
 
+const calculateLateTime = (baseTime: string, addMinutesCount = 5): string => {
+  const [hh, mm] = (baseTime || '07:00').split(':').map(Number)
+  const lateMin = (hh * 60 + mm + addMinutesCount) % (24 * 60)
+  const lateHh = String(Math.floor(lateMin / 60)).padStart(2, '0')
+  const lateMm = String(lateMin % 60).padStart(2, '0')
+  return `${lateHh}:${lateMm}`
+}
+
 const saveAllAttendance = async (silent = false) => {
   if (!selectedCourse.value || !canEditAttendance.value) return
   if (saving.value && !silent) return
-  
+
+  // FORCER: Garantizar que todo estudiante con estado TARDE tenga una hora de llegada estrictamente mayor a la hora de ingreso normal
+  students.value.forEach(student => {
+    if (student.estado === 'TARDE') {
+      if (!student.hora_llegada || student.hora_llegada <= defaultTime.value) {
+        student.hora_llegada = calculateLateTime(defaultTime.value, 5)
+      }
+    }
+  })
+
   try {
     if (silent) {
       autosaveStatus.value = 'saving'
@@ -327,10 +358,9 @@ const saveAllAttendance = async (silent = false) => {
     }
   } catch (error: any) {
     const errorMsg = error.response?.data?.error || 'Error al guardar asistencia'
-    if (silent) {
-      autosaveStatus.value = 'error'
-      autosaveErrorMsg.value = errorMsg
-    } else {
+    autosaveStatus.value = 'error'
+    autosaveErrorMsg.value = errorMsg
+    if (!silent) {
       alert(errorMsg)
     }
   } finally {
@@ -343,8 +373,10 @@ const saveAllAttendance = async (silent = false) => {
 const applyDefaultTimeToAll = () => {
   if (!canEditAttendance.value) return
   students.value.forEach(student => {
-    if (student.estado === 'PRESENTE' || student.estado === 'TARDE') {
+    if (student.estado === 'PRESENTE') {
       student.hora_llegada = defaultTime.value
+    } else if (student.estado === 'TARDE') {
+      student.hora_llegada = calculateLateTime(defaultTime.value, 15)
     }
   })
   saveAllAttendance(true)
@@ -364,9 +396,13 @@ const setStatus = (studentId: number, status: 'PRESENTE' | 'AUSENTE' | 'TARDE' |
       if (status !== 'JUSTIFICADA') {
         student.justificacion = null
       }
-      if (status === 'PRESENTE' || status === 'TARDE') {
+      if (status === 'PRESENTE') {
         if (!student.hora_llegada) {
           student.hora_llegada = defaultTime.value
+        }
+      } else if (status === 'TARDE') {
+        if (!student.hora_llegada || student.hora_llegada <= defaultTime.value) {
+          student.hora_llegada = calculateLateTime(defaultTime.value, 15)
         }
       } else {
         student.hora_llegada = null
@@ -651,6 +687,22 @@ onMounted(() => {
       </div>
     </div>
 
+    <!-- Error Alert Banner for Autosave / Validation Errors -->
+    <div v-if="autosaveStatus === 'error' && autosaveErrorMsg" class="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 p-5 rounded-3xl flex items-center justify-between gap-4 text-red-700 dark:text-red-300 shadow-sm animate-in fade-in slide-in-from-top duration-300">
+      <div class="flex items-center gap-3.5">
+        <div class="w-10 h-10 rounded-2xl bg-red-100 dark:bg-red-900/60 flex items-center justify-center shrink-0">
+          <AlertCircle class="w-5 h-5 text-red-600 dark:text-red-400" />
+        </div>
+        <div>
+          <h4 class="text-xs font-black uppercase tracking-wider text-red-800 dark:text-red-200">Error al guardar la asistencia</h4>
+          <p class="text-xs font-bold leading-relaxed mt-0.5">{{ autosaveErrorMsg }}</p>
+        </div>
+      </div>
+      <button @click="autosaveStatus = 'saved'; autosaveErrorMsg = ''" class="px-4 py-2 bg-red-100 dark:bg-red-900/60 hover:bg-red-200 text-red-800 dark:text-red-200 rounded-xl text-xs font-bold transition-all shrink-0">
+        Entendido
+      </button>
+    </div>
+
     <!-- Active date notification (For past days only) -->
     <div v-if="selectedCourse && activeTab === 'today' && selectedDate !== todayStr" class="bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-150 dark:border-indigo-900 rounded-3xl p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-in slide-in-from-top duration-300">
       <div class="flex items-start gap-3">
@@ -842,6 +894,7 @@ onMounted(() => {
                         v-model="student.hora_llegada"
                         type="time" 
                         :disabled="!canEditAttendance"
+                        @change="saveAllAttendance(true)"
                         @blur="saveAllAttendance(true)"
                         class="w-full bg-transparent border-none text-[10px] font-bold text-slate-700 dark:text-slate-200 focus:outline-none cursor-pointer"
                       />

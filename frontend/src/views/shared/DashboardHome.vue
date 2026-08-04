@@ -619,7 +619,7 @@ const loadPeriods = async () => {
   try {
     const headers = { Authorization: `Bearer ${auth.token}` }
     const response = await axios.get(`http://localhost:3000/api/academic-admin/settings/${schoolId.value}?keys=periods`, { headers })
-    allPeriods.value = response.data.periods
+    allPeriods.value = (response.data.periods || []).filter((p: any) => p.estado !== 'PENDIENTE')
 
     // Set active period by default if none selected
     if (!selectedPeriodId.value) {

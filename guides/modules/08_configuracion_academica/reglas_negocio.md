@@ -146,3 +146,41 @@ Este documento detalla las reglas de negocio técnicas y funcionales del módulo
 - **Endpoints relacionados:** 
   - `PATCH /api/academic-admin/settings/years/:id/calendar-type`
 - **Historias de usuario relacionadas:** HU-CON-007, HU-CON-009
+
+---
+
+### RN-CONF-011: Exclusión Estricta de Periodos `PENDIENTE` en Vistas Operativas
+- **Descripción:** Los periodos académicos cuyo estado sea `PENDIENTE` son totalmente invisibles e inhabilitados en los filtros de selección de todas las vistas operativas de la plataforma:
+  - Planilla de Calificaciones (Docente)
+  - Registro de Asistencia (Docente)
+  - Observador del Estudiante (Docente)
+  - Cierre de Periodos (Docente)
+  - Portales de Estudiantes (Notas, Asistencia, Observaciones, Boletín, Dashboard)
+  - Portales de Acudientes / Padres (Notas, Asistencia, Observaciones, Boletín)
+  - Dashboard Principal / Compartido
+- **Motivo:** Previene que docentes o usuarios finales interactúen o intenten registrar notas, asistencias o evaluaciones en periodos futuros que aún no abren oficialmente.
+- **Módulos afectados:** Configuración Académica, Calificaciones, Asistencia, Observaciones, Portales Estudiante y Padre.
+- **Archivos donde se implementa:** 
+  - [periodHelpers.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/utils/periodHelpers.ts) (`getAllPeriodsForSchool`)
+  - [studentPortalController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/studentPortalController.ts) (`getStudentAllPeriods`)
+  - Vistas Vue frontend ([TeacherGrades.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/teacher/TeacherGrades.vue), [TeacherObservations.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/teacher/TeacherObservations.vue), etc.)
+- **Endpoints relacionados:** 
+  - `GET /api/teacher/periods/:schoolId`
+  - `GET /api/student/all-periods/:id_estudiante/:id_anio`
+- **Historias de usuario relacionadas:** HU-CON-001, HU-CON-002
+
+---
+
+### RN-CONF-012: Excepción de Visibilidad de Periodos `PENDIENTE` para Planificación Curricular y Gestión
+- **Descripción:** Los periodos en estado `PENDIENTE` son únicamente visibles y seleccionables en dos vistas administrativas específicas:
+  1. **Configuración de Periodos Académicos** ([AcademicPeriodsView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/AcademicPeriodsView.vue)): Para administrar y aperturar los periodos.
+  2. **Competencias Académicas y Cobertura DBA** ([AcademicCompetenciesView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/AcademicCompetenciesView.vue) y [DbaReportsView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/DbaReportsView.vue)): Para estructurar la malla curricular, asignar DBA e indicadores de desempeño de periodos futuros con anticipación.
+- **Motivo:** Permite a la coordinación académica estructurar la planeación pedagógica del año completo antes del inicio formal de cada trimestre.
+- **Módulos afectados:** Configuración Académica, Competencias y DBA.
+- **Archivos donde se implementa:** 
+  - [AcademicCompetenciesView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/AcademicCompetenciesView.vue)
+  - [DbaReportsView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/DbaReportsView.vue)
+- **Endpoints relacionados:** 
+  - `GET /api/academic-admin/settings/:schoolId`
+- **Historias de usuario relacionadas:** HU-CON-001, HU-COM-001
+

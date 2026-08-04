@@ -51,7 +51,7 @@ export const getStudentAllPeriods = async (req: Request, res: Response) => {
       SELECT p.id_periodo, p.nombre, p.trimestre, p.porcentaje, p.estado
       FROM periodo_academico p
       JOIN estudiante e ON e.id_colegio = p.id_colegio
-      WHERE e.id_estudiante = $1 AND p.id_anio = $2
+      WHERE e.id_estudiante = $1 AND p.id_anio = $2 AND p.estado != 'PENDIENTE'
       ORDER BY p.trimestre ASC
     `, [id_estudiante, id_anio]);
     res.json(result.rows);

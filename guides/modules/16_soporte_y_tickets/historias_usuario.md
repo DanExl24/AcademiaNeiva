@@ -72,11 +72,12 @@ Este documento contiene las historias de usuario implementadas para el módulo d
 - **Roles involucrados:** Público, Estudiante, Docente, Padre
 - **Reglas de negocio relacionadas:** RN-SOP-003, RN-SOP-008
 - **Endpoints relacionados:** 
+  - `POST /api/support/tickets/:id/observaciones`
   - `POST /api/support/tickets/track/:code/observaciones`
 - **Componentes frontend relacionados:** 
   - [SupportView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/shared/SupportView.vue)
 - **Controllers/Services relacionados:** 
-  - [supportController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/supportController.ts) (`addVisitorObservation`)
+  - [supportController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/supportController.ts) (`addTicketObservation`, `addVisitorObservation`)
 
 ---
 

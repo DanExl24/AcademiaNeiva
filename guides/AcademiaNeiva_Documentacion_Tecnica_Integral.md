@@ -20,6 +20,7 @@
 | 1.0.0 | 2026-01-15 | Equipo de Arquitectura | Inicialización de la arquitectura base, modelo relacional y autenticación JWT. |
 | 1.5.0 | 2026-04-10 | Equipo de Desarrollo | Incorporación del módulo de Supervisión con Aprobación de Directivos y Catálogo DBA. |
 | 2.0.0 | 2026-07-21 | Equipo de Desarrollo | Reestructuración modular completa en 16 módulos con trazabilidad a Historias de Usuario, Reglas de Negocio e Inmutabilidad de Auditorías. |
+| 2.1.0 | 2026-08-04 | Equipo de Desarrollo | Inclusión de Reglas de Negocio de Asistencia (Hora Tarde y ZT Bogota), Regla de Turnos en Soporte (Ping-Pong) y Exclusión Operativa de Periodos Pendientes con excepción en Competencias DBA. |
 
 ---
 

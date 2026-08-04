@@ -12,15 +12,16 @@ Este documento contiene las historias de usuario implementadas para el módulo d
 **Para** registrar el control diario de fallas y asistencia en mi clase.
 
 ## Criterios de Aceptación
-- La lista de estudiantes se precarga por defecto con el estado `PRESENTE` para agilizar el registro.
+- La lista de estudiantes se precarga por defecto para la fecha actual en zona horaria oficial `America/Bogota`.
 - El docente puede cambiar el estado de cada estudiante a `PRESENTE`, `AUSENTE`, `TARDE` o `JUSTIFICADA`.
+- Para estudiantes en estado `TARDE`, la interfaz y backend fuerzan una `hora_llegada` estrictamente mayor a la hora de ingreso normal (`PRESENTE`, ej. `07:15` vs `07:00`). Si el usuario ingresa manualmente una hora menor o igual a la normal, la interfaz la corrige automáticamente a un retraso válido y muestra un banner de advertencia si la solicitud fuera rechazada.
 - El sistema no permite guardar la planilla si el registro hace que algún estudiante supere el límite máximo de 7 bloques de clase al día.
 - Al guardar correctamente, los datos se persisten en la tabla `registro_asistencia`.
 
 ## Detalles Técnicos
 - **Prioridad:** Alta
 - **Roles involucrados:** Docente
-- **Reglas de negocio relacionadas:** RN-ASI-001, RN-ASI-002, RN-ASI-003
+- **Reglas de negocio relacionadas:** RN-ASI-001, RN-ASI-002, RN-ASI-003, RN-ASI-006, RN-ASI-007
 - **Endpoints relacionados:** 
   - `GET /api/teacher/attendance/:detailGradeId/:date`
   - `POST /api/teacher/attendance`

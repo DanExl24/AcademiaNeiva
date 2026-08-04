@@ -20,6 +20,7 @@ import {
   Users
 } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
+import { useAcademicYearStore } from '../../stores/academicYear'
 import axios from 'axios'
 
 interface Course {
@@ -66,6 +67,7 @@ interface Observation {
 
 const route = useRoute()
 const auth = useAuthStore()
+const yearStore = useAcademicYearStore()
 
 // Selectors
 const selectedGradeName = ref<string | null>(null)
@@ -107,9 +109,11 @@ const confirmDeleteId = ref<number | null>(null)
 // Load my courses
 const fetchMyCourses = async () => {
   // In monitoring mode, load the observed teacher's courses
-  const teacherId = auth.isMonitoring ? auth.monitoringUser?.id : auth.user?.id
+  const teacherId = auth.isMonitoring ? auth.monitoringUser?.id : (auth.user?.id_usuario || auth.user?.id)
+  if (!teacherId) return
   try {
-    const response = await axios.get(`http://localhost:3000/api/teacher/courses/${teacherId}`)
+    const params = yearStore.selectedYearId ? { yearId: yearStore.selectedYearId } : {}
+    const response = await axios.get(`http://localhost:3000/api/teacher/courses/${teacherId}`, { params })
     myCourses.value = response.data
     
     // Si venimos con parámetros de consulta (ej. desde el cierre)
@@ -131,15 +135,20 @@ const fetchMyCourses = async () => {
 
 // Load periods
 const fetchPeriods = async () => {
+  const schoolId = auth.user?.schoolId || auth.user?.id_colegio
+  if (!schoolId) return
   try {
-    const response = await axios.get(`http://localhost:3000/api/teacher/periods/${auth.user?.schoolId}`)
-    periods.value = response.data
+    const params = yearStore.selectedYearId ? { yearId: yearStore.selectedYearId } : {}
+    const response = await axios.get(`http://localhost:3000/api/teacher/periods/${schoolId}`, { params })
+    periods.value = (response.data || []).filter((p: any) => p.estado !== 'PENDIENTE')
     // Select first open period by default
     const openPeriod = periods.value.find(p => p.estado === 'ABIERTO')
     if (openPeriod) {
       selectedPeriodId.value = openPeriod.id_periodo
     } else if (periods.value.length > 0) {
       selectedPeriodId.value = periods.value[0].id_periodo
+    } else {
+      selectedPeriodId.value = null
     }
   } catch (error) {
   }
@@ -475,6 +484,18 @@ const paginatedObservations = computed(() => {
 // Reset to page 1 on filter or search changes
 watch([selectedGradeName, selectedSection, selectedJornada, selectedSubjectId, selectedPeriodId, searchQuery, filterType, selectedStudentFilterId], () => {
   currentPage.value = 1
+})
+
+watch(() => yearStore.selectedYearId, () => {
+  selectedGradeName.value = null
+  selectedSection.value = null
+  selectedJornada.value = null
+  selectedSubjectId.value = null
+  selectedPeriodId.value = null
+  observations.value = []
+  students.value = []
+  fetchMyCourses()
+  fetchPeriods()
 })
 
 onMounted(() => {

@@ -63,7 +63,7 @@ export const getAttendanceByDate = async (req: Request, res: Response): Promise<
     const editCheck = await checkEditability(detailGradeId, id_colegio);
     
     // Past days restriction
-    const todayStr = new Date().toLocaleDateString('en-CA');
+    const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
     const isToday = dateStr === todayStr;
     const editable = editCheck.editable && isToday;
     const errorReason = !isToday 
@@ -133,7 +133,7 @@ export const saveAttendance = async (req: Request, res: Response): Promise<void>
     return;
   }
 
-  const todayStr = new Date().toLocaleDateString('en-CA');
+  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
   if (date !== todayStr) {
     res.status(409).json({ error: "No está permitido registrar o modificar la asistencia de días pasados." });
     return;

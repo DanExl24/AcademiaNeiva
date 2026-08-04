@@ -445,7 +445,7 @@ export const getTicketByCode = async (req: Request, res: Response) => {
   }
 };
 
-// POST: Registrar observación de directivo / admin general
+// POST: Registrar observación de directivo / admin general / usuario remitente
 export const addTicketObservation = async (req: Request, res: Response) => {
   const user = (req as any).user;
   const { id } = req.params;
@@ -461,11 +461,12 @@ export const addTicketObservation = async (req: Request, res: Response) => {
 
   try {
     const userRole = (user.role || '').toUpperCase();
-    if (userRole !== 'DIRECTIVO' && userRole !== 'ADMIN_GENERAL') {
-      return res.status(403).json({ error: 'Acceso denegado.' });
-    }
+    const isStaff = userRole === 'DIRECTIVO' || userRole === 'ADMIN_GENERAL';
 
-    const ticketRes = await pool.query('SELECT observaciones, id_colegio, estado FROM tickets_soporte WHERE id_ticket = $1', [id]);
+    const ticketRes = await pool.query('SELECT * FROM tickets_soporte WHERE id_ticket = $1', [id]);
+    if (ticketRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Ticket no encontrado.' });
+    }
     const ticket = ticketRes.rows[0];
 
     // Regla: Si el ticket actual está en estado RESUELTO, no permitir más observaciones.
@@ -473,11 +474,46 @@ export const addTicketObservation = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'El ticket ya está RESUELTO y no se permiten más observaciones.' });
     }
 
-    if (userRole === 'DIRECTIVO') {
-      const userRes = await pool.query('SELECT id_colegio FROM usuario WHERE id_usuario = $1', [user.id]);
-      const schoolId = userRes.rows[0]?.id_colegio;
-      if (Number(schoolId) !== Number(ticketRes.rows[0].id_colegio)) {
+    // Parsear observaciones anteriores
+    let currentObs = [];
+    try {
+      currentObs = typeof ticket.observaciones === 'string'
+        ? JSON.parse(ticket.observaciones || '[]')
+        : (ticket.observaciones || []);
+    } catch {
+      currentObs = [];
+    }
+
+    if (isStaff) {
+      if (userRole === 'DIRECTIVO') {
+        const userRes = await pool.query('SELECT id_colegio FROM usuario WHERE id_usuario = $1', [user.id]);
+        const schoolId = userRes.rows[0]?.id_colegio;
+        if (Number(schoolId) !== Number(ticket.id_colegio)) {
+          return res.status(403).json({ error: 'Acceso denegado.' });
+        }
+      }
+    } else {
+      // Regla para usuarios (Docente / Padre / Estudiante)
+      const userRes = await pool.query('SELECT email, id_colegio FROM usuario WHERE id_usuario = $1', [user.id]);
+      const userEmail = userRes.rows[0]?.email;
+      const userSchoolId = userRes.rows[0]?.id_colegio;
+
+      const isOwner = (ticket.id_usuario && Number(ticket.id_usuario) === Number(user.id)) ||
+                      (ticket.correo_remitente && ticket.correo_remitente.toLowerCase() === (userEmail || '').toLowerCase()) ||
+                      (userSchoolId && Number(userSchoolId) === Number(ticket.id_colegio));
+
+      if (!isOwner) {
         return res.status(403).json({ error: 'Acceso denegado.' });
+      }
+
+      // Regla de Turnos (Ping-Pong): El usuario SOLO puede responder si la ÚLTIMA observación fue de Directivo/Admin
+      if (currentObs.length === 0) {
+        return res.status(400).json({ error: 'No puedes responder a este ticket hasta que el colegio o administrador haya registrado una observación.' });
+      }
+
+      const lastObs = currentObs[currentObs.length - 1];
+      if (lastObs.tipo !== 'DIRECTIVO' && lastObs.tipo !== 'ADMIN_GENERAL') {
+        return res.status(400).json({ error: 'Debes esperar a que el personal del colegio o el administrador responda tu mensaje anterior antes de enviar otro.' });
       }
     }
 
@@ -485,19 +521,9 @@ export const addTicketObservation = async (req: Request, res: Response) => {
     const authorRes = await pool.query('SELECT nombre, apellido FROM usuario WHERE id_usuario = $1', [user.id]);
     const authorName = authorRes.rows.length > 0 
       ? `${authorRes.rows[0].nombre} ${authorRes.rows[0].apellido || ''}`.trim()
-      : 'Personal de soporte';
+      : 'Usuario';
 
-    // Parsear observaciones anteriores
-    let currentObs = [];
-    try {
-      currentObs = typeof ticketRes.rows[0].observaciones === 'string'
-        ? JSON.parse(ticketRes.rows[0].observaciones || '[]')
-        : (ticketRes.rows[0].observaciones || []);
-    } catch {
-      currentObs = [];
-    }
-
-    // Concatenar nueva observación estructurada con el directivo responsable
+    // Concatenar nueva observación estructurada
     const newObs = {
       id_usuario: Number(user.id),
       nombre_usuario: authorName,
@@ -507,9 +533,9 @@ export const addTicketObservation = async (req: Request, res: Response) => {
     };
     currentObs.push(newObs);
 
-    // RN-003: Cambiar estado a EN_PROCESO si estaba ABIERTO
-    let nuevoEstado = ticketRes.rows[0].estado;
-    if (ticketRes.rows[0].estado === 'ABIERTO') {
+    // RN-003: Cambiar estado a EN_PROCESO si estaba ABIERTO y fue respondido por staff
+    let nuevoEstado = ticket.estado;
+    if (isStaff && ticket.estado === 'ABIERTO') {
       nuevoEstado = 'EN_PROCESO';
     }
 

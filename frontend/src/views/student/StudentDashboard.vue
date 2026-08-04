@@ -102,7 +102,7 @@ const loadPeriodsForYear = async () => {
   if (!studentId.value || !selectedYearId.value) return
   try {
     const periodsRes = await axios.get(`http://localhost:3000/api/student/all-periods/${studentId.value}/${selectedYearId.value}`)
-    periods.value = periodsRes.data
+    periods.value = (periodsRes.data || []).filter((p: any) => p.estado !== 'PENDIENTE')
     
     if (periods.value.length > 0) {
       // Default to the open period, or the last one

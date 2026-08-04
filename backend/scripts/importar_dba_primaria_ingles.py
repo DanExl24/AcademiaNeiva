@@ -5,7 +5,11 @@ import re
 import os
 import argparse
 import sys
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
 # Mapeo de grados del MEN a los valores del sistema
 GRADE_MAP = {
@@ -296,7 +300,10 @@ def main():
     parser.add_argument("--db-password", default="postgres")
     
     args = parser.parse_args()
-    load_dotenv()
+    try:
+        load_dotenv()
+    except NameError:
+        pass
     
     db_host = os.environ.get("DB_HOST", args.db_host)
     db_port = os.environ.get("DB_PORT", args.db_port)
@@ -333,6 +340,7 @@ def main():
         
         for dba in dbas:
             try:
+                cur.execute("SAVEPOINT sp_dba")
                 # Comprobar duplicado
                 cur.execute(
                     """SELECT id_dba FROM dba 
@@ -360,10 +368,11 @@ def main():
                     
                 # Limpiar evidencias viejas si las hay
                 cur.execute("DELETE FROM evidencias_dba WHERE id_dba = %s", (id_dba,))
+                cur.execute("RELEASE SAVEPOINT sp_dba")
                 
             except Exception as e:
                 print(f"Error procesando DBA #{dba['numero_dba']} para {dba['grado']}: {e}")
-                conn.rollback()
+                cur.execute("ROLLBACK TO SAVEPOINT sp_dba")
                 continue
                 
         conn.commit()

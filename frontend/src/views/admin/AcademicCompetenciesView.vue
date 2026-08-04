@@ -363,7 +363,7 @@ const loadData = async () => {
       params.yearId = yearStore.selectedYearId
     }
     const response = await axios.get(`http://localhost:3000/api/academic-admin/settings/${schoolId.value}`, { params })
-    periods.value = response.data.periods
+    periods.value = response.data.periods || []
     assignments.value = response.data.assignments
     competencies.value = response.data.competencies
     dimensions.value = response.data.dimensions || []

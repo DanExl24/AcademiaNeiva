@@ -99,13 +99,14 @@ Este documento detalla las reglas de negocio técnicas y funcionales del módulo
 ---
 
 ### RN-SOP-008: Regla de Turnos de Mensajería (Ping-Pong)
-- **Descripción:** El remitente público o autenticado solo podrá enviar un nuevo mensaje en el hilo si la última observación registrada proviene de un `DIRECTIVO` o del `ADMIN_GENERAL`.
-- **Motivo:** Evita el spam de mensajes repetitivos del usuario antes de que soporte haya analizado o dado respuesta a su solicitud anterior.
+- **Descripción:** El usuario remitente/creador del ticket (Docente, Padre, Estudiante o Visitante) solo podrá enviar un nuevo mensaje en el hilo si la última observación registrada fue realizada por personal del colegio (`DIRECTIVO` o `ADMIN_GENERAL`). No se permiten múltiples mensajes consecutivos por parte del remitente.
+- **Motivo:** Evita el spam de mensajes repetitivos del usuario antes de que el soporte del colegio o administración haya analizado o respondido su solicitud previa.
 - **Módulos afectados:** Soporte y Tickets.
 - **Archivos donde se implementa:** 
-  - [supportController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/supportController.ts) (`addVisitorObservation`)
-  - [SupportView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/shared/SupportView.vue) (Inhabilitación del botón de envío)
+  - [supportController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/supportController.ts) (`addTicketObservation` y `addVisitorObservation`)
+  - [SupportView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/shared/SupportView.vue) (Inhabilitación del botón de envío y visualización de la regla de turnos)
 - **Endpoints relacionados:** 
+  - `POST /api/support/tickets/:id/observaciones`
   - `POST /api/support/tickets/track/:code/observaciones`
 - **Historias de usuario relacionadas:** HU-SOP-003
 

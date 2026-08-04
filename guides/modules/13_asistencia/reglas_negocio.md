@@ -62,10 +62,40 @@ Este documento detalla las reglas de negocio técnicas y funcionales del módulo
 
 ### RN-ASI-005: Acumulación de Inasistencias en Resultado Académico
 - **Descripción:** Al consolidar y cerrar la materia del periodo, la sumatoria de registros con estado `AUSENTE` se guarda en la columna `falla_asistencia` de la tabla `resultado_academico` para su impresión en el boletín.
-- **Motivo:** Otimiza la generación de boletines PDF al evitar el conteo en caliente de millones de filas de inasistencia durante las impresiones masivas.
+- **Motivo:** Optimiza la generación de boletines PDF al evitar el conteo en caliente de millones de filas de inasistencia durante las impresiones masivas.
 - **Módulos afectados:** Asistencia Escolar, Cierre y Boletines.
 - **Archivos donde se implementa:** 
   - [gradingController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/gradingController.ts) (`closePeriodForTeacher` - conteo de fallas)
 - **Endpoints relacionados:** 
   - `POST /api/teacher/close-period`
 - **Historias de usuario relacionadas:** HU-ASI-003
+
+---
+
+### RN-ASI-006: Restricción de Registro por Fecha Actual y Zona Horaria Oficial
+- **Descripción:** La toma y modificación de asistencia solo está permitida para la fecha del día actual (`Hoy`), validando la fecha en el backend con la zona horaria oficial `America/Bogota` (UTC-5) para evitar discrepancias con servidores o contenedores Docker en UTC. Las fechas pasadas quedan en modo de sólo lectura.
+- **Motivo:** Garantiza la toma de asistencia en tiempo real y evita bloqueos erróneos en horarios nocturnos.
+- **Módulos afectados:** Asistencia Escolar (Docente).
+- **Archivos donde se implementa:** 
+  - [attendanceController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/attendanceController.ts) (`getAttendanceByDate` y `saveAttendance`)
+  - [TeacherAttendance.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/teacher/TeacherAttendance.vue)
+- **Endpoints relacionados:** 
+  - `GET /api/teacher/attendance/:detailGradeId/:date`
+  - `POST /api/teacher/attendance`
+- **Historias de usuario relacionadas:** HU-ASI-001, HU-ASI-002
+
+---
+
+### RN-ASI-007: Forzado y Validación Estricta de Hora de Llegada para Retrasos (`TARDE`)
+- **Descripción:** Toda asistencia registrada con estado `TARDE` exige que la `hora_llegada` sea **estrictamente mayor a la hora de ingreso normal (`PRESENTE`)**.
+  - Al marcar el estado `TARDE`, la interfaz asigna automáticamente un horario de retraso predeterminado (`defaultTime + 15 min`, ej. `07:15`).
+  - Si el usuario modifica manualmente la hora a un valor menor o igual a la hora normal (ej. `07:00` <= `07:00`), el sistema fuerza y corrige automáticamente la hora a un tiempo de retraso válido (`defaultTime + 5 min`), mostrando una notificación explicativa en pantalla si el backend rechaza la petición.
+- **Motivo:** Previene datos inconsistentes donde la hora de retraso coincida con la hora de ingreso normal y asegura el cumplimiento de las validaciones del servidor.
+- **Módulos afectados:** Asistencia Escolar (Docente).
+- **Archivos donde se implementa:** 
+  - [attendanceController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/attendanceController.ts) (`saveAttendance`)
+  - [TeacherAttendance.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/teacher/TeacherAttendance.vue) (`saveAllAttendance`, `setStatus`, `applyDefaultTimeToAll`)
+- **Endpoints relacionados:** 
+  - `POST /api/teacher/attendance`
+- **Historias de usuario relacionadas:** HU-ASI-001, HU-ASI-002
+

@@ -298,6 +298,7 @@ const loadInitialData = async () => {
 }
 
 watch(() => yearStore.selectedYearId, () => {
+  selectedPeriodId.value = null
   loadInitialData()
 })
 

@@ -142,6 +142,7 @@ export const getAllPeriodsForSchool = async (schoolId: number, targetYearId?: nu
      FROM periodo_academico
      WHERE id_colegio = $1
        AND id_anio = $2
+       AND estado != 'PENDIENTE'
      ORDER BY id_periodo`,
     [schoolId, yearIdToUse]
   );

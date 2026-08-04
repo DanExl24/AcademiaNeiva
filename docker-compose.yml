@@ -4,11 +4,9 @@ services:
     build:
       context: ./frontend
       args:
-        - VITE_API_URL=http://localhost:3001
-    ports:
-      - "8081:80"
+        - VITE_API_URL=https://api.academianeiva.adsoproject.dev/
     networks:
-      - academia-internal
+      - proxy-network
     restart: always
 
   backend:
@@ -16,6 +14,7 @@ services:
     build:
       context: ./backend
     environment:
+      - TZ=America/Bogota
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_USER=postgres
@@ -23,11 +22,12 @@ services:
       - DB_NAME=AcademiaNeiva
     env_file:
       - ./backend/.env
-    ports:
-      - "3001:3000"
+    volumes:
+      - uploads_data:/app/uploads
     depends_on:
       - postgres
     networks:
+      - proxy-network
       - academia-internal
     restart: always
 
@@ -48,8 +48,10 @@ services:
 
 volumes:
   postgres_data:
+  uploads_data:
 
 networks:
-  academia-network:
+  proxy-network:
+    external: true
   academia-internal:
     driver: bridge

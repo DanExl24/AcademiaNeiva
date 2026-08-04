@@ -237,6 +237,56 @@ Este documento contiene las historias de usuario implementadas para el módulo d
 
 ---
 
+# HU-CON-011: Exclusión de Periodos Pendientes en Filtros Operativos
+
+## Historia
+**Como** docente, estudiante o acudiente  
+**Quiero** visualizar únicamente los periodos abiertos y cerrados en los selectores de calificaciones, asistencia, observador y boletines  
+**Para** evitar la selección o registro accidental de datos en periodos futuros que aún no abren oficialmente.
+
+## Criterios de Aceptación
+- El filtro de selección de periodos en los módulos de calificaciones, asistencia, observaciones, boletines y dashboards excluye automáticamente cualquier periodo con `estado = 'PENDIENTE'`.
+- El backend (`getAllPeriodsForSchool`, `getStudentAllPeriods`) no retorna periodos en estado `PENDIENTE` para consultas operativas.
+
+## Detalles Técnicos
+- **Prioridad:** Alta
+- **Roles involucrados:** Docente, Estudiante, Padre
+- **Reglas de negocio relacionadas:** RN-CONF-011
+- **Endpoints relacionados:** 
+  - `GET /api/teacher/periods/:schoolId`
+  - `GET /api/student/all-periods/:id_estudiante/:id_anio`
+- **Componentes frontend relacionados:** 
+  - [TeacherGrades.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/teacher/TeacherGrades.vue)
+  - [TeacherObservations.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/teacher/TeacherObservations.vue)
+  - [StudentGradesView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/student/StudentGradesView.vue)
+  - [ParentGradesView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/parent/ParentGradesView.vue)
+
+---
+
+# HU-CON-012: Planificación Curricular Previa sobre Periodos Pendientes
+
+## Historia
+**Como** coordinador o directivo académico  
+**Quiero** seleccionar periodos en estado `PENDIENTE` en la vista de Competencias y Cobertura DBA  
+**Para** estructurar y asociar los DBA, indicadores de desempeño y evidencias de periodos futuros con anticipación.
+
+## Criterios de Aceptación
+- La vista de Competencias Académicas y Cobertura DBA permite la selección de todos los periodos del año lectivo, incluyendo aquellos con estado `PENDIENTE`.
+- El coordinador puede asociar DBA y evidencias pedagógicas a materias en periodos pendientes sin que los docentes puedan ingresar a calificar hasta que el periodo pase a estado `ABIERTO`.
+
+## Detalles Técnicos
+- **Prioridad:** Media
+- **Roles involucrados:** Directivo, Coordinador Académico
+- **Reglas de negocio relacionadas:** RN-CONF-012
+- **Endpoints relacionados:** 
+  - `GET /api/academic-admin/settings/:schoolId`
+- **Componentes frontend relacionados:** 
+  - [AcademicCompetenciesView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/AcademicCompetenciesView.vue)
+  - [DbaReportsView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/DbaReportsView.vue)
+
+
+---
+
 # HU-CON-010: Concurrencia de Fechas de Periodos y Visualización Prominente de Vigencias
 
 ## Historia
