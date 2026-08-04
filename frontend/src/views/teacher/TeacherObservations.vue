@@ -135,7 +135,7 @@ const fetchMyCourses = async () => {
 
 // Load periods
 const fetchPeriods = async () => {
-  const schoolId = auth.user?.schoolId || auth.user?.id_colegio
+  const schoolId = auth.user?.schoolId || (auth.user as any)?.id_colegio
   if (!schoolId) return
   try {
     const params = yearStore.selectedYearId ? { yearId: yearStore.selectedYearId } : {}

@@ -95,7 +95,7 @@ const fetchProfile = async () => {
   try {
     loadingProfile.value = true
     const headers: Record<string, string> = { Authorization: `Bearer ${auth.token}` }
-    const targetUserId = auth.isMonitoring && auth.monitoringUser ? (auth.monitoringUser.id || auth.monitoringUser.id_usuario) : null
+    const targetUserId = auth.isMonitoring && auth.monitoringUser ? (auth.monitoringUser.id || (auth.monitoringUser as any).id_usuario) : null
     const params: Record<string, any> = {}
     if (targetUserId) {
       params.userId = targetUserId
