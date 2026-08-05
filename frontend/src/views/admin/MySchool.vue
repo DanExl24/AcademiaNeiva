@@ -9,12 +9,16 @@ import {
 } from 'lucide-vue-next'
 import { removeBackground } from '@imgly/background-removal'
 
-const getShieldUrl = (url: string) => {
-  if (!url) return ''
-  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
-    return url
+const getShieldUrl = (url: string | null | undefined): string => {
+  if (!url || typeof url !== 'string') return ''
+  const trimmed = url.trim()
+  if (!trimmed || trimmed === 'undefined' || trimmed === '/uploads/undefined' || trimmed.endsWith('/undefined')) {
+    return ''
   }
-  return `${API_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('data:')) {
+    return trimmed
+  }
+  return `${API_BASE_URL}${trimmed.startsWith('/') ? '' : '/'}${trimmed}`
 }
 
 const auth = useAuthStore()
@@ -600,7 +604,7 @@ const saveChanges = async () => {
             <h4 class="text-xs font-black text-slate-400 uppercase tracking-wider self-start">Escudo del Colegio</h4>
             
             <div class="w-40 h-40 rounded-full bg-slate-50 dark:bg-slate-800/40 p-4 border border-slate-100 dark:border-slate-800 flex items-center justify-center overflow-hidden">
-              <img v-if="form.escudo_url" :src="getShieldUrl(form.escudo_url)" alt="Escudo" class="w-full h-full object-contain" />
+              <img v-if="getShieldUrl(form.escudo_url)" :src="getShieldUrl(form.escudo_url)" alt="Escudo" class="w-full h-full object-contain" />
               <School v-else class="text-slate-300 dark:text-slate-700" :size="72" />
             </div>
             
@@ -627,7 +631,7 @@ const saveChanges = async () => {
                   @click="handleUploadClick"
                   class="w-full aspect-square border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all overflow-hidden relative group"
                 >
-                  <img v-if="form.escudo_url" :src="getShieldUrl(form.escudo_url)" class="w-full h-full object-contain p-3" alt="Escudo" />
+                  <img v-if="getShieldUrl(form.escudo_url)" :src="getShieldUrl(form.escudo_url)" class="w-full h-full object-contain p-3" alt="Escudo" />
                   <div v-else-if="uploading" class="text-center p-3 text-slate-400">
                     <RefreshCw class="animate-spin h-6 w-6 mx-auto mb-1 text-slate-400" />
                     <span class="text-[10px] font-bold">Subiendo...</span>
@@ -637,13 +641,13 @@ const saveChanges = async () => {
                     <span class="text-[10px] font-bold text-slate-400">Subir Escudo</span>
                   </div>
                   
-                  <div v-if="form.escudo_url && !uploading" class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all">
+                  <div v-if="getShieldUrl(form.escudo_url) && !uploading" class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all">
                     <span class="text-xs text-white font-bold">Cambiar Imagen</span>
                   </div>
                 </div>
 
                 <!-- Actions for background removal -->
-                <div v-if="form.escudo_url" class="space-y-1.5 pt-2">
+                <div v-if="getShieldUrl(form.escudo_url)" class="space-y-1.5 pt-2">
                   <button 
                     @click="handleRemoveBgWithAi"
                     :disabled="uploading || processingBg"
@@ -785,7 +789,7 @@ const saveChanges = async () => {
                 <div class="w-16 bg-white dark:bg-slate-900 border-r border-slate-200/50 dark:border-slate-800 flex flex-col items-center py-3 space-y-4 shrink-0">
                   <!-- dynamic logo -->
                   <div class="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center bg-slate-100/50 p-1 border border-slate-100 dark:border-slate-800" :style="{ borderColor: form.color_primario + '33' }">
-                    <img v-if="form.escudo_url" :src="getShieldUrl(form.escudo_url)" class="w-full h-full object-contain" />
+                    <img v-if="getShieldUrl(form.escudo_url)" :src="getShieldUrl(form.escudo_url)" class="w-full h-full object-contain" />
                     <School v-else :style="{ color: form.color_primario }" :size="16" />
                   </div>
                   <!-- navigation links mockup -->
