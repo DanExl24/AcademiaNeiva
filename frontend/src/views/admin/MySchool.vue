@@ -58,7 +58,7 @@ const fetchSchoolData = async () => {
   try {
     loading.value = true
     const headers = { Authorization: `Bearer ${auth.token}` }
-    const response = await axios.get(`http://localhost:3000/api/academic-admin/my-school/${schoolId.value}`, { headers })
+    const response = await axios.get(`${API_BASE_URL}/api/academic-admin/my-school/${schoolId.value}`, { headers })
     if (response.data) {
       schoolData.value = response.data.school
       kpis.value = response.data.kpis
@@ -228,7 +228,7 @@ const uploadShieldFile = async (file: File) => {
       Authorization: `Bearer ${auth.token}`,
       'Content-Type': 'multipart/form-data'
     }
-    const res = await axios.post(`http://localhost:3000/api/academic-admin/my-school/${schoolId.value}/identidad/upload-escudo`, formData, { headers })
+    const res = await axios.post(`${API_BASE_URL}/api/academic-admin/my-school/${schoolId.value}/identidad/upload-escudo`, formData, { headers })
     form.value.escudo_url = res.data.url
   } catch (error: any) {
     validationError.value = error.response?.data?.error || 'Error al cargar escudo.'

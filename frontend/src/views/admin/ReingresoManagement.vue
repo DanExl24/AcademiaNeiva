@@ -337,6 +337,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
+import { API_BASE_URL } from '../../config/api'
 import { useAuthStore } from '../../stores/auth'
 import type { SendReingresoPayload } from '../../types/reingreso.types'
 
@@ -595,10 +596,9 @@ const formatUrl = (target: any) => {
     if (target.startsWith('http')) return target
     const found = documents.value?.find((d: any) => d.url === target)
     if (found && found.id_documento) {
-      return `http://localhost:3000/api/matriculas/documentos/${found.id_documento}/archivo`
+      return `${API_BASE_URL}/api/matriculas/documentos/${found.id_documento}/archivo`
     }
-    const filename = target.split(/[\\/]/).pop()
-    return `http://localhost:3000/uploads/${filename}`
+    return '#'
   }
   return '#'
 }

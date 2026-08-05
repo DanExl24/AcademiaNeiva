@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, nextTick, watch } from 'vue'
 import axios from 'axios'
+import { API_BASE_URL } from '../../config/api'
 import html2pdf from 'html2pdf.js'
 import {
   Search,
@@ -373,18 +374,17 @@ const getDocStatusClass = (estado: string) => {
 const formatUrl = (target: any) => {
   if (!target) return '#'
   if (typeof target === 'object' && target.id_documento) {
-    return `http://localhost:3000/api/matriculas/documentos/${target.id_documento}/archivo`
+    return `${API_BASE_URL}/api/matriculas/documentos/${target.id_documento}/archivo`
   }
   if (typeof target === 'number') {
-    return `http://localhost:3000/api/matriculas/documentos/${target}/archivo`
+    return `${API_BASE_URL}/api/matriculas/documentos/${target}/archivo`
   }
   if (typeof target === 'string') {
     const found = matricula.value?.documentos?.find((d: any) => d.url === target || d.url_anterior === target)
     if (found && found.id_documento) {
-      return `http://localhost:3000/api/matriculas/documentos/${found.id_documento}/archivo`
+      return `${API_BASE_URL}/api/matriculas/documentos/${found.id_documento}/archivo`
     }
-    const filename = target.split(/[\\/]/).pop()
-    return `http://localhost:3000/uploads/${filename}`
+    return '#'
   }
   return '#'
 }
