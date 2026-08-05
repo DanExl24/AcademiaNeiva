@@ -192,7 +192,9 @@ export const uploadEscudo = async (req: AuthRequest, res: Response): Promise<voi
       res.status(400).json({ error: 'No se ha subido ningún archivo' });
       return;
     }
-    const fileUrl = `/uploads/${req.file.filename}`;
+    const mimeType = req.file.mimetype || 'image/png';
+    const base64Data = req.file.buffer.toString('base64');
+    const fileUrl = `data:${mimeType};base64,${base64Data}`;
     res.json({ url: fileUrl });
   } catch (error: any) {
     console.error('Error al subir escudo:', error);

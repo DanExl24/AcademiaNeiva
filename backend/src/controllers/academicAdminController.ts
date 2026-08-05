@@ -5262,15 +5262,17 @@ export const uploadMySchoolEscudo = async (req: Request, res: Response): Promise
       return;
     }
 
-    const ext = path.extname(req.file.originalname).toLowerCase();
-    const allowedExts = ['.jpg', '.jpeg', '.png', '.svg'];
-    if (!allowedExts.includes(ext)) {
-      fs.unlinkSync(req.file.path);
-      res.status(400).json({ error: 'Formato no soportado. Solo se permiten JPG, JPEG, PNG y SVG.' });
+    const ext = req.file.originalname ? path.extname(req.file.originalname).toLowerCase() : '';
+    const allowedExts = ['.jpg', '.jpeg', '.png', '.svg', '.webp'];
+    if (ext && !allowedExts.includes(ext) && !req.file.mimetype?.startsWith('image/')) {
+      res.status(400).json({ error: 'Formato no soportado. Solo se permiten JPG, JPEG, PNG, SVG y WEBP.' });
       return;
     }
 
-    const fileUrl = `/uploads/${req.file.filename}`;
+    const mimeType = req.file.mimetype || 'image/png';
+    const base64Data = req.file.buffer.toString('base64');
+    const fileUrl = `data:${mimeType};base64,${base64Data}`;
+
     res.json({ url: fileUrl });
   } catch (error: any) {
     console.error('Error al subir escudo:', error);
