@@ -15,10 +15,10 @@ const getShieldUrl = (url: string | null | undefined): string => {
   if (!trimmed || trimmed === 'undefined' || trimmed === '/uploads/undefined' || trimmed.endsWith('/undefined')) {
     return ''
   }
-  if (trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('data:')) {
+  if (trimmed.startsWith('data:') || trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
     return trimmed
   }
-  return `${API_BASE_URL}${trimmed.startsWith('/') ? '' : '/'}${trimmed}`
+  return API_BASE_URL ? `${API_BASE_URL}${trimmed.startsWith('/') ? '' : '/'}${trimmed}` : trimmed
 }
 
 const auth = useAuthStore()

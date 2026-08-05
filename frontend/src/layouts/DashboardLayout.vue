@@ -251,7 +251,7 @@ const fetchSchoolIdentity = async () => {
       schoolName.value = school.nombre || 'AcademiaNeiva'
       if (school.escudo_url && typeof school.escudo_url === 'string' && school.escudo_url.trim() && school.escudo_url.trim() !== 'undefined' && !school.escudo_url.includes('undefined')) {
         const rawUrl = school.escudo_url.trim()
-        schoolEscudo.value = (rawUrl.startsWith('http://') || rawUrl.startsWith('https://'))
+        schoolEscudo.value = (rawUrl.startsWith('data:') || rawUrl.startsWith('http://') || rawUrl.startsWith('https://'))
           ? rawUrl 
           : `${API_BASE_URL}${rawUrl.startsWith('/') ? '' : '/'}${rawUrl}`
       } else {
