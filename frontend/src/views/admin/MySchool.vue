@@ -7,7 +7,7 @@ import {
   School, Hash, MapPin, Mail, Phone, Calendar, Users, Upload,
   Palette, RefreshCw, Check, Undo, HelpCircle, ShieldAlert, FileText, Sliders, AlertCircle, Sparkles, Eraser
 } from 'lucide-vue-next'
-import imglyRemoveBackground from '@imgly/background-removal'
+import { removeBackground } from '@imgly/background-removal'
 
 const getShieldUrl = (url: string) => {
   if (!url) return ''
@@ -278,8 +278,7 @@ const handleRemoveBgWithAi = async () => {
       source = await response.blob()
     }
 
-    const removeBgFn: any = (imglyRemoveBackground as any)?.removeBackground || imglyRemoveBackground
-    const blob = await removeBgFn(source, {
+    const blob = await (removeBackground as any)(source, {
       progress: (_key: string, current: number, total: number) => {
         if (total > 0) {
           const pct = Math.round((current / total) * 100)
