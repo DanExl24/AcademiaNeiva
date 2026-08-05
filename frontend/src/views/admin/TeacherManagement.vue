@@ -203,7 +203,7 @@ const handleKeydown = (e: KeyboardEvent) => {
 const fetchData = async () => {
   const params: Record<string, any> = {}
   if (yearStore.selectedYearId) params.yearId = yearStore.selectedYearId
-  const response = await axios.get(`http://localhost:3000/api/academic-admin/teachers/${schoolId.value}`, { params })
+  const response = await axios.get(`/api/academic-admin/teachers/${schoolId.value}`, { params })
   documentTypes.value = response.data.documentTypes
   teachers.value = response.data.teachers
   subjects.value = response.data.subjects
@@ -238,7 +238,7 @@ const handleAutoLookup = async () => {
     if (doc) params.documento = doc
     else if (email) params.email = email
 
-    const res = await axios.get('http://localhost:3000/api/academic-admin/users/lookup', {
+    const res = await axios.get('/api/academic-admin/users/lookup', {
       params,
       headers: { Authorization: `Bearer ${auth.token}` }
     })
@@ -295,7 +295,7 @@ const createTeacher = async (addRoleIfParent: boolean | any = false) => {
   }
   try {
     savingTeacher.value = true
-    await axios.post('http://localhost:3000/api/academic-admin/teachers', {
+    await axios.post('/api/academic-admin/teachers', {
       schoolId: schoolId.value, nombre: p.nombre, apellido: p.apellido,
       documento: p.documento, id_tipodocumento: Number(p.id_tipodocumento),
       email: p.email, password: p.password,
@@ -356,7 +356,7 @@ const updateTeacher = async () => {
 
   try {
     loading.value = true
-    await axios.put(`http://localhost:3000/api/academic-admin/teachers/${f.id_docente}`, {
+    await axios.put(`/api/academic-admin/teachers/${f.id_docente}`, {
       schoolId: schoolId.value,
       nombre: f.nombre.trim(),
       apellido: f.apellido.trim(),
@@ -385,7 +385,7 @@ const deleteTeacher = async (teacher: TeacherItem) => {
 
   try {
     loading.value = true
-    await axios.delete(`http://localhost:3000/api/academic-admin/teachers/${teacher.id_docente}`, {
+    await axios.delete(`/api/academic-admin/teachers/${teacher.id_docente}`, {
       params: { schoolId: schoolId.value }
     })
     alert('Docente eliminado con éxito.')
@@ -417,7 +417,7 @@ const assignCourseSubject = async (replaceExisting = false) => {
   }
   try {
     savingAssignment.value = true
-    await axios.post('http://localhost:3000/api/academic-admin/teacher-assignments', {
+    await axios.post('/api/academic-admin/teacher-assignments', {
       schoolId: schoolId.value,
       id_docente: selectedTeacher.value.id_docente,
       id_grupo: Number(assignmentForm.value.id_grupo),
@@ -453,7 +453,7 @@ const removeAssignment = async () => {
   if (!deleteAssignmentModal.value || deletingAssignment.value) return
   try {
     deletingAssignment.value = true
-    await axios.delete(`http://localhost:3000/api/academic-admin/teacher-assignments/${deleteAssignmentModal.value.id_detallegrado}`, {
+    await axios.delete(`/api/academic-admin/teacher-assignments/${deleteAssignmentModal.value.id_detallegrado}`, {
       params: { schoolId: schoolId.value },
     })
     deleteAssignmentModal.value = null
@@ -473,7 +473,7 @@ const submitTeacherStatus = async () => {
   if (!selectedTeacher.value || !statusModal.value || updatingStatus.value) return
   try {
     updatingStatus.value = true
-    await axios.patch(`http://localhost:3000/api/academic-admin/teachers/${selectedTeacher.value.id_docente}/status`, {
+    await axios.patch(`/api/academic-admin/teachers/${selectedTeacher.value.id_docente}/status`, {
       schoolId: schoolId.value, estado: statusModal.value.estado, reason: statusReason.value,
     })
     statusModal.value = null; statusReason.value = ''

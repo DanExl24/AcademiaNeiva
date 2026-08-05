@@ -78,7 +78,7 @@ const fetchSupervisions = async () => {
   try {
     loading.value = true
     const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get(`http://localhost:3000/api/admin/colegio/${schoolId.value}/supervisiones`, { headers })
+    const res = await axios.get(`/api/admin/colegio/${schoolId.value}/supervisiones`, { headers })
     supervisions.value = res.data
   } catch (error) {
     console.error('Error fetching supervisions for school:', error)
@@ -129,7 +129,7 @@ const handleApprove = async (sup: Supervision) => {
   try {
     processingAction.value = true
     const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.post(`http://localhost:3000/api/admin/supervision/${sup.id_auditoria}/aprobar`, {}, { headers })
+    await axios.post(`/api/admin/supervision/${sup.id_auditoria}/aprobar`, {}, { headers })
     alert('Supervisión aprobada exitosamente. Se ha notificado al Administrador General.')
     await fetchSupervisions()
   } catch (error: any) {
@@ -159,7 +159,7 @@ const handleRejectOrRevoke = async () => {
   try {
     processingAction.value = true
     const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.post(`http://localhost:3000/api/admin/supervision/${selectedSupervision.value.id_auditoria}/revocar`, {
+    await axios.post(`/api/admin/supervision/${selectedSupervision.value.id_auditoria}/revocar`, {
       motivo: revocationReason.value
     }, { headers })
     
@@ -181,7 +181,7 @@ const viewActions = async (sup: Supervision) => {
   try {
     loadingActions.value = true
     const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get(`http://localhost:3000/api/admin/supervision/${sup.id_auditoria}/acciones-directivo`, { headers })
+    const res = await axios.get(`/api/admin/supervision/${sup.id_auditoria}/acciones-directivo`, { headers })
     actions.value = res.data
   } catch (error) {
     console.error('Error fetching actions:', error)

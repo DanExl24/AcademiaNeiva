@@ -46,7 +46,7 @@ const fetchChildren = async () => {
   try {
     const userId = (auth.isMonitoring && auth.monitoringUser?.id) ? auth.monitoringUser.id : auth.user?.id
     if (!userId) return
-    const res = await axios.get(`http://localhost:3000/api/student/parent-children/${userId}`)
+    const res = await axios.get(`/api/student/parent-children/${userId}`)
     children.value = res.data
     if (children.value.length > 0 && !selectedChildId.value) {
       selectedChildId.value = children.value[0].id_estudiante
@@ -63,8 +63,8 @@ const fetchYearsAndInfo = async () => {
   loading.value = true
   try {
     const [yearsRes, infoRes] = await Promise.all([
-      axios.get(`http://localhost:3000/api/student/years/${selectedChildId.value}`),
-      axios.get(`http://localhost:3000/api/student/info/${selectedChildId.value}`)
+      axios.get(`/api/student/years/${selectedChildId.value}`),
+      axios.get(`/api/student/info/${selectedChildId.value}`)
     ])
     years.value = yearsRes.data
     studentInfo.value = infoRes.data
@@ -82,7 +82,7 @@ const fetchYearsAndInfo = async () => {
 const fetchPeriods = async () => {
   if (!selectedChildId.value || !selectedYear.value) return
   try {
-    const res = await axios.get(`http://localhost:3000/api/student/all-periods/${selectedChildId.value}/${selectedYear.value}`)
+    const res = await axios.get(`/api/student/all-periods/${selectedChildId.value}/${selectedYear.value}`)
     periods.value = (res.data || []).filter((p: any) => p.estado !== 'PENDIENTE')
     if (periods.value.length > 0) {
       selectedPeriod.value = periods.value[periods.value.length - 1].id_periodo
@@ -99,7 +99,7 @@ const fetchGrades = async () => {
   if (!selectedChildId.value || !selectedPeriod.value) return
   fetchingGrades.value = true
   try {
-    const res = await axios.get(`http://localhost:3000/api/student/grades/${selectedChildId.value}/${selectedPeriod.value}`)
+    const res = await axios.get(`/api/student/grades/${selectedChildId.value}/${selectedPeriod.value}`)
     academicData.value = res.data
   } catch (err) {
     console.error("Error fetching grades:", err)

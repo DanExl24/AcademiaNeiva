@@ -70,7 +70,7 @@ const currentDoc = computed(() => {
 
 const fetchDetails = async () => {
   try {
-    const response = await axios.get(`http://localhost:3000/api/matriculas/${idMatricula}`)
+    const response = await axios.get(`/api/matriculas/${idMatricula}`)
     matricula.value = response.data
 
     // Pre-populate student data from autoselected candidate
@@ -191,7 +191,7 @@ const handleFinalize = async () => {
       existing_parent_user_id: matricula.value?.existing_parent_user?.id_usuario || null,
       id_estudiante: resolvedIdEstudiante
     }
-    await axios.post(`http://localhost:3000/api/matriculas/finalize/${idMatricula}`, payload)
+    await axios.post(`/api/matriculas/finalize/${idMatricula}`, payload)
     notify.addNotification('Registro finalizado y matrícula activada exitosamente', 'success')
     setTimeout(() => {
       router.push('/dashboard/gestion-matriculas')
@@ -213,7 +213,7 @@ const verifyDocument = async () => {
   
   checkingDocument.value = true
   try {
-    const response = await axios.get(`http://localhost:3000/api/auth/check-document/${parentData.value.documento}`)
+    const response = await axios.get(`/api/auth/check-document/${parentData.value.documento}`)
     if (response.data.exists) {
       docMatchInfo.value = response.data
       notify.addNotification(`Atención: Este documento pertenece a un ${response.data.role} (${response.data.user.nombre} ${response.data.user.apellido}). Se vinculará como padre.`, 'info')

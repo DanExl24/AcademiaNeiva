@@ -43,7 +43,7 @@ const fetchStudentId = async () => {
   try {
     const userId = auth.isMonitoring ? auth.monitoringUser?.id : auth.user?.id
     if (!userId) return
-    const res = await axios.get(`http://localhost:3000/api/student/user-id/${userId}`)
+    const res = await axios.get(`/api/student/user-id/${userId}`)
     studentId.value = res.data.id_estudiante
   } catch (err) {
     console.error("Error fetching student ID:", err)
@@ -54,8 +54,8 @@ const fetchInitialData = async () => {
   if (!studentId.value) return
   try {
     const [yearsRes, infoRes] = await Promise.all([
-      axios.get(`http://localhost:3000/api/student/years/${studentId.value}`),
-      axios.get(`http://localhost:3000/api/student/info/${studentId.value}`)
+      axios.get(`/api/student/years/${studentId.value}`),
+      axios.get(`/api/student/info/${studentId.value}`)
     ])
     years.value = yearsRes.data
     studentInfo.value = infoRes.data
@@ -76,7 +76,7 @@ const fetchInitialData = async () => {
 const fetchPeriods = async () => {
   if (!studentId.value || !selectedYear.value) return
   try {
-    const res = await axios.get(`http://localhost:3000/api/student/all-periods/${studentId.value}/${selectedYear.value}`)
+    const res = await axios.get(`/api/student/all-periods/${studentId.value}/${selectedYear.value}`)
     periods.value = (res.data || []).filter((p: any) => p.estado !== 'PENDIENTE')
     if (periods.value.length > 0) {
       selectedPeriod.value = periods.value[periods.value.length - 1].id_periodo
@@ -94,7 +94,7 @@ const fetchSubjects = async () => {
   if (!studentId.value || !selectedPeriod.value) return
   try {
     // We reuse the grades endpoint to get the list of active subjects for this period
-    const res = await axios.get(`http://localhost:3000/api/student/grades/${studentId.value}/${selectedPeriod.value}`)
+    const res = await axios.get(`/api/student/grades/${studentId.value}/${selectedPeriod.value}`)
     subjects.value = res.data.grades.map((g: any) => ({
       id_materia: g.id_materia,
       nombre: g.materia
@@ -108,7 +108,7 @@ const fetchAttendance = async () => {
   if (!studentId.value || !selectedPeriod.value) return
   loading.value = true
   try {
-    let url = `http://localhost:3000/api/student/attendance/${studentId.value}/${selectedPeriod.value}`
+    let url = `/api/student/attendance/${studentId.value}/${selectedPeriod.value}`
     const queryParams = new URLSearchParams()
     
     if (selectedSubject.value !== 'all') queryParams.append('id_materia', selectedSubject.value.toString())

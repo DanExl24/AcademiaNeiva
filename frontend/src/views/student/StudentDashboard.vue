@@ -70,12 +70,12 @@ const fetchStudentData = async () => {
     if (!id_usuario) return
 
     // Get student ID
-    const idRes = await axios.get(`http://localhost:3000/api/student/user-id/${id_usuario}`)
+    const idRes = await axios.get(`/api/student/user-id/${id_usuario}`)
     studentId.value = idRes.data.id_estudiante
 
     if (studentId.value) {
       // Get all academic years
-      const yearsRes = await axios.get(`http://localhost:3000/api/student/years/${studentId.value}`)
+      const yearsRes = await axios.get(`/api/student/years/${studentId.value}`)
       academicYears.value = yearsRes.data
       
       if (academicYears.value.length > 0) {
@@ -101,7 +101,7 @@ const fetchStudentData = async () => {
 const loadPeriodsForYear = async () => {
   if (!studentId.value || !selectedYearId.value) return
   try {
-    const periodsRes = await axios.get(`http://localhost:3000/api/student/all-periods/${studentId.value}/${selectedYearId.value}`)
+    const periodsRes = await axios.get(`/api/student/all-periods/${studentId.value}/${selectedYearId.value}`)
     periods.value = (periodsRes.data || []).filter((p: any) => p.estado !== 'PENDIENTE')
     
     if (periods.value.length > 0) {
@@ -131,7 +131,7 @@ const fetchStats = async () => {
   try {
     const headers = { Authorization: `Bearer ${auth.token}` }
     const res = await axios.get(
-      `http://localhost:3000/api/student/dashboard-stats/${studentId.value}/${selectedPeriodId.value}`,
+      `/api/student/dashboard-stats/${studentId.value}/${selectedPeriodId.value}`,
       { headers }
     )
     dashboardStats.value = res.data

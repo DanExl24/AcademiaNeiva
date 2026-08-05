@@ -164,9 +164,9 @@ const fetchInitialData = async () => {
     
     const schoolId = auth.user?.schoolId || 1
     const [settingsRes, gradesRes, studentsRes] = await Promise.all([
-      fetch(`http://localhost:3000/api/academic-admin/settings/${schoolId}`, { headers }),
-      fetch(`http://localhost:3000/api/academic-admin/grades/${schoolId}`, { headers }),
-      fetch(`http://localhost:3000/api/student/colegio/${schoolId}`, { headers })
+      fetch(`/api/academic-admin/settings/${schoolId}`, { headers }),
+      fetch(`/api/academic-admin/grades/${schoolId}`, { headers }),
+      fetch(`/api/student/colegio/${schoolId}`, { headers })
     ])
     
     if (settingsRes.ok && gradesRes.ok) {
@@ -227,7 +227,7 @@ const fetchBoletinData = async () => {
     
     // Si hay un estudiante específico, trae solo ese.
     if (selectedStudent.value) {
-      const url = `http://localhost:3000/api/boletines/student/${selectedStudent.value}/${selectedPeriodo.value}`
+      const url = `/api/boletines/student/${selectedStudent.value}/${selectedPeriodo.value}`
       console.log('[fetchBoletinData] Fetching student bulletin:', url)
       const res = await fetch(url, { headers })
       if (!res.ok) {
@@ -239,7 +239,7 @@ const fetchBoletinData = async () => {
       console.log('[fetchBoletinData] Student bulletin loaded successfully:', data)
       boletinesData.value.push(data)
     } else {
-      const url = `http://localhost:3000/api/boletines/grade/${selectedGroup.value}/${selectedPeriodo.value}`
+      const url = `/api/boletines/grade/${selectedGroup.value}/${selectedPeriodo.value}`
       console.log('[fetchBoletinData] Fetching mass group bulletins:', url)
       const groupRes = await fetch(url, { headers })
       if (!groupRes.ok) {
@@ -252,7 +252,7 @@ const fetchBoletinData = async () => {
       console.log('[fetchBoletinData] Student IDs to generate:', ids)
       
       for (const id of ids) {
-        const sUrl = `http://localhost:3000/api/boletines/student/${id}/${selectedPeriodo.value}`
+        const sUrl = `/api/boletines/student/${id}/${selectedPeriodo.value}`
         console.log('[fetchBoletinData] Fetching individual student in loop:', sUrl)
         const sRes = await fetch(sUrl, { headers })
         if (sRes.ok) {

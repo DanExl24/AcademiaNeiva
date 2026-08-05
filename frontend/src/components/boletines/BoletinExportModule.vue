@@ -104,7 +104,7 @@ const handleExport = async () => {
   
   try {
     const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await fetch(`http://localhost:3000/api/boletines/student/${props.studentId}/${props.periodId}`, { headers })
+    const res = await fetch(`/api/boletines/student/${props.studentId}/${props.periodId}`, { headers })
     
     if (!res.ok) {
       const data = await res.json()

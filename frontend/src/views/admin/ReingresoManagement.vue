@@ -437,7 +437,7 @@ onMounted(async () => {
 
 const fetchAllStudents = async () => {
   try {
-    const res = await axios.get('http://localhost:3000/api/student/colegio/' + getSchoolId(), getAuthHeaders())
+    const res = await axios.get('/api/student/colegio/' + getSchoolId(), getAuthHeaders())
     const all = res.data || []
     allStudents.value = all.filter((s: any) => s.estado === 'RETIRADO')
   } catch (err) {
@@ -448,7 +448,7 @@ const fetchAllStudents = async () => {
 const loadTicketContext = async () => {
   if (!ticketId.value) return
   try {
-    const res = await axios.get(`http://localhost:3000/api/reingreso/ticket-context/${ticketId.value}`, getAuthHeaders())
+    const res = await axios.get(`/api/reingreso/ticket-context/${ticketId.value}`, getAuthHeaders())
     ticketContext.value = res.data.ticket
     suggestedStudents.value = res.data.suggestedStudents || []
     if (ticketContext.value && ticketContext.value.correo_remitente) {
@@ -470,7 +470,7 @@ const selectSuggestedStudent = async (studentId: any) => {
 
 const fetchCatalogs = async () => {
   try {
-    const res = await axios.get('http://localhost:3000/api/reingreso/catalogs', getAuthHeaders())
+    const res = await axios.get('/api/reingreso/catalogs', getAuthHeaders())
     academicYears.value = res.data.anios || []
     levels.value = res.data.niveles || []
     if (academicYears.value.length > 0) {
@@ -489,7 +489,7 @@ const fetchCatalogs = async () => {
 const loadGroups = async () => {
   if (!targetForm.id_nivel) return
   try {
-    const res = await axios.get(`http://localhost:3000/api/reingreso/groups?nivelId=${targetForm.id_nivel}`, getAuthHeaders())
+    const res = await axios.get(`/api/reingreso/groups?nivelId=${targetForm.id_nivel}`, getAuthHeaders())
     groups.value = res.data || []
     if (availableGrados.value.length > 0) {
       targetForm.id_tipo_grado = availableGrados.value[0].id_tipo_grado
@@ -511,7 +511,7 @@ const loadStudentHistory = async () => {
   targetForm.id_grupo = ''
 
   try {
-    const res = await axios.get(`http://localhost:3000/api/reingreso/student-history/${selectedStudentId.value}`, getAuthHeaders())
+    const res = await axios.get(`/api/reingreso/student-history/${selectedStudentId.value}`, getAuthHeaders())
     student.value = res.data.student
     lastEnrollment.value = res.data.lastEnrollment
     parent.value = res.data.parent
@@ -562,7 +562,7 @@ const submitReingresoLink = async () => {
       }))
     }
 
-    const res = await axios.post('http://localhost:3000/api/reingreso/send-parent-link', payload, getAuthHeaders())
+    const res = await axios.post('/api/reingreso/send-parent-link', payload, getAuthHeaders())
     alert(res.data.message || 'Enlace de reingreso enviado con éxito.')
     router.push('/dashboard/gestion-matriculas')
   } catch (err: any) {
@@ -587,10 +587,10 @@ const formatDocType = (type: string) => {
 const formatUrl = (target: any) => {
   if (!target || target === 'PENDIENTE') return '#'
   if (typeof target === 'object' && target.id_documento) {
-    return `http://localhost:3000/api/matriculas/documentos/${target.id_documento}/archivo`
+    return `/api/matriculas/documentos/${target.id_documento}/archivo`
   }
   if (typeof target === 'number') {
-    return `http://localhost:3000/api/matriculas/documentos/${target}/archivo`
+    return `/api/matriculas/documentos/${target}/archivo`
   }
   if (typeof target === 'string') {
     if (target.startsWith('http')) return target

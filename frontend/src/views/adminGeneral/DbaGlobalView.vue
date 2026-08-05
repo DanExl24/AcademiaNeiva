@@ -152,7 +152,7 @@ const getHeaders = () => ({
 // API Calls
 const fetchStats = async () => {
   try {
-    const res = await axios.get('http://localhost:3000/api/admin/dba/estadisticas', getHeaders())
+    const res = await axios.get('/api/admin/dba/estadisticas', getHeaders())
     stats.value = res.data
   } catch (error) {
     console.error('Error fetching dba stats:', error)
@@ -162,10 +162,10 @@ const fetchStats = async () => {
 const fetchMeta = async () => {
   try {
     const [areasRes, versionsRes, collegesRes, existentesRes] = await Promise.all([
-      axios.get('http://localhost:3000/api/admin/dba/areas', getHeaders()),
-      axios.get('http://localhost:3000/api/admin/dba/versiones', getHeaders()),
-      axios.get('http://localhost:3000/api/admin/colegios', getHeaders()),
-      axios.get('http://localhost:3000/api/admin/dba/existentes', getHeaders())
+      axios.get('/api/admin/dba/areas', getHeaders()),
+      axios.get('/api/admin/dba/versiones', getHeaders()),
+      axios.get('/api/admin/colegios', getHeaders()),
+      axios.get('/api/admin/dba/existentes', getHeaders())
     ])
     areas.value = areasRes.data
     versions.value = versionsRes.data
@@ -190,7 +190,7 @@ const fetchDbaList = async () => {
       busqueda: filters.value.busqueda || undefined
     }
 
-    const res = await axios.get('http://localhost:3000/api/admin/dba', {
+    const res = await axios.get('/api/admin/dba', {
       headers: { Authorization: `Bearer ${auth.token}` },
       params
     })
@@ -217,7 +217,7 @@ const toggleExpandDba = async (dba: Dba) => {
   dba.isExpanded = !dba.isExpanded
   if (dba.isExpanded && (!dba.evidencias || dba.evidencias.length === 0)) {
     try {
-      const res = await axios.get(`http://localhost:3000/api/admin/dba/${dba.id_dba}`, getHeaders())
+      const res = await axios.get(`/api/admin/dba/${dba.id_dba}`, getHeaders())
       dba.evidencias = res.data.evidencias
     } catch (error) {
       console.error('Error fetching dba details/evidences:', error)
@@ -278,10 +278,10 @@ const handleSaveDba = async () => {
     saving.value = true
     if (selectedDba.value) {
       // Edit
-      await axios.put(`http://localhost:3000/api/admin/dba/${selectedDba.value.id_dba}`, dbaForm.value, getHeaders())
+      await axios.put(`/api/admin/dba/${selectedDba.value.id_dba}`, dbaForm.value, getHeaders())
     } else {
       // Create
-      await axios.post('http://localhost:3000/api/admin/dba', dbaForm.value, getHeaders())
+      await axios.post('/api/admin/dba', dbaForm.value, getHeaders())
     }
     showDbaModal.value = false
     await Promise.all([fetchStats(), fetchMeta(), fetchDbaList()])
@@ -297,7 +297,7 @@ const toggleDbaStatus = async (dba: Dba) => {
   const action = newStatus === 'ACTIVO' ? 'activar' : 'desactivar'
   if (confirm(`¿Estás seguro de que deseas ${action} el DBA #${dba.numero_dba}?`)) {
     try {
-      await axios.patch(`http://localhost:3000/api/admin/dba/${dba.id_dba}/estado`, { estado: newStatus }, getHeaders())
+      await axios.patch(`/api/admin/dba/${dba.id_dba}/estado`, { estado: newStatus }, getHeaders())
       dba.estado = newStatus
       await fetchStats()
     } catch (error: any) {
@@ -309,7 +309,7 @@ const toggleDbaStatus = async (dba: Dba) => {
 const handleDeleteDba = async (dba: Dba) => {
   if (confirm(`¿Estás seguro de que deseas eliminar permanentemente el DBA #${dba.numero_dba}? Esta acción borrará todas sus evidencias y no se puede deshacer.`)) {
     try {
-      await axios.delete(`http://localhost:3000/api/admin/dba/${dba.id_dba}`, getHeaders())
+      await axios.delete(`/api/admin/dba/${dba.id_dba}`, getHeaders())
       await Promise.all([fetchStats(), fetchMeta(), fetchDbaList()])
       alert('DBA eliminado exitosamente.')
     } catch (error: any) {
@@ -349,7 +349,7 @@ const handleSaveEvidence = async () => {
     saving.value = true
     if (selectedEvidence.value) {
       // Edit
-      const res = await axios.put(`http://localhost:3000/api/admin/dba/evidencias/${selectedEvidence.value.id_evidencia_dba}`, evidenceForm.value, getHeaders())
+      const res = await axios.put(`/api/admin/dba/evidencias/${selectedEvidence.value.id_evidencia_dba}`, evidenceForm.value, getHeaders())
       // Update local state
       if (parentDba.value && parentDba.value.evidencias) {
         const idx = parentDba.value.evidencias.findIndex(e => e.id_evidencia_dba === selectedEvidence.value!.id_evidencia_dba)
@@ -357,7 +357,7 @@ const handleSaveEvidence = async () => {
       }
     } else if (parentDba.value) {
       // Create
-      const res = await axios.post(`http://localhost:3000/api/admin/dba/${parentDba.value.id_dba}/evidencias`, evidenceForm.value, getHeaders())
+      const res = await axios.post(`/api/admin/dba/${parentDba.value.id_dba}/evidencias`, evidenceForm.value, getHeaders())
       if (!parentDba.value.evidencias) parentDba.value.evidencias = []
       parentDba.value.evidencias.push(res.data)
       parentDba.value.total_evidencias = (parentDba.value.total_evidencias || 0) + 1
@@ -374,7 +374,7 @@ const handleSaveEvidence = async () => {
 const toggleEvidenceStatus = async (ev: EvidenciaDba) => {
   const newStatus = ev.estado === 'ACTIVO' ? 'INACTIVO' : 'ACTIVO'
   try {
-    const res = await axios.patch(`http://localhost:3000/api/admin/dba/evidencias/${ev.id_evidencia_dba}/estado`, { estado: newStatus }, getHeaders())
+    const res = await axios.patch(`/api/admin/dba/evidencias/${ev.id_evidencia_dba}/estado`, { estado: newStatus }, getHeaders())
     ev.estado = res.data.estado
   } catch (error: any) {
     alert(error.response?.data?.error || 'Error al cambiar estado de la evidencia')
@@ -416,7 +416,7 @@ const handleAssignVersion = async () => {
       }
     }
 
-    const response = await axios.post('http://localhost:3000/api/admin/dba/asignar-version', {
+    const response = await axios.post('/api/admin/dba/asignar-version', {
       id_colegio: isBulkSchool ? 'TODOS' : Number(assignForm.value.id_colegio),
       area: assignForm.value.area,
       grado: assignForm.value.grado,
@@ -435,7 +435,7 @@ const handleAssignVersion = async () => {
 const viewAssignments = async (college: Colegio) => {
   selectedSchoolForView.value = college
   try {
-    const res = await axios.get(`http://localhost:3000/api/admin/dba/asignaciones/${college.id_colegio}`, getHeaders())
+    const res = await axios.get(`/api/admin/dba/asignaciones/${college.id_colegio}`, getHeaders())
     activeSchoolAssignments.value = res.data
     showViewAssignmentsModal.value = true
   } catch (error) {
@@ -484,7 +484,7 @@ const handleImportPDF = async () => {
     formData.append('start_page', String(importForm.value.start_page))
     formData.append('overwrite', String(importOverwrite.value))
 
-    const res = await axios.post('http://localhost:3000/api/admin/dba/importar', formData, {
+    const res = await axios.post('/api/admin/dba/importar', formData, {
       headers: {
         Authorization: `Bearer ${auth.token}`,
         'Content-Type': 'multipart/form-data'

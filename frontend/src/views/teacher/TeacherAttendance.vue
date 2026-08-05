@@ -89,7 +89,7 @@ const fetchMyCourses = async () => {
   if (!teacherId) return
   try {
     const params = yearStore.selectedYearId ? { yearId: yearStore.selectedYearId } : {}
-    const response = await axios.get(`http://localhost:3000/api/teacher/courses/${teacherId}`, { params })
+    const response = await axios.get(`/api/teacher/courses/${teacherId}`, { params })
     myCourses.value = response.data
     
     if (route.query.gradoId) {
@@ -125,7 +125,7 @@ const fetchAttendance = async () => {
   try {
     loading.value = true
     currentPage.value = 1
-    const response = await axios.get(`http://localhost:3000/api/teacher/attendance/${selectedCourse.value.id_detallegrado}/${selectedDate.value}`)
+    const response = await axios.get(`/api/teacher/attendance/${selectedCourse.value.id_detallegrado}/${selectedDate.value}`)
     students.value = response.data.students
     isEditable.value = response.data.editable
     lockReason.value = response.data.error || ''
@@ -143,7 +143,7 @@ const fetchHistory = async () => {
   if (!selectedCourse.value) return
   try {
     historyLoading.value = true
-    const response = await axios.get(`http://localhost:3000/api/teacher/attendance-history/${selectedCourse.value.id_detallegrado}`)
+    const response = await axios.get(`/api/teacher/attendance-history/${selectedCourse.value.id_detallegrado}`)
     historyData.value = response.data.studentsHistory || []
     recordedDates.value = response.data.recordedDates || []
   } catch (error: any) {
@@ -344,7 +344,7 @@ const saveAllAttendance = async (silent = false) => {
       hora_llegada: s.hora_llegada
     }))
 
-    await axios.post('http://localhost:3000/api/teacher/attendance', {
+    await axios.post('/api/teacher/attendance', {
       detailGradeId: selectedCourse.value.id_detallegrado,
       date: selectedDate.value,
       records: recordsToSave

@@ -127,7 +127,7 @@ const submitCreateUser = async () => {
     creatingUser.value = true
     const headers = { Authorization: `Bearer ${auth.token}` }
     await axios.post(
-      'http://localhost:3000/api/admin/usuarios',
+      '/api/admin/usuarios',
       {
         rol: newUser.value.rol,
         email: newUser.value.email.trim(),
@@ -177,7 +177,7 @@ const verifyTicketAndEnableEdit = async () => {
     // Consultar el endpoint privado de validación del ticket para esta cuenta específica
     const headers = { Authorization: `Bearer ${auth.token}` }
     await axios.post(
-      `http://localhost:3000/api/admin/usuarios/${selectedUser.value.id_usuario}/validar-ticket`,
+      `/api/admin/usuarios/${selectedUser.value.id_usuario}/validar-ticket`,
       { codigo_ticket: ticketCodeVerification.value.trim() },
       { headers }
     )
@@ -236,7 +236,7 @@ const applyCredentialsChange = async () => {
   try {
     applyingChange.value = true
     const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.put(`http://localhost:3000/api/admin/usuarios/${selectedUser.value.id_usuario}/credenciales-con-ticket`, {
+    await axios.put(`/api/admin/usuarios/${selectedUser.value.id_usuario}/credenciales-con-ticket`, {
       codigo_ticket: ticketCodeVerification.value.trim(),
       nombre: editableNombre.value,
       apellido: editableApellido.value,
@@ -268,7 +268,7 @@ const applyCredentialsChange = async () => {
 const fetchSchools = async () => {
   try {
     const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get('http://localhost:3000/api/admin/colegios', { headers })
+    const res = await axios.get('/api/admin/colegios', { headers })
     schools.value = res.data.map((c: any) => ({ id_colegio: c.id_colegio, nombre: c.nombre }))
   } catch (error) {
     console.error('Error fetching schools:', error)
@@ -279,7 +279,7 @@ const fetchUsers = async () => {
   try {
     loading.value = true
     const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get('http://localhost:3000/api/admin/usuarios', {
+    const res = await axios.get('/api/admin/usuarios', {
       headers,
       params: {
         estado: selectedEstado.value || undefined,
@@ -334,7 +334,7 @@ const openDetails = async (user: Usuario) => {
   showDetailsModal.value = true
   try {
     const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get(`http://localhost:3000/api/admin/usuarios/${user.id_usuario}`, { headers })
+    const res = await axios.get(`/api/admin/usuarios/${user.id_usuario}`, { headers })
     const data = res.data || {}
     selectedUser.value = { 
       ...user, 
@@ -352,7 +352,7 @@ const updateStatus = async (user: Usuario, estado: string, motivo?: string) => {
 
   try {
     const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.patch(`http://localhost:3000/api/admin/usuarios/${user.id_usuario}/estado`, {
+    await axios.patch(`/api/admin/usuarios/${user.id_usuario}/estado`, {
       estado,
       motivo
     }, { headers })
@@ -390,7 +390,7 @@ const handleResetPassword = async (user: Usuario) => {
     tempPassword.value = ''
     showResetModal.value = true
     const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.post(`http://localhost:3000/api/admin/usuarios/${user.id_usuario}/restablecer-password`, {}, { headers })
+    const res = await axios.post(`/api/admin/usuarios/${user.id_usuario}/restablecer-password`, {}, { headers })
     tempPassword.value = res.data.tempPassword
   } catch (error: any) {
     alert(error.response?.data?.error || 'Error al restablecer contraseña')
@@ -410,7 +410,7 @@ const handleForceLogout = async (user: Usuario) => {
   if (!confirm(`¿Deseas forzar el cierre de todas las sesiones activas de ${user.nombre}?`)) return
   try {
     const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.post(`http://localhost:3000/api/admin/usuarios/${user.id_usuario}/cerrar-sesion`, {}, { headers })
+    await axios.post(`/api/admin/usuarios/${user.id_usuario}/cerrar-sesion`, {}, { headers })
     alert('Sesiones cerradas con éxito.')
   } catch (error: any) {
     alert(error.response?.data?.error || 'Error al forzar cierre de sesión')
@@ -421,7 +421,7 @@ const handleDelete = async (user: Usuario) => {
   if (confirm(`¿Estás seguro de que deseas eliminar la cuenta de ${user.nombre}? Se marcará como inactiva (soft-delete).`)) {
     try {
       const headers = { Authorization: `Bearer ${auth.token}` }
-      await axios.delete(`http://localhost:3000/api/admin/usuarios/${user.id_usuario}`, { headers })
+      await axios.delete(`/api/admin/usuarios/${user.id_usuario}`, { headers })
       await fetchUsers()
     } catch (error: any) {
       alert(error.response?.data?.error || 'Error al eliminar usuario')

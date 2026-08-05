@@ -101,7 +101,7 @@ const fetchProfile = async () => {
       params.userId = targetUserId
       headers['X-Monitoring-Mode'] = 'true'
     }
-    const res = await axios.get('http://localhost:3000/api/auth/profile', { headers, params })
+    const res = await axios.get('/api/auth/profile', { headers, params })
     profileData.value = res.data.user
     emailForm.value.email = res.data.user.email || ''
     phoneForm.value.telefono = res.data.user.telefono || ''
@@ -117,7 +117,7 @@ const fetchAllUsers = async () => {
   try {
     loadingUsers.value = true
     const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get('http://localhost:3000/api/admin/usuarios', { headers })
+    const res = await axios.get('/api/admin/usuarios', { headers })
     usersList.value = res.data || []
   } catch (error) {
     console.error('Error fetching users:', error)
@@ -149,7 +149,7 @@ const handleRequestEmailCode = async () => {
     emailError.value = ''
     
     const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.post('http://localhost:3000/api/auth/profile/request-email-change', {
+    const res = await axios.post('/api/auth/profile/request-email-change', {
       nuevo_email: emailForm.value.email
     }, { headers })
 
@@ -176,7 +176,7 @@ const handleVerifyEmailCode = async () => {
     emailError.value = ''
 
     const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.post('http://localhost:3000/api/auth/profile/verify-email-change', {
+    const res = await axios.post('/api/auth/profile/verify-email-change', {
       nuevo_email: pendingNewEmail.value,
       codigo: verificationCode.value.trim()
     }, { headers })
@@ -214,7 +214,7 @@ const handleUpdatePhone = async () => {
     phoneError.value = ''
 
     const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.put('http://localhost:3000/api/auth/profile/phone', {
+    await axios.put('/api/auth/profile/phone', {
       telefono: phoneForm.value.telefono
     }, { headers })
 
@@ -241,7 +241,7 @@ const handleUpdatePassword = async () => {
     passwordError.value = ''
 
     const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.put('http://localhost:3000/api/auth/profile/password', {
+    await axios.put('/api/auth/profile/password', {
       password_actual: passwordForm.value.password_actual,
       nueva_password: passwordForm.value.nueva_password
     }, { headers })
@@ -299,7 +299,7 @@ const handleContactAdminGeneral = async () => {
       estado: 'ESCALADO' // <--- Se inserta con estado ESCALADO para el Admin General
     }
 
-    const res = await axios.post('http://localhost:3000/api/support/tickets', payload, { headers })
+    const res = await axios.post('/api/support/tickets', payload, { headers })
     requestSuccess.value = `Mensaje enviado al Administrador General con éxito. Código de ticket escalado: ${res.data.ticketCode}`
     showDirectivoModal.value = false
     directivoForm.value.asunto = ''
@@ -325,7 +325,7 @@ const handleAdminResetPassword = async (targetUser: any) => {
 
     const headers = { Authorization: `Bearer ${auth.token}` }
     await axios.post(
-      `http://localhost:3000/api/admin/usuarios/${targetUser.id_usuario}/restablecer-password`, 
+      `/api/admin/usuarios/${targetUser.id_usuario}/restablecer-password`, 
       { nueva_password: adminResetPasswordVal.value }, 
       { headers }
     )

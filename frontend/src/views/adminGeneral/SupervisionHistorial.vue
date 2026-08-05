@@ -71,7 +71,7 @@ const activeAction = ref<AccionAuditoria | null>(null)
 const fetchSchools = async () => {
   try {
     const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get('http://localhost:3000/api/admin/colegios', { headers })
+    const res = await axios.get('/api/admin/colegios', { headers })
     schools.value = res.data.map((c: any) => ({ id_colegio: c.id_colegio, nombre: c.nombre }))
   } catch (error) {
     console.error('Error fetching schools:', error)
@@ -82,7 +82,7 @@ const fetchHistory = async () => {
   try {
     loading.value = true
     const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get('http://localhost:3000/api/admin/supervision/historial', {
+    const res = await axios.get('/api/admin/supervision/historial', {
       headers,
       params: {
         id_colegio: selectedSchool.value || undefined,
@@ -117,7 +117,7 @@ const viewActions = async (sup: Supervision) => {
   try {
     loadingActions.value = true
     const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get(`http://localhost:3000/api/admin/supervision/${sup.id_auditoria}/acciones`, { headers })
+    const res = await axios.get(`/api/admin/supervision/${sup.id_auditoria}/acciones`, { headers })
     actions.value = res.data
   } catch (error) {
     console.error('Error fetching actions:', error)
@@ -136,7 +136,7 @@ const openJsonInspector = (action: AccionAuditoria) => {
 const handleExport = async (sup: Supervision) => {
   try {
     const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.post(`http://localhost:3000/api/admin/supervision/${sup.id_auditoria}/exportar`, {}, { headers })
+    const res = await axios.post(`/api/admin/supervision/${sup.id_auditoria}/exportar`, {}, { headers })
     
     // Create download
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(res.data, null, 2))

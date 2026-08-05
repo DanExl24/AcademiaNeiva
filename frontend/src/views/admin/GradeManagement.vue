@@ -388,8 +388,8 @@ const closeEditCuposModal = () => {
 const fetchCatalogs = async () => {
   const params = yearStore.selectedYearId ? { yearId: yearStore.selectedYearId } : {}
   const [catalogsRes, gradesRes] = await Promise.all([
-    axios.get('http://localhost:3000/api/academic-admin/catalogs'),
-    axios.get(`http://localhost:3000/api/academic-admin/grades/${schoolId.value}`, { params }),
+    axios.get('/api/academic-admin/catalogs'),
+    axios.get(`/api/academic-admin/grades/${schoolId.value}`, { params }),
   ])
 
   secciones.value = catalogsRes.data.secciones
@@ -420,7 +420,7 @@ const createGradeType = async () => {
 
   try {
     savingGrade.value = true
-    await axios.post('http://localhost:3000/api/academic-admin/grade-types', {
+    await axios.post('/api/academic-admin/grade-types', {
       schoolId: schoolId.value,
       id_nivel: Number(newGradeType.value.id_nivel),
       nombre: newGradeType.value.nombre,
@@ -450,7 +450,7 @@ const createGroup = async () => {
 
   try {
     savingGroup.value = true
-    await axios.post('http://localhost:3000/api/academic-admin/groups', {
+    await axios.post('/api/academic-admin/groups', {
       schoolId: schoolId.value,
       id_nivel: Number(payload.id_nivel),
       id_tipo_grado: Number(payload.id_tipo_grado),
@@ -478,7 +478,7 @@ const createGroup = async () => {
 const deleteGradeType = async (item: TipoGrado) => {
   try {
     deleting.value = true
-    await axios.delete(`http://localhost:3000/api/academic-admin/grade-types/${item.id_tipo_grado}`, {
+    await axios.delete(`/api/academic-admin/grade-types/${item.id_tipo_grado}`, {
       params: { schoolId: schoolId.value },
     })
     closeDeleteModal()
@@ -493,7 +493,7 @@ const deleteGradeType = async (item: TipoGrado) => {
 const deleteGroup = async (item: Grupo) => {
   try {
     deleting.value = true
-    await axios.delete(`http://localhost:3000/api/academic-admin/groups/${item.id_grupo}`, {
+    await axios.delete(`/api/academic-admin/groups/${item.id_grupo}`, {
       params: { schoolId: schoolId.value },
     })
     closeDeleteModal()
@@ -516,7 +516,7 @@ const updateGroupCupos = async () => {
 
   try {
     savingCupos.value = true
-    await axios.patch(`http://localhost:3000/api/academic-admin/groups/${selectedGroup.value.id_grupo}/cupos`, {
+    await axios.patch(`/api/academic-admin/groups/${selectedGroup.value.id_grupo}/cupos`, {
       schoolId: schoolId.value,
       cupos_totales: selectedGroup.value.cupos_totales
     })
@@ -551,7 +551,7 @@ const confirmRename = async () => {
   renaming.value = true
   try {
     await axios.patch(
-      `http://localhost:3000/api/academic-admin/groups/${renameTarget.value.id_grupo}/rename`,
+      `/api/academic-admin/groups/${renameTarget.value.id_grupo}/rename`,
       { schoolId: schoolId.value, nuevo_nombre: nombre },
       { headers: { Authorization: `Bearer ${auth.token}` } }
     )
@@ -580,7 +580,7 @@ const confirmBulkRename = async () => {
   bulkRenaming.value = true
   try {
     await axios.patch(
-      `http://localhost:3000/api/academic-admin/grade-types/${bulkTarget.value.id_tipo_grado}/bulk-rename`,
+      `/api/academic-admin/grade-types/${bulkTarget.value.id_tipo_grado}/bulk-rename`,
       {
         schoolId: schoolId.value,
         prefijo: bulkPrefijo.value.trim().toUpperCase(),
@@ -650,7 +650,7 @@ const openCourseMembersModal = async (group: Grupo) => {
     activeMembersTab.value = 'students'
     membersSearchTerm.value = ''
 
-    const res = await axios.get(`http://localhost:3000/api/academic-admin/groups/${group.id_grupo}/members`, {
+    const res = await axios.get(`/api/academic-admin/groups/${group.id_grupo}/members`, {
       params: {
         schoolId: schoolId.value,
         yearId: yearStore.selectedYearId

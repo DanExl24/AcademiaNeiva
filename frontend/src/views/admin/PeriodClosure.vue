@@ -278,7 +278,7 @@ const loadInitialData = async () => {
     if (yearStore.selectedYearId) {
       params.yearId = yearStore.selectedYearId
     }
-    const response = await axios.get(`http://localhost:3000/api/academic-admin/settings/${schoolId.value}`, { params })
+    const response = await axios.get(`/api/academic-admin/settings/${schoolId.value}`, { params })
     periods.value = (response.data.periods || []).filter((p: any) => p.estado !== 'PENDIENTE')
     const openPeriod = periods.value.find(p => p.estado === 'ABIERTO')
     if (openPeriod) {
@@ -309,7 +309,7 @@ const loadClosureDetails = async () => {
     closePeriodPending.value = []
     forceCloseModal.value = false
     const response = await axios.get(
-      `http://localhost:3000/api/academic-admin/settings/closure-details/${schoolId.value}/${selectedPeriodId.value}`
+      `/api/academic-admin/settings/closure-details/${schoolId.value}/${selectedPeriodId.value}`
     )
     periodDetails.value = response.data.periodo
     teachers.value = response.data.teachers
@@ -354,7 +354,7 @@ const attemptClosePeriod = async (force = false) => {
   if (!selectedPeriodId.value) return
   try {
     closingPeriod.value = true
-    await axios.post(`http://localhost:3000/api/academic-admin/settings/periods/${selectedPeriodId.value}/close`, {
+    await axios.post(`/api/academic-admin/settings/periods/${selectedPeriodId.value}/close`, {
       schoolId: schoolId.value,
       force,
     })
@@ -389,7 +389,7 @@ const attemptReopenPeriod = async () => {
   
   try {
     reopeningPeriod.value = true
-    await axios.post(`http://localhost:3000/api/academic-admin/settings/periods/${selectedPeriodId.value}/reopen`, {
+    await axios.post(`/api/academic-admin/settings/periods/${selectedPeriodId.value}/reopen`, {
       schoolId: schoolId.value
     })
     
@@ -415,7 +415,7 @@ const attemptReopenSubject = async (curso: any) => {
   
   try {
     reopeningSubject.value = curso.id_detallegrado
-    await axios.post(`http://localhost:3000/api/academic-admin/settings/periods/${selectedPeriodId.value}/reopen-subject/${curso.id_detallegrado}`, {
+    await axios.post(`/api/academic-admin/settings/periods/${selectedPeriodId.value}/reopen-subject/${curso.id_detallegrado}`, {
       schoolId: schoolId.value
     })
     

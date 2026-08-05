@@ -71,7 +71,7 @@ const fetchDashboardData = async () => {
     if (yearStore.selectedYearId) params.yearId = yearStore.selectedYearId
 
     // Use full URL to avoid Vite SPA fallback issues
-    const response = await axios.get(`http://localhost:3000/api/student/parent-dashboard/${id_usuario}`, { params })
+    const response = await axios.get(`/api/student/parent-dashboard/${id_usuario}`, { params })
     console.log('[Dashboard] Data Received:', response.data)
     
     // Validate that we got JSON and not an HTML error page

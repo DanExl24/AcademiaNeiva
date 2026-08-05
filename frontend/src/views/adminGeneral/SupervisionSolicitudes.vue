@@ -58,7 +58,7 @@ const form = ref({
 const fetchConfigLimits = async () => {
   try {
     const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get('http://localhost:3000/api/admin/configuracion', { headers })
+    const res = await axios.get('/api/admin/configuracion', { headers })
     const data = res.data
     if (data.supervision_duracion_minima_minutos) {
       configLimits.value.minDuration = Number(data.supervision_duracion_minima_minutos.valor)
@@ -74,7 +74,7 @@ const fetchConfigLimits = async () => {
 const fetchSchools = async () => {
   try {
     const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get('http://localhost:3000/api/admin/colegios', { headers })
+    const res = await axios.get('/api/admin/colegios', { headers })
     activeSchools.value = res.data
       .filter((c: any) => c.estado === 'ACTIVO')
       .map((c: any) => ({ id_colegio: c.id_colegio, nombre: c.nombre }))
@@ -88,7 +88,7 @@ const fetchRequests = async () => {
     loading.value = true
     const headers = { Authorization: `Bearer ${auth.token}` }
     // Fetch all states representing requested or approved supervisions
-    const res = await axios.get('http://localhost:3000/api/admin/supervision/historial', { headers })
+    const res = await axios.get('/api/admin/supervision/historial', { headers })
     // Solicitudes are pending (SOLICITADA) or approved (APROBADA)
     requests.value = res.data.filter((r: any) => r.estado_supervision === 'SOLICITADA' || r.estado_supervision === 'APROBADA')
   } catch (error) {
@@ -122,7 +122,7 @@ const handleRequest = async () => {
   try {
     saving.value = true
     const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.post('http://localhost:3000/api/admin/supervision/solicitar', {
+    await axios.post('/api/admin/supervision/solicitar', {
       id_colegio: Number(form.value.id_colegio),
       tipo_supervision: form.value.tipo_supervision,
       duracion_maxima_minutos: Number(form.value.duracion_maxima_minutos),
@@ -149,7 +149,7 @@ const handleEnter = async () => {
   try {
     authenticating.value = true
     const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.post(`http://localhost:3000/api/admin/supervision/${selectedRequest.value.id_auditoria}/entrar`, {
+    await axios.post(`/api/admin/supervision/${selectedRequest.value.id_auditoria}/entrar`, {
       password: adminPassword.value,
       motivo_entrada: entryReason.value
     }, { headers })

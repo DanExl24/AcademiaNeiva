@@ -84,7 +84,7 @@ const fetchColleges = async () => {
   try {
     loading.value = true
     const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get('http://localhost:3000/api/admin/colegios', {
+    const res = await axios.get('/api/admin/colegios', {
       headers,
       params: {
         estado: selectedEstado.value || undefined,
@@ -142,7 +142,7 @@ const handleCreate = async () => {
   try {
     saving.value = true
     const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.post('http://localhost:3000/api/admin/colegios', form.value, { headers })
+    await axios.post('/api/admin/colegios', form.value, { headers })
     showCreateModal.value = false
     await fetchColleges()
   } catch (error: any) {
@@ -177,7 +177,7 @@ const handleEdit = async () => {
   try {
     saving.value = true
     const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.put(`http://localhost:3000/api/admin/colegios/${selectedCollege.value.id_colegio}`, form.value, { headers })
+    await axios.put(`/api/admin/colegios/${selectedCollege.value.id_colegio}`, form.value, { headers })
     showEditModal.value = false
     await fetchColleges()
   } catch (error: any) {
@@ -192,7 +192,7 @@ const openDetails = async (college: Colegio) => {
   showDetailsModal.value = true
   try {
     const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get(`http://localhost:3000/api/admin/colegios/${college.id_colegio}`, { headers })
+    const res = await axios.get(`/api/admin/colegios/${college.id_colegio}`, { headers })
     selectedCollege.value = { ...college, ...res.data }
   } catch (error) {
     console.error('Error fetching college details:', error)
@@ -205,7 +205,7 @@ const updateStatus = async (college: Colegio, estado: string, motivo?: string) =
 
   try {
     const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.patch(`http://localhost:3000/api/admin/colegios/${college.id_colegio}/estado`, {
+    await axios.patch(`/api/admin/colegios/${college.id_colegio}/estado`, {
       estado,
       motivo
     }, { headers })
@@ -238,7 +238,7 @@ const handleDelete = async (college: Colegio) => {
   if (confirm(`¿Estás seguro de que deseas eliminar permanentemente a ${college.nombre}? Todos los directivos y usuarios serán desvinculados.`)) {
     try {
       const headers = { Authorization: `Bearer ${auth.token}` }
-      await axios.delete(`http://localhost:3000/api/admin/colegios/${college.id_colegio}`, { headers })
+      await axios.delete(`/api/admin/colegios/${college.id_colegio}`, { headers })
       await fetchColleges()
     } catch (error: any) {
       alert(error.response?.data?.error || 'Error al eliminar colegio')

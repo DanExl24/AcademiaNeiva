@@ -113,7 +113,7 @@ const fetchMyCourses = async () => {
   if (!teacherId) return
   try {
     const params = yearStore.selectedYearId ? { yearId: yearStore.selectedYearId } : {}
-    const response = await axios.get(`http://localhost:3000/api/teacher/courses/${teacherId}`, { params })
+    const response = await axios.get(`/api/teacher/courses/${teacherId}`, { params })
     myCourses.value = response.data
     
     // Si venimos con parámetros de consulta (ej. desde el cierre)
@@ -139,7 +139,7 @@ const fetchPeriods = async () => {
   if (!schoolId) return
   try {
     const params = yearStore.selectedYearId ? { yearId: yearStore.selectedYearId } : {}
-    const response = await axios.get(`http://localhost:3000/api/teacher/periods/${schoolId}`, { params })
+    const response = await axios.get(`/api/teacher/periods/${schoolId}`, { params })
     periods.value = (response.data || []).filter((p: any) => p.estado !== 'PENDIENTE')
     // Select first open period by default
     const openPeriod = periods.value.find(p => p.estado === 'ABIERTO')
@@ -180,7 +180,7 @@ const selectedGradeId = computed(() => {
 const fetchStudents = async () => {
   if (!selectedGradeId.value) return
   try {
-    const response = await axios.get(`http://localhost:3000/api/teacher/students/${selectedGradeId.value}`)
+    const response = await axios.get(`/api/teacher/students/${selectedGradeId.value}`)
     students.value = response.data
   } catch (error: any) {
     students.value = []
@@ -193,7 +193,7 @@ const fetchObservations = async () => {
   try {
     loading.value = true
     const response = await axios.get(
-      `http://localhost:3000/api/teacher/observations/${selectedCourse.value.id_detallegrado}/${selectedPeriodId.value}`
+      `/api/teacher/observations/${selectedCourse.value.id_detallegrado}/${selectedPeriodId.value}`
     )
     observations.value = response.data.observations || []
     isEditable.value = response.data.editable
@@ -419,10 +419,10 @@ const saveObservation = async () => {
 
     if (editingObservation.value) {
       // Update
-      await axios.put(`http://localhost:3000/api/teacher/observations/${editingObservation.value.id_observacion}`, payload)
+      await axios.put(`/api/teacher/observations/${editingObservation.value.id_observacion}`, payload)
     } else {
       // Create
-      await axios.post('http://localhost:3000/api/teacher/observations', payload)
+      await axios.post('/api/teacher/observations', payload)
     }
 
     closeModal()
@@ -437,7 +437,7 @@ const saveObservation = async () => {
 // Delete observation
 const deleteObservation = async (id: number) => {
   try {
-    await axios.delete(`http://localhost:3000/api/teacher/observations/${id}`)
+    await axios.delete(`/api/teacher/observations/${id}`)
     confirmDeleteId.value = null
     await fetchObservations()
   } catch (error: any) {

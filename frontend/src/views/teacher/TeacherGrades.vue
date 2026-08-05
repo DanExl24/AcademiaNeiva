@@ -228,7 +228,7 @@ const fetchMyCourses = async () => {
   const teacherId = auth.isMonitoring ? auth.monitoringUser?.id : auth.user?.id
   try {
     const params = yearStore.selectedYearId ? { yearId: yearStore.selectedYearId } : {}
-    const response = await axios.get(`http://localhost:3000/api/teacher/courses/${teacherId}`, { params })
+    const response = await axios.get(`/api/teacher/courses/${teacherId}`, { params })
     myCourses.value = response.data
     
     if (route.query.gradoId) {
@@ -252,7 +252,7 @@ const fetchPeriods = async () => {
   if (!schoolId.value) return
   try {
     const params = yearStore.selectedYearId ? { yearId: yearStore.selectedYearId } : {}
-    const response = await axios.get(`http://localhost:3000/api/teacher/periods/${schoolId.value}`, { params })
+    const response = await axios.get(`/api/teacher/periods/${schoolId.value}`, { params })
     periods.value = (response.data || []).filter((p: any) => p.estado !== 'PENDIENTE')
     
     const exists = periods.value.some(p => p.id_periodo === selectedPeriodId.value)
@@ -284,7 +284,7 @@ watch(() => yearStore.selectedYearId, async () => {
 const fetchGradeRange = async () => {
   if (!schoolId.value) return
   try {
-    const response = await axios.get(`http://localhost:3000/api/academic-admin/settings/${schoolId.value}`)
+    const response = await axios.get(`/api/academic-admin/settings/${schoolId.value}`)
     if (response.data?.defaultSettings) {
       gradeRange.value = {
         min: Number(response.data.defaultSettings.nota_minima),
@@ -326,7 +326,7 @@ const fetchGrades = async () => {
   try {
     gradesMatrix.value = {}
     criteriaGradesMatrix.value = {}
-    const response = await axios.get(`http://localhost:3000/api/teacher/grades/${selectedGradeId.value}/${selectedSubjectId.value}/${selectedPeriodId.value}`)
+    const response = await axios.get(`/api/teacher/grades/${selectedGradeId.value}/${selectedSubjectId.value}/${selectedPeriodId.value}`)
     
     response.data.activityGrades.forEach((n: any) => {
       if (!gradesMatrix.value[n.id_estudiante]) gradesMatrix.value[n.id_estudiante] = {}
@@ -350,7 +350,7 @@ const fetchDbaEvidences = async () => {
     return
   }
   try {
-    const res = await axios.get(`http://localhost:3000/api/teacher/courses/${selectedGradeId.value}/${selectedSubjectId.value}/evidencias-dba`, {
+    const res = await axios.get(`/api/teacher/courses/${selectedGradeId.value}/${selectedSubjectId.value}/evidencias-dba`, {
       params: { 
         schoolId: schoolId.value,
         periodId: selectedPeriodId.value
@@ -368,7 +368,7 @@ const fetchActivities = async () => {
   if (!selectedGradeId.value || !selectedSubjectId.value || !selectedPeriodId.value) return
   try {
     activitiesLoading.value = true
-    const response = await axios.get(`http://localhost:3000/api/teacher/activities/${selectedGradeId.value}/${selectedSubjectId.value}/${selectedPeriodId.value}`, {
+    const response = await axios.get(`/api/teacher/activities/${selectedGradeId.value}/${selectedSubjectId.value}/${selectedPeriodId.value}`, {
       params: { userId: auth.user?.id }
     })
     competency.value = response.data.competencia
@@ -394,7 +394,7 @@ const fetchActivities = async () => {
 const fetchStudents = async () => {
   if (!selectedGradeId.value) return
   try {
-    const response = await axios.get(`http://localhost:3000/api/teacher/students/${selectedGradeId.value}`)
+    const response = await axios.get(`/api/teacher/students/${selectedGradeId.value}`)
     students.value = response.data
     initializeMatrixForStudents()
   } catch (error: any) {
@@ -409,7 +409,7 @@ const autosaveGrade = async (studentId: number, id: number, type: 'activity' | '
     autosaveStatus.value = 'saving'
     autosaveErrorMsg.value = ''
     
-    await axios.post('http://localhost:3000/api/teacher/grades', {
+    await axios.post('/api/teacher/grades', {
       activityGrades: type === 'activity' ? [{ id_estudiante: studentId, id_actividadmateria: id, nota: val }] : [],
       criteriaGrades: type === 'criterion' ? [{ id_estudiante: studentId, id_criterio: id, nota: val }] : [],
       schoolId: schoolId.value
@@ -519,7 +519,7 @@ const saveAllGrades = async (silent = false) => {
 
   try {
     saving.value = true
-    await axios.post('http://localhost:3000/api/teacher/grades', {
+    await axios.post('/api/teacher/grades', {
       activityGrades: activityGradesToSave,
       criteriaGrades: criteriaGradesToSave,
       schoolId: schoolId.value
@@ -598,7 +598,7 @@ const addActivity = async () => {
       payload.id_evidencia = newActivity.value.id_evidencia
     }
 
-    await axios.post('http://localhost:3000/api/teacher/activities', payload)
+    await axios.post('/api/teacher/activities', payload)
     newActivity.value = {
       nombre: '',
       porcentaje: 0,
@@ -681,7 +681,7 @@ const getDbaEvidenceDetails = (act: Activity) => {
 // 
 //   try {
 //     competencySaving.value = true
-//     const response = await axios.put(`http://localhost:3000/api/teacher/competencies/${competency.value.id_competencia}`, {
+//     const response = await axios.put(`/api/teacher/competencies/${competency.value.id_competencia}`, {
 //       descripcion: competencyDraft.value
 //     })
 //     competency.value = response.data
@@ -697,7 +697,7 @@ const getDbaEvidenceDetails = (act: Activity) => {
 const removeActivity = async (id: number) => {
   if (!confirm('¿Estás seguro de eliminar esta actividad?')) return
   try {
-    await axios.delete(`http://localhost:3000/api/teacher/activities/${id}`)
+    await axios.delete(`/api/teacher/activities/${id}`)
     activities.value = activities.value.filter(a => a.id_actividadmateria !== id)
   } catch (error) {
     console.error('Error deleting activity:', error)
@@ -719,7 +719,7 @@ const updateActivityWeight = async (act: Activity) => {
       porcentaje: percentage,
       evidencias_dba: act.evidencias_dba || []
     }
-    await axios.put(`http://localhost:3000/api/teacher/activities/${act.id_actividadmateria}`, payload)
+    await axios.put(`/api/teacher/activities/${act.id_actividadmateria}`, payload)
     await fetchActivities() // Recargar para actualizar los totales y consolidar matrices
   } catch (error: any) {
     alert(error.response?.data?.error || 'Error al actualizar el porcentaje de la actividad')
@@ -823,7 +823,7 @@ const addCriterion = async (act: Activity) => {
   }
 
   try {
-    const response = await axios.post('http://localhost:3000/api/teacher/activities/criteria', {
+    const response = await axios.post('/api/teacher/activities/criteria', {
       id_actividadmateria: act.id_actividadmateria,
       id_evidencia: form.id_evidencia,
       descripcion: form.descripcion,
@@ -843,7 +843,7 @@ const addCriterion = async (act: Activity) => {
 const removeCriterion = async (act: Activity, criterionId: number) => {
   if (!confirm('¿Estás seguro de eliminar este criterio?')) return
   try {
-    await axios.delete(`http://localhost:3000/api/teacher/activities/criteria/${criterionId}`)
+    await axios.delete(`/api/teacher/activities/criteria/${criterionId}`)
     if (act.criterios) {
       act.criterios = act.criterios.filter(c => c.id_criterio !== criterionId)
     }

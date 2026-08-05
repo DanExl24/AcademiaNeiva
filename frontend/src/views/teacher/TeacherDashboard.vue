@@ -119,7 +119,7 @@ const fetchDashboard = async () => {
       return
     }
     const params = yearStore.selectedYearId ? { yearId: yearStore.selectedYearId } : {}
-    const response = await axios.get(`http://localhost:3000/api/teacher/dashboard/${userId}`, { params })
+    const response = await axios.get(`/api/teacher/dashboard/${userId}`, { params })
     dashboardData.value = response.data
   } catch (error: any) {
   } finally {

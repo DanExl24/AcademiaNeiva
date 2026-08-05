@@ -383,7 +383,7 @@ const resetToDefaults = async () => {
       const headers = { Authorization: `Bearer ${auth.token}` }
       const payload = { motivo_cambio: isSupervision.value ? justification.value : undefined }
       
-      await axios.post(`http://localhost:3000/api/academic-admin/my-school/${schoolId.value}/identidad/reset`, payload, { headers })
+      await axios.post(`/api/academic-admin/my-school/${schoolId.value}/identidad/reset`, payload, { headers })
       
       form.value = { escudo_url: '', color_primario: '#4f46e5', color_secundario: '#0f172a' }
       originalForm.value = { escudo_url: '', color_primario: '#4f46e5', color_secundario: '#0f172a' }
@@ -414,7 +414,7 @@ const saveChanges = async () => {
       motivo_cambio: isSupervision.value ? justification.value : undefined
     }
     
-    await axios.put(`http://localhost:3000/api/academic-admin/my-school/${schoolId.value}/identidad`, payload, { headers })
+    await axios.put(`/api/academic-admin/my-school/${schoolId.value}/identidad`, payload, { headers })
     originalForm.value = { ...form.value }
     justification.value = ''
     alert('Identidad visual actualizada exitosamente.')

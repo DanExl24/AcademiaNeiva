@@ -85,7 +85,7 @@ const openDrawer = async (studentId: number) => {
   studentSummary.value = null
   try {
     const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get(`http://localhost:3000/api/student/${studentId}/summary`, { headers })
+    const res = await axios.get(`/api/student/${studentId}/summary`, { headers })
     studentSummary.value = res.data
   } catch (error) {
     console.error('Error fetching student summary:', error)
@@ -140,7 +140,7 @@ const openGraduationModal = async (student: any) => {
   eligibilityInfo.value = null
   try {
     const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get(`http://localhost:3000/api/student/${student.id_estudiante}/summary`, { headers })
+    const res = await axios.get(`/api/student/${student.id_estudiante}/summary`, { headers })
     const summary = res.data
     const gpa = summary.gpa || 0.0
     const failedCount = summary.failed_subjects_count || 0
@@ -172,7 +172,7 @@ const confirmGraduation = async () => {
   try {
     const directivoUserId = auth.user?.id || null
     const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.post(`http://localhost:3000/api/student/${targetStudent.value.id_estudiante}/graduate`, {
+    await axios.post(`/api/student/${targetStudent.value.id_estudiante}/graduate`, {
       fecha_graduacion: graduationDate.value,
       observaciones: graduationObservations.value,
       registrar_por: directivoUserId
@@ -199,7 +199,7 @@ const fetchStudents = async () => {
   try {
     const idColegio = auth.user?.schoolId || 1
     const headers = { Authorization: `Bearer ${auth.token}` }
-    const response = await axios.get(`http://localhost:3000/api/student/colegio/${idColegio}`, {
+    const response = await axios.get(`/api/student/colegio/${idColegio}`, {
       headers,
       params: {
         estado: filterStatus.value,
@@ -223,7 +223,7 @@ const fetchMetadata = async () => {
   try {
     const idColegio = auth.user?.schoolId || 1
     const headers = { Authorization: `Bearer ${auth.token}` }
-    const response = await axios.get(`http://localhost:3000/api/academic-admin/grades/${idColegio}`, { headers })
+    const response = await axios.get(`/api/academic-admin/grades/${idColegio}`, { headers })
     levels.value = response.data.niveles
     groups.value = response.data.grupos
     jornadas.value = response.data.jornadas || []
@@ -280,7 +280,7 @@ const saveStudent = async () => {
         ...studentForm.value,
         motivo_cambio: isSupervision.value ? justification.value : undefined
       }
-      await axios.put(`http://localhost:3000/api/student/${selectedStudent.value.id_estudiante}`, payload, { headers })
+      await axios.put(`/api/student/${selectedStudent.value.id_estudiante}`, payload, { headers })
       notify.addNotification('Estudiante actualizado exitosamente', 'success')
     } else {
       // Create student is usually done via Enrollment - but we could add a direct one if needed
@@ -303,7 +303,7 @@ const deleteStudent = async (student: any) => {
 
   try {
     const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.delete(`http://localhost:3000/api/student/${student.id_estudiante}`, { headers })
+    await axios.delete(`/api/student/${student.id_estudiante}`, { headers })
     notify.addNotification('Estudiante eliminado exitosamente.', 'success')
     fetchStudents()
   } catch (error: any) {
@@ -324,7 +324,7 @@ const openStatusModal = async (student: any, status: string) => {
   if (status === 'SANCIONADO') {
     try {
       const headers = { Authorization: `Bearer ${auth.token}` }
-      const res = await axios.get('http://localhost:3000/api/student/sanctions/types', { headers })
+      const res = await axios.get('/api/student/sanctions/types', { headers })
       sanctionTypes.value = res.data
       if (res.data.length > 0) {
         selectedSanctionType.value = res.data[0].id_tipo_sancion
@@ -374,7 +374,7 @@ const confirmStatusChange = async () => {
       payload.observaciones = sanctionObservaciones.value
     }
 
-    await axios.patch(`http://localhost:3000/api/student/${selectedStudent.value.id_estudiante}/status`, payload, { headers })
+    await axios.patch(`/api/student/${selectedStudent.value.id_estudiante}/status`, payload, { headers })
     notify.addNotification(`Estado actualizado a ${newStatus.value}`, 'success')
     statusModalOpen.value = false
     fetchStudents()
@@ -396,7 +396,7 @@ const confirmGradeChange = async () => {
     if (!group) return
 
     const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.patch(`http://localhost:3000/api/student/${selectedStudent.value.id_estudiante}/change-grade`, {
+    await axios.patch(`/api/student/${selectedStudent.value.id_estudiante}/change-grade`, {
       id_grupo: group.id_grupo,
       id_nivel: group.id_nivel,
       motivo: motivoTraslado.value

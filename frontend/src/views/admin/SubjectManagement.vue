@@ -53,8 +53,8 @@ const loadSubjects = async () => {
     loading.value = true
     const params = yearStore.selectedYearId ? { yearId: yearStore.selectedYearId } : {}
     const [subRes, trashRes] = await Promise.all([
-      axios.get(`http://localhost:3000/api/academic-admin/subjects/${schoolId.value}`, { params }),
-      axios.get(`http://localhost:3000/api/academic-admin/subjects/trash/${schoolId.value}`)
+      axios.get(`/api/academic-admin/subjects/${schoolId.value}`, { params }),
+      axios.get(`/api/academic-admin/subjects/trash/${schoolId.value}`)
     ])
     subjects.value = subRes.data
     trashSubjects.value = trashRes.data
@@ -87,7 +87,7 @@ const createSubject = async () => {
 
   try {
     saving.value = true
-    await axios.post('http://localhost:3000/api/academic-admin/subjects', {
+    await axios.post('/api/academic-admin/subjects', {
       schoolId: schoolId.value,
       nombre: newSubject.value.nombre,
       trashId: reuseFromTrash.value?.id_papelera || null
@@ -154,7 +154,7 @@ const generateAndDownloadReport = (data: any) => {
 const confirmDelete = async (item: SubjectItem, force = false) => {
   try {
     deleting.value = true
-    const response = await axios.delete(`http://localhost:3000/api/academic-admin/subjects/${item.id_materia}`, {
+    const response = await axios.delete(`/api/academic-admin/subjects/${item.id_materia}`, {
       params: { 
         schoolId: schoolId.value,
         force: force ? 'true' : 'false'
@@ -333,7 +333,7 @@ const openSubjectDetails = async (id: number) => {
   await fetchSubjectDetails()
 }
 
-const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+const apiBase = import.meta.env.VITE_API_URL || ''
 
 const fetchSubjectDetails = async () => {
   if (!selectedSubjectId.value || !schoolId.value) return
@@ -390,7 +390,7 @@ const saveCompetency = async () => {
   }
   try {
     savingCompetency.value = true
-    await axios.post('http://localhost:3000/api/academic-admin/settings/competencies', {
+    await axios.post('/api/academic-admin/settings/competencies', {
       schoolId: schoolId.value,
       groupId: competencyForm.value.id_grupo,
       subjectId: selectedSubjectId.value,
@@ -409,7 +409,7 @@ const saveCompetency = async () => {
 const deleteCompetency = async (id: number) => {
   if (!confirm('¿Estás seguro de que deseas eliminar esta competencia? Se eliminarán todas sus evidencias y notas asociadas.')) return
   try {
-    await axios.delete(`http://localhost:3000/api/academic-admin/settings/competencies/${id}`, {
+    await axios.delete(`/api/academic-admin/settings/competencies/${id}`, {
       params: { schoolId: schoolId.value }
     })
     await fetchSubjectDetails()
@@ -445,12 +445,12 @@ const saveEvidence = async () => {
   try {
     savingEvidence.value = true
     if (evidenceForm.value.id_evidencia) {
-      await axios.put(`http://localhost:3000/api/academic-admin/settings/evidencias/${evidenceForm.value.id_evidencia}`, {
+      await axios.put(`/api/academic-admin/settings/evidencias/${evidenceForm.value.id_evidencia}`, {
         schoolId: schoolId.value,
         descripcion: evidenceForm.value.descripcion.trim()
       })
     } else {
-      await axios.post(`http://localhost:3000/api/academic-admin/settings/competencies/${evidenceForm.value.id_competencia}/evidencias`, {
+      await axios.post(`/api/academic-admin/settings/competencies/${evidenceForm.value.id_competencia}/evidencias`, {
         schoolId: schoolId.value,
         descripcion: evidenceForm.value.descripcion.trim()
       })
@@ -467,7 +467,7 @@ const saveEvidence = async () => {
 const deleteEvidence = async (id: number) => {
   if (!confirm('¿Estás seguro de que deseas eliminar esta evidencia?')) return
   try {
-    await axios.delete(`http://localhost:3000/api/academic-admin/settings/evidencias/${id}`, {
+    await axios.delete(`/api/academic-admin/settings/evidencias/${id}`, {
       params: { schoolId: schoolId.value }
     })
     await fetchSubjectDetails()

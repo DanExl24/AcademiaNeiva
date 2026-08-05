@@ -37,7 +37,7 @@ const fetchChildren = async () => {
   try {
     const userId = (auth.isMonitoring && auth.monitoringUser?.id) ? auth.monitoringUser.id : auth.user?.id
     if (!userId) return
-    const res = await axios.get(`http://localhost:3000/api/student/parent-children/${userId}`)
+    const res = await axios.get(`/api/student/parent-children/${userId}`)
     children.value = res.data
     if (children.value.length > 0) {
       selectedChildId.value = children.value[0].id_estudiante
@@ -53,7 +53,7 @@ const fetchChildren = async () => {
 const fetchYears = async () => {
   if (!selectedChildId.value) return
   try {
-    const res = await axios.get(`http://localhost:3000/api/student/years/${selectedChildId.value}`)
+    const res = await axios.get(`/api/student/years/${selectedChildId.value}`)
     years.value = res.data
     if (years.value.length > 0) {
       selectedYear.value = years.value[0].id_anio
@@ -66,7 +66,7 @@ const fetchYears = async () => {
 const fetchPeriods = async () => {
   if (!selectedChildId.value || !selectedYear.value) return
   try {
-    const res = await axios.get(`http://localhost:3000/api/student/all-periods/${selectedChildId.value}/${selectedYear.value}`)
+    const res = await axios.get(`/api/student/all-periods/${selectedChildId.value}/${selectedYear.value}`)
     periods.value = (res.data || []).filter((p: any) => p.estado !== 'PENDIENTE')
     if (periods.value.length > 0) {
       selectedPeriodId.value = periods.value[periods.value.length - 1].id_periodo

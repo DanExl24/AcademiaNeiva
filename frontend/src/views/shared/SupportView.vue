@@ -66,7 +66,7 @@ const fetchSchools = async () => {
   if (auth.isAuthenticated) return
   try {
     loadingSchools.value = true
-    const res = await axios.get('http://localhost:3000/api/matriculas')
+    const res = await axios.get('/api/matriculas')
     schools.value = res.data || []
   } catch (error) {
     console.error('Error fetching schools:', error)
@@ -80,7 +80,7 @@ const fetchTickets = async () => {
   try {
     loading.value = true
     const headers = { Authorization: `Bearer ${auth.token}` }
-    let url = 'http://localhost:3000/api/support/tickets'
+    let url = '/api/support/tickets'
     if (showEscalatedOnly.value) {
       url += '?escalados=true'
     }
@@ -136,7 +136,7 @@ const updateTicketStatus = async (ticketId: number, newStatus: string) => {
 
   try {
     const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.put(`http://localhost:3000/api/support/tickets/${ticketId}/status`, { estado: newStatus }, { headers })
+    await axios.put(`/api/support/tickets/${ticketId}/status`, { estado: newStatus }, { headers })
     
     // Actualizar localmente el estado del ticket
     t.estado = newStatus
@@ -154,7 +154,7 @@ const escalateTicketFrontend = async (ticketId: number) => {
   if (!confirm('¿Estás seguro de que deseas escalar esta incidencia al Administrador General?')) return
   try {
     const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.post(`http://localhost:3000/api/support/tickets/${ticketId}/escalar`, {}, { headers })
+    await axios.post(`/api/support/tickets/${ticketId}/escalar`, {}, { headers })
     alert('Incidencia escalada exitosamente al Administrador General.')
     
     // Remover localmente de la lista, ya que ahora es exclusiva del Admin General (o de ver escalados)
@@ -171,7 +171,7 @@ const fetchTrackingTicket = async () => {
     trackingError.value = ''
     trackingTicketData.value = null
 
-    const res = await axios.get(`http://localhost:3000/api/support/tickets/track/${trackingCodeInput.value.trim()}`)
+    const res = await axios.get(`/api/support/tickets/track/${trackingCodeInput.value.trim()}`)
     trackingTicketData.value = res.data.ticket
   } catch (error: any) {
     trackingError.value = error.response?.data?.error || 'Error al consultar el seguimiento. Valida que el código sea correcto.'
@@ -187,7 +187,7 @@ const saveObservation = async (ticketId: number) => {
   try {
     submittingObs.value[ticketId] = true
     const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.post(`http://localhost:3000/api/support/tickets/${ticketId}/observaciones`, {
+    const res = await axios.post(`/api/support/tickets/${ticketId}/observaciones`, {
       observacion: note
     }, { headers })
 
@@ -210,7 +210,7 @@ const handleNotifyNonExistent = async (ticketId: number) => {
   if (motivo === null) return
   try {
     const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.post(`http://localhost:3000/api/reingreso/notify-nonexistent/${ticketId}`, { motivo }, { headers })
+    await axios.post(`/api/reingreso/notify-nonexistent/${ticketId}`, { motivo }, { headers })
     alert('Notificación enviada exitosamente al usuario y ticket resuelto.')
     fetchTickets()
   } catch (err: any) {
@@ -250,7 +250,7 @@ const openExtraordinaryModal = async (ticket: any) => {
   if (auth.token && institutionStudents.value.length === 0) {
     try {
       const headers = { Authorization: `Bearer ${auth.token}` }
-      const res = await axios.get('http://localhost:3000/api/students', { headers })
+      const res = await axios.get('/api/students', { headers })
       institutionStudents.value = res.data.estudiantes || res.data || []
     } catch (err) {
       console.error('Error cargando estudiantes para selector:', err)
@@ -269,7 +269,7 @@ const submitExtraordinaryEnrollment = async () => {
       id_estudiante: extraordinaryStudentMode.value === 'EXISTENTE' ? selectedStudentIdForExtraordinary.value : null,
       motivo: extraordinaryReason.value
     }
-    await axios.post('http://localhost:3000/api/academic-admin/matriculas/extraordinaria', payload, { headers })
+    await axios.post('/api/academic-admin/matriculas/extraordinaria', payload, { headers })
     alert('Matrícula extraordinaria autorizada exitosamente. Se ha enviado el correo con el token de seguimiento al acudiente.')
     showExtraordinaryModal.value = false
     fetchTickets()
@@ -283,7 +283,7 @@ const submitExtraordinaryEnrollment = async () => {
 const fetchMyChildren = async () => {
   if (!auth.isAuthenticated || !auth.user?.id) return
   try {
-    const res = await axios.get(`http://localhost:3000/api/student/parent-children/${auth.user.id}`)
+    const res = await axios.get(`/api/student/parent-children/${auth.user.id}`)
     myChildren.value = res.data || []
     if (myChildren.value.length > 0) {
       selectedChildIdForTicket.value = myChildren.value[0].id_estudiante
@@ -298,7 +298,7 @@ const fetchMyTickets = async () => {
   try {
     loading.value = true
     const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get('http://localhost:3000/api/support/tickets', { headers })
+    const res = await axios.get('/api/support/tickets', { headers })
     myTickets.value = (res.data.tickets || []).map((t: any) => {
       let obs = []
       if (typeof t.observaciones === 'string') {
@@ -363,7 +363,7 @@ const submitVisitorResponse = async () => {
     submittingVisitorObs.value = true
     const ticketId = trackingTicketData.value.id_ticket
     const headers = auth.token ? { Authorization: `Bearer ${auth.token}` } : {}
-    const res = await axios.post(`http://localhost:3000/api/support/tickets/${ticketId}/observaciones`, {
+    const res = await axios.post(`/api/support/tickets/${ticketId}/observaciones`, {
       observacion: visitorResponseInput.value.trim()
     }, { headers })
 
@@ -434,7 +434,7 @@ const handleSubmit = async () => {
       id_estudiante: category.value === 'REINGRESO' ? selectedChildIdForTicket.value : null
     }
 
-    const response = await axios.post('http://localhost:3000/api/support/tickets', payload, { headers })
+    const response = await axios.post('/api/support/tickets', payload, { headers })
     generatedTicketCode.value = response.data.ticketCode
     
     subject.value = ''

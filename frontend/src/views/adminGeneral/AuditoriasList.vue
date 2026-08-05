@@ -51,7 +51,7 @@ const activeAction = ref<AccionAuditoria | null>(null)
 const fetchSchools = async () => {
   try {
     const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get('http://localhost:3000/api/admin/colegios', { headers })
+    const res = await axios.get('/api/admin/colegios', { headers })
     schools.value = res.data.map((c: any) => ({ id_colegio: c.id_colegio, nombre: c.nombre }))
   } catch (error) {
     console.error('Error fetching schools:', error)
@@ -62,7 +62,7 @@ const fetchActions = async () => {
   try {
     loading.value = true
     const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get('http://localhost:3000/api/admin/auditorias', {
+    const res = await axios.get('/api/admin/auditorias', {
       headers,
       params: {
         tipo_accion: props.tipo === 'MODIFICACION' ? undefined : props.tipo,

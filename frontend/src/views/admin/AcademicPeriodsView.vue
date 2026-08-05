@@ -57,7 +57,7 @@ const toggleYearStatus = async (year: AcademicYear) => {
   const targetStatus = currentStatus === 'ABIERTO' ? 'CERRADO' : 'ABIERTO'
   try {
     togglingYearId.value = year.id_anio
-    const response = await axios.patch(`http://localhost:3000/api/academic-admin/settings/years/${year.id_anio}/status`, {
+    const response = await axios.patch(`/api/academic-admin/settings/years/${year.id_anio}/status`, {
       schoolId: schoolId.value,
       estado: targetStatus,
     })
@@ -88,7 +88,7 @@ const deleteYear = async (year: AcademicYear) => {
 
   try {
     deletingYearId.value = year.id_anio
-    await axios.delete(`http://localhost:3000/api/academic-admin/settings/years/${year.id_anio}`, {
+    await axios.delete(`/api/academic-admin/settings/years/${year.id_anio}`, {
       data: { schoolId: schoolId.value }
     })
     
@@ -247,7 +247,7 @@ const loadData = async () => {
     if (activeYearId) {
       params.yearId = activeYearId
     }
-    const response = await axios.get(`http://localhost:3000/api/academic-admin/settings/${schoolId.value}`, { params })
+    const response = await axios.get(`/api/academic-admin/settings/${schoolId.value}`, { params })
     currentYear.value = response.data.currentYear
     academicYears.value = response.data.academicYears || []
     periods.value = response.data.periods
@@ -277,7 +277,7 @@ const createPeriod = async () => {
 
   try {
     savingPeriod.value = true
-    await axios.post('http://localhost:3000/api/academic-admin/settings/periods', {
+    await axios.post('/api/academic-admin/settings/periods', {
       schoolId: schoolId.value,
       nombre: newPeriod.value.nombre,
       porcentaje: Number(newPeriod.value.porcentaje),
@@ -311,7 +311,7 @@ const updatePeriodPercentage = async () => {
 
   try {
     savingPeriod.value = true
-    await axios.patch(`http://localhost:3000/api/academic-admin/settings/periods/${periodEditModal.value.id_periodo}/percentage`, {
+    await axios.patch(`/api/academic-admin/settings/periods/${periodEditModal.value.id_periodo}/percentage`, {
       schoolId: schoolId.value,
       porcentaje: Number(periodEdit.value.porcentaje),
       mes_inicio: mesInicio,
@@ -335,7 +335,7 @@ const approvePeriod = async (period: AcademicPeriod) => {
 
   try {
     loading.value = true
-    await axios.post(`http://localhost:3000/api/academic-admin/settings/periods/${period.id_periodo}/approve`, {
+    await axios.post(`/api/academic-admin/settings/periods/${period.id_periodo}/approve`, {
       schoolId: schoolId.value,
     })
     alert('Periodo académico aprobado y activado correctamente.')
@@ -360,7 +360,7 @@ const closePeriod = async (period: AcademicPeriod, force = false) => {
 
   try {
     closingPeriodId.value = period.id_periodo
-    await axios.post(`http://localhost:3000/api/academic-admin/settings/periods/${period.id_periodo}/close`, {
+    await axios.post(`/api/academic-admin/settings/periods/${period.id_periodo}/close`, {
       schoolId: schoolId.value,
       force
     })
@@ -395,7 +395,7 @@ const reopenPeriod = async (period: AcademicPeriod) => {
 
   try {
     reopeningPeriodId.value = period.id_periodo
-    await axios.post(`http://localhost:3000/api/academic-admin/settings/periods/${period.id_periodo}/reopen`, {
+    await axios.post(`/api/academic-admin/settings/periods/${period.id_periodo}/reopen`, {
       schoolId: schoolId.value,
       motivo: motivo.trim()
     })
@@ -423,7 +423,7 @@ const createAcademicYear = async () => {
 
   try {
     yearSaving.value = true
-    const response = await axios.post('http://localhost:3000/api/academic-admin/settings/years', {
+    const response = await axios.post('/api/academic-admin/settings/years', {
       schoolId: schoolId.value,
       calendario: finalLabel,
       tipo_calendario: academicYearForm.value.tipo_calendario,
@@ -477,7 +477,7 @@ const changeYearCalendarType = async (year: AcademicYear, newType: string) => {
 
   try {
     changingCalendarYearId.value = year.id_anio
-    const response = await axios.patch(`http://localhost:3000/api/academic-admin/settings/years/${year.id_anio}/calendar-type`, {
+    const response = await axios.patch(`/api/academic-admin/settings/years/${year.id_anio}/calendar-type`, {
       schoolId: schoolId.value,
       tipo_calendario: newType
     })
@@ -548,7 +548,7 @@ const deletePeriod = async (period: AcademicPeriod) => {
   if (!confirm(`¿Está seguro de eliminar el periodo "${period.nombre}"?`)) return
   try {
     loading.value = true
-    await axios.delete(`http://localhost:3000/api/academic-admin/settings/periods/${period.id_periodo}`, {
+    await axios.delete(`/api/academic-admin/settings/periods/${period.id_periodo}`, {
       data: { schoolId: schoolId.value }
     })
     alert(`Periodo ${period.nombre} eliminado correctamente.`)

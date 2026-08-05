@@ -85,7 +85,7 @@ const renderAllPdfDocuments = async () => {
 
 const fetchDetails = async () => {
   try {
-    const response = await axios.get(`http://localhost:3000/api/matriculas/${route.params.id}`)
+    const response = await axios.get(`/api/matriculas/${route.params.id}`)
     matricula.value = response.data
     selectedGradeId.value = response.data.id_grado
     renderAllPdfDocuments()
@@ -112,7 +112,7 @@ const cancelEnrollment = async () => {
   if (!cancelMotivo.value) return
   cancelling.value = true
   try {
-    await axios.post(`http://localhost:3000/api/matriculas/cancel/${route.params.id}`, {
+    await axios.post(`/api/matriculas/cancel/${route.params.id}`, {
       motivo: cancelMotivo.value, detalles: cancelDetalles.value
     })
     notify.addNotification('Matrícula cancelada exitosamente', 'success')
@@ -131,7 +131,7 @@ const assignRoom = async () => {
   if (selected) {
     savingGrade.value = true
     try {
-      await axios.post(`http://localhost:3000/api/matriculas/assign-grade/${route.params.id}`, {
+      await axios.post(`/api/matriculas/assign-grade/${route.params.id}`, {
         idGrado: selected.id_grado
       })
       matricula.value.seccion = selected.seccion
@@ -155,7 +155,7 @@ const showPendingModal = ref(false)
 
 const updateDocumentStatus = async (idDocumento: number, estado: string) => {
   try {
-    await axios.patch(`http://localhost:3000/api/matriculas/document/${idDocumento}`, { estado })
+    await axios.patch(`/api/matriculas/document/${idDocumento}`, { estado })
     const doc = matricula.value.documentos.find((d: any) => d.id_documento === idDocumento)
     if (doc) doc.estado = estado
   } catch {
@@ -181,7 +181,7 @@ const confirmSaveLater = () => {
 
 const notifyInconsistencies = async () => {
   try {
-    await axios.post(`http://localhost:3000/api/matriculas/notify-inconsistencies/${route.params.id}`)
+    await axios.post(`/api/matriculas/notify-inconsistencies/${route.params.id}`)
     notify.addNotification('Notificación enviada al padre', 'success')
     showNotifyModal.value = false
     router.push('/dashboard/gestion-matriculas')
@@ -757,7 +757,7 @@ const formatRenewalStateLabel = (state?: string) => {
       <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #cbd5e1; padding-bottom: 20px; margin-bottom: 30px;">
         <!-- School Shield (Left) -->
         <div style="width: 120px; height: 90px; flex-shrink: 0;">
-          <img v-if="matricula.escudo_url" :src="`http://localhost:3000${matricula.escudo_url}`" crossorigin="anonymous" style="width: 120px; height: 90px; object-fit: contain;" />
+          <img v-if="matricula.escudo_url" :src="`${matricula.escudo_url}`" crossorigin="anonymous" style="width: 120px; height: 90px; object-fit: contain;" />
           <div v-else style="width: 120px; height: 90px; background: #f1f5f9; border-radius: 12px; display: flex; align-items: center; justify-content: center;">
             <svg xmlns="http://www.w3.org/2000/svg" width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
           </div>
@@ -861,7 +861,7 @@ const formatRenewalStateLabel = (state?: string) => {
           <!-- Document Page Header -->
           <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #cbd5e1; padding-bottom: 16px; margin-bottom: 24px;">
             <div style="width: 80px; height: 64px; flex-shrink: 0;">
-              <img v-if="matricula.escudo_url" :src="`http://localhost:3000${matricula.escudo_url}`" crossorigin="anonymous" style="width: 80px; height: 64px; object-fit: contain;" />
+              <img v-if="matricula.escudo_url" :src="`${matricula.escudo_url}`" crossorigin="anonymous" style="width: 80px; height: 64px; object-fit: contain;" />
               <div v-else style="width: 80px; height: 64px; background: #f1f5f9; border-radius: 10px; display: flex; align-items: center; justify-content: center;">
                 <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
               </div>

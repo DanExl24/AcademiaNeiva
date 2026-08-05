@@ -82,7 +82,7 @@ const clearFilters = () => {
 const fetchPeriods = async () => {
   try {
     const params = yearStore.selectedYearId ? { yearId: yearStore.selectedYearId } : {}
-    const response = await axios.get(`http://localhost:3000/api/teacher/periods/${auth.user?.schoolId}`, { params })
+    const response = await axios.get(`/api/teacher/periods/${auth.user?.schoolId}`, { params })
     periods.value = (response.data || []).filter((p: any) => p.estado !== 'PENDIENTE')
     const openPeriod = periods.value.find((p: any) => p.estado === 'ABIERTO')
     if (openPeriod) {
@@ -108,12 +108,12 @@ const fetchCoursesWithStatus = async () => {
 
     loading.value = true
     const params = yearStore.selectedYearId ? { yearId: yearStore.selectedYearId } : {}
-    const response = await axios.get(`http://localhost:3000/api/teacher/courses/${userId}`, { params })
+    const response = await axios.get(`/api/teacher/courses/${userId}`, { params })
     const rawCourses = response.data
     
     const coursesWithStatus = await Promise.all(rawCourses.map(async (course: any) => {
       try {
-        const statusRes = await axios.get(`http://localhost:3000/api/teacher/closure-status/${course.id_detallegrado}/${activePeriodId.value}`)
+        const statusRes = await axios.get(`/api/teacher/closure-status/${course.id_detallegrado}/${activePeriodId.value}`)
         return {
           ...course,
           ...statusRes.data
@@ -148,7 +148,7 @@ const handleClosePeriod = async (course: any) => {
 
   try {
     processingId.value = course.id_detallegrado
-    const response = await axios.post('http://localhost:3000/api/teacher/close-period', {
+    const response = await axios.post('/api/teacher/close-period', {
       detailGradeId: course.id_detallegrado,
       periodId: activePeriodId.value,
       userId: auth.user?.id

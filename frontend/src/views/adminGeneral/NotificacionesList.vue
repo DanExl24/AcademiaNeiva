@@ -27,7 +27,7 @@ const fetchNotifications = async () => {
   try {
     loading.value = true
     const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get('http://localhost:3000/api/admin/notificaciones', { headers })
+    const res = await axios.get('/api/admin/notificaciones', { headers })
     notifications.value = res.data
   } catch (error) {
     console.error('Error fetching system notifications:', error)

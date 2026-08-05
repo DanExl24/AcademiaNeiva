@@ -55,7 +55,7 @@ const fetchEnrollments = async () => {
   loading.value = true
   try {
     const idColegio = auth.user?.schoolId || 1
-    const response = await axios.get(`http://localhost:3000/api/matriculas/filtered/${idColegio}`, {
+    const response = await axios.get(`/api/matriculas/filtered/${idColegio}`, {
       params: { 
         estado: 'ALL',
         yearId: yearStore.selectedYearId || undefined
@@ -246,8 +246,8 @@ const confirmCorrection = async () => {
   try {
     const headers = { Authorization: `Bearer ${auth.token}` }
     const endpoint = matricula.value.tipo === 'REINGRESO'
-      ? `http://localhost:3000/api/academic-admin/matriculas/reingreso/${id}/corregir`
-      : `http://localhost:3000/api/academic-admin/matriculas/extraordinaria/${id}/corregir`;
+      ? `/api/academic-admin/matriculas/reingreso/${id}/corregir`
+      : `/api/academic-admin/matriculas/extraordinaria/${id}/corregir`;
 
     await axios.post(endpoint, { observaciones: correctionObservations.value.trim() }, { headers })
     notify.addNotification('Solicitud enviada a corrección exitosamente.', 'success')
@@ -323,14 +323,14 @@ const openDrawer = async (id: number) => {
   detailLoading.value = true
   drawerOpen.value = true
   try {
-    const response = await axios.get(`http://localhost:3000/api/matriculas/${id}`)
+    const response = await axios.get(`/api/matriculas/${id}`)
     matricula.value = response.data
     selectedGradeId.value = response.data.id_grado
 
     // Fetch academic summary if it is a reingreso
     if (response.data.tipo === 'REINGRESO' && response.data.id_estudiante) {
       try {
-        const studentSumRes = await axios.get(`http://localhost:3000/api/student/${response.data.id_estudiante}/summary`)
+        const studentSumRes = await axios.get(`/api/student/${response.data.id_estudiante}/summary`)
         studentSummary.value = studentSumRes.data
       } catch (err) {
         console.error("Error loading student academic history:", err)
@@ -411,7 +411,7 @@ const assignRoom = () => {
 
 const updateDocumentStatus = async (idDocumento: number, estado: string) => {
   try {
-    await axios.patch(`http://localhost:3000/api/matriculas/document/${idDocumento}`, { estado })
+    await axios.patch(`/api/matriculas/document/${idDocumento}`, { estado })
     const doc = matricula.value.documentos.find((d: any) => d.id_documento === idDocumento)
     if (doc) doc.estado = estado
   } catch {
@@ -440,7 +440,7 @@ const confirmSaveLater = () => {
 
 const notifyInconsistencies = async () => {
   try {
-    await axios.post(`http://localhost:3000/api/matriculas/notify-inconsistencies/${matricula.value.id_matricula}`)
+    await axios.post(`/api/matriculas/notify-inconsistencies/${matricula.value.id_matricula}`)
     notify.addNotification('Notificación enviada al padre', 'success')
     showNotifyModal.value = false
     closeDrawer()
@@ -461,12 +461,12 @@ const cancelEnrollment = async () => {
   try {
     if (matricula.value.tipo === 'REINGRESO') {
       const headers = { Authorization: `Bearer ${auth.token}` }
-      await axios.post(`http://localhost:3000/api/academic-admin/matriculas/reingreso/${id}/rechazar`, { motivo: fullReason }, { headers })
+      await axios.post(`/api/academic-admin/matriculas/reingreso/${id}/rechazar`, { motivo: fullReason }, { headers })
     } else if (matricula.value.tipo === 'EXTRAORDINARIA' && matricula.value.estado === 'PENDIENTE') {
       const headers = { Authorization: `Bearer ${auth.token}` }
-      await axios.post(`http://localhost:3000/api/academic-admin/matriculas/extraordinaria/${id}/rechazar`, { motivo: fullReason }, { headers })
+      await axios.post(`/api/academic-admin/matriculas/extraordinaria/${id}/rechazar`, { motivo: fullReason }, { headers })
     } else {
-      await axios.post(`http://localhost:3000/api/matriculas/cancel/${id}`, {
+      await axios.post(`/api/matriculas/cancel/${id}`, {
         motivo: cancelMotivo.value,
         detalles: cancelDetalles.value,
         estado_estudiante: cancelStudentState.value
@@ -518,7 +518,7 @@ const downloadPDF = async (fullMatricula: any) => {
 
 const fetchAndDownloadPDF = async (id: number) => {
   try {
-    const response = await axios.get(`http://localhost:3000/api/matriculas/${id}`)
+    const response = await axios.get(`/api/matriculas/${id}`)
     await downloadPDF(response.data)
   } catch (err) {
     console.error("Error fetching matricula details for PDF:", err)
@@ -550,16 +550,16 @@ const fetchExtraordinaryCatalogs = async () => {
   try {
     const idColegio = auth.user?.schoolId || 1
     // Fetch levels & groups
-    const gradesRes = await axios.get(`http://localhost:3000/api/academic-admin/grades/${idColegio}`)
+    const gradesRes = await axios.get(`/api/academic-admin/grades/${idColegio}`)
     catalogNiveles.value = gradesRes.data.niveles || []
     catalogGrupos.value = gradesRes.data.grupos || []
     
     // Fetch academic years
-    const settingsRes = await axios.get(`http://localhost:3000/api/academic-admin/settings/${idColegio}`)
+    const settingsRes = await axios.get(`/api/academic-admin/settings/${idColegio}`)
     catalogYears.value = settingsRes.data.academicYears || []
     
     // Fetch students, filter out EXPULSADO & GRADUADO
-    const studentsRes = await axios.get(`http://localhost:3000/api/student/colegio/${idColegio}`)
+    const studentsRes = await axios.get(`/api/student/colegio/${idColegio}`)
     institutionStudents.value = (studentsRes.data || []).filter(
       (s: any) => s.estado !== 'EXPULSADO' && s.estado !== 'GRADUADO'
     )
@@ -574,7 +574,7 @@ const ordinaryClosureDate = ref<string | null>(null)
 const checkOrdinaryEnrollmentStatus = async () => {
   try {
     const idColegio = auth.user?.schoolId || 1
-    const res = await axios.get(`http://localhost:3000/api/matriculas/school/${idColegio}/enrollment-config`)
+    const res = await axios.get(`/api/matriculas/school/${idColegio}/enrollment-config`)
     if (res.data?.config) {
       const cfg = res.data.config
       if (cfg.habilitada && cfg.fecha_inicio && cfg.fecha_cierre) {
@@ -638,7 +638,7 @@ const onStudentSelected = () => {
   if (selectedStudentId) {
     const student = institutionStudents.value.find(s => s.id_estudiante === selectedStudentId)
     if (student) {
-      axios.get(`http://localhost:3000/api/student/${selectedStudentId}/summary`)
+      axios.get(`/api/student/${selectedStudentId}/summary`)
         .then(res => {
           if (res.data.parent && res.data.parent.email) {
             extraordinaryForm.value.correo_padre = res.data.parent.email
@@ -684,7 +684,7 @@ const submitExtraordinary = async () => {
       id_estudiante: extraordinaryForm.value.id_estudiante ? Number(extraordinaryForm.value.id_estudiante) : null,
     }
     const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.post('http://localhost:3000/api/academic-admin/matriculas/extraordinaria', payload, { headers })
+    await axios.post('/api/academic-admin/matriculas/extraordinaria', payload, { headers })
     notify.addNotification('Matrícula extraordinaria creada exitosamente.', 'success')
     showExtraordinaryModal.value = false
     // Reset form
@@ -714,8 +714,8 @@ const approveException = async (id: number) => {
   try {
     const headers = { Authorization: `Bearer ${auth.token}` }
     const endpoint = matricula.value?.tipo === 'REINGRESO'
-      ? `http://localhost:3000/api/academic-admin/matriculas/reingreso/${id}/aprobar`
-      : `http://localhost:3000/api/academic-admin/matriculas/extraordinaria/${id}/aprobar`;
+      ? `/api/academic-admin/matriculas/reingreso/${id}/aprobar`
+      : `/api/academic-admin/matriculas/extraordinaria/${id}/aprobar`;
     const response = await axios.post(endpoint, {}, { headers })
     notify.addNotification(response.data.message || 'Solicitud aprobada exitosamente', 'success')
     closeDrawer()
@@ -1880,7 +1880,7 @@ const approveException = async (id: number) => {
     <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #cbd5e1; padding-bottom: 20px; margin-bottom: 30px;">
       <!-- School Shield (Left) -->
       <div style="width: 120px; height: 90px; flex-shrink: 0;">
-        <img v-if="tempMatricula.escudo_url" :src="`http://localhost:3000${tempMatricula.escudo_url}`" crossorigin="anonymous" style="width: 120px; height: 90px; object-fit: contain;" />
+        <img v-if="tempMatricula.escudo_url" :src="`${tempMatricula.escudo_url}`" crossorigin="anonymous" style="width: 120px; height: 90px; object-fit: contain;" />
         <div v-else style="width: 120px; height: 90px; background: #f1f5f9; border-radius: 12px; display: flex; align-items: center; justify-content: center;">
           <svg xmlns="http://www.w3.org/2000/svg" width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
         </div>
@@ -1984,7 +1984,7 @@ const approveException = async (id: number) => {
         <!-- Document Page Header -->
         <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #cbd5e1; padding-bottom: 16px; margin-bottom: 24px;">
           <div style="width: 80px; height: 64px; flex-shrink: 0;">
-            <img v-if="tempMatricula.escudo_url" :src="`http://localhost:3000${tempMatricula.escudo_url}`" crossorigin="anonymous" style="width: 80px; height: 64px; object-fit: contain;" />
+            <img v-if="tempMatricula.escudo_url" :src="`${tempMatricula.escudo_url}`" crossorigin="anonymous" style="width: 80px; height: 64px; object-fit: contain;" />
             <div v-else style="width: 80px; height: 64px; background: #f1f5f9; border-radius: 10px; display: flex; align-items: center; justify-content: center;">
               <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
             </div>

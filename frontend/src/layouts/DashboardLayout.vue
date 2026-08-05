@@ -283,10 +283,10 @@ const checkStudentSanction = async () => {
 
   try {
     const headers = { Authorization: `Bearer ${auth.token}` }
-    const idRes = await axios.get(`http://localhost:3000/api/student/user-id/${auth.user.id}`, { headers })
+    const idRes = await axios.get(`/api/student/user-id/${auth.user.id}`, { headers })
     const studentId = idRes.data.id_estudiante
     if (studentId) {
-      const infoRes = await axios.get(`http://localhost:3000/api/student/info/${studentId}`, { headers })
+      const infoRes = await axios.get(`/api/student/info/${studentId}`, { headers })
       const info = infoRes.data
       if (info.estado === 'SANCIONADO' && info.sancion_hasta) {
         studentSanction.value = {
@@ -356,7 +356,7 @@ const handleExitSupervisionAuto = async () => {
   const supId = auth.supervision?.id_auditoria
   if (supId) {
     try {
-      await axios.post(`http://localhost:3000/api/admin/supervision/${supId}/salir`, {}, {
+      await axios.post(`/api/admin/supervision/${supId}/salir`, {}, {
         headers: { Authorization: `Bearer ${auth.token}` }
       })
     } catch (e) {
@@ -372,7 +372,7 @@ const handleExitSupervisionManual = async () => {
   if (supId) {
     if (confirm('¿Estás seguro de que deseas salir del modo supervisión?')) {
       try {
-        await axios.post(`http://localhost:3000/api/admin/supervision/${supId}/salir`, {}, {
+        await axios.post(`/api/admin/supervision/${supId}/salir`, {}, {
           headers: { Authorization: `Bearer ${auth.token}` }
         })
       } catch (e) {
@@ -420,7 +420,7 @@ const checkRecentActivity = async () => {
   if (auth.activeRole !== 'admin_general' || !auth.token) return
   try {
     const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get('http://localhost:3000/api/admin/dashboard/stats', { headers })
+    const res = await axios.get('/api/admin/dashboard/stats', { headers })
     const newActions = res.data.actividad || []
     
     if (knownActions.size === 0) {
@@ -451,7 +451,7 @@ const checkDirectivoActiveSupervision = async () => {
   if (!sId) return
   try {
     const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get(`http://localhost:3000/api/admin/colegio/${sId}/supervisiones`, { headers })
+    const res = await axios.get(`/api/admin/colegio/${sId}/supervisiones`, { headers })
     const active = res.data.find((s: any) => s.estado_supervision === 'ACTIVA')
     
     if (active && !directivoActiveSupervision.value) {
@@ -498,7 +498,7 @@ const checkAdminSupervisionStatus = async () => {
   }
   try {
     const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get('http://localhost:3000/api/admin/supervision/verificar-activa', { headers })
+    const res = await axios.get('/api/admin/supervision/verificar-activa', { headers })
     console.log('[Supervision Poll] Backend response:', res.data)
     
     if (res.data.activa === false) {

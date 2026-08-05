@@ -174,7 +174,7 @@ const fetchCatalogData = async () => {
     if (yearStore.selectedYearId) {
       params.yearId = yearStore.selectedYearId
     }
-    const res = await axios.get(`http://localhost:3000/api/academic-admin/settings/dba-catalogo/${schoolId.value}`, { params })
+    const res = await axios.get(`/api/academic-admin/settings/dba-catalogo/${schoolId.value}`, { params })
     catalogData.value = res.data || []
   } catch (error) {
     console.error('Error loading DBA catalog for directivo:', error)
@@ -471,8 +471,8 @@ const loadFilterOptions = async () => {
       params.yearId = yearStore.selectedYearId
     }
     const [settingsRes, teachersRes] = await Promise.all([
-      axios.get(`http://localhost:3000/api/academic-admin/settings/${schoolId.value}`, { params }),
-      axios.get(`http://localhost:3000/api/academic-admin/teachers/${schoolId.value}`, { params })
+      axios.get(`/api/academic-admin/settings/${schoolId.value}`, { params }),
+      axios.get(`/api/academic-admin/teachers/${schoolId.value}`, { params })
     ])
     
     periods.value = settingsRes.data.periods || []
@@ -544,7 +544,7 @@ const fetchCoherenciaReport = async () => {
     if (filterSubject.value !== 'TODOS') params.id_materia = filterSubject.value
     if (filterTeacher.value !== 'TODOS') params.id_docente = filterTeacher.value
 
-    const res = await axios.get(`http://localhost:3000/api/academic-admin/settings/dba-reportes/coherencia/${schoolId.value}`, { params })
+    const res = await axios.get(`/api/academic-admin/settings/dba-reportes/coherencia/${schoolId.value}`, { params })
     coherenciaData.value = res.data || []
   } catch (error) {
     console.error('Error loading coherencia report:', error)
@@ -566,7 +566,7 @@ const fetchCoberturaReport = async () => {
     if (filterCoberturaGroup.value !== 'TODOS') params.grado = filterCoberturaGroup.value
     if (filterCoberturaSubject.value !== 'TODOS') params.id_materia = filterCoberturaSubject.value
 
-    const res = await axios.get(`http://localhost:3000/api/academic-admin/settings/dba-reportes/cobertura/${schoolId.value}`, { params })
+    const res = await axios.get(`/api/academic-admin/settings/dba-reportes/cobertura/${schoolId.value}`, { params })
     coberturaResumen.value = res.data.resumen || []
     coberturaDetalles.value = res.data.detalles || []
     selectedResumenCard.value = null

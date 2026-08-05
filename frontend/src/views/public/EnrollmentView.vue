@@ -46,7 +46,7 @@ const loadingGrados = ref(false)
 
 const fetchInitialData = async () => {
   try {
-    const resSchools = await axios.get('http://localhost:3000/api/matriculas')
+    const resSchools = await axios.get('/api/matriculas')
     schools.value = resSchools.data
   } catch (error) {
     console.error('Error fetching schools:', error)
@@ -57,7 +57,7 @@ const fetchGrados = async () => {
   if (!schoolId.value) return
   loadingGrados.value = true
   try {
-    const response = await axios.get(`http://localhost:3000/api/grados/available/${schoolId.value}`)
+    const response = await axios.get(`/api/grados/available/${schoolId.value}`)
     allGrados.value = response.data
   } catch (error) {
     console.error('Error fetching grades:', error)
@@ -78,7 +78,7 @@ onMounted(async () => {
   const token = (route.query.token || route.params.token) as string
   if (token) {
     try {
-      const res = await axios.get(`http://localhost:3000/api/matriculas/public/by-token/${token}`)
+      const res = await axios.get(`/api/matriculas/public/by-token/${token}`)
       if (res.data && res.data.tipo === 'EXTRAORDINARIA') {
         isExtraordinaryToken.value = true
         extraordinaryTokenValue.value = token
@@ -107,7 +107,7 @@ const fetchEnrollmentConfig = async () => {
   }
   loadingConfig.value = true
   try {
-    const res = await axios.get(`http://localhost:3000/api/matriculas/school/${schoolId.value}/enrollment-config`)
+    const res = await axios.get(`/api/matriculas/school/${schoolId.value}/enrollment-config`)
     enrollmentConfig.value = res.data.config
     yearLabel.value = res.data.yearLabel
   } catch (error) {
@@ -345,7 +345,7 @@ const submitEnrollment = async () => {
       }
     }
 
-    await axios.post('http://localhost:3000/api/matriculas/submit', formDataPayload, {
+    await axios.post('/api/matriculas/submit', formDataPayload, {
       headers: {
         'Content-Type': 'multipart/form-data'
       }

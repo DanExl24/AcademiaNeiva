@@ -31,11 +31,11 @@ const fetchDetails = async () => {
     if (!finalStudentId) {
       const userId = auth.isMonitoring ? auth.monitoringUser?.id : auth.user?.id
       if (!userId) return
-      const resEst = await axios.get(`http://localhost:3000/api/student/user-id/${userId}`)
+      const resEst = await axios.get(`/api/student/user-id/${userId}`)
       finalStudentId = resEst.data.id_estudiante
     }
 
-    const res = await axios.get(`http://localhost:3000/api/student/grade-details/${finalStudentId}/${id_periodo}/${id_materia}`)
+    const res = await axios.get(`/api/student/grade-details/${finalStudentId}/${id_periodo}/${id_materia}`)
     subjectDetails.value = res.data
     
     if (subjectDetails.value.length > 0) {

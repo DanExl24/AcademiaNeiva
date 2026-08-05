@@ -3,7 +3,7 @@ import { io, Socket } from 'socket.io-client'
 const getSocketUrl = () => {
   const envUrl = import.meta.env.VITE_API_URL
   if (envUrl) return envUrl.replace(/\/api$/, '')
-  return 'http://localhost:3000'
+  return ''
 }
 
 const SOCKET_URL = getSocketUrl()

@@ -53,7 +53,7 @@ const fetchCourses = async () => {
     }
     
     const params = yearStore.selectedYearId ? { yearId: yearStore.selectedYearId } : {}
-    const response = await axios.get(`http://localhost:3000/api/teacher/courses/${userId}`, { params })
+    const response = await axios.get(`/api/teacher/courses/${userId}`, { params })
     rawData.value = response.data
   } catch (error: any) {
   } finally {
@@ -173,7 +173,7 @@ const openStudentsModal = async (group: any) => {
   studentsLoading.value = true
   studentsList.value = []
   try {
-    const response = await axios.get(`http://localhost:3000/api/teacher/students/${group.id_grado}`)
+    const response = await axios.get(`/api/teacher/students/${group.id_grado}`)
     studentsList.value = response.data
     console.log('[TeacherCourses] openStudentsModal OK:', studentsList.value.length, 'for gradeId', group.id_grado)
   } catch (error: any) {

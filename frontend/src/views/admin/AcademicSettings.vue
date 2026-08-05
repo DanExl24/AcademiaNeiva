@@ -25,7 +25,7 @@ const loadData = async () => {
     if (yearStore.selectedYearId) {
       params.yearId = yearStore.selectedYearId
     }
-    const response = await axios.get(`http://localhost:3000/api/academic-admin/settings/${schoolId.value}`, { params })
+    const response = await axios.get(`/api/academic-admin/settings/${schoolId.value}`, { params })
     currentYear.value = response.data.currentYear
   } catch (error) {
     console.error('Error loading academic settings:', error)

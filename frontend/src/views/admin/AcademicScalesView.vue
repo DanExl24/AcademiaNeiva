@@ -60,7 +60,7 @@ const loadData = async () => {
     if (yearStore.selectedYearId) {
       params.yearId = yearStore.selectedYearId
     }
-    const response = await axios.get(`http://localhost:3000/api/academic-admin/settings/${schoolId.value}`, { params })
+    const response = await axios.get(`/api/academic-admin/settings/${schoolId.value}`, { params })
     scales.value = response.data.scales || []
     defaultSettings.value = response.data.defaultSettings || null
     
@@ -127,7 +127,7 @@ const saveDefaultSettings = async (bypassConfirm = false) => {
 
   try {
     defaultsSaving.value = true
-    await axios.put('http://localhost:3000/api/academic-admin/settings/defaults', {
+    await axios.put('/api/academic-admin/settings/defaults', {
       schoolId: schoolId.value,
       nota_minima: nextMin,
       nota_maxima: nextMax,
@@ -154,7 +154,7 @@ const saveManualScales = async () => {
   try {
     defaultsSaving.value = true
     defaultsForm.value.escala_modo = 'MANUAL'
-    await axios.put('http://localhost:3000/api/academic-admin/settings/scales/manual', {
+    await axios.put('/api/academic-admin/settings/scales/manual', {
       schoolId: schoolId.value,
       basico_max: Number(manualScaleForm.value.basico_max),
       alto_max: Number(manualScaleForm.value.alto_max),

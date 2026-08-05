@@ -127,7 +127,7 @@ const fetchDiagnostic = async () => {
 
   try {
     loadingDiagnostic.value = true
-    const res = await axios.get(`http://localhost:3000/api/academic-admin/settings/dba-planeacion/disponibles/${schoolId.value}`, {
+    const res = await axios.get(`/api/academic-admin/settings/dba-planeacion/disponibles/${schoolId.value}`, {
       params: {
         id_grupo: sampleAssignment.id_grupo,
         id_materia: sampleAssignment.id_materia
@@ -198,7 +198,7 @@ const promptDeleteCompetencia = async (item: CompetencyItem) => {
   deleteUsageInfo.value = null
 
   try {
-    const res = await axios.get(`http://localhost:3000/api/academic-admin/settings/competencies/${item.id_competencia}/usage-check`, {
+    const res = await axios.get(`/api/academic-admin/settings/competencies/${item.id_competencia}/usage-check`, {
       params: { schoolId: schoolId.value }
     })
     deleteUsageInfo.value = res.data
@@ -215,7 +215,7 @@ const confirmDeleteCompetencia = async () => {
 
   try {
     saving.value = true
-    await axios.delete(`http://localhost:3000/api/academic-admin/settings/competencies/${competenciaToDelete.value.id_competencia}`, {
+    await axios.delete(`/api/academic-admin/settings/competencies/${competenciaToDelete.value.id_competencia}`, {
       params: { schoolId: schoolId.value }
     })
     notify.addNotification('Competencia eliminada exitosamente', 'success')
@@ -362,7 +362,7 @@ const loadData = async () => {
     if (yearStore.selectedYearId) {
       params.yearId = yearStore.selectedYearId
     }
-    const response = await axios.get(`http://localhost:3000/api/academic-admin/settings/${schoolId.value}`, { params })
+    const response = await axios.get(`/api/academic-admin/settings/${schoolId.value}`, { params })
     periods.value = response.data.periods || []
     assignments.value = response.data.assignments
     competencies.value = response.data.competencies
@@ -413,7 +413,7 @@ const onFormContextChange = async (arg?: number | Event) => {
   try {
     loadingFormDba.value = true
     showFormDba.value = true
-    const res = await axios.get(`http://localhost:3000/api/academic-admin/settings/dba-planeacion/disponibles/${schoolId.value}`, {
+    const res = await axios.get(`/api/academic-admin/settings/dba-planeacion/disponibles/${schoolId.value}`, {
       params: {
         id_grupo: target.id_grupo,
         id_materia: target.id_materia,
@@ -461,7 +461,7 @@ const openEditModal = async (item: CompetencyItem) => {
   competencyModal.value = true
   
   try {
-    const res = await axios.get(`http://localhost:3000/api/academic-admin/settings/competencies/${item.id_competencia}/usage-check`, {
+    const res = await axios.get(`/api/academic-admin/settings/competencies/${item.id_competencia}/usage-check`, {
       params: { schoolId: schoolId.value }
     })
     editingCompetencyIsUsed.value = res.data.isUsed
@@ -503,7 +503,7 @@ const saveCompetency = async () => {
   try {
     saving.value = true
     const assignment = targets[0]
-    await axios.post('http://localhost:3000/api/academic-admin/settings/competencies', {
+    await axios.post('/api/academic-admin/settings/competencies', {
       schoolId: schoolId.value,
       id_grupo: assignment.id_grupo,
       id_materia: assignment.id_materia,
@@ -546,7 +546,7 @@ const addEvidencia = async (competencia: CompetencyItem) => {
 
   try {
     saving.value = true
-    const response = await axios.post(`http://localhost:3000/api/academic-admin/settings/competencies/${competencia.id_competencia}/evidencias`, {
+    const response = await axios.post(`/api/academic-admin/settings/competencies/${competencia.id_competencia}/evidencias`, {
       schoolId: schoolId.value,
       descripcion: desc
     })
@@ -575,7 +575,7 @@ const saveEditEvidencia = async (evidencia: any) => {
 
   try {
     saving.value = true
-    await axios.put(`http://localhost:3000/api/academic-admin/settings/evidencias/${evidencia.id_evidencia}`, {
+    await axios.put(`/api/academic-admin/settings/evidencias/${evidencia.id_evidencia}`, {
       schoolId: schoolId.value,
       descripcion: desc
     })
@@ -594,7 +594,7 @@ const removeEvidencia = async (competencia: CompetencyItem, evidenciaId: number)
 
   try {
     saving.value = true
-    await axios.delete(`http://localhost:3000/api/academic-admin/settings/evidencias/${evidenciaId}`, {
+    await axios.delete(`/api/academic-admin/settings/evidencias/${evidenciaId}`, {
       params: { schoolId: schoolId.value }
     })
     competencia.evidencias = competencia.evidencias.filter((e: any) => e.id_evidencia !== evidenciaId)
@@ -620,7 +620,7 @@ const openDbaModal = async (competencia: CompetencyItem) => {
     .map(e => e.id_evidencia_dba as number)
 
   try {
-    const res = await axios.get(`http://localhost:3000/api/academic-admin/settings/dba-planeacion/disponibles/${schoolId.value}`, {
+    const res = await axios.get(`/api/academic-admin/settings/dba-planeacion/disponibles/${schoolId.value}`, {
       params: {
         id_grupo: competencia.id_grupo,
         id_materia: competencia.id_materia,
@@ -643,7 +643,7 @@ const saveDbaEvidencias = async () => {
 
   try {
     saving.value = true
-    await axios.post(`http://localhost:3000/api/academic-admin/settings/competencias/${selectedCompetenciaForDba.value.id_competencia}/vincular-evidencias-dba`, {
+    await axios.post(`/api/academic-admin/settings/competencias/${selectedCompetenciaForDba.value.id_competencia}/vincular-evidencias-dba`, {
       schoolId: schoolId.value,
       id_evidencias_dba: checkedDbaEvidences.value
     })

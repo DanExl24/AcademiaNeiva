@@ -104,7 +104,7 @@ const loadConfig = async () => {
     message.value = null
     const headers = { Authorization: `Bearer ${auth.token}` }
     const response = await axios.get(
-      `http://localhost:3000/api/academic-admin/settings/enrollment-config/${schoolId.value}/${selectedYearId.value}`,
+      `/api/academic-admin/settings/enrollment-config/${schoolId.value}/${selectedYearId.value}`,
       { headers }
     )
     
@@ -199,7 +199,7 @@ const handleSave = async () => {
     }
 
     const response = await axios.post(
-      'http://localhost:3000/api/academic-admin/settings/enrollment-config',
+      '/api/academic-admin/settings/enrollment-config',
       payload,
       { headers }
     )

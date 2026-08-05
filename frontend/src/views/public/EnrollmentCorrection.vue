@@ -38,7 +38,7 @@ const docLabels: Record<string, string> = {
 
 const fetchDetails = async () => {
   try {
-    const response = await axios.get(`http://localhost:3000/api/matriculas/${token}`)
+    const response = await axios.get(`/api/matriculas/${token}`)
     matricula.value = response.data
     // Inicializar objeto de nuevos archivos
     matricula.value.documentos.forEach((doc: any) => {
@@ -87,7 +87,7 @@ const submitCorrections = async () => {
       formData.append(key, file as File)
     })
 
-    await axios.post(`http://localhost:3000/api/matriculas/update-documents/${token}`, formData, {
+    await axios.post(`/api/matriculas/update-documents/${token}`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
 

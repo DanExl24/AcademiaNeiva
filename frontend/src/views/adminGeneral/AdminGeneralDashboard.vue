@@ -51,7 +51,7 @@ const fetchStats = async () => {
     loading.value = true
     error.value = ''
     const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get('http://localhost:3000/api/admin/dashboard/stats', { headers })
+    const res = await axios.get('/api/admin/dashboard/stats', { headers })
     stats.value = res.data
   } catch (err: any) {
     console.error('Error fetching admin dashboard stats:', err)

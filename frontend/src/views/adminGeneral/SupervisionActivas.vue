@@ -30,7 +30,7 @@ const fetchActiveSupervisions = async () => {
   try {
     loading.value = true
     const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get('http://localhost:3000/api/admin/supervision/historial', { headers })
+    const res = await axios.get('/api/admin/supervision/historial', { headers })
     activeSupervisions.value = res.data.filter((r: any) => r.estado_supervision === 'ACTIVA')
     updateTimers()
   } catch (error) {
@@ -65,7 +65,7 @@ const updateTimers = () => {
 const handleAutoExit = async (id: number) => {
   try {
     const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.post(`http://localhost:3000/api/admin/supervision/${id}/salir`, {}, { headers })
+    await axios.post(`/api/admin/supervision/${id}/salir`, {}, { headers })
   } catch (e) {
     console.error('Error auto-exiting supervision:', e)
   }
@@ -77,7 +77,7 @@ const handleExit = async (sup: SupervisionActiva) => {
   if (!confirm(`¿Estás seguro de que deseas finalizar la supervisión de ${sup.colegio_nombre}?`)) return
   try {
     const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.post(`http://localhost:3000/api/admin/supervision/${sup.id_auditoria}/salir`, {}, { headers })
+    const res = await axios.post(`/api/admin/supervision/${sup.id_auditoria}/salir`, {}, { headers })
     alert(`Supervisión finalizada. Duración: ${res.data.duracion}. Acciones auditadas: ${res.data.total_acciones}`)
     
     // Stop local Pinia supervision context if this is the supervision we were in

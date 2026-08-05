@@ -68,7 +68,7 @@ const fetchTracking = async (tokenVal: string) => {
   try {
     loading.value = true
     searched.value = true
-    const response = await axios.get(`http://localhost:3000/api/matriculas/${tokenVal.trim()}`)
+    const response = await axios.get(`/api/matriculas/${tokenVal.trim()}`)
     matricula.value = response.data
   } catch (error: any) {
     console.error('Error fetching tracking:', error)

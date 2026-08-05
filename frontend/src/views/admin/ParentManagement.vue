@@ -144,7 +144,7 @@ const totalChildrenLinked = computed(() =>
 )
 const parentsWithAccount = computed(() => parents.value.filter(p => p.email).length)
 
-const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+const apiBase = import.meta.env.VITE_API_URL || ''
 
 const loadParents = async () => {
   if (!schoolId.value) return
@@ -241,7 +241,7 @@ const saveParentEdit = async () => {
   try {
     savingEdit.value = true
     await axios.put(
-      `http://localhost:3000/api/parents/${selectedParentId.value}`,
+      `/api/parents/${selectedParentId.value}`,
       editForm.value,
       { headers: { Authorization: `Bearer ${auth.token}` } }
     )
@@ -297,7 +297,7 @@ const toggleParentAccountStatus = async () => {
   try {
     togglingStatus.value = true
     const res = await axios.patch(
-      `http://localhost:3000/api/parents/${selectedParentId.value}/status`,
+      `/api/parents/${selectedParentId.value}/status`,
       { activo: newStatus },
       { headers: { Authorization: `Bearer ${auth.token}` } }
     )

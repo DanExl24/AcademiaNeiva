@@ -58,7 +58,7 @@ const fetchConfig = async () => {
   try {
     loading.value = true
     const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get('http://localhost:3000/api/admin/configuracion', { headers })
+    const res = await axios.get('/api/admin/configuracion', { headers })
 
     const data = res.data
     if (data.supervision_duracion_minima_minutos) {
@@ -85,7 +85,7 @@ const saveConfig = async () => {
   try {
     saving.value = true
     const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.put('http://localhost:3000/api/admin/configuracion', {
+    await axios.put('/api/admin/configuracion', {
       supervision_duracion_minima_minutos: supervisionSettings.value.minDuration,
       supervision_duracion_maxima_minutos: supervisionSettings.value.maxDuration
     }, { headers })
