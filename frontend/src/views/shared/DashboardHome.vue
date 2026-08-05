@@ -618,13 +618,21 @@ const loadPeriods = async () => {
   if (!schoolId.value) return
   try {
     const headers = { Authorization: `Bearer ${auth.token}` }
-    const response = await axios.get(`http://localhost:3000/api/academic-admin/settings/${schoolId.value}?keys=periods`, { headers })
+    const params: any = { keys: 'periods' }
+    if (selectedYearId.value) {
+      params.yearId = selectedYearId.value
+    }
+    const response = await axios.get(`http://localhost:3000/api/academic-admin/settings/${schoolId.value}`, { headers, params })
     allPeriods.value = (response.data.periods || []).filter((p: any) => p.estado !== 'PENDIENTE')
 
     // Set active period by default if none selected
     if (!selectedPeriodId.value) {
       const active = periods.value.find(p => p.estado === 'ABIERTO')
-      if (active) selectedPeriodId.value = active.id_periodo
+      if (active) {
+        selectedPeriodId.value = active.id_periodo
+      } else if (periods.value.length > 0) {
+        selectedPeriodId.value = periods.value[periods.value.length - 1].id_periodo
+      }
     }
   } catch (error) {
     console.error('Error loading periods:', error)
@@ -632,8 +640,10 @@ const loadPeriods = async () => {
   }
 }
 
-// When year changes, reset period to the open one for that year
-watch(selectedYearId, () => {
+// When year changes, reload periods for that specific year and reset selected period
+watch(selectedYearId, async () => {
+  selectedPeriodId.value = null
+  await loadPeriods()
   const yearPeriods = periods.value
   const active = yearPeriods.find(p => p.estado === 'ABIERTO')
   selectedPeriodId.value = active ? active.id_periodo : (yearPeriods.length > 0 ? yearPeriods[yearPeriods.length - 1].id_periodo : null)
