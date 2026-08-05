@@ -31,7 +31,9 @@ import {
   FileSpreadsheet,
   RefreshCw,
   SlidersHorizontal,
-  Layers
+  Layers,
+  ArrowUpDown,
+  Clock
 } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 import { useNotificationStore } from '../../stores/notifications'
@@ -95,7 +97,21 @@ const stats = computed(() => ({
 
 const filterTipo = ref<string>('TODOS')
 const filterNivel = ref<number | 'TODOS'>('TODOS')
+const filterSortOrder = ref<'OLDEST' | 'NEWEST'>('OLDEST')
 const onlyPendingDocs = ref<boolean>(false)
+
+// Map to track order of submission for pending applications (turn / priority ranking)
+const oldestPendingMap = computed(() => {
+  const map = new Map<number, number>()
+  const pendingList = enrollments.value
+    .filter(e => e.estado === 'PENDIENTE' || e.estado === 'CORRECCION' || e.estado === 'RECHAZADA')
+    .sort((a, b) => (a.id_matricula || 0) - (b.id_matricula || 0))
+
+  pendingList.forEach((item, index) => {
+    map.set(item.id_matricula, index + 1)
+  })
+  return map
+})
 
 const availableLevels = computed(() => {
   const map = new Map<number, string>()
@@ -108,12 +124,13 @@ const availableLevels = computed(() => {
 })
 
 const isAnySecondaryFilterActive = computed(() => {
-  return filterTipo.value !== 'TODOS' || filterNivel.value !== 'TODOS' || onlyPendingDocs.value || searchQuery.value.trim() !== ''
+  return filterTipo.value !== 'TODOS' || filterNivel.value !== 'TODOS' || filterSortOrder.value !== 'OLDEST' || onlyPendingDocs.value || searchQuery.value.trim() !== ''
 })
 
 const resetFilters = () => {
   filterTipo.value = 'TODOS'
   filterNivel.value = 'TODOS'
+  filterSortOrder.value = 'OLDEST'
   onlyPendingDocs.value = false
   searchQuery.value = ''
 }
@@ -193,7 +210,16 @@ const filteredEnrollments = computed(() => {
     })
   }
 
-  return list
+  // Sort Order: OLDEST (ascending by submission ID/date) vs NEWEST (descending)
+  return list.sort((a, b) => {
+    const idA = a.id_matricula || 0
+    const idB = b.id_matricula || 0
+    if (filterSortOrder.value === 'OLDEST') {
+      return idA - idB
+    } else {
+      return idB - idA
+    }
+  })
 })
 
 const getStatusMeta = (status: string) => {
@@ -809,6 +835,15 @@ const approveException = async (id: number) => {
 
         <!-- Filter Selects & Actions -->
         <div class="flex flex-wrap items-center gap-2 w-full md:w-auto justify-end">
+          <!-- Sort Order Filter (Más antiguas vs Más recientes) -->
+          <div class="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 rounded-xl px-3 py-1.5 text-xs font-semibold">
+            <ArrowUpDown :size="14" class="text-indigo-500" />
+            <select v-model="filterSortOrder" class="bg-transparent text-slate-700 dark:text-slate-200 outline-none cursor-pointer font-bold">
+              <option value="OLDEST">⏳ Más Antiguas Primero (Prioridad)</option>
+              <option value="NEWEST">✨ Más Recientes Primero</option>
+            </select>
+          </div>
+
           <!-- Tipo Filter -->
           <div class="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 rounded-xl px-3 py-1.5 text-xs font-semibold">
             <SlidersHorizontal :size="14" class="text-slate-400" />
@@ -907,10 +942,19 @@ const approveException = async (id: number) => {
               class="group hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors"
             >
               <td class="px-6 py-4">
-                <div class="flex items-center gap-1.5 font-sans">
+                <div class="flex flex-wrap items-center gap-1.5 font-sans">
                   <p class="font-black text-slate-900 dark:text-white text-sm">#{{ en.id_matricula }}</p>
                   <span :class="[getTipoMeta(en.tipo).bg, 'text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded']">
                     {{ getTipoMeta(en.tipo).label }}
+                  </span>
+                  <!-- Priority Badge for Oldest Pending Submissions -->
+                  <span 
+                    v-if="oldestPendingMap.has(en.id_matricula) && (en.estado === 'PENDIENTE' || en.estado === 'CORRECCION')" 
+                    class="inline-flex items-center gap-1 bg-amber-500/10 text-amber-700 dark:bg-amber-400/20 dark:text-amber-300 border border-amber-300/80 dark:border-amber-700/80 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full shadow-2xs"
+                    :title="`Solicitud enviada de primero (Turno #${oldestPendingMap.get(en.id_matricula)})`"
+                  >
+                    <Clock :size="10" class="text-amber-600 dark:text-amber-400" />
+                    <span>Turno #{{ oldestPendingMap.get(en.id_matricula) }} • Prioritaria</span>
                   </span>
                 </div>
                 <p class="text-[10px] text-slate-400 font-mono">{{ en.token_seguimiento?.substring(0,10) }}...</p>
