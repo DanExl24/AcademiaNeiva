@@ -50,8 +50,8 @@ app.use(helmet({
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
       imgSrc: ["'self'", "data:", "blob:", "http:", "https:"],
-      connectSrc: ["'self'", "http://localhost:5173", "http://localhost:3000"],
-      frameAncestors: ["'self'", "http://localhost:5173", "http://localhost:3000"]
+      connectSrc: ["'self'", "http://localhost:5173", "http://localhost:3000", "https:"],
+      frameAncestors: ["'self'", "http://localhost:5173", "http://localhost:3000", "https:"]
     }
   },
   frameguard: false
