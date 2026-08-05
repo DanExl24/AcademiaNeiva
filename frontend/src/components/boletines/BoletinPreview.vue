@@ -7,7 +7,7 @@
         <div class="w-32 h-32 flex items-center justify-center">
             <!-- Espacio reservado para Logo Izquierdo o Escudo Real -->
             <div class="w-24 h-24 rounded-full border border-gray-300 bg-gray-55 flex items-center justify-center overflow-hidden">
-                <img v-if="data?.estudiante?.escudo_url" :src="`http://localhost:3000${data.estudiante.escudo_url}`" alt="Escudo Colegio" class="max-w-[90%] max-h-[90%] object-contain" />
+                <img v-if="data?.estudiante?.escudo_url" :src="getShieldUrl(data.estudiante.escudo_url)" alt="Escudo Colegio" class="max-w-[90%] max-h-[90%] object-contain" />
                 <span v-else class="text-xs text-gray-400 text-center px-2">Logo Colegio</span>
             </div>
         </div>
@@ -289,6 +289,13 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import { API_BASE_URL } from '../../config/api'
+
+const getShieldUrl = (url: string) => {
+  if (!url || url === 'undefined' || url.includes('undefined')) return ''
+  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) return url
+  return `${API_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`
+}
 
 const props = defineProps<{
   data: any

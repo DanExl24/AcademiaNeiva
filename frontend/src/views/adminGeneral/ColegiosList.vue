@@ -2,11 +2,18 @@
 import { ref, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import axios from 'axios'
+import { API_BASE_URL } from '../../config/api'
 import { useAuthStore } from '../../stores/auth'
 import { 
   School, Plus, Search, Trash2, Edit3, CheckCircle, XCircle, AlertTriangle, 
   Mail, Phone, MapPin, Calendar, Hash, Users, Eye
 } from 'lucide-vue-next'
+
+const getShieldUrl = (url: string) => {
+  if (!url || url === 'undefined' || url.includes('undefined')) return ''
+  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) return url
+  return `${API_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`
+}
 
 const auth = useAuthStore()
 const route = useRoute()
@@ -570,7 +577,7 @@ const handleDelete = async (college: Colegio) => {
               <div class="space-y-2">
                 <h4 class="text-xs font-black text-slate-400 uppercase tracking-wider">Escudo Institucional</h4>
                 <div class="w-24 h-24 rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 p-2 flex items-center justify-center overflow-hidden">
-                  <img v-if="selectedCollege.escudo_url" :src="`http://localhost:3000${selectedCollege.escudo_url}`" alt="Escudo" class="w-full h-full object-contain" />
+                  <img v-if="selectedCollege.escudo_url" :src="getShieldUrl(selectedCollege.escudo_url)" alt="Escudo" class="w-full h-full object-contain" />
                   <span v-else class="text-xs text-slate-400 italic font-medium">Sin Escudo</span>
                 </div>
               </div>

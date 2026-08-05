@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import axios from 'axios'
+import { API_BASE_URL } from '../config/api'
 import { 
   LayoutDashboard, 
   ClipboardList, 
@@ -244,13 +245,15 @@ const fetchSchoolIdentity = async () => {
 
   try {
     const headers = auth.token ? { Authorization: `Bearer ${auth.token}` } : {}
-    const res = await axios.get(`http://localhost:3000/api/academic-admin/my-school/${schoolId}`, { headers })
+    const res = await axios.get(`${API_BASE_URL}/api/academic-admin/my-school/${schoolId}`, { headers })
     const school = res.data.school || res.data
     if (school) {
       schoolName.value = school.nombre || 'AcademiaNeiva'
-      if (school.escudo_url && typeof school.escudo_url === 'string' && school.escudo_url.trim()) {
+      if (school.escudo_url && typeof school.escudo_url === 'string' && school.escudo_url.trim() && school.escudo_url !== 'undefined') {
         const rawUrl = school.escudo_url.trim()
-        schoolEscudo.value = rawUrl.startsWith('http') ? rawUrl : `http://localhost:3000${rawUrl}`
+        schoolEscudo.value = (rawUrl.startsWith('http://') || rawUrl.startsWith('https://'))
+          ? rawUrl 
+          : `${API_BASE_URL}${rawUrl.startsWith('/') ? '' : '/'}${rawUrl}`
       } else {
         schoolEscudo.value = null
       }

@@ -601,7 +601,7 @@ const saveChanges = async () => {
             <h4 class="text-xs font-black text-slate-400 uppercase tracking-wider self-start">Escudo del Colegio</h4>
             
             <div class="w-40 h-40 rounded-full bg-slate-50 dark:bg-slate-800/40 p-4 border border-slate-100 dark:border-slate-800 flex items-center justify-center overflow-hidden">
-              <img v-if="form.escudo_url" :src="`http://localhost:3000${form.escudo_url}`" alt="Escudo" class="w-full h-full object-contain" />
+              <img v-if="form.escudo_url" :src="getShieldUrl(form.escudo_url)" alt="Escudo" class="w-full h-full object-contain" />
               <School v-else class="text-slate-300 dark:text-slate-700" :size="72" />
             </div>
             
