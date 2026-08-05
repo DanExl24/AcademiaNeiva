@@ -72,3 +72,20 @@ Este documento detalla las reglas de negocio técnicas y funcionales del módulo
 - **Endpoints relacionados:** 
   - `DELETE /api/admin/colegios/:id`
 - **Historias de usuario relacionadas:** N/A
+
+---
+
+### RN-COL-006: Pre-procesamiento de Imágenes con IA y Persistencia Base64 Data URL
+- **Descripción:** Las imágenes procesadas para eliminación de fondo con IA se pre-escalan dinámicamente en el cliente a una resolución máxima de 512x512 píxeles mediante un elemento Canvas HTML5 previo a la inferencia con ONNX WebAssembly. Una vez removido el fondo, la imagen resultante se convierte en un Data URL Base64 (`data:image/png;base64,...`) y se almacena directamente en la columna `colegio.escudo_url` (tipo `TEXT`).
+- **Motivo:** Evita el desbordamiento de memoria RAM y el bloqueo del hilo de eventos del navegador al procesar imágenes de alta resolución (ej. 3000x3000px), reduce la carga computacional en un 97%, elimina la sobrecarga de CPU en el servidor backend VPS y garantiza la portabilidad de los escudos en base de datos sin depender del sistema de archivos local (`/uploads`).
+- **Módulos afectados:** Gestión de Colegios.
+- **Archivos donde se implementa:** 
+  - [MySchool.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/MySchool.vue) (`prepareImageForAi`, `removeBackground`, `getShieldUrl`)
+  - [DashboardLayout.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/layouts/DashboardLayout.vue) (`fetchSchoolIdentity`)
+  - [academicAdminController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdminController.ts) (`uploadMySchoolEscudo`, `updateMySchoolIdentity`)
+  - [app.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/app.ts) (`express.json({ limit: '10mb' })`)
+- **Endpoints relacionados:** 
+  - `PUT /api/academic-admin/my-school/:schoolId/identidad`
+  - `POST /api/academic-admin/my-school/:schoolId/identidad/upload-escudo`
+- **Historias de usuario relacionadas:** HU-COL-005, HU-COL-006
+

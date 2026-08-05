@@ -54,6 +54,7 @@ Este módulo administra el ciclo de vida completo de las instituciones educativa
 - **RN-COL-003 (Calendario tipo A o B):** Los colegios se clasifican como calendario `A` (Enero a Noviembre) o `B` (Agosto a Junio), lo que afecta la generación de años lectivos y periodos.
 - **RN-COL-004 (Identidad visual):** Los directivos pueden personalizar `color_primario`, `color_secundario` y `escudo_url` para que el dashboard refleje los colores institucionales.
 - **RN-COL-005 (Eliminación protegida):** Un colegio no puede eliminarse si tiene matrículas activas, años lectivos vigentes o usuarios asociados.
+- **RN-COL-006 (Remoción de fondo por IA y formato Data URL Base64):** La remoción de fondo del escudo se ejecuta en el navegador del usuario utilizando redes neuronales (ONNX WASM) optimizadas. Las imágenes procesadas y subidas se persisten como Data URLs Base64 (`data:image/png;base64,...`) en la columna `escudo_url`, evitando dependencias con el sistema de archivos estático del servidor.
 
 ---
 
@@ -64,15 +65,17 @@ Este módulo administra el ciclo de vida completo de las instituciones educativa
 | Tipo | Archivo |
 |---|---|
 | **Controller (Admin)** | [adminGeneralController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/adminGeneralController.ts) — `listarColegios`, `detalleColegio`, `registrarColegio`, `actualizarColegio`, `uploadEscudo`, `cambiarEstadoColegio`, `eliminarColegio` |
-| **Controller (Directivo)** | [academicAdminController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdminController.ts) — `getMySchoolData`, `updateMySchoolIdentity`, `resetMySchoolIdentity`, `uploadMySchoolEscudo` |
+| **Controller (Directivo)** | [academicAdminController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdminController.ts) — `getMySchoolData`, `updateMySchoolIdentity`, `resetMySchoolIdentity`, `uploadMySchoolEscudo` (Conversión a Base64) |
 | **Routes** | [adminGeneral.routes.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/routes/adminGeneral.routes.ts), [academicAdmin.routes.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/routes/academicAdmin.routes.ts) |
+| **App Server Config** | [app.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/app.ts) — `express.json({ limit: '10mb' })` y `express.urlencoded({ limit: '10mb' })` para payloads de imágenes Base64 |
 
 ### Frontend
 
 | Tipo | Archivo |
 |---|---|
 | **Vista Admin General** | [ColegiosList.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/adminGeneral/ColegiosList.vue) |
-| **Vista Directivo** | [MySchool.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/MySchool.vue) |
+| **Vista Directivo** | [MySchool.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/MySchool.vue) — Integración de `@imgly/background-removal`, `prepareImageForAi` (pre-resizing Canvas a max 512px), `ort.env.wasm.numThreads = 1` y resolución limpia en `getShieldUrl` |
+| **Layout Dashboard** | [DashboardLayout.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/layouts/DashboardLayout.vue) — Renderizado dinámico de escudos en Base64 en el menú principal |
 | **Store** | [theme.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/stores/theme.ts) — Aplica colores institucionales al dashboard |
 
 ---
@@ -94,7 +97,7 @@ Este módulo administra el ciclo de vida completo de las instituciones educativa
 | `estado` | `estado_colegio` | `PENDIENTE`, `ACTIVO`, `SUSPENDIDO`, `RECHAZADO`, `ELIMINADO` |
 | `fecha_registro` | TIMESTAMPTZ | Fecha de creación del registro |
 | `motivo_rechazo` | TEXT | Motivo si el estado es RECHAZADO |
-| `escudo_url` | TEXT | URL del escudo institucional subido |
+| `escudo_url` | TEXT | Data URL Base64 o URL del escudo institucional |
 | `color_primario` | VARCHAR(50) | Color primario para branding |
 | `color_secundario` | VARCHAR(50) | Color secundario para branding |
 
@@ -125,12 +128,14 @@ CREATE TYPE public.estado_colegio AS ENUM (
 ### Backend
 - Verificación de DANE único al crear/actualizar colegio.
 - Validación de estado válido en transiciones.
-- Upload de escudo con multer (validación de tipo de archivo y tamaño).
+- Transformación de buffers subidos por Multer a cadenas Base64 Data URL (`data:image/png;base64,...`).
 - Aislamiento multi-tenant: Directivo solo puede acceder a datos de su `id_colegio`.
 
 ### Frontend
 - Formularios con validación de campos obligatorios.
 - Preview de escudo antes de subir.
+- Pre-procesamiento en Canvas a máximo 512x512px antes de ejecutar IA para evitar congelar el Hilo Principal del navegador (Event Loop).
+- Detección nativa de esquemas `data:`, `http://` y `https://` para evitar anteponer prefijos del backend a imágenes en Base64.
 - Confirmación para cambios de estado críticos (suspender/eliminar).
 
 ---
@@ -141,4 +146,6 @@ CREATE TYPE public.estado_colegio AS ENUM (
 |---|---|
 | **Colores en tabla colegio** | Permite personalización institucional sin tabla adicional; los colores se cargan al iniciar sesión y se aplican vía CSS variables |
 | **Estado como enum** | Garantiza que solo estados válidos se persistan; las transiciones se validan en el controller |
-| **Escudo como URL** | Se almacena en el filesystem (`uploads/`) y se sirve estáticamente vía Express; la URL se guarda en BD |
+| **IA en el Cliente (ONNX WASM)** | Se utiliza `@imgly/background-removal` directamente en el navegador del usuario, liberando al servidor VPS de tareas pesadas de cómputo e IA |
+| **Pre-resizing a 512px en Canvas** | Reduce en un 97% los píxeles procesados por el modelo ONNX, eliminando bloqueos en el navegador y acelerando la remoción de fondo a ~1 segundo |
+| **Persistencia Data URL Base64** | Almacenar imágenes en formato Base64 directamente en PostgreSQL permite portabilidad total en la base de datos sin depender del sistema de archivos local (`/uploads`) |

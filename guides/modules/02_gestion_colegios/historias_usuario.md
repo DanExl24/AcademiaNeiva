@@ -132,3 +132,35 @@ Este documento contiene las historias de usuario implementadas para el módulo d
   - [MySchool.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/MySchool.vue)
 - **Controllers/Services relacionados:** 
   - [academicAdminController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdminController.ts) (`updateMySchoolIdentity`, `uploadMySchoolEscudo`, `resetMySchoolIdentity`)
+
+---
+
+# HU-COL-006: Eliminación de Fondo de Escudo mediante IA en Navegador
+
+## Historia
+**Como** directivo del colegio  
+**Quiero** procesar la imagen del escudo cargada para remover su fondo automáticamente mediante inteligencia artificial  
+**Para** obtener un logotipo transparente impecable que se adapte estéticamente a los temas oscuro, claro y boletines en PDF.
+
+## Criterios de Aceptación
+- La vista de "Mi Colegio" ofrece una opción interactiva "Quitar fondo con IA" al cargar o tener una imagen de escudo seleccionada.
+- El proceso de IA se ejecuta 100% en el navegador utilizando WebAssembly (ONNX Runtime Web) sin enviar la imagen a APIs externas de pago o saturar el servidor.
+- Para prevenir bloqueos en la interfaz del usuario (Event Loop), la imagen se re-dimensiona previamente en un Canvas HTML5 a un tamaño máximo de 512x512px.
+- La ejecución utiliza el modelo ligero `small` y configura de forma segura el entorno mono-hilo (`numThreads = 1`).
+- El resultado se previsualiza inmediatamente como un PNG con canal alfa transparente y se guarda como Data URL Base64 (`data:image/png;base64,...`) al actualizar la identidad del colegio.
+
+## Detalles Técnicos
+- **Prioridad:** Media / Innovación Visual
+- **Roles involucrados:** Directivo
+- **Reglas de negocio relacionadas:** RN-COL-004, RN-COL-006
+- **Endpoints relacionados:** 
+  - `PUT /api/academic-admin/my-school/:schoolId/identidad`
+  - `POST /api/academic-admin/my-school/:schoolId/identidad/upload-escudo`
+- **Componentes frontend relacionados:** 
+  - [MySchool.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/MySchool.vue)
+- **Librerías clave:** 
+  - `@imgly/background-removal`
+  - `ort-wasm` (ONNX Runtime WebAssembly)
+- **Controllers/Services relacionados:** 
+  - [academicAdminController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdminController.ts) (`updateMySchoolIdentity`, `uploadMySchoolEscudo`)
+
