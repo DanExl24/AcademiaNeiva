@@ -264,25 +264,74 @@ const handleFileChange = async (event: Event) => {
   await uploadShieldFile(file)
 }
 
+const prepareImageForAi = async (source: any): Promise<Blob> => {
+  const img = new Image()
+  img.crossOrigin = 'anonymous'
+  
+  if (source instanceof Blob || source instanceof File) {
+    img.src = URL.createObjectURL(source)
+  } else {
+    img.src = source
+  }
+
+  await new Promise((resolve, reject) => {
+    img.onload = resolve
+    img.onerror = reject
+  })
+
+  // Target max dimension 512px for super-fast AI inference without freezing browser
+  const maxDim = 512
+  let w = img.width
+  let h = img.height
+  if (w > maxDim || h > maxDim) {
+    if (w > h) {
+      h = Math.round((h * maxDim) / w)
+      w = maxDim
+    } else {
+      w = Math.round((w * maxDim) / h)
+      h = maxDim
+    }
+  }
+
+  const canvas = document.createElement('canvas')
+  canvas.width = w
+  canvas.height = h
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('Sin contexto de canvas')
+  ctx.drawImage(img, 0, 0, w, h)
+
+  return new Promise<Blob>((resolve) => {
+    canvas.toBlob((b) => resolve(b!), 'image/png')
+  })
+}
+
 // 1. Remove background with AI using @imgly/background-removal (Client-side)
 const handleRemoveBgWithAi = async () => {
   if (!form.value.escudo_url && !currentSelectedFile.value) return
   
   processingBg.value = true
-  bgStatusMsg.value = 'Procesando IA...'
+  bgStatusMsg.value = 'Optimizando imagen...'
   validationError.value = ''
 
   try {
-    let source: string | Blob
+    let sourceInput: File | Blob | string
     if (currentSelectedFile.value) {
-      source = currentSelectedFile.value
+      sourceInput = currentSelectedFile.value
     } else {
-      const fullUrl = getShieldUrl(form.value.escudo_url)
-      const response = await fetch(fullUrl)
-      source = await response.blob()
+      sourceInput = getShieldUrl(form.value.escudo_url)
     }
 
-    const blob = await (removeBackground as any)(source, {
+    // 1. Pre-resize image to max 512px to prevent thread freezing
+    const optimizedBlob = await prepareImageForAi(sourceInput)
+
+    // Yield to UI thread
+    await new Promise((r) => setTimeout(r, 100))
+
+    bgStatusMsg.value = 'Cargando IA (Modelo Ligero)...'
+
+    // 2. Execute with small quantized model for instant, smooth processing
+    const blob = await (removeBackground as any)(optimizedBlob, {
+      model: 'small',
       progress: (_key: string, current: number, total: number) => {
         if (total > 0) {
           const pct = Math.round((current / total) * 100)
@@ -296,7 +345,8 @@ const handleRemoveBgWithAi = async () => {
     await uploadShieldFile(cleanFile)
   } catch (error: any) {
     console.error("Error al procesar fondo con IA:", error)
-    validationError.value = 'No se pudo procesar la IA. Prueba con Fondo Blanco Transparente.'
+    validationError.value = 'La IA superó el tiempo. Aplicando Limpiador de Fondo...'
+    await handleRemoveWhiteBg()
   } finally {
     processingBg.value = false
     bgStatusMsg.value = ''
