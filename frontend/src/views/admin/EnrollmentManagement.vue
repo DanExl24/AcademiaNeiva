@@ -33,7 +33,8 @@ import {
   SlidersHorizontal,
   Layers,
   ArrowUpDown,
-  Clock
+  Clock,
+  Calendar
 } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 import { useNotificationStore } from '../../stores/notifications'
@@ -422,6 +423,23 @@ const formatDate = (date: string | null) => {
     month: 'long',
     day: 'numeric'
   })
+}
+
+const formatDateTime = (date: string | null | undefined) => {
+  if (!date) return 'Sin fecha'
+  const d = new Date(date)
+  if (isNaN(d.getTime())) return 'Sin fecha'
+  const dateStr = d.toLocaleDateString('es-CO', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric'
+  })
+  const timeStr = d.toLocaleTimeString('es-CO', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true
+  })
+  return `${dateStr}, ${timeStr}`
 }
 
 const assignRoom = () => {
@@ -928,9 +946,10 @@ const approveException = async (id: number) => {
         <table class="w-full text-left">
           <thead class="bg-slate-50 dark:bg-slate-800/50">
             <tr class="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400 dark:text-slate-500">
-              <th class="px-6 py-4">ID / Tipo</th>
+              <th class="px-6 py-4">Tipo</th>
               <th class="px-6 py-4">Estudiante / Acudiente</th>
               <th class="px-6 py-4">Nivel / Grado</th>
+              <th class="px-6 py-4">Fecha Solicitud</th>
               <th class="px-6 py-4">Estado</th>
               <th class="px-6 py-4 text-right">Gestionar</th>
             </tr>
@@ -943,8 +962,7 @@ const approveException = async (id: number) => {
             >
               <td class="px-6 py-4">
                 <div class="flex flex-wrap items-center gap-1.5 font-sans">
-                  <p class="font-black text-slate-900 dark:text-white text-sm">#{{ en.id_matricula }}</p>
-                  <span :class="[getTipoMeta(en.tipo).bg, 'text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded']">
+                  <span :class="[getTipoMeta(en.tipo).bg, 'text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md']">
                     {{ getTipoMeta(en.tipo).label }}
                   </span>
                   <!-- Priority Badge for Oldest Pending Submissions -->
@@ -957,7 +975,6 @@ const approveException = async (id: number) => {
                     <span>Turno #{{ oldestPendingMap.get(en.id_matricula) }} • Prioritaria</span>
                   </span>
                 </div>
-                <p class="text-[10px] text-slate-400 font-mono">{{ en.token_seguimiento?.substring(0,10) }}...</p>
               </td>
               <td class="px-6 py-4">
                 <p v-if="en.student_nombre" class="font-bold text-slate-900 dark:text-white text-sm leading-tight">
@@ -972,6 +989,12 @@ const approveException = async (id: number) => {
                 </p>
                 <p v-else class="text-xs font-bold text-indigo-500 uppercase">ID {{ en.id_grado }}</p>
                 <p v-if="en.nivel_nombre" class="text-[10px] text-slate-400 font-medium">{{ en.nivel_nombre }}</p>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap">
+                <div class="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">
+                  <Calendar :size="13" class="text-indigo-500 shrink-0" />
+                  <span>{{ formatDateTime(en.fecha_creacion) }}</span>
+                </div>
               </td>
               <td class="px-6 py-4">
                 <div class="flex flex-col gap-1.5">

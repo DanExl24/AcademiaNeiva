@@ -180,6 +180,7 @@ export class MatriculaService {
         'm.correo_padre',
         'm.token_seguimiento',
         'm.es_traslado',
+        'm.fecha_creacion',
         'e.nombre as student_nombre',
         'e.apellido as student_apellido',
         'e.documento as student_documento',
