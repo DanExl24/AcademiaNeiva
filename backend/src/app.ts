@@ -18,6 +18,9 @@ import parentRoutes from "./routes/parent.routes";
 
 const app = express();
 
+// Confiar en el Proxy Inverso (Nginx / Cloudflare) para obtener la IP real del cliente
+app.set("trust proxy", 1);
+
 // Rate Limiters
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
