@@ -2,11 +2,20 @@
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import axios from 'axios'
 import { useAuthStore } from '../../stores/auth'
+import { API_BASE_URL } from '../../config/api'
 import { 
   School, Hash, MapPin, Mail, Phone, Calendar, Users, Upload,
   Palette, RefreshCw, Check, Undo, HelpCircle, ShieldAlert, FileText, Sliders, AlertCircle, Sparkles, Eraser
 } from 'lucide-vue-next'
 import imglyRemoveBackground from '@imgly/background-removal'
+
+const getShieldUrl = (url: string) => {
+  if (!url) return ''
+  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
+    return url
+  }
+  return `${API_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`
+}
 
 const auth = useAuthStore()
 const schoolId = computed(() => Number(auth.user?.schoolId || auth.supervision?.id_colegio || 0))
@@ -63,7 +72,7 @@ const fetchSchoolData = async () => {
 
       // Extract colors from the existing shield on load if it exists
       if (shield) {
-        extractColorsFromUrl(`http://localhost:3000${shield}`)
+        extractColorsFromUrl(getShieldUrl(shield))
       }
     }
   } catch (error) {
@@ -264,7 +273,7 @@ const handleRemoveBgWithAi = async () => {
     if (currentSelectedFile.value) {
       source = currentSelectedFile.value
     } else {
-      const fullUrl = `http://localhost:3000${form.value.escudo_url}`
+      const fullUrl = getShieldUrl(form.value.escudo_url)
       const response = await fetch(fullUrl)
       source = await response.blob()
     }
@@ -306,7 +315,7 @@ const handleRemoveWhiteBg = async () => {
     if (currentSelectedFile.value) {
       img.src = URL.createObjectURL(currentSelectedFile.value)
     } else {
-      img.src = `http://localhost:3000${form.value.escudo_url}`
+      img.src = getShieldUrl(form.value.escudo_url)
     }
 
     await new Promise((resolve, reject) => {
@@ -619,7 +628,7 @@ const saveChanges = async () => {
                   @click="handleUploadClick"
                   class="w-full aspect-square border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all overflow-hidden relative group"
                 >
-                  <img v-if="form.escudo_url" :src="`http://localhost:3000${form.escudo_url}`" class="w-full h-full object-contain p-3" alt="Escudo" />
+                  <img v-if="form.escudo_url" :src="getShieldUrl(form.escudo_url)" class="w-full h-full object-contain p-3" alt="Escudo" />
                   <div v-else-if="uploading" class="text-center p-3 text-slate-400">
                     <RefreshCw class="animate-spin h-6 w-6 mx-auto mb-1 text-slate-400" />
                     <span class="text-[10px] font-bold">Subiendo...</span>
@@ -777,7 +786,7 @@ const saveChanges = async () => {
                 <div class="w-16 bg-white dark:bg-slate-900 border-r border-slate-200/50 dark:border-slate-800 flex flex-col items-center py-3 space-y-4 shrink-0">
                   <!-- dynamic logo -->
                   <div class="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center bg-slate-100/50 p-1 border border-slate-100 dark:border-slate-800" :style="{ borderColor: form.color_primario + '33' }">
-                    <img v-if="form.escudo_url" :src="`http://localhost:3000${form.escudo_url}`" class="w-full h-full object-contain" />
+                    <img v-if="form.escudo_url" :src="getShieldUrl(form.escudo_url)" class="w-full h-full object-contain" />
                     <School v-else :style="{ color: form.color_primario }" :size="16" />
                   </div>
                   <!-- navigation links mockup -->
