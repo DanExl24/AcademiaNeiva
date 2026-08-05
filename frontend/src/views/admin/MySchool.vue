@@ -324,10 +324,16 @@ const handleRemoveBgWithAi = async () => {
     // 1. Pre-resize image to max 512px to prevent thread freezing
     const optimizedBlob = await prepareImageForAi(sourceInput)
 
-    // Yield to UI thread
-    await new Promise((r) => setTimeout(r, 100))
-
     bgStatusMsg.value = 'Cargando IA (Modelo Ligero)...'
+
+    // Configure ONNX WASM single-threading to silence multi-threading warning
+    try {
+      if (typeof window !== 'undefined' && (window as any).ort?.env?.wasm) {
+        (window as any).ort.env.wasm.numThreads = 1
+      }
+    } catch (e) {
+      // Ignore
+    }
 
     // 2. Execute with small quantized model for instant, smooth processing
     const blob = await (removeBackground as any)(optimizedBlob, {
