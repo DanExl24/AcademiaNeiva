@@ -4,8 +4,9 @@ import axios from 'axios'
 import { useAuthStore } from '../../stores/auth'
 import { 
   School, Hash, MapPin, Mail, Phone, Calendar, Users, Upload,
-  Palette, RefreshCw, Check, Undo, HelpCircle, ShieldAlert, FileText, Sliders, AlertCircle
+  Palette, RefreshCw, Check, Undo, HelpCircle, ShieldAlert, FileText, Sliders, AlertCircle, Sparkles, Eraser
 } from 'lucide-vue-next'
+import imglyRemoveBackground from '@imgly/background-removal'
 
 const auth = useAuthStore()
 const schoolId = computed(() => Number(auth.user?.schoolId || auth.supervision?.id_colegio || 0))
@@ -195,29 +196,13 @@ const extractColorsFromUrl = (url: string) => {
   }
 }
 
-const handleFileChange = async (event: Event) => {
-  const target = event.target as HTMLInputElement
-  if (!target.files || target.files.length === 0) return
-  const file = target.files[0]
-  
-  // Validation
-  validationError.value = ''
-  const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/svg+xml']
-  if (!allowedTypes.includes(file.type)) {
-    validationError.value = 'Formato de escudo no soportado. Debe ser JPG, JPEG, PNG o SVG.'
-    return
-  }
-  
-  const maxSize = 2 * 1024 * 1024 // 2MB
-  if (file.size > maxSize) {
-    validationError.value = 'El archivo supera el tamaño máximo permitido de 2MB.'
-    return
-  }
+const processingBg = ref(false)
+const bgStatusMsg = ref('')
+const currentSelectedFile = ref<File | null>(null)
 
+const uploadShieldFile = async (file: File) => {
+  uploading.value = true
   try {
-    uploading.value = true
-    
-    // Extract colors on client side before upload completes
     const extracted = await extractColorsFromImage(file)
     extractedColors.value = extracted
     if (extracted.length > 0) {
@@ -240,6 +225,126 @@ const handleFileChange = async (event: Event) => {
     validationError.value = error.response?.data?.error || 'Error al cargar escudo.'
   } finally {
     uploading.value = false
+  }
+}
+
+const handleFileChange = async (event: Event) => {
+  const target = event.target as HTMLInputElement
+  if (!target.files || target.files.length === 0) return
+  const file = target.files[0]
+  
+  // Validation
+  validationError.value = ''
+  const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/svg+xml']
+  if (!allowedTypes.includes(file.type)) {
+    validationError.value = 'Formato de escudo no soportado. Debe ser JPG, JPEG, PNG o SVG.'
+    return
+  }
+  
+  const maxSize = 2 * 1024 * 1024 // 2MB
+  if (file.size > maxSize) {
+    validationError.value = 'El archivo supera el tamaño máximo permitido de 2MB.'
+    return
+  }
+
+  currentSelectedFile.value = file
+  await uploadShieldFile(file)
+}
+
+// 1. Remove background with AI using @imgly/background-removal (Client-side)
+const handleRemoveBgWithAi = async () => {
+  if (!form.value.escudo_url && !currentSelectedFile.value) return
+  
+  processingBg.value = true
+  bgStatusMsg.value = 'Procesando IA...'
+  validationError.value = ''
+
+  try {
+    let source: string | Blob
+    if (currentSelectedFile.value) {
+      source = currentSelectedFile.value
+    } else {
+      const fullUrl = `http://localhost:3000${form.value.escudo_url}`
+      const response = await fetch(fullUrl)
+      source = await response.blob()
+    }
+
+    const removeBgFn: any = (imglyRemoveBackground as any)?.removeBackground || imglyRemoveBackground
+    const blob = await removeBgFn(source, {
+      progress: (_key: string, current: number, total: number) => {
+        if (total > 0) {
+          const pct = Math.round((current / total) * 100)
+          bgStatusMsg.value = `Procesando IA (${pct}%)...`
+        }
+      }
+    })
+
+    const cleanFile = new File([blob], 'escudo_sin_fondo.png', { type: 'image/png' })
+    currentSelectedFile.value = cleanFile
+    await uploadShieldFile(cleanFile)
+  } catch (error: any) {
+    console.error("Error al procesar fondo con IA:", error)
+    validationError.value = 'No se pudo procesar la IA. Prueba con Fondo Blanco Transparente.'
+  } finally {
+    processingBg.value = false
+    bgStatusMsg.value = ''
+  }
+}
+
+// 2. Remove White Background using HTML5 Canvas threshold
+const handleRemoveWhiteBg = async () => {
+  if (!form.value.escudo_url && !currentSelectedFile.value) return
+
+  processingBg.value = true
+  bgStatusMsg.value = 'Limpiando fondo...'
+  validationError.value = ''
+
+  try {
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    
+    if (currentSelectedFile.value) {
+      img.src = URL.createObjectURL(currentSelectedFile.value)
+    } else {
+      img.src = `http://localhost:3000${form.value.escudo_url}`
+    }
+
+    await new Promise((resolve, reject) => {
+      img.onload = resolve
+      img.onerror = reject
+    })
+
+    const canvas = document.createElement('canvas')
+    canvas.width = img.width
+    canvas.height = img.height
+    const ctx = canvas.getContext('2d')
+    if (!ctx) throw new Error('Sin contexto de canvas')
+
+    ctx.drawImage(img, 0, 0)
+    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+    const data = imgData.data
+
+    const threshold = 230 // White threshold
+    for (let i = 0; i < data.length; i += 4) {
+      if (data[i] >= threshold && data[i + 1] >= threshold && data[i + 2] >= threshold) {
+        data[i + 3] = 0 // transparent
+      }
+    }
+    ctx.putImageData(imgData, 0, 0)
+
+    const blob = await new Promise<Blob>((resolve) => {
+      canvas.toBlob((b) => resolve(b!), 'image/png')
+    })
+
+    const cleanFile = new File([blob], 'escudo_sin_fondo.png', { type: 'image/png' })
+    currentSelectedFile.value = cleanFile
+    await uploadShieldFile(cleanFile)
+  } catch (error: any) {
+    console.error("Error al limpiar fondo blanco:", error)
+    validationError.value = 'Error al procesar la imagen.'
+  } finally {
+    processingBg.value = false
+    bgStatusMsg.value = ''
   }
 }
 
@@ -527,6 +632,28 @@ const saveChanges = async () => {
                   <div v-if="form.escudo_url && !uploading" class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all">
                     <span class="text-xs text-white font-bold">Cambiar Imagen</span>
                   </div>
+                </div>
+
+                <!-- Actions for background removal -->
+                <div v-if="form.escudo_url" class="space-y-1.5 pt-2">
+                  <button 
+                    @click="handleRemoveBgWithAi"
+                    :disabled="uploading || processingBg"
+                    type="button"
+                    class="w-full py-2 px-3 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 border border-indigo-200/60 dark:border-indigo-800/60 rounded-xl text-[10px] font-bold transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 shadow-sm"
+                  >
+                    <Sparkles class="w-3.5 h-3.5 text-indigo-500 animate-pulse" />
+                    <span>{{ processingBg ? bgStatusMsg || 'Procesando IA...' : '🪄 Quitar Fondo con IA' }}</span>
+                  </button>
+                  <button 
+                    @click="handleRemoveWhiteBg"
+                    :disabled="uploading || processingBg"
+                    type="button"
+                    class="w-full py-1.5 px-3 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200/60 dark:border-slate-700/60 rounded-xl text-[10px] font-bold transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
+                  >
+                    <Eraser class="w-3.5 h-3.5 text-slate-400" />
+                    <span>🧼 Limpiar Fondo Blanco</span>
+                  </button>
                 </div>
 
                 <p v-if="validationError" class="text-[10px] text-red-500 font-bold mt-1.5 flex items-center gap-1"><AlertCircle :size="12" /> {{ validationError }}</p>

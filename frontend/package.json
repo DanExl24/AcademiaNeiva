@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@imgly/background-removal": "^1.7.0",
     "axios": "^1.16.0",
     "chart.js": "^4.5.1",
     "html2pdf.js": "^0.14.0",
