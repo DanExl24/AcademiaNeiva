@@ -80,8 +80,7 @@ watch(() => yearStore.selectedYearId, () => {
 
 const tabs = [
   { status: 'PENDIENTE',  label: 'Por Revisar',    color: 'amber'   },
-  { status: 'RECHAZADA',  label: 'En Corrección',  color: 'orange'  },
-  { status: 'CORRECCION', label: 'Docs Corregidos', color: 'purple'  },
+  { status: 'CORRECCION', label: 'En Corrección',  color: 'orange'  },
   { status: 'ACTIVA',     label: 'Aprobadas',      color: 'emerald' },
   { status: 'TRASLADADA', label: 'Traslados',      color: 'blue'    },
   { status: 'CANCELADA',  label: 'Canceladas',     color: 'red'     },
@@ -89,8 +88,7 @@ const tabs = [
 
 const stats = computed(() => ({
   pending:     enrollments.value.filter(e => e.estado === 'PENDIENTE').length,
-  rejected:    enrollments.value.filter(e => e.estado === 'RECHAZADA').length,
-  corrected:   enrollments.value.filter(e => e.estado === 'CORRECCION').length,
+  corrected:   enrollments.value.filter(e => e.estado === 'CORRECCION' || e.estado === 'RECHAZADA').length,
   active:      enrollments.value.filter(e => e.estado === 'ACTIVA' || e.estado === 'APROBADA').length,
   transferred: enrollments.value.filter(e => e.estado === 'TRASLADADA').length,
   cancelled:   enrollments.value.filter(e => e.estado === 'CANCELADA').length,
@@ -174,6 +172,8 @@ const filteredEnrollments = computed(() => {
     // Status filter
     if (filterStatus.value === 'ACTIVA') {
       if (en.estado !== 'ACTIVA' && en.estado !== 'APROBADA') return false
+    } else if (filterStatus.value === 'CORRECCION') {
+      if (en.estado !== 'CORRECCION' && en.estado !== 'RECHAZADA') return false
     } else if (filterStatus.value !== 'TODOS' && en.estado !== filterStatus.value) {
       return false
     }
@@ -821,7 +821,7 @@ const approveException = async (id: number) => {
         ]"
       >
         <p class="text-2xl font-black text-slate-900 dark:text-white">
-          {{ [stats.pending, stats.rejected, stats.corrected, stats.active, stats.transferred, stats.cancelled][i] }}
+          {{ [stats.pending, stats.corrected, stats.active, stats.transferred, stats.cancelled][i] }}
         </p>
         <p class="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-0.5">{{ tab.label }}</p>
         <div :class="[

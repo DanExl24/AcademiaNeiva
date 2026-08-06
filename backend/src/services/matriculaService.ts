@@ -514,8 +514,8 @@ export class MatriculaService {
 
     const reason = `Los siguientes documentos presentan inconsistencias: ${rejectedDocs.map((d: any) => d.tipo_documento).join(', ')}. Por favor revísalos y vuelve a subirlos.`;
     
-    // Set to RECHAZADA so the UI shows it as "En Corrección" by parent
-    await pool.query("UPDATE matricula SET estado = 'RECHAZADA' WHERE id_matricula = $1", [idMatricula]);
+    // Set to CORRECCION according to RN-MAT-004 so the parent is notified to fix documents
+    await pool.query("UPDATE matricula SET estado = 'CORRECCION' WHERE id_matricula = $1", [idMatricula]);
 
     await NotificationService.sendRejectionEmail(details.correo_padre, 'Padre de Familia', reason, details.token_seguimiento);
     return { success: true };
@@ -583,13 +583,8 @@ export class MatriculaService {
         );
       }
 
-      // Mantener el estado PENDIENTE si se trata de un proceso de reingreso o carga inicial; en otro caso cambiar a CORRECCION
-      const currentMat = await client.query('SELECT estado, tipo FROM matricula WHERE id_matricula = $1', [idMatricula]);
-      const currentEstado = currentMat.rows[0]?.estado;
-
-      if (currentEstado !== 'PENDIENTE') {
-        await client.query("UPDATE matricula SET estado = 'CORRECCION' WHERE id_matricula = $1", [idMatricula]);
-      }
+      // Devolver la matrícula a estado PENDIENTE para que la directiva vuelva a re-evaluar la solicitud subsanada
+      await client.query("UPDATE matricula SET estado = 'PENDIENTE' WHERE id_matricula = $1", [idMatricula]);
 
       await client.query('COMMIT');
       return { success: true };
@@ -633,6 +628,25 @@ export class MatriculaService {
       
       const finalGradeId = data.id_grado || mat.rows[0].id_grupo;
       const { id_colegio, correo_padre, id_nivel } = mat.rows[0];
+
+      // --- VALIDACIÓN TRANSACTIONAL DE CUPOS CON BLOQUEO DE FILA (RN-MAT-011) ---
+      if (finalGradeId) {
+        const groupCapRes = await client.query(
+          `SELECT g.cupos_totales,
+                  (SELECT COUNT(*) FROM matricula WHERE id_grupo = g.id_grupo AND estado IN ('ACTIVA', 'TRASLADADA') AND id_matricula != $1) as ocupados
+           FROM grupos g
+           WHERE g.id_grupo = $2
+           FOR UPDATE OF g`,
+          [idMatricula, finalGradeId]
+        );
+        if (groupCapRes.rows.length > 0) {
+          const totalCupos = groupCapRes.rows[0].cupos_totales ?? 35;
+          const ocupados = Number(groupCapRes.rows[0].ocupados);
+          if (ocupados >= totalCupos) {
+            throw new Error(`El salón seleccionado no posee cupos disponibles (Cupos totales: ${totalCupos}, Inscritos activos: ${ocupados}). Por favor selecciona otro grupo.`);
+          }
+        }
+      }
 
       // --- CREACIÓN O ACTUALIZACIÓN DEL ESTUDIANTE ---
       let idEstudiante = mat.rows[0].id_estudiante || (data.id_estudiante ? Number(data.id_estudiante) : null);

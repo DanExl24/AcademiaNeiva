@@ -55,15 +55,15 @@ export const FinalizeEnrollmentSchema = z.object({
   }),
   body: z.object({
     student: z.object({
-      nombre: z.string().min(2),
-      apellido: z.string().min(2),
-      documento: z.string().min(4),
+      nombre: z.string().min(2, 'El nombre debe tener al menos 2 caracteres'),
+      apellido: z.string().min(2, 'El apellido debe tener al menos 2 caracteres'),
+      documento: z.string().min(3, 'El documento debe tener al menos 3 caracteres'),
       id_tipodocumento: z.number().optional()
     }),
     parent: z.object({
-      nombre: z.string().min(2),
-      apellido: z.string().min(2),
-      documento: z.string().min(4),
+      nombre: z.string().min(2, 'El nombre debe tener al menos 2 caracteres'),
+      apellido: z.string().min(2, 'El apellido debe tener al menos 2 caracteres'),
+      documento: z.string().min(3, 'El documento debe tener al menos 3 caracteres'),
       id_tipodocumento: z.number().optional()
     }),
     id_grado: z.number().optional().nullable(),

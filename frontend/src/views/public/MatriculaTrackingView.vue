@@ -29,23 +29,28 @@ const docLabels: Record<string, string> = {
 const statusMap: Record<string, { label: string, colorClass: string, desc: string }> = {
   PENDIENTE: { 
     label: 'Pendiente de Revisión', 
-    colorClass: 'bg-yellow-50 text-yellow-700 border-yellow-200',
-    desc: 'Tu solicitud ha sido recibida y se encuentra en cola para validación de documentos.' 
+    colorClass: 'bg-amber-50 text-amber-700 border-amber-200',
+    desc: 'Tu solicitud ha sido recibida y se encuentra en proceso de validación por parte de la secretaría académica.' 
+  },
+  CORRECCION: { 
+    label: 'Inconsistencias Detectadas', 
+    colorClass: 'bg-orange-50 text-orange-700 border-orange-200',
+    desc: 'Se han detectado observaciones en los documentos cargados. Revisa el botón de corrección inferior para subir los archivos requeridos.' 
   },
   RECHAZADA: { 
     label: 'Inconsistencias Detectadas', 
-    colorClass: 'bg-red-50 text-red-700 border-red-200',
-    desc: 'Se han detectado errores en los documentos cargados. Revisa el listado inferior para realizar la corrección.' 
+    colorClass: 'bg-orange-50 text-orange-700 border-orange-200',
+    desc: 'Se han detectado observaciones en los documentos cargados. Revisa el botón de corrección inferior para subir los archivos requeridos.' 
   },
-  CORRECCION: { 
-    label: 'Documentos Corregidos', 
-    colorClass: 'bg-blue-50 text-blue-700 border-blue-200',
-    desc: 'Has cargado nuevos documentos. Nuestra secretaría académica los validará nuevamente.' 
+  APROBADA: { 
+    label: 'Documentos Aprobados', 
+    colorClass: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    desc: 'Tus documentos han sido validados exitosamente y el cupo está reservado. La institución procederá con la oficialización final.' 
   },
   ACTIVA: { 
-    label: 'Matrícula Aprobada', 
-    colorClass: 'bg-green-50 text-green-700 border-green-200',
-    desc: '¡Felicidades! La matrícula ha sido validada y aprobada de manera exitosa. Las credenciales de acceso se enviaron a tu correo.' 
+    label: 'Matrícula Oficializada', 
+    colorClass: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    desc: '¡Felicidades! La matrícula ha sido validada y oficializada de manera exitosa. Las credenciales de acceso se enviaron a tu correo.' 
   },
   TRASLADADA: { 
     label: 'Traslado Aprobado', 
@@ -195,8 +200,8 @@ onMounted(() => {
               </p>
             </div>
 
-            <!-- Call to action if action required (RECHAZADA) -->
-            <div v-if="matricula.estado === 'RECHAZADA'" class="mt-6 p-6 bg-red-50 border border-red-100 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4">
+            <!-- Call to action if action required (CORRECCION / RECHAZADA) -->
+            <div v-if="matricula.estado === 'CORRECCION' || matricula.estado === 'RECHAZADA'" class="mt-6 p-6 bg-red-50 border border-red-100 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4">
               <div class="flex items-start gap-3">
                 <div class="p-2 bg-red-100 text-red-600 rounded-lg shrink-0 mt-0.5">
                   <AlertTriangle :size="20" />

@@ -149,7 +149,7 @@ export const downloadDocumentFile = async (req: Request, res: Response) => {
     // Fallback for legacy files stored on local disk
     if (doc.url && doc.url !== 'PENDIENTE') {
       const diskFilename = path.basename(doc.url);
-      const filePath = path.join(__dirname, '../../uploads', diskFilename);
+      const filePath = path.join(process.cwd(), 'uploads', diskFilename);
 
       if (fs.existsSync(filePath)) {
         res.sendFile(filePath);

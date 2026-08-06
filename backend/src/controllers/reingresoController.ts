@@ -29,9 +29,9 @@ export const getStudentHistoryForReingreso = async (req: Request, res: Response)
 
     const student = studentRes.rows[0];
 
-    if (student.estado === 'EXPULSADO' || student.estado === 'GRADUADO') {
+    if (student.estado === 'EXPULSADO' || student.estado === 'GRADUADO' || student.estado === 'SANCIONADO') {
       res.status(400).json({ 
-        error: `El estudiante se encuentra en estado '${student.estado}' y no es elegible para reingreso.` 
+        error: `El estudiante se encuentra en estado '${student.estado}'${student.estado === 'SANCIONADO' ? ' (Sanción disciplinaria activa)' : ''} y no es elegible para reingreso hasta que la situación se resuelva.` 
       });
       return;
     }
@@ -217,8 +217,8 @@ export const sendReingresoParentLink = async (req: Request, res: Response): Prom
 
     const student = studentRes.rows[0];
 
-    if (student.estado === 'EXPULSADO' || student.estado === 'GRADUADO') {
-      res.status(400).json({ error: `El estudiante se encuentra en estado '${student.estado}' y no es elegible para reingreso.` });
+    if (student.estado === 'EXPULSADO' || student.estado === 'GRADUADO' || student.estado === 'SANCIONADO') {
+      res.status(400).json({ error: `El estudiante se encuentra en estado '${student.estado}'${student.estado === 'SANCIONADO' ? ' (Sanción disciplinaria activa)' : ''} y no es elegible para reingreso hasta que la situación se resuelva.` });
       return;
     }
 
