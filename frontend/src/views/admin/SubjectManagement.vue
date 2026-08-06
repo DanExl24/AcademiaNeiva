@@ -198,6 +198,7 @@ const isSelectedPeriodClosed = computed(() => {
 // Filters for curriculum
 const selectedPeriodId = ref<number | null>(null)
 const selectedCurriculumGradeId = ref<number | null>(null)
+const selectedCurriculumGroupId = ref<number | null>(null)
 const curriculumSearchQuery = ref('')
 
 const uniqueCurriculumGrades = computed(() => {
@@ -205,18 +206,34 @@ const uniqueCurriculumGrades = computed(() => {
   const map = new Map()
   if (subjectDetails.value.assignments) {
     subjectDetails.value.assignments.forEach((a: any) => {
-      if (a.id_tipo_grado && a.tipo_grado_nombre) {
-        map.set(a.id_tipo_grado, a.tipo_grado_nombre)
+      if (a.id_tipo_grado && a.grado_nombre) {
+        map.set(a.id_tipo_grado, a.grado_nombre)
       }
     })
   }
   if (subjectDetails.value.competencies) {
     subjectDetails.value.competencies.forEach((c: any) => {
-      if (c.id_tipo_grado && c.tipo_grado_nombre) {
-        map.set(c.id_tipo_grado, c.tipo_grado_nombre)
+      if (c.id_tipo_grado && c.grado_nombre) {
+        map.set(c.id_tipo_grado, c.grado_nombre)
       }
     })
   }
+  return Array.from(map.entries()).map(([id, name]) => ({ id: id as number, name: name as string }))
+})
+
+const uniqueCurriculumGroups = computed(() => {
+  if (!subjectDetails.value?.competencies) return []
+  let list = subjectDetails.value.competencies
+  if (selectedCurriculumGradeId.value) {
+    list = list.filter((c: any) => c.id_tipo_grado === selectedCurriculumGradeId.value)
+  }
+  const map = new Map()
+  list.forEach((c: any) => {
+    if (c.id_grupo) {
+      const label = `${c.grado_nombre} (${c.seccion_nombre})`
+      map.set(c.id_grupo, label)
+    }
+  })
   return Array.from(map.entries()).map(([id, name]) => ({ id: id as number, name: name as string }))
 })
 
@@ -227,15 +244,30 @@ const filteredCompetencies = computed(() => {
   if (selectedCurriculumGradeId.value) {
     list = list.filter((c: any) => c.id_tipo_grado === selectedCurriculumGradeId.value)
   }
+
+  if (selectedCurriculumGroupId.value) {
+    list = list.filter((c: any) => c.id_grupo === selectedCurriculumGroupId.value)
+  }
   
   const q = curriculumSearchQuery.value.trim().toLowerCase()
   if (q) {
     list = list.filter((c: any) => 
-      c.descripcion.toLowerCase().includes(q) ||
-      (c.evidencias && c.evidencias.some((e: any) => e.descripcion.toLowerCase().includes(q)))
+      c.descripcion?.toLowerCase().includes(q) ||
+      (c.evidencias && c.evidencias.some((e: any) => e.descripcion?.toLowerCase().includes(q)))
     )
   }
-  return list
+
+  // Deduplicate identical competencies for clean UI presentation
+  const deduplicatedMap = new Map<string, any>()
+  list.forEach((comp: any) => {
+    const evFingerprint = (comp.evidencias || []).map((e: any) => e.descripcion?.trim()).sort().join('||')
+    const key = `${comp.id_grupo}_${comp.id_periodo}_${(comp.descripcion || '').trim()}_${evFingerprint}`
+    if (!deduplicatedMap.has(key)) {
+      deduplicatedMap.set(key, comp)
+    }
+  })
+
+  return Array.from(deduplicatedMap.values())
 })
 
 // Filters for assignments (teachers & groups)
@@ -898,16 +930,29 @@ onMounted(loadSubjects)
                       </div>
 
                       <!-- Curriculum Search & Group Filters -->
-                      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
+                      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
                         <div class="space-y-1 text-left">
                           <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Filtrar por Grado</label>
                           <select 
                             v-model="selectedCurriculumGradeId" 
+                            @change="selectedCurriculumGroupId = null"
                             class="w-full bg-white dark:bg-slate-850 border border-slate-100 dark:border-slate-800 rounded-xl p-2 text-xs font-bold outline-none text-slate-900 dark:text-white"
                           >
                             <option :value="null">Todos los grados</option>
                             <option v-for="gr in uniqueCurriculumGrades" :key="gr.id" :value="gr.id">
                               {{ gr.name }}
+                            </option>
+                          </select>
+                        </div>
+                        <div class="space-y-1 text-left">
+                          <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Filtrar por Curso</label>
+                          <select 
+                            v-model="selectedCurriculumGroupId" 
+                            class="w-full bg-white dark:bg-slate-850 border border-slate-100 dark:border-slate-800 rounded-xl p-2 text-xs font-bold outline-none text-slate-900 dark:text-white"
+                          >
+                            <option :value="null">Todos los cursos</option>
+                            <option v-for="g in uniqueCurriculumGroups" :key="g.id" :value="g.id">
+                              {{ g.name }}
                             </option>
                           </select>
                         </div>

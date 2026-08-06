@@ -857,7 +857,7 @@ export const getSubjects = async (req: Request, res: Response): Promise<void> =>
          m.id_materia,
          m.nombre,
          COUNT(DISTINCT dg.id_detallegrado)::int AS asignaciones_count,
-         COUNT(DISTINCT c.id_competencia)::int AS competencias_count
+         COUNT(DISTINCT (c.id_grupo, c.id_periodo, c.descripcion))::int AS competencias_count
        FROM materias m
        LEFT JOIN detalle_grados dg ON dg.id_materia = m.id_materia${dgYearFilter}
        LEFT JOIN competencias c ON c.id_materia = m.id_materia${compYearFilter}
@@ -4118,10 +4118,22 @@ export const getSubjectCurriculumDetails = async (req: Request, res: Response): 
       evidences = evRes.rows;
     }
 
-    const competencies = compsRes.rows.map(comp => ({
-      ...comp,
-      evidencias: evidences.filter(e => e.id_competencia === comp.id_competencia)
-    }));
+    // Deduplicate competencies with identical id_grupo, id_periodo, descripcion and evidences
+    const uniqueCompsMap = new Map<string, any>();
+    compsRes.rows.forEach(comp => {
+      const compEvs = evidences.filter(e => e.id_competencia === comp.id_competencia);
+      const evFingerprint = compEvs.map(e => e.descripcion).sort().join('||');
+      const key = `${comp.id_grupo}_${comp.id_periodo}_${(comp.descripcion || '').trim()}_${evFingerprint}`;
+      
+      if (!uniqueCompsMap.has(key)) {
+        uniqueCompsMap.set(key, {
+          ...comp,
+          evidencias: compEvs
+        });
+      }
+    });
+
+    const competencies = Array.from(uniqueCompsMap.values());
 
     // 6. School groups
     const groupsRes = await pool.query(
