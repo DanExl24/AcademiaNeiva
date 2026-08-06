@@ -4071,7 +4071,7 @@ export const getSubjectCurriculumDetails = async (req: Request, res: Response): 
     const assignmentsRes = await pool.query(
       `SELECT dg.id_detallegrado, dg.id_docente, dg.id_grupo,
               d.nombre || ' ' || d.apellido as docente_nombre,
-              ne.nombre as grado_nombre, tg.nombre as tipo_grado_nombre, tg.id_tipo_grado,
+              tg.nombre as grado_nombre, ne.nombre as nivel_nombre, tg.nombre as tipo_grado_nombre, tg.id_tipo_grado,
               sec.nombre as seccion_nombre, j.nombre as jornada_nombre
        FROM detalle_grados dg
        JOIN docente d ON dg.id_docente = d.id_docente
@@ -4089,7 +4089,7 @@ export const getSubjectCurriculumDetails = async (req: Request, res: Response): 
     // 5. Competencies and learning evidences for this subject in the target year
     const compsRes = await pool.query(
       `SELECT c.id_competencia, c.id_grupo, c.id_periodo, c.descripcion, c.nombre as competencia_nombre,
-              ne.nombre as grado_nombre, tg.id_tipo_grado, tg.nombre as tipo_grado_nombre,
+              tg.nombre as grado_nombre, ne.nombre as nivel_nombre, tg.id_tipo_grado, tg.nombre as tipo_grado_nombre,
               sec.nombre as seccion_nombre, p.nombre as periodo_nombre
        FROM competencias c
        JOIN grupos g ON c.id_grupo = g.id_grupo
@@ -4125,7 +4125,7 @@ export const getSubjectCurriculumDetails = async (req: Request, res: Response): 
 
     // 6. School groups
     const groupsRes = await pool.query(
-      `SELECT g.id_grupo, ne.nombre as grado_nombre, tg.id_tipo_grado, tg.nombre as tipo_grado_nombre,
+      `SELECT g.id_grupo, tg.nombre as grado_nombre, ne.nombre as nivel_nombre, tg.id_tipo_grado, tg.nombre as tipo_grado_nombre,
               sec.nombre as seccion_nombre, j.nombre as jornada_nombre
        FROM grupos g
        JOIN nivel_escolar ne ON g.id_nivel = ne.id_nivel

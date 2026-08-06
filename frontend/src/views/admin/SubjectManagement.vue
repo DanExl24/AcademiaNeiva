@@ -1072,7 +1072,7 @@ onMounted(loadSubjects)
                           <div class="text-left">
                             <h4 class="font-black text-slate-800 dark:text-white text-sm">{{ asg.docente_nombre }}</h4>
                             <p class="text-xs font-bold text-indigo-500 uppercase mt-0.5 tracking-wider">
-                              {{ asg.grado_nombre }}{{ asg.tipo_grado_nombre ? ' - ' + asg.tipo_grado_nombre : '' }} ({{ asg.seccion_nombre }}) · {{ asg.jornada_nombre }}
+                              {{ asg.grado_nombre }} ({{ asg.seccion_nombre }}) · {{ asg.jornada_nombre }}
                             </p>
                           </div>
                         </div>
