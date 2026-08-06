@@ -290,13 +290,17 @@ const filteredCompetencies = computed(() => {
     )
   }
 
-  // Deduplicate identical competencies for clean UI presentation
+  // Deduplicate identical competencies for clean UI presentation, preferring entries with evidences
   const deduplicatedMap = new Map<string, any>()
   list.forEach((comp: any) => {
-    const evFingerprint = (comp.evidencias || []).map((e: any) => e.descripcion?.trim()).sort().join('||')
-    const key = `${comp.id_grupo}_${comp.id_periodo}_${(comp.descripcion || '').trim()}_${evFingerprint}`
+    const key = `${comp.id_grupo}_${comp.id_periodo}_${(comp.descripcion || '').trim()}`
     if (!deduplicatedMap.has(key)) {
       deduplicatedMap.set(key, comp)
+    } else {
+      const existing = deduplicatedMap.get(key)
+      if ((!existing.evidencias || existing.evidencias.length === 0) && comp.evidencias && comp.evidencias.length > 0) {
+        deduplicatedMap.set(key, comp)
+      }
     }
   })
 

@@ -1674,7 +1674,11 @@ async function seedDbaCompetenciesAndEvidences(): Promise<void> {
             const syncUuid = randomUUID();
             await client.query(
               `INSERT INTO competencias (id_anio, id_grupo, id_materia, id_periodo, descripcion, id_colegio, sync_uuid, nombre)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT DO NOTHING`,
+               SELECT $1, $2, $3, $4, $5, $6, $7, $8
+               WHERE NOT EXISTS (
+                 SELECT 1 FROM competencias 
+                 WHERE id_anio = $1 AND id_grupo = $2 AND id_materia = $3 AND id_periodo = $4
+               )`,
               [
                 yearId2026,
                 dg.id_grupo,

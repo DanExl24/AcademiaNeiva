@@ -320,6 +320,11 @@ const gradeScopedCompetencies = computed(() => {
     const key = `${item.nivel_nombre}:${item.tipo_grado_nombre}:${item.id_materia}:${item.id_periodo}`
     if (!unique.has(key)) {
       unique.set(key, item)
+    } else {
+      const existing = unique.get(key)!
+      if ((!existing.evidencias || existing.evidencias.length === 0) && item.evidencias && item.evidencias.length > 0) {
+        unique.set(key, item)
+      }
     }
   }
 

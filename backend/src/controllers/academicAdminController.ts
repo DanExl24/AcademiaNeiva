@@ -4120,18 +4120,25 @@ export const getSubjectCurriculumDetails = async (req: Request, res: Response): 
       evidences = evRes.rows;
     }
 
-    // Deduplicate competencies with identical id_grupo, id_periodo, descripcion and evidences
+    // Deduplicate competencies with identical id_grupo, id_periodo, and descripcion, preferring the row with evidences
     const uniqueCompsMap = new Map<string, any>();
     compsRes.rows.forEach(comp => {
       const compEvs = evidences.filter(e => e.id_competencia === comp.id_competencia);
-      const evFingerprint = compEvs.map(e => e.descripcion).sort().join('||');
-      const key = `${comp.id_grupo}_${comp.id_periodo}_${(comp.descripcion || '').trim()}_${evFingerprint}`;
+      const key = `${comp.id_grupo}_${comp.id_periodo}_${(comp.descripcion || '').trim()}`;
       
       if (!uniqueCompsMap.has(key)) {
         uniqueCompsMap.set(key, {
           ...comp,
           evidencias: compEvs
         });
+      } else {
+        const existing = uniqueCompsMap.get(key);
+        if ((!existing.evidencias || existing.evidencias.length === 0) && compEvs.length > 0) {
+          uniqueCompsMap.set(key, {
+            ...comp,
+            evidencias: compEvs
+          });
+        }
       }
     });
 
