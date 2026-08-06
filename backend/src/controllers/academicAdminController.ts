@@ -857,10 +857,11 @@ export const getSubjects = async (req: Request, res: Response): Promise<void> =>
          m.id_materia,
          m.nombre,
          COUNT(DISTINCT dg.id_detallegrado)::int AS asignaciones_count,
-         COUNT(DISTINCT (c.id_grupo, c.id_periodo, c.descripcion))::int AS competencias_count
+         COUNT(DISTINCT (g.id_tipo_grado, c.id_periodo, c.descripcion))::int AS competencias_count
        FROM materias m
        LEFT JOIN detalle_grados dg ON dg.id_materia = m.id_materia${dgYearFilter}
        LEFT JOIN competencias c ON c.id_materia = m.id_materia${compYearFilter}
+       LEFT JOIN grupos g ON c.id_grupo = g.id_grupo
        WHERE m.id_colegio = $1
        GROUP BY m.id_materia, m.nombre
        ORDER BY m.nombre`,
