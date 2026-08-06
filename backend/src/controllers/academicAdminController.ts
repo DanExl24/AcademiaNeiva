@@ -4091,12 +4091,13 @@ export const getSubjectCurriculumDetails = async (req: Request, res: Response): 
     const compsRes = await pool.query(
       `SELECT c.id_competencia, c.id_grupo, c.id_periodo, c.descripcion, c.nombre as competencia_nombre,
               tg.nombre as grado_nombre, ne.nombre as nivel_nombre, tg.id_tipo_grado, tg.nombre as tipo_grado_nombre,
-              sec.nombre as seccion_nombre, p.nombre as periodo_nombre
+              sec.nombre as seccion_nombre, p.nombre as periodo_nombre, g.id_jornada, j.nombre as jornada_nombre
        FROM competencias c
        JOIN grupos g ON c.id_grupo = g.id_grupo
        JOIN nivel_escolar ne ON g.id_nivel = ne.id_nivel
        JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
        JOIN secciones sec ON g.id_seccion = sec.id_seccion
+       JOIN jornada j ON g.id_jornada = j.id_jornada
        JOIN periodo_academico p ON c.id_periodo = p.id_periodo
        WHERE c.id_materia = $1 AND c.id_anio = $2 AND c.id_colegio = $3
        ORDER BY p.id_periodo ASC, tg.nombre ASC, ne.nombre ASC, sec.nombre ASC`,

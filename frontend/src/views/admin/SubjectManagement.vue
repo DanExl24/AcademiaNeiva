@@ -198,6 +198,7 @@ const isSelectedPeriodClosed = computed(() => {
 // Filters for curriculum
 const selectedPeriodId = ref<number | null>(null)
 const selectedCurriculumGradeId = ref<number | null>(null)
+const selectedCurriculumJornadaId = ref<number | null>(null)
 const selectedCurriculumGroupId = ref<number | null>(null)
 const curriculumSearchQuery = ref('')
 
@@ -221,16 +222,39 @@ const uniqueCurriculumGrades = computed(() => {
   return Array.from(map.entries()).map(([id, name]) => ({ id: id as number, name: name as string }))
 })
 
+const uniqueCurriculumJornadas = computed(() => {
+  if (!subjectDetails.value?.competencies && !subjectDetails.value?.assignments) return []
+  const map = new Map()
+  if (subjectDetails.value.assignments) {
+    subjectDetails.value.assignments.forEach((a: any) => {
+      if (a.jornada_nombre) {
+        map.set(a.jornada_nombre, a.jornada_nombre)
+      }
+    })
+  }
+  if (subjectDetails.value.competencies) {
+    subjectDetails.value.competencies.forEach((c: any) => {
+      if (c.id_jornada && c.jornada_nombre) {
+        map.set(c.id_jornada, c.jornada_nombre)
+      }
+    })
+  }
+  return Array.from(map.entries()).map(([id, name]) => ({ id: id as number, name: name as string }))
+})
+
 const uniqueCurriculumGroups = computed(() => {
   if (!subjectDetails.value?.competencies) return []
   let list = subjectDetails.value.competencies
   if (selectedCurriculumGradeId.value) {
     list = list.filter((c: any) => c.id_tipo_grado === selectedCurriculumGradeId.value)
   }
+  if (selectedCurriculumJornadaId.value) {
+    list = list.filter((c: any) => c.id_jornada === selectedCurriculumJornadaId.value || c.jornada_nombre === selectedCurriculumJornadaId.value)
+  }
   const map = new Map()
   list.forEach((c: any) => {
     if (c.id_grupo) {
-      const label = `${c.grado_nombre} (${c.seccion_nombre})`
+      const label = `${c.grado_nombre} (${c.seccion_nombre})${c.jornada_nombre ? ' · ' + c.jornada_nombre : ''}`
       map.set(c.id_grupo, label)
     }
   })
@@ -243,6 +267,10 @@ const filteredCompetencies = computed(() => {
   
   if (selectedCurriculumGradeId.value) {
     list = list.filter((c: any) => c.id_tipo_grado === selectedCurriculumGradeId.value)
+  }
+
+  if (selectedCurriculumJornadaId.value) {
+    list = list.filter((c: any) => c.id_jornada === selectedCurriculumJornadaId.value || c.jornada_nombre === selectedCurriculumJornadaId.value)
   }
 
   if (selectedCurriculumGroupId.value) {
@@ -930,7 +958,7 @@ onMounted(loadSubjects)
                       </div>
 
                       <!-- Curriculum Search & Group Filters -->
-                      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
+                      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
                         <div class="space-y-1 text-left">
                           <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Filtrar por Grado</label>
                           <select 
@@ -941,6 +969,19 @@ onMounted(loadSubjects)
                             <option :value="null">Todos los grados</option>
                             <option v-for="gr in uniqueCurriculumGrades" :key="gr.id" :value="gr.id">
                               {{ gr.name }}
+                            </option>
+                          </select>
+                        </div>
+                        <div class="space-y-1 text-left">
+                          <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Filtrar por Jornada</label>
+                          <select 
+                            v-model="selectedCurriculumJornadaId" 
+                            @change="selectedCurriculumGroupId = null"
+                            class="w-full bg-white dark:bg-slate-850 border border-slate-100 dark:border-slate-800 rounded-xl p-2 text-xs font-bold outline-none text-slate-900 dark:text-white"
+                          >
+                            <option :value="null">Todas las jornadas</option>
+                            <option v-for="j in uniqueCurriculumJornadas" :key="j.id" :value="j.id">
+                              {{ j.name }}
                             </option>
                           </select>
                         </div>
@@ -983,7 +1024,7 @@ onMounted(loadSubjects)
                           <div class="p-4 bg-slate-50/50 dark:bg-slate-800/20 border-b border-slate-100 dark:border-slate-800/60 flex items-start justify-between gap-4">
                             <div class="flex-1 space-y-1.5 text-left">
                               <span class="inline-block px-2.5 py-0.5 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 rounded-md text-[9px] font-black uppercase tracking-wider">
-                                Curso: {{ comp.grado_nombre }} ({{ comp.seccion_nombre }})
+                                Curso: {{ comp.grado_nombre }} ({{ comp.seccion_nombre }}){{ comp.jornada_nombre ? ' · ' + comp.jornada_nombre : '' }}
                               </span>
                               <p class="text-sm font-bold text-slate-800 dark:text-slate-200">
                                 {{ comp.descripcion }}
