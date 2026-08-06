@@ -92,8 +92,19 @@ const isPeriodClosed = (id_periodo: any): boolean => {
 const search = ref('')
 const selectedPeriod = ref('')
 const selectedGrade = ref('')
+const selectedJornada = ref('')
 const selectedSubject = ref('')
 const selectedStatus = ref('')
+
+const jornadaChoices = computed(() => {
+  const set = new Set<string>()
+  for (const item of assignments.value) {
+    if (item.jornada_nombre) {
+      set.add(item.jornada_nombre.trim())
+    }
+  }
+  return Array.from(set).map((name) => ({ key: name, label: name }))
+})
 
 // Diagnostic DBA state
 interface DiagnosticData {
@@ -323,6 +334,7 @@ const filteredCompetencies = computed(() => {
     const subjectKey = String(item.id_materia)
     const matchesPeriod = !selectedPeriod.value || String(item.id_periodo) === selectedPeriod.value
     const matchesGrade = !selectedGrade.value || gradeKey === selectedGrade.value
+    const matchesJornada = !selectedJornada.value || String(item.jornada_nombre || '').trim().toLowerCase() === selectedJornada.value.trim().toLowerCase()
     const matchesSubject = !selectedSubject.value || subjectKey === selectedSubject.value
     const matchesStatus = !selectedStatus.value || item.estado === selectedStatus.value
     const matchesSearch =
@@ -334,7 +346,7 @@ const filteredCompetencies = computed(() => {
       item.jornada_nombre.toLowerCase().includes(term) ||
       item.periodo_nombre.toLowerCase().includes(term)
 
-    return matchesPeriod && matchesGrade && matchesSubject && matchesStatus && matchesSearch
+    return matchesPeriod && matchesGrade && matchesJornada && matchesSubject && matchesStatus && matchesSearch
   })
 })
 
@@ -821,7 +833,7 @@ watch(() => yearStore.selectedYearId, loadData)
             <h2 class="text-xl font-black text-slate-900 dark:text-white">Explorar asignaciones</h2>
             <p class="mt-2 text-sm font-semibold text-slate-500 dark:text-slate-400">Filtra por periodo o contexto para revisar y actualizar competencias.</p>
           </div>
-          <div class="grid w-full max-w-6xl grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
+          <div class="grid w-full max-w-6xl grid-cols-1 gap-4 md:grid-cols-3 xl:grid-cols-6">
             <label class="space-y-2">
               <span class="text-xs font-black text-slate-700 dark:text-slate-300 ml-1 uppercase tracking-widest">Buscar</span>
               <div class="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:bg-slate-800 dark:border-slate-700">
@@ -834,6 +846,15 @@ watch(() => yearStore.selectedYearId, loadData)
               <select v-model="selectedGrade" @change="handleGradeFilterChange" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-3 font-semibold text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-white outline-none">
                 <option value="">Todos los grados</option>
                 <option v-for="item in gradeChoices" :key="item.key" :value="item.key">
+                  {{ item.label }}
+                </option>
+              </select>
+            </label>
+            <label class="space-y-2">
+              <span class="text-xs font-black text-slate-700 dark:text-slate-300 ml-1 uppercase tracking-widest">Jornada</span>
+              <select v-model="selectedJornada" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-3 font-semibold text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-white outline-none">
+                <option value="">Todas las jornadas</option>
+                <option v-for="item in jornadaChoices" :key="item.key" :value="item.key">
                   {{ item.label }}
                 </option>
               </select>

@@ -198,7 +198,6 @@ const isSelectedPeriodClosed = computed(() => {
 // Filters for curriculum
 const selectedPeriodId = ref<number | null>(null)
 const selectedCurriculumGradeId = ref<number | null>(null)
-const selectedCurriculumJornadaId = ref<number | null>(null)
 const selectedCurriculumGroupId = ref<number | null>(null)
 const curriculumSearchQuery = ref('')
 
@@ -222,24 +221,28 @@ const uniqueCurriculumGrades = computed(() => {
   return Array.from(map.entries()).map(([id, name]) => ({ id: id as number, name: name as string }))
 })
 
+const selectedCurriculumJornadaId = ref<string | null>(null)
+
 const uniqueCurriculumJornadas = computed(() => {
   if (!subjectDetails.value?.competencies && !subjectDetails.value?.assignments) return []
-  const map = new Map()
+  const map = new Map<string, string>()
   if (subjectDetails.value.assignments) {
     subjectDetails.value.assignments.forEach((a: any) => {
       if (a.jornada_nombre) {
-        map.set(a.jornada_nombre, a.jornada_nombre)
+        const name = String(a.jornada_nombre).trim()
+        map.set(name.toUpperCase(), name)
       }
     })
   }
   if (subjectDetails.value.competencies) {
     subjectDetails.value.competencies.forEach((c: any) => {
-      if (c.id_jornada && c.jornada_nombre) {
-        map.set(c.id_jornada, c.jornada_nombre)
+      if (c.jornada_nombre) {
+        const name = String(c.jornada_nombre).trim()
+        map.set(name.toUpperCase(), name)
       }
     })
   }
-  return Array.from(map.entries()).map(([id, name]) => ({ id: id as number, name: name as string }))
+  return Array.from(map.entries()).map(([key, name]) => ({ id: key, name }))
 })
 
 const uniqueCurriculumGroups = computed(() => {
@@ -249,7 +252,8 @@ const uniqueCurriculumGroups = computed(() => {
     list = list.filter((c: any) => c.id_tipo_grado === selectedCurriculumGradeId.value)
   }
   if (selectedCurriculumJornadaId.value) {
-    list = list.filter((c: any) => c.id_jornada === selectedCurriculumJornadaId.value || c.jornada_nombre === selectedCurriculumJornadaId.value)
+    const selectedKey = String(selectedCurriculumJornadaId.value).trim().toUpperCase()
+    list = list.filter((c: any) => c.jornada_nombre && String(c.jornada_nombre).trim().toUpperCase() === selectedKey)
   }
   const map = new Map()
   list.forEach((c: any) => {
@@ -270,7 +274,8 @@ const filteredCompetencies = computed(() => {
   }
 
   if (selectedCurriculumJornadaId.value) {
-    list = list.filter((c: any) => c.id_jornada === selectedCurriculumJornadaId.value || c.jornada_nombre === selectedCurriculumJornadaId.value)
+    const selectedKey = String(selectedCurriculumJornadaId.value).trim().toUpperCase()
+    list = list.filter((c: any) => c.jornada_nombre && String(c.jornada_nombre).trim().toUpperCase() === selectedKey)
   }
 
   if (selectedCurriculumGroupId.value) {
