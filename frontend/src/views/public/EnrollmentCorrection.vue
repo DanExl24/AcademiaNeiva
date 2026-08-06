@@ -183,7 +183,7 @@ const getRenewalStatusClass = (state?: string) => {
                   </span>
 
                   <span 
-                    v-if="doc.estado_renovacion"
+                    v-if="(matricula?.tipo === 'REINGRESO' || matricula?.tipo === 'RENOVACION') && doc.estado_renovacion"
                     :class="[getRenewalStatusClass(doc.estado_renovacion), 'px-2.5 py-0.5 rounded-full text-[10px] font-bold border']"
                   >
                     {{ getRenewalStatusLabel(doc.estado_renovacion) }}
