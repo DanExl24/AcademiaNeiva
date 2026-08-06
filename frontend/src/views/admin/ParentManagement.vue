@@ -162,7 +162,7 @@ const loadParents = async () => {
     if (filterEstadoMatricula.value !== 'TODOS') params.estadoMatricula = filterEstadoMatricula.value
     if (filterSoloDocentes.value) params.soloDocentes = 'true'
 
-    const res = await axios.get(`${apiBase}/api/parents/school/${schoolId.value}`, {
+    const res = await axios.get(`/api/parents/school/${schoolId.value}`, {
       params,
       headers: { Authorization: `Bearer ${auth.token}` }
     })

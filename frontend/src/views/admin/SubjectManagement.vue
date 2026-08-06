@@ -201,14 +201,23 @@ const selectedCurriculumGradeId = ref<number | null>(null)
 const curriculumSearchQuery = ref('')
 
 const uniqueCurriculumGrades = computed(() => {
-  if (!subjectDetails.value?.groups) return []
+  if (!subjectDetails.value?.assignments && !subjectDetails.value?.competencies) return []
   const map = new Map()
-  subjectDetails.value.groups.forEach((g: any) => {
-    if (g.id_tipo_grado && g.tipo_grado_nombre) {
-      map.set(g.id_tipo_grado, g.tipo_grado_nombre)
-    }
-  })
-  return Array.from(map.entries()).map(([id, name]) => ({ id, name }))
+  if (subjectDetails.value.assignments) {
+    subjectDetails.value.assignments.forEach((a: any) => {
+      if (a.id_tipo_grado && a.tipo_grado_nombre) {
+        map.set(a.id_tipo_grado, a.tipo_grado_nombre)
+      }
+    })
+  }
+  if (subjectDetails.value.competencies) {
+    subjectDetails.value.competencies.forEach((c: any) => {
+      if (c.id_tipo_grado && c.tipo_grado_nombre) {
+        map.set(c.id_tipo_grado, c.tipo_grado_nombre)
+      }
+    })
+  }
+  return Array.from(map.entries()).map(([id, name]) => ({ id: id as number, name: name as string }))
 })
 
 const filteredCompetencies = computed(() => {
@@ -333,8 +342,6 @@ const openSubjectDetails = async (id: number) => {
   await fetchSubjectDetails()
 }
 
-const apiBase = import.meta.env.VITE_API_URL || ''
-
 const fetchSubjectDetails = async () => {
   if (!selectedSubjectId.value || !schoolId.value) return
   try {
@@ -343,7 +350,7 @@ const fetchSubjectDetails = async () => {
     if (yearStore.selectedYearId) {
       params.yearId = yearStore.selectedYearId
     }
-    const response = await axios.get(`${apiBase}/api/academic-admin/subjects/${selectedSubjectId.value}/curriculum-details`, {
+    const response = await axios.get(`/api/academic-admin/subjects/${selectedSubjectId.value}/curriculum-details`, {
       params
     })
     subjectDetails.value = response.data
@@ -352,6 +359,11 @@ const fetchSubjectDetails = async () => {
     if (response.data.periods?.length > 0 && !selectedPeriodId.value) {
       const openPeriod = response.data.periods.find((p: any) => p.estado === 'ABIERTO')
       selectedPeriodId.value = openPeriod ? openPeriod.id_periodo : response.data.periods[0].id_periodo
+    }
+
+    // Set default grade filter to first assigned grade to keep list clean
+    if (uniqueCurriculumGrades.value.length > 0 && selectedCurriculumGradeId.value === null) {
+      selectedCurriculumGradeId.value = uniqueCurriculumGrades.value[0].id
     }
   } catch (error) {
     console.error('Error fetching subject details:', error)

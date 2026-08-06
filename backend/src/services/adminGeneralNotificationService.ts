@@ -10,6 +10,13 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+const getFrontendUrl = (): string => {
+  const url = process.env.FRONTEND_URL || process.env.CLIENT_URL || 'https://academianeiva.adsoproject.dev';
+  return url.replace(/\/$/, '');
+};
+
+const FRONTEND_URL = getFrontendUrl();
+
 const FROM = `"Academia Neiva" <${process.env.SMTP_USER}>`;
 
 /**
@@ -65,7 +72,7 @@ export class AdminGeneralNotificationService {
         <p style="line-height: 1.6; color: #6b7280;">Por favor, ingresa a la plataforma para aprobar o rechazar esta solicitud.</p>
 
         <div style="text-align: center; margin-top: 40px;">
-          <a href="http://localhost:5173/login" style="background-color: #d97706; color: white; padding: 16px 32px; border-radius: 12px; text-decoration: none; font-weight: 700; display: inline-block;">
+          <a href="${FRONTEND_URL}/login" style="background-color: #d97706; color: white; padding: 16px 32px; border-radius: 12px; text-decoration: none; font-weight: 700; display: inline-block;">
             Revisar Solicitud
           </a>
         </div>

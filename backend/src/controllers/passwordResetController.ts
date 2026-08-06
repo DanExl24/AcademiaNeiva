@@ -44,7 +44,7 @@ export const forgotPassword = async (req: Request, res: Response): Promise<void>
     );
 
     // 4. Enviar correo con el enlace de recuperación
-    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+    const frontendUrl = (process.env.FRONTEND_URL || process.env.CLIENT_URL || "https://academianeiva.adsoproject.dev").replace(/\/$/, "");
     const resetLink = `${frontendUrl}/reset-password/${token}`;
     const userName = `${user.nombre} ${user.apellido}`;
 

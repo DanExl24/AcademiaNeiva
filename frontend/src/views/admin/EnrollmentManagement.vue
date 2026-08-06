@@ -94,6 +94,8 @@ const stats = computed(() => ({
   cancelled:   enrollments.value.filter(e => e.estado === 'CANCELADA').length,
 }))
 
+const currentOrigin = computed(() => typeof window !== 'undefined' ? window.location.origin : '')
+
 const filterTipo = ref<string>('TODOS')
 const filterNivel = ref<number | 'TODOS'>('TODOS')
 const filterSortOrder = ref<'OLDEST' | 'NEWEST'>('OLDEST')
@@ -1219,7 +1221,7 @@ const approveException = async (id: number) => {
                 <div class="bg-slate-50 dark:bg-slate-800/40 rounded-3xl p-6 space-y-4">
                   <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Enlace de Seguimiento para el Acudiente</p>
                   <p class="text-[11px] font-mono text-slate-500 select-all p-3 bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-xl break-all">
-                    http://localhost:5173/matricula/corregir/{{ matricula.token_seguimiento }}
+                    {{ currentOrigin }}/matricula/corregir/{{ matricula.token_seguimiento }}
                   </p>
                   <p class="text-xs text-slate-500">
                     Puedes copiar este enlace y enviarlo directamente al acudiente si es necesario.

@@ -57,9 +57,19 @@ app.use(helmet({
   frameguard: false
 }));
 
+const defaultAllowedOrigins = [
+  "http://localhost:5173",
+  "http://localhost:3000",
+  "https://academianeiva.adsoproject.dev",
+  "https://api-academianeiva.adsoproject.dev"
+];
+if (process.env.FRONTEND_URL) {
+  defaultAllowedOrigins.push(process.env.FRONTEND_URL.replace(/\/$/, ''));
+}
+
 const allowedOrigins = process.env.ALLOWED_ORIGINS 
-  ? process.env.ALLOWED_ORIGINS.split(",") 
-  : ["http://localhost:5173"];
+  ? process.env.ALLOWED_ORIGINS.split(",").map(o => o.trim()) 
+  : defaultAllowedOrigins;
 
 app.use(cors({
   origin: (origin, callback) => {

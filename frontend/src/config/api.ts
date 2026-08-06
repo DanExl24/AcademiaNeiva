@@ -22,6 +22,8 @@ axios.interceptors.request.use(
       } else if (config.url.startsWith('http://localhost:3001')) {
         config.url = config.url.replace('http://localhost:3001', API_BASE_URL)
       }
+      // Failsafe: Normalize double slashes in URL path (e.g. .dev//api/ -> .dev/api/)
+      config.url = config.url.replace(/([^:]\/)\/+/g, '$1')
     }
     return config
   },

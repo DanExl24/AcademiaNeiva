@@ -23,6 +23,13 @@ transporter.verify((error, success) => {
   }
 });
 
+const getFrontendUrl = (): string => {
+  const url = process.env.FRONTEND_URL || process.env.CLIENT_URL || 'https://academianeiva.adsoproject.dev';
+  return url.replace(/\/$/, '');
+};
+
+const FRONTEND_URL = getFrontendUrl();
+
 export class NotificationService {
   static async sendTeacherWelcomeEmail(
     to: string,
@@ -62,7 +69,7 @@ export class NotificationService {
         </div>
 
         <div style="text-align: center; margin-top: 40px;">
-          <a href="http://localhost:5173/login" style="background-color: #2563eb; color: white; padding: 16px 32px; border-radius: 12px; text-decoration: none; font-weight: 700; display: inline-block;">
+          <a href="${FRONTEND_URL}/login" style="background-color: #2563eb; color: white; padding: 16px 32px; border-radius: 12px; text-decoration: none; font-weight: 700; display: inline-block;">
             Ingresar a la plataforma
           </a>
         </div>
@@ -203,7 +210,7 @@ export class NotificationService {
           </div>
 
           <div style="text-align: center; margin-top: 40px;">
-            <a href="http://localhost:5173/login" style="background-color: #4f46e5; color: white; padding: 16px 32px; border-radius: 12px; text-decoration: none; font-weight: 700; display: inline-block; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+            <a href="${FRONTEND_URL}/login" style="background-color: #4f46e5; color: white; padding: 16px 32px; border-radius: 12px; text-decoration: none; font-weight: 700; display: inline-block; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
               Acceder a la Plataforma
             </a>
           </div>
@@ -251,7 +258,7 @@ export class NotificationService {
         <p style="line-height: 1.6;">Por favor, ingresa a la plataforma para corregir o subir nuevamente los documentos solicitados.</p>
 
         <div style="text-align: center; margin-top: 40px;">
-          <a href="http://localhost:5173/matricula/corregir/${token}" style="background-color: #1f2937; color: white; padding: 16px 32px; border-radius: 12px; text-decoration: none; font-weight: 700; display: inline-block;">
+          <a href="${FRONTEND_URL}/matricula/corregir/${token}" style="background-color: #1f2937; color: white; padding: 16px 32px; border-radius: 12px; text-decoration: none; font-weight: 700; display: inline-block;">
             Corregir Documentación
           </a>
         </div>
@@ -298,13 +305,13 @@ export class NotificationService {
         <p style="line-height: 1.6;">Para continuar con el proceso, debes ingresar al siguiente enlace para cargar la documentación requerida y reservar tu cupo:</p>
 
         <div style="text-align: center; margin-top: 30px;">
-          <a href="http://localhost:5173/matricula/corregir/${token}" style="background-color: #10b981; color: white; padding: 16px 32px; border-radius: 12px; text-decoration: none; font-weight: 700; display: inline-block; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+          <a href="${FRONTEND_URL}/matricula/corregir/${token}" style="background-color: #10b981; color: white; padding: 16px 32px; border-radius: 12px; text-decoration: none; font-weight: 700; display: inline-block; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
             Cargar Documentación
           </a>
         </div>
 
         <div style="text-align: center; margin-top: 15px;">
-          <a href="http://localhost:5173/matriculas/tracking?token=${token}" style="color: #059669; font-size: 13px; font-weight: 600; text-decoration: underline;">
+          <a href="${FRONTEND_URL}/matricula/seguimiento?token=${token}" style="color: #059669; font-size: 13px; font-weight: 600; text-decoration: underline;">
             🔍 Consultar estado de la matrícula en cualquier momento
           </a>
         </div>
@@ -345,7 +352,7 @@ export class NotificationService {
         <p style="line-height: 1.6;">Para continuar con el proceso, debes ingresar al siguiente enlace para actualizar la documentación requerida y reservar tu cupo:</p>
 
         <div style="text-align: center; margin-top: 40px;">
-          <a href="http://localhost:5173/matricula/corregir/${token}" style="background-color: #10b981; color: white; padding: 16px 32px; border-radius: 12px; text-decoration: none; font-weight: 700; display: inline-block; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+          <a href="${FRONTEND_URL}/matricula/corregir/${token}" style="background-color: #10b981; color: white; padding: 16px 32px; border-radius: 12px; text-decoration: none; font-weight: 700; display: inline-block; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
             Actualizar Documentación
           </a>
         </div>
@@ -433,7 +440,7 @@ export class NotificationService {
         <p style="line-height: 1.6;">Por lo tanto, no es posible aplicar un trámite de reingreso. Si desea ingresar al colegio, le invitamos a realizar el proceso de <strong>Matrícula Regular de Estudiante Nuevo</strong> a través de nuestra plataforma pública.</p>
 
         <div style="text-align: center; margin-top: 30px;">
-          <a href="http://localhost:5173/matricula" style="background-color: #3b82f6; color: white; padding: 14px 28px; border-radius: 12px; text-decoration: none; font-weight: 700; display: inline-block;">
+          <a href="${FRONTEND_URL}/matricula" style="background-color: #3b82f6; color: white; padding: 14px 28px; border-radius: 12px; text-decoration: none; font-weight: 700; display: inline-block;">
             Ir al Formulario de Matrícula Regular
           </a>
         </div>
@@ -542,7 +549,7 @@ export class NotificationService {
         <p style="line-height: 1.6; font-size: 14px; color: #64748b; text-align: center;">Este cambio ya está reflejado en la plataforma institucional.</p>
 
         <div style="text-align: center; margin-top: 40px;">
-          <a href="http://localhost:5173/login" style="background-color: #4f46e5; color: white; padding: 16px 32px; border-radius: 12px; text-decoration: none; font-weight: 700; display: inline-block;">
+          <a href="${FRONTEND_URL}/login" style="background-color: #4f46e5; color: white; padding: 16px 32px; border-radius: 12px; text-decoration: none; font-weight: 700; display: inline-block;">
             Acceder a la plataforma
           </a>
         </div>
@@ -614,7 +621,7 @@ export class NotificationService {
       console.error('❌ Error: No se puede enviar email de confirmación de matrícula porque no hay destinatario (to)');
       return;
     }
-    const trackingLink = `http://localhost:5173/matricula/seguimiento?token=${trackingToken}`;
+    const trackingLink = `${FRONTEND_URL}/matricula/seguimiento?token=${trackingToken}`;
     const html = `
       <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #1f2937;">
         <div style="background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%); padding: 40px; border-radius: 24px; text-align: center; color: white; margin-bottom: 30px;">
