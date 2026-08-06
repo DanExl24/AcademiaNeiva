@@ -16,6 +16,7 @@ import TeacherManagement from '../views/admin/TeacherManagement.vue'
 import AcademicSettings from '../views/admin/AcademicSettings.vue'
 import AcademicCompetenciesView from '../views/admin/AcademicCompetenciesView.vue'
 import BoletinGenerator from '../views/admin/BoletinGenerator.vue'
+import MySchool from '../views/admin/MySchool.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -139,7 +140,7 @@ const router = createRouter({
         {
           path: 'mi-colegio',
           name: 'Mi Colegio',
-          component: () => import('../views/admin/MySchool.vue'),
+          component: MySchool,
           meta: { roles: ['directivo'] }
         },
         {
@@ -425,6 +426,24 @@ router.beforeEach(async (to) => {
     if (allowedRoles && !allowedRoles.includes(activeRole || '')) {
       // Redirigir al dashboard home dispatcher si no tiene el rol
       return '/dashboard'
+    }
+  }
+})
+
+// Manejo de actualización de desbalance de chunks post-despliegue (Stale Assets Auto-Reload)
+router.onError((error, to) => {
+  const pattern = /Failed to fetch dynamically imported module|Importing a module script failed|Failed to reload/i
+  const isChunkLoadFailed = pattern.test(error?.message || '')
+  
+  if (isChunkLoadFailed) {
+    const targetPath = to?.fullPath || window.location.href
+    const reloadKey = `chunk_reload_${targetPath}`
+    
+    if (!sessionStorage.getItem(reloadKey)) {
+      sessionStorage.setItem(reloadKey, 'true')
+      window.location.reload()
+    } else {
+      console.error('[Router Chunk Error] No se pudo cargar el módulo después de recargar:', error)
     }
   }
 })
