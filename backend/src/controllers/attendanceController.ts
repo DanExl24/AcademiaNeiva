@@ -59,6 +59,13 @@ export const getAttendanceByDate = async (req: Request, res: Response): Promise<
 
     const { id_colegio, id_grupo } = dgRes.rows[0];
 
+    const authReq = req as any;
+    const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+    if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== id_colegio) {
+      res.status(403).json({ error: "No tiene permiso para ver las asistencias de este colegio." });
+      return;
+    }
+
     // Check if editable
     const editCheck = await checkEditability(detailGradeId, id_colegio);
     
@@ -152,6 +159,13 @@ export const saveAttendance = async (req: Request, res: Response): Promise<void>
     }
 
     const schoolId = dgRes.rows[0].id_colegio;
+
+    const authReq = req as any;
+    const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+    if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== schoolId) {
+      res.status(403).json({ error: "No tiene permiso para registrar asistencias en este colegio." });
+      return;
+    }
 
     // Validate editability
     const editCheck = await checkEditability(detailGradeId, schoolId);

@@ -144,7 +144,7 @@ export const getTickets = async (req: Request, res: Response) => {
 
     if (userRole === 'DIRECTIVO') {
       const userRes = await pool.query('SELECT id_colegio FROM usuario WHERE id_usuario = $1', [user.id]);
-      const schoolId = userRes.rows[0]?.id_colegio;
+      const schoolId = user.schoolId || userRes.rows[0]?.id_colegio;
       if (!schoolId) {
         return res.status(403).json({ error: 'El directivo no está asociado a ningún colegio.' });
       }
@@ -233,7 +233,7 @@ export const updateTicketStatus = async (req: Request, res: Response) => {
 
     if (userRole === 'DIRECTIVO') {
       const userRes = await pool.query('SELECT id_colegio FROM usuario WHERE id_usuario = $1', [user.id]);
-      const schoolId = userRes.rows[0]?.id_colegio;
+      const schoolId = user.schoolId || userRes.rows[0]?.id_colegio;
       if (Number(schoolId) !== Number(ticket.id_colegio)) {
         return res.status(403).json({ error: 'Acceso denegado a este ticket de soporte.' });
       }
@@ -334,7 +334,7 @@ export const escalateTicket = async (req: Request, res: Response) => {
 
       if (userRole === 'DIRECTIVO') {
         const userRes = await client.query('SELECT id_colegio FROM usuario WHERE id_usuario = $1', [user.id]);
-        const schoolId = userRes.rows[0]?.id_colegio;
+        const schoolId = user.schoolId || userRes.rows[0]?.id_colegio;
         if (Number(schoolId) !== Number(ticket.id_colegio)) {
           await client.query('ROLLBACK');
           client.release();
@@ -487,7 +487,7 @@ export const addTicketObservation = async (req: Request, res: Response) => {
     if (isStaff) {
       if (userRole === 'DIRECTIVO') {
         const userRes = await pool.query('SELECT id_colegio FROM usuario WHERE id_usuario = $1', [user.id]);
-        const schoolId = userRes.rows[0]?.id_colegio;
+        const schoolId = user.schoolId || userRes.rows[0]?.id_colegio;
         if (Number(schoolId) !== Number(ticket.id_colegio)) {
           return res.status(403).json({ error: 'Acceso denegado.' });
         }

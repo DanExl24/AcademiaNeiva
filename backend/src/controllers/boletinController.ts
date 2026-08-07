@@ -6,6 +6,13 @@ import { pool } from '../config/db';
  */
 export const validatePeriodClosed = async (req: Request, res: Response) => {
   const { id_periodo, id_colegio } = req.params;
+
+  const authReq = req as any;
+  const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+  if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== Number(id_colegio)) {
+    return res.status(403).json({ error: "No tiene permiso para acceder a los boletines de este colegio." });
+  }
+
   try {
     const periodRes = await pool.query(
       `SELECT estado FROM periodo_academico WHERE id_periodo = $1 AND id_colegio = $2`,
@@ -74,6 +81,12 @@ export const getStudentBoletin = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Estudiante no encontrado' });
     }
     const studentInfo = studentRes.rows[0];
+
+    const authReq = req as any;
+    const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+    if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== Number(studentInfo.id_colegio)) {
+      return res.status(403).json({ error: "No tiene permiso para generar el boletín de este estudiante." });
+    }
 
     // 4. Fetch Todas las Materias y Profesores
     const materiasRes = await pool.query(`

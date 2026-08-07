@@ -722,30 +722,37 @@ const formatRenewalStateLabel = (state?: string) => {
       <div class="bg-white dark:bg-slate-900 w-full max-w-md rounded-[2.5rem] shadow-2xl p-8">
         <div class="text-center">
           <div class="w-16 h-16 bg-red-50 dark:bg-red-950/20 text-red-500 rounded-2xl flex items-center justify-center mx-auto mb-5"><XCircle :size="32" /></div>
-          <h3 class="text-xl font-black text-slate-900 dark:text-white">Cancelar Matrícula</h3>
-          <p class="text-slate-500 dark:text-slate-400 text-sm mt-2">Esta acción es irreversible y liberará el cupo asignado.</p>
+          <h3 class="text-xl font-black text-slate-900 dark:text-white">
+            {{ matricula?.id_estudiante ? 'Cancelar Matrícula' : 'Denegar Solicitud de Matrícula' }}
+          </h3>
+          <p class="text-slate-500 dark:text-slate-400 text-sm mt-2">
+            {{ matricula?.id_estudiante 
+                ? 'Esta acción es irreversible, liberará el cupo asignado y actualizará el estado del estudiante.' 
+                : 'Esta acción rechazará la solicitud de matrícula y enviará una notificación por correo electrónico al acudiente.' }}
+          </p>
         </div>
         <div class="mt-6 space-y-4">
           <div>
-            <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5 ml-1">Motivo</label>
-            <select v-model="cancelMotivo" class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl font-bold text-slate-700 dark:text-white outline-none">
-              <option>Inconsistencias Graves en Documentos</option>
-              <option>Retiro Voluntario</option>
-              <option>Falta de Pago / Costos</option>
-              <option>Traslado a Otra Institución</option>
-              <option>Otro</option>
+            <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5 ml-1">Motivo del Rechazo / Cancelación *</label>
+            <select v-model="cancelMotivo" class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl font-bold text-slate-700 dark:text-white outline-none text-xs">
+              <option value="Inconsistencias Graves en Documentos">Inconsistencias Graves en Documentos</option>
+              <option value="Cupo no Disponible / Agotado">Cupo no Disponible / Agotado</option>
+              <option value="No Cumple Requisitos de Admisión">No Cumple Requisitos de Admisión</option>
+              <option value="Incumplimiento de Plazos">Incumplimiento de Plazos</option>
+              <option value="Retiro / Desistimiento Voluntario">Retiro / Desistimiento Voluntario</option>
+              <option value="Otro">Otro</option>
             </select>
           </div>
           <div>
-            <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5 ml-1">Detalles Adicionales</label>
-            <textarea v-model="cancelDetalles" rows="3" placeholder="Detalles del motivo..." class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl text-sm text-slate-700 dark:text-white outline-none"></textarea>
+            <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5 ml-1">Detalles para el Acudiente (Opcional)</label>
+            <textarea v-model="cancelDetalles" rows="3" placeholder="Explica brevemente los motivos para el correo al padre..." class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-700 dark:text-white outline-none"></textarea>
           </div>
         </div>
         <div class="mt-6 flex gap-3">
           <button @click="showCancelModal = false" :disabled="cancelling" class="flex-1 py-3 rounded-xl font-black text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all text-xs uppercase">Volver</button>
           <button @click="cancelEnrollment" :disabled="cancelling" class="flex-[2] bg-red-600 text-white py-3 rounded-xl font-black text-xs uppercase flex items-center justify-center gap-2 hover:bg-red-700 transition-all disabled:opacity-50">
             <span v-if="cancelling" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-            <span v-else>Confirmar Cancelación</span>
+            <span v-else>{{ matricula?.id_estudiante ? 'Confirmar Cancelación' : 'Confirmar Rechazo' }}</span>
           </button>
         </div>
       </div>

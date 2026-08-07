@@ -1532,9 +1532,9 @@ export const registrarAccionAuditoria = async (
      (id_auditoria, modulo, tipo_accion, accion, recurso_afectado, id_usuario_afectado, valor_antiguo, valor_nuevo, motivo_cambio)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
     [idAuditoria, modulo, tipoAccion, accion, recursoAfectado, idUsuarioAfectado || null,
-     valorAntiguo ? JSON.stringify(valorAntiguo) : null,
-     valorNuevo ? JSON.stringify(valorNuevo) : null,
-     motivoCambio || null]
+     valorAntiguo ? JSON.stringify(valorAntiguo) : (tipoAccion === 'MODIFICACION' ? '{}' : null),
+     valorNuevo ? JSON.stringify(valorNuevo) : (tipoAccion === 'MODIFICACION' ? '{}' : null),
+     motivoCambio || (tipoAccion === 'MODIFICACION' ? 'Modificación auditada en modo supervisión' : null)]
   );
 };
 

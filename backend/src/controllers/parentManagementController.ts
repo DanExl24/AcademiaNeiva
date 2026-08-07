@@ -32,6 +32,13 @@ export const getParentsManagementData = async (req: Request, res: Response): Pro
     return;
   }
 
+  const authReq = req as any;
+  const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+  if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== id_colegio) {
+    res.status(403).json({ error: "No tiene permiso para consultar los padres de familia de este colegio." });
+    return;
+  }
+
   try {
     const selectedYearId = yearId ? Number(yearId) : null;
     const params: any[] = [id_colegio, selectedYearId];
@@ -245,6 +252,13 @@ export const getParentDetail = async (req: Request, res: Response): Promise<void
 
     const parent = parentRes.rows[0];
 
+    const authReq = req as any;
+    const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+    if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== parent.id_colegio) {
+      res.status(403).json({ error: "No tiene permiso para consultar el detalle de este acudiente." });
+      return;
+    }
+
     const childrenRes = await pool.query(
       `SELECT
          e.id_estudiante,
@@ -365,7 +379,7 @@ export const updateParent = async (req: Request, res: Response): Promise<void> =
     await client.query("BEGIN");
 
     const checkRes = await client.query(
-      "SELECT id_padrefamilia, nombre, apellido, documento, id_tipodocumento FROM padre_familia WHERE id_padrefamilia = $1",
+      "SELECT id_padrefamilia, id_colegio, nombre, apellido, documento, id_tipodocumento FROM padre_familia WHERE id_padrefamilia = $1",
       [parentId]
     );
 
@@ -376,6 +390,14 @@ export const updateParent = async (req: Request, res: Response): Promise<void> =
     }
 
     const oldParent = checkRes.rows[0];
+
+    const authReq = req as any;
+    const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+    if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== oldParent.id_colegio) {
+      await client.query("ROLLBACK");
+      res.status(403).json({ error: "No tiene permiso para actualizar acudientes de este colegio." });
+      return;
+    }
 
     if (documento.trim() !== oldParent.documento) {
       const docCheck = await client.query(
@@ -457,7 +479,7 @@ export const updateParentAccountStatus = async (req: Request, res: Response): Pr
 
   try {
     const parentRes = await pool.query(
-      `SELECT pf.id_padrefamilia, pf.id_usuario, pf.nombre, pf.apellido, u.email
+      `SELECT pf.id_padrefamilia, pf.id_usuario, pf.id_colegio, pf.nombre, pf.apellido, u.email
        FROM padre_familia pf
        JOIN usuario u ON u.id_usuario = pf.id_usuario
        WHERE pf.id_padrefamilia = $1`,
@@ -466,6 +488,13 @@ export const updateParentAccountStatus = async (req: Request, res: Response): Pr
 
     if (parentRes.rows.length === 0 || !parentRes.rows[0].id_usuario) {
       res.status(404).json({ error: "El acudiente no tiene una cuenta de usuario registrada para modificar su estado" });
+      return;
+    }
+
+    const authReq = req as any;
+    const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+    if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== parentRes.rows[0].id_colegio) {
+      res.status(403).json({ error: "No tiene permiso para modificar acudientes de este colegio." });
       return;
     }
 
@@ -478,6 +507,13 @@ export const updateParentAccountStatus = async (req: Request, res: Response): Pr
            logged_out_at = CASE WHEN $1 = FALSE THEN NOW() ELSE logged_out_at END
        WHERE id_usuario = $2`,
       [activo, userId]
+    );
+
+    await pool.query(
+      `UPDATE padre_familia
+       SET estado = CASE WHEN $1 = TRUE THEN 'ACTIVO' ELSE 'INACTIVO' END
+       WHERE id_padrefamilia = $2`,
+      [activo, parentId]
     );
 
     res.json({

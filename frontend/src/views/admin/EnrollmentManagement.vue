@@ -1768,11 +1768,17 @@ const approveException = async (id: number) => {
       <div class="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-[28px] shadow-2xl overflow-hidden">
         <div class="p-8 text-center">
           <div class="w-14 h-14 bg-red-50 dark:bg-red-950/20 text-red-500 rounded-2xl flex items-center justify-center mx-auto mb-5"><XCircle :size="28" /></div>
-          <h3 class="text-lg font-black text-slate-900 dark:text-white uppercase">Cancelar Matrícula</h3>
-          <p class="text-slate-500 dark:text-slate-400 text-sm mt-2">Esta acción es irreversible y liberará el cupo asignado.</p>
+          <h3 class="text-lg font-black text-slate-900 dark:text-white uppercase">
+            {{ matricula?.id_estudiante ? 'Cancelar Matrícula' : 'Denegar Solicitud de Matrícula' }}
+          </h3>
+          <p class="text-slate-500 dark:text-slate-400 text-sm mt-2">
+            {{ matricula?.id_estudiante 
+                ? 'Esta acción es irreversible, liberará el cupo asignado y actualizará el estado del estudiante.' 
+                : 'Esta acción rechazará la solicitud de matrícula y enviará una notificación por correo electrónico al acudiente.' }}
+          </p>
         </div>
         <div class="px-8 pb-8 space-y-4">
-          <div class="space-y-1.5">
+          <div v-if="matricula?.id_estudiante" class="space-y-1.5">
             <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Estado Final del Estudiante</label>
             <div class="grid grid-cols-2 gap-2">
               <button
@@ -1804,25 +1810,25 @@ const approveException = async (id: number) => {
             </div>
           </div>
           <div class="space-y-1.5">
-            <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Motivo</label>
+            <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Motivo del Rechazo / Cancelación *</label>
             <select v-model="cancelMotivo" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3 text-sm font-bold outline-none text-slate-900 dark:text-white">
-              <option>Retiro Voluntario</option>
-              <option>Inconsistencias Graves en Documentos</option>
-              <option>Falta de Pago / Costos</option>
-              <option>Traslado a Otra Institución</option>
-              <option>Expulsión Disciplinaria</option>
-              <option>Otro</option>
+              <option value="Inconsistencias Graves en Documentos">Inconsistencias Graves en Documentos</option>
+              <option value="Cupo no Disponible / Agotado">Cupo no Disponible / Agotado</option>
+              <option value="No Cumple Requisitos de Admisión">No Cumple Requisitos de Admisión</option>
+              <option value="Incumplimiento de Plazos">Incumplimiento de Plazos</option>
+              <option value="Retiro / Desistimiento Voluntario">Retiro / Desistimiento Voluntario</option>
+              <option value="Otro">Otro</option>
             </select>
           </div>
           <div class="space-y-1.5">
-            <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Detalles (Opcional)</label>
-            <textarea v-model="cancelDetalles" rows="3" placeholder="Explica brevemente..." class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3 text-sm font-bold outline-none text-slate-900 dark:text-white"></textarea>
+            <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Detalles para el Acudiente (Opcional)</label>
+            <textarea v-model="cancelDetalles" rows="3" placeholder="Explica brevemente los motivos para el correo al padre..." class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3 text-sm font-bold outline-none text-slate-900 dark:text-white"></textarea>
           </div>
           <div class="flex gap-3 pt-1">
             <button @click="showCancelModal = false" :disabled="cancelling" class="flex-1 py-3 rounded-xl font-black text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all text-xs uppercase">Volver</button>
             <button @click="cancelEnrollment" :disabled="cancelling" class="flex-[2] bg-red-600 text-white py-3 rounded-xl font-black text-xs uppercase flex items-center justify-center gap-2 hover:bg-red-700 transition-all disabled:opacity-50">
               <span v-if="cancelling" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-              <span v-else>Confirmar</span>
+              <span v-else>{{ matricula?.id_estudiante ? 'Confirmar Cancelación' : 'Confirmar Rechazo' }}</span>
             </button>
           </div>
         </div>
