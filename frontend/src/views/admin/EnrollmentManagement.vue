@@ -79,15 +79,17 @@ watch(() => yearStore.selectedYearId, () => {
 })
 
 const tabs = [
-  { status: 'PENDIENTE',  label: 'Por Revisar',    color: 'amber'   },
-  { status: 'CORRECCION', label: 'En Corrección',  color: 'orange'  },
-  { status: 'ACTIVA',     label: 'Aprobadas',      color: 'emerald' },
-  { status: 'TRASLADADA', label: 'Traslados',      color: 'blue'    },
-  { status: 'CANCELADA',  label: 'Canceladas',     color: 'red'     },
+  { status: 'PENDIENTE',  label: 'Nuevas (Por Revisar)', color: 'amber'   },
+  { status: 'CORREGIDA',  label: 'Docs Corregidos',      color: 'purple'  },
+  { status: 'CORRECCION', label: 'En Corrección',        color: 'orange'  },
+  { status: 'ACTIVA',     label: 'Aprobadas',            color: 'emerald' },
+  { status: 'TRASLADADA', label: 'Traslados',            color: 'blue'    },
+  { status: 'CANCELADA',  label: 'Canceladas',           color: 'red'     },
 ]
 
 const stats = computed(() => ({
   pending:     enrollments.value.filter(e => e.estado === 'PENDIENTE').length,
+  resubmitted: enrollments.value.filter(e => e.estado === 'CORREGIDA').length,
   corrected:   enrollments.value.filter(e => e.estado === 'CORRECCION' || e.estado === 'RECHAZADA').length,
   active:      enrollments.value.filter(e => e.estado === 'ACTIVA' || e.estado === 'APROBADA').length,
   transferred: enrollments.value.filter(e => e.estado === 'TRASLADADA').length,
@@ -105,7 +107,7 @@ const onlyPendingDocs = ref<boolean>(false)
 const oldestPendingMap = computed(() => {
   const map = new Map<number, number>()
   const pendingList = enrollments.value
-    .filter(e => e.estado === 'PENDIENTE' || e.estado === 'CORRECCION' || e.estado === 'RECHAZADA')
+    .filter(e => e.estado === 'PENDIENTE' || e.estado === 'CORREGIDA' || e.estado === 'CORRECCION' || e.estado === 'RECHAZADA')
     .sort((a, b) => (a.id_matricula || 0) - (b.id_matricula || 0))
 
   pendingList.forEach((item, index) => {
@@ -227,6 +229,7 @@ const filteredEnrollments = computed(() => {
 
 const getStatusMeta = (status: string) => {
   if (status === 'PENDIENTE')  return { label: 'Por Revisar',     bg: 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400' }
+  if (status === 'CORREGIDA')  return { label: 'Docs Corregidos', bg: 'bg-purple-100 text-purple-800 dark:bg-purple-950/40 dark:text-purple-300' }
   if (status === 'CORRECCION') return { label: 'En Corrección',   bg: 'bg-orange-100 text-orange-800 dark:bg-orange-950/40 dark:text-orange-400' }
   if (status === 'RECHAZADA')  return { label: 'Rechazada',       bg: 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400' }
   if (status === 'APROBADA')   return { label: 'Aprobada',        bg: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400' }
@@ -1409,6 +1412,15 @@ const approveException = async (id: number) => {
                   <button v-if="matricula.estado !== 'CANCELADA' && matricula.estado !== 'CULMINADA'" @click="showCancelModal = true" class="px-4 py-2 bg-red-600 text-white rounded-xl font-black text-xs uppercase tracking-wide hover:bg-red-700 transition-all shrink-0 flex items-center gap-1">
                     <XCircle :size="14" /> Cancelar / Denegar
                   </button>
+                </div>
+
+                <!-- Resubmitted / Corrected Banner -->
+                <div v-if="matricula.estado === 'CORREGIDA'" class="p-5 bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-3xl flex items-start gap-4">
+                  <div class="p-2.5 bg-purple-600 text-white rounded-2xl shrink-0"><RefreshCw :size="20" /></div>
+                  <div class="flex-1">
+                    <p class="font-black text-purple-900 dark:text-purple-300 text-sm">Documentos Corregidos por el Acudiente 🔄</p>
+                    <p class="text-purple-800 dark:text-purple-400 text-xs mt-1 font-medium">El padre de familia ha vuelto a cargar los documentos subsanados. Esta solicitud requiere tu segunda revisión.</p>
+                  </div>
                 </div>
 
                 <!-- Cancelled or Rejected banner -->

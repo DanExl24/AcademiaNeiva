@@ -333,7 +333,7 @@ export class MatriculaService {
       error_message: null
     };
 
-    if ((mat.estado === 'PENDIENTE' || mat.estado === 'CORRECCION' || mat.estado === 'RECHAZADA') && !mat.id_estudiante && mat.correo_padre) {
+    if ((mat.estado === 'PENDIENTE' || mat.estado === 'CORREGIDA' || mat.estado === 'CORRECCION' || mat.estado === 'RECHAZADA') && !mat.id_estudiante && mat.correo_padre) {
       const parentUserRes = await pool.query(
         `SELECT u.id_usuario, u.nombre, u.apellido FROM usuario u 
          JOIN usuario_rol ur ON u.id_usuario = ur.id_usuario
@@ -583,8 +583,8 @@ export class MatriculaService {
         );
       }
 
-      // Devolver la matrícula a estado PENDIENTE para que la directiva vuelva a re-evaluar la solicitud subsanada
-      await client.query("UPDATE matricula SET estado = 'PENDIENTE' WHERE id_matricula = $1", [idMatricula]);
+      // Actualizar la matrícula a estado CORREGIDA para que la directiva identifique claramente que se enviaron las correcciones solicitadas
+      await client.query("UPDATE matricula SET estado = 'CORREGIDA' WHERE id_matricula = $1", [idMatricula]);
 
       await client.query('COMMIT');
       return { success: true };
@@ -800,7 +800,7 @@ export class MatriculaService {
       await client.query(
         `UPDATE matricula 
          SET estado = 'CANCELADA', motivo_cancelacion = 'Reemplazada por reingreso / nueva matrícula finalizada'
-         WHERE id_estudiante = $1 AND id_anio = $2 AND id_colegio = $3 AND id_matricula != $4 AND estado IN ('ACTIVA', 'PENDIENTE', 'CORRECCION')`,
+         WHERE id_estudiante = $1 AND id_anio = $2 AND id_colegio = $3 AND id_matricula != $4 AND estado IN ('ACTIVA', 'PENDIENTE', 'CORREGIDA', 'CORRECCION')`,
         [idEstudiante, mat.rows[0].id_anio, id_colegio, idMatricula]
       );
 

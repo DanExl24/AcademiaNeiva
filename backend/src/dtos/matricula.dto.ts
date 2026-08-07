@@ -11,6 +11,7 @@ export const TipoMatriculaSchema = z.enum([
 export const EstadoMatriculaSchema = z.enum([
   'PENDIENTE',
   'CORRECCION',
+  'CORREGIDA',
   'APROBADA',
   'ACTIVA',
   'RECHAZADA',

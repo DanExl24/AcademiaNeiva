@@ -20,7 +20,8 @@ import {
   User,
   Mail,
   GraduationCap,
-  Download
+  Download,
+  RotateCcw
 } from 'lucide-vue-next'
 
 import * as pdfjsLib from 'pdfjs-dist'
@@ -514,6 +515,15 @@ const formatRenewalStateLabel = (state?: string) => {
             <p class="text-amber-700 dark:text-amber-500 text-xs mt-1.5 italic">
               Al aprobar, el estudiante se vinculará automáticamente a su cuenta existente y se le asignará el rol de Padre.
             </p>
+          </div>
+        </div>
+
+        <!-- Resubmitted / Corrected Banner -->
+        <div v-if="matricula.estado === 'CORREGIDA'" class="p-5 bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-3xl flex items-start gap-4">
+          <div class="p-2.5 bg-purple-600 text-white rounded-2xl shrink-0"><RotateCcw :size="20" /></div>
+          <div class="flex-1">
+            <p class="font-black text-purple-900 dark:text-purple-300 text-sm">Documentos Corregidos por el Acudiente 🔄</p>
+            <p class="text-purple-800 dark:text-purple-400 text-xs mt-1 font-medium">El acudiente ha actualizado los documentos solicitados. Por favor realiza la segunda revisión.</p>
           </div>
         </div>
 

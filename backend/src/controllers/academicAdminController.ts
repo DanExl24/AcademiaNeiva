@@ -6158,8 +6158,8 @@ export const rejectReingresoEnrollment = async (req: Request, res: Response): Pr
     }
 
     const mat = matRes.rows[0];
-    if (mat.tipo !== 'REINGRESO' || (mat.estado !== 'PENDIENTE' && mat.estado !== 'CORRECCION')) {
-      res.status(400).json({ error: "Solo se pueden rechazar solicitudes de reingreso en estado PENDIENTE o CORRECCION." });
+    if (mat.tipo !== 'REINGRESO' || (mat.estado !== 'PENDIENTE' && mat.estado !== 'CORREGIDA' && mat.estado !== 'CORRECCION')) {
+      res.status(400).json({ error: "Solo se pueden rechazar solicitudes de reingreso en estado PENDIENTE, CORREGIDA o CORRECCION." });
       return;
     }
 

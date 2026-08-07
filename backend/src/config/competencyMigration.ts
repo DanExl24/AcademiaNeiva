@@ -283,6 +283,16 @@ export const ensureCompetencySchema = async (): Promise<void> => {
       await client.query("ALTER TYPE estado_matricula ADD VALUE 'APROBADA'");
     }
 
+    const checkCorregidaEnum = await client.query(`
+      SELECT 1 FROM pg_type t 
+      JOIN pg_enum e ON t.oid = e.enumtypid 
+      WHERE t.typname = 'estado_matricula' AND e.enumlabel = 'CORREGIDA'
+    `);
+    if (checkCorregidaEnum.rows.length === 0) {
+      console.log("Adding 'CORREGIDA' to estado_matricula enum...");
+      await client.query("ALTER TYPE estado_matricula ADD VALUE 'CORREGIDA'");
+    }
+
     const checkPeriodEnum = await client.query(`
       SELECT 1 FROM pg_type t 
       JOIN pg_enum e ON t.oid = e.enumtypid 

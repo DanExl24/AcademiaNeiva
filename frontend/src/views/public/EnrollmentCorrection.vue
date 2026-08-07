@@ -91,7 +91,7 @@ const submitCorrections = async () => {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
 
-    notify.addNotification('Documentos actualizados exitosamente. Serán validados nuevamente.', 'success')
+    notify.addNotification('Documentos actualizados exitosamente. Tu solicitud ha pasado a revisión con el estado "Docs Corregidos".', 'success')
     setTimeout(() => {
       router.push('/')
     }, 2000)
