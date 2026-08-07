@@ -411,18 +411,25 @@ router.beforeEach(async (to) => {
 
         sessionStorage.setItem('_sessionVerified', 'true')
       } catch (err) {
-        // Error de red (backend caído): permitir acceso local pero no re-verificar constantemente
+        // Error de red (backend caído): notificar advertencia pero no validar falsamente la sesión local
         console.warn('[Auth Guard] No se pudo verificar el token con el servidor:', err)
-        sessionStorage.setItem('_sessionVerified', 'true')
       }
     }
   }
 
-  // Verificación de roles
+  // Verificación de roles e integridad de sesión
   if (auth.isAuthenticated) {
-    const activeRole = auth.activeRole
+    let activeRole = auth.activeRole
+    const userRoles = auth.user?.roles || (auth.user?.role ? [auth.user.role] : [])
+
+    // Prevenir manipulación manual de activeRole en localStorage si no está en modo monitoreo ni supervisión
+    if (!auth.isMonitoring && !auth.isSupervising && activeRole && userRoles.length > 0 && !userRoles.includes(activeRole)) {
+      console.warn('[Auth Guard] Rol activo no autorizado detectado. Restaurando rol legítimo.')
+      auth.setActiveRole(userRoles[0])
+      activeRole = userRoles[0]
+    }
+
     const allowedRoles = to.meta.roles as string[] | undefined
-    
     if (allowedRoles && !allowedRoles.includes(activeRole || '')) {
       // Redirigir al dashboard home dispatcher si no tiene el rol
       return '/dashboard'

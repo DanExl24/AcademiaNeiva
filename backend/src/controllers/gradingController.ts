@@ -56,7 +56,14 @@ const resolveTeachingContext = async (
 export const getPeriods = async (req: Request, res: Response): Promise<void> => {
   const { schoolId } = req.params;
   const targetYearId = req.query.yearId ? Number(req.query.yearId) : undefined;
-  console.log(`[DEV] getPeriods called - schoolId=${schoolId}, yearId=${targetYearId}`);
+
+  const authReq = req as any;
+  const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+  if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== Number(schoolId)) {
+    res.status(403).json({ error: "No tiene permiso para ver los periodos de este colegio." });
+    return;
+  }
+
   try {
     const periods = await getAllPeriodsForSchool(Number(schoolId), targetYearId);
     console.log(`[DEV] getPeriods - result count: ${periods.length}`);
@@ -775,6 +782,13 @@ export const getGrades = async (req: Request, res: Response): Promise<void> => {
     const context = await resolveTeachingContext(gradeId, subjectId, periodId);
     if (!context) {
       res.status(404).json({ error: "No se encontró la asignación académica" });
+      return;
+    }
+
+    const authReq = req as any;
+    const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+    if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== context.idColegio) {
+      res.status(403).json({ error: "No tiene permiso para acceder a las calificaciones de este colegio." });
       return;
     }
 

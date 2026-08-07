@@ -129,6 +129,13 @@ export const obtenerReporteCoberturaDba = async (req: Request, res: Response): P
     return;
   }
 
+  const authReq = req as any;
+  const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+  if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== schoolId) {
+    res.status(403).json({ error: "No tiene permiso para ver los reportes DBA de este colegio." });
+    return;
+  }
+
   try {
     const periodParam = (id_periodo && id_periodo !== "TODOS") ? Number(id_periodo) : null;
     const yearParam = (targetYear && targetYear !== "TODOS") ? Number(targetYear) : null;
@@ -405,6 +412,13 @@ export const obtenerCatalogoDbaDirectivo = async (req: Request, res: Response): 
 
   if (!schoolId) {
     res.status(400).json({ error: "El ID de colegio es obligatorio" });
+    return;
+  }
+
+  const authReq = req as any;
+  const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+  if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== schoolId) {
+    res.status(403).json({ error: "No tiene permiso para ver los reportes DBA de este colegio." });
     return;
   }
 

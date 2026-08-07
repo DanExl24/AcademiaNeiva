@@ -7,6 +7,13 @@ export const getAllStudents = async (req: Request, res: Response) => {
     const { idColegio } = req.params;
     const { estado, id_nivel, id_tipo_grado, id_jornada, grado, busqueda, yearId } = req.query;
 
+    const authReq = req as any;
+    const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+    if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== Number(idColegio)) {
+      res.status(403).json({ error: "No tiene permiso para acceder a la lista de estudiantes de este colegio." });
+      return;
+    }
+
     const params: any[] = [idColegio];
     let paramCount = 1;
     let yearCondition = '';
@@ -336,6 +343,19 @@ export const updateStudentStatus = async (req: Request, res: Response) => {
 
     if (result.rowCount === 0) {
       throw new Error("Estudiante no encontrado");
+    }
+
+    // RN-ESTU-002: Inactivar inmediatamente el usuario si el estudiante pasa a RETIRADO o EXPULSADO
+    if ((estado === 'RETIRADO' || estado === 'EXPULSADO') && oldStudent.id_usuario) {
+      await client.query(
+        "UPDATE usuario SET activo = FALSE, logged_out_at = NOW() WHERE id_usuario = $1",
+        [oldStudent.id_usuario]
+      );
+    } else if (estado === 'ACTIVO' && oldStudent.id_usuario) {
+      await client.query(
+        "UPDATE usuario SET activo = TRUE WHERE id_usuario = $1",
+        [oldStudent.id_usuario]
+      );
     }
 
     // Si el estudiante pasa a estado ACTIVO, resolver los tickets de soporte asociados a sus matrículas de reingreso

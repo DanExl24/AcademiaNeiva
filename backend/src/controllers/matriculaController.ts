@@ -27,6 +27,14 @@ export const getPendingMatriculas = async (req: Request, res: Response) => {
   try {
     const { idColegio } = req.params;
     const { yearId } = req.query;
+
+    const authReq = req as any;
+    const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+    if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== Number(idColegio)) {
+      res.status(403).json({ error: "No tiene permiso para consultar las matrículas de este colegio." });
+      return;
+    }
+
     const matriculas = await MatriculaService.getAllPending(Number(idColegio), yearId ? Number(yearId) : undefined);
     res.json(matriculas);
   } catch (error: any) {
@@ -36,8 +44,22 @@ export const getPendingMatriculas = async (req: Request, res: Response) => {
 
 export const getMatriculaDetails = async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
-    const details = await MatriculaService.getDetails(Number(id));
+    const idStr = String(req.params.id || "");
+    if (/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(idStr)) {
+      const details = await MatriculaService.getByToken(idStr);
+      res.json(details);
+      return;
+    }
+
+    const details = await MatriculaService.getDetails(Number(idStr));
+
+    const authReq = req as any;
+    const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+    if (authReq.user && !isSupervision && authReq.user.schoolId && details && details.id_colegio !== authReq.user.schoolId) {
+      res.status(403).json({ error: "No tiene permiso para acceder al expediente de esta matrícula." });
+      return;
+    }
+
     res.json(details);
   } catch (error: any) {
     res.status(500).json({ error: error.message });

@@ -135,6 +135,13 @@ export const getObservations = async (
 
     const { id_colegio } = dgRes.rows[0];
 
+    const authReq = req as any;
+    const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+    if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== id_colegio) {
+      res.status(403).json({ error: "No tiene permiso para consultar observaciones de este colegio." });
+      return;
+    }
+
     // Check editability
     const editCheck = await checkEditability(detailGradeId, id_colegio, periodId);
 
@@ -233,6 +240,13 @@ export const createObservation = async (
     }
 
     const schoolId = dgRes.rows[0].id_colegio;
+
+    const authReq = req as any;
+    const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+    if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== schoolId) {
+      res.status(403).json({ error: "No tiene permiso para registrar observaciones en este colegio." });
+      return;
+    }
 
     // Validate editability
     const editCheck = await checkEditability(detailGradeId, schoolId, periodId);

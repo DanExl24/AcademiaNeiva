@@ -3,7 +3,13 @@ import { pool } from "../config/db";
 
 export const getTeacherCourses = async (req: Request, res: Response): Promise<void> => {
   const { userId } = req.params;
-  console.log(`[DEV] getTeacherCourses called - userId: ${userId}`);
+
+  const authUser = (req as any).user;
+  const isMonitoring = req.headers['x-monitoring-mode'] === 'true' || req.headers['x-monitoring-mode'] === '1';
+  if (authUser && !authUser.roles.includes("admin_general") && !isMonitoring && Number(authUser.id) !== Number(userId)) {
+    res.status(403).json({ error: "No tiene permiso para consultar los cursos de otro docente." });
+    return;
+  }
 
   try {
     const docenteRes = await pool.query(

@@ -124,11 +124,18 @@ export const registrarColegio = async (req: AuthRequest, res: Response): Promise
       return;
     }
 
+    // Verificar unicidad del DANE (RN-COL-002)
+    const daneCheck = await pool.query('SELECT 1 FROM colegio WHERE dane = $1', [String(dane).trim()]);
+    if (daneCheck.rows.length > 0) {
+      res.status(400).json({ error: `El código DANE '${dane}' ya se encuentra registrado para otra institución.` });
+      return;
+    }
+
     const result = await pool.query(
       `INSERT INTO colegio (nombre, tipo_colegio, sede, contacto, correo, dane, tipo_calendario, estado, fecha_registro, escudo_url, colores)
        VALUES ($1, $2, $3, $4, $5, $6, $7, 'PENDIENTE', NOW(), $8, $9)
        RETURNING *`,
-      [nombre, tipo_colegio, sede, contacto, correo, dane, tipo_calendario || 'A', escudo_url || null, colores || null]
+      [nombre, tipo_colegio, sede, contacto, correo, String(dane).trim(), tipo_calendario || 'A', escudo_url || null, colores || null]
     );
 
     res.status(201).json(result.rows[0]);
@@ -159,6 +166,15 @@ export const actualizarColegio = async (req: AuthRequest, res: Response): Promis
       return;
     }
 
+    // Verificar unicidad del DANE si se está actualizando (RN-COL-002)
+    if (dane) {
+      const daneCheck = await pool.query('SELECT 1 FROM colegio WHERE dane = $1 AND id_colegio != $2', [String(dane).trim(), id]);
+      if (daneCheck.rows.length > 0) {
+        res.status(400).json({ error: `El código DANE '${dane}' ya se encuentra registrado para otra institución.` });
+        return;
+      }
+    }
+
     const result = await pool.query(
       `UPDATE colegio 
        SET nombre = COALESCE($1, nombre),
@@ -172,7 +188,7 @@ export const actualizarColegio = async (req: AuthRequest, res: Response): Promis
            colores = COALESCE($9, colores)
        WHERE id_colegio = $10
        RETURNING *`,
-      [nombre, tipo_colegio, sede, contacto, correo, dane, tipo_calendario, escudo_url || null, colores || null, id]
+      [nombre, tipo_colegio, sede, contacto, correo, dane ? String(dane).trim() : null, tipo_calendario, escudo_url || null, colores || null, id]
     );
 
     res.json(result.rows[0]);
@@ -234,6 +250,25 @@ export const cambiarEstadoColegio = async (req: AuthRequest, res: Response): Pro
 
     const estadoAnterior = colegioActual.rows[0].estado;
     const colegioNombre = colegioActual.rows[0].nombre;
+
+    // RN-COL-005: Restricción de Eliminación de Colegio si posee registros históricos activos
+    if (estado === 'ELIMINADO') {
+      const checkRecords = await client.query(
+        `SELECT 
+           (SELECT COUNT(*)::int FROM estudiante WHERE id_colegio = $1) AS estudiantes_count,
+           (SELECT COUNT(*)::int FROM matricula WHERE id_colegio = $1) AS matriculas_count,
+           (SELECT COUNT(*)::int FROM anio_lectivo WHERE id_colegio = $1) AS anios_count`,
+        [id]
+      );
+      const { estudiantes_count, matriculas_count, anios_count } = checkRecords.rows[0];
+      if (estudiantes_count > 0 || matriculas_count > 0 || anios_count > 0) {
+        await client.query('ROLLBACK');
+        res.status(400).json({ 
+          error: 'No se puede eliminar el colegio porque cuenta con matrículas, estudiantes o años lectivos registrados. Utilice el estado SUSPENDIDO.' 
+        });
+        return;
+      }
+    }
 
     // Actualizar estado
     const updateFields: string[] = ['estado = $1', 'fecha_cambio_estado = NOW()'];
@@ -437,8 +472,18 @@ export const cambiarEstadoUsuario = async (req: AuthRequest, res: Response): Pro
       return;
     }
 
+    // Prevenir que el Admin General suspenda, banee o elimine su propia cuenta
+    if (req.user && Number(req.user.id) === Number(id) && estado !== 'ACTIVO') {
+      res.status(400).json({ error: 'No puedes suspender, banear ni eliminar tu propia cuenta de Administrador General.' });
+      return;
+    }
+
     const updateFields: string[] = ['estado = $1', 'activo = $2'];
     const params: any[] = [estado, estado === 'ACTIVO'];
+
+    if (estado !== 'ACTIVO') {
+      updateFields.push('logged_out_at = NOW()');
+    }
 
     if (estado === 'BANEADO') {
       updateFields.push(`motivo_baneo = $${params.length + 1}`);
@@ -654,51 +699,89 @@ export const actualizarDirectivo = async (req: AuthRequest, res: Response): Prom
  * Desvincular un directivo de su colegio.
  */
 export const desvincularDirectivo = async (req: AuthRequest, res: Response): Promise<void> => {
+  const client = await pool.connect();
   try {
     const { id } = req.params;
 
-    const result = await pool.query(
+    await client.query('BEGIN');
+
+    const result = await client.query(
       `UPDATE directivo SET estado = 'DESVINCULADO', fecha_desvinculacion = NOW()
        WHERE id = $1 RETURNING *`,
       [id]
     );
 
     if (result.rows.length === 0) {
+      await client.query('ROLLBACK');
       res.status(404).json({ error: 'Directivo no encontrado' });
       return;
     }
 
-    res.json({ message: 'Directivo desvinculado exitosamente', directivo: result.rows[0] });
+    const directivo = result.rows[0];
+
+    // RN-DIR-002: Suspender la cuenta de usuario e invalidar sus tokens activos
+    if (directivo.id_usuario) {
+      await client.query(
+        `UPDATE usuario 
+         SET estado = 'SUSPENDIDO', activo = false, logged_out_at = NOW() 
+         WHERE id_usuario = $1`,
+        [directivo.id_usuario]
+      );
+    }
+
+    await client.query('COMMIT');
+    res.json({ message: 'Directivo desvinculado e inhabilitado exitosamente', directivo });
   } catch (error: any) {
+    await client.query('ROLLBACK');
     console.error('Error desvinculando directivo:', error);
     res.status(500).json({ error: 'Error al desvincular directivo' });
+  } finally {
+    client.release();
   }
 };
 
 /**
  * DELETE /admin/directivos/:id
- * Eliminar un directivo.
- * Regla: Un directivo solo puede ser eliminado si no tiene estudiantes asignados.
+ * Eliminar un directivo (Soft delete y suspensión de usuario).
  */
 export const eliminarDirectivo = async (req: AuthRequest, res: Response): Promise<void> => {
+  const client = await pool.connect();
   try {
     const { id } = req.params;
 
-    const result = await pool.query(
+    await client.query('BEGIN');
+
+    const result = await client.query(
       `UPDATE directivo SET estado = 'ELIMINADO', fecha_desvinculacion = NOW()
        WHERE id = $1 RETURNING *`,
       [id]
     );
 
     if (result.rows.length === 0) {
+      await client.query('ROLLBACK');
       res.status(404).json({ error: 'Directivo no encontrado' });
       return;
     }
 
-    res.json({ message: 'Directivo eliminado exitosamente', directivo: result.rows[0] });
+    const directivo = result.rows[0];
+
+    if (directivo.id_usuario) {
+      await client.query(
+        `UPDATE usuario 
+         SET estado = 'ELIMINADO', activo = false, logged_out_at = NOW() 
+         WHERE id_usuario = $1`,
+        [directivo.id_usuario]
+      );
+    }
+
+    await client.query('COMMIT');
+    res.json({ message: 'Directivo eliminado exitosamente', directivo });
   } catch (error: any) {
+    await client.query('ROLLBACK');
     console.error('Error eliminando directivo:', error);
     res.status(500).json({ error: 'Error al eliminar directivo' });
+  } finally {
+    client.release();
   }
 };
 
@@ -2432,6 +2515,14 @@ export const crearUsuarioByAdminGeneral = async (req: AuthRequest, res: Response
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+
+    // RN-DIR-006: Exclusión de la creación directa de estudiantes sin Matrícula Institucional
+    const normalizedRol = String(rol || '').trim().toLowerCase();
+    if (normalizedRol === 'estudiante') {
+      res.status(400).json({ error: 'El rol estudiante no puede crearse directamente. Debe registrarse a través del proceso de Matrícula Institucional.' });
+      await client.query('ROLLBACK');
+      return;
+    }
 
     // 1. Obtener ID del rol
     const rolRes = await client.query('SELECT id_rol FROM rol WHERE LOWER(nombre) = LOWER($1)', [rol]);

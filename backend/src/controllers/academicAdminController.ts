@@ -431,6 +431,13 @@ export const getGradeManagementData = async (req: Request, res: Response): Promi
     return;
   }
 
+  const authReq = req as AuthRequest;
+  const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+  if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== schoolId) {
+    res.status(403).json({ error: "No tiene permiso para acceder a la estructura escolar de este colegio." });
+    return;
+  }
+
   try {
     const { yearId } = req.query;
     let yearMatriculaJoin = `LEFT JOIN matricula m ON m.id_grupo = g.id_grupo AND m.estado NOT IN ('CANCELADA', 'RECHAZADA')`;
@@ -531,6 +538,13 @@ export const createGradeType = async (req: Request, res: Response): Promise<void
     return;
   }
 
+  const authReq = req as AuthRequest;
+  const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+  if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== schoolId) {
+    res.status(403).json({ error: "No tiene permiso para registrar grados en este colegio." });
+    return;
+  }
+
   const nombreNormalized = normalizeGradeName(rawNombre);
   if (!nombreNormalized) {
     res.status(400).json({ error: "Nombre de grado inválido" });
@@ -588,6 +602,13 @@ export const deleteGradeType = async (req: Request, res: Response): Promise<void
 
   if (!gradeTypeId || !schoolId) {
     res.status(400).json({ error: "Parámetros inválidos" });
+    return;
+  }
+
+  const authReq = req as AuthRequest;
+  const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+  if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== schoolId) {
+    res.status(403).json({ error: "No tiene permiso para eliminar grados de este colegio." });
     return;
   }
 
@@ -989,6 +1010,13 @@ export const getAcademicSettingsData = async (req: Request, res: Response): Prom
   const schoolId = parseSchoolId(req.params.schoolId);
   if (!schoolId) {
     res.status(400).json({ error: "Colegio inválido" });
+    return;
+  }
+
+  const authReq = req as AuthRequest;
+  const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+  if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== schoolId) {
+    res.status(403).json({ error: "No tiene permiso para acceder a la configuración académica de este colegio." });
     return;
   }
 
@@ -1512,6 +1540,13 @@ export const createAcademicYear = async (req: Request, res: Response): Promise<v
     return;
   }
 
+  const authReq = req as AuthRequest;
+  const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+  if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== schoolId) {
+    res.status(403).json({ error: "No tiene permiso para registrar años lectivos en este colegio." });
+    return;
+  }
+
   if (!calendarioInput || !/^[0-9]{4}(-[0-9]{4})?$/.test(calendarioInput)) {
     res.status(400).json({ error: "El nombre del año lectivo debe ser un año (ej. 2026) o un rango de dos años (ej. 2026-2027)." });
     return;
@@ -1932,6 +1967,13 @@ export const upsertCompetencyByAdmin = async (req: Request, res: Response): Prom
 
   if (!schoolId || !groupId || !subjectId || !periodId || !descripcion) {
     res.status(400).json({ error: "Curso, materia, periodo y descripción son obligatorios" });
+    return;
+  }
+
+  const authReq = req as AuthRequest;
+  const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+  if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== schoolId) {
+    res.status(403).json({ error: "No tiene permiso para gestionar competencias de este colegio." });
     return;
   }
 
@@ -2676,6 +2718,13 @@ export const getTeacherManagementData = async (req: Request, res: Response): Pro
     return;
   }
 
+  const authReq = req as AuthRequest;
+  const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+  if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== schoolId) {
+    res.status(403).json({ error: "No tiene permiso para acceder a la gestión de docentes de este colegio." });
+    return;
+  }
+
   try {
     const [documentTypesRes, teachersRes, subjectsRes, groupsRes, assignmentsRes] = await Promise.all([
       pool.query(
@@ -2967,6 +3016,13 @@ export const createTeacher = async (req: Request, res: Response): Promise<void> 
 
   if (!schoolId || !nombre || !apellido || !documento || !email || !password || !documentTypeId) {
     res.status(400).json({ error: "Todos los campos del docente son obligatorios" });
+    return;
+  }
+
+  const authReq = req as AuthRequest;
+  const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+  if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== schoolId) {
+    res.status(403).json({ error: "No tiene permiso para registrar docentes en este colegio." });
     return;
   }
 
@@ -3573,6 +3629,13 @@ export const deleteTeacherAssignment = async (req: Request, res: Response): Prom
     return;
   }
 
+  const authReq = req as AuthRequest;
+  const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+  if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== schoolId) {
+    res.status(403).json({ error: "No tiene permiso para eliminar asignaciones de este colegio." });
+    return;
+  }
+
   try {
     const assignmentRes = await pool.query(
       `SELECT
@@ -3603,6 +3666,22 @@ export const deleteTeacherAssignment = async (req: Request, res: Response): Prom
 
     if (assignmentRes.rows.length === 0) {
       res.status(404).json({ error: "Asignación no encontrada" });
+      return;
+    }
+
+    // RN-DOC-005: Denegar eliminación si existen actividades evaluadas o asistencias registradas
+    const checkRelations = await pool.query(
+      `SELECT 
+         (SELECT COUNT(*)::int FROM actividad_materia WHERE id_detallegrado = $1) AS actividades_count,
+         (SELECT COUNT(*)::int FROM registro_asistencia WHERE id_detallegrado = $1) AS asistencias_count`,
+      [assignmentId]
+    );
+
+    const { actividades_count, asistencias_count } = checkRelations.rows[0];
+    if (actividades_count > 0 || asistencias_count > 0) {
+      res.status(409).json({
+        error: "No se puede eliminar esta asignación académica porque contiene actividades de evaluación o registros de asistencia registrados."
+      });
       return;
     }
 
@@ -4241,6 +4320,13 @@ export const deleteCompetencyByAdmin = async (req: Request, res: Response): Prom
     return;
   }
 
+  const authReq = req as AuthRequest;
+  const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+  if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== schoolId) {
+    res.status(403).json({ error: "No tiene permiso para eliminar competencias de este colegio." });
+    return;
+  }
+
   const client = await pool.connect();
 
   try {
@@ -4276,6 +4362,23 @@ export const deleteCompetencyByAdmin = async (req: Request, res: Response): Prom
     const compIds = targetCompIdsRes.rows.map(r => r.id_competencia);
 
     if (compIds.length > 0) {
+      // RN-COM-005: Verificar uso evaluativo antes de eliminar
+      const usageRes = await client.query(
+        `SELECT COUNT(*)::int as count 
+         FROM actividad_materia 
+         WHERE id_competencia = ANY($1::int[])`,
+        [compIds]
+      );
+
+      const activitiesCount = usageRes.rows[0]?.count || 0;
+      if (activitiesCount > 0) {
+        await client.query("ROLLBACK");
+        res.status(409).json({ 
+          error: `No se puede eliminar la competencia porque tiene ${activitiesCount} actividad(es) evaluativa(s) asignada(s) por docentes en el aula.` 
+        });
+        return;
+      }
+
       // 1. Delete associated evidencia_aprendizaje
       await client.query(
         `DELETE FROM evidencia_aprendizaje WHERE id_competencia = ANY($1::int[])`,
@@ -5100,6 +5203,13 @@ export const getMySchoolData = async (req: Request, res: Response): Promise<void
     return;
   }
 
+  const authReq = req as AuthRequest;
+  const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+  if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== schoolId) {
+    res.status(403).json({ error: "No tiene permiso para acceder a la información de este colegio." });
+    return;
+  }
+
   try {
     const [schoolRes, studentsRes, teachersRes, parentsRes] = await Promise.all([
       pool.query(
@@ -5213,9 +5323,14 @@ export const resetMySchoolIdentity = async (req: Request, res: Response): Promis
     return;
   }
 
+  const authReq = req as AuthRequest;
+  const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+  if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== schoolId) {
+    res.status(403).json({ error: "No tiene permiso para restablecer la identidad de este colegio." });
+    return;
+  }
+
   try {
-    const authReq = req as AuthRequest;
-    const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
     let activeAuditoriaId: number | null = null;
     
     if (isSupervision) {
@@ -5279,6 +5394,14 @@ export const resetMySchoolIdentity = async (req: Request, res: Response): Promis
 };
 
 export const uploadMySchoolEscudo = async (req: Request, res: Response): Promise<void> => {
+  const schoolId = Number(req.params.schoolId);
+  const authReq = req as AuthRequest;
+  const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+  if (!isSupervision && authReq.user?.schoolId && schoolId && authReq.user.schoolId !== schoolId) {
+    res.status(403).json({ error: "No tiene permiso para gestionar el escudo de este colegio." });
+    return;
+  }
+
   try {
     if (!req.file) {
       res.status(400).json({ error: 'No se ha subido ningún archivo' });
