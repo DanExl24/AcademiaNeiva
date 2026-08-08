@@ -1191,11 +1191,15 @@ export const getAcademicSettingsData = async (req: Request, res: Response): Prom
                        'id_evidencia', ev.id_evidencia,
                        'descripcion',  ev.descripcion,
                        'orden',        ev.orden,
-                       'id_evidencia_dba', ev.id_evidencia_dba
+                       'id_evidencia_dba', ev.id_evidencia_dba,
+                       'numero_dba',   d.numero_dba,
+                       'dba_enunciado', d.enunciado
                      )
                      ORDER BY ev.orden, ev.id_evidencia
                    )
                    FROM evidencia_aprendizaje ev
+                   LEFT JOIN evidencias_dba edba ON edba.id_evidencia_dba = ev.id_evidencia_dba
+                   LEFT JOIN dba d ON d.id_dba = edba.id_dba
                    WHERE ev.id_competencia = c.id_competencia
                  ),
                  '[]'::json

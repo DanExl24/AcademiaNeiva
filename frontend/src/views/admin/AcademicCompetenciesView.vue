@@ -46,6 +46,8 @@ interface CompetencyItem {
     descripcion: string
     orden: number
     id_evidencia_dba?: number | null
+    numero_dba?: number | null
+    dba_enunciado?: string | null
   }[]
 }
 
@@ -1002,8 +1004,19 @@ watch(() => yearStore.selectedYearId, loadData)
                       <button @click="editingEvidencia = null" class="text-slate-400 hover:text-slate-600 p-2"><X class="h-5 w-5" /></button>
                     </div>
                     <div v-else class="flex-1 flex justify-between items-start gap-4">
-                      <span class="text-sm font-semibold text-slate-700 dark:text-slate-400">{{ ev.descripcion }}</span>
-                      <div v-if="!ev.id_evidencia_dba && !isPeriodClosed(item.id_periodo)" class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div class="space-y-1">
+                        <div v-if="ev.id_evidencia_dba || ev.numero_dba" class="flex items-center gap-2">
+                          <span class="inline-flex items-center gap-1 rounded-md bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider border border-indigo-200/60 dark:border-indigo-800/60">
+                            <Sparkles class="h-3 w-3 text-indigo-500" />
+                            DBA #{{ ev.numero_dba || 'Asignado' }}
+                          </span>
+                          <span v-if="ev.dba_enunciado" class="text-[11px] font-bold text-slate-400 dark:text-slate-500 truncate max-w-md" :title="ev.dba_enunciado">
+                            - {{ ev.dba_enunciado }}
+                          </span>
+                        </div>
+                        <span class="text-sm font-semibold text-slate-700 dark:text-slate-300 block leading-relaxed">{{ ev.descripcion }}</span>
+                      </div>
+                      <div v-if="!ev.id_evidencia_dba && !isPeriodClosed(item.id_periodo)" class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                         <button @click="startEditEvidencia(ev)" class="text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400"><PenSquare class="h-4 w-4" /></button>
                         <button @click="removeEvidencia(item, ev.id_evidencia)" class="text-slate-400 hover:text-red-500"><Trash2 class="h-4 w-4" /></button>
                       </div>
