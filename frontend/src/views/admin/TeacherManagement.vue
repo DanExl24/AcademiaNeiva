@@ -207,8 +207,122 @@ const resetCourseFilters = () => {
   assignmentForm.value.id_grupo = ''
 }
 
-const assignmentFilterSubjectId = ref<number | null>(null)
-const assignmentFilterGroupId = ref<number | null>(null)
+// Filtros divididos para Carga Horaria Actual
+const workloadFilterSubjectId = ref<number | null>(null)
+const workloadFilterNivel = ref<string>('')
+const workloadFilterGrado = ref<string>('')
+const workloadFilterSeccion = ref<string>('')
+const workloadFilterJornada = ref<string>('')
+const workloadFilterGroupId = ref<number | null>(null)
+
+// Asignaciones del docente seleccionado antes de aplicar filtros de carga
+const rawTeacherAssignments = computed(() => {
+  if (!selectedTeacherId.value) return []
+  return assignments.value.filter((a) => a.id_docente === selectedTeacherId.value)
+})
+
+// Materias disponibles en la carga del docente
+const workloadAvailableSubjects = computed(() => {
+  const map = new Map<number, SubjectItem>()
+  rawTeacherAssignments.value.forEach((a) => {
+    if (a.id_materia && !map.has(a.id_materia)) {
+      map.set(a.id_materia, { id_materia: a.id_materia, nombre: a.materia_nombre })
+    }
+  })
+  return Array.from(map.values()).sort((a, b) => a.nombre.localeCompare(b.nombre))
+})
+
+// Niveles disponibles en las asignaciones del docente
+const workloadAvailableNiveles = computed(() => {
+  const set = new Set<string>()
+  rawTeacherAssignments.value.forEach((a) => {
+    if (a.nivel_nombre) set.add(a.nivel_nombre)
+  })
+  return Array.from(set).sort()
+})
+
+// Grados disponibles en las asignaciones del docente (filtrados por Nivel)
+const workloadAvailableGrados = computed(() => {
+  const set = new Set<string>()
+  rawTeacherAssignments.value.forEach((a) => {
+    if (workloadFilterNivel.value && a.nivel_nombre !== workloadFilterNivel.value) return
+    if (a.tipo_grado_nombre) set.add(a.tipo_grado_nombre)
+  })
+  return Array.from(set).sort()
+})
+
+// Secciones disponibles en las asignaciones del docente (filtradas por Nivel y Grado)
+const workloadAvailableSecciones = computed(() => {
+  const set = new Set<string>()
+  rawTeacherAssignments.value.forEach((a) => {
+    if (workloadFilterNivel.value && a.nivel_nombre !== workloadFilterNivel.value) return
+    if (workloadFilterGrado.value && a.tipo_grado_nombre !== workloadFilterGrado.value) return
+    if (a.seccion_nombre) set.add(a.seccion_nombre)
+  })
+  return Array.from(set).sort()
+})
+
+// Jornadas disponibles en las asignaciones del docente
+const workloadAvailableJornadas = computed(() => {
+  const set = new Set<string>()
+  rawTeacherAssignments.value.forEach((a) => {
+    if (workloadFilterNivel.value && a.nivel_nombre !== workloadFilterNivel.value) return
+    if (workloadFilterGrado.value && a.tipo_grado_nombre !== workloadFilterGrado.value) return
+    if (workloadFilterSeccion.value && a.seccion_nombre !== workloadFilterSeccion.value) return
+    if (a.jornada_nombre) set.add(a.jornada_nombre)
+  })
+  return Array.from(set).sort()
+})
+
+// Grupos filtrados en las asignaciones del docente
+const workloadFilteredGroups = computed(() => {
+  const map = new Map<number, GroupItem>()
+  rawTeacherAssignments.value.forEach((a) => {
+    if (workloadFilterNivel.value && a.nivel_nombre !== workloadFilterNivel.value) return
+    if (workloadFilterGrado.value && a.tipo_grado_nombre !== workloadFilterGrado.value) return
+    if (workloadFilterSeccion.value && a.seccion_nombre !== workloadFilterSeccion.value) return
+    if (workloadFilterJornada.value && a.jornada_nombre !== workloadFilterJornada.value) return
+    if (a.id_grupo && !map.has(a.id_grupo)) {
+      map.set(a.id_grupo, {
+        id_grupo: a.id_grupo,
+        nivel_nombre: a.nivel_nombre,
+        tipo_grado_nombre: a.tipo_grado_nombre,
+        seccion_nombre: a.seccion_nombre,
+        jornada_nombre: a.jornada_nombre
+      })
+    }
+  })
+  return Array.from(map.values())
+})
+
+const onWorkloadCourseFilterChange = () => {
+  if (workloadFilterGroupId.value) {
+    const exists = workloadFilteredGroups.value.some((g) => g.id_grupo === workloadFilterGroupId.value)
+    if (!exists) {
+      workloadFilterGroupId.value = null
+    }
+  }
+}
+
+const resetWorkloadFilters = () => {
+  workloadFilterSubjectId.value = null
+  workloadFilterNivel.value = ''
+  workloadFilterGrado.value = ''
+  workloadFilterSeccion.value = ''
+  workloadFilterJornada.value = ''
+  workloadFilterGroupId.value = null
+}
+
+const hasActiveWorkloadFilters = computed(() => {
+  return Boolean(
+    workloadFilterSubjectId.value ||
+    workloadFilterNivel.value ||
+    workloadFilterGrado.value ||
+    workloadFilterSeccion.value ||
+    workloadFilterJornada.value ||
+    workloadFilterGroupId.value
+  )
+})
 
 const visibleTeachers = computed(() => {
   const term = teacherSearch.value.trim().toLowerCase()
@@ -225,12 +339,24 @@ const selectedTeacher = computed(() =>
 )
 
 const selectedTeacherAssignments = computed(() => {
-  let list = assignments.value.filter((a) => a.id_docente === selectedTeacherId.value)
-  if (assignmentFilterSubjectId.value) {
-    list = list.filter(a => a.id_materia === assignmentFilterSubjectId.value)
+  let list = rawTeacherAssignments.value
+  if (workloadFilterSubjectId.value) {
+    list = list.filter((a) => a.id_materia === workloadFilterSubjectId.value)
   }
-  if (assignmentFilterGroupId.value) {
-    list = list.filter(a => a.id_grupo === assignmentFilterGroupId.value)
+  if (workloadFilterNivel.value) {
+    list = list.filter((a) => a.nivel_nombre === workloadFilterNivel.value)
+  }
+  if (workloadFilterGrado.value) {
+    list = list.filter((a) => a.tipo_grado_nombre === workloadFilterGrado.value)
+  }
+  if (workloadFilterSeccion.value) {
+    list = list.filter((a) => a.seccion_nombre === workloadFilterSeccion.value)
+  }
+  if (workloadFilterJornada.value) {
+    list = list.filter((a) => a.jornada_nombre === workloadFilterJornada.value)
+  }
+  if (workloadFilterGroupId.value) {
+    list = list.filter((a) => a.id_grupo === workloadFilterGroupId.value)
   }
   return list
 })
@@ -255,9 +381,8 @@ const teacherStatusLabel = (estado: TeacherItem['estado']) => {
 const openDrawer = (teacherId: number) => {
   selectedTeacherId.value = teacherId
   resetCourseFilters()
+  resetWorkloadFilters()
   assignmentForm.value = { id_grupo: '', id_materia: '' }
-  assignmentFilterSubjectId.value = null
-  assignmentFilterGroupId.value = null
   drawerOpen.value = true
 }
 
@@ -999,29 +1124,103 @@ watch(() => yearStore.selectedYearId, () => {
                     <BookOpen :size="14" />
                     Carga Horaria Actual
                   </p>
-                  <span class="bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 px-3 py-1 rounded-full text-[10px] font-black">{{ selectedTeacherAssignments.length }} asignaciones</span>
+                  <div class="flex items-center gap-2">
+                    <button 
+                      v-if="hasActiveWorkloadFilters" 
+                      @click="resetWorkloadFilters" 
+                      class="text-[10px] font-black text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 uppercase tracking-wider bg-indigo-50 dark:bg-indigo-950/30 px-2.5 py-1 rounded-lg border border-indigo-200 dark:border-indigo-800 transition-all cursor-pointer"
+                    >
+                      Limpiar filtros
+                    </button>
+                    <span class="bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 px-3 py-1 rounded-full text-[10px] font-black">{{ selectedTeacherAssignments.length }} asignaciones</span>
+                  </div>
                 </div>
 
-                <!-- Assignment Filters -->
-                <div class="grid grid-cols-2 gap-3 mb-6">
-                  <div class="space-y-1">
-                    <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Filtrar por Materia</label>
-                    <select v-model="assignmentFilterSubjectId" class="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl p-2.5 text-[10px] font-black outline-none text-slate-900 dark:text-white transition-all focus:ring-2 focus:ring-indigo-500/10">
-                      <option :value="null">Todas las materias</option>
-                      <option v-for="s in subjects" :key="s.id_materia" :value="s.id_materia">{{ s.nombre }}</option>
-                    </select>
-                  </div>
-                  <div class="space-y-1">
-                    <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Filtrar por Curso</label>
-                    <select v-model="assignmentFilterGroupId" class="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl p-2.5 text-[10px] font-black outline-none text-slate-900 dark:text-white transition-all focus:ring-2 focus:ring-indigo-500/10">
-                      <option :value="null">Todos los cursos</option>
-                      <option v-for="g in groups" :key="g.id_grupo" :value="g.id_grupo">
-                        {{ getCourseDisplayName({ tipo_grado_nombre: g.tipo_grado_nombre, seccion_nombre: g.seccion_nombre }) }}
-                      </option>
-                    </select>
-                  </div>
-                  <div v-if="assignmentFilterSubjectId || assignmentFilterGroupId" class="col-span-2">
-                    <button @click="assignmentFilterSubjectId = null; assignmentFilterGroupId = null" class="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest hover:underline px-1">Limpiar filtros de carga</button>
+                <!-- Assignment Filters Divididos (Materia, Nivel, Grado, Sección, Jornada, Curso) -->
+                <div class="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 space-y-3 mb-6">
+                  <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                    <Filter :size="12" class="text-indigo-500" />
+                    Filtrar Asignaciones Registradas:
+                  </p>
+
+                  <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                    <!-- 1. Materia -->
+                    <div class="space-y-1">
+                      <label class="text-[9px] font-black text-slate-400 uppercase tracking-wider ml-1">Materia</label>
+                      <select 
+                        v-model="workloadFilterSubjectId" 
+                        class="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-bold outline-none text-slate-900 dark:text-white transition-all focus:ring-2 focus:ring-indigo-500/10"
+                      >
+                        <option :value="null">Todas</option>
+                        <option v-for="s in workloadAvailableSubjects" :key="s.id_materia" :value="s.id_materia">{{ s.nombre }}</option>
+                      </select>
+                    </div>
+
+                    <!-- 2. Nivel -->
+                    <div class="space-y-1">
+                      <label class="text-[9px] font-black text-slate-400 uppercase tracking-wider ml-1">Nivel</label>
+                      <select 
+                        v-model="workloadFilterNivel" 
+                        @change="onWorkloadCourseFilterChange"
+                        class="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-bold outline-none text-slate-900 dark:text-white transition-all focus:ring-2 focus:ring-indigo-500/10"
+                      >
+                        <option value="">Todos</option>
+                        <option v-for="n in workloadAvailableNiveles" :key="n" :value="n">{{ n }}</option>
+                      </select>
+                    </div>
+
+                    <!-- 3. Grado -->
+                    <div class="space-y-1">
+                      <label class="text-[9px] font-black text-slate-400 uppercase tracking-wider ml-1">Grado</label>
+                      <select 
+                        v-model="workloadFilterGrado" 
+                        @change="onWorkloadCourseFilterChange"
+                        class="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-bold outline-none text-slate-900 dark:text-white transition-all focus:ring-2 focus:ring-indigo-500/10"
+                      >
+                        <option value="">Todos</option>
+                        <option v-for="g in workloadAvailableGrados" :key="g" :value="g">{{ g }}</option>
+                      </select>
+                    </div>
+
+                    <!-- 4. Sección -->
+                    <div class="space-y-1">
+                      <label class="text-[9px] font-black text-slate-400 uppercase tracking-wider ml-1">Sección</label>
+                      <select 
+                        v-model="workloadFilterSeccion" 
+                        @change="onWorkloadCourseFilterChange"
+                        class="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-bold outline-none text-slate-900 dark:text-white transition-all focus:ring-2 focus:ring-indigo-500/10"
+                      >
+                        <option value="">Todas</option>
+                        <option v-for="sec in workloadAvailableSecciones" :key="sec" :value="sec">{{ sec }}</option>
+                      </select>
+                    </div>
+
+                    <!-- 5. Jornada -->
+                    <div class="space-y-1">
+                      <label class="text-[9px] font-black text-slate-400 uppercase tracking-wider ml-1">Jornada</label>
+                      <select 
+                        v-model="workloadFilterJornada" 
+                        @change="onWorkloadCourseFilterChange"
+                        class="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-bold outline-none text-slate-900 dark:text-white transition-all focus:ring-2 focus:ring-indigo-500/10"
+                      >
+                        <option value="">Todas</option>
+                        <option v-for="j in workloadAvailableJornadas" :key="j" :value="j">{{ j }}</option>
+                      </select>
+                    </div>
+
+                    <!-- 6. Curso Específico -->
+                    <div class="space-y-1">
+                      <label class="text-[9px] font-black text-slate-400 uppercase tracking-wider ml-1">Curso Específico</label>
+                      <select 
+                        v-model="workloadFilterGroupId" 
+                        class="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-bold outline-none text-slate-900 dark:text-white transition-all focus:ring-2 focus:ring-indigo-500/10"
+                      >
+                        <option :value="null">Todos los cursos</option>
+                        <option v-for="g in workloadFilteredGroups" :key="g.id_grupo" :value="g.id_grupo">
+                          {{ getCourseDisplayName({ tipo_grado_nombre: g.tipo_grado_nombre, seccion_nombre: g.seccion_nombre }) }} ({{ g.jornada_nombre }})
+                        </option>
+                      </select>
+                    </div>
                   </div>
                 </div>
 
