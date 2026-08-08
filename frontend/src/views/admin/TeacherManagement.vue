@@ -17,7 +17,8 @@ import {
   Eye,
   Download,
   Edit2,
-  UserCheck
+  UserCheck,
+  Filter
 } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 import { useRouter } from 'vue-router'
@@ -121,6 +122,91 @@ const assignmentForm = ref({
   id_materia: '',
 })
 
+// Filtros divididos para selección de curso en asignaciones
+const selectedFilterNivel = ref('')
+const selectedFilterGrado = ref('')
+const selectedFilterSeccion = ref('')
+const selectedFilterJornada = ref('')
+
+const availableNiveles = computed(() => {
+  const set = new Set<string>()
+  groups.value.forEach((g) => {
+    if (g.nivel_nombre) set.add(g.nivel_nombre)
+  })
+  return Array.from(set).sort()
+})
+
+const availableGrados = computed(() => {
+  const set = new Set<string>()
+  groups.value.forEach((g) => {
+    if (selectedFilterNivel.value && g.nivel_nombre !== selectedFilterNivel.value) return
+    if (g.tipo_grado_nombre) set.add(g.tipo_grado_nombre)
+  })
+  return Array.from(set).sort()
+})
+
+const availableSecciones = computed(() => {
+  const set = new Set<string>()
+  groups.value.forEach((g) => {
+    if (selectedFilterNivel.value && g.nivel_nombre !== selectedFilterNivel.value) return
+    if (selectedFilterGrado.value && g.tipo_grado_nombre !== selectedFilterGrado.value) return
+    if (g.seccion_nombre) set.add(g.seccion_nombre)
+  })
+  return Array.from(set).sort()
+})
+
+const availableJornadas = computed(() => {
+  const set = new Set<string>()
+  groups.value.forEach((g) => {
+    if (selectedFilterNivel.value && g.nivel_nombre !== selectedFilterNivel.value) return
+    if (selectedFilterGrado.value && g.tipo_grado_nombre !== selectedFilterGrado.value) return
+    if (selectedFilterSeccion.value && g.seccion_nombre !== selectedFilterSeccion.value) return
+    if (g.jornada_nombre) set.add(g.jornada_nombre)
+  })
+  return Array.from(set).sort()
+})
+
+const filteredGroups = computed(() => {
+  return groups.value.filter((g) => {
+    if (selectedFilterNivel.value && g.nivel_nombre !== selectedFilterNivel.value) return false
+    if (selectedFilterGrado.value && g.tipo_grado_nombre !== selectedFilterGrado.value) return false
+    if (selectedFilterSeccion.value && g.seccion_nombre !== selectedFilterSeccion.value) return false
+    if (selectedFilterJornada.value && g.jornada_nombre !== selectedFilterJornada.value) return false
+    return true
+  })
+})
+
+const onCourseFilterChange = () => {
+  if (assignmentForm.value.id_grupo) {
+    const exists = filteredGroups.value.some((g) => String(g.id_grupo) === String(assignmentForm.value.id_grupo))
+    if (!exists) {
+      assignmentForm.value.id_grupo = ''
+    }
+  }
+  if (filteredGroups.value.length === 1) {
+    assignmentForm.value.id_grupo = String(filteredGroups.value[0].id_grupo)
+  }
+}
+
+const onGroupSelectChange = () => {
+  if (!assignmentForm.value.id_grupo) return
+  const g = groups.value.find((gr) => String(gr.id_grupo) === String(assignmentForm.value.id_grupo))
+  if (g) {
+    selectedFilterNivel.value = g.nivel_nombre || ''
+    selectedFilterGrado.value = g.tipo_grado_nombre || ''
+    selectedFilterSeccion.value = g.seccion_nombre || ''
+    selectedFilterJornada.value = g.jornada_nombre || ''
+  }
+}
+
+const resetCourseFilters = () => {
+  selectedFilterNivel.value = ''
+  selectedFilterGrado.value = ''
+  selectedFilterSeccion.value = ''
+  selectedFilterJornada.value = ''
+  assignmentForm.value.id_grupo = ''
+}
+
 const assignmentFilterSubjectId = ref<number | null>(null)
 const assignmentFilterGroupId = ref<number | null>(null)
 
@@ -168,6 +254,7 @@ const teacherStatusLabel = (estado: TeacherItem['estado']) => {
 
 const openDrawer = (teacherId: number) => {
   selectedTeacherId.value = teacherId
+  resetCourseFilters()
   assignmentForm.value = { id_grupo: '', id_materia: '' }
   assignmentFilterSubjectId.value = null
   assignmentFilterGroupId.value = null
@@ -791,20 +878,98 @@ watch(() => yearStore.selectedYearId, () => {
 
               <!-- Assignment Form -->
               <div v-if="!yearStore.isReadonlyYear" class="bg-slate-50 dark:bg-slate-800/40 rounded-3xl p-6 space-y-5">
-                <div class="flex items-center gap-3">
-                  <div class="p-2.5 bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 rounded-xl"><GraduationCap :size="20" /></div>
-                  <div>
-                    <h3 class="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wide">Nueva Asignación</h3>
-                    <p class="text-[10px] font-bold text-slate-400 mt-0.5">Curso + Materia para este docente</p>
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-3">
+                    <div class="p-2.5 bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 rounded-xl"><GraduationCap :size="20" /></div>
+                    <div>
+                      <h3 class="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wide">Nueva Asignación</h3>
+                      <p class="text-[10px] font-bold text-slate-400 mt-0.5">Filtra por Nivel, Grado, Sección y Jornada para asignar</p>
+                    </div>
+                  </div>
+                  <button 
+                    v-if="selectedFilterNivel || selectedFilterGrado || selectedFilterSeccion || selectedFilterJornada" 
+                    @click="resetCourseFilters" 
+                    class="text-[10px] font-black text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 uppercase tracking-wider bg-emerald-50 dark:bg-emerald-950/30 px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800 transition-all"
+                  >
+                    Limpiar filtros
+                  </button>
+                </div>
+
+                <!-- Filtros divididos para Selección de Curso -->
+                <div class="space-y-3 bg-white dark:bg-slate-800/80 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs">
+                  <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                    <Filter :size="12" class="text-emerald-500" />
+                    Filtros de Curso:
+                  </p>
+
+                  <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                    <!-- 1. Nivel -->
+                    <div class="space-y-1">
+                      <label class="text-[9px] font-black text-slate-400 uppercase tracking-wider ml-1">Nivel</label>
+                      <select 
+                        v-model="selectedFilterNivel" 
+                        @change="onCourseFilterChange"
+                        class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-bold outline-none text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                      >
+                        <option value="">Todos</option>
+                        <option v-for="n in availableNiveles" :key="n" :value="n">{{ n }}</option>
+                      </select>
+                    </div>
+
+                    <!-- 2. Grado -->
+                    <div class="space-y-1">
+                      <label class="text-[9px] font-black text-slate-400 uppercase tracking-wider ml-1">Grado</label>
+                      <select 
+                        v-model="selectedFilterGrado" 
+                        @change="onCourseFilterChange"
+                        class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-bold outline-none text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                      >
+                        <option value="">Todos</option>
+                        <option v-for="g in availableGrados" :key="g" :value="g">{{ g }}</option>
+                      </select>
+                    </div>
+
+                    <!-- 3. Sección -->
+                    <div class="space-y-1">
+                      <label class="text-[9px] font-black text-slate-400 uppercase tracking-wider ml-1">Sección</label>
+                      <select 
+                        v-model="selectedFilterSeccion" 
+                        @change="onCourseFilterChange"
+                        class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-bold outline-none text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                      >
+                        <option value="">Todas</option>
+                        <option v-for="s in availableSecciones" :key="s" :value="s">{{ s }}</option>
+                      </select>
+                    </div>
+
+                    <!-- 4. Jornada -->
+                    <div class="space-y-1">
+                      <label class="text-[9px] font-black text-slate-400 uppercase tracking-wider ml-1">Jornada</label>
+                      <select 
+                        v-model="selectedFilterJornada" 
+                        @change="onCourseFilterChange"
+                        class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-bold outline-none text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                      >
+                        <option value="">Todas</option>
+                        <option v-for="j in availableJornadas" :key="j" :value="j">{{ j }}</option>
+                      </select>
+                    </div>
                   </div>
                 </div>
 
+                <!-- Selección de Curso Resultante y Materia -->
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div class="space-y-1.5">
-                    <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Grupo</label>
-                    <select v-model="assignmentForm.id_grupo" class="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-xs font-bold outline-none text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500/20 transition-all">
+                    <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                      Curso ({{ filteredGroups.length }} {{ filteredGroups.length === 1 ? 'disponible' : 'disponibles' }})
+                    </label>
+                    <select 
+                      v-model="assignmentForm.id_grupo" 
+                      @change="onGroupSelectChange"
+                      class="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-xs font-bold outline-none text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                    >
                       <option value="">Seleccionar curso...</option>
-                      <option v-for="group in groups" :key="group.id_grupo" :value="group.id_grupo">
+                      <option v-for="group in filteredGroups" :key="group.id_grupo" :value="group.id_grupo">
                         {{ getCourseDisplayName({ tipo_grado_nombre: group.tipo_grado_nombre, seccion_nombre: group.seccion_nombre }) }} ({{ group.jornada_nombre }})
                       </option>
                     </select>
@@ -821,7 +986,7 @@ watch(() => yearStore.selectedYearId, () => {
                 <button
                   @click="assignCourseSubject(false)"
                   :disabled="savingAssignment"
-                  class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-black text-xs uppercase tracking-widest shadow-lg shadow-emerald-100 dark:shadow-none transition-all disabled:opacity-50"
+                  class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-black text-xs uppercase tracking-widest shadow-lg shadow-emerald-100 dark:shadow-none transition-all disabled:opacity-50 cursor-pointer"
                 >
                   {{ savingAssignment ? 'Registrando...' : 'Confirmar Asignación' }}
                 </button>
