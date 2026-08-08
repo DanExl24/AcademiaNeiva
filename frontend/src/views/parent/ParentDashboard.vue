@@ -80,6 +80,11 @@ const fetchDashboardData = async () => {
     }
 
     dashboardData.value = response.data
+
+    // Si el padre tiene sólo 1 hijo, seleccionarlo automáticamente por defecto
+    if (dashboardData.value?.children?.length === 1 && !selectedChildId.value) {
+      selectedChildId.value = dashboardData.value.children[0].id_estudiante
+    }
     
     if (!selectedPeriodId.value && dashboardData.value?.activePeriod) {
       selectedPeriodId.value = dashboardData.value.activePeriod.id_periodo
@@ -676,24 +681,59 @@ const barChartOptions = {
            </div>
 
            <div class="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col justify-between">
-             <h3 class="text-xl font-black text-slate-800 dark:text-white mb-4 italic">Perfil Académico</h3>
-             <div v-if="selectedChild" class="space-y-4 animate-in slide-in-from-right duration-500">
-                <div class="flex justify-between items-center p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl">
-                  <span class="text-xs font-bold text-slate-400">Año Escolar</span>
-                  <span class="text-sm font-black text-slate-800 dark:text-white">2026</span>
+             <div class="flex items-center justify-between mb-4">
+               <h3 class="text-xl font-black text-slate-800 dark:text-white italic">Perfil Académico</h3>
+               <span v-if="selectedChild" class="px-3 py-1 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-300 rounded-xl text-[10px] font-black uppercase tracking-widest border border-indigo-100 dark:border-indigo-800">
+                 {{ selectedChild.nombre }}
+               </span>
+             </div>
+
+             <!-- Detalle para hijo seleccionado -->
+             <div v-if="selectedChild" class="space-y-3 animate-in slide-in-from-right duration-500">
+                <div class="p-3.5 bg-slate-50 dark:bg-slate-800/80 rounded-2xl flex justify-between items-center border border-slate-100 dark:border-slate-700/50">
+                  <span class="text-xs font-bold text-slate-400">Estudiante</span>
+                  <span class="text-sm font-black text-slate-800 dark:text-white">{{ selectedChild.nombre }} {{ selectedChild.apellido }}</span>
                 </div>
-                <div class="flex justify-between items-center p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl">
-                  <span class="text-xs font-bold text-slate-400">Grado Especial</span>
-                  <span class="text-sm font-black text-slate-800 dark:text-white">{{ selectedChild.grado }}</span>
+                <div class="p-3.5 bg-slate-50 dark:bg-slate-800/80 rounded-2xl flex justify-between items-center border border-slate-100 dark:border-slate-700/50">
+                  <span class="text-xs font-bold text-slate-400">Grado Académico</span>
+                  <span class="text-sm font-black text-slate-800 dark:text-white">{{ selectedChild.grado || 'Matriculado' }}</span>
                 </div>
-                <div class="flex justify-between items-center p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl">
-                  <span class="text-xs font-bold text-slate-400">Sección</span>
-                  <span class="text-sm font-black text-slate-800 dark:text-white">Grupo {{ selectedChild.grupo }}</span>
+                <div class="p-3.5 bg-slate-50 dark:bg-slate-800/80 rounded-2xl flex justify-between items-center border border-slate-100 dark:border-slate-700/50">
+                  <span class="text-xs font-bold text-slate-400">Grupo / Sección</span>
+                  <span class="text-sm font-black text-slate-800 dark:text-white">{{ selectedChild.grupo ? 'Grupo ' + selectedChild.grupo : 'Principal' }}</span>
+                </div>
+                <div v-if="selectedChild.codigo" class="p-3.5 bg-slate-50 dark:bg-slate-800/80 rounded-2xl flex justify-between items-center border border-slate-100 dark:border-slate-700/50">
+                  <span class="text-xs font-bold text-slate-400">Código Estudiantil</span>
+                  <span class="text-xs font-mono font-black text-indigo-600 dark:text-indigo-400">{{ selectedChild.codigo }}</span>
                 </div>
              </div>
+
+             <!-- Lista interactiva si se tiene seleccionada la "Vista Familiar Global" con varios hijos -->
+             <div v-else-if="dashboardData?.children?.length" class="space-y-2.5">
+               <p class="text-[11px] text-slate-400 font-bold mb-1">Hijos Registrados en el Sistema:</p>
+               <div 
+                 v-for="child in dashboardData.children" 
+                 :key="child.id_estudiante"
+                 @click="selectedChildId = child.id_estudiante"
+                 class="p-3.5 bg-slate-50 hover:bg-indigo-50/60 dark:bg-slate-800/80 dark:hover:bg-slate-700/80 rounded-2xl border border-slate-100 dark:border-slate-700/60 cursor-pointer transition-all flex items-center justify-between group"
+               >
+                 <div>
+                   <p class="text-xs font-black text-slate-900 dark:text-white group-hover:text-indigo-600 transition-colors">
+                     {{ child.nombre }} {{ child.apellido }}
+                   </p>
+                   <p class="text-[10px] font-bold text-slate-400 mt-0.5">
+                     {{ child.grado || 'Estudiante' }} • Grupo {{ child.grupo || 'A' }}
+                   </p>
+                 </div>
+                 <span class="px-2.5 py-1 bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 rounded-xl shadow-xs text-[10px] font-black uppercase tracking-wider group-hover:bg-indigo-600 group-hover:text-white transition-all flex items-center gap-1">
+                   Ver ➔
+                 </span>
+               </div>
+             </div>
+
              <div v-else class="py-10 text-center opacity-30 flex flex-col items-center gap-2">
                <Zap :size="48" />
-               <p class="text-xs font-black uppercase">Vista Familiar Global</p>
+               <p class="text-xs font-black uppercase">Sin Perfil Disponible</p>
              </div>
              
              <div v-if="selectedChildId && selectedPeriodId" class="mt-4">
@@ -704,7 +744,7 @@ const barChartOptions = {
                />
              </div>
 
-             <router-link to="/dashboard/notas-hijos" class="mt-4 w-full py-4 bg-white/5 border border-white/10 dark:border-slate-700 text-slate-600 dark:text-slate-300 rounded-2xl font-black text-xs uppercase tracking-widest text-center shadow-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-all flex items-center justify-center gap-2">
+             <router-link to="/dashboard/notas-hijos" class="mt-4 w-full py-4 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-2xl font-black text-xs uppercase tracking-widest text-center transition-all flex items-center justify-center gap-2">
                 Ver Notas Detalladas
                 <ChevronRight :size="16" />
              </router-link>
