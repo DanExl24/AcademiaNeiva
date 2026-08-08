@@ -4,6 +4,7 @@ import { pool } from "../config/db";
 import bcrypt from "bcrypt";
 import { randomUUID } from "crypto";
 import { NotificationService } from "../services/notificationService";
+import { validateDocumentUniqueness } from "../utils/documentValidation";
 import { normalizeGradeName, isDuplicateOrSimilarGrade } from "../utils/gradeNormalization";
 import { getDefaultMonthsLabelForPeriodOrder, getAcademicYearLabel } from "../config/academicCalendarDefaults";
 import {
@@ -3182,6 +3183,9 @@ export const createTeacher = async (req: Request, res: Response): Promise<void> 
       res.status(409).json({ error: "Ya existe un usuario registrado con ese correo" });
       return;
     }
+
+    // Validar unicidad global del documento de identidad
+    await validateDocumentUniqueness(client, documento, "docente");
 
     const passwordHash = await bcrypt.hash(password, 10);
     const userRes = await client.query(

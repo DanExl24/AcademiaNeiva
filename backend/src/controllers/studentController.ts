@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { pool } from "../config/db";
 import { NotificationService } from "../services/notificationService";
+import { validateDocumentUniqueness } from "../utils/documentValidation";
 
 export const getAllStudents = async (req: Request, res: Response) => {
   try {
@@ -173,6 +174,10 @@ export const updateStudent = async (req: Request, res: Response) => {
       return res.status(404).json({ error: "Estudiante no encontrado" });
     }
     const oldStudent = oldStudentRes.rows[0];
+
+    if (documento) {
+      await validateDocumentUniqueness(client, documento, "estudiante", { excludeEstudianteId: Number(id) });
+    }
 
     const result = await client.query(
       `UPDATE estudiante 

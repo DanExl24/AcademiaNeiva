@@ -3,6 +3,7 @@ import { db } from "../config/kysely";
 import { sql } from "kysely";
 import { NotificationService } from "./notificationService";
 import bcrypt from "bcrypt";
+import { validateDocumentUniqueness, normalizeDocument } from "../utils/documentValidation";
 
 // Documentos siempre obligatorios
 const ALWAYS_REQUIRED = ['documentoPadre', 'salud', 'foto', 'reciboPublico'];
@@ -659,6 +660,10 @@ export class MatriculaService {
       throw new Error('Documento de acudiente no válido. Mínimo 4 caracteres alfanuméricos.');
     }
 
+    if (normalizeDocument(data.student.documento) === normalizeDocument(data.parent.documento)) {
+      throw new Error(`El número de documento de identidad (${data.student.documento}) no está permitido: el estudiante y el acudiente no pueden tener el mismo documento de identidad.`);
+    }
+
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
@@ -691,6 +696,9 @@ export class MatriculaService {
       // --- CREACIÓN O ACTUALIZACIÓN DEL ESTUDIANTE ---
       let idEstudiante = mat.rows[0].id_estudiante || (data.id_estudiante ? Number(data.id_estudiante) : null);
       let studentCode;
+
+      // Validar unicidad global del documento del estudiante en la plataforma
+      await validateDocumentUniqueness(client, data.student.documento, "estudiante", { excludeEstudianteId: idEstudiante });
 
       if (idEstudiante) {
         // Estudiante existente
@@ -767,6 +775,9 @@ export class MatriculaService {
           [data.parent.nombre, data.parent.apellido, data.parent.id_tipodocumento, idPadre]
         );
       } else {
+        // Validar unicidad global del documento de acudiente en la plataforma
+        await validateDocumentUniqueness(client, data.parent.documento, "acudiente");
+
         // 2. Si no existe por documento, verificar si el correo pertenece a un usuario en el sistema
         const existingUserByEmail = await client.query(
           'SELECT id_usuario FROM usuario WHERE email = $1',

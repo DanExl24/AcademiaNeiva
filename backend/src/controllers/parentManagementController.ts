@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { pool } from "../config/db";
+import { validateDocumentUniqueness } from "../utils/documentValidation";
 
 const parseSchoolId = (value: unknown): number | null => {
   const parsed = Number(value);
@@ -399,16 +400,8 @@ export const updateParent = async (req: Request, res: Response): Promise<void> =
       return;
     }
 
-    if (documento.trim() !== oldParent.documento) {
-      const docCheck = await client.query(
-        "SELECT id_padrefamilia FROM padre_familia WHERE documento = $1 AND id_padrefamilia != $2",
-        [documento.trim(), parentId]
-      );
-      if (docCheck.rowCount && docCheck.rowCount > 0) {
-        await client.query("ROLLBACK");
-        res.status(409).json({ error: "El documento ya esta registrado para otro padre de familia" });
-        return;
-      }
+    if (documento && documento.trim() !== oldParent.documento) {
+      await validateDocumentUniqueness(client, documento, "acudiente", { excludePadreId: parentId });
     }
 
     const result = await client.query(

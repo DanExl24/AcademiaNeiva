@@ -173,6 +173,14 @@ const handleFinalize = async () => {
     return
   }
 
+  const cleanStudentDoc = studentData.value.documento.trim().replace(/\s+/g, "").toUpperCase();
+  const cleanParentDoc = parentData.value.documento.trim().replace(/\s+/g, "").toUpperCase();
+
+  if (cleanStudentDoc === cleanParentDoc) {
+    notify.addNotification('El número de documento de identidad no puede ser igual para el estudiante y el acudiente.', 'error')
+    return
+  }
+
   try {
     // Resolve id_estudiante: prefer explicit selection, then autoselected student, then reingreso
     const resolvedIdEstudiante = 
