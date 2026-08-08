@@ -152,7 +152,7 @@ export const getObservations = async (
          o.id_estudiante,
          e.nombre,
          e.apellido,
-         e.documento,
+         u.documento,
          e.codigo,
          o.fortalezas,
          o.debilidades,
@@ -161,6 +161,7 @@ export const getObservations = async (
          o.tipo
        FROM observacion_estudiante o
        JOIN estudiante e ON e.id_estudiante = o.id_estudiante
+       LEFT JOIN usuario u ON e.id_usuario = u.id_usuario
        WHERE o.id_detallegrado = $1 AND o.id_periodo = $2
        ORDER BY o.fecha DESC`,
       [detailGradeId, periodId]

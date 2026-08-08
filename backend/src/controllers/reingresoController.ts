@@ -15,9 +15,10 @@ export const getStudentHistoryForReingreso = async (req: Request, res: Response)
   try {
     // 1. Fetch student info
     const studentRes = await pool.query(
-      `SELECT e.*, td.tipo AS tipo_documento_nombre
+      `SELECT e.*, u.documento, u.id_tipodocumento, td.tipo AS tipo_documento_nombre
        FROM estudiante e
-       LEFT JOIN tipo_documento td ON e.id_tipodocumento = td.id_tipodocumento
+       LEFT JOIN usuario u ON e.id_usuario = u.id_usuario
+       LEFT JOIN tipo_documento td ON u.id_tipodocumento = td.id_tipodocumento
        WHERE e.id_estudiante = $1 AND e.id_colegio = $2`,
       [idEstudiante, schoolId]
     );
@@ -153,14 +154,15 @@ export const getTicketContextForReingreso = async (req: Request, res: Response):
 
     // Find linked students by parent email or user ID
     const studentsRes = await pool.query(
-      `SELECT DISTINCT e.*, td.tipo AS tipo_documento_nombre
+      `SELECT DISTINCT e.*, u_e.documento, u_e.id_tipodocumento, td.tipo AS tipo_documento_nombre
        FROM estudiante e
-       LEFT JOIN tipo_documento td ON e.id_tipodocumento = td.id_tipodocumento
+       LEFT JOIN usuario u_e ON e.id_usuario = u_e.id_usuario
+       LEFT JOIN tipo_documento td ON u_e.id_tipodocumento = td.id_tipodocumento
        LEFT JOIN detalle_padrefamilia dp ON e.id_estudiante = dp.id_estudiante
        LEFT JOIN padre_familia pf ON dp.id_padrefamilia = pf.id_padrefamilia
        LEFT JOIN usuario u ON pf.id_usuario = u.id_usuario
        WHERE e.id_colegio = $1 
-         AND (e.id_estudiante = $3 OR u.email = $2 OR pf.documento = $2 OR u.id_usuario = $4)
+         AND (e.id_estudiante = $3 OR u.email = $2 OR u.documento = $2 OR u.id_usuario = $4)
          AND e.estado = 'RETIRADO'`,
       [schoolId, ticket.correo_remitente, ticket.id_estudiante || null, ticket.id_usuario || null]
     );

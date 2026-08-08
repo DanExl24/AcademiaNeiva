@@ -115,8 +115,8 @@ export const getParentsManagementData = async (req: Request, res: Response): Pro
           pf.id_padrefamilia,
           pf.nombre,
           pf.apellido,
-          pf.documento,
-          pf.id_tipodocumento,
+          u.documento,
+          u.id_tipodocumento,
           td.tipo AS tipo_documento,
           u.email,
           u.id_usuario,
@@ -151,10 +151,9 @@ export const getParentsManagementData = async (req: Request, res: Response): Pro
 
         FROM padre_familia pf
         LEFT JOIN usuario u ON pf.id_usuario = u.id_usuario
-        LEFT JOIN tipo_documento td ON pf.id_tipodocumento = td.id_tipodocumento
+        LEFT JOIN tipo_documento td ON u.id_tipodocumento = td.id_tipodocumento
         LEFT JOIN docente doc ON (
-          (doc.documento = pf.documento OR (doc.id_usuario IS NOT NULL AND pf.id_usuario IS NOT NULL AND doc.id_usuario = pf.id_usuario))
-          AND doc.id_colegio = pf.id_colegio
+          doc.id_usuario IS NOT NULL AND pf.id_usuario IS NOT NULL AND doc.id_usuario = pf.id_usuario AND doc.id_colegio = pf.id_colegio
         )
         LEFT JOIN usuario u_doc ON u_doc.id_usuario = doc.id_usuario
         LEFT JOIN detalle_padrefamilia dpf ON dpf.id_padrefamilia = pf.id_padrefamilia
@@ -164,8 +163,8 @@ export const getParentsManagementData = async (req: Request, res: Response): Pro
         LEFT JOIN grupos g ON g.id_grupo = m.id_grupo
         LEFT JOIN tipo_grado tg ON tg.id_tipo_grado = g.id_tipo_grado
         WHERE pf.id_colegio = $1
-        GROUP BY pf.id_padrefamilia, pf.nombre, pf.apellido, pf.documento,
-                 pf.id_tipodocumento, td.tipo, u.email, u.id_usuario, u.activo, doc.id_docente, u_doc.email
+        GROUP BY pf.id_padrefamilia, pf.nombre, pf.apellido, u.documento,
+                 u.id_tipodocumento, td.tipo, u.email, u.id_usuario, u.activo, doc.id_docente, u_doc.email
       )
       SELECT *
       FROM parent_stats ps
@@ -224,8 +223,8 @@ export const getParentDetail = async (req: Request, res: Response): Promise<void
          pf.id_padrefamilia,
          pf.nombre,
          pf.apellido,
-         pf.documento,
-         pf.id_tipodocumento,
+         u.documento,
+         u.id_tipodocumento,
          pf.id_colegio,
          td.tipo AS tipo_documento,
          u.email,
@@ -236,10 +235,9 @@ export const getParentDetail = async (req: Request, res: Response): Promise<void
          u_doc.email AS email_docente
        FROM padre_familia pf
        LEFT JOIN usuario u ON pf.id_usuario = u.id_usuario
-       LEFT JOIN tipo_documento td ON pf.id_tipodocumento = td.id_tipodocumento
+       LEFT JOIN tipo_documento td ON u.id_tipodocumento = td.id_tipodocumento
        LEFT JOIN docente doc ON (
-         (doc.documento = pf.documento OR (doc.id_usuario IS NOT NULL AND pf.id_usuario IS NOT NULL AND doc.id_usuario = pf.id_usuario))
-         AND doc.id_colegio = pf.id_colegio
+         doc.id_usuario IS NOT NULL AND pf.id_usuario IS NOT NULL AND doc.id_usuario = pf.id_usuario AND doc.id_colegio = pf.id_colegio
        )
        LEFT JOIN usuario u_doc ON u_doc.id_usuario = doc.id_usuario
        WHERE pf.id_padrefamilia = $1`,
@@ -265,7 +263,7 @@ export const getParentDetail = async (req: Request, res: Response): Promise<void
          e.id_estudiante,
          e.nombre,
          e.apellido,
-         e.documento,
+         u_e.documento,
          e.codigo,
          e.estado,
          e.motivo_estado,
@@ -278,7 +276,8 @@ export const getParentDetail = async (req: Request, res: Response): Promise<void
          m.id_anio,
          al.calendario AS anio_lectivo
        FROM detalle_padrefamilia dpf
-       JOIN estudiante e ON e.id_estudiante = dpf.id_estudiante
+       JOIN estudiante e ON dpf.id_estudiante = e.id_estudiante
+       LEFT JOIN usuario u_e ON e.id_usuario = u_e.id_usuario
        LEFT JOIN matricula m ON (
          m.id_estudiante = e.id_estudiante 
          AND m.estado IN ('ACTIVA', 'CULMINADA')
@@ -380,7 +379,10 @@ export const updateParent = async (req: Request, res: Response): Promise<void> =
     await client.query("BEGIN");
 
     const checkRes = await client.query(
-      "SELECT id_padrefamilia, id_colegio, nombre, apellido, documento, id_tipodocumento FROM padre_familia WHERE id_padrefamilia = $1",
+      `SELECT pf.id_padrefamilia, pf.id_colegio, pf.nombre, pf.apellido, pf.id_usuario, u.documento, u.id_tipodocumento 
+       FROM padre_familia pf 
+       LEFT JOIN usuario u ON pf.id_usuario = u.id_usuario 
+       WHERE pf.id_padrefamilia = $1`,
       [parentId]
     );
 
@@ -401,16 +403,25 @@ export const updateParent = async (req: Request, res: Response): Promise<void> =
     }
 
     if (documento && documento.trim() !== oldParent.documento) {
-      await validateDocumentUniqueness(client, documento, "acudiente", { excludePadreId: parentId });
+      await validateDocumentUniqueness(client, documento, "acudiente", { excludeUsuarioId: oldParent.id_usuario }, id_tipodocumento);
     }
 
     const result = await client.query(
       `UPDATE padre_familia
-       SET nombre = $1, apellido = $2, documento = $3, id_tipodocumento = $4
-       WHERE id_padrefamilia = $5
+       SET nombre = $1, apellido = $2
+       WHERE id_padrefamilia = $3
        RETURNING *`,
-      [nombre.trim(), apellido.trim(), documento.trim(), id_tipodocumento, parentId]
+      [nombre.trim(), apellido.trim(), parentId]
     );
+
+    if (oldParent.id_usuario) {
+      await client.query(
+        `UPDATE usuario 
+         SET nombre = $1, apellido = $2, documento = $3, id_tipodocumento = $4 
+         WHERE id_usuario = $5`,
+        [nombre.trim(), apellido.trim(), documento.trim(), id_tipodocumento, oldParent.id_usuario]
+      );
+    }
 
     const activeAuditoriaId = (req as any).user?.supervisionId;
     if (activeAuditoriaId) {

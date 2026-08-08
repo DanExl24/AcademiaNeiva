@@ -221,8 +221,8 @@ export class MatriculaService {
   static async getDetails(idMatricula: number) {
     const matRes = await pool.query(
       `SELECT m.*, ne.nombre as grado_nivel, tg.nombre as tipo_grado, s.nombre as seccion, g.id_jornada, j.nombre as jornada,
-              e.nombre as student_firstname, e.apellido as student_lastname, e.codigo as student_code, e.documento as student_document, e.id_tipodocumento as student_id_tipodocumento, e.motivo_estado as student_motivo_estado,
-              pf.nombre as parent_firstname, pf.apellido as parent_lastname, pf.documento as parent_document, pf.id_tipodocumento as parent_id_tipodocumento,
+              e.nombre as student_firstname, e.apellido as student_lastname, e.codigo as student_code, u_est.documento as student_document, u_est.id_tipodocumento as student_id_tipodocumento, e.motivo_estado as student_motivo_estado,
+              pf.nombre as parent_firstname, pf.apellido as parent_lastname, u_par.documento as parent_document, u_par.id_tipodocumento as parent_id_tipodocumento,
               col.escudo_url, col.nombre as school_name,
               (g.cupos_totales - (SELECT COUNT(*) FROM matricula WHERE id_grupo = g.id_grupo AND estado IN ('ACTIVA', 'TRASLADADA'))) as cupos_restantes
        FROM matricula m
@@ -233,8 +233,13 @@ export class MatriculaService {
        LEFT JOIN secciones s ON g.id_seccion = s.id_seccion
        LEFT JOIN jornada j ON g.id_jornada = j.id_jornada
        LEFT JOIN estudiante e ON e.id_estudiante = m.id_estudiante
-       LEFT JOIN detalle_padrefamilia dpf ON dpf.id_estudiante = e.id_estudiante
-       LEFT JOIN padre_familia pf ON pf.id_padrefamilia = dpf.id_padrefamilia
+       LEFT JOIN usuario u_est ON e.id_usuario = u_est.id_usuario
+       LEFT JOIN (
+         SELECT DISTINCT ON (id_estudiante) id_estudiante, id_padrefamilia
+         FROM detalle_padrefamilia
+       ) dp ON dp.id_estudiante = m.id_estudiante
+       LEFT JOIN padre_familia pf ON pf.id_padrefamilia = dp.id_padrefamilia
+       LEFT JOIN usuario u_par ON pf.id_usuario = u_par.id_usuario
        WHERE m.id_matricula = $1`, [idMatricula]
     );
 
@@ -371,7 +376,7 @@ export class MatriculaService {
           const idPadre = parentRes.rows[0].id_padrefamilia;
           
           const childrenRes = await pool.query(
-            `SELECT e.id_estudiante, e.nombre, e.apellido, e.documento, e.id_tipodocumento,
+            `SELECT e.id_estudiante, e.nombre, e.apellido, u.documento, u.id_tipodocumento,
                     e.estado, e.codigo,
                     tg.nombre as grado_nombre, ne.nombre as nivel_nombre,
                     u.email as student_email 

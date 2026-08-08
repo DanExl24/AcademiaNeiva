@@ -38,6 +38,8 @@ export const getAllStudents = async (req: Request, res: Response) => {
     let query = `
       SELECT e.*, 
              u.email, 
+             u.documento as documento,
+             u.id_tipodocumento as id_tipodocumento,
              td.tipo as tipo_documento_nombre,
              n.nombre as nivel_nombre,
              m.id_grupo,
@@ -48,11 +50,11 @@ export const getAllStudents = async (req: Request, res: Response) => {
              j.nombre as jornada_nombre,
              pf.nombre as acudiente_nombre,
              pf.apellido as acudiente_apellido,
-             pf.documento as acudiente_documento,
+             u_pf.documento as acudiente_documento,
              (${estadoVigenteExpr}) AS estado_vigente
       FROM estudiante e
       LEFT JOIN usuario u ON e.id_usuario = u.id_usuario
-      LEFT JOIN tipo_documento td ON e.id_tipodocumento = td.id_tipodocumento
+      LEFT JOIN tipo_documento td ON u.id_tipodocumento = td.id_tipodocumento
       LEFT JOIN nivel_escolar n ON e.id_nivel = n.id_nivel
       LEFT JOIN matricula m ON e.id_estudiante = m.id_estudiante AND m.estado = 'ACTIVA'${yearCondition}
       LEFT JOIN grupos g ON m.id_grupo = g.id_grupo
@@ -64,6 +66,7 @@ export const getAllStudents = async (req: Request, res: Response) => {
         FROM detalle_padrefamilia
       ) dp ON e.id_estudiante = dp.id_estudiante
       LEFT JOIN padre_familia pf ON dp.id_padrefamilia = pf.id_padrefamilia
+      LEFT JOIN usuario u_pf ON pf.id_usuario = u_pf.id_usuario
       WHERE e.id_colegio = $1
     `;
 
@@ -113,7 +116,7 @@ export const getAllStudents = async (req: Request, res: Response) => {
       query += ` AND (
         e.nombre ILIKE $${paramCount} OR 
         e.apellido ILIKE $${paramCount} OR 
-        e.documento ILIKE $${paramCount} OR 
+        u.documento ILIKE $${paramCount} OR 
         e.codigo ILIKE $${paramCount} OR
         tg.nombre ILIKE $${paramCount} OR
         s.nombre ILIKE $${paramCount} OR
@@ -129,6 +132,7 @@ export const getAllStudents = async (req: Request, res: Response) => {
     const result = await pool.query(query, params);
     res.json(result.rows);
   } catch (error: any) {
+    console.error("Error al obtener estudiantes:", error);
     res.status(500).json({ error: error.message });
   }
 };
@@ -166,7 +170,10 @@ export const updateStudent = async (req: Request, res: Response) => {
 
     // Fetch old student state
     const oldStudentRes = await client.query(
-      `SELECT nombre, apellido, documento, id_tipodocumento, codigo, id_usuario FROM estudiante WHERE id_estudiante = $1`,
+      `SELECT e.nombre, e.apellido, u.documento, u.id_tipodocumento, e.codigo, e.id_usuario 
+       FROM estudiante e 
+       LEFT JOIN usuario u ON e.id_usuario = u.id_usuario 
+       WHERE e.id_estudiante = $1`,
       [id]
     );
     if (oldStudentRes.rowCount === 0) {
@@ -176,16 +183,25 @@ export const updateStudent = async (req: Request, res: Response) => {
     const oldStudent = oldStudentRes.rows[0];
 
     if (documento) {
-      await validateDocumentUniqueness(client, documento, "estudiante", { excludeEstudianteId: Number(id) });
+      await validateDocumentUniqueness(client, documento, "estudiante", { excludeUsuarioId: oldStudent.id_usuario }, id_tipodocumento);
     }
 
     const result = await client.query(
       `UPDATE estudiante 
-       SET nombre = $1, apellido = $2, documento = $3, id_tipodocumento = $4, codigo = $5
-       WHERE id_estudiante = $6
+       SET nombre = $1, apellido = $2, codigo = $3
+       WHERE id_estudiante = $4
        RETURNING *`,
-      [nombre, apellido, documento, id_tipodocumento, codigo, id]
+      [nombre, apellido, codigo, id]
     );
+
+    if (oldStudent.id_usuario) {
+      await client.query(
+        `UPDATE usuario 
+         SET nombre = $1, apellido = $2, documento = $3, id_tipodocumento = $4 
+         WHERE id_usuario = $5`,
+        [nombre, apellido, documento, id_tipodocumento, oldStudent.id_usuario]
+      );
+    };
 
     const updatedStudent = result.rows[0];
 

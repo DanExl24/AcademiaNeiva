@@ -136,7 +136,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
          JOIN usuario u ON e.id_usuario = u.id_usuario
          JOIN usuario_rol ur ON u.id_usuario = ur.id_usuario
          JOIN rol r ON ur.id_rol = r.id_rol
-         WHERE e.codigo = $1 OR e.documento = $1 OR LOWER(u.email) = LOWER($1)
+         WHERE e.codigo = $1 OR u.documento = $1 OR LOWER(u.email) = LOWER($1)
          GROUP BY e.id_usuario, e.estado, u.email, u.nombre, u.password, u.id_colegio, u.estado`,
         [credential]
       );
@@ -622,17 +622,11 @@ export const getUserProfile = async (req: Request, res: Response): Promise<void>
          u.email, 
          u.estado, 
          u.fecha_creacion,
-         COALESCE(u.documento, d.documento, pf.documento, e.documento) AS documento,
-         COALESCE(td_u.tipo, td_d.tipo, td_pf.tipo, td_e.tipo) AS tipo_documento,
+         u.documento,
+         td_u.tipo AS tipo_documento,
          u.telefono AS telefono
        FROM usuario u
        LEFT JOIN tipo_documento td_u ON u.id_tipodocumento = td_u.id_tipodocumento
-       LEFT JOIN docente d ON d.id_usuario = u.id_usuario 
-       LEFT JOIN tipo_documento td_d ON d.id_tipodocumento = td_d.id_tipodocumento 
-       LEFT JOIN padre_familia pf ON pf.id_usuario = u.id_usuario 
-       LEFT JOIN tipo_documento td_pf ON pf.id_tipodocumento = td_pf.id_tipodocumento 
-       LEFT JOIN estudiante e ON e.id_usuario = u.id_usuario 
-       LEFT JOIN tipo_documento td_e ON e.id_tipodocumento = td_e.id_tipodocumento 
        WHERE u.id_usuario = $1`,
       [userId]
     );

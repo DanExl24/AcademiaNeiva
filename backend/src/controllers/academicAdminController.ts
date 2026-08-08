@@ -2738,8 +2738,8 @@ export const getTeacherManagementData = async (req: Request, res: Response): Pro
            d.id_docente,
            d.nombre,
            d.apellido,
-           d.documento,
-           d.id_tipodocumento,
+           u.documento,
+           u.id_tipodocumento,
            td.tipo AS tipo_documento,
            d.estado,
            u.id_usuario,
@@ -2749,14 +2749,13 @@ export const getTeacherManagementData = async (req: Request, res: Response): Pro
              SELECT u_parent.email
              FROM padre_familia pf
              JOIN usuario u_parent ON u_parent.id_usuario = pf.id_usuario
-             WHERE pf.documento = d.documento
-                OR pf.id_usuario = d.id_usuario
+             WHERE pf.id_usuario = d.id_usuario
              LIMIT 1
            ) AS email_padre,
            COUNT(DISTINCT dg.id_detallegrado)::int AS asignaciones_count
          FROM docente d
-         JOIN tipo_documento td ON td.id_tipodocumento = d.id_tipodocumento
          LEFT JOIN usuario u ON u.id_usuario = d.id_usuario
+         LEFT JOIN tipo_documento td ON td.id_tipodocumento = u.id_tipodocumento
          LEFT JOIN detalle_grados dg ON dg.id_docente = d.id_docente
          WHERE d.id_colegio = $1
             AND (
@@ -2775,7 +2774,7 @@ export const getTeacherManagementData = async (req: Request, res: Response): Pro
                 )
               )
             )
-         GROUP BY d.id_docente, td.tipo, d.estado, u.id_usuario, u.email, u.activo
+         GROUP BY d.id_docente, u.documento, u.id_tipodocumento, td.tipo, d.estado, u.id_usuario, u.email, u.activo
          ORDER BY d.nombre, d.apellido`,
         [schoolId, yearId]
       ),
@@ -2883,7 +2882,7 @@ export const getGroupMembers = async (req: Request, res: Response): Promise<void
         e.nombre,
         e.apellido,
         e.codigo AS codigo_estudiantil,
-        e.documento,
+        u.documento,
         td.tipo AS tipo_documento,
         m.id_matricula,
         m.estado AS estado_matricula,
@@ -2891,8 +2890,8 @@ export const getGroupMembers = async (req: Request, res: Response): Promise<void
         u.email
       FROM matricula m
       JOIN estudiante e ON e.id_estudiante = m.id_estudiante
-      LEFT JOIN tipo_documento td ON td.id_tipodocumento = e.id_tipodocumento
       LEFT JOIN usuario u ON u.id_usuario = e.id_usuario
+      LEFT JOIN tipo_documento td ON td.id_tipodocumento = u.id_tipodocumento
       WHERE m.id_grupo = $1
         AND m.estado NOT IN ('CANCELADA', 'RECHAZADA')
     `;
@@ -2914,7 +2913,7 @@ export const getGroupMembers = async (req: Request, res: Response): Promise<void
         doc.id_docente,
         doc.nombre AS docente_nombre,
         doc.apellido AS docente_apellido,
-        doc.documento AS docente_documento,
+        u.documento AS docente_documento,
         u.email AS docente_email
       FROM detalle_grados dg
       JOIN materias mat ON mat.id_materia = dg.id_materia
@@ -2956,20 +2955,18 @@ export const lookupUserIdentity = async (req: Request, res: Response): Promise<v
   try {
     let query = `
       SELECT u.id_usuario, u.email,
-             COALESCE(u.nombre, d.nombre, pf.nombre) AS nombre,
-             COALESCE(u.apellido, d.apellido, pf.apellido) AS apellido,
-             COALESCE(d.documento, pf.documento) AS documento,
-             COALESCE(d.id_tipodocumento, pf.id_tipodocumento) AS id_tipodocumento
+             u.nombre,
+             u.apellido,
+             u.documento,
+             u.id_tipodocumento
       FROM usuario u
-      LEFT JOIN docente d ON d.id_usuario = u.id_usuario
-      LEFT JOIN padre_familia pf ON pf.id_usuario = u.id_usuario
       WHERE 1=1
     `;
     const params: any[] = [];
 
     if (documento) {
       params.push(documento);
-      query += ` AND (d.documento = $${params.length} OR pf.documento = $${params.length})`;
+      query += ` AND u.documento = $${params.length}`;
     } else if (email) {
       params.push(email);
       query += ` AND LOWER(u.email) = $${params.length}`;
@@ -2977,7 +2974,7 @@ export const lookupUserIdentity = async (req: Request, res: Response): Promise<v
 
     if (schoolId) {
       params.push(schoolId);
-      query += ` AND (u.id_colegio = $${params.length} OR pf.id_colegio = $${params.length} OR d.id_colegio = $${params.length})`;
+      query += ` AND u.id_colegio = $${params.length}`;
     }
     query += ` LIMIT 1`;
 
@@ -3036,21 +3033,20 @@ export const createTeacher = async (req: Request, res: Response): Promise<void> 
       [documentTypeId]
     );
     const existingTeacherRes = await client.query(
-      `SELECT id_docente
-       FROM docente
-       WHERE id_colegio = $1
-         AND documento = $2`,
+      `SELECT d.id_docente
+       FROM docente d
+       JOIN usuario u ON d.id_usuario = u.id_usuario
+       WHERE d.id_colegio = $1
+         AND u.documento = $2`,
       [schoolId, documento]
     );
     const existingUserRes = await client.query(
       `SELECT u.id_usuario, u.email, COALESCE(u.activo, true) AS activo,
-              COALESCE(u.nombre, d.nombre, pf.nombre) AS nombre,
-              COALESCE(u.apellido, d.apellido, pf.apellido) AS apellido,
-              COALESCE(d.documento, pf.documento) AS documento,
-              COALESCE(d.id_tipodocumento, pf.id_tipodocumento) AS id_tipodocumento
+              u.nombre,
+              u.apellido,
+              u.documento,
+              u.id_tipodocumento
        FROM usuario u
-       LEFT JOIN docente d ON d.id_usuario = u.id_usuario
-       LEFT JOIN padre_familia pf ON pf.id_usuario = u.id_usuario
        WHERE LOWER(u.email) = $1
        LIMIT 1`,
       [email]
@@ -3151,10 +3147,10 @@ export const createTeacher = async (req: Request, res: Response): Promise<void> 
         const finalTipoDoc = existingUser.id_tipodocumento || documentTypeId;
 
         const teacherRes = await client.query(
-          `INSERT INTO docente (nombre, apellido, documento, id_tipodocumento, id_colegio, id_usuario, estado)
-           VALUES ($1, $2, $3, $4, $5, $6, 'ACTIVO')
-           RETURNING id_docente, nombre, apellido, documento, id_tipodocumento, estado`,
-          [finalNombre, finalApellido, finalDocumento, finalTipoDoc, schoolId, existingUser.id_usuario]
+          `INSERT INTO docente (nombre, apellido, id_colegio, id_usuario, estado)
+           VALUES ($1, $2, $3, $4, 'ACTIVO')
+           RETURNING id_docente, nombre, apellido, estado`,
+          [finalNombre, finalApellido, schoolId, existingUser.id_usuario]
         );
 
         await client.query("COMMIT");

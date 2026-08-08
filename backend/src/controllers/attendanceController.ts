@@ -79,8 +79,9 @@ export const getAttendanceByDate = async (req: Request, res: Response): Promise<
 
     // Get all students enrolled in this group/grade
     const studentsRes = await pool.query(
-      `SELECT e.id_estudiante, e.nombre, e.apellido, e.documento, e.codigo 
+      `SELECT e.id_estudiante, e.nombre, e.apellido, u.documento, e.codigo 
        FROM estudiante e
+       LEFT JOIN usuario u ON e.id_usuario = u.id_usuario
        JOIN matricula m ON e.id_estudiante = m.id_estudiante
        WHERE m.id_grupo = $1 AND m.estado IN ('ACTIVA', 'TRASLADADA')
        ORDER BY e.apellido, e.nombre`,
@@ -305,8 +306,9 @@ export const getAttendanceHistory = async (req: Request, res: Response): Promise
 
     // Get all students
     const studentsRes = await pool.query(
-      `SELECT e.id_estudiante, e.nombre, e.apellido, e.documento, e.codigo 
+      `SELECT e.id_estudiante, e.nombre, e.apellido, u.documento, e.codigo 
        FROM estudiante e
+       LEFT JOIN usuario u ON e.id_usuario = u.id_usuario
        JOIN matricula m ON e.id_estudiante = m.id_estudiante
        WHERE m.id_grupo = $1 AND m.estado IN ('ACTIVA', 'TRASLADADA')
        ORDER BY e.apellido, e.nombre`,

@@ -62,19 +62,9 @@ export const createTicket = async (req: Request, res: Response) => {
         finalSchoolId = u.id_colegio ? Number(u.id_colegio) : finalSchoolId;
         finalSenderName = `${u.nombre} ${u.apellido}`;
         finalSenderEmail = u.email;
+        userDocument = u.documento || null;
 
-        // Intentar obtener el documento del usuario según su rol
         const userRole = (user.role || u.rol || '').toUpperCase();
-        if (userRole === 'DOCENTE') {
-          const docRes = await pool.query('SELECT documento FROM docente WHERE id_usuario = $1', [finalUserId]);
-          if (docRes.rows.length > 0) userDocument = docRes.rows[0].documento;
-        } else if (userRole === 'PADRE') {
-          const docRes = await pool.query('SELECT documento FROM padre_familia WHERE id_usuario = $1', [finalUserId]);
-          if (docRes.rows.length > 0) userDocument = docRes.rows[0].documento;
-        } else if (userRole === 'ESTUDIANTE') {
-          const docRes = await pool.query('SELECT documento FROM estudiante WHERE id_usuario = $1', [finalUserId]);
-          if (docRes.rows.length > 0) userDocument = docRes.rows[0].documento;
-        }
 
         // Si es Directivo y envía la petición de escalado, el estado inicial será ESCALADO
         if (estado === 'ESCALADO' && (userRole === 'DIRECTIVO' || userRole === 'ADMIN_GENERAL')) {
@@ -133,12 +123,13 @@ export const getTickets = async (req: Request, res: Response) => {
              c.nombre AS colegio_nombre,
              e.nombre AS estudiante_nombre,
              e.apellido AS estudiante_apellido,
-             e.documento AS estudiante_documento,
+             u_e.documento AS estudiante_documento,
              e.codigo AS estudiante_codigo,
              e.estado AS estudiante_estado
       FROM tickets_soporte t 
       LEFT JOIN colegio c ON t.id_colegio = c.id_colegio
       LEFT JOIN estudiante e ON t.id_estudiante = e.id_estudiante
+      LEFT JOIN usuario u_e ON e.id_usuario = u_e.id_usuario
     `;
     const params: any[] = [];
 
@@ -407,12 +398,13 @@ export const getTicketByCode = async (req: Request, res: Response) => {
               c.nombre AS colegio_nombre,
               e.nombre AS estudiante_nombre,
               e.apellido AS estudiante_apellido,
-              e.documento AS estudiante_documento,
+              u_e.documento AS estudiante_documento,
               e.codigo AS estudiante_codigo,
               e.estado AS estudiante_estado
        FROM tickets_soporte t 
        LEFT JOIN colegio c ON t.id_colegio = c.id_colegio 
        LEFT JOIN estudiante e ON t.id_estudiante = e.id_estudiante
+       LEFT JOIN usuario u_e ON e.id_usuario = u_e.id_usuario
        WHERE t.codigo_ticket = $1`,
       [code.trim().toUpperCase()]
     );

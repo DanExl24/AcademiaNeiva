@@ -66,8 +66,9 @@ export const getStudentsByGrade = async (req: Request, res: Response): Promise<v
 
   try {
     const result = await pool.query(
-      `SELECT e.id_estudiante, e.nombre, e.apellido, e.documento, e.codigo 
+      `SELECT e.id_estudiante, e.nombre, e.apellido, u.documento, e.codigo 
        FROM estudiante e
+       LEFT JOIN usuario u ON e.id_usuario = u.id_usuario
        JOIN matricula m ON e.id_estudiante = m.id_estudiante
        WHERE m.id_grupo = $1 AND m.estado IN ('ACTIVA', 'TRASLADADA')
        ORDER BY e.apellido, e.nombre`,
