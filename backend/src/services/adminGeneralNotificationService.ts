@@ -11,11 +11,17 @@ const transporter = nodemailer.createTransport({
 });
 
 const getFrontendUrl = (): string => {
-  const url = process.env.FRONTEND_URL || process.env.CLIENT_URL || 'https://academianeiva.adsoproject.dev';
-  return url.replace(/\/$/, '');
+  const envUrl = process.env.FRONTEND_URL || process.env.CLIENT_URL;
+  if (envUrl && envUrl.trim() !== '') {
+    return envUrl.replace(/\/$/, '');
+  }
+  return 'https://academianeiva.adsoproject.dev';
 };
 
-const FRONTEND_URL = getFrontendUrl();
+const FRONTEND_URL = {
+  toString: () => getFrontendUrl(),
+  valueOf: () => getFrontendUrl()
+} as unknown as string;
 
 const FROM = `"Academia Neiva" <${process.env.SMTP_USER}>`;
 

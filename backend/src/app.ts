@@ -67,9 +67,10 @@ if (process.env.FRONTEND_URL) {
   defaultAllowedOrigins.push(process.env.FRONTEND_URL.replace(/\/$/, ''));
 }
 
-const allowedOrigins = process.env.ALLOWED_ORIGINS 
+const envOrigins = process.env.ALLOWED_ORIGINS 
   ? process.env.ALLOWED_ORIGINS.split(",").map(o => o.trim()) 
-  : defaultAllowedOrigins;
+  : [];
+const allowedOrigins = Array.from(new Set([...defaultAllowedOrigins, ...envOrigins]));
 
 app.use(cors({
   origin: (origin, callback) => {

@@ -24,11 +24,17 @@ transporter.verify((error, success) => {
 });
 
 const getFrontendUrl = (): string => {
-  const url = process.env.FRONTEND_URL || process.env.CLIENT_URL || 'https://academianeiva.adsoproject.dev';
-  return url.replace(/\/$/, '');
+  const envUrl = process.env.FRONTEND_URL || process.env.CLIENT_URL;
+  if (envUrl && envUrl.trim() !== '') {
+    return envUrl.replace(/\/$/, '');
+  }
+  return 'https://academianeiva.adsoproject.dev';
 };
 
-const FRONTEND_URL = getFrontendUrl();
+const FRONTEND_URL = {
+  toString: () => getFrontendUrl(),
+  valueOf: () => getFrontendUrl()
+} as unknown as string;
 
 export class NotificationService {
   static async sendTeacherWelcomeEmail(
@@ -241,6 +247,7 @@ export class NotificationService {
       console.error('❌ Error: No se puede enviar email de rechazo porque no hay destinatario (to)');
       return;
     }
+    const FRONTEND_URL = getFrontendUrl();
     const html = `
       <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #1f2937;">
         <div style="background-color: #ef4444; padding: 40px; border-radius: 24px; text-align: center; color: white; margin-bottom: 30px;">
@@ -286,6 +293,7 @@ export class NotificationService {
       console.error('❌ Error: No se puede enviar email de aprobación extraordinaria porque no hay destinatario (to)');
       return;
     }
+    const FRONTEND_URL = getFrontendUrl();
     const html = `
       <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #1f2937;">
         <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 40px; border-radius: 24px; text-align: center; color: white; margin-bottom: 30px;">
@@ -340,6 +348,7 @@ export class NotificationService {
       console.error('❌ Error: No se puede enviar email de aprobación de reingreso porque no hay destinatario (to)');
       return;
     }
+    const FRONTEND_URL = getFrontendUrl();
     const html = `
       <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #1f2937;">
         <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 40px; border-radius: 24px; text-align: center; color: white; margin-bottom: 30px;">
