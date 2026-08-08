@@ -353,11 +353,12 @@ export const createActivity = async (req: Request, res: Response): Promise<void>
       );
       if (dgInfo.rows.length > 0) {
         const { id_grupo, id_materia } = dgInfo.rows[0];
-        const otherPeriodAssigned = await client.query(
-          `SELECT DISTINCT ea.id_evidencia_dba, p.nombre as periodo_nombre
+
+        // 1. Obtener evidencias planificadas en el periodo ACTUAL para este grado/materia
+        const currentPeriodAssigned = await client.query(
+          `SELECT DISTINCT ea.id_evidencia_dba
            FROM evidencia_aprendizaje ea
            JOIN competencias c ON c.id_competencia = ea.id_competencia
-           JOIN periodo_academico p ON p.id_periodo = c.id_periodo
            WHERE c.id_colegio = $1
              AND c.id_materia = $2
              AND c.id_grupo IN (
@@ -366,21 +367,45 @@ export const createActivity = async (req: Request, res: Response): Promise<void>
                JOIN grupos g2 ON g2.id_nivel = g1.id_nivel AND g2.id_tipo_grado = g1.id_tipo_grado
                WHERE g1.id_grupo = $3 AND g1.id_colegio = $1
              )
-             AND c.id_periodo != $4
+             AND c.id_periodo = $4
              AND ea.id_evidencia_dba = ANY($5::int[])`,
           [finalIdColegio, id_materia, id_grupo, finalIdPeriodo, evidencias_dba]
         );
 
-        if (otherPeriodAssigned.rows.length > 0) {
-          if (!motivo_extra || typeof motivo_extra !== "string" || !motivo_extra.trim()) {
-            await client.query("ROLLBACK");
-            res.status(400).json({ error: "Debes seleccionar un motivo para evaluar evidencias planificadas en otros periodos." });
-            return;
-          }
-          if (motivo_extra === "OTRO" && (!justificacion_extra || typeof justificacion_extra !== "string" || !justificacion_extra.trim())) {
-            await client.query("ROLLBACK");
-            res.status(400).json({ error: "Debes escribir una justificación detallada para el motivo 'Otro'." });
-            return;
+        const plannedInCurrentIds = new Set(currentPeriodAssigned.rows.map((r: any) => Number(r.id_evidencia_dba)));
+        const unassignedInCurrent = evidencias_dba.filter((id: number) => !plannedInCurrentIds.has(Number(id)));
+
+        // 2. Solo si hay evidencias NO planificadas en el periodo actual, verificar si fueron planificadas en OTRO periodo
+        if (unassignedInCurrent.length > 0) {
+          const otherPeriodAssigned = await client.query(
+            `SELECT DISTINCT ea.id_evidencia_dba, p.nombre as periodo_nombre
+             FROM evidencia_aprendizaje ea
+             JOIN competencias c ON c.id_competencia = ea.id_competencia
+             JOIN periodo_academico p ON p.id_periodo = c.id_periodo
+             WHERE c.id_colegio = $1
+               AND c.id_materia = $2
+               AND c.id_grupo IN (
+                 SELECT g2.id_grupo
+                 FROM grupos g1
+                 JOIN grupos g2 ON g2.id_nivel = g1.id_nivel AND g2.id_tipo_grado = g1.id_tipo_grado
+                 WHERE g1.id_grupo = $3 AND g1.id_colegio = $1
+               )
+               AND c.id_periodo != $4
+               AND ea.id_evidencia_dba = ANY($5::int[])`,
+            [finalIdColegio, id_materia, id_grupo, finalIdPeriodo, unassignedInCurrent]
+          );
+
+          if (otherPeriodAssigned.rows.length > 0) {
+            if (!motivo_extra || typeof motivo_extra !== "string" || !motivo_extra.trim()) {
+              await client.query("ROLLBACK");
+              res.status(400).json({ error: "Debes seleccionar un motivo para evaluar evidencias planificadas en otros periodos." });
+              return;
+            }
+            if (motivo_extra === "OTRO" && (!justificacion_extra || typeof justificacion_extra !== "string" || !justificacion_extra.trim())) {
+              await client.query("ROLLBACK");
+              res.status(400).json({ error: "Debes escribir una justificación detallada para el motivo 'Otro'." });
+              return;
+            }
           }
         }
       }
@@ -513,11 +538,12 @@ export const updateActivity = async (req: Request, res: Response): Promise<void>
       );
       if (dgInfo.rows.length > 0) {
         const { id_grupo, id_materia } = dgInfo.rows[0];
-        const otherPeriodAssigned = await client.query(
-          `SELECT DISTINCT ea.id_evidencia_dba, p.nombre as periodo_nombre
+
+        // 1. Obtener evidencias planificadas en el periodo ACTUAL para este grado/materia
+        const currentPeriodAssigned = await client.query(
+          `SELECT DISTINCT ea.id_evidencia_dba
            FROM evidencia_aprendizaje ea
            JOIN competencias c ON c.id_competencia = ea.id_competencia
-           JOIN periodo_academico p ON p.id_periodo = c.id_periodo
            WHERE c.id_colegio = $1
              AND c.id_materia = $2
              AND c.id_grupo IN (
@@ -526,21 +552,45 @@ export const updateActivity = async (req: Request, res: Response): Promise<void>
                JOIN grupos g2 ON g2.id_nivel = g1.id_nivel AND g2.id_tipo_grado = g1.id_tipo_grado
                WHERE g1.id_grupo = $3 AND g1.id_colegio = $1
              )
-             AND c.id_periodo != $4
+             AND c.id_periodo = $4
              AND ea.id_evidencia_dba = ANY($5::int[])`,
           [currentAct.id_colegio, id_materia, id_grupo, currentAct.id_periodo, evidencias_dba]
         );
 
-        if (otherPeriodAssigned.rows.length > 0) {
-          if (!motivo_extra || typeof motivo_extra !== "string" || !motivo_extra.trim()) {
-            await client.query("ROLLBACK");
-            res.status(400).json({ error: "Debes seleccionar un motivo para evaluar evidencias planificadas en otros periodos." });
-            return;
-          }
-          if (motivo_extra === "OTRO" && (!justificacion_extra || typeof justificacion_extra !== "string" || !justificacion_extra.trim())) {
-            await client.query("ROLLBACK");
-            res.status(400).json({ error: "Debes escribir una justificación detallada para el motivo 'Otro'." });
-            return;
+        const plannedInCurrentIds = new Set(currentPeriodAssigned.rows.map((r: any) => Number(r.id_evidencia_dba)));
+        const unassignedInCurrent = evidencias_dba.filter((id: number) => !plannedInCurrentIds.has(Number(id)));
+
+        // 2. Solo si hay evidencias NO planificadas en el periodo actual, verificar si fueron planificadas en OTRO periodo
+        if (unassignedInCurrent.length > 0) {
+          const otherPeriodAssigned = await client.query(
+            `SELECT DISTINCT ea.id_evidencia_dba, p.nombre as periodo_nombre
+             FROM evidencia_aprendizaje ea
+             JOIN competencias c ON c.id_competencia = ea.id_competencia
+             JOIN periodo_academico p ON p.id_periodo = c.id_periodo
+             WHERE c.id_colegio = $1
+               AND c.id_materia = $2
+               AND c.id_grupo IN (
+                 SELECT g2.id_grupo
+                 FROM grupos g1
+                 JOIN grupos g2 ON g2.id_nivel = g1.id_nivel AND g2.id_tipo_grado = g1.id_tipo_grado
+                 WHERE g1.id_grupo = $3 AND g1.id_colegio = $1
+               )
+               AND c.id_periodo != $4
+               AND ea.id_evidencia_dba = ANY($5::int[])`,
+            [currentAct.id_colegio, id_materia, id_grupo, currentAct.id_periodo, unassignedInCurrent]
+          );
+
+          if (otherPeriodAssigned.rows.length > 0) {
+            if (!motivo_extra || typeof motivo_extra !== "string" || !motivo_extra.trim()) {
+              await client.query("ROLLBACK");
+              res.status(400).json({ error: "Debes seleccionar un motivo para evaluar evidencias planificadas en otros periodos." });
+              return;
+            }
+            if (motivo_extra === "OTRO" && (!justificacion_extra || typeof justificacion_extra !== "string" || !justificacion_extra.trim())) {
+              await client.query("ROLLBACK");
+              res.status(400).json({ error: "Debes escribir una justificación detallada para el motivo 'Otro'." });
+              return;
+            }
           }
         }
       }
