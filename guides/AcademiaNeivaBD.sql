@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict RBatW3ADDj1p61jWzSa6ahpmaGZ83nwmKCAfwT8xv4YVm2xMtMWEPBnASplddOr
+\restrict bbyNF5C5S9SQLd8IdETENO2aRaAelCt1id6ekQbeQNp2aFWJh4aDYxMG9Pkf6Jn
 
 -- Dumped from database version 18.4
 -- Dumped by pg_dump version 18.4
@@ -143,7 +143,8 @@ CREATE TYPE public.estado_matricula AS ENUM (
     'CORRECCION',
     'APROBADA',
     'CULMINADA',
-    'PENDIENTE_RENOVACION'
+    'PENDIENTE_RENOVACION',
+    'CORREGIDA'
 );
 
 
@@ -1357,8 +1358,6 @@ CREATE TABLE public.docente (
     id_docente integer NOT NULL,
     nombre character varying(255) NOT NULL,
     apellido character varying(255) NOT NULL,
-    documento character varying(255) NOT NULL,
-    id_tipodocumento integer NOT NULL,
     id_contratodocente integer,
     id_colegio integer NOT NULL,
     id_usuario integer,
@@ -1520,9 +1519,7 @@ CREATE TABLE public.estudiante (
     id_estudiante integer NOT NULL,
     nombre character varying(100) NOT NULL,
     apellido character varying(100) NOT NULL,
-    documento character varying(12),
     codigo character varying(20) NOT NULL,
-    id_tipodocumento integer,
     id_nivel integer,
     id_colegio integer NOT NULL,
     id_usuario integer,
@@ -2058,8 +2055,6 @@ CREATE TABLE public.padre_familia (
     id_padrefamilia integer NOT NULL,
     nombre character varying(50) NOT NULL,
     apellido character varying(50) NOT NULL,
-    documento character varying(10) CONSTRAINT padre_familia_documeno_not_null NOT NULL,
-    id_tipodocumento integer NOT NULL,
     id_colegio integer,
     id_usuario integer
 );
@@ -2646,7 +2641,8 @@ CREATE TABLE public.usuario (
     logged_out_at timestamp with time zone,
     id_tipodocumento integer,
     documento character varying(50),
-    telefono character varying(50)
+    telefono character varying(50),
+    CONSTRAINT chk_usuario_documento_format CHECK (((documento IS NULL) OR ((documento)::text ~ '^[a-zA-Z0-9]+$'::text)))
 );
 
 
@@ -3358,14 +3354,6 @@ ALTER TABLE ONLY public.directivo
 
 
 --
--- Name: docente docente_documento_key; Type: CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.docente
-    ADD CONSTRAINT docente_documento_key UNIQUE (documento);
-
-
---
 -- Name: docente docente_id_usuario_key; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -3539,14 +3527,6 @@ ALTER TABLE ONLY public.notificacion_supervision
 
 ALTER TABLE ONLY public.observacion_estudiante
     ADD CONSTRAINT observacion_estudiante_pkey PRIMARY KEY (id_observacion);
-
-
---
--- Name: padre_familia padre_familia_documento_key; Type: CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.padre_familia
-    ADD CONSTRAINT padre_familia_documento_key UNIQUE (documento);
 
 
 --
@@ -4513,14 +4493,6 @@ ALTER TABLE ONLY public.docente
 
 
 --
--- Name: docente docente_id_tipodocumento_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.docente
-    ADD CONSTRAINT docente_id_tipodocumento_fkey FOREIGN KEY (id_tipodocumento) REFERENCES public.tipo_documento(id_tipodocumento);
-
-
---
 -- Name: documento_matriculas documento_matriculas_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -4542,14 +4514,6 @@ ALTER TABLE ONLY public.documento_matriculas
 
 ALTER TABLE ONLY public.estudiante
     ADD CONSTRAINT estudiante_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio) ON DELETE CASCADE;
-
-
---
--- Name: estudiante estudiante_id_tipodocumento_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.estudiante
-    ADD CONSTRAINT estudiante_id_tipodocumento_fkey FOREIGN KEY (id_tipodocumento) REFERENCES public.tipo_documento(id_tipodocumento);
 
 
 --
@@ -4865,14 +4829,6 @@ ALTER TABLE ONLY public.padre_familia
 
 
 --
--- Name: padre_familia padre_familia_id_tipodocumento_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.padre_familia
-    ADD CONSTRAINT padre_familia_id_tipodocumento_fkey FOREIGN KEY (id_tipodocumento) REFERENCES public.tipo_documento(id_tipodocumento);
-
-
---
 -- Name: periodo_academico periodo_academico_id_año_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -5051,5 +5007,5 @@ REVOKE USAGE ON SCHEMA public FROM PUBLIC;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict RBatW3ADDj1p61jWzSa6ahpmaGZ83nwmKCAfwT8xv4YVm2xMtMWEPBnASplddOr
+\unrestrict bbyNF5C5S9SQLd8IdETENO2aRaAelCt1id6ekQbeQNp2aFWJh4aDYxMG9Pkf6Jn
 
