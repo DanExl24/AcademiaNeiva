@@ -136,7 +136,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
          JOIN usuario u ON e.id_usuario = u.id_usuario
          JOIN usuario_rol ur ON u.id_usuario = ur.id_usuario
          JOIN rol r ON ur.id_rol = r.id_rol
-         WHERE e.codigo = $1
+         WHERE e.codigo = $1 OR e.documento = $1 OR LOWER(u.email) = LOWER($1)
          GROUP BY e.id_usuario, e.estado, u.email, u.nombre, u.password, u.id_colegio, u.estado`,
         [credential]
       );

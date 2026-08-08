@@ -573,12 +573,262 @@ export const forzarCierreSesion = async (req: AuthRequest, res: Response): Promi
 };
 
 /**
- * DELETE /admin/usuarios/:id
- * Eliminar un usuario (soft-delete: cambiar estado a ELIMINADO).
+ * PATCH /admin/usuarios/:id/eliminar
+ * Soft-delete controlado de un usuario.
+ *
+ * Reglas:
+ *  1. El Admin General DEBE tener una sesión de supervisión activa (req.user.supervisionId).
+ *  2. Se DEBE proveer un codigo_ticket cuyo remitente sea un Directivo del mismo colegio que el usuario afectado.
+ *  3. Si el usuario es ESTUDIANTE y tiene matrícula ACTIVA → se cancela con motivo registrado.
+ *  4. Si el usuario es DOCENTE → se registra observación en el ticket.
+ *  5. Se registra snapshot completo en auditoria_acciones_realizadas usando la sesión activa.
+ *  6. Se añade observación automática al ticket de soporte.
  */
 export const eliminarUsuario = async (req: AuthRequest, res: Response): Promise<void> => {
-  req.body = { estado: 'ELIMINADO' };
-  return cambiarEstadoUsuario(req, res);
+  const { id } = req.params;
+  const { codigo_ticket, motivo } = req.body;
+
+  // 1. Validar que el admin tiene sesión de supervisión activa
+  const supervisionId = (req as any).user?.supervisionId;
+  if (!supervisionId) {
+    res.status(403).json({
+      error: 'Operación no permitida: debe tener una sesión de supervisión activa aprobada por el Directivo del colegio antes de realizar esta acción.'
+    });
+    return;
+  }
+
+  // 2. Validar que se proveyó un código de ticket
+  if (!codigo_ticket || !String(codigo_ticket).trim()) {
+    res.status(400).json({
+      error: 'Se requiere el código de ticket de soporte del Directivo del colegio para autorizar esta operación.'
+    });
+    return;
+  }
+
+  // 3. Prevenir que el Admin General se auto-elimine
+  if (req.user && Number(req.user.id) === Number(id)) {
+    res.status(400).json({ error: 'No puedes eliminar tu propia cuenta de Administrador General.' });
+    return;
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // 4. Obtener datos completos del usuario a eliminar
+    const userRes = await client.query(
+      `SELECT u.id_usuario, u.email, u.nombre, u.apellido, u.estado, u.id_colegio,
+              u.fecha_creacion, u.documento, u.telefono,
+              c.nombre AS colegio_nombre,
+              array_agg(DISTINCT r.nombre) AS roles
+       FROM usuario u
+       LEFT JOIN colegio c ON c.id_colegio = u.id_colegio
+       LEFT JOIN usuario_rol ur ON ur.id_usuario = u.id_usuario
+       LEFT JOIN rol r ON r.id_rol = ur.id_rol
+       WHERE u.id_usuario = $1
+       GROUP BY u.id_usuario, c.nombre`,
+      [id]
+    );
+
+    if (userRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      res.status(404).json({ error: 'Usuario no encontrado.' });
+      return;
+    }
+
+    const targetUser = userRes.rows[0];
+
+    if (targetUser.estado === 'ELIMINADO') {
+      await client.query('ROLLBACK');
+      res.status(400).json({ error: 'El usuario ya se encuentra en estado ELIMINADO.' });
+      return;
+    }
+
+    // 5. Validar que el ticket pertenece a un Directivo del mismo colegio
+    const ticketRes = await client.query(
+      `SELECT ts.id_ticket, ts.id_usuario, ts.correo_remitente, ts.asunto, ts.descripcion,
+              ts.observaciones, ts.estado, ts.codigo_ticket
+       FROM tickets_soporte ts
+       WHERE ts.codigo_ticket = $1`,
+      [String(codigo_ticket).trim().toUpperCase()]
+    );
+
+    if (ticketRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      res.status(400).json({ error: 'El código de ticket ingresado no existe.' });
+      return;
+    }
+
+    const ticket = ticketRes.rows[0];
+    if (ticket.estado === 'RESUELTO') {
+      await client.query('ROLLBACK');
+      res.status(400).json({ error: 'El ticket ya está RESUELTO y no puede usarse como consentimiento.' });
+      return;
+    }
+
+    // Verificar que el remitente del ticket es un Directivo del mismo colegio del usuario
+    if (!ticket.id_usuario) {
+      await client.query('ROLLBACK');
+      res.status(400).json({ error: 'El ticket no está vinculado a un usuario registrado. Se requiere un ticket creado por el Directivo del colegio.' });
+      return;
+    }
+
+    const creatorRolesRes = await client.query(
+      `SELECT r.nombre, u.id_colegio
+       FROM usuario_rol ur
+       JOIN rol r ON ur.id_rol = r.id_rol
+       JOIN usuario u ON u.id_usuario = ur.id_usuario
+       WHERE ur.id_usuario = $1`,
+      [ticket.id_usuario]
+    );
+
+    const creatorRoles = creatorRolesRes.rows.map((r: any) => String(r.nombre).toUpperCase());
+    const creatorSchoolId = creatorRolesRes.rows[0]?.id_colegio;
+    const isDirectivo = creatorRoles.includes('DIRECTIVO');
+
+    if (!isDirectivo) {
+      await client.query('ROLLBACK');
+      res.status(403).json({ error: 'El remitente del ticket no es un Directivo. Solo el Directivo del colegio puede otorgar consentimiento para eliminar usuarios.' });
+      return;
+    }
+
+    if (!creatorSchoolId || !targetUser.id_colegio || Number(creatorSchoolId) !== Number(targetUser.id_colegio)) {
+      await client.query('ROLLBACK');
+      res.status(403).json({
+        error: `El Directivo que emitió el ticket pertenece a una institución diferente (colegio ID: ${creatorSchoolId}) a la del usuario a eliminar (colegio ID: ${targetUser.id_colegio}). Solo el Directivo del mismo colegio puede dar consentimiento.`
+      });
+      return;
+    }
+
+    // Obtener datos del directivo consentidor
+    const directivoRes = await client.query(
+      `SELECT u.id_usuario, u.nombre, u.apellido, d.id AS id_directivo
+       FROM usuario u
+       LEFT JOIN directivo d ON d.id_usuario = u.id_usuario
+       WHERE u.id_usuario = $1`,
+      [ticket.id_usuario]
+    );
+    const directivo = directivoRes.rows[0];
+
+    // 6. Snapshot del usuario antes de eliminar
+    const userSnapshot = {
+      id_usuario: targetUser.id_usuario,
+      email: targetUser.email,
+      nombre: targetUser.nombre,
+      apellido: targetUser.apellido,
+      estado_anterior: targetUser.estado,
+      id_colegio: targetUser.id_colegio,
+      colegio_nombre: targetUser.colegio_nombre,
+      roles: targetUser.roles,
+      documento: targetUser.documento,
+      telefono: targetUser.telefono,
+      fecha_creacion: targetUser.fecha_creacion,
+      eliminado_por_admin: req.user!.id,
+      consentimiento_directivo: {
+        id_usuario_directivo: directivo?.id_usuario,
+        nombre_directivo: `${directivo?.nombre || ''} ${directivo?.apellido || ''}`.trim(),
+        id_directivo: directivo?.id_directivo,
+        codigo_ticket: ticket.codigo_ticket,
+        id_ticket: ticket.id_ticket
+      },
+      motivo_eliminacion: motivo || 'Baja definitiva del usuario por Administrador General.'
+    };
+
+    // 7. Cascada: si es ESTUDIANTE con matrícula ACTIVA → cancelarla
+    const estudianteRes = await client.query(
+      `SELECT e.id_estudiante FROM estudiante e WHERE e.id_usuario = $1`,
+      [id]
+    );
+    if (estudianteRes.rows.length > 0) {
+      const idEstudiante = estudianteRes.rows[0].id_estudiante;
+      await client.query(
+        `UPDATE matricula
+         SET estado = 'CANCELADA',
+             motivo_cancelacion = $1,
+             detalles_cancelacion = $2
+         WHERE id_estudiante = $3 AND estado = 'ACTIVA'`,
+        [
+          'Baja definitiva del usuario por Administrador General.',
+          `Ticket de consentimiento: ${ticket.codigo_ticket}. Admin General ID: ${req.user!.id}.`,
+          idEstudiante
+        ]
+      );
+
+      // También actualizar estado del estudiante
+      await client.query(
+        `UPDATE estudiante SET estado = 'RETIRADO', motivo_estado = $1 WHERE id_estudiante = $2`,
+        [`Cuenta eliminada por Administrador General. Ticket: ${ticket.codigo_ticket}.`, idEstudiante]
+      );
+    }
+
+    // 8. Soft-delete del usuario
+    await client.query(
+      `UPDATE usuario
+       SET estado = 'ELIMINADO',
+           activo = false,
+           logged_out_at = NOW()
+       WHERE id_usuario = $1`,
+      [id]
+    );
+
+    // 9. Registrar en auditoria_acciones_realizadas con el id_auditoria de la sesión activa
+    await client.query(
+      `INSERT INTO auditoria_acciones_realizadas
+       (id_auditoria, modulo, tipo_accion, accion, recurso_afectado, id_usuario_afectado, valor_antiguo, valor_nuevo, motivo_cambio)
+       VALUES ($1, 'USUARIOS', 'ELIMINACION', $2, $3, $4, $5, NULL, $6)`,
+      [
+        supervisionId,
+        `Soft-delete controlado de usuario. Consentimiento del Directivo via ticket ${ticket.codigo_ticket}.`,
+        `Usuario ID: ${id} (${targetUser.nombre} ${targetUser.apellido || ''}) — Colegio: ${targetUser.colegio_nombre || targetUser.id_colegio}`,
+        Number(id),
+        JSON.stringify(userSnapshot),
+        userSnapshot.motivo_eliminacion
+      ]
+    );
+
+    // 10. Añadir observación automática al ticket de soporte
+    let currentObs: any[] = [];
+    try {
+      currentObs = typeof ticket.observaciones === 'string'
+        ? JSON.parse(ticket.observaciones || '[]')
+        : (ticket.observaciones || []);
+    } catch {
+      currentObs = [];
+    }
+
+    currentObs.push({
+      id_usuario: Number(req.user!.id),
+      nombre_usuario: 'Administrador General (Auditoría)',
+      tipo: 'ADMIN_GENERAL',
+      mensaje: `Acción de BAJA DEFINITIVA ejecutada bajo el consentimiento de este ticket.\n` +
+        `Usuario eliminado: ${targetUser.nombre} ${targetUser.apellido || ''} (ID: ${id}, Email: ${targetUser.email || 'Sin email'}).\n` +
+        `Colegio: ${targetUser.colegio_nombre || targetUser.id_colegio}.\n` +
+        `Directivo consentidor: ${directivo?.nombre || ''} ${directivo?.apellido || ''}.\n` +
+        `Motivo: ${userSnapshot.motivo_eliminacion}\n` +
+        `Sesión de supervisión activa: ID ${supervisionId}.`,
+      fecha_creacion: new Date().toISOString()
+    });
+
+    await client.query(
+      'UPDATE tickets_soporte SET observaciones = $1 WHERE id_ticket = $2',
+      [JSON.stringify(currentObs), ticket.id_ticket]
+    );
+
+    await client.query('COMMIT');
+
+    res.json({
+      message: `Usuario ${targetUser.nombre} ${targetUser.apellido || ''} eliminado exitosamente. La acción ha quedado registrada en la auditoría de la sesión activa (ID: ${supervisionId}) y en el ticket de soporte ${ticket.codigo_ticket}.`,
+      id_usuario_eliminado: Number(id),
+      codigo_ticket: ticket.codigo_ticket,
+      id_auditoria: supervisionId
+    });
+  } catch (error: any) {
+    await client.query('ROLLBACK');
+    console.error('Error en soft-delete controlado de usuario:', error);
+    res.status(500).json({ error: 'Error interno al eliminar el usuario.' });
+  } finally {
+    client.release();
+  }
 };
 
 // ═══════════════════════════════════════════════════════════════════════════

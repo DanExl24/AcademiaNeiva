@@ -730,11 +730,12 @@ export class MatriculaService {
         // Estudiante nuevo
         studentCode = 'MAT-' + Date.now();
         
-        // Usuario estudiante
+        // Usuario estudiante (El email es opcional y por defecto queda en NULL; el estudiante podrá agregarlo en "Mi Cuenta")
         const hashedStudentPass = await bcrypt.hash(studentCode, 10);
+        const studentEmail = (data.student?.email && String(data.student.email).trim()) ? String(data.student.email).trim().toLowerCase() : null;
         const studentUserRes = await client.query(
            `INSERT INTO usuario (email, password, nombre, apellido, id_colegio) VALUES ($1, $2, $3, $4, $5) RETURNING id_usuario`,
-           [studentCode, hashedStudentPass, data.student.nombre, data.student.apellido, id_colegio]
+           [studentEmail, hashedStudentPass, data.student.nombre, data.student.apellido, id_colegio]
         );
         const idUsuarioEstudiante = studentUserRes.rows[0].id_usuario;
         

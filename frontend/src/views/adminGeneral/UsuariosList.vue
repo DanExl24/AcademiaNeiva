@@ -61,6 +61,14 @@ const creatingUser = ref(false)
 const createError = ref('')
 const resetting = ref(false)
 
+// Soft-delete modal
+const showDeleteModal = ref(false)
+const deleteTicketCode = ref('')
+const deleteMotivo = ref('')
+const deleting = ref(false)
+const deleteError = ref('')
+const userToDelete = ref<Usuario | null>(null)
+
 const newUser = ref({
   rol: 'directivo',
   email: '',
@@ -417,15 +425,37 @@ const handleForceLogout = async (user: Usuario) => {
   }
 }
 
-const handleDelete = async (user: Usuario) => {
-  if (confirm(`¿Estás seguro de que deseas eliminar la cuenta de ${user.nombre}? Se marcará como inactiva (soft-delete).`)) {
-    try {
-      const headers = { Authorization: `Bearer ${auth.token}` }
-      await axios.delete(`/api/admin/usuarios/${user.id_usuario}`, { headers })
-      await fetchUsers()
-    } catch (error: any) {
-      alert(error.response?.data?.error || 'Error al eliminar usuario')
-    }
+const openDeleteModal = (user: Usuario) => {
+  userToDelete.value = user
+  deleteTicketCode.value = ''
+  deleteMotivo.value = ''
+  deleteError.value = ''
+  showDeleteModal.value = true
+}
+
+const handleDelete = async () => {
+  if (!userToDelete.value) return
+  if (!deleteTicketCode.value.trim()) {
+    deleteError.value = 'El código de ticket del Directivo es obligatorio.'
+    return
+  }
+  try {
+    deleting.value = true
+    deleteError.value = ''
+    const headers = { Authorization: `Bearer ${auth.token}` }
+    const res = await axios.patch(
+      `/api/admin/usuarios/${userToDelete.value.id_usuario}/eliminar`,
+      { codigo_ticket: deleteTicketCode.value.trim(), motivo: deleteMotivo.value.trim() || undefined },
+      { headers }
+    )
+    showDeleteModal.value = false
+    showDetailsModal.value = false
+    await fetchUsers()
+    alert(res.data.message || 'Usuario eliminado exitosamente.')
+  } catch (error: any) {
+    deleteError.value = error.response?.data?.error || 'Error al eliminar usuario. Verifica que tienes sesión de supervisión activa y que el ticket es válido.'
+  } finally {
+    deleting.value = false
   }
 }
 </script>
@@ -642,7 +672,7 @@ const handleDelete = async (user: Usuario) => {
                     </button>
 
                     <!-- Delete -->
-                    <button @click="handleDelete(user)" class="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-xl transition-all" title="Eliminar cuenta (Soft Delete)">
+                    <button @click="openDeleteModal(user)" class="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-xl transition-all" title="Eliminar cuenta (requiere ticket de Directivo)">
                       <Trash2 :size="16" />
                     </button>
                   </template>
@@ -971,6 +1001,79 @@ const handleDelete = async (user: Usuario) => {
             <button @click="submitCreateUser" :disabled="creatingUser" class="flex-[2] bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white px-6 py-3.5 rounded-2xl font-black shadow-lg shadow-indigo-500/20 transition-all text-sm disabled:opacity-50 flex items-center justify-center gap-2">
               <Loader2 v-if="creatingUser" class="animate-spin" :size="18" />
               <span>{{ creatingUser ? 'Registrando...' : 'Confirmar y Crear Usuario' }}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+      <!-- Soft-Delete Modal -->
+      <div v-if="showDeleteModal && userToDelete" class="fixed inset-0 z-[200] flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" @click="showDeleteModal = false"></div>
+        <div class="relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-[32px] shadow-2xl border border-red-100 dark:border-red-900/40 overflow-hidden">
+          <div class="p-8 space-y-5">
+            <!-- Header -->
+            <div class="flex items-start gap-4">
+              <div class="p-3 bg-red-50 dark:bg-red-950/30 rounded-2xl text-red-600 dark:text-red-400 flex-shrink-0">
+                <Trash2 :size="24" />
+              </div>
+              <div>
+                <h2 class="text-xl font-black text-slate-900 dark:text-white">Baja Definitiva de Usuario</h2>
+                <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                  Estás a punto de eliminar la cuenta de <strong class="text-slate-800 dark:text-white">{{ userToDelete.nombre }} {{ userToDelete.apellido || '' }}</strong>. Esta acción requiere consentimiento del Directivo del colegio.
+                </p>
+              </div>
+            </div>
+
+            <!-- Warnings -->
+            <div class="bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/30 rounded-2xl p-4 space-y-2 text-sm text-red-700 dark:text-red-400">
+              <p class="font-black">⚠️ Atención — efectos irreversibles:</p>
+              <ul class="list-disc list-inside space-y-1 font-medium">
+                <li>El usuario no podrá iniciar sesión.</li>
+                <li>Si es Estudiante: su matrícula activa se cancelará automáticamente.</li>
+                <li>La acción queda registrada en la auditoría de la sesión de supervisión activa.</li>
+                <li>Se requiere <strong>sesión de supervisión activa</strong> para proceder.</li>
+              </ul>
+            </div>
+
+            <!-- Ticket Code -->
+            <div class="space-y-1.5">
+              <label class="text-xs font-black text-slate-700 dark:text-slate-300 ml-1">Código de Ticket del Directivo <span class="text-red-500">*</span></label>
+              <input
+                v-model="deleteTicketCode"
+                type="text"
+                placeholder="Ej. TKT-ABC123"
+                class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-red-400/50 rounded-2xl p-3.5 font-mono font-bold outline-none text-sm text-slate-900 dark:text-white uppercase"
+                @input="deleteTicketCode = deleteTicketCode.toUpperCase()"
+              />
+              <p class="text-[11px] text-slate-400 ml-1">El ticket debe haber sido creado por el Directivo del mismo colegio del usuario afectado.</p>
+            </div>
+
+            <!-- Motivo -->
+            <div class="space-y-1.5">
+              <label class="text-xs font-black text-slate-700 dark:text-slate-300 ml-1">Motivo de la baja <span class="text-slate-400">(opcional)</span></label>
+              <textarea
+                v-model="deleteMotivo"
+                rows="2"
+                placeholder="Ej. Retiro voluntario del sistema solicitado por el Directivo."
+                class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-red-400/50 rounded-2xl p-3.5 font-medium outline-none text-sm text-slate-900 dark:text-white resize-none"
+              />
+            </div>
+
+            <!-- Error -->
+            <div v-if="deleteError" class="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 rounded-2xl p-4 text-sm font-medium">
+              {{ deleteError }}
+            </div>
+          </div>
+
+          <div class="p-6 bg-slate-50 dark:bg-slate-800/50 flex gap-3 border-t border-slate-100 dark:border-slate-800">
+            <button @click="showDeleteModal = false" class="flex-1 px-4 py-3.5 rounded-2xl font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all text-sm">Cancelar</button>
+            <button
+              @click="handleDelete"
+              :disabled="deleting || !deleteTicketCode.trim()"
+              class="flex-[2] bg-red-600 hover:bg-red-700 active:scale-95 text-white px-6 py-3.5 rounded-2xl font-black shadow-lg shadow-red-500/20 transition-all text-sm disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              <Loader2 v-if="deleting" class="animate-spin" :size="18" />
+              <Trash2 v-else :size="16" />
+              <span>{{ deleting ? 'Eliminando...' : 'Confirmar Baja Definitiva' }}</span>
             </button>
           </div>
         </div>

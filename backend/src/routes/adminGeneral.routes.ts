@@ -77,7 +77,7 @@ router.post('/usuarios/:id/restablecer-password', verifyToken, requireAdminGener
 router.post('/usuarios/:id/cerrar-sesion', verifyToken, requireAdminGeneral, forzarCierreSesion);
 router.post('/usuarios/:id/validar-ticket', verifyToken, requireAdminGeneral, validarTicketParaUsuario);
 router.put('/usuarios/:id/credenciales-con-ticket', verifyToken, requireAdminGeneral, modificarCredencialesConTicket);
-router.delete('/usuarios/:id', verifyToken, requireAdminGeneral, eliminarUsuario);
+router.patch('/usuarios/:id/eliminar', verifyToken, requireAdminGeneral, eliminarUsuario);
 
 // ─────────────────────────────────────────────────────────────
 // DIRECTIVOS (requiere Admin General)
