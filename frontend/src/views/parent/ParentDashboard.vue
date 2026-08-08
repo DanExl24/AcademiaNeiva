@@ -702,6 +702,10 @@ const barChartOptions = {
                   <span class="text-xs font-bold text-slate-400">Grupo / Sección</span>
                   <span class="text-sm font-black text-slate-800 dark:text-white">{{ selectedChild.grupo ? 'Grupo ' + selectedChild.grupo : 'Principal' }}</span>
                 </div>
+                <div class="p-3.5 bg-slate-50 dark:bg-slate-800/80 rounded-2xl flex justify-between items-center border border-slate-100 dark:border-slate-700/50">
+                  <span class="text-xs font-bold text-slate-400">Jornada</span>
+                  <span class="text-sm font-black text-slate-800 dark:text-white uppercase">{{ selectedChild.jornada || 'Única' }}</span>
+                </div>
                 <div v-if="selectedChild.codigo" class="p-3.5 bg-slate-50 dark:bg-slate-800/80 rounded-2xl flex justify-between items-center border border-slate-100 dark:border-slate-700/50">
                   <span class="text-xs font-bold text-slate-400">Código Estudiantil</span>
                   <span class="text-xs font-mono font-black text-indigo-600 dark:text-indigo-400">{{ selectedChild.codigo }}</span>
@@ -722,7 +726,7 @@ const barChartOptions = {
                      {{ child.nombre }} {{ child.apellido }}
                    </p>
                    <p class="text-[10px] font-bold text-slate-400 mt-0.5">
-                     {{ child.grado || 'Estudiante' }} • Grupo {{ child.grupo || 'A' }}
+                     {{ child.grado || 'Estudiante' }} • Grupo {{ child.grupo || 'A' }} • Jornada {{ child.jornada || 'Única' }}
                    </p>
                  </div>
                  <span class="px-2.5 py-1 bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 rounded-xl shadow-xs text-[10px] font-black uppercase tracking-wider group-hover:bg-indigo-600 group-hover:text-white transition-all flex items-center gap-1">

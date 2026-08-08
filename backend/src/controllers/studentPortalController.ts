@@ -249,7 +249,7 @@ export const getParentChildren = async (req: Request, res: Response) => {
   try {
     const result = await pool.query(`
       SELECT e.id_estudiante, e.nombre, e.apellido, e.codigo,
-             tg.nombre as grado, s.nombre as grupo, dpf.id_colegio, col.nombre as colegio_nombre
+             tg.nombre as grado, s.nombre as grupo, j.nombre as jornada, dpf.id_colegio, col.nombre as colegio_nombre
       FROM padre_familia pf
       JOIN detalle_padrefamilia dpf ON dpf.id_padrefamilia = pf.id_padrefamilia
       JOIN estudiante e ON e.id_estudiante = dpf.id_estudiante
@@ -258,6 +258,7 @@ export const getParentChildren = async (req: Request, res: Response) => {
       LEFT JOIN grupos gr ON gr.id_grupo = m.id_grupo
       LEFT JOIN secciones s ON s.id_seccion = gr.id_seccion
       LEFT JOIN tipo_grado tg ON tg.id_tipo_grado = gr.id_tipo_grado
+      LEFT JOIN jornada j ON j.id_jornada = gr.id_jornada
       WHERE pf.id_usuario = $1
     `, [id_usuario]);
     res.json(result.rows);
@@ -440,7 +441,8 @@ export const getParentDashboardData = async (req: Request, res: Response) => {
         e.apellido, 
         e.codigo,
         tg.nombre as grado, 
-        s.nombre as grupo, 
+        s.nombre as grupo,
+        j.nombre as jornada,
         e.id_colegio,
         m.id_grupo,
         m.id_anio
@@ -451,6 +453,7 @@ export const getParentDashboardData = async (req: Request, res: Response) => {
       LEFT JOIN grupos gr ON gr.id_grupo = m.id_grupo
       LEFT JOIN secciones s ON s.id_seccion = gr.id_seccion
       LEFT JOIN tipo_grado tg ON tg.id_tipo_grado = gr.id_tipo_grado
+      LEFT JOIN jornada j ON j.id_jornada = gr.id_jornada
       WHERE pf.id_usuario = $1
     `;
     const childrenParams = targetYearId ? [userId, targetYearId] : [userId];
