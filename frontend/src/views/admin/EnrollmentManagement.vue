@@ -87,13 +87,13 @@ const tabs = [
   { status: 'CANCELADA',  label: 'Canceladas',           color: 'red'     },
 ]
 
-const stats = computed(() => ({
-  pending:     enrollments.value.filter(e => e.estado === 'PENDIENTE').length,
-  resubmitted: enrollments.value.filter(e => e.estado === 'CORREGIDA').length,
-  corrected:   enrollments.value.filter(e => e.estado === 'CORRECCION' || e.estado === 'RECHAZADA').length,
-  active:      enrollments.value.filter(e => e.estado === 'ACTIVA' || e.estado === 'APROBADA').length,
-  transferred: enrollments.value.filter(e => e.estado === 'TRASLADADA').length,
-  cancelled:   enrollments.value.filter(e => e.estado === 'CANCELADA').length,
+const stats = computed<Record<string, number>>(() => ({
+  PENDIENTE:  enrollments.value.filter(e => e.estado === 'PENDIENTE').length,
+  CORREGIDA:  enrollments.value.filter(e => e.estado === 'CORREGIDA').length,
+  CORRECCION: enrollments.value.filter(e => e.estado === 'CORRECCION').length,
+  ACTIVA:     enrollments.value.filter(e => e.estado === 'ACTIVA' || e.estado === 'APROBADA').length,
+  TRASLADADA: enrollments.value.filter(e => e.estado === 'TRASLADADA').length,
+  CANCELADA:  enrollments.value.filter(e => e.estado === 'CANCELADA' || e.estado === 'RECHAZADA').length,
 }))
 
 const currentOrigin = computed(() => typeof window !== 'undefined' ? window.location.origin : '')
@@ -176,8 +176,8 @@ const filteredEnrollments = computed(() => {
     // Status filter
     if (filterStatus.value === 'ACTIVA') {
       if (en.estado !== 'ACTIVA' && en.estado !== 'APROBADA') return false
-    } else if (filterStatus.value === 'CORRECCION') {
-      if (en.estado !== 'CORRECCION' && en.estado !== 'RECHAZADA') return false
+    } else if (filterStatus.value === 'CANCELADA') {
+      if (en.estado !== 'CANCELADA' && en.estado !== 'RECHAZADA') return false
     } else if (filterStatus.value !== 'TODOS' && en.estado !== filterStatus.value) {
       return false
     }
@@ -816,7 +816,7 @@ const approveException = async (id: number) => {
     <!-- Stats Row -->
     <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
       <button
-        v-for="(tab, i) in tabs" :key="tab.status"
+        v-for="tab in tabs" :key="tab.status"
         @click="filterStatus = tab.status"
         :class="[
           filterStatus === tab.status
@@ -826,7 +826,7 @@ const approveException = async (id: number) => {
         ]"
       >
         <p class="text-2xl font-black text-slate-900 dark:text-white">
-          {{ [stats.pending, stats.corrected, stats.active, stats.transferred, stats.cancelled][i] }}
+          {{ stats[tab.status] || 0 }}
         </p>
         <p class="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-0.5">{{ tab.label }}</p>
         <div :class="[
