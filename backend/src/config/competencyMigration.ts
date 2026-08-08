@@ -293,6 +293,9 @@ export const ensureCompetencySchema = async (): Promise<void> => {
       await client.query("ALTER TYPE estado_matricula ADD VALUE 'CORREGIDA'");
     }
 
+    // Cleanup redundant table if it was created
+    await client.query(`DROP TABLE IF EXISTS public.historial_documento_matricula CASCADE;`);
+
     const checkPeriodEnum = await client.query(`
       SELECT 1 FROM pg_type t 
       JOIN pg_enum e ON t.oid = e.enumtypid 

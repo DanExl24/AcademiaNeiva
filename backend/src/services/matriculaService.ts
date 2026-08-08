@@ -259,7 +259,7 @@ export class MatriculaService {
     );
     console.log('Found sections count:', sections.rows.length);
 
-    const docs = await pool.query(
+    const rawDocs = await pool.query(
       `SELECT d.id_documento, d.id_matricula, d.id_colegio, d.tipo_documento, d.url, d.estado, d.fecha, d.version, d.fecha_expedicion, d.estado_renovacion, d.mime_type, d.nombre_original, d.tamano_bytes, 
               (SELECT prev.url FROM documento_matriculas prev 
                JOIN matricula prev_m ON prev.id_matricula = prev_m.id_matricula
@@ -278,8 +278,24 @@ export class MatriculaService {
        FROM documento_matriculas d
        LEFT JOIN matricula m ON d.id_matricula = m.id_matricula
        WHERE d.id_matricula = $1
-       ORDER BY d.id_documento ASC`, [idMatricula]
+       ORDER BY d.tipo_documento ASC, d.version DESC, d.id_documento DESC`, [idMatricula]
     );
+
+    // Agrupar documentos por tipo_documento: la versión superior es la activa, las anteriores van a versiones_anteriores
+    const docsGroupedMap = new Map<string, any>();
+    for (const docRow of rawDocs.rows) {
+      const key = docRow.tipo_documento;
+      if (!docsGroupedMap.has(key)) {
+        docsGroupedMap.set(key, {
+          ...docRow,
+          versiones_anteriores: []
+        });
+      } else {
+        const parentDoc = docsGroupedMap.get(key);
+        parentDoc.versiones_anteriores.push(docRow);
+      }
+    }
+    const docsWithHistory = Array.from(docsGroupedMap.values());
 
     // Detectar si el correo del padre ya corresponde a un usuario existente (docente/directivo)
     let existingParentUser = null;
@@ -477,7 +493,7 @@ export class MatriculaService {
     return {
       ...mat,
       availableSections: sections.rows || [],
-      documentos: docs.rows || [],
+      documentos: docsWithHistory || [],
       existing_parent_user: existingParentUser,
       renovacion,
       expulsion: expulsionInfo
@@ -565,20 +581,44 @@ export class MatriculaService {
       for (const [key, fileArray] of Object.entries(files)) {
         const file = (fileArray as any[])[0];
         const filename = file.originalname || file.filename || `${key}.pdf`;
-        // Actualizar el documento existente y resetear estado a PENDIENTE
+
+        // 1. Obtener la versión máxima actual e id_colegio para este tipo de documento
+        const currentDocRes = await client.query(
+          `SELECT id_colegio, COALESCE(MAX(version), 0) as max_version
+           FROM documento_matriculas
+           WHERE id_matricula = $1 AND tipo_documento = $2
+           GROUP BY id_colegio`,
+          [idMatricula, key]
+        );
+
+        let schoolId = 1;
+        let nextVersion = 1;
+
+        if (currentDocRes.rows.length > 0) {
+          schoolId = currentDocRes.rows[0].id_colegio;
+          nextVersion = Number(currentDocRes.rows[0].max_version) + 1;
+        } else {
+          const matRes = await client.query('SELECT id_colegio FROM matricula WHERE id_matricula = $1', [idMatricula]);
+          if (matRes.rows.length > 0) {
+            schoolId = matRes.rows[0].id_colegio;
+          }
+        }
+
+        // 2. Insertar la nueva versión del documento directamente en documento_matriculas
         await client.query(
-          `UPDATE documento_matriculas 
-           SET url = $1, estado = 'PENDIENTE', fecha = NOW(),
-               contenido = $2, mime_type = $3, nombre_original = $4, tamano_bytes = $5
-           WHERE id_matricula = $6 AND tipo_documento = $7`,
+          `INSERT INTO documento_matriculas
+           (id_matricula, tipo_documento, url, estado, fecha, id_colegio, version, contenido, mime_type, nombre_original, tamano_bytes)
+           VALUES ($1, $2, $3, 'PENDIENTE', NOW(), $4, $5, $6, $7, $8, $9)`,
           [
+            idMatricula,
+            key,
             filename,
+            schoolId,
+            nextVersion,
             file.buffer || null,
             file.mimetype || null,
             file.originalname || filename,
-            file.size || null,
-            idMatricula,
-            key
+            file.size || null
           ]
         );
       }
