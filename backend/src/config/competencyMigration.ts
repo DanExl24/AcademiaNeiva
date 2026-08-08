@@ -430,6 +430,13 @@ export const ensureCompetencySchema = async (): Promise<void> => {
       await client.query(checkDocPasaporteSql);
     }
 
+    // Ejecutar migración 032 (permitir email NULL en usuario)
+    const makeEmailNullablePath = path.join(__dirname, "../migrations/032_make_usuario_email_nullable.sql");
+    if (fs.existsSync(makeEmailNullablePath)) {
+      const makeEmailNullableSql = fs.readFileSync(makeEmailNullablePath, "utf8");
+      await client.query(makeEmailNullableSql);
+    }
+
     // Backfill sync_uuid for existing competencies
     const unmigratedRes = await client.query(`
       SELECT id_colegio, id_anio, id_materia, id_periodo, descripcion, ARRAY_AGG(id_competencia) AS ids

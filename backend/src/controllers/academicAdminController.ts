@@ -4,7 +4,7 @@ import { pool } from "../config/db";
 import bcrypt from "bcrypt";
 import { randomUUID } from "crypto";
 import { NotificationService } from "../services/notificationService";
-import { validateDocumentUniqueness } from "../utils/documentValidation";
+import { validateDocumentUniqueness, normalizeDocument, validateDocumentFormatByTipo } from "../utils/documentValidation";
 import { normalizeGradeName, isDuplicateOrSimilarGrade } from "../utils/gradeNormalization";
 import { getDefaultMonthsLabelForPeriodOrder, getAcademicYearLabel } from "../config/academicCalendarDefaults";
 import {
@@ -3006,7 +3006,7 @@ export const createTeacher = async (req: Request, res: Response): Promise<void> 
   const schoolId = parseSchoolId(req.body.schoolId);
   const nombre = String(req.body.nombre || "").trim();
   const apellido = String(req.body.apellido || "").trim();
-  const documento = String(req.body.documento || "").trim();
+  const documento = normalizeDocument(req.body.documento);
   const email = String(req.body.email || "").trim().toLowerCase();
   const password = String(req.body.password || "");
   const documentTypeId = Number(req.body.id_tipodocumento);
@@ -3014,6 +3014,20 @@ export const createTeacher = async (req: Request, res: Response): Promise<void> 
 
   if (!schoolId || !nombre || !apellido || !documento || !email || !password || !documentTypeId) {
     res.status(400).json({ error: "Todos los campos del docente son obligatorios" });
+    return;
+  }
+
+  // 1. Validar formato de documento según el tipo (CC, TI, RC, CE, PEP, Pasaporte)
+  const docFormatCheck = validateDocumentFormatByTipo(documento, documentTypeId);
+  if (!docFormatCheck.isValid) {
+    res.status(400).json({ error: docFormatCheck.error });
+    return;
+  }
+
+  // 2. Validar formato de email
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    res.status(400).json({ error: `El correo electrónico '${email}' no tiene un formato válido.` });
     return;
   }
 
@@ -3032,60 +3046,105 @@ export const createTeacher = async (req: Request, res: Response): Promise<void> 
       "SELECT id_tipodocumento, tipo FROM tipo_documento WHERE id_tipodocumento = $1",
       [documentTypeId]
     );
-    const existingTeacherRes = await client.query(
-      `SELECT d.id_docente
-       FROM docente d
-       JOIN usuario u ON d.id_usuario = u.id_usuario
-       WHERE d.id_colegio = $1
-         AND u.documento = $2`,
-      [schoolId, documento]
-    );
-    const existingUserRes = await client.query(
-      `SELECT u.id_usuario, u.email, COALESCE(u.activo, true) AS activo,
-              u.nombre,
-              u.apellido,
-              u.documento,
-              u.id_tipodocumento
-       FROM usuario u
-       WHERE LOWER(u.email) = $1
-       LIMIT 1`,
-      [email]
-    );
-    const roleRes = await client.query(
-      `SELECT id_rol
-       FROM rol
-       WHERE LOWER(nombre) = 'docente'
-       LIMIT 1`
-    );
-    const schoolRes = await client.query(
-      `SELECT nombre
-       FROM colegio
-       WHERE id_colegio = $1`,
-      [schoolId]
-    );
-
     if (documentTypeRes.rows.length === 0) {
       await client.query("ROLLBACK");
       res.status(404).json({ error: "Tipo de documento no encontrado" });
       return;
     }
 
-    if (existingTeacherRes.rows.length > 0) {
-      await client.query("ROLLBACK");
-      res.status(409).json({ error: "Ya existe un docente registrado con ese documento de identidad en esta institución" });
-      return;
-    }
-
+    const roleRes = await client.query(
+      `SELECT id_rol FROM rol WHERE LOWER(nombre) = 'docente' LIMIT 1`
+    );
     if (roleRes.rows.length === 0) {
       await client.query("ROLLBACK");
       res.status(500).json({ error: "No existe el rol docente configurado en el sistema" });
       return;
     }
 
+    const schoolRes = await client.query(
+      `SELECT nombre FROM colegio WHERE id_colegio = $1`,
+      [schoolId]
+    );
     schoolName = schoolRes.rows[0]?.nombre || schoolName;
 
-    if (existingUserRes.rows.length > 0) {
-      const existingUser = existingUserRes.rows[0];
+    // Buscar si ya existe un registro de docente en la misma institución con ese documento
+    const existingTeacherRes = await client.query(
+      `SELECT d.id_docente
+       FROM docente d
+       JOIN usuario u ON d.id_usuario = u.id_usuario
+       WHERE d.id_colegio = $1
+         AND UPPER(TRIM(u.documento)) = $2`,
+      [schoolId, documento]
+    );
+    if (existingTeacherRes.rows.length > 0) {
+      await client.query("ROLLBACK");
+      res.status(409).json({ error: `Ya existe un docente registrado con el documento de identidad ${documento} en esta institución.` });
+      return;
+    }
+
+    // Buscar usuario en el sistema por documento y por email
+    const userByDocRes = await client.query(
+      `SELECT u.id_usuario, u.email, COALESCE(u.activo, true) AS activo,
+              u.nombre, u.apellido, u.documento, u.id_tipodocumento
+       FROM usuario u
+       WHERE UPPER(TRIM(u.documento)) = $1
+       LIMIT 1`,
+      [documento]
+    );
+
+    const userByEmailRes = await client.query(
+      `SELECT u.id_usuario, u.email, COALESCE(u.activo, true) AS activo,
+              u.nombre, u.apellido, u.documento, u.id_tipodocumento
+       FROM usuario u
+       WHERE LOWER(TRIM(u.email)) = $1
+       LIMIT 1`,
+      [email]
+    );
+
+    const userByDoc = userByDocRes.rows[0] || null;
+    const userByEmail = userByEmailRes.rows[0] || null;
+
+    // Si coinciden con dos usuarios distintos en el sistema: error de cruce de datos
+    if (userByDoc && userByEmail && userByDoc.id_usuario !== userByEmail.id_usuario) {
+      await client.query("ROLLBACK");
+      res.status(400).json({
+        error: `El documento de identidad ${documento} pertenece a '${userByDoc.nombre} ${userByDoc.apellido}', mientras que el correo '${email}' pertenece a un usuario diferente ('${userByEmail.nombre} ${userByEmail.apellido}'). No se pueden asociar datos de dos personas distintas.`
+      });
+      return;
+    }
+
+    const existingUser = userByDoc || userByEmail;
+
+    if (existingUser) {
+      // VALIDACIÓN DE INTEGRIDAD DE DATOS PERSONALES
+      // No se permite modificar Nombres, Apellidos, Tipo o Número de Documento de un usuario existente.
+      const normNombreReq = nombre.toLowerCase().trim();
+      const normApellidoReq = apellido.toLowerCase().trim();
+      const normNombreExist = (existingUser.nombre || "").toLowerCase().trim();
+      const normApellidoExist = (existingUser.apellido || "").toLowerCase().trim();
+      const normDocExist = normalizeDocument(existingUser.documento);
+      const tipoDocExist = Number(existingUser.id_tipodocumento);
+
+      const nameMismatch = normNombreExist && normNombreReq !== normNombreExist;
+      const surnameMismatch = normApellidoExist && normApellidoReq !== normApellidoExist;
+      const docMismatch = normDocExist && documento !== normDocExist;
+      const tipoDocMismatch = tipoDocExist && documentTypeId !== tipoDocExist;
+
+      if (nameMismatch || surnameMismatch || docMismatch || tipoDocMismatch) {
+        await client.query("ROLLBACK");
+        res.status(400).json({
+          error: `Los datos personales ingresados no coinciden con la persona registrada en el sistema (${existingUser.nombre} ${existingUser.apellido}, Doc: ${existingUser.documento}). No se permite alterar el nombre, apellido, tipo o número de documento de un usuario existente.`
+        });
+        return;
+      }
+
+      // Si el correo ingresado difiere del del usuario existente pero está en uso por otro usuario distinto
+      if (email !== (existingUser.email || "").toLowerCase().trim() && userByEmail && userByEmail.id_usuario !== existingUser.id_usuario) {
+        await client.query("ROLLBACK");
+        res.status(409).json({ error: `El correo '${email}' ya está registrado por otro usuario en la plataforma.` });
+        return;
+      }
+
       const userRolesRes = await client.query(
         `SELECT r.nombre 
          FROM usuario_rol ur
@@ -3098,91 +3157,77 @@ export const createTeacher = async (req: Request, res: Response): Promise<void> 
       const isDocente = roles.includes("docente");
 
       if (isDocente) {
-        await client.query("ROLLBACK");
-        res.status(409).json({ error: "Ya existe un docente registrado con ese correo electrónico" });
-        return;
-      }
-
-      // Validar que el número de documento ingresado coincida con la identidad del usuario existente
-      if (existingUser.documento && existingUser.documento.trim() !== documento.trim()) {
-        await client.query("ROLLBACK");
-        res.status(400).json({
-          error: `El correo "${email}" pertenece al usuario registrado "${existingUser.nombre || nombre} ${existingUser.apellido || apellido}" cuyo documento es "${existingUser.documento}". No se puede registrar un docente con un documento diferente (${documento}) usando el mismo correo.`
-        });
-        return;
-      }
-
-      if (existingUser.id_tipodocumento && Number(existingUser.id_tipodocumento) !== documentTypeId) {
-        await client.query("ROLLBACK");
-        res.status(400).json({
-          error: `El correo "${email}" pertenece al usuario registrado "${existingUser.nombre || nombre} ${existingUser.apellido || apellido}". El tipo de documento ingresado no coincide con el registrado en el sistema.`
-        });
-        return;
-      }
-
-      if (isParent) {
-        const addRoleIfParent = Boolean(req.body.addRoleIfParent);
-        const parentFullName = `${existingUser.nombre || nombre} ${existingUser.apellido || apellido}`.trim();
-
-        if (!addRoleIfParent) {
+        const teacherInSchool = await client.query(
+          `SELECT id_docente FROM docente WHERE id_usuario = $1 AND id_colegio = $2`,
+          [existingUser.id_usuario, schoolId]
+        );
+        if (teacherInSchool.rows.length > 0) {
           await client.query("ROLLBACK");
-          res.status(409).json({
-            isParent: true,
-            message: `El correo "${email}" pertenece a un Padre de Familia registrado (${parentFullName}). ¿Desea vincular esta cuenta existente también como Docente?`
-          });
+          res.status(409).json({ error: `El usuario (${existingUser.nombre} ${existingUser.apellido}) ya está registrado como docente en esta institución.` });
           return;
         }
+      }
 
-        // Add 'docente' role to existing user
-        await client.query(
-          `INSERT INTO usuario_rol (id_usuario, id_rol)
-           VALUES ($1, $2)
-           ON CONFLICT DO NOTHING`,
-          [existingUser.id_usuario, roleRes.rows[0].id_rol]
-        );
+      const addRoleIfParent = Boolean(req.body.addRoleIfParent);
+      const parentFullName = `${existingUser.nombre} ${existingUser.apellido}`.trim();
 
-        const finalNombre = existingUser.nombre || nombre;
-        const finalApellido = existingUser.apellido || apellido;
-        const finalDocumento = existingUser.documento || documento;
-        const finalTipoDoc = existingUser.id_tipodocumento || documentTypeId;
-
-        const teacherRes = await client.query(
-          `INSERT INTO docente (nombre, apellido, id_colegio, id_usuario, estado)
-           VALUES ($1, $2, $3, $4, 'ACTIVO')
-           RETURNING id_docente, nombre, apellido, estado`,
-          [finalNombre, finalApellido, schoolId, existingUser.id_usuario]
-        );
-
-        await client.query("COMMIT");
-
-        await NotificationService.sendTeacherWelcomeEmail(
-          existingUser.email,
-          parentFullName,
-          schoolName,
-          documentTypeRes.rows[0].tipo,
-          finalDocumento,
-          password
-        );
-
-        res.status(201).json({
-          ...teacherRes.rows[0],
-          tipo_documento: documentTypeRes.rows[0].tipo,
-          email: existingUser.email,
-          activo: existingUser.activo,
-          estado: teacherRes.rows[0].estado,
-          asignaciones_count: 0
+      if (isParent && !addRoleIfParent && email === (existingUser.email || "").toLowerCase().trim()) {
+        await client.query("ROLLBACK");
+        res.status(409).json({
+          isParent: true,
+          message: `El correo "${email}" pertenece a un Padre de Familia registrado (${parentFullName}). ¿Desea vincular esta cuenta existente también como Docente?`
         });
         return;
       }
 
-      await client.query("ROLLBACK");
-      res.status(409).json({ error: "Ya existe un usuario registrado con ese correo" });
+      // Agregar rol 'docente' al usuario existente
+      await client.query(
+        `INSERT INTO usuario_rol (id_usuario, id_rol)
+         VALUES ($1, $2)
+         ON CONFLICT DO NOTHING`,
+        [existingUser.id_usuario, roleRes.rows[0].id_rol]
+      );
+
+      // Si el directivo especificó un correo institucional nuevo para sus funciones de docente, actualizamos su correo de acceso
+      if (email !== (existingUser.email || "").toLowerCase().trim()) {
+        await client.query(
+          `UPDATE usuario SET email = $1 WHERE id_usuario = $2`,
+          [email, existingUser.id_usuario]
+        );
+      }
+
+      const teacherRes = await client.query(
+        `INSERT INTO docente (nombre, apellido, id_colegio, id_usuario, estado)
+         VALUES ($1, $2, $3, $4, 'ACTIVO')
+         RETURNING id_docente, nombre, apellido, estado`,
+        [existingUser.nombre, existingUser.apellido, schoolId, existingUser.id_usuario]
+      );
+
+      await client.query("COMMIT");
+
+      await NotificationService.sendTeacherWelcomeEmail(
+        email,
+        parentFullName,
+        schoolName,
+        documentTypeRes.rows[0].tipo,
+        existingUser.documento || documento,
+        password
+      );
+
+      res.status(201).json({
+        ...teacherRes.rows[0],
+        documento: existingUser.documento || documento,
+        id_tipodocumento: existingUser.id_tipodocumento || documentTypeId,
+        tipo_documento: documentTypeRes.rows[0].tipo,
+        email,
+        activo: existingUser.activo,
+        estado: teacherRes.rows[0].estado,
+        asignaciones_count: 0
+      });
       return;
     }
 
-    // Validar unicidad global y formato del documento de identidad según tipo
-    await validateDocumentUniqueness(client, documento, "docente", undefined, documentTypeId);
-
+    // CASO 2: Persona y usuario completamente nuevos
     const passwordHash = await bcrypt.hash(password, 10);
     const userRes = await client.query(
       `INSERT INTO usuario (email, password, nombre, apellido, id_colegio, id_tipodocumento, documento)
@@ -3227,8 +3272,8 @@ export const createTeacher = async (req: Request, res: Response): Promise<void> 
     });
   } catch (error: any) {
     await client.query("ROLLBACK");
-    console.error("Error creating teacher:", error);
-    res.status(500).json({ error: "Error en el servidor" });
+    console.error("Error en createTeacher:", error);
+    res.status(500).json({ error: error.message || "Error al registrar el docente" });
   } finally {
     client.release();
   }

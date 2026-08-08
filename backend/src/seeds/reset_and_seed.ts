@@ -1058,6 +1058,10 @@ async function run(): Promise<void> {
     const checkDocPasaporteSql = fs.readFileSync(path.join(__dirname, "../migrations/031_update_documento_check_for_pasaporte.sql"), "utf8");
     await client.query(checkDocPasaporteSql);
 
+    console.log("📦 Aplicando migración 032 (permitir email NULL en la tabla usuario)...");
+    const makeEmailNullableSql = fs.readFileSync(path.join(__dirname, "../migrations/032_make_usuario_email_nullable.sql"), "utf8");
+    await client.query(makeEmailNullableSql);
+
     // ── Phase 2: Schema migrations ──
     console.log("🔧 Migrando columnas adicionales...");
     await client.query(`ALTER TABLE grados ADD COLUMN IF NOT EXISTS seccion VARCHAR(10) DEFAULT 'A';`);
