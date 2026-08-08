@@ -2752,6 +2752,12 @@ export const getTeacherManagementData = async (req: Request, res: Response): Pro
              WHERE pf.id_usuario = d.id_usuario
              LIMIT 1
            ) AS email_padre,
+           EXISTS (
+             SELECT 1 
+             FROM usuario_rol ur 
+             JOIN rol r ON r.id_rol = ur.id_rol 
+             WHERE ur.id_usuario = d.id_usuario AND LOWER(r.nombre) = 'padre'
+           ) AS es_padre,
            COUNT(DISTINCT dg.id_detallegrado)::int AS asignaciones_count
          FROM docente d
          LEFT JOIN usuario u ON u.id_usuario = d.id_usuario
@@ -3284,7 +3290,7 @@ export const updateTeacher = async (req: Request, res: Response): Promise<void> 
   const schoolId = parseSchoolId(req.body.schoolId);
   const nombre = String(req.body.nombre || "").trim();
   const apellido = String(req.body.apellido || "").trim();
-  const documento = String(req.body.documento || "").trim();
+  const documento = normalizeDocument(req.body.documento);
   const email = String(req.body.email || "").trim().toLowerCase();
   const documentTypeId = Number(req.body.id_tipodocumento);
 
@@ -3293,72 +3299,131 @@ export const updateTeacher = async (req: Request, res: Response): Promise<void> 
     return;
   }
 
+  // 1. Validar formato del documento según su tipo
+  const docCheck = validateDocumentFormatByTipo(documento, documentTypeId);
+  if (!docCheck.isValid) {
+    res.status(400).json({ error: docCheck.error });
+    return;
+  }
+
+  // 2. Validar formato del email
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    res.status(400).json({ error: `El correo electrónico '${email}' no tiene un formato válido.` });
+    return;
+  }
+
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
 
-    // Check if another teacher in this school has the same document (en tabla usuario)
-    const duplicateDoc = await client.query(
-      `SELECT d.id_docente 
-       FROM docente d 
-       JOIN usuario u ON d.id_usuario = u.id_usuario 
-       WHERE d.id_colegio = $1 AND u.documento = $2 AND d.id_docente != $3`,
-      [schoolId, documento, teacherId]
-    );
-    if (duplicateDoc.rows.length > 0) {
-      await client.query("ROLLBACK");
-      res.status(409).json({ error: "Ya existe otro docente con ese documento en este colegio" });
-      return;
-    }
-
-    // Get current teacher
+    // Obtenemos los datos del docente y su usuario asociado
     const teacherRes = await client.query(
-      `SELECT id_usuario FROM docente WHERE id_docente = $1 AND id_colegio = $2`,
+      `SELECT d.id_docente, d.id_usuario, u.nombre, u.apellido, u.documento, u.id_tipodocumento, u.email
+       FROM docente d
+       JOIN usuario u ON u.id_usuario = d.id_usuario
+       WHERE d.id_docente = $1 AND d.id_colegio = $2`,
       [teacherId, schoolId]
     );
+
     if (teacherRes.rows.length === 0) {
       await client.query("ROLLBACK");
       res.status(404).json({ error: "Docente no encontrado" });
       return;
     }
 
-    const { id_usuario } = teacherRes.rows[0];
+    const currentTeacher = teacherRes.rows[0];
+    const { id_usuario } = currentTeacher;
 
-    // Check if another user has this email
+    // Verificar si el usuario es también Padre de Familia
+    const isParentRes = await client.query(
+      `SELECT 1 
+       FROM usuario_rol ur 
+       JOIN rol r ON r.id_rol = ur.id_rol 
+       WHERE ur.id_usuario = $1 AND LOWER(r.nombre) = 'padre'
+       LIMIT 1`,
+      [id_usuario]
+    );
+    const isParent = isParentRes.rows.length > 0;
+
+    if (isParent) {
+      const normNombreReq = nombre.toLowerCase();
+      const normApellidoReq = apellido.toLowerCase();
+      const normNombreCur = (currentTeacher.nombre || "").toLowerCase().trim();
+      const normApellidoCur = (currentTeacher.apellido || "").toLowerCase().trim();
+      const normDocCur = normalizeDocument(currentTeacher.documento);
+      const tipoDocCur = Number(currentTeacher.id_tipodocumento);
+
+      if (
+        (normNombreCur && normNombreReq !== normNombreCur) ||
+        (normApellidoCur && normApellidoReq !== normApellidoCur) ||
+        (normDocCur && documento !== normDocCur) ||
+        (tipoDocCur && documentTypeId !== tipoDocCur)
+      ) {
+        await client.query("ROLLBACK");
+        res.status(400).json({
+          error: "Este docente también está registrado como Padre de Familia. Sus datos personales no pueden modificarse desde este módulo; debe realizar el cambio desde la Gestión de Padres de Familia."
+        });
+        return;
+      }
+    }
+
+    // Verificar si otro docente en este colegio usa el mismo documento
+    const duplicateDoc = await client.query(
+      `SELECT d.id_docente 
+       FROM docente d 
+       JOIN usuario u ON d.id_usuario = u.id_usuario 
+       WHERE d.id_colegio = $1 AND UPPER(TRIM(u.documento)) = $2 AND d.id_docente != $3`,
+      [schoolId, documento, teacherId]
+    );
+    if (duplicateDoc.rows.length > 0) {
+      await client.query("ROLLBACK");
+      res.status(409).json({ error: "Ya existe otro docente con ese número de documento en este colegio." });
+      return;
+    }
+
+    // Verificar si otro usuario tiene el nuevo correo especificado
     if (id_usuario) {
       const duplicateEmail = await client.query(
-        `SELECT id_usuario FROM usuario WHERE LOWER(email) = $1 AND id_usuario != $2`,
+        `SELECT id_usuario FROM usuario WHERE LOWER(TRIM(email)) = $1 AND id_usuario != $2`,
         [email, id_usuario]
       );
       if (duplicateEmail.rows.length > 0) {
         await client.query("ROLLBACK");
-        res.status(409).json({ error: "Ya existe otro usuario registrado con ese correo" });
+        res.status(409).json({ error: `El correo '${email}' ya está registrado por otro usuario en la plataforma.` });
         return;
       }
 
-      // Update usuario details (nombre, apellido, email, id_tipodocumento, documento)
+      // Actualizar usuario (si es padre, nombre/apellido/doc se mantienen iguales, sólo se actualiza email)
       await client.query(
         `UPDATE usuario 
          SET nombre = $1, apellido = $2, email = $3, id_tipodocumento = $4, documento = $5
          WHERE id_usuario = $6`,
-        [nombre, apellido, email, documentTypeId, documento, id_usuario]
+        [
+          isParent ? currentTeacher.nombre : nombre,
+          isParent ? currentTeacher.apellido : apellido,
+          email,
+          isParent ? currentTeacher.id_tipodocumento : documentTypeId,
+          isParent ? currentTeacher.documento : documento,
+          id_usuario
+        ]
       );
     }
 
-    // Update docente details (solo nombre y apellido)
+    // Actualizar tabla docente
     await client.query(
       `UPDATE docente 
        SET nombre = $1, apellido = $2
        WHERE id_docente = $3`,
-      [nombre, apellido, teacherId]
+      [isParent ? currentTeacher.nombre : nombre, isParent ? currentTeacher.apellido : apellido, teacherId]
     );
 
     await client.query("COMMIT");
     res.json({ message: "Docente actualizado con éxito." });
   } catch (error: any) {
     await client.query("ROLLBACK");
-    console.error("Error updating teacher:", error);
-    res.status(500).json({ error: "Error en el servidor" });
+    console.error("Error en updateTeacher:", error);
+    res.status(500).json({ error: error.message || "Error al actualizar docente" });
   } finally {
     client.release();
   }

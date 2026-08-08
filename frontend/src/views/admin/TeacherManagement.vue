@@ -39,6 +39,7 @@ interface TeacherItem {
   tipo_documento: string
   email: string
   email_padre?: string
+  es_padre?: boolean
   activo: boolean
   estado: 'ACTIVO' | 'INACTIVO' | 'DESVINCULADO'
   asignaciones_count: number
@@ -338,7 +339,8 @@ const editTeacherForm = ref({
   apellido: '',
   documento: '',
   id_tipodocumento: '',
-  email: ''
+  email: '',
+  es_padre: false
 })
 
 const openEditTeacherModal = () => {
@@ -350,7 +352,8 @@ const openEditTeacherModal = () => {
     apellido: t.apellido,
     documento: t.documento,
     id_tipodocumento: String(t.id_tipodocumento),
-    email: t.email
+    email: t.email,
+    es_padre: Boolean(t.es_padre)
   }
   editTeacherModal.value = true
 }
@@ -974,26 +977,39 @@ watch(() => yearStore.selectedYearId, () => {
           <h2 class="text-xl font-black text-slate-900 dark:text-white flex items-center gap-3"><Edit2 :size="22" class="text-blue-600" />Modificar Datos de Docente</h2>
           <p class="text-slate-400 dark:text-slate-500 text-sm font-medium mt-1">Actualiza los datos personales y de acceso del docente.</p>
         </div>
-        <div class="p-8 space-y-5 overflow-y-auto">
+        <div class="p-8 space-y-5 overflow-y-auto font-sans">
+          <!-- Advertencia si el docente también es Padre de Familia -->
+          <div v-if="editTeacherForm.es_padre" class="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-2xl p-3.5 flex items-center gap-3 animate-in fade-in duration-200">
+            <div class="p-2 bg-amber-500 text-white rounded-xl shrink-0">
+              <Info :size="18" />
+            </div>
+            <div class="text-xs text-amber-950 dark:text-amber-200 leading-relaxed">
+              <p class="font-black uppercase tracking-wider text-[10px]">🔒 Datos Personales Bloqueados:</p>
+              <p class="font-medium mt-0.5">
+                Este docente también está registrado como <strong>Padre de Familia</strong> en el sistema. Para modificar sus nombres, apellidos o documento de identidad, debe hacerlo a través del módulo de <strong>Gestión de Padres de Familia</strong>. Aquí únicamente puede actualizar su correo electrónico.
+              </p>
+            </div>
+          </div>
+
           <div class="grid grid-cols-2 gap-4">
             <label class="space-y-1.5">
               <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nombres</span>
-              <input v-model="editTeacherForm.nombre" type="text" placeholder="Ej. Laura Elena" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-bold outline-none text-slate-900 dark:text-white" />
+              <input v-model="editTeacherForm.nombre" :disabled="editTeacherForm.es_padre" type="text" placeholder="Ej. Laura Elena" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-bold outline-none text-slate-900 dark:text-white disabled:opacity-75 disabled:cursor-not-allowed disabled:bg-slate-200/50 dark:disabled:bg-slate-800/80" />
             </label>
             <label class="space-y-1.5">
               <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Apellidos</span>
-              <input v-model="editTeacherForm.apellido" type="text" placeholder="Ej. Gómez" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-bold outline-none text-slate-900 dark:text-white" />
+              <input v-model="editTeacherForm.apellido" :disabled="editTeacherForm.es_padre" type="text" placeholder="Ej. Gómez" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-bold outline-none text-slate-900 dark:text-white disabled:opacity-75 disabled:cursor-not-allowed disabled:bg-slate-200/50 dark:disabled:bg-slate-800/80" />
             </label>
             <label class="space-y-1.5">
               <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tipo Doc.</span>
-              <select v-model="editTeacherForm.id_tipodocumento" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-bold outline-none text-slate-900 dark:text-white">
+              <select v-model="editTeacherForm.id_tipodocumento" :disabled="editTeacherForm.es_padre" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-bold outline-none text-slate-900 dark:text-white disabled:opacity-75 disabled:cursor-not-allowed disabled:bg-slate-200/50 dark:disabled:bg-slate-800/80">
                 <option value="">Seleccionar...</option>
                 <option v-for="type in documentTypes" :key="type.id_tipodocumento" :value="type.id_tipodocumento">{{ type.tipo }}</option>
               </select>
             </label>
             <label class="space-y-1.5">
               <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Número</span>
-              <input v-model="editTeacherForm.documento" type="text" placeholder="Documento de identidad" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-bold outline-none text-slate-900 dark:text-white" />
+              <input v-model="editTeacherForm.documento" :disabled="editTeacherForm.es_padre" type="text" placeholder="Documento de identidad" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-bold outline-none text-slate-900 dark:text-white disabled:opacity-75 disabled:cursor-not-allowed disabled:bg-slate-200/50 dark:disabled:bg-slate-800/80" />
             </label>
             <label class="col-span-2 space-y-1.5">
               <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Email Institucional</span>
