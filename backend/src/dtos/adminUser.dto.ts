@@ -42,15 +42,17 @@ export const createAdminUserSchema = z.object({
   }, {
     message: 'Debe seleccionar una institución educativa para este rol.',
     path: ['id_colegio']
-  }).refine((data) => {
+  }).superRefine((data, ctx) => {
     if (data.documento && data.documento.trim()) {
       const check = validateDocumentFormatByTipo(data.documento, data.tipo_documento);
-      return check.isValid;
+      if (!check.isValid) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: check.error || 'El número de documento de identidad no es correcto.',
+          path: ['documento']
+        });
+      }
     }
-    return true;
-  }, {
-    message: 'El número de documento no cumple con el formato requerido para el tipo de documento seleccionado.',
-    path: ['documento']
   })
 });
 

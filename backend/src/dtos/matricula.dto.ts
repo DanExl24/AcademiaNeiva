@@ -38,24 +38,27 @@ export const SubmitEnrollmentSchema = z.object({
     parent_lastname: z.string().optional().nullable(),
     parent_document: z.string().optional().nullable(),
     parent_id_tipodocumento: z.number().optional().nullable(),
-  }).refine((data) => {
+  }).superRefine((data, ctx) => {
     if (data.student_document) {
       const check = validateDocumentFormatByTipo(data.student_document, data.student_id_tipodocumento);
-      return check.isValid;
+      if (!check.isValid) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: check.error || 'El número de documento del estudiante no es correcto.',
+          path: ['student_document']
+        });
+      }
     }
-    return true;
-  }, {
-    message: 'El número de documento del estudiante no cumple con el formato requerido.',
-    path: ['student_document']
-  }).refine((data) => {
     if (data.parent_document && data.parent_document.trim()) {
       const check = validateDocumentFormatByTipo(data.parent_document, data.parent_id_tipodocumento);
-      return check.isValid;
+      if (!check.isValid) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: check.error || 'El número de documento del acudiente no es correcto.',
+          path: ['parent_document']
+        });
+      }
     }
-    return true;
-  }, {
-    message: 'El número de documento del acudiente no cumple con el formato requerido.',
-    path: ['parent_document']
   })
 });
 
@@ -89,18 +92,23 @@ export const FinalizeEnrollmentSchema = z.object({
     id_grado: z.number().optional().nullable(),
     existing_parent_user_id: z.number().optional().nullable(),
     id_estudiante: z.number().optional().nullable()
-  }).refine((data) => {
+  }).superRefine((data, ctx) => {
     const sCheck = validateDocumentFormatByTipo(data.student.documento, data.student.id_tipodocumento);
-    return sCheck.isValid;
-  }, {
-    message: 'El número de documento del estudiante no cumple con el formato del tipo de documento.',
-    path: ['student', 'documento']
-  }).refine((data) => {
+    if (!sCheck.isValid) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: sCheck.error || 'El número de documento del estudiante no es correcto.',
+        path: ['student', 'documento']
+      });
+    }
     const pCheck = validateDocumentFormatByTipo(data.parent.documento, data.parent.id_tipodocumento);
-    return pCheck.isValid;
-  }, {
-    message: 'El número de documento del acudiente no cumple con el formato del tipo de documento.',
-    path: ['parent', 'documento']
+    if (!pCheck.isValid) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: pCheck.error || 'El número de documento del acudiente no es correcto.',
+        path: ['parent', 'documento']
+      });
+    }
   })
 });
 

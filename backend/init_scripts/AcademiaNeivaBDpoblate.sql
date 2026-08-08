@@ -2624,7 +2624,7 @@ ALTER SEQUENCE public.token_blacklist_id_seq OWNED BY public.token_blacklist.id;
 
 CREATE TABLE public.usuario (
     id_usuario integer NOT NULL,
-    email character varying(255) NOT NULL,
+    email character varying(255),
     password character varying(255) NOT NULL,
     nombre character varying(255) NOT NULL,
     apellido character varying(255),

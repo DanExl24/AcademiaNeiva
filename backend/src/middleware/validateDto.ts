@@ -32,8 +32,12 @@ export const validateDto = (schema: ZodTypeAny) => {
         console.error(`\x1b[31m[DTO Validation Error] ${req.method} ${req.originalUrl}\x1b[0m`);
         console.error(JSON.stringify(details, null, 2));
 
+        const mainErrorMessage = details.length > 0 && details[0].message
+          ? details[0].message
+          : 'El número de documento o los datos ingresados no son correctos.';
+
         res.status(400).json({
-          error: 'Error de validación en la solicitud (DTO inválido)',
+          error: mainErrorMessage,
           details
         });
         return;
