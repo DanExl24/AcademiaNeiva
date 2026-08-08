@@ -3184,15 +3184,15 @@ export const createTeacher = async (req: Request, res: Response): Promise<void> 
       return;
     }
 
-    // Validar unicidad global del documento de identidad
-    await validateDocumentUniqueness(client, documento, "docente");
+    // Validar unicidad global y formato del documento de identidad según tipo
+    await validateDocumentUniqueness(client, documento, "docente", undefined, documentTypeId);
 
     const passwordHash = await bcrypt.hash(password, 10);
     const userRes = await client.query(
-      `INSERT INTO usuario (email, password, nombre, apellido, id_colegio)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO usuario (email, password, nombre, apellido, id_colegio, id_tipodocumento, documento)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING id_usuario, email, activo`,
-      [email, passwordHash, nombre, apellido, schoolId]
+      [email, passwordHash, nombre, apellido, schoolId, documentTypeId, documento]
     );
 
     await client.query(
@@ -3202,10 +3202,10 @@ export const createTeacher = async (req: Request, res: Response): Promise<void> 
     );
 
     const teacherRes = await client.query(
-      `INSERT INTO docente (nombre, apellido, documento, id_tipodocumento, id_colegio, id_usuario, estado)
-       VALUES ($1, $2, $3, $4, $5, $6, 'ACTIVO')
-       RETURNING id_docente, nombre, apellido, documento, id_tipodocumento, estado`,
-      [nombre, apellido, documento, documentTypeId, schoolId, userRes.rows[0].id_usuario]
+      `INSERT INTO docente (nombre, apellido, id_colegio, id_usuario, estado)
+       VALUES ($1, $2, $3, $4, 'ACTIVO')
+       RETURNING id_docente, nombre, apellido, estado`,
+      [nombre, apellido, schoolId, userRes.rows[0].id_usuario]
     );
 
     await client.query("COMMIT");
@@ -3221,6 +3221,8 @@ export const createTeacher = async (req: Request, res: Response): Promise<void> 
 
     res.status(201).json({
       ...teacherRes.rows[0],
+      documento,
+      id_tipodocumento: documentTypeId,
       tipo_documento: documentTypeRes.rows[0].tipo,
       email: userRes.rows[0].email,
       activo: userRes.rows[0].activo,
@@ -3254,9 +3256,12 @@ export const updateTeacher = async (req: Request, res: Response): Promise<void> 
   try {
     await client.query("BEGIN");
 
-    // Check if another teacher in this school has the same document
+    // Check if another teacher in this school has the same document (en tabla usuario)
     const duplicateDoc = await client.query(
-      `SELECT id_docente FROM docente WHERE id_colegio = $1 AND documento = $2 AND id_docente != $3`,
+      `SELECT d.id_docente 
+       FROM docente d 
+       JOIN usuario u ON d.id_usuario = u.id_usuario 
+       WHERE d.id_colegio = $1 AND u.documento = $2 AND d.id_docente != $3`,
       [schoolId, documento, teacherId]
     );
     if (duplicateDoc.rows.length > 0) {
@@ -3290,21 +3295,21 @@ export const updateTeacher = async (req: Request, res: Response): Promise<void> 
         return;
       }
 
-      // Update usuario details
+      // Update usuario details (nombre, apellido, email, id_tipodocumento, documento)
       await client.query(
         `UPDATE usuario 
-         SET nombre = $1, apellido = $2, email = $3
-         WHERE id_usuario = $4`,
-        [nombre, apellido, email, id_usuario]
+         SET nombre = $1, apellido = $2, email = $3, id_tipodocumento = $4, documento = $5
+         WHERE id_usuario = $6`,
+        [nombre, apellido, email, documentTypeId, documento, id_usuario]
       );
     }
 
-    // Update docente details
+    // Update docente details (solo nombre y apellido)
     await client.query(
       `UPDATE docente 
-       SET nombre = $1, apellido = $2, documento = $3, id_tipodocumento = $4
-       WHERE id_docente = $5`,
-      [nombre, apellido, documento, documentTypeId, teacherId]
+       SET nombre = $1, apellido = $2
+       WHERE id_docente = $3`,
+      [nombre, apellido, teacherId]
     );
 
     await client.query("COMMIT");

@@ -165,6 +165,7 @@ export class MatriculaService {
     let query = db
       .selectFrom('matricula as m')
       .leftJoin('estudiante as e', 'm.id_estudiante', 'e.id_estudiante')
+      .leftJoin('usuario as u', 'e.id_usuario', 'u.id_usuario')
       .leftJoin('nivel_escolar as n', 'm.id_nivel', 'n.id_nivel')
       .leftJoin('grupos as g', 'm.id_grupo', 'g.id_grupo')
       .leftJoin('tipo_grado as tg', 'g.id_tipo_grado', 'tg.id_tipo_grado')
@@ -184,7 +185,7 @@ export class MatriculaService {
         'm.fecha_creacion',
         'e.nombre as student_nombre',
         'e.apellido as student_apellido',
-        'e.documento as student_documento',
+        'u.documento as student_documento',
         'e.motivo_estado as student_motivo_estado',
         'n.nombre as nivel_nombre',
         sql<string>`CONCAT(tg.nombre, ' - ', s.nombre)`.as('grado_nombre'),
@@ -713,29 +714,29 @@ export class MatriculaService {
         studentCode = estRes.rows[0].codigo;
         const idUsuarioEstudiante = estRes.rows[0].id_usuario;
 
-        // Actualizar usuario del estudiante para asegurar que esté activo y con sus nombres actualizados
+        // Actualizar usuario del estudiante para asegurar que esté activo y con sus nombres y documentos actualizados
         await client.query(
-          `UPDATE usuario SET activo = TRUE, nombre = $1, apellido = $2 WHERE id_usuario = $3`,
-          [data.student.nombre, data.student.apellido, idUsuarioEstudiante]
+          `UPDATE usuario SET activo = TRUE, nombre = $1, apellido = $2, id_tipodocumento = $3, documento = $4 WHERE id_usuario = $5`,
+          [data.student.nombre, data.student.apellido, data.student.id_tipodocumento, data.student.documento, idUsuarioEstudiante]
         );
 
-        // Actualizar estudiante (estado a ACTIVO, id_nivel, nombre, apellido, documento, id_tipodocumento)
+        // Actualizar estudiante (estado a ACTIVO, id_nivel, nombre, apellido)
         await client.query(
           `UPDATE estudiante 
-           SET estado = 'ACTIVO', id_nivel = $1, nombre = $2, apellido = $3, documento = $4, id_tipodocumento = $5 
-           WHERE id_estudiante = $6`,
-          [id_nivel, data.student.nombre, data.student.apellido, data.student.documento, data.student.id_tipodocumento, idEstudiante]
+           SET estado = 'ACTIVO', id_nivel = $1, nombre = $2, apellido = $3 
+           WHERE id_estudiante = $4`,
+          [id_nivel, data.student.nombre, data.student.apellido, idEstudiante]
         );
       } else {
         // Estudiante nuevo
         studentCode = 'MAT-' + Date.now();
         
-        // Usuario estudiante (El email es opcional y por defecto queda en NULL; el estudiante podrá agregarlo en "Mi Cuenta")
+        // Usuario estudiante (El email es opcional y por defecto queda en NULL; el teléfono también es opcional y queda en NULL para ser agregado en "Mi Cuenta")
         const hashedStudentPass = await bcrypt.hash(studentCode, 10);
         const studentEmail = (data.student?.email && String(data.student.email).trim()) ? String(data.student.email).trim().toLowerCase() : null;
         const studentUserRes = await client.query(
-           `INSERT INTO usuario (email, password, nombre, apellido, id_colegio) VALUES ($1, $2, $3, $4, $5) RETURNING id_usuario`,
-           [studentEmail, hashedStudentPass, data.student.nombre, data.student.apellido, id_colegio]
+           `INSERT INTO usuario (email, password, nombre, apellido, id_colegio, id_tipodocumento, documento, telefono) VALUES ($1, $2, $3, $4, $5, $6, $7, NULL) RETURNING id_usuario`,
+           [studentEmail, hashedStudentPass, data.student.nombre, data.student.apellido, id_colegio, data.student.id_tipodocumento, data.student.documento]
         );
         const idUsuarioEstudiante = studentUserRes.rows[0].id_usuario;
         
@@ -745,12 +746,12 @@ export class MatriculaService {
             await client.query("INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2)", [idUsuarioEstudiante, rolEstudiante.rows[0].id_rol]);
         }
 
-        // Registro Estudiante
+        // Registro Estudiante (sin documento ni id_tipodocumento, que quedan en usuario)
         const studentRes = await client.query(
-          `INSERT INTO estudiante (nombre, apellido, documento, codigo, id_tipodocumento, id_nivel, id_colegio, id_usuario, estado)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'ACTIVO')
+          `INSERT INTO estudiante (nombre, apellido, codigo, id_nivel, id_colegio, id_usuario, estado)
+           VALUES ($1, $2, $3, $4, $5, $6, 'ACTIVO')
            RETURNING id_estudiante`,
-          [data.student.nombre, data.student.apellido, data.student.documento, studentCode, data.student.id_tipodocumento, id_nivel, id_colegio, idUsuarioEstudiante]
+          [data.student.nombre, data.student.apellido, studentCode, id_nivel, id_colegio, idUsuarioEstudiante]
         );
         idEstudiante = studentRes.rows[0].id_estudiante;
       }
@@ -759,21 +760,31 @@ export class MatriculaService {
       let idPadre: number;
       let idUsuarioPadre: number | null = null;
 
-      // 1. Buscar si ya existe una ficha de padre registrada con el número de documento proporcionado
+      // 1. Buscar si ya existe una ficha de padre registrada con el número de documento proporcionado (en tabla usuario)
       const existingParentByDoc = await client.query(
-        'SELECT id_padrefamilia, id_usuario, nombre, apellido FROM padre_familia WHERE documento = $1',
+        `SELECT pf.id_padrefamilia, pf.id_usuario, pf.nombre, pf.apellido 
+         FROM padre_familia pf 
+         JOIN usuario u ON pf.id_usuario = u.id_usuario 
+         WHERE u.documento = $1`,
         [data.parent.documento]
       );
 
       if (existingParentByDoc.rows.length > 0) {
-        // Encontrado por número de documento: Usar la ficha de padre existente (sin sobreescribir su documento)
+        // Encontrado por número de documento: Usar la ficha de padre existente
         idPadre = existingParentByDoc.rows[0].id_padrefamilia;
         idUsuarioPadre = existingParentByDoc.rows[0].id_usuario;
 
-        // Actualizar nombres/apellidos si cambiaron legítimamente
+        // Actualizar nombres/apellidos y documento en usuario si existe
+        if (idUsuarioPadre) {
+          await client.query(
+            `UPDATE usuario SET nombre = $1, apellido = $2, id_tipodocumento = $3, documento = $4, telefono = COALESCE($5, telefono) WHERE id_usuario = $6`,
+            [data.parent.nombre, data.parent.apellido, data.parent.id_tipodocumento, data.parent.documento, data.parent.telefono || null, idUsuarioPadre]
+          );
+        }
+
         await client.query(
-          `UPDATE padre_familia SET nombre = $1, apellido = $2, id_tipodocumento = $3 WHERE id_padrefamilia = $4`,
-          [data.parent.nombre, data.parent.apellido, data.parent.id_tipodocumento, idPadre]
+          `UPDATE padre_familia SET nombre = $1, apellido = $2 WHERE id_padrefamilia = $3`,
+          [data.parent.nombre, data.parent.apellido, idPadre]
         );
       } else {
         // Validar unicidad global del documento de acudiente en la plataforma
@@ -790,7 +801,10 @@ export class MatriculaService {
 
           // Verificar si este usuario ya tiene una ficha de padre asociada con otro documento distinto
           const existingParentByUser = await client.query(
-            'SELECT id_padrefamilia, documento, nombre, apellido FROM padre_familia WHERE id_usuario = $1',
+            `SELECT pf.id_padrefamilia, u.documento, pf.nombre, pf.apellido 
+             FROM padre_familia pf 
+             JOIN usuario u ON pf.id_usuario = u.id_usuario 
+             WHERE pf.id_usuario = $1`,
             [matchedUserId]
           );
 
@@ -803,21 +817,26 @@ export class MatriculaService {
           }
 
           idUsuarioPadre = matchedUserId;
+          // Actualizar documento en el usuario existente
+          await client.query(
+            `UPDATE usuario SET id_tipodocumento = $1, documento = $2, telefono = COALESCE($3, telefono) WHERE id_usuario = $4`,
+            [data.parent.id_tipodocumento, data.parent.documento, data.parent.telefono || null, idUsuarioPadre]
+          );
         } else {
           // 3. Crear nueva cuenta de usuario para el padre
           const hashedPadrePass = await bcrypt.hash('padre123', 10);
           const parentUserRes = await client.query(
-            `INSERT INTO usuario (email, password, nombre, apellido, id_colegio) VALUES ($1, $2, $3, $4, $5) RETURNING id_usuario`,
-            [correo_padre, hashedPadrePass, data.parent.nombre, data.parent.apellido, id_colegio]
+            `INSERT INTO usuario (email, password, nombre, apellido, id_colegio, id_tipodocumento, documento, telefono) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id_usuario`,
+            [correo_padre, hashedPadrePass, data.parent.nombre, data.parent.apellido, id_colegio, data.parent.id_tipodocumento, data.parent.documento, data.parent.telefono || null]
           );
           idUsuarioPadre = parentUserRes.rows[0].id_usuario;
         }
 
-        // Crear la ficha de padre vinculada al usuario
+        // Crear la ficha de padre vinculada al usuario (sin documento ni id_tipodocumento, almacenados en usuario)
         const parentRes = await client.query(
-          `INSERT INTO padre_familia (nombre, apellido, documento, id_tipodocumento, id_colegio, id_usuario)
-           VALUES ($1, $2, $3, $4, $5, $6) RETURNING id_padrefamilia`,
-          [data.parent.nombre, data.parent.apellido, data.parent.documento, data.parent.id_tipodocumento, id_colegio, idUsuarioPadre]
+          `INSERT INTO padre_familia (nombre, apellido, id_colegio, id_usuario)
+           VALUES ($1, $2, $3, $4) RETURNING id_padrefamilia`,
+          [data.parent.nombre, data.parent.apellido, id_colegio, idUsuarioPadre]
         );
         idPadre = parentRes.rows[0].id_padrefamilia;
       }

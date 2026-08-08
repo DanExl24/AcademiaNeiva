@@ -17,7 +17,7 @@ export type EstadoDocumento = "PENDIENTE" | "RECHAZADO" | "VALIDADO";
 
 export type EstadoEstudiante = "ACTIVO" | "EXPULSADO" | "GRADUADO" | "RETIRADO" | "SANCIONADO";
 
-export type EstadoMatricula = "ACTIVA" | "APROBADA" | "CANCELADA" | "CORRECCION" | "CORREGIDA" | "CULMINADA" | "PENDIENTE" | "PENDIENTE_RENOVACION" | "RECHAZADA" | "TRASLADADA";
+export type EstadoMatricula = "ACTIVA" | "APROBADA" | "CANCELADA" | "CORRECCION" | "CULMINADA" | "PENDIENTE" | "PENDIENTE_RENOVACION" | "RECHAZADA" | "TRASLADADA";
 
 export type EstadoPeriodo = "ABIERTO" | "CERRADO" | "PENDIENTE";
 
@@ -254,16 +254,6 @@ export interface DbaDimensionesPreescolar {
   id_dimension: number;
 }
 
-export interface EmailChangeTokens {
-  codigo: string;
-  created_at: Generated<Timestamp | null>;
-  expires_at: Timestamp;
-  id: Generated<number>;
-  id_usuario: number;
-  nuevo_email: string;
-  used: Generated<boolean | null>;
-}
-
 export interface Desempeno {
   descripcion: string;
   id_actividadmateria: number;
@@ -304,18 +294,16 @@ export interface Directivo {
 
 export interface Docente {
   apellido: string;
-  documento: string;
   estado: Generated<string>;
   id_colegio: number;
   id_contratodocente: number | null;
   id_docente: Generated<number>;
-  id_tipodocumento: number;
   id_usuario: number | null;
   nombre: string;
 }
 
 export interface DocumentoMatriculas {
-  contenido?: Buffer | null;
+  contenido: Buffer | null;
   estado: Generated<EstadoDocumento>;
   estado_renovacion: Generated<EstadoRenovacionDocumento | null>;
   fecha: Timestamp;
@@ -323,12 +311,22 @@ export interface DocumentoMatriculas {
   id_colegio: number;
   id_documento: Generated<number>;
   id_matricula: number;
-  mime_type?: string | null;
-  nombre_original?: string | null;
-  tamano_bytes?: number | null;
+  mime_type: string | null;
+  nombre_original: string | null;
+  tamano_bytes: number | null;
   tipo_documento: string;
   url: string;
   version: Generated<number>;
+}
+
+export interface EmailChangeTokens {
+  codigo: string;
+  created_at: Generated<Timestamp | null>;
+  expires_at: Timestamp;
+  id: Generated<number>;
+  id_usuario: number | null;
+  nuevo_email: string;
+  used: Generated<boolean | null>;
 }
 
 export interface EscalaValoracion {
@@ -342,12 +340,10 @@ export interface EscalaValoracion {
 export interface Estudiante {
   apellido: string;
   codigo: string;
-  documento: string | null;
   estado: Generated<EstadoEstudiante | null>;
   id_colegio: number;
   id_estudiante: Generated<number>;
   id_nivel: number | null;
-  id_tipodocumento: number | null;
   id_usuario: number | null;
   motivo_estado: string | null;
   nombre: string;
@@ -488,10 +484,8 @@ export interface ObservacionEstudiante {
 
 export interface PadreFamilia {
   apellido: string;
-  documento: string;
   id_colegio: number | null;
   id_padrefamilia: Generated<number>;
-  id_tipodocumento: number;
   id_usuario: number | null;
   nombre: string;
 }

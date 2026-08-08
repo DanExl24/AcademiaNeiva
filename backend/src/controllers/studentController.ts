@@ -541,7 +541,10 @@ export const deleteStudent = async (req: Request, res: Response) => {
 
     // Fetch student info
     const studentRes = await client.query(
-      "SELECT id_usuario, nombre, apellido, documento, codigo, id_colegio FROM estudiante WHERE id_estudiante = $1",
+      `SELECT e.id_usuario, e.nombre, e.apellido, u.documento, e.codigo, e.id_colegio 
+       FROM estudiante e 
+       LEFT JOIN usuario u ON e.id_usuario = u.id_usuario 
+       WHERE e.id_estudiante = $1`,
       [id]
     );
     if (studentRes.rowCount === 0) {
@@ -592,7 +595,7 @@ export const getStudentSummary = async (req: Request, res: Response) => {
 
     // 1. Basic Student and Group Info
     const studentRes = await pool.query(`
-      SELECT e.id_estudiante, e.nombre, e.apellido, e.documento, e.codigo, e.estado, e.id_usuario, e.id_colegio, e.motivo_estado,
+      SELECT e.id_estudiante, e.nombre, e.apellido, u.documento, u.id_tipodocumento, e.codigo, e.estado, e.id_usuario, e.id_colegio, e.motivo_estado,
              tg.nombre as grado_nombre, s.nombre as seccion_nombre, n.nombre as nivel_nombre,
              m.id_grupo, u.email as student_email, u.fecha_creacion as user_created_at
       FROM estudiante e

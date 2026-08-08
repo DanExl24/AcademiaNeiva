@@ -409,6 +409,27 @@ export const ensureCompetencySchema = async (): Promise<void> => {
       await client.query(emailChangeTokensSql);
     }
 
+    // Ejecutar migración 029 (remoción de documento e id_tipodocumento de docente, estudiante y padre_familia)
+    const removeDocFromRolesPath = path.join(__dirname, "../migrations/029_remove_documento_from_role_tables.sql");
+    if (fs.existsSync(removeDocFromRolesPath)) {
+      const removeDocFromRolesSql = fs.readFileSync(removeDocFromRolesPath, "utf8");
+      await client.query(removeDocFromRolesSql);
+    }
+
+    // Ejecutar migración 030 (CHECK constraint en usuario.documento)
+    const checkDocNumericPath = path.join(__dirname, "../migrations/030_add_usuario_documento_numeric_check.sql");
+    if (fs.existsSync(checkDocNumericPath)) {
+      const checkDocNumericSql = fs.readFileSync(checkDocNumericPath, "utf8");
+      await client.query(checkDocNumericSql);
+    }
+
+    // Ejecutar migración 031 (actualización de CHECK constraint para Pasaportes)
+    const checkDocPasaportePath = path.join(__dirname, "../migrations/031_update_documento_check_for_pasaporte.sql");
+    if (fs.existsSync(checkDocPasaportePath)) {
+      const checkDocPasaporteSql = fs.readFileSync(checkDocPasaportePath, "utf8");
+      await client.query(checkDocPasaporteSql);
+    }
+
     // Backfill sync_uuid for existing competencies
     const unmigratedRes = await client.query(`
       SELECT id_colegio, id_anio, id_materia, id_periodo, descripcion, ARRAY_AGG(id_competencia) AS ids

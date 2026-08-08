@@ -3,6 +3,7 @@ import { pool } from '../config/db';
 import { AuthRequest } from '../middleware/authMiddleware';
 import { AdminGeneralNotificationService } from '../services/adminGeneralNotificationService';
 import bcrypt from 'bcrypt';
+import { validateDocumentUniqueness } from '../utils/documentValidation';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // GESTIÓN DE COLEGIOS
@@ -424,23 +425,17 @@ export const detalleUsuario = async (req: AuthRequest, res: Response): Promise<v
     const { id } = req.params;
     const result = await pool.query(
       `SELECT u.id_usuario, u.email, u.nombre, u.apellido, u.estado, u.id_colegio,
-              u.fecha_creacion, u.motivo_baneo, u.fecha_baneo, u.activo,
+              u.fecha_creacion, u.motivo_baneo, u.fecha_baneo, u.activo, u.documento, u.telefono, u.id_tipodocumento,
               c.nombre AS colegio_nombre,
-              array_agg(DISTINCT r.nombre) AS roles,
-              COALESCE(d.documento, pf.documento, e.documento) AS documento,
-              COALESCE(td_d.tipo, td_pf.tipo, td_e.tipo) AS tipo_documento
+              td.tipo AS tipo_documento,
+              array_agg(DISTINCT r.nombre) AS roles
        FROM usuario u
        LEFT JOIN colegio c ON c.id_colegio = u.id_colegio
        LEFT JOIN usuario_rol ur ON ur.id_usuario = u.id_usuario
        LEFT JOIN rol r ON r.id_rol = ur.id_rol
-       LEFT JOIN public.docente d ON d.id_usuario = u.id_usuario
-       LEFT JOIN public.tipo_documento td_d ON td_d.id_tipodocumento = d.id_tipodocumento
-       LEFT JOIN public.padre_familia pf ON pf.id_usuario = u.id_usuario
-       LEFT JOIN public.tipo_documento td_pf ON td_pf.id_tipodocumento = pf.id_tipodocumento
-       LEFT JOIN public.estudiante e ON e.id_usuario = u.id_usuario
-       LEFT JOIN public.tipo_documento td_e ON td_e.id_tipodocumento = e.id_tipodocumento
+       LEFT JOIN tipo_documento td ON td.id_tipodocumento = u.id_tipodocumento
        WHERE u.id_usuario = $1
-       GROUP BY u.id_usuario, c.nombre, d.documento, td_d.tipo, pf.documento, td_pf.tipo, e.documento, td_e.tipo`,
+       GROUP BY u.id_usuario, c.nombre, td.tipo`,
       [id]
     );
 
@@ -2493,14 +2488,9 @@ const verificarCorrespondenciaTicketUsuario = async (
     const isDirectivo = creatorRoles.includes('DIRECTIVO');
 
     if (isDirectivo && creatorSchoolId && targetUser.id_colegio && Number(creatorSchoolId) === Number(targetUser.id_colegio)) {
-      // Obtener documento del usuario destino
+      // Obtener documento del usuario destino desde la tabla usuario
       const targetDocRes = await client.query(
-        `SELECT d.documento FROM docente d WHERE d.id_usuario = $1
-         UNION
-         SELECT pf.documento FROM padre_familia pf WHERE pf.id_usuario = $1
-         UNION
-         SELECT e.documento FROM estudiante e WHERE e.id_usuario = $1
-         LIMIT 1`,
+        `SELECT documento FROM usuario WHERE id_usuario = $1`,
         [targetUser.id_usuario]
       );
       const targetDoc = targetDocRes.rows[0]?.documento;
@@ -2612,26 +2602,15 @@ export const modificarCredencialesConTicket = async (req: AuthRequest, res: Resp
     );
     const oldRoles = oldRolesRes.rows.map(r => String(r.nombre).toUpperCase());
 
-    // Consultar documento actual (intentar en docente, padre, estudiante)
+    // Consultar documento actual desde la tabla usuario
     let oldDoc = 'No Registrado';
     let oldTipoDoc = 'No Registrado';
 
     const docSearch = await client.query(
-      `SELECT d.documento, td.tipo AS tipo_documento 
-       FROM docente d 
-       LEFT JOIN tipo_documento td ON d.id_tipodocumento = td.id_tipodocumento 
-       WHERE d.id_usuario = $1
-       UNION
-       SELECT pf.documento, td.tipo AS tipo_documento 
-       FROM padre_familia pf 
-       LEFT JOIN tipo_documento td ON pf.id_tipodocumento = td.id_tipodocumento 
-       WHERE pf.id_usuario = $1
-       UNION
-       SELECT e.documento, td.tipo AS tipo_documento 
-       FROM estudiante e 
-       LEFT JOIN tipo_documento td ON e.id_tipodocumento = td.id_tipodocumento 
-       WHERE e.id_usuario = $1
-       LIMIT 1`,
+      `SELECT u.documento, td.tipo AS tipo_documento 
+       FROM usuario u 
+       LEFT JOIN tipo_documento td ON u.id_tipodocumento = td.id_tipodocumento 
+       WHERE u.id_usuario = $1`,
       [id]
     );
     if (docSearch.rows.length > 0) {
@@ -2650,10 +2629,10 @@ export const modificarCredencialesConTicket = async (req: AuthRequest, res: Resp
       idTipoDoc = tdDb.rows[0].id_tipodocumento;
     }
 
-    // 3. Actualizar tabla usuario
+    // 3. Actualizar tabla usuario (nombres, id_tipodocumento, documento)
     await client.query(
-      "UPDATE usuario SET nombre = $1, apellido = $2 WHERE id_usuario = $3",
-      [nombre.trim(), apellido.trim(), id]
+      "UPDATE usuario SET nombre = $1, apellido = $2, id_tipodocumento = $3, documento = $4 WHERE id_usuario = $5",
+      [nombre.trim(), apellido.trim(), idTipoDoc, documento.trim(), id]
     );
 
     // 4. Sincronizar roles en usuario_rol
@@ -2679,30 +2658,27 @@ export const modificarCredencialesConTicket = async (req: AuthRequest, res: Resp
         // Inicializar o actualizar tabla del rol específico para evitar inconsistencias
         if (roleName === 'DOCENTE') {
           await client.query(
-            `INSERT INTO public.docente (id_usuario, documento, id_tipodocumento, nombre, apellido, id_colegio)
-             VALUES ($1, $2, $3, $4, $5, $6)
+            `INSERT INTO public.docente (id_usuario, nombre, apellido, id_colegio)
+             VALUES ($1, $2, $3, $4)
              ON CONFLICT (id_usuario) DO UPDATE 
-             SET documento = EXCLUDED.documento, id_tipodocumento = EXCLUDED.id_tipodocumento, 
-                 nombre = EXCLUDED.nombre, apellido = EXCLUDED.apellido`,
-            [id, documento.trim(), idTipoDoc, nombre.trim(), apellido.trim(), oldUser.id_colegio || 1]
+             SET nombre = EXCLUDED.nombre, apellido = EXCLUDED.apellido`,
+            [id, nombre.trim(), apellido.trim(), oldUser.id_colegio || 1]
           );
         } else if (roleName === 'PADRE') {
           await client.query(
-            `INSERT INTO public.padre_familia (id_usuario, documento, id_tipodocumento, nombre, apellido, id_colegio)
-             VALUES ($1, $2, $3, $4, $5, $6)
+            `INSERT INTO public.padre_familia (id_usuario, nombre, apellido, id_colegio)
+             VALUES ($1, $2, $3, $4)
              ON CONFLICT (id_usuario) DO UPDATE 
-             SET documento = EXCLUDED.documento, id_tipodocumento = EXCLUDED.id_tipodocumento, 
-                 nombre = EXCLUDED.nombre, apellido = EXCLUDED.apellido`,
-            [id, documento.trim(), idTipoDoc, nombre.trim(), apellido.trim(), oldUser.id_colegio]
+             SET nombre = EXCLUDED.nombre, apellido = EXCLUDED.apellido`,
+            [id, nombre.trim(), apellido.trim(), oldUser.id_colegio]
           );
         } else if (roleName === 'ESTUDIANTE') {
           await client.query(
-            `INSERT INTO public.estudiante (id_usuario, documento, id_tipodocumento, nombre, apellido, id_colegio, codigo)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)
+            `INSERT INTO public.estudiante (id_usuario, nombre, apellido, id_colegio, codigo)
+             VALUES ($1, $2, $3, $4, $5)
              ON CONFLICT (id_usuario) DO UPDATE 
-             SET documento = EXCLUDED.documento, id_tipodocumento = EXCLUDED.id_tipodocumento, 
-                 nombre = EXCLUDED.nombre, apellido = EXCLUDED.apellido`,
-            [id, documento.trim(), idTipoDoc, nombre.trim(), apellido.trim(), oldUser.id_colegio || 1, `EST-${id}`]
+             SET nombre = EXCLUDED.nombre, apellido = EXCLUDED.apellido`,
+            [id, nombre.trim(), apellido.trim(), oldUser.id_colegio || 1, `EST-${id}`]
           );
         }
       }
@@ -2799,12 +2775,25 @@ export const crearUsuarioByAdminGeneral = async (req: AuthRequest, res: Response
       }
     }
 
+    // 3.5. Validar unicidad y formato del documento si fue proporcionado
+    let idTipoDoc: number | null = null;
+    if (tipo_documento && String(tipo_documento).trim()) {
+      const tdDb = await client.query(
+        `SELECT id_tipodocumento FROM tipo_documento WHERE tipo ILIKE $1 OR tipo ILIKE $2 LIMIT 1`,
+        [String(tipo_documento).trim(), `%${String(tipo_documento).trim()}%`]
+      );
+      if (tdDb.rows.length > 0) idTipoDoc = tdDb.rows[0].id_tipodocumento;
+    }
+    if (documento && String(documento).trim()) {
+      await validateDocumentUniqueness(client, String(documento).trim(), rol, undefined, idTipoDoc || tipo_documento);
+    }
+
     // 4. Encriptar contraseña
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // 5. Insertar usuario base
     const userRes = await client.query(
-      `INSERT INTO usuario (email, password, nombre, apellido, id_colegio, activo, tipo_documento, documento, telefono, estado)
+      `INSERT INTO usuario (email, password, nombre, apellido, id_colegio, activo, id_tipodocumento, documento, telefono, estado)
        VALUES ($1, $2, $3, $4, $5, true, $6, $7, $8, 'ACTIVO')
        RETURNING id_usuario, email, nombre, apellido, id_colegio, activo, fecha_creacion`,
       [
@@ -2813,9 +2802,9 @@ export const crearUsuarioByAdminGeneral = async (req: AuthRequest, res: Response
         nombre.trim(),
         (apellido || '').trim() || null,
         id_colegio || null,
-        tipo_documento || null,
-        documento || null,
-        telefono || null
+        idTipoDoc,
+        (documento || '').trim() || null,
+        (telefono || '').trim() || null
       ]
     );
 

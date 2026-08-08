@@ -258,10 +258,11 @@ async function insertSchool(
 
   // --- Rector ---
   const rectorEmail = `rector@${school.domain}`;
+  const rectorDoc = `10010000${school.id}`;
   const rectorRes = await client.query<{ id_usuario: number }>(
-    `INSERT INTO usuario (email, password, nombre, apellido, id_colegio, activo, fecha_creacion)
-     VALUES ($1, $2, $3, $4, $5, true, '2025-01-15 08:00:00-05') RETURNING id_usuario`,
-    [rectorEmail, directivoHash, "Rector", school.nombre, school.id]
+    `INSERT INTO usuario (email, password, nombre, apellido, id_colegio, activo, id_tipodocumento, documento, telefono, fecha_creacion)
+     VALUES ($1, $2, $3, $4, $5, true, $6, $7, $8, '2025-01-15 08:00:00-05') RETURNING id_usuario`,
+    [rectorEmail, directivoHash, "Rector", school.nombre, school.id, DOCUMENT_TYPE_CC, rectorDoc, String(school.contacto)]
   );
   const rectorUserId = rectorRes.rows[0].id_usuario;
   await client.query(`INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2)`, [rectorUserId, roleIds.directivo]);
@@ -274,10 +275,11 @@ async function insertSchool(
 
   // --- Coordinador ---
   const directivoEmail = `directivo@${school.domain}`;
+  const directivoDoc = `10020000${school.id}`;
   const directivoResult = await client.query<{ id_usuario: number }>(
-    `INSERT INTO usuario (email, password, nombre, apellido, id_colegio, activo, fecha_creacion)
-     VALUES ($1, $2, $3, $4, $5, true, '2025-01-15 08:00:00-05') RETURNING id_usuario`,
-    [directivoEmail, directivoHash, "Directivo", school.nombre, school.id]
+    `INSERT INTO usuario (email, password, nombre, apellido, id_colegio, activo, id_tipodocumento, documento, telefono, fecha_creacion)
+     VALUES ($1, $2, $3, $4, $5, true, $6, $7, $8, '2025-01-15 08:00:00-05') RETURNING id_usuario`,
+    [directivoEmail, directivoHash, "Directivo", school.nombre, school.id, DOCUMENT_TYPE_CC, directivoDoc, String(school.contacto)]
   );
   const directivoUserId = directivoResult.rows[0].id_usuario;
   await client.query(`INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2)`, [directivoUserId, roleIds.directivo]);
@@ -295,17 +297,19 @@ async function insertSchool(
     const email = `${alias}.${school.id}@${school.domain}`;
     const fullLastName = `${teacher.lastName} ${school.id}`;
 
+    const teacherDoc = `1003${school.id}${String(index + 1).padStart(4, "0")}`;
+    const teacherPhone = `310${school.id}${String(index + 1).padStart(6, "0")}`;
     const userResult = await client.query<{ id_usuario: number }>(
-      `INSERT INTO usuario (email, password, nombre, apellido, id_colegio, activo, fecha_creacion)
-       VALUES ($1, $2, $3, $4, $5, true, '2025-01-15 08:00:00-05') RETURNING id_usuario`,
-      [email, docenteHash, teacher.firstName, fullLastName, school.id]
+      `INSERT INTO usuario (email, password, nombre, apellido, id_colegio, activo, id_tipodocumento, documento, telefono, fecha_creacion)
+       VALUES ($1, $2, $3, $4, $5, true, $6, $7, $8, '2025-01-15 08:00:00-05') RETURNING id_usuario`,
+      [email, docenteHash, teacher.firstName, fullLastName, school.id, DOCUMENT_TYPE_CC, teacherDoc, teacherPhone]
     );
     const teacherUserId = userResult.rows[0].id_usuario;
     await client.query(`INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2)`, [teacherUserId, roleIds.docente]);
     await client.query(
-      `INSERT INTO docente (nombre, apellido, documento, id_tipodocumento, id_colegio, id_usuario)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [teacher.firstName, fullLastName, `DOC-${school.id}-${String(index + 1).padStart(2, "0")}`, DOCUMENT_TYPE_CC, school.id, teacherUserId]
+      `INSERT INTO docente (nombre, apellido, id_colegio, id_usuario)
+       VALUES ($1, $2, $3, $4)`,
+      [teacher.firstName, fullLastName, school.id, teacherUserId]
     );
 
     credentials.push({
@@ -662,21 +666,22 @@ async function insertStudentsAndParents(
           currentParentEmail = `padre${parentIdx}.${school.id}@${school.domain}`;
           pName = `Padre ${parentIdx}`;
           pLastName = school.nombre;
-          pDoc = `P-${school.id}-${parentIdx}`;
+          pDoc = `1004${school.id}${String(parentIdx).padStart(5, "0")}`;
 
+          const parentPhone = `320${school.id}${String(parentIdx).padStart(6, "0")}`;
           const pUserRes = await client.query<{ id_usuario: number }>(
-            `INSERT INTO usuario (email, password, nombre, apellido, id_colegio, activo, fecha_creacion)
-             VALUES ($1, $2, $3, $4, $5, true, '2025-01-15 08:00:00-05') RETURNING id_usuario`,
-            [currentParentEmail, parentHash, pName, pLastName, school.id]
+            `INSERT INTO usuario (email, password, nombre, apellido, id_colegio, activo, id_tipodocumento, documento, telefono, fecha_creacion)
+             VALUES ($1, $2, $3, $4, $5, true, $6, $7, $8, '2025-01-15 08:00:00-05') RETURNING id_usuario`,
+            [currentParentEmail, parentHash, pName, pLastName, school.id, DOCUMENT_TYPE_CC, pDoc, parentPhone]
           );
           parentUserId = pUserRes.rows[0].id_usuario;
           await client.query(`INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2)`, [parentUserId, roleIds.padre]);
         }
 
         const pFamRes = await client.query<{ id_padrefamilia: number }>(
-          `INSERT INTO padre_familia (nombre, apellido, documento, id_tipodocumento, id_colegio, id_usuario)
-           VALUES ($1, $2, $3, $4, $5, $6) RETURNING id_padrefamilia`,
-          [pName, pLastName, pDoc, DOCUMENT_TYPE_CC, school.id, parentUserId]
+          `INSERT INTO padre_familia (nombre, apellido, id_colegio, id_usuario)
+           VALUES ($1, $2, $3, $4) RETURNING id_padrefamilia`,
+          [pName, pLastName, school.id, parentUserId]
         );
         currentParentId = pFamRes.rows[0].id_padrefamilia;
       }
@@ -691,21 +696,22 @@ async function insertStudentsAndParents(
 
       const studentEmail = `est${globalStudentIdx}.${school.id}@${school.domain}`;
       const studentCode = `EST-${school.id}-${globalStudentIdx}`;
+      const studentDoc = `1005${school.id}${String(globalStudentIdx).padStart(5, "0")}`;
 
-      // ── Create student user ──
+      // ── Create student user (telefono es NULL por defecto) ──
       const sUserRes = await client.query<{ id_usuario: number }>(
-        `INSERT INTO usuario (email, password, nombre, apellido, id_colegio, activo, fecha_creacion)
-         VALUES ($1, $2, $3, $4, $5, $6, '2025-01-15 08:00:00-05') RETURNING id_usuario`,
-        [studentEmail, studentHash, firstName, lastName, school.id, userActive]
+        `INSERT INTO usuario (email, password, nombre, apellido, id_colegio, activo, id_tipodocumento, documento, telefono, fecha_creacion)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULL, '2025-01-15 08:00:00-05') RETURNING id_usuario`,
+        [studentEmail, studentHash, firstName, lastName, school.id, userActive, 1, studentDoc]
       );
       const studentUserId = sUserRes.rows[0].id_usuario;
       await client.query(`INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2)`, [studentUserId, roleIds.estudiante]);
 
       // ── Create student record with estado ──
       const estRes = await client.query<{ id_estudiante: number }>(
-        `INSERT INTO estudiante (nombre, apellido, documento, codigo, id_tipodocumento, id_nivel, id_colegio, id_usuario, estado, motivo_estado)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::estado_estudiante, $10) RETURNING id_estudiante`,
-        [firstName, lastName, `E-${school.id}-${globalStudentIdx}`, studentCode, 1, group.id_nivel, school.id, studentUserId, studentState, motivoEstado]
+        `INSERT INTO estudiante (nombre, apellido, codigo, id_nivel, id_colegio, id_usuario, estado, motivo_estado)
+         VALUES ($1, $2, $3, $4, $5, $6, $7::estado_estudiante, $8) RETURNING id_estudiante`,
+        [firstName, lastName, studentCode, group.id_nivel, school.id, studentUserId, studentState, motivoEstado]
       );
       const idEstudiante = estRes.rows[0].id_estudiante;
 
@@ -1035,6 +1041,22 @@ async function run(): Promise<void> {
     const addObservationsSupportMigrationSql = fs.readFileSync(path.join(__dirname, "../migrations/015_observaciones_tickets.sql"), "utf8");
     await client.query(addObservationsSupportMigrationSql);
 
+    console.log("📦 Aplicando migración 022 (id_tipodocumento, documento y telefono en usuario)...");
+    const addUsuarioDocTelSql = fs.readFileSync(path.join(__dirname, "../migrations/022_add_usuario_documento_telefono.sql"), "utf8");
+    await client.query(addUsuarioDocTelSql);
+
+    console.log("📦 Aplicando migración 029 (remoción de documento e id_tipodocumento de docente, estudiante y padre_familia)...");
+    const removeDocFromRolesSql = fs.readFileSync(path.join(__dirname, "../migrations/029_remove_documento_from_role_tables.sql"), "utf8");
+    await client.query(removeDocFromRolesSql);
+
+    console.log("📦 Aplicando migración 030 (CHECK constraint en usuario.documento)...");
+    const checkDocNumericSql = fs.readFileSync(path.join(__dirname, "../migrations/030_add_usuario_documento_numeric_check.sql"), "utf8");
+    await client.query(checkDocNumericSql);
+
+    console.log("📦 Aplicando migración 031 (actualización de CHECK constraint para Pasaportes)...");
+    const checkDocPasaporteSql = fs.readFileSync(path.join(__dirname, "../migrations/031_update_documento_check_for_pasaporte.sql"), "utf8");
+    await client.query(checkDocPasaporteSql);
+
     // ── Phase 2: Schema migrations ──
     console.log("🔧 Migrando columnas adicionales...");
     await client.query(`ALTER TABLE grados ADD COLUMN IF NOT EXISTS seccion VARCHAR(10) DEFAULT 'A';`);
@@ -1150,9 +1172,9 @@ async function run(): Promise<void> {
     const adminGeneralHash = await bcrypt.hash(adminGeneralPassword, 10);
     const adminGeneralEmail = "admin.general@academianeiva.edu.co";
     const adminGeneralResult = await client.query<{ id_usuario: number }>(
-      `INSERT INTO usuario (email, password, nombre, apellido, id_colegio, activo, estado)
-       VALUES ($1, $2, $3, $4, NULL, true, 'ACTIVO') RETURNING id_usuario`,
-      [adminGeneralEmail, adminGeneralHash, "Admin", "General"]
+      `INSERT INTO usuario (email, password, nombre, apellido, id_colegio, activo, estado, id_tipodocumento, documento, telefono)
+       VALUES ($1, $2, $3, $4, NULL, true, 'ACTIVO', $5, $6, $7) RETURNING id_usuario`,
+      [adminGeneralEmail, adminGeneralHash, "Admin", "General", DOCUMENT_TYPE_CC, "1000000000", "3000000000"]
     );
     await client.query(`INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2)`, [
       adminGeneralResult.rows[0].id_usuario,
