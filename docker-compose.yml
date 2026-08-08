@@ -4,7 +4,7 @@ services:
     build:
       context: ./frontend
       args:
-        - VITE_API_URL=https://api-academianeiva.adsoproject.dev/
+        - VITE_API_URL=https://api-academianeiva.adsoproject.dev
     networks:
       - proxy-network
     restart: always
@@ -25,7 +25,8 @@ services:
     volumes:
       - uploads_data:/app/uploads
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     networks:
       - proxy-network
       - academia-internal
@@ -42,6 +43,11 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./backend/init_scripts:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d AcademiaNeiva"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     networks:
       - academia-internal
     restart: always

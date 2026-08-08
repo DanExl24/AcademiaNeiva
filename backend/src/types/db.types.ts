@@ -17,7 +17,7 @@ export type EstadoDocumento = "PENDIENTE" | "RECHAZADO" | "VALIDADO";
 
 export type EstadoEstudiante = "ACTIVO" | "EXPULSADO" | "GRADUADO" | "RETIRADO" | "SANCIONADO";
 
-export type EstadoMatricula = "ACTIVA" | "APROBADA" | "CANCELADA" | "CORRECCION" | "CULMINADA" | "PENDIENTE" | "PENDIENTE_RENOVACION" | "RECHAZADA" | "TRASLADADA";
+export type EstadoMatricula = "ACTIVA" | "APROBADA" | "CANCELADA" | "CORRECCION" | "CORREGIDA" | "CULMINADA" | "PENDIENTE" | "PENDIENTE_RENOVACION" | "RECHAZADA" | "TRASLADADA";
 
 export type EstadoPeriodo = "ABIERTO" | "CERRADO" | "PENDIENTE";
 

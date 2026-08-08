@@ -207,6 +207,7 @@ async function insertDocumentTypes(client: PoolClient): Promise<void> {
     { id: 3, tipo: "Cédula de Ciudadanía" },
     { id: 4, tipo: "Cédula de Extranjería" },
     { id: 5, tipo: "PEP / PPT" },
+    { id: 6, tipo: "Pasaporte" },
   ];
   for (const dt of documentTypes) {
     await client.query(`INSERT INTO tipo_documento (id_tipodocumento, tipo) VALUES ($1, $2)`, [dt.id, dt.tipo]);
@@ -1290,21 +1291,23 @@ async function run(): Promise<void> {
 async function seedDbaCatalog(): Promise<void> {
   console.log("\n🌱 Iniciando importación y siembra del catálogo de DBA...");
 
+  const rootDir = path.resolve(__dirname, "../../..");
   const dbaPdfs = [
-    { pdf: "guides/DBA/DBA_matematicas.pdf", area: "Matemáticas", version: "2016", startPage: 8, script: "importar_dba.py" },
-    { pdf: "guides/DBA/DBA_lenguaje.pdf", area: "Español", version: "2016", startPage: 8, script: "importar_dba.py" },
-    { pdf: "guides/DBA/DBA_naturales.pdf", area: "Ciencias Naturales", version: "2016", startPage: 8, script: "importar_dba.py" },
-    { pdf: "guides/DBA/DBA_sociales.pdf", area: "Ciencias Sociales", version: "2016", startPage: 8, script: "importar_dba.py" },
-    { pdf: "guides/DBA/DBA_transicion.pdf", area: "Desarrollo Integral", version: "2016", startPage: 8, script: "importar_dba.py" },
-    { pdf: "guides/DBA/dba_ingles_transicion_quinto.pdf", area: "Inglés", version: "2016", startPage: 8, script: "importar_dba_primaria_ingles.py" },
-    { pdf: "guides/DBA/DBA_ingles_sexto_once.pdf", area: "Inglés", version: "2016", startPage: 15, script: "importar_dba.py" }
+    { pdf: path.join(rootDir, "guides/DBA/DBA_matematicas.pdf"), area: "Matemáticas", version: "2016", startPage: 8, script: "importar_dba.py" },
+    { pdf: path.join(rootDir, "guides/DBA/DBA_lenguaje.pdf"), area: "Español", version: "2016", startPage: 8, script: "importar_dba.py" },
+    { pdf: path.join(rootDir, "guides/DBA/DBA_naturales.pdf"), area: "Ciencias Naturales", version: "2016", startPage: 8, script: "importar_dba.py" },
+    { pdf: path.join(rootDir, "guides/DBA/DBA_sociales.pdf"), area: "Ciencias Sociales", version: "2016", startPage: 8, script: "importar_dba.py" },
+    { pdf: path.join(rootDir, "guides/DBA/DBA_transicion.pdf"), area: "Desarrollo Integral", version: "2016", startPage: 8, script: "importar_dba.py" },
+    { pdf: path.join(rootDir, "guides/DBA/dba_ingles_transicion_quinto.pdf"), area: "Inglés", version: "2016", startPage: 8, script: "importar_dba_primaria_ingles.py" },
+    { pdf: path.join(rootDir, "guides/DBA/DBA_ingles_sexto_once.pdf"), area: "Inglés", version: "2016", startPage: 15, script: "importar_dba.py" }
   ];
 
   // 1. Ejecutar importaciones de Python
   for (const item of dbaPdfs) {
     console.log(`⏳ Importando ${item.area} desde ${item.pdf} (pág. ${item.startPage})...`);
     try {
-      const cmd = `python scripts/${item.script} --pdf ${item.pdf} --area "${item.area}" --version "${item.version}" --start-page ${item.startPage}`;
+      const pdfPath = item.pdf.replace(/\\/g, "/");
+      const cmd = `python scripts/${item.script} --pdf "${pdfPath}" --area "${item.area}" --version "${item.version}" --start-page ${item.startPage}`;
       execSync(cmd, { stdio: "inherit", cwd: path.resolve(__dirname, "../..") });
     } catch (err) {
       console.error(`❌ Error importando ${item.pdf}:`, err);
