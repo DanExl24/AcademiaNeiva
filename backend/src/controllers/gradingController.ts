@@ -1355,7 +1355,12 @@ export const getCourseEvidenciasDba = async (req: Request, res: Response): Promi
        JOIN competencias c ON c.id_competencia = ea.id_competencia
        JOIN evidencias_dba edba ON edba.id_evidencia_dba = ea.id_evidencia_dba
        JOIN dba d ON d.id_dba = edba.id_dba
-       WHERE c.id_grupo = $1 AND c.id_materia = $2 AND c.id_colegio = $3 AND ea.id_evidencia_dba IS NOT NULL${planeadasFilter}
+       WHERE c.id_grupo IN (
+         SELECT g2.id_grupo
+         FROM grupos g1
+         JOIN grupos g2 ON g2.id_nivel = g1.id_nivel AND g2.id_tipo_grado = g1.id_tipo_grado
+         WHERE g1.id_grupo = $1 AND g1.id_colegio = $3
+       ) AND c.id_materia = $2 AND c.id_colegio = $3 AND ea.id_evidencia_dba IS NOT NULL${planeadasFilter}
        ORDER BY d.numero_dba, ea.orden, ea.id_evidencia`,
       planeadasParams
     );
