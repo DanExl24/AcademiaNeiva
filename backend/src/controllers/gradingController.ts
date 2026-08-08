@@ -292,17 +292,19 @@ export const createActivity = async (req: Request, res: Response): Promise<void>
       }
 
       const comp = competencyRes.rows[0];
-      finalIdPeriodo = Number(comp.id_periodo);
-      finalIdColegio = Number(comp.id_colegio);
+      if (!finalIdPeriodo) finalIdPeriodo = Number(comp.id_periodo);
+      if (!finalIdColegio) finalIdColegio = Number(comp.id_colegio);
 
-      // Resolver id_detallegrado desde el contexto de la competencia
-      const dgRes = await client.query(
-        `SELECT id_detallegrado FROM detalle_grados
-         WHERE id_grupo = $1 AND id_materia = $2 AND id_colegio = $3
-         LIMIT 1`,
-        [comp.id_grupo, comp.id_materia, comp.id_colegio]
-      );
-      finalIdDetalleGrado = dgRes.rows.length > 0 ? dgRes.rows[0].id_detallegrado : null;
+      // Solo resolver id_detallegrado desde el contexto de la competencia si no venía especificado
+      if (!finalIdDetalleGrado) {
+        const dgRes = await client.query(
+          `SELECT id_detallegrado FROM detalle_grados
+           WHERE id_grupo = $1 AND id_materia = $2 AND id_colegio = $3
+           LIMIT 1`,
+          [comp.id_grupo, comp.id_materia, comp.id_colegio]
+        );
+        finalIdDetalleGrado = dgRes.rows.length > 0 ? dgRes.rows[0].id_detallegrado : null;
+      }
     }
 
     if (!finalIdPeriodo || !finalIdDetalleGrado || !finalIdColegio) {
