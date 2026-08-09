@@ -36,7 +36,9 @@ Este módulo gestiona la autenticación de los 5 roles del sistema, la verificac
 | Verificar existencia de documento | `GET` | `/api/auth/check-document/:document` | Público |
 | Obtener identidad visual del colegio | `GET` | `/api/auth/school-identity/:schoolId` | Autenticado |
 | Obtener perfil del usuario | `GET` | `/api/auth/profile` | Autenticado |
-| Actualizar email del perfil | `PUT` | `/api/auth/profile/email` | Autenticado |
+| Solicitar cambio de email | `POST` | `/api/auth/profile/request-email-change` | Autenticado |
+| Confirmar cambio de email con token | `POST` | `/api/auth/profile/verify-email-change` | Autenticado |
+| Actualizar teléfono del perfil | `PUT` | `/api/auth/profile/phone` | Autenticado |
 | Actualizar contraseña del perfil | `PUT` | `/api/auth/profile/password` | Autenticado |
 
 ---
