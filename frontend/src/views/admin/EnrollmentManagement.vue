@@ -358,7 +358,7 @@ const openDrawer = async (id: number) => {
   try {
     const response = await axios.get(`/api/matriculas/${id}`)
     matricula.value = response.data
-    selectedGradeId.value = response.data.id_grado
+    selectedGradeId.value = response.data.id_grupo || response.data.id_grado || (response.data.availableSections?.[0]?.id_grado ?? null)
 
     // Fetch academic summary if it is a reingreso
     if (response.data.tipo === 'REINGRESO' && response.data.id_estudiante) {
@@ -448,13 +448,25 @@ const formatDateTime = (date: string | null | undefined) => {
   return `${dateStr}, ${timeStr}`
 }
 
-const assignRoom = () => {
+const assignRoom = async () => {
   if (!selectedGradeId.value) return
   const selected = matricula.value.availableSections.find((s: any) => s.id_grado === selectedGradeId.value)
   if (selected) {
-    matricula.value.seccion = selected.seccion
-    matricula.value.id_grado = selected.id_grado
-    notify.addNotification(`Salón ${selected.seccion} seleccionado`, 'info')
+    savingGrade.value = true
+    try {
+      await axios.post(`/api/matriculas/assign-grade/${matricula.value.id_matricula}`, {
+        idGrado: selected.id_grado
+      })
+      matricula.value.seccion = selected.seccion
+      matricula.value.id_grado = selected.id_grado
+      matricula.value.id_grupo = selected.id_grado
+      notify.addNotification(`Salón ${selected.seccion} asignado y guardado correctamente`, 'success')
+    } catch (e: any) {
+      console.error('Error al guardar salón:', e)
+      notify.addNotification('No se pudo guardar la asignación del salón en el servidor', 'error')
+    } finally {
+      savingGrade.value = false
+    }
   }
   currentStep.value = 2
 }

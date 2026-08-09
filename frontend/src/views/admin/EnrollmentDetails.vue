@@ -89,7 +89,7 @@ const fetchDetails = async () => {
   try {
     const response = await axios.get(`/api/matriculas/${route.params.id}`)
     matricula.value = response.data
-    selectedGradeId.value = response.data.id_grado
+    selectedGradeId.value = response.data.id_grupo || response.data.id_grado || (response.data.availableSections?.[0]?.id_grado ?? null)
     renderAllPdfDocuments()
   } catch {
     notify.addNotification('Error al cargar la solicitud', 'error')
