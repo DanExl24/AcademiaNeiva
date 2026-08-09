@@ -1,4 +1,6 @@
 -- Migración 033: Limpieza de asignaciones duplicadas en detalle_grados y actividades duplicadas sin notas
+-- Se activa el bypass de triggers para poder modificar registros de periodos cerrados durante la limpieza
+SET my.app.bypass_triggers = 'true';
 
 -- 1. Reasignar cualquier actividad_materia de detalle_grados duplicados al id_detallegrado más reciente
 WITH ranked_dg AS (
@@ -108,3 +110,6 @@ DELETE FROM actividad_materia
 WHERE id_actividadmateria IN (
   SELECT id_actividadmateria FROM ranked_act WHERE rn > 1
 );
+
+-- Restablecer bypass de triggers al valor por defecto
+SET my.app.bypass_triggers = 'false';
