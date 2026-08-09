@@ -1065,100 +1065,102 @@ onMounted(() => {
         <div class="absolute -left-20 -bottom-20 h-80 w-80 bg-indigo-500/10 rounded-full blur-[100px]"></div>
       </div>
 
-      <!-- Observaciones y Convivencia Escolar Panel -->
-      <div class="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 rounded-[2.5rem] p-8 border border-slate-800 shadow-2xl text-white space-y-6">
-        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-6">
+      <!-- Observaciones y Convivencia Escolar Panel (Minimalist Clean Style) -->
+      <div class="bg-white dark:bg-slate-900 rounded-[2rem] border border-gray-100 dark:border-slate-800 p-8 shadow-sm transition-colors space-y-6">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-5">
           <div class="flex items-center gap-3">
-            <div class="p-3 bg-indigo-500/20 text-indigo-400 rounded-2xl border border-indigo-500/30">
-              <ShieldAlert :size="24" />
+            <div class="p-3 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 rounded-2xl">
+              <ShieldAlert :size="22" />
             </div>
             <div>
-              <h3 class="text-xl font-extrabold tracking-tight">Control y Recopilación de Observaciones</h3>
-              <p class="text-xs text-slate-400 font-medium">Seguimiento institucional de alertas disciplinares, pedagógicas y de convivencia por estado</p>
+              <h3 class="text-lg font-black text-slate-900 dark:text-white tracking-tight">Seguimiento de Convivencia y Observaciones</h3>
+              <p class="text-xs text-slate-500 dark:text-slate-400 font-medium">Recopilación institucional por categoría y estado de reporte</p>
             </div>
           </div>
-          <div class="flex items-center gap-2 bg-white/5 px-4 py-2 rounded-2xl border border-white/10 text-xs font-bold text-slate-300 self-start md:self-auto">
-            <CalendarDays :size="14" class="text-indigo-400" />
-            Total Registros: <span class="text-white text-sm font-black">{{ dashboardData.observationsSummary?.total || 0 }}</span>
+          <div class="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 px-4 py-2 rounded-2xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300 self-start md:self-auto">
+            <CalendarDays :size="14" class="text-indigo-500" />
+            Total Registros: <span class="text-slate-900 dark:text-white text-sm font-black">{{ dashboardData.observationsSummary?.total || 0 }}</span>
           </div>
         </div>
 
         <!-- Observaciones Sub-KPIs Grid -->
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           <!-- Académicas -->
-          <div class="bg-white/5 hover:bg-white/10 border border-white/10 p-5 rounded-2xl transition-all flex items-center justify-between group">
+          <div class="bg-slate-50/60 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800/80 p-5 rounded-2xl transition-all flex items-center justify-between group hover:border-sky-200 dark:hover:border-sky-900">
             <div>
-              <p class="text-[10px] font-black text-sky-400 uppercase tracking-wider">Académicas</p>
-              <p class="text-2xl font-black mt-1 text-white group-hover:scale-105 transition-transform">{{ dashboardData.observationsSummary?.academicas || 0 }}</p>
-              <p class="text-[10px] text-slate-400 mt-0.5">Alertas pedagógicas</p>
+              <p class="text-[10px] font-black text-sky-600 dark:text-sky-400 uppercase tracking-widest">Académicas</p>
+              <p class="text-2xl font-black mt-1 text-slate-900 dark:text-white group-hover:scale-105 transition-transform">{{ dashboardData.observationsSummary?.academicas || 0 }}</p>
+              <p class="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5 font-medium">Alertas pedagógicas</p>
             </div>
-            <div class="p-3 bg-sky-500/20 text-sky-400 rounded-xl group-hover:scale-110 transition-transform">
-              <Lightbulb :size="22" />
+            <div class="p-3 bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400 rounded-xl group-hover:scale-110 transition-transform">
+              <Lightbulb :size="20" />
             </div>
           </div>
 
           <!-- Disciplinarias -->
-          <div class="bg-white/5 hover:bg-white/10 border border-white/10 p-5 rounded-2xl transition-all flex items-center justify-between group">
+          <div class="bg-slate-50/60 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800/80 p-5 rounded-2xl transition-all flex items-center justify-between group hover:border-amber-200 dark:hover:border-amber-900">
             <div>
-              <p class="text-[10px] font-black text-amber-400 uppercase tracking-wider">Disciplinarias</p>
-              <p class="text-2xl font-black mt-1 text-white group-hover:scale-105 transition-transform">{{ dashboardData.observationsSummary?.disciplinarias || 0 }}</p>
-              <p class="text-[10px] text-slate-400 mt-0.5">Faltas al manual</p>
+              <p class="text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest">Disciplinarias</p>
+              <p class="text-2xl font-black mt-1 text-slate-900 dark:text-white group-hover:scale-105 transition-transform">{{ dashboardData.observationsSummary?.disciplinarias || 0 }}</p>
+              <p class="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5 font-medium">Faltas al manual</p>
             </div>
-            <div class="p-3 bg-amber-500/20 text-amber-400 rounded-xl group-hover:scale-110 transition-transform">
-              <FileWarning :size="22" />
+            <div class="p-3 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 rounded-xl group-hover:scale-110 transition-transform">
+              <FileWarning :size="20" />
             </div>
           </div>
 
           <!-- Convivenciales -->
-          <div class="bg-white/5 hover:bg-white/10 border border-white/10 p-5 rounded-2xl transition-all flex items-center justify-between group">
+          <div class="bg-slate-50/60 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800/80 p-5 rounded-2xl transition-all flex items-center justify-between group hover:border-purple-200 dark:hover:border-purple-900">
             <div>
-              <p class="text-[10px] font-black text-purple-400 uppercase tracking-wider">Convivenciales</p>
-              <p class="text-2xl font-black mt-1 text-white group-hover:scale-105 transition-transform">{{ dashboardData.observationsSummary?.convivenciales || 0 }}</p>
-              <p class="text-[10px] text-slate-400 mt-0.5">Acuerdos y grupo</p>
+              <p class="text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest">Convivenciales</p>
+              <p class="text-2xl font-black mt-1 text-slate-900 dark:text-white group-hover:scale-105 transition-transform">{{ dashboardData.observationsSummary?.convivenciales || 0 }}</p>
+              <p class="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5 font-medium">Acuerdos de grupo</p>
             </div>
-            <div class="p-3 bg-purple-500/20 text-purple-400 rounded-xl group-hover:scale-110 transition-transform">
-              <MessageSquare :size="22" />
+            <div class="p-3 bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 rounded-xl group-hover:scale-110 transition-transform">
+              <MessageSquare :size="20" />
             </div>
           </div>
 
           <!-- Sanciones Activas -->
-          <div class="bg-white/5 hover:bg-white/10 border border-white/10 p-5 rounded-2xl transition-all flex items-center justify-between group">
+          <div class="bg-slate-50/60 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800/80 p-5 rounded-2xl transition-all flex items-center justify-between group hover:border-rose-200 dark:hover:border-rose-900">
             <div>
-              <p class="text-[10px] font-black text-rose-400 uppercase tracking-wider">Sanciones Activas</p>
-              <p class="text-2xl font-black mt-1 text-white group-hover:scale-105 transition-transform">{{ dashboardData.observationsSummary?.sancionesActivas || 0 }}</p>
-              <p class="text-[10px] text-slate-400 mt-0.5">Medidas vigentes</p>
+              <p class="text-[10px] font-black text-rose-600 dark:text-rose-400 uppercase tracking-widest">Sanciones Activas</p>
+              <p class="text-2xl font-black mt-1 text-slate-900 dark:text-white group-hover:scale-105 transition-transform">{{ dashboardData.observationsSummary?.sancionesActivas || 0 }}</p>
+              <p class="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5 font-medium">Medidas vigentes</p>
             </div>
-            <div class="p-3 bg-rose-500/20 text-rose-400 rounded-xl group-hover:scale-110 transition-transform">
-              <AlertTriangle :size="22" />
+            <div class="p-3 bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 rounded-xl group-hover:scale-110 transition-transform">
+              <AlertTriangle :size="20" />
             </div>
           </div>
         </div>
 
         <!-- Breakdown by Grade List -->
-        <div v-if="dashboardData.observationsSummary?.byGrade && dashboardData.observationsSummary.byGrade.length > 0" class="mt-6 border-t border-white/5 pt-6">
-          <h4 class="text-xs font-black uppercase tracking-wider text-slate-400 mb-4 flex items-center gap-2">
-            <Filter :size="14" class="text-indigo-400" />
-            Recopilación de Observaciones por Grado
+        <div v-if="dashboardData.observationsSummary?.byGrade && dashboardData.observationsSummary.byGrade.length > 0" class="pt-4 border-t border-slate-100 dark:border-slate-800">
+          <h4 class="text-xs font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-4 flex items-center gap-2">
+            <Filter :size="14" class="text-indigo-500" />
+            Desglose por Grado Académico
           </h4>
           <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             <div 
               v-for="gObs in dashboardData.observationsSummary.byGrade" 
               :key="gObs.grado"
-              class="bg-white/5 border border-white/10 p-4 rounded-2xl flex flex-col justify-between hover:bg-white/10 transition-all"
+              class="bg-slate-50/60 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 p-4 rounded-2xl flex flex-col justify-between hover:bg-slate-100/80 dark:hover:bg-slate-800/80 transition-all"
             >
               <div class="flex justify-between items-center mb-2">
-                <span class="font-bold text-sm text-slate-200">{{ gObs.grado }}</span>
-                <span class="text-xs font-black bg-indigo-500/20 text-indigo-300 px-2.5 py-1 rounded-lg border border-indigo-500/30">
+                <span class="font-bold text-sm text-slate-800 dark:text-slate-200">{{ gObs.grado }}</span>
+                <span class="text-xs font-black bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-300 px-2.5 py-1 rounded-xl border border-indigo-100 dark:border-indigo-900/50">
                   {{ gObs.total }} obs.
                 </span>
               </div>
-              <div class="flex items-center gap-2 text-[11px] font-semibold text-slate-400">
-                <span class="text-sky-300">Acad: {{ gObs.academicas }}</span> • 
-                <span class="text-amber-300">Disc: {{ gObs.disciplinarias }}</span> • 
-                <span class="text-purple-300">Conv: {{ gObs.convivenciales }}</span>
+              <div class="flex items-center gap-2 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                <span class="text-sky-600 dark:text-sky-400">Acad: {{ gObs.academicas }}</span> • 
+                <span class="text-amber-600 dark:text-amber-400">Disc: {{ gObs.disciplinarias }}</span> • 
+                <span class="text-purple-600 dark:text-purple-400">Conv: {{ gObs.convivenciales }}</span>
               </div>
             </div>
           </div>
+        </div>
+      </div>
         </div>
       </div>
 
