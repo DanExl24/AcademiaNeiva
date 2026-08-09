@@ -437,6 +437,13 @@ export const ensureCompetencySchema = async (): Promise<void> => {
       await client.query(makeEmailNullableSql);
     }
 
+    // Ejecutar migración 033 (limpieza de asignaciones duplicadas en detalle_grados y actividades sin notas)
+    const cleanupDuplicatesPath = path.join(__dirname, "../migrations/033_cleanup_duplicate_assignments_and_activities.sql");
+    if (fs.existsSync(cleanupDuplicatesPath)) {
+      const cleanupDuplicatesSql = fs.readFileSync(cleanupDuplicatesPath, "utf8");
+      await client.query(cleanupDuplicatesSql);
+    }
+
     // Backfill sync_uuid for existing competencies
     const unmigratedRes = await client.query(`
       SELECT id_colegio, id_anio, id_materia, id_periodo, descripcion, ARRAY_AGG(id_competencia) AS ids
