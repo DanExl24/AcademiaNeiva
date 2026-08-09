@@ -45,7 +45,44 @@ FROM ranked_dg r
 WHERE oe.id_detallegrado = r.id_detallegrado
   AND oe.id_detallegrado != r.main_id_detallegrado;
 
+-- Reasignar registro_asistencia de detalle_grados duplicados
+WITH ranked_dg AS (
+  SELECT id_detallegrado, id_colegio, id_grupo, id_materia,
+         FIRST_VALUE(id_detallegrado) OVER (
+           PARTITION BY id_colegio, id_grupo, id_materia 
+           ORDER BY id_detallegrado DESC
+         ) AS main_id_detallegrado
+  FROM detalle_grados
+)
+UPDATE registro_asistencia ra
+SET id_detallegrado = r.main_id_detallegrado
+FROM ranked_dg r
+WHERE ra.id_detallegrado = r.id_detallegrado
+  AND ra.id_detallegrado != r.main_id_detallegrado;
+
+-- Reasignar cierre_materia de detalle_grados duplicados (si la tabla existe)
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'cierre_materia') THEN
+    WITH ranked_dg AS (
+      SELECT id_detallegrado, id_colegio, id_grupo, id_materia,
+             FIRST_VALUE(id_detallegrado) OVER (
+               PARTITION BY id_colegio, id_grupo, id_materia 
+               ORDER BY id_detallegrado DESC
+             ) AS main_id_detallegrado
+      FROM detalle_grados
+    )
+    UPDATE cierre_materia cm
+    SET id_detallegrado = r.main_id_detallegrado
+    FROM ranked_dg r
+    WHERE cm.id_detallegrado = r.id_detallegrado
+      AND cm.id_detallegrado != r.main_id_detallegrado;
+  END IF;
+END;
+$$;
+
 -- Eliminar detalle_grados antiguos duplicados que ya no son el principal
+-- Solo si no tienen ninguna referencia pendiente en ninguna tabla hija
 DELETE FROM detalle_grados dg
 WHERE id_detallegrado NOT IN (
   SELECT MAX(id_detallegrado)
@@ -54,7 +91,8 @@ WHERE id_detallegrado NOT IN (
 )
 AND NOT EXISTS (SELECT 1 FROM actividad_materia am WHERE am.id_detallegrado = dg.id_detallegrado)
 AND NOT EXISTS (SELECT 1 FROM resultado_academico ra WHERE ra.id_detallegrado = dg.id_detallegrado)
-AND NOT EXISTS (SELECT 1 FROM observacion_estudiante oe WHERE oe.id_detallegrado = dg.id_detallegrado);
+AND NOT EXISTS (SELECT 1 FROM observacion_estudiante oe WHERE oe.id_detallegrado = dg.id_detallegrado)
+AND NOT EXISTS (SELECT 1 FROM registro_asistencia ra WHERE ra.id_detallegrado = dg.id_detallegrado);
 
 -- 2. Limpiar actividades duplicadas sin notas creadas durante pruebas
 WITH ranked_act AS (
