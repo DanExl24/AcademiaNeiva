@@ -111,13 +111,14 @@ onMounted(async () => {
 watch(selectedYear, fetchPeriods)
 watch(selectedPeriod, fetchGrades)
 
-const getPerformanceColor = (level: string) => {
+const getPerformanceColor = (level: string | null | undefined) => {
+  if (!level) return 'text-slate-500 bg-slate-100 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
   level = level.toLowerCase()
   if (level.includes('superior')) return 'text-emerald-600 bg-emerald-50 border-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-900/50'
   if (level.includes('alto')) return 'text-blue-600 bg-blue-50 border-blue-100 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-900/50'
   if (level.includes('basico')) return 'text-amber-600 bg-amber-50 border-amber-100 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-900/50'
   if (level.includes('bajo')) return 'text-rose-600 bg-rose-50 border-rose-100 dark:bg-rose-950/30 dark:text-rose-400 dark:border-rose-900/50'
-  return 'text-slate-600 bg-slate-50 border-slate-100 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
+  return 'text-slate-500 bg-slate-100 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
 }
 </script>
 
@@ -159,7 +160,7 @@ const getPerformanceColor = (level: string) => {
       <div class="bg-gradient-to-br from-indigo-600 to-violet-700 p-6 rounded-3xl text-white shadow-xl shadow-indigo-100 dark:shadow-none flex items-center justify-between group overflow-hidden relative">
         <div class="relative z-10">
           <p class="text-xs font-bold uppercase tracking-widest text-indigo-100 opacity-80">Promedio General</p>
-          <p class="text-4xl font-black mt-1">{{ academicData.promedio_general }}</p>
+          <p class="text-4xl font-black mt-1">{{ academicData.promedio_general !== null && academicData.promedio_general !== undefined ? academicData.promedio_general : 'N/A' }}</p>
         </div>
         <div class="bg-white/20 p-4 rounded-2xl relative z-10 group-hover:scale-110 transition-transform duration-300">
           <TrendingUp :size="32" stroke-width="2.5" />
@@ -170,7 +171,7 @@ const getPerformanceColor = (level: string) => {
       <div class="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center justify-between group hover:shadow-lg transition-all duration-300">
         <div>
           <p class="text-xs font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Desempeño Global</p>
-          <p class="text-2xl font-black mt-1 text-slate-800 dark:text-white">{{ academicData.nivel_desempeno }}</p>
+          <p class="text-2xl font-black mt-1 text-slate-800 dark:text-white">{{ academicData.nivel_desempeno || 'N/A' }}</p>
         </div>
         <div class="p-4 rounded-2xl group-hover:scale-110 transition-transform duration-300" :class="getPerformanceColor(academicData.nivel_desempeno)">
           <Award :size="32" stroke-width="2.5" />
@@ -180,7 +181,9 @@ const getPerformanceColor = (level: string) => {
       <div class="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center justify-between group hover:shadow-lg transition-all duration-300">
         <div>
           <p class="text-xs font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Materias Evaluadas</p>
-          <p class="text-2xl font-black mt-1 text-slate-800 dark:text-white">{{ academicData.grades.length }}</p>
+          <p class="text-2xl font-black mt-1 text-slate-800 dark:text-white">
+            {{ academicData.grades.filter((g: any) => g.calificacion !== null && g.calificacion !== undefined).length }} / {{ academicData.grades.length }}
+          </p>
         </div>
         <div class="bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 p-4 rounded-2xl group-hover:scale-110 transition-transform duration-300">
           <GraduationCap :size="32" stroke-width="2.5" />
@@ -239,10 +242,12 @@ const getPerformanceColor = (level: string) => {
               <td class="px-8 py-6">
                 <div class="flex justify-center">
                   <div 
-                    class="h-12 w-12 rounded-2xl flex items-center justify-center text-lg font-black shadow-sm"
-                    :class="item.calificacion < 3.0 ? 'bg-rose-50 text-rose-600 dark:bg-rose-950/30 dark:text-rose-400' : 'bg-slate-50 text-slate-800 dark:bg-slate-800 dark:text-white'"
+                    class="h-12 w-12 rounded-2xl flex items-center justify-center text-xs font-black shadow-sm"
+                    :class="item.calificacion === null || item.calificacion === undefined
+                      ? 'bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500'
+                      : (item.calificacion < 3.0 ? 'bg-rose-50 text-rose-600 dark:bg-rose-950/30 dark:text-rose-400' : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400')"
                   >
-                    {{ item.calificacion }}
+                    {{ item.calificacion !== null && item.calificacion !== undefined ? item.calificacion : 'N/A' }}
                   </div>
                 </div>
               </td>
@@ -251,7 +256,7 @@ const getPerformanceColor = (level: string) => {
                   class="inline-flex items-center px-3 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider border"
                   :class="getPerformanceColor(item.desempeno)"
                 >
-                  {{ item.desempeno }}
+                  {{ item.desempeno || 'SIN NOTAS AÚN' }}
                 </span>
               </td>
               <td class="px-6 py-6 text-right">

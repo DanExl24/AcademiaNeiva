@@ -83,7 +83,7 @@ export const getStudentGrades = async (req: Request, res: Response) => {
         m.id_materia,
         m.nombre as materia,
         d.nombre || ' ' || d.apellido as docente,
-        COALESCE(ra.promedio, calc.promedio_calculado, 0) as calificacion,
+        COALESCE(ra.promedio, calc.promedio_calculado) as calificacion,
         ev.nivel as desempeno
       FROM detalle_grados dg
       JOIN materias m ON m.id_materia = dg.id_materia
@@ -99,34 +99,42 @@ export const getStudentGrades = async (req: Request, res: Response) => {
       ) calc ON calc.id_detallegrado = dg.id_detallegrado
       LEFT JOIN escala_valoracion ev 
              ON ev.id_colegio = $3
-            AND COALESCE(ra.promedio, calc.promedio_calculado, 0) >= ev.valor_minimo 
-            AND COALESCE(ra.promedio, calc.promedio_calculado, 0) <= ev.valor_maximo
+            AND COALESCE(ra.promedio, calc.promedio_calculado) >= ev.valor_minimo 
+            AND COALESCE(ra.promedio, calc.promedio_calculado) <= ev.valor_maximo
       WHERE mat.id_estudiante = $1 AND mat.estado = 'ACTIVA'
       ORDER BY m.nombre ASC
     `, [id_estudiante, id_periodo, id_colegio]);
 
-    // Calculate general average
-    const grades = result.rows.map(row => ({
-      ...row,
-      calificacion: parseFloat(row.calificacion)
-    }));
+    // Calculate general average ONLY for subjects with registered grades
+    const grades = result.rows.map(row => {
+      const hasGrade = row.calificacion !== null && row.calificacion !== undefined;
+      return {
+        ...row,
+        calificacion: hasGrade ? parseFloat(row.calificacion) : null,
+        desempeno: hasGrade ? (row.desempeno || 'SIN DEFINIR') : 'N/A'
+      };
+    });
     
-    let promedio_general = 0;
-    if (grades.length > 0) {
-      const sum = grades.reduce((acc, curr) => acc + curr.calificacion, 0);
-      promedio_general = sum / grades.length;
+    const gradedList = grades.filter(g => g.calificacion !== null);
+    let promedio_general: number | null = null;
+    if (gradedList.length > 0) {
+      const sum = gradedList.reduce((acc, curr) => acc + curr.calificacion!, 0);
+      promedio_general = parseFloat((sum / gradedList.length).toFixed(2));
     }
 
-    // Get general performance level for the overall average
-    const performanceRes = await pool.query(`
-      SELECT nivel FROM escala_valoracion 
-      WHERE id_colegio = $1 AND $2 >= valor_minimo AND $2 <= valor_maximo
-    `, [id_colegio, promedio_general]);
+    let nivel_desempeno = 'N/A';
+    if (promedio_general !== null) {
+      const performanceRes = await pool.query(`
+        SELECT nivel FROM escala_valoracion 
+        WHERE id_colegio = $1 AND $2 >= valor_minimo AND $2 <= valor_maximo
+      `, [id_colegio, promedio_general]);
+      nivel_desempeno = performanceRes.rows[0]?.nivel || 'N/A';
+    }
 
     res.json({
       grades,
-      promedio_general: parseFloat(promedio_general.toFixed(2)),
-      nivel_desempeno: performanceRes.rows[0]?.nivel || 'N/A'
+      promedio_general,
+      nivel_desempeno
     });
   } catch (error) {
     console.error('Error fetching student grades:', error);
@@ -534,7 +542,7 @@ export const getParentDashboardData = async (req: Request, res: Response) => {
         gradesRes = await pool.query(`
           SELECT 
             m.nombre as materia,
-            COALESCE(ra.promedio, calc.promedio_calculado, 0) as calificacion
+            COALESCE(ra.promedio, calc.promedio_calculado) as calificacion
           FROM detalle_grados dg
           JOIN materias m ON m.id_materia = dg.id_materia
           LEFT JOIN resultado_academico ra ON ra.id_detallegrado = dg.id_detallegrado AND ra.id_periodo = $2 AND ra.id_estudiante = $1
@@ -552,7 +560,7 @@ export const getParentDashboardData = async (req: Request, res: Response) => {
         gradesRes = await pool.query(`
           SELECT 
             m.nombre as materia,
-            COALESCE(calc.promedio_calculado, 0) as calificacion
+            COALESCE(calc.promedio_calculado, NULL) as calificacion
           FROM detalle_grados dg
           JOIN materias m ON m.id_materia = dg.id_materia
           LEFT JOIN (
@@ -567,9 +575,13 @@ export const getParentDashboardData = async (req: Request, res: Response) => {
         `, [child.id_estudiante, child.id_anio, child.id_grupo]);
       }
 
-      const grades = gradesRes.rows.map(r => ({ ...r, calificacion: parseFloat(r.calificacion) }));
-      const avg = grades.length > 0 ? (grades.reduce((a, b) => a + b.calificacion, 0) / grades.length) : 0;
-      const atRisk = grades.filter(g => g.calificacion < 3.0 && g.calificacion > 0);
+      const grades = gradesRes.rows.map(r => ({
+        ...r,
+        calificacion: r.calificacion !== null && r.calificacion !== undefined ? parseFloat(r.calificacion) : null
+      }));
+      const gradedList = grades.filter(g => g.calificacion !== null);
+      const avg = gradedList.length > 0 ? (gradedList.reduce((a, b) => a + b.calificacion!, 0) / gradedList.length) : null;
+      const atRisk = gradedList.filter(g => g.calificacion! < 3.0);
 
       // Attendance Filtered by Period Dates or overall academic year
       let attRes;
@@ -632,13 +644,13 @@ export const getParentDashboardData = async (req: Request, res: Response) => {
       `, [child.id_estudiante, child.id_anio]);
 
       // Sort to get top best and worst subjects
-      const sortedGrades = [...grades].sort((a, b) => b.calificacion - a.calificacion);
+      const sortedGrades = [...gradedList].sort((a, b) => b.calificacion! - a.calificacion!);
       const top_materias_mejores = sortedGrades.slice(0, 5);
       const top_materias_peores = [...sortedGrades].reverse().slice(0, 5);
 
       return {
         id_estudiante: child.id_estudiante,
-        average: parseFloat(avg.toFixed(2)),
+        average: avg !== null ? parseFloat(avg.toFixed(2)) : 0,
         atRisk: atRisk.length,
         atRiskSubjects: atRisk.map(s => s.materia),
         attendanceRate: Math.round(attRate),
@@ -817,7 +829,7 @@ export const getStudentDashboardStats = async (req: Request, res: Response) => {
       SELECT 
         m.id_materia,
         m.nombre as materia,
-        COALESCE(ra.promedio, calc.promedio_calculado, 0) as calificacion
+        COALESCE(ra.promedio, calc.promedio_calculado) as calificacion
       FROM detalle_grados dg
       JOIN materias m ON m.id_materia = dg.id_materia
       LEFT JOIN resultado_academico ra ON ra.id_detallegrado = dg.id_detallegrado AND ra.id_periodo = $2 AND ra.id_estudiante = $1
@@ -835,8 +847,10 @@ export const getStudentDashboardStats = async (req: Request, res: Response) => {
     const grades = gradesRes.rows.map(row => ({
       id_materia: row.id_materia,
       materia: row.materia,
-      calificacion: parseFloat(row.calificacion)
+      calificacion: row.calificacion !== null && row.calificacion !== undefined ? parseFloat(row.calificacion) : null
     }));
+
+    const gradedList = grades.filter(g => g.calificacion !== null);
 
     // Check if any actual grades or results exist in the database for this period and student
     const notesCountRes = await pool.query(`
@@ -859,14 +873,14 @@ export const getStudentDashboardStats = async (req: Request, res: Response) => {
     let materias_aprobadas: number | null = null;
     let materias_reprobadas: number | null = null;
 
-    if (has_calificaciones && grades.length > 0) {
-      const sum = grades.reduce((acc, curr) => acc + curr.calificacion, 0);
-      promedio_general = sum / grades.length;
+    if (has_calificaciones && gradedList.length > 0) {
+      const sum = gradedList.reduce((acc, curr) => acc + curr.calificacion!, 0);
+      promedio_general = sum / gradedList.length;
       
       let aprobadas = 0;
       let reprobadas = 0;
-      grades.forEach(g => {
-        if (g.calificacion >= nota_aprobacion) {
+      gradedList.forEach(g => {
+        if (g.calificacion! >= nota_aprobacion) {
           aprobadas++;
         } else {
           reprobadas++;
@@ -876,8 +890,8 @@ export const getStudentDashboardStats = async (req: Request, res: Response) => {
       materias_reprobadas = reprobadas;
     }
 
-    // Sort to get top best and worst subjects
-    const sortedGrades = [...grades].sort((a, b) => b.calificacion - a.calificacion);
+    // Sort to get top best and worst subjects (only among subjects with grades)
+    const sortedGrades = [...gradedList].sort((a, b) => b.calificacion! - a.calificacion!);
     const top_materias_mejores = sortedGrades.slice(0, 5);
     const top_materias_peores = [...sortedGrades].reverse().slice(0, 5);
 
