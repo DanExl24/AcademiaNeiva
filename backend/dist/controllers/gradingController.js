@@ -926,8 +926,7 @@ const getClosureStatus = async (req, res) => {
 };
 exports.getClosureStatus = getClosureStatus;
 const closeTeacherSubject = async (req, res) => {
-    const { detailGradeId, periodId } = req.params;
-    const { justificacion } = req.body || {};
+    const { detailGradeId, periodId, justificacion_evidencias_pendientes } = req.body;
     const userId = req.user.id;
     const client = await db_1.pool.connect();
     try {

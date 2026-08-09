@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict bbyNF5C5S9SQLd8IdETENO2aRaAelCt1id6ekQbeQNp2aFWJh4aDYxMG9Pkf6Jn
+\restrict hzH2TbblBfFGoUDbpi9bMtq7V5QOJbKUiBcGpi2qTmSEzgwdfebhWIF2u7ZApbZ
 
 -- Dumped from database version 18.4
 -- Dumped by pg_dump version 18.4
@@ -586,7 +586,8 @@ CREATE TABLE public.actividad_materia (
     id_evidencia integer,
     fecha_creacion timestamp with time zone DEFAULT now(),
     motivo_extra character varying(100) DEFAULT NULL::character varying,
-    justificacion_extra text
+    justificacion_extra text,
+    id_docente_creador integer
 );
 
 
@@ -742,7 +743,9 @@ CREATE TABLE public.cierre_materia (
     id_detallegrado integer NOT NULL,
     id_periodo integer NOT NULL,
     estado public.estado_cierre_materia NOT NULL,
-    fecha_cierre timestamp with time zone NOT NULL
+    fecha_cierre timestamp with time zone NOT NULL,
+    justificacion_evidencias_pendientes text,
+    id_docente_cierre integer
 );
 
 
@@ -2627,7 +2630,7 @@ ALTER SEQUENCE public.token_blacklist_id_seq OWNED BY public.token_blacklist.id;
 
 CREATE TABLE public.usuario (
     id_usuario integer NOT NULL,
-    email character varying(255) NOT NULL,
+    email character varying(255),
     password character varying(255) NOT NULL,
     nombre character varying(255) NOT NULL,
     apellido character varying(255),
@@ -4197,6 +4200,14 @@ ALTER TABLE ONLY public.actividad_materia
 
 
 --
+-- Name: actividad_materia actividad_materia_id_docente_creador_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.actividad_materia
+    ADD CONSTRAINT actividad_materia_id_docente_creador_fkey FOREIGN KEY (id_docente_creador) REFERENCES public.docente(id_docente);
+
+
+--
 -- Name: actividad_materia actividad_materia_id_evidencia_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -4258,6 +4269,14 @@ ALTER TABLE ONLY public.anio_lectivo
 
 ALTER TABLE ONLY public.cierre_materia
     ADD CONSTRAINT cierre_materia_id_detallegrado_fkey FOREIGN KEY (id_detallegrado) REFERENCES public.detalle_grados(id_detallegrado);
+
+
+--
+-- Name: cierre_materia cierre_materia_id_docente_cierre_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.cierre_materia
+    ADD CONSTRAINT cierre_materia_id_docente_cierre_fkey FOREIGN KEY (id_docente_cierre) REFERENCES public.docente(id_docente) ON DELETE SET NULL;
 
 
 --
@@ -5007,5 +5026,5 @@ REVOKE USAGE ON SCHEMA public FROM PUBLIC;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict bbyNF5C5S9SQLd8IdETENO2aRaAelCt1id6ekQbeQNp2aFWJh4aDYxMG9Pkf6Jn
+\unrestrict hzH2TbblBfFGoUDbpi9bMtq7V5QOJbKUiBcGpi2qTmSEzgwdfebhWIF2u7ZApbZ
 

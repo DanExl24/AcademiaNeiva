@@ -1241,8 +1241,7 @@ export const getClosureStatus = async (req: Request, res: Response): Promise<voi
 };
 
 export const closeTeacherSubject = async (req: Request, res: Response): Promise<void> => {
-  const { detailGradeId, periodId } = req.params;
-  const { justificacion } = req.body || {};
+  const { detailGradeId, periodId, justificacion_evidencias_pendientes } = req.body;
   const userId = (req as any).user.id;
 
   const client = await pool.connect();
