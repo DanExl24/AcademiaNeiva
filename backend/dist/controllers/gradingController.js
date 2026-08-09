@@ -31,9 +31,15 @@ const resolveTeachingContext = async (gradeId, subjectId, periodId, userId) => {
 // Obtener periodos del colegio
 const getPeriods = async (req, res) => {
     const { schoolId } = req.params;
-    console.log(`[DEV] getPeriods called - schoolId=${schoolId}`);
+    const targetYearId = req.query.yearId ? Number(req.query.yearId) : undefined;
+    const authReq = req;
+    const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+    if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== Number(schoolId)) {
+        res.status(403).json({ error: "No tiene permiso para ver los periodos de este colegio." });
+        return;
+    }
     try {
-        const periods = await (0, periodHelpers_1.getAllPeriodsForSchool)(Number(schoolId));
+        const periods = await (0, periodHelpers_1.getAllPeriodsForSchool)(Number(schoolId), targetYearId);
         console.log(`[DEV] getPeriods - result count: ${periods.length}`);
         res.json(periods);
     }
@@ -88,7 +94,7 @@ const getActivities = async (req, res) => {
             const validComps = allComps.filter(c => c.descripcion && c.descripcion.trim());
             // Unificar descripciones de las competencias
             let competencia = competenciaBase;
-            if (validComps.length > 1) {
+            if (competenciaBase && validComps.length > 1) {
                 const descripcionUnificada = validComps
                     .map((c, idx) => `${idx + 1}. ${c.descripcion.trim()}`)
                     .join("\n\n");
@@ -211,13 +217,17 @@ const createActivity = async (req, res) => {
                 return;
             }
             const comp = competencyRes.rows[0];
-            finalIdPeriodo = Number(comp.id_periodo);
-            finalIdColegio = Number(comp.id_colegio);
-            // Resolver id_detallegrado desde el contexto de la competencia
-            const dgRes = await client.query(`SELECT id_detallegrado FROM detalle_grados
-         WHERE id_grupo = $1 AND id_materia = $2 AND id_colegio = $3
-         LIMIT 1`, [comp.id_grupo, comp.id_materia, comp.id_colegio]);
-            finalIdDetalleGrado = dgRes.rows.length > 0 ? dgRes.rows[0].id_detallegrado : null;
+            if (!finalIdPeriodo)
+                finalIdPeriodo = Number(comp.id_periodo);
+            if (!finalIdColegio)
+                finalIdColegio = Number(comp.id_colegio);
+            // Solo resolver id_detallegrado desde el contexto de la competencia si no venía especificado
+            if (!finalIdDetalleGrado) {
+                const dgRes = await client.query(`SELECT id_detallegrado FROM detalle_grados
+           WHERE id_grupo = $1 AND id_materia = $2 AND id_colegio = $3
+           LIMIT 1`, [comp.id_grupo, comp.id_materia, comp.id_colegio]);
+                finalIdDetalleGrado = dgRes.rows.length > 0 ? dgRes.rows[0].id_detallegrado : null;
+            }
         }
         if (!finalIdPeriodo || !finalIdDetalleGrado || !finalIdColegio) {
             await client.query("ROLLBACK");
@@ -255,10 +265,10 @@ const createActivity = async (req, res) => {
             const dgInfo = await client.query(`SELECT id_grupo, id_materia FROM detalle_grados WHERE id_detallegrado = $1`, [finalIdDetalleGrado]);
             if (dgInfo.rows.length > 0) {
                 const { id_grupo, id_materia } = dgInfo.rows[0];
-                const otherPeriodAssigned = await client.query(`SELECT DISTINCT ea.id_evidencia_dba, p.nombre as periodo_nombre
+                // 1. Obtener evidencias planificadas en el periodo ACTUAL para este grado/materia
+                const currentPeriodAssigned = await client.query(`SELECT DISTINCT ea.id_evidencia_dba
            FROM evidencia_aprendizaje ea
            JOIN competencias c ON c.id_competencia = ea.id_competencia
-           JOIN periodo_academico p ON p.id_periodo = c.id_periodo
            WHERE c.id_colegio = $1
              AND c.id_materia = $2
              AND c.id_grupo IN (
@@ -267,18 +277,37 @@ const createActivity = async (req, res) => {
                JOIN grupos g2 ON g2.id_nivel = g1.id_nivel AND g2.id_tipo_grado = g1.id_tipo_grado
                WHERE g1.id_grupo = $3 AND g1.id_colegio = $1
              )
-             AND c.id_periodo != $4
+             AND c.id_periodo = $4
              AND ea.id_evidencia_dba = ANY($5::int[])`, [finalIdColegio, id_materia, id_grupo, finalIdPeriodo, evidencias_dba]);
-                if (otherPeriodAssigned.rows.length > 0) {
-                    if (!motivo_extra || typeof motivo_extra !== "string" || !motivo_extra.trim()) {
-                        await client.query("ROLLBACK");
-                        res.status(400).json({ error: "Debes seleccionar un motivo para evaluar evidencias planificadas en otros periodos." });
-                        return;
-                    }
-                    if (motivo_extra === "OTRO" && (!justificacion_extra || typeof justificacion_extra !== "string" || !justificacion_extra.trim())) {
-                        await client.query("ROLLBACK");
-                        res.status(400).json({ error: "Debes escribir una justificación detallada para el motivo 'Otro'." });
-                        return;
+                const plannedInCurrentIds = new Set(currentPeriodAssigned.rows.map((r) => Number(r.id_evidencia_dba)));
+                const unassignedInCurrent = evidencias_dba.filter((id) => !plannedInCurrentIds.has(Number(id)));
+                // 2. Solo si hay evidencias NO planificadas en el periodo actual, verificar si fueron planificadas en OTRO periodo
+                if (unassignedInCurrent.length > 0) {
+                    const otherPeriodAssigned = await client.query(`SELECT DISTINCT ea.id_evidencia_dba, p.nombre as periodo_nombre
+             FROM evidencia_aprendizaje ea
+             JOIN competencias c ON c.id_competencia = ea.id_competencia
+             JOIN periodo_academico p ON p.id_periodo = c.id_periodo
+             WHERE c.id_colegio = $1
+               AND c.id_materia = $2
+               AND c.id_grupo IN (
+                 SELECT g2.id_grupo
+                 FROM grupos g1
+                 JOIN grupos g2 ON g2.id_nivel = g1.id_nivel AND g2.id_tipo_grado = g1.id_tipo_grado
+                 WHERE g1.id_grupo = $3 AND g1.id_colegio = $1
+               )
+               AND c.id_periodo != $4
+               AND ea.id_evidencia_dba = ANY($5::int[])`, [finalIdColegio, id_materia, id_grupo, finalIdPeriodo, unassignedInCurrent]);
+                    if (otherPeriodAssigned.rows.length > 0) {
+                        if (!motivo_extra || typeof motivo_extra !== "string" || !motivo_extra.trim()) {
+                            await client.query("ROLLBACK");
+                            res.status(400).json({ error: "Debes seleccionar un motivo para evaluar evidencias planificadas en otros periodos." });
+                            return;
+                        }
+                        if (motivo_extra === "OTRO" && (!justificacion_extra || typeof justificacion_extra !== "string" || !justificacion_extra.trim())) {
+                            await client.query("ROLLBACK");
+                            res.status(400).json({ error: "Debes escribir una justificación detallada para el motivo 'Otro'." });
+                            return;
+                        }
                     }
                 }
             }
@@ -293,8 +322,10 @@ const createActivity = async (req, res) => {
                 finalIdEvidencia = localEvRes.rows[0].id_evidencia;
             }
         }
-        const newActivityRes = await client.query(`INSERT INTO actividad_materia (id_competencia, id_evidencia, id_detallegrado, id_periodo, nombre, porcentaje, id_colegio, motivo_extra, justificacion_extra)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        const dgTeacherRes = await client.query(`SELECT id_docente FROM detalle_grados WHERE id_detallegrado = $1`, [finalIdDetalleGrado]);
+        const creatorTeacherId = dgTeacherRes.rows[0]?.id_docente || null;
+        const newActivityRes = await client.query(`INSERT INTO actividad_materia (id_competencia, id_evidencia, id_detallegrado, id_periodo, nombre, porcentaje, id_colegio, motivo_extra, justificacion_extra, id_docente_creador)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING *`, [
             finalIdCompetencia,
             finalIdEvidencia,
@@ -305,6 +336,7 @@ const createActivity = async (req, res) => {
             finalIdColegio,
             motivo_extra || null,
             justificacion_extra || null,
+            creatorTeacherId,
         ]);
         const newActivity = newActivityRes.rows[0];
         // Vincular evidencias del DBA si vienen especificadas
@@ -377,10 +409,10 @@ const updateActivity = async (req, res) => {
             const dgInfo = await client.query(`SELECT id_grupo, id_materia FROM detalle_grados WHERE id_detallegrado = $1`, [currentAct.id_detallegrado]);
             if (dgInfo.rows.length > 0) {
                 const { id_grupo, id_materia } = dgInfo.rows[0];
-                const otherPeriodAssigned = await client.query(`SELECT DISTINCT ea.id_evidencia_dba, p.nombre as periodo_nombre
+                // 1. Obtener evidencias planificadas en el periodo ACTUAL para este grado/materia
+                const currentPeriodAssigned = await client.query(`SELECT DISTINCT ea.id_evidencia_dba
            FROM evidencia_aprendizaje ea
            JOIN competencias c ON c.id_competencia = ea.id_competencia
-           JOIN periodo_academico p ON p.id_periodo = c.id_periodo
            WHERE c.id_colegio = $1
              AND c.id_materia = $2
              AND c.id_grupo IN (
@@ -389,18 +421,37 @@ const updateActivity = async (req, res) => {
                JOIN grupos g2 ON g2.id_nivel = g1.id_nivel AND g2.id_tipo_grado = g1.id_tipo_grado
                WHERE g1.id_grupo = $3 AND g1.id_colegio = $1
              )
-             AND c.id_periodo != $4
+             AND c.id_periodo = $4
              AND ea.id_evidencia_dba = ANY($5::int[])`, [currentAct.id_colegio, id_materia, id_grupo, currentAct.id_periodo, evidencias_dba]);
-                if (otherPeriodAssigned.rows.length > 0) {
-                    if (!motivo_extra || typeof motivo_extra !== "string" || !motivo_extra.trim()) {
-                        await client.query("ROLLBACK");
-                        res.status(400).json({ error: "Debes seleccionar un motivo para evaluar evidencias planificadas en otros periodos." });
-                        return;
-                    }
-                    if (motivo_extra === "OTRO" && (!justificacion_extra || typeof justificacion_extra !== "string" || !justificacion_extra.trim())) {
-                        await client.query("ROLLBACK");
-                        res.status(400).json({ error: "Debes escribir una justificación detallada para el motivo 'Otro'." });
-                        return;
+                const plannedInCurrentIds = new Set(currentPeriodAssigned.rows.map((r) => Number(r.id_evidencia_dba)));
+                const unassignedInCurrent = evidencias_dba.filter((id) => !plannedInCurrentIds.has(Number(id)));
+                // 2. Solo si hay evidencias NO planificadas en el periodo actual, verificar si fueron planificadas en OTRO periodo
+                if (unassignedInCurrent.length > 0) {
+                    const otherPeriodAssigned = await client.query(`SELECT DISTINCT ea.id_evidencia_dba, p.nombre as periodo_nombre
+             FROM evidencia_aprendizaje ea
+             JOIN competencias c ON c.id_competencia = ea.id_competencia
+             JOIN periodo_academico p ON p.id_periodo = c.id_periodo
+             WHERE c.id_colegio = $1
+               AND c.id_materia = $2
+               AND c.id_grupo IN (
+                 SELECT g2.id_grupo
+                 FROM grupos g1
+                 JOIN grupos g2 ON g2.id_nivel = g1.id_nivel AND g2.id_tipo_grado = g1.id_tipo_grado
+                 WHERE g1.id_grupo = $3 AND g1.id_colegio = $1
+               )
+               AND c.id_periodo != $4
+               AND ea.id_evidencia_dba = ANY($5::int[])`, [currentAct.id_colegio, id_materia, id_grupo, currentAct.id_periodo, unassignedInCurrent]);
+                    if (otherPeriodAssigned.rows.length > 0) {
+                        if (!motivo_extra || typeof motivo_extra !== "string" || !motivo_extra.trim()) {
+                            await client.query("ROLLBACK");
+                            res.status(400).json({ error: "Debes seleccionar un motivo para evaluar evidencias planificadas en otros periodos." });
+                            return;
+                        }
+                        if (motivo_extra === "OTRO" && (!justificacion_extra || typeof justificacion_extra !== "string" || !justificacion_extra.trim())) {
+                            await client.query("ROLLBACK");
+                            res.status(400).json({ error: "Debes escribir una justificación detallada para el motivo 'Otro'." });
+                            return;
+                        }
                     }
                 }
             }
@@ -580,6 +631,12 @@ const getGrades = async (req, res) => {
         const context = await resolveTeachingContext(gradeId, subjectId, periodId);
         if (!context) {
             res.status(404).json({ error: "No se encontró la asignación académica" });
+            return;
+        }
+        const authReq = req;
+        const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+        if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== context.idColegio) {
+            res.status(403).json({ error: "No tiene permiso para acceder a las calificaciones de este colegio." });
             return;
         }
         const grades = await db_1.pool.query(`SELECT n.*
@@ -860,16 +917,55 @@ const closePeriodForTeacher = async (req, res) => {
                 return;
             }
         }
+        // 5.1 Verificar si hay evidencias DBA planeadas para este periodo/materia que no fueron evaluadas en ninguna actividad
+        const dgInfo = await client.query(`SELECT id_grupo, id_materia FROM detalle_grados WHERE id_detallegrado = $1`, [detailGradeId]);
+        let unevaluatedEvidences = [];
+        if (dgInfo.rows.length > 0) {
+            const { id_grupo, id_materia } = dgInfo.rows[0];
+            const pendingEvRes = await client.query(`SELECT DISTINCT edba.id_evidencia_dba, d.numero_dba, edba.descripcion
+         FROM evidencia_aprendizaje ea
+         JOIN competencias c ON c.id_competencia = ea.id_competencia
+         JOIN evidencias_dba edba ON edba.id_evidencia_dba = ea.id_evidencia_dba
+         JOIN dba d ON d.id_dba = edba.id_dba
+         WHERE c.id_colegio = $1
+           AND c.id_materia = $2
+           AND c.id_grupo IN (
+             SELECT g2.id_grupo
+             FROM grupos g1
+             JOIN grupos g2 ON g2.id_nivel = g1.id_nivel AND g2.id_tipo_grado = g1.id_tipo_grado
+             WHERE g1.id_grupo = $3 AND g1.id_colegio = $1
+           )
+           AND c.id_periodo = $4
+           AND NOT EXISTS (
+             SELECT 1
+             FROM actividad_evidencia_dba aedba
+             JOIN actividad_materia am ON am.id_actividadmateria = aedba.id_actividadmateria
+             WHERE aedba.id_evidencia_dba = edba.id_evidencia_dba
+               AND am.id_detallegrado = $5
+               AND am.id_periodo = $4
+           )`, [id_colegio, id_materia, id_grupo, periodId, detailGradeId]);
+            unevaluatedEvidences = pendingEvRes.rows;
+        }
+        const { justificacion_evidencias_pendientes } = req.body;
+        if (unevaluatedEvidences.length > 0 && (!justificacion_evidencias_pendientes || typeof justificacion_evidencias_pendientes !== 'string' || !justificacion_evidencias_pendientes.trim())) {
+            res.status(422).json({
+                requires_justification: true,
+                unevaluated_evidences: unevaluatedEvidences,
+                error: `Existen ${unevaluatedEvidences.length} evidencia(s) DBA planeadas para este periodo que aún no han sido evaluadas en ninguna actividad.`
+            });
+            return;
+        }
         await client.query("BEGIN");
-        // 6. Marcar como CERRADO — ya validamos que no existe un registro CERRADO
-        // Verificamos si hay un registro ABIERTO existente
+        // 6. Marcar como CERRADO guardando la justificación si existían evidencias pendientes
         const existingRes = await client.query(`SELECT id_cierremateria FROM cierre_materia WHERE id_detallegrado = $1 AND id_periodo = $2`, [detailGradeId, periodId]);
         if (existingRes.rows.length > 0) {
-            await client.query(`UPDATE cierre_materia SET estado = 'CERRADO', fecha_cierre = NOW() WHERE id_cierremateria = $1`, [existingRes.rows[0].id_cierremateria]);
+            await client.query(`UPDATE cierre_materia 
+         SET estado = 'CERRADO', fecha_cierre = NOW(), justificacion_evidencias_pendientes = $2 
+         WHERE id_cierremateria = $1`, [existingRes.rows[0].id_cierremateria, justificacion_evidencias_pendientes || null]);
         }
         else {
-            await client.query(`INSERT INTO cierre_materia (id_detallegrado, id_periodo, estado, fecha_cierre)
-         VALUES ($1, $2, 'CERRADO', NOW())`, [detailGradeId, periodId]);
+            await client.query(`INSERT INTO cierre_materia (id_detallegrado, id_periodo, estado, fecha_cierre, justificacion_evidencias_pendientes)
+         VALUES ($1, $2, 'CERRADO', NOW(), $3)`, [detailGradeId, periodId, justificacion_evidencias_pendientes || null]);
         }
         await client.query("COMMIT");
         res.json({ message: "Periodo cerrado exitosamente para esta materia" });
@@ -994,7 +1090,12 @@ const getCourseEvidenciasDba = async (req, res) => {
        JOIN competencias c ON c.id_competencia = ea.id_competencia
        JOIN evidencias_dba edba ON edba.id_evidencia_dba = ea.id_evidencia_dba
        JOIN dba d ON d.id_dba = edba.id_dba
-       WHERE c.id_grupo = $1 AND c.id_materia = $2 AND c.id_colegio = $3 AND ea.id_evidencia_dba IS NOT NULL${planeadasFilter}
+       WHERE c.id_grupo IN (
+         SELECT g2.id_grupo
+         FROM grupos g1
+         JOIN grupos g2 ON g2.id_nivel = g1.id_nivel AND g2.id_tipo_grado = g1.id_tipo_grado
+         WHERE g1.id_grupo = $1 AND g1.id_colegio = $3
+       ) AND c.id_materia = $2 AND c.id_colegio = $3 AND ea.id_evidencia_dba IS NOT NULL${planeadasFilter}
        ORDER BY d.numero_dba, ea.orden, ea.id_evidencia`, planeadasParams);
         const planeadasIds = planeadasRes.rows.map(r => r.id_evidencia_dba);
         // 3. Obtener evidencias ya evaluadas en periodos CERRADOS (para excluirlas de extras)

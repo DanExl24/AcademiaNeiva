@@ -31,7 +31,7 @@ const forgotPassword = async (req, res) => {
         await db_1.pool.query("UPDATE password_reset_tokens SET used = true WHERE id_usuario = $1 AND used = false", [user.id_usuario]);
         await db_1.pool.query("INSERT INTO password_reset_tokens (id_usuario, token, expires_at, used) VALUES ($1, $2, $3, false)", [user.id_usuario, token, expiresAt]);
         // 4. Enviar correo con el enlace de recuperación
-        const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+        const frontendUrl = (process.env.FRONTEND_URL || process.env.CLIENT_URL || "https://academianeiva.adsoproject.dev").replace(/\/$/, "");
         const resetLink = `${frontendUrl}/reset-password/${token}`;
         const userName = `${user.nombre} ${user.apellido}`;
         await notificationService_1.NotificationService.sendPasswordResetEmail(email, userName, resetLink);

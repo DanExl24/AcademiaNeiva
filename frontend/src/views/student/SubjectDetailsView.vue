@@ -115,7 +115,7 @@ const getNotaColor = (nota: number) => {
 
           <div class="flex flex-col md:flex-row md:items-start justify-between gap-8 relative z-10">
             <div class="flex-1 space-y-4">
-              <div class="flex items-center gap-3">
+              <div class="flex items-center gap-3 flex-wrap">
                 <span class="px-4 py-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 text-[11px] font-black uppercase tracking-widest rounded-full border border-indigo-100 dark:border-indigo-900/50">
                   {{ act.porcentaje }}% de la materia
                 </span>
@@ -123,13 +123,43 @@ const getNotaColor = (nota: number) => {
                   <Calendar :size="14" />
                   Actividad de Periodo
                 </span>
+                <!-- Docente creador (si es diferente al actual) -->
+                <span
+                  v-if="act.docente_creador && act.docente_creador !== act.docente"
+                  class="flex items-center gap-1.5 text-violet-500 dark:text-violet-400 text-xs font-bold"
+                >
+                  <User :size="13" />
+                  Creado por: {{ act.docente_creador }}
+                </span>
               </div>
 
               <h2 class="text-2xl font-black text-slate-800 dark:text-white capitalize">
                 {{ act.actividad }}
               </h2>
 
-              <div class="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-3xl border border-slate-100 dark:border-slate-800/50">
+              <!-- Criterios individuales con nota por criterio -->
+              <div v-if="act.criterios && act.criterios.length > 0" class="space-y-3">
+                <p class="text-[11px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Criterios de Evaluación</p>
+                <div
+                  v-for="criterio in act.criterios"
+                  :key="criterio.id_criterio"
+                  class="flex items-center justify-between bg-slate-50 dark:bg-slate-800/50 px-5 py-4 rounded-2xl border border-slate-100 dark:border-slate-800/50"
+                >
+                  <div class="flex-1 min-w-0 mr-4">
+                    <p class="text-slate-600 dark:text-slate-300 font-medium leading-snug">{{ criterio.descripcion }}</p>
+                    <p class="text-[11px] text-slate-400 mt-0.5 font-semibold">Peso: {{ criterio.porcentaje }}%</p>
+                  </div>
+                  <div
+                    class="h-12 w-12 rounded-xl flex flex-col items-center justify-center border-2 shrink-0 text-sm font-black transition-all"
+                    :class="criterio.nota_criterio != null ? getNotaColor(criterio.nota_criterio) : 'text-slate-400 bg-slate-50 border-slate-200 dark:bg-slate-800 dark:border-slate-700'"
+                  >
+                    {{ criterio.nota_criterio != null ? criterio.nota_criterio : '—' }}
+                  </div>
+                </div>
+              </div>
+
+              <!-- Criterio único (actividades sin criterios múltiples) -->
+              <div v-else class="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-3xl border border-slate-100 dark:border-slate-800/50">
                 <p class="text-[11px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-3 block">Criterio de Evaluación</p>
                 <p class="text-slate-600 dark:text-slate-300 leading-relaxed font-medium italic">
                   "{{ act.criterio || 'No se ha registrado una descripción detallada para este criterio.' }}"
@@ -137,13 +167,14 @@ const getNotaColor = (nota: number) => {
               </div>
             </div>
 
+            <!-- Nota final de la actividad -->
             <div class="flex md:flex-col items-center justify-between md:justify-center gap-4 min-w-[140px]">
                <p class="text-[10px] font-black uppercase tracking-widest text-slate-400 md:hidden">Calificación</p>
                <div 
                 class="h-24 w-24 rounded-[2rem] flex flex-col items-center justify-center border-2 transition-all duration-500 group-hover:scale-110 shadow-lg"
-                :class="getNotaColor(act.nota)"
+                :class="act.nota != null ? getNotaColor(act.nota) : 'text-slate-300 bg-slate-50 border-slate-200 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-600'"
                >
-                 <span class="text-4xl font-black">{{ act.nota || '---' }}</span>
+                 <span class="text-4xl font-black">{{ act.nota != null ? act.nota : '---' }}</span>
                  <span class="text-[9px] font-black uppercase opacity-60 mt-1">Puntos</span>
                </div>
             </div>
@@ -159,7 +190,7 @@ const getNotaColor = (nota: number) => {
         <div class="text-center md:text-left">
           <h4 class="text-lg font-black uppercase tracking-tight mb-1">Sobre tus calificaciones</h4>
           <p class="font-medium opacity-80 leading-relaxed">
-            Cada actividad mostrada tiene un peso específico en la nota final de la materia. Si tienes dudas sobre alguna calificación o criterio, conversa con tu docente para recibir retroalimentación detallada.
+            Cada actividad tiene un peso en la nota final. Cuando una actividad tiene criterios, tu nota refleja el promedio ponderado de cada uno. Consulta con tu docente si tienes dudas.
           </p>
         </div>
       </div>

@@ -3,6 +3,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const multer_1 = require("../config/multer");
 const authMiddleware_1 = require("../middleware/authMiddleware");
+const validateDto_1 = require("../middleware/validateDto");
+const adminUser_dto_1 = require("../dtos/adminUser.dto");
 const adminGeneralController_1 = require("../controllers/adminGeneralController");
 const router = (0, express_1.Router)();
 // ─────────────────────────────────────────────────────────────
@@ -23,13 +25,14 @@ router.delete('/colegios/:id', authMiddleware_1.verifyToken, authMiddleware_1.re
 // USUARIOS (requiere Admin General)
 // ─────────────────────────────────────────────────────────────
 router.get('/usuarios', authMiddleware_1.verifyToken, authMiddleware_1.requireAdminGeneral, adminGeneralController_1.listarUsuarios);
+router.post('/usuarios', authMiddleware_1.verifyToken, authMiddleware_1.requireAdminGeneral, (0, validateDto_1.validateDto)(adminUser_dto_1.createAdminUserSchema), adminGeneralController_1.crearUsuarioByAdminGeneral);
 router.get('/usuarios/:id', authMiddleware_1.verifyToken, authMiddleware_1.requireAdminGeneral, adminGeneralController_1.detalleUsuario);
 router.patch('/usuarios/:id/estado', authMiddleware_1.verifyToken, authMiddleware_1.requireAdminGeneral, adminGeneralController_1.cambiarEstadoUsuario);
 router.post('/usuarios/:id/restablecer-password', authMiddleware_1.verifyToken, authMiddleware_1.requireAdminGeneral, adminGeneralController_1.restablecerPassword);
 router.post('/usuarios/:id/cerrar-sesion', authMiddleware_1.verifyToken, authMiddleware_1.requireAdminGeneral, adminGeneralController_1.forzarCierreSesion);
 router.post('/usuarios/:id/validar-ticket', authMiddleware_1.verifyToken, authMiddleware_1.requireAdminGeneral, adminGeneralController_1.validarTicketParaUsuario);
 router.put('/usuarios/:id/credenciales-con-ticket', authMiddleware_1.verifyToken, authMiddleware_1.requireAdminGeneral, adminGeneralController_1.modificarCredencialesConTicket);
-router.delete('/usuarios/:id', authMiddleware_1.verifyToken, authMiddleware_1.requireAdminGeneral, adminGeneralController_1.eliminarUsuario);
+router.patch('/usuarios/:id/eliminar', authMiddleware_1.verifyToken, authMiddleware_1.requireAdminGeneral, adminGeneralController_1.eliminarUsuario);
 // ─────────────────────────────────────────────────────────────
 // DIRECTIVOS (requiere Admin General)
 // ─────────────────────────────────────────────────────────────

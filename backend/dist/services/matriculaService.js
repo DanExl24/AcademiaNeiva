@@ -5,8 +5,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.MatriculaService = void 0;
 const db_1 = require("../config/db");
+const kysely_1 = require("../config/kysely");
+const kysely_2 = require("kysely");
 const notificationService_1 = require("./notificationService");
 const bcrypt_1 = __importDefault(require("bcrypt"));
+const documentValidation_1 = require("../utils/documentValidation");
 // Documentos siempre obligatorios
 const ALWAYS_REQUIRED = ['documentoPadre', 'salud', 'foto', 'reciboPublico'];
 const REQUIRED_FOR_LOWER_LEVELS = ['registroCivil', 'vacunas']; // NO aplica a SE/BA
@@ -18,6 +21,9 @@ class MatriculaService {
      */
     static async createEnrollment(data, files) {
         const { level, hasDisability, isForeigner, parentEmail, id_colegio } = data;
+        if (!parentEmail || !/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(String(parentEmail).trim())) {
+            throw new Error("El correo electrónico del acudiente no es válido.");
+        }
         // --- Validación de documentos ---
         const isHigher = level === 'SECUNDARIA' || level === 'MEDIA';
         const isPre = level === 'PREESCOLAR';
@@ -38,51 +44,78 @@ class MatriculaService {
         const client = await db_1.pool.connect();
         try {
             await client.query('BEGIN');
-            // Fetch active year for the school
-            const yearRes = await client.query(`SELECT id_anio FROM anio_lectivo WHERE id_colegio = $1 AND estado = 'ABIERTO' LIMIT 1`, [id_colegio]);
-            if (yearRes.rows.length === 0) {
-                throw new Error("El colegio seleccionado no tiene un año lectivo activo abierto.");
+            let idMatricula = 0;
+            let tokenSeguimiento = '';
+            let isExtraordinary = false;
+            if (data.token) {
+                const extraRes = await client.query(`SELECT id_matricula, token_seguimiento, id_colegio, id_anio, tipo 
+           FROM matricula WHERE token_seguimiento = $1 AND tipo = 'EXTRAORDINARIA'`, [data.token]);
+                if (extraRes.rows.length > 0) {
+                    isExtraordinary = true;
+                    idMatricula = extraRes.rows[0].id_matricula;
+                    tokenSeguimiento = extraRes.rows[0].token_seguimiento;
+                }
             }
-            const activeYearId = yearRes.rows[0].id_anio;
-            // Check if approved matriculas exist for this year
-            const approvedRes = await client.query(`SELECT COUNT(*)::int AS count 
-         FROM matricula 
-         WHERE id_colegio = $1 AND id_anio = $2 AND estado IN ('ACTIVA', 'TRASLADADA')`, [id_colegio, activeYearId]);
-            if (approvedRes.rows[0].count > 0) {
-                throw new Error("Las inscripciones para este año académico ya han finalizado.");
+            if (!isExtraordinary) {
+                // Fetch active year for the school
+                const yearRes = await client.query(`SELECT id_anio FROM anio_lectivo WHERE id_colegio = $1 AND estado = 'ABIERTO' ORDER BY id_anio DESC LIMIT 1`, [id_colegio]);
+                if (yearRes.rows.length === 0) {
+                    throw new Error("El colegio seleccionado no tiene un año lectivo activo abierto.");
+                }
+                const activeYearId = yearRes.rows[0].id_anio;
+                // Validate enrollment configuration dates and state
+                const configRes = await client.query(`SELECT fecha_inicio, fecha_cierre, habilitada 
+           FROM configuracion_inscripcion 
+           WHERE id_colegio = $1 AND id_anio = $2`, [id_colegio, activeYearId]);
+                if (configRes.rows.length === 0) {
+                    throw new Error("Las inscripciones para esta institución aún no están configuradas.");
+                }
+                const config = configRes.rows[0];
+                if (!config.habilitada) {
+                    throw new Error("Las inscripciones están deshabilitadas temporalmente por la institución.");
+                }
+                const now = new Date();
+                const start = new Date(config.fecha_inicio);
+                const end = new Date(config.fecha_cierre);
+                if (now < start) {
+                    throw new Error(`Las inscripciones aún no han comenzado. Abren el ${start.toLocaleDateString('es-CO')}.`);
+                }
+                if (now > end) {
+                    throw new Error(`Las inscripciones ya cerraron. Finalizaron el ${end.toLocaleDateString('es-CO')}.`);
+                }
+                // Note: No duplicate guard by correo_padre alone — a parent may enroll
+                // multiple children in the same academic year. The directivo reviews
+                // and approves/rejects each request individually.
+                // Insertar nueva matrícula regular
+                const matRes = await client.query(`INSERT INTO matricula 
+             (id_estudiante, id_nivel, id_grupo, id_colegio, id_anio, estado, correo_padre, tiene_discapacidad, es_extranjero)
+           VALUES (NULL, NULL, $1, $2, $3, 'PENDIENTE', $4, $5, $6)
+           RETURNING id_matricula, token_seguimiento`, [data.grade, id_colegio, activeYearId, parentEmail, hasDisability === 'true', isForeigner === 'true']);
+                idMatricula = matRes.rows[0].id_matricula;
+                tokenSeguimiento = matRes.rows[0].token_seguimiento;
             }
-            // Validate enrollment configuration dates and state
-            const configRes = await client.query(`SELECT fecha_inicio, fecha_cierre, habilitada 
-         FROM configuracion_inscripcion 
-         WHERE id_colegio = $1 AND id_anio = $2`, [id_colegio, activeYearId]);
-            if (configRes.rows.length === 0) {
-                throw new Error("Las inscripciones para esta institución aún no están configuradas.");
+            else {
+                // Actualizar la matrícula extraordinaria pre-creada con el grupo y datos del formulario
+                await client.query(`UPDATE matricula 
+           SET id_grupo = $1, tiene_discapacidad = $2, es_extranjero = $3, estado = 'PENDIENTE'
+           WHERE id_matricula = $4`, [data.grade, hasDisability === 'true' || hasDisability === true, isForeigner === 'true' || isForeigner === true, idMatricula]);
             }
-            const config = configRes.rows[0];
-            if (!config.habilitada) {
-                throw new Error("Las inscripciones están deshabilitadas temporalmente por la institución.");
-            }
-            const now = new Date();
-            const start = new Date(config.fecha_inicio);
-            const end = new Date(config.fecha_cierre);
-            if (now < start) {
-                throw new Error(`Las inscripciones aún no han comenzado. Abren el ${start.toLocaleDateString('es-CO')}.`);
-            }
-            if (now > end) {
-                throw new Error(`Las inscripciones ya cerraron. Finalizaron el ${end.toLocaleDateString('es-CO')}.`);
-            }
-            // 1. Insertar en tabla matricula original (id_estudiante es NULL)
-            const matRes = await client.query(`INSERT INTO matricula 
-           (id_estudiante, id_nivel, id_grupo, id_colegio, id_anio, estado, correo_padre, tiene_discapacidad, es_extranjero)
-         VALUES (NULL, NULL, $1, $2, $3, 'PENDIENTE', $4, $5, $6)
-         RETURNING id_matricula, token_seguimiento`, [data.grade, id_colegio, activeYearId, parentEmail, hasDisability === 'true', isForeigner === 'true']);
-            const idMatricula = matRes.rows[0].id_matricula;
-            const tokenSeguimiento = matRes.rows[0].token_seguimiento;
             // 2. Guardar documentos en tabla documento_matriculas
             for (const [key, fileArray] of Object.entries(files)) {
                 const file = fileArray[0];
-                await client.query(`INSERT INTO documento_matriculas (id_matricula, tipo_documento, url, estado, fecha, id_colegio)
-           VALUES ($1, $2, $3, 'PENDIENTE', NOW(), $4)`, [idMatricula, key, file.filename, id_colegio]);
+                const filename = file.originalname || file.filename || `${key}.pdf`;
+                await client.query(`INSERT INTO documento_matriculas 
+             (id_matricula, tipo_documento, url, estado, fecha, id_colegio, contenido, mime_type, nombre_original, tamano_bytes)
+           VALUES ($1, $2, $3, 'PENDIENTE', NOW(), $4, $5, $6, $7, $8)`, [
+                    idMatricula,
+                    key,
+                    filename,
+                    id_colegio,
+                    file.buffer || null,
+                    file.mimetype || null,
+                    file.originalname || filename,
+                    file.size || null
+                ]);
             }
             await client.query('COMMIT');
             // Enviar correo de confirmación de forma asíncrona
@@ -99,35 +132,63 @@ class MatriculaService {
             client.release();
         }
     }
-    /** MR02 – Ver matrículas filtradas por estado */
-    static async getFiltered(idColegio, estado) {
-        let query = `
-      SELECT m.*, 
-             (SELECT COUNT(*) FROM documento_matriculas WHERE id_matricula = m.id_matricula AND estado = 'PENDIENTE') > 0 as has_pending_docs
-      FROM matricula m
-      WHERE m.id_colegio = $1
-    `;
-        const params = [idColegio];
-        if (estado !== 'ALL') {
-            query += ` AND m.estado = $2`;
-            params.push(estado);
+    /** MR02 – Ver matrículas filtradas por estado y año lectivo (Kysely Type-Safe Query) */
+    static async getFiltered(idColegio, estado, yearId) {
+        let query = kysely_1.db
+            .selectFrom('matricula as m')
+            .leftJoin('estudiante as e', 'm.id_estudiante', 'e.id_estudiante')
+            .leftJoin('usuario as u', 'e.id_usuario', 'u.id_usuario')
+            .leftJoin('nivel_escolar as n', 'm.id_nivel', 'n.id_nivel')
+            .leftJoin('grupos as g', 'm.id_grupo', 'g.id_grupo')
+            .leftJoin('tipo_grado as tg', 'g.id_tipo_grado', 'tg.id_tipo_grado')
+            .leftJoin('secciones as s', 'g.id_seccion', 's.id_seccion')
+            .select([
+            'm.id_matricula',
+            'm.id_estudiante',
+            'm.id_nivel',
+            'm.id_grupo',
+            'm.id_colegio',
+            'm.id_anio',
+            'm.estado',
+            'm.tipo',
+            'm.correo_padre',
+            'm.token_seguimiento',
+            'm.es_traslado',
+            'm.fecha_creacion',
+            'e.nombre as student_nombre',
+            'e.apellido as student_apellido',
+            'u.documento as student_documento',
+            'e.motivo_estado as student_motivo_estado',
+            'n.nombre as nivel_nombre',
+            (0, kysely_2.sql) `CONCAT(tg.nombre, ' - ', s.nombre)`.as('grado_nombre'),
+            (0, kysely_2.sql) `(SELECT COUNT(*) FROM documento_matriculas WHERE id_matricula = m.id_matricula AND estado = 'PENDIENTE') > 0`.as('has_pending_docs')
+        ])
+            .where('m.id_colegio', '=', idColegio);
+        if (yearId) {
+            query = query.where('m.id_anio', '=', yearId);
         }
-        query += ` ORDER BY m.id_matricula DESC`;
-        const res = await db_1.pool.query(query, params);
-        return res.rows;
+        if (estado !== 'ALL') {
+            query = query.where('m.estado', '=', estado);
+        }
+        return await query.orderBy('m.id_matricula', 'desc').execute();
     }
-    /** MR02 – Ver todas las matrículas pendientes */
-    static async getAllPending(idColegio) {
-        const res = await db_1.pool.query(`SELECT * FROM matricula
-       WHERE id_colegio = $1 AND estado = 'PENDIENTE'
-       ORDER BY id_matricula DESC`, [idColegio]);
+    /** MR02 – Ver todas las matrículas pendientes por año lectivo */
+    static async getAllPending(idColegio, yearId) {
+        let query = `SELECT * FROM matricula WHERE id_colegio = $1 AND estado = 'PENDIENTE'`;
+        const params = [idColegio];
+        if (yearId) {
+            params.push(yearId);
+            query += ` AND id_anio = $${params.length}`;
+        }
+        query += ` ORDER BY id_matricula DESC`;
+        const res = await db_1.pool.query(query, params);
         return res.rows;
     }
     /** MR02 – Detalles de una matrícula */
     static async getDetails(idMatricula) {
         const matRes = await db_1.pool.query(`SELECT m.*, ne.nombre as grado_nivel, tg.nombre as tipo_grado, s.nombre as seccion, g.id_jornada, j.nombre as jornada,
-              e.nombre as student_firstname, e.apellido as student_lastname, e.codigo as student_code, e.documento as student_document, e.id_tipodocumento as student_id_tipodocumento,
-              pf.nombre as parent_firstname, pf.apellido as parent_lastname, pf.documento as parent_document, pf.id_tipodocumento as parent_id_tipodocumento,
+              e.nombre as student_firstname, e.apellido as student_lastname, e.codigo as student_code, u_est.documento as student_document, u_est.id_tipodocumento as student_id_tipodocumento, e.motivo_estado as student_motivo_estado,
+              pf.nombre as parent_firstname, pf.apellido as parent_lastname, u_par.documento as parent_document, u_par.id_tipodocumento as parent_id_tipodocumento,
               col.escudo_url, col.nombre as school_name,
               (g.cupos_totales - (SELECT COUNT(*) FROM matricula WHERE id_grupo = g.id_grupo AND estado IN ('ACTIVA', 'TRASLADADA'))) as cupos_restantes
        FROM matricula m
@@ -138,8 +199,13 @@ class MatriculaService {
        LEFT JOIN secciones s ON g.id_seccion = s.id_seccion
        LEFT JOIN jornada j ON g.id_jornada = j.id_jornada
        LEFT JOIN estudiante e ON e.id_estudiante = m.id_estudiante
-       LEFT JOIN detalle_padrefamilia dpf ON dpf.id_estudiante = e.id_estudiante
-       LEFT JOIN padre_familia pf ON pf.id_padrefamilia = dpf.id_padrefamilia
+       LEFT JOIN usuario u_est ON e.id_usuario = u_est.id_usuario
+       LEFT JOIN (
+         SELECT DISTINCT ON (id_estudiante) id_estudiante, id_padrefamilia
+         FROM detalle_padrefamilia
+       ) dp ON dp.id_estudiante = m.id_estudiante
+       LEFT JOIN padre_familia pf ON pf.id_padrefamilia = dp.id_padrefamilia
+       LEFT JOIN usuario u_par ON pf.id_usuario = u_par.id_usuario
        WHERE m.id_matricula = $1`, [idMatricula]);
         if (matRes.rows.length === 0)
             throw new Error('Matrícula no encontrada');
@@ -159,7 +225,41 @@ class MatriculaService {
        JOIN nivel_escolar ne ON g.id_nivel = ne.id_nivel
        WHERE g.id_colegio = $1 AND ne.nombre = $2 AND tg.nombre = $3 AND g.id_jornada = $4`, [mat.id_colegio, mat.grado_nivel, mat.tipo_grado, mat.id_jornada]);
         console.log('Found sections count:', sections.rows.length);
-        const docs = await db_1.pool.query(`SELECT * FROM documento_matriculas WHERE id_matricula = $1`, [idMatricula]);
+        const rawDocs = await db_1.pool.query(`SELECT d.id_documento, d.id_matricula, d.id_colegio, d.tipo_documento, d.url, d.estado, d.fecha, d.version, d.fecha_expedicion, d.estado_renovacion, d.mime_type, d.nombre_original, d.tamano_bytes, 
+              (SELECT prev.url FROM documento_matriculas prev 
+               JOIN matricula prev_m ON prev.id_matricula = prev_m.id_matricula
+               WHERE m.id_estudiante IS NOT NULL 
+                 AND prev_m.id_estudiante = m.id_estudiante 
+                 AND LOWER(REPLACE(prev.tipo_documento, ' ', '')) = LOWER(REPLACE(d.tipo_documento, ' ', ''))
+                 AND prev.id_matricula != d.id_matricula
+               ORDER BY prev.version DESC, prev.id_documento DESC LIMIT 1) AS url_anterior,
+              (SELECT prev.version FROM documento_matriculas prev 
+               JOIN matricula prev_m ON prev.id_matricula = prev_m.id_matricula
+               WHERE m.id_estudiante IS NOT NULL 
+                 AND prev_m.id_estudiante = m.id_estudiante 
+                 AND LOWER(REPLACE(prev.tipo_documento, ' ', '')) = LOWER(REPLACE(d.tipo_documento, ' ', ''))
+                 AND prev.id_matricula != d.id_matricula
+               ORDER BY prev.version DESC, prev.id_documento DESC LIMIT 1) AS version_anterior
+       FROM documento_matriculas d
+       LEFT JOIN matricula m ON d.id_matricula = m.id_matricula
+       WHERE d.id_matricula = $1
+       ORDER BY d.tipo_documento ASC, d.version DESC, d.id_documento DESC`, [idMatricula]);
+        // Agrupar documentos por tipo_documento: la versión superior es la activa, las anteriores van a versiones_anteriores
+        const docsGroupedMap = new Map();
+        for (const docRow of rawDocs.rows) {
+            const key = docRow.tipo_documento;
+            if (!docsGroupedMap.has(key)) {
+                docsGroupedMap.set(key, {
+                    ...docRow,
+                    versiones_anteriores: []
+                });
+            }
+            else {
+                const parentDoc = docsGroupedMap.get(key);
+                parentDoc.versiones_anteriores.push(docRow);
+            }
+        }
+        const docsWithHistory = Array.from(docsGroupedMap.values());
         // Detectar si el correo del padre ya corresponde a un usuario existente (docente/directivo)
         let existingParentUser = null;
         if (mat.correo_padre) {
@@ -192,62 +292,96 @@ class MatriculaService {
                 }
             }
         }
-        // Renovación check
+        // Renovación check — detecta todos los hijos elegibles del padre
         let renovacion = {
             is_renovacion: false,
+            parent_name: null,
+            candidates: [],
             student: null,
             error_message: null
         };
-        if ((mat.estado === 'PENDIENTE' || mat.estado === 'CORRECCION' || mat.estado === 'RECHAZADA') && !mat.id_estudiante && mat.correo_padre) {
-            const parentUserRes = await db_1.pool.query(`SELECT u.id_usuario FROM usuario u 
+        if ((mat.estado === 'PENDIENTE' || mat.estado === 'CORREGIDA' || mat.estado === 'CORRECCION' || mat.estado === 'RECHAZADA') && !mat.id_estudiante && mat.correo_padre) {
+            const parentUserRes = await db_1.pool.query(`SELECT u.id_usuario, u.nombre, u.apellido FROM usuario u 
          JOIN usuario_rol ur ON u.id_usuario = ur.id_usuario
          JOIN rol r ON ur.id_rol = r.id_rol
          WHERE u.email = $1 AND r.nombre = 'padre' LIMIT 1`, [mat.correo_padre]);
             if (parentUserRes.rows.length > 0) {
                 const idUsuarioPadre = parentUserRes.rows[0].id_usuario;
+                const parentFullName = `${parentUserRes.rows[0].nombre} ${parentUserRes.rows[0].apellido}`.trim();
                 const parentRes = await db_1.pool.query(`SELECT id_padrefamilia FROM padre_familia WHERE id_usuario = $1 LIMIT 1`, [idUsuarioPadre]);
                 if (parentRes.rows.length > 0) {
                     const idPadre = parentRes.rows[0].id_padrefamilia;
-                    const childrenRes = await db_1.pool.query(`SELECT e.*, u.email as student_email 
+                    const childrenRes = await db_1.pool.query(`SELECT e.id_estudiante, e.nombre, e.apellido, u.documento, u.id_tipodocumento,
+                    e.estado, e.codigo,
+                    tg.nombre as grado_nombre, ne.nombre as nivel_nombre,
+                    u.email as student_email 
              FROM estudiante e
              JOIN detalle_padrefamilia dp ON e.id_estudiante = dp.id_estudiante
              LEFT JOIN usuario u ON e.id_usuario = u.id_usuario
-             WHERE dp.id_padrefamilia = $1 AND e.id_colegio = $2`, [idPadre, mat.id_colegio]);
+             LEFT JOIN matricula m ON m.id_estudiante = e.id_estudiante AND m.id_colegio = e.id_colegio AND m.estado IN ('ACTIVA','TRASLADADA')
+             LEFT JOIN grupos g ON m.id_grupo = g.id_grupo
+             LEFT JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
+             LEFT JOIN nivel_escolar ne ON g.id_nivel = ne.id_nivel
+             WHERE dp.id_padrefamilia = $1 AND e.id_colegio = $2
+             ORDER BY e.apellido, e.nombre`, [idPadre, mat.id_colegio]);
                     if (childrenRes.rows.length > 0) {
                         const currentYearRes = await db_1.pool.query(`SELECT calendario FROM anio_lectivo WHERE id_anio = $1 LIMIT 1`, [mat.id_anio]);
                         if (currentYearRes.rows.length > 0) {
                             const currentYearStr = currentYearRes.rows[0].calendario;
                             const prevYearStr = String(Number(currentYearStr) - 1);
                             const prevYearRes = await db_1.pool.query(`SELECT id_anio FROM anio_lectivo WHERE id_colegio = $1 AND calendario = $2 LIMIT 1`, [mat.id_colegio, prevYearStr]);
-                            if (prevYearRes.rows.length > 0) {
-                                const prevYearId = prevYearRes.rows[0].id_anio;
-                                for (const child of childrenRes.rows) {
-                                    const prevEnrollmentRes = await db_1.pool.query(`SELECT id_matricula, estado FROM matricula 
+                            const prevYearId = prevYearRes.rows.length > 0 ? prevYearRes.rows[0].id_anio : null;
+                            // Build candidate list for EVERY child, including those not from prev year
+                            const candidates = [];
+                            for (const child of childrenRes.rows) {
+                                let prevEnrollmentStatus = null;
+                                if (prevYearId) {
+                                    const prevEnrollmentRes = await db_1.pool.query(`SELECT estado FROM matricula 
                      WHERE id_estudiante = $1 AND id_anio = $2 AND estado IN ('ACTIVA', 'TRASLADADA') LIMIT 1`, [child.id_estudiante, prevYearId]);
                                     if (prevEnrollmentRes.rows.length > 0) {
-                                        const prevEnrollment = prevEnrollmentRes.rows[0];
-                                        renovacion.is_renovacion = true;
-                                        renovacion.student = child;
-                                        const status = child.estado;
-                                        if (status === 'EXPULSADO') {
-                                            renovacion.error_message = 'El estudiante se encuentra en estado EXPULSADO y no puede realizar renovación.';
-                                        }
-                                        else if (status === 'GRADUADO') {
-                                            renovacion.error_message = 'El estudiante ya se encuentra graduado y no puede matricularse nuevamente.';
-                                        }
-                                        else if (status === 'SANCIONADO') {
-                                            renovacion.error_message = 'El estudiante se encuentra en estado SUSPENDIDO/SANCIONADO. No se puede renovar la matrícula hasta que la sanción sea levantada.';
-                                        }
-                                        else if (prevEnrollment.estado === 'TRASLADADA') {
-                                            renovacion.error_message = 'El estudiante se encuentra en estado de TRASLADO y no puede renovar matrícula en la institución de origen.';
-                                        }
-                                        else if (status !== 'ACTIVO') {
-                                            renovacion.error_message = `El estudiante se encuentra en estado ${status} (No activo).`;
-                                        }
-                                        if (!renovacion.error_message) {
-                                            break;
-                                        }
+                                        prevEnrollmentStatus = prevEnrollmentRes.rows[0].estado;
                                     }
+                                }
+                                // Determine eligibility and error reason
+                                let candidateError = null;
+                                if (child.estado === 'EXPULSADO') {
+                                    candidateError = 'Estudiante en estado EXPULSADO — no puede renovar.';
+                                }
+                                else if (child.estado === 'GRADUADO') {
+                                    candidateError = 'Estudiante graduado — no puede matricularse nuevamente.';
+                                }
+                                else if (child.estado === 'SANCIONADO') {
+                                    candidateError = 'Estudiante sancionado — la sanción debe levantarse antes de renovar.';
+                                }
+                                else if (prevEnrollmentStatus === 'TRASLADADA') {
+                                    candidateError = 'Estudiante en estado de TRASLADO — no puede renovar en la institución de origen.';
+                                }
+                                // Check for duplicate enrollment in current year
+                                const currentEnrollmentRes = await db_1.pool.query(`SELECT id_matricula FROM matricula 
+                   WHERE id_estudiante = $1 AND id_anio = $2 AND estado IN ('ACTIVA', 'TRASLADADA') LIMIT 1`, [child.id_estudiante, mat.id_anio]);
+                                if (currentEnrollmentRes.rows.length > 0) {
+                                    candidateError = `Estudiante ya tiene matrícula activa para ${currentYearStr}.`;
+                                }
+                                candidates.push({
+                                    ...child,
+                                    prev_enrollment_status: prevEnrollmentStatus,
+                                    error_message: candidateError,
+                                    eligible: !candidateError
+                                });
+                            }
+                            if (candidates.length > 0) {
+                                renovacion.is_renovacion = true;
+                                renovacion.parent_name = parentFullName;
+                                renovacion.candidates = candidates;
+                                // Backward compatibility: autoselect if exactly 1 eligible candidate
+                                const eligibles = candidates.filter(c => c.eligible);
+                                if (eligibles.length === 1) {
+                                    renovacion.student = eligibles[0];
+                                }
+                                else if (eligibles.length === 0 && candidates.length === 1) {
+                                    // Only one candidate but blocked
+                                    renovacion.student = candidates[0];
+                                    renovacion.error_message = candidates[0].error_message;
                                 }
                             }
                         }
@@ -275,7 +409,7 @@ class MatriculaService {
         return {
             ...mat,
             availableSections: sections.rows || [],
-            documentos: docs.rows || [],
+            documentos: docsWithHistory || [],
             existing_parent_user: existingParentUser,
             renovacion,
             expulsion: expulsionInfo
@@ -301,8 +435,8 @@ class MatriculaService {
         if (rejectedDocs.length === 0)
             return { success: false, message: 'No hay documentos rechazados para notificar' };
         const reason = `Los siguientes documentos presentan inconsistencias: ${rejectedDocs.map((d) => d.tipo_documento).join(', ')}. Por favor revísalos y vuelve a subirlos.`;
-        // Set to RECHAZADA so the UI shows it as "En Corrección" by parent
-        await db_1.pool.query("UPDATE matricula SET estado = 'RECHAZADA' WHERE id_matricula = $1", [idMatricula]);
+        // Set to CORRECCION according to RN-MAT-004 so the parent is notified to fix documents
+        await db_1.pool.query("UPDATE matricula SET estado = 'CORRECCION' WHERE id_matricula = $1", [idMatricula]);
         await notificationService_1.NotificationService.sendRejectionEmail(details.correo_padre, 'Padre de Familia', reason, details.token_seguimiento);
         return { success: true };
     }
@@ -310,14 +444,17 @@ class MatriculaService {
     static async getByToken(token) {
         const mat = await db_1.pool.query(`SELECT m.*, ne.nombre as grado_nivel, tg.nombre as tipo_grado, j.nombre as jornada
        FROM matricula m
-       JOIN grupos g ON m.id_grupo = g.id_grupo
+       LEFT JOIN grupos g ON m.id_grupo = g.id_grupo
        LEFT JOIN nivel_escolar ne ON g.id_nivel = ne.id_nivel
        LEFT JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
        LEFT JOIN jornada j ON g.id_jornada = j.id_jornada
        WHERE m.token_seguimiento = $1`, [token]);
         if (mat.rows.length === 0)
             throw new Error('Solicitud no encontrada');
-        const docs = await db_1.pool.query(`SELECT * FROM documento_matriculas WHERE id_matricula = $1`, [mat.rows[0].id_matricula]);
+        const docs = await db_1.pool.query(`SELECT id_documento, id_matricula, id_colegio, tipo_documento, url, estado, fecha, version, fecha_expedicion, estado_renovacion, mime_type, nombre_original, tamano_bytes
+       FROM documento_matriculas 
+       WHERE id_matricula = $1 
+       ORDER BY id_documento ASC`, [mat.rows[0].id_matricula]);
         return {
             ...mat.rows[0],
             documentos: docs.rows
@@ -339,13 +476,41 @@ class MatriculaService {
             await client.query('BEGIN');
             for (const [key, fileArray] of Object.entries(files)) {
                 const file = fileArray[0];
-                // Actualizar el documento existente y resetear estado a PENDIENTE
-                await client.query(`UPDATE documento_matriculas 
-           SET url = $1, estado = 'PENDIENTE', fecha = NOW()
-           WHERE id_matricula = $2 AND tipo_documento = $3`, [file.filename, idMatricula, key]);
+                const filename = file.originalname || file.filename || `${key}.pdf`;
+                // 1. Obtener la versión máxima actual e id_colegio para este tipo de documento
+                const currentDocRes = await client.query(`SELECT id_colegio, COALESCE(MAX(version), 0) as max_version
+           FROM documento_matriculas
+           WHERE id_matricula = $1 AND tipo_documento = $2
+           GROUP BY id_colegio`, [idMatricula, key]);
+                let schoolId = 1;
+                let nextVersion = 1;
+                if (currentDocRes.rows.length > 0) {
+                    schoolId = currentDocRes.rows[0].id_colegio;
+                    nextVersion = Number(currentDocRes.rows[0].max_version) + 1;
+                }
+                else {
+                    const matRes = await client.query('SELECT id_colegio FROM matricula WHERE id_matricula = $1', [idMatricula]);
+                    if (matRes.rows.length > 0) {
+                        schoolId = matRes.rows[0].id_colegio;
+                    }
+                }
+                // 2. Insertar la nueva versión del documento directamente en documento_matriculas
+                await client.query(`INSERT INTO documento_matriculas
+           (id_matricula, tipo_documento, url, estado, fecha, id_colegio, version, contenido, mime_type, nombre_original, tamano_bytes)
+           VALUES ($1, $2, $3, 'PENDIENTE', NOW(), $4, $5, $6, $7, $8, $9)`, [
+                    idMatricula,
+                    key,
+                    filename,
+                    schoolId,
+                    nextVersion,
+                    file.buffer || null,
+                    file.mimetype || null,
+                    file.originalname || filename,
+                    file.size || null
+                ]);
             }
-            // Set to CORRECCION so the Admin can filter these quickly
-            await client.query("UPDATE matricula SET estado = 'CORRECCION' WHERE id_matricula = $1", [idMatricula]);
+            // Actualizar la matrícula a estado CORREGIDA para que la directiva identifique claramente que se enviaron las correcciones solicitadas
+            await client.query("UPDATE matricula SET estado = 'CORREGIDA' WHERE id_matricula = $1", [idMatricula]);
             await client.query('COMMIT');
             return { success: true };
         }
@@ -359,6 +524,28 @@ class MatriculaService {
     }
     /** MR04 – Finalizar registro: crea estudiante y padre, actualiza matricula */
     static async finalizeEnrollment(idMatricula, data) {
+        // --- Backend Field Text Validations ---
+        if (!data.student || !data.student.nombre || !/^[a-zA-ZáéíóúñÁÉÍÓÚÑ\s]{2,}$/.test(data.student.nombre.trim())) {
+            throw new Error('Nombres de estudiante no válidos. Solo se permiten letras (mínimo 2).');
+        }
+        if (!data.student || !data.student.apellido || !/^[a-zA-ZáéíóúñÁÉÍÓÚÑ\s]{2,}$/.test(data.student.apellido.trim())) {
+            throw new Error('Apellidos de estudiante no válidos. Solo se permiten letras (mínimo 2).');
+        }
+        if (!data.student || !data.student.documento || !/^[a-zA-Z0-9-]{4,}$/.test(data.student.documento.trim())) {
+            throw new Error('Documento de estudiante no válido. Mínimo 4 caracteres alfanuméricos.');
+        }
+        if (!data.parent || !data.parent.nombre || !/^[a-zA-ZáéíóúñÁÉÍÓÚÑ\s]{2,}$/.test(data.parent.nombre.trim())) {
+            throw new Error('Nombres de acudiente no válidos. Solo se permiten letras (mínimo 2).');
+        }
+        if (!data.parent || !data.parent.apellido || !/^[a-zA-ZáéíóúñÁÉÍÓÚÑ\s]{2,}$/.test(data.parent.apellido.trim())) {
+            throw new Error('Apellidos de acudiente no válidos. Solo se permiten letras (mínimo 2).');
+        }
+        if (!data.parent || !data.parent.documento || !/^[a-zA-Z0-9-]{4,}$/.test(data.parent.documento.trim())) {
+            throw new Error('Documento de acudiente no válido. Mínimo 4 caracteres alfanuméricos.');
+        }
+        if ((0, documentValidation_1.normalizeDocument)(data.student.documento) === (0, documentValidation_1.normalizeDocument)(data.parent.documento)) {
+            throw new Error(`El número de documento de identidad (${data.student.documento}) no está permitido: el estudiante y el acudiente no pueden tener el mismo documento de identidad.`);
+        }
         const client = await db_1.pool.connect();
         try {
             await client.query('BEGIN');
@@ -367,9 +554,26 @@ class MatriculaService {
                 throw new Error('Matrícula no encontrada');
             const finalGradeId = data.id_grado || mat.rows[0].id_grupo;
             const { id_colegio, correo_padre, id_nivel } = mat.rows[0];
+            // --- VALIDACIÓN TRANSACTIONAL DE CUPOS CON BLOQUEO DE FILA (RN-MAT-011) ---
+            if (finalGradeId) {
+                const groupCapRes = await client.query(`SELECT g.cupos_totales,
+                  (SELECT COUNT(*) FROM matricula WHERE id_grupo = g.id_grupo AND estado IN ('ACTIVA', 'TRASLADADA') AND id_matricula != $1) as ocupados
+           FROM grupos g
+           WHERE g.id_grupo = $2
+           FOR UPDATE OF g`, [idMatricula, finalGradeId]);
+                if (groupCapRes.rows.length > 0) {
+                    const totalCupos = groupCapRes.rows[0].cupos_totales ?? 35;
+                    const ocupados = Number(groupCapRes.rows[0].ocupados);
+                    if (ocupados >= totalCupos) {
+                        throw new Error(`El salón seleccionado no posee cupos disponibles (Cupos totales: ${totalCupos}, Inscritos activos: ${ocupados}). Por favor selecciona otro grupo.`);
+                    }
+                }
+            }
             // --- CREACIÓN O ACTUALIZACIÓN DEL ESTUDIANTE ---
             let idEstudiante = mat.rows[0].id_estudiante || (data.id_estudiante ? Number(data.id_estudiante) : null);
             let studentCode;
+            // Validar unicidad global del documento del estudiante en la plataforma
+            await (0, documentValidation_1.validateDocumentUniqueness)(client, data.student.documento, "estudiante", { excludeEstudianteId: idEstudiante });
             if (idEstudiante) {
                 // Estudiante existente
                 const estRes = await client.query(`SELECT id_usuario, codigo, estado FROM estudiante WHERE id_estudiante = $1`, [idEstudiante]);
@@ -380,88 +584,112 @@ class MatriculaService {
                 }
                 studentCode = estRes.rows[0].codigo;
                 const idUsuarioEstudiante = estRes.rows[0].id_usuario;
-                // Actualizar usuario del estudiante para asegurar que esté activo y con sus nombres actualizados
-                await client.query(`UPDATE usuario SET activo = TRUE, nombre = $1, apellido = $2 WHERE id_usuario = $3`, [data.student.nombre, data.student.apellido, idUsuarioEstudiante]);
-                // Actualizar estudiante (estado a ACTIVO, id_nivel, nombre, apellido, documento, id_tipodocumento)
+                // Actualizar usuario del estudiante para asegurar que esté activo y con sus nombres y documentos actualizados
+                await client.query(`UPDATE usuario SET activo = TRUE, nombre = $1, apellido = $2, id_tipodocumento = $3, documento = $4 WHERE id_usuario = $5`, [data.student.nombre, data.student.apellido, data.student.id_tipodocumento, data.student.documento, idUsuarioEstudiante]);
+                // Actualizar estudiante (estado a ACTIVO, id_nivel, nombre, apellido)
                 await client.query(`UPDATE estudiante 
-           SET estado = 'ACTIVO', id_nivel = $1, nombre = $2, apellido = $3, documento = $4, id_tipodocumento = $5 
-           WHERE id_estudiante = $6`, [id_nivel, data.student.nombre, data.student.apellido, data.student.documento, data.student.id_tipodocumento, idEstudiante]);
+           SET estado = 'ACTIVO', id_nivel = $1, nombre = $2, apellido = $3 
+           WHERE id_estudiante = $4`, [id_nivel, data.student.nombre, data.student.apellido, idEstudiante]);
             }
             else {
                 // Estudiante nuevo
                 studentCode = 'MAT-' + Date.now();
-                // Usuario estudiante
+                // Usuario estudiante (El email es opcional y por defecto queda en NULL; el teléfono también es opcional y queda en NULL para ser agregado en "Mi Cuenta")
                 const hashedStudentPass = await bcrypt_1.default.hash(studentCode, 10);
-                const studentUserRes = await client.query(`INSERT INTO usuario (email, password, nombre, apellido, id_colegio) VALUES ($1, $2, $3, $4, $5) RETURNING id_usuario`, [studentCode, hashedStudentPass, data.student.nombre, data.student.apellido, id_colegio]);
+                const studentEmail = (data.student?.email && String(data.student.email).trim()) ? String(data.student.email).trim().toLowerCase() : null;
+                const studentUserRes = await client.query(`INSERT INTO usuario (email, password, nombre, apellido, id_colegio, id_tipodocumento, documento, telefono) VALUES ($1, $2, $3, $4, $5, $6, $7, NULL) RETURNING id_usuario`, [studentEmail, hashedStudentPass, data.student.nombre, data.student.apellido, id_colegio, data.student.id_tipodocumento, data.student.documento]);
                 const idUsuarioEstudiante = studentUserRes.rows[0].id_usuario;
                 // Rol estudiante
                 const rolEstudiante = await client.query("SELECT id_rol FROM rol WHERE nombre = 'estudiante'");
                 if (rolEstudiante.rows.length > 0) {
                     await client.query("INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2)", [idUsuarioEstudiante, rolEstudiante.rows[0].id_rol]);
                 }
-                // Registro Estudiante
-                const studentRes = await client.query(`INSERT INTO estudiante (nombre, apellido, documento, codigo, id_tipodocumento, id_nivel, id_colegio, id_usuario, estado)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'ACTIVO')
-           RETURNING id_estudiante`, [data.student.nombre, data.student.apellido, data.student.documento, studentCode, data.student.id_tipodocumento, id_nivel, id_colegio, idUsuarioEstudiante]);
+                // Registro Estudiante (sin documento ni id_tipodocumento, que quedan en usuario)
+                const studentRes = await client.query(`INSERT INTO estudiante (nombre, apellido, codigo, id_nivel, id_colegio, id_usuario, estado)
+           VALUES ($1, $2, $3, $4, $5, $6, 'ACTIVO')
+           RETURNING id_estudiante`, [data.student.nombre, data.student.apellido, studentCode, id_nivel, id_colegio, idUsuarioEstudiante]);
                 idEstudiante = studentRes.rows[0].id_estudiante;
             }
-            // --- CREACIÓN DEL PADRE DE FAMILIA ---
-            let idUsuarioPadre;
-            // PRIORIDAD 1: El frontend ya detectó un usuario existente (docente/directivo)
-            if (data.existing_parent_user_id) {
-                idUsuarioPadre = data.existing_parent_user_id;
-                console.log('Using pre-detected existing user (staff parent):', idUsuarioPadre);
+            // --- CREACIÓN / VINCULACIÓN DEL PADRE DE FAMILIA ---
+            let idPadre;
+            let idUsuarioPadre = null;
+            // 1. Buscar si ya existe una ficha de padre registrada con el número de documento proporcionado (en tabla usuario)
+            const existingParentByDoc = await client.query(`SELECT pf.id_padrefamilia, pf.id_usuario, pf.nombre, pf.apellido 
+         FROM padre_familia pf 
+         JOIN usuario u ON pf.id_usuario = u.id_usuario 
+         WHERE u.documento = $1`, [data.parent.documento]);
+            if (existingParentByDoc.rows.length > 0) {
+                // Encontrado por número de documento: Usar la ficha de padre existente
+                idPadre = existingParentByDoc.rows[0].id_padrefamilia;
+                idUsuarioPadre = existingParentByDoc.rows[0].id_usuario;
+                // Actualizar nombres/apellidos y documento en usuario si existe
+                if (idUsuarioPadre) {
+                    await client.query(`UPDATE usuario SET nombre = $1, apellido = $2, id_tipodocumento = $3, documento = $4, telefono = COALESCE($5, telefono) WHERE id_usuario = $6`, [data.parent.nombre, data.parent.apellido, data.parent.id_tipodocumento, data.parent.documento, data.parent.telefono || null, idUsuarioPadre]);
+                }
+                await client.query(`UPDATE padre_familia SET nombre = $1, apellido = $2 WHERE id_padrefamilia = $3`, [data.parent.nombre, data.parent.apellido, idPadre]);
             }
             else {
-                // PRIORIDAD 2: Buscar por documento en la tabla docente
-                const existingDocente = await client.query('SELECT id_usuario FROM docente WHERE documento = $1', [data.parent.documento]);
-                if (existingDocente.rows.length > 0) {
-                    idUsuarioPadre = existingDocente.rows[0].id_usuario;
-                    console.log('Match found by document (Docente):', idUsuarioPadre);
+                // Validar unicidad global del documento de acudiente en la plataforma
+                await (0, documentValidation_1.validateDocumentUniqueness)(client, data.parent.documento, "acudiente");
+                // 2. Si no existe por documento, verificar si el correo pertenece a un usuario en el sistema
+                const existingUserByEmail = await client.query('SELECT id_usuario FROM usuario WHERE email = $1', [correo_padre]);
+                if (existingUserByEmail.rows.length > 0) {
+                    const matchedUserId = existingUserByEmail.rows[0].id_usuario;
+                    // Verificar si este usuario ya tiene una ficha de padre asociada con otro documento distinto
+                    const existingParentByUser = await client.query(`SELECT pf.id_padrefamilia, u.documento, pf.nombre, pf.apellido 
+             FROM padre_familia pf 
+             JOIN usuario u ON pf.id_usuario = u.id_usuario 
+             WHERE pf.id_usuario = $1`, [matchedUserId]);
+                    if (existingParentByUser.rows.length > 0) {
+                        const registeredDoc = existingParentByUser.rows[0].documento;
+                        const parentName = `${existingParentByUser.rows[0].nombre} ${existingParentByUser.rows[0].apellido}`;
+                        throw new Error(`El correo '${correo_padre}' ya se encuentra registrado a nombre del acudiente '${parentName}' con documento (${registeredDoc}). No se puede modificar el documento a (${data.parent.documento}). Por favor verifica el documento ingresado o utiliza un correo distinto.`);
+                    }
+                    idUsuarioPadre = matchedUserId;
+                    // Actualizar documento en el usuario existente
+                    await client.query(`UPDATE usuario SET id_tipodocumento = $1, documento = $2, telefono = COALESCE($3, telefono) WHERE id_usuario = $4`, [data.parent.id_tipodocumento, data.parent.documento, data.parent.telefono || null, idUsuarioPadre]);
                 }
                 else {
-                    // PRIORIDAD 3: Buscar por email
-                    const existingParentUser = await client.query('SELECT id_usuario FROM usuario WHERE email = $1', [correo_padre]);
-                    if (existingParentUser.rows.length > 0) {
-                        idUsuarioPadre = existingParentUser.rows[0].id_usuario;
-                        console.log('Match found by email:', idUsuarioPadre);
-                    }
-                    else {
-                        // NUEVA CUENTA: No existe, crear usuario padre
-                        const hashedPadrePass = await bcrypt_1.default.hash('padre123', 10);
-                        const parentUserRes = await client.query(`INSERT INTO usuario (email, password, nombre, apellido, id_colegio) VALUES ($1, $2, $3, $4, $5) RETURNING id_usuario`, [correo_padre, hashedPadrePass, data.parent.nombre, data.parent.apellido, id_colegio]);
-                        idUsuarioPadre = parentUserRes.rows[0].id_usuario;
-                    }
+                    // 3. Crear nueva cuenta de usuario para el padre
+                    const hashedPadrePass = await bcrypt_1.default.hash('padre123', 10);
+                    const parentUserRes = await client.query(`INSERT INTO usuario (email, password, nombre, apellido, id_colegio, id_tipodocumento, documento, telefono) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id_usuario`, [correo_padre, hashedPadrePass, data.parent.nombre, data.parent.apellido, id_colegio, data.parent.id_tipodocumento, data.parent.documento, data.parent.telefono || null]);
+                    idUsuarioPadre = parentUserRes.rows[0].id_usuario;
                 }
-            }
-            // Asegurar que el usuario tenga el ROL PADRE (Importante: ahora aplica a todos: nuevos y existentes)
-            const rolPadre = await client.query("SELECT id_rol FROM rol WHERE nombre = 'padre'");
-            if (rolPadre.rows.length > 0) {
-                await client.query(`INSERT INTO usuario_rol (id_usuario, id_rol) 
-               VALUES ($1, $2) 
-               ON CONFLICT (id_usuario, id_rol) DO NOTHING`, [idUsuarioPadre, rolPadre.rows[0].id_rol]);
-            }
-            // Registro Padre
-            const existingParent = await client.query('SELECT id_padrefamilia FROM padre_familia WHERE documento = $1', [data.parent.documento]);
-            let idPadre;
-            if (existingParent.rows.length > 0) {
-                idPadre = existingParent.rows[0].id_padrefamilia;
-                // Actualizar si es necesario
-                await client.query(`UPDATE padre_familia SET nombre = $1, apellido = $2, id_tipodocumento = $3 WHERE id_padrefamilia = $4`, [data.parent.nombre, data.parent.apellido, data.parent.id_tipodocumento, idPadre]);
-            }
-            else {
-                const parentRes = await client.query(`INSERT INTO padre_familia (nombre, apellido, documento, id_tipodocumento, id_colegio, id_usuario)
-             VALUES ($1, $2, $3, $4, $5, $6) RETURNING id_padrefamilia`, [data.parent.nombre, data.parent.apellido, data.parent.documento, data.parent.id_tipodocumento, id_colegio, idUsuarioPadre]);
+                // Crear la ficha de padre vinculada al usuario (sin documento ni id_tipodocumento, almacenados en usuario)
+                const parentRes = await client.query(`INSERT INTO padre_familia (nombre, apellido, id_colegio, id_usuario)
+           VALUES ($1, $2, $3, $4) RETURNING id_padrefamilia`, [data.parent.nombre, data.parent.apellido, id_colegio, idUsuarioPadre]);
                 idPadre = parentRes.rows[0].id_padrefamilia;
+            }
+            // Asegurar que el usuario tenga el ROL PADRE
+            if (idUsuarioPadre) {
+                const rolPadre = await client.query("SELECT id_rol FROM rol WHERE nombre = 'padre'");
+                if (rolPadre.rows.length > 0) {
+                    await client.query(`INSERT INTO usuario_rol (id_usuario, id_rol) 
+             VALUES ($1, $2) 
+             ON CONFLICT (id_usuario, id_rol) DO NOTHING`, [idUsuarioPadre, rolPadre.rows[0].id_rol]);
+                }
             }
             // 3. Vincular Estudiante y Padre (si no están vinculados)
             const linkRes = await client.query("SELECT 1 FROM detalle_padrefamilia WHERE id_padrefamilia = $1 AND id_estudiante = $2", [idPadre, idEstudiante]);
             if (linkRes.rows.length === 0) {
                 await client.query("INSERT INTO detalle_padrefamilia (id_padrefamilia, id_estudiante, id_colegio) VALUES ($1, $2, $3)", [idPadre, idEstudiante, id_colegio]);
             }
-            // 4. Actualizar Matrícula
+            // 4. Cancelar matrículas previas en estado activo/pendiente para el mismo estudiante en este año lectivo
+            // (Previene la violación del índice único idx_matricula_estudiante_anio_colegio_activo)
+            await client.query(`UPDATE matricula 
+         SET estado = 'CANCELADA', motivo_cancelacion = 'Reemplazada por reingreso / nueva matrícula finalizada'
+         WHERE id_estudiante = $1 AND id_anio = $2 AND id_colegio = $3 AND id_matricula != $4 AND estado IN ('ACTIVA', 'PENDIENTE', 'CORREGIDA', 'CORRECCION')`, [idEstudiante, mat.rows[0].id_anio, id_colegio, idMatricula]);
+            // 5. Actualizar Matrícula actual a ACTIVA o TRASLADADA
             const finalEstado = mat.rows[0].es_traslado ? 'TRASLADADA' : 'ACTIVA';
             await client.query("UPDATE matricula SET id_estudiante = $1, id_grupo = $3, estado = $4, fecha_aprobacion = NOW() WHERE id_matricula = $2", [idEstudiante, idMatricula, finalGradeId, finalEstado]);
+            // Si la matrícula está vinculada a un ticket de soporte (ej. Reingreso), actualizar el ticket a RESUELTO
+            if (mat.rows[0].id_ticket) {
+                await client.query(`UPDATE tickets_soporte SET estado = 'RESUELTO' WHERE id_ticket = $1`, [mat.rows[0].id_ticket]);
+            }
+            // Asegurar que el estudiante quede en estado ACTIVO en el plantel
+            if (idEstudiante) {
+                await client.query(`UPDATE estudiante SET estado = 'ACTIVO', motivo_estado = NULL WHERE id_estudiante = $1`, [idEstudiante]);
+            }
             // Supervision Logging if admin_general
             const isRenovacion = !!data.id_estudiante;
             const isReingreso = mat.rows[0].tipo === 'REINGRESO';
@@ -515,19 +743,30 @@ class MatriculaService {
         const client = await db_1.pool.connect();
         try {
             await client.query('BEGIN');
-            const matRes = await client.query('SELECT correo_padre, estado FROM matricula WHERE id_matricula = $1', [idMatricula]);
+            const matRes = await client.query('SELECT id_estudiante, correo_padre, estado, id_ticket FROM matricula WHERE id_matricula = $1', [idMatricula]);
             if (matRes.rows.length === 0)
                 throw new Error('Matrícula no encontrada');
             const mat = matRes.rows[0];
-            if (mat.estado !== 'ACTIVA' && mat.estado !== 'TRASLADADA') {
-                throw new Error('Solo se pueden cancelar matrículas que estén aprobadas o trasladadas');
+            if (mat.estado === 'CANCELADA' || mat.estado === 'CULMINADA') {
+                throw new Error('La matrícula ya se encuentra cancelada o culminada');
             }
+            const targetStudentState = data.estado_estudiante === 'EXPULSADO' ? 'EXPULSADO' : 'RETIRADO';
             await client.query(`UPDATE matricula 
          SET estado = 'CANCELADA', motivo_cancelacion = $1, detalles_cancelacion = $2
-         WHERE id_matricula = $3`, [data.motivo, data.detalles, idMatricula]);
+         WHERE id_matricula = $3`, [data.motivo, data.detalles || null, idMatricula]);
+            // Si la matrícula proviene de un ticket de reingreso, actualizar el ticket a RESUELTO
+            if (mat.id_ticket) {
+                await client.query(`UPDATE tickets_soporte SET estado = 'RESUELTO' WHERE id_ticket = $1`, [mat.id_ticket]);
+            }
+            // Si el estudiante ya está creado u oficializado, actualizar su estado en la tabla estudiante
+            if (mat.id_estudiante) {
+                await client.query(`UPDATE estudiante 
+           SET estado = $1, motivo_estado = $2 
+           WHERE id_estudiante = $3`, [targetStudentState, data.motivo, mat.id_estudiante]);
+            }
             await client.query('COMMIT');
             // Notificar al padre
-            await notificationService_1.NotificationService.sendCancellationEmail(mat.correo_padre, 'Padre de Familia', data.motivo, data.detalles);
+            await notificationService_1.NotificationService.sendCancellationEmail(mat.correo_padre, 'Padre de Familia', data.motivo, data.detalles || data.motivo);
             return { success: true };
         }
         catch (e) {

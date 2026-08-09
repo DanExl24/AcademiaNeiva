@@ -3,11 +3,12 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getUserProfile = exports.updateProfilePassword = exports.updateProfileEmail = exports.verifySession = exports.getSchoolIdentity = exports.studentLogin = exports.login = void 0;
+exports.getUserProfile = exports.updateProfilePhone = exports.updateProfilePassword = exports.verifyEmailChange = exports.requestEmailChange = exports.verifySession = exports.getSchoolIdentity = exports.studentLogin = exports.login = void 0;
 const db_1 = require("../config/db");
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const crypto_1 = __importDefault(require("crypto"));
+const notificationService_1 = require("../services/notificationService");
 const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret";
 const login = async (req, res) => {
     const { email, password } = req.body;
@@ -110,7 +111,7 @@ const login = async (req, res) => {
          JOIN usuario u ON e.id_usuario = u.id_usuario
          JOIN usuario_rol ur ON u.id_usuario = ur.id_usuario
          JOIN rol r ON ur.id_rol = r.id_rol
-         WHERE e.codigo = $1
+         WHERE e.codigo = $1 OR u.documento = $1 OR LOWER(u.email) = LOWER($1)
          GROUP BY e.id_usuario, e.estado, u.email, u.nombre, u.password, u.id_colegio, u.estado`, [credential]);
             if (studentRes.rows.length === 0) {
                 res.status(401).json({ error: "Código o contraseña incorrectos" });
@@ -302,35 +303,107 @@ const verifySession = async (req, res) => {
     }
 };
 exports.verifySession = verifySession;
-const updateProfileEmail = async (req, res) => {
+const requestEmailChange = async (req, res) => {
     const user = req.user;
     const { nuevo_email } = req.body;
     if (!user) {
         res.status(401).json({ error: "No autorizado." });
         return;
     }
-    if (!nuevo_email || !nuevo_email.includes("@")) {
+    const targetEmail = (nuevo_email || '').trim().toLowerCase();
+    if (!targetEmail || !targetEmail.includes("@")) {
         res.status(400).json({ error: "Debe proporcionar un correo electrónico válido." });
         return;
     }
     try {
         const userId = Number(user.id);
-        // Verificar si el correo ya está en uso por otro usuario
-        const checkRes = await db_1.pool.query('SELECT 1 FROM usuario WHERE email = $1 AND id_usuario != $2', [nuevo_email.trim(), userId]);
-        if (checkRes.rows.length > 0) {
-            res.status(400).json({ error: "El correo electrónico ya se encuentra registrado en el sistema." });
+        // 1. Obtener datos del usuario
+        const userRes = await db_1.pool.query('SELECT email, nombre, apellido FROM usuario WHERE id_usuario = $1', [userId]);
+        if (userRes.rows.length === 0) {
+            res.status(404).json({ error: "Usuario no encontrado." });
             return;
         }
-        // Actualizar correo
-        await db_1.pool.query('UPDATE usuario SET email = $1 WHERE id_usuario = $2', [nuevo_email.trim(), userId]);
-        res.json({ message: "Correo electrónico actualizado exitosamente." });
+        const currentEmail = (userRes.rows[0].email || '').trim().toLowerCase();
+        const userName = `${userRes.rows[0].nombre} ${userRes.rows[0].apellido || ''}`.trim();
+        if (currentEmail === targetEmail) {
+            res.status(400).json({ error: "El nuevo correo electrónico es idéntico al actual." });
+            return;
+        }
+        // 2. Verificar que el nuevo correo no esté registrado por otro usuario
+        const checkRes = await db_1.pool.query('SELECT 1 FROM usuario WHERE LOWER(email) = $1 AND id_usuario != $2', [targetEmail, userId]);
+        if (checkRes.rows.length > 0) {
+            res.status(400).json({ error: "El correo electrónico ya se encuentra registrado en la plataforma por otra cuenta." });
+            return;
+        }
+        // 3. Generar código numérico de 6 dígitos aleatorio
+        const code = Math.floor(100000 + Math.random() * 900000).toString();
+        // Expiración en 15 minutos
+        const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+        // Inactivar tokens anteriores no usados de este usuario
+        await db_1.pool.query('UPDATE email_change_tokens SET used = TRUE WHERE id_usuario = $1 AND used = FALSE', [userId]);
+        // Insertar nuevo token
+        await db_1.pool.query(`INSERT INTO email_change_tokens (id_usuario, nuevo_email, codigo, expires_at)
+       VALUES ($1, $2, $3, $4)`, [userId, targetEmail, code, expiresAt]);
+        // 4. Enviar email con el código de 6 dígitos al NUEVO correo electrónico
+        await notificationService_1.NotificationService.sendEmailChangeCode(targetEmail, userName, code);
+        res.json({
+            message: `Código de verificación enviado exitosamente al correo ${targetEmail}. Por favor ingresa los 6 dígitos para confirmar el cambio.`
+        });
     }
     catch (error) {
-        console.error("Error updating profile email:", error);
-        res.status(500).json({ error: "Error al actualizar el correo electrónico." });
+        console.error("Error requesting email change:", error);
+        res.status(500).json({ error: "Error al generar la solicitud de cambio de correo." });
     }
 };
-exports.updateProfileEmail = updateProfileEmail;
+exports.requestEmailChange = requestEmailChange;
+const verifyEmailChange = async (req, res) => {
+    const user = req.user;
+    const { nuevo_email, codigo } = req.body;
+    if (!user) {
+        res.status(401).json({ error: "No autorizado." });
+        return;
+    }
+    const targetEmail = (nuevo_email || '').trim().toLowerCase();
+    const inputCode = (codigo || '').trim();
+    if (!targetEmail || !inputCode) {
+        res.status(400).json({ error: "Correo electrónico y código de verificación son requeridos." });
+        return;
+    }
+    try {
+        const userId = Number(user.id);
+        // 1. Buscar token activo matching id_usuario, nuevo_email y codigo
+        const tokenRes = await db_1.pool.query(`SELECT id, expires_at 
+       FROM email_change_tokens 
+       WHERE id_usuario = $1 
+         AND LOWER(nuevo_email) = $2 
+         AND codigo = $3 
+         AND used = FALSE 
+         AND expires_at > NOW()
+       ORDER BY created_at DESC 
+       LIMIT 1`, [userId, targetEmail, inputCode]);
+        if (tokenRes.rows.length === 0) {
+            res.status(400).json({ error: "El código de verificación es incorrecto o ha expirado. Por favor solicita uno nuevo." });
+            return;
+        }
+        const tokenId = tokenRes.rows[0].id;
+        // 2. Verificar por seguridad que el correo no se haya ocupado mientras tanto
+        const checkRes = await db_1.pool.query('SELECT 1 FROM usuario WHERE LOWER(email) = $1 AND id_usuario != $2', [targetEmail, userId]);
+        if (checkRes.rows.length > 0) {
+            res.status(400).json({ error: "El correo electrónico ya se encuentra registrado por otro usuario." });
+            return;
+        }
+        // 3. Actualizar correo en la tabla usuario
+        await db_1.pool.query('UPDATE usuario SET email = $1 WHERE id_usuario = $2', [targetEmail, userId]);
+        // 4. Marcar token como usado
+        await db_1.pool.query('UPDATE email_change_tokens SET used = TRUE WHERE id = $1', [tokenId]);
+        res.json({ message: "Correo electrónico verificado y actualizado exitosamente." });
+    }
+    catch (error) {
+        console.error("Error verifying email change:", error);
+        res.status(500).json({ error: "Error al verificar el código de cambio de correo." });
+    }
+};
+exports.verifyEmailChange = verifyEmailChange;
 const updateProfilePassword = async (req, res) => {
     const user = req.user;
     const { password_actual, nueva_password } = req.body;
@@ -368,6 +441,26 @@ const updateProfilePassword = async (req, res) => {
     }
 };
 exports.updateProfilePassword = updateProfilePassword;
+const updateProfilePhone = async (req, res) => {
+    const user = req.user;
+    const { telefono } = req.body;
+    if (!user) {
+        res.status(401).json({ error: "No autorizado." });
+        return;
+    }
+    try {
+        const userId = Number(user.id);
+        const newPhone = telefono ? String(telefono).trim() : null;
+        // Actualizar teléfono en la tabla usuario
+        await db_1.pool.query('UPDATE usuario SET telefono = $1 WHERE id_usuario = $2', [newPhone, userId]);
+        res.json({ message: "Teléfono de contacto actualizado exitosamente." });
+    }
+    catch (error) {
+        console.error("Error updating profile phone:", error);
+        res.status(500).json({ error: "Error al actualizar el teléfono." });
+    }
+};
+exports.updateProfilePhone = updateProfilePhone;
 const getUserProfile = async (req, res) => {
     const user = req.user;
     if (!user) {
@@ -375,57 +468,39 @@ const getUserProfile = async (req, res) => {
         return;
     }
     try {
-        const userId = Number(user.id);
-        // Obtener los datos básicos de la tabla usuario
-        const userRes = await db_1.pool.query(`SELECT id_usuario, nombre, apellido, email, estado, fecha_creacion
-       FROM usuario WHERE id_usuario = $1`, [userId]);
+        const userId = req.query.userId ? Number(req.query.userId) : Number(user.id);
+        // Obtener datos unificados del usuario
+        const userRes = await db_1.pool.query(`SELECT 
+         u.id_usuario, 
+         u.nombre, 
+         u.apellido, 
+         u.email, 
+         u.estado, 
+         u.fecha_creacion,
+         u.documento,
+         td_u.tipo AS tipo_documento,
+         u.telefono AS telefono
+       FROM usuario u
+       LEFT JOIN tipo_documento td_u ON u.id_tipodocumento = td_u.id_tipodocumento
+       WHERE u.id_usuario = $1`, [userId]);
         if (userRes.rows.length === 0) {
             res.status(404).json({ error: "Usuario no encontrado." });
             return;
         }
-        const basicUser = userRes.rows[0];
-        // El rol lo tomamos del token del middleware (user.role)
+        const userData = userRes.rows[0];
         const userRole = (user.role || '').toUpperCase();
-        let documento = null;
-        let tipo_documento = null;
-        // Buscar documento y tipo según el rol del usuario en su respectiva tabla
-        if (userRole === 'DOCENTE') {
-            const docRes = await db_1.pool.query(`SELECT d.documento, td.tipo AS tipo_documento 
-         FROM docente d 
-         LEFT JOIN tipo_documento td ON d.id_tipodocumento = td.id_tipodocumento 
-         WHERE d.id_usuario = $1`, [userId]);
-            if (docRes.rows.length > 0) {
-                documento = docRes.rows[0].documento;
-                tipo_documento = docRes.rows[0].tipo_documento;
-            }
-        }
-        else if (userRole === 'PADRE') {
-            const docRes = await db_1.pool.query(`SELECT p.documento, td.tipo AS tipo_documento 
-         FROM padre_familia p 
-         LEFT JOIN tipo_documento td ON p.id_tipodocumento = td.id_tipodocumento 
-         WHERE p.id_usuario = $1`, [userId]);
-            if (docRes.rows.length > 0) {
-                documento = docRes.rows[0].documento;
-                tipo_documento = docRes.rows[0].tipo_documento;
-            }
-        }
-        else if (userRole === 'ESTUDIANTE') {
-            const docRes = await db_1.pool.query(`SELECT e.documento, td.tipo AS tipo_documento 
-         FROM estudiante e 
-         LEFT JOIN tipo_documento td ON e.id_tipodocumento = td.id_tipodocumento 
-         WHERE e.id_usuario = $1`, [userId]);
-            if (docRes.rows.length > 0) {
-                documento = docRes.rows[0].documento;
-                tipo_documento = docRes.rows[0].tipo_documento;
-            }
-        }
-        // Retornamos el objeto unificado
         res.json({
             user: {
-                ...basicUser,
+                id_usuario: userData.id_usuario,
+                nombre: userData.nombre,
+                apellido: userData.apellido,
+                email: userData.email,
+                estado: userData.estado,
+                fecha_creacion: userData.fecha_creacion,
                 rol: userRole,
-                documento: documento || 'No Registrado',
-                tipo_documento: tipo_documento || 'No Registrado'
+                documento: userData.documento || 'No Registrado',
+                tipo_documento: userData.tipo_documento || 'No Registrado',
+                telefono: userData.telefono || null
             }
         });
     }

@@ -7,6 +7,11 @@ const db_1 = require("../config/db");
  */
 const validatePeriodClosed = async (req, res) => {
     const { id_periodo, id_colegio } = req.params;
+    const authReq = req;
+    const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+    if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== Number(id_colegio)) {
+        return res.status(403).json({ error: "No tiene permiso para acceder a los boletines de este colegio." });
+    }
     try {
         const periodRes = await db_1.pool.query(`SELECT estado FROM periodo_academico WHERE id_periodo = $1 AND id_colegio = $2`, [id_periodo, id_colegio]);
         if (periodRes.rows.length === 0) {
@@ -42,7 +47,7 @@ const getStudentBoletin = async (req, res) => {
         const idAnio = periodoDetails.id_anio;
         // 2. Fetch Student Info (including school calendar type)
         const studentRes = await db_1.pool.query(`
-      SELECT e.id_estudiante, e.nombre as estudiante_nombre, e.apellido as estudiante_apellido, e.documento, e.codigo,
+      SELECT e.id_estudiante, e.nombre as estudiante_nombre, e.apellido as estudiante_apellido, u.documento, e.codigo,
              e.id_colegio,
              c.nombre as colegio_nombre, c.sede, c.dane, c.escudo_url, c.colores,
              COALESCE(c.tipo_calendario, 'A') as tipo_calendario,
@@ -50,6 +55,7 @@ const getStudentBoletin = async (req, res) => {
              j.nombre as jornada_nombre,
              al.calendario
       FROM estudiante e
+      LEFT JOIN usuario u ON e.id_usuario = u.id_usuario
       JOIN colegio c ON c.id_colegio = e.id_colegio
       LEFT JOIN matricula m ON m.id_estudiante = e.id_estudiante
       LEFT JOIN grupos gr ON gr.id_grupo = m.id_grupo
@@ -64,6 +70,11 @@ const getStudentBoletin = async (req, res) => {
             return res.status(404).json({ error: 'Estudiante no encontrado' });
         }
         const studentInfo = studentRes.rows[0];
+        const authReq = req;
+        const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+        if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== Number(studentInfo.id_colegio)) {
+            return res.status(403).json({ error: "No tiene permiso para generar el boletín de este estudiante." });
+        }
         // 4. Fetch Todas las Materias y Profesores
         const materiasRes = await db_1.pool.query(`
       SELECT dg.id_materia, m.nombre as materia,

@@ -79,50 +79,67 @@ const getStudentGrades = async (req, res) => {
         const id_colegio = periodCheck.rows[0].id_colegio;
         // 2. Fetch grades using logic similar to boletin controller
         const result = await db_1.pool.query(`
-      SELECT 
+      SELECT DISTINCT ON (m.id_materia)
         m.id_materia,
         m.nombre as materia,
         d.nombre || ' ' || d.apellido as docente,
-        COALESCE(ra.promedio, calc.promedio_calculado, 0) as calificacion,
+        COALESCE(ra.promedio, calc.promedio_calculado) as calificacion,
         ev.nivel as desempeno
       FROM detalle_grados dg
       JOIN materias m ON m.id_materia = dg.id_materia
       JOIN docente d ON d.id_docente = dg.id_docente
       JOIN matricula mat ON mat.id_grupo = dg.id_grupo
-      LEFT JOIN resultado_academico ra ON ra.id_detallegrado = dg.id_detallegrado AND ra.id_periodo = $2 AND ra.id_estudiante = $1
       LEFT JOIN (
-        SELECT am.id_detallegrado, na.id_estudiante, ROUND(AVG(na.nota)::numeric, 2) as promedio_calculado
+        SELECT dg_ra.id_materia, ra_inner.promedio
+        FROM resultado_academico ra_inner
+        JOIN detalle_grados dg_ra ON dg_ra.id_detallegrado = ra_inner.id_detallegrado
+        WHERE ra_inner.id_estudiante = $1 AND ra_inner.id_periodo = $2
+        ORDER BY ra_inner.id_resultado DESC
+      ) ra ON ra.id_materia = m.id_materia
+      LEFT JOIN (
+        SELECT dg_am.id_materia, ROUND(AVG(na.nota)::numeric, 2) as promedio_calculado
         FROM notas_actividad na
         JOIN actividad_materia am ON am.id_actividadmateria = na.id_actividadmateria
+        JOIN detalle_grados dg_am ON dg_am.id_detallegrado = am.id_detallegrado
         WHERE am.id_periodo = $2 AND na.id_estudiante = $1
-        GROUP BY am.id_detallegrado, na.id_estudiante
-      ) calc ON calc.id_detallegrado = dg.id_detallegrado
+        GROUP BY dg_am.id_materia
+      ) calc ON calc.id_materia = m.id_materia
       LEFT JOIN escala_valoracion ev 
              ON ev.id_colegio = $3
-            AND COALESCE(ra.promedio, calc.promedio_calculado, 0) >= ev.valor_minimo 
-            AND COALESCE(ra.promedio, calc.promedio_calculado, 0) <= ev.valor_maximo
+            AND COALESCE(ra.promedio, calc.promedio_calculado) >= ev.valor_minimo 
+            AND COALESCE(ra.promedio, calc.promedio_calculado) <= ev.valor_maximo
       WHERE mat.id_estudiante = $1 AND mat.estado = 'ACTIVA'
-      ORDER BY m.nombre ASC
+      ORDER BY m.id_materia, dg.id_detallegrado DESC
     `, [id_estudiante, id_periodo, id_colegio]);
-        // Calculate general average
-        const grades = result.rows.map(row => ({
-            ...row,
-            calificacion: parseFloat(row.calificacion)
-        }));
-        let promedio_general = 0;
-        if (grades.length > 0) {
-            const sum = grades.reduce((acc, curr) => acc + curr.calificacion, 0);
-            promedio_general = sum / grades.length;
+        // Ordenar alfabéticamente por materia tras tomar la asignación docente más reciente
+        const sortedRows = result.rows.sort((a, b) => a.materia.localeCompare(b.materia));
+        // Calculate general average ONLY for subjects with registered grades
+        const grades = sortedRows.map(row => {
+            const hasGrade = row.calificacion !== null && row.calificacion !== undefined;
+            return {
+                ...row,
+                calificacion: hasGrade ? parseFloat(row.calificacion) : null,
+                desempeno: hasGrade ? (row.desempeno || 'SIN DEFINIR') : 'N/A'
+            };
+        });
+        const gradedList = grades.filter(g => g.calificacion !== null);
+        let promedio_general = null;
+        if (gradedList.length > 0) {
+            const sum = gradedList.reduce((acc, curr) => acc + curr.calificacion, 0);
+            promedio_general = parseFloat((sum / gradedList.length).toFixed(2));
         }
-        // Get general performance level for the overall average
-        const performanceRes = await db_1.pool.query(`
-      SELECT nivel FROM escala_valoracion 
-      WHERE id_colegio = $1 AND $2 >= valor_minimo AND $2 <= valor_maximo
-    `, [id_colegio, promedio_general]);
+        let nivel_desempeno = 'N/A';
+        if (promedio_general !== null) {
+            const performanceRes = await db_1.pool.query(`
+        SELECT nivel FROM escala_valoracion 
+        WHERE id_colegio = $1 AND $2 >= valor_minimo AND $2 <= valor_maximo
+      `, [id_colegio, promedio_general]);
+            nivel_desempeno = performanceRes.rows[0]?.nivel || 'N/A';
+        }
         res.json({
             grades,
-            promedio_general: parseFloat(promedio_general.toFixed(2)),
-            nivel_desempeno: performanceRes.rows[0]?.nivel || 'N/A'
+            promedio_general,
+            nivel_desempeno
         });
     }
     catch (error) {
@@ -146,29 +163,98 @@ const getGradeDetails = async (req, res) => {
         if (isNaN(studentIdInt) || isNaN(periodIdInt) || isNaN(materiaIdInt)) {
             return res.status(400).json({ error: 'Parámetros numéricos inválidos' });
         }
+        // 1. Obtener grupo del estudiante
+        const matRes = await db_1.pool.query(`SELECT id_grupo FROM matricula WHERE id_estudiante = $1 AND estado = 'ACTIVA' LIMIT 1`, [studentIdInt]);
+        if (matRes.rows.length === 0) {
+            return res.json([]);
+        }
+        const id_grupo = matRes.rows[0].id_grupo;
+        // 2. Obtener el docente ACTUAL asignado (para el header de la materia)
+        const docRes = await db_1.pool.query(`SELECT d.nombre || ' ' || d.apellido as docente, m.nombre as materia
+       FROM detalle_grados dg
+       JOIN docente d ON d.id_docente = dg.id_docente
+       JOIN materias m ON m.id_materia = dg.id_materia
+       WHERE dg.id_grupo = $1 AND dg.id_materia = $2
+       ORDER BY dg.id_detallegrado DESC
+       LIMIT 1`, [id_grupo, materiaIdInt]);
+        const currentTeacher = docRes.rows[0]?.docente || 'Sin docente asignado';
+        const materiaNombre = docRes.rows[0]?.materia || '';
+        // 3. Obtener actividades con el nombre del docente CREADOR de cada una
         const result = await db_1.pool.query(`
-      SELECT 
+      SELECT DISTINCT ON (am.id_actividadmateria)
+        am.id_actividadmateria,
         am.nombre as actividad,
         am.porcentaje,
         na.nota,
-        ce.descripcion as criterio,
-        am.id_actividadmateria,
-        m.nombre as materia,
-        doc.nombre || ' ' || doc.apellido as docente
+        $4::text as materia,
+        $5::text as docente,
+        CASE
+          WHEN am.id_docente_creador IS NOT NULL THEN
+            (SELECT d2.nombre || ' ' || d2.apellido FROM docente d2 WHERE d2.id_docente = am.id_docente_creador)
+          ELSE $5::text
+        END as docente_creador
       FROM actividad_materia am
       JOIN detalle_grados dg ON dg.id_detallegrado = am.id_detallegrado
-      JOIN materias m ON m.id_materia = dg.id_materia
-      JOIN docente doc ON doc.id_docente = dg.id_docente
-      JOIN matricula mat ON mat.id_grupo = dg.id_grupo
-      LEFT JOIN notas_actividad na ON na.id_actividadmateria = am.id_actividadmateria AND na.id_estudiante = mat.id_estudiante
-      LEFT JOIN criterio_evaluacion ce ON ce.id_actividadmateria = am.id_actividadmateria
-      WHERE m.id_materia = $3 
-        AND am.id_periodo = $2 
-        AND mat.id_estudiante = $1
-        AND mat.estado = 'ACTIVA'
-      ORDER BY am.nombre ASC
-    `, [studentIdInt, periodIdInt, materiaIdInt]);
-        res.json(result.rows);
+      LEFT JOIN notas_actividad na ON na.id_actividadmateria = am.id_actividadmateria AND na.id_estudiante = $1
+      WHERE dg.id_grupo = $2 
+        AND dg.id_materia = $3 
+        AND am.id_periodo = $6
+      ORDER BY am.id_actividadmateria ASC
+    `, [studentIdInt, id_grupo, materiaIdInt, materiaNombre, currentTeacher, periodIdInt]);
+        const activityIds = result.rows.map((r) => r.id_actividadmateria);
+        // 4. Obtener criterios con su nota individual por estudiante
+        let criteriosByActivity = {};
+        if (activityIds.length > 0) {
+            const critRes = await db_1.pool.query(`
+        SELECT 
+          ce.id_criterio,
+          ce.id_actividadmateria,
+          ce.descripcion,
+          ce.porcentaje,
+          nc.nota as nota_criterio
+        FROM criterio_evaluacion ce
+        LEFT JOIN nota_criterio nc 
+          ON nc.id_criterio = ce.id_criterio 
+         AND nc.id_estudiante = $1
+        WHERE ce.id_actividadmateria = ANY($2::int[])
+        ORDER BY ce.id_criterio ASC
+      `, [studentIdInt, activityIds]);
+            for (const row of critRes.rows) {
+                if (!criteriosByActivity[row.id_actividadmateria]) {
+                    criteriosByActivity[row.id_actividadmateria] = [];
+                }
+                criteriosByActivity[row.id_actividadmateria].push(row);
+            }
+        }
+        // 5. Combinar actividades con sus criterios y calcular nota final ponderada si aplica
+        const activities = result.rows.map((act) => {
+            const criterios = criteriosByActivity[act.id_actividadmateria] || [];
+            // Si tiene criterios, la nota es el promedio ponderado de las notas de criterio
+            let notaFinal = act.nota !== null && act.nota !== undefined ? parseFloat(act.nota) : null;
+            if (criterios.length > 0) {
+                const allGraded = criterios.every((c) => c.nota_criterio !== null && c.nota_criterio !== undefined);
+                if (allGraded) {
+                    const totalPeso = criterios.reduce((sum, c) => sum + parseFloat(c.porcentaje), 0);
+                    const ponderado = criterios.reduce((sum, c) => {
+                        return sum + (parseFloat(c.nota_criterio) * parseFloat(c.porcentaje));
+                    }, 0);
+                    notaFinal = totalPeso > 0 ? parseFloat((ponderado / totalPeso).toFixed(2)) : null;
+                }
+                else {
+                    notaFinal = null; // Aún no todos los criterios calificados
+                }
+            }
+            return {
+                ...act,
+                nota: notaFinal,
+                criterios,
+                // Mantener criterio como string para compatibilidad con componentes que lo usen
+                criterio: criterios.length > 0
+                    ? criterios.map((c) => c.descripcion).join(' / ')
+                    : null
+            };
+        });
+        res.json(activities);
     }
     catch (error) {
         console.error('Error fetching grade details:', error);
@@ -241,7 +327,7 @@ const getParentChildren = async (req, res) => {
     try {
         const result = await db_1.pool.query(`
       SELECT e.id_estudiante, e.nombre, e.apellido, e.codigo,
-             tg.nombre as grado, s.nombre as grupo, dpf.id_colegio, col.nombre as colegio_nombre
+             tg.nombre as grado, s.nombre as grupo, j.nombre as jornada, dpf.id_colegio, col.nombre as colegio_nombre
       FROM padre_familia pf
       JOIN detalle_padrefamilia dpf ON dpf.id_padrefamilia = pf.id_padrefamilia
       JOIN estudiante e ON e.id_estudiante = dpf.id_estudiante
@@ -250,6 +336,7 @@ const getParentChildren = async (req, res) => {
       LEFT JOIN grupos gr ON gr.id_grupo = m.id_grupo
       LEFT JOIN secciones s ON s.id_seccion = gr.id_seccion
       LEFT JOIN tipo_grado tg ON tg.id_tipo_grado = gr.id_tipo_grado
+      LEFT JOIN jornada j ON j.id_jornada = gr.id_jornada
       WHERE pf.id_usuario = $1
     `, [id_usuario]);
         res.json(result.rows);
@@ -410,27 +497,32 @@ const getParentDashboardData = async (req, res) => {
         return res.status(400).json({ error: 'ID de usuario inválido' });
     }
     try {
-        // 1. Get children basic info and current enrollment
-        const childrenRes = await db_1.pool.query(`
+        const targetYearId = req.query.yearId ? Number(req.query.yearId) : null;
+        // 1. Get children basic info and enrollment for selected year
+        const childrenQuery = `
       SELECT 
         e.id_estudiante, 
         e.nombre, 
         e.apellido, 
         e.codigo,
         tg.nombre as grado, 
-        s.nombre as grupo, 
+        s.nombre as grupo,
+        j.nombre as jornada,
         e.id_colegio,
         m.id_grupo,
         m.id_anio
       FROM padre_familia pf
       JOIN detalle_padrefamilia dpf ON dpf.id_padrefamilia = pf.id_padrefamilia
       JOIN estudiante e ON e.id_estudiante = dpf.id_estudiante
-      LEFT JOIN matricula m ON m.id_estudiante = e.id_estudiante AND m.estado = 'ACTIVA'
+      LEFT JOIN matricula m ON m.id_estudiante = e.id_estudiante ${targetYearId ? 'AND m.id_anio = $2' : ''}
       LEFT JOIN grupos gr ON gr.id_grupo = m.id_grupo
       LEFT JOIN secciones s ON s.id_seccion = gr.id_seccion
       LEFT JOIN tipo_grado tg ON tg.id_tipo_grado = gr.id_tipo_grado
+      LEFT JOIN jornada j ON j.id_jornada = gr.id_jornada
       WHERE pf.id_usuario = $1
-    `, [userId]);
+    `;
+        const childrenParams = targetYearId ? [userId, targetYearId] : [userId];
+        const childrenRes = await db_1.pool.query(childrenQuery, childrenParams);
         const children = childrenRes.rows;
         if (children.length === 0) {
             return res.json({
@@ -452,8 +544,8 @@ const getParentDashboardData = async (req, res) => {
                 periods: []
             });
         }
-        // 2. Get all available periods for the picker for the selected school
-        const allPeriodsRes = await db_1.pool.query(`
+        // 2. Get available periods for the selected year and school
+        const periodsQuery = `
       SELECT 
         pa.id_periodo, pa.nombre, pa.trimestre, pa.estado,
         (al.calendario || '-' || lpad(pa.mes_inicio::text, 2, '0') || '-' || lpad(pa.dia_inicio::text, 2, '0'))::date as fecha_inicio,
@@ -461,8 +553,11 @@ const getParentDashboardData = async (req, res) => {
       FROM periodo_academico pa
       JOIN anio_lectivo al ON al.id_anio = pa.id_anio
       WHERE pa.id_colegio = $1 AND pa.estado != 'PENDIENTE'
+      ${targetYearId ? 'AND pa.id_anio = $2' : ''}
       ORDER BY pa.trimestre ASC
-    `, [schoolId]);
+    `;
+        const periodsParams = targetYearId ? [schoolId, targetYearId] : [schoolId];
+        const allPeriodsRes = await db_1.pool.query(periodsQuery, periodsParams);
         const periods = allPeriodsRes.rows;
         // 3. Determine active period (either from query or auto-detected)
         let id_periodo = null;
@@ -495,7 +590,7 @@ const getParentDashboardData = async (req, res) => {
                 gradesRes = await db_1.pool.query(`
           SELECT 
             m.nombre as materia,
-            COALESCE(ra.promedio, calc.promedio_calculado, 0) as calificacion
+            COALESCE(ra.promedio, calc.promedio_calculado) as calificacion
           FROM detalle_grados dg
           JOIN materias m ON m.id_materia = dg.id_materia
           LEFT JOIN resultado_academico ra ON ra.id_detallegrado = dg.id_detallegrado AND ra.id_periodo = $2 AND ra.id_estudiante = $1
@@ -514,7 +609,7 @@ const getParentDashboardData = async (req, res) => {
                 gradesRes = await db_1.pool.query(`
           SELECT 
             m.nombre as materia,
-            COALESCE(calc.promedio_calculado, 0) as calificacion
+            COALESCE(calc.promedio_calculado, NULL) as calificacion
           FROM detalle_grados dg
           JOIN materias m ON m.id_materia = dg.id_materia
           LEFT JOIN (
@@ -528,9 +623,13 @@ const getParentDashboardData = async (req, res) => {
           WHERE dg.id_grupo = $3
         `, [child.id_estudiante, child.id_anio, child.id_grupo]);
             }
-            const grades = gradesRes.rows.map(r => ({ ...r, calificacion: parseFloat(r.calificacion) }));
-            const avg = grades.length > 0 ? (grades.reduce((a, b) => a + b.calificacion, 0) / grades.length) : 0;
-            const atRisk = grades.filter(g => g.calificacion < 3.0 && g.calificacion > 0);
+            const grades = gradesRes.rows.map(r => ({
+                ...r,
+                calificacion: r.calificacion !== null && r.calificacion !== undefined ? parseFloat(r.calificacion) : null
+            }));
+            const gradedList = grades.filter(g => g.calificacion !== null);
+            const avg = gradedList.length > 0 ? (gradedList.reduce((a, b) => a + b.calificacion, 0) / gradedList.length) : null;
+            const atRisk = gradedList.filter(g => g.calificacion < 3.0);
             // Attendance Filtered by Period Dates or overall academic year
             let attRes;
             if (id_periodo && activePeriod) {
@@ -590,12 +689,12 @@ const getParentDashboardData = async (req, res) => {
         ORDER BY pa.trimestre ASC
       `, [child.id_estudiante, child.id_anio]);
             // Sort to get top best and worst subjects
-            const sortedGrades = [...grades].sort((a, b) => b.calificacion - a.calificacion);
+            const sortedGrades = [...gradedList].sort((a, b) => b.calificacion - a.calificacion);
             const top_materias_mejores = sortedGrades.slice(0, 5);
             const top_materias_peores = [...sortedGrades].reverse().slice(0, 5);
             return {
                 id_estudiante: child.id_estudiante,
-                average: parseFloat(avg.toFixed(2)),
+                average: avg !== null ? parseFloat(avg.toFixed(2)) : 0,
                 atRisk: atRisk.length,
                 atRiskSubjects: atRisk.map(s => s.materia),
                 attendanceRate: Math.round(attRate),
@@ -761,7 +860,7 @@ const getStudentDashboardStats = async (req, res) => {
       SELECT 
         m.id_materia,
         m.nombre as materia,
-        COALESCE(ra.promedio, calc.promedio_calculado, 0) as calificacion
+        COALESCE(ra.promedio, calc.promedio_calculado) as calificacion
       FROM detalle_grados dg
       JOIN materias m ON m.id_materia = dg.id_materia
       LEFT JOIN resultado_academico ra ON ra.id_detallegrado = dg.id_detallegrado AND ra.id_periodo = $2 AND ra.id_estudiante = $1
@@ -778,8 +877,9 @@ const getStudentDashboardStats = async (req, res) => {
         const grades = gradesRes.rows.map(row => ({
             id_materia: row.id_materia,
             materia: row.materia,
-            calificacion: parseFloat(row.calificacion)
+            calificacion: row.calificacion !== null && row.calificacion !== undefined ? parseFloat(row.calificacion) : null
         }));
+        const gradedList = grades.filter(g => g.calificacion !== null);
         // Check if any actual grades or results exist in the database for this period and student
         const notesCountRes = await db_1.pool.query(`
       SELECT COUNT(*) as count 
@@ -797,12 +897,12 @@ const getStudentDashboardStats = async (req, res) => {
         let promedio_general = null;
         let materias_aprobadas = null;
         let materias_reprobadas = null;
-        if (has_calificaciones && grades.length > 0) {
-            const sum = grades.reduce((acc, curr) => acc + curr.calificacion, 0);
-            promedio_general = sum / grades.length;
+        if (has_calificaciones && gradedList.length > 0) {
+            const sum = gradedList.reduce((acc, curr) => acc + curr.calificacion, 0);
+            promedio_general = sum / gradedList.length;
             let aprobadas = 0;
             let reprobadas = 0;
-            grades.forEach(g => {
+            gradedList.forEach(g => {
                 if (g.calificacion >= nota_aprobacion) {
                     aprobadas++;
                 }
@@ -813,8 +913,8 @@ const getStudentDashboardStats = async (req, res) => {
             materias_aprobadas = aprobadas;
             materias_reprobadas = reprobadas;
         }
-        // Sort to get top best and worst subjects
-        const sortedGrades = [...grades].sort((a, b) => b.calificacion - a.calificacion);
+        // Sort to get top best and worst subjects (only among subjects with grades)
+        const sortedGrades = [...gradedList].sort((a, b) => b.calificacion - a.calificacion);
         const top_materias_mejores = sortedGrades.slice(0, 5);
         const top_materias_peores = [...sortedGrades].reverse().slice(0, 5);
         // 3. Attendance statistics

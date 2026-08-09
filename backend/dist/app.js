@@ -18,7 +18,11 @@ const student_routes_1 = __importDefault(require("./routes/student.routes"));
 const adminGeneral_routes_1 = __importDefault(require("./routes/adminGeneral.routes"));
 const dba_routes_1 = __importDefault(require("./routes/dba.routes"));
 const support_routes_1 = __importDefault(require("./routes/support.routes"));
+const reingreso_routes_1 = __importDefault(require("./routes/reingreso.routes"));
+const parent_routes_1 = __importDefault(require("./routes/parent.routes"));
 const app = (0, express_1.default)();
+// Confiar en el Proxy Inverso (Nginx / Cloudflare) para obtener la IP real del cliente
+app.set("trust proxy", 1);
 // Rate Limiters
 const globalLimiter = (0, express_rate_limit_1.default)({
     windowMs: 15 * 60 * 1000, // 15 minutos
@@ -45,14 +49,25 @@ app.use((0, helmet_1.default)({
             styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
             fontSrc: ["'self'", "https://fonts.gstatic.com"],
             imgSrc: ["'self'", "data:", "blob:", "http:", "https:"],
-            connectSrc: ["'self'", "http://localhost:5173", "http://localhost:3000"]
+            connectSrc: ["'self'", "http://localhost:5173", "http://localhost:3000", "https:"],
+            frameAncestors: ["'self'", "http://localhost:5173", "http://localhost:3000", "https:"]
         }
     },
-    frameguard: { action: "deny" }
+    frameguard: false
 }));
-const allowedOrigins = process.env.ALLOWED_ORIGINS
-    ? process.env.ALLOWED_ORIGINS.split(",")
-    : ["http://localhost:5173"];
+const defaultAllowedOrigins = [
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "https://academianeiva.adsoproject.dev",
+    "https://api-academianeiva.adsoproject.dev"
+];
+if (process.env.FRONTEND_URL) {
+    defaultAllowedOrigins.push(process.env.FRONTEND_URL.replace(/\/$/, ''));
+}
+const envOrigins = process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(",").map(o => o.trim())
+    : [];
+const allowedOrigins = Array.from(new Set([...defaultAllowedOrigins, ...envOrigins]));
 app.use((0, cors_1.default)({
     origin: (origin, callback) => {
         if (!origin || allowedOrigins.includes(origin)) {
@@ -64,7 +79,8 @@ app.use((0, cors_1.default)({
     },
     credentials: true
 }));
-app.use(express_1.default.json());
+app.use(express_1.default.json({ limit: '10mb' }));
+app.use(express_1.default.urlencoded({ limit: '10mb', extended: true }));
 // Apply rate limiting
 app.use(globalLimiter);
 app.use("/api/auth/login", loginLimiter);
@@ -82,6 +98,8 @@ app.use("/api/student", student_routes_1.default);
 app.use("/api/admin", adminGeneral_routes_1.default);
 app.use("/api/admin", dba_routes_1.default);
 app.use("/api/support", support_routes_1.default);
+app.use("/api/reingreso", reingreso_routes_1.default);
+app.use("/api/parents", parent_routes_1.default);
 app.get("/", (req, res) => {
     res.json({ message: "API TS funcionando segura" });
 });

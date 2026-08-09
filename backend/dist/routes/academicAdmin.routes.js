@@ -21,6 +21,7 @@ router.put("/my-school/:schoolId/identidad", academicAdminController_1.updateMyS
 router.post("/my-school/:schoolId/identidad/reset", academicAdminController_1.resetMySchoolIdentity);
 router.post("/my-school/:schoolId/identidad/upload-escudo", multer_1.upload.single("escudo"), academicAdminController_1.uploadMySchoolEscudo);
 router.get("/grades/:schoolId", academicAdminController_1.getGradeManagementData);
+router.get("/groups/:groupId/members", academicAdminController_1.getGroupMembers);
 router.post("/grade-types", academicAdminController_1.createGradeType);
 router.delete("/grade-types/:id", academicAdminController_1.deleteGradeType);
 router.post("/groups", academicAdminController_1.createGroup);
@@ -34,16 +35,21 @@ router.get("/subjects/trash/:schoolId", academicAdminController_1.getSubjectTras
 router.post("/subjects", academicAdminController_1.createSubject);
 router.delete("/subjects/:id", academicAdminController_1.deleteSubject);
 router.get("/teachers/:schoolId", academicAdminController_1.getTeacherManagementData);
+router.get("/users/lookup", academicAdminController_1.lookupUserIdentity);
 router.post("/teachers", academicAdminController_1.createTeacher);
+router.put("/teachers/:id", academicAdminController_1.updateTeacher);
+router.delete("/teachers/:id", academicAdminController_1.deleteTeacher);
 router.patch("/teachers/:id/status", academicAdminController_1.updateTeacherStatus);
 router.post("/teacher-assignments", academicAdminController_1.assignTeacherCourseSubject);
 router.delete("/teacher-assignments/:id", academicAdminController_1.deleteTeacherAssignment);
 router.post("/settings/years", academicAdminController_1.createAcademicYear);
 router.delete("/settings/years/:id", academicAdminController_1.deleteAcademicYear);
 router.patch("/settings/years/:id/status", academicAdminController_1.updateAcademicYearStatus);
+router.patch("/settings/years/:id/calendar-type", academicAdminController_1.updateAcademicYearCalendarType);
 router.put("/settings/defaults", academicAdminController_1.updateSchoolDefaultSettings);
 router.put("/settings/scales/manual", academicAdminController_1.updateManualScaleConfiguration);
 router.post("/settings/periods", academicAdminController_1.createAcademicPeriod);
+router.delete("/settings/periods/:id", academicAdminController_1.deleteAcademicPeriod);
 router.patch("/settings/periods/:id/percentage", academicAdminController_1.updateAcademicPeriodPercentage);
 router.get("/settings/closure-details/:schoolId/:periodId", academicAdminController_1.getPeriodClosureDetails);
 router.post("/settings/competencies", academicAdminController_1.upsertCompetencyByAdmin);
@@ -75,5 +81,6 @@ router.post("/matriculas/extraordinaria/:id/rechazar", academicAdminController_1
 // Reingreso
 router.post("/matriculas/reingreso", academicAdminController_1.createReingresoEnrollment);
 router.post("/matriculas/reingreso/:id/aprobar", academicAdminController_1.approveReingresoEnrollment);
+router.post("/matriculas/reingreso/:id/corregir", academicAdminController_1.correctReingresoEnrollment);
 router.post("/matriculas/reingreso/:id/rechazar", academicAdminController_1.rejectReingresoEnrollment);
 exports.default = router;

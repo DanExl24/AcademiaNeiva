@@ -1,0 +1,334 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.getReingresoGroups = exports.getReingresoCatalogs = exports.notifyNonExistentStudent = exports.sendReingresoParentLink = exports.getTicketContextForReingreso = exports.getStudentHistoryForReingreso = void 0;
+const db_1 = require("../config/db");
+const notificationService_1 = require("../services/notificationService");
+const getStudentHistoryForReingreso = async (req, res) => {
+    const authReq = req;
+    const schoolId = authReq.user?.schoolId;
+    const { idEstudiante } = req.params;
+    if (!schoolId) {
+        res.status(400).json({ error: "No se pudo identificar el colegio del usuario" });
+        return;
+    }
+    try {
+        // 1. Fetch student info
+        const studentRes = await db_1.pool.query(`SELECT e.*, u.documento, u.id_tipodocumento, td.tipo AS tipo_documento_nombre
+       FROM estudiante e
+       LEFT JOIN usuario u ON e.id_usuario = u.id_usuario
+       LEFT JOIN tipo_documento td ON u.id_tipodocumento = td.id_tipodocumento
+       WHERE e.id_estudiante = $1 AND e.id_colegio = $2`, [idEstudiante, schoolId]);
+        if (studentRes.rows.length === 0) {
+            res.status(404).json({ error: "Estudiante no encontrado en esta institución" });
+            return;
+        }
+        const student = studentRes.rows[0];
+        if (student.estado === 'EXPULSADO' || student.estado === 'GRADUADO' || student.estado === 'SANCIONADO') {
+            res.status(400).json({
+                error: `El estudiante se encuentra en estado '${student.estado}'${student.estado === 'SANCIONADO' ? ' (Sanción disciplinaria activa)' : ''} y no es elegible para reingreso hasta que la situación se resuelva.`
+            });
+            return;
+        }
+        // 2. Fetch last active/cancelled enrollment
+        const lastMatRes = await db_1.pool.query(`SELECT m.*, 
+              COALESCE(CONCAT(tg.nombre, ' - ', s.nombre), 'Grupo Asignado') AS nombre_grupo, 
+              n.nombre AS nombre_nivel, 
+              a.calendario AS anio_lectivo
+       FROM matricula m
+       LEFT JOIN grupos g ON m.id_grupo = g.id_grupo
+       LEFT JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
+       LEFT JOIN secciones s ON g.id_seccion = s.id_seccion
+       LEFT JOIN nivel_escolar n ON m.id_nivel = n.id_nivel
+       LEFT JOIN anio_lectivo a ON m.id_anio = a.id_anio
+       WHERE m.id_estudiante = $1 AND m.id_colegio = $2
+       ORDER BY m.id_matricula DESC LIMIT 1`, [idEstudiante, schoolId]);
+        const lastEnrollment = lastMatRes.rows.length > 0 ? lastMatRes.rows[0] : null;
+        // 3. Fetch latest documents for student
+        let documents = [];
+        if (lastEnrollment) {
+            const docsRes = await db_1.pool.query(`SELECT d.*
+         FROM documento_matriculas d
+         WHERE d.id_matricula = $1
+         ORDER BY d.tipo_documento, d.version DESC`, [lastEnrollment.id_matricula]);
+            documents = docsRes.rows;
+        }
+        // 4. Calculate system default suggestions for document renewal
+        const now = new Date();
+        const evaluatedDocs = documents.map(doc => {
+            let suggestedState = 'VIGENTE';
+            let motivoSugerencia = "Documento válido conservado en archivo";
+            const tipo = doc.tipo_documento.toLowerCase();
+            const docDate = doc.fecha ? new Date(doc.fecha) : null;
+            const yearsElapsed = docDate ? (now.getTime() - docDate.getTime()) / (1000 * 60 * 60 * 24 * 365.25) : 99;
+            if (tipo.includes('salud') || tipo.includes('paz') || tipo.includes('laboral')) {
+                suggestedState = 'OBLIGATORIO_ACTUALIZAR';
+                motivoSugerencia = "Debe actualizarse cada año lectivo";
+            }
+            else if (tipo.includes('foto')) {
+                if (yearsElapsed >= 2) {
+                    suggestedState = 'RECOMENDADO_ACTUALIZAR';
+                    motivoSugerencia = "Fotografía con más de 2 años de antigüedad";
+                }
+            }
+            else if (tipo.includes('identidad') || tipo.includes('documento')) {
+                if (doc.fecha_expedicion) {
+                    const expDate = new Date(doc.fecha_expedicion);
+                    if (expDate < now) {
+                        suggestedState = 'DESACTUALIZADO_POR_FECHA';
+                        motivoSugerencia = "Documento vencido o requiriendo actualización de tipo de documento";
+                    }
+                }
+            }
+            return {
+                ...doc,
+                estado_renovacion_sugerido: suggestedState,
+                motivo_sugerencia: motivoSugerencia
+            };
+        });
+        // 5. Fetch parent info
+        const parentRes = await db_1.pool.query(`SELECT pf.*, u.email
+       FROM detalle_padrefamilia dp
+       JOIN padre_familia pf ON dp.id_padrefamilia = pf.id_padrefamilia
+       JOIN usuario u ON pf.id_usuario = u.id_usuario
+       WHERE dp.id_estudiante = $1 AND dp.id_colegio = $2
+       LIMIT 1`, [idEstudiante, schoolId]);
+        const parent = parentRes.rows.length > 0 ? parentRes.rows[0] : null;
+        res.json({
+            student,
+            lastEnrollment,
+            parent,
+            documents: evaluatedDocs
+        });
+    }
+    catch (error) {
+        console.error("Error in getStudentHistoryForReingreso:", error);
+        res.status(500).json({ error: "Error interno al consultar historial del estudiante" });
+    }
+};
+exports.getStudentHistoryForReingreso = getStudentHistoryForReingreso;
+const getTicketContextForReingreso = async (req, res) => {
+    const authReq = req;
+    const schoolId = authReq.user?.schoolId;
+    const { ticketId } = req.params;
+    if (!schoolId) {
+        res.status(400).json({ error: "No se pudo identificar el colegio del directivo" });
+        return;
+    }
+    try {
+        const ticketRes = await db_1.pool.query(`SELECT * FROM tickets_soporte WHERE id_ticket = $1 AND id_colegio = $2`, [ticketId, schoolId]);
+        if (ticketRes.rows.length === 0) {
+            res.status(404).json({ error: "Ticket de soporte no encontrado" });
+            return;
+        }
+        const ticket = ticketRes.rows[0];
+        // Find linked students by parent email or user ID
+        const studentsRes = await db_1.pool.query(`SELECT DISTINCT e.*, u_e.documento, u_e.id_tipodocumento, td.tipo AS tipo_documento_nombre
+       FROM estudiante e
+       LEFT JOIN usuario u_e ON e.id_usuario = u_e.id_usuario
+       LEFT JOIN tipo_documento td ON u_e.id_tipodocumento = td.id_tipodocumento
+       LEFT JOIN detalle_padrefamilia dp ON e.id_estudiante = dp.id_estudiante
+       LEFT JOIN padre_familia pf ON dp.id_padrefamilia = pf.id_padrefamilia
+       LEFT JOIN usuario u ON pf.id_usuario = u.id_usuario
+       WHERE e.id_colegio = $1 
+         AND (e.id_estudiante = $3 OR u.email = $2 OR u.documento = $2 OR u.id_usuario = $4)
+         AND e.estado = 'RETIRADO'`, [schoolId, ticket.correo_remitente, ticket.id_estudiante || null, ticket.id_usuario || null]);
+        res.json({
+            ticket,
+            suggestedStudents: studentsRes.rows
+        });
+    }
+    catch (error) {
+        console.error("Error in getTicketContextForReingreso:", error);
+        res.status(500).json({ error: "Error al obtener contexto del ticket para reingreso" });
+    }
+};
+exports.getTicketContextForReingreso = getTicketContextForReingreso;
+const sendReingresoParentLink = async (req, res) => {
+    const authReq = req;
+    const schoolId = authReq.user?.schoolId;
+    if (!schoolId) {
+        res.status(400).json({ error: "No se pudo identificar el colegio del directivo" });
+        return;
+    }
+    const { id_estudiante, id_nivel, id_grupo, id_anio, id_ticket, document_config, correo_padre, observaciones } = req.body;
+    if (!id_estudiante || !id_nivel || !id_grupo || !id_anio || !correo_padre) {
+        res.status(400).json({ error: "Los campos id_estudiante, id_nivel, id_grupo, id_anio y correo_padre son obligatorios" });
+        return;
+    }
+    const client = await db_1.pool.connect();
+    try {
+        await client.query("BEGIN");
+        // Check student status
+        const studentRes = await client.query("SELECT estado, nombre, apellido FROM estudiante WHERE id_estudiante = $1 AND id_colegio = $2", [id_estudiante, schoolId]);
+        if (studentRes.rows.length === 0) {
+            res.status(404).json({ error: "Estudiante no encontrado en la institución" });
+            return;
+        }
+        const student = studentRes.rows[0];
+        if (student.estado === 'EXPULSADO' || student.estado === 'GRADUADO' || student.estado === 'SANCIONADO') {
+            res.status(400).json({ error: `El estudiante se encuentra en estado '${student.estado}'${student.estado === 'SANCIONADO' ? ' (Sanción disciplinaria activa)' : ''} y no es elegible para reingreso hasta que la situación se resuelva.` });
+            return;
+        }
+        // Auto-update student state to RETIRADO if currently active, to prepare for re-admission
+        if (student.estado !== 'RETIRADO') {
+            await client.query("UPDATE estudiante SET estado = 'RETIRADO', motivo_estado = 'Trámite de reingreso lectivo iniciado' WHERE id_estudiante = $1", [id_estudiante]);
+        }
+        // Check duplicate active/pending enrollment
+        const dupRes = await client.query(`SELECT id_matricula FROM matricula 
+       WHERE id_estudiante = $1 AND id_colegio = $2 AND id_anio = $3 AND estado IN ('ACTIVA', 'PENDIENTE', 'CORRECCION')`, [id_estudiante, schoolId, id_anio]);
+        if (dupRes.rows.length > 0) {
+            res.status(400).json({ error: "El estudiante ya posee un trámite de matrícula activo para este año lectivo" });
+            return;
+        }
+        // Insert matricula with PENDIENTE status and REINGRESO type
+        const matRes = await client.query(`INSERT INTO matricula 
+         (id_estudiante, id_nivel, id_grupo, id_colegio, id_anio, estado, correo_padre, tipo, observaciones, id_usuario_responsable, id_ticket, fecha_creacion)
+       VALUES ($1, $2, $3, $4, $5, 'PENDIENTE', $6, 'REINGRESO', $7, $8, $9, NOW())
+       RETURNING *`, [
+            id_estudiante,
+            id_nivel,
+            id_grupo,
+            schoolId,
+            id_anio,
+            correo_padre,
+            observaciones || 'Matrícula de reingreso autorizada por directivo',
+            authReq.user.id,
+            id_ticket || null
+        ]);
+        const newMat = matRes.rows[0];
+        // Save document configuration matrix
+        if (Array.isArray(document_config)) {
+            for (const item of document_config) {
+                await client.query(`INSERT INTO documento_matriculas 
+             (id_matricula, tipo_documento, url, estado, fecha, id_colegio, version, estado_renovacion)
+           VALUES ($1, $2, $3, $4, NOW(), $5, 1, $6)`, [
+                    newMat.id_matricula,
+                    item.tipo_documento,
+                    item.url || 'PENDIENTE',
+                    item.estado_renovacion === 'VIGENTE' ? 'VALIDADO' : 'PENDIENTE',
+                    schoolId,
+                    item.estado_renovacion || 'VIGENTE'
+                ]);
+            }
+        }
+        // Update support ticket if attached
+        if (id_ticket) {
+            await client.query(`UPDATE tickets_soporte SET estado = 'EN_PROCESO' WHERE id_ticket = $1 AND id_colegio = $2`, [id_ticket, schoolId]);
+        }
+        // Send email to parent
+        await notificationService_1.NotificationService.sendReingresoApprovalEmail(correo_padre, `${student.nombre} ${student.apellido}`, newMat.token_seguimiento);
+        await client.query("COMMIT");
+        res.json({
+            message: "Solicitud de reingreso preparada exitosamente y notificación enviada al acudiente.",
+            matricula: newMat
+        });
+    }
+    catch (error) {
+        await client.query("ROLLBACK");
+        console.error("Error in sendReingresoParentLink:", error);
+        res.status(500).json({ error: "Error en el servidor al enviar enlace de reingreso" });
+    }
+    finally {
+        client.release();
+    }
+};
+exports.sendReingresoParentLink = sendReingresoParentLink;
+const notifyNonExistentStudent = async (req, res) => {
+    const authReq = req;
+    const { id } = req.params; // ticketId
+    const { motivo } = req.body;
+    const schoolId = authReq.user?.schoolId;
+    if (!schoolId) {
+        res.status(400).json({ error: "No se pudo identificar el colegio del directivo" });
+        return;
+    }
+    const client = await db_1.pool.connect();
+    try {
+        await client.query("BEGIN");
+        const ticketRes = await client.query(`SELECT * FROM tickets_soporte WHERE id_ticket = $1 AND id_colegio = $2`, [id, schoolId]);
+        if (ticketRes.rows.length === 0) {
+            res.status(404).json({ error: "Ticket de soporte no encontrado" });
+            return;
+        }
+        const ticket = ticketRes.rows[0];
+        // Send notification email explaining that student is not found and must register as new
+        await notificationService_1.NotificationService.sendNonExistentStudentEmail(ticket.correo_remitente, ticket.nombre_remitente, motivo || 'No se encontraron antecedentes académicos del estudiante en el plantel.');
+        // Update ticket status to RESUELTO
+        await client.query(`UPDATE tickets_soporte SET estado = 'RESUELTO' WHERE id_ticket = $1`, [id]);
+        await client.query("COMMIT");
+        res.json({ message: "Notificación enviada exitosamente al usuario y ticket resuelto." });
+    }
+    catch (error) {
+        await client.query("ROLLBACK");
+        console.error("Error in notifyNonExistentStudent:", error);
+        res.status(500).json({ error: "Error al enviar notificación de estudiante no existente" });
+    }
+    finally {
+        client.release();
+    }
+};
+exports.notifyNonExistentStudent = notifyNonExistentStudent;
+const getReingresoCatalogs = async (req, res) => {
+    const authReq = req;
+    const schoolId = authReq.user?.schoolId;
+    if (!schoolId) {
+        res.status(400).json({ error: "No se pudo identificar el colegio del directivo" });
+        return;
+    }
+    try {
+        const yearsRes = await db_1.pool.query(`SELECT id_anio, calendario AS anio, estado 
+       FROM anio_lectivo 
+       WHERE id_colegio = $1 
+       ORDER BY CASE WHEN estado = 'ABIERTO' THEN 0 ELSE 1 END, id_anio DESC`, [schoolId]);
+        const levelsRes = await db_1.pool.query(`SELECT id_nivel, nombre 
+       FROM nivel_escolar 
+       WHERE id_colegio = $1 OR id_colegio IS NULL 
+       ORDER BY id_nivel`, [schoolId]);
+        res.json({
+            anios: yearsRes.rows,
+            niveles: levelsRes.rows
+        });
+    }
+    catch (error) {
+        console.error("Error in getReingresoCatalogs:", error);
+        res.status(500).json({ error: "Error al consultar catálogos para reingreso" });
+    }
+};
+exports.getReingresoCatalogs = getReingresoCatalogs;
+const getReingresoGroups = async (req, res) => {
+    const authReq = req;
+    const schoolId = authReq.user?.schoolId;
+    const { nivelId } = req.query;
+    if (!schoolId || !nivelId) {
+        res.status(400).json({ error: "Parámetros schoolId y nivelId son requeridos" });
+        return;
+    }
+    try {
+        const groupsRes = await db_1.pool.query(`SELECT g.id_grupo, 
+              g.id_tipo_grado,
+              g.id_nivel,
+              tg.nombre AS grado_nombre,
+              s.nombre AS seccion_nombre,
+              CONCAT(tg.nombre, ' - ', s.nombre) AS nombre,
+              COALESCE(g.cupos_totales, 35) AS cupos_totales,
+              COALESCE(m_cnt.cnt, 0)::int AS matriculados,
+              GREATEST(0, COALESCE(g.cupos_totales, 35) - COALESCE(m_cnt.cnt, 0)::int) AS cupos_disponibles
+       FROM grupos g
+       JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
+       JOIN secciones s ON g.id_seccion = s.id_seccion
+       LEFT JOIN (
+         SELECT id_grupo, COUNT(*)::int AS cnt 
+         FROM matricula 
+         WHERE estado IN ('ACTIVA', 'PENDIENTE') 
+         GROUP BY id_grupo
+       ) m_cnt ON g.id_grupo = m_cnt.id_grupo
+       WHERE g.id_colegio = $1 AND g.id_nivel = $2
+       ORDER BY tg.id_tipo_grado, s.nombre`, [schoolId, nivelId]);
+        res.json(groupsRes.rows);
+    }
+    catch (error) {
+        console.error("Error in getReingresoGroups:", error);
+        res.status(500).json({ error: "Error al consultar grupos para reingreso" });
+    }
+};
+exports.getReingresoGroups = getReingresoGroups;

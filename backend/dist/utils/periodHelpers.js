@@ -67,21 +67,25 @@ const ensureCurrentPeriodOrRespond = async (res, schoolId, periodId) => {
     return true;
 };
 exports.ensureCurrentPeriodOrRespond = ensureCurrentPeriodOrRespond;
-const getAllPeriodsForSchool = async (schoolId) => {
-    const currentYearRes = await db_1.pool.query(`SELECT id_anio
-     FROM anio_lectivo
-     WHERE id_colegio = $1
-     ORDER BY id_anio DESC
-     LIMIT 1`, [schoolId]);
-    if (currentYearRes.rows.length === 0) {
-        return [];
+const getAllPeriodsForSchool = async (schoolId, targetYearId) => {
+    let yearIdToUse = targetYearId;
+    if (!yearIdToUse) {
+        const currentYearRes = await db_1.pool.query(`SELECT id_anio
+       FROM anio_lectivo
+       WHERE id_colegio = $1
+       ORDER BY CASE WHEN estado = 'ABIERTO' THEN 0 ELSE 1 END, id_anio DESC
+       LIMIT 1`, [schoolId]);
+        if (currentYearRes.rows.length === 0) {
+            return [];
+        }
+        yearIdToUse = currentYearRes.rows[0].id_anio;
     }
     const periodsRes = await db_1.pool.query(`SELECT id_periodo, nombre, estado, porcentaje, id_anio, dia_inicio, dia_fin, mes_inicio, mes_fin, trimestre
      FROM periodo_academico
      WHERE id_colegio = $1
        AND id_anio = $2
-       AND estado IN ('ABIERTO', 'CERRADO')
-     ORDER BY id_periodo`, [schoolId, Number(currentYearRes.rows[0].id_anio)]);
+       AND estado != 'PENDIENTE'
+     ORDER BY id_periodo`, [schoolId, yearIdToUse]);
     return periodsRes.rows;
 };
 exports.getAllPeriodsForSchool = getAllPeriodsForSchool;

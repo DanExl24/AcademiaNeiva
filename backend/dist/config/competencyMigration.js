@@ -280,6 +280,17 @@ const ensureCompetencySchema = async () => {
             console.log("Adding 'APROBADA' to estado_matricula enum...");
             await client.query("ALTER TYPE estado_matricula ADD VALUE 'APROBADA'");
         }
+        const checkCorregidaEnum = await client.query(`
+      SELECT 1 FROM pg_type t 
+      JOIN pg_enum e ON t.oid = e.enumtypid 
+      WHERE t.typname = 'estado_matricula' AND e.enumlabel = 'CORREGIDA'
+    `);
+        if (checkCorregidaEnum.rows.length === 0) {
+            console.log("Adding 'CORREGIDA' to estado_matricula enum...");
+            await client.query("ALTER TYPE estado_matricula ADD VALUE 'CORREGIDA'");
+        }
+        // Cleanup redundant table if it was created
+        await client.query(`DROP TABLE IF EXISTS public.historial_documento_matricula CASCADE;`);
         const checkPeriodEnum = await client.query(`
       SELECT 1 FROM pg_type t 
       JOIN pg_enum e ON t.oid = e.enumtypid 
@@ -347,11 +358,77 @@ const ensureCompetencySchema = async () => {
             const instMigrationSql = fs_1.default.readFileSync(instMigrationPath, "utf8");
             await client.query(instMigrationSql);
         }
-        // Ejecutar migración de independencia de actividades (Fase 3)
-        const indMigrationPath = path_1.default.join(__dirname, "../migrations/009_dba_independencia_actividades.sql");
-        if (fs_1.default.existsSync(indMigrationPath)) {
-            const indMigrationSql = fs_1.default.readFileSync(indMigrationPath, "utf8");
-            await client.query(indMigrationSql);
+        // Ejecutar migración de reingreso y versionamiento de documentos (019)
+        const reingresoMigrationPath = path_1.default.join(__dirname, "../migrations/019_reingreso_and_document_versioning.sql");
+        if (fs_1.default.existsSync(reingresoMigrationPath)) {
+            const reingresoMigrationSql = fs_1.default.readFileSync(reingresoMigrationPath, "utf8");
+            await client.query(reingresoMigrationSql);
+        }
+        // Ejecutar migración de normalización de tipo y estado de matrícula (020 - Idempotente)
+        const normalizeMatriculaPath = path_1.default.join(__dirname, "../migrations/020_normalize_matricula_estado_and_tipo.sql");
+        if (fs_1.default.existsSync(normalizeMatriculaPath)) {
+            const normalizeMatriculaSql = fs_1.default.readFileSync(normalizeMatriculaPath, "utf8");
+            await client.query(normalizeMatriculaSql);
+        }
+        // Ejecutar migración 021 (MATRICULA_EXTRAORDINARIA en tipo_incidencia_soporte)
+        const extraMatriculaIncidenciaPath = path_1.default.join(__dirname, "../migrations/021_add_matricula_extraordinaria_to_tipo_incidencia.sql");
+        if (fs_1.default.existsSync(extraMatriculaIncidenciaPath)) {
+            const extraMatriculaIncidenciaSql = fs_1.default.readFileSync(extraMatriculaIncidenciaPath, "utf8");
+            await client.query(extraMatriculaIncidenciaSql);
+        }
+        // Ejecutar migración 022 (id_tipodocumento, documento, telefono en usuario)
+        const addUsuarioDocTelPath = path_1.default.join(__dirname, "../migrations/022_add_usuario_documento_telefono.sql");
+        if (fs_1.default.existsSync(addUsuarioDocTelPath)) {
+            const addUsuarioDocTelSql = fs_1.default.readFileSync(addUsuarioDocTelPath, "utf8");
+            await client.query(addUsuarioDocTelSql);
+        }
+        // Ejecutar migración 023 (email_change_tokens)
+        const emailChangeTokensPath = path_1.default.join(__dirname, "../migrations/023_email_change_tokens.sql");
+        if (fs_1.default.existsSync(emailChangeTokensPath)) {
+            const emailChangeTokensSql = fs_1.default.readFileSync(emailChangeTokensPath, "utf8");
+            await client.query(emailChangeTokensSql);
+        }
+        // Ejecutar migración 029 (remoción de documento e id_tipodocumento de docente, estudiante y padre_familia)
+        const removeDocFromRolesPath = path_1.default.join(__dirname, "../migrations/029_remove_documento_from_role_tables.sql");
+        if (fs_1.default.existsSync(removeDocFromRolesPath)) {
+            const removeDocFromRolesSql = fs_1.default.readFileSync(removeDocFromRolesPath, "utf8");
+            await client.query(removeDocFromRolesSql);
+        }
+        // Ejecutar migración 030 (CHECK constraint en usuario.documento)
+        const checkDocNumericPath = path_1.default.join(__dirname, "../migrations/030_add_usuario_documento_numeric_check.sql");
+        if (fs_1.default.existsSync(checkDocNumericPath)) {
+            const checkDocNumericSql = fs_1.default.readFileSync(checkDocNumericPath, "utf8");
+            await client.query(checkDocNumericSql);
+        }
+        // Ejecutar migración 031 (actualización de CHECK constraint para Pasaportes)
+        const checkDocPasaportePath = path_1.default.join(__dirname, "../migrations/031_update_documento_check_for_pasaporte.sql");
+        if (fs_1.default.existsSync(checkDocPasaportePath)) {
+            const checkDocPasaporteSql = fs_1.default.readFileSync(checkDocPasaportePath, "utf8");
+            await client.query(checkDocPasaporteSql);
+        }
+        // Ejecutar migración 032 (permitir email NULL en usuario)
+        const makeEmailNullablePath = path_1.default.join(__dirname, "../migrations/032_make_usuario_email_nullable.sql");
+        if (fs_1.default.existsSync(makeEmailNullablePath)) {
+            const makeEmailNullableSql = fs_1.default.readFileSync(makeEmailNullablePath, "utf8");
+            await client.query(makeEmailNullableSql);
+        }
+        // Ejecutar migración 033 (limpieza de asignaciones duplicadas en detalle_grados y actividades sin notas)
+        const cleanupDuplicatesPath = path_1.default.join(__dirname, "../migrations/033_cleanup_duplicate_assignments_and_activities.sql");
+        if (fs_1.default.existsSync(cleanupDuplicatesPath)) {
+            const cleanupDuplicatesSql = fs_1.default.readFileSync(cleanupDuplicatesPath, "utf8");
+            await client.query(cleanupDuplicatesSql);
+        }
+        // Ejecutar migración 034 (justificación de evidencias pendientes en cierre_materia)
+        const addJustificacionCierrePath = path_1.default.join(__dirname, "../migrations/034_add_justificacion_cierre_materia.sql");
+        if (fs_1.default.existsSync(addJustificacionCierrePath)) {
+            const addJustificacionCierreSql = fs_1.default.readFileSync(addJustificacionCierrePath, "utf8");
+            await client.query(addJustificacionCierreSql);
+        }
+        // Ejecutar migración 035 (id_docente_creador en actividad_materia para trazabilidad histórica)
+        const addDocenteCreadorPath = path_1.default.join(__dirname, "../migrations/035_add_id_docente_creador_to_actividad_materia.sql");
+        if (fs_1.default.existsSync(addDocenteCreadorPath)) {
+            const addDocenteCreadorSql = fs_1.default.readFileSync(addDocenteCreadorPath, "utf8");
+            await client.query(addDocenteCreadorSql);
         }
         // Backfill sync_uuid for existing competencies
         const unmigratedRes = await client.query(`
@@ -505,6 +582,7 @@ const ensureCompetencyForContext = async (client, context, periodId) => {
     if (existRes.rows.length > 0) {
         return existRes.rows[0];
     }
-    return (0, exports.syncCompetencyAcrossGrade)(client, context, periodId);
+    // Do not auto-create a default competency. Return null so the competencies list starts completely empty.
+    return null;
 };
 exports.ensureCompetencyForContext = ensureCompetencyForContext;

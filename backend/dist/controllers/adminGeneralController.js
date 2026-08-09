@@ -3,10 +3,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.modificarCredencialesConTicket = exports.validarTicketParaUsuario = exports.actualizarConfiguracion = exports.obtenerConfiguracion = exports.verAccionesSupervisionDirectivo = exports.listarSupervisionesColegio = exports.listarNotificacionesSistema = exports.listarAuditoriasAcciones = exports.obtenerStatsDashboard = exports.registrarAccionAuditoria = exports.exportarAuditoria = exports.historialSupervision = exports.verAccionesSupervision = exports.verificarSupervisionActiva = exports.revocarSupervision = exports.salirSupervision = exports.entrarSupervision = exports.aprobarSupervision = exports.solicitarSupervision = exports.eliminarDirectivo = exports.desvincularDirectivo = exports.actualizarDirectivo = exports.registrarDirectivo = exports.listarDirectivos = exports.eliminarUsuario = exports.forzarCierreSesion = exports.restablecerPassword = exports.cambiarEstadoUsuario = exports.detalleUsuario = exports.listarUsuarios = exports.eliminarColegio = exports.cambiarEstadoColegio = exports.uploadEscudo = exports.actualizarColegio = exports.registrarColegio = exports.detalleColegio = exports.listarColegios = void 0;
+exports.crearUsuarioByAdminGeneral = exports.modificarCredencialesConTicket = exports.validarTicketParaUsuario = exports.actualizarConfiguracion = exports.obtenerConfiguracion = exports.verAccionesSupervisionDirectivo = exports.listarSupervisionesColegio = exports.listarNotificacionesSistema = exports.listarAuditoriasAcciones = exports.obtenerStatsDashboard = exports.registrarAccionAuditoria = exports.exportarAuditoria = exports.historialSupervision = exports.verAccionesSupervision = exports.verificarSupervisionActiva = exports.revocarSupervision = exports.salirSupervision = exports.entrarSupervision = exports.aprobarSupervision = exports.solicitarSupervision = exports.eliminarDirectivo = exports.desvincularDirectivo = exports.actualizarDirectivo = exports.registrarDirectivo = exports.listarDirectivos = exports.eliminarUsuario = exports.forzarCierreSesion = exports.restablecerPassword = exports.cambiarEstadoUsuario = exports.detalleUsuario = exports.listarUsuarios = exports.eliminarColegio = exports.cambiarEstadoColegio = exports.uploadEscudo = exports.actualizarColegio = exports.registrarColegio = exports.detalleColegio = exports.listarColegios = void 0;
 const db_1 = require("../config/db");
 const adminGeneralNotificationService_1 = require("../services/adminGeneralNotificationService");
 const bcrypt_1 = __importDefault(require("bcrypt"));
+const documentValidation_1 = require("../utils/documentValidation");
 // ═══════════════════════════════════════════════════════════════════════════
 // GESTIÓN DE COLEGIOS
 // ═══════════════════════════════════════════════════════════════════════════
@@ -114,9 +115,15 @@ const registrarColegio = async (req, res) => {
             res.status(400).json({ error: 'Todos los campos son obligatorios' });
             return;
         }
+        // Verificar unicidad del DANE (RN-COL-002)
+        const daneCheck = await db_1.pool.query('SELECT 1 FROM colegio WHERE dane = $1', [String(dane).trim()]);
+        if (daneCheck.rows.length > 0) {
+            res.status(400).json({ error: `El código DANE '${dane}' ya se encuentra registrado para otra institución.` });
+            return;
+        }
         const result = await db_1.pool.query(`INSERT INTO colegio (nombre, tipo_colegio, sede, contacto, correo, dane, tipo_calendario, estado, fecha_registro, escudo_url, colores)
        VALUES ($1, $2, $3, $4, $5, $6, $7, 'PENDIENTE', NOW(), $8, $9)
-       RETURNING *`, [nombre, tipo_colegio, sede, contacto, correo, dane, tipo_calendario || 'A', escudo_url || null, colores || null]);
+       RETURNING *`, [nombre, tipo_colegio, sede, contacto, correo, String(dane).trim(), tipo_calendario || 'A', escudo_url || null, colores || null]);
         res.status(201).json(result.rows[0]);
     }
     catch (error) {
@@ -144,6 +151,14 @@ const actualizarColegio = async (req, res) => {
             res.status(400).json({ error: 'No se puede editar un colegio en estado ELIMINADO' });
             return;
         }
+        // Verificar unicidad del DANE si se está actualizando (RN-COL-002)
+        if (dane) {
+            const daneCheck = await db_1.pool.query('SELECT 1 FROM colegio WHERE dane = $1 AND id_colegio != $2', [String(dane).trim(), id]);
+            if (daneCheck.rows.length > 0) {
+                res.status(400).json({ error: `El código DANE '${dane}' ya se encuentra registrado para otra institución.` });
+                return;
+            }
+        }
         const result = await db_1.pool.query(`UPDATE colegio 
        SET nombre = COALESCE($1, nombre),
            tipo_colegio = COALESCE($2, tipo_colegio),
@@ -155,7 +170,7 @@ const actualizarColegio = async (req, res) => {
            escudo_url = COALESCE($8, escudo_url),
            colores = COALESCE($9, colores)
        WHERE id_colegio = $10
-       RETURNING *`, [nombre, tipo_colegio, sede, contacto, correo, dane, tipo_calendario, escudo_url || null, colores || null, id]);
+       RETURNING *`, [nombre, tipo_colegio, sede, contacto, correo, dane ? String(dane).trim() : null, tipo_calendario, escudo_url || null, colores || null, id]);
         res.json(result.rows[0]);
     }
     catch (error) {
@@ -174,7 +189,9 @@ const uploadEscudo = async (req, res) => {
             res.status(400).json({ error: 'No se ha subido ningún archivo' });
             return;
         }
-        const fileUrl = `/uploads/${req.file.filename}`;
+        const mimeType = req.file.mimetype || 'image/png';
+        const base64Data = req.file.buffer.toString('base64');
+        const fileUrl = `data:${mimeType};base64,${base64Data}`;
         res.json({ url: fileUrl });
     }
     catch (error) {
@@ -208,6 +225,21 @@ const cambiarEstadoColegio = async (req, res) => {
         }
         const estadoAnterior = colegioActual.rows[0].estado;
         const colegioNombre = colegioActual.rows[0].nombre;
+        // RN-COL-005: Restricción de Eliminación de Colegio si posee registros históricos activos
+        if (estado === 'ELIMINADO') {
+            const checkRecords = await client.query(`SELECT 
+           (SELECT COUNT(*)::int FROM estudiante WHERE id_colegio = $1) AS estudiantes_count,
+           (SELECT COUNT(*)::int FROM matricula WHERE id_colegio = $1) AS matriculas_count,
+           (SELECT COUNT(*)::int FROM anio_lectivo WHERE id_colegio = $1) AS anios_count`, [id]);
+            const { estudiantes_count, matriculas_count, anios_count } = checkRecords.rows[0];
+            if (estudiantes_count > 0 || matriculas_count > 0 || anios_count > 0) {
+                await client.query('ROLLBACK');
+                res.status(400).json({
+                    error: 'No se puede eliminar el colegio porque cuenta con matrículas, estudiantes o años lectivos registrados. Utilice el estado SUSPENDIDO.'
+                });
+                return;
+            }
+        }
         // Actualizar estado
         const updateFields = ['estado = $1', 'fecha_cambio_estado = NOW()'];
         const updateParams = [estado];
@@ -330,23 +362,17 @@ const detalleUsuario = async (req, res) => {
     try {
         const { id } = req.params;
         const result = await db_1.pool.query(`SELECT u.id_usuario, u.email, u.nombre, u.apellido, u.estado, u.id_colegio,
-              u.fecha_creacion, u.motivo_baneo, u.fecha_baneo, u.activo,
+              u.fecha_creacion, u.motivo_baneo, u.fecha_baneo, u.activo, u.documento, u.telefono, u.id_tipodocumento,
               c.nombre AS colegio_nombre,
-              array_agg(DISTINCT r.nombre) AS roles,
-              COALESCE(d.documento, pf.documento, e.documento) AS documento,
-              COALESCE(td_d.tipo, td_pf.tipo, td_e.tipo) AS tipo_documento
+              td.tipo AS tipo_documento,
+              array_agg(DISTINCT r.nombre) AS roles
        FROM usuario u
        LEFT JOIN colegio c ON c.id_colegio = u.id_colegio
        LEFT JOIN usuario_rol ur ON ur.id_usuario = u.id_usuario
        LEFT JOIN rol r ON r.id_rol = ur.id_rol
-       LEFT JOIN public.docente d ON d.id_usuario = u.id_usuario
-       LEFT JOIN public.tipo_documento td_d ON td_d.id_tipodocumento = d.id_tipodocumento
-       LEFT JOIN public.padre_familia pf ON pf.id_usuario = u.id_usuario
-       LEFT JOIN public.tipo_documento td_pf ON td_pf.id_tipodocumento = pf.id_tipodocumento
-       LEFT JOIN public.estudiante e ON e.id_usuario = u.id_usuario
-       LEFT JOIN public.tipo_documento td_e ON td_e.id_tipodocumento = e.id_tipodocumento
+       LEFT JOIN tipo_documento td ON td.id_tipodocumento = u.id_tipodocumento
        WHERE u.id_usuario = $1
-       GROUP BY u.id_usuario, c.nombre, d.documento, td_d.tipo, pf.documento, td_pf.tipo, e.documento, td_e.tipo`, [id]);
+       GROUP BY u.id_usuario, c.nombre, td.tipo`, [id]);
         if (result.rows.length === 0) {
             res.status(404).json({ error: 'Usuario no encontrado' });
             return;
@@ -373,8 +399,16 @@ const cambiarEstadoUsuario = async (req, res) => {
             res.status(400).json({ error: `Estado inválido. Valores permitidos: ${estadosValidos.join(', ')}` });
             return;
         }
+        // Prevenir que el Admin General suspenda, banee o elimine su propia cuenta
+        if (req.user && Number(req.user.id) === Number(id) && estado !== 'ACTIVO') {
+            res.status(400).json({ error: 'No puedes suspender, banear ni eliminar tu propia cuenta de Administrador General.' });
+            return;
+        }
         const updateFields = ['estado = $1', 'activo = $2'];
         const params = [estado, estado === 'ACTIVO'];
+        if (estado !== 'ACTIVO') {
+            updateFields.push('logged_out_at = NOW()');
+        }
         if (estado === 'BANEADO') {
             updateFields.push(`motivo_baneo = $${params.length + 1}`);
             params.push(motivo || null);
@@ -451,12 +485,208 @@ const forzarCierreSesion = async (req, res) => {
 };
 exports.forzarCierreSesion = forzarCierreSesion;
 /**
- * DELETE /admin/usuarios/:id
- * Eliminar un usuario (soft-delete: cambiar estado a ELIMINADO).
+ * PATCH /admin/usuarios/:id/eliminar
+ * Soft-delete controlado de un usuario.
+ *
+ * Reglas:
+ *  1. El Admin General DEBE tener una sesión de supervisión activa (req.user.supervisionId).
+ *  2. Se DEBE proveer un codigo_ticket cuyo remitente sea un Directivo del mismo colegio que el usuario afectado.
+ *  3. Si el usuario es ESTUDIANTE y tiene matrícula ACTIVA → se cancela con motivo registrado.
+ *  4. Si el usuario es DOCENTE → se registra observación en el ticket.
+ *  5. Se registra snapshot completo en auditoria_acciones_realizadas usando la sesión activa.
+ *  6. Se añade observación automática al ticket de soporte.
  */
 const eliminarUsuario = async (req, res) => {
-    req.body = { estado: 'ELIMINADO' };
-    return (0, exports.cambiarEstadoUsuario)(req, res);
+    const { id } = req.params;
+    const { codigo_ticket, motivo } = req.body;
+    // 1. Validar que el admin tiene sesión de supervisión activa
+    const supervisionId = req.user?.supervisionId;
+    if (!supervisionId) {
+        res.status(403).json({
+            error: 'Operación no permitida: debe tener una sesión de supervisión activa aprobada por el Directivo del colegio antes de realizar esta acción.'
+        });
+        return;
+    }
+    // 2. Validar que se proveyó un código de ticket
+    if (!codigo_ticket || !String(codigo_ticket).trim()) {
+        res.status(400).json({
+            error: 'Se requiere el código de ticket de soporte del Directivo del colegio para autorizar esta operación.'
+        });
+        return;
+    }
+    // 3. Prevenir que el Admin General se auto-elimine
+    if (req.user && Number(req.user.id) === Number(id)) {
+        res.status(400).json({ error: 'No puedes eliminar tu propia cuenta de Administrador General.' });
+        return;
+    }
+    const client = await db_1.pool.connect();
+    try {
+        await client.query('BEGIN');
+        // 4. Obtener datos completos del usuario a eliminar
+        const userRes = await client.query(`SELECT u.id_usuario, u.email, u.nombre, u.apellido, u.estado, u.id_colegio,
+              u.fecha_creacion, u.documento, u.telefono,
+              c.nombre AS colegio_nombre,
+              array_agg(DISTINCT r.nombre) AS roles
+       FROM usuario u
+       LEFT JOIN colegio c ON c.id_colegio = u.id_colegio
+       LEFT JOIN usuario_rol ur ON ur.id_usuario = u.id_usuario
+       LEFT JOIN rol r ON r.id_rol = ur.id_rol
+       WHERE u.id_usuario = $1
+       GROUP BY u.id_usuario, c.nombre`, [id]);
+        if (userRes.rows.length === 0) {
+            await client.query('ROLLBACK');
+            res.status(404).json({ error: 'Usuario no encontrado.' });
+            return;
+        }
+        const targetUser = userRes.rows[0];
+        if (targetUser.estado === 'ELIMINADO') {
+            await client.query('ROLLBACK');
+            res.status(400).json({ error: 'El usuario ya se encuentra en estado ELIMINADO.' });
+            return;
+        }
+        // 5. Validar que el ticket pertenece a un Directivo del mismo colegio
+        const ticketRes = await client.query(`SELECT ts.id_ticket, ts.id_usuario, ts.correo_remitente, ts.asunto, ts.descripcion,
+              ts.observaciones, ts.estado, ts.codigo_ticket
+       FROM tickets_soporte ts
+       WHERE ts.codigo_ticket = $1`, [String(codigo_ticket).trim().toUpperCase()]);
+        if (ticketRes.rows.length === 0) {
+            await client.query('ROLLBACK');
+            res.status(400).json({ error: 'El código de ticket ingresado no existe.' });
+            return;
+        }
+        const ticket = ticketRes.rows[0];
+        if (ticket.estado === 'RESUELTO') {
+            await client.query('ROLLBACK');
+            res.status(400).json({ error: 'El ticket ya está RESUELTO y no puede usarse como consentimiento.' });
+            return;
+        }
+        // Verificar que el remitente del ticket es un Directivo del mismo colegio del usuario
+        if (!ticket.id_usuario) {
+            await client.query('ROLLBACK');
+            res.status(400).json({ error: 'El ticket no está vinculado a un usuario registrado. Se requiere un ticket creado por el Directivo del colegio.' });
+            return;
+        }
+        const creatorRolesRes = await client.query(`SELECT r.nombre, u.id_colegio
+       FROM usuario_rol ur
+       JOIN rol r ON ur.id_rol = r.id_rol
+       JOIN usuario u ON u.id_usuario = ur.id_usuario
+       WHERE ur.id_usuario = $1`, [ticket.id_usuario]);
+        const creatorRoles = creatorRolesRes.rows.map((r) => String(r.nombre).toUpperCase());
+        const creatorSchoolId = creatorRolesRes.rows[0]?.id_colegio;
+        const isDirectivo = creatorRoles.includes('DIRECTIVO');
+        if (!isDirectivo) {
+            await client.query('ROLLBACK');
+            res.status(403).json({ error: 'El remitente del ticket no es un Directivo. Solo el Directivo del colegio puede otorgar consentimiento para eliminar usuarios.' });
+            return;
+        }
+        if (!creatorSchoolId || !targetUser.id_colegio || Number(creatorSchoolId) !== Number(targetUser.id_colegio)) {
+            await client.query('ROLLBACK');
+            res.status(403).json({
+                error: `El Directivo que emitió el ticket pertenece a una institución diferente (colegio ID: ${creatorSchoolId}) a la del usuario a eliminar (colegio ID: ${targetUser.id_colegio}). Solo el Directivo del mismo colegio puede dar consentimiento.`
+            });
+            return;
+        }
+        // Obtener datos del directivo consentidor
+        const directivoRes = await client.query(`SELECT u.id_usuario, u.nombre, u.apellido, d.id AS id_directivo
+       FROM usuario u
+       LEFT JOIN directivo d ON d.id_usuario = u.id_usuario
+       WHERE u.id_usuario = $1`, [ticket.id_usuario]);
+        const directivo = directivoRes.rows[0];
+        // 6. Snapshot del usuario antes de eliminar
+        const userSnapshot = {
+            id_usuario: targetUser.id_usuario,
+            email: targetUser.email,
+            nombre: targetUser.nombre,
+            apellido: targetUser.apellido,
+            estado_anterior: targetUser.estado,
+            id_colegio: targetUser.id_colegio,
+            colegio_nombre: targetUser.colegio_nombre,
+            roles: targetUser.roles,
+            documento: targetUser.documento,
+            telefono: targetUser.telefono,
+            fecha_creacion: targetUser.fecha_creacion,
+            eliminado_por_admin: req.user.id,
+            consentimiento_directivo: {
+                id_usuario_directivo: directivo?.id_usuario,
+                nombre_directivo: `${directivo?.nombre || ''} ${directivo?.apellido || ''}`.trim(),
+                id_directivo: directivo?.id_directivo,
+                codigo_ticket: ticket.codigo_ticket,
+                id_ticket: ticket.id_ticket
+            },
+            motivo_eliminacion: motivo || 'Baja definitiva del usuario por Administrador General.'
+        };
+        // 7. Cascada: si es ESTUDIANTE con matrícula ACTIVA → cancelarla
+        const estudianteRes = await client.query(`SELECT e.id_estudiante FROM estudiante e WHERE e.id_usuario = $1`, [id]);
+        if (estudianteRes.rows.length > 0) {
+            const idEstudiante = estudianteRes.rows[0].id_estudiante;
+            await client.query(`UPDATE matricula
+         SET estado = 'CANCELADA',
+             motivo_cancelacion = $1,
+             detalles_cancelacion = $2
+         WHERE id_estudiante = $3 AND estado = 'ACTIVA'`, [
+                'Baja definitiva del usuario por Administrador General.',
+                `Ticket de consentimiento: ${ticket.codigo_ticket}. Admin General ID: ${req.user.id}.`,
+                idEstudiante
+            ]);
+            // También actualizar estado del estudiante
+            await client.query(`UPDATE estudiante SET estado = 'RETIRADO', motivo_estado = $1 WHERE id_estudiante = $2`, [`Cuenta eliminada por Administrador General. Ticket: ${ticket.codigo_ticket}.`, idEstudiante]);
+        }
+        // 8. Soft-delete del usuario
+        await client.query(`UPDATE usuario
+       SET estado = 'ELIMINADO',
+           activo = false,
+           logged_out_at = NOW()
+       WHERE id_usuario = $1`, [id]);
+        // 9. Registrar en auditoria_acciones_realizadas con el id_auditoria de la sesión activa
+        await client.query(`INSERT INTO auditoria_acciones_realizadas
+       (id_auditoria, modulo, tipo_accion, accion, recurso_afectado, id_usuario_afectado, valor_antiguo, valor_nuevo, motivo_cambio)
+       VALUES ($1, 'USUARIOS', 'ELIMINACION', $2, $3, $4, $5, NULL, $6)`, [
+            supervisionId,
+            `Soft-delete controlado de usuario. Consentimiento del Directivo via ticket ${ticket.codigo_ticket}.`,
+            `Usuario ID: ${id} (${targetUser.nombre} ${targetUser.apellido || ''}) — Colegio: ${targetUser.colegio_nombre || targetUser.id_colegio}`,
+            Number(id),
+            JSON.stringify(userSnapshot),
+            userSnapshot.motivo_eliminacion
+        ]);
+        // 10. Añadir observación automática al ticket de soporte
+        let currentObs = [];
+        try {
+            currentObs = typeof ticket.observaciones === 'string'
+                ? JSON.parse(ticket.observaciones || '[]')
+                : (ticket.observaciones || []);
+        }
+        catch {
+            currentObs = [];
+        }
+        currentObs.push({
+            id_usuario: Number(req.user.id),
+            nombre_usuario: 'Administrador General (Auditoría)',
+            tipo: 'ADMIN_GENERAL',
+            mensaje: `Acción de BAJA DEFINITIVA ejecutada bajo el consentimiento de este ticket.\n` +
+                `Usuario eliminado: ${targetUser.nombre} ${targetUser.apellido || ''} (ID: ${id}, Email: ${targetUser.email || 'Sin email'}).\n` +
+                `Colegio: ${targetUser.colegio_nombre || targetUser.id_colegio}.\n` +
+                `Directivo consentidor: ${directivo?.nombre || ''} ${directivo?.apellido || ''}.\n` +
+                `Motivo: ${userSnapshot.motivo_eliminacion}\n` +
+                `Sesión de supervisión activa: ID ${supervisionId}.`,
+            fecha_creacion: new Date().toISOString()
+        });
+        await client.query('UPDATE tickets_soporte SET observaciones = $1 WHERE id_ticket = $2', [JSON.stringify(currentObs), ticket.id_ticket]);
+        await client.query('COMMIT');
+        res.json({
+            message: `Usuario ${targetUser.nombre} ${targetUser.apellido || ''} eliminado exitosamente. La acción ha quedado registrada en la auditoría de la sesión activa (ID: ${supervisionId}) y en el ticket de soporte ${ticket.codigo_ticket}.`,
+            id_usuario_eliminado: Number(id),
+            codigo_ticket: ticket.codigo_ticket,
+            id_auditoria: supervisionId
+        });
+    }
+    catch (error) {
+        await client.query('ROLLBACK');
+        console.error('Error en soft-delete controlado de usuario:', error);
+        res.status(500).json({ error: 'Error interno al eliminar el usuario.' });
+    }
+    finally {
+        client.release();
+    }
 };
 exports.eliminarUsuario = eliminarUsuario;
 // ═══════════════════════════════════════════════════════════════════════════
@@ -557,41 +787,69 @@ exports.actualizarDirectivo = actualizarDirectivo;
  * Desvincular un directivo de su colegio.
  */
 const desvincularDirectivo = async (req, res) => {
+    const client = await db_1.pool.connect();
     try {
         const { id } = req.params;
-        const result = await db_1.pool.query(`UPDATE directivo SET estado = 'DESVINCULADO', fecha_desvinculacion = NOW()
+        await client.query('BEGIN');
+        const result = await client.query(`UPDATE directivo SET estado = 'DESVINCULADO', fecha_desvinculacion = NOW()
        WHERE id = $1 RETURNING *`, [id]);
         if (result.rows.length === 0) {
+            await client.query('ROLLBACK');
             res.status(404).json({ error: 'Directivo no encontrado' });
             return;
         }
-        res.json({ message: 'Directivo desvinculado exitosamente', directivo: result.rows[0] });
+        const directivo = result.rows[0];
+        // RN-DIR-002: Suspender la cuenta de usuario e invalidar sus tokens activos
+        if (directivo.id_usuario) {
+            await client.query(`UPDATE usuario 
+         SET estado = 'SUSPENDIDO', activo = false, logged_out_at = NOW() 
+         WHERE id_usuario = $1`, [directivo.id_usuario]);
+        }
+        await client.query('COMMIT');
+        res.json({ message: 'Directivo desvinculado e inhabilitado exitosamente', directivo });
     }
     catch (error) {
+        await client.query('ROLLBACK');
         console.error('Error desvinculando directivo:', error);
         res.status(500).json({ error: 'Error al desvincular directivo' });
+    }
+    finally {
+        client.release();
     }
 };
 exports.desvincularDirectivo = desvincularDirectivo;
 /**
  * DELETE /admin/directivos/:id
- * Eliminar un directivo.
- * Regla: Un directivo solo puede ser eliminado si no tiene estudiantes asignados.
+ * Eliminar un directivo (Soft delete y suspensión de usuario).
  */
 const eliminarDirectivo = async (req, res) => {
+    const client = await db_1.pool.connect();
     try {
         const { id } = req.params;
-        const result = await db_1.pool.query(`UPDATE directivo SET estado = 'ELIMINADO', fecha_desvinculacion = NOW()
+        await client.query('BEGIN');
+        const result = await client.query(`UPDATE directivo SET estado = 'ELIMINADO', fecha_desvinculacion = NOW()
        WHERE id = $1 RETURNING *`, [id]);
         if (result.rows.length === 0) {
+            await client.query('ROLLBACK');
             res.status(404).json({ error: 'Directivo no encontrado' });
             return;
         }
-        res.json({ message: 'Directivo eliminado exitosamente', directivo: result.rows[0] });
+        const directivo = result.rows[0];
+        if (directivo.id_usuario) {
+            await client.query(`UPDATE usuario 
+         SET estado = 'ELIMINADO', activo = false, logged_out_at = NOW() 
+         WHERE id_usuario = $1`, [directivo.id_usuario]);
+        }
+        await client.query('COMMIT');
+        res.json({ message: 'Directivo eliminado exitosamente', directivo });
     }
     catch (error) {
+        await client.query('ROLLBACK');
         console.error('Error eliminando directivo:', error);
         res.status(500).json({ error: 'Error al eliminar directivo' });
+    }
+    finally {
+        client.release();
     }
 };
 exports.eliminarDirectivo = eliminarDirectivo;
@@ -964,7 +1222,11 @@ const verAccionesSupervision = async (req, res) => {
        LEFT JOIN usuario u ON u.id_usuario = a.id_usuario_afectado
        WHERE a.id_auditoria = $1
        ORDER BY a.fecha_accion ASC`, [id]);
-        res.json(result.rows);
+        const mapped = result.rows.map((row) => ({
+            ...row,
+            recurso_afectado: transformResourceForExport(row.recurso_afectado).descripcion
+        }));
+        res.json(mapped);
     }
     catch (error) {
         console.error('Error obteniendo acciones:', error);
@@ -984,12 +1246,15 @@ const historialSupervision = async (req, res) => {
              c.nombre AS colegio_nombre,
              u.nombre AS admin_nombre, u.email AS admin_email,
              ud.nombre AS directivo_nombre, ud.apellido AS directivo_apellido,
+             udr.nombre AS directivo_revocador_nombre, udr.apellido AS directivo_revocador_apellido,
              (SELECT COUNT(*) FROM auditoria_acciones_realizadas acc WHERE acc.id_auditoria = a.id_auditoria) AS total_acciones
       FROM auditoria_supervision a
       JOIN colegio c ON c.id_colegio = a.id_colegio
       JOIN usuario u ON u.id_usuario = a.id_admin_general
       LEFT JOIN directivo d ON d.id = a.id_directivo_aprobador
       LEFT JOIN usuario ud ON ud.id_usuario = d.id_usuario
+      LEFT JOIN directivo dr ON dr.id = a.revocado_por
+      LEFT JOIN usuario udr ON udr.id_usuario = dr.id_usuario
       WHERE a.eliminado = FALSE
     `;
         const params = [];
@@ -1045,9 +1310,20 @@ const exportarAuditoria = async (req, res) => {
         // Obtener datos completos para exportar
         const acciones = await client.query(`SELECT * FROM auditoria_acciones_realizadas WHERE id_auditoria = $1 ORDER BY fecha_accion ASC`, [id]);
         await client.query('COMMIT');
+        const mappedAcciones = acciones.rows.map((row) => {
+            const cleanResource = transformResourceForExport(row.recurso_afectado);
+            return {
+                ...row,
+                recurso_afectado: cleanResource.descripcion,
+                detalles_tecnicos: cleanResource.endpoint ? {
+                    endpoint: cleanResource.endpoint,
+                    query: cleanResource.query || null
+                } : null
+            };
+        });
         res.json({
             auditoria: auditoria.rows[0],
-            acciones: acciones.rows,
+            acciones: mappedAcciones,
             exportado_en: new Date().toISOString(),
             exportado_por: req.user.email,
         });
@@ -1062,6 +1338,84 @@ const exportarAuditoria = async (req, res) => {
     }
 };
 exports.exportarAuditoria = exportarAuditoria;
+function transformResourceForExport(recurso) {
+    if (!recurso) {
+        return { descripcion: 'No especificado' };
+    }
+    let url = '';
+    if (recurso.startsWith('Consulta: /')) {
+        url = recurso.substring(10);
+    }
+    else if (recurso.startsWith('Petición ') && recurso.includes(' a la ruta: ')) {
+        const parts = recurso.split(' a la ruta: ');
+        url = parts[1] || '';
+    }
+    else if (recurso.includes('?')) {
+        url = recurso;
+    }
+    else if (recurso.startsWith('/api/')) {
+        url = recurso;
+    }
+    if (url) {
+        const [path, queryString] = url.split('?');
+        const query = {};
+        if (queryString) {
+            const pairs = queryString.split('&');
+            for (const pair of pairs) {
+                const [key, val] = pair.split('=');
+                if (key) {
+                    query[decodeURIComponent(key)] = val ? decodeURIComponent(val) : true;
+                }
+            }
+        }
+        const descripcion = getCleanFriendlyName(path);
+        return {
+            descripcion,
+            endpoint: path,
+            query: Object.keys(query).length > 0 ? query : undefined
+        };
+    }
+    return { descripcion: recurso };
+}
+function getCleanFriendlyName(path) {
+    if (path.includes('/dashboard'))
+        return 'Dashboard académico';
+    if (path.includes('/settings'))
+        return 'Configuración académica';
+    if (path.includes('/boletines/student'))
+        return 'Boletín individual de estudiante';
+    if (path.includes('/boletines/grade'))
+        return 'Boletines de grado';
+    if (path.includes('/boletines'))
+        return 'Generador de boletines';
+    if (path.includes('/student/colegio'))
+        return 'Listado general de estudiantes';
+    if (path.includes('/student/sanctions/types'))
+        return 'Tipos de sanciones disciplinarias';
+    if (path.endsWith('/summary') && path.includes('/student/'))
+        return 'Ficha resumen de estudiante';
+    if (path.endsWith('/status') && path.includes('/student/'))
+        return 'Estado y sanción de estudiante';
+    if (path.endsWith('/change-grade') && path.includes('/student/'))
+        return 'Traslado de grado de estudiante';
+    if (path.endsWith('/graduate') && path.includes('/student/'))
+        return 'Graduación de estudiante';
+    if (path.includes('/student'))
+        return 'Ficha de estudiante';
+    if (path.includes('/teacher') || path.includes('/docentes'))
+        return 'Gestión de docentes';
+    if (path.includes('/grados'))
+        return 'Configuración de grados';
+    if (path.includes('/dba'))
+        return 'Derechos básicos de aprendizaje (DBA)';
+    if (path.includes('/support'))
+        return 'Soporte técnico';
+    if (path.includes('/matricula') || path.includes('/matriculas'))
+        return 'Gestión de matrículas';
+    if (path.includes('/academic-admin'))
+        return 'Configuración curricular';
+    return 'Recurso del sistema';
+}
 // ═══════════════════════════════════════════════════════════════════════════
 // REGISTRO DE ACCIONES DE AUDITORÍA (helper para uso interno)
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1073,9 +1427,9 @@ const registrarAccionAuditoria = async (idAuditoria, modulo, tipoAccion, accion,
     await db_1.pool.query(`INSERT INTO auditoria_acciones_realizadas
      (id_auditoria, modulo, tipo_accion, accion, recurso_afectado, id_usuario_afectado, valor_antiguo, valor_nuevo, motivo_cambio)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`, [idAuditoria, modulo, tipoAccion, accion, recursoAfectado, idUsuarioAfectado || null,
-        valorAntiguo ? JSON.stringify(valorAntiguo) : null,
-        valorNuevo ? JSON.stringify(valorNuevo) : null,
-        motivoCambio || null]);
+        valorAntiguo ? JSON.stringify(valorAntiguo) : (tipoAccion === 'MODIFICACION' ? '{}' : null),
+        valorNuevo ? JSON.stringify(valorNuevo) : (tipoAccion === 'MODIFICACION' ? '{}' : null),
+        motivoCambio || (tipoAccion === 'MODIFICACION' ? 'Modificación auditada en modo supervisión' : null)]);
 };
 exports.registrarAccionAuditoria = registrarAccionAuditoria;
 /**
@@ -1366,9 +1720,13 @@ const listarAuditoriasAcciones = async (req, res) => {
             query += ` OFFSET $${params.length}`;
         }
         const result = await db_1.pool.query(query, params);
+        const mapped = result.rows.map((row) => ({
+            ...row,
+            recurso_afectado: transformResourceForExport(row.recurso_afectado).descripcion
+        }));
         res.setHeader("x-total-count", String(totalCount));
         res.setHeader("Access-Control-Expose-Headers", "x-total-count");
-        res.json(result.rows);
+        res.json(mapped);
     }
     catch (error) {
         console.error('Error obteniendo auditorías:', error);
@@ -1383,21 +1741,33 @@ exports.listarAuditoriasAcciones = listarAuditoriasAcciones;
 const listarNotificacionesSistema = async (req, res) => {
     try {
         const supervisionRes = await db_1.pool.query(`
-      SELECT ns.id_notificacion, ns.tipo_notificacion as tipo, ns.mensaje, ns.fecha_notificacion as fecha,
-             'SUPERVISION' as origen, c.nombre as colegio_nombre, u.nombre || ' ' || COALESCE(u.apellido, '') as directivo_nombre
+      SELECT MIN(ns.id_notificacion) as id_notificacion, 
+             ns.tipo_notificacion as tipo, 
+             ns.mensaje, 
+             ns.fecha_notificacion as fecha,
+             'SUPERVISION' as origen, 
+             c.nombre as colegio_nombre, 
+             string_agg(u.nombre || ' ' || COALESCE(u.apellido, ''), ', ') as directivo_nombre
       FROM notificacion_supervision ns
       JOIN directivo d ON ns.id_directivo = d.id
       JOIN usuario u ON d.id_usuario = u.id_usuario
       JOIN auditoria_supervision aus ON ns.id_auditoria = aus.id_auditoria
       JOIN colegio c ON aus.id_colegio = c.id_colegio
+      GROUP BY ns.tipo_notificacion, ns.mensaje, ns.fecha_notificacion, c.nombre
     `);
         const colegioRes = await db_1.pool.query(`
-      SELECT nc.id_notificacion, nc.tipo, nc.mensaje, nc.fecha_notificacion as fecha,
-             'COLEGIO' as origen, c.nombre as colegio_nombre, u.nombre || ' ' || COALESCE(u.apellido, '') as directivo_nombre
+      SELECT MIN(nc.id_notificacion) as id_notificacion, 
+             nc.tipo, 
+             nc.mensaje, 
+             nc.fecha_notificacion as fecha,
+             'COLEGIO' as origen, 
+             c.nombre as colegio_nombre, 
+             string_agg(u.nombre || ' ' || COALESCE(u.apellido, ''), ', ') as directivo_nombre
       FROM notificacion_colegio nc
       JOIN directivo d ON nc.id_directivo = d.id
       JOIN usuario u ON d.id_usuario = u.id_usuario
       JOIN colegio c ON nc.id_colegio = c.id_colegio
+      GROUP BY nc.tipo, nc.mensaje, nc.fecha_notificacion, c.nombre
     `);
         const allNotificaciones = [...supervisionRes.rows, ...colegioRes.rows];
         allNotificaciones.sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
@@ -1483,7 +1853,11 @@ const verAccionesSupervisionDirectivo = async (req, res) => {
        LEFT JOIN usuario u ON u.id_usuario = a.id_usuario_afectado
        WHERE a.id_auditoria = $1
        ORDER BY a.fecha_accion ASC`, [id]);
-        res.json(result.rows);
+        const mapped = result.rows.map((row) => ({
+            ...row,
+            recurso_afectado: transformResourceForExport(row.recurso_afectado).descripcion
+        }));
+        res.json(mapped);
     }
     catch (error) {
         console.error('Error obteniendo acciones para directivo:', error);
@@ -1662,13 +2036,8 @@ const verificarCorrespondenciaTicketUsuario = async (client, idUsuario, codigoTi
         const creatorSchoolId = creatorRolesRes.rows[0]?.id_colegio;
         const isDirectivo = creatorRoles.includes('DIRECTIVO');
         if (isDirectivo && creatorSchoolId && targetUser.id_colegio && Number(creatorSchoolId) === Number(targetUser.id_colegio)) {
-            // Obtener documento del usuario destino
-            const targetDocRes = await client.query(`SELECT d.documento FROM docente d WHERE d.id_usuario = $1
-         UNION
-         SELECT pf.documento FROM padre_familia pf WHERE pf.id_usuario = $1
-         UNION
-         SELECT e.documento FROM estudiante e WHERE e.id_usuario = $1
-         LIMIT 1`, [targetUser.id_usuario]);
+            // Obtener documento del usuario destino desde la tabla usuario
+            const targetDocRes = await client.query(`SELECT documento FROM usuario WHERE id_usuario = $1`, [targetUser.id_usuario]);
             const targetDoc = targetDocRes.rows[0]?.documento;
             const emailMentioned = String(ticket.asunto).toLowerCase().includes(String(targetUser.email).toLowerCase()) ||
                 String(ticket.descripcion).toLowerCase().includes(String(targetUser.email).toLowerCase());
@@ -1756,24 +2125,13 @@ const modificarCredencialesConTicket = async (req, res) => {
        JOIN rol r ON ur.id_rol = r.id_rol 
        WHERE ur.id_usuario = $1`, [id]);
         const oldRoles = oldRolesRes.rows.map(r => String(r.nombre).toUpperCase());
-        // Consultar documento actual (intentar en docente, padre, estudiante)
+        // Consultar documento actual desde la tabla usuario
         let oldDoc = 'No Registrado';
         let oldTipoDoc = 'No Registrado';
-        const docSearch = await client.query(`SELECT d.documento, td.tipo AS tipo_documento 
-       FROM docente d 
-       LEFT JOIN tipo_documento td ON d.id_tipodocumento = td.id_tipodocumento 
-       WHERE d.id_usuario = $1
-       UNION
-       SELECT pf.documento, td.tipo AS tipo_documento 
-       FROM padre_familia pf 
-       LEFT JOIN tipo_documento td ON pf.id_tipodocumento = td.id_tipodocumento 
-       WHERE pf.id_usuario = $1
-       UNION
-       SELECT e.documento, td.tipo AS tipo_documento 
-       FROM estudiante e 
-       LEFT JOIN tipo_documento td ON e.id_tipodocumento = td.id_tipodocumento 
-       WHERE e.id_usuario = $1
-       LIMIT 1`, [id]);
+        const docSearch = await client.query(`SELECT u.documento, td.tipo AS tipo_documento 
+       FROM usuario u 
+       LEFT JOIN tipo_documento td ON u.id_tipodocumento = td.id_tipodocumento 
+       WHERE u.id_usuario = $1`, [id]);
         if (docSearch.rows.length > 0) {
             oldDoc = docSearch.rows[0].documento || 'No Registrado';
             oldTipoDoc = docSearch.rows[0].tipo_documento || 'No Registrado';
@@ -1785,8 +2143,8 @@ const modificarCredencialesConTicket = async (req, res) => {
         if (tdDb.rows.length > 0) {
             idTipoDoc = tdDb.rows[0].id_tipodocumento;
         }
-        // 3. Actualizar tabla usuario
-        await client.query("UPDATE usuario SET nombre = $1, apellido = $2 WHERE id_usuario = $3", [nombre.trim(), apellido.trim(), id]);
+        // 3. Actualizar tabla usuario (nombres, id_tipodocumento, documento)
+        await client.query("UPDATE usuario SET nombre = $1, apellido = $2, id_tipodocumento = $3, documento = $4 WHERE id_usuario = $5", [nombre.trim(), apellido.trim(), idTipoDoc, documento.trim(), id]);
         // 4. Sincronizar roles en usuario_rol
         const normalizedNewRoles = roles.map(r => String(r).toUpperCase());
         // Obtener catálogo de roles de la BD
@@ -1802,25 +2160,22 @@ const modificarCredencialesConTicket = async (req, res) => {
                 await client.query("INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2) ON CONFLICT DO NOTHING", [id, roleId]);
                 // Inicializar o actualizar tabla del rol específico para evitar inconsistencias
                 if (roleName === 'DOCENTE') {
-                    await client.query(`INSERT INTO public.docente (id_usuario, documento, id_tipodocumento, nombre, apellido, id_colegio)
-             VALUES ($1, $2, $3, $4, $5, $6)
+                    await client.query(`INSERT INTO public.docente (id_usuario, nombre, apellido, id_colegio)
+             VALUES ($1, $2, $3, $4)
              ON CONFLICT (id_usuario) DO UPDATE 
-             SET documento = EXCLUDED.documento, id_tipodocumento = EXCLUDED.id_tipodocumento, 
-                 nombre = EXCLUDED.nombre, apellido = EXCLUDED.apellido`, [id, documento.trim(), idTipoDoc, nombre.trim(), apellido.trim(), oldUser.id_colegio || 1]);
+             SET nombre = EXCLUDED.nombre, apellido = EXCLUDED.apellido`, [id, nombre.trim(), apellido.trim(), oldUser.id_colegio || 1]);
                 }
                 else if (roleName === 'PADRE') {
-                    await client.query(`INSERT INTO public.padre_familia (id_usuario, documento, id_tipodocumento, nombre, apellido, id_colegio)
-             VALUES ($1, $2, $3, $4, $5, $6)
+                    await client.query(`INSERT INTO public.padre_familia (id_usuario, nombre, apellido, id_colegio)
+             VALUES ($1, $2, $3, $4)
              ON CONFLICT (id_usuario) DO UPDATE 
-             SET documento = EXCLUDED.documento, id_tipodocumento = EXCLUDED.id_tipodocumento, 
-                 nombre = EXCLUDED.nombre, apellido = EXCLUDED.apellido`, [id, documento.trim(), idTipoDoc, nombre.trim(), apellido.trim(), oldUser.id_colegio]);
+             SET nombre = EXCLUDED.nombre, apellido = EXCLUDED.apellido`, [id, nombre.trim(), apellido.trim(), oldUser.id_colegio]);
                 }
                 else if (roleName === 'ESTUDIANTE') {
-                    await client.query(`INSERT INTO public.estudiante (id_usuario, documento, id_tipodocumento, nombre, apellido, id_colegio, codigo)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)
+                    await client.query(`INSERT INTO public.estudiante (id_usuario, nombre, apellido, id_colegio, codigo)
+             VALUES ($1, $2, $3, $4, $5)
              ON CONFLICT (id_usuario) DO UPDATE 
-             SET documento = EXCLUDED.documento, id_tipodocumento = EXCLUDED.id_tipodocumento, 
-                 nombre = EXCLUDED.nombre, apellido = EXCLUDED.apellido`, [id, documento.trim(), idTipoDoc, nombre.trim(), apellido.trim(), oldUser.id_colegio || 1, `EST-${id}`]);
+             SET nombre = EXCLUDED.nombre, apellido = EXCLUDED.apellido`, [id, nombre.trim(), apellido.trim(), oldUser.id_colegio || 1, `EST-${id}`]);
                 }
             }
         }
@@ -1861,3 +2216,115 @@ Detalle de cambios (Antes ➔ Después):
     }
 };
 exports.modificarCredencialesConTicket = modificarCredencialesConTicket;
+const crearUsuarioByAdminGeneral = async (req, res) => {
+    const { rol, email, password, nombre, apellido, id_colegio, tipo_documento, documento, telefono } = (req.body?.body ?? req.body);
+    const client = await db_1.pool.connect();
+    try {
+        await client.query('BEGIN');
+        // RN-DIR-006: Exclusión de la creación directa de estudiantes sin Matrícula Institucional
+        const normalizedRol = String(rol || '').trim().toLowerCase();
+        if (normalizedRol === 'estudiante') {
+            res.status(400).json({ error: 'El rol estudiante no puede crearse directamente. Debe registrarse a través del proceso de Matrícula Institucional.' });
+            await client.query('ROLLBACK');
+            return;
+        }
+        // 1. Obtener ID del rol
+        const rolRes = await client.query('SELECT id_rol FROM rol WHERE LOWER(nombre) = LOWER($1)', [rol]);
+        if (rolRes.rows.length === 0) {
+            res.status(400).json({ error: `El rol '${rol}' no existe en el sistema.` });
+            await client.query('ROLLBACK');
+            return;
+        }
+        const idRol = rolRes.rows[0].id_rol;
+        // 2. Determinar correo electrónico final
+        // Para estudiantes, el correo es opcional y puede quedar en NULL
+        const trimmedEmail = (email || '').trim().toLowerCase();
+        const finalEmail = trimmedEmail || null;
+        // 3. Verificar duplicado de correo si se ingresó uno
+        // (NULL no viola la restricción UNIQUE en PostgreSQL: NULL ≠ NULL)
+        if (finalEmail) {
+            const dupCheck = await client.query('SELECT id_usuario FROM usuario WHERE LOWER(email) = LOWER($1)', [finalEmail]);
+            if (dupCheck.rows.length > 0) {
+                res.status(409).json({ error: `El correo electrónico '${email}' ya se encuentra registrado.` });
+                await client.query('ROLLBACK');
+                return;
+            }
+        }
+        // 3.5. Validar unicidad y formato del documento si fue proporcionado
+        let idTipoDoc = null;
+        if (tipo_documento && String(tipo_documento).trim()) {
+            const tdDb = await client.query(`SELECT id_tipodocumento FROM tipo_documento WHERE tipo ILIKE $1 OR tipo ILIKE $2 LIMIT 1`, [String(tipo_documento).trim(), `%${String(tipo_documento).trim()}%`]);
+            if (tdDb.rows.length > 0)
+                idTipoDoc = tdDb.rows[0].id_tipodocumento;
+        }
+        if (documento && String(documento).trim()) {
+            await (0, documentValidation_1.validateDocumentUniqueness)(client, String(documento).trim(), rol, undefined, idTipoDoc || tipo_documento);
+        }
+        // 4. Encriptar contraseña
+        const hashedPassword = await bcrypt_1.default.hash(password, 10);
+        // 5. Insertar usuario base
+        const userRes = await client.query(`INSERT INTO usuario (email, password, nombre, apellido, id_colegio, activo, id_tipodocumento, documento, telefono, estado)
+       VALUES ($1, $2, $3, $4, $5, true, $6, $7, $8, 'ACTIVO')
+       RETURNING id_usuario, email, nombre, apellido, id_colegio, activo, fecha_creacion`, [
+            finalEmail,
+            hashedPassword,
+            nombre.trim(),
+            (apellido || '').trim() || null,
+            id_colegio || null,
+            idTipoDoc,
+            (documento || '').trim() || null,
+            (telefono || '').trim() || null
+        ]);
+        const newUserId = userRes.rows[0].id_usuario;
+        // 6. Asignar rol en usuario_rol
+        await client.query('INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2) ON CONFLICT DO NOTHING', [newUserId, idRol]);
+        // 7. Crear perfil específico según el rol
+        if (rol === 'directivo' && id_colegio) {
+            await client.query(`INSERT INTO directivo (id_usuario, id_colegio, cargo, fecha_vinculacion)
+         VALUES ($1, $2, 'Directivo Institucional', NOW())`, [newUserId, id_colegio]);
+        }
+        else if (rol === 'docente' && id_colegio) {
+            await client.query(`INSERT INTO docente (id_usuario, id_colegio, nombre, apellido, documento, estado)
+         VALUES ($1, $2, $3, $4, $5, 'ACTIVO') ON CONFLICT DO NOTHING`, [newUserId, id_colegio, nombre.trim(), (apellido || '').trim() || '', documento || '']);
+        }
+        else if (rol === 'padre' && id_colegio) {
+            await client.query(`INSERT INTO padre_familia (id_usuario, id_colegio, nombre, apellido, documento)
+         VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING`, [newUserId, id_colegio, nombre.trim(), (apellido || '').trim() || '', documento || '']);
+        }
+        // 8. Registro de Auditoría de Supervisión si aplica
+        const authReq = req;
+        const activeAuditoriaId = authReq.user?.supervisionId;
+        if (activeAuditoriaId) {
+            await client.query(`INSERT INTO auditoria_acciones_realizadas
+         (id_auditoria, modulo, tipo_accion, accion, recurso_afectado, id_usuario_afectado, valor_nuevo, motivo_cambio)
+         VALUES ($1, 'USUARIOS', 'CREACION', 'Creación directa de usuario por Admin General', $2, $3, $4, $5)`, [
+                activeAuditoriaId,
+                `Usuario ID: ${newUserId}`,
+                newUserId,
+                JSON.stringify({ email: finalEmail, nombre, apellido, rol, id_colegio }),
+                'Creación de cuenta por administración global'
+            ]);
+        }
+        await client.query('COMMIT');
+        res.status(201).json({
+            message: `Usuario ${nombre} ${apellido || ''} (${rol}) creado exitosamente.`,
+            user: {
+                id_usuario: newUserId,
+                email: finalEmail,
+                nombre,
+                apellido,
+                rol,
+                id_colegio
+            }
+        });
+    }
+    catch (error) {
+        await client.query('ROLLBACK');
+        console.error('Error creating user by Admin General:', error);
+        res.status(500).json({ error: 'Error interno del servidor al crear usuario.' });
+    }
+    finally {
+        client.release();
+    }
+};
+exports.crearUsuarioByAdminGeneral = crearUsuarioByAdminGeneral;

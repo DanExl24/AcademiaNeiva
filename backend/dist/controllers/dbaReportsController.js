@@ -12,7 +12,8 @@ const parseSchoolId = (val) => {
 // ============================================================================
 const obtenerReporteCoherenciaCurricular = async (req, res) => {
     const schoolId = parseSchoolId(req.params.schoolId);
-    const { id_anio, id_periodo, id_grupo, grado, id_materia, id_docente } = req.query;
+    const { id_anio, yearId, id_periodo, id_grupo, grado, id_materia, id_docente } = req.query;
+    const targetYear = id_anio || yearId;
     const targetGrade = (grado || id_grupo);
     if (!schoolId) {
         res.status(400).json({ error: "El ID de colegio es obligatorio" });
@@ -38,6 +39,7 @@ const obtenerReporteCoherenciaCurricular = async (req, res) => {
         m.nombre AS materia_nombre,
         d.id_docente,
         u.nombre || ' ' || u.apellido AS docente_nombre,
+        COALESCE(u_creador.nombre || ' ' || u_creador.apellido, u.nombre || ' ' || u.apellido) AS docente_creador_nombre,
         edba.id_evidencia_dba,
         edba.descripcion AS evidencia_descripcion,
         edba.orden AS evidencia_orden,
@@ -64,15 +66,23 @@ const obtenerReporteCoherenciaCurricular = async (req, res) => {
       JOIN tipo_grado tg ON tg.id_tipo_grado = g.id_tipo_grado
       JOIN secciones s ON s.id_seccion = g.id_seccion
       JOIN materias m ON m.id_materia = c.id_materia
-      LEFT JOIN detalle_grados dg ON dg.id_detallegrado = am.id_detallegrado
+      LEFT JOIN LATERAL (
+        SELECT dg_cur.id_docente
+        FROM detalle_grados dg_cur
+        WHERE dg_cur.id_grupo = g.id_grupo AND dg_cur.id_materia = m.id_materia
+        ORDER BY dg_cur.id_detallegrado DESC
+        LIMIT 1
+      ) dg ON true
       LEFT JOIN docente d ON d.id_docente = dg.id_docente
       LEFT JOIN usuario u ON u.id_usuario = d.id_usuario
+      LEFT JOIN docente d_creador ON d_creador.id_docente = am.id_docente_creador
+      LEFT JOIN usuario u_creador ON u_creador.id_usuario = d_creador.id_usuario
       WHERE c.id_colegio = $1
     `;
         const params = [schoolId];
-        if (id_anio) {
-            params.push(Number(id_anio));
-            query += ` AND c.id_año = $${params.length}`;
+        if (targetYear && targetYear !== "TODOS") {
+            params.push(Number(targetYear));
+            query += ` AND c.id_anio = $${params.length}`;
         }
         if (id_periodo && id_periodo !== "TODOS") {
             params.push(Number(id_periodo));
@@ -111,24 +121,31 @@ exports.obtenerReporteCoherenciaCurricular = obtenerReporteCoherenciaCurricular;
 // ============================================================================
 const obtenerReporteCoberturaDba = async (req, res) => {
     const schoolId = parseSchoolId(req.params.schoolId);
-    const { id_periodo, id_materia, id_grupo, grado } = req.query;
+    const { id_anio, yearId, id_periodo, id_materia, id_grupo, grado } = req.query;
+    const targetYear = (id_anio || yearId);
     const targetGrade = (grado || id_grupo);
     if (!schoolId) {
         res.status(400).json({ error: "El ID de colegio es obligatorio" });
         return;
     }
+    const authReq = req;
+    const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+    if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== schoolId) {
+        res.status(403).json({ error: "No tiene permiso para ver los reportes DBA de este colegio." });
+        return;
+    }
     try {
-        // 1. Obtener resumen de cobertura por Área y Grado
         const periodParam = (id_periodo && id_periodo !== "TODOS") ? Number(id_periodo) : null;
-        const summaryParams = [schoolId, periodParam];
+        const yearParam = (targetYear && targetYear !== "TODOS") ? Number(targetYear) : null;
+        const summaryParams = [schoolId, periodParam, yearParam];
         let summaryQuery = `
       SELECT 
         cvc.area,
         cvc.grado,
         cvc.version_curricular,
         COUNT(DISTINCT CASE 
-          WHEN $2::int IS NULL THEN edba.id_evidencia_dba
-          WHEN ea_plan.id_evidencia_dba IS NOT NULL THEN edba.id_evidencia_dba
+          WHEN $2::int IS NULL AND $3::int IS NULL THEN edba.id_evidencia_dba
+          WHEN ea_plan.id_evidencia_dba IS NOT NULL OR aedba.id_evidencia_dba IS NOT NULL THEN edba.id_evidencia_dba
         END)::int AS total_evidencias,
         COUNT(DISTINCT CASE WHEN aedba.id_evidencia_dba IS NOT NULL THEN edba.id_evidencia_dba END)::int AS evidencias_evaluadas
       FROM colegio_version_curricular cvc
@@ -143,6 +160,7 @@ const obtenerReporteCoberturaDba = async (req, res) => {
           WHERE c.id_competencia = ea_plan.id_competencia
             AND c.id_colegio = cvc.id_colegio
             AND ($2::int IS NULL OR c.id_periodo = $2::int)
+            AND ($3::int IS NULL OR c.id_anio = $3::int)
     `;
         if (id_materia && id_materia !== "TODOS") {
             summaryParams.push(Number(id_materia));
@@ -170,6 +188,7 @@ const obtenerReporteCoberturaDba = async (req, res) => {
           WHERE am.id_actividadmateria = aedba.id_actividadmateria
             AND c.id_colegio = cvc.id_colegio
             AND ($2::int IS NULL OR c.id_periodo = $2::int)
+            AND ($3::int IS NULL OR c.id_anio = $3::int)
     `;
         if (id_materia && id_materia !== "TODOS") {
             summaryParams.push(Number(id_materia));
@@ -189,7 +208,6 @@ const obtenerReporteCoberturaDba = async (req, res) => {
         )
       WHERE cvc.id_colegio = $1
     `;
-        // Filtros externos de la versión curricular
         if (id_materia && id_materia !== "TODOS") {
             summaryParams.push(Number(id_materia));
             summaryQuery += ` AND LOWER(TRIM(cvc.area)) = (SELECT LOWER(TRIM(nombre)) FROM materias WHERE id_materia = $${summaryParams.length})`;
@@ -207,8 +225,8 @@ const obtenerReporteCoberturaDba = async (req, res) => {
         summaryQuery += `
       GROUP BY cvc.area, cvc.grado, cvc.version_curricular
       HAVING COUNT(DISTINCT CASE 
-        WHEN $2::int IS NULL THEN edba.id_evidencia_dba
-        WHEN ea_plan.id_evidencia_dba IS NOT NULL THEN edba.id_evidencia_dba
+        WHEN $2::int IS NULL AND $3::int IS NULL THEN edba.id_evidencia_dba
+        WHEN ea_plan.id_evidencia_dba IS NOT NULL OR aedba.id_evidencia_dba IS NOT NULL THEN edba.id_evidencia_dba
       END) > 0
       ORDER BY cvc.area, 
         CASE cvc.grado
@@ -228,7 +246,7 @@ const obtenerReporteCoberturaDba = async (req, res) => {
     `;
         const summaryRes = await db_1.pool.query(summaryQuery, summaryParams);
         // 2. Obtener lista detallada de evidencias y su estado de cobertura
-        const detailsParams = [schoolId, periodParam];
+        const detailsParams = [schoolId, periodParam, yearParam];
         let detailsQuery = `
       SELECT 
         d.id_dba,
@@ -249,6 +267,7 @@ const obtenerReporteCoberturaDba = async (req, res) => {
              WHERE ea.id_evidencia_dba = edba.id_evidencia_dba
                AND c.id_colegio = cvc.id_colegio
                AND ($2::int IS NULL OR c.id_periodo = $2::int)
+               AND ($3::int IS NULL OR c.id_anio = $3::int)
                AND c.id_materia = (SELECT id_materia FROM materias WHERE nombre = cvc.area LIMIT 1)
                AND tg.nombre = cvc.grado
           )), false
@@ -256,41 +275,73 @@ const obtenerReporteCoberturaDba = async (req, res) => {
         COALESCE(
           (SELECT json_agg(
              json_build_object(
-               'actividad_nombre', am.nombre,
-               'actividad_porcentaje', am.porcentaje,
-               'grupo_nombre', ne.nombre || ' - ' || tg.nombre,
-               'docente_nombre', u.nombre || ' ' || u.apellido
+               'actividad_nombre', sub.actividad_nombre,
+               'actividad_porcentaje', sub.actividad_porcentaje,
+               'grupo_nombre', sub.grupo_nombre,
+               'docente_nombre', sub.docente_nombre,
+               'periodo_nombre', sub.periodo_nombre
              )
            )
-           FROM actividad_evidencia_dba aedba
-           JOIN actividad_materia am ON am.id_actividadmateria = aedba.id_actividadmateria
-           LEFT JOIN detalle_grados dg ON dg.id_detallegrado = am.id_detallegrado
-           LEFT JOIN grupos g ON g.id_grupo = dg.id_grupo
-           LEFT JOIN nivel_escolar ne ON ne.id_nivel = g.id_nivel
-           LEFT JOIN tipo_grado tg ON tg.id_tipo_grado = g.id_tipo_grado
-           LEFT JOIN docente doc ON doc.id_docente = dg.id_docente
-           LEFT JOIN usuario u ON u.id_usuario = doc.id_usuario
-           WHERE aedba.id_evidencia_dba = edba.id_evidencia_dba
-             AND am.id_colegio = cvc.id_colegio
-             AND ($2::int IS NULL OR am.id_periodo = $2::int)
-    `;
-        if (targetGrade && targetGrade !== "TODOS") {
-            if (!isNaN(Number(targetGrade))) {
-                detailsParams.push(Number(targetGrade));
-                detailsQuery += ` AND g.id_grupo = $${detailsParams.length}`;
-            }
-            else {
-                detailsParams.push(targetGrade.trim());
-                detailsQuery += ` AND LOWER(TRIM(tg.nombre)) = LOWER(TRIM($${detailsParams.length}))`;
-            }
-        }
-        detailsQuery += `
+           FROM (
+             SELECT DISTINCT
+               am.id_actividadmateria,
+               am.nombre AS actividad_nombre,
+               am.porcentaje AS actividad_porcentaje,
+               ne.nombre || ' - ' || tg.nombre || COALESCE(' (' || s.nombre || ')', '') AS grupo_nombre,
+               u.nombre || ' ' || u.apellido AS docente_nombre,
+               p.nombre AS periodo_nombre
+             FROM actividad_evidencia_dba aedba
+             JOIN actividad_materia am ON am.id_actividadmateria = aedba.id_actividadmateria
+             JOIN competencias c ON c.id_competencia = am.id_competencia
+             LEFT JOIN periodo_academico p ON p.id_periodo = am.id_periodo
+             LEFT JOIN detalle_grados dg ON dg.id_detallegrado = am.id_detallegrado
+             LEFT JOIN grupos g ON g.id_grupo = dg.id_grupo
+             LEFT JOIN secciones s ON s.id_seccion = g.id_seccion
+             LEFT JOIN nivel_escolar ne ON ne.id_nivel = g.id_nivel
+             LEFT JOIN tipo_grado tg ON tg.id_tipo_grado = g.id_tipo_grado
+             LEFT JOIN docente doc ON doc.id_docente = dg.id_docente
+             LEFT JOIN usuario u ON u.id_usuario = doc.id_usuario
+             WHERE aedba.id_evidencia_dba = edba.id_evidencia_dba
+               AND am.id_colegio = cvc.id_colegio
+               AND ($2::int IS NULL OR am.id_periodo = $2::int)
+               AND ($3::int IS NULL OR c.id_anio = $3::int)
+           ) sub
           ), '[]'::json
         ) AS evaluaciones
       FROM colegio_version_curricular cvc
       JOIN dba d ON d.area = cvc.area AND d.grado = cvc.grado AND d.version_curricular = cvc.version_curricular AND d.estado = 'ACTIVO'
       JOIN evidencias_dba edba ON edba.id_dba = d.id_dba AND edba.estado = 'ACTIVO'
       WHERE cvc.id_colegio = $1
+        AND (
+          $2::int IS NULL 
+          OR EXISTS (
+            SELECT 1 
+            FROM evidencia_aprendizaje ea
+            JOIN competencias c ON c.id_competencia = ea.id_competencia
+            JOIN grupos g ON g.id_grupo = c.id_grupo
+            JOIN tipo_grado tg ON tg.id_tipo_grado = g.id_tipo_grado
+            WHERE ea.id_evidencia_dba = edba.id_evidencia_dba
+              AND c.id_colegio = cvc.id_colegio
+              AND c.id_periodo = $2::int
+              AND ($3::int IS NULL OR c.id_anio = $3::int)
+              AND c.id_materia = (SELECT id_materia FROM materias WHERE nombre = cvc.area LIMIT 1)
+              AND tg.nombre = cvc.grado
+          )
+          OR EXISTS (
+            SELECT 1 
+            FROM actividad_evidencia_dba aedba
+            JOIN actividad_materia am ON am.id_actividadmateria = aedba.id_actividadmateria
+            JOIN competencias c ON c.id_competencia = am.id_competencia
+            JOIN grupos g ON g.id_grupo = c.id_grupo
+            JOIN tipo_grado tg ON tg.id_tipo_grado = g.id_tipo_grado
+            WHERE aedba.id_evidencia_dba = edba.id_evidencia_dba
+              AND am.id_colegio = cvc.id_colegio
+              AND am.id_periodo = $2::int
+              AND ($3::int IS NULL OR c.id_anio = $3::int)
+              AND c.id_materia = (SELECT id_materia FROM materias WHERE nombre = cvc.area LIMIT 1)
+              AND tg.nombre = cvc.grado
+          )
+        )
     `;
         if (id_materia && id_materia !== "TODOS") {
             detailsParams.push(Number(id_materia));
@@ -340,8 +391,17 @@ exports.obtenerReporteCoberturaDba = obtenerReporteCoberturaDba;
 // ============================================================================
 const obtenerCatalogoDbaDirectivo = async (req, res) => {
     const schoolId = parseSchoolId(req.params.schoolId);
+    const { id_anio, yearId } = req.query;
+    const targetYear = (id_anio || yearId);
+    const yearParam = (targetYear && targetYear !== "TODOS") ? Number(targetYear) : null;
     if (!schoolId) {
         res.status(400).json({ error: "El ID de colegio es obligatorio" });
+        return;
+    }
+    const authReq = req;
+    const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+    if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== schoolId) {
+        res.status(403).json({ error: "No tiene permiso para ver los reportes DBA de este colegio." });
         return;
     }
     try {
@@ -383,6 +443,7 @@ const obtenerCatalogoDbaDirectivo = async (req, res) => {
                   JOIN secciones s ON s.id_seccion = g.id_seccion
                   WHERE ea.id_evidencia_dba = edba.id_evidencia_dba
                     AND c.id_colegio = $1
+                    AND ($2::int IS NULL OR c.id_anio = $2::int)
                  ), '[]'::json
                )
              ) ORDER BY edba.orden ASC, edba.id_evidencia_dba ASC
@@ -410,7 +471,7 @@ const obtenerCatalogoDbaDirectivo = async (req, res) => {
           ELSE 12
         END ASC, d.numero_dba ASC
     `;
-        const result = await db_1.pool.query(query, [schoolId]);
+        const result = await db_1.pool.query(query, [schoolId, yearParam]);
         res.json(result.rows);
     }
     catch (error) {

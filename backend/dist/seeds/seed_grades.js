@@ -119,11 +119,14 @@ async function runSeedGrades() {
         await client.query("DELETE FROM actividad_materia");
         await client.query("DELETE FROM cierre_materia");
         console.log("✅ Datos anteriores eliminados.");
-        // ─── FETCH BASE DATA ────────────────────────────────────────────────────
-        const closedPeriodsRes = await client.query(`SELECT id_periodo, id_colegio, id_anio FROM periodo_academico WHERE estado = 'CERRADO'`);
+        // ─── FETCH BASE DATA (Only Year 2025) ────────────────────────────────────
+        const closedPeriodsRes = await client.query(`SELECT p.id_periodo, p.id_colegio, p.id_anio 
+       FROM periodo_academico p
+       JOIN anio_lectivo al ON al.id_anio = p.id_anio
+       WHERE (al.calendario = '2025' OR al.calendario = '2024-2025')`);
         const allPeriods = closedPeriodsRes.rows;
         if (allPeriods.length === 0) {
-            console.log("❌ No hay periodos disponibles. Se necesita al menos uno.");
+            console.log("❌ No hay periodos disponibles para el año 2025.");
             return;
         }
         // Only ACTIVO and SANCIONADO students (not EXPULSADO or RETIRADO)
@@ -134,8 +137,10 @@ async function runSeedGrades() {
       WHERE m.estado = 'ACTIVA' AND e.estado IN ('ACTIVO', 'SANCIONADO')
     `);
         const detalleGradosRes = await client.query(`
-      SELECT dg.id_detallegrado, dg.id_materia, dg.id_docente, dg.id_grupo, dg.id_colegio
+      SELECT dg.id_detallegrado, dg.id_materia, dg.id_docente, dg.id_grupo, dg.id_colegio, dg.id_anio
       FROM detalle_grados dg
+      JOIN anio_lectivo al ON al.id_anio = dg.id_anio
+      WHERE (al.calendario = '2025' OR al.calendario = '2024-2025')
     `);
         // Get escala_valoracion per school for proper FK
         const escalasRes = await client.query(`
@@ -181,7 +186,7 @@ async function runSeedGrades() {
         let observacionesGenerales = 0;
         for (const period of allPeriods) {
             const isClosed = closedPeriodsRes.rows.some((p) => p.id_periodo === period.id_periodo);
-            const detalleGradosDePeriodo = detalleGradosRes.rows.filter((d) => d.id_colegio === period.id_colegio);
+            const detalleGradosDePeriodo = detalleGradosRes.rows.filter((d) => d.id_colegio === period.id_colegio && d.id_anio === period.id_anio);
             for (const dg of detalleGradosDePeriodo) {
                 let shouldProcess = true;
                 let gradePercentageOfStudents = 1.0;

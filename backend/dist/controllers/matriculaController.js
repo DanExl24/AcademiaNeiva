@@ -1,7 +1,13 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.toggleTransfer = exports.cancelEnrollment = exports.finalizeEnrollment = exports.notifyInconsistencies = exports.assignGrade = exports.validateDocument = exports.getMatriculaDetails = exports.getPendingMatriculas = exports.submitEnrollment = void 0;
+exports.downloadDocumentFile = exports.toggleTransfer = exports.cancelEnrollment = exports.finalizeEnrollment = exports.notifyInconsistencies = exports.assignGrade = exports.validateDocument = exports.getMatriculaDetails = exports.getPendingMatriculas = exports.submitEnrollment = void 0;
 const matriculaService_1 = require("../services/matriculaService");
+const db_1 = require("../config/db");
+const path_1 = __importDefault(require("path"));
+const fs_1 = __importDefault(require("fs"));
 const submitEnrollment = async (req, res) => {
     try {
         const data = req.body;
@@ -23,7 +29,14 @@ exports.submitEnrollment = submitEnrollment;
 const getPendingMatriculas = async (req, res) => {
     try {
         const { idColegio } = req.params;
-        const matriculas = await matriculaService_1.MatriculaService.getAllPending(Number(idColegio));
+        const { yearId } = req.query;
+        const authReq = req;
+        const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+        if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== Number(idColegio)) {
+            res.status(403).json({ error: "No tiene permiso para consultar las matrículas de este colegio." });
+            return;
+        }
+        const matriculas = await matriculaService_1.MatriculaService.getAllPending(Number(idColegio), yearId ? Number(yearId) : undefined);
         res.json(matriculas);
     }
     catch (error) {
@@ -33,8 +46,19 @@ const getPendingMatriculas = async (req, res) => {
 exports.getPendingMatriculas = getPendingMatriculas;
 const getMatriculaDetails = async (req, res) => {
     try {
-        const { id } = req.params;
-        const details = await matriculaService_1.MatriculaService.getDetails(Number(id));
+        const idStr = String(req.params.id || "");
+        if (/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(idStr)) {
+            const details = await matriculaService_1.MatriculaService.getByToken(idStr);
+            res.json(details);
+            return;
+        }
+        const details = await matriculaService_1.MatriculaService.getDetails(Number(idStr));
+        const authReq = req;
+        const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+        if (authReq.user && !isSupervision && authReq.user.schoolId && details && details.id_colegio !== authReq.user.schoolId) {
+            res.status(403).json({ error: "No tiene permiso para acceder al expediente de esta matrícula." });
+            return;
+        }
         res.json(details);
     }
     catch (error) {
@@ -113,3 +137,53 @@ const toggleTransfer = async (req, res) => {
     }
 };
 exports.toggleTransfer = toggleTransfer;
+const downloadDocumentFile = async (req, res) => {
+    try {
+        const { idDocumento } = req.params;
+        const queryRes = await db_1.pool.query(`SELECT id_documento, contenido, mime_type, nombre_original, url 
+       FROM documento_matriculas 
+       WHERE id_documento = $1`, [idDocumento]);
+        if (queryRes.rows.length === 0) {
+            res.status(404).json({ error: "Documento no encontrado" });
+            return;
+        }
+        const doc = queryRes.rows[0];
+        // If file binary bytea exists in DB
+        if (doc.contenido && Buffer.isBuffer(doc.contenido)) {
+            const filename = doc.nombre_original || doc.url || `documento-${idDocumento}`;
+            let contentType = doc.mime_type;
+            if (!contentType) {
+                const ext = path_1.default.extname(filename).toLowerCase();
+                if (ext === '.pdf')
+                    contentType = 'application/pdf';
+                else if (ext === '.png')
+                    contentType = 'image/png';
+                else if (ext === '.jpg' || ext === '.jpeg')
+                    contentType = 'image/jpeg';
+                else if (ext === '.svg')
+                    contentType = 'image/svg+xml';
+                else
+                    contentType = 'application/octet-stream';
+            }
+            res.setHeader('Content-Type', contentType);
+            res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+            res.send(doc.contenido);
+            return;
+        }
+        // Fallback for legacy files stored on local disk
+        if (doc.url && doc.url !== 'PENDIENTE') {
+            const diskFilename = path_1.default.basename(doc.url);
+            const filePath = path_1.default.join(process.cwd(), 'uploads', diskFilename);
+            if (fs_1.default.existsSync(filePath)) {
+                res.sendFile(filePath);
+                return;
+            }
+        }
+        res.status(404).json({ error: "El archivo adjunto no existe o está pendiente de carga" });
+    }
+    catch (error) {
+        console.error("Error al descargar documento:", error);
+        res.status(500).json({ error: "Error en el servidor al obtener el archivo" });
+    }
+};
+exports.downloadDocumentFile = downloadDocumentFile;

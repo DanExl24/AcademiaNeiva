@@ -28,7 +28,7 @@ async function run() {
             // Query 2: student info
             console.log('\n- Executing Query 2: student info join...');
             const studentQueryRes = await db_1.pool.query(`
-        SELECT e.id_estudiante, e.nombre as estudiante_nombre, e.apellido as estudiante_apellido, e.documento, e.codigo,
+        SELECT e.id_estudiante, e.nombre as estudiante_nombre, e.apellido as estudiante_apellido, u.documento, e.codigo,
                e.id_colegio,
                c.nombre as colegio_nombre, c.sede, c.dane,
                COALESCE(c.tipo_calendario, 'A') as tipo_calendario,
@@ -36,6 +36,7 @@ async function run() {
                j.nombre as jornada_nombre,
                al.calendario
         FROM estudiante e
+        LEFT JOIN usuario u ON e.id_usuario = u.id_usuario
         JOIN colegio c ON c.id_colegio = e.id_colegio
         LEFT JOIN matricula m ON m.id_estudiante = e.id_estudiante
         LEFT JOIN grupos gr ON gr.id_grupo = m.id_grupo

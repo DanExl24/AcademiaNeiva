@@ -4,13 +4,23 @@ exports.deleteObservation = exports.updateObservation = exports.createObservatio
 const db_1 = require("../config/db");
 // Helper to check if period/class is editable (same logic as attendanceController)
 const checkEditability = async (detailGradeId, schoolId, periodId) => {
-    // 1. Check period is open
-    const periodRes = await db_1.pool.query(`SELECT estado FROM periodo_academico WHERE id_periodo = $1 AND id_colegio = $2`, [periodId, schoolId]);
+    // 1. Check period and academic year are open
+    const periodRes = await db_1.pool.query(`SELECT pa.estado AS periodo_estado, al.estado AS anio_estado 
+     FROM periodo_academico pa
+     JOIN anio_lectivo al ON al.id_anio = pa.id_anio
+     WHERE pa.id_periodo = $1 AND pa.id_colegio = $2`, [periodId, schoolId]);
     if (periodRes.rows.length === 0) {
         return { editable: false, error: "Periodo académico no encontrado." };
     }
-    if (periodRes.rows[0].estado !== "ABIERTO") {
-        const isPending = periodRes.rows[0].estado === "PENDIENTE";
+    const { periodo_estado, anio_estado } = periodRes.rows[0];
+    if (anio_estado === "CERRADO") {
+        return {
+            editable: false,
+            error: "El año lectivo correspondiente se encuentra CERRADO. No se permiten modificaciones.",
+        };
+    }
+    if (periodo_estado !== "ABIERTO") {
+        const isPending = periodo_estado === "PENDIENTE";
         return {
             editable: false,
             error: isPending
@@ -80,6 +90,12 @@ const getObservations = async (req, res) => {
             return;
         }
         const { id_colegio } = dgRes.rows[0];
+        const authReq = req;
+        const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+        if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== id_colegio) {
+            res.status(403).json({ error: "No tiene permiso para consultar observaciones de este colegio." });
+            return;
+        }
         // Check editability
         const editCheck = await checkEditability(detailGradeId, id_colegio, periodId);
         // Get all observations for this detailGrade and period, joined with student info
@@ -88,7 +104,7 @@ const getObservations = async (req, res) => {
          o.id_estudiante,
          e.nombre,
          e.apellido,
-         e.documento,
+         u.documento,
          e.codigo,
          o.fortalezas,
          o.debilidades,
@@ -97,6 +113,7 @@ const getObservations = async (req, res) => {
          o.tipo
        FROM observacion_estudiante o
        JOIN estudiante e ON e.id_estudiante = o.id_estudiante
+       LEFT JOIN usuario u ON e.id_usuario = u.id_usuario
        WHERE o.id_detallegrado = $1 AND o.id_periodo = $2
        ORDER BY o.fecha DESC`, [detailGradeId, periodId]);
         const observations = observationsRes.rows.map((r) => {
@@ -162,6 +179,12 @@ const createObservation = async (req, res) => {
             return;
         }
         const schoolId = dgRes.rows[0].id_colegio;
+        const authReq = req;
+        const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+        if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== schoolId) {
+            res.status(403).json({ error: "No tiene permiso para registrar observaciones en este colegio." });
+            return;
+        }
         // Validate editability
         const editCheck = await checkEditability(detailGradeId, schoolId, periodId);
         if (!editCheck.editable) {

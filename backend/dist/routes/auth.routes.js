@@ -5,6 +5,8 @@ const authController_1 = require("../controllers/authController");
 const userController_1 = require("../controllers/userController");
 const passwordResetController_1 = require("../controllers/passwordResetController");
 const authMiddleware_1 = require("../middleware/authMiddleware");
+const validateDto_1 = require("../middleware/validateDto");
+const profile_dto_1 = require("../dtos/profile.dto");
 const router = (0, express_1.Router)();
 router.post("/login", authController_1.login);
 router.post("/student-login", authController_1.studentLogin);
@@ -15,6 +17,8 @@ router.get("/school-identity/:schoolId", authMiddleware_1.verifyToken, authContr
 router.get("/verify", authController_1.verifySession);
 // Endpoints de gestión de perfil de usuario logueado
 router.get("/profile", authMiddleware_1.verifyToken, authController_1.getUserProfile);
-router.put("/profile/email", authMiddleware_1.verifyToken, authController_1.updateProfileEmail);
+router.post("/profile/request-email-change", authMiddleware_1.verifyToken, (0, validateDto_1.validateDto)(profile_dto_1.requestEmailChangeSchema), authController_1.requestEmailChange);
+router.post("/profile/verify-email-change", authMiddleware_1.verifyToken, (0, validateDto_1.validateDto)(profile_dto_1.verifyEmailChangeSchema), authController_1.verifyEmailChange);
+router.put("/profile/phone", authMiddleware_1.verifyToken, (0, validateDto_1.validateDto)(profile_dto_1.updatePhoneSchema), authController_1.updateProfilePhone);
 router.put("/profile/password", authMiddleware_1.verifyToken, authController_1.updateProfilePassword);
 exports.default = router;

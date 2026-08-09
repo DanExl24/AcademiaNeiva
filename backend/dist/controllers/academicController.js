@@ -4,7 +4,12 @@ exports.getTeacherDashboard = exports.getStudentsByGrade = exports.getTeacherCou
 const db_1 = require("../config/db");
 const getTeacherCourses = async (req, res) => {
     const { userId } = req.params;
-    console.log(`[DEV] getTeacherCourses called - userId: ${userId}`);
+    const authUser = req.user;
+    const isMonitoring = req.headers['x-monitoring-mode'] === 'true' || req.headers['x-monitoring-mode'] === '1';
+    if (authUser && !authUser.roles.includes("admin_general") && !isMonitoring && Number(authUser.id) !== Number(userId)) {
+        res.status(403).json({ error: "No tiene permiso para consultar los cursos de otro docente." });
+        return;
+    }
     try {
         const docenteRes = await db_1.pool.query("SELECT id_docente FROM docente WHERE id_usuario = $1", [userId]);
         if (docenteRes.rows.length === 0) {
@@ -14,7 +19,9 @@ const getTeacherCourses = async (req, res) => {
         }
         const idDocente = docenteRes.rows[0].id_docente;
         console.log(`[DEV] getTeacherCourses - id_docente=${idDocente}`);
-        const result = await db_1.pool.query(`SELECT 
+        const yearId = req.query.yearId ? Number(req.query.yearId) : null;
+        let query = `
+      SELECT 
         dg.id_detallegrado,
         g.id_grupo as id_grado, 
         tg.nombre as grado_nombre, 
@@ -30,7 +37,13 @@ const getTeacherCourses = async (req, res) => {
        JOIN secciones s ON g.id_seccion = s.id_seccion
        JOIN jornada j ON g.id_jornada = j.id_jornada
        JOIN materias m ON dg.id_materia = m.id_materia
-       WHERE dg.id_docente = $1`, [idDocente]);
+       WHERE dg.id_docente = $1`;
+        const params = [idDocente];
+        if (yearId) {
+            query += ` AND dg.id_anio = $2`;
+            params.push(yearId);
+        }
+        const result = await db_1.pool.query(query, params);
         console.log(`[DEV] getTeacherCourses - returning ${result.rows.length} course(s) for id_docente=${idDocente}`);
         res.json(result.rows);
     }
@@ -44,8 +57,9 @@ const getStudentsByGrade = async (req, res) => {
     const { gradeId } = req.params;
     console.log(`[DEV] getStudentsByGrade called - gradeId (id_grupo): ${gradeId}`);
     try {
-        const result = await db_1.pool.query(`SELECT e.id_estudiante, e.nombre, e.apellido, e.documento, e.codigo 
+        const result = await db_1.pool.query(`SELECT e.id_estudiante, e.nombre, e.apellido, u.documento, e.codigo 
        FROM estudiante e
+       LEFT JOIN usuario u ON e.id_usuario = u.id_usuario
        JOIN matricula m ON e.id_estudiante = m.id_estudiante
        WHERE m.id_grupo = $1 AND m.estado IN ('ACTIVA', 'TRASLADADA')
        ORDER BY e.apellido, e.nombre`, [gradeId]);

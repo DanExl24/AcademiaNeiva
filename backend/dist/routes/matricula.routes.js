@@ -5,6 +5,8 @@ const matriculaService_1 = require("../services/matriculaService");
 const matriculaController_1 = require("../controllers/matriculaController");
 const multer_1 = require("../config/multer");
 const authMiddleware_1 = require("../middleware/authMiddleware");
+const validateDto_1 = require("../middleware/validateDto");
+const matricula_dto_1 = require("../dtos/matricula.dto");
 const db_1 = require("../config/db");
 const router = (0, express_1.Router)();
 // Helper helper middleware to protect routes that request an integer ID, but bypass for UUID tokens
@@ -30,17 +32,14 @@ router.get("/school/:schoolId/enrollment-config", async (req, res) => {
     try {
         const { schoolId } = req.params;
         // Find active year for school
-        const yearRes = await db_1.pool.query(`SELECT id_anio, calendario FROM anio_lectivo WHERE id_colegio = $1 AND estado = 'ABIERTO' LIMIT 1`, [schoolId]);
+        const yearRes = await db_1.pool.query(`SELECT id_anio, calendario FROM anio_lectivo WHERE id_colegio = $1 AND estado = 'ABIERTO' ORDER BY id_anio DESC LIMIT 1`, [schoolId]);
         if (yearRes.rows.length === 0) {
             res.json({ config: null, yearLabel: null });
             return;
         }
         const yearId = yearRes.rows[0].id_anio;
         const yearLabel = yearRes.rows[0].calendario;
-        const approvedRes = await db_1.pool.query(`SELECT COUNT(*)::int AS count 
-       FROM matricula 
-       WHERE id_colegio = $1 AND id_anio = $2 AND estado IN ('ACTIVA', 'TRASLADADA')`, [schoolId, yearId]);
-        const hasApproved = approvedRes.rows[0].count > 0;
+        const hasApproved = false;
         const configRes = await db_1.pool.query(`SELECT id_configuracion, fecha_inicio, fecha_cierre, habilitada 
        FROM configuracion_inscripcion 
        WHERE id_colegio = $1 AND id_anio = $2`, [schoolId, yearId]);
@@ -86,8 +85,8 @@ router.post("/submit", multer_1.upload.fields([
 router.get("/pending/:idColegio", authMiddleware_1.verifyToken, authMiddleware_1.requireDirectivo, matriculaController_1.getPendingMatriculas);
 router.get("/filtered/:idColegio", authMiddleware_1.verifyToken, authMiddleware_1.requireDirectivo, async (req, res) => {
     try {
-        const { estado } = req.query;
-        const result = await matriculaService_1.MatriculaService.getFiltered(Number(req.params.idColegio), estado);
+        const { estado, yearId } = req.query;
+        const result = await matriculaService_1.MatriculaService.getFiltered(Number(req.params.idColegio), estado, yearId ? Number(yearId) : undefined);
         res.json(result);
     }
     catch (e) {
@@ -110,7 +109,7 @@ router.get("/:id", protectIfIntegerId, async (req, res) => {
         res.status(500).json({ error: e.message });
     }
 });
-router.patch("/document/:idDocumento", authMiddleware_1.verifyToken, authMiddleware_1.requireDirectivo, matriculaController_1.validateDocument);
+router.patch("/document/:idDocumento", authMiddleware_1.verifyToken, authMiddleware_1.requireDirectivo, (0, validateDto_1.validateDto)(matricula_dto_1.ValidateDocumentSchema), matriculaController_1.validateDocument);
 router.post("/assign-grade/:id", authMiddleware_1.verifyToken, authMiddleware_1.requireDirectivo, matriculaController_1.assignGrade);
 router.post("/notify-inconsistencies/:id", authMiddleware_1.verifyToken, authMiddleware_1.requireDirectivo, matriculaController_1.notifyInconsistencies);
 router.post("/update-documents/:token", multer_1.upload.fields([
@@ -133,7 +132,8 @@ router.post("/update-documents/:token", multer_1.upload.fields([
         res.status(500).json({ error: e.message });
     }
 });
-router.post("/finalize/:id", authMiddleware_1.verifyToken, authMiddleware_1.requireDirectivo, matriculaController_1.finalizeEnrollment);
-router.post("/cancel/:id", authMiddleware_1.verifyToken, authMiddleware_1.requireDirectivo, matriculaController_1.cancelEnrollment);
+router.post("/finalize/:id", authMiddleware_1.verifyToken, authMiddleware_1.requireDirectivo, (0, validateDto_1.validateDto)(matricula_dto_1.FinalizeEnrollmentSchema), matriculaController_1.finalizeEnrollment);
+router.post("/cancel/:id", authMiddleware_1.verifyToken, authMiddleware_1.requireDirectivo, (0, validateDto_1.validateDto)(matricula_dto_1.CancelEnrollmentSchema), matriculaController_1.cancelEnrollment);
 router.patch("/transfer-status/:id", authMiddleware_1.verifyToken, authMiddleware_1.requireDirectivo, matriculaController_1.toggleTransfer);
+router.get("/documentos/:idDocumento/archivo", matriculaController_1.downloadDocumentFile);
 exports.default = router;

@@ -183,7 +183,7 @@ export const getGradeDetails = async (req: Request, res: Response) => {
 
     const id_grupo = matRes.rows[0].id_grupo;
 
-    // 2. Obtener el docente ACTUAL asignado a esta materia en el grupo
+    // 2. Obtener el docente ACTUAL asignado (para el header de la materia)
     const docRes = await pool.query(
       `SELECT d.nombre || ' ' || d.apellido as docente, m.nombre as materia
        FROM detalle_grados dg
@@ -198,20 +198,20 @@ export const getGradeDetails = async (req: Request, res: Response) => {
     const currentTeacher = docRes.rows[0]?.docente || 'Sin docente asignado';
     const materiaNombre = docRes.rows[0]?.materia || '';
 
-    // 3. Obtener actividades únicas asociadas a este grupo y materia en este periodo
+    // 3. Obtener actividades con el nombre del docente CREADOR de cada una
     const result = await pool.query(`
       SELECT DISTINCT ON (am.id_actividadmateria)
         am.id_actividadmateria,
         am.nombre as actividad,
         am.porcentaje,
         na.nota,
-        (
-          SELECT string_agg(ce.descripcion, ' / ') 
-          FROM criterio_evaluacion ce 
-          WHERE ce.id_actividadmateria = am.id_actividadmateria
-        ) as criterio,
         $4::text as materia,
-        $5::text as docente
+        $5::text as docente,
+        CASE
+          WHEN am.id_docente_creador IS NOT NULL THEN
+            (SELECT d2.nombre || ' ' || d2.apellido FROM docente d2 WHERE d2.id_docente = am.id_docente_creador)
+          ELSE $5::text
+        END as docente_creador
       FROM actividad_materia am
       JOIN detalle_grados dg ON dg.id_detallegrado = am.id_detallegrado
       LEFT JOIN notas_actividad na ON na.id_actividadmateria = am.id_actividadmateria AND na.id_estudiante = $1
@@ -221,7 +221,65 @@ export const getGradeDetails = async (req: Request, res: Response) => {
       ORDER BY am.id_actividadmateria ASC
     `, [studentIdInt, id_grupo, materiaIdInt, materiaNombre, currentTeacher, periodIdInt]);
 
-    res.json(result.rows);
+    const activityIds = result.rows.map((r: any) => r.id_actividadmateria);
+
+    // 4. Obtener criterios con su nota individual por estudiante
+    let criteriosByActivity: Record<number, any[]> = {};
+    if (activityIds.length > 0) {
+      const critRes = await pool.query(`
+        SELECT 
+          ce.id_criterio,
+          ce.id_actividadmateria,
+          ce.descripcion,
+          ce.porcentaje,
+          nc.nota as nota_criterio
+        FROM criterio_evaluacion ce
+        LEFT JOIN nota_criterio nc 
+          ON nc.id_criterio = ce.id_criterio 
+         AND nc.id_estudiante = $1
+        WHERE ce.id_actividadmateria = ANY($2::int[])
+        ORDER BY ce.id_criterio ASC
+      `, [studentIdInt, activityIds]);
+
+      for (const row of critRes.rows) {
+        if (!criteriosByActivity[row.id_actividadmateria]) {
+          criteriosByActivity[row.id_actividadmateria] = [];
+        }
+        criteriosByActivity[row.id_actividadmateria].push(row);
+      }
+    }
+
+    // 5. Combinar actividades con sus criterios y calcular nota final ponderada si aplica
+    const activities = result.rows.map((act: any) => {
+      const criterios = criteriosByActivity[act.id_actividadmateria] || [];
+      
+      // Si tiene criterios, la nota es el promedio ponderado de las notas de criterio
+      let notaFinal = act.nota !== null && act.nota !== undefined ? parseFloat(act.nota) : null;
+      if (criterios.length > 0) {
+        const allGraded = criterios.every((c: any) => c.nota_criterio !== null && c.nota_criterio !== undefined);
+        if (allGraded) {
+          const totalPeso = criterios.reduce((sum: number, c: any) => sum + parseFloat(c.porcentaje), 0);
+          const ponderado = criterios.reduce((sum: number, c: any) => {
+            return sum + (parseFloat(c.nota_criterio) * parseFloat(c.porcentaje));
+          }, 0);
+          notaFinal = totalPeso > 0 ? parseFloat((ponderado / totalPeso).toFixed(2)) : null;
+        } else {
+          notaFinal = null; // Aún no todos los criterios calificados
+        }
+      }
+
+      return {
+        ...act,
+        nota: notaFinal,
+        criterios,
+        // Mantener criterio como string para compatibilidad con componentes que lo usen
+        criterio: criterios.length > 0
+          ? criterios.map((c: any) => c.descripcion).join(' / ')
+          : null
+      };
+    });
+
+    res.json(activities);
   } catch (error) {
     console.error('Error fetching grade details:', error);
     res.status(500).json({ error: 'Error al obtener detalle de calificaciones' });

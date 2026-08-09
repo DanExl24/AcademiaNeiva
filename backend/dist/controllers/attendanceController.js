@@ -4,13 +4,14 @@ exports.getAttendanceHistory = exports.saveAttendance = exports.getAttendanceByD
 const db_1 = require("../config/db");
 // Helper to check if period/class is editable
 const checkEditability = async (detailGradeId, schoolId) => {
-    // 1. Get open period
-    const periodRes = await db_1.pool.query(`SELECT id_periodo, nombre 
-     FROM periodo_academico 
-     WHERE id_colegio = $1 AND estado = 'ABIERTO' 
+    // 1. Get open period in open academic year
+    const periodRes = await db_1.pool.query(`SELECT pa.id_periodo, pa.nombre 
+     FROM periodo_academico pa
+     JOIN anio_lectivo al ON al.id_anio = pa.id_anio
+     WHERE pa.id_colegio = $1 AND pa.estado = 'ABIERTO' AND al.estado = 'ABIERTO'
      LIMIT 1`, [schoolId]);
     if (periodRes.rows.length === 0) {
-        return { editable: false, error: "No hay un periodo académico abierto para esta institución." };
+        return { editable: false, error: "No hay un periodo académico y año lectivo abierto para esta institución." };
     }
     const periodId = periodRes.rows[0].id_periodo;
     // 2. Check if teaching assignment is closed
@@ -39,18 +40,25 @@ const getAttendanceByDate = async (req, res) => {
             return;
         }
         const { id_colegio, id_grupo } = dgRes.rows[0];
+        const authReq = req;
+        const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+        if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== id_colegio) {
+            res.status(403).json({ error: "No tiene permiso para ver las asistencias de este colegio." });
+            return;
+        }
         // Check if editable
         const editCheck = await checkEditability(detailGradeId, id_colegio);
         // Past days restriction
-        const todayStr = new Date().toLocaleDateString('en-CA');
+        const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
         const isToday = dateStr === todayStr;
         const editable = editCheck.editable && isToday;
         const errorReason = !isToday
             ? "No está permitido registrar o editar asistencias de fechas anteriores. Solo lectura habilitada."
             : editCheck.error;
         // Get all students enrolled in this group/grade
-        const studentsRes = await db_1.pool.query(`SELECT e.id_estudiante, e.nombre, e.apellido, e.documento, e.codigo 
+        const studentsRes = await db_1.pool.query(`SELECT e.id_estudiante, e.nombre, e.apellido, u.documento, e.codigo 
        FROM estudiante e
+       LEFT JOIN usuario u ON e.id_usuario = u.id_usuario
        JOIN matricula m ON e.id_estudiante = m.id_estudiante
        WHERE m.id_grupo = $1 AND m.estado IN ('ACTIVA', 'TRASLADADA')
        ORDER BY e.apellido, e.nombre`, [id_grupo]);
@@ -100,7 +108,7 @@ const saveAttendance = async (req, res) => {
         res.status(400).json({ error: "Parámetros inválidos" });
         return;
     }
-    const todayStr = new Date().toLocaleDateString('en-CA');
+    const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
     if (date !== todayStr) {
         res.status(409).json({ error: "No está permitido registrar o modificar la asistencia de días pasados." });
         return;
@@ -113,6 +121,12 @@ const saveAttendance = async (req, res) => {
             return;
         }
         const schoolId = dgRes.rows[0].id_colegio;
+        const authReq = req;
+        const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+        if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== schoolId) {
+            res.status(403).json({ error: "No tiene permiso para registrar asistencias en este colegio." });
+            return;
+        }
         // Validate editability
         const editCheck = await checkEditability(detailGradeId, schoolId);
         if (!editCheck.editable) {
@@ -220,8 +234,9 @@ const getAttendanceHistory = async (req, res) => {
         }
         const { id_grupo } = dgRes.rows[0];
         // Get all students
-        const studentsRes = await db_1.pool.query(`SELECT e.id_estudiante, e.nombre, e.apellido, e.documento, e.codigo 
+        const studentsRes = await db_1.pool.query(`SELECT e.id_estudiante, e.nombre, e.apellido, u.documento, e.codigo 
        FROM estudiante e
+       LEFT JOIN usuario u ON e.id_usuario = u.id_usuario
        JOIN matricula m ON e.id_estudiante = m.id_estudiante
        WHERE m.id_grupo = $1 AND m.estado IN ('ACTIVA', 'TRASLADADA')
        ORDER BY e.apellido, e.nombre`, [id_grupo]);
