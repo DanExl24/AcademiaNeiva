@@ -16,6 +16,8 @@ SET check_function_bodies = false;
 SET xmloption = content;
 SET client_min_messages = warning;
 SET row_security = off;
+SET my.app.bypass_triggers = 'true';
+
 
 --
 -- Name: public; Type: SCHEMA; Schema: -; Owner: postgres
