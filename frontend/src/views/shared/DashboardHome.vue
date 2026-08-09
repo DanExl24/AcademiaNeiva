@@ -11,12 +11,16 @@ import {
   TrendingUp,
   Target,
   AlertTriangle,
-  UserCheck,
   Filter,
   LayoutDashboard,
   X,
   Search,
-  CalendarDays
+  CalendarDays,
+  Award,
+  ShieldAlert,
+  Lightbulb,
+  MessageSquare,
+  FileWarning
 } from 'lucide-vue-next'
 import {
   Chart as ChartJS,
@@ -59,6 +63,7 @@ const dashboardData = ref({
     totalTeachers: 0,
     attendanceToday: 0,
     generalAverage: 0,
+    approvalRate: 0,
     studentsAtRisk: 0,
     disciplinaryReports: 0,
     desertionRate: 0,
@@ -68,10 +73,19 @@ const dashboardData = ref({
     totalTeachers: number;
     attendanceToday: number;
     generalAverage: number;
+    approvalRate: number;
     studentsAtRisk: number;
     disciplinaryReports: number;
     desertionRate: number;
   }>,
+  observationsSummary: {
+    total: 0,
+    academicas: 0,
+    disciplinarias: 0,
+    convivenciales: 0,
+    sancionesActivas: 0,
+    byGrade: [] as { grado: string; total: number; academicas: number; disciplinarias: number; convivenciales: number }[]
+  },
   charts: {
     performanceByGrade: [] as {nombre: string, average: number}[],
     performanceBySubject: [] as {nombre: string, average: number}[],
@@ -163,18 +177,20 @@ const activeSummary = computed(() => {
     totalTeachers: 0,
     attendanceToday: 0,
     generalAverage: 0,
+    approvalRate: 0,
     studentsAtRisk: 0,
     disciplinaryReports: 0,
     desertionRate: 0
   }
 })
 
-// Computed Stats for Cards
+// Computed Stats for 5 Cards
 const dashboardStats = computed(() => [
-  { name: 'Estudiantes', value: activeSummary.value.totalStudents.toString(), icon: GraduationCap, color: 'text-blue-600', bg: 'bg-blue-50' },
-  { name: 'Docentes', value: activeSummary.value.totalTeachers.toString(), icon: Users, color: 'text-indigo-600', bg: 'bg-indigo-50' },
-  { name: 'Asistencia Hoy', value: `${activeSummary.value.attendanceToday}%`, icon: UserCheck, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-  { name: 'Riesgo Académico', value: activeSummary.value.studentsAtRisk.toString(), icon: AlertTriangle, color: 'text-rose-600', bg: 'bg-rose-50' },
+  { name: 'Estudiantes', value: activeSummary.value.totalStudents.toString(), icon: GraduationCap, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950/40' },
+  { name: 'Docentes', value: activeSummary.value.totalTeachers.toString(), icon: Users, color: 'text-indigo-600 dark:text-indigo-400', bg: 'bg-indigo-50 dark:bg-indigo-950/40' },
+  { name: 'Promedio Institucional', value: `${activeSummary.value.generalAverage || '0.0'} / 5.0`, icon: TrendingUp, color: 'text-sky-600 dark:text-sky-400', bg: 'bg-sky-50 dark:bg-sky-950/40' },
+  { name: 'Tasa de Aprobación', value: `${activeSummary.value.approvalRate ?? 100}%`, icon: Award, color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-950/40' },
+  { name: 'Riesgo Académico', value: activeSummary.value.studentsAtRisk.toString(), icon: AlertTriangle, color: 'text-rose-600 dark:text-rose-400', bg: 'bg-rose-50 dark:bg-rose-950/40' },
 ])
 
 // Chart Configs
@@ -823,7 +839,7 @@ onMounted(() => {
       </div>
 
       <!-- Principal KPIs -->
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
         <div 
           v-for="stat in dashboardStats" 
           :key="stat.name" 
@@ -1047,6 +1063,103 @@ onMounted(() => {
         <!-- Decorative BG -->
         <div class="absolute -right-20 -top-20 h-80 w-80 bg-rose-500/10 rounded-full blur-[100px]"></div>
         <div class="absolute -left-20 -bottom-20 h-80 w-80 bg-indigo-500/10 rounded-full blur-[100px]"></div>
+      </div>
+
+      <!-- Observaciones y Convivencia Escolar Panel -->
+      <div class="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 rounded-[2.5rem] p-8 border border-slate-800 shadow-2xl text-white space-y-6">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-6">
+          <div class="flex items-center gap-3">
+            <div class="p-3 bg-indigo-500/20 text-indigo-400 rounded-2xl border border-indigo-500/30">
+              <ShieldAlert :size="24" />
+            </div>
+            <div>
+              <h3 class="text-xl font-extrabold tracking-tight">Control y Recopilación de Observaciones</h3>
+              <p class="text-xs text-slate-400 font-medium">Seguimiento institucional de alertas disciplinares, pedagógicas y de convivencia por estado</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2 bg-white/5 px-4 py-2 rounded-2xl border border-white/10 text-xs font-bold text-slate-300 self-start md:self-auto">
+            <CalendarDays :size="14" class="text-indigo-400" />
+            Total Registros: <span class="text-white text-sm font-black">{{ dashboardData.observationsSummary?.total || 0 }}</span>
+          </div>
+        </div>
+
+        <!-- Observaciones Sub-KPIs Grid -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          <!-- Académicas -->
+          <div class="bg-white/5 hover:bg-white/10 border border-white/10 p-5 rounded-2xl transition-all flex items-center justify-between group">
+            <div>
+              <p class="text-[10px] font-black text-sky-400 uppercase tracking-wider">Académicas</p>
+              <p class="text-2xl font-black mt-1 text-white group-hover:scale-105 transition-transform">{{ dashboardData.observationsSummary?.academicas || 0 }}</p>
+              <p class="text-[10px] text-slate-400 mt-0.5">Alertas pedagógicas</p>
+            </div>
+            <div class="p-3 bg-sky-500/20 text-sky-400 rounded-xl group-hover:scale-110 transition-transform">
+              <Lightbulb :size="22" />
+            </div>
+          </div>
+
+          <!-- Disciplinarias -->
+          <div class="bg-white/5 hover:bg-white/10 border border-white/10 p-5 rounded-2xl transition-all flex items-center justify-between group">
+            <div>
+              <p class="text-[10px] font-black text-amber-400 uppercase tracking-wider">Disciplinarias</p>
+              <p class="text-2xl font-black mt-1 text-white group-hover:scale-105 transition-transform">{{ dashboardData.observationsSummary?.disciplinarias || 0 }}</p>
+              <p class="text-[10px] text-slate-400 mt-0.5">Faltas al manual</p>
+            </div>
+            <div class="p-3 bg-amber-500/20 text-amber-400 rounded-xl group-hover:scale-110 transition-transform">
+              <FileWarning :size="22" />
+            </div>
+          </div>
+
+          <!-- Convivenciales -->
+          <div class="bg-white/5 hover:bg-white/10 border border-white/10 p-5 rounded-2xl transition-all flex items-center justify-between group">
+            <div>
+              <p class="text-[10px] font-black text-purple-400 uppercase tracking-wider">Convivenciales</p>
+              <p class="text-2xl font-black mt-1 text-white group-hover:scale-105 transition-transform">{{ dashboardData.observationsSummary?.convivenciales || 0 }}</p>
+              <p class="text-[10px] text-slate-400 mt-0.5">Acuerdos y grupo</p>
+            </div>
+            <div class="p-3 bg-purple-500/20 text-purple-400 rounded-xl group-hover:scale-110 transition-transform">
+              <MessageSquare :size="22" />
+            </div>
+          </div>
+
+          <!-- Sanciones Activas -->
+          <div class="bg-white/5 hover:bg-white/10 border border-white/10 p-5 rounded-2xl transition-all flex items-center justify-between group">
+            <div>
+              <p class="text-[10px] font-black text-rose-400 uppercase tracking-wider">Sanciones Activas</p>
+              <p class="text-2xl font-black mt-1 text-white group-hover:scale-105 transition-transform">{{ dashboardData.observationsSummary?.sancionesActivas || 0 }}</p>
+              <p class="text-[10px] text-slate-400 mt-0.5">Medidas vigentes</p>
+            </div>
+            <div class="p-3 bg-rose-500/20 text-rose-400 rounded-xl group-hover:scale-110 transition-transform">
+              <AlertTriangle :size="22" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Breakdown by Grade List -->
+        <div v-if="dashboardData.observationsSummary?.byGrade && dashboardData.observationsSummary.byGrade.length > 0" class="mt-6 border-t border-white/5 pt-6">
+          <h4 class="text-xs font-black uppercase tracking-wider text-slate-400 mb-4 flex items-center gap-2">
+            <Filter :size="14" class="text-indigo-400" />
+            Recopilación de Observaciones por Grado
+          </h4>
+          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            <div 
+              v-for="gObs in dashboardData.observationsSummary.byGrade" 
+              :key="gObs.grado"
+              class="bg-white/5 border border-white/10 p-4 rounded-2xl flex flex-col justify-between hover:bg-white/10 transition-all"
+            >
+              <div class="flex justify-between items-center mb-2">
+                <span class="font-bold text-sm text-slate-200">{{ gObs.grado }}</span>
+                <span class="text-xs font-black bg-indigo-500/20 text-indigo-300 px-2.5 py-1 rounded-lg border border-indigo-500/30">
+                  {{ gObs.total }} obs.
+                </span>
+              </div>
+              <div class="flex items-center gap-2 text-[11px] font-semibold text-slate-400">
+                <span class="text-sky-300">Acad: {{ gObs.academicas }}</span> • 
+                <span class="text-amber-300">Disc: {{ gObs.disciplinarias }}</span> • 
+                <span class="text-purple-300">Conv: {{ gObs.convivenciales }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Modal for Students at Risk details -->

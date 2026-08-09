@@ -1,10 +1,10 @@
 {
   "summary": {
     "totalExecuted": 38,
-    "passed": 38,
-    "failed": 0,
+    "passed": 37,
+    "failed": 1,
     "warnings": 0,
-    "avgScore": "100.00"
+    "avgScore": "97.89"
   },
   "results": [
     {
@@ -569,7 +569,7 @@
         "userId": 4
       },
       "expectedResult": "HTTP 200 OK con array de asignaciones",
-      "actualResult": "HTTP 200. Cursos: 84",
+      "actualResult": "HTTP 200. Cursos: 168",
       "httpCode": 200,
       "expectedCode": 200,
       "validations": [
@@ -786,8 +786,8 @@
         "Authorization": "Bearer <directivoToken>"
       },
       "expectedResult": "HTTP 200 OK con estadísticas del colegio",
-      "actualResult": "HTTP 200",
-      "httpCode": 200,
+      "actualResult": "HTTP 500",
+      "httpCode": 500,
       "expectedCode": 200,
       "validations": [
         "Cálculo de métricas DB"
@@ -796,25 +796,23 @@
         "stats"
       ],
       "receivedFields": [
-        "summary",
-        "stats",
-        "summaryByGrade",
-        "charts",
-        "lowPerformance"
+        "error"
       ],
-      "errors": [],
-      "severity": "NONE",
-      "evidence": "Status: 200",
+      "errors": [
+        "Error al cargar dashboard del directivo"
+      ],
+      "severity": "IMPORTANT",
+      "evidence": "Status: 500",
       "possibleCause": "",
-      "status": "PASS",
+      "status": "FAIL",
       "scores": {
-        "httpStatus": 10,
-        "schema": 20,
-        "datos": 25,
-        "reglasNegocio": 25,
+        "httpStatus": 0,
+        "schema": 0,
+        "datos": 0,
+        "reglasNegocio": 0,
         "errores": 10,
         "seguridad": 10,
-        "total": 100
+        "total": 20
       }
     },
     {

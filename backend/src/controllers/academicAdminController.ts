@@ -4997,7 +4997,63 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
       });
     }
 
-    // 5. Charts Data
+    // Calculate approvalRate for summaryByGrade
+    Object.keys(summaryByGrade).forEach(g => {
+      const tot = summaryByGrade[g].totalStudents || 0;
+      const risk = summaryByGrade[g].studentsAtRisk || 0;
+      summaryByGrade[g].approvalRate = tot > 0 ? Number(((tot - risk) / tot * 100).toFixed(1)) : 100;
+    });
+
+    // 5. Observations & Convivencia Summary
+    const obsRes = await pool.query(
+      `SELECT 
+         COUNT(*)::int as total,
+         COUNT(*) FILTER (WHERE o.tipo::text IN ('ACADEMICA', 'ACADEMICO'))::int as academicas,
+         COUNT(*) FILTER (WHERE o.tipo::text IN ('DISCIPLINARIA', 'DISCIPLINARIO'))::int as disciplinarias,
+         COUNT(*) FILTER (WHERE o.tipo::text IN ('CONVIVENCIA', 'CONVIVENCIAL'))::int as convivenciales
+       FROM observacion_estudiante o
+       JOIN detalle_grados dg ON o.id_detallegrado = dg.id_detallegrado
+       WHERE dg.id_colegio = $1 ${targetPeriodId ? `AND o.id_periodo = $2` : ''}`,
+      targetPeriodId ? [schoolId, targetPeriodId] : [schoolId]
+    );
+
+    const sancionRes = await pool.query(
+      `SELECT COUNT(DISTINCT s.id_sancion)::int as total
+       FROM sancion s
+       JOIN estudiante e ON s.id_estudiante = e.id_estudiante
+       JOIN matricula m ON e.id_estudiante = m.id_estudiante AND m.id_anio = $2 AND m.estado = 'ACTIVA'
+       JOIN detalle_grados dg ON m.id_grupo = dg.id_grupo
+       WHERE dg.id_colegio = $1 AND s.estado = 'ACTIVA'`,
+      [schoolId, targetYearId]
+    );
+
+    const obsByGradeRes = await pool.query(
+      `SELECT 
+         tg.nombre as grado,
+         COUNT(*)::int as total,
+         COUNT(*) FILTER (WHERE o.tipo::text IN ('ACADEMICA', 'ACADEMICO'))::int as academicas,
+         COUNT(*) FILTER (WHERE o.tipo::text IN ('DISCIPLINARIA', 'DISCIPLINARIO'))::int as disciplinarias,
+         COUNT(*) FILTER (WHERE o.tipo::text IN ('CONVIVENCIA', 'CONVIVENCIAL'))::int as convivenciales
+       FROM observacion_estudiante o
+       JOIN detalle_grados dg ON o.id_detallegrado = dg.id_detallegrado
+       JOIN grupos g ON dg.id_grupo = g.id_grupo
+       JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
+       WHERE dg.id_colegio = $1 ${targetPeriodId ? `AND o.id_periodo = $2` : ''}
+       GROUP BY tg.id_tipo_grado, tg.nombre
+       ORDER BY tg.id_tipo_grado`,
+      targetPeriodId ? [schoolId, targetPeriodId] : [schoolId]
+    );
+
+    const observationsSummary = {
+      total: Number(obsRes.rows[0]?.total || 0),
+      academicas: Number(obsRes.rows[0]?.academicas || 0),
+      disciplinarias: Number(obsRes.rows[0]?.disciplinarias || 0),
+      convivenciales: Number(obsRes.rows[0]?.convivenciales || 0),
+      sancionesActivas: Number(sancionRes.rows[0]?.total || 0),
+      byGrade: obsByGradeRes.rows
+    };
+
+    // 6. Charts Data
     let charts: { performanceByGrade: any[]; performanceBySubject: any[]; performanceByCourse: any[]; performanceBySubjectCourse: any[]; evolution: any[]; evolutionByCourse: any[] } = { 
       performanceByGrade: [], 
       performanceBySubject: [], 
@@ -5115,7 +5171,7 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
     );
     charts.evolutionByCourse = evolutionByCourseRes.rows;
 
-    // 6. Low Performance Analysis Block
+    // 7. Low Performance Analysis Block
     let lowPerformance: {
       criticalSubjects: { 
         nombre: string; 
@@ -5279,12 +5335,17 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
       }));
     }
 
+    const totalStuds = Number(studentsCountRes.rows[0].total);
+    const atRiskStuds = performanceMetrics.atRisk;
+    const calcApprovalRate = totalStuds > 0 ? Number(((totalStuds - atRiskStuds) / totalStuds * 100).toFixed(1)) : 100;
+
     const summaryData = {
-      totalStudents: Number(studentsCountRes.rows[0].total),
+      totalStudents: totalStuds,
       totalTeachers: Number(teachersCountRes.rows[0].total),
       attendanceToday: Number(Number(attendanceTodayRes.rows[0].rate || 0).toFixed(1)),
       generalAverage: performanceMetrics.average,
-      studentsAtRisk: performanceMetrics.atRisk,
+      approvalRate: calcApprovalRate,
+      studentsAtRisk: atRiskStuds,
       disciplinaryReports: Number(disciplinaryRes.rows[0].total),
       desertionRate: Number(desertionRes.rows[0].total),
     };
@@ -5293,6 +5354,7 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
       summary: summaryData,
       stats: summaryData,
       summaryByGrade,
+      observationsSummary,
       charts,
       lowPerformance,
     });
