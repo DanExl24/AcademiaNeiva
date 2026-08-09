@@ -66,8 +66,13 @@ export const obtenerReporteCoherenciaCurricular = async (req: Request, res: Resp
       JOIN nivel_escolar ne ON ne.id_nivel = g.id_nivel
       JOIN tipo_grado tg ON tg.id_tipo_grado = g.id_tipo_grado
       JOIN secciones s ON s.id_seccion = g.id_seccion
-      JOIN materias m ON m.id_materia = c.id_materia
-      LEFT JOIN detalle_grados dg ON dg.id_detallegrado = am.id_detallegrado
+      LEFT JOIN LATERAL (
+        SELECT dg_cur.id_docente
+        FROM detalle_grados dg_cur
+        WHERE dg_cur.id_grupo = g.id_grupo AND dg_cur.id_materia = m.id_materia
+        ORDER BY dg_cur.id_detallegrado DESC
+        LIMIT 1
+      ) dg ON true
       LEFT JOIN docente d ON d.id_docente = dg.id_docente
       LEFT JOIN usuario u ON u.id_usuario = d.id_usuario
       WHERE c.id_colegio = $1

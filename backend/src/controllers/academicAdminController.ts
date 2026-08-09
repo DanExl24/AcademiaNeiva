@@ -3672,8 +3672,8 @@ export const assignTeacherCourseSubject = async (req: Request, res: Response): P
        WHERE dg.id_colegio = $1
          AND dg.id_materia = $2
          AND dg.id_grupo = $3
-         AND dg.id_anio = $4`,
-      [schoolId, subjectId, groupId, activeYearId]
+       ORDER BY dg.id_detallegrado DESC`,
+      [schoolId, subjectId, groupId]
     );
 
     if (existingRes.rows.length > 0) {
@@ -3697,10 +3697,24 @@ export const assignTeacherCourseSubject = async (req: Request, res: Response): P
 
       const updated = await pool.query(
         `UPDATE detalle_grados
-         SET id_docente = $1
+         SET id_docente = $1, id_anio = COALESCE(id_anio, $3)
          WHERE id_detallegrado = $2
          RETURNING id_detallegrado, id_docente, id_materia, id_grupo`,
-        [teacherId, existing.id_detallegrado]
+        [teacherId, existing.id_detallegrado, activeYearId]
+      );
+
+      // Consolidar cualquier detalle_grados duplicado existente para este grupo/materia
+      await pool.query(
+        `UPDATE actividad_materia SET id_detallegrado = $1 WHERE id_detallegrado IN (SELECT id_detallegrado FROM detalle_grados WHERE id_colegio = $2 AND id_materia = $3 AND id_grupo = $4 AND id_detallegrado != $1)`,
+        [existing.id_detallegrado, schoolId, subjectId, groupId]
+      );
+      await pool.query(
+        `UPDATE resultado_academico SET id_detallegrado = $1 WHERE id_detallegrado IN (SELECT id_detallegrado FROM detalle_grados WHERE id_colegio = $2 AND id_materia = $3 AND id_grupo = $4 AND id_detallegrado != $1)`,
+        [existing.id_detallegrado, schoolId, subjectId, groupId]
+      );
+      await pool.query(
+        `DELETE FROM detalle_grados WHERE id_colegio = $1 AND id_materia = $2 AND id_grupo = $3 AND id_detallegrado != $4`,
+        [schoolId, subjectId, groupId, existing.id_detallegrado]
       );
 
       await NotificationService.sendTeacherAssignmentEmail(
