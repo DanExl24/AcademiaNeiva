@@ -1,10 +1,10 @@
 {
   "summary": {
     "totalExecuted": 38,
-    "passed": 38,
-    "failed": 0,
+    "passed": 36,
+    "failed": 2,
     "warnings": 0,
-    "avgScore": "100.00"
+    "avgScore": "95.79"
   },
   "results": [
     {
@@ -906,8 +906,8 @@
         "schoolId": 1
       },
       "expectedResult": "HTTP 200 OK con plantilla docente",
-      "actualResult": "HTTP 200",
-      "httpCode": 200,
+      "actualResult": "HTTP 500",
+      "httpCode": 500,
       "expectedCode": 200,
       "validations": [
         "Consulta de entidad docente"
@@ -918,26 +918,23 @@
         "apellido"
       ],
       "receivedFields": [
-        "documentTypes",
-        "teachers",
-        "docentes",
-        "subjects",
-        "groups",
-        "assignments"
+        "error"
       ],
-      "errors": [],
-      "severity": "NONE",
-      "evidence": "Status: 200",
+      "errors": [
+        "Error al obtener docentes"
+      ],
+      "severity": "IMPORTANT",
+      "evidence": "Status: 500",
       "possibleCause": "",
-      "status": "PASS",
+      "status": "FAIL",
       "scores": {
-        "httpStatus": 10,
-        "schema": 20,
-        "datos": 25,
-        "reglasNegocio": 25,
+        "httpStatus": 0,
+        "schema": 0,
+        "datos": 0,
+        "reglasNegocio": 0,
         "errores": 10,
         "seguridad": 10,
-        "total": 100
+        "total": 20
       }
     },
     {
@@ -1500,8 +1497,8 @@
         "schoolId": 1
       },
       "expectedResult": "HTTP 200 OK con lista de padres",
-      "actualResult": "HTTP 200. Padres: 70",
-      "httpCode": 200,
+      "actualResult": "HTTP 500. Padres: 0",
+      "httpCode": 500,
       "expectedCode": 200,
       "validations": [
         "Consulta relacional de acudientes"
@@ -1512,23 +1509,23 @@
         "apellido"
       ],
       "receivedFields": [
-        "parents",
-        "padres",
-        "catalogs"
+        "error"
       ],
-      "errors": [],
-      "severity": "NONE",
-      "evidence": "Status: 200",
+      "errors": [
+        "Error al obtener listado de padres"
+      ],
+      "severity": "IMPORTANT",
+      "evidence": "Status: 500",
       "possibleCause": "",
-      "status": "PASS",
+      "status": "FAIL",
       "scores": {
-        "httpStatus": 10,
-        "schema": 20,
-        "datos": 25,
-        "reglasNegocio": 25,
+        "httpStatus": 0,
+        "schema": 0,
+        "datos": 0,
+        "reglasNegocio": 0,
         "errores": 10,
         "seguridad": 10,
-        "total": 100
+        "total": 20
       }
     },
     {
