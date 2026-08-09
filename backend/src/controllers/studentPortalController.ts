@@ -79,7 +79,7 @@ export const getStudentGrades = async (req: Request, res: Response) => {
 
     // 2. Fetch grades using logic similar to boletin controller
     const result = await pool.query(`
-      SELECT 
+      SELECT DISTINCT ON (m.id_materia)
         m.id_materia,
         m.nombre as materia,
         d.nombre || ' ' || d.apellido as docente,
@@ -89,24 +89,34 @@ export const getStudentGrades = async (req: Request, res: Response) => {
       JOIN materias m ON m.id_materia = dg.id_materia
       JOIN docente d ON d.id_docente = dg.id_docente
       JOIN matricula mat ON mat.id_grupo = dg.id_grupo
-      LEFT JOIN resultado_academico ra ON ra.id_detallegrado = dg.id_detallegrado AND ra.id_periodo = $2 AND ra.id_estudiante = $1
       LEFT JOIN (
-        SELECT am.id_detallegrado, na.id_estudiante, ROUND(AVG(na.nota)::numeric, 2) as promedio_calculado
+        SELECT dg_ra.id_materia, ra_inner.promedio
+        FROM resultado_academico ra_inner
+        JOIN detalle_grados dg_ra ON dg_ra.id_detallegrado = ra_inner.id_detallegrado
+        WHERE ra_inner.id_estudiante = $1 AND ra_inner.id_periodo = $2
+        ORDER BY ra_inner.id_resultado DESC
+      ) ra ON ra.id_materia = m.id_materia
+      LEFT JOIN (
+        SELECT dg_am.id_materia, ROUND(AVG(na.nota)::numeric, 2) as promedio_calculado
         FROM notas_actividad na
         JOIN actividad_materia am ON am.id_actividadmateria = na.id_actividadmateria
+        JOIN detalle_grados dg_am ON dg_am.id_detallegrado = am.id_detallegrado
         WHERE am.id_periodo = $2 AND na.id_estudiante = $1
-        GROUP BY am.id_detallegrado, na.id_estudiante
-      ) calc ON calc.id_detallegrado = dg.id_detallegrado
+        GROUP BY dg_am.id_materia
+      ) calc ON calc.id_materia = m.id_materia
       LEFT JOIN escala_valoracion ev 
              ON ev.id_colegio = $3
             AND COALESCE(ra.promedio, calc.promedio_calculado) >= ev.valor_minimo 
             AND COALESCE(ra.promedio, calc.promedio_calculado) <= ev.valor_maximo
       WHERE mat.id_estudiante = $1 AND mat.estado = 'ACTIVA'
-      ORDER BY m.nombre ASC
+      ORDER BY m.id_materia, dg.id_detallegrado DESC
     `, [id_estudiante, id_periodo, id_colegio]);
 
+    // Ordenar alfabéticamente por materia tras tomar la asignación docente más reciente
+    const sortedRows = result.rows.sort((a, b) => a.materia.localeCompare(b.materia));
+
     // Calculate general average ONLY for subjects with registered grades
-    const grades = result.rows.map(row => {
+    const grades = sortedRows.map(row => {
       const hasGrade = row.calificacion !== null && row.calificacion !== undefined;
       return {
         ...row,
@@ -161,28 +171,55 @@ export const getGradeDetails = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Parámetros numéricos inválidos' });
     }
 
+    // 1. Obtener grupo del estudiante
+    const matRes = await pool.query(
+      `SELECT id_grupo FROM matricula WHERE id_estudiante = $1 AND estado = 'ACTIVA' LIMIT 1`,
+      [studentIdInt]
+    );
+
+    if (matRes.rows.length === 0) {
+      return res.json([]);
+    }
+
+    const id_grupo = matRes.rows[0].id_grupo;
+
+    // 2. Obtener el docente ACTUAL asignado a esta materia en el grupo
+    const docRes = await pool.query(
+      `SELECT d.nombre || ' ' || d.apellido as docente, m.nombre as materia
+       FROM detalle_grados dg
+       JOIN docente d ON d.id_docente = dg.id_docente
+       JOIN materias m ON m.id_materia = dg.id_materia
+       WHERE dg.id_grupo = $1 AND dg.id_materia = $2
+       ORDER BY dg.id_detallegrado DESC
+       LIMIT 1`,
+      [id_grupo, materiaIdInt]
+    );
+
+    const currentTeacher = docRes.rows[0]?.docente || 'Sin docente asignado';
+    const materiaNombre = docRes.rows[0]?.materia || '';
+
+    // 3. Obtener actividades únicas asociadas a este grupo y materia en este periodo
     const result = await pool.query(`
-      SELECT 
+      SELECT DISTINCT ON (am.id_actividadmateria)
+        am.id_actividadmateria,
         am.nombre as actividad,
         am.porcentaje,
         na.nota,
-        ce.descripcion as criterio,
-        am.id_actividadmateria,
-        m.nombre as materia,
-        doc.nombre || ' ' || doc.apellido as docente
+        (
+          SELECT string_agg(ce.descripcion, ' / ') 
+          FROM criterio_evaluacion ce 
+          WHERE ce.id_actividadmateria = am.id_actividadmateria
+        ) as criterio,
+        $4::text as materia,
+        $5::text as docente
       FROM actividad_materia am
       JOIN detalle_grados dg ON dg.id_detallegrado = am.id_detallegrado
-      JOIN materias m ON m.id_materia = dg.id_materia
-      JOIN docente doc ON doc.id_docente = dg.id_docente
-      JOIN matricula mat ON mat.id_grupo = dg.id_grupo
-      LEFT JOIN notas_actividad na ON na.id_actividadmateria = am.id_actividadmateria AND na.id_estudiante = mat.id_estudiante
-      LEFT JOIN criterio_evaluacion ce ON ce.id_actividadmateria = am.id_actividadmateria
-      WHERE m.id_materia = $3 
-        AND am.id_periodo = $2 
-        AND mat.id_estudiante = $1
-        AND mat.estado = 'ACTIVA'
-      ORDER BY am.nombre ASC
-    `, [studentIdInt, periodIdInt, materiaIdInt]);
+      LEFT JOIN notas_actividad na ON na.id_actividadmateria = am.id_actividadmateria AND na.id_estudiante = $1
+      WHERE dg.id_grupo = $2 
+        AND dg.id_materia = $3 
+        AND am.id_periodo = $6
+      ORDER BY am.id_actividadmateria ASC
+    `, [studentIdInt, id_grupo, materiaIdInt, materiaNombre, currentTeacher, periodIdInt]);
 
     res.json(result.rows);
   } catch (error) {
