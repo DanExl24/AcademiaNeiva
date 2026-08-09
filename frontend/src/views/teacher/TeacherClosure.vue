@@ -376,6 +376,9 @@ onMounted(async () => {
                 <span class="text-[11px] text-emerald-700 dark:text-emerald-400 font-bold">Promedio del Grupo: <span class="font-black">{{ course.groupAverage != null ? course.groupAverage.toFixed(1) : 'N/A' }}</span></span>
                 <span class="text-[11px] text-emerald-700 dark:text-emerald-400 font-bold">Estudiantes: <span class="font-black text-emerald-600 dark:text-emerald-400">COMPLETADO</span></span>
               </div>
+              <div v-if="course.closureData && course.closureData.docente_cierre_nombre" class="text-[11px] text-emerald-800 dark:text-emerald-300 font-medium border-t border-emerald-200/60 dark:border-emerald-900/50 pt-1.5 mt-1">
+                Cerrado por: <span class="font-bold text-emerald-950 dark:text-emerald-200">{{ course.closureData.docente_cierre_nombre }}</span>
+              </div>
             </div>
 
             <!-- Missing grades (Pending) -->

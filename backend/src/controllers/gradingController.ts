@@ -1118,9 +1118,12 @@ export const getClosureStatus = async (req: Request, res: Response): Promise<voi
 
   try {
     const closedRes = await pool.query(
-      `SELECT estado, fecha_cierre
-       FROM cierre_materia
-       WHERE id_detallegrado = $1 AND id_periodo = $2`,
+      `SELECT cm.estado, cm.fecha_cierre,
+              d.nombre || ' ' || d.apellido AS docente_cierre_nombre,
+              cm.id_docente_cierre
+       FROM cierre_materia cm
+       LEFT JOIN docente d ON d.id_docente = cm.id_docente_cierre
+       WHERE cm.id_detallegrado = $1 AND cm.id_periodo = $2`,
       [detailGradeId, periodId]
     );
 
@@ -1404,15 +1407,15 @@ export const closeTeacherSubject = async (req: Request, res: Response): Promise<
     if (existingRes.rows.length > 0) {
       await client.query(
         `UPDATE cierre_materia 
-         SET estado = 'CERRADO', fecha_cierre = NOW(), justificacion_evidencias_pendientes = $2 
+         SET estado = 'CERRADO', fecha_cierre = NOW(), justificacion_evidencias_pendientes = $2, id_docente_cierre = $3
          WHERE id_cierremateria = $1`,
-        [existingRes.rows[0].id_cierremateria, justificacion_evidencias_pendientes || null]
+        [existingRes.rows[0].id_cierremateria, justificacion_evidencias_pendientes || null, teacherId]
       );
     } else {
       await client.query(
-        `INSERT INTO cierre_materia (id_detallegrado, id_periodo, estado, fecha_cierre, justificacion_evidencias_pendientes)
-         VALUES ($1, $2, 'CERRADO', NOW(), $3)`,
-        [detailGradeId, periodId, justificacion_evidencias_pendientes || null]
+        `INSERT INTO cierre_materia (id_detallegrado, id_periodo, estado, fecha_cierre, justificacion_evidencias_pendientes, id_docente_cierre)
+         VALUES ($1, $2, 'CERRADO', NOW(), $3, $4)`,
+        [detailGradeId, periodId, justificacion_evidencias_pendientes || null, teacherId]
       );
     }
 
