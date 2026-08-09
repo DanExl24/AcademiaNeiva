@@ -1231,10 +1231,57 @@ export const closePeriodForTeacher = async (req: Request, res: Response): Promis
       }
     }
 
+    // 5.1 Verificar si hay evidencias DBA planeadas para este periodo/materia que no fueron evaluadas en ninguna actividad
+    const dgInfo = await client.query(
+      `SELECT id_grupo, id_materia FROM detalle_grados WHERE id_detallegrado = $1`,
+      [detailGradeId]
+    );
+
+    let unevaluatedEvidences: any[] = [];
+    if (dgInfo.rows.length > 0) {
+      const { id_grupo, id_materia } = dgInfo.rows[0];
+      const pendingEvRes = await client.query(
+        `SELECT DISTINCT edba.id_evidencia_dba, d.numero_dba, edba.descripcion
+         FROM evidencia_aprendizaje ea
+         JOIN competencias c ON c.id_competencia = ea.id_competencia
+         JOIN evidencias_dba edba ON edba.id_evidencia_dba = ea.id_evidencia_dba
+         JOIN dba d ON d.id_dba = edba.id_dba
+         WHERE c.id_colegio = $1
+           AND c.id_materia = $2
+           AND c.id_grupo IN (
+             SELECT g2.id_grupo
+             FROM grupos g1
+             JOIN grupos g2 ON g2.id_nivel = g1.id_nivel AND g2.id_tipo_grado = g1.id_tipo_grado
+             WHERE g1.id_grupo = $3 AND g1.id_colegio = $1
+           )
+           AND c.id_periodo = $4
+           AND NOT EXISTS (
+             SELECT 1
+             FROM actividad_evidencia_dba aedba
+             JOIN actividad_materia am ON am.id_actividadmateria = aedba.id_actividadmateria
+             WHERE aedba.id_evidencia_dba = edba.id_evidencia_dba
+               AND am.id_detallegrado = $5
+               AND am.id_periodo = $4
+           )`,
+        [id_colegio, id_materia, id_grupo, periodId, detailGradeId]
+      );
+      unevaluatedEvidences = pendingEvRes.rows;
+    }
+
+    const { justificacion_evidencias_pendientes } = req.body;
+
+    if (unevaluatedEvidences.length > 0 && (!justificacion_evidencias_pendientes || typeof justificacion_evidencias_pendientes !== 'string' || !justificacion_evidencias_pendientes.trim())) {
+      res.status(422).json({
+        requires_justification: true,
+        unevaluated_evidences: unevaluatedEvidences,
+        error: `Existen ${unevaluatedEvidences.length} evidencia(s) DBA planeadas para este periodo que aún no han sido evaluadas en ninguna actividad.`
+      });
+      return;
+    }
+
     await client.query("BEGIN");
 
-    // 6. Marcar como CERRADO — ya validamos que no existe un registro CERRADO
-    // Verificamos si hay un registro ABIERTO existente
+    // 6. Marcar como CERRADO guardando la justificación si existían evidencias pendientes
     const existingRes = await client.query(
       `SELECT id_cierremateria FROM cierre_materia WHERE id_detallegrado = $1 AND id_periodo = $2`,
       [detailGradeId, periodId]
@@ -1242,14 +1289,16 @@ export const closePeriodForTeacher = async (req: Request, res: Response): Promis
 
     if (existingRes.rows.length > 0) {
       await client.query(
-        `UPDATE cierre_materia SET estado = 'CERRADO', fecha_cierre = NOW() WHERE id_cierremateria = $1`,
-        [existingRes.rows[0].id_cierremateria]
+        `UPDATE cierre_materia 
+         SET estado = 'CERRADO', fecha_cierre = NOW(), justificacion_evidencias_pendientes = $2 
+         WHERE id_cierremateria = $1`,
+        [existingRes.rows[0].id_cierremateria, justificacion_evidencias_pendientes || null]
       );
     } else {
       await client.query(
-        `INSERT INTO cierre_materia (id_detallegrado, id_periodo, estado, fecha_cierre)
-         VALUES ($1, $2, 'CERRADO', NOW())`,
-        [detailGradeId, periodId]
+        `INSERT INTO cierre_materia (id_detallegrado, id_periodo, estado, fecha_cierre, justificacion_evidencias_pendientes)
+         VALUES ($1, $2, 'CERRADO', NOW(), $3)`,
+        [detailGradeId, periodId, justificacion_evidencias_pendientes || null]
       );
     }
 

@@ -444,6 +444,13 @@ export const ensureCompetencySchema = async (): Promise<void> => {
       await client.query(cleanupDuplicatesSql);
     }
 
+    // Ejecutar migración 034 (justificación de evidencias pendientes en cierre_materia)
+    const addJustificacionCierrePath = path.join(__dirname, "../migrations/034_add_justificacion_cierre_materia.sql");
+    if (fs.existsSync(addJustificacionCierrePath)) {
+      const addJustificacionCierreSql = fs.readFileSync(addJustificacionCierrePath, "utf8");
+      await client.query(addJustificacionCierreSql);
+    }
+
     // Backfill sync_uuid for existing competencies
     const unmigratedRes = await client.query(`
       SELECT id_colegio, id_anio, id_materia, id_periodo, descripcion, ARRAY_AGG(id_competencia) AS ids

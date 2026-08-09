@@ -141,6 +141,51 @@ watch(() => yearStore.selectedYearId, async () => {
   await fetchCoursesWithStatus()
 })
 
+const showJustificationModal = ref(false)
+const courseToClose = ref<any>(null)
+const pendingEvidences = ref<any[]>([])
+const selectedReasonPreset = ref('Tiempo insuficiente por imprevistos del calendario académico')
+const customReason = ref('')
+
+const openJustificationModal = (course: any, evidences: any[]) => {
+  courseToClose.value = course
+  pendingEvidences.value = evidences
+  selectedReasonPreset.value = 'Tiempo insuficiente por imprevistos del calendario académico'
+  customReason.value = ''
+  showJustificationModal.value = true
+}
+
+const handleConfirmClosureWithJustification = async () => {
+  if (!courseToClose.value) return
+
+  const justification = selectedReasonPreset.value === 'OTRO'
+    ? customReason.value.trim()
+    : selectedReasonPreset.value
+
+  if (!justification) {
+    alert('Por favor especifica el motivo por el cual no se evaluaron las evidencias DBA.')
+    return
+  }
+
+  try {
+    processingId.value = courseToClose.value.id_detallegrado
+    const response = await axios.post('/api/teacher/close-period', {
+      detailGradeId: courseToClose.value.id_detallegrado,
+      periodId: activePeriodId.value,
+      userId: auth.user?.id,
+      justificacion_evidencias_pendientes: justification
+    })
+    
+    alert(response.data.message || 'Periodo cerrado correctamente')
+    showJustificationModal.value = false
+    await fetchCoursesWithStatus()
+  } catch (error: any) {
+    alert(error.response?.data?.error || 'Error al cerrar el periodo')
+  } finally {
+    processingId.value = null
+  }
+}
+
 const handleClosePeriod = async (course: any) => {
   if (!confirm(`¿Estás seguro de cerrar el periodo para ${course.materia_nombre} en ${course.grado_nombre}?`)) {
     return
@@ -157,7 +202,11 @@ const handleClosePeriod = async (course: any) => {
     alert(response.data.message || 'Periodo cerrado correctamente')
     await fetchCoursesWithStatus()
   } catch (error: any) {
-    alert(error.response?.data?.error || 'Error al cerrar el periodo')
+    if (error.response?.status === 422 && error.response?.data?.requires_justification) {
+      openJustificationModal(course, error.response.data.unevaluated_evidences || [])
+    } else {
+      alert(error.response?.data?.error || 'Error al cerrar el periodo')
+    }
   } finally {
     processingId.value = null
   }
@@ -391,8 +440,69 @@ onMounted(async () => {
       <div class="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6">
         <GraduationCap class="w-10 h-10 text-slate-300" />
       </div>
-      <h3 class="text-xl font-black text-slate-400">No tienes materias asignadas</h3>
-      <p class="text-slate-400 mt-2">Contacta a la administración para verificar tu carga académica.</p>
+    <!-- Modal de Justificación de Evidencias DBA Pendientes -->
+    <div v-if="showJustificationModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+      <div class="bg-white dark:bg-slate-900 rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 dark:border-slate-800 space-y-5">
+        <div class="flex items-start justify-between gap-4">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-2xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold">
+              <AlertTriangle class="w-5 h-5" />
+            </div>
+            <div>
+              <h3 class="text-lg font-black text-slate-900 dark:text-white">Evidencias DBA Sin Evaluar</h3>
+              <p class="text-xs text-slate-500 font-medium">Materia: {{ courseToClose?.materia_nombre }} ({{ courseToClose?.grado_nombre }})</p>
+            </div>
+          </div>
+          <button @click="showJustificationModal = false" class="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg">
+            <X class="w-5 h-5" />
+          </button>
+        </div>
+
+        <div class="p-4 bg-amber-50/50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/40 rounded-2xl text-xs text-amber-800 dark:text-amber-300 space-y-2">
+          <p class="font-bold">Existen {{ pendingEvidences.length }} evidencia(s) DBA planeadas para este periodo que no fueron asociadas a ninguna actividad evaluativa:</p>
+          <ul class="list-disc list-inside space-y-1 text-[11px] max-h-28 overflow-y-auto custom-scrollbar">
+            <li v-for="ev in pendingEvidences" :key="ev.id_evidencia_dba" class="font-medium">
+              <span class="font-bold">DBA {{ ev.numero_dba }}:</span> {{ ev.descripcion }}
+            </li>
+          </ul>
+        </div>
+
+        <div class="space-y-3">
+          <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">Selecciona o escribe el motivo por el cual no se evaluaron:</label>
+          
+          <select v-model="selectedReasonPreset" class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 outline-none focus:border-indigo-500">
+            <option value="Tiempo insuficiente por imprevistos del calendario académico">Tiempo insuficiente por imprevistos del calendario académico</option>
+            <option value="Reorganización pedagógica aprobada institucionalmente">Reorganización pedagógica aprobada institucionalmente</option>
+            <option value="Contenido cubierto dentro de otra evidencia integrada">Contenido cubierto dentro de otra evidencia integrada</option>
+            <option value="OTRO">Otro motivo (especificar abajo)...</option>
+          </select>
+
+          <textarea 
+            v-if="selectedReasonPreset === 'OTRO'" 
+            v-model="customReason" 
+            rows="3" 
+            placeholder="Escribe la justificación detallada..." 
+            class="w-full p-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 placeholder-slate-400 outline-none focus:border-indigo-500"
+          ></textarea>
+        </div>
+
+        <div class="flex items-center justify-end gap-3 pt-2">
+          <button 
+            @click="showJustificationModal = false" 
+            class="px-4 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs rounded-xl hover:bg-slate-200 transition-all"
+          >
+            Cancelar
+          </button>
+          <button 
+            @click="handleConfirmClosureWithJustification" 
+            :disabled="processingId === courseToClose?.id_detallegrado"
+            class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-2 disabled:opacity-50"
+          >
+            <Loader2 v-if="processingId === courseToClose?.id_detallegrado" class="w-4 h-4 animate-spin" />
+            <span>Confirmar Cierre de Materia</span>
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
