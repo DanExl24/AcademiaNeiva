@@ -955,7 +955,7 @@ const closeTeacherSubject = async (req, res) => {
             return;
         }
         // 4. Verificar si la materia YA FUE CERRADA por el docente
-        const existingClosure = await client.query('SELECT id_cierre FROM cierre_materia WHERE id_detallegrado = $1 AND id_periodo = $2', [detailGradeId, periodId]);
+        const existingClosure = await client.query('SELECT id_cierremateria FROM cierre_materia WHERE id_detallegrado = $1 AND id_periodo = $2', [detailGradeId, periodId]);
         if (existingClosure.rows.length > 0) {
             res.status(400).json({ error: 'Ya has cerrado esta materia para este periodo.' });
             return;
