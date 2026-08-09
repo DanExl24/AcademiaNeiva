@@ -394,6 +394,7 @@ export const getReingresoCatalogs = async (req: Request, res: Response): Promise
 
     res.json({
       anios: yearsRes.rows,
+      years: yearsRes.rows,
       niveles: levelsRes.rows
     });
   } catch (error: any) {

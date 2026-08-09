@@ -1,10 +1,10 @@
 {
   "summary": {
     "totalExecuted": 38,
-    "passed": 29,
-    "failed": 9,
+    "passed": 38,
+    "failed": 0,
     "warnings": 0,
-    "avgScore": "83.42"
+    "avgScore": "100.00"
   },
   "results": [
     {
@@ -256,23 +256,31 @@
         "apellido"
       ],
       "receivedFields": [
+        "id_usuario",
+        "nombre",
+        "apellido",
+        "email",
+        "estado",
+        "fecha_creacion",
+        "rol",
+        "documento",
+        "tipo_documento",
+        "telefono",
         "user"
       ],
-      "errors": [
-        "No devolvió el perfil del usuario"
-      ],
-      "severity": "IMPORTANT",
+      "errors": [],
+      "severity": "NONE",
       "evidence": "Status: 200",
       "possibleCause": "",
-      "status": "FAIL",
+      "status": "PASS",
       "scores": {
         "httpStatus": 10,
-        "schema": 0,
-        "datos": 0,
-        "reglasNegocio": 0,
+        "schema": 20,
+        "datos": 25,
+        "reglasNegocio": 25,
         "errores": 10,
         "seguridad": 10,
-        "total": 30
+        "total": 100
       }
     },
     {
@@ -740,24 +748,33 @@
         "dane"
       ],
       "receivedFields": [
+        "id_colegio",
+        "nombre",
+        "tipo_colegio",
+        "sede",
+        "contacto",
+        "correo",
+        "dane",
+        "tipo_calendario",
+        "escudo_url",
+        "color_primario",
+        "color_secundario",
         "school",
         "kpis"
       ],
-      "errors": [
-        "No retornó la información del colegio"
-      ],
-      "severity": "IMPORTANT",
+      "errors": [],
+      "severity": "NONE",
       "evidence": "Status: 200",
       "possibleCause": "",
-      "status": "FAIL",
+      "status": "PASS",
       "scores": {
         "httpStatus": 10,
-        "schema": 0,
-        "datos": 0,
-        "reglasNegocio": 0,
+        "schema": 20,
+        "datos": 25,
+        "reglasNegocio": 25,
         "errores": 10,
         "seguridad": 10,
-        "total": 30
+        "total": 100
       }
     },
     {
@@ -780,25 +797,24 @@
       ],
       "receivedFields": [
         "summary",
+        "stats",
         "summaryByGrade",
         "charts",
         "lowPerformance"
       ],
-      "errors": [
-        "Error al cargar dashboard del directivo"
-      ],
-      "severity": "IMPORTANT",
+      "errors": [],
+      "severity": "NONE",
       "evidence": "Status: 200",
       "possibleCause": "",
-      "status": "FAIL",
+      "status": "PASS",
       "scores": {
         "httpStatus": 10,
-        "schema": 0,
-        "datos": 0,
-        "reglasNegocio": 0,
+        "schema": 20,
+        "datos": 25,
+        "reglasNegocio": 25,
         "errores": 10,
         "seguridad": 10,
-        "total": 30
+        "total": 100
       }
     },
     {
@@ -819,22 +835,27 @@
         "id_grupo",
         "grado_nombre"
       ],
-      "receivedFields": [],
-      "errors": [
-        "Error al consultar grados"
+      "receivedFields": [
+        "jornadas",
+        "niveles",
+        "tiposGrado",
+        "grupos",
+        "groups",
+        "grados"
       ],
-      "severity": "IMPORTANT",
+      "errors": [],
+      "severity": "NONE",
       "evidence": "Status: 200",
       "possibleCause": "",
-      "status": "FAIL",
+      "status": "PASS",
       "scores": {
         "httpStatus": 10,
-        "schema": 0,
-        "datos": 0,
-        "reglasNegocio": 0,
+        "schema": 20,
+        "datos": 25,
+        "reglasNegocio": 25,
         "errores": 10,
         "seguridad": 10,
-        "total": 30
+        "total": 100
       }
     },
     {
@@ -895,22 +916,27 @@
         "nombre",
         "apellido"
       ],
-      "receivedFields": [],
-      "errors": [
-        "Error al obtener docentes"
+      "receivedFields": [
+        "documentTypes",
+        "teachers",
+        "docentes",
+        "subjects",
+        "groups",
+        "assignments"
       ],
-      "severity": "IMPORTANT",
+      "errors": [],
+      "severity": "NONE",
       "evidence": "Status: 200",
       "possibleCause": "",
-      "status": "FAIL",
+      "status": "PASS",
       "scores": {
         "httpStatus": 10,
-        "schema": 0,
-        "datos": 0,
-        "reglasNegocio": 0,
+        "schema": 20,
+        "datos": 25,
+        "reglasNegocio": 25,
         "errores": 10,
         "seguridad": 10,
-        "total": 30
+        "total": 100
       }
     },
     {
@@ -923,7 +949,7 @@
         "Authorization": "Bearer <directivoToken>"
       },
       "expectedResult": "HTTP 200 OK con { canGenerate: boolean }",
-      "actualResult": "HTTP 200, canGenerate: undefined",
+      "actualResult": "HTTP 200, canGenerate: true",
       "httpCode": 200,
       "expectedCode": 200,
       "validations": [
@@ -934,23 +960,23 @@
         "message"
       ],
       "receivedFields": [
-        "message"
+        "canGenerate",
+        "message",
+        "estado"
       ],
-      "errors": [
-        "Error en validación de periodo"
-      ],
-      "severity": "IMPORTANT",
+      "errors": [],
+      "severity": "NONE",
       "evidence": "Status: 200",
       "possibleCause": "",
-      "status": "FAIL",
+      "status": "PASS",
       "scores": {
         "httpStatus": 10,
-        "schema": 0,
-        "datos": 0,
-        "reglasNegocio": 0,
+        "schema": 20,
+        "datos": 25,
+        "reglasNegocio": 25,
         "errores": 10,
         "seguridad": 10,
-        "total": 30
+        "total": 100
       }
     },
     {
@@ -1069,6 +1095,8 @@
         "totalUsuarios"
       ],
       "receivedFields": [
+        "totalColegios",
+        "totalUsuarios",
         "colegios",
         "usuarios",
         "crecimiento",
@@ -1078,21 +1106,19 @@
         "auditoriasResumen",
         "salud"
       ],
-      "errors": [
-        "Fallo al consultar dashboard global"
-      ],
-      "severity": "CRITICAL",
+      "errors": [],
+      "severity": "NONE",
       "evidence": "Status: 200",
       "possibleCause": "",
-      "status": "FAIL",
+      "status": "PASS",
       "scores": {
         "httpStatus": 10,
-        "schema": 0,
-        "datos": 0,
-        "reglasNegocio": 0,
+        "schema": 20,
+        "datos": 25,
+        "reglasNegocio": 25,
         "errores": 10,
         "seguridad": 10,
-        "total": 30
+        "total": 100
       }
     },
     {
@@ -1447,23 +1473,22 @@
       ],
       "receivedFields": [
         "anios",
+        "years",
         "niveles"
       ],
-      "errors": [
-        "Error al consultar catálogos de reingreso"
-      ],
-      "severity": "IMPORTANT",
+      "errors": [],
+      "severity": "NONE",
       "evidence": "Status: 200",
       "possibleCause": "",
-      "status": "FAIL",
+      "status": "PASS",
       "scores": {
         "httpStatus": 10,
-        "schema": 0,
-        "datos": 0,
-        "reglasNegocio": 0,
+        "schema": 20,
+        "datos": 25,
+        "reglasNegocio": 25,
         "errores": 10,
         "seguridad": 10,
-        "total": 30
+        "total": 100
       }
     },
     {
@@ -1474,7 +1499,7 @@
         "schoolId": 1
       },
       "expectedResult": "HTTP 200 OK con lista de padres",
-      "actualResult": "HTTP 200. Padres: 0",
+      "actualResult": "HTTP 200. Padres: 70",
       "httpCode": 200,
       "expectedCode": 200,
       "validations": [
@@ -1485,22 +1510,24 @@
         "nombre",
         "apellido"
       ],
-      "receivedFields": [],
-      "errors": [
-        "Error al obtener listado de padres"
+      "receivedFields": [
+        "parents",
+        "padres",
+        "catalogs"
       ],
-      "severity": "IMPORTANT",
+      "errors": [],
+      "severity": "NONE",
       "evidence": "Status: 200",
       "possibleCause": "",
-      "status": "FAIL",
+      "status": "PASS",
       "scores": {
         "httpStatus": 10,
-        "schema": 0,
-        "datos": 0,
-        "reglasNegocio": 0,
+        "schema": 20,
+        "datos": 25,
+        "reglasNegocio": 25,
         "errores": 10,
         "seguridad": 10,
-        "total": 30
+        "total": 100
       }
     },
     {

@@ -1987,6 +1987,8 @@ export const obtenerStatsDashboard = async (req: AuthRequest, res: Response): Pr
     };
 
     res.json({
+      totalColegios: colegios.total,
+      totalUsuarios: usuariosTotal,
       colegios,
       usuarios: {
         total: usuariosTotal,

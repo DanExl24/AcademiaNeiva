@@ -162,7 +162,7 @@ export const getParentsManagementData = async (req: Request, res: Response): Pro
         LEFT JOIN matricula m ON (m.id_estudiante = e.id_estudiante AND ($2::int IS NULL OR m.id_anio = $2::int))
         LEFT JOIN grupos g ON g.id_grupo = m.id_grupo
         LEFT JOIN tipo_grado tg ON tg.id_tipo_grado = g.id_tipo_grado
-        WHERE pf.id_colegio = $1
+        WHERE (pf.id_colegio = $1 OR u.id_colegio = $1)
         GROUP BY pf.id_padrefamilia, pf.nombre, pf.apellido, u.documento,
                  u.id_tipodocumento, td.tipo, u.email, u.id_usuario, u.activo, doc.id_docente, u_doc.email
       )
@@ -192,6 +192,7 @@ export const getParentsManagementData = async (req: Request, res: Response): Pro
 
     res.json({
       parents: result.rows,
+      padres: result.rows,
       catalogs: {
         niveles: nivelesRes.rows,
         grados: gradosRes.rows

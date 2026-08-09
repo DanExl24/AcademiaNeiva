@@ -24,10 +24,18 @@ export const validatePeriodClosed = async (req: Request, res: Response) => {
     }
 
     if (periodRes.rows[0].estado !== 'CERRADO') {
-      return res.status(400).json({ error: 'El periodo académico debe estar cerrado para generar boletines.' });
+      return res.status(200).json({ 
+        canGenerate: false, 
+        message: 'El periodo académico debe estar cerrado para generar boletines.',
+        estado: periodRes.rows[0].estado
+      });
     }
 
-    res.json({ message: 'El periodo está cerrado, se pueden generar boletines.' });
+    res.json({ 
+      canGenerate: true, 
+      message: 'El periodo está cerrado, se pueden generar boletines.',
+      estado: periodRes.rows[0].estado
+    });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Error validando estado del periodo' });

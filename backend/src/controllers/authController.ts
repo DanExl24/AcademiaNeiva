@@ -639,19 +639,22 @@ export const getUserProfile = async (req: Request, res: Response): Promise<void>
     const userData = userRes.rows[0];
     const userRole = (user.role || '').toUpperCase();
 
+    const profileObj = {
+      id_usuario: userData.id_usuario,
+      nombre: userData.nombre,
+      apellido: userData.apellido,
+      email: userData.email,
+      estado: userData.estado,
+      fecha_creacion: userData.fecha_creacion,
+      rol: userRole,
+      documento: userData.documento || 'No Registrado',
+      tipo_documento: userData.tipo_documento || 'No Registrado',
+      telefono: userData.telefono || null
+    };
+
     res.json({
-      user: {
-        id_usuario: userData.id_usuario,
-        nombre: userData.nombre,
-        apellido: userData.apellido,
-        email: userData.email,
-        estado: userData.estado,
-        fecha_creacion: userData.fecha_creacion,
-        rol: userRole,
-        documento: userData.documento || 'No Registrado',
-        tipo_documento: userData.tipo_documento || 'No Registrado',
-        telefono: userData.telefono || null
-      }
+      ...profileObj,
+      user: profileObj
     });
   } catch (error) {
     console.error("Error fetching user profile:", error);

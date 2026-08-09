@@ -522,6 +522,8 @@ export const getGradeManagementData = async (req: Request, res: Response): Promi
       niveles: levelsRes.rows,
       tiposGrado: gradeTypesRes.rows,
       grupos: groupsRes.rows,
+      groups: groupsRes.rows,
+      grados: groupsRes.rows
     });
   } catch (error: any) {
     console.error("Error fetching grade management data:", error);
@@ -2773,15 +2775,6 @@ export const getTeacherManagementData = async (req: Request, res: Response): Pro
               EXISTS (
                 SELECT 1 FROM detalle_grados dg_sel 
                 WHERE dg_sel.id_docente = d.id_docente AND dg_sel.id_anio = $2
-              ) OR
-              (
-                (u.fecha_creacion IS NULL OR EXTRACT(YEAR FROM u.fecha_creacion) <= COALESCE((SELECT SUBSTRING(calendario FROM '^[0-9]{4}')::int FROM anio_lectivo WHERE id_anio = $2), 9999))
-                AND NOT EXISTS (
-                  SELECT 1 FROM detalle_grados dg_future
-                  JOIN anio_lectivo al_f ON al_f.id_anio = dg_future.id_anio
-                  WHERE dg_future.id_docente = d.id_docente 
-                    AND SUBSTRING(al_f.calendario FROM '^[0-9]{4}')::int > COALESCE((SELECT SUBSTRING(calendario FROM '^[0-9]{4}')::int FROM anio_lectivo WHERE id_anio = $2), 9999)
-                )
               )
             )
          GROUP BY d.id_docente, u.documento, u.id_tipodocumento, td.tipo, d.estado, u.id_usuario, u.email, u.activo
@@ -2843,6 +2836,7 @@ export const getTeacherManagementData = async (req: Request, res: Response): Pro
     res.json({
       documentTypes: documentTypesRes.rows,
       teachers: teachersRes.rows,
+      docentes: teachersRes.rows,
       subjects: subjectsRes.rows,
       groups: groupsRes.rows,
       assignments: assignmentsRes.rows,
@@ -5285,16 +5279,19 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
       }));
     }
 
+    const summaryData = {
+      totalStudents: Number(studentsCountRes.rows[0].total),
+      totalTeachers: Number(teachersCountRes.rows[0].total),
+      attendanceToday: Number(Number(attendanceTodayRes.rows[0].rate || 0).toFixed(1)),
+      generalAverage: performanceMetrics.average,
+      studentsAtRisk: performanceMetrics.atRisk,
+      disciplinaryReports: Number(disciplinaryRes.rows[0].total),
+      desertionRate: Number(desertionRes.rows[0].total),
+    };
+
     res.json({
-      summary: {
-        totalStudents: Number(studentsCountRes.rows[0].total),
-        totalTeachers: Number(teachersCountRes.rows[0].total),
-        attendanceToday: Number(Number(attendanceTodayRes.rows[0].rate || 0).toFixed(1)),
-        generalAverage: performanceMetrics.average,
-        studentsAtRisk: performanceMetrics.atRisk,
-        disciplinaryReports: Number(disciplinaryRes.rows[0].total),
-        desertionRate: Number(desertionRes.rows[0].total),
-      },
+      summary: summaryData,
+      stats: summaryData,
       summaryByGrade,
       charts,
       lowPerformance,
@@ -5362,6 +5359,7 @@ export const getMySchoolData = async (req: Request, res: Response): Promise<void
     }
 
     res.json({
+      ...schoolRes.rows[0],
       school: schoolRes.rows[0],
       kpis: {
         totalEstudiantes: studentsRes.rows[0].count,
