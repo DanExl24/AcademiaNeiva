@@ -1,10 +1,10 @@
 {
   "summary": {
     "totalExecuted": 38,
-    "passed": 36,
-    "failed": 2,
+    "passed": 38,
+    "failed": 0,
     "warnings": 0,
-    "avgScore": "95.79"
+    "avgScore": "100.00"
   },
   "results": [
     {
@@ -906,8 +906,8 @@
         "schoolId": 1
       },
       "expectedResult": "HTTP 200 OK con plantilla docente",
-      "actualResult": "HTTP 500",
-      "httpCode": 500,
+      "actualResult": "HTTP 200",
+      "httpCode": 200,
       "expectedCode": 200,
       "validations": [
         "Consulta de entidad docente"
@@ -918,23 +918,26 @@
         "apellido"
       ],
       "receivedFields": [
-        "error"
+        "documentTypes",
+        "teachers",
+        "docentes",
+        "subjects",
+        "groups",
+        "assignments"
       ],
-      "errors": [
-        "Error al obtener docentes"
-      ],
-      "severity": "IMPORTANT",
-      "evidence": "Status: 500",
+      "errors": [],
+      "severity": "NONE",
+      "evidence": "Status: 200",
       "possibleCause": "",
-      "status": "FAIL",
+      "status": "PASS",
       "scores": {
-        "httpStatus": 0,
-        "schema": 0,
-        "datos": 0,
-        "reglasNegocio": 0,
+        "httpStatus": 10,
+        "schema": 20,
+        "datos": 25,
+        "reglasNegocio": 25,
         "errores": 10,
         "seguridad": 10,
-        "total": 20
+        "total": 100
       }
     },
     {
@@ -1497,8 +1500,8 @@
         "schoolId": 1
       },
       "expectedResult": "HTTP 200 OK con lista de padres",
-      "actualResult": "HTTP 500. Padres: 0",
-      "httpCode": 500,
+      "actualResult": "HTTP 200. Padres: 70",
+      "httpCode": 200,
       "expectedCode": 200,
       "validations": [
         "Consulta relacional de acudientes"
@@ -1509,23 +1512,23 @@
         "apellido"
       ],
       "receivedFields": [
-        "error"
+        "parents",
+        "padres",
+        "catalogs"
       ],
-      "errors": [
-        "Error al obtener listado de padres"
-      ],
-      "severity": "IMPORTANT",
-      "evidence": "Status: 500",
+      "errors": [],
+      "severity": "NONE",
+      "evidence": "Status: 200",
       "possibleCause": "",
-      "status": "FAIL",
+      "status": "PASS",
       "scores": {
-        "httpStatus": 0,
-        "schema": 0,
-        "datos": 0,
-        "reglasNegocio": 0,
+        "httpStatus": 10,
+        "schema": 20,
+        "datos": 25,
+        "reglasNegocio": 25,
         "errores": 10,
         "seguridad": 10,
-        "total": 20
+        "total": 100
       }
     },
     {

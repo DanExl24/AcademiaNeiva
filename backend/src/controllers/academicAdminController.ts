@@ -3671,8 +3671,9 @@ export const assignTeacherCourseSubject = async (req: Request, res: Response): P
        WHERE dg.id_colegio = $1
          AND dg.id_materia = $2
          AND dg.id_grupo = $3
+         AND (dg.id_anio = $4 OR ($4::int IS NULL AND dg.id_anio IS NULL))
        ORDER BY dg.id_detallegrado DESC`,
-      [schoolId, subjectId, groupId]
+      [schoolId, subjectId, groupId, activeYearId]
     );
 
     if (existingRes.rows.length > 0) {
@@ -3702,19 +3703,42 @@ export const assignTeacherCourseSubject = async (req: Request, res: Response): P
         [teacherId, existing.id_detallegrado, activeYearId]
       );
 
-      // Consolidar cualquier detalle_grados duplicado existente para este grupo/materia
-      await pool.query(
-        `UPDATE actividad_materia SET id_detallegrado = $1 WHERE id_detallegrado IN (SELECT id_detallegrado FROM detalle_grados WHERE id_colegio = $2 AND id_materia = $3 AND id_grupo = $4 AND id_detallegrado != $1)`,
-        [existing.id_detallegrado, schoolId, subjectId, groupId]
+      // Consolidar cualquier detalle_grados duplicado existente para este mismo año/grupo/materia
+      const duplicateRes = await pool.query(
+        `SELECT id_detallegrado FROM detalle_grados 
+         WHERE id_colegio = $1 AND id_materia = $2 AND id_grupo = $3 
+           AND (id_anio = $4 OR ($4::int IS NULL AND id_anio IS NULL))
+           AND id_detallegrado != $5`,
+        [schoolId, subjectId, groupId, activeYearId, existing.id_detallegrado]
       );
-      await pool.query(
-        `UPDATE resultado_academico SET id_detallegrado = $1 WHERE id_detallegrado IN (SELECT id_detallegrado FROM detalle_grados WHERE id_colegio = $2 AND id_materia = $3 AND id_grupo = $4 AND id_detallegrado != $1)`,
-        [existing.id_detallegrado, schoolId, subjectId, groupId]
-      );
-      await pool.query(
-        `DELETE FROM detalle_grados WHERE id_colegio = $1 AND id_materia = $2 AND id_grupo = $3 AND id_detallegrado != $4`,
-        [schoolId, subjectId, groupId, existing.id_detallegrado]
-      );
+      const duplicateIds = duplicateRes.rows.map((r: any) => Number(r.id_detallegrado));
+
+      if (duplicateIds.length > 0) {
+        await pool.query(
+          `UPDATE actividad_materia SET id_detallegrado = $1 WHERE id_detallegrado = ANY($2::int[])`,
+          [existing.id_detallegrado, duplicateIds]
+        );
+        await pool.query(
+          `UPDATE resultado_academico SET id_detallegrado = $1 WHERE id_detallegrado = ANY($2::int[])`,
+          [existing.id_detallegrado, duplicateIds]
+        );
+        await pool.query(
+          `UPDATE cierre_materia SET id_detallegrado = $1 WHERE id_detallegrado = ANY($2::int[])`,
+          [existing.id_detallegrado, duplicateIds]
+        );
+        await pool.query(
+          `UPDATE observacion_estudiante SET id_detallegrado = $1 WHERE id_detallegrado = ANY($2::int[])`,
+          [existing.id_detallegrado, duplicateIds]
+        );
+        await pool.query(
+          `UPDATE registro_asistencia SET id_detallegrado = $1 WHERE id_detallegrado = ANY($2::int[])`,
+          [existing.id_detallegrado, duplicateIds]
+        );
+        await pool.query(
+          `DELETE FROM detalle_grados WHERE id_detallegrado = ANY($1::int[])`,
+          [duplicateIds]
+        );
+      }
 
       await NotificationService.sendTeacherAssignmentEmail(
         context.email,
@@ -3748,7 +3772,7 @@ export const assignTeacherCourseSubject = async (req: Request, res: Response): P
     res.status(201).json(created.rows[0]);
   } catch (error: any) {
     console.error("Error assigning teacher course subject:", error);
-    res.status(500).json({ error: "Error en el servidor" });
+    res.status(500).json({ error: formatFriendlyErrorMessage(error, "Error al realizar el traslado o asignación de la materia") });
   }
 };
 
@@ -3801,18 +3825,21 @@ export const deleteTeacherAssignment = async (req: Request, res: Response): Prom
       return;
     }
 
-    // RN-DOC-005: Denegar eliminación si existen actividades evaluadas o asistencias registradas
+    // RN-DOC-005: Denegar eliminación si existen actividades evaluadas, asistencias, calificaciones o cierres de materia registrados
     const checkRelations = await pool.query(
       `SELECT 
          (SELECT COUNT(*)::int FROM actividad_materia WHERE id_detallegrado = $1) AS actividades_count,
-         (SELECT COUNT(*)::int FROM registro_asistencia WHERE id_detallegrado = $1) AS asistencias_count`,
+         (SELECT COUNT(*)::int FROM registro_asistencia WHERE id_detallegrado = $1) AS asistencias_count,
+         (SELECT COUNT(*)::int FROM cierre_materia WHERE id_detallegrado = $1) AS cierres_count,
+         (SELECT COUNT(*)::int FROM resultado_academico WHERE id_detallegrado = $1) AS notas_count,
+         (SELECT COUNT(*)::int FROM observacion_estudiante WHERE id_detallegrado = $1) AS observaciones_count`,
       [assignmentId]
     );
 
-    const { actividades_count, asistencias_count } = checkRelations.rows[0];
-    if (actividades_count > 0 || asistencias_count > 0) {
+    const { actividades_count, asistencias_count, cierres_count, notas_count, observaciones_count } = checkRelations.rows[0];
+    if (actividades_count > 0 || asistencias_count > 0 || cierres_count > 0 || notas_count > 0 || observaciones_count > 0) {
       res.status(409).json({
-        error: "No se puede eliminar esta asignación académica porque contiene actividades de evaluación o registros de asistencia registrados."
+        error: "No se puede eliminar esta asignación académica porque contiene evaluaciones, asistencias, notas o cierres de materia registrados."
       });
       return;
     }
@@ -3843,7 +3870,7 @@ export const deleteTeacherAssignment = async (req: Request, res: Response): Prom
     res.json({ message: "Asignación eliminada correctamente" });
   } catch (error: any) {
     console.error("Error deleting teacher assignment:", error);
-    res.status(500).json({ error: "Error en el servidor" });
+    res.status(500).json({ error: formatFriendlyErrorMessage(error, "Error al eliminar la asignación académica") });
   }
 };
 
