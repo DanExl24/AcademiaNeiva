@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict hzH2TbblBfFGoUDbpi9bMtq7V5QOJbKUiBcGpi2qTmSEzgwdfebhWIF2u7ZApbZ
+\restrict zeOWeac1Je4O5W4kA6ouNowQnGWChUBq3kEhWSFy2QQgtmA90Axragr7bUyv52a
 
 -- Dumped from database version 18.4
 -- Dumped by pg_dump version 18.4
@@ -554,6 +554,104 @@ $$;
 
 
 ALTER FUNCTION public.proteger_auditoria_finalizada() OWNER TO postgres;
+
+--
+-- Name: trg_check_subject_not_closed(); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.trg_check_subject_not_closed() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+    v_id_detallegrado INTEGER;
+    v_id_periodo INTEGER;
+    v_is_closed BOOLEAN;
+BEGIN
+    IF current_setting('my.app.bypass_triggers', true) = 'true' THEN
+        IF TG_OP = 'DELETE' THEN
+            RETURN OLD;
+        ELSE
+            RETURN NEW;
+        END IF;
+    END IF;
+    IF TG_TABLE_NAME = 'actividad_materia' THEN
+        IF TG_OP = 'DELETE' THEN
+            v_id_detallegrado := OLD.id_detallegrado;
+            v_id_periodo := OLD.id_periodo;
+        ELSE
+            v_id_detallegrado := NEW.id_detallegrado;
+            v_id_periodo := NEW.id_periodo;
+        END IF;
+    ELSIF TG_TABLE_NAME = 'notas_actividad' THEN
+        IF TG_OP = 'DELETE' THEN
+            SELECT id_detallegrado, id_periodo INTO v_id_detallegrado, v_id_periodo
+            FROM public.actividad_materia WHERE id_actividadmateria = OLD.id_actividadmateria;
+        ELSE
+            SELECT id_detallegrado, id_periodo INTO v_id_detallegrado, v_id_periodo
+            FROM public.actividad_materia WHERE id_actividadmateria = NEW.id_actividadmateria;
+        END IF;
+    ELSIF TG_TABLE_NAME = 'criterio_evaluacion' THEN
+        IF TG_OP = 'DELETE' THEN
+            SELECT id_detallegrado, id_periodo INTO v_id_detallegrado, v_id_periodo
+            FROM public.actividad_materia WHERE id_actividadmateria = OLD.id_actividadmateria;
+        ELSE
+            SELECT id_detallegrado, id_periodo INTO v_id_detallegrado, v_id_periodo
+            FROM public.actividad_materia WHERE id_actividadmateria = NEW.id_actividadmateria;
+        END IF;
+    ELSIF TG_TABLE_NAME = 'nota_criterio' THEN
+        IF TG_OP = 'DELETE' THEN
+            SELECT am.id_detallegrado, am.id_periodo INTO v_id_detallegrado, v_id_periodo
+            FROM public.criterio_evaluacion ce
+            JOIN public.actividad_materia am ON ce.id_actividadmateria = am.id_actividadmateria
+            WHERE ce.id_criterio = OLD.id_criterio;
+        ELSE
+            SELECT am.id_detallegrado, am.id_periodo INTO v_id_detallegrado, v_id_periodo
+            FROM public.criterio_evaluacion ce
+            JOIN public.actividad_materia am ON ce.id_actividadmateria = am.id_actividadmateria
+            WHERE ce.id_criterio = NEW.id_criterio;
+        END IF;
+    ELSIF TG_TABLE_NAME = 'registro_asistencia' THEN
+        IF TG_OP = 'DELETE' THEN
+            v_id_detallegrado := OLD.id_detallegrado;
+            v_id_periodo := NULL;
+        ELSE
+            v_id_detallegrado := NEW.id_detallegrado;
+            v_id_periodo := NULL;
+        END IF;
+    ELSIF TG_TABLE_NAME = 'observacion_estudiante' THEN
+        IF TG_OP = 'DELETE' THEN
+            v_id_detallegrado := OLD.id_detallegrado;
+            v_id_periodo := OLD.id_periodo;
+        ELSE
+            v_id_detallegrado := NEW.id_detallegrado;
+            v_id_periodo := NEW.id_periodo;
+        END IF;
+    END IF;
+
+    IF v_id_detallegrado IS NOT NULL AND v_id_periodo IS NOT NULL THEN
+        SELECT EXISTS (
+            SELECT 1 FROM public.cierre_materia
+            WHERE id_detallegrado = v_id_detallegrado
+              AND id_periodo = v_id_periodo
+              AND estado = 'CERRADO'
+        ) INTO v_is_closed;
+
+        IF v_is_closed THEN
+            RAISE EXCEPTION 'La materia se encuentra CERRADA para este periodo y no admite modificaciones.'
+                USING ERRCODE = '55000';
+        END IF;
+    END IF;
+
+    IF TG_OP = 'DELETE' THEN
+        RETURN OLD;
+    ELSE
+        RETURN NEW;
+    END IF;
+END;
+$$;
+
+
+ALTER FUNCTION public.trg_check_subject_not_closed() OWNER TO postgres;
 
 SET default_tablespace = '';
 
@@ -4139,6 +4237,48 @@ CREATE TRIGGER trg_bloquear_observacion_periodo BEFORE INSERT OR DELETE OR UPDAT
 
 
 --
+-- Name: actividad_materia trg_prevent_closed_actividad_materia; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE TRIGGER trg_prevent_closed_actividad_materia BEFORE INSERT OR DELETE OR UPDATE ON public.actividad_materia FOR EACH ROW EXECUTE FUNCTION public.trg_check_subject_not_closed();
+
+
+--
+-- Name: criterio_evaluacion trg_prevent_closed_criterio_evaluacion; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE TRIGGER trg_prevent_closed_criterio_evaluacion BEFORE INSERT OR DELETE OR UPDATE ON public.criterio_evaluacion FOR EACH ROW EXECUTE FUNCTION public.trg_check_subject_not_closed();
+
+
+--
+-- Name: nota_criterio trg_prevent_closed_nota_criterio; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE TRIGGER trg_prevent_closed_nota_criterio BEFORE INSERT OR DELETE OR UPDATE ON public.nota_criterio FOR EACH ROW EXECUTE FUNCTION public.trg_check_subject_not_closed();
+
+
+--
+-- Name: notas_actividad trg_prevent_closed_notas_actividad; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE TRIGGER trg_prevent_closed_notas_actividad BEFORE INSERT OR DELETE OR UPDATE ON public.notas_actividad FOR EACH ROW EXECUTE FUNCTION public.trg_check_subject_not_closed();
+
+
+--
+-- Name: observacion_estudiante trg_prevent_closed_observacion_estudiante; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE TRIGGER trg_prevent_closed_observacion_estudiante BEFORE INSERT OR DELETE OR UPDATE ON public.observacion_estudiante FOR EACH ROW EXECUTE FUNCTION public.trg_check_subject_not_closed();
+
+
+--
+-- Name: registro_asistencia trg_prevent_closed_registro_asistencia; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE TRIGGER trg_prevent_closed_registro_asistencia BEFORE INSERT OR DELETE OR UPDATE ON public.registro_asistencia FOR EACH ROW EXECUTE FUNCTION public.trg_check_subject_not_closed();
+
+
+--
 -- Name: auditoria_acciones_realizadas trg_proteger_acciones; Type: TRIGGER; Schema: public; Owner: postgres
 --
 
@@ -5026,5 +5166,5 @@ REVOKE USAGE ON SCHEMA public FROM PUBLIC;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict hzH2TbblBfFGoUDbpi9bMtq7V5QOJbKUiBcGpi2qTmSEzgwdfebhWIF2u7ZApbZ
+\unrestrict zeOWeac1Je4O5W4kA6ouNowQnGWChUBq3kEhWSFy2QQgtmA90Axragr7bUyv52a
 
