@@ -22,9 +22,9 @@ COPY package*.json ./
 
 COPY --from=builder /app/dist ./dist
 
-# Copiar archivos SQL que son leídos en tiempo de ejecución por el seed y las migraciones
-COPY src/config/auth.migration.sql ./src/config/auth.migration.sql
-COPY src/migrations ./src/migrations
+# Copiar archivos SQL a dist/ donde el código compilado los busca (usando __dirname)
+COPY src/config/auth.migration.sql ./dist/config/auth.migration.sql
+COPY src/migrations ./dist/migrations
 
 RUN npm ci --omit=dev && mkdir -p /app/uploads
 
