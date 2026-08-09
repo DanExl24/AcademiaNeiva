@@ -952,7 +952,17 @@ export const getUserEligibleAcademicYears = async (
   // 3. Teacher participation in academic activities/evaluations/competencies/assignments
   if (userRoles.includes('docente')) {
     const teacherYears = await pool.query<{ id_anio: number }>(
-      `SELECT DISTINCT p.id_anio
+      `SELECT DISTINCT dg.id_anio
+       FROM detalle_grados dg
+       JOIN docente d ON d.id_docente = dg.id_docente
+       LEFT JOIN usuario u ON u.id_usuario = d.id_usuario
+       WHERE (d.id_usuario = $1 OR UPPER(u.email) = UPPER($2))
+         AND dg.id_colegio = $3
+         AND dg.id_anio IS NOT NULL
+
+       UNION
+
+       SELECT DISTINCT p.id_anio
        FROM periodo_academico p
        JOIN actividad_materia am ON am.id_periodo = p.id_periodo
        JOIN detalle_grados dg ON dg.id_detallegrado = am.id_detallegrado
@@ -994,11 +1004,43 @@ export const getUserEligibleAcademicYears = async (
     teacherYears.rows.forEach(r => eligibleYearIds.add(Number(r.id_anio)));
   }
 
-  // Fallback: If no history found, return active open year
+  // Filter out any academic years that ended before the user was registered
+  if (eligibleYearIds.size > 0) {
+    const validYearsRes = await pool.query<{ id_anio: number }>(
+      `SELECT al.id_anio
+       FROM anio_lectivo al
+       LEFT JOIN usuario u ON u.id_usuario = $1
+       WHERE al.id_anio = ANY($2::int[])
+         AND (
+           u.fecha_creacion IS NULL OR
+           NOT (
+             EXTRACT(YEAR FROM u.fecha_creacion) > NULLIF(regexp_replace(al.calendario, '\\D', '', 'g'), '')::int
+             OR (al.fecha_fin IS NOT NULL AND DATE(u.fecha_creacion) > al.fecha_fin)
+           )
+         )`,
+      [userId, Array.from(eligibleYearIds)]
+    );
+    eligibleYearIds.clear();
+    validYearsRes.rows.forEach(r => eligibleYearIds.add(Number(r.id_anio)));
+  }
+
+  // Fallback: If no history found or filtered out, return active open year valid for creation date
   if (eligibleYearIds.size === 0) {
     const openYear = await pool.query<{ id_anio: number }>(
-      `SELECT id_anio FROM anio_lectivo WHERE id_colegio = $1 ORDER BY CASE WHEN estado = 'ABIERTO' THEN 0 ELSE 1 END, id_anio DESC LIMIT 1`,
-      [schoolId]
+      `SELECT al.id_anio
+       FROM anio_lectivo al
+       LEFT JOIN usuario u ON u.id_usuario = $1
+       WHERE al.id_colegio = $2
+         AND (
+           u.fecha_creacion IS NULL OR
+           NOT (
+             EXTRACT(YEAR FROM u.fecha_creacion) > NULLIF(regexp_replace(al.calendario, '\\D', '', 'g'), '')::int
+             OR (al.fecha_fin IS NOT NULL AND DATE(u.fecha_creacion) > al.fecha_fin)
+           )
+         )
+       ORDER BY CASE WHEN al.estado = 'ABIERTO' THEN 0 ELSE 1 END, al.id_anio DESC
+       LIMIT 1`,
+      [userId, schoolId]
     );
     if (openYear.rows.length > 0) {
       eligibleYearIds.add(Number(openYear.rows[0].id_anio));
@@ -5628,20 +5670,21 @@ export const uploadMySchoolEscudo = async (req: Request, res: Response): Promise
   }
 
   try {
-    if (!req.file) {
+    const reqAny = req as any;
+    if (!reqAny.file) {
       res.status(400).json({ error: 'No se ha subido ningún archivo' });
       return;
     }
 
-    const ext = req.file.originalname ? path.extname(req.file.originalname).toLowerCase() : '';
+    const ext = reqAny.file.originalname ? path.extname(reqAny.file.originalname).toLowerCase() : '';
     const allowedExts = ['.jpg', '.jpeg', '.png', '.svg', '.webp'];
-    if (ext && !allowedExts.includes(ext) && !req.file.mimetype?.startsWith('image/')) {
+    if (ext && !allowedExts.includes(ext) && !reqAny.file.mimetype?.startsWith('image/')) {
       res.status(400).json({ error: 'Formato no soportado. Solo se permiten JPG, JPEG, PNG, SVG y WEBP.' });
       return;
     }
 
-    const mimeType = req.file.mimetype || 'image/png';
-    const base64Data = req.file.buffer.toString('base64');
+    const mimeType = reqAny.file.mimetype || 'image/png';
+    const base64Data = reqAny.file.buffer.toString('base64');
     const fileUrl = `data:${mimeType};base64,${base64Data}`;
 
     res.json({ url: fileUrl });
