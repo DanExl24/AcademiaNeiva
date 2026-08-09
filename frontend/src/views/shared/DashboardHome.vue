@@ -1161,8 +1161,6 @@ onMounted(() => {
           </div>
         </div>
       </div>
-        </div>
-      </div>
 
       <!-- Modal for Students at Risk details -->
       <div v-if="selectedAlertCourse" class="fixed inset-0 z-50 flex items-center justify-center p-4">
