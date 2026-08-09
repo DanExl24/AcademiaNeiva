@@ -451,6 +451,13 @@ export const ensureCompetencySchema = async (): Promise<void> => {
       await client.query(addJustificacionCierreSql);
     }
 
+    // Ejecutar migración 035 (id_docente_creador en actividad_materia para trazabilidad histórica)
+    const addDocenteCreadorPath = path.join(__dirname, "../migrations/035_add_id_docente_creador_to_actividad_materia.sql");
+    if (fs.existsSync(addDocenteCreadorPath)) {
+      const addDocenteCreadorSql = fs.readFileSync(addDocenteCreadorPath, "utf8");
+      await client.query(addDocenteCreadorSql);
+    }
+
     // Backfill sync_uuid for existing competencies
     const unmigratedRes = await client.query(`
       SELECT id_colegio, id_anio, id_materia, id_periodo, descripcion, ARRAY_AGG(id_competencia) AS ids

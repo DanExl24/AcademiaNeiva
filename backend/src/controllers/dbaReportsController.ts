@@ -41,6 +41,7 @@ export const obtenerReporteCoherenciaCurricular = async (req: Request, res: Resp
         m.nombre AS materia_nombre,
         d.id_docente,
         u.nombre || ' ' || u.apellido AS docente_nombre,
+        COALESCE(u_creador.nombre || ' ' || u_creador.apellido, u.nombre || ' ' || u.apellido) AS docente_creador_nombre,
         edba.id_evidencia_dba,
         edba.descripcion AS evidencia_descripcion,
         edba.orden AS evidencia_orden,
@@ -66,6 +67,7 @@ export const obtenerReporteCoherenciaCurricular = async (req: Request, res: Resp
       JOIN nivel_escolar ne ON ne.id_nivel = g.id_nivel
       JOIN tipo_grado tg ON tg.id_tipo_grado = g.id_tipo_grado
       JOIN secciones s ON s.id_seccion = g.id_seccion
+      JOIN materias m ON m.id_materia = c.id_materia
       LEFT JOIN LATERAL (
         SELECT dg_cur.id_docente
         FROM detalle_grados dg_cur
@@ -75,6 +77,8 @@ export const obtenerReporteCoherenciaCurricular = async (req: Request, res: Resp
       ) dg ON true
       LEFT JOIN docente d ON d.id_docente = dg.id_docente
       LEFT JOIN usuario u ON u.id_usuario = d.id_usuario
+      LEFT JOIN docente d_creador ON d_creador.id_docente = am.id_docente_creador
+      LEFT JOIN usuario u_creador ON u_creador.id_usuario = d_creador.id_usuario
       WHERE c.id_colegio = $1
     `;
 

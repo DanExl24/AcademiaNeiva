@@ -427,9 +427,15 @@ export const createActivity = async (req: Request, res: Response): Promise<void>
       }
     }
 
+    const dgTeacherRes = await client.query(
+      `SELECT id_docente FROM detalle_grados WHERE id_detallegrado = $1`,
+      [finalIdDetalleGrado]
+    );
+    const creatorTeacherId = dgTeacherRes.rows[0]?.id_docente || null;
+
     const newActivityRes = await client.query(
-      `INSERT INTO actividad_materia (id_competencia, id_evidencia, id_detallegrado, id_periodo, nombre, porcentaje, id_colegio, motivo_extra, justificacion_extra)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      `INSERT INTO actividad_materia (id_competencia, id_evidencia, id_detallegrado, id_periodo, nombre, porcentaje, id_colegio, motivo_extra, justificacion_extra, id_docente_creador)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING *`,
       [
         finalIdCompetencia,
@@ -441,6 +447,7 @@ export const createActivity = async (req: Request, res: Response): Promise<void>
         finalIdColegio,
         motivo_extra || null,
         justificacion_extra || null,
+        creatorTeacherId,
       ]
     );
     const newActivity = newActivityRes.rows[0];
