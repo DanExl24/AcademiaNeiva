@@ -1270,7 +1270,16 @@ async function run(): Promise<void> {
     // ── Phase 14: Populate academic grades ──
     console.log("\n📊 Generando calificaciones y datos académicos de prueba...");
     try {
-      execSync("npm run seed:grades", { stdio: "inherit", cwd: path.resolve(__dirname, "../..") });
+      // En el contenedor Docker (dist compilado), ts-node-dev no está disponible.
+      // Detectamos si estamos corriendo desde el JS compilado o desde TypeScript.
+      const isCompiled = __filename.endsWith(".js");
+      const gradesCmd = isCompiled
+        ? `node ${path.resolve(__dirname, "seed_grades.js")}`
+        : "npm run seed:grades";
+      const gradesCwd = isCompiled
+        ? undefined
+        : path.resolve(__dirname, "../..");
+      execSync(gradesCmd, { stdio: "inherit", cwd: gradesCwd });
     } catch (err) {
       console.error("⚠️ Error al generar calificaciones:", err);
     }
