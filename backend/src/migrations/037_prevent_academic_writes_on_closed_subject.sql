@@ -6,6 +6,13 @@ DECLARE
     v_id_periodo INTEGER;
     v_is_closed BOOLEAN;
 BEGIN
+    IF current_setting('my.app.bypass_triggers', true) = 'true' THEN
+        IF TG_OP = 'DELETE' THEN
+            RETURN OLD;
+        ELSE
+            RETURN NEW;
+        END IF;
+    END IF;
     IF TG_TABLE_NAME = 'actividad_materia' THEN
         IF TG_OP = 'DELETE' THEN
             v_id_detallegrado := OLD.id_detallegrado;
@@ -45,10 +52,10 @@ BEGIN
     ELSIF TG_TABLE_NAME = 'registro_asistencia' THEN
         IF TG_OP = 'DELETE' THEN
             v_id_detallegrado := OLD.id_detallegrado;
-            v_id_periodo := OLD.id_periodo;
+            v_id_periodo := NULL;
         ELSE
             v_id_detallegrado := NEW.id_detallegrado;
-            v_id_periodo := NEW.id_periodo;
+            v_id_periodo := NULL;
         END IF;
     ELSIF TG_TABLE_NAME = 'observacion_estudiante' THEN
         IF TG_OP = 'DELETE' THEN

@@ -2,11 +2,11 @@
 -- Se activa el bypass de triggers para poder modificar registros de periodos cerrados durante la limpieza
 SET my.app.bypass_triggers = 'true';
 
--- 1. Reasignar cualquier actividad_materia de detalle_grados duplicados al id_detallegrado más reciente
+-- 1. Reasignar cualquier actividad_materia de detalle_grados duplicados al id_detallegrado más reciente por año
 WITH ranked_dg AS (
-  SELECT id_detallegrado, id_colegio, id_grupo, id_materia,
+  SELECT id_detallegrado, id_colegio, id_grupo, id_materia, id_anio,
          FIRST_VALUE(id_detallegrado) OVER (
-           PARTITION BY id_colegio, id_grupo, id_materia 
+           PARTITION BY id_colegio, id_grupo, id_materia, id_anio 
            ORDER BY id_detallegrado DESC
          ) AS main_id_detallegrado
   FROM detalle_grados
@@ -19,9 +19,9 @@ WHERE am.id_detallegrado = r.id_detallegrado
 
 -- Reasignar resultado_academico de detalle_grados duplicados
 WITH ranked_dg AS (
-  SELECT id_detallegrado, id_colegio, id_grupo, id_materia,
+  SELECT id_detallegrado, id_colegio, id_grupo, id_materia, id_anio,
          FIRST_VALUE(id_detallegrado) OVER (
-           PARTITION BY id_colegio, id_grupo, id_materia 
+           PARTITION BY id_colegio, id_grupo, id_materia, id_anio 
            ORDER BY id_detallegrado DESC
          ) AS main_id_detallegrado
   FROM detalle_grados
@@ -34,9 +34,9 @@ WHERE ra.id_detallegrado = r.id_detallegrado
 
 -- Reasignar observacion_estudiante de detalle_grados duplicados
 WITH ranked_dg AS (
-  SELECT id_detallegrado, id_colegio, id_grupo, id_materia,
+  SELECT id_detallegrado, id_colegio, id_grupo, id_materia, id_anio,
          FIRST_VALUE(id_detallegrado) OVER (
-           PARTITION BY id_colegio, id_grupo, id_materia 
+           PARTITION BY id_colegio, id_grupo, id_materia, id_anio 
            ORDER BY id_detallegrado DESC
          ) AS main_id_detallegrado
   FROM detalle_grados
@@ -49,9 +49,9 @@ WHERE oe.id_detallegrado = r.id_detallegrado
 
 -- Reasignar registro_asistencia de detalle_grados duplicados
 WITH ranked_dg AS (
-  SELECT id_detallegrado, id_colegio, id_grupo, id_materia,
+  SELECT id_detallegrado, id_colegio, id_grupo, id_materia, id_anio,
          FIRST_VALUE(id_detallegrado) OVER (
-           PARTITION BY id_colegio, id_grupo, id_materia 
+           PARTITION BY id_colegio, id_grupo, id_materia, id_anio 
            ORDER BY id_detallegrado DESC
          ) AS main_id_detallegrado
   FROM detalle_grados
@@ -67,9 +67,9 @@ DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'cierre_materia') THEN
     WITH ranked_dg AS (
-      SELECT id_detallegrado, id_colegio, id_grupo, id_materia,
+      SELECT id_detallegrado, id_colegio, id_grupo, id_materia, id_anio,
              FIRST_VALUE(id_detallegrado) OVER (
-               PARTITION BY id_colegio, id_grupo, id_materia 
+               PARTITION BY id_colegio, id_grupo, id_materia, id_anio 
                ORDER BY id_detallegrado DESC
              ) AS main_id_detallegrado
       FROM detalle_grados
@@ -83,13 +83,12 @@ BEGIN
 END;
 $$;
 
--- Eliminar detalle_grados antiguos duplicados que ya no son el principal
--- Solo si no tienen ninguna referencia pendiente en ninguna tabla hija
+-- Eliminar detalle_grados antiguos duplicados que ya no son el principal dentro del MISMO año
 DELETE FROM detalle_grados dg
 WHERE id_detallegrado NOT IN (
   SELECT MAX(id_detallegrado)
   FROM detalle_grados
-  GROUP BY id_colegio, id_grupo, id_materia
+  GROUP BY id_colegio, id_grupo, id_materia, id_anio
 )
 AND NOT EXISTS (SELECT 1 FROM actividad_materia am WHERE am.id_detallegrado = dg.id_detallegrado)
 AND NOT EXISTS (SELECT 1 FROM resultado_academico ra WHERE ra.id_detallegrado = dg.id_detallegrado)
