@@ -109,14 +109,34 @@ const activitiesLoading = ref(false)
 
 // Búsqueda de estudiantes
 const studentSearch = ref('')
+const isSubjectClosed = ref(false)
 
 const selectedPeriod = computed(() => {
   return periods.value.find(p => p.id_periodo === selectedPeriodId.value)
 })
 
 const isPeriodClosed = computed(() => {
-  return selectedPeriod.value?.estado === 'CERRADO'
+  return selectedPeriod.value?.estado === 'CERRADO' || isSubjectClosed.value
 })
+
+const checkSubjectClosure = async () => {
+  if (!selectedGradeId.value || !selectedSubjectId.value || !selectedPeriodId.value) {
+    isSubjectClosed.value = false
+    return
+  }
+  const matchedCourse = myCourses.value.find((c: any) => c.id_grado === selectedGradeId.value && c.id_materia === selectedSubjectId.value)
+  const idDetalleGrado = matchedCourse ? matchedCourse.id_detallegrado : null
+  if (!idDetalleGrado) {
+    isSubjectClosed.value = false
+    return
+  }
+  try {
+    const res = await axios.get(`/api/teacher/closure-status/${idDetalleGrado}/${selectedPeriodId.value}`)
+    isSubjectClosed.value = res.data?.isClosed || false
+  } catch (err) {
+    isSubjectClosed.value = false
+  }
+}
 
 const filteredStudents = computed(() => {
   const allStudents = Array.isArray(students.value) ? students.value : []
@@ -368,6 +388,7 @@ const fetchActivities = async () => {
   if (!selectedGradeId.value || !selectedSubjectId.value || !selectedPeriodId.value) return
   try {
     activitiesLoading.value = true
+    await checkSubjectClosure()
     const response = await axios.get(`/api/teacher/activities/${selectedGradeId.value}/${selectedSubjectId.value}/${selectedPeriodId.value}`, {
       params: { userId: auth.user?.id }
     })

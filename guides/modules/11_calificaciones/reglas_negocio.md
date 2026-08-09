@@ -74,3 +74,49 @@ Este documento detalla las reglas de negocio técnicas y funcionales del módulo
 - **Endpoints relacionados:** 
   - `POST /api/teacher/grades`
 - **Historias de usuario relacionadas:** HU-CAL-003
+
+---
+
+### RN-CAL-006: Inviolabilidad de Materias Cerradas a Nivel de Base de Datos
+- **Descripción:** Se ejecuta un trigger en PostgreSQL (`trg_check_subject_not_closed`) `BEFORE INSERT OR UPDATE OR DELETE` sobre las tablas `actividad_materia`, `notas_actividad`, `criterio_evaluacion`, `nota_criterio`, `registro_asistencia` y `observacion_estudiante`. Si la materia se encuentra en estado `CERRADO` en `cierre_materia` para esa asignación y periodo, PostgreSQL aborta automáticamente la transacción con error `55000`.
+- **Motivo:** Garantiza la integridad absoluta de los datos académicos consolidados independientemente de la interfaz o llamadas directas a la API.
+- **Módulos afectados:** Calificaciones, Asistencia, Observaciones, Cierre y Boletines.
+- **Archivos donde se implementa:** 
+  - `037_prevent_academic_writes_on_closed_subject.sql`
+  - [competencyMigration.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/config/competencyMigration.ts)
+- **Endpoints relacionados:** Todos los endpoints de modificación académica.
+- **Historias de usuario relacionadas:** HU-CAL-003, HU-CIE-001
+
+---
+
+### RN-CAL-007: Visualización en Modo Lectura de Actividades en Materias Cerradas
+- **Descripción:** Cuando una materia es cerrada por el docente, la interfaz del módulo de Calificaciones (`TeacherGrades.vue`):
+  - Muestra un banner destacado "Planilla en Modo Solo Lectura".
+  - Deshabilita todas las casillas e inputs de notas (actividades y criterios).
+  - Oculta el botón "+ Crear Actividad".
+  - Permite hacer clic en las actividades existentes para abrir el panel lateral (Drawer) exclusivamente en **Modo Lectura** (permite consultar nombre, peso, evidencias DBA y criterios, pero oculta los controles de edición, guardado o eliminación).
+- **Motivo:** Brinda visibilidad y transparencia al docente y directivo sobre lo evaluado sin permitir alteraciones de calificaciones consolidadas.
+- **Módulos afectados:** Calificaciones.
+- **Archivos donde se implementa:** 
+  - [TeacherGrades.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/teacher/TeacherGrades.vue)
+- **Endpoints relacionados:** `GET /api/teacher/closure-status/:detailGradeId/:periodId`
+- **Historias de usuario relacionadas:** HU-CAL-001, HU-CAL-003
+
+---
+
+### RN-CAL-008: Trazabilidad de Docente Creador y Docente de Cierre
+- **Descripción:** 
+  - La tabla `actividad_materia` almacena `id_docente_creador` para identificar qué docente creó la actividad (preservando este dato aunque la asignatura sea reasignada a otro docente en `detalle_grados`).
+  - La tabla `cierre_materia` almacena `id_docente_cierre` para registrar el docente exacto que realizó la acción del cierre de periodo.
+- **Motivo:** Asegura la auditoría histórica de las actividades pedagógicas y cierres de periodo cuando ocurren cambios de planta docente.
+- **Módulos afectados:** Calificaciones, Cierre y Boletines, Portal Estudiante.
+- **Archivos donde se implementa:** 
+  - `035_add_id_docente_creador_to_actividad_materia.sql`
+  - `036_add_id_docente_cierre_to_cierre_materia.sql`
+  - [gradingController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/gradingController.ts)
+  - [studentPortalController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/studentPortalController.ts)
+  - [TeacherClosure.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/teacher/TeacherClosure.vue)
+  - [SubjectDetailsView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/student/SubjectDetailsView.vue)
+- **Endpoints relacionados:** `POST /api/teacher/close-period`, `GET /api/student/grade-details/...`
+- **Historias de usuario relacionadas:** HU-CAL-001, HU-CIE-001
+

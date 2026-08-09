@@ -436,6 +436,12 @@ const ensureCompetencySchema = async () => {
             const addDocenteCierreSql = fs_1.default.readFileSync(addDocenteCierrePath, "utf8");
             await client.query(addDocenteCierreSql);
         }
+        // Ejecutar migración 037 (triggers para prevenir escrituras en tablas académicas con materia cerrada)
+        const preventClosedWritesPath = path_1.default.join(__dirname, "../migrations/037_prevent_academic_writes_on_closed_subject.sql");
+        if (fs_1.default.existsSync(preventClosedWritesPath)) {
+            const preventClosedWritesSql = fs_1.default.readFileSync(preventClosedWritesPath, "utf8");
+            await client.query(preventClosedWritesSql);
+        }
         // Backfill sync_uuid for existing competencies
         const unmigratedRes = await client.query(`
       SELECT id_colegio, id_anio, id_materia, id_periodo, descripcion, ARRAY_AGG(id_competencia) AS ids

@@ -465,6 +465,13 @@ export const ensureCompetencySchema = async (): Promise<void> => {
       await client.query(addDocenteCierreSql);
     }
 
+    // Ejecutar migración 037 (triggers para prevenir escrituras en tablas académicas con materia cerrada)
+    const preventClosedWritesPath = path.join(__dirname, "../migrations/037_prevent_academic_writes_on_closed_subject.sql");
+    if (fs.existsSync(preventClosedWritesPath)) {
+      const preventClosedWritesSql = fs.readFileSync(preventClosedWritesPath, "utf8");
+      await client.query(preventClosedWritesSql);
+    }
+
 
     // Backfill sync_uuid for existing competencies
     const unmigratedRes = await client.query(`

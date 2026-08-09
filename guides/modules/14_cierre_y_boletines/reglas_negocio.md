@@ -68,3 +68,33 @@ Este documento detalla las reglas de negocio técnicas y funcionales del módulo
 - **Endpoints relacionados:** 
   - `POST /api/academic-admin/settings/periods/:periodId/reopen-subject/:detailGradeId`
 - **Historias de usuario relacionadas:** HU-BOL-002
+
+---
+
+### RN-CIE-006: Sincronización Automática de Calificaciones por Criterios en Cierre
+- **Descripción:** Al guardar calificaciones por criterios (`nota_criterio`), el sistema calcula automáticamente el promedio ponderado por estudiante/actividad y lo refleja en `notas_actividad`. Durante las verificaciones de cierre (`getClosureStatus` y `closeTeacherSubject`), la consulta determina de forma transparente si una actividad utiliza notas directas o por criterios para validar que el 100% de los estudiantes activos hayan sido calificados.
+- **Motivo:** Asegura un único punto de verdad para el cálculo de promedios al momento del cierre de materia.
+- **Módulos afectados:** Calificaciones, Cierre y Boletines.
+- **Archivos donde se implementa:** 
+  - [gradingController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/gradingController.ts) (`saveGrades`, `getClosureStatus`, `closeTeacherSubject`)
+- **Endpoints relacionados:** 
+  - `POST /api/teacher/grades`
+  - `GET /api/teacher/closure-status/:detailGradeId/:periodId`
+  - `POST /api/teacher/close-period`
+- **Historias de usuario relacionadas:** HU-BOL-001
+
+---
+
+### RN-CIE-007: Trazabilidad del Docente Responsable del Cierre (`id_docente_cierre`)
+- **Descripción:** Al ejecutar el cierre de materia, el backend persiste el ID del docente en la columna `id_docente_cierre` de `cierre_materia`. La API `getClosureStatus` retorna el nombre del docente que ejecutó el cierre (`docente_cierre_nombre`), permitiendo que si la asignación cambia en `detalle_grados`, el nuevo docente continúe observando el distintivo indicando quién realizó el cierre en ese periodo.
+- **Motivo:** Preserva la responsabilidad y auditoría histórica sobre el cierre académico.
+- **Módulos afectados:** Cierre y Boletines.
+- **Archivos donde se implementa:** 
+  - `036_add_id_docente_cierre_to_cierre_materia.sql`
+  - [gradingController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/gradingController.ts)
+  - [TeacherClosure.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/teacher/TeacherClosure.vue)
+- **Endpoints relacionados:** 
+  - `POST /api/teacher/close-period`
+  - `GET /api/teacher/closure-status/:detailGradeId/:periodId`
+- **Historias de usuario relacionadas:** HU-BOL-001
+
