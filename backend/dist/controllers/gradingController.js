@@ -824,9 +824,12 @@ const getClosureStatus = async (req, res) => {
     const detailGradeId = Number(req.params.detailGradeId);
     const periodId = Number(req.params.periodId);
     try {
-        const closedRes = await db_1.pool.query(`SELECT estado, fecha_cierre
-       FROM cierre_materia
-       WHERE id_detallegrado = $1 AND id_periodo = $2`, [detailGradeId, periodId]);
+        const closedRes = await db_1.pool.query(`SELECT cm.estado, cm.fecha_cierre,
+              d.nombre || ' ' || d.apellido AS docente_cierre_nombre,
+              cm.id_docente_cierre
+       FROM cierre_materia cm
+       LEFT JOIN docente d ON d.id_docente = cm.id_docente_cierre
+       WHERE cm.id_detallegrado = $1 AND cm.id_periodo = $2`, [detailGradeId, periodId]);
         const isClosed = closedRes.rows.length > 0 && closedRes.rows[0].estado === 'CERRADO';
         // También verificamos si faltan alumnos por calificar (soporta tanto notas directas como notas por criterios)
         const studentsRes = await db_1.pool.query(`SELECT e.id_estudiante, e.nombre, e.apellido
@@ -1040,12 +1043,12 @@ const closeTeacherSubject = async (req, res) => {
         const existingRes = await client.query(`SELECT id_cierremateria FROM cierre_materia WHERE id_detallegrado = $1 AND id_periodo = $2`, [detailGradeId, periodId]);
         if (existingRes.rows.length > 0) {
             await client.query(`UPDATE cierre_materia 
-         SET estado = 'CERRADO', fecha_cierre = NOW(), justificacion_evidencias_pendientes = $2 
-         WHERE id_cierremateria = $1`, [existingRes.rows[0].id_cierremateria, justificacion_evidencias_pendientes || null]);
+         SET estado = 'CERRADO', fecha_cierre = NOW(), justificacion_evidencias_pendientes = $2, id_docente_cierre = $3
+         WHERE id_cierremateria = $1`, [existingRes.rows[0].id_cierremateria, justificacion_evidencias_pendientes || null, teacherId]);
         }
         else {
-            await client.query(`INSERT INTO cierre_materia (id_detallegrado, id_periodo, estado, fecha_cierre, justificacion_evidencias_pendientes)
-         VALUES ($1, $2, 'CERRADO', NOW(), $3)`, [detailGradeId, periodId, justificacion_evidencias_pendientes || null]);
+            await client.query(`INSERT INTO cierre_materia (id_detallegrado, id_periodo, estado, fecha_cierre, justificacion_evidencias_pendientes, id_docente_cierre)
+         VALUES ($1, $2, 'CERRADO', NOW(), $3, $4)`, [detailGradeId, periodId, justificacion_evidencias_pendientes || null, teacherId]);
         }
         await client.query("COMMIT");
         res.json({ message: "Periodo cerrado exitosamente para esta materia" });

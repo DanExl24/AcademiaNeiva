@@ -430,6 +430,12 @@ const ensureCompetencySchema = async () => {
             const addDocenteCreadorSql = fs_1.default.readFileSync(addDocenteCreadorPath, "utf8");
             await client.query(addDocenteCreadorSql);
         }
+        // Ejecutar migración 036 (id_docente_cierre en cierre_materia para trazabilidad del cierre)
+        const addDocenteCierrePath = path_1.default.join(__dirname, "../migrations/036_add_id_docente_cierre_to_cierre_materia.sql");
+        if (fs_1.default.existsSync(addDocenteCierrePath)) {
+            const addDocenteCierreSql = fs_1.default.readFileSync(addDocenteCierrePath, "utf8");
+            await client.query(addDocenteCierreSql);
+        }
         // Backfill sync_uuid for existing competencies
         const unmigratedRes = await client.query(`
       SELECT id_colegio, id_anio, id_materia, id_periodo, descripcion, ARRAY_AGG(id_competencia) AS ids
