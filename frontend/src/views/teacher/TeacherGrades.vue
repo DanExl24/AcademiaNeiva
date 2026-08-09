@@ -189,8 +189,10 @@ const showWarningModal = ref(false)
 const showExtraModal = ref(false)
 
 const openDrawer = () => {
-  if (auth.isMonitoring || isPeriodClosed.value) return
-  console.log('openDrawer triggered')
+  if (!selectedSubjectId.value) {
+    alert('Por favor selecciona primero el grado, sección, jornada y materia.')
+    return
+  }
   isDrawerOpen.value = true
 }
 

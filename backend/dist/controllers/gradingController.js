@@ -56,6 +56,10 @@ const getActivities = async (req, res) => {
     const periodId = Number(req.params.periodId);
     const userId = req.query.userId ? Number(req.query.userId) : undefined;
     console.log(`[DEV] getActivities called - gradeId=${gradeId}, subjectId=${subjectId}, periodId=${periodId}, userId=${userId}`);
+    if (Number.isNaN(gradeId) || Number.isNaN(subjectId) || Number.isNaN(periodId)) {
+        res.status(400).json({ error: "Parámetros de consulta académicos no válidos" });
+        return;
+    }
     try {
         const contextPreview = await resolveTeachingContext(gradeId, subjectId, periodId, userId);
         console.log(`[DEV] getActivities - resolveTeachingContext result: ${contextPreview ? JSON.stringify(contextPreview) : 'null (not found)'}`);
