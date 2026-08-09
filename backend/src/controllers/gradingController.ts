@@ -1025,6 +1025,7 @@ export const saveGrades = async (req: Request, res: Response): Promise<void> => 
     }
 
     // Guardar criteriaGrades
+    const touchedActivities = new Set<number>();
     for (const item of criteriaGrades) {
       const notaNum = Number(parseFloat(item.nota).toFixed(1));
       if (Number.isNaN(notaNum) || notaNum < notaMinima || notaNum > notaMaxima) {
@@ -1042,6 +1043,62 @@ export const saveGrades = async (req: Request, res: Response): Promise<void> => 
          DO UPDATE SET nota = EXCLUDED.nota`,
         [item.id_criterio, item.id_estudiante, notaNum, schoolId]
       );
+
+      const actRes = await client.query(
+        `SELECT id_actividadmateria FROM criterio_evaluacion WHERE id_criterio = $1`,
+        [item.id_criterio]
+      );
+      if (actRes.rows.length > 0) {
+        touchedActivities.add(actRes.rows[0].id_actividadmateria);
+      }
+    }
+
+    // Sincronizar notas_actividad para actividades con criterios modificados
+    for (const actId of touchedActivities) {
+      const studentsRes = await client.query(
+        `SELECT DISTINCT nc.id_estudiante
+         FROM nota_criterio nc
+         JOIN criterio_evaluacion ce ON ce.id_criterio = nc.id_criterio
+         WHERE ce.id_actividadmateria = $1`,
+        [actId]
+      );
+
+      for (const st of studentsRes.rows) {
+        const studentId = st.id_estudiante;
+        const calcRes = await client.query(
+          `SELECT 
+             COUNT(ce.id_criterio) as total_criterios,
+             COUNT(nc.id_nota_criterio) as calificados,
+             SUM(ce.porcentaje) as total_peso,
+             SUM(nc.nota * ce.porcentaje) as suma_ponderada
+           FROM criterio_evaluacion ce
+           LEFT JOIN nota_criterio nc ON nc.id_criterio = ce.id_criterio AND nc.id_estudiante = $2
+           WHERE ce.id_actividadmateria = $1`,
+          [actId, studentId]
+        );
+
+        const { total_criterios, calificados, total_peso, suma_ponderada } = calcRes.rows[0];
+        if (Number(total_criterios) > 0 && Number(total_criterios) === Number(calificados) && Number(total_peso) > 0) {
+          const notaPonderada = Number((Number(suma_ponderada) / Number(total_peso)).toFixed(1));
+          
+          const escala = escalas.find(
+            (entry) =>
+              notaPonderada >= parseFloat(entry.valor_minimo) &&
+              notaPonderada <= parseFloat(entry.valor_maximo)
+          );
+          const idEscala =
+            escala?.id_escalavaloracion ??
+            escalas[escalas.length - 1]?.id_escalavaloracion;
+
+          await client.query(
+            `INSERT INTO notas_actividad (id_actividadmateria, id_estudiante, nota, id_escalavaloracion, id_colegio)
+             VALUES ($1, $2, $3, $4, $5)
+             ON CONFLICT (id_actividadmateria, id_estudiante)
+             DO UPDATE SET nota = EXCLUDED.nota, id_escalavaloracion = EXCLUDED.id_escalavaloracion`,
+            [actId, studentId, notaPonderada, idEscala, schoolId]
+          );
+        }
+      }
     }
 
     await client.query("COMMIT");
@@ -1069,7 +1126,7 @@ export const getClosureStatus = async (req: Request, res: Response): Promise<voi
 
     const isClosed = closedRes.rows.length > 0 && closedRes.rows[0].estado === 'CERRADO';
 
-    // También verificamos si faltan alumnos por calificar
+    // También verificamos si faltan alumnos por calificar (soporta tanto notas directas como notas por criterios)
     const studentsRes = await pool.query(
       `SELECT e.id_estudiante, e.nombre, e.apellido
        FROM estudiante e
@@ -1081,19 +1138,34 @@ export const getClosureStatus = async (req: Request, res: Response): Promise<voi
 
     const missingGrades = [];
     for (const student of studentsRes.rows) {
-      // Un alumno tiene nota si tiene el promedio calculado en resultado_academico 
-      // o verificamos si tiene todas las actividades calificadas.
-      // Siguiendo la regla de negocio: todas las actividades deben tener nota.
       const gradeCheck = await pool.query(
         `SELECT COUNT(*) as count
          FROM actividad_materia am
          JOIN competencias c ON am.id_competencia = c.id_competencia
          JOIN detalle_grados dg ON am.id_detallegrado = dg.id_detallegrado
          WHERE dg.id_detallegrado = $1 AND c.id_periodo = $2
-           AND NOT EXISTS (
-             SELECT 1 FROM notas_actividad na 
-             WHERE na.id_actividadmateria = am.id_actividadmateria 
-             AND na.id_estudiante = $3
+           AND (
+             (
+               NOT EXISTS (SELECT 1 FROM criterio_evaluacion ce WHERE ce.id_actividadmateria = am.id_actividadmateria)
+               AND NOT EXISTS (
+                 SELECT 1 FROM notas_actividad na 
+                 WHERE na.id_actividadmateria = am.id_actividadmateria 
+                   AND na.id_estudiante = $3
+               )
+             )
+             OR
+             (
+               EXISTS (SELECT 1 FROM criterio_evaluacion ce WHERE ce.id_actividadmateria = am.id_actividadmateria)
+               AND EXISTS (
+                 SELECT 1 FROM criterio_evaluacion ce
+                 WHERE ce.id_actividadmateria = am.id_actividadmateria
+                   AND NOT EXISTS (
+                     SELECT 1 FROM nota_criterio nc
+                     WHERE nc.id_criterio = ce.id_criterio
+                       AND nc.id_estudiante = $3
+                   )
+               )
+             )
            )`,
         [detailGradeId, periodId, student.id_estudiante]
       );
@@ -1119,22 +1191,36 @@ export const getClosureStatus = async (req: Request, res: Response): Promise<voi
     const totalPercentage = Number(statsRes.rows[0].total_percentage);
     const activityCount = Number(statsRes.rows[0].activity_count);
 
-    // Calcular promedio grupal actual
+    // Calcular promedio grupal actual (soporta notas directas y notas de criterios)
     let groupAverage = null;
     if (activityCount > 0) {
       const avgRes = await pool.query(
         `SELECT AVG(promedio_estudiante) as group_avg 
          FROM (
-           SELECT SUM(na.nota * (am.porcentaje / 100)) as promedio_estudiante
-           FROM notas_actividad na
-           JOIN actividad_materia am ON na.id_actividadmateria = am.id_actividadmateria
-           JOIN competencias c ON am.id_competencia = c.id_competencia
-           WHERE am.id_detallegrado = $1 AND c.id_periodo = $2
-           GROUP BY na.id_estudiante
+           SELECT SUM(
+             COALESCE(
+               na.nota,
+               (
+                 SELECT SUM(nc.nota * (ce.porcentaje / 100))
+                 FROM nota_criterio nc
+                 JOIN criterio_evaluacion ce ON ce.id_criterio = nc.id_criterio
+                 WHERE ce.id_actividadmateria = am.id_actividadmateria
+                   AND nc.id_estudiante = est.id_estudiante
+               )
+             ) * (am.porcentaje / 100)
+           ) as promedio_estudiante
+           FROM estudiante est
+           JOIN matricula m ON m.id_estudiante = est.id_estudiante
+           JOIN detalle_grados dg ON dg.id_grupo = m.id_grupo
+           JOIN actividad_materia am ON am.id_detallegrado = dg.id_detallegrado
+           JOIN competencias c ON c.id_competencia = am.id_competencia
+           LEFT JOIN notas_actividad na ON na.id_actividadmateria = am.id_actividadmateria AND na.id_estudiante = est.id_estudiante
+           WHERE dg.id_detallegrado = $1 AND c.id_periodo = $2 AND m.estado = 'ACTIVA'
+           GROUP BY est.id_estudiante
          ) as promedios`,
         [detailGradeId, periodId]
       );
-      groupAverage = avgRes.rows[0].group_avg ? Number(Number(avgRes.rows[0].group_avg).toFixed(2)) : null;
+      groupAverage = avgRes.rows[0]?.group_avg ? Number(Number(avgRes.rows[0].group_avg).toFixed(2)) : null;
     }
 
     res.json({
@@ -1151,64 +1237,67 @@ export const getClosureStatus = async (req: Request, res: Response): Promise<voi
   }
 };
 
-export const closePeriodForTeacher = async (req: Request, res: Response): Promise<void> => {
-  const { detailGradeId, periodId, userId } = req.body;
-
-  if (!detailGradeId || !periodId || !userId) {
-    res.status(400).json({ error: "Faltan parámetros descriptivos" });
-    return;
-  }
+export const closeTeacherSubject = async (req: Request, res: Response): Promise<void> => {
+  const { detailGradeId, periodId } = req.params;
+  const { justificacion } = req.body || {};
+  const userId = (req as any).user.id;
 
   const client = await pool.connect();
   try {
-    // 1. Validar que el docente es el dueño de la asignación
-    const ownershipRes = await client.query(
-      `SELECT dg.id_detallegrado, dg.id_docente, d.id_usuario, dg.id_colegio
-       FROM detalle_grados dg
-       JOIN docente d ON dg.id_docente = d.id_docente
-       WHERE dg.id_detallegrado = $1 AND d.id_usuario = $2`,
-      [detailGradeId, userId]
+    await client.query('BEGIN');
+
+    // 1. Obtener docente a partir de su id_usuario
+    const docRes = await client.query(
+      'SELECT id_docente FROM docente WHERE id_usuario = $1',
+      [userId]
     );
 
-    if (ownershipRes.rows.length === 0) {
-      res.status(403).json({ error: "No tienes permiso para cerrar este periodo" });
+    if (!docRes.rows.length) {
+      res.status(403).json({ error: 'No tienes perfil de docente' });
       return;
     }
 
-    const { id_colegio, id_docente } = ownershipRes.rows[0];
+    const teacherId = docRes.rows[0].id_docente;
 
-    // 2. Validar que el periodo esté abierto institucionalmente
-    if (!(await ensureCurrentPeriodForSchool(id_colegio, periodId))) {
-      res.status(409).json({ error: "El periodo no es el actual o está cerrado institucionalmente" });
+    // 2. Verificar que este id_detallegrado pertenece al docente
+    const dgRes = await client.query(
+      'SELECT id_grupo, id_materia FROM detalle_grados WHERE id_detallegrado = $1 AND id_docente = $2',
+      [detailGradeId, teacherId]
+    );
+
+    if (!dgRes.rows.length) {
+      res.status(403).json({ error: 'No tienes asignada esta materia' });
       return;
     }
 
-    // 3. Validar que no esté ya cerrado por el docente
-    const closedCheck = await client.query(
-      `SELECT estado FROM cierre_materia WHERE id_detallegrado = $1 AND id_periodo = $2`,
+    // 3. Verificar que el periodo institucional NO esté CERRADO (administrador)
+    const periodRes = await client.query(
+      'SELECT estado FROM periodo_academico WHERE id_periodo = $1',
+      [periodId]
+    );
+
+    if (!periodRes.rows.length) {
+      res.status(404).json({ error: 'Periodo no encontrado' });
+      return;
+    }
+
+    if (periodRes.rows[0].estado === 'CERRADO') {
+      res.status(400).json({ error: 'El periodo ya fue cerrado institucionalmente por el administrador.' });
+      return;
+    }
+
+    // 4. Verificar si la materia YA FUE CERRADA por el docente
+    const existingClosure = await client.query(
+      'SELECT id_cierre FROM cierre_materia WHERE id_detallegrado = $1 AND id_periodo = $2',
       [detailGradeId, periodId]
     );
 
-    if (closedCheck.rows.length > 0 && closedCheck.rows[0].estado === 'CERRADO') {
-      res.status(409).json({ error: "La materia ya se encuentra cerrada para este periodo" });
+    if (existingClosure.rows.length > 0) {
+      res.status(400).json({ error: 'Ya has cerrado esta materia para este periodo.' });
       return;
     }
 
-    // 4. Validar suma de porcentajes de actividades = 100%
-    const sumRes = await client.query(
-      `SELECT COALESCE(SUM(am.porcentaje), 0) AS total
-       FROM actividad_materia am
-       JOIN competencias c ON am.id_competencia = c.id_competencia
-       WHERE am.id_detallegrado = $1 AND c.id_periodo = $2`,
-      [detailGradeId, periodId]
-    );
-
-    if (Math.round(Number(sumRes.rows[0].total)) !== 100) {
-      res.status(400).json({ error: `La suma de los porcentajes de las actividades debe ser 100%. Actual: ${sumRes.rows[0].total}%` });
-      return;
-    }
-
-    // 5. Validar que todos los estudiantes activos tengan todas las notas
+    // 5. Validar que todos los estudiantes activos tengan todas las notas (soporta tanto notas directas como notas por criterios)
     const studentsRes = await client.query(
       `SELECT e.id_estudiante
        FROM estudiante e
@@ -1224,10 +1313,28 @@ export const closePeriodForTeacher = async (req: Request, res: Response): Promis
          FROM actividad_materia am
          JOIN competencias c ON am.id_competencia = c.id_competencia
          WHERE am.id_detallegrado = $1 AND c.id_periodo = $2
-           AND NOT EXISTS (
-             SELECT 1 FROM notas_actividad na 
-             WHERE na.id_actividadmateria = am.id_actividadmateria 
-             AND na.id_estudiante = $3
+           AND (
+             (
+               NOT EXISTS (SELECT 1 FROM criterio_evaluacion ce WHERE ce.id_actividadmateria = am.id_actividadmateria)
+               AND NOT EXISTS (
+                 SELECT 1 FROM notas_actividad na 
+                 WHERE na.id_actividadmateria = am.id_actividadmateria 
+                   AND na.id_estudiante = $3
+               )
+             )
+             OR
+             (
+               EXISTS (SELECT 1 FROM criterio_evaluacion ce WHERE ce.id_actividadmateria = am.id_actividadmateria)
+               AND EXISTS (
+                 SELECT 1 FROM criterio_evaluacion ce
+                 WHERE ce.id_actividadmateria = am.id_actividadmateria
+                   AND NOT EXISTS (
+                     SELECT 1 FROM nota_criterio nc
+                     WHERE nc.id_criterio = ce.id_criterio
+                       AND nc.id_estudiante = $3
+                   )
+               )
+             )
            )`,
         [detailGradeId, periodId, student.id_estudiante]
       );
@@ -1240,13 +1347,13 @@ export const closePeriodForTeacher = async (req: Request, res: Response): Promis
 
     // 5.1 Verificar si hay evidencias DBA planeadas para este periodo/materia que no fueron evaluadas en ninguna actividad
     const dgInfo = await client.query(
-      `SELECT id_grupo, id_materia FROM detalle_grados WHERE id_detallegrado = $1`,
+      `SELECT id_grupo, id_materia, id_colegio FROM detalle_grados WHERE id_detallegrado = $1`,
       [detailGradeId]
     );
 
     let unevaluatedEvidences: any[] = [];
     if (dgInfo.rows.length > 0) {
-      const { id_grupo, id_materia } = dgInfo.rows[0];
+      const { id_grupo, id_materia, id_colegio } = dgInfo.rows[0];
       const pendingEvRes = await client.query(
         `SELECT DISTINCT edba.id_evidencia_dba, d.numero_dba, edba.descripcion
          FROM evidencia_aprendizaje ea
@@ -1319,6 +1426,8 @@ export const closePeriodForTeacher = async (req: Request, res: Response): Promis
     client.release();
   }
 };
+
+export const closePeriodForTeacher = closeTeacherSubject;
 
 // ============================================================================
 // ─── Evidencias DBA para el Docente (Fase 2) ────────────────────────────────
