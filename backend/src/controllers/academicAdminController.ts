@@ -5,6 +5,7 @@ import bcrypt from "bcrypt";
 import { randomUUID } from "crypto";
 import { NotificationService } from "../services/notificationService";
 import { validateDocumentUniqueness, normalizeDocument, validateDocumentFormatByTipo } from "../utils/documentValidation";
+import { formatFriendlyErrorMessage } from "../utils/errorHelper";
 import { normalizeGradeName, isDuplicateOrSimilarGrade } from "../utils/gradeNormalization";
 import { getDefaultMonthsLabelForPeriodOrder, getAcademicYearLabel } from "../config/academicCalendarDefaults";
 import {
@@ -2764,19 +2765,12 @@ export const getTeacherManagementData = async (req: Request, res: Response): Pro
              JOIN rol r ON r.id_rol = ur.id_rol 
              WHERE ur.id_usuario = d.id_usuario AND LOWER(r.nombre) = 'padre'
            ) AS es_padre,
-           COUNT(DISTINCT dg.id_detallegrado)::int AS asignaciones_count
+           COUNT(DISTINCT CASE WHEN $2::int IS NULL OR dg.id_anio = $2 THEN dg.id_detallegrado END)::int AS asignaciones_count
          FROM docente d
          LEFT JOIN usuario u ON u.id_usuario = d.id_usuario
          LEFT JOIN tipo_documento td ON td.id_tipodocumento = u.id_tipodocumento
          LEFT JOIN detalle_grados dg ON dg.id_docente = d.id_docente
          WHERE d.id_colegio = $1
-            AND (
-              $2::int IS NULL OR
-              EXISTS (
-                SELECT 1 FROM detalle_grados dg_sel 
-                WHERE dg_sel.id_docente = d.id_docente AND dg_sel.id_anio = $2
-              )
-            )
          GROUP BY d.id_docente, u.documento, u.id_tipodocumento, td.tipo, d.estado, u.id_usuario, u.email, u.activo
          ORDER BY d.nombre, d.apellido`,
         [schoolId, yearId]
@@ -3277,7 +3271,7 @@ export const createTeacher = async (req: Request, res: Response): Promise<void> 
   } catch (error: any) {
     await client.query("ROLLBACK");
     console.error("Error en createTeacher:", error);
-    res.status(500).json({ error: error.message || "Error al registrar el docente" });
+    res.status(500).json({ error: formatFriendlyErrorMessage(error, "Error al registrar el docente") });
   } finally {
     client.release();
   }
@@ -3421,7 +3415,7 @@ export const updateTeacher = async (req: Request, res: Response): Promise<void> 
   } catch (error: any) {
     await client.query("ROLLBACK");
     console.error("Error en updateTeacher:", error);
-    res.status(500).json({ error: error.message || "Error al actualizar docente" });
+    res.status(500).json({ error: formatFriendlyErrorMessage(error, "Error al actualizar docente") });
   } finally {
     client.release();
   }

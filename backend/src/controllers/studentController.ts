@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { pool } from "../config/db";
 import { NotificationService } from "../services/notificationService";
 import { validateDocumentUniqueness } from "../utils/documentValidation";
+import { formatFriendlyErrorMessage } from "../utils/errorHelper";
 
 export const getAllStudents = async (req: Request, res: Response) => {
   try {
@@ -133,7 +134,7 @@ export const getAllStudents = async (req: Request, res: Response) => {
     res.json(result.rows);
   } catch (error: any) {
     console.error("Error al obtener estudiantes:", error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: formatFriendlyErrorMessage(error) });
   }
 };
 
@@ -234,7 +235,7 @@ export const updateStudent = async (req: Request, res: Response) => {
     res.json(updatedStudent);
   } catch (error: any) {
     await client.query("ROLLBACK");
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: formatFriendlyErrorMessage(error) });
   } finally {
     client.release();
   }
@@ -414,7 +415,7 @@ export const updateStudentStatus = async (req: Request, res: Response) => {
     res.json(result.rows[0]);
   } catch (error: any) {
     await client.query("ROLLBACK");
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: formatFriendlyErrorMessage(error) });
   } finally {
     client.release();
   }
@@ -425,7 +426,7 @@ export const getTipoSanciones = async (req: Request, res: Response) => {
     const result = await pool.query("SELECT * FROM tipo_sancion ORDER BY id_tipo_sancion ASC");
     res.json(result.rows);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: formatFriendlyErrorMessage(error) });
   }
 };
 
@@ -542,7 +543,7 @@ export const changeStudentGrade = async (req: Request, res: Response) => {
   } catch (error: any) {
     await client.query("ROLLBACK");
     console.error("Error en changeStudentGrade:", error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: formatFriendlyErrorMessage(error) });
   } finally {
     client.release();
   }
@@ -598,7 +599,7 @@ export const deleteStudent = async (req: Request, res: Response) => {
         error: "No se puede eliminar el estudiante porque tiene registros académicos asociados. Use 'Retirar' o 'Expulsar' en su lugar." 
       });
     } else {
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: formatFriendlyErrorMessage(error) });
     }
   } finally {
     client.release();
@@ -818,7 +819,7 @@ export const getStudentSummary = async (req: Request, res: Response) => {
 
   } catch (error: any) {
     console.error("Error in getStudentSummary:", error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: formatFriendlyErrorMessage(error) });
   }
 };
 
@@ -997,7 +998,7 @@ export const graduateStudent = async (req: Request, res: Response): Promise<void
   } catch (error: any) {
     await client.query("ROLLBACK");
     console.error("Error in graduateStudent:", error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: formatFriendlyErrorMessage(error) });
   } finally {
     client.release();
   }

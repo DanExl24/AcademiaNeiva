@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { pool } from "../config/db";
 import { validateDocumentUniqueness } from "../utils/documentValidation";
+import { formatFriendlyErrorMessage } from "../utils/errorHelper";
 
 const parseSchoolId = (value: unknown): number | null => {
   const parsed = Number(value);
@@ -200,7 +201,7 @@ export const getParentsManagementData = async (req: Request, res: Response): Pro
     });
   } catch (error: any) {
     console.error("Error en getParentsManagementData:", error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: formatFriendlyErrorMessage(error) });
   }
 };
 
@@ -352,7 +353,7 @@ export const getParentDetail = async (req: Request, res: Response): Promise<void
     });
   } catch (error: any) {
     console.error("Error en getParentDetail:", error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: formatFriendlyErrorMessage(error) });
   }
 };
 
@@ -446,7 +447,7 @@ export const updateParent = async (req: Request, res: Response): Promise<void> =
   } catch (error: any) {
     await client.query("ROLLBACK");
     console.error("Error en updateParent:", error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: formatFriendlyErrorMessage(error) });
   } finally {
     client.release();
   }
@@ -463,7 +464,7 @@ export const getDocumentTypes = async (req: Request, res: Response): Promise<voi
     res.json(result.rows);
   } catch (error: any) {
     console.error("Error en getDocumentTypes:", error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: formatFriendlyErrorMessage(error) });
   }
 };
 
@@ -527,6 +528,6 @@ export const updateParentAccountStatus = async (req: Request, res: Response): Pr
     });
   } catch (error: any) {
     console.error("Error en updateParentAccountStatus:", error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: formatFriendlyErrorMessage(error) });
   }
 };
