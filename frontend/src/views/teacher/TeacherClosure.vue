@@ -440,6 +440,10 @@ onMounted(async () => {
       <div class="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6">
         <GraduationCap class="w-10 h-10 text-slate-300" />
       </div>
+      <h3 class="text-xl font-black text-slate-400">No tienes materias asignadas</h3>
+      <p class="text-slate-400 mt-2">Contacta a la administración para verificar tu carga académica.</p>
+    </div>
+
     <!-- Modal de Justificación de Evidencias DBA Pendientes -->
     <div v-if="showJustificationModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
       <div class="bg-white dark:bg-slate-900 rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 dark:border-slate-800 space-y-5">
