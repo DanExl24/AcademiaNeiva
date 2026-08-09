@@ -1078,7 +1078,7 @@ onMounted(() => {
           class="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-6 py-3 rounded-2xl font-bold transition-all flex items-center gap-2 active:scale-95 border border-slate-200 dark:border-slate-700 shadow-sm"
         >
           <BookOpen :size="20" class="text-indigo-500" />
-          Configurar Actividades
+          {{ isPeriodClosed ? 'Ver Actividades' : 'Configurar Actividades' }}
         </button>
         <div v-if="auth.isMonitoring || isPeriodClosed" class="text-amber-600 font-bold text-sm bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 px-5 py-3 rounded-2xl">
           Solo Lectura
@@ -1163,12 +1163,11 @@ onMounted(() => {
           </div>
         </div>
         <button 
-          v-if="!auth.isMonitoring && !isPeriodClosed"
           @click="openDrawer"
           class="shrink-0 bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-violet-700 dark:text-violet-300 font-bold px-6 py-3 rounded-2xl transition-all flex items-center gap-2 active:scale-95 border border-violet-100 dark:border-violet-850 text-xs shadow-sm self-start md:self-auto"
         >
           <Settings :size="16" />
-          Configurar Actividades
+          {{ isPeriodClosed ? 'Ver Actividades / Evidencias' : 'Configurar Actividades' }}
         </button>
       </div>
 
@@ -1335,8 +1334,12 @@ onMounted(() => {
                 <Settings :size="20" />
               </div>
               <div>
-                <h2 class="text-lg font-black text-slate-900 dark:text-white leading-none">Gestión Pedagógica</h2>
-                <p class="text-xs text-slate-500 dark:text-slate-400 font-semibold mt-1">Configura actividades y evidencias DBA</p>
+                <h2 class="text-lg font-black text-slate-900 dark:text-white leading-none">
+                  {{ isPeriodClosed ? 'Detalle de Actividades (Solo Lectura)' : 'Gestión Pedagógica' }}
+                </h2>
+                <p class="text-xs text-slate-500 dark:text-slate-400 font-semibold mt-1">
+                  {{ isPeriodClosed ? 'Materia cerrada para este periodo' : 'Configura actividades y evidencias DBA' }}
+                </p>
               </div>
             </div>
             <button @click="closeDrawer" class="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-all">
