@@ -754,13 +754,13 @@ export const getTeacherManagementData = async (req: Request, res: Response): Pro
           "u.id_usuario",
           "u.email",
           sql<boolean>`COALESCE(u.activo, true)`.as("activo"),
-          db
-            .selectFrom("padre_familia as pf")
-            .innerJoin("usuario as u_parent", "u_parent.id_usuario", "pf.id_usuario")
-            .select("u_parent.email")
-            .where(sql`pf.id_usuario = d.id_usuario`)
-            .limit(1)
-            .as("email_padre"),
+          sql<string | null>`(
+            SELECT u_parent.email
+            FROM padre_familia pf
+            JOIN usuario u_parent ON u_parent.id_usuario = pf.id_usuario
+            WHERE pf.id_usuario = d.id_usuario
+            LIMIT 1
+          )`.as("email_padre"),
           sql<boolean>`EXISTS (
             SELECT 1 
             FROM usuario_rol ur 
