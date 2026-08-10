@@ -342,7 +342,7 @@ export const getStudentInfo = async (req: Request, res: Response) => {
       .updateTable("sancion")
       .set({ estado: 'VENCIDA' })
       .where("estado", "=", 'ACTIVA')
-      .where("fecha_fin", "<", sql`CURRENT_DATE`)
+      .where("fecha_fin", "<", sql<Date>`CURRENT_DATE`)
       .execute();
 
     await db
