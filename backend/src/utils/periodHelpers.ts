@@ -55,7 +55,7 @@ export const getCurrentAllowedPeriodForSchool = async (schoolId: number) => {
     .orderBy("id_periodo", "asc")
     .executeTakeFirst();
 
-  if (period) {
+  if (period && period.id_anio !== null) {
     if (period.id_anio < 2000) {
       period.id_anio = new Date().getFullYear();
     }

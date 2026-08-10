@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { pool } from "../config/db";
 import { db } from "../config/kysely";
 import { sql } from "kysely";
 
