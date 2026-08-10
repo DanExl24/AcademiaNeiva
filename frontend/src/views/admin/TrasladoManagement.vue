@@ -126,7 +126,7 @@ const newTraslado = ref({
 })
 
 // Computed
-const isAdminGeneral = computed(() => auth.user?.roles?.includes('admin_general') || auth.user?.role === 'admin_general')
+const isAdminGeneral = computed(() => !!(auth.user?.roles?.includes('admin_general')))
 
 // Approval Form Data
 const approvalForm = ref({
@@ -231,10 +231,11 @@ watch(() => newTraslado.value.tipo, () => {
 watch(() => newTraslado.value.id_colegio_origen, (newId) => {
   newTraslado.value.id_usuario = null
   newTraslado.value.id_matricula = null
-  if (newId) {
-    fetchPersonalColegio(newId)
-    fetchDirectivosColegio(newId)
-    fetchEstudiantesByColegio(newId)
+  const sid = newId ? Number(newId) : undefined
+  if (sid) {
+    fetchPersonalColegio(sid)
+    fetchDirectivosColegio(sid)
+    fetchEstudiantesByColegio(sid)
   }
 })
 
