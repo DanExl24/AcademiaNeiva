@@ -112,9 +112,9 @@ const collection = {
           request: {
             method: "GET",
             url: {
-              raw: "{{baseUrl}}/api/admin-general/colegios",
+              raw: "{{baseUrl}}/api/admin/colegios",
               host: ["{{baseUrl}}"],
-              path: ["api", "admin-general", "colegios"]
+              path: ["api", "admin", "colegios"]
             }
           }
         },
@@ -123,9 +123,9 @@ const collection = {
           request: {
             method: "GET",
             url: {
-              raw: "{{baseUrl}}/api/admin-general/colegios/{{schoolId}}",
+              raw: "{{baseUrl}}/api/admin/colegios/{{schoolId}}",
               host: ["{{baseUrl}}"],
-              path: ["api", "admin-general", "colegios", "{{schoolId}}"]
+              path: ["api", "admin", "colegios", "{{schoolId}}"]
             }
           }
         }

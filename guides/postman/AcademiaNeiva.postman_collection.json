@@ -152,13 +152,13 @@
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{baseUrl}}/api/admin-general/colegios",
+              "raw": "{{baseUrl}}/api/admin/colegios",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "admin-general",
+                "admin",
                 "colegios"
               ]
             }
@@ -169,13 +169,13 @@
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{baseUrl}}/api/admin-general/colegios/{{schoolId}}",
+              "raw": "{{baseUrl}}/api/admin/colegios/{{schoolId}}",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "admin-general",
+                "admin",
                 "colegios",
                 "{{schoolId}}"
               ]
