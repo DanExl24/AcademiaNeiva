@@ -1,6 +1,8 @@
 import { Request, Response } from "express";
 import { PoolClient } from "pg";
 import { pool } from "../../config/db";
+import { db } from "../../config/kysely";
+import { sql } from "kysely";
 import bcrypt from "bcrypt";
 import { randomUUID } from "crypto";
 import { NotificationService } from "../../services/notificationService";
@@ -73,67 +75,78 @@ export const createTeacher = async (req: Request, res: Response): Promise<void> 
   try {
     await client.query("BEGIN");
 
-    const documentTypeRes = await client.query(
-      "SELECT id_tipodocumento, tipo FROM tipo_documento WHERE id_tipodocumento = $1",
-      [documentTypeId]
-    );
-    if (documentTypeRes.rows.length === 0) {
+    const documentTypeRes = await db
+      .selectFrom("tipo_documento")
+      .select(["id_tipodocumento", "tipo"])
+      .where("id_tipodocumento", "=", documentTypeId)
+      .executeTakeFirst();
+    if (!documentTypeRes) {
       await client.query("ROLLBACK");
       res.status(404).json({ error: "Tipo de documento no encontrado" });
       return;
     }
 
-    const roleRes = await client.query(
-      `SELECT id_rol FROM rol WHERE LOWER(nombre) = 'docente' LIMIT 1`
-    );
-    if (roleRes.rows.length === 0) {
+    const roleRes = await db
+      .selectFrom("rol")
+      .select("id_rol")
+      .where(sql<string>`LOWER(nombre)`, "=", "docente")
+      .executeTakeFirst();
+    if (!roleRes) {
       await client.query("ROLLBACK");
       res.status(500).json({ error: "No existe el rol docente configurado en el sistema" });
       return;
     }
 
-    const schoolRes = await client.query(
-      `SELECT nombre FROM colegio WHERE id_colegio = $1`,
-      [schoolId]
-    );
-    schoolName = schoolRes.rows[0]?.nombre || schoolName;
+    const schoolRes = await db
+      .selectFrom("colegio")
+      .select("nombre")
+      .where("id_colegio", "=", schoolId)
+      .executeTakeFirst();
+    schoolName = schoolRes?.nombre || schoolName;
 
     // Buscar si ya existe un registro de docente en la misma institución con ese documento
-    const existingTeacherRes = await client.query(
-      `SELECT d.id_docente
-       FROM docente d
-       JOIN usuario u ON d.id_usuario = u.id_usuario
-       WHERE d.id_colegio = $1
-         AND UPPER(TRIM(u.documento)) = $2`,
-      [schoolId, documento]
-    );
-    if (existingTeacherRes.rows.length > 0) {
+    const existingTeacherRes = await db
+      .selectFrom("docente as d")
+      .innerJoin("usuario as u", "u.id_usuario", "d.id_usuario")
+      .select("d.id_docente")
+      .where("d.id_colegio", "=", schoolId)
+      .where(sql<string>`UPPER(TRIM(u.documento))`, "=", documento.toUpperCase().trim())
+      .executeTakeFirst();
+
+    if (existingTeacherRes) {
       await client.query("ROLLBACK");
       res.status(409).json({ error: `Ya existe un docente registrado con el documento de identidad ${documento} en esta institución.` });
       return;
     }
 
     // Buscar usuario en el sistema por documento y por email
-    const userByDocRes = await client.query(
-      `SELECT u.id_usuario, u.email, COALESCE(u.activo, true) AS activo,
-              u.nombre, u.apellido, u.documento, u.id_tipodocumento
-       FROM usuario u
-       WHERE UPPER(TRIM(u.documento)) = $1
-       LIMIT 1`,
-      [documento]
-    );
+    const userByDoc = await db
+      .selectFrom("usuario as u")
+      .select([
+        "u.id_usuario",
+        "u.email",
+        sql<boolean>`COALESCE(u.activo, true)`.as("activo"),
+        "u.nombre",
+        "u.apellido",
+        "u.documento",
+        "u.id_tipodocumento",
+      ])
+      .where(sql<string>`UPPER(TRIM(u.documento))`, "=", documento.toUpperCase().trim())
+      .executeTakeFirst();
 
-    const userByEmailRes = await client.query(
-      `SELECT u.id_usuario, u.email, COALESCE(u.activo, true) AS activo,
-              u.nombre, u.apellido, u.documento, u.id_tipodocumento
-       FROM usuario u
-       WHERE LOWER(TRIM(u.email)) = $1
-       LIMIT 1`,
-      [email]
-    );
-
-    const userByDoc = userByDocRes.rows[0] || null;
-    const userByEmail = userByEmailRes.rows[0] || null;
+    const userByEmail = await db
+      .selectFrom("usuario as u")
+      .select([
+        "u.id_usuario",
+        "u.email",
+        sql<boolean>`COALESCE(u.activo, true)`.as("activo"),
+        "u.nombre",
+        "u.apellido",
+        "u.documento",
+        "u.id_tipodocumento",
+      ])
+      .where(sql<string>`LOWER(TRIM(u.email))`, "=", email)
+      .executeTakeFirst();
 
     // Si coinciden con dos usuarios distintos en el sistema: error de cruce de datos
     if (userByDoc && userByEmail && userByDoc.id_usuario !== userByEmail.id_usuario) {
@@ -720,105 +733,124 @@ export const getTeacherManagementData = async (req: Request, res: Response): Pro
 
   try {
     const [documentTypesRes, teachersRes, subjectsRes, groupsRes, assignmentsRes] = await Promise.all([
-      pool.query(
-        `SELECT id_tipodocumento, tipo
-         FROM tipo_documento
-         ORDER BY tipo`
-      ),
-      pool.query(
-        `SELECT
-           d.id_docente,
-           d.nombre,
-           d.apellido,
-           u.documento,
-           u.id_tipodocumento,
-           td.tipo AS tipo_documento,
-           d.estado,
-           u.id_usuario,
-           u.email,
-           COALESCE(u.activo, true) AS activo,
-           (
-             SELECT u_parent.email
-             FROM padre_familia pf
-             JOIN usuario u_parent ON u_parent.id_usuario = pf.id_usuario
-             WHERE pf.id_usuario = d.id_usuario
-             LIMIT 1
-           ) AS email_padre,
-           EXISTS (
-             SELECT 1 
-             FROM usuario_rol ur 
-             JOIN rol r ON r.id_rol = ur.id_rol 
-             WHERE ur.id_usuario = d.id_usuario AND LOWER(r.nombre) = 'padre'
-           ) AS es_padre,
-           COUNT(DISTINCT CASE WHEN $2::int IS NULL OR dg.id_anio = $2 THEN dg.id_detallegrado END)::int AS asignaciones_count
-         FROM docente d
-         LEFT JOIN usuario u ON u.id_usuario = d.id_usuario
-         LEFT JOIN tipo_documento td ON td.id_tipodocumento = u.id_tipodocumento
-         LEFT JOIN detalle_grados dg ON dg.id_docente = d.id_docente
-         WHERE d.id_colegio = $1
-         GROUP BY d.id_docente, u.documento, u.id_tipodocumento, td.tipo, d.estado, u.id_usuario, u.email, u.activo
-         ORDER BY d.nombre, d.apellido`,
-        [schoolId, yearId]
-      ),
-      pool.query(
-        `SELECT id_materia, nombre
-         FROM materias
-         WHERE id_colegio = $1
-         ORDER BY nombre`,
-        [schoolId]
-      ),
-      pool.query(
-        `SELECT
-           g.id_grupo,
-           ne.nombre AS nivel_nombre,
-           tg.nombre AS tipo_grado_nombre,
-           s.nombre AS seccion_nombre,
-           j.nombre AS jornada_nombre
-         FROM grupos g
-         JOIN nivel_escolar ne ON ne.id_nivel = g.id_nivel
-         JOIN tipo_grado tg ON tg.id_tipo_grado = g.id_tipo_grado
-         JOIN secciones s ON s.id_seccion = g.id_seccion
-         JOIN jornada j ON j.id_jornada = g.id_jornada
-         WHERE g.id_colegio = $1
-          ORDER BY ne.nombre, tg.nombre, LENGTH(s.nombre), s.nombre, j.nombre`,
-        [schoolId]
-      ),
-      pool.query(
-        `SELECT
-           dg.id_detallegrado,
-           dg.id_docente,
-           dg.id_materia,
-           dg.id_grupo,
-           m.nombre AS materia_nombre,
-           d.nombre AS docente_nombre,
-           d.apellido AS docente_apellido,
-           ne.nombre AS nivel_nombre,
-           tg.nombre AS tipo_grado_nombre,
-           s.nombre AS seccion_nombre,
-           j.nombre AS jornada_nombre
-         FROM detalle_grados dg
-         JOIN docente d ON d.id_docente = dg.id_docente
-         JOIN materias m ON m.id_materia = dg.id_materia
-         JOIN grupos g ON g.id_grupo = dg.id_grupo
-         JOIN nivel_escolar ne ON ne.id_nivel = g.id_nivel
-         JOIN tipo_grado tg ON tg.id_tipo_grado = g.id_tipo_grado
-         JOIN secciones s ON s.id_seccion = g.id_seccion
-         JOIN jornada j ON j.id_jornada = g.id_jornada
-         WHERE dg.id_colegio = $1
-           AND dg.id_grupo IS NOT NULL
-           AND ($2::int IS NULL OR dg.id_anio = $2)
-         ORDER BY d.nombre, d.apellido, ne.nombre, tg.nombre, m.nombre`,
-        [schoolId, yearId]
-      ),
+      db
+        .selectFrom("tipo_documento")
+        .select(["id_tipodocumento", "tipo"])
+        .orderBy("tipo", "asc")
+        .execute(),
+      db
+        .selectFrom("docente as d")
+        .leftJoin("usuario as u", "u.id_usuario", "d.id_usuario")
+        .leftJoin("tipo_documento as td", "td.id_tipodocumento", "u.id_tipodocumento")
+        .leftJoin("detalle_grados as dg", "dg.id_docente", "d.id_docente")
+        .select([
+          "d.id_docente",
+          "d.nombre",
+          "d.apellido",
+          "u.documento",
+          "u.id_tipodocumento",
+          "td.tipo as tipo_documento",
+          "d.estado",
+          "u.id_usuario",
+          "u.email",
+          sql<boolean>`COALESCE(u.activo, true)`.as("activo"),
+          db
+            .selectFrom("padre_familia as pf")
+            .innerJoin("usuario as u_parent", "u_parent.id_usuario", "pf.id_usuario")
+            .select("u_parent.email")
+            .whereRef("pf.id_usuario", "=", "d.id_usuario")
+            .limit(1)
+            .as("email_padre"),
+          sql<boolean>`EXISTS (
+            SELECT 1 
+            FROM usuario_rol ur 
+            JOIN rol r ON r.id_rol = ur.id_rol 
+            WHERE ur.id_usuario = d.id_usuario AND LOWER(r.nombre) = 'padre'
+          )`.as("es_padre"),
+          sql<number>`COUNT(DISTINCT CASE WHEN ${yearId}::int IS NULL OR dg.id_anio = ${yearId} THEN dg.id_detallegrado END)::int`.as("asignaciones_count")
+        ])
+        .where("d.id_colegio", "=", schoolId)
+        .groupBy([
+          "d.id_docente",
+          "u.documento",
+          "u.id_tipodocumento",
+          "td.tipo",
+          "d.estado",
+          "u.id_usuario",
+          "u.email",
+          "u.activo"
+        ])
+        .orderBy("d.nombre", "asc")
+        .orderBy("d.apellido", "asc")
+        .execute(),
+      db
+        .selectFrom("materias")
+        .select(["id_materia", "nombre"])
+        .where("id_colegio", "=", schoolId)
+        .orderBy("nombre", "asc")
+        .execute(),
+      db
+        .selectFrom("grupos as g")
+        .innerJoin("nivel_escolar as ne", "ne.id_nivel", "g.id_nivel")
+        .innerJoin("tipo_grado as tg", "tg.id_tipo_grado", "g.id_tipo_grado")
+        .innerJoin("secciones as s", "s.id_seccion", "g.id_seccion")
+        .innerJoin("jornada as j", "j.id_jornada", "g.id_jornada")
+        .select([
+          "g.id_grupo",
+          "ne.nombre as nivel_nombre",
+          "tg.nombre as tipo_grado_nombre",
+          "s.nombre as seccion_nombre",
+          "j.nombre as jornada_nombre"
+        ])
+        .where("g.id_colegio", "=", schoolId)
+        .orderBy("ne.nombre", "asc")
+        .orderBy("tg.nombre", "asc")
+        .orderBy(sql`LENGTH(s.nombre)`, "asc")
+        .orderBy("s.nombre", "asc")
+        .orderBy("j.nombre", "asc")
+        .execute(),
+      db
+        .selectFrom("detalle_grados as dg")
+        .innerJoin("docente as d", "d.id_docente", "dg.id_docente")
+        .innerJoin("materias as m", "m.id_materia", "dg.id_materia")
+        .innerJoin("grupos as g", "g.id_grupo", "dg.id_grupo")
+        .innerJoin("nivel_escolar as ne", "ne.id_nivel", "g.id_nivel")
+        .innerJoin("tipo_grado as tg", "tg.id_tipo_grado", "g.id_tipo_grado")
+        .innerJoin("secciones as s", "s.id_seccion", "g.id_seccion")
+        .innerJoin("jornada as j", "j.id_jornada", "g.id_jornada")
+        .select([
+          "dg.id_detallegrado",
+          "dg.id_docente",
+          "dg.id_materia",
+          "dg.id_grupo",
+          "m.nombre as materia_nombre",
+          "d.nombre as docente_nombre",
+          "d.apellido as docente_apellido",
+          "ne.nombre as nivel_nombre",
+          "tg.nombre as tipo_grado_nombre",
+          "s.nombre as seccion_nombre",
+          "j.nombre as jornada_nombre"
+        ])
+        .where("dg.id_colegio", "=", schoolId)
+        .where("dg.id_grupo", "is not", null)
+        .where((eb) =>
+          yearId ? eb("dg.id_anio", "=", yearId) : eb.val(true)
+        )
+        .orderBy("d.nombre", "asc")
+        .orderBy("d.apellido", "asc")
+        .orderBy("ne.nombre", "asc")
+        .orderBy("tg.nombre", "asc")
+        .orderBy("m.nombre", "asc")
+        .execute(),
     ]);
 
     res.json({
-      documentTypes: documentTypesRes.rows,
-      teachers: teachersRes.rows,
-      docentes: teachersRes.rows,
-      subjects: subjectsRes.rows,
-      groups: groupsRes.rows,
-      assignments: assignmentsRes.rows,
+      documentTypes: documentTypesRes,
+      teachers: teachersRes,
+      docentes: teachersRes,
+      subjects: subjectsRes,
+      groups: groupsRes,
+      assignments: assignmentsRes,
     });
   } catch (error: any) {
     console.error("Error fetching teacher management data:", error);
