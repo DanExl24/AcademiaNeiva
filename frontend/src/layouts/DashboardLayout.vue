@@ -240,7 +240,7 @@ const updateTheme = (color1?: string, color2?: string) => {
 }
 
 const fetchSchoolIdentity = async () => {
-  const schoolId = auth.user?.schoolId || auth.supervision?.id_colegio
+  const schoolId = auth.selectedSchoolId || auth.user?.schoolId || auth.supervision?.id_colegio || auth.user?.schoolIds?.[0]
   if (!schoolId) {
     schoolName.value = 'AcademiaNeiva'
     schoolEscudo.value = null
@@ -812,8 +812,19 @@ onUnmounted(() => {
         <div class="flex items-center gap-6">
           <!-- Selector Prominente de Año Lectivo, Colegio y Hora -->
           <div class="hidden md:flex items-center gap-3">
-            <!-- Selector de Colegio Activo (si labora en más de 1 colegio) -->
-            <div v-if="userSchools.length > 1" class="flex items-center gap-2 bg-gradient-to-r from-blue-500/10 via-blue-600/15 to-blue-700/10 dark:from-blue-950/40 dark:to-blue-900/40 px-3.5 py-1.5 rounded-2xl border-2 border-blue-200 dark:border-blue-800/80 shadow-sm transition-all hover:border-blue-400">
+            <!-- Botón Cambiar Colegio para docentes u otros usuarios multi-colegio -->
+            <router-link 
+              v-if="userSchools.length > 1" 
+              to="/select-school" 
+              class="flex items-center gap-1.5 text-xs font-bold bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900 text-indigo-600 dark:text-indigo-300 px-3 py-1.5 rounded-xl border border-indigo-200 dark:border-indigo-800 transition-all shadow-sm"
+              title="Cambiar de colegio de sesión"
+            >
+              <Building2 :size="15" />
+              <span class="hidden lg:inline">Cambiar Colegio</span>
+            </router-link>
+
+            <!-- Selector de Colegio Activo en Header (Solo para directivos) -->
+            <div v-if="userSchools.length > 1 && auth.activeRole !== 'docente'" class="flex items-center gap-2 bg-gradient-to-r from-blue-500/10 via-blue-600/15 to-blue-700/10 dark:from-blue-950/40 dark:to-blue-900/40 px-3.5 py-1.5 rounded-2xl border-2 border-blue-200 dark:border-blue-800/80 shadow-sm transition-all hover:border-blue-400">
               <Building2 :size="18" class="text-blue-600 dark:text-blue-400 shrink-0" />
               <span class="text-xs font-black text-blue-950 dark:text-blue-200 uppercase tracking-wider hidden lg:inline">Colegio:</span>
               <select 

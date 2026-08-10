@@ -32,6 +32,12 @@ const router = createRouter({
       component: LoginView
     },
     {
+      path: '/select-school',
+      name: 'select-school',
+      component: () => import('../views/auth/SelectSchoolView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
       path: '/matricula',
       name: 'matricula',
       component: EnrollmentView

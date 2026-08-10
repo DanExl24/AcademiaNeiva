@@ -30,7 +30,8 @@ import {
   ensureSchoolDefaultSettings,
   roundToOne,
   syncSchoolScalesAndGrades,
-  getUserEligibleAcademicYears
+  getUserEligibleAcademicYears,
+  isSchoolAccessAllowed
 } from "./helpers";
 
 export const createGradeType = async (req: Request, res: Response): Promise<void> => {
@@ -757,8 +758,7 @@ export const getAcademicSettingsData = async (req: Request, res: Response): Prom
   }
 
   const authReq = req as AuthRequest;
-  const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
-  if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== schoolId) {
+  if (!isSchoolAccessAllowed(authReq.user, schoolId)) {
     res.status(403).json({ error: "No tiene permiso para acceder a la configuración académica de este colegio." });
     return;
   }

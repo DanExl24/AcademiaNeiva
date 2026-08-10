@@ -34,7 +34,11 @@ const handleLogin = async () => {
     const { user, token } = response.data
     auth.setUser(user, token)
     
-    router.push('/dashboard')
+    if (user.schoolIds && user.schoolIds.length > 1) {
+      router.push('/select-school')
+    } else {
+      router.push('/dashboard')
+    }
   } catch (err: any) {
     console.error('Login error:', err)
     error.value = err.response?.data?.error || 'Error al iniciar sesión. Verifica tus credenciales.'

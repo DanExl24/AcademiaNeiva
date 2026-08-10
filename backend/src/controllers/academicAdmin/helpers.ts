@@ -20,14 +20,25 @@ import {
 export interface AuthRequest extends Request {
   user?: {
     id: number;
-    id_usuario: number;
+    id_usuario?: number;
     email: string;
+    role?: string;
     roles: string[];
-    schoolId?: number;
+    schoolId?: number | null;
+    schoolIds?: number[];
   };
 }
 
 export { path };
+
+export const isSchoolAccessAllowed = (user: any, targetSchoolId: number | null | undefined): boolean => {
+  if (!user || !targetSchoolId) return false;
+  if (user.roles && user.roles.includes('admin_general')) return true;
+  const target = Number(targetSchoolId);
+  if (user.schoolId && Number(user.schoolId) === target) return true;
+  if (user.schoolIds && Array.isArray(user.schoolIds) && user.schoolIds.map(Number).includes(target)) return true;
+  return false;
+};
 
 export const parseSchoolId = (value: unknown): number | null => {
   const parsed = Number(value);
