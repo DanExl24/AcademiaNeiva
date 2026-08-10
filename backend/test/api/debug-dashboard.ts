@@ -1,4 +1,4 @@
-import { pool } from "./config/db";
+import { pool } from "../../src/config/db";
 
 async function testDashboard() {
   // Auto-detect a valid teacher userId

@@ -9,7 +9,7 @@
     "start": "node dist/server.js",
     "seed:reset": "ts-node-dev --transpile-only src/seeds/reset_and_seed.ts",
     "seed:grades": "ts-node-dev --transpile-only src/seeds/seed_grades.ts",
-    "db:clean": "ts-node-dev --transpile-only src/clean_db.ts",
+    "db:clean": "ts-node-dev --transpile-only src/scripts/clean_db.ts",
     "db:types": "kysely-codegen --url postgres://postgres:postgres@localhost:5432/AcademiaNeiva --out-file src/types/db.types.ts",
       "db:dump": "docker exec -t academia-postgres pg_dump -U postgres -d AcademiaNeiva > init_scripts/AcademiaNeivaBDpoblate.sql"
   },
