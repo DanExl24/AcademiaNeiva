@@ -1,3 +1,3 @@
 # Reglas del Proyecto AcademiaNeiva
 
-- **Commits Automáticos**: Después de realizar y verificar cualquier cambio o corrección en el código del proyecto, realiza el correspondiente `git add .` y `git commit -m "..."` para mantener el historial del repositorio actualizado.
+- **Commits y Push Automáticos**: Después de realizar y verificar cualquier cambio o corrección en el código del proyecto, realiza secuencialmente `git add .`, `git commit -m "..."` y `git push` para mantener el repositorio local y remoto totalmente actualizados.
