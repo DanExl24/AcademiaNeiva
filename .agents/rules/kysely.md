@@ -1,7 +1,11 @@
 ---
-trigger: model_decision
+trigger: always_on
 description: Al requerir nuevas consultas o actualizacion de consultas manuales en SQL
 ---
+
+Cada vez que vayas a realizar una consulta SQL de forma manual en un archivo, utiliza el querybuilder de kysely.
+
+Cada vez que encuentres una consutla SQL de forma cruda y manual en un archivo, sin querybuilder, reemplaza la consulta por el querybuilder de kysely para mayor validacion de relaciones entre tablas.
 
 El proyecto ahora mismo tiene incorporado kysely, una libreria que su funcion es:
 Ser de querybuilder sql con tipado de Typescript.

@@ -75,7 +75,11 @@ export const getStudentBoletin = async (req: Request, res: Response) => {
       .selectFrom("estudiante as e")
       .leftJoin("usuario as u", "u.id_usuario", "e.id_usuario")
       .innerJoin("colegio as c", "c.id_colegio", "e.id_colegio")
-      .leftJoin("matricula as m", "m.id_estudiante", "e.id_estudiante")
+      .leftJoin("matricula as m", (join) =>
+        join
+          .onRef("m.id_estudiante", "=", "e.id_estudiante")
+          .on("m.id_anio", "=", idAnio)
+      )
       .leftJoin("grupos as gr", "gr.id_grupo", "m.id_grupo")
       .leftJoin("jornada as j", "j.id_jornada", "gr.id_jornada")
       .leftJoin("grados as g", (join) =>
@@ -122,7 +126,7 @@ export const getStudentBoletin = async (req: Request, res: Response) => {
       return res.status(403).json({ error: "No tiene permiso para generar el boletín de este estudiante." });
     }
 
-    // 4. Fetch Todas las Materias y Profesores
+    // 4. Fetch Todas las Materias y Profesores del año filtrado
     const materiasRes = await db
       .selectFrom("detalle_grados as dg")
       .innerJoin("matricula as mat", "mat.id_grupo", "dg.id_grupo")
@@ -135,13 +139,15 @@ export const getStudentBoletin = async (req: Request, res: Response) => {
         "d.apellido as docente_apellido"
       ])
       .where("mat.id_estudiante", "=", numEstudiante)
+      .where("mat.id_anio", "=", idAnio)
       .execute();
     
     // 5. Fetch Notas Historicas del Año
     const studentGroupSubquery = db
       .selectFrom("matricula")
       .select("id_grupo")
-      .where("id_estudiante", "=", numEstudiante);
+      .where("id_estudiante", "=", numEstudiante)
+      .where("id_anio", "=", idAnio);
 
     const calcSubquery = db
       .selectFrom("notas_actividad as na")
@@ -208,6 +214,7 @@ export const getStudentBoletin = async (req: Request, res: Response) => {
       .innerJoin("evidencia_aprendizaje as ea", "ea.id_competencia", "c.id_competencia")
       .select(["c.id_materia", "ea.descripcion"])
       .where("mat.id_estudiante", "=", numEstudiante)
+      .where("mat.id_anio", "=", idAnio)
       .where("c.id_periodo", "=", numPeriodo)
       .execute();
 
@@ -303,7 +310,7 @@ export const getStudentBoletin = async (req: Request, res: Response) => {
         sql<number>`ROUND(AVG(COALESCE(ra2.promedio, calc.promedio_calculado, 0))::numeric, 2)`.as("student_avg")
       ])
       .where("m2.id_grupo", "=",
-        db.selectFrom("matricula").select("id_grupo").where("id_estudiante", "=", numEstudiante).limit(1)
+        db.selectFrom("matricula").select("id_grupo").where("id_estudiante", "=", numEstudiante).where("id_anio", "=", idAnio).limit(1)
       )
       .where("m2.estado", "=", 'ACTIVA')
       .groupBy("m2.id_estudiante");
@@ -348,7 +355,7 @@ export const getStudentBoletin = async (req: Request, res: Response) => {
       .innerJoin("grupos as g", "g.id_docente", "d.id_docente")
       .select(sql<string>`d.nombre || ' ' || d.apellido`.as("nombre_completo"))
       .where("g.id_grupo", "=",
-        db.selectFrom("matricula").select("id_grupo").where("id_estudiante", "=", numEstudiante).limit(1)
+        db.selectFrom("matricula").select("id_grupo").where("id_estudiante", "=", numEstudiante).where("id_anio", "=", idAnio).limit(1)
       )
       .executeTakeFirst();
 
