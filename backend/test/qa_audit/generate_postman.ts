@@ -46,7 +46,7 @@ const collection = {
             body: {
               mode: "raw",
               raw: JSON.stringify({
-                documento: "100000000",
+                email: "admin.general@academianeiva.edu.co",
                 password: "adminGeneral123"
               }, null, 2)
             },
@@ -80,7 +80,7 @@ const collection = {
             body: {
               mode: "raw",
               raw: JSON.stringify({
-                documento: "1075214001",
+                email: "rector@ceaschool.edu.co",
                 password: "directivo123"
               }, null, 2)
             },

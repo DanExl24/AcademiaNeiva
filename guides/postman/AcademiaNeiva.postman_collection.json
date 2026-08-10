@@ -67,7 +67,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"documento\": \"100000000\",\n  \"password\": \"adminGeneral123\"\n}"
+              "raw": "{\n  \"email\": \"admin.general@academianeiva.edu.co\",\n  \"password\": \"adminGeneral123\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/auth/login",
@@ -109,7 +109,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"documento\": \"1075214001\",\n  \"password\": \"directivo123\"\n}"
+              "raw": "{\n  \"email\": \"rector@ceaschool.edu.co\",\n  \"password\": \"directivo123\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/auth/login",
