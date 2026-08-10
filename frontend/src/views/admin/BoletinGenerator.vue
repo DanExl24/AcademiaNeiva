@@ -230,10 +230,17 @@ const fetchBoletinData = async () => {
       const url = `/api/boletines/student/${selectedStudent.value}/${selectedPeriodo.value}`
       console.log('[fetchBoletinData] Fetching student bulletin:', url)
       const res = await fetch(url, { headers })
+      const contentType = res.headers.get('content-type') || ''
       if (!res.ok) {
-        const d = await res.json()
-        console.error('[fetchBoletinData] Error fetching individual:', d)
-        throw new Error(d.error || 'Error fetching boletin individual')
+        let errStr = `Error HTTP ${res.status}`
+        if (contentType.includes('application/json')) {
+          const d = await res.json()
+          errStr = d.error || errStr
+        } else {
+          console.error('[fetchBoletinData] Non-JSON error:', await res.text())
+          errStr = `El servidor backend devolvió un error (HTTP ${res.status}).`
+        }
+        throw new Error(errStr)
       }
       const data = await res.json()
       console.log('[fetchBoletinData] Student bulletin loaded successfully:', data)
@@ -242,10 +249,17 @@ const fetchBoletinData = async () => {
       const url = `/api/boletines/grade/${selectedGroup.value}/${selectedPeriodo.value}`
       console.log('[fetchBoletinData] Fetching mass group bulletins:', url)
       const groupRes = await fetch(url, { headers })
+      const contentType = groupRes.headers.get('content-type') || ''
       if (!groupRes.ok) {
-         const d = await groupRes.json()
-         console.error('[fetchBoletinData] Error fetching mass group:', d)
-         throw new Error(d.error || 'Error fetching boletines masivos')
+         let errStr = `Error HTTP ${groupRes.status}`
+         if (contentType.includes('application/json')) {
+           const d = await groupRes.json()
+           errStr = d.error || errStr
+         } else {
+           console.error('[fetchBoletinData] Non-JSON group error:', await groupRes.text())
+           errStr = `El servidor backend devolvió un error (HTTP ${groupRes.status}).`
+         }
+         throw new Error(errStr)
       }
       const groupData = await groupRes.json()
       const ids = groupData.students || []

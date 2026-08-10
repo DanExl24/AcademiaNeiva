@@ -106,9 +106,18 @@ const handleExport = async () => {
     const headers = { Authorization: `Bearer ${auth.token}` }
     const res = await fetch(`/api/boletines/student/${props.studentId}/${props.periodId}`, { headers })
     
+    const contentType = res.headers.get('content-type') || ''
     if (!res.ok) {
-      const data = await res.json()
-      throw new Error(data.error || 'Error al obtener los datos del boletín')
+      let errorMessage = `Error HTTP ${res.status}`
+      if (contentType.includes('application/json')) {
+        const data = await res.json()
+        errorMessage = data.error || errorMessage
+      } else {
+        const text = await res.text()
+        console.error('El servidor devolvió una respuesta HTML de error:', text)
+        errorMessage = `Respuesta no válida del servidor (HTTP ${res.status}). Verifica que el backend esté encendido en el puerto 3000.`
+      }
+      throw new Error(errorMessage)
     }
     
     boletinData.value = await res.json()
