@@ -453,15 +453,15 @@ const getStatusColor = (estado: string) => {
             </div>
             <div>
               <p class="font-black text-amber-900 text-sm">
-                Acudiente identificado como
-                <span class="uppercase font-extrabold">{{ matricula.existing_parent_user.display_role }}</span>
+                Persona registrada en la plataforma como
+                <span class="uppercase font-extrabold text-amber-950">{{ matricula.existing_parent_user.display_role }}</span>
               </p>
               <p class="text-amber-800 text-xs mt-0.5">
                 {{ matricula.existing_parent_user.nombre }} {{ matricula.existing_parent_user.apellido }}
                 · {{ matricula.existing_parent_user.email }}
               </p>
-              <p class="text-amber-700 text-xs mt-1.5 italic">
-                Los campos de nombre han sido pre-llenados. Solo verifica el número de documento y guarda.
+              <p class="text-amber-700 text-xs mt-1.5 font-semibold">
+                ✨ En este colegio se vinculará únicamente como <strong>Padre de Familia / Acudiente</strong> (sin asignarle rol de docente en esta institución).
               </p>
             </div>
           </div>

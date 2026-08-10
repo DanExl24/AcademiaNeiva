@@ -798,43 +798,26 @@ export class MatriculaService {
           [data.parent.nombre, data.parent.apellido, idPadre]
         );
       } else {
-        // Validar unicidad global del documento de acudiente en la plataforma
-        await validateDocumentUniqueness(client, data.parent.documento, "acudiente");
-
-        // 2. Si no existe por documento, verificar si el correo pertenece a un usuario en el sistema
-        const existingUserByEmail = await client.query(
-          'SELECT id_usuario FROM usuario WHERE email = $1',
-          [correo_padre]
+        // 2. Verificar si el documento o correo ya pertenece a un usuario existente en la plataforma (ej: Docente en otra institución, Directivo, etc.)
+        const existingUserRes = await client.query(
+          `SELECT id_usuario, documento, email, nombre, apellido FROM usuario WHERE (documento IS NOT NULL AND TRIM(documento) = TRIM($1)) OR LOWER(email) = LOWER($2) LIMIT 1`,
+          [data.parent.documento, correo_padre]
         );
 
-        if (existingUserByEmail.rows.length > 0) {
-          const matchedUserId = existingUserByEmail.rows[0].id_usuario;
+        if (existingUserRes.rows.length > 0) {
+          // El usuario ya existe en la plataforma (misma persona)
+          idUsuarioPadre = existingUserRes.rows[0].id_usuario;
 
-          // Verificar si este usuario ya tiene una ficha de padre asociada con otro documento distinto
-          const existingParentByUser = await client.query(
-            `SELECT pf.id_padrefamilia, u.documento, pf.nombre, pf.apellido 
-             FROM padre_familia pf 
-             JOIN usuario u ON pf.id_usuario = u.id_usuario 
-             WHERE pf.id_usuario = $1`,
-            [matchedUserId]
-          );
-
-          if (existingParentByUser.rows.length > 0) {
-            const registeredDoc = existingParentByUser.rows[0].documento;
-            const parentName = `${existingParentByUser.rows[0].nombre} ${existingParentByUser.rows[0].apellido}`;
-            throw new Error(
-              `El correo '${correo_padre}' ya se encuentra registrado a nombre del acudiente '${parentName}' con documento (${registeredDoc}). No se puede modificar el documento a (${data.parent.documento}). Por favor verifica el documento ingresado o utiliza un correo distinto.`
-            );
-          }
-
-          idUsuarioPadre = matchedUserId;
-          // Actualizar documento en el usuario existente
+          // Actualizar tipo de documento, documento y teléfono si aplica
           await client.query(
             `UPDATE usuario SET id_tipodocumento = $1, documento = $2, telefono = COALESCE($3, telefono) WHERE id_usuario = $4`,
             [data.parent.id_tipodocumento, data.parent.documento, data.parent.telefono || null, idUsuarioPadre]
           );
         } else {
-          // 3. Crear nueva cuenta de usuario para el padre
+          // 3. Si no existe en la plataforma, es un usuario totalmente nuevo: validar unicidad del documento
+          await validateDocumentUniqueness(client, data.parent.documento, "acudiente");
+
+          // Crear nueva cuenta de usuario para el padre
           const hashedPadrePass = await bcrypt.hash('padre123', 10);
           const parentUserRes = await client.query(
             `INSERT INTO usuario (email, password, nombre, apellido, id_colegio, id_tipodocumento, documento, telefono) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id_usuario`,
@@ -843,7 +826,7 @@ export class MatriculaService {
           idUsuarioPadre = parentUserRes.rows[0].id_usuario;
         }
 
-        // Crear la ficha de padre vinculada al usuario (sin documento ni id_tipodocumento, almacenados en usuario)
+        // Crear la ficha de padre vinculada al usuario
         const parentRes = await client.query(
           `INSERT INTO padre_familia (nombre, apellido, id_colegio, id_usuario)
            VALUES ($1, $2, $3, $4) RETURNING id_padrefamilia`,
