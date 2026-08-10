@@ -12,11 +12,7 @@ import {
   Clock, 
   AlertCircle, 
   Building2, 
-  User, 
-  Send, 
-  ShieldCheck, 
   RefreshCw,
-  FileText,
   Building,
   Check,
   X,
@@ -349,14 +345,14 @@ const canUserApproveCurrentModal = computed(() => {
   if (!selectedSolicitud.value) return false
   if (['EJECUTADA', 'RECHAZADA', 'CANCELADA'].includes(selectedSolicitud.value.estado)) return false
 
-  const userSchool = auth.user?.schoolId
-  const userId = auth.user?.id
+  const userSchool = auth.user?.schoolId ? Number(auth.user.schoolId) : null
+  const userId = auth.user?.id ? Number(auth.user.id) : null
   const roles = auth.user?.roles || []
 
   if (roles.includes('admin_general')) return true
-  if (userId === selectedSolicitud.value.id_usuario) return true
-  if (userSchool === selectedSolicitud.value.id_colegio_origen) return true
-  if (userSchool === selectedSolicitud.value.id_colegio_destino) return true
+  if (userId !== null && userId === selectedSolicitud.value.id_usuario) return true
+  if (userSchool !== null && userSchool === selectedSolicitud.value.id_colegio_origen) return true
+  if (userSchool !== null && userSchool === selectedSolicitud.value.id_colegio_destino) return true
 
   return false
 })
