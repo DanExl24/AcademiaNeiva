@@ -756,17 +756,6 @@ export const getTeacherManagementData = async (req: Request, res: Response): Pro
          LEFT JOIN tipo_documento td ON td.id_tipodocumento = u.id_tipodocumento
          LEFT JOIN detalle_grados dg ON dg.id_docente = d.id_docente
          WHERE d.id_colegio = $1
-            AND (
-              $2::int IS NULL OR
-              NOT EXISTS (
-                SELECT 1 FROM anio_lectivo al
-                WHERE al.id_anio = $2
-                  AND (
-                    EXTRACT(YEAR FROM u.fecha_creacion) > NULLIF(regexp_replace(al.calendario, '\D', '', 'g'), '')::int
-                    OR (al.fecha_fin IS NOT NULL AND DATE(u.fecha_creacion) > al.fecha_fin)
-                  )
-              )
-            )
          GROUP BY d.id_docente, u.documento, u.id_tipodocumento, td.tipo, d.estado, u.id_usuario, u.email, u.activo
          ORDER BY d.nombre, d.apellido`,
         [schoolId, yearId]
