@@ -229,13 +229,13 @@ export const createTeacher = async (req: Request, res: Response): Promise<void> 
         `INSERT INTO usuario_rol (id_usuario, id_rol)
          VALUES ($1, $2)
          ON CONFLICT DO NOTHING`,
-        [existingUser.id_usuario, roleRes.rows[0].id_rol]
+        [existingUser.id_usuario, roleRes.id_rol]
       );
 
       await client.query(
         `INSERT INTO usuario_colegio (id_usuario, id_colegio, id_rol, estado, fecha_inicio)
          VALUES ($1, $2, $3, 'ACTIVO', NOW()) ON CONFLICT DO NOTHING`,
-        [existingUser.id_usuario, schoolId, roleRes.rows[0].id_rol]
+        [existingUser.id_usuario, schoolId, roleRes.id_rol]
       );
 
       // Si el directivo especificó un correo institucional nuevo para sus funciones de docente, actualizamos su correo de acceso
@@ -259,7 +259,7 @@ export const createTeacher = async (req: Request, res: Response): Promise<void> 
         email,
         parentFullName,
         schoolName,
-        documentTypeRes.rows[0].tipo,
+        documentTypeRes.tipo,
         existingUser.documento || documento,
         password
       );
@@ -268,7 +268,7 @@ export const createTeacher = async (req: Request, res: Response): Promise<void> 
         ...teacherRes.rows[0],
         documento: existingUser.documento || documento,
         id_tipodocumento: existingUser.id_tipodocumento || documentTypeId,
-        tipo_documento: documentTypeRes.rows[0].tipo,
+        tipo_documento: documentTypeRes.tipo,
         email,
         activo: existingUser.activo,
         estado: teacherRes.rows[0].estado,
@@ -289,13 +289,13 @@ export const createTeacher = async (req: Request, res: Response): Promise<void> 
     await client.query(
       `INSERT INTO usuario_rol (id_usuario, id_rol)
        VALUES ($1, $2)`,
-      [userRes.rows[0].id_usuario, roleRes.rows[0].id_rol]
+      [userRes.rows[0].id_usuario, roleRes.id_rol]
     );
 
     await client.query(
       `INSERT INTO usuario_colegio (id_usuario, id_colegio, id_rol, estado, fecha_inicio)
        VALUES ($1, $2, $3, 'ACTIVO', NOW()) ON CONFLICT DO NOTHING`,
-      [userRes.rows[0].id_usuario, schoolId, roleRes.rows[0].id_rol]
+      [userRes.rows[0].id_usuario, schoolId, roleRes.id_rol]
     );
 
     const teacherRes = await client.query(
@@ -311,7 +311,7 @@ export const createTeacher = async (req: Request, res: Response): Promise<void> 
       userRes.rows[0].email,
       `${nombre} ${apellido}`,
       schoolName,
-      documentTypeRes.rows[0].tipo,
+      documentTypeRes.tipo,
       documento,
       password
     );
@@ -320,7 +320,7 @@ export const createTeacher = async (req: Request, res: Response): Promise<void> 
       ...teacherRes.rows[0],
       documento,
       id_tipodocumento: documentTypeId,
-      tipo_documento: documentTypeRes.rows[0].tipo,
+      tipo_documento: documentTypeRes.tipo,
       email: userRes.rows[0].email,
       activo: userRes.rows[0].activo,
       estado: teacherRes.rows[0].estado,
@@ -758,7 +758,7 @@ export const getTeacherManagementData = async (req: Request, res: Response): Pro
             .selectFrom("padre_familia as pf")
             .innerJoin("usuario as u_parent", "u_parent.id_usuario", "pf.id_usuario")
             .select("u_parent.email")
-            .whereRef("pf.id_usuario", "=", "d.id_usuario")
+            .where(sql`pf.id_usuario = d.id_usuario`)
             .limit(1)
             .as("email_padre"),
           sql<boolean>`EXISTS (
