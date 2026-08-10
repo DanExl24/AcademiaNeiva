@@ -1,3 +1,5 @@
+sn
+
 # 📐 Arquitectura y Modelo de Datos - AcademiaNeiva
 
 Este documento detalla la arquitectura de software, la jerarquía de roles de usuario y las tablas fundamentales de la base de datos relacional de **AcademiaNeiva**.
@@ -15,12 +17,14 @@ graph TD
 ```
 
 ### Frontend
+
 - **Framework**: Vue 3 (Composition API) con TypeScript.
 - **Enrutamiento**: Vue Router.
 - **Gestión de Estado**: Pinia (con stores especializados en notificaciones, autenticación, etc.).
 - **Diseño y Estilos**: TailwindCSS y CSS nativo para vistas personalizadas premium.
 
 ### Backend
+
 - **Entorno de Ejecución**: Node.js v18+ con TypeScript.
 - **Framework Web**: Express.
 - **Base de Datos**: PostgreSQL utilizando el driver nativo de agrupación de conexiones `pg` (pg-pool).
@@ -56,12 +60,14 @@ El portal cuenta con 5 roles de usuario principales definidos en la tabla `rol`:
 El diseño de datos está definido en [AcademiaNeivaBD.sql](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/AcademiaNeivaBD.sql). A continuación se resumen las entidades críticas del sistema:
 
 ### Estructura Escolar e Instituciones
+
 - `colegio`: Define las instituciones (nombre, dane, dominio, calendario 'A' o 'B', estado 'Activo'/'Suspendido').
 - `año_lectivo`: Controla los calendarios académicos específicos de cada escuela (`calendario`, `id_colegio`).
 - `periodo_academico`: Trimestres académicos (`trimestre`, `estado: ABIERTO/PENDIENTE/CERRADO`, `porcentaje`).
 - `configuracion_colegio`: Configuración de límites evaluativos (`nota_minima`, `nota_maxima`, `nota_aprobacion`, `escala_modo`).
 
 ### Matrículas y Cursos
+
 - `nivel_escolar` y `tipo_grado`: Jerarquía escolar (ej. PRIMARIA -> PRIMERO).
 - `grupos` y `grados`: Cursos del año (ej. Primero A, Primero B).
 - `materias`: Asignaturas del catálogo (ej. Matemáticas, Español).
@@ -69,6 +75,7 @@ El diseño de datos está definido en [AcademiaNeivaBD.sql](file:///c:/Users/ale
 - `matricula`: Vincula al estudiante con un grupo, año lectivo y estado de matrícula (`ACTIVA`/`CANCELADA`).
 
 ### Académico y Planeación Curricular
+
 - `competencias`: Plan curricular. Posee la columna `sync_uuid` para coordinar la sincronización entre cursos paralelos.
 - `evidencia_aprendizaje`: Evidencias pedagógicas asociadas a una competencia (pueden ser libres o enlazadas a un `id_evidencia_dba` oficial).
 - `actividad_materia`: Evaluaciones del periodo creadas por los docentes. Posee el campo `fecha_creacion` (TIMESTAMPTZ).

@@ -1,5 +1,5 @@
-import { pool } from "../../src/config/db';
-import { getUserEligibleAcademicYears } from "../../src/controllers/academicAdminController';
+import { pool } from "../../src/config/db";
+import { getUserEligibleAcademicYears } from "../../src/controllers/academicAdminController";
 
 async function main() {
   const years = await getUserEligibleAcademicYears(31, 'alejopmotta@gmail.com', ['docente'], 1);

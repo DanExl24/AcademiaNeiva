@@ -1,10 +1,10 @@
-import { pool } from "../../src/config/db';
+import { pool } from "../../src/config/db";
 import * as fs from 'fs';
 import * as path from 'path';
 
 async function main() {
   try {
-    const migrationPath = path.join(__dirname, "../../src/migrations/038_traslados_y_usuario_colegio.sql');
+    const migrationPath = path.join(__dirname, "../../src/migrations/038_traslados_y_usuario_colegio.sql");
     const sql = fs.readFileSync(migrationPath, 'utf-8');
     
     console.log('Aplicando migración 038...');
