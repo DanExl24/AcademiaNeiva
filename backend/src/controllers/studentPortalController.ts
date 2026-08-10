@@ -311,15 +311,30 @@ export const getStudentInfo = async (req: Request, res: Response) => {
         e.codigo, 
         e.estado,
         tg.nombre as grado, 
-        s.nombre as grupo,
+        s.nombre as seccion,
+        CASE 
+          WHEN tg.nombre IS NOT NULL AND s.nombre IS NOT NULL THEN tg.nombre || '-' || s.nombre
+          WHEN tg.nombre IS NOT NULL THEN tg.nombre
+          WHEN s.nombre IS NOT NULL THEN s.nombre
+          ELSE 'Sin Grupo'
+        END as grupo,
+        j.nombre as jornada,
+        n.nombre as nivel,
         sanc.fecha_fin as sancion_hasta,
         sanc.motivo as sancion_motivo,
         sanc.tipo_nombre as sancion_tipo
       FROM estudiante e
-      LEFT JOIN matricula m ON m.id_estudiante = e.id_estudiante AND m.estado = 'ACTIVA'
+      LEFT JOIN (
+        SELECT DISTINCT ON (id_estudiante) id_estudiante, id_grupo, id_anio, estado
+        FROM matricula
+        WHERE estado IN ('ACTIVA', 'APROBADA')
+        ORDER BY id_estudiante, id_anio DESC, id_matricula DESC
+      ) m ON m.id_estudiante = e.id_estudiante
       LEFT JOIN grupos gr ON gr.id_grupo = m.id_grupo
       LEFT JOIN secciones s ON s.id_seccion = gr.id_seccion
       LEFT JOIN tipo_grado tg ON tg.id_tipo_grado = gr.id_tipo_grado
+      LEFT JOIN jornada j ON j.id_jornada = gr.id_jornada
+      LEFT JOIN nivel_escolar n ON n.id_nivel = gr.id_nivel OR n.id_nivel = e.id_nivel
       LEFT JOIN LATERAL (
         SELECT sa.fecha_fin, sa.motivo, ts.nombre as tipo_nombre
         FROM public.sancion sa
@@ -351,17 +366,38 @@ export const getParentChildren = async (req: Request, res: Response) => {
   const { id_usuario } = req.params;
   try {
     const result = await pool.query(`
-      SELECT e.id_estudiante, e.nombre, e.apellido, e.codigo,
-             tg.nombre as grado, s.nombre as grupo, j.nombre as jornada, dpf.id_colegio, col.nombre as colegio_nombre
+      SELECT 
+        e.id_estudiante, 
+        e.nombre, 
+        e.apellido, 
+        e.codigo,
+        tg.nombre as grado, 
+        s.nombre as seccion,
+        CASE 
+          WHEN tg.nombre IS NOT NULL AND s.nombre IS NOT NULL THEN tg.nombre || '-' || s.nombre
+          WHEN tg.nombre IS NOT NULL THEN tg.nombre
+          WHEN s.nombre IS NOT NULL THEN s.nombre
+          ELSE 'Sin Grupo'
+        END as grupo,
+        j.nombre as jornada,
+        n.nombre as nivel,
+        dpf.id_colegio, 
+        col.nombre as colegio_nombre
       FROM padre_familia pf
       JOIN detalle_padrefamilia dpf ON dpf.id_padrefamilia = pf.id_padrefamilia
       JOIN estudiante e ON e.id_estudiante = dpf.id_estudiante
       LEFT JOIN colegio col ON col.id_colegio = dpf.id_colegio
-      LEFT JOIN matricula m ON m.id_estudiante = e.id_estudiante AND m.estado = 'ACTIVA'
+      LEFT JOIN (
+        SELECT DISTINCT ON (id_estudiante) id_estudiante, id_grupo, id_anio, estado
+        FROM matricula
+        WHERE estado IN ('ACTIVA', 'APROBADA')
+        ORDER BY id_estudiante, id_anio DESC, id_matricula DESC
+      ) m ON m.id_estudiante = e.id_estudiante
       LEFT JOIN grupos gr ON gr.id_grupo = m.id_grupo
       LEFT JOIN secciones s ON s.id_seccion = gr.id_seccion
       LEFT JOIN tipo_grado tg ON tg.id_tipo_grado = gr.id_tipo_grado
       LEFT JOIN jornada j ON j.id_jornada = gr.id_jornada
+      LEFT JOIN nivel_escolar n ON n.id_nivel = gr.id_nivel OR n.id_nivel = e.id_nivel
       WHERE pf.id_usuario = $1
     `, [id_usuario]);
     res.json(result.rows);
@@ -544,19 +580,32 @@ export const getParentDashboardData = async (req: Request, res: Response) => {
         e.apellido, 
         e.codigo,
         tg.nombre as grado, 
-        s.nombre as grupo,
+        s.nombre as seccion,
+        CASE 
+          WHEN tg.nombre IS NOT NULL AND s.nombre IS NOT NULL THEN tg.nombre || '-' || s.nombre
+          WHEN tg.nombre IS NOT NULL THEN tg.nombre
+          WHEN s.nombre IS NOT NULL THEN s.nombre
+          ELSE 'Sin Grupo'
+        END as grupo,
         j.nombre as jornada,
+        n.nombre as nivel,
         e.id_colegio,
         m.id_grupo,
         m.id_anio
       FROM padre_familia pf
       JOIN detalle_padrefamilia dpf ON dpf.id_padrefamilia = pf.id_padrefamilia
       JOIN estudiante e ON e.id_estudiante = dpf.id_estudiante
-      LEFT JOIN matricula m ON m.id_estudiante = e.id_estudiante ${targetYearId ? 'AND m.id_anio = $2' : ''}
+      LEFT JOIN (
+        SELECT DISTINCT ON (id_estudiante) id_estudiante, id_grupo, id_anio, estado
+        FROM matricula
+        WHERE estado IN ('ACTIVA', 'APROBADA') ${targetYearId ? 'AND id_anio = $2' : ''}
+        ORDER BY id_estudiante, id_anio DESC, id_matricula DESC
+      ) m ON m.id_estudiante = e.id_estudiante
       LEFT JOIN grupos gr ON gr.id_grupo = m.id_grupo
       LEFT JOIN secciones s ON s.id_seccion = gr.id_seccion
       LEFT JOIN tipo_grado tg ON tg.id_tipo_grado = gr.id_tipo_grado
       LEFT JOIN jornada j ON j.id_jornada = gr.id_jornada
+      LEFT JOIN nivel_escolar n ON n.id_nivel = gr.id_nivel OR n.id_nivel = e.id_nivel
       WHERE pf.id_usuario = $1
     `;
     const childrenParams = targetYearId ? [userId, targetYearId] : [userId];

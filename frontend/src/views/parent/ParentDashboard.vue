@@ -696,11 +696,11 @@ const barChartOptions = {
                 </div>
                 <div class="p-3.5 bg-slate-50 dark:bg-slate-800/80 rounded-2xl flex justify-between items-center border border-slate-100 dark:border-slate-700/50">
                   <span class="text-xs font-bold text-slate-400">Grado Académico</span>
-                  <span class="text-sm font-black text-slate-800 dark:text-white">{{ selectedChild.grado || 'Matriculado' }}</span>
+                  <span class="text-sm font-black text-slate-800 dark:text-white">{{ selectedChild.grado || selectedChild.nivel || 'Sin Asignar' }}</span>
                 </div>
                 <div class="p-3.5 bg-slate-50 dark:bg-slate-800/80 rounded-2xl flex justify-between items-center border border-slate-100 dark:border-slate-700/50">
                   <span class="text-xs font-bold text-slate-400">Grupo / Sección</span>
-                  <span class="text-sm font-black text-slate-800 dark:text-white">{{ selectedChild.grupo ? 'Grupo ' + selectedChild.grupo : 'Principal' }}</span>
+                  <span class="text-sm font-black text-slate-800 dark:text-white">{{ selectedChild.grupo || (selectedChild.seccion ? 'Sección ' + selectedChild.seccion : 'Sin Grupo') }}</span>
                 </div>
                 <div class="p-3.5 bg-slate-50 dark:bg-slate-800/80 rounded-2xl flex justify-between items-center border border-slate-100 dark:border-slate-700/50">
                   <span class="text-xs font-bold text-slate-400">Jornada</span>
@@ -726,7 +726,7 @@ const barChartOptions = {
                      {{ child.nombre }} {{ child.apellido }}
                    </p>
                    <p class="text-[10px] font-bold text-slate-400 mt-0.5">
-                     {{ child.grado || 'Estudiante' }} • Grupo {{ child.grupo || 'A' }} • Jornada {{ child.jornada || 'Única' }}
+                     {{ child.grado || 'Estudiante' }} • {{ child.grupo || 'Sin Grupo' }} • Jornada {{ child.jornada || 'Única' }}
                    </p>
                  </div>
                  <span class="px-2.5 py-1 bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 rounded-xl shadow-xs text-[10px] font-black uppercase tracking-wider group-hover:bg-indigo-600 group-hover:text-white transition-all flex items-center gap-1">
