@@ -403,6 +403,17 @@ export class TrasladoService {
         [solicitud.id_usuario, solicitud.id_colegio_destino, idRol]
       );
 
+      // 3.1 Si el usuario posee rol de docente, asegurar/reactivar perfil en la tabla docente del colegio destino
+      await client.query(
+        `INSERT INTO docente (id_usuario, id_colegio, nombre, apellido, estado)
+         SELECT u.id_usuario, $2, u.nombre, COALESCE(u.apellido, ''), 'ACTIVO'
+         FROM usuario u 
+         WHERE u.id_usuario = $1
+         ON CONFLICT (id_usuario, id_colegio)
+         DO UPDATE SET estado = 'ACTIVO'`,
+        [solicitud.id_usuario, solicitud.id_colegio_destino]
+      );
+
       // 4. Actualizar el colegio activo del usuario
       await client.query(
         `UPDATE usuario SET id_colegio = $1 WHERE id_usuario = $2`,
