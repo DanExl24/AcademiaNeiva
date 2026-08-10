@@ -745,10 +745,16 @@ export class MatriculaService {
         );
         const idUsuarioEstudiante = studentUserRes.rows[0].id_usuario;
         
-        // Rol estudiante
+        // Rol estudiante y vinculación institucional
         const rolEstudiante = await client.query("SELECT id_rol FROM rol WHERE nombre = 'estudiante'");
         if(rolEstudiante.rows.length > 0) {
-            await client.query("INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2)", [idUsuarioEstudiante, rolEstudiante.rows[0].id_rol]);
+            const idRolEst = rolEstudiante.rows[0].id_rol;
+            await client.query("INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2)", [idUsuarioEstudiante, idRolEst]);
+            await client.query(
+              `INSERT INTO usuario_colegio (id_usuario, id_colegio, id_rol, estado, fecha_inicio)
+               VALUES ($1, $2, $3, 'ACTIVO', NOW()) ON CONFLICT DO NOTHING`,
+              [idUsuarioEstudiante, id_colegio, idRolEst]
+            );
         }
 
         // Registro Estudiante (sin documento ni id_tipodocumento, que quedan en usuario)
@@ -846,15 +852,21 @@ export class MatriculaService {
         idPadre = parentRes.rows[0].id_padrefamilia;
       }
 
-      // Asegurar que el usuario tenga el ROL PADRE
+      // Asegurar que el usuario tenga el ROL PADRE y la vinculación usuario_colegio
       if (idUsuarioPadre) {
         const rolPadre = await client.query("SELECT id_rol FROM rol WHERE nombre = 'padre'");
         if (rolPadre.rows.length > 0) {
+          const idRolPadre = rolPadre.rows[0].id_rol;
           await client.query(
             `INSERT INTO usuario_rol (id_usuario, id_rol) 
              VALUES ($1, $2) 
              ON CONFLICT (id_usuario, id_rol) DO NOTHING`, 
-            [idUsuarioPadre, rolPadre.rows[0].id_rol]
+            [idUsuarioPadre, idRolPadre]
+          );
+          await client.query(
+            `INSERT INTO usuario_colegio (id_usuario, id_colegio, id_rol, estado, fecha_inicio)
+             VALUES ($1, $2, $3, 'ACTIVO', NOW()) ON CONFLICT DO NOTHING`,
+            [idUsuarioPadre, id_colegio, idRolPadre]
           );
         }
       }

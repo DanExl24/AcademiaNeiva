@@ -21,103 +21,118 @@ export const listarColegios = async (req: AuthRequest, res: Response): Promise<v
     const page = req.query.page ? Number(req.query.page) : null;
     const limit = req.query.limit ? Number(req.query.limit) : null;
 
-    let query = `
-      SELECT c.*, 
-             COUNT(DISTINCT d.id) AS total_directivos,
-             COUNT(DISTINCT d.id) AS directivos_count,
-             COUNT(DISTINCT doc.id_docente) AS total_docentes,
-             COUNT(DISTINCT doc.id_docente) AS docentes_count,
-             COUNT(DISTINCT e.id_estudiante) AS total_estudiantes,
-             COUNT(DISTINCT e.id_estudiante) AS estudiantes_count,
-             COUNT(DISTINCT pf.id_padrefamilia) AS total_padres,
-             COUNT(DISTINCT pf.id_padrefamilia) AS padres_count
-      FROM colegio c
-      LEFT JOIN directivo d ON d.id_colegio = c.id_colegio AND d.estado = 'ACTIVO'
-      LEFT JOIN docente doc ON doc.id_colegio = c.id_colegio AND doc.estado = 'ACTIVO'
-      LEFT JOIN estudiante e ON e.id_colegio = c.id_colegio AND e.estado = 'ACTIVO'
-      LEFT JOIN padre_familia pf ON pf.id_colegio = c.id_colegio
-      WHERE 1=1
-    `;
-    const params: any[] = [];
+    let baseQuery = db
+      .selectFrom("colegio as c")
+      .leftJoin("directivo as d", (join) => join.onRef("d.id_colegio", "=", "c.id_colegio").on("d.estado", "=", "ACTIVO"))
+      .leftJoin("docente as doc", (join) => join.onRef("doc.id_colegio", "=", "c.id_colegio").on("doc.estado", "=", "ACTIVO"))
+      .leftJoin("estudiante as e", (join) => join.onRef("e.id_colegio", "=", "c.id_colegio").on("e.estado", "=", "ACTIVO"))
+      .leftJoin("padre_familia as pf", "pf.id_colegio", "c.id_colegio")
+      .select([
+        "c.id_colegio",
+        "c.nombre",
+        "c.tipo_colegio",
+        "c.sede",
+        "c.contacto",
+        "c.correo",
+        "c.dane",
+        "c.tipo_calendario",
+        "c.estado",
+        "c.fecha_registro",
+        "c.motivo_rechazo",
+        "c.escudo_url",
+        "c.color_primario",
+        "c.color_secundario",
+        sql<number>`COUNT(DISTINCT d.id)::int`.as("total_directivos"),
+        sql<number>`COUNT(DISTINCT d.id)::int`.as("directivos_count"),
+        sql<number>`COUNT(DISTINCT doc.id_docente)::int`.as("total_docentes"),
+        sql<number>`COUNT(DISTINCT doc.id_docente)::int`.as("docentes_count"),
+        sql<number>`COUNT(DISTINCT e.id_estudiante)::int`.as("total_estudiantes"),
+        sql<number>`COUNT(DISTINCT e.id_estudiante)::int`.as("estudiantes_count"),
+        sql<number>`COUNT(DISTINCT pf.id_padrefamilia)::int`.as("total_padres"),
+        sql<number>`COUNT(DISTINCT pf.id_padrefamilia)::int`.as("padres_count")
+      ])
+      .groupBy("c.id_colegio");
 
     if (estado && estado !== 'TODOS') {
-      params.push(estado);
-      query += ` AND c.estado = $${params.length}`;
+      baseQuery = baseQuery.where("c.estado", "=", estado as any);
     }
 
     if (busqueda) {
-      params.push(`%${busqueda}%`);
-      query += ` AND (c.nombre ILIKE $${params.length} OR c.dane ILIKE $${params.length} OR c.correo ILIKE $${params.length})`;
+      const searchPattern = `%${busqueda}%`;
+      baseQuery = baseQuery.where((eb) => eb.or([
+        eb("c.nombre", "ilike", searchPattern),
+        eb("c.dane", "ilike", searchPattern),
+        eb("c.correo", "ilike", searchPattern)
+      ]));
     }
 
-    query += ` GROUP BY c.id_colegio ORDER BY c.fecha_registro DESC`;
+    const allRows = await baseQuery.orderBy("c.fecha_registro", "desc").execute();
+    const totalCount = allRows.length;
 
-    // Count query for total
-    const countQuery = `SELECT COUNT(*)::int as count FROM (${query}) AS temp`;
-    const countResult = await pool.query(countQuery, params);
-    const totalCount = countResult.rows[0].count;
-
+    let pagedRows = allRows;
     if (page && limit) {
-      const offset = (page - 1) * limit;
-      params.push(limit);
-      query += ` LIMIT $${params.length}`;
-      params.push(offset);
-      query += ` OFFSET $${params.length}`;
+      const offset = (Number(page) - 1) * Number(limit);
+      pagedRows = allRows.slice(offset, offset + Number(limit));
     }
 
-    const result = await pool.query(query, params);
     res.setHeader("x-total-count", String(totalCount));
     res.setHeader("Access-Control-Expose-Headers", "x-total-count");
-    res.json(result.rows);
+    res.json(pagedRows);
   } catch (error: any) {
     console.error('Error listando colegios:', error);
     res.status(500).json({ error: 'Error al listar colegios' });
   }
 };
 
-/**
- * GET /admin/colegios/:id
- * Ver detalle de un colegio.
- */
 export const detalleColegio = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { id } = req.params;
-    const result = await pool.query(
-      `SELECT c.*,
-              COUNT(DISTINCT d.id) AS total_directivos,
-              COUNT(DISTINCT d.id) AS directivos_count,
-              COUNT(DISTINCT doc.id_docente) AS total_docentes,
-              COUNT(DISTINCT doc.id_docente) AS docentes_count,
-              COUNT(DISTINCT e.id_estudiante) AS total_estudiantes,
-              COUNT(DISTINCT e.id_estudiante) AS estudiantes_count,
-              COUNT(DISTINCT pf.id_padrefamilia) AS total_padres,
-              COUNT(DISTINCT pf.id_padrefamilia) AS padres_count
-       FROM colegio c
-       LEFT JOIN directivo d ON d.id_colegio = c.id_colegio
-       LEFT JOIN docente doc ON doc.id_colegio = c.id_colegio
-       LEFT JOIN estudiante e ON e.id_colegio = c.id_colegio
-       LEFT JOIN padre_familia pf ON pf.id_colegio = c.id_colegio
-       WHERE c.id_colegio = $1
-       GROUP BY c.id_colegio`,
-      [id]
-    );
+    const schoolId = Number(req.params.id);
+    const school = await db
+      .selectFrom("colegio as c")
+      .leftJoin("directivo as d", "d.id_colegio", "c.id_colegio")
+      .leftJoin("docente as doc", "doc.id_colegio", "c.id_colegio")
+      .leftJoin("estudiante as e", "e.id_colegio", "c.id_colegio")
+      .leftJoin("padre_familia as pf", "pf.id_colegio", "c.id_colegio")
+      .select([
+        "c.id_colegio",
+        "c.nombre",
+        "c.tipo_colegio",
+        "c.sede",
+        "c.contacto",
+        "c.correo",
+        "c.dane",
+        "c.tipo_calendario",
+        "c.estado",
+        "c.fecha_registro",
+        "c.motivo_rechazo",
+        "c.escudo_url",
+        "c.color_primario",
+        "c.color_secundario",
+        sql<number>`COUNT(DISTINCT d.id)::int`.as("total_directivos"),
+        sql<number>`COUNT(DISTINCT d.id)::int`.as("directivos_count"),
+        sql<number>`COUNT(DISTINCT doc.id_docente)::int`.as("total_docentes"),
+        sql<number>`COUNT(DISTINCT doc.id_docente)::int`.as("docentes_count"),
+        sql<number>`COUNT(DISTINCT e.id_estudiante)::int`.as("total_estudiantes"),
+        sql<number>`COUNT(DISTINCT e.id_estudiante)::int`.as("estudiantes_count"),
+        sql<number>`COUNT(DISTINCT pf.id_padrefamilia)::int`.as("total_padres"),
+        sql<number>`COUNT(DISTINCT pf.id_padrefamilia)::int`.as("padres_count")
+      ])
+      .where("c.id_colegio", "=", schoolId)
+      .groupBy("c.id_colegio")
+      .executeTakeFirst();
 
-    if (result.rows.length === 0) {
+    if (!school) {
       res.status(404).json({ error: 'Colegio no encontrado' });
       return;
     }
 
-    res.json(result.rows[0]);
+    res.json(school);
   } catch (error: any) {
     console.error('Error obteniendo detalle colegio:', error);
     res.status(500).json({ error: 'Error al obtener detalle del colegio' });
   }
 };
 
-/**
- * POST /admin/colegios
- * Registrar un nuevo colegio (estado por defecto: PENDIENTE).
- */
 export const registrarColegio = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { nombre, tipo_colegio, sede, contacto, correo, dane, tipo_calendario, escudo_url, colores } = req.body;
@@ -127,74 +142,96 @@ export const registrarColegio = async (req: AuthRequest, res: Response): Promise
       return;
     }
 
-    // Verificar unicidad del DANE (RN-COL-002)
-    const daneCheck = await pool.query('SELECT 1 FROM colegio WHERE dane = $1', [String(dane).trim()]);
-    if (daneCheck.rows.length > 0) {
+    const cleanDane = String(dane).trim();
+    const daneCheck = await db
+      .selectFrom("colegio")
+      .select("id_colegio")
+      .where("dane", "=", cleanDane)
+      .executeTakeFirst();
+
+    if (daneCheck) {
       res.status(400).json({ error: `El código DANE '${dane}' ya se encuentra registrado para otra institución.` });
       return;
     }
 
-    const result = await pool.query(
-      `INSERT INTO colegio (nombre, tipo_colegio, sede, contacto, correo, dane, tipo_calendario, estado, fecha_registro, escudo_url, colores)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 'PENDIENTE', NOW(), $8, $9)
-       RETURNING *`,
-      [nombre, tipo_colegio, sede, contacto, correo, String(dane).trim(), tipo_calendario || 'A', escudo_url || null, colores || null]
-    );
+    const newSchool = await db
+      .insertInto("colegio")
+      .values({
+        nombre,
+        tipo_colegio,
+        sede,
+        contacto: String(contacto),
+        correo,
+        dane: cleanDane,
+        tipo_calendario: tipo_calendario || 'A',
+        estado: 'PENDIENTE',
+        escudo_url: escudo_url || null,
+        colores: colores || null
+      })
+      .returningAll()
+      .executeTakeFirstOrThrow();
 
-    res.status(201).json(result.rows[0]);
+    res.status(201).json(newSchool);
   } catch (error: any) {
     console.error('Error registrando colegio:', error);
     res.status(500).json({ error: 'Error al registrar colegio' });
   }
 };
 
-/**
- * PUT /admin/colegios/:id
- * Actualizar información de un colegio.
- * Regla: Un colegio no puede ser editado si está en estado ELIMINADO.
- */
 export const actualizarColegio = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { id } = req.params;
+    const schoolId = Number(req.params.id);
     const { nombre, tipo_colegio, sede, contacto, correo, dane, tipo_calendario, escudo_url, colores } = req.body;
 
-    // Verificar estado actual
-    const colegioActual = await pool.query('SELECT estado FROM colegio WHERE id_colegio = $1', [id]);
-    if (colegioActual.rows.length === 0) {
+    const colegioActual = await db
+      .selectFrom("colegio")
+      .select(["id_colegio", "estado"])
+      .where("id_colegio", "=", schoolId)
+      .executeTakeFirst();
+
+    if (!colegioActual) {
       res.status(404).json({ error: 'Colegio no encontrado' });
       return;
     }
-    if (colegioActual.rows[0].estado === 'ELIMINADO') {
+    if (colegioActual.estado === 'ELIMINADO') {
       res.status(400).json({ error: 'No se puede editar un colegio en estado ELIMINADO' });
       return;
     }
 
-    // Verificar unicidad del DANE si se está actualizando (RN-COL-002)
     if (dane) {
-      const daneCheck = await pool.query('SELECT 1 FROM colegio WHERE dane = $1 AND id_colegio != $2', [String(dane).trim(), id]);
-      if (daneCheck.rows.length > 0) {
+      const cleanDane = String(dane).trim();
+      const daneCheck = await db
+        .selectFrom("colegio")
+        .select("id_colegio")
+        .where("dane", "=", cleanDane)
+        .where("id_colegio", "!=", schoolId)
+        .executeTakeFirst();
+
+      if (daneCheck) {
         res.status(400).json({ error: `El código DANE '${dane}' ya se encuentra registrado para otra institución.` });
         return;
       }
     }
 
-    const result = await pool.query(
-      `UPDATE colegio 
-       SET nombre = COALESCE($1, nombre),
-           tipo_colegio = COALESCE($2, tipo_colegio),
-           sede = COALESCE($3, sede),
-           contacto = COALESCE($4, contacto),
-           correo = COALESCE($5, correo),
-           dane = COALESCE($6, dane),
-           tipo_calendario = COALESCE($7, tipo_calendario),
-           escudo_url = COALESCE($8, escudo_url),
-           colores = COALESCE($9, colores)
-       WHERE id_colegio = $10
-       RETURNING *`,
-      [nombre, tipo_colegio, sede, contacto, correo, dane ? String(dane).trim() : null, tipo_calendario, escudo_url || null, colores || null, id]
-    );
+    const updateObject: any = {};
+    if (nombre !== undefined) updateObject.nombre = nombre;
+    if (tipo_colegio !== undefined) updateObject.tipo_colegio = tipo_colegio;
+    if (sede !== undefined) updateObject.sede = sede;
+    if (contacto !== undefined) updateObject.contacto = String(contacto);
+    if (correo !== undefined) updateObject.correo = correo;
+    if (dane !== undefined) updateObject.dane = String(dane).trim();
+    if (tipo_calendario !== undefined) updateObject.tipo_calendario = tipo_calendario;
+    if (escudo_url !== undefined) updateObject.escudo_url = escudo_url;
+    if (colores !== undefined) updateObject.colores = colores;
 
-    res.json(result.rows[0]);
+    const updated = await db
+      .updateTable("colegio")
+      .set(updateObject)
+      .where("id_colegio", "=", schoolId)
+      .returningAll()
+      .executeTakeFirstOrThrow();
+
+    res.json(updated);
   } catch (error: any) {
     console.error('Error actualizando colegio:', error);
     res.status(500).json({ error: 'Error al actualizar colegio' });
@@ -921,12 +958,18 @@ export const registrarDirectivo = async (req: AuthRequest, res: Response): Promi
       [id_colegio, id_usuario, cargo || 'Directivo']
     );
 
-    // Asignar rol directivo si no lo tiene
+    // Asignar rol directivo si no lo tiene y crear vinculacion usuario_colegio
     const rolDirectivo = await client.query("SELECT id_rol FROM rol WHERE nombre = 'directivo'");
     if (rolDirectivo.rows.length > 0) {
+      const idRol = rolDirectivo.rows[0].id_rol;
       await client.query(
         'INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2) ON CONFLICT DO NOTHING',
-        [id_usuario, rolDirectivo.rows[0].id_rol]
+        [id_usuario, idRol]
+      );
+      await client.query(
+        `INSERT INTO usuario_colegio (id_usuario, id_colegio, id_rol, estado, fecha_inicio)
+         VALUES ($1, $2, $3, 'ACTIVO', NOW()) ON CONFLICT DO NOTHING`,
+        [id_usuario, id_colegio, idRol]
       );
     }
 
@@ -1000,6 +1043,13 @@ export const desvincularDirectivo = async (req: AuthRequest, res: Response): Pro
          WHERE id_usuario = $1`,
         [directivo.id_usuario]
       );
+      if (directivo.id_colegio) {
+        await client.query(
+          `UPDATE usuario_colegio SET estado = 'INACTIVO', fecha_fin = NOW()
+           WHERE id_usuario = $1 AND id_colegio = $2`,
+          [directivo.id_usuario, directivo.id_colegio]
+        );
+      }
     }
 
     await client.query('COMMIT');

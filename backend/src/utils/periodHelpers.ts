@@ -1,71 +1,63 @@
 import { Response } from "express";
-import { pool } from "../config/db";
+import { db } from "../config/kysely";
 
 export const ensurePeriodOpen = async (periodId: number): Promise<boolean> => {
-  const result = await pool.query(
-    `SELECT 1
-     FROM periodo_academico
-     WHERE id_periodo = $1
-       AND estado = 'ABIERTO'`,
-    [periodId]
-  );
+  const row = await db
+    .selectFrom("periodo_academico")
+    .select("id_periodo")
+    .where("id_periodo", "=", periodId)
+    .where("estado", "=", "ABIERTO")
+    .executeTakeFirst();
 
-  return result.rows.length > 0;
+  return !!row;
 };
 
 export const ensureSubjectOpen = async (detailGradeId: number, periodId: number): Promise<boolean> => {
-  const result = await pool.query(
-    `SELECT 1
-     FROM cierre_materia
-     WHERE id_detallegrado = $1
-       AND id_periodo = $2
-       AND estado = 'CERRADO'`,
-    [detailGradeId, periodId]
-  );
+  const row = await db
+    .selectFrom("cierre_materia")
+    .select("id_cierremateria")
+    .where("id_detallegrado", "=", detailGradeId)
+    .where("id_periodo", "=", periodId)
+    .where("estado", "=", "CERRADO")
+    .executeTakeFirst();
 
-  return result.rows.length === 0;
+  return !row;
 };
 
 export const getCurrentAllowedPeriodForSchool = async (schoolId: number) => {
-  const currentYearRes = await pool.query<{ id_anio: number }>(
-    `SELECT id_anio
-     FROM anio_lectivo
-     WHERE id_colegio = $1
-     ORDER BY id_anio DESC
-     LIMIT 1`,
-    [schoolId]
-  );
+  const currentYear = await db
+    .selectFrom("anio_lectivo")
+    .select("id_anio")
+    .where("id_colegio", "=", schoolId)
+    .orderBy("id_anio", "desc")
+    .executeTakeFirst();
 
-  if (currentYearRes.rows.length === 0) {
+  if (!currentYear) {
     return null;
   }
 
-  const periodsRes = await pool.query<{
-    id_periodo: number;
-    nombre: string;
-    estado: "ABIERTO" | "CERRADO";
-    porcentaje: number;
-    id_anio: number;
-    trimestre: number | null;
-    dia_inicio: number | null;
-    dia_fin: number | null;
-    mes_inicio: number | null;
-    mes_fin: number | null;
-  }>(
-    `SELECT id_periodo, nombre, estado, porcentaje, id_anio, dia_inicio, dia_fin, mes_inicio, mes_fin
-     FROM periodo_academico
-     WHERE id_colegio = $1
-       AND id_anio = $2
-       AND estado = 'ABIERTO'
-     ORDER BY id_periodo
-     LIMIT 1`,
-    [schoolId, Number(currentYearRes.rows[0].id_anio)]
-  );
+  const period = await db
+    .selectFrom("periodo_academico")
+    .select([
+      "id_periodo",
+      "nombre",
+      "estado",
+      "porcentaje",
+      "id_anio",
+      "dia_inicio",
+      "dia_fin",
+      "mes_inicio",
+      "mes_fin"
+    ])
+    .where("id_colegio", "=", schoolId)
+    .where("id_anio", "=", currentYear.id_anio)
+    .where("estado", "=", "ABIERTO")
+    .orderBy("id_periodo", "asc")
+    .executeTakeFirst();
 
-  const period = periodsRes.rows[0];
   if (period) {
     if (period.id_anio < 2000) {
-       period.id_anio = new Date().getFullYear();
+      period.id_anio = new Date().getFullYear();
     }
   }
 
@@ -73,14 +65,17 @@ export const getCurrentAllowedPeriodForSchool = async (schoolId: number) => {
 };
 
 export const ensureCurrentPeriodForSchool = async (schoolId: number, periodId: number): Promise<boolean> => {
-  const result = await pool.query(
-    `SELECT estado FROM periodo_academico WHERE id_periodo = $1 AND id_colegio = $2`,
-    [periodId, schoolId]
-  );
-  if (result.rows.length === 0) {
+  const row = await db
+    .selectFrom("periodo_academico")
+    .select("estado")
+    .where("id_periodo", "=", periodId)
+    .where("id_colegio", "=", schoolId)
+    .executeTakeFirst();
+
+  if (!row) {
     return false;
   }
-  return result.rows[0].estado !== "CERRADO";
+  return row.estado !== "CERRADO";
 };
 
 export const ensureCurrentPeriodOrRespond = async (
@@ -88,19 +83,21 @@ export const ensureCurrentPeriodOrRespond = async (
   schoolId: number,
   periodId: number
 ): Promise<boolean> => {
-  const periodRes = await pool.query(
-    `SELECT estado, nombre FROM periodo_academico WHERE id_periodo = $1 AND id_colegio = $2`,
-    [periodId, schoolId]
-  );
+  const period = await db
+    .selectFrom("periodo_academico")
+    .select(["estado", "nombre"])
+    .where("id_periodo", "=", periodId)
+    .where("id_colegio", "=", schoolId)
+    .executeTakeFirst();
 
-  if (periodRes.rows.length === 0) {
+  if (!period) {
     res.status(404).json({ error: "Periodo académico no encontrado" });
     return false;
   }
 
-  if (periodRes.rows[0].estado === "CERRADO") {
+  if (period.estado === "CERRADO") {
     res.status(409).json({
-      error: `El periodo académico "${periodRes.rows[0].nombre}" está cerrado institucionalmente y no admite modificaciones.`,
+      error: `El periodo académico "${period.nombre}" está cerrado institucionalmente y no admite modificaciones.`,
     });
     return false;
   }
@@ -111,41 +108,38 @@ export const ensureCurrentPeriodOrRespond = async (
 export const getAllPeriodsForSchool = async (schoolId: number, targetYearId?: number) => {
   let yearIdToUse = targetYearId;
   if (!yearIdToUse) {
-    const currentYearRes = await pool.query<{ id_anio: number }>(
-      `SELECT id_anio
-       FROM anio_lectivo
-       WHERE id_colegio = $1
-       ORDER BY CASE WHEN estado = 'ABIERTO' THEN 0 ELSE 1 END, id_anio DESC
-       LIMIT 1`,
-      [schoolId]
-    );
+    const currentYear = await db
+      .selectFrom("anio_lectivo")
+      .select("id_anio")
+      .where("id_colegio", "=", schoolId)
+      .orderBy("id_anio", "desc")
+      .executeTakeFirst();
 
-    if (currentYearRes.rows.length === 0) {
+    if (!currentYear) {
       return [];
     }
-    yearIdToUse = currentYearRes.rows[0].id_anio;
+    yearIdToUse = currentYear.id_anio;
   }
 
-  const periodsRes = await pool.query<{
-    id_periodo: number;
-    nombre: string;
-    estado: "ABIERTO" | "CERRADO" | "PENDIENTE";
-    porcentaje: number;
-    id_anio: number;
-    trimestre: number | null;
-    dia_inicio: number | null;
-    dia_fin: number | null;
-    mes_inicio: number | null;
-    mes_fin: number | null;
-  }>(
-    `SELECT id_periodo, nombre, estado, porcentaje, id_anio, dia_inicio, dia_fin, mes_inicio, mes_fin, trimestre
-     FROM periodo_academico
-     WHERE id_colegio = $1
-       AND id_anio = $2
-       AND estado != 'PENDIENTE'
-     ORDER BY id_periodo`,
-    [schoolId, yearIdToUse]
-  );
+  const periods = await db
+    .selectFrom("periodo_academico")
+    .select([
+      "id_periodo",
+      "nombre",
+      "estado",
+      "porcentaje",
+      "id_anio",
+      "dia_inicio",
+      "dia_fin",
+      "mes_inicio",
+      "mes_fin",
+      "trimestre"
+    ])
+    .where("id_colegio", "=", schoolId)
+    .where("id_anio", "=", yearIdToUse)
+    .where("estado", "!=", "PENDIENTE")
+    .orderBy("id_periodo", "asc")
+    .execute();
 
-  return periodsRes.rows;
+  return periods;
 };
