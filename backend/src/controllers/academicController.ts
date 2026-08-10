@@ -13,16 +13,23 @@ export const getTeacherCourses = async (req: Request, res: Response): Promise<vo
     return;
   }
 
+  const schoolId = req.headers['x-school-id'] ? Number(req.headers['x-school-id']) : (req.query.schoolId ? Number(req.query.schoolId) : (authUser?.schoolId ? Number(authUser.schoolId) : null));
+
   try {
-    const docente = await db
+    let docenteQuery = db
       .selectFrom("docente")
-      .select("id_docente")
-      .where("id_usuario", "=", Number(userId))
-      .executeTakeFirst();
+      .select(["id_docente", "id_colegio"])
+      .where("id_usuario", "=", Number(userId));
+
+    if (schoolId) {
+      docenteQuery = docenteQuery.where("id_colegio", "=", schoolId);
+    }
+
+    const docente = await docenteQuery.executeTakeFirst();
 
     if (!docente) {
-      console.warn(`[DEV] getTeacherCourses - No docente found for id_usuario=${userId}`);
-      res.status(404).json({ error: "Docente no encontrado" });
+      console.warn(`[DEV] getTeacherCourses - No docente found for id_usuario=${userId} in schoolId=${schoolId}`);
+      res.json([]);
       return;
     }
 
@@ -48,6 +55,10 @@ export const getTeacherCourses = async (req: Request, res: Response): Promise<vo
         "m.nombre as materia_nombre"
       ])
       .where("dg.id_docente", "=", idDocente);
+
+    if (schoolId) {
+      baseQuery = baseQuery.where("dg.id_colegio", "=", schoolId);
+    }
 
     if (yearId) {
       baseQuery = baseQuery.where("dg.id_anio", "=", yearId);
@@ -91,21 +102,35 @@ export const getStudentsByGrade = async (req: Request, res: Response): Promise<v
 
 export const getTeacherDashboard = async (req: Request, res: Response): Promise<void> => {
   const { userId } = req.params;
+  const authUser = (req as any).user;
+  const schoolId = req.headers['x-school-id'] ? Number(req.headers['x-school-id']) : (req.query.schoolId ? Number(req.query.schoolId) : (authUser?.schoolId ? Number(authUser.schoolId) : null));
 
   try {
-    const docente = await db
+    let docenteQuery = db
       .selectFrom("docente")
-      .select("id_docente")
-      .where("id_usuario", "=", Number(userId))
-      .executeTakeFirst();
+      .select(["id_docente", "id_colegio"])
+      .where("id_usuario", "=", Number(userId));
+
+    if (schoolId) {
+      docenteQuery = docenteQuery.where("id_colegio", "=", schoolId);
+    }
+
+    const docente = await docenteQuery.executeTakeFirst();
 
     if (!docente) {
-      res.status(404).json({ error: "Docente no encontrado" });
+      res.json({
+        coursesCount: 0,
+        studentsCount: 0,
+        noGradeActivities: 0,
+        upToDateCourses: 0,
+        courseAverages: [],
+        alerts: []
+      });
       return;
     }
     const idDocente = docente.id_docente;
 
-    const courses = await db
+    let coursesQuery = db
       .selectFrom("detalle_grados as dg")
       .innerJoin("grupos as g", "g.id_grupo", "dg.id_grupo")
       .innerJoin("tipo_grado as tg", "tg.id_tipo_grado", "g.id_tipo_grado")
@@ -119,20 +144,34 @@ export const getTeacherDashboard = async (req: Request, res: Response): Promise<
         "s.nombre as seccion",
         "j.nombre as jornada"
       ])
-      .where("dg.id_docente", "=", idDocente)
-      .execute();
+      .where("dg.id_docente", "=", idDocente);
 
-    const studentCount = await db
+    if (schoolId) {
+      coursesQuery = coursesQuery.where("dg.id_colegio", "=", schoolId);
+    }
+
+    const courses = await coursesQuery.execute();
+
+    let studentCountQuery = db
       .selectFrom("detalle_grados as dg")
       .innerJoin("matricula as m", "m.id_grupo", "dg.id_grupo")
       .select(sql<number>`COUNT(DISTINCT m.id_estudiante)::int`.as("total_students"))
       .where("dg.id_docente", "=", idDocente)
-      .where("m.estado", "=", "ACTIVA")
-      .executeTakeFirst();
+      .where("m.estado", "=", "ACTIVA");
 
+    if (schoolId) {
+      studentCountQuery = studentCountQuery.where("dg.id_colegio", "=", schoolId);
+    }
+
+    const studentCount = await studentCountQuery.executeTakeFirst();
     const totalActiveStudents = studentCount ? studentCount.total_students : 0;
 
-    const periodRes = await pool.query("SELECT id_periodo FROM periodo_academico WHERE estado = 'ABIERTO' LIMIT 1");
+    let periodRes;
+    if (schoolId) {
+      periodRes = await pool.query("SELECT id_periodo FROM periodo_academico WHERE id_colegio = $1 AND estado = 'ABIERTO' ORDER BY id_periodo DESC LIMIT 1", [schoolId]);
+    } else {
+      periodRes = await pool.query("SELECT id_periodo FROM periodo_academico WHERE estado = 'ABIERTO' ORDER BY id_periodo DESC LIMIT 1");
+    }
     const activePeriodId = periodRes.rows.length > 0 ? periodRes.rows[0].id_periodo : null;
 
     if (!activePeriodId) {
