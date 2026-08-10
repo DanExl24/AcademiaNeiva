@@ -3725,8 +3725,8 @@ export const assignTeacherCourseSubject = async (req: Request, res: Response): P
        WHERE dg.id_colegio = $1
          AND dg.id_materia = $2
          AND dg.id_grupo = $3
-         AND (dg.id_anio = $4 OR ($4::int IS NULL AND dg.id_anio IS NULL))
-       ORDER BY dg.id_detallegrado DESC`,
+         AND (dg.id_anio = $4 OR dg.id_anio IS NULL OR $4::int IS NULL)
+       ORDER BY dg.id_anio DESC NULLS LAST, dg.id_detallegrado DESC`,
       [schoolId, subjectId, groupId, activeYearId]
     );
 
