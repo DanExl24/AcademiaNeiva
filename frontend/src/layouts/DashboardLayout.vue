@@ -170,10 +170,21 @@ const menuItems = computed(() => {
   return items
 })
 
-const hasMultipleRoles = computed(() => (auth.user?.roles?.length || 0) > 1)
+const currentSchoolRoles = computed(() => {
+  const currentSchoolId = auth.selectedSchoolId
+  if (!currentSchoolId || userSchools.value.length === 0) {
+    return auth.user?.roles || (auth.user?.role ? [auth.user.role] : [])
+  }
+  const roles = userSchools.value
+    .filter(s => s.id_colegio === currentSchoolId && s.rol_nombre)
+    .map(s => s.rol_nombre)
+  return Array.from(new Set(roles))
+})
+
+const hasMultipleRoles = computed(() => currentSchoolRoles.value.length > 1)
 const otherRole = computed(() => {
   if (!hasMultipleRoles.value) return null
-  return auth.user?.roles.find(r => r !== auth.activeRole)
+  return currentSchoolRoles.value.find(r => r !== auth.activeRole)
 })
 
 const handleLogout = () => {
@@ -573,7 +584,7 @@ function onHeaderYearChange(e: Event) {
   }
 }
 
-const userSchools = ref<{ id_colegio: number; colegio_nombre: string }[]>([])
+const userSchools = ref<{ id_colegio: number; colegio_nombre: string; rol_nombre: string }[]>([])
 
 const fetchUserSchools = async () => {
   if (!auth.token) return
@@ -581,34 +592,30 @@ const fetchUserSchools = async () => {
     const headers = { Authorization: `Bearer ${auth.token}` }
     const res = await axios.get(`${API_BASE_URL}/api/traslados/mis-vinculaciones`, { headers })
     const active = (res.data || []).filter((v: any) => v.estado === 'ACTIVO')
-    const uniqueMap = new Map<number, string>()
-    active.forEach((v: any) => {
-      if (!uniqueMap.has(v.id_colegio)) {
-        uniqueMap.set(v.id_colegio, v.colegio_nombre)
-      }
-    })
-    userSchools.value = Array.from(uniqueMap.entries()).map(([id_colegio, colegio_nombre]) => ({
-      id_colegio,
-      colegio_nombre
+    
+    userSchools.value = active.map((v: any) => ({
+      id_colegio: v.id_colegio,
+      colegio_nombre: v.colegio_nombre,
+      rol_nombre: v.rol_nombre
     }))
 
     if (userSchools.value.length > 0) {
-      const exists = userSchools.value.some(s => s.id_colegio === auth.selectedSchoolId)
-      if (!exists && !auth.user?.schoolId) {
-        auth.setSelectedSchoolId(userSchools.value[0].id_colegio)
+      const currentSchoolId = auth.selectedSchoolId || userSchools.value[0].id_colegio
+      if (!auth.selectedSchoolId) {
+        auth.setSelectedSchoolId(currentSchoolId)
+      }
+
+      // Sincronizar el rol activo del usuario según la institución seleccionada
+      const currentBindings = userSchools.value.filter(s => s.id_colegio === currentSchoolId)
+      if (currentBindings.length > 0) {
+        const rolesInSchool = currentBindings.map(s => s.rol_nombre)
+        if (!rolesInSchool.includes(auth.activeRole || '')) {
+          auth.setActiveRole(rolesInSchool[0])
+        }
       }
     }
   } catch (e) {
     console.error('Error fetching user schools:', e)
-  }
-}
-
-function onHeaderSchoolChange(e: Event) {
-  const target = e.target as HTMLSelectElement
-  if (target?.value) {
-    const sId = Number(target.value)
-    auth.setSelectedSchoolId(sId)
-    window.location.reload()
   }
 }
 
@@ -812,7 +819,7 @@ onUnmounted(() => {
         <div class="flex items-center gap-6">
           <!-- Selector Prominente de Año Lectivo, Colegio y Hora -->
           <div class="hidden md:flex items-center gap-3">
-            <!-- Botón Cambiar Colegio para docentes u otros usuarios multi-colegio -->
+            <!-- Botón Cambiar Colegio para usuarios multi-colegio -->
             <router-link 
               v-if="userSchools.length > 1" 
               to="/select-school" 
@@ -822,21 +829,6 @@ onUnmounted(() => {
               <Building2 :size="15" />
               <span class="hidden lg:inline">Cambiar Colegio</span>
             </router-link>
-
-            <!-- Selector de Colegio Activo en Header (Solo para directivos) -->
-            <div v-if="userSchools.length > 1 && auth.activeRole !== 'docente'" class="flex items-center gap-2 bg-gradient-to-r from-blue-500/10 via-blue-600/15 to-blue-700/10 dark:from-blue-950/40 dark:to-blue-900/40 px-3.5 py-1.5 rounded-2xl border-2 border-blue-200 dark:border-blue-800/80 shadow-sm transition-all hover:border-blue-400">
-              <Building2 :size="18" class="text-blue-600 dark:text-blue-400 shrink-0" />
-              <span class="text-xs font-black text-blue-950 dark:text-blue-200 uppercase tracking-wider hidden lg:inline">Colegio:</span>
-              <select 
-                :value="auth.selectedSchoolId || userSchools[0]?.id_colegio"
-                @change="onHeaderSchoolChange"
-                class="font-black text-sm text-white bg-blue-600 dark:bg-blue-700 hover:bg-blue-700 dark:hover:bg-blue-600 px-3 py-1 rounded-xl border border-blue-500 shadow-sm outline-none cursor-pointer focus:ring-4 focus:ring-blue-300 dark:focus:ring-blue-900 transition-all max-w-[180px] truncate"
-              >
-                <option v-for="s in userSchools" :key="s.id_colegio" :value="s.id_colegio" class="bg-slate-900 text-white font-bold">
-                  {{ s.colegio_nombre }}
-                </option>
-              </select>
-            </div>
 
             <div class="flex items-center gap-2 bg-gradient-to-r from-indigo-500/10 via-indigo-600/15 to-indigo-700/10 dark:from-indigo-950/40 dark:to-indigo-900/40 px-3.5 py-1.5 rounded-2xl border-2 border-indigo-200 dark:border-indigo-800/80 shadow-sm transition-all hover:border-indigo-400">
               <Calendar :size="18" class="text-indigo-600 dark:text-indigo-400 shrink-0" />
