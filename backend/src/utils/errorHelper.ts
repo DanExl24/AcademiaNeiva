@@ -11,8 +11,8 @@ export const formatFriendlyErrorMessage = (
   // 1. Captura de violaciones de clave única en PostgreSQL (Código 23505)
   if (error.code === '23505') {
     const constraint = String(error.constraint || error.detail || '');
-    if (constraint.includes('docente_id_usuario_key')) {
-      return "El usuario seleccionado ya se encuentra registrado como docente en el sistema.";
+    if (constraint.includes('docente_id_usuario_key') || constraint.includes('docente_id_usuario_id_colegio_key')) {
+      return "El usuario seleccionado ya se encuentra registrado como docente en esta institución.";
     }
     if (constraint.includes('usuario_email_key') || constraint.includes('email')) {
       return "El correo electrónico ingresado ya se encuentra registrado en la plataforma por otro usuario.";
