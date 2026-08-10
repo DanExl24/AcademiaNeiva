@@ -96,6 +96,12 @@ const router = createRouter({
           meta: { roles: ['directivo'] }
         },
         {
+          path: 'gestion-traslados',
+          name: 'Gestión de Traslados',
+          component: () => import('../views/admin/TrasladoManagement.vue'),
+          meta: { roles: ['directivo', 'admin_general', 'padre'] }
+        },
+        {
           path: 'gestion-grados',
           name: 'Gestión de Grados',
           component: GradeManagement,

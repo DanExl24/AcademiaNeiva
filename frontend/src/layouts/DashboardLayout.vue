@@ -27,7 +27,8 @@ import {
   Users,
   Bell,
   Settings,
-  LifeBuoy
+  LifeBuoy,
+  ArrowLeftRight
 } from 'lucide-vue-next'
 import { useAuthStore } from '../stores/auth'
 import { useThemeStore } from '../stores/theme'
@@ -101,7 +102,8 @@ const menuItems = computed(() => {
       },
       { name: 'Notificaciones', icon: Bell, path: '/dashboard/notificaciones' },
       { name: 'Configuración', icon: Settings, path: '/dashboard/configuracion' },
-      { name: 'Catálogo DBA', icon: BookOpen, path: '/dashboard/catalogo-dba' }
+      { name: 'Catálogo DBA', icon: BookOpen, path: '/dashboard/catalogo-dba' },
+      { name: 'Gestión Traslados', icon: ArrowLeftRight, path: '/dashboard/gestion-traslados' }
     ]
   } else if (role === 'docente') {
     items = [
@@ -118,7 +120,8 @@ const menuItems = computed(() => {
       { name: 'Calificaciones', icon: ClipboardList, path: '/dashboard/notas-hijos' },
       { name: 'Asistencia', icon: CalendarCheck, path: '/dashboard/asistencia-hijos' },
       { name: 'Observaciones', icon: MessageSquare, path: '/dashboard/observaciones-hijos' },
-      { name: 'Boletines', icon: FileText, path: '/dashboard/boletines-hijos' }
+      { name: 'Boletines', icon: FileText, path: '/dashboard/boletines-hijos' },
+      { name: 'Gestión Traslados', icon: ArrowLeftRight, path: '/dashboard/gestion-traslados' }
     ]
   } else if (role === 'estudiante') {
     items = [
@@ -141,7 +144,8 @@ const menuItems = computed(() => {
       { name: 'Docentes', icon: GraduationCap, path: '/dashboard/docentes' },
       { name: 'Configuración Académica', icon: SlidersHorizontal, path: '/dashboard/configuracion-academica' },
       { name: 'Boletines', icon: FileText, path: '/dashboard/boletines' },
-      { name: 'Supervisiones', icon: ShieldAlert, path: '/dashboard/supervisiones' }
+      { name: 'Supervisiones', icon: ShieldAlert, path: '/dashboard/supervisiones' },
+      { name: 'Gestión Traslados', icon: ArrowLeftRight, path: '/dashboard/gestion-traslados' }
     ]
   }
 
