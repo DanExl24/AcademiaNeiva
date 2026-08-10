@@ -578,4 +578,30 @@ export class TrasladoService {
       .orderBy('uc.fecha_inicio', 'desc')
       .execute();
   }
+
+  /**
+   * Obtener el personal activo de un colegio para traslados de tipo TRASLADO_USUARIO.
+   * Excluye estudiantes y directivos.
+   */
+  static async getPersonalColegio(idColegio: number): Promise<any[]> {
+    return await db
+      .selectFrom('usuario_colegio as uc')
+      .innerJoin('usuario as u', 'u.id_usuario', 'uc.id_usuario')
+      .innerJoin('rol as r', 'r.id_rol', 'uc.id_rol')
+      .select([
+        'u.id_usuario',
+        'u.nombre',
+        'u.apellido',
+        'u.email',
+        'u.documento',
+        'r.nombre as rol_nombre',
+      ])
+      .where('uc.id_colegio', '=', idColegio)
+      .where('uc.estado', '=', 'ACTIVO')
+      .where('r.nombre', 'not in', ['directivo', 'estudiante', 'admin_general'])
+      .orderBy('u.apellido', 'asc')
+      .orderBy('u.nombre', 'asc')
+      .execute();
+  }
 }
+

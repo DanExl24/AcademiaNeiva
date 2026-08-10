@@ -8,6 +8,7 @@ import {
   getTraslados,
   getTrasladoById,
   getMyVinculaciones,
+  getPersonalColegio,
   getAdminTrasladosGlobal,
   getAdminEstadisticas,
   intervenirTraslado
@@ -23,6 +24,7 @@ router.get('/admin/estadisticas', requireAdminGeneral, getAdminEstadisticas);
 
 // Rutas generales (directivos, padres, usuarios)
 router.get('/mis-vinculaciones', getMyVinculaciones);
+router.get('/personal/:schoolId', getPersonalColegio);
 router.get('/', getTraslados);
 router.get('/:id', getTrasladoById);
 

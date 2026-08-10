@@ -119,6 +119,32 @@ export const getMyVinculaciones = async (req: AuthRequest, res: Response): Promi
 };
 
 /**
+ * GET /api/traslados/personal/:schoolId
+ * Retorna el personal vinculado activo del colegio, excluyendo directivos y estudiantes.
+ * Usado para el selector de TRASLADO_USUARIO.
+ */
+export const getPersonalColegio = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'No autenticado' });
+      return;
+    }
+
+    const schoolId = parseInt(String(req.params.schoolId), 10);
+    if (isNaN(schoolId)) {
+      res.status(400).json({ error: 'ID de colegio inválido' });
+      return;
+    }
+
+    const personal = await TrasladoService.getPersonalColegio(schoolId);
+    res.json(personal);
+  } catch (error: any) {
+    console.error('Error en getPersonalColegio:', error);
+    res.status(500).json({ error: 'Error al consultar el personal del colegio' });
+  }
+};
+
+/**
  * GET /api/traslados/admin/global
  * Retorna TODOS los traslados del sistema con filtros avanzados.
  * Exclusivo para admin_general.

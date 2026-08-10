@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch }  from 'vue'
 import axios from 'axios'
 import { API_BASE_URL } from '../../config/api'
 import { useAuthStore } from '../../stores/auth'
@@ -86,6 +86,7 @@ interface EstudianteOption {
   codigo?: string
   grado?: string
   seccion?: string
+  matricula_id?: number | null
 }
 
 // Active Tab
@@ -96,6 +97,7 @@ const solicitudes = ref<SolicitudTraslado[]>([])
 const vinculaciones = ref<Vinculacion[]>([])
 const colegios = ref<Colegio[]>([])
 const estudiantesColegio = ref<EstudianteOption[]>([])
+const personalColegio = ref<{ id_usuario: number; nombre: string; apellido: string; email: string; documento?: string; rol_nombre: string }[]>([])
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -134,7 +136,8 @@ onMounted(async () => {
     fetchSolicitudes(),
     fetchVinculaciones(),
     fetchColegios(),
-    fetchEstudiantes()
+    fetchEstudiantes(),
+    fetchPersonalColegio()
   ])
 })
 
@@ -187,6 +190,38 @@ const fetchEstudiantes = async () => {
     console.error('Error fetching estudiantes:', err)
   }
 }
+
+const fetchPersonalColegio = async () => {
+  const schoolId = auth.user?.schoolId || 1
+  try {
+    const res = await axios.get(`${API_BASE_URL}/api/traslados/personal/${schoolId}`, {
+      headers: { Authorization: `Bearer ${auth.token}` }
+    })
+    personalColegio.value = res.data || []
+  } catch (err: any) {
+    console.error('Error fetching personal colegio:', err)
+  }
+}
+
+// Watch el tipo de traslado: limpiar selección al cambiar
+watch(() => newTraslado.value.tipo, () => {
+  newTraslado.value.id_usuario = null
+  newTraslado.value.id_matricula = null
+})
+
+// Auto-asignar id_matricula cuando se selecciona un estudiante para TRASLADO_MATRICULA
+watch(() => newTraslado.value.id_usuario, (newUserId) => {
+  if (newTraslado.value.tipo === 'TRASLADO_MATRICULA' && newUserId) {
+    const est = estudiantesColegio.value.find(e => e.id_usuario === newUserId)
+    if (est && est.matricula_id) {
+      newTraslado.value.id_matricula = est.matricula_id
+    } else {
+      newTraslado.value.id_matricula = null
+    }
+  } else {
+    newTraslado.value.id_matricula = null
+  }
+})
 
 const openDetailModal = async (solicitud: SolicitudTraslado) => {
   selectedSolicitud.value = null
@@ -802,8 +837,8 @@ const canUserApproveCurrentModal = computed(() => {
             </select>
           </div>
 
-          <!-- Estudiante / Usuario Selector -->
-          <div>
+          <!-- Estudiante / Usuario Selector (cambia según tipo) -->
+          <div v-if="newTraslado.tipo === 'TRASLADO_MATRICULA'">
             <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Seleccionar Estudiante</label>
             <select 
               v-model="newTraslado.id_usuario"
@@ -814,6 +849,21 @@ const canUserApproveCurrentModal = computed(() => {
                 {{ est.nombre }} {{ est.apellido }} ({{ est.codigo || est.documento || 'Sin código' }}) - {{ est.grado || '' }} {{ est.seccion || '' }}
               </option>
             </select>
+          </div>
+
+          <!-- Selector de Personal (Docentes, Padres, etc.) para TRASLADO_USUARIO -->
+          <div v-else>
+            <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Seleccionar Personal (Docente / Acudiente / otro)</label>
+            <select 
+              v-model="newTraslado.id_usuario"
+              class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option :value="null" disabled>-- Selecciona el usuario --</option>
+              <option v-for="p in personalColegio" :key="p.id_usuario" :value="p.id_usuario">
+                {{ p.nombre }} {{ p.apellido }} ({{ p.rol_nombre }}) - {{ p.email }}
+              </option>
+            </select>
+            <p v-if="personalColegio.length === 0" class="text-[10px] text-amber-600 dark:text-amber-400 mt-1">No se encontró personal disponible para traslado en esta institución.</p>
           </div>
 
           <!-- Colegio Destino Selector -->
