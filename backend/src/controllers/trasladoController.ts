@@ -29,7 +29,7 @@ export const approveTraslado = async (req: AuthRequest, res: Response): Promise<
       return;
     }
 
-    const idSolicitud = parseInt(req.params.id, 10);
+    const idSolicitud = parseInt(String(req.params.id), 10);
     if (isNaN(idSolicitud)) {
       res.status(400).json({ error: 'ID de solicitud inválido' });
       return;
@@ -84,7 +84,7 @@ export const getTrasladoById = async (req: AuthRequest, res: Response): Promise<
       return;
     }
 
-    const idSolicitud = parseInt(req.params.id, 10);
+    const idSolicitud = parseInt(String(req.params.id), 10);
     if (isNaN(idSolicitud)) {
       res.status(400).json({ error: 'ID de solicitud inválido' });
       return;

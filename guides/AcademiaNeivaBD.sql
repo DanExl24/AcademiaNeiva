@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict hME9fYj1SnTd4ZfvJ2nU3Uhj47hsF7jBxloqgnFho4IOvGt3F4sYXjPzgqJOxua
+\restrict HrNM6ov7LSPRpPSUpiiyKlha6ixrggOFFmB5mDVIu3Gq5plpUXdbSrVakS9ljEm
 
 -- Dumped from database version 18.4
 -- Dumped by pg_dump version 18.4
@@ -48,6 +48,19 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA public;
 
 COMMENT ON EXTENSION "uuid-ossp" IS 'generate universally unique identifiers (UUIDs)';
 
+
+--
+-- Name: accion_aprobacion_traslado; Type: TYPE; Schema: public; Owner: postgres
+--
+
+CREATE TYPE public.accion_aprobacion_traslado AS ENUM (
+    'APROBAR',
+    'RECHAZAR',
+    'CANCELAR'
+);
+
+
+ALTER TYPE public.accion_aprobacion_traslado OWNER TO postgres;
 
 --
 -- Name: estado_asistencia; Type: TYPE; Schema: public; Owner: postgres
@@ -204,6 +217,22 @@ CREATE TYPE public.estado_sancion AS ENUM (
 ALTER TYPE public.estado_sancion OWNER TO postgres;
 
 --
+-- Name: estado_solicitud_traslado; Type: TYPE; Schema: public; Owner: postgres
+--
+
+CREATE TYPE public.estado_solicitud_traslado AS ENUM (
+    'SOLICITADA',
+    'EN_APROBACION',
+    'APROBADA',
+    'RECHAZADA',
+    'CANCELADA',
+    'EJECUTADA'
+);
+
+
+ALTER TYPE public.estado_solicitud_traslado OWNER TO postgres;
+
+--
 -- Name: estado_supervision; Type: TYPE; Schema: public; Owner: postgres
 --
 
@@ -348,6 +377,18 @@ CREATE TYPE public.tipo_supervision AS ENUM (
 
 
 ALTER TYPE public.tipo_supervision OWNER TO postgres;
+
+--
+-- Name: tipo_traslado; Type: TYPE; Schema: public; Owner: postgres
+--
+
+CREATE TYPE public.tipo_traslado AS ENUM (
+    'TRASLADO_USUARIO',
+    'TRASLADO_MATRICULA'
+);
+
+
+ALTER TYPE public.tipo_traslado OWNER TO postgres;
 
 --
 -- Name: fn_bloquear_periodo_cerrado(); Type: FUNCTION; Schema: public; Owner: postgres
@@ -2536,6 +2577,50 @@ ALTER SEQUENCE public.secciones_id_seccion_seq OWNED BY public.secciones.id_secc
 
 
 --
+-- Name: solicitud_traslado; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.solicitud_traslado (
+    id_solicitud integer NOT NULL,
+    tipo public.tipo_traslado DEFAULT 'TRASLADO_USUARIO'::public.tipo_traslado NOT NULL,
+    id_usuario integer NOT NULL,
+    id_colegio_origen integer NOT NULL,
+    id_colegio_destino integer NOT NULL,
+    id_matricula integer,
+    estado public.estado_solicitud_traslado DEFAULT 'SOLICITADA'::public.estado_solicitud_traslado NOT NULL,
+    motivo text NOT NULL,
+    creado_por integer NOT NULL,
+    fecha_creacion timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+    fecha_finalizacion timestamp with time zone,
+    CONSTRAINT chk_origen_destino_diff CHECK ((id_colegio_origen <> id_colegio_destino))
+);
+
+
+ALTER TABLE public.solicitud_traslado OWNER TO postgres;
+
+--
+-- Name: solicitud_traslado_id_solicitud_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.solicitud_traslado_id_solicitud_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.solicitud_traslado_id_solicitud_seq OWNER TO postgres;
+
+--
+-- Name: solicitud_traslado_id_solicitud_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.solicitud_traslado_id_solicitud_seq OWNED BY public.solicitud_traslado.id_solicitud;
+
+
+--
 -- Name: tickets_soporte; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -2723,6 +2808,45 @@ ALTER SEQUENCE public.token_blacklist_id_seq OWNED BY public.token_blacklist.id;
 
 
 --
+-- Name: traslado_aprobacion; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.traslado_aprobacion (
+    id_aprobacion integer NOT NULL,
+    id_solicitud integer NOT NULL,
+    id_usuario integer NOT NULL,
+    rol character varying(50) NOT NULL,
+    accion public.accion_aprobacion_traslado NOT NULL,
+    comentario text,
+    fecha timestamp with time zone DEFAULT CURRENT_TIMESTAMP
+);
+
+
+ALTER TABLE public.traslado_aprobacion OWNER TO postgres;
+
+--
+-- Name: traslado_aprobacion_id_aprobacion_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.traslado_aprobacion_id_aprobacion_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.traslado_aprobacion_id_aprobacion_seq OWNER TO postgres;
+
+--
+-- Name: traslado_aprobacion_id_aprobacion_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.traslado_aprobacion_id_aprobacion_seq OWNED BY public.traslado_aprobacion.id_aprobacion;
+
+
+--
 -- Name: usuario; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -2748,6 +2872,46 @@ CREATE TABLE public.usuario (
 
 
 ALTER TABLE public.usuario OWNER TO postgres;
+
+--
+-- Name: usuario_colegio; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.usuario_colegio (
+    id_usuario_colegio integer NOT NULL,
+    id_usuario integer NOT NULL,
+    id_colegio integer NOT NULL,
+    id_rol integer NOT NULL,
+    estado character varying(20) DEFAULT 'ACTIVO'::character varying NOT NULL,
+    fecha_inicio timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+    fecha_fin timestamp with time zone,
+    CONSTRAINT usuario_colegio_estado_check CHECK (((estado)::text = ANY ((ARRAY['ACTIVO'::character varying, 'INACTIVO'::character varying, 'SUSPENDIDO'::character varying])::text[])))
+);
+
+
+ALTER TABLE public.usuario_colegio OWNER TO postgres;
+
+--
+-- Name: usuario_colegio_id_usuario_colegio_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.usuario_colegio_id_usuario_colegio_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.usuario_colegio_id_usuario_colegio_seq OWNER TO postgres;
+
+--
+-- Name: usuario_colegio_id_usuario_colegio_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.usuario_colegio_id_usuario_colegio_seq OWNED BY public.usuario_colegio.id_usuario_colegio;
+
 
 --
 -- Name: usuario_id_usuario_seq; Type: SEQUENCE; Schema: public; Owner: postgres
@@ -3205,6 +3369,13 @@ ALTER TABLE ONLY public.secciones ALTER COLUMN id_seccion SET DEFAULT nextval('p
 
 
 --
+-- Name: solicitud_traslado id_solicitud; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.solicitud_traslado ALTER COLUMN id_solicitud SET DEFAULT nextval('public.solicitud_traslado_id_solicitud_seq'::regclass);
+
+
+--
 -- Name: tickets_soporte id_ticket; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -3240,10 +3411,24 @@ ALTER TABLE ONLY public.token_blacklist ALTER COLUMN id SET DEFAULT nextval('pub
 
 
 --
+-- Name: traslado_aprobacion id_aprobacion; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.traslado_aprobacion ALTER COLUMN id_aprobacion SET DEFAULT nextval('public.traslado_aprobacion_id_aprobacion_seq'::regclass);
+
+
+--
 -- Name: usuario id_usuario; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.usuario ALTER COLUMN id_usuario SET DEFAULT nextval('public.usuario_id_usuario_seq'::regclass);
+
+
+--
+-- Name: usuario_colegio id_usuario_colegio; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.usuario_colegio ALTER COLUMN id_usuario_colegio SET DEFAULT nextval('public.usuario_colegio_id_usuario_colegio_seq'::regclass);
 
 
 --
@@ -3751,6 +3936,14 @@ ALTER TABLE ONLY public.secciones
 
 
 --
+-- Name: solicitud_traslado solicitud_traslado_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.solicitud_traslado
+    ADD CONSTRAINT solicitud_traslado_pkey PRIMARY KEY (id_solicitud);
+
+
+--
 -- Name: tickets_soporte tickets_soporte_codigo_ticket_key; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -3815,6 +4008,14 @@ ALTER TABLE ONLY public.token_blacklist
 
 
 --
+-- Name: traslado_aprobacion traslado_aprobacion_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.traslado_aprobacion
+    ADD CONSTRAINT traslado_aprobacion_pkey PRIMARY KEY (id_aprobacion);
+
+
+--
 -- Name: notas_actividad unique_actividad_estudiante; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -3860,6 +4061,22 @@ ALTER TABLE ONLY public.dba
 
 ALTER TABLE ONLY public.tipo_grado
     ADD CONSTRAINT uq_tipo_grado UNIQUE (nombre, id_nivel);
+
+
+--
+-- Name: usuario_colegio uq_usuario_colegio_rol; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.usuario_colegio
+    ADD CONSTRAINT uq_usuario_colegio_rol UNIQUE (id_usuario, id_colegio, id_rol);
+
+
+--
+-- Name: usuario_colegio usuario_colegio_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.usuario_colegio
+    ADD CONSTRAINT usuario_colegio_pkey PRIMARY KEY (id_usuario_colegio);
 
 
 --
@@ -4153,6 +4370,27 @@ CREATE INDEX idx_password_reset_token ON public.password_reset_tokens USING btre
 
 
 --
+-- Name: idx_solicitud_traslado_destino; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_solicitud_traslado_destino ON public.solicitud_traslado USING btree (id_colegio_destino);
+
+
+--
+-- Name: idx_solicitud_traslado_origen; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_solicitud_traslado_origen ON public.solicitud_traslado USING btree (id_colegio_origen);
+
+
+--
+-- Name: idx_solicitud_traslado_usr; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_solicitud_traslado_usr ON public.solicitud_traslado USING btree (id_usuario);
+
+
+--
 -- Name: idx_tickets_codigo; Type: INDEX; Schema: public; Owner: postgres
 --
 
@@ -4188,10 +4426,38 @@ CREATE INDEX idx_token_blacklist_expires_at ON public.token_blacklist USING btre
 
 
 --
+-- Name: idx_traslado_aprobacion_sol; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_traslado_aprobacion_sol ON public.traslado_aprobacion USING btree (id_solicitud);
+
+
+--
 -- Name: idx_usuario_colegio; Type: INDEX; Schema: public; Owner: postgres
 --
 
 CREATE INDEX idx_usuario_colegio ON public.usuario USING btree (id_colegio);
+
+
+--
+-- Name: idx_usuario_colegio_activo; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_usuario_colegio_activo ON public.usuario_colegio USING btree (id_usuario, id_colegio) WHERE ((estado)::text = 'ACTIVO'::text);
+
+
+--
+-- Name: idx_usuario_colegio_col; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_usuario_colegio_col ON public.usuario_colegio USING btree (id_colegio);
+
+
+--
+-- Name: idx_usuario_colegio_usr; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_usuario_colegio_usr ON public.usuario_colegio USING btree (id_usuario);
 
 
 --
@@ -5100,6 +5366,46 @@ ALTER TABLE ONLY public.sancion
 
 
 --
+-- Name: solicitud_traslado solicitud_traslado_creado_por_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.solicitud_traslado
+    ADD CONSTRAINT solicitud_traslado_creado_por_fkey FOREIGN KEY (creado_por) REFERENCES public.usuario(id_usuario);
+
+
+--
+-- Name: solicitud_traslado solicitud_traslado_id_colegio_destino_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.solicitud_traslado
+    ADD CONSTRAINT solicitud_traslado_id_colegio_destino_fkey FOREIGN KEY (id_colegio_destino) REFERENCES public.colegio(id_colegio);
+
+
+--
+-- Name: solicitud_traslado solicitud_traslado_id_colegio_origen_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.solicitud_traslado
+    ADD CONSTRAINT solicitud_traslado_id_colegio_origen_fkey FOREIGN KEY (id_colegio_origen) REFERENCES public.colegio(id_colegio);
+
+
+--
+-- Name: solicitud_traslado solicitud_traslado_id_matricula_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.solicitud_traslado
+    ADD CONSTRAINT solicitud_traslado_id_matricula_fkey FOREIGN KEY (id_matricula) REFERENCES public.matricula(id_matricula) ON DELETE SET NULL;
+
+
+--
+-- Name: solicitud_traslado solicitud_traslado_id_usuario_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.solicitud_traslado
+    ADD CONSTRAINT solicitud_traslado_id_usuario_fkey FOREIGN KEY (id_usuario) REFERENCES public.usuario(id_usuario) ON DELETE CASCADE;
+
+
+--
 -- Name: tickets_soporte tickets_soporte_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -5116,11 +5422,51 @@ ALTER TABLE ONLY public.tickets_soporte
 
 
 --
+-- Name: traslado_aprobacion traslado_aprobacion_id_solicitud_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.traslado_aprobacion
+    ADD CONSTRAINT traslado_aprobacion_id_solicitud_fkey FOREIGN KEY (id_solicitud) REFERENCES public.solicitud_traslado(id_solicitud) ON DELETE CASCADE;
+
+
+--
+-- Name: traslado_aprobacion traslado_aprobacion_id_usuario_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.traslado_aprobacion
+    ADD CONSTRAINT traslado_aprobacion_id_usuario_fkey FOREIGN KEY (id_usuario) REFERENCES public.usuario(id_usuario);
+
+
+--
 -- Name: usuario usuario_baneado_por_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.usuario
     ADD CONSTRAINT usuario_baneado_por_fkey FOREIGN KEY (baneado_por) REFERENCES public.usuario(id_usuario);
+
+
+--
+-- Name: usuario_colegio usuario_colegio_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.usuario_colegio
+    ADD CONSTRAINT usuario_colegio_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio) ON DELETE CASCADE;
+
+
+--
+-- Name: usuario_colegio usuario_colegio_id_rol_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.usuario_colegio
+    ADD CONSTRAINT usuario_colegio_id_rol_fkey FOREIGN KEY (id_rol) REFERENCES public.rol(id_rol) ON DELETE CASCADE;
+
+
+--
+-- Name: usuario_colegio usuario_colegio_id_usuario_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.usuario_colegio
+    ADD CONSTRAINT usuario_colegio_id_usuario_fkey FOREIGN KEY (id_usuario) REFERENCES public.usuario(id_usuario) ON DELETE CASCADE;
 
 
 --
@@ -5166,5 +5512,5 @@ REVOKE USAGE ON SCHEMA public FROM PUBLIC;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict hME9fYj1SnTd4ZfvJ2nU3Uhj47hsF7jBxloqgnFho4IOvGt3F4sYXjPzgqJOxua
+\unrestrict HrNM6ov7LSPRpPSUpiiyKlha6ixrggOFFmB5mDVIu3Gq5plpUXdbSrVakS9ljEm
 

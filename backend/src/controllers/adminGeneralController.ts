@@ -1,5 +1,7 @@
 import { Response } from 'express';
 import { pool } from '../config/db';
+import { db } from '../config/kysely';
+import { sql } from 'kysely';
 import { AuthRequest } from '../middleware/authMiddleware';
 import { AdminGeneralNotificationService } from '../services/adminGeneralNotificationService';
 import bcrypt from 'bcrypt';
@@ -358,58 +360,65 @@ export const listarUsuarios = async (req: AuthRequest, res: Response): Promise<v
     const page = req.query.page ? Number(req.query.page) : null;
     const limit = req.query.limit ? Number(req.query.limit) : null;
 
-    let query = `
-      SELECT u.id_usuario, u.email, u.nombre, u.apellido, u.estado, u.id_colegio,
-             u.fecha_creacion, u.motivo_baneo, u.fecha_baneo,
-             c.nombre AS colegio_nombre,
-             array_agg(DISTINCT r.nombre) AS roles
-      FROM usuario u
-      LEFT JOIN colegio c ON c.id_colegio = u.id_colegio
-      LEFT JOIN usuario_rol ur ON ur.id_usuario = u.id_usuario
-      LEFT JOIN rol r ON r.id_rol = ur.id_rol
-      WHERE 1=1
-    `;
-    const params: any[] = [];
+    let baseQuery = db
+      .selectFrom("usuario as u")
+      .leftJoin("usuario_colegio as uc", (join) => 
+        join.onRef("uc.id_usuario", "=", "u.id_usuario").on("uc.estado", "=", "ACTIVO")
+      )
+      .leftJoin("colegio as c", "c.id_colegio", "uc.id_colegio")
+      .leftJoin("usuario_rol as ur", "ur.id_usuario", "u.id_usuario")
+      .leftJoin("rol as r", "r.id_rol", "ur.id_rol")
+      .select([
+        "u.id_usuario",
+        "u.email",
+        "u.nombre",
+        "u.apellido",
+        "u.estado",
+        "uc.id_colegio",
+        "u.fecha_creacion",
+        "u.motivo_baneo",
+        "u.fecha_baneo",
+        "c.nombre as colegio_nombre",
+        sql<string[]>`array_agg(r.nombre)`.as("roles")
+      ])
+      .groupBy([
+        "u.id_usuario", "u.email", "u.nombre", "u.apellido", "u.estado", 
+        "uc.id_colegio", "u.fecha_creacion", "u.motivo_baneo", "u.fecha_baneo", "c.nombre"
+      ]);
 
     if (estado && estado !== 'TODOS') {
-      params.push(estado);
-      query += ` AND u.estado = $${params.length}`;
+      baseQuery = baseQuery.where("u.estado", "=", estado as any);
     }
 
     if (rol) {
-      params.push(rol);
-      query += ` AND r.nombre = $${params.length}`;
+      baseQuery = baseQuery.where("r.nombre", "=", rol as string);
     }
 
     if (busqueda) {
-      params.push(`%${busqueda}%`);
-      query += ` AND (u.nombre ILIKE $${params.length} OR u.apellido ILIKE $${params.length} OR u.email ILIKE $${params.length})`;
+      const searchPattern = `%${busqueda}%`;
+      baseQuery = baseQuery.where((eb) => eb.or([
+        eb("u.nombre", "ilike", searchPattern),
+        eb("u.apellido", "ilike", searchPattern),
+        eb("u.email", "ilike", searchPattern)
+      ]));
     }
 
     if (id_colegio) {
-      params.push(id_colegio);
-      query += ` AND u.id_colegio = $${params.length}`;
+      baseQuery = baseQuery.where("uc.id_colegio", "=", Number(id_colegio));
     }
 
-    query += ` GROUP BY u.id_usuario, c.nombre ORDER BY u.fecha_creacion DESC`;
+    const allRows = await baseQuery.orderBy("u.fecha_creacion", "desc").execute();
+    const totalCount = allRows.length;
 
-    // Count query for total
-    const countQuery = `SELECT COUNT(*)::int as count FROM (${query}) AS temp`;
-    const countResult = await pool.query(countQuery, params);
-    const totalCount = countResult.rows[0].count;
-
+    let pagedRows = allRows;
     if (page && limit) {
-      const offset = (page - 1) * limit;
-      params.push(limit);
-      query += ` LIMIT $${params.length}`;
-      params.push(offset);
-      query += ` OFFSET $${params.length}`;
+      const offset = (Number(page) - 1) * Number(limit);
+      pagedRows = allRows.slice(offset, offset + Number(limit));
     }
 
-    const result = await pool.query(query, params);
     res.setHeader("x-total-count", String(totalCount));
     res.setHeader("Access-Control-Expose-Headers", "x-total-count");
-    res.json(result.rows);
+    res.json(pagedRows);
   } catch (error: any) {
     console.error('Error listando usuarios:', error);
     res.status(500).json({ error: 'Error al listar usuarios' });
@@ -422,29 +431,48 @@ export const listarUsuarios = async (req: AuthRequest, res: Response): Promise<v
  */
 export const detalleUsuario = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { id } = req.params;
-    const result = await pool.query(
-      `SELECT u.id_usuario, u.email, u.nombre, u.apellido, u.estado, u.id_colegio,
-              u.fecha_creacion, u.motivo_baneo, u.fecha_baneo, u.activo, u.documento, u.telefono, u.id_tipodocumento,
-              c.nombre AS colegio_nombre,
-              td.tipo AS tipo_documento,
-              array_agg(DISTINCT r.nombre) AS roles
-       FROM usuario u
-       LEFT JOIN colegio c ON c.id_colegio = u.id_colegio
-       LEFT JOIN usuario_rol ur ON ur.id_usuario = u.id_usuario
-       LEFT JOIN rol r ON r.id_rol = ur.id_rol
-       LEFT JOIN tipo_documento td ON td.id_tipodocumento = u.id_tipodocumento
-       WHERE u.id_usuario = $1
-       GROUP BY u.id_usuario, c.nombre, td.tipo`,
-      [id]
-    );
+    const userId = Number(req.params.id);
+    const userDetail = await db
+      .selectFrom("usuario as u")
+      .leftJoin("usuario_colegio as uc", (join) => 
+        join.onRef("uc.id_usuario", "=", "u.id_usuario").on("uc.estado", "=", "ACTIVO")
+      )
+      .leftJoin("colegio as c", "c.id_colegio", "uc.id_colegio")
+      .leftJoin("usuario_rol as ur", "ur.id_usuario", "u.id_usuario")
+      .leftJoin("rol as r", "r.id_rol", "ur.id_rol")
+      .leftJoin("tipo_documento as td", "td.id_tipodocumento", "u.id_tipodocumento")
+      .select([
+        "u.id_usuario",
+        "u.email",
+        "u.nombre",
+        "u.apellido",
+        "u.estado",
+        "uc.id_colegio",
+        "u.fecha_creacion",
+        "u.motivo_baneo",
+        "u.fecha_baneo",
+        "u.activo",
+        "u.documento",
+        "u.telefono",
+        "u.id_tipodocumento",
+        "c.nombre as colegio_nombre",
+        "td.tipo as tipo_documento",
+        sql<string[]>`array_agg(r.nombre)`.as("roles")
+      ])
+      .where("u.id_usuario", "=", userId)
+      .groupBy([
+        "u.id_usuario", "u.email", "u.nombre", "u.apellido", "u.estado", "uc.id_colegio",
+        "u.fecha_creacion", "u.motivo_baneo", "u.fecha_baneo", "u.activo", "u.documento",
+        "u.telefono", "u.id_tipodocumento", "c.nombre", "td.tipo"
+      ])
+      .executeTakeFirst();
 
-    if (result.rows.length === 0) {
+    if (!userDetail) {
       res.status(404).json({ error: 'Usuario no encontrado' });
       return;
     }
 
-    res.json(result.rows[0]);
+    res.json(userDetail);
   } catch (error: any) {
     console.error('Error obteniendo detalle usuario:', error);
     res.status(500).json({ error: 'Error al obtener detalle del usuario' });
@@ -2812,11 +2840,19 @@ export const crearUsuarioByAdminGeneral = async (req: AuthRequest, res: Response
 
     const newUserId = userRes.rows[0].id_usuario;
 
-    // 6. Asignar rol en usuario_rol
+    // 6. Asignar rol en usuario_rol y usuario_colegio
     await client.query(
       'INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2) ON CONFLICT DO NOTHING',
       [newUserId, idRol]
     );
+
+    if (id_colegio) {
+      await client.query(
+        `INSERT INTO usuario_colegio (id_usuario, id_colegio, id_rol, estado, fecha_inicio)
+         VALUES ($1, $2, $3, 'ACTIVO', NOW()) ON CONFLICT DO NOTHING`,
+        [newUserId, id_colegio, idRol]
+      );
+    }
 
     // 7. Crear perfil específico según el rol
     if (rol === 'directivo' && id_colegio) {

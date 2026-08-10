@@ -1,5 +1,7 @@
 import { Request, Response } from "express";
 import { pool } from "../config/db";
+import { db } from "../config/kysely";
+import { sql } from "kysely";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
@@ -20,22 +22,28 @@ export const login = async (req: Request, res: Response): Promise<void> => {
   try {
     if (credential.includes("@")) {
       // --- LOGIN GENERAL (Email: directivo, docente, padre, admin_general) ---
-      const userRes = await pool.query(
-        `SELECT u.*, array_agg(r.nombre) as roles
-         FROM usuario u
-         JOIN usuario_rol ur ON u.id_usuario = ur.id_usuario
-         JOIN rol r ON ur.id_rol = r.id_rol
-         WHERE u.email = $1
-         GROUP BY u.id_usuario`,
-        [credential]
-      );
+      const user = await db
+        .selectFrom("usuario as u")
+        .leftJoin("usuario_rol as ur", "ur.id_usuario", "u.id_usuario")
+        .leftJoin("rol as r", "r.id_rol", "ur.id_rol")
+        .select([
+          "u.id_usuario",
+          "u.email",
+          "u.password",
+          "u.nombre",
+          "u.apellido",
+          "u.id_colegio",
+          "u.estado",
+          sql<string[]>`array_agg(r.nombre)`.as("roles")
+        ])
+        .where("u.email", "=", credential)
+        .groupBy(["u.id_usuario", "u.email", "u.password", "u.nombre", "u.apellido", "u.id_colegio", "u.estado"])
+        .executeTakeFirst();
 
-      if (userRes.rows.length === 0) {
+      if (!user) {
         res.status(401).json({ error: "Credenciales incorrectas" });
         return;
       }
-
-      const user = userRes.rows[0];
 
       // Verificar estado del usuario
       if (user.estado === 'BANEADO') {
@@ -51,26 +59,30 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         return;
       }
 
-      // Verificar estado del colegio (si el usuario pertenece a uno)
-      if (user.id_colegio) {
-        const colegioRes = await pool.query(
-          'SELECT estado FROM colegio WHERE id_colegio = $1',
-          [user.id_colegio]
-        );
-        if (colegioRes.rows.length > 0) {
-          const estadoColegio = colegioRes.rows[0].estado;
-          if (estadoColegio === 'PENDIENTE') {
-            res.status(403).json({ error: "El colegio asociado aún no ha sido aprobado." });
-            return;
-          }
-          if (estadoColegio === 'SUSPENDIDO') {
-            res.status(403).json({ error: "El colegio asociado se encuentra suspendido." });
-            return;
-          }
-          if (estadoColegio === 'RECHAZADO' || estadoColegio === 'ELIMINADO') {
-            res.status(403).json({ error: "El colegio asociado no tiene acceso al sistema." });
-            return;
-          }
+      // Consultar vinculaciones de institucion en usuario_colegio
+      const activeSchools = await db
+        .selectFrom("usuario_colegio as uc")
+        .innerJoin("colegio as c", "c.id_colegio", "uc.id_colegio")
+        .select(["uc.id_colegio", "c.estado as colegio_estado"])
+        .where("uc.id_usuario", "=", user.id_usuario)
+        .where("uc.estado", "=", "ACTIVO")
+        .execute();
+
+      let activeSchoolId: number | null = user.id_colegio || (activeSchools.length > 0 ? activeSchools[0].id_colegio : null);
+
+      if (activeSchools.length > 0) {
+        const firstSchool = activeSchools[0];
+        if (firstSchool.colegio_estado === 'PENDIENTE') {
+          res.status(403).json({ error: "El colegio asociado aún no ha sido aprobado." });
+          return;
+        }
+        if (firstSchool.colegio_estado === 'SUSPENDIDO') {
+          res.status(403).json({ error: "El colegio asociado se encuentra suspendido." });
+          return;
+        }
+        if (firstSchool.colegio_estado === 'RECHAZADO' || firstSchool.colegio_estado === 'ELIMINADO') {
+          res.status(403).json({ error: "El colegio asociado no tiene acceso al sistema." });
+          return;
         }
       }
 
@@ -81,22 +93,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         return;
       }
 
-      // Query schoolIds for parent
-      let schoolIds: number[] = [];
-      if (user.roles.includes("padre")) {
-        const parentInfoRes = await pool.query(
-          `SELECT id_padrefamilia FROM padre_familia WHERE id_usuario = $1`,
-          [user.id_usuario]
-        );
-        if (parentInfoRes.rows.length > 0) {
-          const idPadre = parentInfoRes.rows[0].id_padrefamilia;
-          const schoolsRes = await pool.query(
-            `SELECT DISTINCT id_colegio FROM detalle_padrefamilia WHERE id_padrefamilia = $1`,
-            [idPadre]
-          );
-          schoolIds = schoolsRes.rows.map(r => Number(r.id_colegio));
-        }
-      }
+      const schoolIds = activeSchools.map((s: { id_colegio: number }) => Number(s.id_colegio));
 
       // Generar JWT
       const jti = crypto.randomUUID();
@@ -106,7 +103,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
           email: user.email, 
           role: user.roles[0], 
           roles: user.roles,
-          schoolId: user.id_colegio,
+          schoolId: activeSchoolId,
           schoolIds: schoolIds.length > 0 ? schoolIds : undefined,
           jti
         },
@@ -122,7 +119,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
           email: userWithoutPassword.email,
           role: userWithoutPassword.roles[0],
           roles: userWithoutPassword.roles,
-          schoolId: userWithoutPassword.id_colegio,
+          schoolId: activeSchoolId,
           schoolIds: schoolIds.length > 0 ? schoolIds : undefined
         },
         token
@@ -130,23 +127,33 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
     } else {
       // --- LOGIN ESTUDIANTE (Código: e.g. EST-1-12) ---
-      const studentRes = await pool.query(
-        `SELECT e.id_usuario, e.estado AS estado_estudiante, u.email, u.nombre, u.password, u.id_colegio, u.estado, array_agg(r.nombre) as roles
-         FROM estudiante e
-         JOIN usuario u ON e.id_usuario = u.id_usuario
-         JOIN usuario_rol ur ON u.id_usuario = ur.id_usuario
-         JOIN rol r ON ur.id_rol = r.id_rol
-         WHERE e.codigo = $1 OR u.documento = $1 OR LOWER(u.email) = LOWER($1)
-         GROUP BY e.id_usuario, e.estado, u.email, u.nombre, u.password, u.id_colegio, u.estado`,
-        [credential]
-      );
+      const user = await db
+        .selectFrom("estudiante as e")
+        .innerJoin("usuario as u", "u.id_usuario", "e.id_usuario")
+        .leftJoin("usuario_rol as ur", "ur.id_usuario", "u.id_usuario")
+        .leftJoin("rol as r", "r.id_rol", "ur.id_rol")
+        .select([
+          "e.id_usuario",
+          "e.estado as estado_estudiante",
+          "u.email",
+          "u.nombre",
+          "u.password",
+          "u.id_colegio",
+          "u.estado",
+          sql<string[]>`array_agg(r.nombre)`.as("roles")
+        ])
+        .where((eb) => eb.or([
+          eb("e.codigo", "=", credential),
+          eb("u.documento", "=", credential),
+          eb(sql`LOWER(u.email)`, "=", credential.toLowerCase())
+        ]))
+        .groupBy(["e.id_usuario", "e.estado", "u.email", "u.nombre", "u.password", "u.id_colegio", "u.estado"])
+        .executeTakeFirst();
 
-      if (studentRes.rows.length === 0) {
+      if (!user) {
         res.status(401).json({ error: "Código o contraseña incorrectos" });
         return;
       }
-
-      const user = studentRes.rows[0];
 
       // Verificar estado del estudiante (expulsado no puede ingresar)
       if (user.estado_estudiante === 'EXPULSADO') {
@@ -204,24 +211,30 @@ export const studentLogin = async (req: Request, res: Response): Promise<void> =
   const { codigo, password } = req.body;
 
   try {
-    // 1. Buscar el estudiante por su código (incluye estado del estudiante)
-    const studentRes = await pool.query(
-      `SELECT e.id_usuario, e.estado AS estado_estudiante, u.email, u.nombre, u.password, u.id_colegio, u.estado, array_agg(r.nombre) as roles
-       FROM estudiante e
-       JOIN usuario u ON e.id_usuario = u.id_usuario
-       JOIN usuario_rol ur ON u.id_usuario = ur.id_usuario
-       JOIN rol r ON ur.id_rol = r.id_rol
-       WHERE e.codigo = $1
-       GROUP BY e.id_usuario, e.estado, u.email, u.nombre, u.password, u.id_colegio, u.estado`,
-      [codigo]
-    );
+    // Buscar el estudiante por su código usando Kysely
+    const user = await db
+      .selectFrom("estudiante as e")
+      .innerJoin("usuario as u", "u.id_usuario", "e.id_usuario")
+      .leftJoin("usuario_rol as ur", "ur.id_usuario", "u.id_usuario")
+      .leftJoin("rol as r", "r.id_rol", "ur.id_rol")
+      .select([
+        "e.id_usuario",
+        "e.estado as estado_estudiante",
+        "u.email",
+        "u.nombre",
+        "u.password",
+        "u.id_colegio",
+        "u.estado",
+        sql<string[]>`array_agg(r.nombre)`.as("roles")
+      ])
+      .where("e.codigo", "=", codigo)
+      .groupBy(["e.id_usuario", "e.estado", "u.email", "u.nombre", "u.password", "u.id_colegio", "u.estado"])
+      .executeTakeFirst();
 
-    if (studentRes.rows.length === 0) {
+    if (!user) {
       res.status(401).json({ error: "Código o contraseña incorrectos" });
       return;
     }
-
-    const user = studentRes.rows[0];
 
     // Verificar estado del estudiante (expulsado no puede ingresar)
     if (user.estado_estudiante === 'EXPULSADO') {

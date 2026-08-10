@@ -267,6 +267,7 @@ async function insertSchool(
   );
   const rectorUserId = rectorRes.rows[0].id_usuario;
   await client.query(`INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2)`, [rectorUserId, roleIds.directivo]);
+  await client.query(`INSERT INTO usuario_colegio (id_usuario, id_colegio, id_rol, estado, fecha_inicio) VALUES ($1, $2, $3, 'ACTIVO', NOW()) ON CONFLICT DO NOTHING`, [rectorUserId, school.id, roleIds.directivo]);
   await client.query(`INSERT INTO directivo (id_colegio, id_usuario, cargo) VALUES ($1, $2, $3)`, [school.id, rectorUserId, "RECTOR"]);
 
   credentials.push({
@@ -284,6 +285,7 @@ async function insertSchool(
   );
   const directivoUserId = directivoResult.rows[0].id_usuario;
   await client.query(`INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2)`, [directivoUserId, roleIds.directivo]);
+  await client.query(`INSERT INTO usuario_colegio (id_usuario, id_colegio, id_rol, estado, fecha_inicio) VALUES ($1, $2, $3, 'ACTIVO', NOW()) ON CONFLICT DO NOTHING`, [directivoUserId, school.id, roleIds.directivo]);
   await client.query(`INSERT INTO directivo (id_colegio, id_usuario, cargo) VALUES ($1, $2, $3)`, [school.id, directivoUserId, "COORDINADOR"]);
 
   credentials.push({
@@ -307,6 +309,7 @@ async function insertSchool(
     );
     const teacherUserId = userResult.rows[0].id_usuario;
     await client.query(`INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2)`, [teacherUserId, roleIds.docente]);
+    await client.query(`INSERT INTO usuario_colegio (id_usuario, id_colegio, id_rol, estado, fecha_inicio) VALUES ($1, $2, $3, 'ACTIVO', NOW()) ON CONFLICT DO NOTHING`, [teacherUserId, school.id, roleIds.docente]);
     await client.query(
       `INSERT INTO docente (nombre, apellido, id_colegio, id_usuario)
        VALUES ($1, $2, $3, $4)`,
@@ -662,6 +665,11 @@ async function insertStudentsAndParents(
              ON CONFLICT (id_usuario, id_rol) DO NOTHING`,
             [parentUserId, roleIds.padre]
           );
+          await client.query(
+            `INSERT INTO usuario_colegio (id_usuario, id_colegio, id_rol, estado, fecha_inicio)
+             VALUES ($1, $2, $3, 'ACTIVO', NOW()) ON CONFLICT DO NOTHING`,
+            [parentUserId, school.id, roleIds.padre]
+          );
         } else {
           // Crear un padre normal desde cero
           currentParentEmail = `padre${parentIdx}.${school.id}@${school.domain}`;
@@ -677,6 +685,7 @@ async function insertStudentsAndParents(
           );
           parentUserId = pUserRes.rows[0].id_usuario;
           await client.query(`INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2)`, [parentUserId, roleIds.padre]);
+          await client.query(`INSERT INTO usuario_colegio (id_usuario, id_colegio, id_rol, estado, fecha_inicio) VALUES ($1, $2, $3, 'ACTIVO', NOW()) ON CONFLICT DO NOTHING`, [parentUserId, school.id, roleIds.padre]);
         }
 
         const pFamRes = await client.query<{ id_padrefamilia: number }>(
@@ -707,6 +716,7 @@ async function insertStudentsAndParents(
       );
       const studentUserId = sUserRes.rows[0].id_usuario;
       await client.query(`INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2)`, [studentUserId, roleIds.estudiante]);
+      await client.query(`INSERT INTO usuario_colegio (id_usuario, id_colegio, id_rol, estado, fecha_inicio) VALUES ($1, $2, $3, 'ACTIVO', NOW()) ON CONFLICT DO NOTHING`, [studentUserId, school.id, roleIds.estudiante]);
 
       // ── Create student record with estado ──
       const estRes = await client.query<{ id_estudiante: number }>(
@@ -1149,7 +1159,10 @@ async function run(): Promise<void> {
       "escala_valoracion",
       "configuracion_colegio",
       "configuracion_inscripcion",
-      // Auth
+      // Auth & Traslados
+      "traslado_aprobacion",
+      "solicitud_traslado",
+      "usuario_colegio",
       "usuario_rol",
       "usuario",
       "rol",

@@ -5,6 +5,8 @@
 
 import type { ColumnType } from "kysely";
 
+export type AccionAprobacionTraslado = "APROBAR" | "CANCELAR" | "RECHAZAR";
+
 export type EstadoAsistencia = "AUSENTE" | "JUSTIFICADA" | "PRESENTE" | "TARDE";
 
 export type EstadoCierreMateria = "ABIERTO" | "CERRADO";
@@ -26,6 +28,8 @@ export type EstadoRenovacionDocumento = "DESACTUALIZADO_POR_FECHA" | "OBLIGATORI
 export type EstadoResultado = "APROBADO" | "EN_PROCESO" | "REPROBADO";
 
 export type EstadoSancion = "ACTIVA" | "REVOCADA" | "VENCIDA";
+
+export type EstadoSolicitudTraslado = "APROBADA" | "CANCELADA" | "EJECUTADA" | "EN_APROBACION" | "RECHAZADA" | "SOLICITADA";
 
 export type EstadoSupervision = "ACTIVA" | "APROBADA" | "EXPIRADA" | "FINALIZADA" | "REVOCADA" | "SOLICITADA";
 
@@ -67,6 +71,8 @@ export type TipoObservacion = "ACADEMICA" | "CONVIVENCIA" | "DISCIPLINARIA" | "O
 
 export type TipoSupervision = "EDITOR" | "SOLO_LECTURA";
 
+export type TipoTraslado = "TRASLADO_MATRICULA" | "TRASLADO_USUARIO";
+
 export interface ActividadEvidenciaDba {
   id_actividadmateria: number;
   id_evidencia_dba: number;
@@ -78,6 +84,7 @@ export interface ActividadMateria {
   id_colegio: number;
   id_competencia: number | null;
   id_detallegrado: number | null;
+  id_docente_creador: number | null;
   id_evidencia: number | null;
   id_periodo: number | null;
   justificacion_extra: string | null;
@@ -137,7 +144,9 @@ export interface CierreMateria {
   fecha_cierre: Timestamp;
   id_cierremateria: Generated<number>;
   id_detallegrado: number;
+  id_docente_cierre: number | null;
   id_periodo: number;
+  justificacion_evidencias_pendientes: string | null;
 }
 
 export interface Colegio {
@@ -578,6 +587,20 @@ export interface Secciones {
   nombre: string;
 }
 
+export interface SolicitudTraslado {
+  creado_por: number;
+  estado: Generated<EstadoSolicitudTraslado>;
+  fecha_creacion: Generated<Timestamp | null>;
+  fecha_finalizacion: Timestamp | null;
+  id_colegio_destino: number;
+  id_colegio_origen: number;
+  id_matricula: number | null;
+  id_solicitud: Generated<number>;
+  id_usuario: number;
+  motivo: string;
+  tipo: Generated<TipoTraslado>;
+}
+
 export interface TicketsSoporte {
   asunto: string;
   codigo_ticket: string | null;
@@ -620,12 +643,22 @@ export interface TokenBlacklist {
   jti: string;
 }
 
+export interface TrasladoAprobacion {
+  accion: AccionAprobacionTraslado;
+  comentario: string | null;
+  fecha: Generated<Timestamp | null>;
+  id_aprobacion: Generated<number>;
+  id_solicitud: number;
+  id_usuario: number;
+  rol: string;
+}
+
 export interface Usuario {
   activo: Generated<boolean | null>;
   apellido: string | null;
   baneado_por: number | null;
   documento: string | null;
-  email: string;
+  email: string | null;
   estado: Generated<EstadoUsuarioSistema>;
   fecha_baneo: Timestamp | null;
   fecha_creacion: Generated<Timestamp | null>;
@@ -637,6 +670,16 @@ export interface Usuario {
   nombre: string;
   password: string;
   telefono: string | null;
+}
+
+export interface UsuarioColegio {
+  estado: Generated<string>;
+  fecha_fin: Timestamp | null;
+  fecha_inicio: Generated<Timestamp | null>;
+  id_colegio: number;
+  id_rol: number;
+  id_usuario: number;
+  id_usuario_colegio: Generated<number>;
 }
 
 export interface UsuarioRol {
@@ -756,12 +799,15 @@ export interface DB {
   rol: Rol;
   sancion: Sancion;
   secciones: Secciones;
+  solicitud_traslado: SolicitudTraslado;
   tickets_soporte: TicketsSoporte;
   tipo_documento: TipoDocumento;
   tipo_grado: TipoGrado;
   tipo_sancion: TipoSancion;
   token_blacklist: TokenBlacklist;
+  traslado_aprobacion: TrasladoAprobacion;
   usuario: Usuario;
+  usuario_colegio: UsuarioColegio;
   usuario_rol: UsuarioRol;
   vw_asistencia_estudiante: VwAsistenciaEstudiante;
   vw_desempeno_estudiante: VwDesempenoEstudiante;

@@ -3239,6 +3239,12 @@ export const createTeacher = async (req: Request, res: Response): Promise<void> 
         [existingUser.id_usuario, roleRes.rows[0].id_rol]
       );
 
+      await client.query(
+        `INSERT INTO usuario_colegio (id_usuario, id_colegio, id_rol, estado, fecha_inicio)
+         VALUES ($1, $2, $3, 'ACTIVO', NOW()) ON CONFLICT DO NOTHING`,
+        [existingUser.id_usuario, schoolId, roleRes.rows[0].id_rol]
+      );
+
       // Si el directivo especificó un correo institucional nuevo para sus funciones de docente, actualizamos su correo de acceso
       if (email !== (existingUser.email || "").toLowerCase().trim()) {
         await client.query(
@@ -3291,6 +3297,12 @@ export const createTeacher = async (req: Request, res: Response): Promise<void> 
       `INSERT INTO usuario_rol (id_usuario, id_rol)
        VALUES ($1, $2)`,
       [userRes.rows[0].id_usuario, roleRes.rows[0].id_rol]
+    );
+
+    await client.query(
+      `INSERT INTO usuario_colegio (id_usuario, id_colegio, id_rol, estado, fecha_inicio)
+       VALUES ($1, $2, $3, 'ACTIVO', NOW()) ON CONFLICT DO NOTHING`,
+      [userRes.rows[0].id_usuario, schoolId, roleRes.rows[0].id_rol]
     );
 
     const teacherRes = await client.query(
