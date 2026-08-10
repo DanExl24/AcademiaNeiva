@@ -122,25 +122,38 @@ export const getParentsManagementData = async (req: Request, res: Response): Pro
           u.email,
           u.id_usuario,
           u.activo AS usuario_activo,
-          COUNT(DISTINCT dpf.id_estudiante) AS hijos_count,
+          COUNT(DISTINCT CASE WHEN $2::int IS NULL THEN dpf.id_estudiante ELSE m.id_estudiante END) AS hijos_count,
           (doc.id_docente IS NOT NULL) AS es_docente,
           u_doc.email AS email_docente,
 
           BOOL_OR(
-            e.id_estudiante IS NOT NULL AND EXISTS (
-              SELECT 1 FROM sancion sa WHERE sa.id_estudiante = e.id_estudiante AND sa.estado = 'ACTIVA'
+            e.id_estudiante IS NOT NULL AND ($2::int IS NULL OR m.id_matricula IS NOT NULL) AND EXISTS (
+              SELECT 1 FROM sancion sa 
+              WHERE sa.id_estudiante = e.id_estudiante 
+                AND sa.estado = 'ACTIVA'
+                AND ($2::int IS NULL OR sa.id_anio = $2::int)
             )
           ) AS tiene_hijo_sancionado,
 
           BOOL_OR(
-            e.id_estudiante IS NOT NULL AND (
-              (SELECT COUNT(*) FROM registro_asistencia ra WHERE ra.id_estudiante = e.id_estudiante AND ra.estado = 'AUSENTE') >= 3
+            e.id_estudiante IS NOT NULL AND ($2::int IS NULL OR m.id_matricula IS NOT NULL) AND (
+              (SELECT COUNT(*) FROM registro_asistencia ra 
+               JOIN periodo_academico pa_a ON pa_a.id_periodo = ra.id_periodo 
+               WHERE ra.id_estudiante = e.id_estudiante 
+                 AND ra.estado = 'AUSENTE'
+                 AND ($2::int IS NULL OR pa_a.id_anio = $2::int)
+              ) >= 3
             )
           ) AS tiene_hijo_inasistencias,
 
           BOOL_OR(
-            e.id_estudiante IS NOT NULL AND (
-              (SELECT AVG(ra_nota.promedio) FROM resultado_academico ra_nota JOIN periodo_academico pa ON pa.id_periodo = ra_nota.id_periodo WHERE ra_nota.id_estudiante = e.id_estudiante AND pa.estado != 'PENDIENTE') < 3.0
+            e.id_estudiante IS NOT NULL AND ($2::int IS NULL OR m.id_matricula IS NOT NULL) AND (
+              (SELECT AVG(ra_nota.promedio) FROM resultado_academico ra_nota 
+               JOIN periodo_academico pa ON pa.id_periodo = ra_nota.id_periodo 
+               WHERE ra_nota.id_estudiante = e.id_estudiante 
+                 AND pa.estado != 'PENDIENTE'
+                 AND ($2::int IS NULL OR pa.id_anio = $2::int)
+              ) < 3.0
             )
           ) AS tiene_hijo_riesgo,
 
@@ -159,22 +172,11 @@ export const getParentsManagementData = async (req: Request, res: Response): Pro
         LEFT JOIN usuario u_doc ON u_doc.id_usuario = doc.id_usuario
         LEFT JOIN detalle_padrefamilia dpf ON dpf.id_padrefamilia = pf.id_padrefamilia
         LEFT JOIN estudiante e ON e.id_estudiante = dpf.id_estudiante
-        LEFT JOIN nivel_escolar ne ON ne.id_nivel = e.id_nivel
         LEFT JOIN matricula m ON (m.id_estudiante = e.id_estudiante AND ($2::int IS NULL OR m.id_anio = $2::int))
         LEFT JOIN grupos g ON g.id_grupo = m.id_grupo
         LEFT JOIN tipo_grado tg ON tg.id_tipo_grado = g.id_tipo_grado
+        LEFT JOIN nivel_escolar ne ON ne.id_nivel = g.id_nivel OR ne.id_nivel = e.id_nivel
         WHERE (pf.id_colegio = $1 OR EXISTS (SELECT 1 FROM usuario_colegio uc WHERE uc.id_usuario = u.id_usuario AND uc.id_colegio = $1 AND uc.estado = 'ACTIVO'))
-          AND (
-            $2::int IS NULL OR
-            NOT EXISTS (
-              SELECT 1 FROM anio_lectivo al
-              WHERE al.id_anio = $2
-                AND (
-                  EXTRACT(YEAR FROM u.fecha_creacion) > NULLIF(regexp_replace(al.calendario, '\D', '', 'g'), '')::int
-                  OR (al.fecha_fin IS NOT NULL AND DATE(u.fecha_creacion) > al.fecha_fin)
-                )
-            )
-          )
         GROUP BY pf.id_padrefamilia, pf.nombre, pf.apellido, u.documento,
                  u.id_tipodocumento, td.tipo, u.email, u.id_usuario, u.activo, doc.id_docente, u_doc.email
       )
@@ -329,9 +331,12 @@ export const getParentDetail = async (req: Request, res: Response): Promise<void
 
           const attRes = await pool.query(
             `SELECT COUNT(*)::integer AS count
-             FROM registro_asistencia
-             WHERE id_estudiante = $1 AND estado = 'AUSENTE'`,
-            [child.id_estudiante]
+             FROM registro_asistencia ra
+             JOIN periodo_academico pa ON pa.id_periodo = ra.id_periodo
+             WHERE ra.id_estudiante = $1 
+               AND ra.estado = 'AUSENTE'
+               AND pa.id_anio = $2`,
+            [child.id_estudiante, child.id_anio]
           );
           inasistencias = attRes.rows[0]?.count ?? 0;
         }
@@ -339,8 +344,10 @@ export const getParentDetail = async (req: Request, res: Response): Promise<void
         const sanctionRes = await pool.query(
           `SELECT COUNT(*)::integer AS count
            FROM sancion
-           WHERE id_estudiante = $1 AND estado = 'ACTIVA'`,
-          [child.id_estudiante]
+           WHERE id_estudiante = $1 
+             AND estado = 'ACTIVA'
+             AND ($2::int IS NULL OR id_anio = $2::int)`,
+          [child.id_estudiante, selectedYearId]
         );
         sanciones_activas = sanctionRes.rows[0]?.count ?? 0;
 
