@@ -25,6 +25,13 @@ axios.interceptors.request.use(
       // Failsafe: Normalize double slashes in URL path (e.g. .dev//api/ -> .dev/api/)
       config.url = config.url.replace(/([^:]\/)\/+/g, '$1')
     }
+
+    // Inject x-school-id header for multi-school context switching
+    const selectedSchoolId = localStorage.getItem('selectedSchoolId')
+    if (selectedSchoolId && config.headers && !config.headers['x-school-id']) {
+      config.headers['x-school-id'] = selectedSchoolId
+    }
+
     return config
   },
   (error) => Promise.reject(error)

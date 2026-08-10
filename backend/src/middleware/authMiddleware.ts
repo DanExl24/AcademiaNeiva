@@ -71,13 +71,21 @@ export const verifyToken = async (req: AuthRequest, res: Response, next: NextFun
       }
     }
 
+    const headerSchoolId = req.headers['x-school-id'] ? Number(req.headers['x-school-id']) : null;
+    const userSchoolIds = (decoded.schoolIds || []).map(Number);
+    
+    let activeSchoolId = decoded.schoolId || null;
+    if (headerSchoolId && (userSchoolIds.length === 0 || userSchoolIds.includes(headerSchoolId) || decoded.roles?.includes('admin_general'))) {
+      activeSchoolId = headerSchoolId;
+    }
+
     req.user = {
       id: decoded.id,
       email: decoded.email,
       role: decoded.role,
       roles: decoded.roles || [decoded.role],
-      schoolId: decoded.schoolId || null,
-      schoolIds: decoded.schoolIds || [],
+      schoolId: activeSchoolId,
+      schoolIds: userSchoolIds,
       jti: decoded.jti,
       supervisionId: null
     };
