@@ -19,6 +19,7 @@ import {
 
 export interface AuthRequest extends Request {
   user?: {
+    id: number;
     id_usuario: number;
     email: string;
     roles: string[];
