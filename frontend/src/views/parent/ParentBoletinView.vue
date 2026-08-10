@@ -62,7 +62,7 @@ const fetchYears = async () => {
         const currentYearStr = new Date().getFullYear().toString()
         const matchingYear = years.value.find((y: any) => y.calendario === currentYearStr)
         selectedYear.value = matchingYear ? matchingYear.id_anio : years.value[0].id_anio
-        yearStore.setSelectedYearId(selectedYear.value)
+        if (selectedYear.value) yearStore.setSelectedYearId(selectedYear.value)
       }
     }
   } catch (err) {
