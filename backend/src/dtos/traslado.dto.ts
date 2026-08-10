@@ -2,9 +2,9 @@ import { z } from 'zod';
 
 export const CreateTrasladoSchema = z.object({
   tipo: z.enum(['TRASLADO_USUARIO', 'TRASLADO_MATRICULA']).default('TRASLADO_USUARIO'),
-  id_usuario: z.coerce.number({ invalid_type_error: 'El ID de usuario es obligatorio' }).positive({ message: 'El ID de usuario es obligatorio' }),
-  id_colegio_origen: z.coerce.number({ invalid_type_error: 'El ID de colegio origen es obligatorio' }).positive({ message: 'El ID de colegio origen es obligatorio' }),
-  id_colegio_destino: z.coerce.number({ invalid_type_error: 'El ID de colegio destino es obligatorio' }).positive({ message: 'El ID de colegio destino es obligatorio' }),
+  id_usuario: z.coerce.number().positive({ message: 'El ID de usuario es obligatorio' }),
+  id_colegio_origen: z.coerce.number().positive({ message: 'El ID de colegio origen es obligatorio' }),
+  id_colegio_destino: z.coerce.number().positive({ message: 'El ID de colegio destino es obligatorio' }),
   id_matricula: z.preprocess(
     (val) => (val === '' || val === null || val === undefined ? null : Number(val)),
     z.number().positive().nullable().optional()
