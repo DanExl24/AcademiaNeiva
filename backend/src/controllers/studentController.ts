@@ -76,8 +76,8 @@ export const getAllStudents = async (req: Request, res: Response) => {
         SELECT 1 FROM anio_lectivo al
         WHERE al.id_anio = $2
           AND (
-            EXTRACT(YEAR FROM COALESCE(e.fecha_creacion, u.fecha_creacion)) > NULLIF(regexp_replace(al.calendario, '\\D', '', 'g'), '')::int
-            OR (al.fecha_fin IS NOT NULL AND DATE(COALESCE(e.fecha_creacion, u.fecha_creacion)) > al.fecha_fin)
+            EXTRACT(YEAR FROM u.fecha_creacion) > NULLIF(regexp_replace(al.calendario, '\\D', '', 'g'), '')::int
+            OR (al.fecha_fin IS NOT NULL AND DATE(u.fecha_creacion) > al.fecha_fin)
           )
       )`;
     }
