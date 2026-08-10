@@ -131,17 +131,23 @@ export const getParentsManagementData = async (req: Request, res: Response): Pro
               SELECT 1 FROM sancion sa 
               WHERE sa.id_estudiante = e.id_estudiante 
                 AND sa.estado = 'ACTIVA'
-                AND ($2::int IS NULL OR sa.id_anio = $2::int)
+                AND (
+                  $2::int IS NULL OR EXISTS (
+                    SELECT 1 FROM anio_lectivo al_s 
+                    WHERE al_s.id_anio = $2::int 
+                      AND EXTRACT(YEAR FROM sa.fecha_inicio) = NULLIF(regexp_replace(al_s.calendario, '\D', '', 'g'), '')::int
+                  )
+                )
             )
           ) AS tiene_hijo_sancionado,
 
           BOOL_OR(
             e.id_estudiante IS NOT NULL AND ($2::int IS NULL OR m.id_matricula IS NOT NULL) AND (
               (SELECT COUNT(*) FROM registro_asistencia ra 
-               JOIN periodo_academico pa_a ON pa_a.id_periodo = ra.id_periodo 
+               JOIN detalle_grados dg_ra ON dg_ra.id_detallegrado = ra.id_detallegrado 
                WHERE ra.id_estudiante = e.id_estudiante 
                  AND ra.estado = 'AUSENTE'
-                 AND ($2::int IS NULL OR pa_a.id_anio = $2::int)
+                 AND ($2::int IS NULL OR dg_ra.id_anio = $2::int)
               ) >= 3
             )
           ) AS tiene_hijo_inasistencias,
@@ -332,10 +338,10 @@ export const getParentDetail = async (req: Request, res: Response): Promise<void
           const attRes = await pool.query(
             `SELECT COUNT(*)::integer AS count
              FROM registro_asistencia ra
-             JOIN periodo_academico pa ON pa.id_periodo = ra.id_periodo
+             JOIN detalle_grados dg ON dg.id_detallegrado = ra.id_detallegrado
              WHERE ra.id_estudiante = $1 
                AND ra.estado = 'AUSENTE'
-               AND pa.id_anio = $2`,
+               AND dg.id_anio = $2`,
             [child.id_estudiante, child.id_anio]
           );
           inasistencias = attRes.rows[0]?.count ?? 0;
@@ -343,10 +349,16 @@ export const getParentDetail = async (req: Request, res: Response): Promise<void
 
         const sanctionRes = await pool.query(
           `SELECT COUNT(*)::integer AS count
-           FROM sancion
-           WHERE id_estudiante = $1 
-             AND estado = 'ACTIVA'
-             AND ($2::int IS NULL OR id_anio = $2::int)`,
+           FROM sancion sa
+           WHERE sa.id_estudiante = $1 
+             AND sa.estado = 'ACTIVA'
+             AND (
+               $2::int IS NULL OR EXISTS (
+                 SELECT 1 FROM anio_lectivo al_s 
+                 WHERE al_s.id_anio = $2::int 
+                   AND EXTRACT(YEAR FROM sa.fecha_inicio) = NULLIF(regexp_replace(al_s.calendario, '\D', '', 'g'), '')::int
+               )
+             )`,
           [child.id_estudiante, selectedYearId]
         );
         sanciones_activas = sanctionRes.rows[0]?.count ?? 0;
