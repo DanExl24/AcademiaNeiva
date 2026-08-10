@@ -79,7 +79,7 @@ export const getStudentGrades = async (req: Request, res: Response) => {
     // 1. Verify period exists and is not pending
     const period = await db
       .selectFrom("periodo_academico")
-      .select(["estado", "id_colegio"])
+      .select(["estado", "id_colegio", "id_anio"])
       .where("id_periodo", "=", Number(id_periodo))
       .executeTakeFirst();
 
@@ -133,7 +133,8 @@ export const getStudentGrades = async (req: Request, res: Response) => {
         "ev.nivel as desempeno"
       ])
       .where("mat.id_estudiante", "=", Number(id_estudiante))
-      .where("mat.estado", "=", "ACTIVA")
+      .where("mat.id_anio", "=", period.id_anio)
+      .where("mat.estado", "in", ["ACTIVA", "APROBADA"])
       .orderBy("m.id_materia")
       .orderBy("dg.id_detallegrado", "desc")
       .execute();

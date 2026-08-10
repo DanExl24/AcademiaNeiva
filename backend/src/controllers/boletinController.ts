@@ -126,12 +126,13 @@ export const getStudentBoletin = async (req: Request, res: Response) => {
       return res.status(403).json({ error: "No tiene permiso para generar el boletín de este estudiante." });
     }
 
-    // 4. Fetch Todas las Materias y Profesores del año filtrado
+    // 4. Fetch Todas las Materias y Profesores del año filtrado (Únicas por Materia)
     const materiasRes = await db
       .selectFrom("detalle_grados as dg")
       .innerJoin("matricula as mat", "mat.id_grupo", "dg.id_grupo")
       .innerJoin("materias as m", "m.id_materia", "dg.id_materia")
       .innerJoin("docente as d", "d.id_docente", "dg.id_docente")
+      .distinctOn("m.id_materia")
       .select([
         "dg.id_materia",
         "m.nombre as materia",
@@ -140,62 +141,83 @@ export const getStudentBoletin = async (req: Request, res: Response) => {
       ])
       .where("mat.id_estudiante", "=", numEstudiante)
       .where("mat.id_anio", "=", idAnio)
+      .orderBy("m.id_materia")
+      .orderBy("dg.id_detallegrado", "desc")
       .execute();
     
-    // 5. Fetch Notas Historicas del Año
+    // 5. Fetch Notas Historicas del Año (Agrupadas por Materia y Periodo)
     const studentGroupSubquery = db
       .selectFrom("matricula")
       .select("id_grupo")
       .where("id_estudiante", "=", numEstudiante)
-      .where("id_anio", "=", idAnio);
+      .where("id_anio", "=", idAnio)
+      .limit(1);
 
     const calcSubquery = db
       .selectFrom("notas_actividad as na")
       .innerJoin("actividad_materia as am", "am.id_actividadmateria", "na.id_actividadmateria")
+      .innerJoin("detalle_grados as dg_am", "dg_am.id_detallegrado", "am.id_detallegrado")
       .select([
-        "am.id_detallegrado",
+        "dg_am.id_materia",
         "am.id_periodo",
         sql<number>`ROUND(AVG(na.nota)::numeric, 2)`.as("promedio_calculado")
       ])
       .where("na.id_estudiante", "=", numEstudiante)
-      .groupBy(["am.id_detallegrado", "am.id_periodo"])
+      .groupBy(["dg_am.id_materia", "am.id_periodo"])
       .as("calc");
 
-    const notasRes = await db
+    const raSubquery = db
+      .selectFrom("resultado_academico as ra_inner")
+      .innerJoin("detalle_grados as dg_ra", "dg_ra.id_detallegrado", "ra_inner.id_detallegrado")
+      .select([
+        "dg_ra.id_materia",
+        "ra_inner.id_periodo",
+        sql<number>`MAX(ra_inner.promedio)`.as("promedio")
+      ])
+      .where("ra_inner.id_estudiante", "=", numEstudiante)
+      .groupBy(["dg_ra.id_materia", "ra_inner.id_periodo"])
+      .as("ra");
+
+    const groupMateriasSubquery = db
       .selectFrom("detalle_grados as dg")
+      .select("dg.id_materia")
+      .distinctOn("dg.id_materia")
+      .where("dg.id_grupo", "=", studentGroupSubquery)
+      .as("gm");
+
+    const notasRes = await db
+      .selectFrom(groupMateriasSubquery)
       .innerJoin("periodo_academico as p", (join) =>
         join
           .on("p.id_anio", "=", idAnio)
-          .onRef("p.id_colegio", "=", "dg.id_colegio")
+          .on("p.id_colegio", "=", Number(studentInfo.id_colegio))
       )
-      .leftJoin("resultado_academico as ra", (join) =>
+      .leftJoin(raSubquery, (join) =>
         join
-          .onRef("ra.id_detallegrado", "=", "dg.id_detallegrado")
+          .onRef("ra.id_materia", "=", "gm.id_materia")
           .onRef("ra.id_periodo", "=", "p.id_periodo")
-          .on("ra.id_estudiante", "=", numEstudiante)
       )
       .leftJoin(calcSubquery, (join) =>
         join
-          .onRef("calc.id_detallegrado", "=", "dg.id_detallegrado")
+          .onRef("calc.id_materia", "=", "gm.id_materia")
           .onRef("calc.id_periodo", "=", "p.id_periodo")
       )
       .leftJoin("escala_valoracion as ev", (join) =>
         join
-          .onRef("ev.id_colegio", "=", "dg.id_colegio")
+          .on("ev.id_colegio", "=", Number(studentInfo.id_colegio))
           .on(sql`COALESCE(ra.promedio, calc.promedio_calculado)`, ">=", sql.ref("ev.valor_minimo"))
           .on(sql`COALESCE(ra.promedio, calc.promedio_calculado)`, "<=", sql.ref("ev.valor_maximo"))
       )
       .select([
-        "dg.id_materia",
+        "gm.id_materia",
         "p.nombre as periodo_nombre",
         "p.id_periodo",
         "p.trimestre",
         sql<number>`COALESCE(ra.promedio, calc.promedio_calculado)`.as("calificacion"),
         "ev.nivel as desempeno"
       ])
-      .where("dg.id_grupo", "in", studentGroupSubquery)
       .orderBy("p.trimestre", "asc")
-      .orderBy("dg.id_materia", "asc")
+      .orderBy("gm.id_materia", "asc")
       .execute();
 
     // 6. Fetch Observaciones del Periodo Actual
