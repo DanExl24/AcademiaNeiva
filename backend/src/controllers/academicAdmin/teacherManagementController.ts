@@ -871,46 +871,62 @@ export const assignTeacherCourseSubject = async (req: Request, res: Response): P
   }
 
   try {
-    const validationRes = await pool.query(
-      `SELECT
-         EXISTS(SELECT 1 FROM docente WHERE id_docente = $1 AND id_colegio = $4) AS teacher_ok,
-         EXISTS(SELECT 1 FROM materias WHERE id_materia = $2 AND id_colegio = $4) AS subject_ok,
-         EXISTS(SELECT 1 FROM grupos WHERE id_grupo = $3 AND id_colegio = $4) AS group_ok`,
-      [teacherId, subjectId, groupId, schoolId]
-    );
+    const teacher_ok = await db
+      .selectFrom("docente")
+      .select("id_docente")
+      .where("id_docente", "=", teacherId)
+      .where("id_colegio", "=", schoolId)
+      .executeTakeFirst();
 
-    const validation = validationRes.rows[0];
-    if (!validation.teacher_ok || !validation.subject_ok || !validation.group_ok) {
+    const subject_ok = await db
+      .selectFrom("materias")
+      .select("id_materia")
+      .where("id_materia", "=", subjectId)
+      .where("id_colegio", "=", schoolId)
+      .executeTakeFirst();
+
+    const group_ok = await db
+      .selectFrom("grupos")
+      .select("id_grupo")
+      .where("id_grupo", "=", groupId)
+      .where("id_colegio", "=", schoolId)
+      .executeTakeFirst();
+
+    if (!teacher_ok || !subject_ok || !group_ok) {
       res.status(400).json({ error: "La asignación solicitada no es válida para este colegio" });
       return;
     }
 
-    const contextRes = await pool.query(
-      `SELECT
-         c.nombre AS colegio_nombre,
-         u.email,
-         d.nombre,
-         d.apellido,
-         m.nombre AS materia_nombre,
-         ne.nombre AS nivel_nombre,
-         tg.nombre AS tipo_grado_nombre,
-         s.nombre AS seccion_nombre,
-         j.nombre AS jornada_nombre
-       FROM docente d
-       JOIN usuario u ON u.id_usuario = d.id_usuario
-       JOIN colegio c ON c.id_colegio = d.id_colegio
-       JOIN materias m ON m.id_materia = $2
-       JOIN grupos g ON g.id_grupo = $3
-       JOIN nivel_escolar ne ON ne.id_nivel = g.id_nivel
-       JOIN tipo_grado tg ON tg.id_tipo_grado = g.id_tipo_grado
-       JOIN secciones s ON s.id_seccion = g.id_seccion
-       JOIN jornada j ON j.id_jornada = g.id_jornada
-       WHERE d.id_docente = $1
-         AND d.id_colegio = $4`,
-      [teacherId, subjectId, groupId, schoolId]
-    );
+    const context = await db
+      .selectFrom("docente as d")
+      .innerJoin("usuario as u", "u.id_usuario", "d.id_usuario")
+      .innerJoin("colegio as c", "c.id_colegio", "d.id_colegio")
+      .innerJoin("materias as m", "m.id_materia", sql.val(subjectId))
+      .innerJoin("grupos as g", "g.id_grupo", sql.val(groupId))
+      .innerJoin("nivel_escolar as ne", "ne.id_nivel", "g.id_nivel")
+      .innerJoin("tipo_grado as tg", "tg.id_tipo_grado", "g.id_tipo_grado")
+      .innerJoin("secciones as s", "s.id_seccion", "g.id_seccion")
+      .innerJoin("jornada as j", "j.id_jornada", "g.id_jornada")
+      .select([
+        "c.nombre as colegio_nombre",
+        "u.email",
+        "d.nombre",
+        "d.apellido",
+        "m.nombre as materia_nombre",
+        "ne.nombre as nivel_nombre",
+        "tg.nombre as tipo_grado_nombre",
+        "s.nombre as seccion_nombre",
+        "j.nombre as jornada_nombre",
+      ])
+      .where("d.id_docente", "=", teacherId)
+      .where("d.id_colegio", "=", schoolId)
+      .executeTakeFirst();
 
-    const context = contextRes.rows[0];
+    if (!context) {
+      res.status(400).json({ error: "La información del docente o del curso no fue encontrada." });
+      return;
+    }
+
     if (context.tipo_grado_nombre === "TRANSICION" && 
         context.materia_nombre !== "Desarrollo Integral" && 
         context.materia_nombre !== "Desarrollo Integral (Transición)") {
@@ -919,34 +935,43 @@ export const assignTeacherCourseSubject = async (req: Request, res: Response): P
     }
     const courseName = `${context.tipo_grado_nombre} ${context.seccion_nombre} - ${context.jornada_nombre} - ${context.nivel_nombre}`;
 
-    const activeYearRes = await pool.query(
-      `SELECT id_anio FROM anio_lectivo WHERE id_colegio = $1 AND estado = 'ABIERTO' LIMIT 1`,
-      [schoolId]
-    );
-    const activeYearId = activeYearRes.rows[0]?.id_anio;
+    const activeYearRow = await db
+      .selectFrom("anio_lectivo")
+      .select("id_anio")
+      .where("id_colegio", "=", schoolId)
+      .where("estado", "=", "ABIERTO")
+      .executeTakeFirst();
+
+    const activeYearId = activeYearRow?.id_anio;
     if (!activeYearId) {
       res.status(400).json({ error: "No hay un año lectivo abierto configurado para el colegio." });
       return;
     }
 
-    const existingRes = await pool.query(
-      `SELECT
-         dg.id_detallegrado,
-         dg.id_docente,
-         d.nombre,
-         d.apellido
-       FROM detalle_grados dg
-       JOIN docente d ON d.id_docente = dg.id_docente
-       WHERE dg.id_colegio = $1
-         AND dg.id_materia = $2
-         AND dg.id_grupo = $3
-         AND (dg.id_anio = $4 OR dg.id_anio IS NULL OR $4::int IS NULL)
-       ORDER BY dg.id_anio DESC NULLS LAST, dg.id_detallegrado DESC`,
-      [schoolId, subjectId, groupId, activeYearId]
-    );
+    const existingRes = await db
+      .selectFrom("detalle_grados as dg")
+      .innerJoin("docente as d", "d.id_docente", "dg.id_docente")
+      .select([
+        "dg.id_detallegrado",
+        "dg.id_docente",
+        "d.nombre",
+        "d.apellido",
+      ])
+      .where("dg.id_colegio", "=", schoolId)
+      .where("dg.id_materia", "=", subjectId)
+      .where("dg.id_grupo", "=", groupId)
+      .where((eb) =>
+        eb.or([
+          eb("dg.id_anio", "=", activeYearId),
+          eb("dg.id_anio", "is", null),
+        ])
+      )
+      .orderBy("dg.id_anio", "desc")
+      .orderBy("dg.id_detallegrado", "desc")
+      .execute();
 
-    if (existingRes.rows.length > 0) {
-      const existing = existingRes.rows[0];
+    if (existingRes.length > 0) {
+      const existing = existingRes[0];
       if (Number(existing.id_docente) === teacherId) {
         res.status(409).json({ error: "El docente ya tiene asignada esta materia en este curso" });
         return;
@@ -964,81 +989,96 @@ export const assignTeacherCourseSubject = async (req: Request, res: Response): P
         return;
       }
 
-      const updated = await pool.query(
-        `UPDATE detalle_grados
-         SET id_docente = $1, id_anio = COALESCE(id_anio, $3)
-         WHERE id_detallegrado = $2
-         RETURNING id_detallegrado, id_docente, id_materia, id_grupo`,
-        [teacherId, existing.id_detallegrado, activeYearId]
-      );
+      const updated = await db
+        .updateTable("detalle_grados")
+        .set({
+          id_docente: teacherId,
+          id_anio: sql`COALESCE(id_anio, ${activeYearId})`,
+        })
+        .where("id_detallegrado", "=", existing.id_detallegrado)
+        .returning(["id_detallegrado", "id_docente", "id_materia", "id_grupo"])
+        .executeTakeFirst();
 
       // Consolidar cualquier detalle_grados duplicado existente para este mismo año/grupo/materia
-      const duplicateRes = await pool.query(
-        `SELECT id_detallegrado FROM detalle_grados 
-         WHERE id_colegio = $1 AND id_materia = $2 AND id_grupo = $3 
-           AND (id_anio = $4 OR ($4::int IS NULL AND id_anio IS NULL))
-           AND id_detallegrado != $5`,
-        [schoolId, subjectId, groupId, activeYearId, existing.id_detallegrado]
-      );
-      const duplicateIds = duplicateRes.rows.map((r: any) => Number(r.id_detallegrado));
+      const duplicateRes = await db
+        .selectFrom("detalle_grados")
+        .select("id_detallegrado")
+        .where("id_colegio", "=", schoolId)
+        .where("id_materia", "=", subjectId)
+        .where("id_grupo", "=", groupId)
+        .where((eb) => eb.or([eb("id_anio", "=", activeYearId), eb("id_anio", "is", null)]))
+        .where("id_detallegrado", "!=", existing.id_detallegrado)
+        .execute();
+
+      const duplicateIds = duplicateRes.map((r) => Number(r.id_detallegrado));
 
       if (duplicateIds.length > 0) {
-        await pool.query(
-          `UPDATE actividad_materia SET id_detallegrado = $1 WHERE id_detallegrado = ANY($2::int[])`,
-          [existing.id_detallegrado, duplicateIds]
-        );
-        await pool.query(
-          `UPDATE resultado_academico SET id_detallegrado = $1 WHERE id_detallegrado = ANY($2::int[])`,
-          [existing.id_detallegrado, duplicateIds]
-        );
-        await pool.query(
-          `UPDATE cierre_materia SET id_detallegrado = $1 WHERE id_detallegrado = ANY($2::int[])`,
-          [existing.id_detallegrado, duplicateIds]
-        );
-        await pool.query(
-          `UPDATE observacion_estudiante SET id_detallegrado = $1 WHERE id_detallegrado = ANY($2::int[])`,
-          [existing.id_detallegrado, duplicateIds]
-        );
-        await pool.query(
-          `UPDATE registro_asistencia SET id_detallegrado = $1 WHERE id_detallegrado = ANY($2::int[])`,
-          [existing.id_detallegrado, duplicateIds]
-        );
-        await pool.query(
-          `DELETE FROM detalle_grados WHERE id_detallegrado = ANY($1::int[])`,
-          [duplicateIds]
-        );
+        await db
+          .updateTable("actividad_materia")
+          .set({ id_detallegrado: existing.id_detallegrado })
+          .where("id_detallegrado", "in", duplicateIds)
+          .execute();
+        await db
+          .updateTable("resultado_academico")
+          .set({ id_detallegrado: existing.id_detallegrado })
+          .where("id_detallegrado", "in", duplicateIds)
+          .execute();
+        await db
+          .updateTable("cierre_materia")
+          .set({ id_detallegrado: existing.id_detallegrado })
+          .where("id_detallegrado", "in", duplicateIds)
+          .execute();
+        await db
+          .updateTable("observacion_estudiante")
+          .set({ id_detallegrado: existing.id_detallegrado })
+          .where("id_detallegrado", "in", duplicateIds)
+          .execute();
+        await db
+          .updateTable("registro_asistencia")
+          .set({ id_detallegrado: existing.id_detallegrado })
+          .where("id_detallegrado", "in", duplicateIds)
+          .execute();
+        await db
+          .deleteFrom("detalle_grados")
+          .where("id_detallegrado", "in", duplicateIds)
+          .execute();
       }
 
       await NotificationService.sendTeacherAssignmentEmail(
-        context.email,
+        context.email || "",
         `${context.nombre} ${context.apellido}`,
-        context.colegio_nombre,
-        context.materia_nombre,
+        context.colegio_nombre || "",
+        context.materia_nombre || "",
         courseName,
         "assigned"
       );
 
-      res.json(updated.rows[0]);
+      res.json(updated);
       return;
     }
 
-    const created = await pool.query(
-      `INSERT INTO detalle_grados (id_materia, id_docente, id_colegio, id_grupo, id_anio)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING id_detallegrado, id_docente, id_materia, id_grupo`,
-      [subjectId, teacherId, schoolId, groupId, activeYearId]
-    );
+    const created = await db
+      .insertInto("detalle_grados")
+      .values({
+        id_materia: subjectId,
+        id_docente: teacherId,
+        id_colegio: schoolId,
+        id_grupo: groupId,
+        id_anio: activeYearId,
+      })
+      .returning(["id_detallegrado", "id_docente", "id_materia", "id_grupo"])
+      .executeTakeFirst();
 
     await NotificationService.sendTeacherAssignmentEmail(
-      context.email,
+      context.email || "",
       `${context.nombre} ${context.apellido}`,
-      context.colegio_nombre,
-      context.materia_nombre,
+      context.colegio_nombre || "",
+      context.materia_nombre || "",
       courseName,
       "assigned"
     );
 
-    res.status(201).json(created.rows[0]);
+    res.status(201).json(created);
   } catch (error: any) {
     console.error("Error assigning teacher course subject:", error);
     res.status(500).json({ error: formatFriendlyErrorMessage(error, "Error al realizar el traslado o asignación de la materia") });
@@ -1062,50 +1102,74 @@ export const deleteTeacherAssignment = async (req: Request, res: Response): Prom
   }
 
   try {
-    const assignmentRes = await pool.query(
-      `SELECT
-         dg.id_detallegrado,
-         u.email,
-         d.nombre,
-         d.apellido,
-         c.nombre AS colegio_nombre,
-         m.nombre AS materia_nombre,
-         ne.nombre AS nivel_nombre,
-         tg.nombre AS tipo_grado_nombre,
-         s.nombre AS seccion_nombre,
-         j.nombre AS jornada_nombre
-       FROM detalle_grados dg
-       JOIN docente d ON d.id_docente = dg.id_docente
-       JOIN usuario u ON u.id_usuario = d.id_usuario
-       JOIN colegio c ON c.id_colegio = dg.id_colegio
-       JOIN materias m ON m.id_materia = dg.id_materia
-       JOIN grupos g ON g.id_grupo = dg.id_grupo
-       JOIN nivel_escolar ne ON ne.id_nivel = g.id_nivel
-       JOIN tipo_grado tg ON tg.id_tipo_grado = g.id_tipo_grado
-       JOIN secciones s ON s.id_seccion = g.id_seccion
-       JOIN jornada j ON j.id_jornada = g.id_jornada
-       WHERE dg.id_detallegrado = $1
-         AND dg.id_colegio = $2`,
-      [assignmentId, schoolId]
-    );
+    const assignment = await db
+      .selectFrom("detalle_grados as dg")
+      .innerJoin("docente as d", "d.id_docente", "dg.id_docente")
+      .innerJoin("usuario as u", "u.id_usuario", "d.id_usuario")
+      .innerJoin("colegio as c", "c.id_colegio", "dg.id_colegio")
+      .innerJoin("materias as m", "m.id_materia", "dg.id_materia")
+      .innerJoin("grupos as g", "g.id_grupo", "dg.id_grupo")
+      .innerJoin("nivel_escolar as ne", "ne.id_nivel", "g.id_nivel")
+      .innerJoin("tipo_grado as tg", "tg.id_tipo_grado", "g.id_tipo_grado")
+      .innerJoin("secciones as s", "s.id_seccion", "g.id_seccion")
+      .innerJoin("jornada as j", "j.id_jornada", "g.id_jornada")
+      .select([
+        "dg.id_detallegrado",
+        "u.email",
+        "d.nombre",
+        "d.apellido",
+        "c.nombre as colegio_nombre",
+        "m.nombre as materia_nombre",
+        "ne.nombre as nivel_nombre",
+        "tg.nombre as tipo_grado_nombre",
+        "s.nombre as seccion_nombre",
+        "j.nombre as jornada_nombre",
+      ])
+      .where("dg.id_detallegrado", "=", assignmentId)
+      .where("dg.id_colegio", "=", schoolId)
+      .executeTakeFirst();
 
-    if (assignmentRes.rows.length === 0) {
+    if (!assignment) {
       res.status(404).json({ error: "Asignación no encontrada" });
       return;
     }
 
-    // RN-DOC-005: Denegar eliminación si existen actividades evaluadas, asistencias, calificaciones o cierres de materia registrados
-    const checkRelations = await pool.query(
-      `SELECT 
-         (SELECT COUNT(*)::int FROM actividad_materia WHERE id_detallegrado = $1) AS actividades_count,
-         (SELECT COUNT(*)::int FROM registro_asistencia WHERE id_detallegrado = $1) AS asistencias_count,
-         (SELECT COUNT(*)::int FROM cierre_materia WHERE id_detallegrado = $1) AS cierres_count,
-         (SELECT COUNT(*)::int FROM resultado_academico WHERE id_detallegrado = $1) AS notas_count,
-         (SELECT COUNT(*)::int FROM observacion_estudiante WHERE id_detallegrado = $1) AS observaciones_count`,
-      [assignmentId]
-    );
+    const actividadesCount = await db
+      .selectFrom("actividad_materia")
+      .select(sql<number>`count(*)::int`.as("count"))
+      .where("id_detallegrado", "=", assignmentId)
+      .executeTakeFirst();
 
-    const { actividades_count, asistencias_count, cierres_count, notas_count, observaciones_count } = checkRelations.rows[0];
+    const asistenciasCount = await db
+      .selectFrom("registro_asistencia")
+      .select(sql<number>`count(*)::int`.as("count"))
+      .where("id_detallegrado", "=", assignmentId)
+      .executeTakeFirst();
+
+    const cierresCount = await db
+      .selectFrom("cierre_materia")
+      .select(sql<number>`count(*)::int`.as("count"))
+      .where("id_detallegrado", "=", assignmentId)
+      .executeTakeFirst();
+
+    const notasCount = await db
+      .selectFrom("resultado_academico")
+      .select(sql<number>`count(*)::int`.as("count"))
+      .where("id_detallegrado", "=", assignmentId)
+      .executeTakeFirst();
+
+    const observacionesCount = await db
+      .selectFrom("observacion_estudiante")
+      .select(sql<number>`count(*)::int`.as("count"))
+      .where("id_detallegrado", "=", assignmentId)
+      .executeTakeFirst();
+
+    const actividades_count = actividadesCount?.count || 0;
+    const asistencias_count = asistenciasCount?.count || 0;
+    const cierres_count = cierresCount?.count || 0;
+    const notas_count = notasCount?.count || 0;
+    const observaciones_count = observacionesCount?.count || 0;
+
     if (actividades_count > 0 || asistencias_count > 0 || cierres_count > 0 || notas_count > 0 || observaciones_count > 0) {
       res.status(409).json({
         error: "No se puede eliminar esta asignación académica porque contiene evaluaciones, asistencias, notas o cierres de materia registrados."
@@ -1113,25 +1177,23 @@ export const deleteTeacherAssignment = async (req: Request, res: Response): Prom
       return;
     }
 
-    const deleted = await pool.query(
-      `DELETE FROM detalle_grados
-       WHERE id_detallegrado = $1
-         AND id_colegio = $2
-       RETURNING id_detallegrado`,
-      [assignmentId, schoolId]
-    );
+    const deleted = await db
+      .deleteFrom("detalle_grados")
+      .where("id_detallegrado", "=", assignmentId)
+      .where("id_colegio", "=", schoolId)
+      .returning("id_detallegrado")
+      .executeTakeFirst();
 
-    if (deleted.rows.length === 0) {
+    if (!deleted) {
       res.status(404).json({ error: "Asignación no encontrada" });
       return;
     }
 
-    const assignment = assignmentRes.rows[0];
     await NotificationService.sendTeacherAssignmentEmail(
-      assignment.email,
+      assignment.email || "",
       `${assignment.nombre} ${assignment.apellido}`,
-      assignment.colegio_nombre,
-      assignment.materia_nombre,
+      assignment.colegio_nombre || "",
+      assignment.materia_nombre || "",
       `${assignment.tipo_grado_nombre} ${assignment.seccion_nombre} - ${assignment.jornada_nombre} - ${assignment.nivel_nombre}`,
       "unassigned"
     );
