@@ -279,12 +279,12 @@ const openDetailModal = async (solicitud: SolicitudTraslado) => {
 }
 
 const handleCreateTraslado = async () => {
-  if (!newTraslado.value.id_usuario || !newTraslado.value.id_colegio_destino || !newTraslado.value.motivo.trim()) {
+  if (!newTraslado.value.id_usuario || !newTraslado.value.id_colegio_origen || !newTraslado.value.id_colegio_destino || !newTraslado.value.motivo.trim()) {
     alert('Por favor completa todos los campos requeridos.')
     return
   }
 
-  if (newTraslado.value.id_colegio_origen === newTraslado.value.id_colegio_destino) {
+  if (Number(newTraslado.value.id_colegio_origen) === Number(newTraslado.value.id_colegio_destino)) {
     alert('La institución de origen y destino deben ser diferentes.')
     return
   }
@@ -294,8 +294,12 @@ const handleCreateTraslado = async () => {
   try {
     // TRASLADO_DIRECTIVO es un subtipo de TRASLADO_USUARIO en el backend
     const payload = {
-      ...newTraslado.value,
-      tipo: newTraslado.value.tipo === 'TRASLADO_DIRECTIVO' ? 'TRASLADO_USUARIO' : newTraslado.value.tipo
+      tipo: newTraslado.value.tipo === 'TRASLADO_DIRECTIVO' ? 'TRASLADO_USUARIO' : newTraslado.value.tipo,
+      id_usuario: Number(newTraslado.value.id_usuario),
+      id_colegio_origen: Number(newTraslado.value.id_colegio_origen),
+      id_colegio_destino: Number(newTraslado.value.id_colegio_destino),
+      id_matricula: newTraslado.value.id_matricula ? Number(newTraslado.value.id_matricula) : null,
+      motivo: newTraslado.value.motivo.trim()
     }
     await axios.post(`${API_BASE_URL}/api/traslados`, payload, {
       headers: { Authorization: `Bearer ${auth.token}` }
@@ -891,7 +895,7 @@ const canUserApproveCurrentModal = computed(() => {
           <div v-if="isAdminGeneral">
             <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Institución de Origen</label>
             <select
-              v-model="newTraslado.id_colegio_origen"
+              v-model.number="newTraslado.id_colegio_origen"
               class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
               <option :value="null" disabled>-- Selecciona la institución de origen --</option>
@@ -905,7 +909,7 @@ const canUserApproveCurrentModal = computed(() => {
           <div v-if="newTraslado.tipo === 'TRASLADO_MATRICULA'">
             <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Seleccionar Estudiante</label>
             <select 
-              v-model="newTraslado.id_usuario"
+              v-model.number="newTraslado.id_usuario"
               class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
               <option :value="null" disabled>-- Selecciona un estudiante --</option>
@@ -919,7 +923,7 @@ const canUserApproveCurrentModal = computed(() => {
           <div v-else-if="newTraslado.tipo === 'TRASLADO_USUARIO'">
             <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Seleccionar Personal (Docente / Acudiente / otro)</label>
             <select 
-              v-model="newTraslado.id_usuario"
+              v-model.number="newTraslado.id_usuario"
               class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
               <option :value="null" disabled>-- Selecciona el usuario --</option>
@@ -934,7 +938,7 @@ const canUserApproveCurrentModal = computed(() => {
           <div v-else-if="newTraslado.tipo === 'TRASLADO_DIRECTIVO'">
             <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Seleccionar Directivo a Trasladar</label>
             <select 
-              v-model="newTraslado.id_usuario"
+              v-model.number="newTraslado.id_usuario"
               class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
             >
               <option :value="null" disabled>-- Selecciona el directivo --</option>
@@ -949,7 +953,7 @@ const canUserApproveCurrentModal = computed(() => {
           <div>
             <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Institución de Destino</label>
             <select 
-              v-model="newTraslado.id_colegio_destino"
+              v-model.number="newTraslado.id_colegio_destino"
               class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
               <option :value="null" disabled>-- Selecciona la institución de destino --</option>
@@ -987,7 +991,7 @@ const canUserApproveCurrentModal = computed(() => {
           
           <button 
             @click="handleCreateTraslado"
-            :disabled="submitting || !newTraslado.id_usuario || !newTraslado.id_colegio_destino || !newTraslado.motivo.trim()"
+            :disabled="submitting || !newTraslado.id_usuario || !newTraslado.id_colegio_origen || !newTraslado.id_colegio_destino || !newTraslado.motivo.trim()"
             class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition-all disabled:opacity-40"
           >
             {{ submitting ? 'Enviando...' : 'Enviar Solicitud' }}
