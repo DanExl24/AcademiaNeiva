@@ -382,9 +382,9 @@ export const getSubjectTrash = async (req: Request, res: Response): Promise<void
   }
 };
 
-import * as path from 'path';
-import * as fs from 'fs';
-import { AuthRequest } from '../middleware/authMiddleware';
+
+
+
 
 export const getSubjectCurriculumDetails = async (req: Request, res: Response): Promise<void> => {
   try {
