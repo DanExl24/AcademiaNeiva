@@ -1,5 +1,7 @@
 import { Response } from "express";
 import { pool } from "../config/db";
+import { db } from "../config/kysely";
+import { sql } from "kysely";
 import { AuthRequest } from "../middleware/authMiddleware";
 import { spawn } from "child_process";
 import path from "path";
@@ -14,73 +16,58 @@ export const listarDBA = async (req: AuthRequest, res: Response): Promise<void> 
     const page = req.query.page ? Number(req.query.page) : null;
     const limit = req.query.limit ? Number(req.query.limit) : null;
 
-    let query = `
-      SELECT d.*, 
-             COUNT(e.id_evidencia_dba)::int AS total_evidencias
-      FROM dba d
-      LEFT JOIN evidencias_dba e ON e.id_dba = d.id_dba
-      WHERE 1=1
-    `;
-    const params: any[] = [];
+    let baseQuery = db
+      .selectFrom("dba as d")
+      .leftJoin("evidencias_dba as e", "e.id_dba", "d.id_dba")
+      .select([
+        "d.id_dba",
+        "d.area",
+        "d.grado",
+        "d.numero_dba",
+        "d.enunciado",
+        "d.version_curricular",
+        "d.estado",
+        sql<number>`COUNT(e.id_evidencia_dba)::int`.as("total_evidencias")
+      ])
+      .groupBy("d.id_dba");
 
     if (area && area !== "TODOS") {
-      params.push(area);
-      query += ` AND d.area = $${params.length}`;
+      baseQuery = baseQuery.where("d.area", "=", area as string);
     }
 
     if (grado && grado !== "TODOS") {
-      params.push(grado);
-      query += ` AND d.grado = $${params.length}`;
+      baseQuery = baseQuery.where("d.grado", "=", grado as string);
     }
 
     if (version && version !== "TODOS") {
-      params.push(version);
-      query += ` AND d.version_curricular = $${params.length}`;
+      baseQuery = baseQuery.where("d.version_curricular", "=", version as string);
     }
 
     if (estado && estado !== "TODOS") {
-      params.push(estado);
-      query += ` AND d.estado = $${params.length}`;
+      baseQuery = baseQuery.where("d.estado", "=", estado as any);
     }
 
     if (busqueda) {
-      params.push(`%${busqueda}%`);
-      query += ` AND (d.enunciado ILIKE $${params.length} OR d.area ILIKE $${params.length} OR d.grado ILIKE $${params.length})`;
+      const searchPattern = `%${busqueda}%`;
+      baseQuery = baseQuery.where((eb) => eb.or([
+        eb("d.enunciado", "ilike", searchPattern),
+        eb("d.area", "ilike", searchPattern),
+        eb("d.grado", "ilike", searchPattern)
+      ]));
     }
 
-    query += ` GROUP BY d.id_dba ORDER BY d.area ASC, 
-      CASE d.grado
-        WHEN 'PRIMERO' THEN 1
-        WHEN 'SEGUNDO' THEN 2
-        WHEN 'TERCERO' THEN 3
-        WHEN 'CUARTO' THEN 4
-        WHEN 'QUINTO' THEN 5
-        WHEN 'SEXTO' THEN 6
-        WHEN 'SEPTIMO' THEN 7
-        WHEN 'OCTAVO' THEN 8
-        WHEN 'NOVENO' THEN 9
-        WHEN 'DECIMO' THEN 10
-        WHEN 'ONCE' THEN 11
-        ELSE 12
-      END ASC, d.numero_dba ASC`;
+    const allRows = await baseQuery.orderBy("d.area", "asc").orderBy("d.numero_dba", "asc").execute();
+    const totalCount = allRows.length;
 
-    // Count query for pagination
-    const countQuery = `SELECT COUNT(*)::int as count FROM (${query}) AS temp`;
-    const countResult = await pool.query(countQuery, params);
-    const totalCount = countResult.rows[0].count;
-
+    let pagedRows = allRows;
     if (page && limit) {
-      const offset = (page - 1) * limit;
-      params.push(limit);
-      query += ` LIMIT $${params.length}`;
-      params.push(offset);
-      query += ` OFFSET $${params.length}`;
+      const offset = (Number(page) - 1) * Number(limit);
+      pagedRows = allRows.slice(offset, offset + Number(limit));
     }
 
-    const result = await pool.query(query, params);
     res.setHeader("x-total-count", String(totalCount));
     res.setHeader("Access-Control-Expose-Headers", "x-total-count");
-    res.json(result.rows);
+    res.json(pagedRows);
   } catch (error: any) {
     console.error("Error al listar DBA:", error);
     res.status(500).json({ error: "Error al listar DBA" });
@@ -92,27 +79,31 @@ export const listarDBA = async (req: AuthRequest, res: Response): Promise<void> 
 // ============================================================================
 export const detalleDBA = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { id } = req.params;
+    const dbaId = Number(req.params.id);
 
-    const dbaResult = await pool.query(
-      `SELECT * FROM dba WHERE id_dba = $1`,
-      [id]
-    );
+    const dba = await db
+      .selectFrom("dba")
+      .selectAll()
+      .where("id_dba", "=", dbaId)
+      .executeTakeFirst();
 
-    if (dbaResult.rows.length === 0) {
+    if (!dba) {
       res.status(404).json({ error: "DBA no encontrado" });
       return;
     }
 
-    const dba = dbaResult.rows[0];
+    const evidencias = await db
+      .selectFrom("evidencias_dba")
+      .selectAll()
+      .where("id_dba", "=", dbaId)
+      .orderBy("orden", "asc")
+      .orderBy("id_evidencia_dba", "asc")
+      .execute();
 
-    const evidenciasResult = await pool.query(
-      `SELECT * FROM evidencias_dba WHERE id_dba = $1 ORDER BY orden ASC, id_evidencia_dba ASC`,
-      [id]
-    );
-
-    dba.evidencias = evidenciasResult.rows;
-    res.json(dba);
+    res.json({
+      ...dba,
+      evidencias
+    });
   } catch (error: any) {
     console.error("Error al obtener detalle del DBA:", error);
     res.status(500).json({ error: "Error al obtener el detalle del DBA" });
@@ -131,26 +122,34 @@ export const crearDBA = async (req: AuthRequest, res: Response): Promise<void> =
       return;
     }
 
-    // RN-DBA-001 / RN-DBA-002: Validar duplicidad
-    const dupCheck = await pool.query(
-      `SELECT id_dba FROM dba 
-       WHERE area = $1 AND grado = $2 AND numero_dba = $3 AND version_curricular = $4`,
-      [area, grado, numero_dba, version_curricular]
-    );
+    const dupCheck = await db
+      .selectFrom("dba")
+      .select("id_dba")
+      .where("area", "=", area)
+      .where("grado", "=", grado)
+      .where("numero_dba", "=", Number(numero_dba))
+      .where("version_curricular", "=", version_curricular)
+      .executeTakeFirst();
 
-    if (dupCheck.rows.length > 0) {
+    if (dupCheck) {
       res.status(400).json({ error: `Ya existe el DBA #${numero_dba} para el grado ${grado} de ${area} en la versión ${version_curricular}` });
       return;
     }
 
-    const result = await pool.query(
-      `INSERT INTO dba (area, grado, numero_dba, enunciado, version_curricular, estado, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, 'ACTIVO', NOW(), NOW())
-       RETURNING *`,
-      [area, grado, numero_dba, enunciado, version_curricular]
-    );
+    const newDba = await db
+      .insertInto("dba")
+      .values({
+        area,
+        grado,
+        numero_dba: Number(numero_dba),
+        enunciado,
+        version_curricular,
+        estado: 'ACTIVO'
+      })
+      .returningAll()
+      .executeTakeFirstOrThrow();
 
-    res.status(201).json(result.rows[0]);
+    res.status(201).json(newDba);
   } catch (error: any) {
     console.error("Error al crear DBA:", error);
     res.status(500).json({ error: "Error al crear el DBA" });
@@ -162,7 +161,7 @@ export const crearDBA = async (req: AuthRequest, res: Response): Promise<void> =
 // ============================================================================
 export const actualizarDBA = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { id } = req.params;
+    const dbaId = Number(req.params.id);
     const { area, grado, numero_dba, enunciado, version_curricular } = req.body;
 
     if (!area || !grado || !numero_dba || !enunciado || !version_curricular) {
@@ -170,34 +169,46 @@ export const actualizarDBA = async (req: AuthRequest, res: Response): Promise<vo
       return;
     }
 
-    // Verificar si existe el DBA
-    const dbaCheck = await pool.query(`SELECT id_dba FROM dba WHERE id_dba = $1`, [id]);
-    if (dbaCheck.rows.length === 0) {
+    const dbaCheck = await db
+      .selectFrom("dba")
+      .select("id_dba")
+      .where("id_dba", "=", dbaId)
+      .executeTakeFirst();
+
+    if (!dbaCheck) {
       res.status(404).json({ error: "DBA no encontrado" });
       return;
     }
 
-    // Validar duplicado con otros registros
-    const dupCheck = await pool.query(
-      `SELECT id_dba FROM dba 
-       WHERE area = $1 AND grado = $2 AND numero_dba = $3 AND version_curricular = $4 AND id_dba <> $5`,
-      [area, grado, numero_dba, version_curricular, id]
-    );
+    const dupCheck = await db
+      .selectFrom("dba")
+      .select("id_dba")
+      .where("area", "=", area)
+      .where("grado", "=", grado)
+      .where("numero_dba", "=", Number(numero_dba))
+      .where("version_curricular", "=", version_curricular)
+      .where("id_dba", "!=", dbaId)
+      .executeTakeFirst();
 
-    if (dupCheck.rows.length > 0) {
+    if (dupCheck) {
       res.status(400).json({ error: `Ya existe otro DBA #${numero_dba} para el grado ${grado} de ${area} en la versión ${version_curricular}` });
       return;
     }
 
-    const result = await pool.query(
-      `UPDATE dba 
-       SET area = $1, grado = $2, numero_dba = $3, enunciado = $4, version_curricular = $5, updated_at = NOW()
-       WHERE id_dba = $6
-       RETURNING *`,
-      [area, grado, numero_dba, enunciado, version_curricular, id]
-    );
+    const updated = await db
+      .updateTable("dba")
+      .set({
+        area,
+        grado,
+        numero_dba: Number(numero_dba),
+        enunciado,
+        version_curricular
+      })
+      .where("id_dba", "=", dbaId)
+      .returningAll()
+      .executeTakeFirstOrThrow();
 
-    res.json(result.rows[0]);
+    res.json(updated);
   } catch (error: any) {
     console.error("Error al actualizar DBA:", error);
     res.status(500).json({ error: "Error al actualizar el DBA" });
