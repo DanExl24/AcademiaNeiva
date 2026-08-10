@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict HrNM6ov7LSPRpPSUpiiyKlha6ixrggOFFmB5mDVIu3Gq5plpUXdbSrVakS9ljEm
+\restrict M1gznMWYLSm6m3aALOTBGJdMldmwnUDtXqlyCuHqDPgtSgzXBUKYjKsHfcD15k3
 
 -- Dumped from database version 18.4
 -- Dumped by pg_dump version 18.4
@@ -5366,14 +5366,6 @@ ALTER TABLE ONLY public.sancion
 
 
 --
--- Name: solicitud_traslado solicitud_traslado_creado_por_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.solicitud_traslado
-    ADD CONSTRAINT solicitud_traslado_creado_por_fkey FOREIGN KEY (creado_por) REFERENCES public.usuario(id_usuario);
-
-
---
 -- Name: solicitud_traslado solicitud_traslado_id_colegio_destino_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -5395,14 +5387,6 @@ ALTER TABLE ONLY public.solicitud_traslado
 
 ALTER TABLE ONLY public.solicitud_traslado
     ADD CONSTRAINT solicitud_traslado_id_matricula_fkey FOREIGN KEY (id_matricula) REFERENCES public.matricula(id_matricula) ON DELETE SET NULL;
-
-
---
--- Name: solicitud_traslado solicitud_traslado_id_usuario_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.solicitud_traslado
-    ADD CONSTRAINT solicitud_traslado_id_usuario_fkey FOREIGN KEY (id_usuario) REFERENCES public.usuario(id_usuario) ON DELETE CASCADE;
 
 
 --
@@ -5430,14 +5414,6 @@ ALTER TABLE ONLY public.traslado_aprobacion
 
 
 --
--- Name: traslado_aprobacion traslado_aprobacion_id_usuario_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.traslado_aprobacion
-    ADD CONSTRAINT traslado_aprobacion_id_usuario_fkey FOREIGN KEY (id_usuario) REFERENCES public.usuario(id_usuario);
-
-
---
 -- Name: usuario usuario_baneado_por_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -5451,22 +5427,6 @@ ALTER TABLE ONLY public.usuario
 
 ALTER TABLE ONLY public.usuario_colegio
     ADD CONSTRAINT usuario_colegio_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio) ON DELETE CASCADE;
-
-
---
--- Name: usuario_colegio usuario_colegio_id_rol_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.usuario_colegio
-    ADD CONSTRAINT usuario_colegio_id_rol_fkey FOREIGN KEY (id_rol) REFERENCES public.rol(id_rol) ON DELETE CASCADE;
-
-
---
--- Name: usuario_colegio usuario_colegio_id_usuario_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.usuario_colegio
-    ADD CONSTRAINT usuario_colegio_id_usuario_fkey FOREIGN KEY (id_usuario) REFERENCES public.usuario(id_usuario) ON DELETE CASCADE;
 
 
 --
@@ -5512,5 +5472,5 @@ REVOKE USAGE ON SCHEMA public FROM PUBLIC;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict HrNM6ov7LSPRpPSUpiiyKlha6ixrggOFFmB5mDVIu3Gq5plpUXdbSrVakS9ljEm
+\unrestrict M1gznMWYLSm6m3aALOTBGJdMldmwnUDtXqlyCuHqDPgtSgzXBUKYjKsHfcD15k3
 
