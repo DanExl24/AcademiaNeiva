@@ -127,6 +127,7 @@
 import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { useAuthStore } from '../../stores/auth'
 import { useAcademicYearStore } from '../../stores/academicYear'
+import { API_BASE_URL } from '../../config/api'
 import BoletinPreview from '../../components/boletines/BoletinPreview.vue'
 import html2pdf from 'html2pdf.js'
 import { getCourseDisplayName } from '../../utils/courseHelper'
@@ -167,9 +168,9 @@ const fetchInitialData = async () => {
     const schoolId = auth.user?.schoolId || 1
     const yearIdParam = yearStore.selectedYearId ? `?id_anio=${yearStore.selectedYearId}` : ''
     const [settingsRes, gradesRes, studentsRes] = await Promise.all([
-      fetch(`/api/academic-admin/settings/${schoolId}${yearIdParam}`, { headers }),
-      fetch(`/api/academic-admin/grades/${schoolId}${yearIdParam}`, { headers }),
-      fetch(`/api/student/colegio/${schoolId}`, { headers })
+      fetch(`${API_BASE_URL}/api/academic-admin/settings/${schoolId}${yearIdParam}`, { headers }),
+      fetch(`${API_BASE_URL}/api/academic-admin/grades/${schoolId}${yearIdParam}`, { headers }),
+      fetch(`${API_BASE_URL}/api/student/colegio/${schoolId}`, { headers })
     ])
     
     if (settingsRes.ok && gradesRes.ok) {
@@ -239,7 +240,7 @@ const fetchBoletinData = async () => {
     
     // Si hay un estudiante específico, trae solo ese.
     if (selectedStudent.value) {
-      const url = `/api/boletines/student/${selectedStudent.value}/${selectedPeriodo.value}`
+      const url = `${API_BASE_URL}/api/boletines/student/${selectedStudent.value}/${selectedPeriodo.value}`
       console.log('[fetchBoletinData] Fetching student bulletin:', url)
       const res = await fetch(url, { headers })
       const contentType = res.headers.get('content-type') || ''
@@ -258,7 +259,7 @@ const fetchBoletinData = async () => {
       console.log('[fetchBoletinData] Student bulletin loaded successfully:', data)
       boletinesData.value.push(data)
     } else {
-      const url = `/api/boletines/grade/${selectedGroup.value}/${selectedPeriodo.value}`
+      const url = `${API_BASE_URL}/api/boletines/grade/${selectedGroup.value}/${selectedPeriodo.value}`
       console.log('[fetchBoletinData] Fetching mass group bulletins:', url)
       const groupRes = await fetch(url, { headers })
       const contentType = groupRes.headers.get('content-type') || ''
@@ -278,7 +279,7 @@ const fetchBoletinData = async () => {
       console.log('[fetchBoletinData] Student IDs to generate:', ids)
       
       for (const id of ids) {
-        const sUrl = `/api/boletines/student/${id}/${selectedPeriodo.value}`
+        const sUrl = `${API_BASE_URL}/api/boletines/student/${id}/${selectedPeriodo.value}`
         console.log('[fetchBoletinData] Fetching individual student in loop:', sUrl)
         const sRes = await fetch(sUrl, { headers })
         if (sRes.ok) {

@@ -2,6 +2,7 @@
 import { ref, nextTick } from 'vue'
 import { FileDown, Loader2 } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
+import { API_BASE_URL } from '../../config/api'
 import BoletinPreview from './BoletinPreview.vue'
 import html2pdf from 'html2pdf.js'
 
@@ -104,7 +105,7 @@ const handleExport = async () => {
   
   try {
     const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await fetch(`/api/boletines/student/${props.studentId}/${props.periodId}`, { headers })
+    const res = await fetch(`${API_BASE_URL}/api/boletines/student/${props.studentId}/${props.periodId}`, { headers })
     
     const contentType = res.headers.get('content-type') || ''
     if (!res.ok) {
