@@ -1187,7 +1187,7 @@ async function runAudit() {
   };
 
   fs.writeFileSync(path.join(__dirname, "qa_results.json"), JSON.stringify(outputData, null, 2));
-  console.log("Results written to scratch/qa_results.json successfully.");
+  console.log("Results written to test/qa_audit/qa_results.json successfully.");
 }
 
 runAudit().then(() => {

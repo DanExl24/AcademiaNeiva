@@ -73,7 +73,7 @@
       ],
       "errors": [],
       "severity": "NONE",
-      "evidence": "Status: 200, Body: {\"user\":{\"id\":2,\"name\":\"Rector\",\"email\":\"rector@ceaschool.edu.co\",\"role\":\"directivo\",\"roles\":[\"directivo\"],\"schoolId\":1},\"token\":\"eyJhbGciOiJIUzI1NiIs",
+      "evidence": "Status: 200, Body: {\"user\":{\"id\":2,\"name\":\"Rector\",\"email\":\"rector@ceaschool.edu.co\",\"role\":\"directivo\",\"roles\":[\"directivo\"],\"schoolId\":1,\"schoolIds\":[1]},\"token\":\"eyJh",
       "possibleCause": "",
       "status": "PASS",
       "scores": {
@@ -1151,9 +1151,7 @@
         "estado",
         "fecha_registro",
         "motivo_rechazo",
-        "fecha_cambio_estado",
         "escudo_url",
-        "colores",
         "color_primario",
         "color_secundario",
         "total_directivos",
