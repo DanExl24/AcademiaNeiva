@@ -37,15 +37,22 @@ export class TrasladoService {
         .executeTakeFirst();
       if (!destinoRow) throw new Error('La institución de destino no existe.');
 
-      // 3. Verificar vinculación activa en origen
-      const linkOrigen = await db
-        .selectFrom('usuario_colegio')
-        .select('id_usuario_colegio')
-        .where('id_usuario', '=', id_usuario)
-        .where('id_colegio', '=', id_colegio_origen)
-        .where('estado', '=', 'ACTIVO')
+      // 3. Verificar vinculación activa en origen (y detectar si es directivo)
+      const linkOrigenData = await db
+        .selectFrom('usuario_colegio as uc')
+        .innerJoin('rol as r', 'r.id_rol', 'uc.id_rol')
+        .select(['uc.id_usuario_colegio', 'r.nombre as rol_nombre'])
+        .where('uc.id_usuario', '=', id_usuario)
+        .where('uc.id_colegio', '=', id_colegio_origen)
+        .where('uc.estado', '=', 'ACTIVO')
         .executeTakeFirst();
-      if (!linkOrigen) throw new Error('El usuario no posee una vinculación activa con la institución de origen.');
+      if (!linkOrigenData) throw new Error('El usuario no posee una vinculación activa con la institución de origen.');
+
+      // 3.1 Solo el Admin General puede solicitar traslados de directivos
+      const esDirectivo = linkOrigenData.rol_nombre === 'directivo';
+      if (esDirectivo && !rolCreador.includes('admin_general')) {
+        throw new Error('Solo el Administrador General puede gestionar traslados de directivos institucionales.');
+      }
 
       // 4. Verificar que no exista ya vinculación activa en destino
       const linkDestino = await db
@@ -68,13 +75,18 @@ export class TrasladoService {
         .executeTakeFirst();
       if (pending) throw new Error('Ya existe una solicitud de traslado pendiente para este usuario.');
 
+      // Guardar si es directivo en variable para usarla al insertar
+      const esTraslado_directivo = esDirectivo;
+
       // 6. Insertar solicitud de traslado (transacción raw necesaria para el ON CONFLICT / RETURNING)
+      // Para directivos, el tipo siempre es TRASLADO_USUARIO
+      const tipoFinal = esTraslado_directivo ? 'TRASLADO_USUARIO' : tipo;
       const insertSolRes = await client.query(
         `INSERT INTO solicitud_traslado 
          (tipo, id_usuario, id_colegio_origen, id_colegio_destino, id_matricula, estado, motivo, creado_por)
          VALUES ($1, $2, $3, $4, $5, 'EN_APROBACION', $6, $7)
          RETURNING *`,
-        [tipo, id_usuario, id_colegio_origen, id_colegio_destino, id_matricula || null, motivo, idUsuarioCreador]
+        [tipoFinal, id_usuario, id_colegio_origen, id_colegio_destino, id_matricula || null, motivo, idUsuarioCreador]
       );
       const solicitud = insertSolRes.rows[0];
 
@@ -324,7 +336,13 @@ export class TrasladoService {
   }
 
   /**
-   * Verifica si una solicitud posee las aprobaciones requeridas y la ejecuta en transacción
+   * Verifica si una solicitud posee las aprobaciones requeridas y la ejecuta en transacción.
+   *
+   * Flujos de aprobación:
+   * - Traslado DIRECTIVO    → requiere ADMIN_GENERAL + DIRECTIVO_ORIGEN + DIRECTIVO_DESTINO (los 3 explícitos)
+   * - Traslado USUARIO      → requiere DIRECTIVO_ORIGEN + DIRECTIVO_DESTINO + USUARIO
+   *                            (admin_general puede reemplazar cualquiera de los tres individualmente)
+   * - Traslado MATRICULA    → igual que TRASLADO_USUARIO para el flujo de aprobación
    */
   private static async evaluarYEjecutarSiCompleto(idSolicitud: number): Promise<any> {
     const solicitud = await db
@@ -344,12 +362,35 @@ export class TrasladoService {
 
     const rolesAprobados = new Set(aprobaciones.map(r => r.rol));
 
-    const tieneOrigen = rolesAprobados.has('DIRECTIVO_ORIGEN') || rolesAprobados.has('ADMIN_GENERAL');
-    const tieneDestino = rolesAprobados.has('DIRECTIVO_DESTINO') || rolesAprobados.has('ADMIN_GENERAL');
-    const tieneUsuario = rolesAprobados.has('USUARIO') || rolesAprobados.has('ADMIN_GENERAL');
+    // Detectar si el usuario trasladado es un directivo en la institución origen
+    const vinculacion = await db
+      .selectFrom('usuario_colegio as uc')
+      .innerJoin('rol as r', 'r.id_rol', 'uc.id_rol')
+      .select(['r.nombre as rol_nombre'])
+      .where('uc.id_usuario', '=', solicitud.id_usuario)
+      .where('uc.id_colegio', '=', solicitud.id_colegio_origen)
+      .executeTakeFirst();
+    const esDirectivo = vinculacion?.rol_nombre === 'directivo';
 
-    if ((tieneOrigen && tieneDestino && tieneUsuario) || rolesAprobados.has('ADMIN_GENERAL')) {
-      return await this.ejecutarTrasladoTransaccional(idSolicitud);
+    if (esDirectivo) {
+      // Traslado de DIRECTIVO: requiere los 3 roles explícitamente
+      const completo =
+        rolesAprobados.has('ADMIN_GENERAL') &&
+        rolesAprobados.has('DIRECTIVO_ORIGEN') &&
+        rolesAprobados.has('DIRECTIVO_DESTINO');
+      if (completo) {
+        return await this.ejecutarTrasladoTransaccional(idSolicitud);
+      }
+    } else {
+      // Traslado de USUARIO / MATRICULA: flujo estándar tripartita
+      // admin_general puede reemplazar cualquier rol individual (no de los 3 simultáneamente)
+      const tieneOrigen = rolesAprobados.has('DIRECTIVO_ORIGEN') || rolesAprobados.has('ADMIN_GENERAL');
+      const tieneDestino = rolesAprobados.has('DIRECTIVO_DESTINO') || rolesAprobados.has('ADMIN_GENERAL');
+      const tieneUsuario = rolesAprobados.has('USUARIO') || rolesAprobados.has('ADMIN_GENERAL');
+
+      if (tieneOrigen && tieneDestino && tieneUsuario) {
+        return await this.ejecutarTrasladoTransaccional(idSolicitud);
+      }
     }
 
     return await this.getSolicitudDetalle(idSolicitud);
@@ -581,7 +622,7 @@ export class TrasladoService {
 
   /**
    * Obtener el personal activo de un colegio para traslados de tipo TRASLADO_USUARIO.
-   * Excluye estudiantes y directivos.
+   * Excluye estudiantes, directivos y admin_general. Usado para directivos normales.
    */
   static async getPersonalColegio(idColegio: number): Promise<any[]> {
     return await db
@@ -603,5 +644,31 @@ export class TrasladoService {
       .orderBy('u.nombre', 'asc')
       .execute();
   }
+
+  /**
+   * Obtener los directivos activos de un colegio.
+   * Exclusivo para admin_general al gestionar traslados de directivos.
+   */
+  static async getDirectivosColegio(idColegio: number): Promise<any[]> {
+    return await db
+      .selectFrom('usuario_colegio as uc')
+      .innerJoin('usuario as u', 'u.id_usuario', 'uc.id_usuario')
+      .innerJoin('rol as r', 'r.id_rol', 'uc.id_rol')
+      .select([
+        'u.id_usuario',
+        'u.nombre',
+        'u.apellido',
+        'u.email',
+        'u.documento',
+        'r.nombre as rol_nombre',
+      ])
+      .where('uc.id_colegio', '=', idColegio)
+      .where('uc.estado', '=', 'ACTIVO')
+      .where('r.nombre', '=', 'directivo')
+      .orderBy('u.apellido', 'asc')
+      .orderBy('u.nombre', 'asc')
+      .execute();
+  }
 }
+
 

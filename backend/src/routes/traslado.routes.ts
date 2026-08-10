@@ -9,6 +9,7 @@ import {
   getTrasladoById,
   getMyVinculaciones,
   getPersonalColegio,
+  getDirectivosColegio,
   getAdminTrasladosGlobal,
   getAdminEstadisticas,
   intervenirTraslado
@@ -21,6 +22,7 @@ router.use(verifyToken);
 // Rutas exclusivas del Administrador General (deben ir ANTES de /:id para evitar conflictos de captura)
 router.get('/admin/global', requireAdminGeneral, getAdminTrasladosGlobal);
 router.get('/admin/estadisticas', requireAdminGeneral, getAdminEstadisticas);
+router.get('/directivos/:schoolId', requireAdminGeneral, getDirectivosColegio);
 
 // Rutas generales (directivos, padres, usuarios)
 router.get('/mis-vinculaciones', getMyVinculaciones);

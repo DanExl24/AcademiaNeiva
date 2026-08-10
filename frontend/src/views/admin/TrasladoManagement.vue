@@ -98,6 +98,7 @@ const vinculaciones = ref<Vinculacion[]>([])
 const colegios = ref<Colegio[]>([])
 const estudiantesColegio = ref<EstudianteOption[]>([])
 const personalColegio = ref<{ id_usuario: number; nombre: string; apellido: string; email: string; documento?: string; rol_nombre: string }[]>([])
+const directivosColegio = ref<{ id_usuario: number; nombre: string; apellido: string; email: string; documento?: string; rol_nombre: string }[]>([])
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -116,13 +117,16 @@ const selectedSolicitud = ref<SolicitudTraslado | null>(null)
 
 // Create Form Data
 const newTraslado = ref({
-  tipo: 'TRASLADO_MATRICULA' as 'TRASLADO_MATRICULA' | 'TRASLADO_USUARIO',
+  tipo: 'TRASLADO_MATRICULA' as 'TRASLADO_MATRICULA' | 'TRASLADO_USUARIO' | 'TRASLADO_DIRECTIVO',
   id_usuario: null as number | null,
   id_colegio_origen: auth.user?.schoolId || 1,
   id_colegio_destino: null as number | null,
   id_matricula: null as number | null,
   motivo: ''
 })
+
+// Computed
+const isAdminGeneral = computed(() => auth.user?.roles?.includes('admin_general') || auth.user?.role === 'admin_general')
 
 // Approval Form Data
 const approvalForm = ref({
@@ -137,7 +141,8 @@ onMounted(async () => {
     fetchVinculaciones(),
     fetchColegios(),
     fetchEstudiantes(),
-    fetchPersonalColegio()
+    fetchPersonalColegio(),
+    fetchDirectivosColegio()
   ])
 })
 
@@ -191,10 +196,10 @@ const fetchEstudiantes = async () => {
   }
 }
 
-const fetchPersonalColegio = async () => {
-  const schoolId = auth.user?.schoolId || 1
+const fetchPersonalColegio = async (schoolId?: number) => {
+  const sid = schoolId || auth.user?.schoolId || 1
   try {
-    const res = await axios.get(`${API_BASE_URL}/api/traslados/personal/${schoolId}`, {
+    const res = await axios.get(`${API_BASE_URL}/api/traslados/personal/${sid}`, {
       headers: { Authorization: `Bearer ${auth.token}` }
     })
     personalColegio.value = res.data || []
@@ -203,11 +208,46 @@ const fetchPersonalColegio = async () => {
   }
 }
 
+const fetchDirectivosColegio = async (schoolId?: number) => {
+  if (!isAdminGeneral.value) return
+  const sid = schoolId || auth.user?.schoolId || 1
+  try {
+    const res = await axios.get(`${API_BASE_URL}/api/traslados/directivos/${sid}`, {
+      headers: { Authorization: `Bearer ${auth.token}` }
+    })
+    directivosColegio.value = res.data || []
+  } catch (err: any) {
+    console.error('Error fetching directivos colegio:', err)
+  }
+}
+
 // Watch el tipo de traslado: limpiar selección al cambiar
 watch(() => newTraslado.value.tipo, () => {
   newTraslado.value.id_usuario = null
   newTraslado.value.id_matricula = null
 })
+
+// Watch colegio_origen: recargar personal/directivos según la institución elegida
+watch(() => newTraslado.value.id_colegio_origen, (newId) => {
+  newTraslado.value.id_usuario = null
+  newTraslado.value.id_matricula = null
+  if (newId) {
+    fetchPersonalColegio(newId)
+    fetchDirectivosColegio(newId)
+    fetchEstudiantesByColegio(newId)
+  }
+})
+
+const fetchEstudiantesByColegio = async (schoolId: number) => {
+  try {
+    const res = await axios.get(`${API_BASE_URL}/api/student/colegio/${schoolId}`, {
+      headers: { Authorization: `Bearer ${auth.token}` }
+    })
+    estudiantesColegio.value = res.data || []
+  } catch (err: any) {
+    console.error('Error fetching estudiantes by colegio:', err)
+  }
+}
 
 // Auto-asignar id_matricula cuando se selecciona un estudiante para TRASLADO_MATRICULA
 watch(() => newTraslado.value.id_usuario, (newUserId) => {
@@ -251,7 +291,12 @@ const handleCreateTraslado = async () => {
   submitting.value = true
   errorMessage.value = ''
   try {
-    await axios.post(`${API_BASE_URL}/api/traslados`, newTraslado.value, {
+    // TRASLADO_DIRECTIVO es un subtipo de TRASLADO_USUARIO en el backend
+    const payload = {
+      ...newTraslado.value,
+      tipo: newTraslado.value.tipo === 'TRASLADO_DIRECTIVO' ? 'TRASLADO_USUARIO' : newTraslado.value.tipo
+    }
+    await axios.post(`${API_BASE_URL}/api/traslados`, payload, {
       headers: { Authorization: `Bearer ${auth.token}` }
     })
     
@@ -834,6 +879,24 @@ const canUserApproveCurrentModal = computed(() => {
             >
               <option value="TRASLADO_MATRICULA">Traslado de Estudiante (con Matrícula)</option>
               <option value="TRASLADO_USUARIO">Traslado de Usuario / Personal</option>
+              <option v-if="isAdminGeneral" value="TRASLADO_DIRECTIVO">Traslado de Directivo Institucional</option>
+            </select>
+            <p v-if="newTraslado.tipo === 'TRASLADO_DIRECTIVO'" class="mt-1 text-[10px] text-purple-600 dark:text-purple-400 font-semibold">
+              ⚠️ Solo disponible para el Administrador General. Requiere aprobación del Admin + Directivo Origen + Directivo Destino.
+            </p>
+          </div>
+
+          <!-- Selección de Colegio Origen (solo admin_general puede elegirlo) -->
+          <div v-if="isAdminGeneral">
+            <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Institución de Origen</label>
+            <select
+              v-model="newTraslado.id_colegio_origen"
+              class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option :value="null" disabled>-- Selecciona la institución de origen --</option>
+              <option v-for="col in colegios" :key="col.id_colegio" :value="col.id_colegio">
+                {{ col.nombre }}
+              </option>
             </select>
           </div>
 
@@ -852,7 +915,7 @@ const canUserApproveCurrentModal = computed(() => {
           </div>
 
           <!-- Selector de Personal (Docentes, Padres, etc.) para TRASLADO_USUARIO -->
-          <div v-else>
+          <div v-else-if="newTraslado.tipo === 'TRASLADO_USUARIO'">
             <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Seleccionar Personal (Docente / Acudiente / otro)</label>
             <select 
               v-model="newTraslado.id_usuario"
@@ -864,6 +927,21 @@ const canUserApproveCurrentModal = computed(() => {
               </option>
             </select>
             <p v-if="personalColegio.length === 0" class="text-[10px] text-amber-600 dark:text-amber-400 mt-1">No se encontró personal disponible para traslado en esta institución.</p>
+          </div>
+
+          <!-- Selector de Directivos para TRASLADO_DIRECTIVO (solo admin_general) -->
+          <div v-else-if="newTraslado.tipo === 'TRASLADO_DIRECTIVO'">
+            <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Seleccionar Directivo a Trasladar</label>
+            <select 
+              v-model="newTraslado.id_usuario"
+              class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+            >
+              <option :value="null" disabled>-- Selecciona el directivo --</option>
+              <option v-for="d in directivosColegio" :key="d.id_usuario" :value="d.id_usuario">
+                {{ d.nombre }} {{ d.apellido }} (Directivo) - {{ d.email }}
+              </option>
+            </select>
+            <p v-if="directivosColegio.length === 0" class="text-[10px] text-amber-600 dark:text-amber-400 mt-1">No se encontraron directivos en la institución seleccionada.</p>
           </div>
 
           <!-- Colegio Destino Selector -->

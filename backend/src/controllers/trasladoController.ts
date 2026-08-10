@@ -145,6 +145,36 @@ export const getPersonalColegio = async (req: AuthRequest, res: Response): Promi
 };
 
 /**
+ * GET /api/traslados/directivos/:schoolId
+ * Retorna los directivos activos del colegio.
+ * Exclusivo para admin_general para gestionar traslados de directivos.
+ */
+export const getDirectivosColegio = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'No autenticado' });
+      return;
+    }
+    if (!req.user.roles.includes('admin_general')) {
+      res.status(403).json({ error: 'Solo el Administrador General puede consultar directivos para traslado.' });
+      return;
+    }
+
+    const schoolId = parseInt(String(req.params.schoolId), 10);
+    if (isNaN(schoolId)) {
+      res.status(400).json({ error: 'ID de colegio inválido' });
+      return;
+    }
+
+    const directivos = await TrasladoService.getDirectivosColegio(schoolId);
+    res.json(directivos);
+  } catch (error: any) {
+    console.error('Error en getDirectivosColegio:', error);
+    res.status(500).json({ error: 'Error al consultar los directivos del colegio' });
+  }
+};
+
+/**
  * GET /api/traslados/admin/global
  * Retorna TODOS los traslados del sistema con filtros avanzados.
  * Exclusivo para admin_general.
