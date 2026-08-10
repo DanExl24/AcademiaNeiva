@@ -278,13 +278,36 @@ const openDetailModal = async (solicitud: SolicitudTraslado) => {
   }
 }
 
+const openCreateModal = () => {
+  const originSchoolId = auth.selectedSchoolId || (auth.user?.schoolId ? Number(auth.user.schoolId) : (colegios.value[0]?.id_colegio || 1))
+  newTraslado.value = {
+    tipo: 'TRASLADO_MATRICULA',
+    id_usuario: null,
+    id_colegio_origen: originSchoolId,
+    id_colegio_destino: null,
+    id_matricula: null,
+    motivo: ''
+  }
+  if (originSchoolId) {
+    fetchPersonalColegio(originSchoolId)
+    fetchDirectivosColegio(originSchoolId)
+    fetchEstudiantesByColegio(originSchoolId)
+  }
+  showCreateModal.value = true
+}
+
 const handleCreateTraslado = async () => {
-  if (!newTraslado.value.id_usuario || !newTraslado.value.id_colegio_origen || !newTraslado.value.id_colegio_destino || !newTraslado.value.motivo.trim()) {
+  const idUser = newTraslado.value.id_usuario ? Number(newTraslado.value.id_usuario) : null
+  const idOrigen = newTraslado.value.id_colegio_origen ? Number(newTraslado.value.id_colegio_origen) : null
+  const idDestino = newTraslado.value.id_colegio_destino ? Number(newTraslado.value.id_colegio_destino) : null
+  const motivoTxt = newTraslado.value.motivo ? newTraslado.value.motivo.trim() : ''
+
+  if (!idUser || !idOrigen || !idDestino || !motivoTxt || isNaN(idUser) || isNaN(idOrigen) || isNaN(idDestino)) {
     alert('Por favor completa todos los campos requeridos.')
     return
   }
 
-  if (Number(newTraslado.value.id_colegio_origen) === Number(newTraslado.value.id_colegio_destino)) {
+  if (idOrigen === idDestino) {
     alert('La institución de origen y destino deben ser diferentes.')
     return
   }
@@ -295,11 +318,11 @@ const handleCreateTraslado = async () => {
     // TRASLADO_DIRECTIVO es un subtipo de TRASLADO_USUARIO en el backend
     const payload = {
       tipo: newTraslado.value.tipo === 'TRASLADO_DIRECTIVO' ? 'TRASLADO_USUARIO' : newTraslado.value.tipo,
-      id_usuario: Number(newTraslado.value.id_usuario),
-      id_colegio_origen: Number(newTraslado.value.id_colegio_origen),
-      id_colegio_destino: Number(newTraslado.value.id_colegio_destino),
+      id_usuario: idUser,
+      id_colegio_origen: idOrigen,
+      id_colegio_destino: idDestino,
       id_matricula: newTraslado.value.id_matricula ? Number(newTraslado.value.id_matricula) : null,
-      motivo: newTraslado.value.motivo.trim()
+      motivo: motivoTxt
     }
     await axios.post(`${API_BASE_URL}/api/traslados`, payload, {
       headers: { Authorization: `Bearer ${auth.token}` }
@@ -313,7 +336,7 @@ const handleCreateTraslado = async () => {
     newTraslado.value = {
       tipo: 'TRASLADO_MATRICULA',
       id_usuario: null,
-      id_colegio_origen: auth.user?.schoolId || 1,
+      id_colegio_origen: auth.selectedSchoolId || (auth.user?.schoolId ? Number(auth.user.schoolId) : 1),
       id_colegio_destino: null,
       id_matricula: null,
       motivo: ''
@@ -473,7 +496,7 @@ const canUserApproveCurrentModal = computed(() => {
         </button>
 
         <button 
-          @click="showCreateModal = true"
+          @click="openCreateModal"
           class="flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white px-5 py-3 rounded-2xl font-bold text-xs uppercase tracking-wider shadow-lg shadow-indigo-500/25 transition-all transform hover:-translate-y-0.5 active:translate-y-0"
         >
           <Plus :size="18" />
