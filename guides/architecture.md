@@ -83,3 +83,39 @@ El diseño de datos está definido en [AcademiaNeivaBD.sql](file:///c:/Users/ale
 - `notas_actividad` / `nota_criterio`: Notas individuales de los estudiantes.
 - `resultado_academico`: Promedios oficiales del periodo calculados al cerrar la materia.
 - `registro_asistencia`: Registros de fallas (`AUSENTE`, `PRESENTE`, `TARDE`, `JUSTIFICADA`).
+
+---
+
+## 🏛️ Modelo de Vinculación Multi-Colegio: `usuario_colegio` vs. Entidades de Rol
+
+Para soportar docentes, estudiantes y directivos que pertenecen a más de una institución simultáneamente sin duplicar su identidad ni mezclar su información académica, el sistema implementa una separación limpia de responsabilidades:
+
+```mermaid
+graph TD
+    U["usuario (Persona Global)"] --> UC1["usuario_colegio (Permisos Colegio 1)"]
+    U --> UC2["usuario_colegio (Permisos Colegio 2)"]
+    U --> D1["docente (Perfil Académico Colegio 1)"]
+    U --> D2["docente (Perfil Académico Colegio 2)"]
+    D1 --> DG1["detalle_grados (Carga Colegio 1)"]
+    D2 --> DG2["detalle_grados (Carga Colegio 2)"]
+```
+
+### Fuentes de Verdad
+
+1. **`usuario` (Identidad Global de la Persona)**:
+   - **Propósito**: Guarda la identidad física única (Nombre, Apellido, Cédula, Email, Password Hash).
+   - **`id_colegio`**: Es `NULLABLE` para permitir usuarios transversales y administradores globales.
+
+2. **`usuario_colegio` (Fuente de Verdad Administrativa y de Autenticación)**:
+   - **Propósito**: Define si una persona tiene acceso y autorización activa en una institución específica (`id_usuario`, `id_colegio`, `id_rol`, `estado`).
+   - **Uso**: Controla el inicio de sesión, el menú selector de colegio en la barra superior (`x-school-id`), el middleware de seguridad y los traslados multi-institución.
+
+3. **`docente` / `estudiante` (Fuente de Verdad Operativa y Académica)**:
+   - **Propósito**: Representa la entidad operativa del rol dentro de un colegio concreto.
+   - **Restricción Única**: `UNIQUE (id_usuario, id_colegio)` permite que la misma persona tenga un registro independiente en cada colegio donde labora o estudia.
+   - **Uso**: Es la clave foránea (`id_docente` / `id_estudiante`) vinculada a cargas lectivas (`detalle_grados`), calificaciones (`resultado_academico`), asistencias (`registro_asistencia`) y cierres de materia (`cierre_materia`).
+
+### Ventajas de esta Arquitectura
+- **Aislamiento de Carga Lectiva**: Un docente puede tener el `id_docente: 12` en el Colegio A y el `id_docente: 15` en el Colegio B. Sus asignaciones, horarios y notas no se mezclan.
+- **Trazabilidad e Historial**: Si una persona es inactivada en `usuario_colegio` para el Colegio A, pierde acceso al colegio en la plataforma, pero todo su historial de firmas, calificaciones y evidencias registradas en `docente` / `detalle_grados` para el Colegio A permanece **100% inalterado por auditoría**.
+
