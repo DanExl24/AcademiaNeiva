@@ -1,4 +1,4 @@
-import { pool } from "./src/config/db";
+import { pool } from "../../src/config/db";
 
 async function getColumns() {
   const tables = ['estudiante', 'padre_familia', 'usuario'];

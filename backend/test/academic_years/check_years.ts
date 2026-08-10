@@ -1,4 +1,4 @@
-import { pool } from '../src/config/db';
+import { pool } from "../../src/config/db';
 
 async function main() {
   const columnsRes = await pool.query(`

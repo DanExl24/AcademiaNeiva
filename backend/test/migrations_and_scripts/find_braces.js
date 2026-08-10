@@ -1,7 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 
-const filePath = path.join(__dirname, "../src/controllers/academicAdminController.ts");
+const filePath = path.join(__dirname, "../../src/controllers/academicAdminController.ts");
 const content = fs.readFileSync(filePath, "utf-8");
 
 let braces = 0;

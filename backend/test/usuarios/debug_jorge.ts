@@ -1,4 +1,4 @@
-import { pool } from '../src/config/db';
+import { pool } from "../../src/config/db';
 
 async function main() {
   const years = await pool.query(`SELECT * FROM anio_lectivo WHERE id_colegio = 1`);

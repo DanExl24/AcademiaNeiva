@@ -1,4 +1,4 @@
-import { pool } from '../src/config/db';
+import { pool } from "../../src/config/db';
 
 async function main() {
   const updateRes = await pool.query(`UPDATE detalle_grados SET id_anio = 2 WHERE id_docente = 8 AND (id_anio IS NULL OR id_anio = 1)`);

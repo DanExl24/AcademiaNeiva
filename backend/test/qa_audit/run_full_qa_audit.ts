@@ -1,4 +1,4 @@
-import app from "../src/app";
+import app from "../../src/app";
 import http from "http";
 import fs from "fs";
 import path from "path";

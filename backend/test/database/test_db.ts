@@ -1,4 +1,4 @@
-import { pool } from '../src/config/db';
+import { pool } from "../../src/config/db';
 async function test() {
   const res = await pool.query("SELECT * FROM grados WHERE id_colegio = 1 AND nivel = 'PRIMARIA' AND tipo_grado = 'PRIMERO' AND id_jornada = 2");
   console.log('Found sections:', res.rows);

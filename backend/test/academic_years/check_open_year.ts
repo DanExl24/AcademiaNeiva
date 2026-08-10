@@ -1,4 +1,4 @@
-import { pool } from '../src/config/db';
+import { pool } from "../../src/config/db';
 
 async function main() {
   const yearsRes = await pool.query(`SELECT id_anio, id_colegio, calendario, estado FROM anio_lectivo WHERE id_colegio = 1 ORDER BY id_anio DESC`);

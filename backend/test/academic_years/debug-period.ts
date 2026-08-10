@@ -1,5 +1,5 @@
-import { pool } from "./src/config/db";
-import { getCurrentAllowedPeriodForSchool } from "./src/utils/periodHelpers";
+import { pool } from "../../src/config/db";
+import { getCurrentAllowedPeriodForSchool } from "../../src/utils/periodHelpers";
 
 async function run() {
   try {

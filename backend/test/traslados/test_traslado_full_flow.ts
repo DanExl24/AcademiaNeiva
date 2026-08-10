@@ -1,5 +1,5 @@
-import { pool } from '../src/config/db';
-import { TrasladoService } from '../src/services/trasladoService';
+import { pool } from '../../src/config/db';
+import { TrasladoService } from '../../src/services/trasladoService';
 
 async function testFullFlow() {
   console.log('🧪 Iniciando prueba automatizada de flujo completo de traslados...');

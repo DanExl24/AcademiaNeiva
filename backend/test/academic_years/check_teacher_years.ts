@@ -1,5 +1,5 @@
-import { pool } from '../src/config/db';
-import { getUserEligibleAcademicYears } from '../src/controllers/academicAdminController';
+import { pool } from "../../src/config/db';
+import { getUserEligibleAcademicYears } from "../../src/controllers/academicAdminController';
 
 async function main() {
   const teacherUser = await pool.query(`
