@@ -248,7 +248,9 @@ export const getStudentBoletin = async (req: Request, res: Response) => {
       });
 
       const ausencias = ausenciasRes.find(a => Number(a.id_materia) === mId)?.faltas || 0;
-      const desempenos = compRes.filter(c => Number(c.id_materia) === mId).map(c => c.descripcion);
+      const desempenos = Array.from(
+        new Set(compRes.filter(c => Number(c.id_materia) === mId).map(c => c.descripcion))
+      ).slice(0, 3);
 
       return {
         materia: m.materia,

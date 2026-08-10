@@ -1603,7 +1603,7 @@ async function seedDbaCompetenciesAndEvidences(): Promise<void> {
                     const evidencias = evRes.rows;
 
                     if (evidencias.length > 0) {
-                      for (const ev of evidencias) {
+                      for (const ev of evidencias.slice(0, 3)) {
                         await client.query(
                           `INSERT INTO evidencia_aprendizaje (id_competencia, descripcion, orden, id_colegio, id_evidencia_dba)
                            VALUES ($1, $2, $3, $4, $5)`,
@@ -1679,7 +1679,7 @@ async function seedDbaCompetenciesAndEvidences(): Promise<void> {
                     const evidencias = evRes.rows;
 
                     if (evidencias.length > 0) {
-                      for (const ev of evidencias) {
+                      for (const ev of evidencias.slice(0, 3)) {
                         await client.query(
                           `INSERT INTO evidencia_aprendizaje (id_competencia, descripcion, orden, id_colegio, id_evidencia_dba)
                            VALUES ($1, $2, $3, $4, $5)`,

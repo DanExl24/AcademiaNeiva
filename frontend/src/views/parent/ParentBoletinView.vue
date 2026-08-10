@@ -56,7 +56,14 @@ const fetchYears = async () => {
     const res = await axios.get(`/api/student/years/${selectedChildId.value}`)
     years.value = res.data
     if (years.value.length > 0) {
-      selectedYear.value = years.value[0].id_anio
+      if (yearStore.selectedYearId && years.value.some((y: any) => y.id_anio === yearStore.selectedYearId)) {
+        selectedYear.value = yearStore.selectedYearId
+      } else {
+        const currentYearStr = new Date().getFullYear().toString()
+        const matchingYear = years.value.find((y: any) => y.calendario === currentYearStr)
+        selectedYear.value = matchingYear ? matchingYear.id_anio : years.value[0].id_anio
+        yearStore.setSelectedYearId(selectedYear.value)
+      }
     }
   } catch (err) {
     console.error("Error fetching years:", err)
@@ -94,6 +101,9 @@ watch(selectedChildId, async (newVal) => {
 
 watch(selectedYear, async (newVal) => {
   if (newVal) {
+    if (newVal !== yearStore.selectedYearId) {
+      yearStore.setSelectedYearId(newVal)
+    }
     selectedPeriodId.value = null
     await fetchPeriods()
   }

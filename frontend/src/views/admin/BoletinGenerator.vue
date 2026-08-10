@@ -124,13 +124,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { useAuthStore } from '../../stores/auth'
+import { useAcademicYearStore } from '../../stores/academicYear'
 import BoletinPreview from '../../components/boletines/BoletinPreview.vue'
 import html2pdf from 'html2pdf.js'
 import { getCourseDisplayName } from '../../utils/courseHelper'
 
 const auth = useAuthStore()
+const yearStore = useAcademicYearStore()
 
 const periodos = ref<any[]>([])
 const levels = ref<any[]>([])
@@ -163,9 +165,10 @@ const fetchInitialData = async () => {
     const headers = { Authorization: `Bearer ${auth.token}` }
     
     const schoolId = auth.user?.schoolId || 1
+    const yearIdParam = yearStore.selectedYearId ? `?id_anio=${yearStore.selectedYearId}` : ''
     const [settingsRes, gradesRes, studentsRes] = await Promise.all([
-      fetch(`/api/academic-admin/settings/${schoolId}`, { headers }),
-      fetch(`/api/academic-admin/grades/${schoolId}`, { headers }),
+      fetch(`/api/academic-admin/settings/${schoolId}${yearIdParam}`, { headers }),
+      fetch(`/api/academic-admin/grades/${schoolId}${yearIdParam}`, { headers }),
       fetch(`/api/student/colegio/${schoolId}`, { headers })
     ])
     
@@ -173,8 +176,12 @@ const fetchInitialData = async () => {
       const settingsData = await settingsRes.json()
       const gradesData = await gradesRes.json()
       
-      // Use closed periods strictly
-      periodos.value = settingsData.periods.filter((p: any) => p.estado === 'CERRADO')
+      // Use closed periods strictly for selected year
+      let allP = settingsData.periods.filter((p: any) => p.estado === 'CERRADO')
+      if (yearStore.selectedYearId) {
+        allP = allP.filter((p: any) => p.id_anio === yearStore.selectedYearId)
+      }
+      periodos.value = allP
       levels.value = gradesData.niveles
       groups.value = gradesData.grupos
     }
@@ -195,6 +202,11 @@ const fetchInitialData = async () => {
 }
 
 onMounted(() => {
+  fetchInitialData()
+})
+
+watch(() => yearStore.selectedYearId, () => {
+  selectedPeriodo.value = ''
   fetchInitialData()
 })
 
