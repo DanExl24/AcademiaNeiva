@@ -272,42 +272,59 @@ export const getStudentBoletin = async (req: Request, res: Response) => {
     }
 
     // 9. Fetch Ranking (Puesto) en el Grupo
-    const rankingQuery = await sql<{ puesto: number | null; total_grupo: number | null; student_avg: number }>`
-      WITH group_averages AS (
-        SELECT 
-          m2.id_estudiante,
-          ROUND(AVG(COALESCE(ra2.promedio, calc.promedio_calculado, 0))::numeric, 2) as student_avg
-        FROM matricula m2
-        JOIN detalle_grados dg2 ON dg2.id_grupo = m2.id_grupo
-        LEFT JOIN resultado_academico ra2 
-          ON ra2.id_estudiante = m2.id_estudiante 
-          AND ra2.id_detallegrado = dg2.id_detallegrado 
-          AND ra2.id_periodo = ${numPeriodo}
-        LEFT JOIN (
-          SELECT am.id_detallegrado, na.id_estudiante, ROUND(AVG(na.nota)::numeric, 2) as promedio_calculado
-          FROM notas_actividad na
-          JOIN actividad_materia am ON am.id_actividadmateria = na.id_actividadmateria
-          WHERE am.id_periodo = ${numPeriodo}
-          GROUP BY am.id_detallegrado, na.id_estudiante
-        ) calc ON calc.id_detallegrado = dg2.id_detallegrado AND calc.id_estudiante = m2.id_estudiante
-        WHERE m2.id_grupo = (SELECT id_grupo FROM matricula WHERE id_estudiante = ${numEstudiante} LIMIT 1)
-          AND m2.estado = 'ACTIVA'
-        GROUP BY m2.id_estudiante
-      ),
-      ranked AS (
-        SELECT 
-          id_estudiante,
-          student_avg,
-          RANK() OVER (ORDER BY student_avg DESC) as puesto,
-          COUNT(*) OVER () as total_grupo
-        FROM group_averages
-      )
-      SELECT puesto, total_grupo, student_avg
-      FROM ranked
-      WHERE id_estudiante = ${numEstudiante};
-    `.execute(db);
+    const calcSubqueryRanking = db
+      .selectFrom("notas_actividad as na")
+      .innerJoin("actividad_materia as am", "am.id_actividadmateria", "na.id_actividadmateria")
+      .select([
+        "am.id_detallegrado",
+        "na.id_estudiante",
+        sql<number>`ROUND(AVG(na.nota)::numeric, 2)`.as("promedio_calculado")
+      ])
+      .where("am.id_periodo", "=", numPeriodo)
+      .groupBy(["am.id_detallegrado", "na.id_estudiante"])
+      .as("calc");
 
-    const rankingRow = rankingQuery.rows[0];
+    const groupAveragesCte = db
+      .selectFrom("matricula as m2")
+      .innerJoin("detalle_grados as dg2", "dg2.id_grupo", "m2.id_grupo")
+      .leftJoin("resultado_academico as ra2", (join) =>
+        join
+          .onRef("ra2.id_estudiante", "=", "m2.id_estudiante")
+          .onRef("ra2.id_detallegrado", "=", "dg2.id_detallegrado")
+          .on("ra2.id_periodo", "=", numPeriodo)
+      )
+      .leftJoin(calcSubqueryRanking, (join) =>
+        join
+          .onRef("calc.id_detallegrado", "=", "dg2.id_detallegrado")
+          .onRef("calc.id_estudiante", "=", "m2.id_estudiante")
+      )
+      .select([
+        "m2.id_estudiante",
+        sql<number>`ROUND(AVG(COALESCE(ra2.promedio, calc.promedio_calculado, 0))::numeric, 2)`.as("student_avg")
+      ])
+      .where("m2.id_grupo", "=",
+        db.selectFrom("matricula").select("id_grupo").where("id_estudiante", "=", numEstudiante).limit(1)
+      )
+      .where("m2.estado", "=", 'ACTIVA')
+      .groupBy("m2.id_estudiante");
+
+    const rankedCte = db
+      .with("group_averages", () => groupAveragesCte)
+      .selectFrom("group_averages")
+      .select([
+        "id_estudiante",
+        "student_avg",
+        sql<number>`RANK() OVER (ORDER BY student_avg DESC)`.as("puesto"),
+        sql<number>`COUNT(*) OVER ()`.as("total_grupo")
+      ]);
+
+    const rankingRow = await db
+      .with("group_averages", () => groupAveragesCte)
+      .with("ranked", () => rankedCte)
+      .selectFrom("ranked")
+      .select(["puesto", "total_grupo", "student_avg"])
+      .where("id_estudiante", "=", numEstudiante)
+      .executeTakeFirst();
 
     // 10. Fetch Escala de Valoración Completa del colegio
     const escalaRows = await db
