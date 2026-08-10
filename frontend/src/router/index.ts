@@ -98,7 +98,13 @@ const router = createRouter({
         {
           path: 'gestion-traslados',
           name: 'Gestión de Traslados',
-          component: () => import('../views/admin/TrasladoManagement.vue'),
+          component: () => {
+            const auth = useAuthStore()
+            if (auth.activeRole?.toLowerCase() === 'admin_general') {
+              return import('../views/admin/AdminTrasladosView.vue')
+            }
+            return import('../views/admin/TrasladoManagement.vue')
+          },
           meta: { roles: ['directivo', 'admin_general', 'padre'] }
         },
         {

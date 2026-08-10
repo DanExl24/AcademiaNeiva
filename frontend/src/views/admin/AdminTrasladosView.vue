@@ -256,28 +256,17 @@ const filteredSolicitudes = computed(() => {
 // Approval panel: for a given solicitud, which roles have approved / pending
 const getApprovalMatrix = (sol: SolicitudTraslado) => {
   const aprobaciones = sol.aprobaciones || []
-  const rolesAprobados = new Set(aprobaciones.filter(a => a.accion === 'APROBAR').map(a => a.rol))
+  const rolesAprobados = new Set<string>(aprobaciones.filter(a => a.accion === 'APROBAR').map(a => a.rol))
 
-  const requiredRoles = sol.tipo === 'TRASLADO_MATRICULA'
-    ? ['DIRECTIVO_ORIGEN', 'DIRECTIVO_DESTINO', 'USUARIO']
-    : ['DIRECTIVO_ORIGEN', 'DIRECTIVO_DESTINO', 'USUARIO']
+  const requiredRoles = ['DIRECTIVO_ORIGEN', 'DIRECTIVO_DESTINO', 'USUARIO']
 
   return requiredRoles.map(rol => ({
     rol,
-    label: rolLabels[rol] || rol,
+    label: getRolLabel(rol, sol.tipo),
     aprobado: rolesAprobados.has(rol) || rolesAprobados.has('ADMIN_GENERAL')
   }))
 }
 
-const rolLabels: Record<string, string> = {
-  DIRECTIVO_ORIGEN: 'Directivo Institución Origen',
-  DIRECTIVO_DESTINO: 'Directivo Institución Destino',
-  USUARIO: sol?.tipo === 'TRASLADO_MATRICULA' ? 'Padre de Familia / Usuario' : 'Usuario Afectado',
-  ADMIN_GENERAL: 'Administrador General',
-  CREADOR: 'Creador de Solicitud'
-}
-
-// Solución sin usar variable no inicializada
 const getRolLabel = (rol: string, tipo?: string) => {
   const map: Record<string, string> = {
     DIRECTIVO_ORIGEN: 'Directivo Institución Origen',
@@ -743,7 +732,7 @@ const formatDate = (dateStr?: string | null) => {
               <div class="absolute left-5 top-5 bottom-5 w-px bg-slate-200 dark:bg-slate-700/60 z-0"></div>
 
               <div
-                v-for="(ap, idx) in selectedSolicitud.aprobaciones"
+                v-for="ap in selectedSolicitud.aprobaciones"
                 :key="ap.id_aprobacion"
                 class="relative flex items-start gap-4 pb-4"
               >
