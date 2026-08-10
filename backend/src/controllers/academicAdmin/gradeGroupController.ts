@@ -15,7 +15,23 @@ import {
   syncCompetencyAcrossGrade,
   TeachingContext,
 } from "../../config/competencyMigration";
-import { parseSchoolId, ensureTeacherStatusColumn, autoSwitchPeriodsForYear } from "./helpers";
+import {
+  AuthRequest,
+  path,
+  parseSchoolId,
+  ensureTeacherStatusColumn,
+  autoSwitchPeriodsForYear,
+  ensureAcademicYearForSchool,
+  ensureSchoolSettingsTable,
+  ensureAcademicPeriodTrimesterColumn,
+  ensureAcademicPeriodDayColumns,
+  ensureAcademicPeriodMonthColumns,
+  ensureAcademicPeriodPendingStatus,
+  ensureSchoolDefaultSettings,
+  roundToOne,
+  syncSchoolScalesAndGrades,
+  getUserEligibleAcademicYears
+} from "./helpers";
 
 export const createGradeType = async (req: Request, res: Response): Promise<void> => {
   const schoolId = parseSchoolId(req.body.schoolId);

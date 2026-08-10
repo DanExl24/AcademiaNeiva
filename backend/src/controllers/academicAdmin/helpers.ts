@@ -3,6 +3,7 @@ import { PoolClient } from "pg";
 import { pool } from "../../config/db";
 import bcrypt from "bcrypt";
 import { randomUUID } from "crypto";
+import path from "path";
 import { NotificationService } from "../../services/notificationService";
 import { validateDocumentUniqueness, normalizeDocument, validateDocumentFormatByTipo } from "../../utils/documentValidation";
 import { formatFriendlyErrorMessage } from "../../utils/errorHelper";
@@ -15,6 +16,17 @@ import {
   syncCompetencyAcrossGrade,
   TeachingContext,
 } from "../../config/competencyMigration";
+
+export interface AuthRequest extends Request {
+  user?: {
+    id_usuario: number;
+    email: string;
+    roles: string[];
+    schoolId?: number;
+  };
+}
+
+export { path };
 
 export const parseSchoolId = (value: unknown): number | null => {
   const parsed = Number(value);
@@ -102,9 +114,308 @@ export const autoSwitchPeriodsForYear = async (client: any, schoolId: number, ye
 
     if (nextState !== p.estado) {
       await client.query(
-        `UPDATE periodo_academico SET estado = $1 WHERE id_periodo = $2`,
+        `UPDATE periodo_academico SET estado = $1::estado_periodo WHERE id_periodo = $2`,
         [nextState, p.id_periodo]
       );
     }
   }
+};
+
+export const ensureAcademicYearForSchool = async (schoolId: number): Promise<number> => {
+  const existing = await pool.query(
+    `SELECT id_anio
+     FROM anio_lectivo
+     WHERE id_colegio = $1 AND estado = 'ABIERTO'
+     ORDER BY id_anio DESC
+     LIMIT 1`,
+    [schoolId]
+  );
+
+  if (existing.rows.length > 0) {
+    return Number(existing.rows[0].id_anio);
+  }
+
+  const fallback = await pool.query(
+    `SELECT id_anio
+     FROM anio_lectivo
+     WHERE id_colegio = $1
+     ORDER BY id_anio DESC
+     LIMIT 1`,
+    [schoolId]
+  );
+
+  if (fallback.rows.length > 0) {
+    return Number(fallback.rows[0].id_anio);
+  }
+
+  const currentYear = new Date().getFullYear();
+  const created = await pool.query(
+    `INSERT INTO anio_lectivo (calendario, id_colegio, tipo_calendario, estado)
+     VALUES ($1, $2, 'A', 'ABIERTO')
+     RETURNING id_anio`,
+    [String(currentYear), schoolId]
+  );
+
+  return Number(created.rows[0].id_anio);
+};
+
+export const ensureSchoolSettingsTable = async () => {};
+export const ensureAcademicPeriodTrimesterColumn = async () => {};
+export const ensureAcademicPeriodDayColumns = async () => {};
+export const ensureAcademicPeriodMonthColumns = async () => {};
+export const ensureAcademicPeriodPendingStatus = async () => {};
+
+export const ensureSchoolDefaultSettings = async (schoolId: number) => {
+  const existing = await pool.query(
+    `SELECT id_colegio, nota_minima, nota_maxima, nota_aprobacion, escala_modo
+     FROM configuracion_colegio
+     WHERE id_colegio = $1`,
+    [schoolId]
+  );
+
+  if (existing.rows.length > 0) {
+    return existing.rows[0];
+  }
+
+  const scaleBoundsRes = await pool.query(
+    `SELECT
+       MIN(valor_minimo)::numeric AS nota_minima,
+       MAX(valor_maximo)::numeric AS nota_maxima
+     FROM escala_valoracion
+     WHERE id_colegio = $1`,
+    [schoolId]
+  );
+
+  const inferredMin = scaleBoundsRes.rows[0]?.nota_minima !== null ? Number(scaleBoundsRes.rows[0].nota_minima) : 0;
+  const inferredMax = scaleBoundsRes.rows[0]?.nota_maxima !== null ? Number(scaleBoundsRes.rows[0].nota_maxima) : 5;
+  const inferredApproval = inferredMin <= 3 && 3 <= inferredMax ? 3 : Number(((inferredMin + inferredMax) / 2).toFixed(1));
+
+  const created = await pool.query(
+    `INSERT INTO configuracion_colegio (id_colegio, nota_minima, nota_maxima, nota_aprobacion, escala_modo)
+     VALUES ($1, $2, $3, $4, 'AUTOMATICO')
+     RETURNING id_colegio, nota_minima, nota_maxima, nota_aprobacion, escala_modo`,
+    [schoolId, inferredMin, inferredMax, inferredApproval]
+  );
+
+  return created.rows[0];
+};
+
+export const roundToOne = (value: number): number => Number(value.toFixed(1));
+
+export const clamp = (value: number, min: number, max: number): number =>
+  Math.min(Math.max(value, min), max);
+
+export const buildAutomaticScales = (notaMinima: number, notaMaxima: number, notaAprobacion: number) => {
+  const min = roundToOne(notaMinima);
+  const max = roundToOne(notaMaxima);
+  const approval = roundToOne(notaAprobacion);
+  const failMax = roundToOne(Math.max(min, approval - 0.1));
+  const approvedSpan = Math.max(0, max - approval);
+  const basicMax = roundToOne(clamp(approval + approvedSpan / 3, approval, max));
+  const altoMin = roundToOne(clamp(basicMax + 0.1, approval, max));
+  const altoMax = roundToOne(clamp(approval + (approvedSpan * 2) / 3, altoMin, max));
+  const superiorMin = roundToOne(clamp(altoMax + 0.1, altoMin, max));
+
+  return [
+    { nivel: "BAJO", valor_minimo: min, valor_maximo: failMax },
+    { nivel: "BASICO", valor_minimo: approval, valor_maximo: basicMax },
+    { nivel: "ALTO", valor_minimo: altoMin, valor_maximo: altoMax },
+    { nivel: "SUPERIOR", valor_minimo: superiorMin, valor_maximo: max },
+  ];
+};
+
+export const buildManualScales = (
+  notaMinima: number,
+  notaMaxima: number,
+  notaAprobacion: number,
+  basicMaxInput?: number | null,
+  altoMaxInput?: number | null
+) => {
+  const min = roundToOne(notaMinima);
+  const max = roundToOne(notaMaxima);
+  const approval = roundToOne(notaAprobacion);
+  const failMax = roundToOne(Math.max(min, approval - 0.1));
+
+  if (max - approval < 0.2) {
+    throw new Error("El rango aprobado es demasiado corto para construir escalas manuales válidas");
+  }
+
+  const defaultBasicMax = roundToOne(clamp(approval + (max - approval) / 3, approval, max - 0.2));
+  const basicMax = roundToOne(clamp(basicMaxInput ?? defaultBasicMax, approval, max - 0.2));
+  const altoMin = roundToOne(basicMax + 0.1);
+  const defaultAltoMax = roundToOne(clamp(altoMin + (max - altoMin) / 2, altoMin, max - 0.1));
+  const altoMax = roundToOne(clamp(altoMaxInput ?? defaultAltoMax, altoMin, max - 0.1));
+  const superiorMin = roundToOne(altoMax + 0.1);
+
+  return [
+    { nivel: "BAJO", valor_minimo: min, valor_maximo: failMax },
+    { nivel: "BASICO", valor_minimo: approval, valor_maximo: basicMax },
+    { nivel: "ALTO", valor_minimo: altoMin, valor_maximo: altoMax },
+    { nivel: "SUPERIOR", valor_minimo: superiorMin, valor_maximo: max },
+  ];
+};
+
+export const assignScaleForScore = <T extends { id_escalavaloracion: number; valor_minimo: number | string; valor_maximo: number | string }>(
+  score: number,
+  scales: T[]
+) => {
+  const normalized = roundToOne(score);
+  return (
+    scales.find((item) => {
+      const min = Number(item.valor_minimo);
+      const max = Number(item.valor_maximo);
+      return normalized >= min && normalized <= max;
+    }) ?? scales[scales.length - 1]
+  );
+};
+
+export const syncSchoolScalesAndGrades = async (
+  client: PoolClient,
+  schoolId: number,
+  previousMin: number,
+  previousMax: number,
+  nextMin: number,
+  nextMax: number,
+  nextApproval: number,
+  scaleMode: "AUTOMATICO" | "MANUAL" = "AUTOMATICO",
+  manualBreaks?: { basicMax?: number | null; altoMax?: number | null }
+) => {
+  const previousScalesRes = await client.query(
+    `SELECT id_escalavaloracion, nivel
+     FROM escala_valoracion
+     WHERE id_colegio = $1
+     ORDER BY valor_minimo`,
+    [schoolId]
+  );
+
+  const nextScalesDraft =
+    scaleMode === "MANUAL"
+      ? buildManualScales(nextMin, nextMax, nextApproval, manualBreaks?.basicMax, manualBreaks?.altoMax)
+      : buildAutomaticScales(nextMin, nextMax, nextApproval);
+
+  let nextScales: { id_escalavaloracion: number; nivel: string; valor_minimo: number; valor_maximo: number }[] = [];
+
+  if (previousScalesRes.rows.length === nextScalesDraft.length) {
+    for (let i = 0; i < previousScalesRes.rows.length; i++) {
+      const existingId = previousScalesRes.rows[i].id_escalavaloracion;
+      const draft = nextScalesDraft[i];
+      await client.query(
+        `UPDATE escala_valoracion
+         SET nivel = $1, valor_minimo = $2, valor_maximo = $3
+         WHERE id_escalavaloracion = $4`,
+        [draft.nivel, draft.valor_minimo, draft.valor_maximo, existingId]
+      );
+      nextScales.push({ id_escalavaloracion: existingId, ...draft });
+    }
+  } else {
+    await client.query(
+      `UPDATE notas_actividad SET id_escalavaloracion = NULL WHERE id_colegio = $1`,
+      [schoolId]
+    );
+    if (previousScalesRes.rows.length > 0) {
+      const oldIds = previousScalesRes.rows.map((r) => Number(r.id_escalavaloracion));
+      await client.query(
+        `DELETE FROM escala_valoracion WHERE id_escalavaloracion = ANY($1::int[])`,
+        [oldIds]
+      );
+    }
+    const createdRes = await client.query(
+      `INSERT INTO escala_valoracion (nivel, valor_minimo, valor_maximo, id_colegio)
+       VALUES ($1, $2, $3, $4), ($5, $6, $7, $4), ($8, $9, $10, $4), ($11, $12, $13, $4)
+       RETURNING id_escalavaloracion, nivel, valor_minimo, valor_maximo`,
+      [
+        nextScalesDraft[0].nivel, nextScalesDraft[0].valor_minimo, nextScalesDraft[0].valor_maximo,
+        schoolId,
+        nextScalesDraft[1].nivel, nextScalesDraft[1].valor_minimo, nextScalesDraft[1].valor_maximo,
+        nextScalesDraft[2].nivel, nextScalesDraft[2].valor_minimo, nextScalesDraft[2].valor_maximo,
+        nextScalesDraft[3].nivel, nextScalesDraft[3].valor_minimo, nextScalesDraft[3].valor_maximo,
+      ]
+    );
+    nextScales = createdRes.rows;
+  }
+
+  const notesRes = await client.query(
+    `SELECT id_notaactividad, nota
+     FROM notas_actividad
+     WHERE id_colegio = $1
+     FOR UPDATE`,
+    [schoolId]
+  );
+
+  const previousRange = previousMax - previousMin;
+  const nextRange = nextMax - nextMin;
+
+  for (const row of notesRes.rows) {
+    const currentScore = Number(row.nota);
+    const ratio = previousRange > 0 ? (currentScore - previousMin) / previousRange : 0;
+    const normalizedRatio = clamp(ratio, 0, 1);
+    const rescaledScore = roundToOne(nextMin + normalizedRatio * nextRange);
+    const scale = assignScaleForScore(rescaledScore, nextScales);
+
+    await client.query(
+      `UPDATE notas_actividad
+       SET nota = $1,
+           id_escalavaloracion = $2
+       WHERE id_notaactividad = $3`,
+      [rescaledScore, scale.id_escalavaloracion, row.id_notaactividad]
+    );
+  }
+
+  const criteriaNotesRes = await client.query(
+    `SELECT id_nota_criterio, nota
+     FROM nota_criterio
+     WHERE id_colegio = $1
+     FOR UPDATE`,
+    [schoolId]
+  );
+
+  for (const row of criteriaNotesRes.rows) {
+    const currentScore = Number(row.nota);
+    const ratio = previousRange > 0 ? (currentScore - previousMin) / previousRange : 0;
+    const normalizedRatio = clamp(ratio, 0, 1);
+    const rescaledScore = roundToOne(nextMin + normalizedRatio * nextRange);
+
+    await client.query(
+      `UPDATE nota_criterio
+       SET nota = $1
+       WHERE id_nota_criterio = $2`,
+      [rescaledScore, row.id_nota_criterio]
+    );
+  }
+
+  const resultsRes = await client.query(
+    `SELECT ra.id_resultado, ra.promedio
+     FROM resultado_academico ra
+     JOIN detalle_grados dg ON dg.id_detallegrado = ra.id_detallegrado
+     WHERE dg.id_colegio = $1
+     FOR UPDATE OF ra`,
+    [schoolId]
+  );
+
+  for (const row of resultsRes.rows) {
+    const currentScore = Number(row.promedio);
+    const ratio = previousRange > 0 ? (currentScore - previousMin) / previousRange : 0;
+    const normalizedRatio = clamp(ratio, 0, 1);
+    const rescaledScore = Number((nextMin + normalizedRatio * nextRange).toFixed(2));
+
+    await client.query(
+      `UPDATE resultado_academico
+       SET promedio = $1
+       WHERE id_resultado = $2`,
+      [rescaledScore, row.id_resultado]
+    );
+  }
+
+  return nextScales;
+};
+
+export const getUserEligibleAcademicYears = async (schoolId: number): Promise<any[]> => {
+  const res = await pool.query(
+    `SELECT id_anio, calendario, estado, tipo_calendario
+     FROM anio_lectivo
+     WHERE id_colegio = $1
+     ORDER BY id_anio DESC`,
+    [schoolId]
+  );
+  return res.rows;
 };
