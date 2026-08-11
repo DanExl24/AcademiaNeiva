@@ -165,8 +165,7 @@ export const registrarColegio = async (req: AuthRequest, res: Response): Promise
         dane: cleanDane,
         tipo_calendario: tipo_calendario || 'A',
         estado: 'PENDIENTE',
-        escudo_url: escudo_url || null,
-        colores: colores || null
+        escudo_url: escudo_url || null
       })
       .returningAll()
       .executeTakeFirstOrThrow();

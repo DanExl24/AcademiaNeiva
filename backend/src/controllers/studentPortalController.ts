@@ -387,12 +387,7 @@ export const getStudentInfo = async (req: Request, res: Response) => {
       .leftJoin("secciones as s", "s.id_seccion", "gr.id_seccion")
       .leftJoin("tipo_grado as tg", "tg.id_tipo_grado", "gr.id_tipo_grado")
       .leftJoin("jornada as j", "j.id_jornada", "gr.id_jornada")
-      .leftJoin("nivel_escolar as n", (join) =>
-        join.on((eb) => eb.or([
-          eb("n.id_nivel", "=", eb.ref("gr.id_nivel")),
-          eb("n.id_nivel", "=", eb.ref("e.id_nivel"))
-        ]))
-      )
+      .leftJoin("nivel_escolar as n", "n.id_nivel", "gr.id_nivel")
       .leftJoin(sancionSubquery, "sanc.id_estudiante", "e.id_estudiante")
       .select([
         "e.id_estudiante",
@@ -453,12 +448,7 @@ export const getParentChildren = async (req: Request, res: Response) => {
       .leftJoin("secciones as s", "s.id_seccion", "gr.id_seccion")
       .leftJoin("tipo_grado as tg", "tg.id_tipo_grado", "gr.id_tipo_grado")
       .leftJoin("jornada as j", "j.id_jornada", "gr.id_jornada")
-      .leftJoin("nivel_escolar as n", (join) =>
-        join.on((eb) => eb.or([
-          eb("n.id_nivel", "=", eb.ref("gr.id_nivel")),
-          eb("n.id_nivel", "=", eb.ref("e.id_nivel"))
-        ]))
-      )
+      .leftJoin("nivel_escolar as n", "n.id_nivel", "gr.id_nivel")
       .select([
         "e.id_estudiante",
         "e.nombre",
@@ -681,12 +671,7 @@ export const getParentDashboardData = async (req: Request, res: Response) => {
       .leftJoin("secciones as s", "s.id_seccion", "gr.id_seccion")
       .leftJoin("tipo_grado as tg", "tg.id_tipo_grado", "gr.id_tipo_grado")
       .leftJoin("jornada as j", "j.id_jornada", "gr.id_jornada")
-      .leftJoin("nivel_escolar as n", (join) =>
-        join.on((eb) => eb.or([
-          eb("n.id_nivel", "=", eb.ref("gr.id_nivel")),
-          eb("n.id_nivel", "=", eb.ref("e.id_nivel"))
-        ]))
-      )
+      .leftJoin("nivel_escolar as n", "n.id_nivel", "gr.id_nivel")
       .select([
         "e.id_estudiante",
         "e.nombre",
