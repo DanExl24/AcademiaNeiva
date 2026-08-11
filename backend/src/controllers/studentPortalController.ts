@@ -659,7 +659,7 @@ export const getParentDashboardData = async (req: Request, res: Response) => {
       .selectFrom("matricula")
       .select(["id_estudiante", "id_grupo", "id_anio", "estado"])
       .distinctOn("id_estudiante")
-      .where("estado", "in", ["ACTIVA", "APROBADA"]);
+      .where("estado", "in", ["APROBADA", "MATRICULADO", "TRASLADADA", "REGISTRADA", "EN_REVISION"] as any);
 
     if (targetYearId) {
       activeMatriculaQuery = activeMatriculaQuery.where("id_anio", "=", Number(targetYearId));

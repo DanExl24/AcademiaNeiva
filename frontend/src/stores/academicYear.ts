@@ -41,11 +41,15 @@ export const useAcademicYearStore = defineStore('academicYear', () => {
 
       if (currentSaved && exists) {
         // Keep user selection
-      } else if (res.data.activeYear) {
-        const activeId = res.data.activeYear.id_anio ?? res.data.activeYear.id_año
-        setSelectedYearId(activeId)
-      } else if (years.length > 0) {
-        setSelectedYearId(years[0].id_anio)
+      } else {
+        const activeYearId = res.data.activeYear ? (res.data.activeYear.id_anio ?? res.data.activeYear.id_año) : null
+        const activeExists = activeYearId ? years.some(y => y.id_anio === activeYearId) : false
+
+        if (activeYearId && activeExists) {
+          setSelectedYearId(activeYearId)
+        } else if (years.length > 0) {
+          setSelectedYearId(years[0].id_anio)
+        }
       }
     } catch (err) {
       console.error('Error loading academic years in store:', err)
