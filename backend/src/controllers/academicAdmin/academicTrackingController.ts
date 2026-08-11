@@ -57,15 +57,21 @@ interface AnnualSubjectAccumulator {
  * Auxiliar para obtener el valor mínimo aprobatorio según la escala del colegio.
  */
 async function getMinPassingScore(schoolId: number): Promise<number> {
-  const scale = await db
-    .selectFrom("escala_valoracion")
-    .select(["valor_minimo", "nivel"])
-    .where("id_colegio", "=", schoolId)
-    .where("nivel", "!=", "Bajo")
-    .orderBy("valor_minimo", "asc")
-    .executeTakeFirst();
+  try {
+    const scale = await db
+      .selectFrom("escala_valoracion")
+      .select(["valor_minimo"])
+      .where("id_colegio", "=", schoolId)
+      .executeTakeFirst();
 
-  return scale ? parseFloat(String(scale.valor_minimo)) : 3.0;
+    if (scale && scale.valor_minimo != null) {
+      const val = parseFloat(String(scale.valor_minimo));
+      if (!isNaN(val) && val > 0) return val;
+    }
+  } catch (err) {
+    console.error("Error al obtener la escala de valoración:", err);
+  }
+  return 3.0;
 }
 
 /**
@@ -93,11 +99,9 @@ export const getPeriodAcademicTracking = async (req: Request, res: Response): Pr
     // Obtener períodos del año
     const periodsInYear = await db
       .selectFrom("periodo_academico")
-      .select(["id_periodo", "nombre", "mes_inicio", "dia_inicio"])
+      .select(["id_periodo", "nombre"])
       .where("id_colegio", "=", schoolId)
       .where("id_anio", "=", yearId)
-      .orderBy("mes_inicio", "asc")
-      .orderBy("dia_inicio", "asc")
       .orderBy("id_periodo", "asc")
       .execute();
 
@@ -110,9 +114,6 @@ export const getPeriodAcademicTracking = async (req: Request, res: Response): Pr
       targetPeriodIds = [periodId];
     } else if (periodsInYear.length > 0) {
       targetPeriodIds = [periodsInYear[0].id_periodo];
-    } else {
-      res.status(404).json({ error: "No se encontraron períodos académicos para el año seleccionado." });
-      return;
     }
 
     // Consulta base de estudiantes matriculados
@@ -146,13 +147,25 @@ export const getPeriodAcademicTracking = async (req: Request, res: Response): Pr
 
     const students = await query.orderBy("u.apellido", "asc").orderBy("u.nombre", "asc").execute();
 
-    if (students.length === 0) {
+    if (students.length === 0 || targetPeriodIds.length === 0) {
       res.json({
-        total_estudiantes: 0,
-        aprobados_count: 0,
+        total_estudiantes: students.length,
+        aprobados_count: students.length,
         reprobados_count: 0,
         min_passing_score: minPassingScore,
-        estudiantes: []
+        periodos_analizados: targetPeriodIds,
+        estudiantes: students.map(s => ({
+          id_estudiante: s.id_estudiante,
+          nombre: s.nombre,
+          apellido: s.apellido,
+          documento: s.documento,
+          grado_nombre: s.grado_nombre || "Sin Grado",
+          grupo_nombre: s.grupo_nombre || "Sin Grupo",
+          estado_academico: "APROBADO",
+          cantidad_reprobadas: 0,
+          asignaturas_reprobadas: [],
+          todas_asignaturas: []
+        }))
       });
       return;
     }
@@ -172,8 +185,8 @@ export const getPeriodAcademicTracking = async (req: Request, res: Response): Pr
         "am.id_periodo",
         "dg.id_materia",
         "mat.nombre as materia_nombre",
-        sql<string>`COALESCE(ud.nombre || ' ' || ud.apellido, 'Sin Asignar')`.as("docente_nombre"),
-        sql<number>`SUM(na.nota * am.porcentaje / 100)`.as("nota_ponderada_actividades")
+        sql<string>`MAX(COALESCE(ud.nombre || ' ' || ud.apellido, 'Sin Asignar'))`.as("docente_nombre"),
+        sql<number>`COALESCE(SUM(na.nota * am.porcentaje / 100.0), 0)`.as("nota_ponderada_actividades")
       ])
       .where("na.id_estudiante", "in", studentIds)
       .where("am.id_periodo", "in", targetPeriodIds)
@@ -181,9 +194,7 @@ export const getPeriodAcademicTracking = async (req: Request, res: Response): Pr
         "na.id_estudiante",
         "am.id_periodo",
         "dg.id_materia",
-        "mat.nombre",
-        "ud.nombre",
-        "ud.apellido"
+        "mat.nombre"
       ])
       .execute();
 
@@ -334,25 +345,28 @@ export const getAnnualConsolidation = async (req: Request, res: Response): Promi
         promovidos_count: 0,
         no_promovidos_count: 0,
         pendientes_count: 0,
+        min_passing_score: minPassingScore,
         estudiantes: []
       });
       return;
     }
 
-    const decisions = await db
-      .selectFrom("decision_promocion_directivo")
-      .selectAll()
-      .where("id_colegio", "=", schoolId)
-      .where("id_anio_anterior", "=", yearId)
-      .where("id_estudiante", "in", studentIds)
-      .execute();
+    const decisions = studentIds.length > 0
+      ? await db
+          .selectFrom("decision_promocion_directivo")
+          .selectAll()
+          .where("id_colegio", "=", schoolId)
+          .where("id_anio_anterior", "=", yearId)
+          .where("id_estudiante", "in", studentIds)
+          .execute()
+      : [];
 
     const decisionsMap: Record<number, any> = {};
     decisions.forEach((d: any) => {
       decisionsMap[d.id_estudiante] = d;
     });
 
-    const gradesData = periodIds.length > 0
+    const gradesData = (studentIds.length > 0 && periodIds.length > 0)
       ? await db
           .selectFrom("notas_actividad as na")
           .innerJoin("actividad_materia as am", "am.id_actividadmateria", "na.id_actividadmateria")
@@ -365,8 +379,8 @@ export const getAnnualConsolidation = async (req: Request, res: Response): Promi
             "am.id_periodo",
             "dg.id_materia",
             "mat.nombre as materia_nombre",
-            sql<string>`COALESCE(ud.nombre || ' ' || ud.apellido, 'Sin Asignar')`.as("docente_nombre"),
-            sql<number>`SUM(na.nota * am.porcentaje / 100)`.as("nota_ponderada")
+            sql<string>`MAX(COALESCE(ud.nombre || ' ' || ud.apellido, 'Sin Asignar'))`.as("docente_nombre"),
+            sql<number>`COALESCE(SUM(na.nota * am.porcentaje / 100.0), 0)`.as("nota_ponderada")
           ])
           .where("na.id_estudiante", "in", studentIds)
           .where("am.id_periodo", "in", periodIds)
@@ -374,9 +388,7 @@ export const getAnnualConsolidation = async (req: Request, res: Response): Promi
             "na.id_estudiante",
             "am.id_periodo",
             "dg.id_materia",
-            "mat.nombre",
-            "ud.nombre",
-            "ud.apellido"
+            "mat.nombre"
           ])
           .execute()
       : [];
@@ -640,7 +652,7 @@ export const checkStudentAcademicWarning = async (req: Request, res: Response): 
         .select([
           "dg.id_materia",
           "mat.nombre as materia_nombre",
-          sql<number>`SUM(na.nota * am.porcentaje / 100)`.as("nota_ponderada")
+          sql<number>`COALESCE(SUM(na.nota * am.porcentaje / 100.0), 0)`.as("nota_ponderada")
         ])
         .where("na.id_estudiante", "=", user.id_estudiante)
         .where("am.id_periodo", "in", periodIds)
