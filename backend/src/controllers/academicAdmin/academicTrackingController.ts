@@ -751,6 +751,49 @@ export const recordDirectiveDecision = async (req: Request, res: Response): Prom
       return;
     }
 
+    // Verificar estado del año lectivo evaluado
+    const academicYear = await db
+      .selectFrom("anio_lectivo")
+      .select(["id_anio", "estado", "calendario"])
+      .where("id_anio", "=", previousYearId)
+      .executeTakeFirst();
+
+    if (!academicYear) {
+      res.status(404).json({ error: "El año lectivo evaluado no existe." });
+      return;
+    }
+
+    // Verificar si el año está ABIERTO en períodos intermedios (ej. P1, P2 o P3)
+    if (academicYear.estado !== "CERRADO") {
+      const openPeriods = await db
+        .selectFrom("periodo_academico")
+        .select(["id_periodo", "nombre", "estado"])
+        .where("id_colegio", "=", schoolId)
+        .where("id_anio", "=", previousYearId)
+        .where("estado", "=", "ABIERTO")
+        .execute();
+
+      const totalPeriodsCount = await db
+        .selectFrom("periodo_academico")
+        .select(["id_periodo"])
+        .where("id_colegio", "=", schoolId)
+        .where("id_anio", "=", previousYearId)
+        .orderBy("id_periodo", "asc")
+        .execute();
+
+      if (totalPeriodsCount.length > 1 && openPeriods.length > 0) {
+        const lastPeriodId = totalPeriodsCount[totalPeriodsCount.length - 1].id_periodo;
+        const isOpenInIntermediates = openPeriods.some(p => p.id_periodo !== lastPeriodId);
+
+        if (isOpenInIntermediates) {
+          res.status(400).json({
+            error: `No se puede registrar la decisión final de promoción para el año lectivo ${academicYear.calendario} porque aún se encuentra ABIERTO en períodos intermedios. Las decisiones finales de promoción deben registrarse cuando el año lectivo esté CERRADO o en su período académico final.`
+          });
+          return;
+        }
+      }
+    }
+
     const inserted = await db
       .insertInto("decision_promocion_directivo")
       .values({

@@ -1317,6 +1317,26 @@ async function seedDbaCompetenciesAndEvidences() {
                     }
                 }
             }
+            // ─── 2025 PROMOTION DECISIONS SEEDING FOR ALL STUDENTS ───
+            const year2025Res = await client.query("SELECT id_anio FROM anio_lectivo WHERE id_colegio = $1 AND (calendario = '2025' OR calendario = '2024-2025') ORDER BY id_anio ASC LIMIT 1", [school.id_colegio]);
+            const yearId2025 = year2025Res.rows[0]?.id_anio;
+            const directivoUserRes = await client.query("SELECT u.id_usuario FROM usuario u JOIN directivo d ON d.id_usuario = u.id_usuario WHERE u.id_colegio = $1 ORDER BY u.id_usuario ASC LIMIT 1", [school.id_colegio]);
+            const directiveUserId = directivoUserRes.rows[0]?.id_usuario || 1;
+            if (yearId2025) {
+                const enrollments2025 = await client.query(`SELECT m.id_estudiante, m.id_grupo, g.id_tipo_grado
+           FROM matricula m
+           JOIN grupos g ON g.id_grupo = m.id_grupo
+           WHERE m.id_colegio = $1 AND m.id_anio = $2 AND m.estado NOT IN ('CANCELADA', 'RECHAZADA')`, [school.id_colegio, yearId2025]);
+                for (const enr of enrollments2025.rows) {
+                    const existCheck = await client.query("SELECT 1 FROM decision_promocion_directivo WHERE id_estudiante = $1 AND id_anio_anterior = $2", [enr.id_estudiante, yearId2025]);
+                    if (existCheck.rows.length === 0) {
+                        await client.query(`INSERT INTO decision_promocion_directivo 
+               (id_colegio, id_estudiante, id_anio_anterior, resultado_calculado, decision_tomada, id_grado_anterior, id_grado_asignado, id_usuario_decision, observacion)
+               VALUES ($1, $2, $3, 'APROBADO', 'PROMOVER_SIGUIENTE_GRADO', $4, $4, $5, 'Estudiante promovido satisfactoriamente al siguiente grado lectivo por el Consejo Académico.')`, [school.id_colegio, enr.id_estudiante, yearId2025, enr.id_tipo_grado, directiveUserId]);
+                    }
+                }
+                console.log(`✅ Decisiones de promoción 2025 registradas para ${enrollments2025.rows.length} estudiantes de ${school.nombre}.`);
+            }
         }
         console.log("✅ Siembra de competencias y evidencias basada en DBA completada exitosamente.");
     }
