@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict uxx8SZM2wBit2SBEuuDWxnaPVRieEmfpkC7D6xMVC03YENbg7zBafnKXDRKAqyS
+\restrict EjDO76XGir4Uyvs4WJEGiCemSSsHZ7HNbY3H1SAUFPVTXlsDmdnxKqjP3H2Zxkz
 
 -- Dumped from database version 18.4
 -- Dumped by pg_dump version 18.4
@@ -61,6 +61,20 @@ CREATE TYPE public.accion_aprobacion_traslado AS ENUM (
 
 
 ALTER TYPE public.accion_aprobacion_traslado OWNER TO postgres;
+
+--
+-- Name: decision_promocion_tipo; Type: TYPE; Schema: public; Owner: postgres
+--
+
+CREATE TYPE public.decision_promocion_tipo AS ENUM (
+    'PROMOVER_SIGUIENTE_GRADO',
+    'MANTENER_GRADO',
+    'MATRICULA_CONDICIONADA',
+    'OTRA_DECISION'
+);
+
+
+ALTER TYPE public.decision_promocion_tipo OWNER TO postgres;
 
 --
 -- Name: estado_asistencia; Type: TYPE; Schema: public; Owner: postgres
@@ -275,6 +289,20 @@ CREATE TYPE public.estado_usuario_sistema AS ENUM (
 
 
 ALTER TYPE public.estado_usuario_sistema OWNER TO postgres;
+
+--
+-- Name: resultado_consolidado_anual; Type: TYPE; Schema: public; Owner: postgres
+--
+
+CREATE TYPE public.resultado_consolidado_anual AS ENUM (
+    'APROBADO',
+    'NO_PROMOVIDO',
+    'PENDIENTE_RECUPERACION',
+    'PENDIENTE_DECISION'
+);
+
+
+ALTER TYPE public.resultado_consolidado_anual OWNER TO postgres;
 
 --
 -- Name: tipo_accion_auditoria; Type: TYPE; Schema: public; Owner: postgres
@@ -1307,6 +1335,49 @@ ALTER SEQUENCE public.dba_id_dba_seq OWNER TO postgres;
 --
 
 ALTER SEQUENCE public.dba_id_dba_seq OWNED BY public.dba.id_dba;
+
+
+--
+-- Name: decision_promocion_directivo; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.decision_promocion_directivo (
+    id_decision integer NOT NULL,
+    id_estudiante integer NOT NULL,
+    id_colegio integer NOT NULL,
+    id_anio_anterior integer NOT NULL,
+    resultado_calculado public.resultado_consolidado_anual NOT NULL,
+    decision_tomada public.decision_promocion_tipo NOT NULL,
+    id_grado_anterior integer,
+    id_grado_asignado integer,
+    id_usuario_decision integer NOT NULL,
+    fecha_decision timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+    observacion text
+);
+
+
+ALTER TABLE public.decision_promocion_directivo OWNER TO postgres;
+
+--
+-- Name: decision_promocion_directivo_id_decision_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.decision_promocion_directivo_id_decision_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.decision_promocion_directivo_id_decision_seq OWNER TO postgres;
+
+--
+-- Name: decision_promocion_directivo_id_decision_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.decision_promocion_directivo_id_decision_seq OWNED BY public.decision_promocion_directivo.id_decision;
 
 
 --
@@ -3152,6 +3223,13 @@ ALTER TABLE ONLY public.dba ALTER COLUMN id_dba SET DEFAULT nextval('public.dba_
 
 
 --
+-- Name: decision_promocion_directivo id_decision; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.decision_promocion_directivo ALTER COLUMN id_decision SET DEFAULT nextval('public.decision_promocion_directivo_id_decision_seq'::regclass);
+
+
+--
 -- Name: desempeno id_desempeno; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -3581,6 +3659,14 @@ ALTER TABLE ONLY public.dba_dimensiones_preescolar
 
 ALTER TABLE ONLY public.dba
     ADD CONSTRAINT dba_pkey PRIMARY KEY (id_dba);
+
+
+--
+-- Name: decision_promocion_directivo decision_promocion_directivo_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.decision_promocion_directivo
+    ADD CONSTRAINT decision_promocion_directivo_pkey PRIMARY KEY (id_decision);
 
 
 --
@@ -4237,6 +4323,20 @@ CREATE INDEX idx_dba_version ON public.dba USING btree (version_curricular);
 
 
 --
+-- Name: idx_decision_promocion_anio; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_decision_promocion_anio ON public.decision_promocion_directivo USING btree (id_anio_anterior);
+
+
+--
+-- Name: idx_decision_promocion_estudiante; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_decision_promocion_estudiante ON public.decision_promocion_directivo USING btree (id_estudiante, id_colegio);
+
+
+--
 -- Name: idx_detalle_padrefamilia_padrefamilia; Type: INDEX; Schema: public; Owner: postgres
 --
 
@@ -4819,6 +4919,46 @@ ALTER TABLE ONLY public.dba_dimensiones_preescolar
 
 ALTER TABLE ONLY public.dba_dimensiones_preescolar
     ADD CONSTRAINT dba_dimensiones_preescolar_id_dimension_fkey FOREIGN KEY (id_dimension) REFERENCES public.dimensiones_preescolar(id_dimension) ON DELETE CASCADE;
+
+
+--
+-- Name: decision_promocion_directivo decision_promocion_directivo_id_anio_anterior_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.decision_promocion_directivo
+    ADD CONSTRAINT decision_promocion_directivo_id_anio_anterior_fkey FOREIGN KEY (id_anio_anterior) REFERENCES public.anio_lectivo(id_anio) ON DELETE CASCADE;
+
+
+--
+-- Name: decision_promocion_directivo decision_promocion_directivo_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.decision_promocion_directivo
+    ADD CONSTRAINT decision_promocion_directivo_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio) ON DELETE CASCADE;
+
+
+--
+-- Name: decision_promocion_directivo decision_promocion_directivo_id_estudiante_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.decision_promocion_directivo
+    ADD CONSTRAINT decision_promocion_directivo_id_estudiante_fkey FOREIGN KEY (id_estudiante) REFERENCES public.estudiante(id_estudiante) ON DELETE CASCADE;
+
+
+--
+-- Name: decision_promocion_directivo decision_promocion_directivo_id_grado_anterior_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.decision_promocion_directivo
+    ADD CONSTRAINT decision_promocion_directivo_id_grado_anterior_fkey FOREIGN KEY (id_grado_anterior) REFERENCES public.grados(id_grado) ON DELETE SET NULL;
+
+
+--
+-- Name: decision_promocion_directivo decision_promocion_directivo_id_grado_asignado_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.decision_promocion_directivo
+    ADD CONSTRAINT decision_promocion_directivo_id_grado_asignado_fkey FOREIGN KEY (id_grado_asignado) REFERENCES public.grados(id_grado) ON DELETE SET NULL;
 
 
 --
@@ -5472,5 +5612,5 @@ REVOKE USAGE ON SCHEMA public FROM PUBLIC;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict uxx8SZM2wBit2SBEuuDWxnaPVRieEmfpkC7D6xMVC03YENbg7zBafnKXDRKAqyS
+\unrestrict EjDO76XGir4Uyvs4WJEGiCemSSsHZ7HNbY3H1SAUFPVTXlsDmdnxKqjP3H2Zxkz
 
