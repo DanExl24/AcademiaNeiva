@@ -2,12 +2,15 @@
 -- PostgreSQL database dump
 --
 
-\restrict ceMtPsngg56YcJuXH443kQCEedZqrx5p1BLccrZp92hm4MmiSI26NmF5dqemlcX
+\restrict x7o1Rb87njYhbOKuKNKOP9YKRR2vCcjTxteC8tGxakbkVF8Lekkq4RcZGHIZ38t
 
 -- Dumped from database version 18.4
 -- Dumped by pg_dump version 18.4
 
+SET statement_timeout = 0;
 SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET transaction_timeout = 0;
 SET client_encoding = 'UTF8';
 SET standard_conforming_strings = on;
 SELECT pg_catalog.set_config('search_path', '', false);
@@ -213764,5 +213767,5 @@ REVOKE USAGE ON SCHEMA public FROM PUBLIC;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict ceMtPsngg56YcJuXH443kQCEedZqrx5p1BLccrZp92hm4MmiSI26NmF5dqemlcX
+\unrestrict x7o1Rb87njYhbOKuKNKOP9YKRR2vCcjTxteC8tGxakbkVF8Lekkq4RcZGHIZ38t
 

@@ -763,35 +763,34 @@ export const recordDirectiveDecision = async (req: Request, res: Response): Prom
       return;
     }
 
-    // Verificar si el año está ABIERTO en períodos intermedios (ej. P1, P2 o P3)
-    if (academicYear.estado !== "CERRADO") {
-      const openPeriods = await db
-        .selectFrom("periodo_academico")
-        .select(["id_periodo", "nombre", "estado"])
-        .where("id_colegio", "=", schoolId)
-        .where("id_anio", "=", previousYearId)
-        .where("estado", "=", "ABIERTO")
-        .execute();
+    // Verificar períodos del año lectivo evaluado
+    const allPeriods = await db
+      .selectFrom("periodo_academico")
+      .select(["id_periodo", "nombre", "estado"])
+      .where("id_colegio", "=", schoolId)
+      .where("id_anio", "=", previousYearId)
+      .orderBy("id_periodo", "asc")
+      .execute();
 
-      const totalPeriodsCount = await db
-        .selectFrom("periodo_academico")
-        .select(["id_periodo"])
-        .where("id_colegio", "=", schoolId)
-        .where("id_anio", "=", previousYearId)
-        .orderBy("id_periodo", "asc")
-        .execute();
+    if (allPeriods.length === 0) {
+      res.status(400).json({ error: "El año lectivo evaluado no tiene períodos académicos registrados." });
+      return;
+    }
 
-      if (totalPeriodsCount.length > 1 && openPeriods.length > 0) {
-        const lastPeriodId = totalPeriodsCount[totalPeriodsCount.length - 1].id_periodo;
-        const isOpenInIntermediates = openPeriods.some(p => p.id_periodo !== lastPeriodId);
+    const closedPeriodsCount = allPeriods.filter(p => p.estado === "CERRADO").length;
+    const totalPeriodsCount = allPeriods.length;
 
-        if (isOpenInIntermediates) {
-          res.status(400).json({
-            error: `No se puede registrar la decisión final de promoción para el año lectivo ${academicYear.calendario} porque aún se encuentra ABIERTO en períodos intermedios. Las decisiones finales de promoción deben registrarse cuando el año lectivo esté CERRADO o en su período académico final.`
-          });
-          return;
-        }
-      }
+    // Regla de Negocio: Para registrar la decisión de promoción anual, el año lectivo debe:
+    // 1) Haber cerrado al menos N-1 períodos (ej: tener cerrados P1, P2 y P3 para estar evaluando P4), O
+    // 2) Haber completado/cerrado TODOS los períodos del año.
+    // Aunque el directivo haya cerrado el año antes de tiempo, si solo pasaron 1 o 2 períodos de 4, no es válido promocionar.
+    const isAtOrPastFinalPeriod = totalPeriodsCount <= 1 || closedPeriodsCount >= totalPeriodsCount - 1;
+
+    if (!isAtOrPastFinalPeriod) {
+      res.status(400).json({
+        error: `No es posible registrar la decisión de promoción anual para el año lectivo ${academicYear.calendario} porque apenas se han completado ${closedPeriodsCount} de ${totalPeriodsCount} períodos. La promoción anual únicamente se puede evaluar y registrar cuando el año lectivo se encuentre en su 4° período final o haya culminado todos sus períodos.`
+      });
+      return;
     }
 
     const inserted = await db
