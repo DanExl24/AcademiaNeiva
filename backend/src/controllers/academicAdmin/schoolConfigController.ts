@@ -633,7 +633,7 @@ export const getMySchoolData = async (req: Request, res: Response): Promise<void
   }
 
   const authReq = req as AuthRequest;
-  if (!isSchoolAccessAllowed(authReq.user, schoolId)) {
+  if (!(await isSchoolAccessAllowed(authReq.user, schoolId))) {
     res.status(403).json({ error: "No tiene permiso para acceder a la información de este colegio." });
     return;
   }

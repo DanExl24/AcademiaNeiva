@@ -31,12 +31,48 @@ export interface AuthRequest extends Request {
 
 export { path };
 
-export const isSchoolAccessAllowed = (user: any, targetSchoolId: number | null | undefined): boolean => {
+export const isSchoolAccessAllowed = async (user: any, targetSchoolId: number | null | undefined): Promise<boolean> => {
   if (!user || !targetSchoolId) return false;
-  if (user.roles && user.roles.includes('admin_general')) return true;
   const target = Number(targetSchoolId);
+
+  if (user.roles && user.roles.includes('admin_general')) return true;
   if (user.schoolId && Number(user.schoolId) === target) return true;
   if (user.schoolIds && Array.isArray(user.schoolIds) && user.schoolIds.map(Number).includes(target)) return true;
+
+  const userId = Number(user.id || user.id_usuario || 0);
+  if (!userId) return false;
+
+  const role = String(user.role || '').toLowerCase();
+
+  try {
+    if (role === 'estudiante' || (user.roles && user.roles.includes('estudiante'))) {
+      const check = await pool.query(
+        `SELECT 1 FROM estudiante WHERE (id_usuario = $1 OR id_estudiante = $1) AND id_colegio = $2 LIMIT 1`,
+        [userId, target]
+      );
+      if (check.rows.length > 0) return true;
+    }
+
+    if (role === 'padre' || (user.roles && user.roles.includes('padre'))) {
+      const check = await pool.query(
+        `SELECT 1 FROM padre_familia pf
+         JOIN detalle_padrefamilia dpf ON pf.id_padrefamilia = dpf.id_padrefamilia
+         JOIN estudiante e ON dpf.id_estudiante = e.id_estudiante
+         WHERE (pf.id_usuario = $1 OR pf.id_padrefamilia = $1) AND e.id_colegio = $2 LIMIT 1`,
+        [userId, target]
+      );
+      if (check.rows.length > 0) return true;
+    }
+
+    const checkBinding = await pool.query(
+      `SELECT 1 FROM usuario_colegio WHERE id_usuario = $1 AND id_colegio = $2 AND estado = 'ACTIVO' LIMIT 1`,
+      [userId, target]
+    );
+    if (checkBinding.rows.length > 0) return true;
+  } catch (err) {
+    console.error('Error in isSchoolAccessAllowed query:', err);
+  }
+
   return false;
 };
 

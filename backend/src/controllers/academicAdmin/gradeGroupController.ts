@@ -758,7 +758,7 @@ export const getAcademicSettingsData = async (req: Request, res: Response): Prom
   }
 
   const authReq = req as AuthRequest;
-  if (!isSchoolAccessAllowed(authReq.user, schoolId)) {
+  if (!(await isSchoolAccessAllowed(authReq.user, schoolId))) {
     res.status(403).json({ error: "No tiene permiso para acceder a la configuración académica de este colegio." });
     return;
   }
