@@ -7,6 +7,8 @@ import type { ColumnType } from "kysely";
 
 export type AccionAprobacionTraslado = "APROBAR" | "CANCELAR" | "RECHAZAR";
 
+export type DecisionPromocionTipo = "PROMOVER_SIGUIENTE_GRADO" | "MANTENER_GRADO" | "MATRICULA_CONDICIONADA" | "OTRA_DECISION";
+
 export type EstadoAsistencia = "AUSENTE" | "JUSTIFICADA" | "PRESENTE" | "TARDE";
 
 export type EstadoCierreMateria = "ABIERTO" | "CERRADO";
@@ -24,6 +26,8 @@ export type EstadoMatricula = "ACTIVA" | "APROBADA" | "CANCELADA" | "CORRECCION"
 export type EstadoPeriodo = "ABIERTO" | "CERRADO" | "PENDIENTE";
 
 export type EstadoRenovacionDocumento = "DESACTUALIZADO_POR_FECHA" | "OBLIGATORIO_ACTUALIZAR" | "RECOMENDADO_ACTUALIZAR" | "VIGENTE";
+
+export type ResultadoConsolidadoAnual = "APROBADO" | "NO_PROMOVIDO" | "PENDIENTE_RECUPERACION" | "PENDIENTE_DECISION";
 
 export type EstadoResultado = "APROBADO" | "EN_PROCESO" | "REPROBADO";
 
@@ -177,6 +181,20 @@ export interface ColegioVersionCurricular {
   version_curricular: string;
 }
 
+export interface DecisionPromocionDirectivo {
+  id_decision: Generated<number>;
+  id_estudiante: number;
+  id_colegio: number;
+  id_anio_anterior: number;
+  resultado_calculado: ResultadoConsolidadoAnual;
+  decision_tomada: DecisionPromocionTipo;
+  id_grado_anterior: number | null;
+  id_grado_asignado: number | null;
+  id_usuario_decision: number;
+  fecha_decision: Generated<Timestamp | null>;
+  observacion: string | null;
+}
+
 export interface Competencias {
   descripcion: Generated<string>;
   id_anio: number;
@@ -261,20 +279,6 @@ export interface Dba {
 export interface DbaDimensionesPreescolar {
   id_dba: number;
   id_dimension: number;
-}
-
-export interface DecisionPromocionDirectivo {
-  id_decision: Generated<number>;
-  id_estudiante: number;
-  id_colegio: number;
-  id_anio_anterior: number;
-  resultado_calculado: string;
-  decision_tomada: string;
-  id_grado_anterior: number | null;
-  id_grado_asignado: number | null;
-  id_usuario_decision: number;
-  fecha_decision: Generated<Timestamp | null>;
-  observacion: string | null;
 }
 
 export interface Desempeno {
@@ -780,7 +784,6 @@ export interface DB {
   criterio_evaluacion: CriterioEvaluacion;
   dba: Dba;
   dba_dimensiones_preescolar: DbaDimensionesPreescolar;
-  decision_promocion_directivo: DecisionPromocionDirectivo;
   desempeno: Desempeno;
   detalle_grados: DetalleGrados;
   detalle_padrefamilia: DetallePadrefamilia;
