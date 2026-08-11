@@ -3,7 +3,6 @@ import { ref, onMounted, computed, watch } from 'vue'
 import axios from 'axios'
 import { API_BASE_URL } from '../../config/api'
 import { useAuthStore } from '../../stores/auth'
-import { useAcademicYearStore } from '../../stores/academicYear'
 import {
   Award,
   TrendingUp,
@@ -11,7 +10,6 @@ import {
   CheckCircle2,
   XCircle,
   Clock,
-  Filter,
   Search,
   ChevronDown,
   ChevronUp,
@@ -25,7 +23,6 @@ import {
 } from 'lucide-vue-next'
 
 const auth = useAuthStore()
-const yearStore = useAcademicYearStore()
 
 const activeTab = ref<'period' | 'annual' | 'history' | 'decisions'>('period')
 const loading = ref(false)
@@ -99,7 +96,7 @@ const decisionForm = ref({
   observation: ''
 })
 
-const schoolId = computed(() => auth.selectedSchoolId || auth.user?.id_colegio)
+const schoolId = computed(() => auth.selectedSchoolId || (auth.user as any)?.id_colegio || (auth.user?.schoolId ? Number(auth.user.schoolId) : undefined))
 
 // Cargar catálogos iniciales
 const loadCatalogs = async () => {
