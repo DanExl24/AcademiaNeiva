@@ -316,6 +316,8 @@ sequenceDiagram
          │                                                            │
          ▼                                                            ▼
 [Módulo 10: Catálogo DBA] ───► [Módulo 09: Competencias] ────► [Módulo 14: Boletines PDF]
+         │                                                            │
+         └────────────────────────────────────────────────────────────┴──► [Módulo 19: Seguimiento y Promoción]
 ```
 
 ---

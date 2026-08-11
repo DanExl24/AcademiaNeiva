@@ -157,6 +157,9 @@ graph TD
 | **14** | **Cierre y Boletines** | Consolidación final y reportes oficiales. | Cierre institucional, consolidado en `resultado_academico` e impresión de PDF masivo. | [Ver Módulo 14](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/modules/14_cierre_y_boletines/cierre_y_boletines.md) |
 | **15** | **Supervisión** | Acceso extraordinario del Admin General. | Supervisión con re-autenticación del Rector, temporizadores y bitácoras inmutables SQL. | [Ver Módulo 15](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/modules/15_supervision_y_auditoria/supervision_y_auditoria.md) |
 | **16** | **Soporte / Tickets** | Mesa de ayuda e incidencias técnicas. | Tickets con código Base36 ofuscado, regla de turnos (ping-pong) y escalamientos. | [Ver Módulo 16](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/modules/16_soporte_y_tickets/soporte_y_tickets.md) |
+| **17** | **Gestión de Padres** | Administración de cuentas de acudientes y supervisión multihijo. | Vinculación padre-estudiante, monitoreo de notas, observaciones y asistencia. | [Ver Módulo 17](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/modules/17_gestion_padres/gestion_padres.md) |
+| **18** | **Gestión de Traslados** | Traslados de matrículas e intercolegiados. | Solicitudes de traslado entre colegios, flujo de aprobación y transferencia de registro. | [Ver Módulo 18](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/modules/18_gestion_traslados/gestion_traslados.md) |
+| **19** | **Seguimiento y Promoción** | Rendimiento acumulativo, resultado anual y decisiones directivas. | Seguimiento por período acumulado P1..PN, consolidado anual, advertencias en matrícula y registro de decisiones. | [Ver Módulo 19](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/modules/19_seguimiento_y_promocion_academica/seguimiento_y_promocion_academica.md) |
 
 ---
 
@@ -327,3 +330,5 @@ Para consultar el detalle exhaustivo de historias de usuario, reglas de negocio 
 - 🕵️ **[Módulo 15: Supervisión y Auditoría](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/modules/15_supervision_y_auditoria/supervision_y_auditoria.md)**
 - 🎟️ **[Módulo 16: Soporte y Tickets](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/modules/16_soporte_y_tickets/soporte_y_tickets.md)**
 - 👨‍👩‍👧‍👦 **[Módulo 17: Gestión de Padres de Familia](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/modules/17_gestion_padres/gestion_padres.md)**
+- 🔀 **[Módulo 18: Gestión de Traslados](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/modules/18_gestion_traslados/gestion_traslados.md)**
+- 🏅 **[Módulo 19: Seguimiento Académico, Promoción y Reprobación](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/modules/19_seguimiento_y_promocion_academica/seguimiento_y_promocion_academica.md)**

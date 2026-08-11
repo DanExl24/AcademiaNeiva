@@ -8,8 +8,8 @@ Bienvenido a la Base de Conocimiento oficial del sistema **AcademiaNeiva**. Esta
 
 - 📘 **[Documento Maestro Funcional y de Negocio (Volumen 1)](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/AcademiaNeiva_Documento_Funcional.md)**
   - Propuesta de valor, problemas que resuelve el sistema y roles.
-  - Conocimiento del Dominio Educativo Colombiano (16 conceptos explicados).
-  - Resumen ejecutivo de los 16 módulos de negocio, reglas globales y diagramas de flujos.
+  - Conocimiento del Dominio Educativo Colombiano (conceptos clave explicados).
+  - Resumen ejecutivo de los 19 módulos de negocio, reglas globales y diagramas de flujos.
 
 - 📙 **[Documento Maestro Técnico y de Arquitectura (Volumen 2)](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/AcademiaNeiva_Documento_Tecnico.md)**
   - Arquitectura desacoplada de 3 capas (Vue 3 SPA → Express API → PostgreSQL PL/pgSQL Triggers & JSONB).
@@ -19,7 +19,7 @@ Bienvenido a la Base de Conocimiento oficial del sistema **AcademiaNeiva**. Esta
 
 - 📜 **[Especificación de Requisitos de Software IEEE Std 830-1998](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/AcademiaNeiva_Especificacion_IEEE830.md)**
   - Documento formal conforme a la norma IEEE 830-1998 con guías inteligentes por sección.
-  - Catálogo de requisitos funcionales por módulo (`RF-XXX-00X`), requisitos no funcionales (rendimiento, seguridad, fiabilidad) y apéndices de trazabilidad SQL.
+  - Catálogo de requisitos funcionales por los 19 módulos (`RF-XXX-00X`), requisitos no funcionales (rendimiento, seguridad, fiabilidad) y apéndices de trazabilidad SQL.
 
 
 ---

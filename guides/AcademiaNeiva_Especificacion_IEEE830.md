@@ -245,6 +245,16 @@ Este documento está estructurado en tres secciones principales: la Sección 1 d
 - **RF-PAD-002 (HU-PAD-003)**: Al inactivar la cuenta de un padre de familia, el sistema revoca inmediatamente su sesión mediante la actualización atómica de `usuario.logged_out_at`.
 - **RF-PAD-003 (HU-PAD-004)**: El Directivo puede auditar el portal del acudiente en Modo Monitoreo restringiendo el acceso al módulo de Soporte Técnico.
 
+### 3.2.18 Módulo 18: Gestión de Traslados
+- **RF-TRS-001 (HU-TRS-001)**: El usuario puede solicitar el traslado de matrícula entre colegios especificando el motivo y colegio destino.
+- **RF-TRS-002 (HU-TRS-002)**: El Directivo y Admin General pueden aprobar o rechazar solicitudes de traslado registrando la trazabilidad de la acción.
+
+### 3.2.19 Módulo 19: Seguimiento Académico, Promoción y Reprobación Anual
+- **RF-PRO-001 (HU-19.1)**: El Directivo puede consultar el seguimiento académico por período único o acumulado (Períodos 1..N) con el desglose de asignaturas reprobadas y docentes responsables.
+- **RF-PRO-002 (HU-19.2)**: El sistema clasifica automáticamente a los estudiantes en `APROBADO`, `NO_PROMOVIDO` o `PENDIENTE_RECUPERACION` según los promedios ponderados anuales.
+- **RF-PRO-003 (HU-19.3)**: El sistema muestra el aviso **⚠️ Advertencia académica** durante la matrícula sin bloquear automáticamente el proceso.
+- **RF-PRO-004 (HU-19.4)**: El Directivo puede registrar la decisión de promoción institucional en la tabla `decision_promocion_directivo`.
+
 ---
 
 ## 3.3 Requisitos No Funcionales
@@ -303,3 +313,5 @@ Este documento está estructurado en tres secciones principales: la Sección 1 d
 | **SUP** | Supervisión y Auditoría | `auditoria_supervision`, `auditoria_acciones_realizadas` | `adminGeneralController.ts` |
 | **SOP** | Soporte y Tickets | `ticket_soporte`, `nota_ticket_soporte` | `supportController.ts` |
 | **PAD** | Gestión de Padres de Familia | `padre_familia`, `detalle_padrefamilia` | `parentManagementController.ts` |
+| **TRS** | Gestión de Traslados | `solicitud_traslado`, `traslado_aprobacion` | `trasladoController.ts` |
+| **PRO** | Seguimiento y Promoción | `decision_promocion_directivo` | `academicTrackingController.ts` |

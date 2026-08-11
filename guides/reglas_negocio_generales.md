@@ -2155,3 +2155,4 @@ Regla transversal sin HU específica.
 | RN-GEN-031 | Configuración de Evaluación por Colegio                         | Configuración Institucional |
 | RN-GEN-032 | Configuración de Sistema por Colegio con Herencia               | Configuración Institucional |
 | RN-GEN-033 | Registro Consolidado de Constraints CHECK                       | Constraints de Validación   |
+| RN-GEN-034 | Advertencias Informativas de Promoción y Decisiones Directivas | Consistencia y Promoción   |

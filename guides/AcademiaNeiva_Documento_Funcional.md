@@ -250,6 +250,24 @@ Para interpretar correctamente el funcionamiento del sistema, es indispensable d
 
 ---
 
+### 🔀 18. Gestión de Traslados
+- **Descripción:** Módulo administrativo y público para gestionar traslados de matrícula de estudiantes entre sedes o colegios distintos y cambio de colegio de usuarios.
+- **Responsabilidad:** Creación de solicitudes de traslado, flujo de aprobación institucional (colegio origen y colegio destino), cancelación, ejecución del traslado e historial de trazabilidad de cambios.
+- **Actor Principal:** Directivo, Admin General, Padre de Familia.
+- **Documentación Completa:** [Módulo 18 — Gestión de Traslados](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/modules/18_gestion_traslados/gestion_traslados.md) | [Historias de Usuario](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/modules/18_gestion_traslados/historias_usuario.md) | [Reglas de Negocio](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/modules/18_gestion_traslados/reglas_negocio.md) | [Casos de Uso](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/modules/18_gestion_traslados/casos_uso.md)
+
+---
+
+### 🏅 19. Seguimiento Académico, Promoción y Reprobación Anual
+- **Descripción:** Módulo para la gestión integral del estado académico de los estudiantes en cada período (individual y acumulativo hasta el período N), consolidación del resultado anual y soporte de decisiones institucionales de promoción.
+- **Responsabilidad:** Seguimiento por período acumulado (P1..PN), promedio ponderado por asignatura cotejado con la escala institucional, consolidación anual (Promovido, No Promovido, Pendiente), advertencias informativas en el proceso de matrícula e historial de decisiones tomadas por directivos.
+- **Actor Principal:** Directivo.
+- **Documentación Completa:** [Módulo 19 — Seguimiento y Promoción Académica](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/modules/19_seguimiento_y_promocion_academica/seguimiento_y_promocion_academica.md) | [Historias de Usuario](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/modules/19_seguimiento_y_promocion_academica/historias_usuario.md) | [Reglas de Negocio](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/modules/19_seguimiento_y_promocion_academica/reglas_negocio.md) | [Casos de Uso](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/modules/19_seguimiento_y_promocion_academica/casos_uso.md)
+
+---
+
+---
+
 ## 5. Reglas de Negocio Globales
 
 1. **Aislamiento Multi-Tenant Absoluto**: Toda consulta o modificación sobre la base de datos debe estar aislada por el campo `id_colegio`. Un colegio jamás puede acceder a la información de otro plantel.
