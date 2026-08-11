@@ -500,49 +500,85 @@ const userAlreadyVotedMessage = computed(() => {
   const userSchool = auth.user?.schoolId ? Number(auth.user.schoolId) : null
   const roles = auth.user?.roles || []
 
-  // Verificar si el usuario por ID ya votó
+  // 1. Verificar si el usuario específico por su ID ya votó
   const userVote = aprobaciones.find(a => Number(a.id_usuario) === userId)
   if (userVote) {
     return `Ya has registrado tu decisión (${userVote.accion}) para esta solicitud.`
   }
 
-  // Verificar si el rol ya registró su voto
-  if (userSchool !== null && userSchool === selectedSolicitud.value.id_colegio_origen) {
-    const origenVote = aprobaciones.find(a => a.rol === 'DIRECTIVO_ORIGEN')
-    if (origenVote) return 'La institución de Origen (Directivo Origen) ya registró su voto de aprobación para esta solicitud.'
+  // 2. Evaluar roles específicos del usuario autenticado
+  const isPadre = roles.includes('padre')
+  const isTargetUser = userId !== null && userId === selectedSolicitud.value.id_usuario
+  const isParentOfStudent = selectedSolicitud.value.padre && Number(selectedSolicitud.value.padre.id_usuario) === userId
+  const isFamily = isPadre || isTargetUser || isParentOfStudent
+
+  const isDirectivo = roles.includes('directivo')
+  const isOrigenSchool = userSchool !== null && userSchool === selectedSolicitud.value.id_colegio_origen
+  const isDestinoSchool = userSchool !== null && userSchool === selectedSolicitud.value.id_colegio_destino
+  const isAdmin = roles.includes('admin_general')
+
+  const usuarioVote = aprobaciones.find(a => a.rol === 'USUARIO')
+  const origenVote = aprobaciones.find(a => a.rol === 'DIRECTIVO_ORIGEN')
+  const destinoVote = aprobaciones.find(a => a.rol === 'DIRECTIVO_DESTINO')
+  const adminVote = aprobaciones.find(a => a.rol === 'ADMIN_GENERAL')
+
+  // Si actúa como Padre / Familia / Usuario afectado:
+  if (isFamily) {
+    if (usuarioVote) {
+      return 'El voto del Padre de Familia / Acudiente ya se encuentra registrado.'
+    }
+    return '' // Habilitado para votar como USUARIO
   }
 
-  if (userSchool !== null && userSchool === selectedSolicitud.value.id_colegio_destino) {
-    const destinoVote = aprobaciones.find(a => a.rol === 'DIRECTIVO_DESTINO')
-    if (destinoVote) return 'La institución de Destino (Directivo Destino) ya registró su voto para esta solicitud.'
+  // Si actúa como Directivo de Origen:
+  if (isDirectivo && isOrigenSchool) {
+    if (origenVote) {
+      return 'La institución de Origen (Directivo Origen) ya registró su voto para esta solicitud.'
+    }
+    return '' // Habilitado para votar como DIRECTIVO_ORIGEN
   }
 
-  if (userId !== null && userId === selectedSolicitud.value.id_usuario) {
-    const usuarioVote = aprobaciones.find(a => a.rol === 'USUARIO')
-    if (usuarioVote) return 'El usuario/acudiente afectado ya registró su voto para esta solicitud.'
+  // Si actúa como Directivo de Destino:
+  if (isDirectivo && isDestinoSchool) {
+    if (destinoVote) {
+      return 'La institución de Destino (Directivo Destino) ya registró su voto para esta solicitud.'
+    }
+    return '' // Habilitado para votar como DIRECTIVO_DESTINO
   }
 
-  if (roles.includes('admin_general')) {
-    const adminVote = aprobaciones.find(a => a.rol === 'ADMIN_GENERAL')
-    if (adminVote) return 'El Administrador General ya emitió una decisión para esta solicitud.'
+  // Si actúa como Administrador General:
+  if (isAdmin) {
+    if (adminVote) {
+      return 'El Administrador General ya registró su voto ejecutiva para esta solicitud.'
+    }
+    return ''
   }
 
-  return ''
+  return 'No posees autorización o rol vigente para emitir voto en esta solicitud.'
 })
 
 const canUserApproveCurrentModal = computed(() => {
   if (!selectedSolicitud.value) return false
-  if (['EJECUTADA', 'RECHAZADA', 'CANCELADA'].includes(selectedSolicitud.value.estado)) return false
+  if (['EJECUTADA', 'RECHAZADA', 'CANCELADA', 'APROBADA'].includes(selectedSolicitud.value.estado)) return false
   if (userAlreadyVotedMessage.value) return false
 
   const userSchool = auth.user?.schoolId ? Number(auth.user.schoolId) : null
   const userId = auth.user?.id ? Number(auth.user.id) : null
   const roles = auth.user?.roles || []
 
-  if (roles.includes('admin_general')) return true
-  if (userId !== null && userId === selectedSolicitud.value.id_usuario) return true
-  if (userSchool !== null && userSchool === selectedSolicitud.value.id_colegio_origen) return true
-  if (userSchool !== null && userSchool === selectedSolicitud.value.id_colegio_destino) return true
+  const isPadre = roles.includes('padre')
+  const isTargetUser = userId !== null && userId === selectedSolicitud.value.id_usuario
+  const isParentOfStudent = selectedSolicitud.value.padre && Number(selectedSolicitud.value.padre.id_usuario) === userId
+  const isFamily = isPadre || isTargetUser || isParentOfStudent
+
+  const isDirectivo = roles.includes('directivo')
+  const isOrigenSchool = userSchool !== null && userSchool === selectedSolicitud.value.id_colegio_origen
+  const isDestinoSchool = userSchool !== null && userSchool === selectedSolicitud.value.id_colegio_destino
+  const isAdmin = roles.includes('admin_general')
+
+  if (isAdmin) return true
+  if (isFamily) return true
+  if (isDirectivo && (isOrigenSchool || isDestinoSchool)) return true
 
   return false
 })

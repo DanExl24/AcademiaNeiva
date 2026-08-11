@@ -155,18 +155,16 @@ export class TrasladoService {
 
       // Determinar rol de aprobación
       let rolAprobacion = '';
-      if (rolesAprobador.includes('admin_general')) {
-        rolAprobacion = 'ADMIN_GENERAL';
-      } else if (colegioIdAprobador === solicitud.id_colegio_origen) {
-        rolAprobacion = 'DIRECTIVO_ORIGEN';
-      } else if (colegioIdAprobador === solicitud.id_colegio_destino) {
-        rolAprobacion = 'DIRECTIVO_DESTINO';
-      } else {
-        const esTarget = idUsuarioAprobador === solicitud.id_usuario;
-        const esPadre = await this.esPadreOResponsable(idUsuarioAprobador, solicitud.id_usuario, solicitud.id_matricula || null, trx);
+      const esTarget = idUsuarioAprobador === solicitud.id_usuario;
+      const esPadre = await this.esPadreOResponsable(idUsuarioAprobador, solicitud.id_usuario, solicitud.id_matricula || null, trx);
+      const esDirectivo = rolesAprobador.includes('directivo');
+      const esAdmin = rolesAprobador.includes('admin_general');
 
+      if (esAdmin) {
+        rolAprobacion = 'ADMIN_GENERAL';
+      } else if (esPadre || rolesAprobador.includes('padre') || (esTarget && !esDirectivo)) {
         if (solicitud.tipo === 'TRASLADO_MATRICULA') {
-          if (esPadre) {
+          if (esPadre || rolesAprobador.includes('padre')) {
             rolAprobacion = 'USUARIO';
           } else if (esTarget) {
             const tienePadre = await this.tienePadreVinculado(solicitud.id_usuario, solicitud.id_matricula || null, trx);
@@ -185,6 +183,12 @@ export class TrasladoService {
             throw new Error('No posees autorización para actuar sobre esta solicitud de traslado.');
           }
         }
+      } else if (esDirectivo && colegioIdAprobador === solicitud.id_colegio_origen) {
+        rolAprobacion = 'DIRECTIVO_ORIGEN';
+      } else if (esDirectivo && colegioIdAprobador === solicitud.id_colegio_destino) {
+        rolAprobacion = 'DIRECTIVO_DESTINO';
+      } else {
+        throw new Error('No posees autorización para actuar sobre esta solicitud de traslado.');
       }
 
       // Validar si el rol o usuario ya emitieron voto previo en esta solicitud
