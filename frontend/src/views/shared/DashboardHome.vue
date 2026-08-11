@@ -59,6 +59,7 @@ const schoolId = computed(() => Number(auth.user?.schoolId || 0))
 
 // Data State
 const dashboardData = ref({
+  activePeriodInfo: null as any,
   summary: {
     totalStudents: 0,
     totalTeachers: 0,
@@ -742,7 +743,7 @@ onMounted(() => {
   <div class="space-y-8 pb-20 animate-in fade-in slide-in-from-bottom-4 duration-700">
     
     <!-- Contador Regresivo de Cierre de Período Académico -->
-    <PeriodCountdownBanner />
+    <PeriodCountdownBanner :period-info="dashboardData?.activePeriodInfo" />
 
     <!-- Welcome & Period Selector -->
     <div class="flex flex-col lg:flex-row gap-6 items-start lg:items-center justify-between">

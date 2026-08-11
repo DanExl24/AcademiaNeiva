@@ -469,7 +469,7 @@ const barChartOptions = {
   <div class="space-y-10 animate-in fade-in duration-700 pb-20">
     
     <!-- Contador Regresivo de Cierre de Período Académico -->
-    <PeriodCountdownBanner />
+    <PeriodCountdownBanner :period-info="dashboardData?.activePeriod" />
 
     <div class="relative overflow-hidden group">
       <div class="bg-slate-900 border border-slate-800 rounded-[3rem] p-10 text-white shadow-2xl relative z-10 transition-colors duration-500">

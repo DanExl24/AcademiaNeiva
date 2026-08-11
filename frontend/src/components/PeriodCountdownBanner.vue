@@ -27,6 +27,7 @@ const yearStore = useAcademicYearStore()
 
 const fetchedPeriod = ref<PeriodInfo | null>(null)
 const timer = ref<any>(null)
+const loading = ref(false)
 
 const activePeriod = computed(() => {
   return props.periodInfo || fetchedPeriod.value
@@ -62,21 +63,6 @@ const isPeriodStrictlyOpen = computed(() => {
   const st = (activePeriod.value.estado || '').toUpperCase()
   return st === 'ABIERTO'
 })
-
-const fetchActivePeriodInfo = async () => {
-  if (!isNotAdminGeneral.value) return
-  try {
-    const params: any = {}
-    if (schoolId.value) params.schoolId = schoolId.value
-    if (yearStore.selectedYearId) params.yearId = yearStore.selectedYearId
-
-    const headers = auth.token ? { Authorization: `Bearer ${auth.token}` } : {}
-    const res = await axios.get('/api/academic-admin/active-period-info', { params, headers })
-    fetchedPeriod.value = res.data?.activePeriod || null
-  } catch (err) {
-    fetchedPeriod.value = null
-  }
-}
 
 // Cálculo del tiempo restante hasta la hora fin
 const timeLeft = ref({
@@ -129,8 +115,44 @@ const calculateTimeLeft = () => {
   }
 }
 
+const fetchActivePeriodInfo = async () => {
+  if (!isNotAdminGeneral.value) return
+  loading.value = true
+  try {
+    const params: any = {}
+    if (schoolId.value) params.schoolId = schoolId.value
+    if (yearStore.selectedYearId) params.yearId = yearStore.selectedYearId
+
+    const headers = auth.token ? { Authorization: `Bearer ${auth.token}` } : {}
+    const res = await axios.get('/api/academic-admin/active-period-info', { params, headers })
+    fetchedPeriod.value = res.data?.activePeriod || null
+    calculateTimeLeft()
+  } catch (err) {
+    fetchedPeriod.value = null
+  } finally {
+    loading.value = false
+  }
+}
+
 const shouldShow = computed(() => {
   return isNotAdminGeneral.value && isYearOpen.value && isPeriodStrictlyOpen.value && timeLeft.value.isValidDate
+})
+
+// Observar cualquier cambio en el período activo (prop o fetched)
+watch(activePeriod, () => {
+  calculateTimeLeft()
+}, { immediate: true, deep: true })
+
+watch(() => yearStore.selectedYearId, () => {
+  if (!props.periodInfo) {
+    fetchActivePeriodInfo()
+  }
+})
+
+watch(schoolId, () => {
+  if (!props.periodInfo) {
+    fetchActivePeriodInfo()
+  }
 })
 
 onMounted(() => {
@@ -147,16 +169,6 @@ onMounted(() => {
 
 onUnmounted(() => {
   if (timer.value) clearInterval(timer.value)
-})
-
-watch(() => props.periodInfo, () => {
-  calculateTimeLeft()
-}, { deep: true })
-
-watch(() => yearStore.selectedYearId, () => {
-  if (!props.periodInfo) {
-    fetchActivePeriodInfo()
-  }
 })
 </script>
 

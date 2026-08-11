@@ -168,11 +168,25 @@ export const getTeacherDashboard = async (req: Request, res: Response): Promise<
 
     let periodRes;
     if (schoolId) {
-      periodRes = await pool.query("SELECT id_periodo FROM periodo_academico WHERE id_colegio = $1 AND estado = 'ABIERTO' ORDER BY id_periodo DESC LIMIT 1", [schoolId]);
+      periodRes = await pool.query(
+        `SELECT pa.id_periodo, pa.nombre, pa.estado, pa.mes_inicio, pa.dia_inicio, pa.mes_fin, pa.dia_fin, pa.id_anio, al.calendario, al.estado as anio_estado
+         FROM periodo_academico pa
+         JOIN anio_lectivo al ON pa.id_anio = al.id_anio
+         WHERE pa.id_colegio = $1 AND pa.estado = 'ABIERTO'
+         ORDER BY pa.id_periodo DESC LIMIT 1`,
+        [schoolId]
+      );
     } else {
-      periodRes = await pool.query("SELECT id_periodo FROM periodo_academico WHERE estado = 'ABIERTO' ORDER BY id_periodo DESC LIMIT 1");
+      periodRes = await pool.query(
+        `SELECT pa.id_periodo, pa.nombre, pa.estado, pa.mes_inicio, pa.dia_inicio, pa.mes_fin, pa.dia_fin, pa.id_anio, al.calendario, al.estado as anio_estado
+         FROM periodo_academico pa
+         JOIN anio_lectivo al ON pa.id_anio = al.id_anio
+         WHERE pa.estado = 'ABIERTO'
+         ORDER BY pa.id_periodo DESC LIMIT 1`
+      );
     }
-    const activePeriodId = periodRes.rows.length > 0 ? periodRes.rows[0].id_periodo : null;
+    const activePeriodInfo = periodRes.rows.length > 0 ? periodRes.rows[0] : null;
+    const activePeriodId = activePeriodInfo ? activePeriodInfo.id_periodo : null;
 
     if (!activePeriodId) {
       res.json({ 
@@ -181,7 +195,8 @@ export const getTeacherDashboard = async (req: Request, res: Response): Promise<
         noGradeActivities: 0, 
         upToDateCourses: courses.length,
         courseAverages: [], 
-        alerts: [] 
+        alerts: [],
+        activePeriodInfo: null
       });
       return;
     }
@@ -308,7 +323,8 @@ export const getTeacherDashboard = async (req: Request, res: Response): Promise<
       noGradeActivities: noGradeActivitiesCount,
       upToDateCourses: upToDateCoursesCount,
       courseAverages,
-      alerts
+      alerts,
+      activePeriodInfo
     });
   } catch (error: any) {
     console.error(`[DEV] getTeacherDashboard ERROR - userId=${userId}:`, error.message, error.detail || '', error.hint || '');

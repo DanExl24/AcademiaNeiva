@@ -61,21 +61,16 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
         targetPeriodId = null;
       }
     }
-    if (!targetPeriodId) {
-      const activePeriodRes = await pool.query(
-        `SELECT id_periodo FROM periodo_academico WHERE id_colegio = $1 AND id_anio = $2 AND estado = 'ABIERTO' ORDER BY id_periodo DESC LIMIT 1`,
-        [schoolId, targetYearId]
+    let activePeriodInfo = null;
+    if (targetPeriodId) {
+      const activePeriodFullRes = await pool.query(
+        `SELECT pa.id_periodo, pa.nombre, pa.estado, pa.mes_inicio, pa.dia_inicio, pa.mes_fin, pa.dia_fin, pa.id_anio, al.calendario, al.estado as anio_estado
+         FROM periodo_academico pa
+         JOIN anio_lectivo al ON pa.id_anio = al.id_anio
+         WHERE pa.id_periodo = $1`,
+        [targetPeriodId]
       );
-      if (activePeriodRes.rows.length > 0) {
-        targetPeriodId = activePeriodRes.rows[0].id_periodo;
-      } else {
-        // Fallback to the most recent period in this year even if not open
-        const lastPeriodRes = await pool.query(
-          `SELECT id_periodo FROM periodo_academico WHERE id_colegio = $1 AND id_anio = $2 ORDER BY id_periodo DESC LIMIT 1`,
-          [schoolId, targetYearId]
-        );
-        targetPeriodId = lastPeriodRes.rows.length > 0 ? lastPeriodRes.rows[0].id_periodo : null;
-      }
+      activePeriodInfo = activePeriodFullRes.rows[0] || null;
     }
 
     // 2. Principal Indicators (Counters)
@@ -622,6 +617,7 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
       observationsSummary,
       charts,
       lowPerformance,
+      activePeriodInfo
     });
   } catch (error: any) {
     console.error("Error fetching directivo dashboard:", error);
