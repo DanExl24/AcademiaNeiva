@@ -613,6 +613,29 @@ const fetchUserSchools = async () => {
           auth.setActiveRole(rolesInSchool[0])
         }
       }
+    } else if (auth.token && (auth.user?.id || (auth.user as any)?.id_usuario)) {
+      // Fallback para Padre y Estudiante (cuyo id_colegio está en la ficha del estudiante)
+      const uId = auth.user?.id || (auth.user as any)?.id_usuario
+      const role = (auth.activeRole || auth.user?.role || '').toLowerCase()
+      if (role === 'padre') {
+        const pRes = await axios.get(`${API_BASE_URL}/api/student/parent-dashboard/${uId}`, { headers })
+        const children = pRes.data?.children || []
+        if (children.length > 0 && children[0].id_colegio) {
+          const sId = Number(children[0].id_colegio)
+          if (!auth.selectedSchoolId) {
+            auth.setSelectedSchoolId(sId)
+          }
+        }
+      } else if (role === 'estudiante') {
+        const idRes = await axios.get(`${API_BASE_URL}/api/student/user-id/${uId}`, { headers })
+        const stuId = idRes.data?.id_estudiante
+        if (stuId) {
+          const infoRes = await axios.get(`${API_BASE_URL}/api/student/info/${stuId}`, { headers })
+          if (infoRes.data?.id_colegio && !auth.selectedSchoolId) {
+            auth.setSelectedSchoolId(Number(infoRes.data.id_colegio))
+          }
+        }
+      }
     }
   } catch (e) {
     console.error('Error fetching user schools:', e)

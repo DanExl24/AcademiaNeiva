@@ -9,7 +9,6 @@ import {
   Bell,
   Zap,
   Star,
-  SearchX,
   FileText,
   TrendingUp,
   AlertTriangle,
@@ -856,12 +855,25 @@ const barChartOptions = {
        <p class="mt-6 text-slate-500 font-black uppercase tracking-widest text-sm animate-pulse">Analizando ecosistema familiar...</p>
     </div>
 
-    <div v-else class="text-center py-40 bg-white rounded-[3rem] border-2 border-dashed border-slate-200">
-       <SearchX :size="80" class="mx-auto text-slate-200 mb-6" />
-       <h2 class="text-2xl font-black">No pudimos encontrar tus datos</h2>
-       <p class="text-slate-500 max-w-sm mx-auto mt-2">
-         Parece que no tienes hijos matriculados para el año lectivo vigente. Contacta a la institución.
+    <div v-else class="text-center py-20 px-6 bg-white dark:bg-slate-900 rounded-[3rem] border-2 border-dashed border-indigo-200 dark:border-slate-800 shadow-sm max-w-2xl mx-auto">
+       <div class="w-16 h-16 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-sm">
+         <GraduationCap :size="36" />
+       </div>
+       <h2 class="text-2xl font-black text-slate-800 dark:text-slate-100 tracking-tight">¡Hola! Aviso sobre la matrícula</h2>
+       <p class="text-slate-600 dark:text-slate-300 max-w-md mx-auto mt-3 font-medium text-sm leading-relaxed">
+         Aún no tienes hijos matriculados para el año lectivo <span class="font-black text-indigo-600 dark:text-indigo-400">{{ yearStore.selectedYear?.calendario || 'seleccionado' }}</span>.
        </p>
+       <p class="text-xs text-slate-400 dark:text-slate-500 mt-2">
+         Si crees que se trata de un error o deseas iniciar el proceso de matrícula o reingreso, comunícate con la institución educativa.
+       </p>
+       <div class="mt-6">
+         <button 
+           @click="router.push('/soporte?tipo_incidencia=REINGRESO')"
+           class="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all shadow-lg inline-flex items-center gap-2"
+         >
+           🔄 Solicitar Matrícula / Reingreso Estudiantil
+         </button>
+       </div>
     </div>
   </div>
 </template>

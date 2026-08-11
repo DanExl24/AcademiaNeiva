@@ -499,7 +499,20 @@ const hasObservations = computed(() => {
         </div>
 
         <div class="flex-1 relative min-h-[220px]">
-          <div v-if="statsLoading" class="absolute inset-0 flex items-center justify-center">
+          <!-- No Active Enrollment Warning -->
+          <div v-if="!statsLoading && (!dashboardStats || periods.length === 0)" class="text-center py-20 px-6 bg-white dark:bg-slate-900 rounded-[3rem] border-2 border-dashed border-indigo-200 dark:border-slate-800 shadow-sm max-w-2xl mx-auto">
+             <div class="w-16 h-16 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-sm">
+               <GraduationCap :size="36" />
+             </div>
+             <h2 class="text-2xl font-black text-slate-800 dark:text-slate-100 tracking-tight">¡Hola {{ (studentName || '').split(' ')[0] }}! Aviso de Matrícula</h2>
+             <p class="text-slate-600 dark:text-slate-300 max-w-md mx-auto mt-3 font-medium text-sm leading-relaxed">
+               Aún no tienes una matrícula activa para el año lectivo <span class="font-black text-indigo-600 dark:text-indigo-400">{{ yearStore.selectedYear?.calendario || 'seleccionado' }}</span>.
+             </p>
+             <p class="text-xs text-slate-400 dark:text-slate-500 mt-2">
+               Si crees que se trata de un error o deseas consultar el estado de tu proceso de matrícula, comunícate con la administración de tu colegio.
+             </p>
+          </div>
+          <div v-else-if="statsLoading" class="absolute inset-0 flex items-center justify-center">
             <div class="w-8 h-8 border-4 border-indigo-600/20 border-t-indigo-600 rounded-full animate-spin"></div>
           </div>
           <div v-else-if="!dashboardStats || dashboardStats?.actividades_recientes?.length === 0" class="absolute inset-0 flex flex-col items-center justify-center text-center text-slate-400 p-6">
