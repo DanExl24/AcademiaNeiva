@@ -51,6 +51,7 @@ export const lookupUserIdentity = async (req: Request, res: Response): Promise<v
              u.documento,
              u.id_tipodocumento
       FROM usuario u
+      LEFT JOIN usuario_colegio uc ON uc.id_usuario = u.id_usuario
       WHERE 1=1
     `;
     const params: any[] = [];
@@ -65,7 +66,7 @@ export const lookupUserIdentity = async (req: Request, res: Response): Promise<v
 
     if (schoolId) {
       params.push(schoolId);
-      query += ` AND u.id_colegio = $${params.length}`;
+      query += ` AND uc.id_colegio = $${params.length}`;
     }
     query += ` LIMIT 1`;
 

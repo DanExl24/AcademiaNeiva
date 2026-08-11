@@ -676,16 +676,17 @@ export const eliminarUsuario = async (req: AuthRequest, res: Response): Promise<
 
     // 4. Obtener datos completos del usuario a eliminar
     const userRes = await client.query(
-      `SELECT u.id_usuario, u.email, u.nombre, u.apellido, u.estado, u.id_colegio,
+      `SELECT u.id_usuario, u.email, u.nombre, u.apellido, u.estado, uc.id_colegio,
               u.fecha_creacion, u.documento, u.telefono,
               c.nombre AS colegio_nombre,
               array_agg(DISTINCT r.nombre) AS roles
        FROM usuario u
-       LEFT JOIN colegio c ON c.id_colegio = u.id_colegio
+       LEFT JOIN usuario_colegio uc ON uc.id_usuario = u.id_usuario AND uc.estado = 'ACTIVO'
+       LEFT JOIN colegio c ON c.id_colegio = uc.id_colegio
        LEFT JOIN usuario_rol ur ON ur.id_usuario = u.id_usuario
        LEFT JOIN rol r ON r.id_rol = ur.id_rol
        WHERE u.id_usuario = $1
-       GROUP BY u.id_usuario, c.nombre`,
+       GROUP BY u.id_usuario, uc.id_colegio, c.nombre`,
       [id]
     );
 
@@ -733,10 +734,11 @@ export const eliminarUsuario = async (req: AuthRequest, res: Response): Promise<
     }
 
     const creatorRolesRes = await client.query(
-      `SELECT r.nombre, u.id_colegio
+      `SELECT r.nombre, uc.id_colegio
        FROM usuario_rol ur
        JOIN rol r ON ur.id_rol = r.id_rol
        JOIN usuario u ON u.id_usuario = ur.id_usuario
+       LEFT JOIN usuario_colegio uc ON uc.id_usuario = u.id_usuario AND uc.estado = 'ACTIVO'
        WHERE ur.id_usuario = $1`,
       [ticket.id_usuario]
     );
@@ -2554,10 +2556,11 @@ const verificarCorrespondenciaTicketUsuario = async (
   // Caso C: El remitente es un Directivo del mismo colegio del usuario destino
   if (ticket.id_usuario) {
     const creatorRolesRes = await client.query(
-      `SELECT r.nombre, u.id_colegio
+      `SELECT r.nombre, uc.id_colegio
        FROM usuario_rol ur 
        JOIN rol r ON ur.id_rol = r.id_rol 
        JOIN usuario u ON u.id_usuario = ur.id_usuario
+       LEFT JOIN usuario_colegio uc ON uc.id_usuario = u.id_usuario AND uc.estado = 'ACTIVO'
        WHERE ur.id_usuario = $1`,
       [ticket.id_usuario]
     );
