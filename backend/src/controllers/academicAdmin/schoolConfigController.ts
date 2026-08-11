@@ -1109,3 +1109,43 @@ export const saveEnrollmentConfig = async (req: Request, res: Response): Promise
   }
 };
 
+export const getActivePeriodInfo = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const schoolId = req.query.schoolId ? Number(req.query.schoolId) : (req as any).user?.schoolId;
+    const yearId = req.query.yearId ? Number(req.query.yearId) : null;
+
+    let query = `
+      SELECT pa.id_periodo, pa.nombre, pa.estado, pa.mes_inicio, pa.dia_inicio, pa.mes_fin, pa.dia_fin, pa.id_anio,
+             al.calendario, al.estado as anio_estado
+      FROM periodo_academico pa
+      JOIN anio_lectivo al ON pa.id_anio = al.id_anio
+      WHERE pa.estado = 'ABIERTO'
+    `;
+    const params: any[] = [];
+
+    if (schoolId) {
+      params.push(schoolId);
+      query += ` AND pa.id_colegio = $${params.length}`;
+    }
+
+    if (yearId) {
+      params.push(yearId);
+      query += ` AND pa.id_anio = $${params.length}`;
+    }
+
+    query += ` ORDER BY pa.id_periodo DESC LIMIT 1`;
+
+    const result = await pool.query(query, params);
+    if (result.rows.length === 0) {
+      res.json({ activePeriod: null });
+      return;
+    }
+
+    res.json({ activePeriod: result.rows[0] });
+  } catch (error: any) {
+    console.error("Error in getActivePeriodInfo:", error);
+    res.status(500).json({ error: "Error al obtener periodo activo" });
+  }
+};
+
+

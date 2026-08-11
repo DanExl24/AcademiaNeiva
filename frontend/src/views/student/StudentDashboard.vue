@@ -42,6 +42,7 @@ ChartJS.register(
 )
 
 import { useAcademicYearStore } from '../../stores/academicYear'
+import PeriodCountdownBanner from '../../components/PeriodCountdownBanner.vue'
 
 const auth = useAuthStore()
 const yearStore = useAcademicYearStore()
@@ -257,6 +258,9 @@ const hasObservations = computed(() => {
 
 <template>
   <div class="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20">
+
+    <!-- Contador Regresivo de Cierre de Período Académico -->
+    <PeriodCountdownBanner />
 
     <!-- Welcome Hero Banner -->
     <div class="relative overflow-hidden bg-gradient-to-br from-indigo-600 via-violet-700 to-purple-800 rounded-3xl p-8 md:p-10 text-white shadow-2xl">

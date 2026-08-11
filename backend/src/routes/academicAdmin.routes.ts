@@ -52,6 +52,7 @@ import {
   uploadMySchoolEscudo,
   getEnrollmentConfig,
   saveEnrollmentConfig,
+  getActivePeriodInfo,
   createExtraordinaryEnrollment,
   approveExtraordinaryEnrollment,
   rejectExtraordinaryEnrollment,
@@ -152,6 +153,7 @@ router.get("/settings/dba-catalogo/:schoolId", obtenerCatalogoDbaDirectivo);
 
 // Dashboard Analítico
 router.get("/dashboard/:schoolId", getDirectivoDashboard);
+router.get("/active-period-info", getActivePeriodInfo);
 
 // Matrícula Extraordinaria
 router.post("/matriculas/extraordinaria", createExtraordinaryEnrollment);

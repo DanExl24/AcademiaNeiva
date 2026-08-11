@@ -22,6 +22,7 @@ import {
   MessageSquare,
   FileWarning
 } from 'lucide-vue-next'
+import PeriodCountdownBanner from '../../components/PeriodCountdownBanner.vue'
 import {
   Chart as ChartJS,
   Title,
@@ -740,6 +741,9 @@ onMounted(() => {
 <template>
   <div class="space-y-8 pb-20 animate-in fade-in slide-in-from-bottom-4 duration-700">
     
+    <!-- Contador Regresivo de Cierre de Período Académico -->
+    <PeriodCountdownBanner />
+
     <!-- Welcome & Period Selector -->
     <div class="flex flex-col lg:flex-row gap-6 items-start lg:items-center justify-between">
       <div class="bg-indigo-600 rounded-[2rem] p-8 text-white shadow-xl shadow-indigo-100 dark:shadow-none flex-1 relative overflow-hidden w-full">

@@ -48,6 +48,7 @@ ChartJS.register(
 
 import BoletinExportModule from '../../components/boletines/BoletinExportModule.vue'
 import { useAcademicYearStore } from '../../stores/academicYear'
+import PeriodCountdownBanner from '../../components/PeriodCountdownBanner.vue'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -466,6 +467,10 @@ const barChartOptions = {
 
 <template>
   <div class="space-y-10 animate-in fade-in duration-700 pb-20">
+    
+    <!-- Contador Regresivo de Cierre de Período Académico -->
+    <PeriodCountdownBanner />
+
     <div class="relative overflow-hidden group">
       <div class="bg-slate-900 border border-slate-800 rounded-[3rem] p-10 text-white shadow-2xl relative z-10 transition-colors duration-500">
         <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-10">
