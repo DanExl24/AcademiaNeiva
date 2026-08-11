@@ -104,10 +104,10 @@ const loadCatalogs = async () => {
   loading.value = true
   try {
     const [yearsRes, settingsRes] = await Promise.all([
-      axios.get(`${API_BASE_URL}/academic-admin/settings/${schoolId.value}`, {
+      axios.get(`${API_BASE_URL}/api/academic-admin/settings/${schoolId.value}`, {
         headers: { Authorization: `Bearer ${auth.token}` }
       }),
-      axios.get(`${API_BASE_URL}/academic-admin/grades/${schoolId.value}`, {
+      axios.get(`${API_BASE_URL}/api/academic-admin/grades/${schoolId.value}`, {
         headers: { Authorization: `Bearer ${auth.token}` }
       })
     ])
@@ -159,7 +159,7 @@ const fetchPeriodTracking = async () => {
     if (selectedGradeId.value) params.gradeId = selectedGradeId.value
     if (selectedGroupId.value) params.groupId = selectedGroupId.value
 
-    const response = await axios.get(`${API_BASE_URL}/academic-admin/academic-tracking/period-tracking`, {
+    const response = await axios.get(`${API_BASE_URL}/api/academic-admin/academic-tracking/period-tracking`, {
       params,
       headers: { Authorization: `Bearer ${auth.token}` }
     })
@@ -186,7 +186,7 @@ const fetchAnnualConsolidation = async () => {
     if (selectedGradeId.value) params.gradeId = selectedGradeId.value
     if (selectedGroupId.value) params.groupId = selectedGroupId.value
 
-    const response = await axios.get(`${API_BASE_URL}/academic-admin/academic-tracking/annual-consolidation`, {
+    const response = await axios.get(`${API_BASE_URL}/api/academic-admin/academic-tracking/annual-consolidation`, {
       params,
       headers: { Authorization: `Bearer ${auth.token}` }
     })
@@ -209,7 +209,7 @@ const searchStudentHistory = async (studentId?: number) => {
     let targetId = studentId
     if (!targetId && historySearchQuery.value) {
       // Buscar primero por documento
-      const warningRes = await axios.get(`${API_BASE_URL}/academic-admin/academic-tracking/check-warning`, {
+      const warningRes = await axios.get(`${API_BASE_URL}/api/academic-admin/academic-tracking/check-warning`, {
         params: { documento: historySearchQuery.value.trim() },
         headers: { Authorization: `Bearer ${auth.token}` }
       })
@@ -223,7 +223,7 @@ const searchStudentHistory = async (studentId?: number) => {
     }
 
     if (targetId) {
-      const historyRes = await axios.get(`${API_BASE_URL}/academic-admin/academic-tracking/student-history/${targetId}`, {
+      const historyRes = await axios.get(`${API_BASE_URL}/api/academic-admin/academic-tracking/student-history/${targetId}`, {
         headers: { Authorization: `Bearer ${auth.token}` }
       })
       studentHistory.value = historyRes.data
@@ -253,7 +253,7 @@ const saveDirectiveDecision = async () => {
   errorMessage.value = ''
   successMessage.value = ''
   try {
-    await axios.post(`${API_BASE_URL}/academic-admin/academic-tracking/record-decision`, {
+    await axios.post(`${API_BASE_URL}/api/academic-admin/academic-tracking/record-decision`, {
       schoolId: schoolId.value,
       studentId: targetStudentForDecision.value.id_estudiante,
       previousYearId: selectedYearId.value,

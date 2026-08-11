@@ -117,7 +117,7 @@ const academicWarning = ref<any>(null)
 const checkAcademicWarningForStudent = async (doc: string) => {
   if (!doc || doc.trim().length < 4) return
   try {
-    const res = await axios.get(`${API_BASE_URL}/academic-admin/academic-tracking/check-warning`, {
+    const res = await axios.get(`${API_BASE_URL}/api/academic-admin/academic-tracking/check-warning`, {
       params: { documento: doc.trim() }
     })
     if (res.data.exists && res.data.warning) {
