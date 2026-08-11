@@ -695,6 +695,21 @@ const barChartOptions = {
                   <span class="text-sm font-black text-slate-800 dark:text-white">{{ selectedChild.nombre }} {{ selectedChild.apellido }}</span>
                 </div>
                 <div class="p-3.5 bg-slate-50 dark:bg-slate-800/80 rounded-2xl flex justify-between items-center border border-slate-100 dark:border-slate-700/50">
+                  <span class="text-xs font-bold text-slate-400">Estado de Matrícula</span>
+                  <span :class="[
+                    selectedChild.estado_matricula === 'ACTIVA' || selectedChild.estado_matricula === 'APROBADA'
+                      ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                      : selectedChild.estado_matricula === 'TRASLADADA'
+                      ? 'bg-purple-100 text-purple-800 dark:bg-purple-950/50 dark:text-purple-300 border-purple-200 dark:border-purple-800'
+                      : selectedChild.estado_matricula === 'PENDIENTE' || selectedChild.estado_matricula === 'PENDIENTE_RENOVACION'
+                      ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300 border-amber-200 dark:border-amber-800'
+                      : 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-600',
+                    'px-3 py-1 rounded-xl text-xs font-black uppercase tracking-wider border shadow-xs'
+                  ]">
+                    {{ selectedChild.estado_matricula || 'MATRICULADO' }}
+                  </span>
+                </div>
+                <div class="p-3.5 bg-slate-50 dark:bg-slate-800/80 rounded-2xl flex justify-between items-center border border-slate-100 dark:border-slate-700/50">
                   <span class="text-xs font-bold text-slate-400">Grado Académico</span>
                   <span class="text-sm font-black text-slate-800 dark:text-white">{{ selectedChild.grado || selectedChild.nivel || 'Sin Asignar' }}</span>
                 </div>

@@ -475,7 +475,8 @@ export const getParentChildren = async (req: Request, res: Response) => {
         "j.nombre as jornada",
         "n.nombre as nivel",
         "dpf.id_colegio",
-        "col.nombre as colegio_nombre"
+        "col.nombre as colegio_nombre",
+        "m.estado as estado_matricula"
       ])
       .where("pf.id_usuario", "=", Number(id_usuario))
       .execute();
@@ -703,7 +704,8 @@ export const getParentDashboardData = async (req: Request, res: Response) => {
         "n.nombre as nivel",
         "e.id_colegio",
         "m.id_grupo",
-        "m.id_anio"
+        "m.id_anio",
+        "m.estado as estado_matricula"
       ])
       .where("pf.id_usuario", "=", userId)
       .execute();
