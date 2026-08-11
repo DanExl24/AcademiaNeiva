@@ -667,7 +667,47 @@ export class TrasladoService {
       .orderBy('ta.fecha', 'asc')
       .execute();
 
-    return { ...solicitud, aprobaciones };
+    let padreInfo: { id_usuario?: number; nombre?: string | null; apellido?: string | null; email?: string | null } | null = null;
+    if (solicitud.tipo === 'TRASLADO_MATRICULA') {
+      if (solicitud.id_matricula) {
+        const mat = await db
+          .selectFrom('matricula as m')
+          .leftJoin('usuario as up', 'up.id_usuario', 'm.id_usuario_responsable')
+          .select(['up.id_usuario', 'up.nombre', 'up.apellido', 'up.email', 'm.correo_padre'])
+          .where('m.id_matricula', '=', solicitud.id_matricula)
+          .executeTakeFirst();
+        if (mat?.id_usuario) {
+          padreInfo = {
+            id_usuario: mat.id_usuario,
+            nombre: mat.nombre,
+            apellido: mat.apellido,
+            email: mat.email || mat.correo_padre || null,
+          };
+        }
+      }
+
+      if (!padreInfo) {
+        const est = await db
+          .selectFrom('estudiante')
+          .select('id_estudiante')
+          .where('id_usuario', '=', solicitud.id_usuario)
+          .executeTakeFirst();
+        if (est) {
+          const parentRow = await db
+            .selectFrom('detalle_padrefamilia as dpf')
+            .innerJoin('padre_familia as pf', 'pf.id_padrefamilia', 'dpf.id_padrefamilia')
+            .innerJoin('usuario as up', 'up.id_usuario', 'pf.id_usuario')
+            .select(['up.id_usuario', 'up.nombre', 'up.apellido', 'up.email'])
+            .where('dpf.id_estudiante', '=', est.id_estudiante)
+            .executeTakeFirst();
+          if (parentRow) {
+            padreInfo = parentRow;
+          }
+        }
+      }
+    }
+
+    return { ...solicitud, aprobaciones, padre: padreInfo };
   }
 
   /**

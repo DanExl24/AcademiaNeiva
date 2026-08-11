@@ -62,6 +62,12 @@ interface SolicitudTraslado {
   fecha_creacion: string
   fecha_finalizacion?: string | null
   aprobaciones?: Aprobacion[]
+  padre?: {
+    id_usuario?: number
+    nombre?: string
+    apellido?: string
+    email?: string
+  } | null
 }
 
 interface Estadisticas {
@@ -256,15 +262,39 @@ const filteredSolicitudes = computed(() => {
 // Approval panel: for a given solicitud, which roles have approved / pending
 const getApprovalMatrix = (sol: SolicitudTraslado) => {
   const aprobaciones = sol.aprobaciones || []
-  const rolesAprobados = new Set<string>(aprobaciones.filter(a => a.accion === 'APROBAR').map(a => a.rol))
+  const adminAprobacion = aprobaciones.find(a => a.rol === 'ADMIN_GENERAL' && a.accion === 'APROBAR')
+  
+  const origenAprobacion = aprobaciones.find(a => a.rol === 'DIRECTIVO_ORIGEN' && a.accion === 'APROBAR')
+  const destinoAprobacion = aprobaciones.find(a => a.rol === 'DIRECTIVO_DESTINO' && a.accion === 'APROBAR')
+  const usuarioAprobacion = aprobaciones.find(a => a.rol === 'USUARIO' && a.accion === 'APROBAR')
 
-  const requiredRoles = ['DIRECTIVO_ORIGEN', 'DIRECTIVO_DESTINO', 'USUARIO']
+  let entidadPadre = sol.tipo === 'TRASLADO_MATRICULA'
+    ? (sol.padre ? `${sol.padre.nombre || ''} ${sol.padre.apellido || ''}`.trim() : `Acudiente Legal de ${sol.usuario_nombre}`)
+    : `${sol.usuario_nombre} ${sol.usuario_apellido}`
 
-  return requiredRoles.map(rol => ({
-    rol,
-    label: getRolLabel(rol, sol.tipo),
-    aprobado: rolesAprobados.has(rol) || rolesAprobados.has('ADMIN_GENERAL')
-  }))
+  return [
+    {
+      rol: 'DIRECTIVO_ORIGEN',
+      label: 'Directivo Institución Origen',
+      entidad: sol.colegio_origen_nombre,
+      aprobacion: origenAprobacion || adminAprobacion,
+      esBypassAdmin: !origenAprobacion && !!adminAprobacion
+    },
+    {
+      rol: 'DIRECTIVO_DESTINO',
+      label: 'Directivo Institución Destino',
+      entidad: sol.colegio_destino_nombre,
+      aprobacion: destinoAprobacion || adminAprobacion,
+      esBypassAdmin: !destinoAprobacion && !!adminAprobacion
+    },
+    {
+      rol: 'USUARIO',
+      label: sol.tipo === 'TRASLADO_MATRICULA' ? 'Padre de Familia / Acudiente Legal' : 'Usuario Afectado',
+      entidad: entidadPadre,
+      aprobacion: usuarioAprobacion || adminAprobacion,
+      esBypassAdmin: !usuarioAprobacion && !!adminAprobacion
+    }
+  ]
 }
 
 const getRolLabel = (rol: string, tipo?: string) => {
@@ -694,24 +724,52 @@ const formatDate = (dateStr?: string | null) => {
           </div>
 
           <!-- Approval Matrix Panel -->
-          <div>
-            <h3 class="text-[11px] font-black uppercase text-slate-400 tracking-wider mb-2">Estado de Aprobaciones Requeridas</h3>
-            <div class="space-y-2">
+          <div class="space-y-3">
+            <div class="flex items-center justify-between">
+              <h3 class="text-xs font-black uppercase text-slate-400 tracking-wider">Estado de Aprobaciones Requeridas (Consenso)</h3>
+              <span class="text-[10px] font-bold text-slate-400">3 Votos Requeridos</span>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div
                 v-for="item in getApprovalMatrix(selectedSolicitud)"
                 :key="item.rol"
                 :class="[
-                  'flex items-center justify-between p-3 rounded-xl border text-xs font-bold',
-                  item.aprobado
-                    ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/40 text-emerald-800 dark:text-emerald-300'
-                    : 'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/40 text-amber-800 dark:text-amber-300'
+                  'p-3.5 rounded-2xl border transition-all flex flex-col justify-between space-y-2',
+                  item.aprobacion
+                    ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/40'
+                    : 'bg-amber-50/50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/40'
                 ]"
               >
-                <span>{{ item.label }}</span>
-                <div class="flex items-center gap-1.5">
-                  <CheckCircle2 v-if="item.aprobado" :size="16" class="text-emerald-600 dark:text-emerald-400" />
-                  <Clock v-else :size="16" class="text-amber-500 dark:text-amber-400" />
-                  <span>{{ item.aprobado ? 'Aprobado' : 'Pendiente' }}</span>
+                <div>
+                  <div class="flex items-center justify-between mb-1">
+                    <span class="text-[10px] font-black uppercase tracking-wider text-slate-400">{{ item.label }}</span>
+                    <span :class="[
+                      'px-2 py-0.5 rounded-full text-[9px] font-black uppercase flex items-center gap-1',
+                      item.aprobacion
+                        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300'
+                        : 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300'
+                    ]">
+                      <CheckCircle2 v-if="item.aprobacion" :size="10" />
+                      <Clock v-else :size="10" />
+                      <span>{{ item.aprobacion ? 'Aprobado' : 'Pendiente' }}</span>
+                    </span>
+                  </div>
+                  <p class="font-bold text-slate-800 dark:text-white text-xs truncate" :title="item.entidad">{{ item.entidad }}</p>
+                </div>
+
+                <div class="text-[10px] pt-2 border-t border-slate-200/50 dark:border-slate-800">
+                  <template v-if="item.aprobacion">
+                    <p class="text-emerald-700 dark:text-emerald-400 font-bold truncate">
+                      ✓ {{ item.aprobacion.usuario_nombre }} {{ item.aprobacion.usuario_apellido }}
+                    </p>
+                    <p class="text-slate-400 font-mono text-[9px] mt-0.5">{{ formatDate(item.aprobacion.fecha) }}</p>
+                  </template>
+                  <template v-else>
+                    <p class="text-amber-700 dark:text-amber-400 font-semibold italic">
+                      ⏳ Pendiente por aprobar
+                    </p>
+                  </template>
                 </div>
               </div>
             </div>

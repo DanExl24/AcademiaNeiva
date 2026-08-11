@@ -57,6 +57,12 @@ interface SolicitudTraslado {
   fecha_creacion: string
   fecha_finalizacion?: string | null
   aprobaciones?: Aprobacion[]
+  padre?: {
+    id_usuario?: number
+    nombre?: string
+    apellido?: string
+    email?: string
+  } | null
 }
 
 interface Vinculacion {
@@ -446,6 +452,44 @@ const formatDate = (dateStr?: string | null) => {
     hour: '2-digit',
     minute: '2-digit'
   })
+}
+
+// Matriz de Aprobaciones Requeridas (Consenso Tripartito)
+const getApprovalMatrix = (sol: SolicitudTraslado) => {
+  const aprobaciones = sol.aprobaciones || []
+  const adminAprobacion = aprobaciones.find(a => a.rol === 'ADMIN_GENERAL' && a.accion === 'APROBAR')
+  
+  const origenAprobacion = aprobaciones.find(a => a.rol === 'DIRECTIVO_ORIGEN' && a.accion === 'APROBAR')
+  const destinoAprobacion = aprobaciones.find(a => a.rol === 'DIRECTIVO_DESTINO' && a.accion === 'APROBAR')
+  const usuarioAprobacion = aprobaciones.find(a => a.rol === 'USUARIO' && a.accion === 'APROBAR')
+
+  let entidadPadre = sol.tipo === 'TRASLADO_MATRICULA'
+    ? (sol.padre ? `${sol.padre.nombre || ''} ${sol.padre.apellido || ''}`.trim() : `Acudiente Legal de ${sol.usuario_nombre}`)
+    : `${sol.usuario_nombre} ${sol.usuario_apellido}`
+
+  return [
+    {
+      rol: 'DIRECTIVO_ORIGEN',
+      label: 'Directivo Institución Origen',
+      entidad: sol.colegio_origen_nombre,
+      aprobacion: origenAprobacion || adminAprobacion,
+      esBypassAdmin: !origenAprobacion && !!adminAprobacion
+    },
+    {
+      rol: 'DIRECTIVO_DESTINO',
+      label: 'Directivo Institución Destino',
+      entidad: sol.colegio_destino_nombre,
+      aprobacion: destinoAprobacion || adminAprobacion,
+      esBypassAdmin: !destinoAprobacion && !!adminAprobacion
+    },
+    {
+      rol: 'USUARIO',
+      label: sol.tipo === 'TRASLADO_MATRICULA' ? 'Padre de Familia / Acudiente Legal' : 'Usuario Afectado',
+      entidad: entidadPadre,
+      aprobacion: usuarioAprobacion || adminAprobacion,
+      esBypassAdmin: !usuarioAprobacion && !!adminAprobacion
+    }
+  ]
 }
 
 // Can User Approve in Modal?
@@ -840,9 +884,61 @@ const canUserApproveCurrentModal = computed(() => {
           </div>
         </div>
 
+        <!-- Consenso Matrix Section (Estado de Aprobaciones Requeridas) -->
+        <div class="space-y-3">
+          <div class="flex items-center justify-between">
+            <h3 class="text-xs font-black uppercase text-slate-400 tracking-wider">Estado de Aprobaciones Requeridas (Consenso)</h3>
+            <span class="text-[10px] font-bold text-slate-400">3 Votos Requeridos</span>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div
+              v-for="item in getApprovalMatrix(selectedSolicitud)"
+              :key="item.rol"
+              :class="[
+                'p-3.5 rounded-2xl border transition-all flex flex-col justify-between space-y-2',
+                item.aprobacion
+                  ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/40'
+                  : 'bg-amber-50/50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/40'
+              ]"
+            >
+              <div>
+                <div class="flex items-center justify-between mb-1">
+                  <span class="text-[10px] font-black uppercase tracking-wider text-slate-400">{{ item.label }}</span>
+                  <span :class="[
+                    'px-2 py-0.5 rounded-full text-[9px] font-black uppercase flex items-center gap-1',
+                    item.aprobacion
+                      ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300'
+                      : 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300'
+                  ]">
+                    <CheckCircle2 v-if="item.aprobacion" :size="10" />
+                    <Clock v-else :size="10" />
+                    <span>{{ item.aprobacion ? 'Aprobado' : 'Pendiente' }}</span>
+                  </span>
+                </div>
+                <p class="font-bold text-slate-800 dark:text-white text-xs truncate" :title="item.entidad">{{ item.entidad }}</p>
+              </div>
+
+              <div class="text-[10px] pt-2 border-t border-slate-200/50 dark:border-slate-800">
+                <template v-if="item.aprobacion">
+                  <p class="text-emerald-700 dark:text-emerald-400 font-bold truncate">
+                    ✓ {{ item.aprobacion.usuario_nombre }} {{ item.aprobacion.usuario_apellido }}
+                  </p>
+                  <p class="text-slate-400 font-mono text-[9px] mt-0.5">{{ formatDate(item.aprobacion.fecha) }}</p>
+                </template>
+                <template v-else>
+                  <p class="text-amber-700 dark:text-amber-400 font-semibold italic">
+                    ⏳ Pendiente por aprobar
+                  </p>
+                </template>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Approvals Timeline -->
         <div class="space-y-3">
-          <h3 class="text-xs font-black uppercase text-slate-400 tracking-wider">Cronología de Consenso (Aprobaciones)</h3>
+          <h3 class="text-xs font-black uppercase text-slate-400 tracking-wider">Historial de Auditoría y Votos Registrados</h3>
           
           <div v-if="!selectedSolicitud.aprobaciones || selectedSolicitud.aprobaciones.length === 0" class="p-4 text-center text-xs text-slate-400 bg-slate-50 dark:bg-slate-800/30 rounded-xl">
             Aún no se registran votos de aprobación para esta solicitud.
