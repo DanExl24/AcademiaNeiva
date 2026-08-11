@@ -361,7 +361,7 @@ export class TrasladoService {
             eb(
               sql<number>`EXTRACT(YEAR FROM st.fecha_creacion)`,
               '=',
-              sql<number>`(SELECT anio FROM anio_lectivo WHERE id_anio = ${filter.yearId})`
+              sql<number>`(SELECT CAST(SPLIT_PART(calendario, '-', 1) AS INTEGER) FROM anio_lectivo WHERE id_anio = ${filter.yearId})`
             )
           ])
         ])
@@ -720,7 +720,7 @@ export class TrasladoService {
             eb(
               sql<number>`EXTRACT(YEAR FROM st.fecha_creacion)`,
               '=',
-              sql<number>`(SELECT anio FROM anio_lectivo WHERE id_anio = ${filter.yearId})`
+              sql<number>`(SELECT CAST(SPLIT_PART(calendario, '-', 1) AS INTEGER) FROM anio_lectivo WHERE id_anio = ${filter.yearId})`
             )
           ])
         ])
