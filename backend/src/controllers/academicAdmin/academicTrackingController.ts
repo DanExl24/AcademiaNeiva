@@ -516,7 +516,7 @@ export const getStudentAcademicHistory = async (req: Request, res: Response): Pr
     const studentInfo = await db
       .selectFrom("estudiante as e")
       .innerJoin("usuario as u", "u.id_usuario", "e.id_usuario")
-      .leftJoin("colegio as c", "c.id_colegio", "u.id_colegio")
+      .leftJoin("colegio as c", "c.id_colegio", "e.id_colegio")
       .select([
         "e.id_estudiante",
         "u.nombre",
@@ -599,7 +599,7 @@ export const checkStudentAcademicWarning = async (req: Request, res: Response): 
         "u.documento",
         "u.email",
         "u.telefono",
-        "u.id_colegio",
+        "e.id_colegio",
         "e.id_estudiante"
       ])
       .where("u.documento", "=", documento)

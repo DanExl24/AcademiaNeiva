@@ -677,7 +677,6 @@ export interface Usuario {
   estado: Generated<EstadoUsuarioSistema>;
   fecha_baneo: Timestamp | null;
   fecha_creacion: Generated<Timestamp | null>;
-  id_colegio: number | null;
   id_tipodocumento: number | null;
   id_usuario: Generated<number>;
   logged_out_at: Timestamp | null;

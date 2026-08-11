@@ -32,12 +32,11 @@ export const login = async (req: Request, res: Response): Promise<void> => {
           "u.password",
           "u.nombre",
           "u.apellido",
-          "u.id_colegio",
           "u.estado",
           sql<string[]>`array_agg(r.nombre)`.as("roles")
         ])
         .where("u.email", "=", credential)
-        .groupBy(["u.id_usuario", "u.email", "u.password", "u.nombre", "u.apellido", "u.id_colegio", "u.estado"])
+        .groupBy(["u.id_usuario", "u.email", "u.password", "u.nombre", "u.apellido", "u.estado"])
         .executeTakeFirst();
 
       if (!user) {
@@ -68,7 +67,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         .where("uc.estado", "=", "ACTIVO")
         .execute();
 
-      let activeSchoolId: number | null = user.id_colegio || (activeSchools.length > 0 ? activeSchools[0].id_colegio : null);
+      let activeSchoolId: number | null = activeSchools.length > 0 ? activeSchools[0].id_colegio : null;
 
       if (activeSchools.length > 0) {
         const firstSchool = activeSchools[0];
@@ -135,10 +134,10 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         .select([
           "e.id_usuario",
           "e.estado as estado_estudiante",
+          "e.id_colegio",
           "u.email",
           "u.nombre",
           "u.password",
-          "u.id_colegio",
           "u.estado",
           sql<string[]>`array_agg(r.nombre)`.as("roles")
         ])
@@ -147,7 +146,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
           eb("u.documento", "=", credential),
           eb(sql`LOWER(u.email)`, "=", credential.toLowerCase())
         ]))
-        .groupBy(["e.id_usuario", "e.estado", "u.email", "u.nombre", "u.password", "u.id_colegio", "u.estado"])
+        .groupBy(["e.id_usuario", "e.estado", "e.id_colegio", "u.email", "u.nombre", "u.password", "u.estado"])
         .executeTakeFirst();
 
       if (!user) {
@@ -161,10 +160,31 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         return;
       }
 
-      // Verificar estado del usuario
-      if (user.estado !== 'ACTIVO') {
-        res.status(403).json({ error: "Tu cuenta no se encuentra activa. Contacta al administrador." });
-        return;
+      // Consultar vinculaciones de institucion en usuario_colegio
+      const activeSchools = await db
+        .selectFrom("usuario_colegio as uc")
+        .innerJoin("colegio as c", "c.id_colegio", "uc.id_colegio")
+        .select(["uc.id_colegio", "c.estado as colegio_estado"])
+        .where("uc.id_usuario", "=", user.id_usuario)
+        .where("uc.estado", "=", "ACTIVO")
+        .execute();
+
+      let activeSchoolId: number | null = user.id_colegio || (activeSchools.length > 0 ? activeSchools[0].id_colegio : null);
+
+      if (activeSchools.length > 0) {
+        const firstSchool = activeSchools[0];
+        if (firstSchool.colegio_estado === 'PENDIENTE') {
+          res.status(403).json({ error: "El colegio asociado aún no ha sido aprobado." });
+          return;
+        }
+        if (firstSchool.colegio_estado === 'SUSPENDIDO') {
+          res.status(403).json({ error: "El colegio asociado se encuentra suspendido." });
+          return;
+        }
+        if (firstSchool.colegio_estado === 'RECHAZADO' || firstSchool.colegio_estado === 'ELIMINADO') {
+          res.status(403).json({ error: "El colegio asociado no tiene acceso al sistema." });
+          return;
+        }
       }
 
       // Verificar contraseña
@@ -174,29 +194,37 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         return;
       }
 
+      const schoolIds = activeSchools.map((s: { id_colegio: number }) => Number(s.id_colegio));
+      if (!schoolIds.includes(user.id_colegio) && user.id_colegio) {
+        schoolIds.push(user.id_colegio);
+      }
+
       // Generar JWT
       const jti = crypto.randomUUID();
       const token = jwt.sign(
         { 
           id: user.id_usuario, 
           email: user.email, 
-          role: "estudiante", 
+          role: user.roles[0], 
           roles: user.roles,
-          schoolId: user.id_colegio,
+          schoolId: activeSchoolId,
+          schoolIds: schoolIds.length > 0 ? schoolIds : undefined,
           jti
         },
         JWT_SECRET,
         { expiresIn: "8h" }
       );
 
+      const { password: _, ...userWithoutPassword } = user;
       res.json({
         user: {
-          id: user.id_usuario,
-          name: user.nombre,
-          email: user.email,
-          role: "estudiante",
-          roles: user.roles,
-          schoolId: user.id_colegio
+          id: userWithoutPassword.id_usuario,
+          name: userWithoutPassword.nombre,
+          email: userWithoutPassword.email,
+          role: userWithoutPassword.roles[0],
+          roles: userWithoutPassword.roles,
+          schoolId: activeSchoolId,
+          schoolIds: schoolIds.length > 0 ? schoolIds : undefined
         },
         token
       });
@@ -220,15 +248,15 @@ export const studentLogin = async (req: Request, res: Response): Promise<void> =
       .select([
         "e.id_usuario",
         "e.estado as estado_estudiante",
+        "e.id_colegio",
         "u.email",
         "u.nombre",
         "u.password",
-        "u.id_colegio",
         "u.estado",
         sql<string[]>`array_agg(r.nombre)`.as("roles")
       ])
       .where("e.codigo", "=", codigo)
-      .groupBy(["e.id_usuario", "e.estado", "u.email", "u.nombre", "u.password", "u.id_colegio", "u.estado"])
+      .groupBy(["e.id_usuario", "e.estado", "e.id_colegio", "u.email", "u.nombre", "u.password", "u.estado"])
       .executeTakeFirst();
 
     if (!user) {
