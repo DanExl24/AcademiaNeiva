@@ -81,9 +81,10 @@ router.get("/catalogs", getAcademicCatalogs);
 // Protected routes (require verification)
 router.use(verifyToken);
 
-// Expose read-only routes to all authenticated users (Docentes need these settings to show scales and branding)
+// Expose read-only routes to all authenticated users (Docentes, Padres, Estudiantes need these settings)
 router.get("/my-school/:schoolId", getMySchoolData);
 router.get("/settings/:schoolId", getAcademicSettingsData);
+router.get("/active-period-info", getActivePeriodInfo);
 
 // Require Directivo role for administrative actions
 router.use(requireDirectivo);
@@ -153,7 +154,6 @@ router.get("/settings/dba-catalogo/:schoolId", obtenerCatalogoDbaDirectivo);
 
 // Dashboard Analítico
 router.get("/dashboard/:schoolId", getDirectivoDashboard);
-router.get("/active-period-info", getActivePeriodInfo);
 
 // Matrícula Extraordinaria
 router.post("/matriculas/extraordinaria", createExtraordinaryEnrollment);

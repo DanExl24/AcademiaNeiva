@@ -1111,7 +1111,10 @@ export const saveEnrollmentConfig = async (req: Request, res: Response): Promise
 
 export const getActivePeriodInfo = async (req: Request, res: Response): Promise<void> => {
   try {
-    const schoolId = req.query.schoolId ? Number(req.query.schoolId) : (req as any).user?.schoolId;
+    const authUser = (req as any).user;
+    const schoolId = req.query.schoolId 
+      ? Number(req.query.schoolId) 
+      : (authUser?.schoolId ? Number(authUser.schoolId) : (authUser?.id_colegio ? Number(authUser.id_colegio) : null));
     const yearId = req.query.yearId ? Number(req.query.yearId) : null;
 
     let query = `

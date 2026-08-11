@@ -70,7 +70,8 @@ const fetchActivePeriodInfo = async () => {
     if (schoolId.value) params.schoolId = schoolId.value
     if (yearStore.selectedYearId) params.yearId = yearStore.selectedYearId
 
-    const res = await axios.get('/api/academic-admin/active-period-info', { params })
+    const headers = auth.token ? { Authorization: `Bearer ${auth.token}` } : {}
+    const res = await axios.get('/api/academic-admin/active-period-info', { params, headers })
     fetchedPeriod.value = res.data?.activePeriod || null
   } catch (err) {
     fetchedPeriod.value = null
