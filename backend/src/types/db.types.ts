@@ -156,7 +156,6 @@ export interface CierreMateria {
 export interface Colegio {
   color_primario: Generated<string | null>;
   color_secundario: Generated<string | null>;
-  colores: string | null;
   contacto: Numeric;
   correo: string;
   dane: string;
@@ -323,7 +322,6 @@ export interface Docente {
   apellido: string;
   estado: Generated<string>;
   id_colegio: number;
-  id_contratodocente: number | null;
   id_docente: Generated<number>;
   id_usuario: number | null;
   nombre: string;
@@ -370,7 +368,6 @@ export interface Estudiante {
   estado: Generated<EstadoEstudiante | null>;
   id_colegio: number;
   id_estudiante: Generated<number>;
-  id_nivel: number | null;
   id_usuario: number | null;
   motivo_estado: string | null;
   nombre: string;
@@ -775,15 +772,11 @@ export interface DB {
   colegio: Colegio;
   colegio_version_curricular: ColegioVersionCurricular;
   competencias: Competencias;
-  configuracion_base: ConfiguracionBase;
   configuracion_colegio: ConfiguracionColegio;
   configuracion_inscripcion: ConfiguracionInscripcion;
   configuracion_plataforma: ConfiguracionPlataforma;
-  configuracion_sistema: ConfiguracionSistema;
-  contrato_docente: ContratoDocente;
   criterio_evaluacion: CriterioEvaluacion;
   dba: Dba;
-  dba_dimensiones_preescolar: DbaDimensionesPreescolar;
   decision_promocion_directivo: DecisionPromocionDirectivo;
   desempeno: Desempeno;
   detalle_grados: DetalleGrados;
@@ -828,11 +821,4 @@ export interface DB {
   usuario: Usuario;
   usuario_colegio: UsuarioColegio;
   usuario_rol: UsuarioRol;
-  vw_asistencia_estudiante: VwAsistenciaEstudiante;
-  vw_desempeno_estudiante: VwDesempenoEstudiante;
-  vw_notas_enriquecidas: VwNotasEnriquecidas;
-  vw_observaciones_estudiante: VwObservacionesEstudiante;
-  vw_promedio_estudiante_periodo: VwPromedioEstudiantePeriodo;
-  vw_promedio_materia: VwPromedioMateria;
-  vw_promedio_normalizado: VwPromedioNormalizado;
 }
