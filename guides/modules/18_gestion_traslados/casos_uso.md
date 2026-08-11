@@ -23,9 +23,10 @@ sequenceDiagram
     actor Creador as Directivo / Acudiente
     participant API as Backend (Express)
     participant Service as TrasladoService
-    participant DB as PostgreSQL
+    participant DB as PostgreSQL (Kysely)
     actor Origen as Directivo Origen
     actor Destino as Directivo Destino
+    actor Padre as Padre / Acudiente Legal
 
     Creador->>API: POST /api/traslados (id_usuario, origen, destino, motivo)
     API->>Service: crearSolicitud(input)
@@ -35,10 +36,15 @@ sequenceDiagram
     Service-->>API: Solicitud creada con ID único
     API-->>Creador: HTTP 201 Created
 
-    Note over Origen,Destino: Proceso de Aprobaciones Pendientes
+    Note over Origen,Padre: Proceso de Aprobaciones Pendientes (Consenso Tripartito)
     Origen->>API: POST /api/traslados/:id/aprobacion (accion: APROBAR)
     API->>Service: registrarAprobacion(idSolicitud, input)
     Service->>DB: INSERT INTO traslado_aprobacion (DIRECTIVO_ORIGEN)
+    Service->>Service: evaluarYEjecutarSiCompleto()
+
+    Padre->>API: POST /api/traslados/:id/aprobacion (accion: APROBAR)
+    API->>Service: registrarAprobacion(idSolicitud, input)
+    Service->>DB: INSERT INTO traslado_aprobacion (USUARIO - Padre/Acudiente)
     Service->>Service: evaluarYEjecutarSiCompleto()
 
     Destino->>API: POST /api/traslados/:id/aprobacion (accion: APROBAR)
@@ -46,7 +52,7 @@ sequenceDiagram
     Service->>DB: INSERT INTO traslado_aprobacion (DIRECTIVO_DESTINO)
     Service->>Service: evaluarYEjecutarSiCompleto() (¡Consenso Alcanzado!)
     
-    Service->>DB: BEGIN TRANSACTION (SELECT FOR UPDATE)
+    Service->>DB: BEGIN TRANSACTION Kysely (.forUpdate())
     Service->>DB: UPDATE usuario_colegio (Origen -> INACTIVO)
     Service->>DB: INSERT/UPDATE usuario_colegio (Destino -> ACTIVO)
     Service->>DB: UPDATE matricula SET estado = 'TRASLADADA'
@@ -60,8 +66,9 @@ sequenceDiagram
 1. El creador envía los datos del traslado mediante `POST /api/traslados`.
 2. El sistema valida los datos con `CreateTrasladoSchema` de Zod.
 3. Se crea la solicitud en estado `EN_APROBACION` y se auto-aprueba el rol del creador.
-4. Los aprobadores restantes (Directivo Origen, Directivo Destino, Acudiente) emiten sus votos en `POST /api/traslados/:id/aprobacion`.
-5. Al detectar los 3 votos favorables, el sistema ejecuta la transacción atómica PostgreSQL:
+4. Los aprobadores restantes (Directivo Origen, Directivo Destino, Padre/Acudiente Legal) emiten sus votos en `POST /api/traslados/:id/aprobacion`.
+5. El servidor valida que no existan votos duplicados por rol o usuario, y rechaza intentos de aprobación directa por parte del estudiante menor de edad.
+6. Al detectar los 3 votos favorables, el sistema ejecuta la transacción atómica PostgreSQL mediante Kysely:
    - Desactiva el vínculo con la sede origen en `usuario_colegio`.
    - Activa el vínculo con la sede destino en `usuario_colegio`.
    - Actualiza la matrícula previa a estado `TRASLADADA`.

@@ -23,7 +23,7 @@
 
 ## HU-TRA-002: Consenso Tripartito de Aprobación de Traslado
 
-**Como** Directivo de Origen, Directivo de Destino o Acudiente Afectado,  
+**Como** Directivo de Origen, Directivo de Destino o Padre de Familia / Acudiente Legal,  
 **Quiero** revisar el detalle y registrar mi voto de aprobación o rechazo en una solicitud de traslado,  
 **Para** dar el consentimiento de transferencia institucional.
 
@@ -31,9 +31,10 @@
 
 1. **Dado** una solicitud de traslado en estado `EN_APROBACION`,  
 2. **Cuando** un usuario autorizado envía `POST /api/traslados/:id/aprobacion` con la acción `APROBAR`, `RECHAZAR` o `CANCELAR`,  
-3. **Entonces** el sistema registra su voto en `traslado_aprobacion` identificando su rol (`DIRECTIVO_ORIGEN`, `DIRECTIVO_DESTINO`, `USUARIO`).  
-4. **Si** la acción es `RECHAZAR` o `CANCELAR`, la solicitud finaliza inmediatamente con dicho estado.  
-5. **Si** la acción es `APROBAR`, el sistema evalúa si se han completado los 3 votos requeridos (`DIRECTIVO_ORIGEN`, `DIRECTIVO_DESTINO`, `USUARIO`).
+3. **Entonces** el sistema valida que el usuario no haya votado previamente y que posea el rol de representación correspondiente (`DIRECTIVO_ORIGEN`, `DIRECTIVO_DESTINO`, o `USUARIO` otorgado al Padre/Acudiente legal del estudiante en `TRASLADO_MATRICULA`).  
+4. **Si** un estudiante menor de edad intenta aprobar directamente su propio traslado de matrícula, el sistema rechaza la solicitud exigiendo el aval del Padre/Acudiente legal registrado.  
+5. **Si** la acción es `RECHAZAR` o `CANCELAR`, la solicitud finaliza inmediatamente con dicho estado.  
+6. **Si** la acción es `APROBAR`, el sistema evalúa si se han completado los 3 votos requeridos (`DIRECTIVO_ORIGEN`, `DIRECTIVO_DESTINO`, `USUARIO`).
 
 ---
 

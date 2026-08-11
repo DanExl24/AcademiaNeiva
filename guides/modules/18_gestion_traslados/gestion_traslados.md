@@ -10,7 +10,7 @@
 
 Este módulo gestiona de forma integral el proceso de traslado de estudiantes y usuarios entre instituciones educativas del sistema AcademiaNeiva (`TRASLADO_MATRICULA` y `TRASLADO_USUARIO`), así como los traslados internos de grupo/salón. 
 
-Debido al modelo de **Identidad Global Multi-Institucional**, la cuenta de usuario (`usuario`) permanece única e inalterada, mientras que sus relaciones institucionales se administran dinámicamente en `usuario_colegio`. Para traslados interinstitucionales, el módulo implementa un workflow de **consenso tripartito** que requiere la aprobación explícita de tres actores: la Institución de Origen, la Institución de Destino y el propio Usuario/Acudiente. Una vez alcanzado el consenso (o mediante la aprobación directa del Administrador General), una transacción atómica en PostgreSQL desactiva la vinculación en el colegio origen, activa la vinculación en el colegio destino, actualiza el estado de la matrícula a `TRASLADADA` y notifica vía correo electrónico.
+Debido al modelo de **Identidad Global Multi-Institucional**, la cuenta de usuario (`usuario`) permanece única e inalterada, mientras que sus relaciones institucionales se administran dinámicamente en `usuario_colegio`. Para traslados interinstitucionales, el módulo implementa un workflow de **consenso tripartito** que requiere la aprobación explícita de tres actores: la Institución de Origen, la Institución de Destino y el **Padre de Familia / Acudiente legal** (en traslados escolares de matrícula) o el propio usuario adulto (en traslados de personal/docentes). Una vez alcanzado el consenso (o mediante la aprobación directa del Administrador General), una transacción atómica en PostgreSQL ejecutada mediante Kysely QueryBuilder desactiva la vinculación en el colegio origen, activa la vinculación en el colegio destino, actualiza el estado de la matrícula a `TRASLADADA` y notifica vía correo electrónico.
 
 ---
 
@@ -18,7 +18,8 @@ Debido al modelo de **Identidad Global Multi-Institucional**, la cuenta de usuar
 
 | Rol | Alcance |
 |---|---|
-| **Usuario / Acudiente / Estudiante** | Consultar sus vinculaciones institucionales históricas y activas, emitir su voto de aprobación/rechazo en solicitudes de traslado que le afecten. |
+| **Padre de Familia / Acudiente Legal** | Consultar solicitudes de traslado relativas a sus estudiantes a cargo y emitir su voto de aprobación/rechazo legal (`USUARIO`). |
+| **Usuario / Personal Adulto** | Consultar sus vinculaciones institucionales históricas y activas, autorizar traslados laborales que le afecten. |
 | **Directivo (Origen / Destino)** | Crear solicitudes de traslado de alumnos o personal de su institución, consultar la bandeja de traslados entrantes/salientes de su sede, y registrar aprobación o rechazo institucional. |
 | **Administrador General** | Acceso global a todas las solicitudes de traslado del ecosistema. Posee facultad de **aprobación directa**, la cual ejecuta la transacción inmediatamente omitiendo los votos pendientes. |
 
@@ -29,10 +30,10 @@ Debido al modelo de **Identidad Global Multi-Institucional**, la cuenta de usuar
 | Acción | Método | Endpoint | Rol Requerido |
 |---|---|---|---|
 | Consultar vinculaciones institucionales del usuario | `GET` | `/api/traslados/mis-vinculaciones` | Autenticado |
-| Listar solicitudes de traslado filtradas por colegio y estado | `GET` | `/api/traslados` | Directivo / Admin General |
-| Obtener detalle completo de una solicitud con cronología | `GET` | `/api/traslados/:id` | Directivo / Admin General / Usuario |
-| Crear nueva solicitud de traslado interinstitucional | `POST` | `/api/traslados` | Directivo / Admin General / Usuario |
-| Registrar decisión (Aprobar, Rechazar, Cancelar) | `POST` | `/api/traslados/:id/aprobacion` | Directivo / Admin General / Usuario |
+| Listar solicitudes de traslado filtradas por colegio y estado | `GET` | `/api/traslados` | Directivo / Admin General / Padre |
+| Obtener detalle completo de una solicitud con cronología | `GET` | `/api/traslados/:id` | Directivo / Admin General / Padre / Usuario |
+| Crear nueva solicitud de traslado interinstitucional | `POST` | `/api/traslados` | Directivo / Admin General / Padre |
+| Registrar decisión (Aprobar, Rechazar, Cancelar) | `POST` | `/api/traslados/:id/aprobacion` | Directivo / Admin General / Padre / Usuario |
 | Cambiar estado de traslado en matrícula | `PATCH` | `/api/matriculas/transfer-status/:id` | Directivo |
 | Traslado interno de grupo con notificación por email | `POST` | `/api/student/change-group` | Directivo |
 
@@ -44,15 +45,16 @@ Debido al modelo de **Identidad Global Multi-Institucional**, la cuenta de usuar
 - **RN-TRA-002 (Consenso Tripartito Obligatorio):** Todo traslado interinstitucional regular requiere 3 aprobaciones (`APROBAR`) para ejecutarse:
   1. `DIRECTIVO_ORIGEN` (Colegio que entrega)
   2. `DIRECTIVO_DESTINO` (Colegio que recibe)
-  3. `USUARIO` (Estudiante / Acudiente afectado)
+  3. `USUARIO` (Padre de Familia / Acudiente legal registrado para `TRASLADO_MATRICULA`, o el usuario afectado para `TRASLADO_USUARIO`).
 - **RN-TRA-003 (Bypass por Administrador General):** Si un `ADMIN_GENERAL` registra una aprobación (`APROBAR`), la solicitud se marca como completada e inmediatamente se ejecuta la transacción de traslado sin requerir los votos restantes.
-- **RN-TRA-004 (Auto-Aprobación del Creador):** La persona que crea la solicitud auto-aprueba en el mismo acto la casilla correspondiente a su rol.
+- **RN-TRA-004 (Auto-Aprobación del Creador):** La persona que crea la solicitud auto-aprueba en el mismo acto la casilla correspondiente a su rol (por ejemplo, `DIRECTIVO_ORIGEN` o el Padre/Acudiente creador).
 - **RN-TRA-005 (Restricción de Institución Distinta):** `id_colegio_origen` e `id_colegio_destino` deben ser numéricamente diferentes.
 - **RN-TRA-006 (Control de Duplicados en Trámite):** No se permite crear una nueva solicitud si ya existe una activa en estado `SOLICITADA` o `EN_APROBACION` para el mismo usuario entre los mismos colegios.
-- **RN-TRA-007 (Atomicidad y Bloqueo Pessimistic `FOR UPDATE`):** La ejecución del traslado se procesa en un bloque `BEGIN ... COMMIT` PostgreSQL con `SELECT FOR UPDATE` en `solicitud_traslado` para prevenir condiciones de carrera.
+- **RN-TRA-007 (Atomicidad y Bloqueo Pessimistic `FOR UPDATE`):** La ejecución del traslado se procesa mediante Kysely QueryBuilder en una transacción PostgreSQL con `.forUpdate()` en `solicitud_traslado` para prevenir condiciones de carrera.
 - **RN-TRA-008 (Actualización de Matrícula y Estudiante):** En `TRASLADO_MATRICULA`, la matrícula original pasa a `TRASLADADA` y el campo `id_colegio` en la tabla `estudiante` se actualiza al colegio destino.
 - **RN-TRA-009 (Motivo Obligatorio en Traslado Interno):** Todo cambio de grupo/sección interno requiere un motivo obligatorio (mínimo 5 caracteres) y desencadena el envío de un correo con plantilla HTML mediante `NotificationService.sendStudentTransferEmail`.
 - **RN-TRA-010 (Irreversibilidad de Resoluciones Finales):** Una vez que una solicitud pasa a estado `RECHAZADA`, `CANCELADA` o `EJECUTADA`, se prohíbe cualquier nuevo intento de registrar aprobaciones o cambiar la decisión.
+- **RN-TRA-011 (Unicidad e Imposibilidad de Votos Duplicados):** Cada rol (`DIRECTIVO_ORIGEN`, `DIRECTIVO_DESTINO`, `USUARIO`, `ADMIN_GENERAL`) o usuario solo puede registrar una única decisión de voto por solicitud. Intentar aprobar repetidamente lanzará una excepción `400 Bad Request`.
 
 ---
 

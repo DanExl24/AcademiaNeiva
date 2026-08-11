@@ -22,15 +22,15 @@
 Para que una solicitud de traslado interinstitucional regular complete su ciclo y pase a ejecución, se requiere la aprobación explícita de **tres partes involucradas**:
 1. **Institución de Origen (`DIRECTIVO_ORIGEN`):** Directivo de la institución que transfiere al usuario.
 2. **Institución de Destino (`DIRECTIVO_DESTINO`):** Directivo de la institución que recibe al usuario.
-3. **Usuario Afectado / Acudiente (`USUARIO`):** El propio usuario o su acudiente responsable legal.
+3. **Padre de Familia / Acudiente Legal (`USUARIO`):** Para solicitudes de `TRASLADO_MATRICULA` (estudiantes menores de edad), la aprobación con rol `USUARIO` recae exclusivamente sobre el **Padre de Familia o Acudiente legal registrado**. En traslados de personal adulto (`TRASLADO_USUARIO`), la otorga el usuario afectado.
 
 ### RN-TRA-003: Facultad de Bypass del Administrador General
 - El rol `ADMIN_GENERAL` posee autoridad ejecutiva global.
-- Si un `ADMIN_GENERAL` emite un voto de aprobación (`APROBAR`), la solicitud se considera plenamente autorizada y desencadena la transacción de ejecución inmediata sin requerir los votos de origen, destino o usuario.
+- Si un `ADMIN_GENERAL` emite un voto de aprobación (`APROBAR`), la solicitud se considera plenamente autorizada y desencadena la transacción de ejecución inmediata sin requerir los votos de origen, destino o acudiente.
 
 ### RN-TRA-004: Auto-Aprobación del Creador de la Solicitud
-- Cuando una solicitud es registrada por un usuario autorizado (por ejemplo, un directivo de origen o el propio acudiente), el sistema crea automáticamente el registro de aprobación en `traslado_aprobacion` correspondiente a dicho rol.
-- Si el creador es el propio usuario afectado, el rol asignado es `USUARIO`. Si es directivo del colegio origen, se asigna `DIRECTIVO_ORIGEN`.
+- Cuando una solicitud es registrada por un usuario autorizado (por ejemplo, un directivo de origen o el propio acudiente del estudiante), el sistema crea automáticamente el registro de aprobación en `traslado_aprobacion` correspondiente a dicho rol.
+- Si el creador es el acudiente del estudiante (o usuario afectado), el rol asignado es `USUARIO`. Si es directivo del colegio origen, se asigna `DIRECTIVO_ORIGEN`.
 
 ### RN-TRA-005: Restricción de Origen y Destino Distintos
 - Los parámetros `id_colegio_origen` e `id_colegio_destino` deben corresponder a colegios registrados existentes y ser estrictamente diferentes.
@@ -44,9 +44,9 @@ Para que una solicitud de traslado interinstitucional regular complete su ciclo 
 
 ## 3. Integridad Transaccional y Matrículas
 
-### RN-TRA-007: Atomicidad de Ejecución con Bloqueo `FOR UPDATE`
-- La ejecución del traslado dentro de `ejecutarTrasladoTransaccional` se realiza obligatoriamente dentro de una transacción PostgreSQL (`BEGIN ... COMMIT`).
-- Se utiliza `SELECT ... FOR UPDATE` sobre la fila de `solicitud_traslado` para prevenir condiciones de carrera cuando dos directivos intenten aprobar simultáneamente.
+### RN-TRA-007: Atomicidad de Ejecución con Bloqueo `FOR UPDATE` y Kysely
+- La ejecución del traslado dentro de `ejecutarTrasladoTransaccional` se realiza obligatoriamente dentro de una transacción PostgreSQL procesada con Kysely QueryBuilder.
+- Se utiliza `.forUpdate()` sobre la fila de `solicitud_traslado` para prevenir condiciones de carrera cuando dos directivos intenten aprobar simultáneamente.
 - Si la solicitud ya se encuentra en estado `EJECUTADA`, la transacción realiza un `COMMIT` limpio e idempotente sin duplicar modificaciones.
 
 ### RN-TRA-008: Actualización de Estado de Matrícula y Estudiante
@@ -57,7 +57,7 @@ Para que una solicitud de traslado interinstitucional regular complete su ciclo 
 
 ---
 
-## 4. Traslados Internos y Notificaciones
+## 4. Traslados Internos, Notificaciones y Votos Únicos
 
 ### RN-TRA-009: Traslado Interno de Grupo y Notificación por Correo
 - Al reasignar un estudiante de grupo o sección dentro de la misma sede:
@@ -68,3 +68,7 @@ Para que una solicitud de traslado interinstitucional regular complete su ciclo 
 ### RN-TRA-010: Irreversibilidad de Resoluciones Definitivas
 - Cuando una solicitud alcanza un estado final (`APROBADA`, `RECHAZADA`, `CANCELADA`, `EJECUTADA`), queda congelada.
 - Cualquier intento posterior de registrar un nuevo voto mediante `POST /api/traslados/:id/aprobacion` será rechazado por el backend con el error *"La solicitud ya se encuentra en estado final"*.
+
+### RN-TRA-011: Unicidad e Imposibilidad de Votos Duplicados
+- Cada rol participante (`DIRECTIVO_ORIGEN`, `DIRECTIVO_DESTINO`, `USUARIO`, `ADMIN_GENERAL`) o usuario solo puede emitir un único voto por solicitud de traslado.
+- Si una solicitud ya posee una decisión registrada para un determinado rol o por un determinado usuario, el servidor rechazará los intentos posteriores con un error `400 Bad Request` impidiendo duplicidades en el consenso.

@@ -93,9 +93,14 @@ export class TrasladoService {
       let rolAprobacion = 'CREADOR';
       let accionComentario = `Solicitud creada por ${rolCreador}`;
 
+      const esPadreCreador = await this.esPadreOResponsable(idUsuarioCreador, id_usuario, id_matricula || null, trx);
+
       if (idUsuarioCreador === id_usuario) {
         rolAprobacion = 'USUARIO';
         accionComentario = 'Auto-aprobación del usuario afectado al crear la solicitud';
+      } else if (esPadreCreador) {
+        rolAprobacion = 'USUARIO';
+        accionComentario = 'Auto-aprobación del Padre/Acudiente legal al crear la solicitud de traslado';
       } else if (rolCreador.includes('admin_general')) {
         rolAprobacion = 'ADMIN_GENERAL';
       } else {
@@ -152,14 +157,34 @@ export class TrasladoService {
       let rolAprobacion = '';
       if (rolesAprobador.includes('admin_general')) {
         rolAprobacion = 'ADMIN_GENERAL';
-      } else if (idUsuarioAprobador === solicitud.id_usuario) {
-        rolAprobacion = 'USUARIO';
       } else if (colegioIdAprobador === solicitud.id_colegio_origen) {
         rolAprobacion = 'DIRECTIVO_ORIGEN';
       } else if (colegioIdAprobador === solicitud.id_colegio_destino) {
         rolAprobacion = 'DIRECTIVO_DESTINO';
       } else {
-        throw new Error('No posees autorización para actuar sobre esta solicitud de traslado.');
+        const esTarget = idUsuarioAprobador === solicitud.id_usuario;
+        const esPadre = await this.esPadreOResponsable(idUsuarioAprobador, solicitud.id_usuario, solicitud.id_matricula || null, trx);
+
+        if (solicitud.tipo === 'TRASLADO_MATRICULA') {
+          if (esPadre) {
+            rolAprobacion = 'USUARIO';
+          } else if (esTarget) {
+            const tienePadre = await this.tienePadreVinculado(solicitud.id_usuario, solicitud.id_matricula || null, trx);
+            if (!tienePadre) {
+              rolAprobacion = 'USUARIO';
+            } else {
+              throw new Error('El traslado de matrícula debe ser aprobado por el Padre de Familia / Acudiente legal registrado.');
+            }
+          } else {
+            throw new Error('No posees autorización para actuar sobre esta solicitud de traslado.');
+          }
+        } else {
+          if (esTarget || esPadre) {
+            rolAprobacion = 'USUARIO';
+          } else {
+            throw new Error('No posees autorización para actuar sobre esta solicitud de traslado.');
+          }
+        }
       }
 
       // Validar si el rol o usuario ya emitieron voto previo en esta solicitud
@@ -718,6 +743,93 @@ export class TrasladoService {
       .orderBy('u.nombre', 'asc')
       .execute();
   }
+
+  /**
+   * Verifica si un usuario es el Padre/Acudiente o responsable legal de un estudiante.
+   */
+  private static async esPadreOResponsable(
+    idUsuarioPadre: number,
+    idUsuarioEstudiante: number,
+    idMatricula: number | null,
+    trx?: any
+  ): Promise<boolean> {
+    const runner = trx || db;
+
+    // 1. Verificar si es id_usuario_responsable en la matrícula
+    if (idMatricula) {
+      const mat = await runner
+        .selectFrom('matricula')
+        .select('id_usuario_responsable')
+        .where('id_matricula', '=', idMatricula)
+        .executeTakeFirst();
+      if (mat && mat.id_usuario_responsable === idUsuarioPadre) {
+        return true;
+      }
+    }
+
+    // 2. Verificar vía estudiante -> detalle_padrefamilia -> padre_familia
+    const est = await runner
+      .selectFrom('estudiante')
+      .select('id_estudiante')
+      .where('id_usuario', '=', idUsuarioEstudiante)
+      .executeTakeFirst();
+
+    if (est) {
+      const parentRow = await runner
+        .selectFrom('detalle_padrefamilia as dpf')
+        .innerJoin('padre_familia as pf', 'pf.id_padrefamilia', 'dpf.id_padrefamilia')
+        .select('pf.id_usuario')
+        .where('dpf.id_estudiante', '=', est.id_estudiante)
+        .where('pf.id_usuario', '=', idUsuarioPadre)
+        .executeTakeFirst();
+
+      if (parentRow) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Verifica si el estudiante tiene al menos un Padre/Acudiente legal vinculado.
+   */
+  private static async tienePadreVinculado(
+    idUsuarioEstudiante: number,
+    idMatricula: number | null,
+    trx?: any
+  ): Promise<boolean> {
+    const runner = trx || db;
+
+    if (idMatricula) {
+      const mat = await runner
+        .selectFrom('matricula')
+        .select(['id_usuario_responsable', 'correo_padre'])
+        .where('id_matricula', '=', idMatricula)
+        .executeTakeFirst();
+      if (mat && (mat.id_usuario_responsable || mat.correo_padre)) {
+        return true;
+      }
+    }
+
+    const est = await runner
+      .selectFrom('estudiante')
+      .select('id_estudiante')
+      .where('id_usuario', '=', idUsuarioEstudiante)
+      .executeTakeFirst();
+
+    if (est) {
+      const parentRow = await runner
+        .selectFrom('detalle_padrefamilia')
+        .select('id_detallepadrefamilia')
+        .where('id_estudiante', '=', est.id_estudiante)
+        .executeTakeFirst();
+      if (parentRow) return true;
+    }
+
+    return false;
+  }
 }
+
 
 
