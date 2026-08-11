@@ -82,12 +82,8 @@ export const getStudentBoletin = async (req: Request, res: Response) => {
       )
       .leftJoin("grupos as gr", "gr.id_grupo", "m.id_grupo")
       .leftJoin("jornada as j", "j.id_jornada", "gr.id_jornada")
-      .leftJoin("grados as g", (join) =>
-        join
-          .onRef("g.id_jornada", "=", "gr.id_jornada")
-          .onRef("g.id_colegio", "=", "gr.id_colegio")
-          .onRef("g.seccion", "=", sql<string>`gr.id_seccion::varchar`)
-      )
+      .leftJoin("nivel_escolar as ne", "ne.id_nivel", "gr.id_nivel")
+      .leftJoin("secciones as s", "s.id_seccion", "gr.id_seccion")
       .leftJoin("tipo_grado as tg", "tg.id_tipo_grado", "gr.id_tipo_grado")
       .leftJoin("anio_lectivo as al", (join) =>
         join
@@ -108,8 +104,8 @@ export const getStudentBoletin = async (req: Request, res: Response) => {
         "c.color_primario",
         "c.color_secundario",
         sql<string>`COALESCE(c.tipo_calendario, 'A')`.as("tipo_calendario"),
-        "g.nivel",
-        "g.seccion",
+        "ne.nombre as nivel",
+        "s.nombre as seccion",
         "tg.nombre as grado_nombre",
         "j.nombre as jornada_nombre",
         "al.calendario"

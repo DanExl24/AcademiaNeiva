@@ -396,7 +396,6 @@ export interface Grados {
   id_colegio: number;
   id_grado: Generated<number>;
   id_jornada: number;
-  nivel: string;
   seccion: Generated<string | null>;
   tipo_grado: string;
 }
