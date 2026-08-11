@@ -144,6 +144,12 @@ const availablePeriodsForYear = computed(() => {
   return periods.value.filter(p => p.id_anio === selectedYearId.value)
 })
 
+// Filtrar grupos por el grado seleccionado
+const filteredGroups = computed(() => {
+  if (!selectedGradeId.value) return groups.value
+  return groups.value.filter(g => g.id_tipo_grado === selectedGradeId.value || g.id_grado === selectedGradeId.value)
+})
+
 // Cargar seguimiento por período / acumulativo
 const fetchPeriodTracking = async () => {
   if (!schoolId.value || !selectedYearId.value) return
@@ -402,7 +408,7 @@ onMounted(async () => {
           <label><GraduationCap class="w-4 h-4" /> Grado</label>
           <select v-model="selectedGradeId" class="form-select">
             <option value="">Todos los grados</option>
-            <option v-for="g in grades" :key="g.id_grado" :value="g.id_grado">
+            <option v-for="g in grades" :key="g.id_tipo_grado || g.id_grado" :value="g.id_tipo_grado || g.id_grado">
               {{ g.nombre }}
             </option>
           </select>
@@ -413,8 +419,8 @@ onMounted(async () => {
           <label><Layers3 class="w-4 h-4" /> Grupo</label>
           <select v-model="selectedGroupId" class="form-select">
             <option value="">Todos los grupos</option>
-            <option v-for="grp in groups" :key="grp.id_grupo" :value="grp.id_grupo">
-              {{ grp.nombre }}
+            <option v-for="grp in filteredGroups" :key="grp.id_grupo" :value="grp.id_grupo">
+              {{ grp.nombre || (grp.tipo_grado_nombre ? grp.tipo_grado_nombre + ' ' + (grp.seccion_nombre || '') + (grp.jornada_nombre ? ' (' + grp.jornada_nombre + ')' : '') : 'Grupo ' + grp.id_grupo) }}
             </option>
           </select>
         </div>
