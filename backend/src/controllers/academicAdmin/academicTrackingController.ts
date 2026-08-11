@@ -58,10 +58,25 @@ interface AnnualSubjectAccumulator {
  */
 async function getMinPassingScore(schoolId: number): Promise<number> {
   try {
+    // 1. Consultar nota_aprobacion en configuracion_colegio
+    const config = await db
+      .selectFrom("configuracion_colegio")
+      .select(["nota_aprobacion"])
+      .where("id_colegio", "=", schoolId)
+      .executeTakeFirst();
+
+    if (config && config.nota_aprobacion != null) {
+      const val = parseFloat(String(config.nota_aprobacion));
+      if (!isNaN(val) && val > 0) return val;
+    }
+
+    // 2. Si no existe en la config, buscar el valor mínimo de la escala aprobatoria más baja (ej. Básico)
     const scale = await db
       .selectFrom("escala_valoracion")
       .select(["valor_minimo"])
       .where("id_colegio", "=", schoolId)
+      .where(sql`LOWER(nivel)`, "not in", ["bajo", "insuficiente"])
+      .orderBy("valor_minimo", "asc")
       .executeTakeFirst();
 
     if (scale && scale.valor_minimo != null) {
@@ -69,7 +84,7 @@ async function getMinPassingScore(schoolId: number): Promise<number> {
       if (!isNaN(val) && val > 0) return val;
     }
   } catch (err) {
-    console.error("Error al obtener la escala de valoración:", err);
+    console.error("Error al obtener la nota mínima aprobatoria:", err);
   }
   return 3.0;
 }
