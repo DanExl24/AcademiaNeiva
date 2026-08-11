@@ -356,14 +356,7 @@ export class TrasladoService {
       query = query.where((eb) =>
         eb.or([
           eb('m.id_anio', '=', filter.yearId!),
-          eb.and([
-            eb('st.id_matricula', 'is', null),
-            eb(
-              sql<number>`EXTRACT(YEAR FROM st.fecha_creacion)`,
-              '=',
-              sql<number>`(SELECT CAST(SPLIT_PART(calendario, '-', 1) AS INTEGER) FROM anio_lectivo WHERE id_anio = ${filter.yearId})`
-            )
-          ])
+          eb('st.id_matricula', 'is', null)
         ])
       );
     }
@@ -715,14 +708,7 @@ export class TrasladoService {
       query = query.where((eb) =>
         eb.or([
           eb('m.id_anio', '=', filter.yearId!),
-          eb.and([
-            eb('st.id_matricula', 'is', null),
-            eb(
-              sql<number>`EXTRACT(YEAR FROM st.fecha_creacion)`,
-              '=',
-              sql<number>`(SELECT CAST(SPLIT_PART(calendario, '-', 1) AS INTEGER) FROM anio_lectivo WHERE id_anio = ${filter.yearId})`
-            )
-          ])
+          eb('st.id_matricula', 'is', null)
         ])
       );
     }
