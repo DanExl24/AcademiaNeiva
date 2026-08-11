@@ -534,17 +534,86 @@ export class TrasladoService {
 
       // 5. Si es traslado de estudiante con matrícula
       if (solicitud.tipo === 'TRASLADO_MATRICULA' && solicitud.id_matricula) {
+        // 5.1 Marcar matrícula en origen como TRASLADADA con tipo TRASLADO
         await trx
           .updateTable('matricula')
-          .set({ estado: 'TRASLADADA' as any })
+          .set({
+            estado: 'TRASLADADA' as any,
+            tipo: 'TRASLADO' as any,
+            es_traslado: true
+          })
           .where('id_matricula', '=', solicitud.id_matricula)
           .execute();
 
+        // 5.2 Actualizar colegio activo del estudiante
         await trx
           .updateTable('estudiante')
           .set({ id_colegio: solicitud.id_colegio_destino })
           .where('id_usuario', '=', solicitud.id_usuario)
           .execute();
+
+        // 5.3 Generar/Activar la matrícula por traslado en el colegio destino
+        const origMat = await trx
+          .selectFrom('matricula')
+          .selectAll()
+          .where('id_matricula', '=', solicitud.id_matricula)
+          .executeTakeFirst();
+
+        const estRow = await trx
+          .selectFrom('estudiante')
+          .select('id_estudiante')
+          .where('id_usuario', '=', solicitud.id_usuario)
+          .executeTakeFirst();
+
+        if (origMat && estRow) {
+          const origenColegio = await trx
+            .selectFrom('colegio')
+            .select('nombre')
+            .where('id_colegio', '=', solicitud.id_colegio_origen)
+            .executeTakeFirst();
+
+          const obsTraslado = `Matrícula ingresada por traslado interinstitucional desde ${origenColegio?.nombre || 'colegio origen'}`;
+
+          const destMatExistente = await trx
+            .selectFrom('matricula')
+            .select('id_matricula')
+            .where('id_estudiante', '=', estRow.id_estudiante)
+            .where('id_colegio', '=', solicitud.id_colegio_destino)
+            .where('id_anio', '=', origMat.id_anio)
+            .executeTakeFirst();
+
+          if (destMatExistente) {
+            await trx
+              .updateTable('matricula')
+              .set({
+                estado: 'APROBADA' as any,
+                tipo: 'TRASLADO' as any,
+                es_traslado: true,
+                observaciones: obsTraslado,
+                fecha_aprobacion: sql`NOW()`
+              })
+              .where('id_matricula', '=', destMatExistente.id_matricula)
+              .execute();
+          } else {
+            await trx
+              .insertInto('matricula')
+              .values({
+                id_colegio: solicitud.id_colegio_destino,
+                id_estudiante: estRow.id_estudiante,
+                id_anio: origMat.id_anio,
+                id_usuario_responsable: origMat.id_usuario_responsable,
+                correo_padre: origMat.correo_padre,
+                id_nivel: origMat.id_nivel,
+                estado: 'APROBADA' as any,
+                tipo: 'TRASLADO' as any,
+                es_traslado: true,
+                observaciones: obsTraslado,
+                fecha_aprobacion: sql`NOW()`,
+                fecha_creacion: sql`NOW()`
+              })
+              .execute();
+          }
+        }
       }
 
       // 6. Marcar solicitud como EJECUTADA
