@@ -800,6 +800,23 @@ export const getStudentSummary = async (req: Request, res: Response) => {
       }
     }
 
+    // 11. Fetch directive promotion decisions
+    const decisionsRes = await pool.query(
+      `SELECT dpd.id_decision, dpd.resultado_calculado, dpd.decision_tomada, dpd.fecha_decision, dpd.observacion,
+              al.calendario as anio_calendario,
+              tg_ant.nombre as grado_anterior_nombre,
+              tg_asig.nombre as grado_asignado_nombre,
+              u.nombre || ' ' || u.apellido as directivo_nombre
+       FROM decision_promocion_directivo dpd
+       JOIN anio_lectivo al ON dpd.id_anio_anterior = al.id_anio
+       LEFT JOIN tipo_grado tg_ant ON dpd.id_grado_anterior = tg_ant.id_tipo_grado
+       LEFT JOIN tipo_grado tg_asig ON dpd.id_grado_asignado = tg_asig.id_tipo_grado
+       LEFT JOIN usuario u ON dpd.id_usuario_decision = u.id_usuario
+       WHERE dpd.id_estudiante = $1
+       ORDER BY dpd.fecha_decision DESC`,
+      [id]
+    );
+
     res.json({
       id_estudiante: student.id_estudiante,
       nombre_completo: `${student.nombre} ${student.apellido}`,
@@ -825,7 +842,8 @@ export const getStudentSummary = async (req: Request, res: Response) => {
       failed_subjects: materiasReprobadas,
       ultima_actividad: ultimaActividad,
       graduation: graduationInfo,
-      sanction: sanctionInfo
+      sanction: sanctionInfo,
+      directive_decisions: decisionsRes.rows || []
     });
 
   } catch (error: any) {

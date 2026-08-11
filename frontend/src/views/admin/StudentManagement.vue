@@ -1244,6 +1244,39 @@ const exportToSIMAT = () => {
               </div>
             </div>
 
+            <!-- Directive Promotion Decisions History -->
+            <div v-if="studentSummary.directive_decisions && studentSummary.directive_decisions.length > 0" class="space-y-3">
+              <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                <Award :size="14" class="text-indigo-500" />
+                Decisiones de Promoción ({{ studentSummary.directive_decisions.length }})
+              </h4>
+              <div class="space-y-2">
+                <div v-for="dec in studentSummary.directive_decisions" :key="dec.id_decision" class="bg-indigo-50/40 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/50 rounded-2xl p-4 space-y-2 text-left">
+                  <div class="flex items-center justify-between">
+                    <span class="px-2 py-0.5 bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 rounded-lg text-[9px] font-black uppercase tracking-wider">
+                      Año Lectivo {{ dec.anio_calendario }}
+                    </span>
+                    <span :class="[
+                      dec.decision_tomada === 'PROMOVER_SIGUIENTE_GRADO' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400' :
+                      dec.decision_tomada === 'MANTENER_GRADO' ? 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400' :
+                      'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400',
+                      'px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider'
+                    ]">
+                      {{ dec.decision_tomada.replace(/_/g, ' ') }}
+                    </span>
+                  </div>
+                  <div class="text-xs text-slate-700 dark:text-slate-200 space-y-1">
+                    <p><strong class="font-bold">Resultado Calculado:</strong> {{ dec.resultado_calculado }}</p>
+                    <p v-if="dec.observacion" class="italic text-slate-500 dark:text-slate-400 text-[11px]">"{{ dec.observacion }}"</p>
+                  </div>
+                  <div class="pt-2 border-t border-indigo-100/50 dark:border-indigo-900/40 flex items-center justify-between text-[9px] text-slate-400 font-medium">
+                    <span>Por: {{ dec.directivo_nombre || 'Directivo' }}</span>
+                    <span>{{ new Date(dec.fecha_decision).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' }) }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <!-- Parent Info -->
             <div class="space-y-3">
               <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Contacto de Acudiente</h4>
