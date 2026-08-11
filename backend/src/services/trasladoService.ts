@@ -1,6 +1,5 @@
 import { sql } from 'kysely';
 import { db } from '../config/kysely';
-import { pool } from '../config/db';
 import { CreateTrasladoInput, ApproveTrasladoInput, FilterTrasladoInput } from '../dtos/traslado.dto';
 
 export class TrasladoService {
@@ -8,14 +7,11 @@ export class TrasladoService {
    * Crear una solicitud de traslado
    */
   static async crearSolicitud(input: CreateTrasladoInput, idUsuarioCreador: number, rolCreador: string): Promise<any> {
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-
+    return await db.transaction().execute(async (trx) => {
       const { tipo, id_usuario, id_colegio_origen, id_colegio_destino, id_matricula, motivo } = input;
 
       // 1. Verificar existencia de usuario
-      const userRow = await db
+      const userRow = await trx
         .selectFrom('usuario')
         .select(['id_usuario', 'nombre', 'apellido', 'email'])
         .where('id_usuario', '=', id_usuario)
@@ -23,14 +19,14 @@ export class TrasladoService {
       if (!userRow) throw new Error('El usuario especificado no existe.');
 
       // 2. Verificar existencia de colegios
-      const origenRow = await db
+      const origenRow = await trx
         .selectFrom('colegio')
         .select(['id_colegio', 'nombre'])
         .where('id_colegio', '=', id_colegio_origen)
         .executeTakeFirst();
       if (!origenRow) throw new Error('La institución de origen no existe.');
 
-      const destinoRow = await db
+      const destinoRow = await trx
         .selectFrom('colegio')
         .select(['id_colegio', 'nombre'])
         .where('id_colegio', '=', id_colegio_destino)
@@ -38,7 +34,7 @@ export class TrasladoService {
       if (!destinoRow) throw new Error('La institución de destino no existe.');
 
       // 3. Verificar vinculación activa en origen (y detectar si es directivo)
-      const linkOrigenData = await db
+      const linkOrigenData = await trx
         .selectFrom('usuario_colegio as uc')
         .innerJoin('rol as r', 'r.id_rol', 'uc.id_rol')
         .select(['uc.id_usuario_colegio', 'r.nombre as rol_nombre'])
@@ -55,7 +51,7 @@ export class TrasladoService {
       }
 
       // 4. Verificar que no exista ya vinculación activa en destino
-      const linkDestino = await db
+      const linkDestino = await trx
         .selectFrom('usuario_colegio')
         .select('id_usuario_colegio')
         .where('id_usuario', '=', id_usuario)
@@ -65,7 +61,7 @@ export class TrasladoService {
       if (linkDestino) throw new Error('El usuario ya posee una vinculación activa con la institución de destino.');
 
       // 5. Verificar que no exista solicitud pendiente entre estos colegios para el usuario
-      const pending = await db
+      const pending = await trx
         .selectFrom('solicitud_traslado')
         .select('id_solicitud')
         .where('id_usuario', '=', id_usuario)
@@ -75,20 +71,23 @@ export class TrasladoService {
         .executeTakeFirst();
       if (pending) throw new Error('Ya existe una solicitud de traslado pendiente para este usuario.');
 
-      // Guardar si es directivo en variable para usarla al insertar
-      const esTraslado_directivo = esDirectivo;
-
-      // 6. Insertar solicitud de traslado (transacción raw necesaria para el ON CONFLICT / RETURNING)
-      // Para directivos, el tipo siempre es TRASLADO_USUARIO
-      const tipoFinal = esTraslado_directivo ? 'TRASLADO_USUARIO' : tipo;
-      const insertSolRes = await client.query(
-        `INSERT INTO solicitud_traslado 
-         (tipo, id_usuario, id_colegio_origen, id_colegio_destino, id_matricula, estado, motivo, creado_por)
-         VALUES ($1, $2, $3, $4, $5, 'EN_APROBACION', $6, $7)
-         RETURNING *`,
-        [tipoFinal, id_usuario, id_colegio_origen, id_colegio_destino, id_matricula || null, motivo, idUsuarioCreador]
-      );
-      const solicitud = insertSolRes.rows[0];
+      // 6. Insertar solicitud de traslado usando Kysely
+      const tipoFinal = esDirectivo ? 'TRASLADO_USUARIO' : tipo;
+      const solicitud = await trx
+        .insertInto('solicitud_traslado')
+        .values({
+          tipo: tipoFinal as any,
+          id_usuario,
+          id_colegio_origen,
+          id_colegio_destino,
+          id_matricula: id_matricula || null,
+          estado: 'EN_APROBACION' as any,
+          motivo,
+          creado_por: idUsuarioCreador,
+          fecha_creacion: sql`NOW()`
+        })
+        .returningAll()
+        .executeTakeFirstOrThrow();
 
       // 7. Auto-aprobar el paso de quien crea la solicitud
       let rolAprobacion = 'CREADOR';
@@ -100,7 +99,7 @@ export class TrasladoService {
       } else if (rolCreador.includes('admin_general')) {
         rolAprobacion = 'ADMIN_GENERAL';
       } else {
-        const dirRow = await db
+        const dirRow = await trx
           .selectFrom('directivo')
           .select('id_colegio')
           .where('id_usuario', '=', idUsuarioCreador)
@@ -111,20 +110,20 @@ export class TrasladoService {
         }
       }
 
-      await client.query(
-        `INSERT INTO traslado_aprobacion (id_solicitud, id_usuario, rol, accion, comentario)
-         VALUES ($1, $2, $3, 'APROBAR', $4)`,
-        [solicitud.id_solicitud, idUsuarioCreador, rolAprobacion, accionComentario]
-      );
+      await trx
+        .insertInto('traslado_aprobacion')
+        .values({
+          id_solicitud: solicitud.id_solicitud,
+          id_usuario: idUsuarioCreador,
+          rol: rolAprobacion as any,
+          accion: 'APROBAR' as any,
+          comentario: accionComentario,
+          fecha: sql`NOW()`
+        })
+        .execute();
 
-      await client.query('COMMIT');
-      return await this.evaluarYEjecutarSiCompleto(solicitud.id_solicitud);
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
+      return await this.evaluarYEjecutarSiCompleto(solicitud.id_solicitud, trx);
+    });
   }
 
   /**
@@ -137,11 +136,8 @@ export class TrasladoService {
     rolesAprobador: string[],
     colegioIdAprobador: number | null
   ): Promise<any> {
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-
-      const solicitud = await db
+    return await db.transaction().execute(async (trx) => {
+      const solicitud = await trx
         .selectFrom('solicitud_traslado')
         .selectAll()
         .where('id_solicitud', '=', idSolicitud)
@@ -166,30 +162,57 @@ export class TrasladoService {
         throw new Error('No posees autorización para actuar sobre esta solicitud de traslado.');
       }
 
-      await client.query(
-        `INSERT INTO traslado_aprobacion (id_solicitud, id_usuario, rol, accion, comentario)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [idSolicitud, idUsuarioAprobador, rolAprobacion, input.accion, input.comentario || null]
-      );
+      // Validar si el rol o usuario ya emitieron voto previo en esta solicitud
+      const votoExistenteRol = await trx
+        .selectFrom('traslado_aprobacion')
+        .select('id_aprobacion')
+        .where('id_solicitud', '=', idSolicitud)
+        .where('rol', '=', rolAprobacion as any)
+        .executeTakeFirst();
+
+      if (votoExistenteRol) {
+        throw new Error(`El rol '${rolAprobacion}' ya ha registrado su decisión para esta solicitud.`);
+      }
+
+      const votoExistenteUsuario = await trx
+        .selectFrom('traslado_aprobacion')
+        .select('id_aprobacion')
+        .where('id_solicitud', '=', idSolicitud)
+        .where('id_usuario', '=', idUsuarioAprobador)
+        .executeTakeFirst();
+
+      if (votoExistenteUsuario) {
+        throw new Error('Ya has registrado tu decisión sobre esta solicitud de traslado.');
+      }
+
+      await trx
+        .insertInto('traslado_aprobacion')
+        .values({
+          id_solicitud: idSolicitud,
+          id_usuario: idUsuarioAprobador,
+          rol: rolAprobacion as any,
+          accion: input.accion as any,
+          comentario: input.comentario || null,
+          fecha: sql`NOW()`
+        })
+        .execute();
 
       if (input.accion === 'RECHAZAR' || input.accion === 'CANCELAR') {
         const nuevoEstado = input.accion === 'RECHAZAR' ? 'RECHAZADA' : 'CANCELADA';
-        await client.query(
-          `UPDATE solicitud_traslado SET estado = $1, fecha_finalizacion = NOW() WHERE id_solicitud = $2`,
-          [nuevoEstado, idSolicitud]
-        );
-        await client.query('COMMIT');
+        await trx
+          .updateTable('solicitud_traslado')
+          .set({
+            estado: nuevoEstado as any,
+            fecha_finalizacion: sql`NOW()`
+          })
+          .where('id_solicitud', '=', idSolicitud)
+          .execute();
+
         return await this.getSolicitudDetalle(idSolicitud);
       }
 
-      await client.query('COMMIT');
-      return await this.evaluarYEjecutarSiCompleto(idSolicitud);
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
+      return await this.evaluarYEjecutarSiCompleto(idSolicitud, trx);
+    });
   }
 
   /**
@@ -205,11 +228,8 @@ export class TrasladoService {
       throw new Error('El motivo de la intervención administrativa es obligatorio y debe tener al menos 10 caracteres.');
     }
 
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-
-      const solicitud = await db
+    return await db.transaction().execute(async (trx) => {
+      const solicitud = await trx
         .selectFrom('solicitud_traslado')
         .selectAll()
         .where('id_solicitud', '=', idSolicitud)
@@ -223,25 +243,29 @@ export class TrasladoService {
       const nuevoEstado = accion === 'CANCELAR' ? 'CANCELADA' : 'RECHAZADA';
       const comentarioAdmin = `[INTERVENCIÓN ADMINISTRATIVA] ${motivo.trim()}`;
 
-      await client.query(
-        `INSERT INTO traslado_aprobacion (id_solicitud, id_usuario, rol, accion, comentario)
-         VALUES ($1, $2, 'ADMIN_GENERAL', $3, $4)`,
-        [idSolicitud, idAdmin, accion, comentarioAdmin]
-      );
+      await trx
+        .insertInto('traslado_aprobacion')
+        .values({
+          id_solicitud: idSolicitud,
+          id_usuario: idAdmin,
+          rol: 'ADMIN_GENERAL' as any,
+          accion: accion as any,
+          comentario: comentarioAdmin,
+          fecha: sql`NOW()`
+        })
+        .execute();
 
-      await client.query(
-        `UPDATE solicitud_traslado SET estado = $1, fecha_finalizacion = NOW() WHERE id_solicitud = $2`,
-        [nuevoEstado, idSolicitud]
-      );
+      await trx
+        .updateTable('solicitud_traslado')
+        .set({
+          estado: nuevoEstado as any,
+          fecha_finalizacion: sql`NOW()`
+        })
+        .where('id_solicitud', '=', idSolicitud)
+        .execute();
 
-      await client.query('COMMIT');
       return await this.getSolicitudDetalle(idSolicitud);
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
+    });
   }
 
   /**
@@ -337,15 +361,11 @@ export class TrasladoService {
 
   /**
    * Verifica si una solicitud posee las aprobaciones requeridas y la ejecuta en transacción.
-   *
-   * Flujos de aprobación:
-   * - Traslado DIRECTIVO    → requiere ADMIN_GENERAL + DIRECTIVO_ORIGEN + DIRECTIVO_DESTINO (los 3 explícitos)
-   * - Traslado USUARIO      → requiere DIRECTIVO_ORIGEN + DIRECTIVO_DESTINO + USUARIO
-   *                            (admin_general puede reemplazar cualquiera de los tres individualmente)
-   * - Traslado MATRICULA    → igual que TRASLADO_USUARIO para el flujo de aprobación
    */
-  private static async evaluarYEjecutarSiCompleto(idSolicitud: number): Promise<any> {
-    const solicitud = await db
+  private static async evaluarYEjecutarSiCompleto(idSolicitud: number, trxPassed?: any): Promise<any> {
+    const runner = trxPassed || db;
+
+    const solicitud = await runner
       .selectFrom('solicitud_traslado')
       .selectAll()
       .where('id_solicitud', '=', idSolicitud)
@@ -353,17 +373,17 @@ export class TrasladoService {
 
     if (!solicitud) return null;
 
-    const aprobaciones = await db
+    const aprobaciones = await runner
       .selectFrom('traslado_aprobacion')
       .select(['rol', 'accion'])
       .where('id_solicitud', '=', idSolicitud)
       .where('accion', '=', 'APROBAR')
       .execute();
 
-    const rolesAprobados = new Set(aprobaciones.map(r => r.rol));
+    const rolesAprobados = new Set(aprobaciones.map((r: any) => r.rol));
 
     // Detectar si el usuario trasladado es un directivo en la institución origen
-    const vinculacion = await db
+    const vinculacion = await runner
       .selectFrom('usuario_colegio as uc')
       .innerJoin('rol as r', 'r.id_rol', 'uc.id_rol')
       .select(['r.nombre as rol_nombre'])
@@ -379,17 +399,16 @@ export class TrasladoService {
         rolesAprobados.has('DIRECTIVO_ORIGEN') &&
         rolesAprobados.has('DIRECTIVO_DESTINO');
       if (completo) {
-        return await this.ejecutarTrasladoTransaccional(idSolicitud);
+        return await this.ejecutarTrasladoTransaccional(idSolicitud, trxPassed);
       }
     } else {
       // Traslado de USUARIO / MATRICULA: flujo estándar tripartita
-      // admin_general puede reemplazar cualquier rol individual (no de los 3 simultáneamente)
       const tieneOrigen = rolesAprobados.has('DIRECTIVO_ORIGEN') || rolesAprobados.has('ADMIN_GENERAL');
       const tieneDestino = rolesAprobados.has('DIRECTIVO_DESTINO') || rolesAprobados.has('ADMIN_GENERAL');
       const tieneUsuario = rolesAprobados.has('USUARIO') || rolesAprobados.has('ADMIN_GENERAL');
 
       if (tieneOrigen && tieneDestino && tieneUsuario) {
-        return await this.ejecutarTrasladoTransaccional(idSolicitud);
+        return await this.ejecutarTrasladoTransaccional(idSolicitud, trxPassed);
       }
     }
 
@@ -397,27 +416,23 @@ export class TrasladoService {
   }
 
   /**
-   * Ejecución final del traslado dentro de una transacción atómica PostgreSQL
+   * Ejecución final del traslado dentro de una transacción atómica PostgreSQL con Kysely
    */
-  private static async ejecutarTrasladoTransaccional(idSolicitud: number): Promise<any> {
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
+  private static async ejecutarTrasladoTransaccional(idSolicitud: number, trxPassed?: any): Promise<any> {
+    const executeLogic = async (trx: any) => {
+      const solicitud = await trx
+        .selectFrom('solicitud_traslado')
+        .selectAll()
+        .where('id_solicitud', '=', idSolicitud)
+        .forUpdate()
+        .executeTakeFirst();
 
-      // FOR UPDATE requiere SQL raw (Kysely no tiene soporte directo de row lock en select)
-      const solRes = await client.query(
-        'SELECT * FROM solicitud_traslado WHERE id_solicitud = $1 FOR UPDATE',
-        [idSolicitud]
-      );
-      const solicitud = solRes.rows[0];
-
-      if (solicitud.estado === 'EJECUTADA') {
-        await client.query('COMMIT');
+      if (!solicitud || solicitud.estado === 'EJECUTADA') {
         return await this.getSolicitudDetalle(idSolicitud);
       }
 
       // 1. Obtener el rol del usuario en la institución origen
-      const linkOrigenRow = await db
+      const linkOrigenRow = await trx
         .selectFrom('usuario_colegio')
         .select('id_rol')
         .where('id_usuario', '=', solicitud.id_usuario)
@@ -428,64 +443,98 @@ export class TrasladoService {
       const idRol = linkOrigenRow?.id_rol ?? 1;
 
       // 2. Inactivar vinculación con Colegio Origen
-      await client.query(
-        `UPDATE usuario_colegio 
-         SET estado = 'INACTIVO', fecha_fin = NOW() 
-         WHERE id_usuario = $1 AND id_colegio = $2 AND estado = 'ACTIVO'`,
-        [solicitud.id_usuario, solicitud.id_colegio_origen]
-      );
+      await trx
+        .updateTable('usuario_colegio')
+        .set({
+          estado: 'INACTIVO',
+          fecha_fin: sql`NOW()`
+        })
+        .where('id_usuario', '=', solicitud.id_usuario)
+        .where('id_colegio', '=', solicitud.id_colegio_origen)
+        .where('estado', '=', 'ACTIVO')
+        .execute();
 
       // 3. Crear/Activar vinculación con Colegio Destino
-      await client.query(
-        `INSERT INTO usuario_colegio (id_usuario, id_colegio, id_rol, estado, fecha_inicio)
-         VALUES ($1, $2, $3, 'ACTIVO', NOW())
-         ON CONFLICT (id_usuario, id_colegio, id_rol) 
-         DO UPDATE SET estado = 'ACTIVO', fecha_inicio = NOW(), fecha_fin = NULL`,
-        [solicitud.id_usuario, solicitud.id_colegio_destino, idRol]
-      );
+      await trx
+        .insertInto('usuario_colegio')
+        .values({
+          id_usuario: solicitud.id_usuario,
+          id_colegio: solicitud.id_colegio_destino,
+          id_rol: idRol,
+          estado: 'ACTIVO',
+          fecha_inicio: sql`NOW()`
+        })
+        .onConflict((oc: any) =>
+          oc.columns(['id_usuario', 'id_colegio', 'id_rol']).doUpdateSet({
+            estado: 'ACTIVO',
+            fecha_inicio: sql`NOW()`,
+            fecha_fin: null
+          })
+        )
+        .execute();
 
       // 3.1 Si el usuario posee rol de docente, asegurar/reactivar perfil en la tabla docente del colegio destino
-      await client.query(
-        `INSERT INTO docente (id_usuario, id_colegio, nombre, apellido, estado)
-         SELECT u.id_usuario, $2, u.nombre, COALESCE(u.apellido, ''), 'ACTIVO'
-         FROM usuario u 
-         WHERE u.id_usuario = $1
-         ON CONFLICT (id_usuario, id_colegio)
-         DO UPDATE SET estado = 'ACTIVO'`,
-        [solicitud.id_usuario, solicitud.id_colegio_destino]
-      );
+      await trx
+        .insertInto('docente')
+        .columns(['id_usuario', 'id_colegio', 'nombre', 'apellido', 'estado'])
+        .expression((eb: any) =>
+          eb
+            .selectFrom('usuario')
+            .select([
+              'id_usuario',
+              eb.val(solicitud.id_colegio_destino).as('id_colegio'),
+              'nombre',
+              sql<string>`COALESCE(apellido, '')`.as('apellido'),
+              eb.val('ACTIVO').as('estado')
+            ])
+            .where('id_usuario', '=', solicitud.id_usuario)
+        )
+        .onConflict((oc: any) =>
+          oc.columns(['id_usuario', 'id_colegio']).doUpdateSet({
+            estado: 'ACTIVO'
+          })
+        )
+        .execute();
 
       // 4. Actualizar el colegio activo del usuario
-      await client.query(
-        `UPDATE usuario SET id_colegio = $1 WHERE id_usuario = $2`,
-        [solicitud.id_colegio_destino, solicitud.id_usuario]
-      );
+      await trx
+        .updateTable('usuario')
+        .set({ id_colegio: solicitud.id_colegio_destino })
+        .where('id_usuario', '=', solicitud.id_usuario)
+        .execute();
 
       // 5. Si es traslado de estudiante con matrícula
       if (solicitud.tipo === 'TRASLADO_MATRICULA' && solicitud.id_matricula) {
-        await client.query(
-          `UPDATE matricula SET estado = 'TRASLADADA' WHERE id_matricula = $1`,
-          [solicitud.id_matricula]
-        );
-        await client.query(
-          `UPDATE estudiante SET id_colegio = $1 WHERE id_usuario = $2`,
-          [solicitud.id_colegio_destino, solicitud.id_usuario]
-        );
+        await trx
+          .updateTable('matricula')
+          .set({ estado: 'TRASLADADA' as any })
+          .where('id_matricula', '=', solicitud.id_matricula)
+          .execute();
+
+        await trx
+          .updateTable('estudiante')
+          .set({ id_colegio: solicitud.id_colegio_destino })
+          .where('id_usuario', '=', solicitud.id_usuario)
+          .execute();
       }
 
       // 6. Marcar solicitud como EJECUTADA
-      await client.query(
-        `UPDATE solicitud_traslado SET estado = 'EJECUTADA', fecha_finalizacion = NOW() WHERE id_solicitud = $1`,
-        [idSolicitud]
-      );
+      await trx
+        .updateTable('solicitud_traslado')
+        .set({
+          estado: 'EJECUTADA' as any,
+          fecha_finalizacion: sql`NOW()`
+        })
+        .where('id_solicitud', '=', idSolicitud)
+        .execute();
 
-      await client.query('COMMIT');
       return await this.getSolicitudDetalle(idSolicitud);
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
+    };
+
+    if (trxPassed) {
+      return await executeLogic(trxPassed);
+    } else {
+      return await db.transaction().execute(executeLogic);
     }
   }
 

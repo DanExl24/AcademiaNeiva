@@ -449,9 +449,47 @@ const formatDate = (dateStr?: string | null) => {
 }
 
 // Can User Approve in Modal?
+const userAlreadyVotedMessage = computed(() => {
+  if (!selectedSolicitud.value) return ''
+  const aprobaciones = selectedSolicitud.value.aprobaciones || []
+  const userId = auth.user?.id ? Number(auth.user.id) : null
+  const userSchool = auth.user?.schoolId ? Number(auth.user.schoolId) : null
+  const roles = auth.user?.roles || []
+
+  // Verificar si el usuario por ID ya votó
+  const userVote = aprobaciones.find(a => Number(a.id_usuario) === userId)
+  if (userVote) {
+    return `Ya has registrado tu decisión (${userVote.accion}) para esta solicitud.`
+  }
+
+  // Verificar si el rol ya registró su voto
+  if (userSchool !== null && userSchool === selectedSolicitud.value.id_colegio_origen) {
+    const origenVote = aprobaciones.find(a => a.rol === 'DIRECTIVO_ORIGEN')
+    if (origenVote) return 'La institución de Origen (Directivo Origen) ya registró su voto de aprobación para esta solicitud.'
+  }
+
+  if (userSchool !== null && userSchool === selectedSolicitud.value.id_colegio_destino) {
+    const destinoVote = aprobaciones.find(a => a.rol === 'DIRECTIVO_DESTINO')
+    if (destinoVote) return 'La institución de Destino (Directivo Destino) ya registró su voto para esta solicitud.'
+  }
+
+  if (userId !== null && userId === selectedSolicitud.value.id_usuario) {
+    const usuarioVote = aprobaciones.find(a => a.rol === 'USUARIO')
+    if (usuarioVote) return 'El usuario/acudiente afectado ya registró su voto para esta solicitud.'
+  }
+
+  if (roles.includes('admin_general')) {
+    const adminVote = aprobaciones.find(a => a.rol === 'ADMIN_GENERAL')
+    if (adminVote) return 'El Administrador General ya emitió una decisión para esta solicitud.'
+  }
+
+  return ''
+})
+
 const canUserApproveCurrentModal = computed(() => {
   if (!selectedSolicitud.value) return false
   if (['EJECUTADA', 'RECHAZADA', 'CANCELADA'].includes(selectedSolicitud.value.estado)) return false
+  if (userAlreadyVotedMessage.value) return false
 
   const userSchool = auth.user?.schoolId ? Number(auth.user.schoolId) : null
   const userId = auth.user?.id ? Number(auth.user.id) : null
@@ -837,6 +875,14 @@ const canUserApproveCurrentModal = computed(() => {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+
+        <!-- Already Voted Banner -->
+        <div v-if="userAlreadyVotedMessage && !['EJECUTADA', 'RECHAZADA', 'CANCELADA'].includes(selectedSolicitud.estado)" class="border-t border-slate-100 dark:border-slate-800 pt-4">
+          <div class="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl text-emerald-700 dark:text-emerald-400 font-bold text-xs flex items-center gap-3">
+            <CheckCircle2 :size="18" />
+            <span>{{ userAlreadyVotedMessage }}</span>
           </div>
         </div>
 
