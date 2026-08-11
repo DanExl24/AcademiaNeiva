@@ -135,7 +135,7 @@ export const getPeriodAcademicTracking = async (req: Request, res: Response): Pr
       ])
       .where("m.id_colegio", "=", schoolId)
       .where("m.id_anio", "=", yearId)
-      .where("m.estado", "in", ["ACTIVA", "APROBADA", "CULMINADA"]);
+      .where("m.estado", "not in", ["CANCELADA", "RECHAZADA"]);
 
     if (gradeId) {
       query = query.where("tg.id_tipo_grado", "=", gradeId);
@@ -320,7 +320,7 @@ export const getAnnualConsolidation = async (req: Request, res: Response): Promi
       ])
       .where("m.id_colegio", "=", schoolId)
       .where("m.id_anio", "=", yearId)
-      .where("m.estado", "in", ["ACTIVA", "APROBADA", "CULMINADA"]);
+      .where("m.estado", "not in", ["CANCELADA", "RECHAZADA"]);
 
     if (gradeId) query = query.where("tg.id_tipo_grado", "=", gradeId);
     if (groupId) query = query.where("m.id_grupo", "=", groupId);

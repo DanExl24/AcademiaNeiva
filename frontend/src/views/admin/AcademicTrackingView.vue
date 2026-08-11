@@ -3,6 +3,7 @@ import { ref, onMounted, computed, watch } from 'vue'
 import axios from 'axios'
 import { API_BASE_URL } from '../../config/api'
 import { useAuthStore } from '../../stores/auth'
+import { useAcademicYearStore } from '../../stores/academicYear'
 import {
   Award,
   TrendingUp,
@@ -23,6 +24,7 @@ import {
 } from 'lucide-vue-next'
 
 const auth = useAuthStore()
+const yearStore = useAcademicYearStore()
 
 const activeTab = ref<'period' | 'annual' | 'history' | 'decisions'>('period')
 const loading = ref(false)
@@ -103,27 +105,30 @@ const loadCatalogs = async () => {
   if (!schoolId.value) return
   loading.value = true
   try {
-    const [yearsRes, settingsRes] = await Promise.all([
-      axios.get(`${API_BASE_URL}/api/academic-admin/settings/${schoolId.value}`, {
+    const yearIdParam = yearStore.selectedYearId ? `?yearId=${yearStore.selectedYearId}` : ''
+    const [settingsRes, gradesRes] = await Promise.all([
+      axios.get(`${API_BASE_URL}/api/academic-admin/settings/${schoolId.value}${yearIdParam}`, {
         headers: { Authorization: `Bearer ${auth.token}` }
       }),
-      axios.get(`${API_BASE_URL}/api/academic-admin/grades/${schoolId.value}`, {
+      axios.get(`${API_BASE_URL}/api/academic-admin/grades/${schoolId.value}${yearIdParam}`, {
         headers: { Authorization: `Bearer ${auth.token}` }
       })
     ])
 
-    years.value = yearsRes.data.years || []
-    periods.value = yearsRes.data.periods || []
-    grades.value = settingsRes.data.grades || []
-    groups.value = settingsRes.data.groups || []
+    years.value = settingsRes.data.academicYears || settingsRes.data.years || []
+    periods.value = settingsRes.data.periods || []
+    grades.value = gradesRes.data.tiposGrado || gradesRes.data.grados || gradesRes.data.grades || []
+    groups.value = gradesRes.data.grupos || gradesRes.data.groups || []
 
-    if (years.value.length > 0 && !selectedYearId.value) {
+    if (yearStore.selectedYearId && years.value.some((y: any) => Number(y.id_anio) === Number(yearStore.selectedYearId))) {
+      selectedYearId.value = Number(yearStore.selectedYearId)
+    } else if (years.value.length > 0 && !selectedYearId.value) {
       selectedYearId.value = years.value[0].id_anio
     }
 
     if (periods.value.length > 0 && !selectedPeriodId.value) {
-      selectedPeriodId.value = periods.value[0].id_periodo;
-      cumulativePeriodOrder.value = periods.value.length;
+      selectedPeriodId.value = periods.value[0].id_periodo
+      cumulativePeriodOrder.value = periods.value.length
     }
   } catch (err: any) {
     console.error("Error al cargar catálogos:", err)
@@ -278,20 +283,36 @@ const saveDirectiveDecision = async () => {
   }
 }
 
-// Observadores de filtros
-watch([selectedYearId, selectedPeriodId, isCumulativeMode, cumulativePeriodOrder, selectedGradeId, selectedGroupId], () => {
+// Helper para refrescar datos según la pestaña activa
+const fetchDataForActiveTab = () => {
   if (activeTab.value === 'period') fetchPeriodTracking()
   else if (activeTab.value === 'annual') fetchAnnualConsolidation()
+}
+
+// Observadores de filtros locales
+watch([selectedYearId, selectedPeriodId, isCumulativeMode, cumulativePeriodOrder, selectedGradeId, selectedGroupId], () => {
+  fetchDataForActiveTab()
 })
 
-watch(activeTab, (newTab) => {
-  if (newTab === 'period') fetchPeriodTracking()
-  else if (newTab === 'annual') fetchAnnualConsolidation()
+watch(activeTab, () => {
+  fetchDataForActiveTab()
+})
+
+// Observar cambios del Año Lectivo Global desde el Header de la App
+watch(() => yearStore.selectedYearId, async (newYearId) => {
+  if (newYearId) {
+    selectedYearId.value = Number(newYearId)
+    await loadCatalogs()
+    fetchDataForActiveTab()
+  }
 })
 
 onMounted(async () => {
+  if (yearStore.selectedYearId) {
+    selectedYearId.value = Number(yearStore.selectedYearId)
+  }
   await loadCatalogs()
-  fetchPeriodTracking()
+  fetchDataForActiveTab()
 })
 </script>
 
