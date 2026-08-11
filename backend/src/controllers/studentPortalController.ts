@@ -692,6 +692,7 @@ export const getParentDashboardData = async (req: Request, res: Response) => {
         "e.nombre",
         "e.apellido",
         "e.codigo",
+        "e.estado as estado_estudiante",
         "tg.nombre as grado",
         "s.nombre as seccion",
         sql<string>`CASE 

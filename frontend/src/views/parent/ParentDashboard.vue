@@ -690,10 +690,26 @@ const barChartOptions = {
 
              <!-- Detalle para hijo seleccionado -->
              <div v-if="selectedChild" class="space-y-3 animate-in slide-in-from-right duration-500">
-                <div class="p-3.5 bg-slate-50 dark:bg-slate-800/80 rounded-2xl flex justify-between items-center border border-slate-100 dark:border-slate-700/50">
-                  <span class="text-xs font-bold text-slate-400">Estudiante</span>
-                  <span class="text-sm font-black text-slate-800 dark:text-white">{{ selectedChild.nombre }} {{ selectedChild.apellido }}</span>
-                </div>
+                 <div class="p-3.5 bg-slate-50 dark:bg-slate-800/80 rounded-2xl flex justify-between items-center border border-slate-100 dark:border-slate-700/50">
+                   <span class="text-xs font-bold text-slate-400">Estudiante</span>
+                   <div class="flex items-center gap-2">
+                     <span class="text-sm font-black text-slate-800 dark:text-white">{{ selectedChild.nombre }} {{ selectedChild.apellido }}</span>
+                     <span v-if="selectedChild.estado_estudiante && selectedChild.estado_estudiante !== 'ACTIVO'" :class="[
+                       selectedChild.estado_estudiante === 'GRADUADO'
+                         ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800'
+                         : selectedChild.estado_estudiante === 'RETIRADO'
+                         ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300 border-amber-200 dark:border-amber-800'
+                         : selectedChild.estado_estudiante === 'SANCIONADO'
+                         ? 'bg-rose-100 text-rose-800 dark:bg-rose-950/50 dark:text-rose-300 border-rose-200 dark:border-rose-800'
+                         : selectedChild.estado_estudiante === 'EXPULSADO'
+                         ? 'bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-300 border-red-200 dark:border-red-800'
+                         : 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-600',
+                       'px-2 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider border'
+                     ]">
+                       {{ selectedChild.estado_estudiante }}
+                     </span>
+                   </div>
+                 </div>
                 <div class="p-3.5 bg-slate-50 dark:bg-slate-800/80 rounded-2xl flex justify-between items-center border border-slate-100 dark:border-slate-700/50">
                   <span class="text-xs font-bold text-slate-400">Estado de Matrícula</span>
                   <span :class="[
