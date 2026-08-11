@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch }  from 'vue'
+import { useRoute } from 'vue-router'
 import axios from 'axios'
 import { API_BASE_URL } from '../../config/api'
 import { useAuthStore } from '../../stores/auth'
@@ -21,6 +22,7 @@ import {
 } from 'lucide-vue-next'
 
 const auth = useAuthStore()
+const route = useRoute()
 
 // Types & Interfaces
 interface Aprobacion {
@@ -150,6 +152,18 @@ onMounted(async () => {
     fetchPersonalColegio(),
     fetchDirectivosColegio()
   ])
+
+  if (route.query.id) {
+    const targetId = Number(route.query.id)
+    if (!isNaN(targetId)) {
+      const found = solicitudes.value.find(s => Number(s.id_solicitud) === targetId)
+      if (found) {
+        await openDetailModal(found)
+      } else {
+        await openDetailModal({ id_solicitud: targetId } as any)
+      }
+    }
+  }
 })
 
 const fetchSolicitudes = async () => {

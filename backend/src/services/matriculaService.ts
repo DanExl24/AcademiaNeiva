@@ -497,13 +497,36 @@ export class MatriculaService {
       }
     }
 
+    // Consulta de trazabilidad de traslado de matrícula
+    let trasladoInfo = null;
+    if (mat.estado === 'TRASLADADA' || mat.es_traslado || mat.tipo === 'TRASLADO') {
+      const trasRes = await pool.query(
+        `SELECT st.id_solicitud, st.estado as estado_traslado, st.tipo as tipo_traslado,
+                st.fecha_creacion, st.fecha_finalizacion, st.motivo,
+                st.id_colegio_origen, st.id_colegio_destino,
+                co.nombre as colegio_origen_nombre,
+                cd.nombre as colegio_destino_nombre
+         FROM solicitud_traslado st
+         LEFT JOIN colegio co ON co.id_colegio = st.id_colegio_origen
+         LEFT JOIN colegio cd ON cd.id_colegio = st.id_colegio_destino
+         WHERE st.id_matricula = $1 
+            OR (st.id_usuario = (SELECT id_usuario FROM estudiante WHERE id_estudiante = $2) AND st.tipo = 'TRASLADO_MATRICULA')
+         ORDER BY st.id_solicitud DESC LIMIT 1`,
+        [idMatricula, mat.id_estudiante]
+      );
+      if (trasRes.rows.length > 0) {
+        trasladoInfo = trasRes.rows[0];
+      }
+    }
+
     return {
       ...mat,
       availableSections: sections.rows || [],
       documentos: docsWithHistory || [],
       existing_parent_user: existingParentUser,
       renovacion,
-      expulsion: expulsionInfo
+      expulsion: expulsionInfo,
+      traslado_info: trasladoInfo
     };
   }
 

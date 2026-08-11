@@ -512,6 +512,14 @@ const notifyInconsistencies = async () => {
   }
 }
 
+const goToTrasladoDetail = (idSolicitud: number) => {
+  closeDrawer()
+  router.push({
+    name: 'Gestión de Traslados',
+    query: { id: idSolicitud }
+  })
+}
+
 
 
 const cancelEnrollment = async () => {
@@ -1268,8 +1276,60 @@ const approveException = async (id: number) => {
 
               <!-- ── APPROVED SUMMARY VIEW ────────────────────────────────── -->
               <div v-else-if="matricula.estado === 'ACTIVA' || matricula.estado === 'TRASLADADA'" class="p-8 space-y-8">
-                <!-- Status Header Card -->
-                <div class="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900 rounded-[2rem] p-8 text-center space-y-4">
+                <!-- Status Header Card (Especial para Matrícula de Traslado) -->
+                <div v-if="matricula.estado === 'TRASLADADA' || matricula.tipo === 'TRASLADO' || matricula.es_traslado || matricula.traslado_info"
+                     class="bg-gradient-to-br from-indigo-900 via-slate-900 to-purple-950 text-white rounded-[2rem] p-8 space-y-6 shadow-xl border border-indigo-500/30">
+                  
+                  <div class="flex items-center justify-between border-b border-white/10 pb-4">
+                    <div class="flex items-center gap-3">
+                      <div class="p-3 bg-indigo-500/20 text-indigo-300 rounded-2xl border border-indigo-500/30">
+                        <ArrowLeftRight :size="24" />
+                      </div>
+                      <div>
+                        <span class="text-[10px] font-black uppercase tracking-widest text-indigo-300">Trazabilidad de Traslado Interinstitucional</span>
+                        <h3 class="text-xl font-black text-white">Matrícula Trasladada</h3>
+                      </div>
+                    </div>
+                    <span :class="[
+                      matricula.traslado_info?.estado_traslado === 'EJECUTADA' || matricula.estado === 'TRASLADADA' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+                      'px-3.5 py-1 text-[11px] font-black uppercase tracking-wider rounded-full border shadow-sm'
+                    ]">
+                      {{ matricula.traslado_info?.estado_traslado || matricula.estado }}
+                    </span>
+                  </div>
+
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                    <div class="p-4 bg-white/5 rounded-2xl border border-white/10 space-y-1">
+                      <p class="text-[10px] font-black text-indigo-300 uppercase tracking-widest">Institución de Origen</p>
+                      <p class="font-bold text-white text-sm">{{ matricula.traslado_info?.colegio_origen_nombre || matricula.school_name || 'Colegio de Origen' }}</p>
+                    </div>
+                    <div class="p-4 bg-indigo-500/15 rounded-2xl border border-indigo-500/30 space-y-1">
+                      <p class="text-[10px] font-black text-indigo-300 uppercase tracking-widest">Institución Receptor (Trasladado a)</p>
+                      <p class="font-bold text-white text-sm">{{ matricula.traslado_info?.colegio_destino_nombre || 'Colegio Destino' }}</p>
+                    </div>
+                  </div>
+
+                  <div class="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-white/10">
+                    <div class="text-left w-full sm:w-auto">
+                      <p class="text-[10px] font-black text-indigo-300 uppercase tracking-widest">Fecha de Aprobación y Ejecución</p>
+                      <p class="text-sm font-bold text-white mt-0.5">
+                        {{ formatDateTime(matricula.traslado_info?.fecha_finalizacion || matricula.fecha_aprobacion) }}
+                      </p>
+                    </div>
+
+                    <button 
+                      v-if="matricula.traslado_info?.id_solicitud"
+                      @click="goToTrasladoDetail(matricula.traslado_info.id_solicitud)"
+                      class="w-full sm:w-auto px-5 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/40 hover:scale-[1.02]"
+                    >
+                      <ExternalLink :size="16" />
+                      <span>Ver Detalle en Gestión de Traslados</span>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Status Header Card Estándar para Matrículas Regulares -->
+                <div v-else class="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900 rounded-[2rem] p-8 text-center space-y-4">
                   <div class="w-20 h-20 bg-emerald-600 text-white rounded-3xl flex items-center justify-center mx-auto shadow-lg shadow-emerald-200 dark:shadow-none">
                     <ShieldCheck :size="40" />
                   </div>
