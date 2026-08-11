@@ -27,6 +27,7 @@ import {
 } from 'lucide-vue-next'
 
 const auth = useAuthStore()
+const route = useRoute()
 
 // Types
 interface Aprobacion {
