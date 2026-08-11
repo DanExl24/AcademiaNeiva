@@ -1032,7 +1032,7 @@ const approveException = async (id: number) => {
                     {{ getStatusMeta(en.estado).label }}
                   </span>
                   <!-- Sentido del Traslado para visibilidad del Directivo -->
-                  <div v-if="en.sentido_traslado === 'ENTRANTE' || (en.es_traslado && en.colegio_origen_nombre && en.colegio_origen_nombre !== auth.user?.schoolName)"
+                  <div v-if="en.sentido_traslado === 'ENTRANTE' || (en.es_traslado && en.colegio_origen_nombre && String(en.id_colegio) === String(en.id_colegio_destino))"
                        class="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300 text-[10px] font-black bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 px-2 py-0.5 rounded-lg w-fit"
                        :title="`Matrícula recibida desde: ${en.colegio_origen_nombre || 'otro colegio'}`">
                     <ArrowDownLeft :size="12" class="text-emerald-600 dark:text-emerald-400" />
