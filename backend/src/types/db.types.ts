@@ -263,6 +263,20 @@ export interface DbaDimensionesPreescolar {
   id_dimension: number;
 }
 
+export interface DecisionPromocionDirectivo {
+  id_decision: Generated<number>;
+  id_estudiante: number;
+  id_colegio: number;
+  id_anio_anterior: number;
+  resultado_calculado: string;
+  decision_tomada: string;
+  id_grado_anterior: number | null;
+  id_grado_asignado: number | null;
+  id_usuario_decision: number;
+  fecha_decision: Generated<Timestamp | null>;
+  observacion: string | null;
+}
+
 export interface Desempeno {
   descripcion: string;
   id_actividadmateria: number;
@@ -766,6 +780,7 @@ export interface DB {
   criterio_evaluacion: CriterioEvaluacion;
   dba: Dba;
   dba_dimensiones_preescolar: DbaDimensionesPreescolar;
+  decision_promocion_directivo: DecisionPromocionDirectivo;
   desempeno: Desempeno;
   detalle_grados: DetalleGrados;
   detalle_padrefamilia: DetallePadrefamilia;

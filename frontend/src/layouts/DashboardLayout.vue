@@ -29,7 +29,8 @@ import {
   Settings,
   LifeBuoy,
   ArrowLeftRight,
-  Building2
+  Building2,
+  Award
 } from 'lucide-vue-next'
 import { useAuthStore } from '../stores/auth'
 import { useThemeStore } from '../stores/theme'
@@ -139,6 +140,7 @@ const menuItems = computed(() => {
       { name: 'Mi Colegio', icon: School, path: '/dashboard/mi-colegio' },
       { name: 'Gestión Matrículas', icon: ClipboardList, path: '/dashboard/gestion-matriculas' },
       { name: 'Gestión Estudiantes', icon: GraduationCap, path: '/dashboard/gestion-estudiantes' },
+      { name: 'Gestión Aprobados', icon: Award, path: '/dashboard/gestion-aprobados' },
       { name: 'Padres de Familia', icon: Users, path: '/dashboard/padres-familia' },
       { name: 'Gestión de Grados', icon: Layers3, path: '/dashboard/gestion-grados' },
       { name: 'Gestión de Materias', icon: LibraryBig, path: '/dashboard/gestion-materias' },

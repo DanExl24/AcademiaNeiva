@@ -101,11 +101,32 @@ const fetchDetails = async () => {
       parentData.value.nombre = eu.nombre
       parentData.value.apellido = eu.apellido
     }
+    // Si hay documento de estudiante, consultar advertencias académicas previas
+    if (studentData.value.documento) {
+      checkAcademicWarningForStudent(studentData.value.documento)
+    }
   } catch (error) {
     notify.addNotification('Error al cargar la solicitud', 'error')
     router.push('/dashboard/gestion-matriculas')
   } finally {
     loading.value = false
+  }
+}
+
+const academicWarning = ref<any>(null)
+const checkAcademicWarningForStudent = async (doc: string) => {
+  if (!doc || doc.trim().length < 4) return
+  try {
+    const res = await axios.get(`${API_BASE_URL}/academic-admin/academic-tracking/check-warning`, {
+      params: { documento: doc.trim() }
+    })
+    if (res.data.exists && res.data.warning) {
+      academicWarning.value = res.data
+    } else {
+      academicWarning.value = null
+    }
+  } catch (err) {
+    console.error("Error al consultar advertencia académica:", err)
   }
 }
 
@@ -288,6 +309,38 @@ const getStatusColor = (estado: string) => {
           </button>
           <h1 class="text-4xl font-extrabold text-gray-900 tracking-tight">Registro Final</h1>
           <p class="text-gray-500 mt-2">Completa los datos personales para activar la matrícula.</p>
+        </div>
+
+        <!-- Banner de Advertencia Académica -->
+        <div v-if="academicWarning" class="p-5 bg-amber-50 border-2 border-amber-300 rounded-2xl mb-8 font-sans shadow-sm">
+          <div class="flex items-start gap-3">
+            <div class="p-2.5 bg-amber-500 text-white rounded-xl shrink-0">
+              <AlertTriangle :size="22" />
+            </div>
+            <div class="flex-1">
+              <h4 class="font-extrabold text-amber-950 text-base flex items-center gap-2">
+                ⚠️ Advertencia académica
+              </h4>
+              <p class="text-amber-800 text-xs font-semibold mt-1">
+                Este estudiante no aprobó completamente el año lectivo anterior.
+              </p>
+              <div class="mt-3 grid grid-cols-2 gap-2 text-xs bg-amber-100/60 p-3 rounded-xl border border-amber-200">
+                <div><span class="text-amber-700 font-bold">Año:</span> {{ academicWarning.ultima_matricula?.calendario || academicWarning.ultima_matricula?.id_anio }}</div>
+                <div><span class="text-amber-700 font-bold">Curso:</span> {{ academicWarning.ultima_matricula?.grado_nombre }} {{ academicWarning.ultima_matricula?.grupo_nombre }}</div>
+                <div><span class="text-amber-700 font-bold">Resultado:</span> <span class="font-black text-red-700">{{ academicWarning.resultado_calculado }}</span></div>
+                <div><span class="text-amber-700 font-bold">Asignaturas reprobadas:</span> {{ academicWarning.cantidad_materias_reprobadas }}</div>
+              </div>
+              <div v-if="academicWarning.materias_reprobadas?.length > 0" class="mt-2 text-xs text-amber-900">
+                <strong>Detalle:</strong> {{ academicWarning.materias_reprobadas.map((m: any) => m.materia_nombre + ' (' + m.promedio + ')').join(', ') }}
+              </div>
+              <div class="mt-4 flex items-center justify-between border-t border-amber-200 pt-3">
+                <span class="text-xs text-amber-900 font-medium">Información relevante de apoyo a la toma de decisión.</span>
+                <router-link to="/dashboard/gestion-aprobados" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg shadow-sm">
+                  Ir a Gestión de Aprobados
+                </router-link>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- ===== RENOVACIÓN: Multi-child Candidate Picker ===== -->

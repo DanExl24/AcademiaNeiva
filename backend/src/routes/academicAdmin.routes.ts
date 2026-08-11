@@ -70,6 +70,13 @@ import {
   obtenerReporteCoberturaDba,
   obtenerCatalogoDbaDirectivo
 } from "../controllers/dbaReportsController";
+import {
+  getPeriodAcademicTracking,
+  getAnnualConsolidation,
+  getStudentAcademicHistory,
+  checkStudentAcademicWarning,
+  recordDirectiveDecision
+} from "../controllers/academicAdmin/academicTrackingController";
 import { upload } from "../config/multer";
 import { verifyToken, requireDirectivo } from "../middleware/authMiddleware";
 
@@ -165,5 +172,12 @@ router.post("/matriculas/reingreso", createReingresoEnrollment);
 router.post("/matriculas/reingreso/:id/aprobar", approveReingresoEnrollment);
 router.post("/matriculas/reingreso/:id/corregir", correctReingresoEnrollment);
 router.post("/matriculas/reingreso/:id/rechazar", rejectReingresoEnrollment);
+
+// Seguimiento Académico y Consolidación de Promoción
+router.get("/academic-tracking/period-tracking", getPeriodAcademicTracking);
+router.get("/academic-tracking/annual-consolidation", getAnnualConsolidation);
+router.get("/academic-tracking/student-history/:studentId", getStudentAcademicHistory);
+router.get("/academic-tracking/check-warning", checkStudentAcademicWarning);
+router.post("/academic-tracking/record-decision", recordDirectiveDecision);
 
 export default router;

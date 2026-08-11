@@ -472,6 +472,13 @@ export const ensureCompetencySchema = async (): Promise<void> => {
       await client.query(preventClosedWritesSql);
     }
 
+    // Ejecutar migración 041 (tabla decision_promocion_directivo para registro de decisiones)
+    const decisionPromocionPath = path.join(__dirname, "../migrations/041_decision_promocion_directivo.sql");
+    if (fs.existsSync(decisionPromocionPath)) {
+      const decisionPromocionSql = fs.readFileSync(decisionPromocionPath, "utf8");
+      await client.query(decisionPromocionSql);
+    }
+
 
     // Backfill sync_uuid for existing competencies
     const unmigratedRes = await client.query(`

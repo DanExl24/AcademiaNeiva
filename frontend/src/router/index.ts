@@ -150,6 +150,12 @@ const router = createRouter({
           meta: { roles: ['directivo'] }
         },
         {
+          path: 'gestion-aprobados',
+          name: 'Gestión de Aprobados',
+          component: () => import('../views/admin/AcademicTrackingView.vue'),
+          meta: { roles: ['directivo'] }
+        },
+        {
           path: 'configuracion-academica/inscripciones',
           name: 'Fechas de Inscripción',
           component: () => import('../views/admin/AcademicEnrollmentDatesView.vue'),

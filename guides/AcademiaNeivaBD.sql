@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict PsEc5Eyzlm5f1ZTLsG9RO1BrKBCQsVpvlPEDyAwkwX28ZXefEJyKmeWPDLidJr8
+\restrict uxx8SZM2wBit2SBEuuDWxnaPVRieEmfpkC7D6xMVC03YENbg7zBafnKXDRKAqyS
 
 -- Dumped from database version 18.4
 -- Dumped by pg_dump version 18.4
@@ -3640,11 +3640,11 @@ ALTER TABLE ONLY public.directivo
 
 
 --
--- Name: docente docente_id_usuario_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: docente docente_id_usuario_id_colegio_key; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.docente
-    ADD CONSTRAINT docente_id_usuario_key UNIQUE (id_usuario);
+    ADD CONSTRAINT docente_id_usuario_id_colegio_key UNIQUE (id_usuario, id_colegio);
 
 
 --
@@ -5472,5 +5472,5 @@ REVOKE USAGE ON SCHEMA public FROM PUBLIC;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict PsEc5Eyzlm5f1ZTLsG9RO1BrKBCQsVpvlPEDyAwkwX28ZXefEJyKmeWPDLidJr8
+\unrestrict uxx8SZM2wBit2SBEuuDWxnaPVRieEmfpkC7D6xMVC03YENbg7zBafnKXDRKAqyS
 
