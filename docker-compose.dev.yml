@@ -21,7 +21,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile.dev
     env_file:
-      - ./backend/.env
+      - path: ./backend/.env
+        required: false
     environment:
       - DB_HOST=postgres
       - DB_PORT=5432
@@ -44,7 +45,8 @@ services:
     container_name: academia-postgres-dev
     image: postgres:16
     env_file:
-      - ./backend/.env_postgres
+      - path: ./backend/.env_postgres
+        required: false
     environment:
       - TZ=America/Bogota
       - PGTZ=America/Bogota

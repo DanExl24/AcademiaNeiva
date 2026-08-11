@@ -21,7 +21,8 @@ services:
       - DB_PASSWORD=postgres
       - DB_NAME=AcademiaNeiva
     env_file:
-      - ./backend/.env
+      - path: ./backend/.env
+        required: false
     volumes:
       - uploads_data:/app/uploads
     depends_on:
@@ -36,7 +37,8 @@ services:
     container_name: academia-postgres
     image: postgres:16
     env_file:
-      - ./backend/.env_postgres
+      - path: ./backend/.env_postgres
+        required: false
     environment:
       - TZ=America/Bogota
       - PGTZ=America/Bogota
