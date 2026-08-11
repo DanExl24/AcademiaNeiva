@@ -142,6 +142,15 @@ class MatriculaService {
             .leftJoin('grupos as g', 'm.id_grupo', 'g.id_grupo')
             .leftJoin('tipo_grado as tg', 'g.id_tipo_grado', 'tg.id_tipo_grado')
             .leftJoin('secciones as s', 'g.id_seccion', 's.id_seccion')
+            .leftJoin('solicitud_traslado as st', (join) => join.on((eb) => eb.or([
+            eb('st.id_matricula', '=', eb.ref('m.id_matricula')),
+            eb.and([
+                eb('st.id_usuario', '=', eb.ref('e.id_usuario')),
+                eb('st.tipo', '=', eb.val('TRASLADO_MATRICULA'))
+            ])
+        ])))
+            .leftJoin('colegio as co_orig', 'co_orig.id_colegio', 'st.id_colegio_origen')
+            .leftJoin('colegio as co_dest', 'co_dest.id_colegio', 'st.id_colegio_destino')
             .select([
             'm.id_matricula',
             'm.id_estudiante',
@@ -160,6 +169,17 @@ class MatriculaService {
             'u.documento as student_documento',
             'e.motivo_estado as student_motivo_estado',
             'n.nombre as nivel_nombre',
+            'st.id_solicitud as id_solicitud_traslado',
+            'st.id_colegio_origen',
+            'st.id_colegio_destino',
+            'co_orig.nombre as colegio_origen_nombre',
+            'co_dest.nombre as colegio_destino_nombre',
+            (0, kysely_2.sql) `CASE 
+          WHEN m.id_colegio = st.id_colegio_destino THEN 'ENTRANTE'
+          WHEN m.id_colegio = st.id_colegio_origen THEN 'SALIENTE'
+          WHEN m.es_traslado IS TRUE OR m.tipo = 'TRASLADO' THEN 'ENTRANTE'
+          ELSE NULL
+        END`.as('sentido_traslado'),
             (0, kysely_2.sql) `CONCAT(tg.nombre, ' - ', s.nombre)`.as('grado_nombre'),
             (0, kysely_2.sql) `(SELECT COUNT(*) FROM documento_matriculas WHERE id_matricula = m.id_matricula AND estado = 'PENDIENTE') > 0`.as('has_pending_docs')
         ])
@@ -167,7 +187,14 @@ class MatriculaService {
         if (yearId) {
             query = query.where('m.id_anio', '=', yearId);
         }
-        if (estado !== 'ALL') {
+        if (estado === 'TRASLADADA') {
+            query = query.where((eb) => eb.or([
+                eb('m.estado', '=', 'TRASLADADA'),
+                eb('m.tipo', '=', 'TRASLADO'),
+                eb('m.es_traslado', '=', true)
+            ]));
+        }
+        else if (estado !== 'ALL') {
             query = query.where('m.estado', '=', estado);
         }
         return await query.orderBy('m.id_matricula', 'desc').execute();
@@ -406,13 +433,32 @@ class MatriculaService {
                 expulsionInfo = expRes.rows[0];
             }
         }
+        // Consulta de trazabilidad de traslado de matrícula
+        let trasladoInfo = null;
+        if (mat.estado === 'TRASLADADA' || mat.es_traslado || mat.tipo === 'TRASLADO') {
+            const trasRes = await db_1.pool.query(`SELECT st.id_solicitud, st.estado as estado_traslado, st.tipo as tipo_traslado,
+                st.fecha_creacion, st.fecha_finalizacion, st.motivo,
+                st.id_colegio_origen, st.id_colegio_destino,
+                co.nombre as colegio_origen_nombre,
+                cd.nombre as colegio_destino_nombre
+         FROM solicitud_traslado st
+         LEFT JOIN colegio co ON co.id_colegio = st.id_colegio_origen
+         LEFT JOIN colegio cd ON cd.id_colegio = st.id_colegio_destino
+         WHERE st.id_matricula = $1 
+            OR (st.id_usuario = (SELECT id_usuario FROM estudiante WHERE id_estudiante = $2) AND st.tipo = 'TRASLADO_MATRICULA')
+         ORDER BY st.id_solicitud DESC LIMIT 1`, [idMatricula, mat.id_estudiante]);
+            if (trasRes.rows.length > 0) {
+                trasladoInfo = trasRes.rows[0];
+            }
+        }
         return {
             ...mat,
             availableSections: sections.rows || [],
             documentos: docsWithHistory || [],
             existing_parent_user: existingParentUser,
             renovacion,
-            expulsion: expulsionInfo
+            expulsion: expulsionInfo,
+            traslado_info: trasladoInfo
         };
     }
     static async assignGrade(idMatricula, idGrado) {
@@ -599,10 +645,13 @@ class MatriculaService {
                 const studentEmail = (data.student?.email && String(data.student.email).trim()) ? String(data.student.email).trim().toLowerCase() : null;
                 const studentUserRes = await client.query(`INSERT INTO usuario (email, password, nombre, apellido, id_colegio, id_tipodocumento, documento, telefono) VALUES ($1, $2, $3, $4, $5, $6, $7, NULL) RETURNING id_usuario`, [studentEmail, hashedStudentPass, data.student.nombre, data.student.apellido, id_colegio, data.student.id_tipodocumento, data.student.documento]);
                 const idUsuarioEstudiante = studentUserRes.rows[0].id_usuario;
-                // Rol estudiante
+                // Rol estudiante y vinculación institucional
                 const rolEstudiante = await client.query("SELECT id_rol FROM rol WHERE nombre = 'estudiante'");
                 if (rolEstudiante.rows.length > 0) {
-                    await client.query("INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2)", [idUsuarioEstudiante, rolEstudiante.rows[0].id_rol]);
+                    const idRolEst = rolEstudiante.rows[0].id_rol;
+                    await client.query("INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2)", [idUsuarioEstudiante, idRolEst]);
+                    await client.query(`INSERT INTO usuario_colegio (id_usuario, id_colegio, id_rol, estado, fecha_inicio)
+               VALUES ($1, $2, $3, 'ACTIVO', NOW()) ON CONFLICT DO NOTHING`, [idUsuarioEstudiante, id_colegio, idRolEst]);
                 }
                 // Registro Estudiante (sin documento ni id_tipodocumento, que quedan en usuario)
                 const studentRes = await client.query(`INSERT INTO estudiante (nombre, apellido, codigo, id_nivel, id_colegio, id_usuario, estado)
@@ -629,44 +678,37 @@ class MatriculaService {
                 await client.query(`UPDATE padre_familia SET nombre = $1, apellido = $2 WHERE id_padrefamilia = $3`, [data.parent.nombre, data.parent.apellido, idPadre]);
             }
             else {
-                // Validar unicidad global del documento de acudiente en la plataforma
-                await (0, documentValidation_1.validateDocumentUniqueness)(client, data.parent.documento, "acudiente");
-                // 2. Si no existe por documento, verificar si el correo pertenece a un usuario en el sistema
-                const existingUserByEmail = await client.query('SELECT id_usuario FROM usuario WHERE email = $1', [correo_padre]);
-                if (existingUserByEmail.rows.length > 0) {
-                    const matchedUserId = existingUserByEmail.rows[0].id_usuario;
-                    // Verificar si este usuario ya tiene una ficha de padre asociada con otro documento distinto
-                    const existingParentByUser = await client.query(`SELECT pf.id_padrefamilia, u.documento, pf.nombre, pf.apellido 
-             FROM padre_familia pf 
-             JOIN usuario u ON pf.id_usuario = u.id_usuario 
-             WHERE pf.id_usuario = $1`, [matchedUserId]);
-                    if (existingParentByUser.rows.length > 0) {
-                        const registeredDoc = existingParentByUser.rows[0].documento;
-                        const parentName = `${existingParentByUser.rows[0].nombre} ${existingParentByUser.rows[0].apellido}`;
-                        throw new Error(`El correo '${correo_padre}' ya se encuentra registrado a nombre del acudiente '${parentName}' con documento (${registeredDoc}). No se puede modificar el documento a (${data.parent.documento}). Por favor verifica el documento ingresado o utiliza un correo distinto.`);
-                    }
-                    idUsuarioPadre = matchedUserId;
-                    // Actualizar documento en el usuario existente
+                // 2. Verificar si el documento o correo ya pertenece a un usuario existente en la plataforma (ej: Docente en otra institución, Directivo, etc.)
+                const existingUserRes = await client.query(`SELECT id_usuario, documento, email, nombre, apellido FROM usuario WHERE (documento IS NOT NULL AND TRIM(documento) = TRIM($1)) OR LOWER(email) = LOWER($2) LIMIT 1`, [data.parent.documento, correo_padre]);
+                if (existingUserRes.rows.length > 0) {
+                    // El usuario ya existe en la plataforma (misma persona)
+                    idUsuarioPadre = existingUserRes.rows[0].id_usuario;
+                    // Actualizar tipo de documento, documento y teléfono si aplica
                     await client.query(`UPDATE usuario SET id_tipodocumento = $1, documento = $2, telefono = COALESCE($3, telefono) WHERE id_usuario = $4`, [data.parent.id_tipodocumento, data.parent.documento, data.parent.telefono || null, idUsuarioPadre]);
                 }
                 else {
-                    // 3. Crear nueva cuenta de usuario para el padre
+                    // 3. Si no existe en la plataforma, es un usuario totalmente nuevo: validar unicidad del documento
+                    await (0, documentValidation_1.validateDocumentUniqueness)(client, data.parent.documento, "acudiente");
+                    // Crear nueva cuenta de usuario para el padre
                     const hashedPadrePass = await bcrypt_1.default.hash('padre123', 10);
                     const parentUserRes = await client.query(`INSERT INTO usuario (email, password, nombre, apellido, id_colegio, id_tipodocumento, documento, telefono) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id_usuario`, [correo_padre, hashedPadrePass, data.parent.nombre, data.parent.apellido, id_colegio, data.parent.id_tipodocumento, data.parent.documento, data.parent.telefono || null]);
                     idUsuarioPadre = parentUserRes.rows[0].id_usuario;
                 }
-                // Crear la ficha de padre vinculada al usuario (sin documento ni id_tipodocumento, almacenados en usuario)
+                // Crear la ficha de padre vinculada al usuario
                 const parentRes = await client.query(`INSERT INTO padre_familia (nombre, apellido, id_colegio, id_usuario)
            VALUES ($1, $2, $3, $4) RETURNING id_padrefamilia`, [data.parent.nombre, data.parent.apellido, id_colegio, idUsuarioPadre]);
                 idPadre = parentRes.rows[0].id_padrefamilia;
             }
-            // Asegurar que el usuario tenga el ROL PADRE
+            // Asegurar que el usuario tenga el ROL PADRE y la vinculación usuario_colegio
             if (idUsuarioPadre) {
                 const rolPadre = await client.query("SELECT id_rol FROM rol WHERE nombre = 'padre'");
                 if (rolPadre.rows.length > 0) {
+                    const idRolPadre = rolPadre.rows[0].id_rol;
                     await client.query(`INSERT INTO usuario_rol (id_usuario, id_rol) 
              VALUES ($1, $2) 
-             ON CONFLICT (id_usuario, id_rol) DO NOTHING`, [idUsuarioPadre, rolPadre.rows[0].id_rol]);
+             ON CONFLICT (id_usuario, id_rol) DO NOTHING`, [idUsuarioPadre, idRolPadre]);
+                    await client.query(`INSERT INTO usuario_colegio (id_usuario, id_colegio, id_rol, estado, fecha_inicio)
+             VALUES ($1, $2, $3, 'ACTIVO', NOW()) ON CONFLICT DO NOTHING`, [idUsuarioPadre, id_colegio, idRolPadre]);
                 }
             }
             // 3. Vincular Estudiante y Padre (si no están vinculados)

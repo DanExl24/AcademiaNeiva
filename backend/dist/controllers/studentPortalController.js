@@ -1,21 +1,23 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getStudentDashboardStats = exports.getStudentIdByUserId = exports.getParentDashboardData = exports.getStudentObservations = exports.getStudentAttendance = exports.getParentChildren = exports.getStudentInfo = exports.getGradeDetails = exports.getStudentGrades = exports.getStudentAllPeriods = exports.getStudentClosedPeriods = exports.getStudentAcademicYears = void 0;
-const db_1 = require("../config/db");
+const kysely_1 = require("../config/kysely");
+const kysely_2 = require("kysely");
 /**
  * Gets closed academic years for a specific student's school
  */
 const getStudentAcademicYears = async (req, res) => {
     const { id_estudiante } = req.params;
     try {
-        const result = await db_1.pool.query(`
-      SELECT DISTINCT al.id_anio, al.calendario
-      FROM anio_lectivo al
-      JOIN estudiante e ON e.id_colegio = al.id_colegio
-      WHERE e.id_estudiante = $1
-      ORDER BY al.calendario DESC
-    `, [id_estudiante]);
-        res.json(result.rows);
+        const rows = await kysely_1.db
+            .selectFrom("anio_lectivo as al")
+            .innerJoin("estudiante as e", "e.id_colegio", "al.id_colegio")
+            .select(["al.id_anio", "al.calendario"])
+            .distinct()
+            .where("e.id_estudiante", "=", Number(id_estudiante))
+            .orderBy("al.calendario", "desc")
+            .execute();
+        res.json(rows);
     }
     catch (error) {
         console.error('Error fetching academic years:', error);
@@ -29,14 +31,16 @@ exports.getStudentAcademicYears = getStudentAcademicYears;
 const getStudentClosedPeriods = async (req, res) => {
     const { id_estudiante, id_anio } = req.params;
     try {
-        const result = await db_1.pool.query(`
-      SELECT p.id_periodo, p.nombre, p.trimestre, p.porcentaje
-      FROM periodo_academico p
-      JOIN estudiante e ON e.id_colegio = p.id_colegio
-      WHERE e.id_estudiante = $1 AND p.id_anio = $2 AND p.estado = 'CERRADO'
-      ORDER BY p.trimestre ASC
-    `, [id_estudiante, id_anio]);
-        res.json(result.rows);
+        const rows = await kysely_1.db
+            .selectFrom("periodo_academico as p")
+            .innerJoin("estudiante as e", "e.id_colegio", "p.id_colegio")
+            .select(["p.id_periodo", "p.nombre", "p.trimestre", "p.porcentaje"])
+            .where("e.id_estudiante", "=", Number(id_estudiante))
+            .where("p.id_anio", "=", Number(id_anio))
+            .where("p.estado", "=", "CERRADO")
+            .orderBy("p.trimestre", "asc")
+            .execute();
+        res.json(rows);
     }
     catch (error) {
         console.error('Error fetching closed periods:', error);
@@ -50,14 +54,16 @@ exports.getStudentClosedPeriods = getStudentClosedPeriods;
 const getStudentAllPeriods = async (req, res) => {
     const { id_estudiante, id_anio } = req.params;
     try {
-        const result = await db_1.pool.query(`
-      SELECT p.id_periodo, p.nombre, p.trimestre, p.porcentaje, p.estado
-      FROM periodo_academico p
-      JOIN estudiante e ON e.id_colegio = p.id_colegio
-      WHERE e.id_estudiante = $1 AND p.id_anio = $2 AND p.estado != 'PENDIENTE'
-      ORDER BY p.trimestre ASC
-    `, [id_estudiante, id_anio]);
-        res.json(result.rows);
+        const rows = await kysely_1.db
+            .selectFrom("periodo_academico as p")
+            .innerJoin("estudiante as e", "e.id_colegio", "p.id_colegio")
+            .select(["p.id_periodo", "p.nombre", "p.trimestre", "p.porcentaje", "p.estado"])
+            .where("e.id_estudiante", "=", Number(id_estudiante))
+            .where("p.id_anio", "=", Number(id_anio))
+            .where("p.estado", "!=", "PENDIENTE")
+            .orderBy("p.trimestre", "asc")
+            .execute();
+        res.json(rows);
     }
     catch (error) {
         console.error('Error fetching all periods:', error);
@@ -72,53 +78,69 @@ const getStudentGrades = async (req, res) => {
     const { id_estudiante, id_periodo } = req.params;
     try {
         // 1. Verify period exists and is not pending
-        const periodCheck = await db_1.pool.query('SELECT estado, id_colegio FROM periodo_academico WHERE id_periodo = $1', [id_periodo]);
-        if (!periodCheck.rows.length || periodCheck.rows[0].estado === 'PENDIENTE') {
+        const period = await kysely_1.db
+            .selectFrom("periodo_academico")
+            .select(["estado", "id_colegio", "id_anio"])
+            .where("id_periodo", "=", Number(id_periodo))
+            .executeTakeFirst();
+        if (!period || period.estado === 'PENDIENTE') {
             return res.status(400).json({ error: 'El periodo seleccionado no está disponible' });
         }
-        const id_colegio = periodCheck.rows[0].id_colegio;
+        const id_colegio = period.id_colegio;
         // 2. Fetch grades using logic similar to boletin controller
-        const result = await db_1.pool.query(`
-      SELECT DISTINCT ON (m.id_materia)
-        m.id_materia,
-        m.nombre as materia,
-        d.nombre || ' ' || d.apellido as docente,
-        COALESCE(ra.promedio, calc.promedio_calculado) as calificacion,
-        ev.nivel as desempeno
-      FROM detalle_grados dg
-      JOIN materias m ON m.id_materia = dg.id_materia
-      JOIN docente d ON d.id_docente = dg.id_docente
-      JOIN matricula mat ON mat.id_grupo = dg.id_grupo
-      LEFT JOIN (
-        SELECT dg_ra.id_materia, ra_inner.promedio
-        FROM resultado_academico ra_inner
-        JOIN detalle_grados dg_ra ON dg_ra.id_detallegrado = ra_inner.id_detallegrado
-        WHERE ra_inner.id_estudiante = $1 AND ra_inner.id_periodo = $2
-        ORDER BY ra_inner.id_resultado DESC
-      ) ra ON ra.id_materia = m.id_materia
-      LEFT JOIN (
-        SELECT dg_am.id_materia, ROUND(AVG(na.nota)::numeric, 2) as promedio_calculado
-        FROM notas_actividad na
-        JOIN actividad_materia am ON am.id_actividadmateria = na.id_actividadmateria
-        JOIN detalle_grados dg_am ON dg_am.id_detallegrado = am.id_detallegrado
-        WHERE am.id_periodo = $2 AND na.id_estudiante = $1
-        GROUP BY dg_am.id_materia
-      ) calc ON calc.id_materia = m.id_materia
-      LEFT JOIN escala_valoracion ev 
-             ON ev.id_colegio = $3
-            AND COALESCE(ra.promedio, calc.promedio_calculado) >= ev.valor_minimo 
-            AND COALESCE(ra.promedio, calc.promedio_calculado) <= ev.valor_maximo
-      WHERE mat.id_estudiante = $1 AND mat.estado = 'ACTIVA'
-      ORDER BY m.id_materia, dg.id_detallegrado DESC
-    `, [id_estudiante, id_periodo, id_colegio]);
+        const raSubquery = kysely_1.db
+            .selectFrom("resultado_academico as ra_inner")
+            .innerJoin("detalle_grados as dg_ra", "dg_ra.id_detallegrado", "ra_inner.id_detallegrado")
+            .select(["dg_ra.id_materia", "ra_inner.promedio"])
+            .where("ra_inner.id_estudiante", "=", Number(id_estudiante))
+            .where("ra_inner.id_periodo", "=", Number(id_periodo))
+            .orderBy("ra_inner.id_resultado", "desc")
+            .as("ra");
+        const calcSubquery = kysely_1.db
+            .selectFrom("notas_actividad as na")
+            .innerJoin("actividad_materia as am", "am.id_actividadmateria", "na.id_actividadmateria")
+            .innerJoin("detalle_grados as dg_am", "dg_am.id_detallegrado", "am.id_detallegrado")
+            .select([
+            "dg_am.id_materia",
+            (0, kysely_2.sql) `ROUND(AVG(na.nota)::numeric, 2)`.as("promedio_calculado")
+        ])
+            .where("am.id_periodo", "=", Number(id_periodo))
+            .where("na.id_estudiante", "=", Number(id_estudiante))
+            .groupBy("dg_am.id_materia")
+            .as("calc");
+        const gradeRows = await kysely_1.db
+            .selectFrom("detalle_grados as dg")
+            .innerJoin("materias as m", "m.id_materia", "dg.id_materia")
+            .innerJoin("docente as d", "d.id_docente", "dg.id_docente")
+            .innerJoin("matricula as mat", "mat.id_grupo", "dg.id_grupo")
+            .leftJoin(raSubquery, "ra.id_materia", "m.id_materia")
+            .leftJoin(calcSubquery, "calc.id_materia", "m.id_materia")
+            .leftJoin("escala_valoracion as ev", (join) => join
+            .on("ev.id_colegio", "=", id_colegio)
+            .on((0, kysely_2.sql) `COALESCE(ra.promedio, calc.promedio_calculado)`, ">=", (0, kysely_2.sql) `ev.valor_minimo`)
+            .on((0, kysely_2.sql) `COALESCE(ra.promedio, calc.promedio_calculado)`, "<=", (0, kysely_2.sql) `ev.valor_maximo`))
+            .distinctOn("m.id_materia")
+            .select([
+            "m.id_materia",
+            "m.nombre as materia",
+            (0, kysely_2.sql) `d.nombre || ' ' || d.apellido`.as("docente"),
+            (0, kysely_2.sql) `COALESCE(ra.promedio, calc.promedio_calculado)`.as("calificacion"),
+            "ev.nivel as desempeno"
+        ])
+            .where("mat.id_estudiante", "=", Number(id_estudiante))
+            .where("mat.id_anio", "=", period.id_anio)
+            .where("mat.estado", "in", ["ACTIVA", "APROBADA"])
+            .orderBy("m.id_materia")
+            .orderBy("dg.id_detallegrado", "desc")
+            .execute();
         // Ordenar alfabéticamente por materia tras tomar la asignación docente más reciente
-        const sortedRows = result.rows.sort((a, b) => a.materia.localeCompare(b.materia));
+        const sortedRows = gradeRows.sort((a, b) => a.materia.localeCompare(b.materia));
         // Calculate general average ONLY for subjects with registered grades
         const grades = sortedRows.map(row => {
             const hasGrade = row.calificacion !== null && row.calificacion !== undefined;
             return {
                 ...row,
-                calificacion: hasGrade ? parseFloat(row.calificacion) : null,
+                calificacion: hasGrade ? parseFloat(String(row.calificacion)) : null,
                 desempeno: hasGrade ? (row.desempeno || 'SIN DEFINIR') : 'N/A'
             };
         });
@@ -130,11 +152,14 @@ const getStudentGrades = async (req, res) => {
         }
         let nivel_desempeno = 'N/A';
         if (promedio_general !== null) {
-            const performanceRes = await db_1.pool.query(`
-        SELECT nivel FROM escala_valoracion 
-        WHERE id_colegio = $1 AND $2 >= valor_minimo AND $2 <= valor_maximo
-      `, [id_colegio, promedio_general]);
-            nivel_desempeno = performanceRes.rows[0]?.nivel || 'N/A';
+            const perf = await kysely_1.db
+                .selectFrom("escala_valoracion")
+                .select("nivel")
+                .where("id_colegio", "=", id_colegio)
+                .where((0, kysely_2.sql) `${promedio_general}`, ">=", (0, kysely_2.sql) `valor_minimo`)
+                .where((0, kysely_2.sql) `${promedio_general}`, "<=", (0, kysely_2.sql) `valor_maximo`)
+                .executeTakeFirst();
+            nivel_desempeno = perf?.nivel || 'N/A';
         }
         res.json({
             grades,
@@ -164,62 +189,79 @@ const getGradeDetails = async (req, res) => {
             return res.status(400).json({ error: 'Parámetros numéricos inválidos' });
         }
         // 1. Obtener grupo del estudiante
-        const matRes = await db_1.pool.query(`SELECT id_grupo FROM matricula WHERE id_estudiante = $1 AND estado = 'ACTIVA' LIMIT 1`, [studentIdInt]);
-        if (matRes.rows.length === 0) {
+        const mat = await kysely_1.db
+            .selectFrom("matricula")
+            .select("id_grupo")
+            .where("id_estudiante", "=", studentIdInt)
+            .where("estado", "=", "ACTIVA")
+            .limit(1)
+            .executeTakeFirst();
+        if (!mat || !mat.id_grupo) {
             return res.json([]);
         }
-        const id_grupo = matRes.rows[0].id_grupo;
+        const id_grupo = mat.id_grupo;
         // 2. Obtener el docente ACTUAL asignado (para el header de la materia)
-        const docRes = await db_1.pool.query(`SELECT d.nombre || ' ' || d.apellido as docente, m.nombre as materia
-       FROM detalle_grados dg
-       JOIN docente d ON d.id_docente = dg.id_docente
-       JOIN materias m ON m.id_materia = dg.id_materia
-       WHERE dg.id_grupo = $1 AND dg.id_materia = $2
-       ORDER BY dg.id_detallegrado DESC
-       LIMIT 1`, [id_grupo, materiaIdInt]);
-        const currentTeacher = docRes.rows[0]?.docente || 'Sin docente asignado';
-        const materiaNombre = docRes.rows[0]?.materia || '';
+        const doc = await kysely_1.db
+            .selectFrom("detalle_grados as dg")
+            .innerJoin("docente as d", "d.id_docente", "dg.id_docente")
+            .innerJoin("materias as m", "m.id_materia", "dg.id_materia")
+            .select([
+            (0, kysely_2.sql) `d.nombre || ' ' || d.apellido`.as("docente"),
+            "m.nombre as materia"
+        ])
+            .where("dg.id_grupo", "=", id_grupo)
+            .where("dg.id_materia", "=", materiaIdInt)
+            .orderBy("dg.id_detallegrado", "desc")
+            .limit(1)
+            .executeTakeFirst();
+        const currentTeacher = doc?.docente || 'Sin docente asignado';
+        const materiaNombre = doc?.materia || '';
         // 3. Obtener actividades con el nombre del docente CREADOR de cada una
-        const result = await db_1.pool.query(`
-      SELECT DISTINCT ON (am.id_actividadmateria)
-        am.id_actividadmateria,
-        am.nombre as actividad,
-        am.porcentaje,
-        na.nota,
-        $4::text as materia,
-        $5::text as docente,
-        CASE
+        const activityRows = await kysely_1.db
+            .selectFrom("actividad_materia as am")
+            .innerJoin("detalle_grados as dg", "dg.id_detallegrado", "am.id_detallegrado")
+            .leftJoin("notas_actividad as na", (join) => join
+            .onRef("na.id_actividadmateria", "=", "am.id_actividadmateria")
+            .on("na.id_estudiante", "=", studentIdInt))
+            .distinctOn("am.id_actividadmateria")
+            .select([
+            "am.id_actividadmateria",
+            "am.nombre as actividad",
+            "am.porcentaje",
+            "na.nota",
+            (0, kysely_2.sql) `${materiaNombre}`.as("materia"),
+            (0, kysely_2.sql) `${currentTeacher}`.as("docente"),
+            (0, kysely_2.sql) `CASE
           WHEN am.id_docente_creador IS NOT NULL THEN
             (SELECT d2.nombre || ' ' || d2.apellido FROM docente d2 WHERE d2.id_docente = am.id_docente_creador)
-          ELSE $5::text
-        END as docente_creador
-      FROM actividad_materia am
-      JOIN detalle_grados dg ON dg.id_detallegrado = am.id_detallegrado
-      LEFT JOIN notas_actividad na ON na.id_actividadmateria = am.id_actividadmateria AND na.id_estudiante = $1
-      WHERE dg.id_grupo = $2 
-        AND dg.id_materia = $3 
-        AND am.id_periodo = $6
-      ORDER BY am.id_actividadmateria ASC
-    `, [studentIdInt, id_grupo, materiaIdInt, materiaNombre, currentTeacher, periodIdInt]);
-        const activityIds = result.rows.map((r) => r.id_actividadmateria);
+          ELSE ${currentTeacher}
+        END`.as("docente_creador")
+        ])
+            .where("dg.id_grupo", "=", id_grupo)
+            .where("dg.id_materia", "=", materiaIdInt)
+            .where("am.id_periodo", "=", periodIdInt)
+            .orderBy("am.id_actividadmateria", "asc")
+            .execute();
+        const activityIds = activityRows.map(r => r.id_actividadmateria);
         // 4. Obtener criterios con su nota individual por estudiante
         let criteriosByActivity = {};
         if (activityIds.length > 0) {
-            const critRes = await db_1.pool.query(`
-        SELECT 
-          ce.id_criterio,
-          ce.id_actividadmateria,
-          ce.descripcion,
-          ce.porcentaje,
-          nc.nota as nota_criterio
-        FROM criterio_evaluacion ce
-        LEFT JOIN nota_criterio nc 
-          ON nc.id_criterio = ce.id_criterio 
-         AND nc.id_estudiante = $1
-        WHERE ce.id_actividadmateria = ANY($2::int[])
-        ORDER BY ce.id_criterio ASC
-      `, [studentIdInt, activityIds]);
-            for (const row of critRes.rows) {
+            const critRows = await kysely_1.db
+                .selectFrom("criterio_evaluacion as ce")
+                .leftJoin("nota_criterio as nc", (join) => join
+                .onRef("nc.id_criterio", "=", "ce.id_criterio")
+                .on("nc.id_estudiante", "=", studentIdInt))
+                .select([
+                "ce.id_criterio",
+                "ce.id_actividadmateria",
+                "ce.descripcion",
+                "ce.porcentaje",
+                "nc.nota as nota_criterio"
+            ])
+                .where("ce.id_actividadmateria", "in", activityIds)
+                .orderBy("ce.id_criterio", "asc")
+                .execute();
+            for (const row of critRows) {
                 if (!criteriosByActivity[row.id_actividadmateria]) {
                     criteriosByActivity[row.id_actividadmateria] = [];
                 }
@@ -227,16 +269,16 @@ const getGradeDetails = async (req, res) => {
             }
         }
         // 5. Combinar actividades con sus criterios y calcular nota final ponderada si aplica
-        const activities = result.rows.map((act) => {
+        const activities = activityRows.map((act) => {
             const criterios = criteriosByActivity[act.id_actividadmateria] || [];
             // Si tiene criterios, la nota es el promedio ponderado de las notas de criterio
-            let notaFinal = act.nota !== null && act.nota !== undefined ? parseFloat(act.nota) : null;
+            let notaFinal = act.nota !== null && act.nota !== undefined ? parseFloat(String(act.nota)) : null;
             if (criterios.length > 0) {
                 const allGraded = criterios.every((c) => c.nota_criterio !== null && c.nota_criterio !== undefined);
                 if (allGraded) {
-                    const totalPeso = criterios.reduce((sum, c) => sum + parseFloat(c.porcentaje), 0);
+                    const totalPeso = criterios.reduce((sum, c) => sum + parseFloat(String(c.porcentaje)), 0);
                     const ponderado = criterios.reduce((sum, c) => {
-                        return sum + (parseFloat(c.nota_criterio) * parseFloat(c.porcentaje));
+                        return sum + (parseFloat(String(c.nota_criterio)) * parseFloat(String(c.porcentaje)));
                     }, 0);
                     notaFinal = totalPeso > 0 ? parseFloat((ponderado / totalPeso).toFixed(2)) : null;
                 }
@@ -269,49 +311,81 @@ const getStudentInfo = async (req, res) => {
     const { id_estudiante } = req.params;
     try {
         // Auto-expire sanctions
-        await db_1.pool.query(`
-      UPDATE public.sancion SET estado = 'VENCIDA' WHERE estado = 'ACTIVA' AND fecha_fin < CURRENT_DATE
-    `);
-        await db_1.pool.query(`
-      UPDATE public.estudiante 
-      SET estado = 'ACTIVO' 
-      WHERE estado = 'SANCIONADO' 
-        AND id_estudiante NOT IN (SELECT id_estudiante FROM public.sancion WHERE estado = 'ACTIVA')
-    `);
-        const result = await db_1.pool.query(`
-      SELECT 
-        e.id_estudiante, 
-        e.nombre, 
-        e.apellido, 
-        e.codigo, 
-        e.estado,
-        tg.nombre as grado, 
-        s.nombre as grupo,
-        sanc.fecha_fin as sancion_hasta,
-        sanc.motivo as sancion_motivo,
-        sanc.tipo_nombre as sancion_tipo
-      FROM estudiante e
-      LEFT JOIN matricula m ON m.id_estudiante = e.id_estudiante AND m.estado = 'ACTIVA'
-      LEFT JOIN grupos gr ON gr.id_grupo = m.id_grupo
-      LEFT JOIN secciones s ON s.id_seccion = gr.id_seccion
-      LEFT JOIN tipo_grado tg ON tg.id_tipo_grado = gr.id_tipo_grado
-      LEFT JOIN LATERAL (
-        SELECT sa.fecha_fin, sa.motivo, ts.nombre as tipo_nombre
-        FROM public.sancion sa
-        JOIN public.tipo_sancion ts ON sa.id_tipo_sancion = ts.id_tipo_sancion
-        WHERE sa.id_estudiante = e.id_estudiante
-          AND sa.estado = 'ACTIVA'
-          AND CURRENT_DATE BETWEEN sa.fecha_inicio AND sa.fecha_fin
-        ORDER BY sa.fecha_fin DESC
-        LIMIT 1
-      ) sanc ON TRUE
-      WHERE e.id_estudiante = $1
-      LIMIT 1
-    `, [id_estudiante]);
-        if (!result.rows.length) {
+        await kysely_1.db
+            .updateTable("sancion")
+            .set({ estado: 'VENCIDA' })
+            .where("estado", "=", 'ACTIVA')
+            .where("fecha_fin", "<", (0, kysely_2.sql) `CURRENT_DATE`)
+            .execute();
+        await kysely_1.db
+            .updateTable("estudiante")
+            .set({ estado: 'ACTIVO' })
+            .where("estado", "=", 'SANCIONADO')
+            .where((eb) => eb("id_estudiante", "not in", eb.selectFrom("sancion").select("id_estudiante").where("estado", "=", 'ACTIVA')))
+            .execute();
+        const activeMatriculaSubquery = kysely_1.db
+            .selectFrom("matricula")
+            .select(["id_estudiante", "id_grupo", "id_anio", "estado"])
+            .distinctOn("id_estudiante")
+            .where("estado", "in", ["ACTIVA", "APROBADA"])
+            .orderBy("id_estudiante")
+            .orderBy("id_anio", "desc")
+            .orderBy("id_matricula", "desc")
+            .as("m");
+        const sancionSubquery = kysely_1.db
+            .selectFrom("sancion as sa")
+            .innerJoin("tipo_sancion as ts", "ts.id_tipo_sancion", "sa.id_tipo_sancion")
+            .select([
+            "sa.fecha_fin as sancion_hasta",
+            "sa.motivo as sancion_motivo",
+            "ts.nombre as sancion_tipo",
+            "sa.id_estudiante"
+        ])
+            .where("sa.id_estudiante", "=", Number(id_estudiante))
+            .where("sa.estado", "=", "ACTIVA")
+            .where((0, kysely_2.sql) `CURRENT_DATE`, ">=", (0, kysely_2.sql) `sa.fecha_inicio`)
+            .where((0, kysely_2.sql) `CURRENT_DATE`, "<=", (0, kysely_2.sql) `sa.fecha_fin`)
+            .orderBy("sa.fecha_fin", "desc")
+            .limit(1)
+            .as("sanc");
+        const row = await kysely_1.db
+            .selectFrom("estudiante as e")
+            .leftJoin(activeMatriculaSubquery, "m.id_estudiante", "e.id_estudiante")
+            .leftJoin("grupos as gr", "gr.id_grupo", "m.id_grupo")
+            .leftJoin("secciones as s", "s.id_seccion", "gr.id_seccion")
+            .leftJoin("tipo_grado as tg", "tg.id_tipo_grado", "gr.id_tipo_grado")
+            .leftJoin("jornada as j", "j.id_jornada", "gr.id_jornada")
+            .leftJoin("nivel_escolar as n", (join) => join.on((eb) => eb.or([
+            eb("n.id_nivel", "=", eb.ref("gr.id_nivel")),
+            eb("n.id_nivel", "=", eb.ref("e.id_nivel"))
+        ])))
+            .leftJoin(sancionSubquery, "sanc.id_estudiante", "e.id_estudiante")
+            .select([
+            "e.id_estudiante",
+            "e.nombre",
+            "e.apellido",
+            "e.codigo",
+            "e.estado",
+            "tg.nombre as grado",
+            "s.nombre as seccion",
+            (0, kysely_2.sql) `CASE 
+          WHEN tg.nombre IS NOT NULL AND s.nombre IS NOT NULL THEN tg.nombre || '-' || s.nombre
+          WHEN tg.nombre IS NOT NULL THEN tg.nombre
+          WHEN s.nombre IS NOT NULL THEN s.nombre
+          ELSE 'Sin Grupo'
+        END`.as("grupo"),
+            "j.nombre as jornada",
+            "n.nombre as nivel",
+            "sanc.sancion_hasta",
+            "sanc.sancion_motivo",
+            "sanc.sancion_tipo"
+        ])
+            .where("e.id_estudiante", "=", Number(id_estudiante))
+            .executeTakeFirst();
+        if (!row) {
             return res.status(404).json({ error: 'Estudiante no encontrado' });
         }
-        res.json(result.rows[0]);
+        res.json(row);
     }
     catch (error) {
         console.error('Error fetching student info:', error);
@@ -325,21 +399,51 @@ exports.getStudentInfo = getStudentInfo;
 const getParentChildren = async (req, res) => {
     const { id_usuario } = req.params;
     try {
-        const result = await db_1.pool.query(`
-      SELECT e.id_estudiante, e.nombre, e.apellido, e.codigo,
-             tg.nombre as grado, s.nombre as grupo, j.nombre as jornada, dpf.id_colegio, col.nombre as colegio_nombre
-      FROM padre_familia pf
-      JOIN detalle_padrefamilia dpf ON dpf.id_padrefamilia = pf.id_padrefamilia
-      JOIN estudiante e ON e.id_estudiante = dpf.id_estudiante
-      LEFT JOIN colegio col ON col.id_colegio = dpf.id_colegio
-      LEFT JOIN matricula m ON m.id_estudiante = e.id_estudiante AND m.estado = 'ACTIVA'
-      LEFT JOIN grupos gr ON gr.id_grupo = m.id_grupo
-      LEFT JOIN secciones s ON s.id_seccion = gr.id_seccion
-      LEFT JOIN tipo_grado tg ON tg.id_tipo_grado = gr.id_tipo_grado
-      LEFT JOIN jornada j ON j.id_jornada = gr.id_jornada
-      WHERE pf.id_usuario = $1
-    `, [id_usuario]);
-        res.json(result.rows);
+        const activeMatriculaSubquery = kysely_1.db
+            .selectFrom("matricula")
+            .select(["id_estudiante", "id_grupo", "id_anio", "estado"])
+            .distinctOn("id_estudiante")
+            .where("estado", "in", ["ACTIVA", "APROBADA"])
+            .orderBy("id_estudiante")
+            .orderBy("id_anio", "desc")
+            .orderBy("id_matricula", "desc")
+            .as("m");
+        const rows = await kysely_1.db
+            .selectFrom("padre_familia as pf")
+            .innerJoin("detalle_padrefamilia as dpf", "dpf.id_padrefamilia", "pf.id_padrefamilia")
+            .innerJoin("estudiante as e", "e.id_estudiante", "dpf.id_estudiante")
+            .leftJoin("colegio as col", "col.id_colegio", "dpf.id_colegio")
+            .leftJoin(activeMatriculaSubquery, "m.id_estudiante", "e.id_estudiante")
+            .leftJoin("grupos as gr", "gr.id_grupo", "m.id_grupo")
+            .leftJoin("secciones as s", "s.id_seccion", "gr.id_seccion")
+            .leftJoin("tipo_grado as tg", "tg.id_tipo_grado", "gr.id_tipo_grado")
+            .leftJoin("jornada as j", "j.id_jornada", "gr.id_jornada")
+            .leftJoin("nivel_escolar as n", (join) => join.on((eb) => eb.or([
+            eb("n.id_nivel", "=", eb.ref("gr.id_nivel")),
+            eb("n.id_nivel", "=", eb.ref("e.id_nivel"))
+        ])))
+            .select([
+            "e.id_estudiante",
+            "e.nombre",
+            "e.apellido",
+            "e.codigo",
+            "tg.nombre as grado",
+            "s.nombre as seccion",
+            (0, kysely_2.sql) `CASE 
+          WHEN tg.nombre IS NOT NULL AND s.nombre IS NOT NULL THEN tg.nombre || '-' || s.nombre
+          WHEN tg.nombre IS NOT NULL THEN tg.nombre
+          WHEN s.nombre IS NOT NULL THEN s.nombre
+          ELSE 'Sin Grupo'
+        END`.as("grupo"),
+            "j.nombre as jornada",
+            "n.nombre as nivel",
+            "dpf.id_colegio",
+            "col.nombre as colegio_nombre",
+            "m.estado as estado_matricula"
+        ])
+            .where("pf.id_usuario", "=", Number(id_usuario))
+            .execute();
+        res.json(rows);
     }
     catch (error) {
         console.error('Error fetching parent children:', error);
@@ -354,85 +458,83 @@ const getStudentAttendance = async (req, res) => {
     const { id_estudiante, id_periodo } = req.params;
     const { id_materia, estado, fecha } = req.query; // Optional filters
     try {
-        const params = [id_estudiante];
-        let paramIndex = 2;
-        let filterClauses = '';
-        // Standard Period filter (used unless a specific date is provided)
+        const studentIdInt = Number(id_estudiante);
+        const periodIdInt = Number(id_periodo);
+        let queryRecords = kysely_1.db
+            .selectFrom("registro_asistencia as ra")
+            .innerJoin("detalle_grados as dg", "dg.id_detallegrado", "ra.id_detallegrado")
+            .innerJoin("materias as m", "m.id_materia", "dg.id_materia")
+            .innerJoin("docente as doc", "doc.id_docente", "dg.id_docente")
+            .where("ra.id_estudiante", "=", studentIdInt);
+        let queryStats = kysely_1.db
+            .selectFrom("registro_asistencia as ra")
+            .innerJoin("detalle_grados as dg", "dg.id_detallegrado", "ra.id_detallegrado")
+            .where("ra.id_estudiante", "=", studentIdInt);
         if (fecha) {
-            filterClauses += ` AND ra.fecha = $${paramIndex}`;
-            params.push(fecha);
-            paramIndex++;
+            queryRecords = queryRecords.where("ra.fecha", "=", fecha);
+            queryStats = queryStats.where("ra.fecha", "=", fecha);
         }
         else {
-            filterClauses += `
-        AND ra.fecha >= (
-          SELECT (al.calendario || '-' || LPAD(pa.mes_inicio::text, 2, '0') || '-' || LPAD(pa.dia_inicio::text, 2, '0'))::date
-          FROM periodo_academico pa
-          JOIN anio_lectivo al ON al.id_anio = pa.id_anio
-          WHERE pa.id_periodo = $${paramIndex}
-        )
-        AND ra.fecha <= (
-          SELECT (al.calendario || '-' || LPAD(pa.mes_fin::text, 2, '0') || '-' || LPAD(pa.dia_fin::text, 2, '0'))::date
-          FROM periodo_academico pa
-          JOIN anio_lectivo al ON al.id_anio = pa.id_anio
-          WHERE pa.id_periodo = $${paramIndex}
-        )
-      `;
-            params.push(id_periodo);
-            paramIndex++;
+            const dateStartSubquery = kysely_1.db
+                .selectFrom("periodo_academico as pa")
+                .innerJoin("anio_lectivo as al", "al.id_anio", "pa.id_anio")
+                .select([
+                (0, kysely_2.sql) `(al.calendario || '-' || LPAD(pa.mes_inicio::text, 2, '0') || '-' || LPAD(pa.dia_inicio::text, 2, '0'))::date`.as("fecha_inicio")
+            ])
+                .where("pa.id_periodo", "=", periodIdInt);
+            const dateEndSubquery = kysely_1.db
+                .selectFrom("periodo_academico as pa")
+                .innerJoin("anio_lectivo as al", "al.id_anio", "pa.id_anio")
+                .select([
+                (0, kysely_2.sql) `(al.calendario || '-' || LPAD(pa.mes_fin::text, 2, '0') || '-' || LPAD(pa.dia_fin::text, 2, '0'))::date`.as("fecha_fin")
+            ])
+                .where("pa.id_periodo", "=", periodIdInt);
+            queryRecords = queryRecords
+                .where("ra.fecha", ">=", dateStartSubquery)
+                .where("ra.fecha", "<=", dateEndSubquery);
+            queryStats = queryStats
+                .where("ra.fecha", ">=", dateStartSubquery)
+                .where("ra.fecha", "<=", dateEndSubquery);
         }
-        // Optional dynamic filters
         if (id_materia && id_materia !== 'all') {
-            filterClauses += ` AND dg.id_materia = $${paramIndex}`;
-            params.push(id_materia);
-            paramIndex++;
+            queryRecords = queryRecords.where("dg.id_materia", "=", Number(id_materia));
+            queryStats = queryStats.where("dg.id_materia", "=", Number(id_materia));
         }
         if (estado && estado !== 'all') {
-            filterClauses += ` AND ra.estado = $${paramIndex}`;
-            params.push(estado);
-            paramIndex++;
+            queryRecords = queryRecords.where("ra.estado", "=", estado);
+            queryStats = queryStats.where("ra.estado", "=", estado);
         }
-        // 1. Fetch filtered records
-        const recordsQuery = `
-      SELECT 
-        ra.fecha,
-        ra.estado,
-        ra.justificacion,
-        TO_CHAR(ra.hora_llegada, 'HH24:MI') as hora_llegada,
-        m.nombre as materia,
-        doc.nombre || ' ' || doc.apellido as docente
-      FROM registro_asistencia ra
-      JOIN detalle_grados dg ON dg.id_detallegrado = ra.id_detallegrado
-      JOIN materias m ON m.id_materia = dg.id_materia
-      JOIN docente doc ON doc.id_docente = dg.id_docente
-      WHERE ra.id_estudiante = $1 ${filterClauses}
-      ORDER BY ra.fecha DESC
-    `;
-        const recordsRes = await db_1.pool.query(recordsQuery, params);
-        // 2. Calculate filtered statistics
-        const statsQuery = `
-      SELECT 
-        estado,
-        COUNT(*) as count
-      FROM registro_asistencia ra
-      JOIN detalle_grados dg ON dg.id_detallegrado = ra.id_detallegrado
-      WHERE ra.id_estudiante = $1 ${filterClauses}
-      GROUP BY estado
-    `;
-        const statsRes = await db_1.pool.query(statsQuery, params);
+        const records = await queryRecords
+            .select([
+            "ra.fecha",
+            "ra.estado",
+            "ra.justificacion",
+            (0, kysely_2.sql) `TO_CHAR(ra.hora_llegada, 'HH24:MI')`.as("hora_llegada"),
+            "m.nombre as materia",
+            (0, kysely_2.sql) `doc.nombre || ' ' || doc.apellido`.as("docente")
+        ])
+            .orderBy("ra.fecha", "desc")
+            .execute();
+        const statsRows = await queryStats
+            .select([
+            "ra.estado",
+            (0, kysely_2.sql) `COUNT(*)::int`.as("count")
+        ])
+            .groupBy("ra.estado")
+            .execute();
         const stats = {
             PRESENTE: 0,
             AUSENTE: 0,
             TARDE: 0,
             JUSTIFICADA: 0
         };
-        statsRes.rows.forEach(row => {
+        statsRows.forEach(row => {
             if (stats.hasOwnProperty(row.estado)) {
-                stats[row.estado] = parseInt(row.count);
+                stats[row.estado] = Number(row.count);
             }
         });
         res.json({
-            records: recordsRes.rows,
+            records,
             stats
         });
     }
@@ -449,34 +551,34 @@ const getStudentObservations = async (req, res) => {
     const { id_estudiante, id_periodo } = req.params;
     const { tipo } = req.query;
     try {
-        let query = `
-      SELECT 
-        oe.id_observacion,
-        oe.fortalezas,
-        oe.debilidades,
-        oe.recomendaciones,
-        oe.fecha,
-        oe.tipo,
-        m.nombre as materia,
-        d.nombre || ' ' || d.apellido as docente
-      FROM observacion_estudiante oe
-      JOIN detalle_grados dg ON dg.id_detallegrado = oe.id_detallegrado
-      JOIN materias m ON m.id_materia = dg.id_materia
-      JOIN docente d ON d.id_docente = dg.id_docente
-      WHERE oe.id_estudiante = $1 AND oe.id_periodo = $2
-    `;
-        const params = [id_estudiante, id_periodo];
+        let query = kysely_1.db
+            .selectFrom("observacion_estudiante as oe")
+            .innerJoin("detalle_grados as dg", "dg.id_detallegrado", "oe.id_detallegrado")
+            .innerJoin("materias as m", "m.id_materia", "dg.id_materia")
+            .innerJoin("docente as d", "d.id_docente", "dg.id_docente")
+            .where("oe.id_estudiante", "=", Number(id_estudiante))
+            .where("oe.id_periodo", "=", Number(id_periodo));
         if (tipo && tipo !== 'all') {
             let targetTipo = tipo;
             if (tipo === 'CONVIVENCIAL') {
                 targetTipo = 'CONVIVENCIA';
             }
-            query += ` AND oe.tipo = $3`;
-            params.push(targetTipo);
+            query = query.where("oe.tipo", "=", targetTipo);
         }
-        query += ` ORDER BY m.nombre ASC`;
-        const result = await db_1.pool.query(query, params);
-        const mappedRows = result.rows.map(row => ({
+        const rows = await query
+            .select([
+            "oe.id_observacion",
+            "oe.fortalezas",
+            "oe.debilidades",
+            "oe.recomendaciones",
+            "oe.fecha",
+            "oe.tipo",
+            "m.nombre as materia",
+            (0, kysely_2.sql) `d.nombre || ' ' || d.apellido`.as("docente")
+        ])
+            .orderBy("m.nombre", "asc")
+            .execute();
+        const mappedRows = rows.map(row => ({
             ...row,
             tipo: row.tipo === 'CONVIVENCIA' ? 'CONVIVENCIAL' : row.tipo
         }));
@@ -499,31 +601,55 @@ const getParentDashboardData = async (req, res) => {
     try {
         const targetYearId = req.query.yearId ? Number(req.query.yearId) : null;
         // 1. Get children basic info and enrollment for selected year
-        const childrenQuery = `
-      SELECT 
-        e.id_estudiante, 
-        e.nombre, 
-        e.apellido, 
-        e.codigo,
-        tg.nombre as grado, 
-        s.nombre as grupo,
-        j.nombre as jornada,
-        e.id_colegio,
-        m.id_grupo,
-        m.id_anio
-      FROM padre_familia pf
-      JOIN detalle_padrefamilia dpf ON dpf.id_padrefamilia = pf.id_padrefamilia
-      JOIN estudiante e ON e.id_estudiante = dpf.id_estudiante
-      LEFT JOIN matricula m ON m.id_estudiante = e.id_estudiante ${targetYearId ? 'AND m.id_anio = $2' : ''}
-      LEFT JOIN grupos gr ON gr.id_grupo = m.id_grupo
-      LEFT JOIN secciones s ON s.id_seccion = gr.id_seccion
-      LEFT JOIN tipo_grado tg ON tg.id_tipo_grado = gr.id_tipo_grado
-      LEFT JOIN jornada j ON j.id_jornada = gr.id_jornada
-      WHERE pf.id_usuario = $1
-    `;
-        const childrenParams = targetYearId ? [userId, targetYearId] : [userId];
-        const childrenRes = await db_1.pool.query(childrenQuery, childrenParams);
-        const children = childrenRes.rows;
+        let activeMatriculaQuery = kysely_1.db
+            .selectFrom("matricula")
+            .select(["id_estudiante", "id_grupo", "id_anio", "estado"])
+            .distinctOn("id_estudiante")
+            .where("estado", "in", ["ACTIVA", "APROBADA", "PENDIENTE", "PENDIENTE_RENOVACION", "CORREGIDA", "TRASLADADA", "CULMINADA"]);
+        if (targetYearId) {
+            activeMatriculaQuery = activeMatriculaQuery.where("id_anio", "=", Number(targetYearId));
+        }
+        const activeMatriculaSubquery = activeMatriculaQuery
+            .orderBy("id_estudiante")
+            .orderBy("id_anio", "desc")
+            .orderBy("id_matricula", "desc")
+            .as("m");
+        const children = await kysely_1.db
+            .selectFrom("padre_familia as pf")
+            .innerJoin("detalle_padrefamilia as dpf", "dpf.id_padrefamilia", "pf.id_padrefamilia")
+            .innerJoin("estudiante as e", "e.id_estudiante", "dpf.id_estudiante")
+            .leftJoin(activeMatriculaSubquery, "m.id_estudiante", "e.id_estudiante")
+            .leftJoin("grupos as gr", "gr.id_grupo", "m.id_grupo")
+            .leftJoin("secciones as s", "s.id_seccion", "gr.id_seccion")
+            .leftJoin("tipo_grado as tg", "tg.id_tipo_grado", "gr.id_tipo_grado")
+            .leftJoin("jornada as j", "j.id_jornada", "gr.id_jornada")
+            .leftJoin("nivel_escolar as n", (join) => join.on((eb) => eb.or([
+            eb("n.id_nivel", "=", eb.ref("gr.id_nivel")),
+            eb("n.id_nivel", "=", eb.ref("e.id_nivel"))
+        ])))
+            .select([
+            "e.id_estudiante",
+            "e.nombre",
+            "e.apellido",
+            "e.codigo",
+            "e.estado as estado_estudiante",
+            "tg.nombre as grado",
+            "s.nombre as seccion",
+            (0, kysely_2.sql) `CASE 
+          WHEN tg.nombre IS NOT NULL AND s.nombre IS NOT NULL THEN tg.nombre || '-' || s.nombre
+          WHEN tg.nombre IS NOT NULL THEN tg.nombre
+          WHEN s.nombre IS NOT NULL THEN s.nombre
+          ELSE 'Sin Grupo'
+        END`.as("grupo"),
+            "j.nombre as jornada",
+            "n.nombre as nivel",
+            "e.id_colegio",
+            "m.id_grupo",
+            "m.id_anio",
+            "m.estado as estado_matricula"
+        ])
+            .where("pf.id_usuario", "=", userId)
+            .execute();
         if (children.length === 0) {
             return res.json({
                 children: [],
@@ -534,7 +660,7 @@ const getParentDashboardData = async (req, res) => {
             });
         }
         const schoolId = req.query.id_colegio ? parseInt(req.query.id_colegio) : children[0].id_colegio;
-        const filteredChildren = children.filter(c => c.id_colegio === schoolId);
+        const filteredChildren = children.filter((c) => c.id_colegio === schoolId);
         if (filteredChildren.length === 0) {
             return res.json({
                 children,
@@ -545,20 +671,23 @@ const getParentDashboardData = async (req, res) => {
             });
         }
         // 2. Get available periods for the selected year and school
-        const periodsQuery = `
-      SELECT 
-        pa.id_periodo, pa.nombre, pa.trimestre, pa.estado,
-        (al.calendario || '-' || lpad(pa.mes_inicio::text, 2, '0') || '-' || lpad(pa.dia_inicio::text, 2, '0'))::date as fecha_inicio,
-        (al.calendario || '-' || lpad(pa.mes_fin::text, 2, '0') || '-' || lpad(pa.dia_fin::text, 2, '0'))::date as fecha_fin
-      FROM periodo_academico pa
-      JOIN anio_lectivo al ON al.id_anio = pa.id_anio
-      WHERE pa.id_colegio = $1 AND pa.estado != 'PENDIENTE'
-      ${targetYearId ? 'AND pa.id_anio = $2' : ''}
-      ORDER BY pa.trimestre ASC
-    `;
-        const periodsParams = targetYearId ? [schoolId, targetYearId] : [schoolId];
-        const allPeriodsRes = await db_1.pool.query(periodsQuery, periodsParams);
-        const periods = allPeriodsRes.rows;
+        let periodsQuery = kysely_1.db
+            .selectFrom("periodo_academico as pa")
+            .innerJoin("anio_lectivo as al", "al.id_anio", "pa.id_anio")
+            .select([
+            "pa.id_periodo",
+            "pa.nombre",
+            "pa.trimestre",
+            "pa.estado",
+            (0, kysely_2.sql) `(al.calendario || '-' || lpad(pa.mes_inicio::text, 2, '0') || '-' || lpad(pa.dia_inicio::text, 2, '0'))::date`.as("fecha_inicio"),
+            (0, kysely_2.sql) `(al.calendario || '-' || lpad(pa.mes_fin::text, 2, '0') || '-' || lpad(pa.dia_fin::text, 2, '0'))::date`.as("fecha_fin")
+        ])
+            .where("pa.id_colegio", "=", schoolId)
+            .where("pa.estado", "!=", "PENDIENTE");
+        if (targetYearId) {
+            periodsQuery = periodsQuery.where("pa.id_anio", "=", Number(targetYearId));
+        }
+        const periods = await periodsQuery.orderBy("pa.trimestre", "asc").execute();
         // 3. Determine active period (either from query or auto-detected)
         let id_periodo = null;
         let activePeriod = null;
@@ -585,109 +714,152 @@ const getParentDashboardData = async (req, res) => {
         // 4. Aggregate stats per child (only for the selected school)
         const statsPromises = filteredChildren.map(async (child) => {
             // Average and At Risk
-            let gradesRes;
-            if (id_periodo) {
-                gradesRes = await db_1.pool.query(`
-          SELECT 
-            m.nombre as materia,
-            COALESCE(ra.promedio, calc.promedio_calculado) as calificacion
-          FROM detalle_grados dg
-          JOIN materias m ON m.id_materia = dg.id_materia
-          LEFT JOIN resultado_academico ra ON ra.id_detallegrado = dg.id_detallegrado AND ra.id_periodo = $2 AND ra.id_estudiante = $1
-          LEFT JOIN (
-            SELECT am.id_detallegrado, na.id_estudiante, ROUND(AVG(na.nota)::numeric, 2) as promedio_calculado
-            FROM notas_actividad na
-            JOIN actividad_materia am ON am.id_actividadmateria = na.id_actividadmateria
-            WHERE am.id_periodo = $2 AND na.id_estudiante = $1
-            GROUP BY am.id_detallegrado, na.id_estudiante
-          ) calc ON calc.id_detallegrado = dg.id_detallegrado
-          WHERE dg.id_grupo = $3
-        `, [child.id_estudiante, id_periodo, child.id_grupo]);
+            let grades = [];
+            if (id_periodo && child.id_grupo) {
+                const calcSubquery = kysely_1.db
+                    .selectFrom("notas_actividad as na")
+                    .innerJoin("actividad_materia as am", "am.id_actividadmateria", "na.id_actividadmateria")
+                    .select([
+                    "am.id_detallegrado",
+                    "na.id_estudiante",
+                    (0, kysely_2.sql) `ROUND(AVG(na.nota)::numeric, 2)`.as("promedio_calculado")
+                ])
+                    .where("am.id_periodo", "=", id_periodo)
+                    .where("na.id_estudiante", "=", child.id_estudiante)
+                    .groupBy(["am.id_detallegrado", "na.id_estudiante"])
+                    .as("calc");
+                const rows = await kysely_1.db
+                    .selectFrom("detalle_grados as dg")
+                    .innerJoin("materias as m", "m.id_materia", "dg.id_materia")
+                    .leftJoin("resultado_academico as ra", (join) => join
+                    .onRef("ra.id_detallegrado", "=", "dg.id_detallegrado")
+                    .on("ra.id_periodo", "=", id_periodo)
+                    .on("ra.id_estudiante", "=", child.id_estudiante))
+                    .leftJoin(calcSubquery, "calc.id_detallegrado", "dg.id_detallegrado")
+                    .select([
+                    "m.nombre as materia",
+                    (0, kysely_2.sql) `COALESCE(ra.promedio, calc.promedio_calculado)`.as("calificacion")
+                ])
+                    .where("dg.id_grupo", "=", child.id_grupo)
+                    .execute();
+                grades = rows.map(r => ({
+                    ...r,
+                    calificacion: r.calificacion !== null && r.calificacion !== undefined ? parseFloat(String(r.calificacion)) : null
+                }));
             }
-            else {
-                // Mode "Todos los periodos": calculate accumulative average for all activities in the current academic year
-                gradesRes = await db_1.pool.query(`
-          SELECT 
-            m.nombre as materia,
-            COALESCE(calc.promedio_calculado, NULL) as calificacion
-          FROM detalle_grados dg
-          JOIN materias m ON m.id_materia = dg.id_materia
-          LEFT JOIN (
-            SELECT am.id_detallegrado, na.id_estudiante, ROUND(AVG(na.nota)::numeric, 2) as promedio_calculado
-            FROM notas_actividad na
-            JOIN actividad_materia am ON am.id_actividadmateria = na.id_actividadmateria
-            JOIN periodo_academico pa ON pa.id_periodo = am.id_periodo
-            WHERE pa.id_anio = $2 AND na.id_estudiante = $1 AND pa.estado != 'PENDIENTE'
-            GROUP BY am.id_detallegrado, na.id_estudiante
-          ) calc ON calc.id_detallegrado = dg.id_detallegrado
-          WHERE dg.id_grupo = $3
-        `, [child.id_estudiante, child.id_anio, child.id_grupo]);
+            else if (child.id_grupo && child.id_anio) {
+                const calcSubquery = kysely_1.db
+                    .selectFrom("notas_actividad as na")
+                    .innerJoin("actividad_materia as am", "am.id_actividadmateria", "na.id_actividadmateria")
+                    .innerJoin("periodo_academico as pa", "pa.id_periodo", "am.id_periodo")
+                    .select([
+                    "am.id_detallegrado",
+                    "na.id_estudiante",
+                    (0, kysely_2.sql) `ROUND(AVG(na.nota)::numeric, 2)`.as("promedio_calculado")
+                ])
+                    .where("pa.id_anio", "=", Number(child.id_anio))
+                    .where("na.id_estudiante", "=", child.id_estudiante)
+                    .where("pa.estado", "!=", "PENDIENTE")
+                    .groupBy(["am.id_detallegrado", "na.id_estudiante"])
+                    .as("calc");
+                const rows = await kysely_1.db
+                    .selectFrom("detalle_grados as dg")
+                    .innerJoin("materias as m", "m.id_materia", "dg.id_materia")
+                    .leftJoin(calcSubquery, "calc.id_detallegrado", "dg.id_detallegrado")
+                    .select([
+                    "m.nombre as materia",
+                    (0, kysely_2.sql) `calc.promedio_calculado`.as("calificacion")
+                ])
+                    .where("dg.id_grupo", "=", child.id_grupo)
+                    .execute();
+                grades = rows.map(r => ({
+                    ...r,
+                    calificacion: r.calificacion !== null && r.calificacion !== undefined ? parseFloat(String(r.calificacion)) : null
+                }));
             }
-            const grades = gradesRes.rows.map(r => ({
-                ...r,
-                calificacion: r.calificacion !== null && r.calificacion !== undefined ? parseFloat(r.calificacion) : null
-            }));
             const gradedList = grades.filter(g => g.calificacion !== null);
             const avg = gradedList.length > 0 ? (gradedList.reduce((a, b) => a + b.calificacion, 0) / gradedList.length) : null;
             const atRisk = gradedList.filter(g => g.calificacion < 3.0);
             // Attendance Filtered by Period Dates or overall academic year
-            let attRes;
+            let attStatsRow;
             if (id_periodo && activePeriod) {
-                attRes = await db_1.pool.query(`
-          SELECT 
-            COUNT(*) filter (where estado = 'PRESENTE') as presentes,
-            COUNT(*) filter (where estado = 'AUSENTE') as ausentes,
-            COUNT(*) filter (where estado = 'TARDE') as tardes,
-            COUNT(*) as total
-          FROM registro_asistencia
-          WHERE id_estudiante = $1 AND id_colegio = $2
-          AND fecha BETWEEN $3 AND $4
-        `, [child.id_estudiante, child.id_colegio, activePeriod.fecha_inicio, activePeriod.fecha_fin]);
+                attStatsRow = await kysely_1.db
+                    .selectFrom("registro_asistencia")
+                    .select([
+                    (0, kysely_2.sql) `COUNT(*) filter (where estado = 'PRESENTE')::int`.as("presentes"),
+                    (0, kysely_2.sql) `COUNT(*) filter (where estado = 'AUSENTE')::int`.as("ausentes"),
+                    (0, kysely_2.sql) `COUNT(*) filter (where estado = 'TARDE')::int`.as("tardes"),
+                    (0, kysely_2.sql) `COUNT(*)::int`.as("total")
+                ])
+                    .where("id_estudiante", "=", child.id_estudiante)
+                    .where("id_colegio", "=", child.id_colegio)
+                    .where("fecha", ">=", activePeriod.fecha_inicio)
+                    .where("fecha", "<=", activePeriod.fecha_fin)
+                    .executeTakeFirst();
             }
             else {
-                // Without period date bounds (takes all year attendance for the student)
-                attRes = await db_1.pool.query(`
-          SELECT 
-            COUNT(*) filter (where estado = 'PRESENTE') as presentes,
-            COUNT(*) filter (where estado = 'AUSENTE') as ausentes,
-            COUNT(*) filter (where estado = 'TARDE') as tardes,
-            COUNT(*) as total
-          FROM registro_asistencia
-          WHERE id_estudiante = $1 AND id_colegio = $2
-        `, [child.id_estudiante, child.id_colegio]);
+                attStatsRow = await kysely_1.db
+                    .selectFrom("registro_asistencia")
+                    .select([
+                    (0, kysely_2.sql) `COUNT(*) filter (where estado = 'PRESENTE')::int`.as("presentes"),
+                    (0, kysely_2.sql) `COUNT(*) filter (where estado = 'AUSENTE')::int`.as("ausentes"),
+                    (0, kysely_2.sql) `COUNT(*) filter (where estado = 'TARDE')::int`.as("tardes"),
+                    (0, kysely_2.sql) `COUNT(*)::int`.as("total")
+                ])
+                    .where("id_estudiante", "=", child.id_estudiante)
+                    .where("id_colegio", "=", child.id_colegio)
+                    .executeTakeFirst();
             }
-            const attStats = attRes.rows[0];
-            const attRate = attStats.total > 0 ? (parseInt(attStats.presentes) / parseInt(attStats.total)) * 100 : 100;
+            const attStats = attStatsRow || { presentes: 0, ausentes: 0, tardes: 0, total: 0 };
+            const attRate = attStats.total > 0 ? (Number(attStats.presentes) / Number(attStats.total)) * 100 : 100;
             // Pending Activities
-            let pendingRes;
-            if (id_periodo) {
-                pendingRes = await db_1.pool.query(`
-          SELECT COUNT(*) as count
-          FROM actividad_materia am
-          JOIN detalle_grados dg ON dg.id_detallegrado = am.id_detallegrado
-          LEFT JOIN notas_actividad na ON na.id_actividadmateria = am.id_actividadmateria AND na.id_estudiante = $1
-          WHERE dg.id_grupo = $2 AND am.id_periodo = $3 AND na.nota IS NULL
-        `, [child.id_estudiante, child.id_grupo, id_periodo]);
+            let pendingCount = 0;
+            if (id_periodo && child.id_grupo) {
+                const row = await kysely_1.db
+                    .selectFrom("actividad_materia as am")
+                    .innerJoin("detalle_grados as dg", "dg.id_detallegrado", "am.id_detallegrado")
+                    .leftJoin("notas_actividad as na", (join) => join
+                    .onRef("na.id_actividadmateria", "=", "am.id_actividadmateria")
+                    .on("na.id_estudiante", "=", child.id_estudiante))
+                    .select((0, kysely_2.sql) `COUNT(*)::int`.as("count"))
+                    .where("dg.id_grupo", "=", child.id_grupo)
+                    .where("am.id_periodo", "=", id_periodo)
+                    .where("na.nota", "is", null)
+                    .executeTakeFirst();
+                pendingCount = row?.count || 0;
             }
-            else {
-                pendingRes = await db_1.pool.query(`
-          SELECT COUNT(*) as count
-          FROM actividad_materia am
-          JOIN detalle_grados dg ON dg.id_detallegrado = am.id_detallegrado
-          JOIN periodo_academico pa ON pa.id_periodo = am.id_periodo
-          LEFT JOIN notas_actividad na ON na.id_actividadmateria = am.id_actividadmateria AND na.id_estudiante = $1
-          WHERE dg.id_grupo = $2 AND pa.id_anio = $3 AND pa.estado != 'PENDIENTE' AND na.nota IS NULL
-        `, [child.id_estudiante, child.id_grupo, child.id_anio]);
+            else if (child.id_grupo && child.id_anio) {
+                const row = await kysely_1.db
+                    .selectFrom("actividad_materia as am")
+                    .innerJoin("detalle_grados as dg", "dg.id_detallegrado", "am.id_detallegrado")
+                    .innerJoin("periodo_academico as pa", "pa.id_periodo", "am.id_periodo")
+                    .leftJoin("notas_actividad as na", (join) => join
+                    .onRef("na.id_actividadmateria", "=", "am.id_actividadmateria")
+                    .on("na.id_estudiante", "=", child.id_estudiante))
+                    .select((0, kysely_2.sql) `COUNT(*)::int`.as("count"))
+                    .where("dg.id_grupo", "=", child.id_grupo)
+                    .where("pa.id_anio", "=", Number(child.id_anio))
+                    .where("pa.estado", "!=", "PENDIENTE")
+                    .where("na.nota", "is", null)
+                    .executeTakeFirst();
+                pendingCount = row?.count || 0;
             }
             // Evolution (by period)
-            const evolutionRes = await db_1.pool.query(`
-        SELECT pa.nombre as periodo, ROUND(AVG(ra.promedio)::numeric, 2) as promedio
-        FROM resultado_academico ra
-        JOIN periodo_academico pa ON pa.id_periodo = ra.id_periodo
-        WHERE ra.id_estudiante = $1 AND pa.id_anio = $2
-        GROUP BY pa.id_periodo, pa.nombre, pa.trimestre
-        ORDER BY pa.trimestre ASC
-      `, [child.id_estudiante, child.id_anio]);
+            let evolution = [];
+            if (child.id_anio) {
+                evolution = await kysely_1.db
+                    .selectFrom("resultado_academico as ra")
+                    .innerJoin("periodo_academico as pa", "pa.id_periodo", "ra.id_periodo")
+                    .select([
+                    "pa.nombre as periodo",
+                    (0, kysely_2.sql) `ROUND(AVG(ra.promedio)::numeric, 2)`.as("promedio")
+                ])
+                    .where("ra.id_estudiante", "=", child.id_estudiante)
+                    .where("pa.id_anio", "=", Number(child.id_anio))
+                    .groupBy(["pa.id_periodo", "pa.nombre", "pa.trimestre"])
+                    .orderBy("pa.trimestre", "asc")
+                    .execute();
+            }
             // Sort to get top best and worst subjects
             const sortedGrades = [...gradedList].sort((a, b) => b.calificacion - a.calificacion);
             const top_materias_mejores = sortedGrades.slice(0, 5);
@@ -698,108 +870,101 @@ const getParentDashboardData = async (req, res) => {
                 atRisk: atRisk.length,
                 atRiskSubjects: atRisk.map(s => s.materia),
                 attendanceRate: Math.round(attRate),
-                pendingActivities: parseInt(pendingRes.rows[0].count),
-                evolution: evolutionRes.rows,
+                pendingActivities: Number(pendingCount),
+                evolution,
                 grades,
                 top_materias_mejores,
                 top_materias_peores,
                 attendanceDetails: {
-                    presentes: parseInt(attStats.presentes || 0),
-                    ausentes: parseInt(attStats.ausentes || 0),
-                    tardes: parseInt(attStats.tardes || 0),
-                    total: parseInt(attStats.total || 0)
+                    presentes: Number(attStats.presentes || 0),
+                    ausentes: Number(attStats.ausentes || 0),
+                    tardes: Number(attStats.tardes || 0),
+                    total: Number(attStats.total || 0)
                 }
             };
         });
-        console.log(`[Dashboard] Found ${children.length} children, using id_periodo: ${id_periodo}`);
         const studentStats = await Promise.all(statsPromises);
-        console.log(`[Dashboard] Calculated stats for ${studentStats.length} students`);
         // 5. Recent Activity (use filtered studentIds)
-        const studentIds = filteredChildren.map(c => c.id_estudiante);
-        let recentActivityRes;
-        if (id_periodo) {
-            recentActivityRes = await db_1.pool.query(`
-        (
-          SELECT 
-            'CALIFICACION' as tipo_actividad,
-            m.nombre as materia,
-            am.nombre as detalle,
-            na.nota::text as valor,
-            NULL::date as fecha,
-            e.nombre || ' ' || e.apellido as estudiante
-          FROM notas_actividad na
-          JOIN actividad_materia am ON am.id_actividadmateria = na.id_actividadmateria
-          JOIN detalle_grados dg ON dg.id_detallegrado = am.id_detallegrado
-          JOIN materias m ON m.id_materia = dg.id_materia
-          JOIN estudiante e ON e.id_estudiante = na.id_estudiante
-          WHERE na.id_estudiante = ANY($1) AND am.id_periodo = $2
-        )
-        UNION ALL
-        (
-          SELECT 
-            'OBSERVACION' as tipo_actividad,
-            m.nombre as materia,
-            oe.tipo::text as detalle,
-            oe.id_observacion::text as valor,
-            oe.fecha as fecha,
-            e.nombre || ' ' || e.apellido as estudiante
-          FROM observacion_estudiante oe
-          JOIN detalle_grados dg ON dg.id_detallegrado = oe.id_detallegrado
-          JOIN materias m ON m.id_materia = dg.id_materia
-          JOIN estudiante e ON e.id_estudiante = oe.id_estudiante
-          WHERE oe.id_estudiante = ANY($1) AND oe.id_periodo = $2
-        )
-        ORDER BY fecha DESC
-        LIMIT 10
-      `, [studentIds, id_periodo]);
-        }
-        else {
-            recentActivityRes = await db_1.pool.query(`
-        (
-          SELECT 
-            'CALIFICACION' as tipo_actividad,
-            m.nombre as materia,
-            am.nombre as detalle,
-            na.nota::text as valor,
-            NULL::date as fecha,
-            e.nombre || ' ' || e.apellido as estudiante
-          FROM notas_actividad na
-          JOIN actividad_materia am ON am.id_actividadmateria = na.id_actividadmateria
-          JOIN detalle_grados dg ON dg.id_detallegrado = am.id_detallegrado
-          JOIN materias m ON m.id_materia = dg.id_materia
-          JOIN estudiante e ON e.id_estudiante = na.id_estudiante
-          WHERE na.id_estudiante = ANY($1)
-        )
-        UNION ALL
-        (
-          SELECT 
-            'OBSERVACION' as tipo_actividad,
-            m.nombre as materia,
-            oe.tipo::text as detalle,
-            oe.id_observacion::text as valor,
-            oe.fecha as fecha,
-            e.nombre || ' ' || e.apellido as estudiante
-          FROM observacion_estudiante oe
-          JOIN detalle_grados dg ON dg.id_detallegrado = oe.id_detallegrado
-          JOIN materias m ON m.id_materia = dg.id_materia
-          JOIN estudiante e ON e.id_estudiante = oe.id_estudiante
-          WHERE oe.id_estudiante = ANY($1)
-        )
-        ORDER BY fecha DESC
-        LIMIT 10
-      `, [studentIds]);
+        const studentIds = filteredChildren.map((c) => c.id_estudiante);
+        let recentActivity = [];
+        if (studentIds.length > 0) {
+            if (id_periodo) {
+                const califs = kysely_1.db
+                    .selectFrom("notas_actividad as na")
+                    .innerJoin("actividad_materia as am", "am.id_actividadmateria", "na.id_actividadmateria")
+                    .innerJoin("detalle_grados as dg", "dg.id_detallegrado", "am.id_detallegrado")
+                    .innerJoin("materias as m", "m.id_materia", "dg.id_materia")
+                    .innerJoin("estudiante as e", "e.id_estudiante", "na.id_estudiante")
+                    .select([
+                    (0, kysely_2.sql) `'CALIFICACION'`.as("tipo_actividad"),
+                    "m.nombre as materia",
+                    "am.nombre as detalle",
+                    (0, kysely_2.sql) `na.nota::text`.as("valor"),
+                    (0, kysely_2.sql) `NULL::date`.as("fecha"),
+                    (0, kysely_2.sql) `e.nombre || ' ' || e.apellido`.as("estudiante")
+                ])
+                    .where("na.id_estudiante", "in", studentIds)
+                    .where("am.id_periodo", "=", id_periodo);
+                const obs = kysely_1.db
+                    .selectFrom("observacion_estudiante as oe")
+                    .innerJoin("detalle_grados as dg", "dg.id_detallegrado", "oe.id_detallegrado")
+                    .innerJoin("materias as m", "m.id_materia", "dg.id_materia")
+                    .innerJoin("estudiante as e", "e.id_estudiante", "oe.id_estudiante")
+                    .select([
+                    (0, kysely_2.sql) `'OBSERVACION'`.as("tipo_actividad"),
+                    "m.nombre as materia",
+                    (0, kysely_2.sql) `oe.tipo::text`.as("detalle"),
+                    (0, kysely_2.sql) `oe.id_observacion::text`.as("valor"),
+                    "oe.fecha as fecha",
+                    (0, kysely_2.sql) `e.nombre || ' ' || e.apellido`.as("estudiante")
+                ])
+                    .where("oe.id_estudiante", "in", studentIds)
+                    .where("oe.id_periodo", "=", id_periodo);
+                recentActivity = await califs.unionAll(obs).orderBy("fecha", "desc").limit(10).execute();
+            }
+            else {
+                const califs = kysely_1.db
+                    .selectFrom("notas_actividad as na")
+                    .innerJoin("actividad_materia as am", "am.id_actividadmateria", "na.id_actividadmateria")
+                    .innerJoin("detalle_grados as dg", "dg.id_detallegrado", "am.id_detallegrado")
+                    .innerJoin("materias as m", "m.id_materia", "dg.id_materia")
+                    .innerJoin("estudiante as e", "e.id_estudiante", "na.id_estudiante")
+                    .select([
+                    (0, kysely_2.sql) `'CALIFICACION'`.as("tipo_actividad"),
+                    "m.nombre as materia",
+                    "am.nombre as detalle",
+                    (0, kysely_2.sql) `na.nota::text`.as("valor"),
+                    (0, kysely_2.sql) `NULL::date`.as("fecha"),
+                    (0, kysely_2.sql) `e.nombre || ' ' || e.apellido`.as("estudiante")
+                ])
+                    .where("na.id_estudiante", "in", studentIds);
+                const obs = kysely_1.db
+                    .selectFrom("observacion_estudiante as oe")
+                    .innerJoin("detalle_grados as dg", "dg.id_detallegrado", "oe.id_detallegrado")
+                    .innerJoin("materias as m", "m.id_materia", "dg.id_materia")
+                    .innerJoin("estudiante as e", "e.id_estudiante", "oe.id_estudiante")
+                    .select([
+                    (0, kysely_2.sql) `'OBSERVACION'`.as("tipo_actividad"),
+                    "m.nombre as materia",
+                    (0, kysely_2.sql) `oe.tipo::text`.as("detalle"),
+                    (0, kysely_2.sql) `oe.id_observacion::text`.as("valor"),
+                    "oe.fecha as fecha",
+                    (0, kysely_2.sql) `e.nombre || ' ' || e.apellido`.as("estudiante")
+                ])
+                    .where("oe.id_estudiante", "in", studentIds);
+                recentActivity = await califs.unionAll(obs).orderBy("fecha", "desc").limit(10).execute();
+            }
         }
         res.json({
             children,
             studentStats,
-            recentActivity: recentActivityRes.rows,
+            recentActivity,
             activePeriod,
             periods
         });
     }
     catch (error) {
         console.error('Error fetching parent dashboard data:', error);
-        // Return empty structure instead of just error to prevent frontend crash
         res.status(500).json({
             error: 'Error al obtener datos del dashboard',
             children: [],
@@ -817,11 +982,15 @@ exports.getParentDashboardData = getParentDashboardData;
 const getStudentIdByUserId = async (req, res) => {
     const { id_usuario } = req.params;
     try {
-        const result = await db_1.pool.query('SELECT id_estudiante FROM estudiante WHERE id_usuario = $1', [id_usuario]);
-        if (!result.rows.length) {
+        const row = await kysely_1.db
+            .selectFrom("estudiante")
+            .select("id_estudiante")
+            .where("id_usuario", "=", Number(id_usuario))
+            .executeTakeFirst();
+        if (!row) {
             return res.status(404).json({ error: 'Estudiante no vinculado a este usuario' });
         }
-        res.json(result.rows[0]);
+        res.json(row);
     }
     catch (error) {
         console.error('Error fetching student ID:', error);
@@ -841,58 +1010,79 @@ const getStudentDashboardStats = async (req, res) => {
             return res.status(400).json({ error: 'Parámetros numéricos inválidos' });
         }
         // 1. Get student basic info and group
-        const studentCheck = await db_1.pool.query(`
-      SELECT e.id_estudiante, e.id_colegio, m.id_grupo
-      FROM estudiante e
-      LEFT JOIN matricula m ON m.id_estudiante = e.id_estudiante AND m.estado = 'ACTIVA'
-      WHERE e.id_estudiante = $1
-      LIMIT 1
-    `, [studentIdInt]);
-        if (!studentCheck.rows.length) {
+        const studentCheck = await kysely_1.db
+            .selectFrom("estudiante as e")
+            .leftJoin("matricula as m", (join) => join
+            .onRef("m.id_estudiante", "=", "e.id_estudiante")
+            .on("m.estado", "=", "ACTIVA"))
+            .select(["e.id_estudiante", "e.id_colegio", "m.id_grupo"])
+            .where("e.id_estudiante", "=", studentIdInt)
+            .limit(1)
+            .executeTakeFirst();
+        if (!studentCheck) {
             return res.status(404).json({ error: 'Estudiante no encontrado' });
         }
-        const { id_colegio, id_grupo } = studentCheck.rows[0];
+        const { id_colegio, id_grupo } = studentCheck;
         // Get school grading approval limit
-        const configRes = await db_1.pool.query('SELECT nota_aprobacion FROM configuracion_colegio WHERE id_colegio = $1', [id_colegio]);
-        const nota_aprobacion = configRes.rows.length ? parseFloat(configRes.rows[0].nota_aprobacion) : 3.0;
+        const configRes = await kysely_1.db
+            .selectFrom("configuracion_colegio")
+            .select("nota_aprobacion")
+            .where("id_colegio", "=", id_colegio)
+            .executeTakeFirst();
+        const nota_aprobacion = configRes ? parseFloat(String(configRes.nota_aprobacion)) : 3.0;
         // 2. Fetch all student subjects and their grades for this period
-        const gradesRes = await db_1.pool.query(`
-      SELECT 
-        m.id_materia,
-        m.nombre as materia,
-        COALESCE(ra.promedio, calc.promedio_calculado) as calificacion
-      FROM detalle_grados dg
-      JOIN materias m ON m.id_materia = dg.id_materia
-      LEFT JOIN resultado_academico ra ON ra.id_detallegrado = dg.id_detallegrado AND ra.id_periodo = $2 AND ra.id_estudiante = $1
-      LEFT JOIN (
-        SELECT am.id_detallegrado, na.id_estudiante, ROUND(AVG(na.nota)::numeric, 2) as promedio_calculado
-        FROM notas_actividad na
-        JOIN actividad_materia am ON am.id_actividadmateria = na.id_actividadmateria
-        WHERE am.id_periodo = $2 AND na.id_estudiante = $1
-        GROUP BY am.id_detallegrado, na.id_estudiante
-      ) calc ON calc.id_detallegrado = dg.id_detallegrado
-      WHERE dg.id_grupo = $3
-      ORDER BY m.nombre ASC
-    `, [studentIdInt, periodIdInt, id_grupo]);
-        const grades = gradesRes.rows.map(row => ({
-            id_materia: row.id_materia,
-            materia: row.materia,
-            calificacion: row.calificacion !== null && row.calificacion !== undefined ? parseFloat(row.calificacion) : null
-        }));
+        let grades = [];
+        if (id_grupo) {
+            const calcSubquery = kysely_1.db
+                .selectFrom("notas_actividad as na")
+                .innerJoin("actividad_materia as am", "am.id_actividadmateria", "na.id_actividadmateria")
+                .select([
+                "am.id_detallegrado",
+                "na.id_estudiante",
+                (0, kysely_2.sql) `ROUND(AVG(na.nota)::numeric, 2)`.as("promedio_calculado")
+            ])
+                .where("am.id_periodo", "=", periodIdInt)
+                .where("na.id_estudiante", "=", studentIdInt)
+                .groupBy(["am.id_detallegrado", "na.id_estudiante"])
+                .as("calc");
+            const gradesRows = await kysely_1.db
+                .selectFrom("detalle_grados as dg")
+                .innerJoin("materias as m", "m.id_materia", "dg.id_materia")
+                .leftJoin("resultado_academico as ra", (join) => join
+                .onRef("ra.id_detallegrado", "=", "dg.id_detallegrado")
+                .on("ra.id_periodo", "=", periodIdInt)
+                .on("ra.id_estudiante", "=", studentIdInt))
+                .leftJoin(calcSubquery, "calc.id_detallegrado", "dg.id_detallegrado")
+                .select([
+                "m.id_materia",
+                "m.nombre as materia",
+                (0, kysely_2.sql) `COALESCE(ra.promedio, calc.promedio_calculado)`.as("calificacion")
+            ])
+                .where("dg.id_grupo", "=", id_grupo)
+                .orderBy("m.nombre", "asc")
+                .execute();
+            grades = gradesRows.map(row => ({
+                id_materia: row.id_materia,
+                materia: row.materia,
+                calificacion: row.calificacion !== null && row.calificacion !== undefined ? parseFloat(String(row.calificacion)) : null
+            }));
+        }
         const gradedList = grades.filter(g => g.calificacion !== null);
         // Check if any actual grades or results exist in the database for this period and student
-        const notesCountRes = await db_1.pool.query(`
-      SELECT COUNT(*) as count 
-      FROM notas_actividad na
-      JOIN actividad_materia am ON am.id_actividadmateria = na.id_actividadmateria
-      WHERE am.id_periodo = $1 AND na.id_estudiante = $2
-    `, [periodIdInt, studentIdInt]);
-        const resultsCountRes = await db_1.pool.query(`
-      SELECT COUNT(*) as count 
-      FROM resultado_academico
-      WHERE id_periodo = $1 AND id_estudiante = $2
-    `, [periodIdInt, studentIdInt]);
-        const has_calificaciones = parseInt(notesCountRes.rows[0].count) > 0 || parseInt(resultsCountRes.rows[0].count) > 0;
+        const notesCountRow = await kysely_1.db
+            .selectFrom("notas_actividad as na")
+            .innerJoin("actividad_materia as am", "am.id_actividadmateria", "na.id_actividadmateria")
+            .select((0, kysely_2.sql) `COUNT(*)::int`.as("count"))
+            .where("am.id_periodo", "=", periodIdInt)
+            .where("na.id_estudiante", "=", studentIdInt)
+            .executeTakeFirst();
+        const resultsCountRow = await kysely_1.db
+            .selectFrom("resultado_academico")
+            .select((0, kysely_2.sql) `COUNT(*)::int`.as("count"))
+            .where("id_periodo", "=", periodIdInt)
+            .where("id_estudiante", "=", studentIdInt)
+            .executeTakeFirst();
+        const has_calificaciones = (notesCountRow?.count || 0) > 0 || (resultsCountRow?.count || 0) > 0;
         // Calculate grades aggregates
         let promedio_general = null;
         let materias_aprobadas = null;
@@ -918,32 +1108,37 @@ const getStudentDashboardStats = async (req, res) => {
         const top_materias_mejores = sortedGrades.slice(0, 5);
         const top_materias_peores = [...sortedGrades].reverse().slice(0, 5);
         // 3. Attendance statistics
-        const attendanceRes = await db_1.pool.query(`
-      SELECT 
-        estado,
-        COUNT(*) as count
-      FROM registro_asistencia ra
-      JOIN detalle_grados dg ON dg.id_detallegrado = ra.id_detallegrado
-      WHERE ra.id_estudiante = $1
-        AND ra.fecha >= (
-          SELECT (al.calendario || '-' || LPAD(pa.mes_inicio::text, 2, '0') || '-' || LPAD(pa.dia_inicio::text, 2, '0'))::date
-          FROM periodo_academico pa
-          JOIN anio_lectivo al ON al.id_anio = pa.id_anio
-          WHERE pa.id_periodo = $2
-        )
-        AND ra.fecha <= (
-          SELECT (al.calendario || '-' || LPAD(pa.mes_fin::text, 2, '0') || '-' || LPAD(pa.dia_fin::text, 2, '0'))::date
-          FROM periodo_academico pa
-          JOIN anio_lectivo al ON al.id_anio = pa.id_anio
-          WHERE pa.id_periodo = $2
-        )
-      GROUP BY estado
-    `, [studentIdInt, periodIdInt]);
+        const dateStartSubquery = kysely_1.db
+            .selectFrom("periodo_academico as pa")
+            .innerJoin("anio_lectivo as al", "al.id_anio", "pa.id_anio")
+            .select([
+            (0, kysely_2.sql) `(al.calendario || '-' || LPAD(pa.mes_inicio::text, 2, '0') || '-' || LPAD(pa.dia_inicio::text, 2, '0'))::date`.as("fecha_inicio")
+        ])
+            .where("pa.id_periodo", "=", periodIdInt);
+        const dateEndSubquery = kysely_1.db
+            .selectFrom("periodo_academico as pa")
+            .innerJoin("anio_lectivo as al", "al.id_anio", "pa.id_anio")
+            .select([
+            (0, kysely_2.sql) `(al.calendario || '-' || LPAD(pa.mes_fin::text, 2, '0') || '-' || LPAD(pa.dia_fin::text, 2, '0'))::date`.as("fecha_fin")
+        ])
+            .where("pa.id_periodo", "=", periodIdInt);
+        const attendanceRows = await kysely_1.db
+            .selectFrom("registro_asistencia as ra")
+            .innerJoin("detalle_grados as dg", "dg.id_detallegrado", "ra.id_detallegrado")
+            .select([
+            "ra.estado",
+            (0, kysely_2.sql) `COUNT(*)::int`.as("count")
+        ])
+            .where("ra.id_estudiante", "=", studentIdInt)
+            .where("ra.fecha", ">=", dateStartSubquery)
+            .where("ra.fecha", "<=", dateEndSubquery)
+            .groupBy("ra.estado")
+            .execute();
         const attCounts = { PRESENTE: 0, AUSENTE: 0, TARDE: 0, JUSTIFICADA: 0 };
         let attendance_total = 0;
-        attendanceRes.rows.forEach(row => {
+        attendanceRows.forEach(row => {
             if (attCounts.hasOwnProperty(row.estado)) {
-                const count = parseInt(row.count);
+                const count = Number(row.count);
                 attCounts[row.estado] = count;
                 attendance_total += count;
             }
@@ -954,88 +1149,113 @@ const getStudentDashboardStats = async (req, res) => {
             ? Math.round(((attendance_total - inasistencias_total) / attendance_total) * 100)
             : null;
         // 4. Observations count by type
-        const observationsRes = await db_1.pool.query(`
-      SELECT tipo, COUNT(*) as count
-      FROM observacion_estudiante
-      WHERE id_estudiante = $1 AND id_periodo = $2
-      GROUP BY tipo
-    `, [studentIdInt, periodIdInt]);
+        const obsRows = await kysely_1.db
+            .selectFrom("observacion_estudiante")
+            .select([
+            "tipo",
+            (0, kysely_2.sql) `COUNT(*)::int`.as("count")
+        ])
+            .where("id_estudiante", "=", studentIdInt)
+            .where("id_periodo", "=", periodIdInt)
+            .groupBy("tipo")
+            .execute();
         const reportes_conteo = {
             ACADEMICA: 0,
             DISCIPLINARIA: 0,
             CONVIVENCIAL: 0
         };
-        observationsRes.rows.forEach(row => {
+        obsRows.forEach(row => {
             if (row.tipo === 'ACADEMICA') {
-                reportes_conteo.ACADEMICA = parseInt(row.count);
+                reportes_conteo.ACADEMICA = Number(row.count);
             }
             else if (row.tipo === 'CONVIVENCIA') {
-                reportes_conteo.CONVIVENCIAL = parseInt(row.count);
+                reportes_conteo.CONVIVENCIAL = Number(row.count);
             }
             else if (row.tipo === 'DISCIPLINARIA') {
-                reportes_conteo.DISCIPLINARIA = parseInt(row.count);
+                reportes_conteo.DISCIPLINARIA = Number(row.count);
             }
         });
         // 5. Recent activities
-        const activitiesRes = await db_1.pool.query(`
-      SELECT 
-        am.nombre as actividad,
-        am.porcentaje,
-        m.nombre as materia,
-        (CASE WHEN na.nota IS NOT NULL THEN true ELSE false END) as calificada,
-        na.nota
-      FROM actividad_materia am
-      JOIN detalle_grados dg ON dg.id_detallegrado = am.id_detallegrado
-      JOIN materias m ON m.id_materia = dg.id_materia
-      LEFT JOIN notas_actividad na ON na.id_actividadmateria = am.id_actividadmateria AND na.id_estudiante = $1
-      WHERE dg.id_grupo = $2 AND am.id_periodo = $3
-      ORDER BY am.id_actividadmateria DESC
-      LIMIT 5
-    `, [studentIdInt, id_grupo, periodIdInt]);
-        const actividades_recientes = activitiesRes.rows.map(row => ({
-            actividad: row.actividad,
-            porcentaje: parseFloat(row.porcentaje),
-            materia: row.materia,
-            calificada: row.calificada,
-            nota: row.nota ? parseFloat(row.nota) : null
-        }));
+        let actividades_recientes = [];
+        if (id_grupo) {
+            const actRows = await kysely_1.db
+                .selectFrom("actividad_materia as am")
+                .innerJoin("detalle_grados as dg", "dg.id_detallegrado", "am.id_detallegrado")
+                .innerJoin("materias as m", "m.id_materia", "dg.id_materia")
+                .leftJoin("notas_actividad as na", (join) => join
+                .onRef("na.id_actividadmateria", "=", "am.id_actividadmateria")
+                .on("na.id_estudiante", "=", studentIdInt))
+                .select([
+                "am.nombre as actividad",
+                "am.porcentaje",
+                "m.nombre as materia",
+                (0, kysely_2.sql) `CASE WHEN na.nota IS NOT NULL THEN true ELSE false END`.as("calificada"),
+                "na.nota"
+            ])
+                .where("dg.id_grupo", "=", id_grupo)
+                .where("am.id_periodo", "=", periodIdInt)
+                .orderBy("am.id_actividadmateria", "desc")
+                .limit(5)
+                .execute();
+            actividades_recientes = actRows.map(row => ({
+                actividad: row.actividad,
+                porcentaje: parseFloat(String(row.porcentaje)),
+                materia: row.materia,
+                calificada: row.calificada,
+                nota: row.nota ? parseFloat(String(row.nota)) : null
+            }));
+        }
         // 6. Student ranking / academic position in group
         let puesto = null;
         let total_estudiantes = 0;
         if (id_grupo) {
-            const rankingRes = await db_1.pool.query(`
-        WITH promedios_estudiantes AS (
-          SELECT 
-            mat.id_estudiante,
-            ROUND(AVG(COALESCE(ra.promedio, calc.promedio_calculado, 0))::numeric, 2) as promedio_general
-          FROM matricula mat
-          JOIN detalle_grados dg ON dg.id_grupo = mat.id_grupo
-          LEFT JOIN resultado_academico ra ON ra.id_detallegrado = dg.id_detallegrado AND ra.id_periodo = $2 AND ra.id_estudiante = mat.id_estudiante
-          LEFT JOIN (
-            SELECT am.id_detallegrado, na.id_estudiante, AVG(na.nota) as promedio_calculado
-            FROM notas_actividad na
-            JOIN actividad_materia am ON am.id_actividadmateria = na.id_actividadmateria
-            WHERE am.id_periodo = $2
-            GROUP BY am.id_detallegrado, na.id_estudiante
-          ) calc ON calc.id_detallegrado = dg.id_detallegrado AND calc.id_estudiante = mat.id_estudiante
-          WHERE mat.id_grupo = $1 AND mat.estado = 'ACTIVA'
-          GROUP BY mat.id_estudiante
-        ),
-        ranking_estudiantes AS (
-          SELECT 
-            id_estudiante,
-            promedio_general,
-            RANK() OVER (ORDER BY promedio_general DESC) as puesto,
-            COUNT(*) OVER () as total_estudiantes
-          FROM promedios_estudiantes
-        )
-        SELECT puesto, total_estudiantes
-        FROM ranking_estudiantes
-        WHERE id_estudiante = $3
-      `, [id_grupo, periodIdInt, studentIdInt]);
-            if (rankingRes.rows.length) {
-                puesto = parseInt(rankingRes.rows[0].puesto);
-                total_estudiantes = parseInt(rankingRes.rows[0].total_estudiantes);
+            const calcSubqueryRanking = kysely_1.db
+                .selectFrom("notas_actividad as na")
+                .innerJoin("actividad_materia as am", "am.id_actividadmateria", "na.id_actividadmateria")
+                .select([
+                "am.id_detallegrado",
+                "na.id_estudiante",
+                (0, kysely_2.sql) `AVG(na.nota)`.as("promedio_calculado")
+            ])
+                .where("am.id_periodo", "=", periodIdInt)
+                .groupBy(["am.id_detallegrado", "na.id_estudiante"])
+                .as("calc");
+            const promediosEstudiantesCte = kysely_1.db
+                .selectFrom("matricula as mat")
+                .innerJoin("detalle_grados as dg", "dg.id_grupo", "mat.id_grupo")
+                .leftJoin("resultado_academico as ra", (join) => join
+                .onRef("ra.id_detallegrado", "=", "dg.id_detallegrado")
+                .on("ra.id_periodo", "=", periodIdInt)
+                .onRef("ra.id_estudiante", "=", "mat.id_estudiante"))
+                .leftJoin(calcSubqueryRanking, (join) => join
+                .onRef("calc.id_detallegrado", "=", "dg.id_detallegrado")
+                .onRef("calc.id_estudiante", "=", "mat.id_estudiante"))
+                .select([
+                "mat.id_estudiante",
+                (0, kysely_2.sql) `ROUND(AVG(COALESCE(ra.promedio, calc.promedio_calculado, 0))::numeric, 2)`.as("promedio_general")
+            ])
+                .where("mat.id_grupo", "=", id_grupo)
+                .where("mat.estado", "=", "ACTIVA")
+                .groupBy("mat.id_estudiante");
+            const rankingEstudiantesCte = kysely_1.db
+                .with("promedios_estudiantes", () => promediosEstudiantesCte)
+                .selectFrom("promedios_estudiantes")
+                .select([
+                "id_estudiante",
+                "promedio_general",
+                (0, kysely_2.sql) `RANK() OVER (ORDER BY promedio_general DESC)`.as("puesto"),
+                (0, kysely_2.sql) `COUNT(*) OVER ()`.as("total_estudiantes")
+            ]);
+            const rankingRow = await kysely_1.db
+                .with("promedios_estudiantes", () => promediosEstudiantesCte)
+                .with("ranking_estudiantes", () => rankingEstudiantesCte)
+                .selectFrom("ranking_estudiantes")
+                .select(["puesto", "total_estudiantes"])
+                .where("id_estudiante", "=", studentIdInt)
+                .executeTakeFirst();
+            if (rankingRow) {
+                puesto = Number(rankingRow.puesto);
+                total_estudiantes = Number(rankingRow.total_estudiantes);
             }
         }
         res.json({

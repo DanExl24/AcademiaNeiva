@@ -4,23 +4,31 @@ exports.validateDto = void 0;
 const zod_1 = require("zod");
 /**
  * Middleware genérico para validar solicitudes HTTP contra esquemas Zod.
- * Soporta validación de body, query y params.
+ * Soporta validación de body, query y params o validación directa del body.
  */
 const validateDto = (schema) => {
     return async (req, res, next) => {
         try {
-            const parsed = await schema.parseAsync({
-                body: req.body,
-                query: req.query,
-                params: req.params,
-            });
+            // Determinar si el esquema define 'body', 'query' o 'params' en la raíz
+            const def = schema?._def;
+            const shape = def?.shape ? (typeof def.shape === 'function' ? def.shape() : def.shape) : null;
+            const isWrappedSchema = shape && ('body' in shape || 'query' in shape || 'params' in shape);
+            const targetToParse = isWrappedSchema
+                ? { body: req.body, query: req.query, params: req.params }
+                : req.body;
+            const parsed = await schema.parseAsync(targetToParse);
             if (parsed && typeof parsed === 'object') {
-                if (parsed.body)
-                    req.body = parsed.body;
-                if (parsed.query)
-                    req.query = parsed.query;
-                if (parsed.params)
-                    req.params = parsed.params;
+                if (isWrappedSchema) {
+                    if (parsed.body)
+                        req.body = parsed.body;
+                    if (parsed.query)
+                        req.query = parsed.query;
+                    if (parsed.params)
+                        req.params = parsed.params;
+                }
+                else {
+                    req.body = parsed;
+                }
             }
             next();
         }

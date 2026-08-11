@@ -4,6 +4,7 @@ exports.graduateStudent = exports.getStudentSummary = exports.deleteStudent = ex
 const db_1 = require("../config/db");
 const notificationService_1 = require("../services/notificationService");
 const documentValidation_1 = require("../utils/documentValidation");
+const errorHelper_1 = require("../utils/errorHelper");
 const getAllStudents = async (req, res) => {
     try {
         const { idColegio } = req.params;
@@ -65,6 +66,16 @@ const getAllStudents = async (req, res) => {
       LEFT JOIN usuario u_pf ON pf.id_usuario = u_pf.id_usuario
       WHERE e.id_colegio = $1
     `;
+        if (yearId) {
+            query += ` AND NOT EXISTS (
+        SELECT 1 FROM anio_lectivo al
+        WHERE al.id_anio = $2
+          AND (
+            EXTRACT(YEAR FROM u.fecha_creacion) > NULLIF(regexp_replace(al.calendario, '\\D', '', 'g'), '')::int
+            OR (al.fecha_fin IS NOT NULL AND DATE(u.fecha_creacion) > al.fecha_fin)
+          )
+      )`;
+        }
         if (estado && estado !== 'TODOS') {
             // When filtering by estado, match against estado_vigente logic
             if (estado === 'INACTIVO') {
@@ -126,7 +137,7 @@ const getAllStudents = async (req, res) => {
     }
     catch (error) {
         console.error("Error al obtener estudiantes:", error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: (0, errorHelper_1.formatFriendlyErrorMessage)(error) });
     }
 };
 exports.getAllStudents = getAllStudents;
@@ -204,7 +215,7 @@ const updateStudent = async (req, res) => {
     }
     catch (error) {
         await client.query("ROLLBACK");
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: (0, errorHelper_1.formatFriendlyErrorMessage)(error) });
     }
     finally {
         client.release();
@@ -338,7 +349,7 @@ const updateStudentStatus = async (req, res) => {
     }
     catch (error) {
         await client.query("ROLLBACK");
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: (0, errorHelper_1.formatFriendlyErrorMessage)(error) });
     }
     finally {
         client.release();
@@ -351,7 +362,7 @@ const getTipoSanciones = async (req, res) => {
         res.json(result.rows);
     }
     catch (error) {
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: (0, errorHelper_1.formatFriendlyErrorMessage)(error) });
     }
 };
 exports.getTipoSanciones = getTipoSanciones;
@@ -434,7 +445,7 @@ const changeStudentGrade = async (req, res) => {
     catch (error) {
         await client.query("ROLLBACK");
         console.error("Error en changeStudentGrade:", error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: (0, errorHelper_1.formatFriendlyErrorMessage)(error) });
     }
     finally {
         client.release();
@@ -483,7 +494,7 @@ const deleteStudent = async (req, res) => {
             });
         }
         else {
-            res.status(500).json({ error: error.message });
+            res.status(500).json({ error: (0, errorHelper_1.formatFriendlyErrorMessage)(error) });
         }
     }
     finally {
@@ -679,7 +690,7 @@ const getStudentSummary = async (req, res) => {
     }
     catch (error) {
         console.error("Error in getStudentSummary:", error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: (0, errorHelper_1.formatFriendlyErrorMessage)(error) });
     }
 };
 exports.getStudentSummary = getStudentSummary;
@@ -824,7 +835,7 @@ const graduateStudent = async (req, res) => {
     catch (error) {
         await client.query("ROLLBACK");
         console.error("Error in graduateStudent:", error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: (0, errorHelper_1.formatFriendlyErrorMessage)(error) });
     }
     finally {
         client.release();

@@ -80,12 +80,12 @@ async function getMinPassingScore(schoolId: number): Promise<number> {
 export const getPeriodAcademicTracking = async (req: Request, res: Response): Promise<void> => {
   try {
     const parseResult = getPeriodTrackingSchema.safeParse({
-      schoolId: req.query.schoolId || req.body.schoolId,
-      yearId: req.query.yearId || req.body.yearId,
-      periodId: req.query.periodId || req.body.periodId,
-      cumulativeUpToPeriodOrder: req.query.cumulativeUpToPeriodOrder || req.body.cumulativeUpToPeriodOrder,
-      gradeId: req.query.gradeId || req.body.gradeId,
-      groupId: req.query.groupId || req.body.groupId
+      schoolId: req.query.schoolId || (req.body as any)?.schoolId,
+      yearId: req.query.yearId || (req.body as any)?.yearId,
+      periodId: req.query.periodId || (req.body as any)?.periodId,
+      cumulativeUpToPeriodOrder: req.query.cumulativeUpToPeriodOrder || (req.body as any)?.cumulativeUpToPeriodOrder,
+      gradeId: req.query.gradeId || (req.body as any)?.gradeId,
+      groupId: req.query.groupId || (req.body as any)?.groupId
     });
 
     if (!parseResult.success) {
@@ -289,10 +289,10 @@ export const getPeriodAcademicTracking = async (req: Request, res: Response): Pr
 export const getAnnualConsolidation = async (req: Request, res: Response): Promise<void> => {
   try {
     const parseResult = getAnnualConsolidationSchema.safeParse({
-      schoolId: req.query.schoolId || req.body.schoolId,
-      yearId: req.query.yearId || req.body.yearId,
-      gradeId: req.query.gradeId || req.body.gradeId,
-      groupId: req.query.groupId || req.body.groupId
+      schoolId: req.query.schoolId || (req.body as any)?.schoolId,
+      yearId: req.query.yearId || (req.body as any)?.yearId,
+      gradeId: req.query.gradeId || (req.body as any)?.gradeId,
+      groupId: req.query.groupId || (req.body as any)?.groupId
     });
 
     if (!parseResult.success) {
@@ -564,7 +564,7 @@ export const getStudentAcademicHistory = async (req: Request, res: Response): Pr
 export const checkStudentAcademicWarning = async (req: Request, res: Response): Promise<void> => {
   try {
     const parseResult = checkWarningSchema.safeParse({
-      documento: req.query.documento || req.body.documento
+      documento: req.query.documento || (req.body as any)?.documento
     });
 
     if (!parseResult.success) {

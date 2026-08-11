@@ -5,6 +5,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.crearUsuarioByAdminGeneral = exports.modificarCredencialesConTicket = exports.validarTicketParaUsuario = exports.actualizarConfiguracion = exports.obtenerConfiguracion = exports.verAccionesSupervisionDirectivo = exports.listarSupervisionesColegio = exports.listarNotificacionesSistema = exports.listarAuditoriasAcciones = exports.obtenerStatsDashboard = exports.registrarAccionAuditoria = exports.exportarAuditoria = exports.historialSupervision = exports.verAccionesSupervision = exports.verificarSupervisionActiva = exports.revocarSupervision = exports.salirSupervision = exports.entrarSupervision = exports.aprobarSupervision = exports.solicitarSupervision = exports.eliminarDirectivo = exports.desvincularDirectivo = exports.actualizarDirectivo = exports.registrarDirectivo = exports.listarDirectivos = exports.eliminarUsuario = exports.forzarCierreSesion = exports.restablecerPassword = exports.cambiarEstadoUsuario = exports.detalleUsuario = exports.listarUsuarios = exports.eliminarColegio = exports.cambiarEstadoColegio = exports.uploadEscudo = exports.actualizarColegio = exports.registrarColegio = exports.detalleColegio = exports.listarColegios = void 0;
 const db_1 = require("../config/db");
+const kysely_1 = require("../config/kysely");
+const kysely_2 = require("kysely");
 const adminGeneralNotificationService_1 = require("../services/adminGeneralNotificationService");
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const documentValidation_1 = require("../utils/documentValidation");
@@ -20,48 +22,58 @@ const listarColegios = async (req, res) => {
         const { estado, busqueda } = req.query;
         const page = req.query.page ? Number(req.query.page) : null;
         const limit = req.query.limit ? Number(req.query.limit) : null;
-        let query = `
-      SELECT c.*, 
-             COUNT(DISTINCT d.id) AS total_directivos,
-             COUNT(DISTINCT d.id) AS directivos_count,
-             COUNT(DISTINCT doc.id_docente) AS total_docentes,
-             COUNT(DISTINCT doc.id_docente) AS docentes_count,
-             COUNT(DISTINCT e.id_estudiante) AS total_estudiantes,
-             COUNT(DISTINCT e.id_estudiante) AS estudiantes_count,
-             COUNT(DISTINCT pf.id_padrefamilia) AS total_padres,
-             COUNT(DISTINCT pf.id_padrefamilia) AS padres_count
-      FROM colegio c
-      LEFT JOIN directivo d ON d.id_colegio = c.id_colegio AND d.estado = 'ACTIVO'
-      LEFT JOIN docente doc ON doc.id_colegio = c.id_colegio AND doc.estado = 'ACTIVO'
-      LEFT JOIN estudiante e ON e.id_colegio = c.id_colegio AND e.estado = 'ACTIVO'
-      LEFT JOIN padre_familia pf ON pf.id_colegio = c.id_colegio
-      WHERE 1=1
-    `;
-        const params = [];
+        let baseQuery = kysely_1.db
+            .selectFrom("colegio as c")
+            .leftJoin("directivo as d", (join) => join.onRef("d.id_colegio", "=", "c.id_colegio").on("d.estado", "=", "ACTIVO"))
+            .leftJoin("docente as doc", (join) => join.onRef("doc.id_colegio", "=", "c.id_colegio").on("doc.estado", "=", "ACTIVO"))
+            .leftJoin("estudiante as e", (join) => join.onRef("e.id_colegio", "=", "c.id_colegio").on("e.estado", "=", "ACTIVO"))
+            .leftJoin("padre_familia as pf", "pf.id_colegio", "c.id_colegio")
+            .select([
+            "c.id_colegio",
+            "c.nombre",
+            "c.tipo_colegio",
+            "c.sede",
+            "c.contacto",
+            "c.correo",
+            "c.dane",
+            "c.tipo_calendario",
+            "c.estado",
+            "c.fecha_registro",
+            "c.motivo_rechazo",
+            "c.escudo_url",
+            "c.color_primario",
+            "c.color_secundario",
+            (0, kysely_2.sql) `COUNT(DISTINCT d.id)::int`.as("total_directivos"),
+            (0, kysely_2.sql) `COUNT(DISTINCT d.id)::int`.as("directivos_count"),
+            (0, kysely_2.sql) `COUNT(DISTINCT doc.id_docente)::int`.as("total_docentes"),
+            (0, kysely_2.sql) `COUNT(DISTINCT doc.id_docente)::int`.as("docentes_count"),
+            (0, kysely_2.sql) `COUNT(DISTINCT e.id_estudiante)::int`.as("total_estudiantes"),
+            (0, kysely_2.sql) `COUNT(DISTINCT e.id_estudiante)::int`.as("estudiantes_count"),
+            (0, kysely_2.sql) `COUNT(DISTINCT pf.id_padrefamilia)::int`.as("total_padres"),
+            (0, kysely_2.sql) `COUNT(DISTINCT pf.id_padrefamilia)::int`.as("padres_count")
+        ])
+            .groupBy("c.id_colegio");
         if (estado && estado !== 'TODOS') {
-            params.push(estado);
-            query += ` AND c.estado = $${params.length}`;
+            baseQuery = baseQuery.where("c.estado", "=", estado);
         }
         if (busqueda) {
-            params.push(`%${busqueda}%`);
-            query += ` AND (c.nombre ILIKE $${params.length} OR c.dane ILIKE $${params.length} OR c.correo ILIKE $${params.length})`;
+            const searchPattern = `%${busqueda}%`;
+            baseQuery = baseQuery.where((eb) => eb.or([
+                eb("c.nombre", "ilike", searchPattern),
+                eb("c.dane", "ilike", searchPattern),
+                eb("c.correo", "ilike", searchPattern)
+            ]));
         }
-        query += ` GROUP BY c.id_colegio ORDER BY c.fecha_registro DESC`;
-        // Count query for total
-        const countQuery = `SELECT COUNT(*)::int as count FROM (${query}) AS temp`;
-        const countResult = await db_1.pool.query(countQuery, params);
-        const totalCount = countResult.rows[0].count;
+        const allRows = await baseQuery.orderBy("c.fecha_registro", "desc").execute();
+        const totalCount = allRows.length;
+        let pagedRows = allRows;
         if (page && limit) {
-            const offset = (page - 1) * limit;
-            params.push(limit);
-            query += ` LIMIT $${params.length}`;
-            params.push(offset);
-            query += ` OFFSET $${params.length}`;
+            const offset = (Number(page) - 1) * Number(limit);
+            pagedRows = allRows.slice(offset, offset + Number(limit));
         }
-        const result = await db_1.pool.query(query, params);
         res.setHeader("x-total-count", String(totalCount));
         res.setHeader("Access-Control-Expose-Headers", "x-total-count");
-        res.json(result.rows);
+        res.json(pagedRows);
     }
     catch (error) {
         console.error('Error listando colegios:', error);
@@ -69,34 +81,47 @@ const listarColegios = async (req, res) => {
     }
 };
 exports.listarColegios = listarColegios;
-/**
- * GET /admin/colegios/:id
- * Ver detalle de un colegio.
- */
 const detalleColegio = async (req, res) => {
     try {
-        const { id } = req.params;
-        const result = await db_1.pool.query(`SELECT c.*,
-              COUNT(DISTINCT d.id) AS total_directivos,
-              COUNT(DISTINCT d.id) AS directivos_count,
-              COUNT(DISTINCT doc.id_docente) AS total_docentes,
-              COUNT(DISTINCT doc.id_docente) AS docentes_count,
-              COUNT(DISTINCT e.id_estudiante) AS total_estudiantes,
-              COUNT(DISTINCT e.id_estudiante) AS estudiantes_count,
-              COUNT(DISTINCT pf.id_padrefamilia) AS total_padres,
-              COUNT(DISTINCT pf.id_padrefamilia) AS padres_count
-       FROM colegio c
-       LEFT JOIN directivo d ON d.id_colegio = c.id_colegio
-       LEFT JOIN docente doc ON doc.id_colegio = c.id_colegio
-       LEFT JOIN estudiante e ON e.id_colegio = c.id_colegio
-       LEFT JOIN padre_familia pf ON pf.id_colegio = c.id_colegio
-       WHERE c.id_colegio = $1
-       GROUP BY c.id_colegio`, [id]);
-        if (result.rows.length === 0) {
+        const schoolId = Number(req.params.id);
+        const school = await kysely_1.db
+            .selectFrom("colegio as c")
+            .leftJoin("directivo as d", "d.id_colegio", "c.id_colegio")
+            .leftJoin("docente as doc", "doc.id_colegio", "c.id_colegio")
+            .leftJoin("estudiante as e", "e.id_colegio", "c.id_colegio")
+            .leftJoin("padre_familia as pf", "pf.id_colegio", "c.id_colegio")
+            .select([
+            "c.id_colegio",
+            "c.nombre",
+            "c.tipo_colegio",
+            "c.sede",
+            "c.contacto",
+            "c.correo",
+            "c.dane",
+            "c.tipo_calendario",
+            "c.estado",
+            "c.fecha_registro",
+            "c.motivo_rechazo",
+            "c.escudo_url",
+            "c.color_primario",
+            "c.color_secundario",
+            (0, kysely_2.sql) `COUNT(DISTINCT d.id)::int`.as("total_directivos"),
+            (0, kysely_2.sql) `COUNT(DISTINCT d.id)::int`.as("directivos_count"),
+            (0, kysely_2.sql) `COUNT(DISTINCT doc.id_docente)::int`.as("total_docentes"),
+            (0, kysely_2.sql) `COUNT(DISTINCT doc.id_docente)::int`.as("docentes_count"),
+            (0, kysely_2.sql) `COUNT(DISTINCT e.id_estudiante)::int`.as("total_estudiantes"),
+            (0, kysely_2.sql) `COUNT(DISTINCT e.id_estudiante)::int`.as("estudiantes_count"),
+            (0, kysely_2.sql) `COUNT(DISTINCT pf.id_padrefamilia)::int`.as("total_padres"),
+            (0, kysely_2.sql) `COUNT(DISTINCT pf.id_padrefamilia)::int`.as("padres_count")
+        ])
+            .where("c.id_colegio", "=", schoolId)
+            .groupBy("c.id_colegio")
+            .executeTakeFirst();
+        if (!school) {
             res.status(404).json({ error: 'Colegio no encontrado' });
             return;
         }
-        res.json(result.rows[0]);
+        res.json(school);
     }
     catch (error) {
         console.error('Error obteniendo detalle colegio:', error);
@@ -104,10 +129,6 @@ const detalleColegio = async (req, res) => {
     }
 };
 exports.detalleColegio = detalleColegio;
-/**
- * POST /admin/colegios
- * Registrar un nuevo colegio (estado por defecto: PENDIENTE).
- */
 const registrarColegio = async (req, res) => {
     try {
         const { nombre, tipo_colegio, sede, contacto, correo, dane, tipo_calendario, escudo_url, colores } = req.body;
@@ -115,16 +136,33 @@ const registrarColegio = async (req, res) => {
             res.status(400).json({ error: 'Todos los campos son obligatorios' });
             return;
         }
-        // Verificar unicidad del DANE (RN-COL-002)
-        const daneCheck = await db_1.pool.query('SELECT 1 FROM colegio WHERE dane = $1', [String(dane).trim()]);
-        if (daneCheck.rows.length > 0) {
+        const cleanDane = String(dane).trim();
+        const daneCheck = await kysely_1.db
+            .selectFrom("colegio")
+            .select("id_colegio")
+            .where("dane", "=", cleanDane)
+            .executeTakeFirst();
+        if (daneCheck) {
             res.status(400).json({ error: `El código DANE '${dane}' ya se encuentra registrado para otra institución.` });
             return;
         }
-        const result = await db_1.pool.query(`INSERT INTO colegio (nombre, tipo_colegio, sede, contacto, correo, dane, tipo_calendario, estado, fecha_registro, escudo_url, colores)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 'PENDIENTE', NOW(), $8, $9)
-       RETURNING *`, [nombre, tipo_colegio, sede, contacto, correo, String(dane).trim(), tipo_calendario || 'A', escudo_url || null, colores || null]);
-        res.status(201).json(result.rows[0]);
+        const newSchool = await kysely_1.db
+            .insertInto("colegio")
+            .values({
+            nombre,
+            tipo_colegio,
+            sede,
+            contacto: String(contacto),
+            correo,
+            dane: cleanDane,
+            tipo_calendario: tipo_calendario || 'A',
+            estado: 'PENDIENTE',
+            escudo_url: escudo_url || null,
+            colores: colores || null
+        })
+            .returningAll()
+            .executeTakeFirstOrThrow();
+        res.status(201).json(newSchool);
     }
     catch (error) {
         console.error('Error registrando colegio:', error);
@@ -132,46 +170,62 @@ const registrarColegio = async (req, res) => {
     }
 };
 exports.registrarColegio = registrarColegio;
-/**
- * PUT /admin/colegios/:id
- * Actualizar información de un colegio.
- * Regla: Un colegio no puede ser editado si está en estado ELIMINADO.
- */
 const actualizarColegio = async (req, res) => {
     try {
-        const { id } = req.params;
+        const schoolId = Number(req.params.id);
         const { nombre, tipo_colegio, sede, contacto, correo, dane, tipo_calendario, escudo_url, colores } = req.body;
-        // Verificar estado actual
-        const colegioActual = await db_1.pool.query('SELECT estado FROM colegio WHERE id_colegio = $1', [id]);
-        if (colegioActual.rows.length === 0) {
+        const colegioActual = await kysely_1.db
+            .selectFrom("colegio")
+            .select(["id_colegio", "estado"])
+            .where("id_colegio", "=", schoolId)
+            .executeTakeFirst();
+        if (!colegioActual) {
             res.status(404).json({ error: 'Colegio no encontrado' });
             return;
         }
-        if (colegioActual.rows[0].estado === 'ELIMINADO') {
+        if (colegioActual.estado === 'ELIMINADO') {
             res.status(400).json({ error: 'No se puede editar un colegio en estado ELIMINADO' });
             return;
         }
-        // Verificar unicidad del DANE si se está actualizando (RN-COL-002)
         if (dane) {
-            const daneCheck = await db_1.pool.query('SELECT 1 FROM colegio WHERE dane = $1 AND id_colegio != $2', [String(dane).trim(), id]);
-            if (daneCheck.rows.length > 0) {
+            const cleanDane = String(dane).trim();
+            const daneCheck = await kysely_1.db
+                .selectFrom("colegio")
+                .select("id_colegio")
+                .where("dane", "=", cleanDane)
+                .where("id_colegio", "!=", schoolId)
+                .executeTakeFirst();
+            if (daneCheck) {
                 res.status(400).json({ error: `El código DANE '${dane}' ya se encuentra registrado para otra institución.` });
                 return;
             }
         }
-        const result = await db_1.pool.query(`UPDATE colegio 
-       SET nombre = COALESCE($1, nombre),
-           tipo_colegio = COALESCE($2, tipo_colegio),
-           sede = COALESCE($3, sede),
-           contacto = COALESCE($4, contacto),
-           correo = COALESCE($5, correo),
-           dane = COALESCE($6, dane),
-           tipo_calendario = COALESCE($7, tipo_calendario),
-           escudo_url = COALESCE($8, escudo_url),
-           colores = COALESCE($9, colores)
-       WHERE id_colegio = $10
-       RETURNING *`, [nombre, tipo_colegio, sede, contacto, correo, dane ? String(dane).trim() : null, tipo_calendario, escudo_url || null, colores || null, id]);
-        res.json(result.rows[0]);
+        const updateObject = {};
+        if (nombre !== undefined)
+            updateObject.nombre = nombre;
+        if (tipo_colegio !== undefined)
+            updateObject.tipo_colegio = tipo_colegio;
+        if (sede !== undefined)
+            updateObject.sede = sede;
+        if (contacto !== undefined)
+            updateObject.contacto = String(contacto);
+        if (correo !== undefined)
+            updateObject.correo = correo;
+        if (dane !== undefined)
+            updateObject.dane = String(dane).trim();
+        if (tipo_calendario !== undefined)
+            updateObject.tipo_calendario = tipo_calendario;
+        if (escudo_url !== undefined)
+            updateObject.escudo_url = escudo_url;
+        if (colores !== undefined)
+            updateObject.colores = colores;
+        const updated = await kysely_1.db
+            .updateTable("colegio")
+            .set(updateObject)
+            .where("id_colegio", "=", schoolId)
+            .returningAll()
+            .executeTakeFirstOrThrow();
+        res.json(updated);
     }
     catch (error) {
         console.error('Error actualizando colegio:', error);
@@ -303,50 +357,56 @@ const listarUsuarios = async (req, res) => {
         const busqueda = req.query.busqueda || req.query.search;
         const page = req.query.page ? Number(req.query.page) : null;
         const limit = req.query.limit ? Number(req.query.limit) : null;
-        let query = `
-      SELECT u.id_usuario, u.email, u.nombre, u.apellido, u.estado, u.id_colegio,
-             u.fecha_creacion, u.motivo_baneo, u.fecha_baneo,
-             c.nombre AS colegio_nombre,
-             array_agg(DISTINCT r.nombre) AS roles
-      FROM usuario u
-      LEFT JOIN colegio c ON c.id_colegio = u.id_colegio
-      LEFT JOIN usuario_rol ur ON ur.id_usuario = u.id_usuario
-      LEFT JOIN rol r ON r.id_rol = ur.id_rol
-      WHERE 1=1
-    `;
-        const params = [];
+        let baseQuery = kysely_1.db
+            .selectFrom("usuario as u")
+            .leftJoin("usuario_colegio as uc", (join) => join.onRef("uc.id_usuario", "=", "u.id_usuario").on("uc.estado", "=", "ACTIVO"))
+            .leftJoin("colegio as c", "c.id_colegio", "uc.id_colegio")
+            .leftJoin("usuario_rol as ur", "ur.id_usuario", "u.id_usuario")
+            .leftJoin("rol as r", "r.id_rol", "ur.id_rol")
+            .select([
+            "u.id_usuario",
+            "u.email",
+            "u.nombre",
+            "u.apellido",
+            "u.estado",
+            "uc.id_colegio",
+            "u.fecha_creacion",
+            "u.motivo_baneo",
+            "u.fecha_baneo",
+            "c.nombre as colegio_nombre",
+            (0, kysely_2.sql) `array_agg(r.nombre)`.as("roles")
+        ])
+            .groupBy([
+            "u.id_usuario", "u.email", "u.nombre", "u.apellido", "u.estado",
+            "uc.id_colegio", "u.fecha_creacion", "u.motivo_baneo", "u.fecha_baneo", "c.nombre"
+        ]);
         if (estado && estado !== 'TODOS') {
-            params.push(estado);
-            query += ` AND u.estado = $${params.length}`;
+            baseQuery = baseQuery.where("u.estado", "=", estado);
         }
         if (rol) {
-            params.push(rol);
-            query += ` AND r.nombre = $${params.length}`;
+            baseQuery = baseQuery.where("r.nombre", "=", rol);
         }
         if (busqueda) {
-            params.push(`%${busqueda}%`);
-            query += ` AND (u.nombre ILIKE $${params.length} OR u.apellido ILIKE $${params.length} OR u.email ILIKE $${params.length})`;
+            const searchPattern = `%${busqueda}%`;
+            baseQuery = baseQuery.where((eb) => eb.or([
+                eb("u.nombre", "ilike", searchPattern),
+                eb("u.apellido", "ilike", searchPattern),
+                eb("u.email", "ilike", searchPattern)
+            ]));
         }
         if (id_colegio) {
-            params.push(id_colegio);
-            query += ` AND u.id_colegio = $${params.length}`;
+            baseQuery = baseQuery.where("uc.id_colegio", "=", Number(id_colegio));
         }
-        query += ` GROUP BY u.id_usuario, c.nombre ORDER BY u.fecha_creacion DESC`;
-        // Count query for total
-        const countQuery = `SELECT COUNT(*)::int as count FROM (${query}) AS temp`;
-        const countResult = await db_1.pool.query(countQuery, params);
-        const totalCount = countResult.rows[0].count;
+        const allRows = await baseQuery.orderBy("u.fecha_creacion", "desc").execute();
+        const totalCount = allRows.length;
+        let pagedRows = allRows;
         if (page && limit) {
-            const offset = (page - 1) * limit;
-            params.push(limit);
-            query += ` LIMIT $${params.length}`;
-            params.push(offset);
-            query += ` OFFSET $${params.length}`;
+            const offset = (Number(page) - 1) * Number(limit);
+            pagedRows = allRows.slice(offset, offset + Number(limit));
         }
-        const result = await db_1.pool.query(query, params);
         res.setHeader("x-total-count", String(totalCount));
         res.setHeader("Access-Control-Expose-Headers", "x-total-count");
-        res.json(result.rows);
+        res.json(pagedRows);
     }
     catch (error) {
         console.error('Error listando usuarios:', error);
@@ -360,24 +420,44 @@ exports.listarUsuarios = listarUsuarios;
  */
 const detalleUsuario = async (req, res) => {
     try {
-        const { id } = req.params;
-        const result = await db_1.pool.query(`SELECT u.id_usuario, u.email, u.nombre, u.apellido, u.estado, u.id_colegio,
-              u.fecha_creacion, u.motivo_baneo, u.fecha_baneo, u.activo, u.documento, u.telefono, u.id_tipodocumento,
-              c.nombre AS colegio_nombre,
-              td.tipo AS tipo_documento,
-              array_agg(DISTINCT r.nombre) AS roles
-       FROM usuario u
-       LEFT JOIN colegio c ON c.id_colegio = u.id_colegio
-       LEFT JOIN usuario_rol ur ON ur.id_usuario = u.id_usuario
-       LEFT JOIN rol r ON r.id_rol = ur.id_rol
-       LEFT JOIN tipo_documento td ON td.id_tipodocumento = u.id_tipodocumento
-       WHERE u.id_usuario = $1
-       GROUP BY u.id_usuario, c.nombre, td.tipo`, [id]);
-        if (result.rows.length === 0) {
+        const userId = Number(req.params.id);
+        const userDetail = await kysely_1.db
+            .selectFrom("usuario as u")
+            .leftJoin("usuario_colegio as uc", (join) => join.onRef("uc.id_usuario", "=", "u.id_usuario").on("uc.estado", "=", "ACTIVO"))
+            .leftJoin("colegio as c", "c.id_colegio", "uc.id_colegio")
+            .leftJoin("usuario_rol as ur", "ur.id_usuario", "u.id_usuario")
+            .leftJoin("rol as r", "r.id_rol", "ur.id_rol")
+            .leftJoin("tipo_documento as td", "td.id_tipodocumento", "u.id_tipodocumento")
+            .select([
+            "u.id_usuario",
+            "u.email",
+            "u.nombre",
+            "u.apellido",
+            "u.estado",
+            "uc.id_colegio",
+            "u.fecha_creacion",
+            "u.motivo_baneo",
+            "u.fecha_baneo",
+            "u.activo",
+            "u.documento",
+            "u.telefono",
+            "u.id_tipodocumento",
+            "c.nombre as colegio_nombre",
+            "td.tipo as tipo_documento",
+            (0, kysely_2.sql) `array_agg(r.nombre)`.as("roles")
+        ])
+            .where("u.id_usuario", "=", userId)
+            .groupBy([
+            "u.id_usuario", "u.email", "u.nombre", "u.apellido", "u.estado", "uc.id_colegio",
+            "u.fecha_creacion", "u.motivo_baneo", "u.fecha_baneo", "u.activo", "u.documento",
+            "u.telefono", "u.id_tipodocumento", "c.nombre", "td.tipo"
+        ])
+            .executeTakeFirst();
+        if (!userDetail) {
             res.status(404).json({ error: 'Usuario no encontrado' });
             return;
         }
-        res.json(result.rows[0]);
+        res.json(userDetail);
     }
     catch (error) {
         console.error('Error obteniendo detalle usuario:', error);
@@ -743,10 +823,13 @@ const registrarDirectivo = async (req, res) => {
         const result = await client.query(`INSERT INTO directivo (id_colegio, id_usuario, cargo, estado, fecha_vinculacion)
        VALUES ($1, $2, $3, 'ACTIVO', NOW())
        RETURNING *`, [id_colegio, id_usuario, cargo || 'Directivo']);
-        // Asignar rol directivo si no lo tiene
+        // Asignar rol directivo si no lo tiene y crear vinculacion usuario_colegio
         const rolDirectivo = await client.query("SELECT id_rol FROM rol WHERE nombre = 'directivo'");
         if (rolDirectivo.rows.length > 0) {
-            await client.query('INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2) ON CONFLICT DO NOTHING', [id_usuario, rolDirectivo.rows[0].id_rol]);
+            const idRol = rolDirectivo.rows[0].id_rol;
+            await client.query('INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2) ON CONFLICT DO NOTHING', [id_usuario, idRol]);
+            await client.query(`INSERT INTO usuario_colegio (id_usuario, id_colegio, id_rol, estado, fecha_inicio)
+         VALUES ($1, $2, $3, 'ACTIVO', NOW()) ON CONFLICT DO NOTHING`, [id_usuario, id_colegio, idRol]);
         }
         await client.query('COMMIT');
         res.status(201).json(result.rows[0]);
@@ -804,6 +887,10 @@ const desvincularDirectivo = async (req, res) => {
             await client.query(`UPDATE usuario 
          SET estado = 'SUSPENDIDO', activo = false, logged_out_at = NOW() 
          WHERE id_usuario = $1`, [directivo.id_usuario]);
+            if (directivo.id_colegio) {
+                await client.query(`UPDATE usuario_colegio SET estado = 'INACTIVO', fecha_fin = NOW()
+           WHERE id_usuario = $1 AND id_colegio = $2`, [directivo.id_usuario, directivo.id_colegio]);
+            }
         }
         await client.query('COMMIT');
         res.json({ message: 'Directivo desvinculado e inhabilitado exitosamente', directivo });
@@ -1629,6 +1716,8 @@ const obtenerStatsDashboard = async (req, res) => {
             almacenamiento
         };
         res.json({
+            totalColegios: colegios.total,
+            totalUsuarios: usuariosTotal,
             colegios,
             usuarios: {
                 total: usuariosTotal,
@@ -2276,8 +2365,12 @@ const crearUsuarioByAdminGeneral = async (req, res) => {
             (telefono || '').trim() || null
         ]);
         const newUserId = userRes.rows[0].id_usuario;
-        // 6. Asignar rol en usuario_rol
+        // 6. Asignar rol en usuario_rol y usuario_colegio
         await client.query('INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2) ON CONFLICT DO NOTHING', [newUserId, idRol]);
+        if (id_colegio) {
+            await client.query(`INSERT INTO usuario_colegio (id_usuario, id_colegio, id_rol, estado, fecha_inicio)
+         VALUES ($1, $2, $3, 'ACTIVO', NOW()) ON CONFLICT DO NOTHING`, [newUserId, id_colegio, idRol]);
+        }
         // 7. Crear perfil específico según el rol
         if (rol === 'directivo' && id_colegio) {
             await client.query(`INSERT INTO directivo (id_usuario, id_colegio, cargo, fecha_vinculacion)

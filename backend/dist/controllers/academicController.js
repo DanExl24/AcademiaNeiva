@@ -2,6 +2,8 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getTeacherDashboard = exports.getStudentsByGrade = exports.getTeacherCourses = void 0;
 const db_1 = require("../config/db");
+const kysely_1 = require("../config/kysely");
+const kysely_2 = require("kysely");
 const getTeacherCourses = async (req, res) => {
     const { userId } = req.params;
     const authUser = req.user;
@@ -10,42 +12,50 @@ const getTeacherCourses = async (req, res) => {
         res.status(403).json({ error: "No tiene permiso para consultar los cursos de otro docente." });
         return;
     }
+    const schoolId = req.headers['x-school-id'] ? Number(req.headers['x-school-id']) : (req.query.schoolId ? Number(req.query.schoolId) : (authUser?.schoolId ? Number(authUser.schoolId) : null));
     try {
-        const docenteRes = await db_1.pool.query("SELECT id_docente FROM docente WHERE id_usuario = $1", [userId]);
-        if (docenteRes.rows.length === 0) {
-            console.warn(`[DEV] getTeacherCourses - No docente found for id_usuario=${userId}`);
-            res.status(404).json({ error: "Docente no encontrado" });
+        let docenteQuery = kysely_1.db
+            .selectFrom("docente")
+            .select(["id_docente", "id_colegio"])
+            .where("id_usuario", "=", Number(userId));
+        if (schoolId) {
+            docenteQuery = docenteQuery.where("id_colegio", "=", schoolId);
+        }
+        const docente = await docenteQuery.executeTakeFirst();
+        if (!docente) {
+            console.warn(`[DEV] getTeacherCourses - No docente found for id_usuario=${userId} in schoolId=${schoolId}`);
+            res.json([]);
             return;
         }
-        const idDocente = docenteRes.rows[0].id_docente;
-        console.log(`[DEV] getTeacherCourses - id_docente=${idDocente}`);
+        const idDocente = docente.id_docente;
         const yearId = req.query.yearId ? Number(req.query.yearId) : null;
-        let query = `
-      SELECT 
-        dg.id_detallegrado,
-        g.id_grupo as id_grado, 
-        tg.nombre as grado_nombre, 
-        ne.nombre as nivel, 
-        s.nombre as seccion,
-        j.nombre as jornada_nombre,
-        m.id_materia, 
-        m.nombre as materia_nombre
-       FROM detalle_grados dg
-       JOIN grupos g ON dg.id_grupo = g.id_grupo
-       JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
-       JOIN nivel_escolar ne ON g.id_nivel = ne.id_nivel
-       JOIN secciones s ON g.id_seccion = s.id_seccion
-       JOIN jornada j ON g.id_jornada = j.id_jornada
-       JOIN materias m ON dg.id_materia = m.id_materia
-       WHERE dg.id_docente = $1`;
-        const params = [idDocente];
-        if (yearId) {
-            query += ` AND dg.id_anio = $2`;
-            params.push(yearId);
+        let baseQuery = kysely_1.db
+            .selectFrom("detalle_grados as dg")
+            .innerJoin("grupos as g", "g.id_grupo", "dg.id_grupo")
+            .innerJoin("tipo_grado as tg", "tg.id_tipo_grado", "g.id_tipo_grado")
+            .innerJoin("nivel_escolar as ne", "ne.id_nivel", "g.id_nivel")
+            .innerJoin("secciones as s", "s.id_seccion", "g.id_seccion")
+            .innerJoin("jornada as j", "j.id_jornada", "g.id_jornada")
+            .innerJoin("materias as m", "m.id_materia", "dg.id_materia")
+            .select([
+            "dg.id_detallegrado",
+            "g.id_grupo as id_grado",
+            "tg.nombre as grado_nombre",
+            "ne.nombre as nivel",
+            "s.nombre as seccion",
+            "j.nombre as jornada_nombre",
+            "m.id_materia",
+            "m.nombre as materia_nombre"
+        ])
+            .where("dg.id_docente", "=", idDocente);
+        if (schoolId) {
+            baseQuery = baseQuery.where("dg.id_colegio", "=", schoolId);
         }
-        const result = await db_1.pool.query(query, params);
-        console.log(`[DEV] getTeacherCourses - returning ${result.rows.length} course(s) for id_docente=${idDocente}`);
-        res.json(result.rows);
+        if (yearId) {
+            baseQuery = baseQuery.where("dg.id_anio", "=", yearId);
+        }
+        const result = await baseQuery.execute();
+        res.json(result);
     }
     catch (error) {
         console.error(`[DEV] getTeacherCourses ERROR - userId=${userId}:`, error.message, error.detail || '');
@@ -55,16 +65,24 @@ const getTeacherCourses = async (req, res) => {
 exports.getTeacherCourses = getTeacherCourses;
 const getStudentsByGrade = async (req, res) => {
     const { gradeId } = req.params;
-    console.log(`[DEV] getStudentsByGrade called - gradeId (id_grupo): ${gradeId}`);
     try {
-        const result = await db_1.pool.query(`SELECT e.id_estudiante, e.nombre, e.apellido, u.documento, e.codigo 
-       FROM estudiante e
-       LEFT JOIN usuario u ON e.id_usuario = u.id_usuario
-       JOIN matricula m ON e.id_estudiante = m.id_estudiante
-       WHERE m.id_grupo = $1 AND m.estado IN ('ACTIVA', 'TRASLADADA')
-       ORDER BY e.apellido, e.nombre`, [gradeId]);
-        console.log(`[DEV] getStudentsByGrade - gradeId=${gradeId} -> ${result.rows.length} student(s)`);
-        res.json(result.rows);
+        const students = await kysely_1.db
+            .selectFrom("estudiante as e")
+            .leftJoin("usuario as u", "u.id_usuario", "e.id_usuario")
+            .innerJoin("matricula as m", "m.id_estudiante", "e.id_estudiante")
+            .select([
+            "e.id_estudiante",
+            "e.nombre",
+            "e.apellido",
+            "u.documento",
+            "e.codigo"
+        ])
+            .where("m.id_grupo", "=", Number(gradeId))
+            .where("m.estado", "in", ["ACTIVA", "TRASLADADA"])
+            .orderBy("e.apellido", "asc")
+            .orderBy("e.nombre", "asc")
+            .execute();
+        res.json(students);
     }
     catch (error) {
         console.error(`[DEV] getStudentsByGrade ERROR - gradeId=${gradeId}:`, error.message, error.detail || '');
@@ -74,49 +92,85 @@ const getStudentsByGrade = async (req, res) => {
 exports.getStudentsByGrade = getStudentsByGrade;
 const getTeacherDashboard = async (req, res) => {
     const { userId } = req.params;
-    console.log(`[DEV] getTeacherDashboard called - userId: ${userId}`);
+    const authUser = req.user;
+    const schoolId = req.headers['x-school-id'] ? Number(req.headers['x-school-id']) : (req.query.schoolId ? Number(req.query.schoolId) : (authUser?.schoolId ? Number(authUser.schoolId) : null));
     try {
-        const docenteRes = await db_1.pool.query("SELECT id_docente FROM docente WHERE id_usuario = $1", [userId]);
-        if (docenteRes.rows.length === 0) {
-            console.warn(`[DEV] getTeacherDashboard - No docente found for id_usuario=${userId}`);
-            res.status(404).json({ error: "Docente no encontrado" });
+        let docenteQuery = kysely_1.db
+            .selectFrom("docente")
+            .select(["id_docente", "id_colegio"])
+            .where("id_usuario", "=", Number(userId));
+        if (schoolId) {
+            docenteQuery = docenteQuery.where("id_colegio", "=", schoolId);
+        }
+        const docente = await docenteQuery.executeTakeFirst();
+        if (!docente) {
+            res.json({
+                coursesCount: 0,
+                studentsCount: 0,
+                noGradeActivities: 0,
+                upToDateCourses: 0,
+                courseAverages: [],
+                alerts: []
+            });
             return;
         }
-        const idDocente = docenteRes.rows[0].id_docente;
-        console.log(`[DEV] getTeacherDashboard - id_docente=${idDocente}`);
-        const coursesRes = await db_1.pool.query(`
-      SELECT dg.id_detallegrado, m.nombre as materia_nombre, 
-             tg.nombre as grado_nombre, s.nombre as seccion, j.nombre as jornada
-      FROM detalle_grados dg
-      JOIN grupos g ON dg.id_grupo = g.id_grupo
-      JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
-      JOIN secciones s ON g.id_seccion = s.id_seccion
-      JOIN jornada j ON g.id_jornada = j.id_jornada
-      JOIN materias m ON dg.id_materia = m.id_materia
-      WHERE dg.id_docente = $1
-    `, [idDocente]);
-        const courses = coursesRes.rows;
-        console.log(`[DEV] getTeacherDashboard - courses found: ${courses.length}`);
-        const studentsRes = await db_1.pool.query(`
-      SELECT count(distinct m.id_estudiante) as total_students
-      FROM detalle_grados dg
-      JOIN matricula m ON dg.id_grupo = m.id_grupo
-      WHERE dg.id_docente = $1 AND m.estado = 'ACTIVA'
-    `, [idDocente]);
-        const totalActiveStudents = Number(studentsRes.rows[0].total_students);
-        console.log(`[DEV] getTeacherDashboard - total active students: ${totalActiveStudents}`);
-        const periodRes = await db_1.pool.query("SELECT id_periodo FROM periodo_academico WHERE estado = 'ABIERTO' LIMIT 1");
-        const activePeriodId = periodRes.rows.length > 0 ? periodRes.rows[0].id_periodo : null;
-        console.log(`[DEV] getTeacherDashboard - active periodId: ${activePeriodId}`);
+        const idDocente = docente.id_docente;
+        let coursesQuery = kysely_1.db
+            .selectFrom("detalle_grados as dg")
+            .innerJoin("grupos as g", "g.id_grupo", "dg.id_grupo")
+            .innerJoin("tipo_grado as tg", "tg.id_tipo_grado", "g.id_tipo_grado")
+            .innerJoin("secciones as s", "s.id_seccion", "g.id_seccion")
+            .innerJoin("jornada as j", "j.id_jornada", "g.id_jornada")
+            .innerJoin("materias as m", "m.id_materia", "dg.id_materia")
+            .select([
+            "dg.id_detallegrado",
+            "m.nombre as materia_nombre",
+            "tg.nombre as grado_nombre",
+            "s.nombre as seccion",
+            "j.nombre as jornada"
+        ])
+            .where("dg.id_docente", "=", idDocente);
+        if (schoolId) {
+            coursesQuery = coursesQuery.where("dg.id_colegio", "=", schoolId);
+        }
+        const courses = await coursesQuery.execute();
+        let studentCountQuery = kysely_1.db
+            .selectFrom("detalle_grados as dg")
+            .innerJoin("matricula as m", "m.id_grupo", "dg.id_grupo")
+            .select((0, kysely_2.sql) `COUNT(DISTINCT m.id_estudiante)::int`.as("total_students"))
+            .where("dg.id_docente", "=", idDocente)
+            .where("m.estado", "=", "ACTIVA");
+        if (schoolId) {
+            studentCountQuery = studentCountQuery.where("dg.id_colegio", "=", schoolId);
+        }
+        const studentCount = await studentCountQuery.executeTakeFirst();
+        const totalActiveStudents = studentCount ? studentCount.total_students : 0;
+        let periodRes;
+        if (schoolId) {
+            periodRes = await db_1.pool.query(`SELECT pa.id_periodo, pa.nombre, pa.estado, pa.mes_inicio, pa.dia_inicio, pa.mes_fin, pa.dia_fin, pa.id_anio, al.calendario, al.estado as anio_estado
+         FROM periodo_academico pa
+         JOIN anio_lectivo al ON pa.id_anio = al.id_anio
+         WHERE pa.id_colegio = $1 AND pa.estado = 'ABIERTO'
+         ORDER BY pa.id_periodo DESC LIMIT 1`, [schoolId]);
+        }
+        else {
+            periodRes = await db_1.pool.query(`SELECT pa.id_periodo, pa.nombre, pa.estado, pa.mes_inicio, pa.dia_inicio, pa.mes_fin, pa.dia_fin, pa.id_anio, al.calendario, al.estado as anio_estado
+         FROM periodo_academico pa
+         JOIN anio_lectivo al ON pa.id_anio = al.id_anio
+         WHERE pa.estado = 'ABIERTO'
+         ORDER BY pa.id_periodo DESC LIMIT 1`);
+        }
+        const activePeriodInfo = periodRes.rows.length > 0 ? periodRes.rows[0] : null;
+        const activePeriodId = activePeriodInfo ? activePeriodInfo.id_periodo : null;
         if (!activePeriodId) {
-            console.log(`[DEV] getTeacherDashboard - No active period, returning basic stats`);
             res.json({
                 coursesCount: courses.length,
                 studentsCount: totalActiveStudents,
                 noGradeActivities: 0,
                 upToDateCourses: courses.length,
                 courseAverages: [],
-                alerts: []
+                alerts: [],
+                activePeriodInfo: null
             });
             return;
         }
@@ -127,7 +181,6 @@ const getTeacherDashboard = async (req, res) => {
         for (const course of courses) {
             const dgId = course.id_detallegrado;
             const courseName = `${course.grado_nombre} ${course.seccion} - ${course.materia_nombre} (${course.jornada})`;
-            console.log(`[DEV] getTeacherDashboard - processing course dgId=${dgId}: ${courseName}`);
             // 1. Actividades del curso
             const activitiesRes = await db_1.pool.query(`
         SELECT am.id_actividadmateria, am.porcentaje, am.nombre
@@ -137,7 +190,6 @@ const getTeacherDashboard = async (req, res) => {
       `, [dgId, activePeriodId]);
             const activities = activitiesRes.rows;
             const activityCount = activities.length;
-            console.log(`[DEV]   -> activities: ${activityCount}`);
             // 2. Estudiantes del curso
             const courseStudentsRes = await db_1.pool.query(`
         SELECT e.id_estudiante, e.nombre, e.apellido
@@ -147,7 +199,6 @@ const getTeacherDashboard = async (req, res) => {
         WHERE dg.id_detallegrado = $1 AND m.estado = 'ACTIVA'
       `, [dgId]);
             const courseStudents = courseStudentsRes.rows;
-            console.log(`[DEV]   -> courseStudents: ${courseStudents.length}`);
             if (courseStudents.length === 0 || activityCount === 0) {
                 courseAverages.push({ name: courseName, shortName: `${course.grado_nombre} ${course.seccion} - ${course.materia_nombre}`, average: 0 });
                 continue;
@@ -224,14 +275,14 @@ const getTeacherDashboard = async (req, res) => {
                 });
             }
         }
-        console.log(`[DEV] getTeacherDashboard - done. courses=${courses.length}, students=${totalActiveStudents}, noGradeActs=${noGradeActivitiesCount}, alerts=${alerts.length}`);
         res.json({
             coursesCount: courses.length,
             studentsCount: totalActiveStudents,
             noGradeActivities: noGradeActivitiesCount,
             upToDateCourses: upToDateCoursesCount,
             courseAverages,
-            alerts
+            alerts,
+            activePeriodInfo
         });
     }
     catch (error) {

@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.updateParentAccountStatus = exports.getDocumentTypes = exports.updateParent = exports.getParentDetail = exports.getParentsManagementData = void 0;
 const db_1 = require("../config/db");
 const documentValidation_1 = require("../utils/documentValidation");
+const errorHelper_1 = require("../utils/errorHelper");
 const parseSchoolId = (value) => {
     const parsed = Number(value);
     if (!parsed || Number.isNaN(parsed)) {
@@ -103,25 +104,44 @@ const getParentsManagementData = async (req, res) => {
           u.email,
           u.id_usuario,
           u.activo AS usuario_activo,
-          COUNT(DISTINCT dpf.id_estudiante) AS hijos_count,
+          COUNT(DISTINCT CASE WHEN $2::int IS NULL THEN dpf.id_estudiante ELSE m.id_estudiante END) AS hijos_count,
           (doc.id_docente IS NOT NULL) AS es_docente,
           u_doc.email AS email_docente,
 
           BOOL_OR(
-            e.id_estudiante IS NOT NULL AND EXISTS (
-              SELECT 1 FROM sancion sa WHERE sa.id_estudiante = e.id_estudiante AND sa.estado = 'ACTIVA'
+            e.id_estudiante IS NOT NULL AND ($2::int IS NULL OR m.id_matricula IS NOT NULL) AND EXISTS (
+              SELECT 1 FROM sancion sa 
+              WHERE sa.id_estudiante = e.id_estudiante 
+                AND sa.estado = 'ACTIVA'
+                AND (
+                  $2::int IS NULL OR EXISTS (
+                    SELECT 1 FROM anio_lectivo al_s 
+                    WHERE al_s.id_anio = $2::int 
+                      AND EXTRACT(YEAR FROM sa.fecha_inicio) = NULLIF(regexp_replace(al_s.calendario, '\D', '', 'g'), '')::int
+                  )
+                )
             )
           ) AS tiene_hijo_sancionado,
 
           BOOL_OR(
-            e.id_estudiante IS NOT NULL AND (
-              (SELECT COUNT(*) FROM registro_asistencia ra WHERE ra.id_estudiante = e.id_estudiante AND ra.estado = 'AUSENTE') >= 3
+            e.id_estudiante IS NOT NULL AND ($2::int IS NULL OR m.id_matricula IS NOT NULL) AND (
+              (SELECT COUNT(*) FROM registro_asistencia ra 
+               JOIN detalle_grados dg_ra ON dg_ra.id_detallegrado = ra.id_detallegrado 
+               WHERE ra.id_estudiante = e.id_estudiante 
+                 AND ra.estado = 'AUSENTE'
+                 AND ($2::int IS NULL OR dg_ra.id_anio = $2::int)
+              ) >= 3
             )
           ) AS tiene_hijo_inasistencias,
 
           BOOL_OR(
-            e.id_estudiante IS NOT NULL AND (
-              (SELECT AVG(ra_nota.promedio) FROM resultado_academico ra_nota JOIN periodo_academico pa ON pa.id_periodo = ra_nota.id_periodo WHERE ra_nota.id_estudiante = e.id_estudiante AND pa.estado != 'PENDIENTE') < 3.0
+            e.id_estudiante IS NOT NULL AND ($2::int IS NULL OR m.id_matricula IS NOT NULL) AND (
+              (SELECT AVG(ra_nota.promedio) FROM resultado_academico ra_nota 
+               JOIN periodo_academico pa ON pa.id_periodo = ra_nota.id_periodo 
+               WHERE ra_nota.id_estudiante = e.id_estudiante 
+                 AND pa.estado != 'PENDIENTE'
+                 AND ($2::int IS NULL OR pa.id_anio = $2::int)
+              ) < 3.0
             )
           ) AS tiene_hijo_riesgo,
 
@@ -140,11 +160,11 @@ const getParentsManagementData = async (req, res) => {
         LEFT JOIN usuario u_doc ON u_doc.id_usuario = doc.id_usuario
         LEFT JOIN detalle_padrefamilia dpf ON dpf.id_padrefamilia = pf.id_padrefamilia
         LEFT JOIN estudiante e ON e.id_estudiante = dpf.id_estudiante
-        LEFT JOIN nivel_escolar ne ON ne.id_nivel = e.id_nivel
         LEFT JOIN matricula m ON (m.id_estudiante = e.id_estudiante AND ($2::int IS NULL OR m.id_anio = $2::int))
         LEFT JOIN grupos g ON g.id_grupo = m.id_grupo
         LEFT JOIN tipo_grado tg ON tg.id_tipo_grado = g.id_tipo_grado
-        WHERE pf.id_colegio = $1
+        LEFT JOIN nivel_escolar ne ON ne.id_nivel = g.id_nivel OR ne.id_nivel = e.id_nivel
+        WHERE (pf.id_colegio = $1 OR EXISTS (SELECT 1 FROM usuario_colegio uc WHERE uc.id_usuario = u.id_usuario AND uc.id_colegio = $1 AND uc.estado = 'ACTIVO'))
         GROUP BY pf.id_padrefamilia, pf.nombre, pf.apellido, u.documento,
                  u.id_tipodocumento, td.tipo, u.email, u.id_usuario, u.activo, doc.id_docente, u_doc.email
       )
@@ -166,6 +186,7 @@ const getParentsManagementData = async (req, res) => {
        ORDER BY MIN(id_tipo_grado) ASC`);
         res.json({
             parents: result.rows,
+            padres: result.rows,
             catalogs: {
                 niveles: nivelesRes.rows,
                 grados: gradosRes.rows
@@ -174,7 +195,7 @@ const getParentsManagementData = async (req, res) => {
     }
     catch (error) {
         console.error("Error en getParentsManagementData:", error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: (0, errorHelper_1.formatFriendlyErrorMessage)(error) });
     }
 };
 exports.getParentsManagementData = getParentsManagementData;
@@ -270,13 +291,24 @@ const getParentDetail = async (req, res) => {
                AND pa.estado != 'PENDIENTE'`, [child.id_estudiante, child.id_anio]);
                 promedio = avgRes.rows[0]?.promedio ?? null;
                 const attRes = await db_1.pool.query(`SELECT COUNT(*)::integer AS count
-             FROM registro_asistencia
-             WHERE id_estudiante = $1 AND estado = 'AUSENTE'`, [child.id_estudiante]);
+             FROM registro_asistencia ra
+             JOIN detalle_grados dg ON dg.id_detallegrado = ra.id_detallegrado
+             WHERE ra.id_estudiante = $1 
+               AND ra.estado = 'AUSENTE'
+               AND dg.id_anio = $2`, [child.id_estudiante, child.id_anio]);
                 inasistencias = attRes.rows[0]?.count ?? 0;
             }
             const sanctionRes = await db_1.pool.query(`SELECT COUNT(*)::integer AS count
-           FROM sancion
-           WHERE id_estudiante = $1 AND estado = 'ACTIVA'`, [child.id_estudiante]);
+           FROM sancion sa
+           WHERE sa.id_estudiante = $1 
+             AND sa.estado = 'ACTIVA'
+             AND (
+               $2::int IS NULL OR EXISTS (
+                 SELECT 1 FROM anio_lectivo al_s 
+                 WHERE al_s.id_anio = $2::int 
+                   AND EXTRACT(YEAR FROM sa.fecha_inicio) = NULLIF(regexp_replace(al_s.calendario, '\D', '', 'g'), '')::int
+               )
+             )`, [child.id_estudiante, selectedYearId]);
             sanciones_activas = sanctionRes.rows[0]?.count ?? 0;
             return {
                 ...child,
@@ -294,7 +326,7 @@ const getParentDetail = async (req, res) => {
     }
     catch (error) {
         console.error("Error en getParentDetail:", error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: (0, errorHelper_1.formatFriendlyErrorMessage)(error) });
     }
 };
 exports.getParentDetail = getParentDetail;
@@ -364,7 +396,7 @@ const updateParent = async (req, res) => {
     catch (error) {
         await client.query("ROLLBACK");
         console.error("Error en updateParent:", error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: (0, errorHelper_1.formatFriendlyErrorMessage)(error) });
     }
     finally {
         client.release();
@@ -381,7 +413,7 @@ const getDocumentTypes = async (req, res) => {
     }
     catch (error) {
         console.error("Error en getDocumentTypes:", error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: (0, errorHelper_1.formatFriendlyErrorMessage)(error) });
     }
 };
 exports.getDocumentTypes = getDocumentTypes;
@@ -429,7 +461,7 @@ const updateParentAccountStatus = async (req, res) => {
     }
     catch (error) {
         console.error("Error en updateParentAccountStatus:", error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: (0, errorHelper_1.formatFriendlyErrorMessage)(error) });
     }
 };
 exports.updateParentAccountStatus = updateParentAccountStatus;

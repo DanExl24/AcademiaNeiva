@@ -5,6 +5,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getUserProfile = exports.updateProfilePhone = exports.updateProfilePassword = exports.verifyEmailChange = exports.requestEmailChange = exports.verifySession = exports.getSchoolIdentity = exports.studentLogin = exports.login = void 0;
 const db_1 = require("../config/db");
+const kysely_1 = require("../config/kysely");
+const kysely_2 = require("kysely");
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const crypto_1 = __importDefault(require("crypto"));
@@ -20,17 +22,27 @@ const login = async (req, res) => {
     try {
         if (credential.includes("@")) {
             // --- LOGIN GENERAL (Email: directivo, docente, padre, admin_general) ---
-            const userRes = await db_1.pool.query(`SELECT u.*, array_agg(r.nombre) as roles
-         FROM usuario u
-         JOIN usuario_rol ur ON u.id_usuario = ur.id_usuario
-         JOIN rol r ON ur.id_rol = r.id_rol
-         WHERE u.email = $1
-         GROUP BY u.id_usuario`, [credential]);
-            if (userRes.rows.length === 0) {
+            const user = await kysely_1.db
+                .selectFrom("usuario as u")
+                .leftJoin("usuario_rol as ur", "ur.id_usuario", "u.id_usuario")
+                .leftJoin("rol as r", "r.id_rol", "ur.id_rol")
+                .select([
+                "u.id_usuario",
+                "u.email",
+                "u.password",
+                "u.nombre",
+                "u.apellido",
+                "u.id_colegio",
+                "u.estado",
+                (0, kysely_2.sql) `array_agg(r.nombre)`.as("roles")
+            ])
+                .where("u.email", "=", credential)
+                .groupBy(["u.id_usuario", "u.email", "u.password", "u.nombre", "u.apellido", "u.id_colegio", "u.estado"])
+                .executeTakeFirst();
+            if (!user) {
                 res.status(401).json({ error: "Credenciales incorrectas" });
                 return;
             }
-            const user = userRes.rows[0];
             // Verificar estado del usuario
             if (user.estado === 'BANEADO') {
                 res.status(403).json({ error: "Tu cuenta ha sido baneada. Contacta al administrador." });
@@ -44,23 +56,28 @@ const login = async (req, res) => {
                 res.status(401).json({ error: "Credenciales incorrectas" });
                 return;
             }
-            // Verificar estado del colegio (si el usuario pertenece a uno)
-            if (user.id_colegio) {
-                const colegioRes = await db_1.pool.query('SELECT estado FROM colegio WHERE id_colegio = $1', [user.id_colegio]);
-                if (colegioRes.rows.length > 0) {
-                    const estadoColegio = colegioRes.rows[0].estado;
-                    if (estadoColegio === 'PENDIENTE') {
-                        res.status(403).json({ error: "El colegio asociado aún no ha sido aprobado." });
-                        return;
-                    }
-                    if (estadoColegio === 'SUSPENDIDO') {
-                        res.status(403).json({ error: "El colegio asociado se encuentra suspendido." });
-                        return;
-                    }
-                    if (estadoColegio === 'RECHAZADO' || estadoColegio === 'ELIMINADO') {
-                        res.status(403).json({ error: "El colegio asociado no tiene acceso al sistema." });
-                        return;
-                    }
+            // Consultar vinculaciones de institucion en usuario_colegio
+            const activeSchools = await kysely_1.db
+                .selectFrom("usuario_colegio as uc")
+                .innerJoin("colegio as c", "c.id_colegio", "uc.id_colegio")
+                .select(["uc.id_colegio", "c.estado as colegio_estado"])
+                .where("uc.id_usuario", "=", user.id_usuario)
+                .where("uc.estado", "=", "ACTIVO")
+                .execute();
+            let activeSchoolId = user.id_colegio || (activeSchools.length > 0 ? activeSchools[0].id_colegio : null);
+            if (activeSchools.length > 0) {
+                const firstSchool = activeSchools[0];
+                if (firstSchool.colegio_estado === 'PENDIENTE') {
+                    res.status(403).json({ error: "El colegio asociado aún no ha sido aprobado." });
+                    return;
+                }
+                if (firstSchool.colegio_estado === 'SUSPENDIDO') {
+                    res.status(403).json({ error: "El colegio asociado se encuentra suspendido." });
+                    return;
+                }
+                if (firstSchool.colegio_estado === 'RECHAZADO' || firstSchool.colegio_estado === 'ELIMINADO') {
+                    res.status(403).json({ error: "El colegio asociado no tiene acceso al sistema." });
+                    return;
                 }
             }
             // Verificar contraseña
@@ -69,16 +86,7 @@ const login = async (req, res) => {
                 res.status(401).json({ error: "Credenciales incorrectas" });
                 return;
             }
-            // Query schoolIds for parent
-            let schoolIds = [];
-            if (user.roles.includes("padre")) {
-                const parentInfoRes = await db_1.pool.query(`SELECT id_padrefamilia FROM padre_familia WHERE id_usuario = $1`, [user.id_usuario]);
-                if (parentInfoRes.rows.length > 0) {
-                    const idPadre = parentInfoRes.rows[0].id_padrefamilia;
-                    const schoolsRes = await db_1.pool.query(`SELECT DISTINCT id_colegio FROM detalle_padrefamilia WHERE id_padrefamilia = $1`, [idPadre]);
-                    schoolIds = schoolsRes.rows.map(r => Number(r.id_colegio));
-                }
-            }
+            const schoolIds = activeSchools.map((s) => Number(s.id_colegio));
             // Generar JWT
             const jti = crypto_1.default.randomUUID();
             const token = jsonwebtoken_1.default.sign({
@@ -86,7 +94,7 @@ const login = async (req, res) => {
                 email: user.email,
                 role: user.roles[0],
                 roles: user.roles,
-                schoolId: user.id_colegio,
+                schoolId: activeSchoolId,
                 schoolIds: schoolIds.length > 0 ? schoolIds : undefined,
                 jti
             }, JWT_SECRET, { expiresIn: "8h" });
@@ -98,7 +106,7 @@ const login = async (req, res) => {
                     email: userWithoutPassword.email,
                     role: userWithoutPassword.roles[0],
                     roles: userWithoutPassword.roles,
-                    schoolId: userWithoutPassword.id_colegio,
+                    schoolId: activeSchoolId,
                     schoolIds: schoolIds.length > 0 ? schoolIds : undefined
                 },
                 token
@@ -106,18 +114,32 @@ const login = async (req, res) => {
         }
         else {
             // --- LOGIN ESTUDIANTE (Código: e.g. EST-1-12) ---
-            const studentRes = await db_1.pool.query(`SELECT e.id_usuario, e.estado AS estado_estudiante, u.email, u.nombre, u.password, u.id_colegio, u.estado, array_agg(r.nombre) as roles
-         FROM estudiante e
-         JOIN usuario u ON e.id_usuario = u.id_usuario
-         JOIN usuario_rol ur ON u.id_usuario = ur.id_usuario
-         JOIN rol r ON ur.id_rol = r.id_rol
-         WHERE e.codigo = $1 OR u.documento = $1 OR LOWER(u.email) = LOWER($1)
-         GROUP BY e.id_usuario, e.estado, u.email, u.nombre, u.password, u.id_colegio, u.estado`, [credential]);
-            if (studentRes.rows.length === 0) {
+            const user = await kysely_1.db
+                .selectFrom("estudiante as e")
+                .innerJoin("usuario as u", "u.id_usuario", "e.id_usuario")
+                .leftJoin("usuario_rol as ur", "ur.id_usuario", "u.id_usuario")
+                .leftJoin("rol as r", "r.id_rol", "ur.id_rol")
+                .select([
+                "e.id_usuario",
+                "e.estado as estado_estudiante",
+                "u.email",
+                "u.nombre",
+                "u.password",
+                "u.id_colegio",
+                "u.estado",
+                (0, kysely_2.sql) `array_agg(r.nombre)`.as("roles")
+            ])
+                .where((eb) => eb.or([
+                eb("e.codigo", "=", credential),
+                eb("u.documento", "=", credential),
+                eb((0, kysely_2.sql) `LOWER(u.email)`, "=", credential.toLowerCase())
+            ]))
+                .groupBy(["e.id_usuario", "e.estado", "u.email", "u.nombre", "u.password", "u.id_colegio", "u.estado"])
+                .executeTakeFirst();
+            if (!user) {
                 res.status(401).json({ error: "Código o contraseña incorrectos" });
                 return;
             }
-            const user = studentRes.rows[0];
             // Verificar estado del estudiante (expulsado no puede ingresar)
             if (user.estado_estudiante === 'EXPULSADO') {
                 res.status(403).json({ error: "Tu cuenta ha sido suspendida por expulsión. No tienes acceso al sistema." });
@@ -166,19 +188,29 @@ exports.login = login;
 const studentLogin = async (req, res) => {
     const { codigo, password } = req.body;
     try {
-        // 1. Buscar el estudiante por su código (incluye estado del estudiante)
-        const studentRes = await db_1.pool.query(`SELECT e.id_usuario, e.estado AS estado_estudiante, u.email, u.nombre, u.password, u.id_colegio, u.estado, array_agg(r.nombre) as roles
-       FROM estudiante e
-       JOIN usuario u ON e.id_usuario = u.id_usuario
-       JOIN usuario_rol ur ON u.id_usuario = ur.id_usuario
-       JOIN rol r ON ur.id_rol = r.id_rol
-       WHERE e.codigo = $1
-       GROUP BY e.id_usuario, e.estado, u.email, u.nombre, u.password, u.id_colegio, u.estado`, [codigo]);
-        if (studentRes.rows.length === 0) {
+        // Buscar el estudiante por su código usando Kysely
+        const user = await kysely_1.db
+            .selectFrom("estudiante as e")
+            .innerJoin("usuario as u", "u.id_usuario", "e.id_usuario")
+            .leftJoin("usuario_rol as ur", "ur.id_usuario", "u.id_usuario")
+            .leftJoin("rol as r", "r.id_rol", "ur.id_rol")
+            .select([
+            "e.id_usuario",
+            "e.estado as estado_estudiante",
+            "u.email",
+            "u.nombre",
+            "u.password",
+            "u.id_colegio",
+            "u.estado",
+            (0, kysely_2.sql) `array_agg(r.nombre)`.as("roles")
+        ])
+            .where("e.codigo", "=", codigo)
+            .groupBy(["e.id_usuario", "e.estado", "u.email", "u.nombre", "u.password", "u.id_colegio", "u.estado"])
+            .executeTakeFirst();
+        if (!user) {
             res.status(401).json({ error: "Código o contraseña incorrectos" });
             return;
         }
-        const user = studentRes.rows[0];
         // Verificar estado del estudiante (expulsado no puede ingresar)
         if (user.estado_estudiante === 'EXPULSADO') {
             res.status(403).json({ error: "Tu cuenta ha sido suspendida por expulsión. No tienes acceso al sistema." });
@@ -489,19 +521,21 @@ const getUserProfile = async (req, res) => {
         }
         const userData = userRes.rows[0];
         const userRole = (user.role || '').toUpperCase();
+        const profileObj = {
+            id_usuario: userData.id_usuario,
+            nombre: userData.nombre,
+            apellido: userData.apellido,
+            email: userData.email,
+            estado: userData.estado,
+            fecha_creacion: userData.fecha_creacion,
+            rol: userRole,
+            documento: userData.documento || 'No Registrado',
+            tipo_documento: userData.tipo_documento || 'No Registrado',
+            telefono: userData.telefono || null
+        };
         res.json({
-            user: {
-                id_usuario: userData.id_usuario,
-                nombre: userData.nombre,
-                apellido: userData.apellido,
-                email: userData.email,
-                estado: userData.estado,
-                fecha_creacion: userData.fecha_creacion,
-                rol: userRole,
-                documento: userData.documento || 'No Registrado',
-                tipo_documento: userData.tipo_documento || 'No Registrado',
-                telefono: userData.telefono || null
-            }
+            ...profileObj,
+            user: profileObj
         });
     }
     catch (error) {

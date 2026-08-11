@@ -182,6 +182,7 @@ async function insertSchool(client, school, roleIds, directivoHash, docenteHash,
      VALUES ($1, $2, $3, $4, $5, true, $6, $7, $8, '2025-01-15 08:00:00-05') RETURNING id_usuario`, [rectorEmail, directivoHash, "Rector", school.nombre, school.id, DOCUMENT_TYPE_CC, rectorDoc, String(school.contacto)]);
     const rectorUserId = rectorRes.rows[0].id_usuario;
     await client.query(`INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2)`, [rectorUserId, roleIds.directivo]);
+    await client.query(`INSERT INTO usuario_colegio (id_usuario, id_colegio, id_rol, estado, fecha_inicio) VALUES ($1, $2, $3, 'ACTIVO', NOW()) ON CONFLICT DO NOTHING`, [rectorUserId, school.id, roleIds.directivo]);
     await client.query(`INSERT INTO directivo (id_colegio, id_usuario, cargo) VALUES ($1, $2, $3)`, [school.id, rectorUserId, "RECTOR"]);
     credentials.push({
         colegio: school.nombre, seccion: "staff", rol: "DIRECTIVO",
@@ -194,6 +195,7 @@ async function insertSchool(client, school, roleIds, directivoHash, docenteHash,
      VALUES ($1, $2, $3, $4, $5, true, $6, $7, $8, '2025-01-15 08:00:00-05') RETURNING id_usuario`, [directivoEmail, directivoHash, "Directivo", school.nombre, school.id, DOCUMENT_TYPE_CC, directivoDoc, String(school.contacto)]);
     const directivoUserId = directivoResult.rows[0].id_usuario;
     await client.query(`INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2)`, [directivoUserId, roleIds.directivo]);
+    await client.query(`INSERT INTO usuario_colegio (id_usuario, id_colegio, id_rol, estado, fecha_inicio) VALUES ($1, $2, $3, 'ACTIVO', NOW()) ON CONFLICT DO NOTHING`, [directivoUserId, school.id, roleIds.directivo]);
     await client.query(`INSERT INTO directivo (id_colegio, id_usuario, cargo) VALUES ($1, $2, $3)`, [school.id, directivoUserId, "COORDINADOR"]);
     credentials.push({
         colegio: school.nombre, seccion: "staff", rol: "DIRECTIVO",
@@ -211,6 +213,7 @@ async function insertSchool(client, school, roleIds, directivoHash, docenteHash,
        VALUES ($1, $2, $3, $4, $5, true, $6, $7, $8, '2025-01-15 08:00:00-05') RETURNING id_usuario`, [email, docenteHash, teacher.firstName, fullLastName, school.id, DOCUMENT_TYPE_CC, teacherDoc, teacherPhone]);
         const teacherUserId = userResult.rows[0].id_usuario;
         await client.query(`INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2)`, [teacherUserId, roleIds.docente]);
+        await client.query(`INSERT INTO usuario_colegio (id_usuario, id_colegio, id_rol, estado, fecha_inicio) VALUES ($1, $2, $3, 'ACTIVO', NOW()) ON CONFLICT DO NOTHING`, [teacherUserId, school.id, roleIds.docente]);
         await client.query(`INSERT INTO docente (nombre, apellido, id_colegio, id_usuario)
        VALUES ($1, $2, $3, $4)`, [teacher.firstName, fullLastName, school.id, teacherUserId]);
         credentials.push({
@@ -457,6 +460,8 @@ async function insertStudentsAndParents(client, school, roleIds, parentHash, stu
                     await client.query(`INSERT INTO usuario_rol (id_usuario, id_rol) 
              VALUES ($1, $2) 
              ON CONFLICT (id_usuario, id_rol) DO NOTHING`, [parentUserId, roleIds.padre]);
+                    await client.query(`INSERT INTO usuario_colegio (id_usuario, id_colegio, id_rol, estado, fecha_inicio)
+             VALUES ($1, $2, $3, 'ACTIVO', NOW()) ON CONFLICT DO NOTHING`, [parentUserId, school.id, roleIds.padre]);
                 }
                 else {
                     // Crear un padre normal desde cero
@@ -469,6 +474,7 @@ async function insertStudentsAndParents(client, school, roleIds, parentHash, stu
              VALUES ($1, $2, $3, $4, $5, true, $6, $7, $8, '2025-01-15 08:00:00-05') RETURNING id_usuario`, [currentParentEmail, parentHash, pName, pLastName, school.id, DOCUMENT_TYPE_CC, pDoc, parentPhone]);
                     parentUserId = pUserRes.rows[0].id_usuario;
                     await client.query(`INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2)`, [parentUserId, roleIds.padre]);
+                    await client.query(`INSERT INTO usuario_colegio (id_usuario, id_colegio, id_rol, estado, fecha_inicio) VALUES ($1, $2, $3, 'ACTIVO', NOW()) ON CONFLICT DO NOTHING`, [parentUserId, school.id, roleIds.padre]);
                 }
                 const pFamRes = await client.query(`INSERT INTO padre_familia (nombre, apellido, id_colegio, id_usuario)
            VALUES ($1, $2, $3, $4) RETURNING id_padrefamilia`, [pName, pLastName, school.id, parentUserId]);
@@ -489,6 +495,7 @@ async function insertStudentsAndParents(client, school, roleIds, parentHash, stu
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULL, '2025-01-15 08:00:00-05') RETURNING id_usuario`, [studentEmail, studentHash, firstName, lastName, school.id, userActive, 1, studentDoc]);
             const studentUserId = sUserRes.rows[0].id_usuario;
             await client.query(`INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2)`, [studentUserId, roleIds.estudiante]);
+            await client.query(`INSERT INTO usuario_colegio (id_usuario, id_colegio, id_rol, estado, fecha_inicio) VALUES ($1, $2, $3, 'ACTIVO', NOW()) ON CONFLICT DO NOTHING`, [studentUserId, school.id, roleIds.estudiante]);
             // ── Create student record with estado ──
             const estRes = await client.query(`INSERT INTO estudiante (nombre, apellido, codigo, id_nivel, id_colegio, id_usuario, estado, motivo_estado)
          VALUES ($1, $2, $3, $4, $5, $6, $7::estado_estudiante, $8) RETURNING id_estudiante`, [firstName, lastName, studentCode, group.id_nivel, school.id, studentUserId, studentState, motivoEstado]);
@@ -840,7 +847,10 @@ async function run() {
             "escala_valoracion",
             "configuracion_colegio",
             "configuracion_inscripcion",
-            // Auth
+            // Auth & Traslados
+            "traslado_aprobacion",
+            "solicitud_traslado",
+            "usuario_colegio",
             "usuario_rol",
             "usuario",
             "rol",
@@ -1204,7 +1214,7 @@ async function seedDbaCompetenciesAndEvidences() {
                                         const evRes = await client.query("SELECT id_evidencia_dba, descripcion, orden FROM evidencias_dba WHERE id_dba = $1 AND estado = 'ACTIVO' ORDER BY orden ASC", [dba.id_dba]);
                                         const evidencias = evRes.rows;
                                         if (evidencias.length > 0) {
-                                            for (const ev of evidencias) {
+                                            for (const ev of evidencias.slice(0, 3)) {
                                                 await client.query(`INSERT INTO evidencia_aprendizaje (id_competencia, descripcion, orden, id_colegio, id_evidencia_dba)
                            VALUES ($1, $2, $3, $4, $5)`, [compInsert.rows[0].id_competencia, ev.descripcion, ev.orden, school.id_colegio, ev.id_evidencia_dba]);
                                             }
@@ -1261,7 +1271,7 @@ async function seedDbaCompetenciesAndEvidences() {
                                         const evRes = await client.query("SELECT id_evidencia_dba, descripcion, orden FROM evidencias_dba WHERE id_dba = $1 AND estado = 'ACTIVO' ORDER BY orden ASC", [dba.id_dba]);
                                         const evidencias = evRes.rows;
                                         if (evidencias.length > 0) {
-                                            for (const ev of evidencias) {
+                                            for (const ev of evidencias.slice(0, 3)) {
                                                 await client.query(`INSERT INTO evidencia_aprendizaje (id_competencia, descripcion, orden, id_colegio, id_evidencia_dba)
                            VALUES ($1, $2, $3, $4, $5)`, [compInsert.rows[0].id_competencia, ev.descripcion, ev.orden, school.id_colegio, ev.id_evidencia_dba]);
                                             }

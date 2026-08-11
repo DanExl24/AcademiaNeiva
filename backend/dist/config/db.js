@@ -19,4 +19,13 @@ exports.pool = new pg_1.Pool({
 exports.pool.query(`
   ALTER TABLE public.anio_lectivo ADD COLUMN IF NOT EXISTS fecha_inicio DATE;
   ALTER TABLE public.anio_lectivo ADD COLUMN IF NOT EXISTS fecha_fin DATE;
-`).catch((err) => console.error("Error adding fecha_inicio/fecha_fin to anio_lectivo:", err));
+  ALTER TABLE public.docente DROP CONSTRAINT IF EXISTS docente_id_usuario_key;
+  DO $$
+  BEGIN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'docente_id_usuario_id_colegio_key'
+    ) THEN
+      ALTER TABLE public.docente ADD CONSTRAINT docente_id_usuario_id_colegio_key UNIQUE (id_usuario, id_colegio);
+    END IF;
+  END $$;
+`).catch((err) => console.error("Error adding fecha_inicio/fecha_fin or updating docente constraint:", err));

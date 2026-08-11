@@ -442,6 +442,12 @@ const ensureCompetencySchema = async () => {
             const preventClosedWritesSql = fs_1.default.readFileSync(preventClosedWritesPath, "utf8");
             await client.query(preventClosedWritesSql);
         }
+        // Ejecutar migración 041 (tabla decision_promocion_directivo para registro de decisiones)
+        const decisionPromocionPath = path_1.default.join(__dirname, "../migrations/041_decision_promocion_directivo.sql");
+        if (fs_1.default.existsSync(decisionPromocionPath)) {
+            const decisionPromocionSql = fs_1.default.readFileSync(decisionPromocionPath, "utf8");
+            await client.query(decisionPromocionSql);
+        }
         // Backfill sync_uuid for existing competencies
         const unmigratedRes = await client.query(`
       SELECT id_colegio, id_anio, id_materia, id_periodo, descripcion, ARRAY_AGG(id_competencia) AS ids

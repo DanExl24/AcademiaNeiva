@@ -20,6 +20,7 @@ const dba_routes_1 = __importDefault(require("./routes/dba.routes"));
 const support_routes_1 = __importDefault(require("./routes/support.routes"));
 const reingreso_routes_1 = __importDefault(require("./routes/reingreso.routes"));
 const parent_routes_1 = __importDefault(require("./routes/parent.routes"));
+const traslado_routes_1 = __importDefault(require("./routes/traslado.routes"));
 const app = (0, express_1.default)();
 // Confiar en el Proxy Inverso (Nginx / Cloudflare) para obtener la IP real del cliente
 app.set("trust proxy", 1);
@@ -100,6 +101,7 @@ app.use("/api/admin", dba_routes_1.default);
 app.use("/api/support", support_routes_1.default);
 app.use("/api/reingreso", reingreso_routes_1.default);
 app.use("/api/parents", parent_routes_1.default);
+app.use("/api/traslados", traslado_routes_1.default);
 app.get("/", (req, res) => {
     res.json({ message: "API TS funcionando segura" });
 });

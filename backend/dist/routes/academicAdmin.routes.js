@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const academicAdminController_1 = require("../controllers/academicAdminController");
 const dbaReportsController_1 = require("../controllers/dbaReportsController");
+const academicTrackingController_1 = require("../controllers/academicAdmin/academicTrackingController");
 const multer_1 = require("../config/multer");
 const authMiddleware_1 = require("../middleware/authMiddleware");
 const router = (0, express_1.Router)();
@@ -10,9 +11,10 @@ const router = (0, express_1.Router)();
 router.get("/catalogs", academicAdminController_1.getAcademicCatalogs);
 // Protected routes (require verification)
 router.use(authMiddleware_1.verifyToken);
-// Expose read-only routes to all authenticated users (Docentes need these settings to show scales and branding)
+// Expose read-only routes to all authenticated users (Docentes, Padres, Estudiantes need these settings)
 router.get("/my-school/:schoolId", academicAdminController_1.getMySchoolData);
 router.get("/settings/:schoolId", academicAdminController_1.getAcademicSettingsData);
+router.get("/active-period-info", academicAdminController_1.getActivePeriodInfo);
 // Require Directivo role for administrative actions
 router.use(authMiddleware_1.requireDirectivo);
 router.get("/settings/enrollment-config/:schoolId/:yearId", academicAdminController_1.getEnrollmentConfig);
@@ -83,4 +85,10 @@ router.post("/matriculas/reingreso", academicAdminController_1.createReingresoEn
 router.post("/matriculas/reingreso/:id/aprobar", academicAdminController_1.approveReingresoEnrollment);
 router.post("/matriculas/reingreso/:id/corregir", academicAdminController_1.correctReingresoEnrollment);
 router.post("/matriculas/reingreso/:id/rechazar", academicAdminController_1.rejectReingresoEnrollment);
+// Seguimiento Académico y Consolidación de Promoción
+router.get("/academic-tracking/period-tracking", academicTrackingController_1.getPeriodAcademicTracking);
+router.get("/academic-tracking/annual-consolidation", academicTrackingController_1.getAnnualConsolidation);
+router.get("/academic-tracking/student-history/:studentId", academicTrackingController_1.getStudentAcademicHistory);
+router.get("/academic-tracking/check-warning", academicTrackingController_1.checkStudentAcademicWarning);
+router.post("/academic-tracking/record-decision", academicTrackingController_1.recordDirectiveDecision);
 exports.default = router;

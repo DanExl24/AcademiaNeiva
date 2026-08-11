@@ -286,6 +286,7 @@ const getReingresoCatalogs = async (req, res) => {
        ORDER BY id_nivel`, [schoolId]);
         res.json({
             anios: yearsRes.rows,
+            years: yearsRes.rows,
             niveles: levelsRes.rows
         });
     }

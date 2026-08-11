@@ -50,6 +50,12 @@ const createTicket = async (req, res) => {
             if (userRes.rows.length > 0) {
                 const u = userRes.rows[0];
                 finalSchoolId = u.id_colegio ? Number(u.id_colegio) : finalSchoolId;
+                if (!finalSchoolId) {
+                    const schoolLinkRes = await db_1.pool.query(`SELECT id_colegio FROM usuario_colegio WHERE id_usuario = $1 AND estado = 'ACTIVO' LIMIT 1`, [finalUserId]);
+                    if (schoolLinkRes.rows.length > 0) {
+                        finalSchoolId = Number(schoolLinkRes.rows[0].id_colegio);
+                    }
+                }
                 finalSenderName = `${u.nombre} ${u.apellido}`;
                 finalSenderEmail = u.email;
                 userDocument = u.documento || null;

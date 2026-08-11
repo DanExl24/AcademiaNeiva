@@ -1,22 +1,27 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.checkDocument = void 0;
-const db_1 = require("../config/db");
+const kysely_1 = require("../config/kysely");
+const kysely_2 = require("kysely");
 const checkDocument = async (req, res) => {
     const { document } = req.params;
     try {
-        // 1. Buscar en la tabla usuario por número de documento
-        const userRes = await db_1.pool.query(`SELECT u.id_usuario, u.nombre, u.apellido, u.email,
-              ARRAY_AGG(r.nombre) as roles
-       FROM usuario u
-       JOIN usuario_rol ur ON u.id_usuario = ur.id_usuario
-       JOIN rol r ON ur.id_rol = r.id_rol
-       WHERE u.documento = $1
-       GROUP BY u.id_usuario, u.nombre, u.apellido, u.email`, [document]);
-        if (userRes.rows.length > 0) {
-            const user = userRes.rows[0];
+        const user = await kysely_1.db
+            .selectFrom("usuario as u")
+            .innerJoin("usuario_rol as ur", "ur.id_usuario", "u.id_usuario")
+            .innerJoin("rol as r", "r.id_rol", "ur.id_rol")
+            .select([
+            "u.id_usuario",
+            "u.nombre",
+            "u.apellido",
+            "u.email",
+            (0, kysely_2.sql) `array_agg(r.nombre)`.as("roles")
+        ])
+            .where("u.documento", "=", document)
+            .groupBy(["u.id_usuario", "u.nombre", "u.apellido", "u.email"])
+            .executeTakeFirst();
+        if (user) {
             const roles = user.roles;
-            // Determinar rol principal para mostrar (prioridad: directivo > admin > docente)
             let displayRole = 'docente';
             if (roles.includes('directivo'))
                 displayRole = 'directivo';
@@ -30,7 +35,6 @@ const checkDocument = async (req, res) => {
             });
             return;
         }
-        // 2. No encontrado en docente, no hay otra tabla de personal con documento
         res.json({ exists: false });
     }
     catch (error) {

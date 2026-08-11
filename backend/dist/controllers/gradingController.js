@@ -33,8 +33,11 @@ const getPeriods = async (req, res) => {
     const { schoolId } = req.params;
     const targetYearId = req.query.yearId ? Number(req.query.yearId) : undefined;
     const authReq = req;
-    const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
-    if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== Number(schoolId)) {
+    const isSupervision = authReq.user && authReq.user.roles?.includes("admin_general");
+    const userSchoolIds = (authReq.user?.schoolIds || []).map(Number);
+    const targetId = Number(schoolId);
+    const isAllowed = isSupervision || (authReq.user?.schoolId && Number(authReq.user.schoolId) === targetId) || (userSchoolIds.includes(targetId));
+    if (authReq.user && !isAllowed) {
         res.status(403).json({ error: "No tiene permiso para ver los periodos de este colegio." });
         return;
     }
