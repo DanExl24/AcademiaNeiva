@@ -1,0 +1,39 @@
+﻿# =============================================
+# AcademiaNeiva — Backend .gitignore
+# =============================================
+
+# Variables de entorno
+.env
+.env.*
+!.env.example
+
+# Dependencias
+node_modules/
+
+# Build
+dist/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Uploads
+uploads/
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Certificados
+*.pem
+*.key
+*.crt
+*.p12

@@ -1,0 +1,64 @@
+﻿# =============================================
+# AcademiaNeiva — Root .gitignore
+# =============================================
+
+# ---- Variables de entorno (NUNCA al repositorio) ----
+.env
+.env.*
+!.env.example
+
+# ---- Dependencias de Node ----
+node_modules/
+**/node_modules/
+
+# ---- Compilados / builds ----
+dist/
+dist-ssr/
+build/
+
+# ---- Logs ----
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ---- Archivos del SO ----
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- Editor ----
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# ---- Uploads locales ----
+backend/uploads/
+uploads/
+
+# ---- Bases de datos y volcados SQL sensibles ----
+*.sql.bak
+*.dump
+*.bak
+
+# ---- Docker volumes locales ----
+pgdata/
+postgres-data/
+
+# ---- TypeScript caches ----
+*.tsbuildinfo
+
+# ---- Certificados / llaves privadas ----
+*.pem
+*.p12
+*.pfx
+*.key
+*.cer
+*.crt
