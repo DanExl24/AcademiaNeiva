@@ -1,11 +1,11 @@
 -- Migración 039: Solución permanente a duplicados en detalle_grados
 -- 1. Llenar id_anio en detalle_grados para registros antiguos donde id_anio es NULL
 UPDATE public.detalle_grados dg
-SET id_anio = g.id_anio
-FROM public.grupos g
-WHERE dg.id_grupo = g.id_grupo
+SET id_anio = al.id_anio
+FROM public.anio_lectivo al
+WHERE dg.id_colegio = al.id_colegio
   AND dg.id_anio IS NULL
-  AND g.id_anio IS NOT NULL;
+  AND al.estado = 'ABIERTO';
 
 -- 2. Consolidar registros duplicados en detalle_grados por (id_colegio, id_grupo, id_materia, id_anio)
 WITH ranked_dg AS (

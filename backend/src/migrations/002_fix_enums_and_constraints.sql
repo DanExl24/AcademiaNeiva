@@ -101,28 +101,34 @@ CREATE OR REPLACE VIEW public.vw_asistencia_estudiante AS
 
 ALTER VIEW public.vw_asistencia_estudiante OWNER TO postgres;
 
--- 12. Recrear vw_promedio_normalizado usando nota_maxima
-CREATE OR REPLACE VIEW public.vw_promedio_normalizado AS
- SELECT p.id_estudiante,
-    p.id_periodo,
-    p.id_colegio,
-    ((p.promedio_raw / NULLIF(cfg.nota_maxima, (0)::numeric)) * (5)::numeric) AS promedio_normalizado
-   FROM public.vw_promedio_estudiante_periodo p
-     JOIN public.configuracion_colegio cfg ON (cfg.id_colegio = p.id_colegio);
+-- 12 y 13. Recrear vw_promedio_normalizado y vw_desempeno_estudiante si existe la vista base
+DO $$ 
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.views WHERE table_schema = 'public' AND table_name = 'vw_promedio_estudiante_periodo') THEN
+    EXECUTE '
+      CREATE OR REPLACE VIEW public.vw_promedio_normalizado AS
+       SELECT p.id_estudiante,
+          p.id_periodo,
+          p.id_colegio,
+          ((p.promedio_raw / NULLIF(cfg.nota_maxima, (0)::numeric)) * (5)::numeric) AS promedio_normalizado
+         FROM public.vw_promedio_estudiante_periodo p
+           JOIN public.configuracion_colegio cfg ON (cfg.id_colegio = p.id_colegio);
 
-ALTER VIEW public.vw_promedio_normalizado OWNER TO postgres;
+      ALTER VIEW public.vw_promedio_normalizado OWNER TO postgres;
 
--- 13. Recrear vw_desempeno_estudiante (dependía de vw_promedio_normalizado)
-CREATE OR REPLACE VIEW public.vw_desempeno_estudiante AS
- SELECT p.id_estudiante,
-    p.id_periodo,
-    p.id_colegio,
-    p.promedio_normalizado,
-    d.nivel AS "desempeño"
-   FROM (public.vw_promedio_normalizado p
-     JOIN public.escala_valoracion d ON (((p.promedio_normalizado >= d.valor_minimo) AND (p.promedio_normalizado <= d.valor_maximo) AND (d.id_colegio = p.id_colegio))));
+      CREATE OR REPLACE VIEW public.vw_desempeno_estudiante AS
+       SELECT p.id_estudiante,
+          p.id_periodo,
+          p.id_colegio,
+          p.promedio_normalizado,
+          d.nivel AS "desempeño"
+         FROM (public.vw_promedio_normalizado p
+           JOIN public.escala_valoracion d ON (((p.promedio_normalizado >= d.valor_minimo) AND (p.promedio_normalizado <= d.valor_maximo) AND (d.id_colegio = p.id_colegio))));
 
-ALTER VIEW public.vw_desempeno_estudiante OWNER TO postgres;
+      ALTER VIEW public.vw_desempeno_estudiante OWNER TO postgres;
+    ';
+  END IF;
+END $$;
 
 -- 14. Crear tabla token_blacklist
 CREATE TABLE IF NOT EXISTS token_blacklist (

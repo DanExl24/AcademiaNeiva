@@ -44,7 +44,7 @@ ALTER TABLE public.tickets_soporte
     ALTER COLUMN observaciones TYPE jsonb 
     USING (
         CASE 
-            WHEN observaciones IS NULL OR trim(observaciones) = '' THEN '[]'::jsonb
+            WHEN observaciones IS NULL OR trim(observaciones::text) = '' THEN '[]'::jsonb
             ELSE observaciones::jsonb
         END
     );
