@@ -1,7 +1,7 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import axios from 'axios'
-import { Clock, Calendar, AlertTriangle, Sparkles } from 'lucide-vue-next'
+import { Clock, AlertTriangle, Sparkles } from 'lucide-vue-next'
 import { useAuthStore } from '../stores/auth'
 import { useAcademicYearStore } from '../stores/academicYear'
 
@@ -38,7 +38,8 @@ const schoolId = computed(() => {
 
 // Regla de Negocio 1: Admin General NO debe ver el contador
 const isNotAdminGeneral = computed(() => {
-  return auth.activeRole !== 'admin_general' && auth.user?.role !== 'admin_general'
+  const role = (auth.activeRole || (auth.user as any)?.role || '') as string
+  return role !== 'admin_general'
 })
 
 // Regla de Negocio 2: El año lectivo NO debe estar CERRADO o INACTIVO
