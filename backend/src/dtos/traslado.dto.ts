@@ -9,6 +9,10 @@ export const CreateTrasladoSchema = z.object({
     (val) => (val === '' || val === null || val === undefined ? null : Number(val)),
     z.number().positive().nullable().optional()
   ),
+  yearId: z.preprocess(
+    (val) => (val === '' || val === null || val === undefined ? null : Number(val)),
+    z.number().positive().nullable().optional()
+  ),
   motivo: z.string().min(5, { message: 'El motivo debe contener al menos 5 caracteres' })
 }).refine(data => Number(data.id_colegio_origen) !== Number(data.id_colegio_destino), {
   message: 'La institución de origen y destino deben ser diferentes',
@@ -23,7 +27,8 @@ export const ApproveTrasladoSchema = z.object({
 export const FilterTrasladoSchema = z.object({
   estado: z.enum(['SOLICITADA', 'EN_APROBACION', 'APROBADA', 'RECHAZADA', 'CANCELADA', 'EJECUTADA']).optional(),
   tipo: z.enum(['TRASLADO_USUARIO', 'TRASLADO_MATRICULA']).optional(),
-  id_colegio: z.number().positive().optional()
+  id_colegio: z.number().positive().optional(),
+  yearId: z.number().positive().optional()
 });
 
 export type CreateTrasladoInput = z.infer<typeof CreateTrasladoSchema>;

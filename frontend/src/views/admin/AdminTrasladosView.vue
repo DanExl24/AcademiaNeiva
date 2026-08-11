@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import axios from 'axios'
 import { API_BASE_URL } from '../../config/api'
 import { useAuthStore } from '../../stores/auth'
+import { useAcademicYearStore } from '../../stores/academicYear'
 import {
   ArrowLeftRight,
   Search,
@@ -27,6 +28,7 @@ import {
 } from 'lucide-vue-next'
 
 const auth = useAuthStore()
+const yearStore = useAcademicYearStore()
 const route = useRoute()
 
 // Types
@@ -142,11 +144,17 @@ onMounted(async () => {
   }
 })
 
+watch(() => yearStore.selectedYearId, () => {
+  fetchSolicitudes()
+  fetchEstadisticas()
+})
+
 const fetchSolicitudes = async () => {
   loading.value = true
   errorMessage.value = ''
   try {
     const params: Record<string, string> = {}
+    if (yearStore.selectedYearId) params.yearId = String(yearStore.selectedYearId)
     if (filterEstado.value !== 'ALL') params.estado = filterEstado.value
     if (filterTipo.value !== 'ALL') params.tipo = filterTipo.value
     if (filterOrigenId.value) params.id_colegio_origen = String(filterOrigenId.value)

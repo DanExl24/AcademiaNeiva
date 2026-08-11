@@ -71,6 +71,19 @@ export class TrasladoService {
         .executeTakeFirst();
       if (pending) throw new Error('Ya existe una solicitud de traslado pendiente para este usuario.');
 
+      // 5.1 Verificar pertenencia de la matrícula al año lectivo seleccionado si aplica
+      if (id_matricula) {
+        const matCheck = await trx
+          .selectFrom('matricula')
+          .select(['id_matricula', 'id_anio'])
+          .where('id_matricula', '=', id_matricula)
+          .executeTakeFirst();
+        if (!matCheck) throw new Error('La matrícula especificada no existe.');
+        if (input.yearId && matCheck.id_anio !== Number(input.yearId)) {
+          throw new Error('La matrícula del estudiante no pertenece al año lectivo seleccionado.');
+        }
+      }
+
       // 6. Insertar solicitud de traslado usando Kysely
       const tipoFinal = esDirectivo ? 'TRASLADO_USUARIO' : tipo;
       const solicitud = await trx
@@ -307,6 +320,7 @@ export class TrasladoService {
     id_colegio_destino?: number;
     fecha_desde?: string;
     fecha_hasta?: string;
+    yearId?: number;
   }): Promise<any[]> {
     let query = db
       .selectFrom('solicitud_traslado as st')
@@ -314,6 +328,7 @@ export class TrasladoService {
       .innerJoin('colegio as co', 'co.id_colegio', 'st.id_colegio_origen')
       .innerJoin('colegio as cd', 'cd.id_colegio', 'st.id_colegio_destino')
       .innerJoin('usuario as uc', 'uc.id_usuario', 'st.creado_por')
+      .leftJoin('matricula as m', 'm.id_matricula', 'st.id_matricula')
       .select([
         'st.id_solicitud',
         'st.tipo',
@@ -336,6 +351,22 @@ export class TrasladoService {
         'uc.apellido as creador_apellido',
       ])
       .orderBy('st.fecha_creacion', 'desc');
+
+    if (filter?.yearId) {
+      query = query.where((eb) =>
+        eb.or([
+          eb('m.id_anio', '=', filter.yearId!),
+          eb.and([
+            eb('st.id_matricula', 'is', null),
+            eb(
+              sql<number>`EXTRACT(YEAR FROM st.fecha_creacion)`,
+              '=',
+              sql<number>`(SELECT anio FROM anio_lectivo WHERE id_anio = ${filter.yearId})`
+            )
+          ])
+        ])
+      );
+    }
 
     if (filter?.estado) {
       query = query.where('st.estado', '=', filter.estado as any);
@@ -650,6 +681,7 @@ export class TrasladoService {
       .innerJoin('colegio as co', 'co.id_colegio', 'st.id_colegio_origen')
       .innerJoin('colegio as cd', 'cd.id_colegio', 'st.id_colegio_destino')
       .innerJoin('usuario as uc', 'uc.id_usuario', 'st.creado_por')
+      .leftJoin('matricula as m', 'm.id_matricula', 'st.id_matricula')
       .select([
         'st.id_solicitud',
         'st.tipo',
@@ -678,6 +710,22 @@ export class TrasladoService {
         ])
       )
       .orderBy('st.fecha_creacion', 'desc');
+
+    if (filter?.yearId) {
+      query = query.where((eb) =>
+        eb.or([
+          eb('m.id_anio', '=', filter.yearId!),
+          eb.and([
+            eb('st.id_matricula', 'is', null),
+            eb(
+              sql<number>`EXTRACT(YEAR FROM st.fecha_creacion)`,
+              '=',
+              sql<number>`(SELECT anio FROM anio_lectivo WHERE id_anio = ${filter.yearId})`
+            )
+          ])
+        ])
+      );
+    }
 
     if (filter?.estado) {
       query = query.where('st.estado', '=', filter.estado as any);

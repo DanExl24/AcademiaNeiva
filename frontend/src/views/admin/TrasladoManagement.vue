@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import axios from 'axios'
 import { API_BASE_URL } from '../../config/api'
 import { useAuthStore } from '../../stores/auth'
+import { useAcademicYearStore } from '../../stores/academicYear'
 import { 
   ArrowLeftRight, 
   Search, 
@@ -22,6 +23,7 @@ import {
 } from 'lucide-vue-next'
 
 const auth = useAuthStore()
+const yearStore = useAcademicYearStore()
 const route = useRoute()
 
 // Types & Interfaces
@@ -170,8 +172,13 @@ const fetchSolicitudes = async () => {
   loading.value = true
   errorMessage.value = ''
   try {
+    const params: Record<string, any> = {}
+    if (yearStore.selectedYearId) {
+      params.yearId = yearStore.selectedYearId
+    }
     const res = await axios.get(`${API_BASE_URL}/api/traslados`, {
-      headers: { Authorization: `Bearer ${auth.token}` }
+      headers: { Authorization: `Bearer ${auth.token}` },
+      params
     })
     solicitudes.value = res.data || []
   } catch (err: any) {
@@ -205,19 +212,12 @@ const fetchColegios = async () => {
 }
 
 const fetchEstudiantes = async () => {
-  const schoolId = auth.user?.schoolId || 1
-  try {
-    const res = await axios.get(`${API_BASE_URL}/api/student/colegio/${schoolId}`, {
-      headers: { Authorization: `Bearer ${auth.token}` }
-    })
-    estudiantesColegio.value = res.data || []
-  } catch (err: any) {
-    console.error('Error fetching estudiantes:', err)
-  }
+  const schoolId = auth.user?.schoolId ? Number(auth.user.schoolId) : 1
+  await fetchEstudiantesByColegio(schoolId)
 }
 
 const fetchPersonalColegio = async (schoolId?: number) => {
-  const sid = schoolId || auth.user?.schoolId || 1
+  const sid = schoolId || (auth.user?.schoolId ? Number(auth.user.schoolId) : 1)
   try {
     const res = await axios.get(`${API_BASE_URL}/api/traslados/personal/${sid}`, {
       headers: { Authorization: `Bearer ${auth.token}` }
@@ -230,7 +230,7 @@ const fetchPersonalColegio = async (schoolId?: number) => {
 
 const fetchDirectivosColegio = async (schoolId?: number) => {
   if (!isAdminGeneral.value) return
-  const sid = schoolId || auth.user?.schoolId || 1
+  const sid = schoolId || (auth.user?.schoolId ? Number(auth.user.schoolId) : 1)
   try {
     const res = await axios.get(`${API_BASE_URL}/api/traslados/directivos/${sid}`, {
       headers: { Authorization: `Bearer ${auth.token}` }
@@ -240,6 +240,29 @@ const fetchDirectivosColegio = async (schoolId?: number) => {
     console.error('Error fetching directivos colegio:', err)
   }
 }
+
+const fetchEstudiantesByColegio = async (schoolId: number) => {
+  try {
+    const params: Record<string, any> = {}
+    if (yearStore.selectedYearId) {
+      params.yearId = yearStore.selectedYearId
+    }
+    const res = await axios.get(`${API_BASE_URL}/api/student/colegio/${schoolId}`, {
+      headers: { Authorization: `Bearer ${auth.token}` },
+      params
+    })
+    estudiantesColegio.value = res.data || []
+  } catch (err: any) {
+    console.error('Error fetching estudiantes by colegio:', err)
+  }
+}
+
+// Watch año lectivo seleccionado para refrescar las solicitudes y estudiantes
+watch(() => yearStore.selectedYearId, () => {
+  fetchSolicitudes()
+  const sid = newTraslado.value.id_colegio_origen ? Number(newTraslado.value.id_colegio_origen) : (auth.user?.schoolId ? Number(auth.user.schoolId) : 1)
+  fetchEstudiantesByColegio(sid)
+})
 
 // Watch el tipo de traslado: limpiar selección al cambiar
 watch(() => newTraslado.value.tipo, () => {
@@ -258,17 +281,6 @@ watch(() => newTraslado.value.id_colegio_origen, (newId) => {
     fetchEstudiantesByColegio(sid)
   }
 })
-
-const fetchEstudiantesByColegio = async (schoolId: number) => {
-  try {
-    const res = await axios.get(`${API_BASE_URL}/api/student/colegio/${schoolId}`, {
-      headers: { Authorization: `Bearer ${auth.token}` }
-    })
-    estudiantesColegio.value = res.data || []
-  } catch (err: any) {
-    console.error('Error fetching estudiantes by colegio:', err)
-  }
-}
 
 // Auto-asignar id_matricula cuando se selecciona un estudiante para TRASLADO_MATRICULA
 watch(() => newTraslado.value.id_usuario, (newUserId) => {
@@ -342,6 +354,7 @@ const handleCreateTraslado = async () => {
       id_colegio_origen: idOrigen,
       id_colegio_destino: idDestino,
       id_matricula: newTraslado.value.id_matricula ? Number(newTraslado.value.id_matricula) : null,
+      yearId: yearStore.selectedYearId ? Number(yearStore.selectedYearId) : null,
       motivo: motivoTxt
     }
     await axios.post(`${API_BASE_URL}/api/traslados`, payload, {

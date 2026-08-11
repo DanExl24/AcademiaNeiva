@@ -66,7 +66,8 @@ export const getTraslados = async (req: AuthRequest, res: Response): Promise<voi
     const filter = {
       estado: req.query.estado as any,
       tipo: req.query.tipo as any,
-      id_colegio: schoolId || undefined
+      id_colegio: schoolId || undefined,
+      yearId: req.query.yearId ? Number(req.query.yearId) : undefined
     };
 
     const solicitudes = await TrasladoService.getSolicitudesPorColegio(schoolId || Number(req.query.id_colegio), filter);
@@ -198,6 +199,7 @@ export const getAdminTrasladosGlobal = async (req: AuthRequest, res: Response): 
       id_colegio_destino: req.query.id_colegio_destino ? Number(req.query.id_colegio_destino) : undefined,
       fecha_desde: req.query.fecha_desde as string | undefined,
       fecha_hasta: req.query.fecha_hasta as string | undefined,
+      yearId: req.query.yearId ? Number(req.query.yearId) : undefined,
     };
 
     const solicitudes = await TrasladoService.getAllSolicitudesGlobal(filter);
