@@ -41,10 +41,12 @@ const resolveTeachingContext = async (
      JOIN periodo_academico p
        ON p.id_periodo = $3
       AND p.id_colegio = dg.id_colegio
+      AND p.id_anio = dg.id_anio
      LEFT JOIN docente d ON dg.id_docente = d.id_docente
      WHERE dg.id_grupo = $1
        AND dg.id_materia = $2
        ${teacherFilter}
+     ORDER BY dg.id_detallegrado DESC
      LIMIT 1`,
     params
   );
@@ -303,15 +305,37 @@ export const createActivity = async (req: Request, res: Response): Promise<void>
       if (!finalIdPeriodo) finalIdPeriodo = Number(comp.id_periodo);
       if (!finalIdColegio) finalIdColegio = Number(comp.id_colegio);
 
-      // Solo resolver id_detallegrado desde el contexto de la competencia si no venía especificado
+      // Resolver id_detallegrado desde el contexto de la competencia y el id_anio del periodo
       if (!finalIdDetalleGrado) {
         const dgRes = await client.query(
-          `SELECT id_detallegrado FROM detalle_grados
-           WHERE id_grupo = $1 AND id_materia = $2 AND id_colegio = $3
+          `SELECT dg.id_detallegrado 
+           FROM detalle_grados dg
+           JOIN periodo_academico p ON p.id_periodo = $4 AND p.id_colegio = dg.id_colegio AND p.id_anio = dg.id_anio
+           WHERE dg.id_grupo = $1 AND dg.id_materia = $2 AND dg.id_colegio = $3
+           ORDER BY dg.id_detallegrado DESC
            LIMIT 1`,
-          [comp.id_grupo, comp.id_materia, comp.id_colegio]
+          [comp.id_grupo, comp.id_materia, comp.id_colegio, finalIdPeriodo]
         );
         finalIdDetalleGrado = dgRes.rows.length > 0 ? dgRes.rows[0].id_detallegrado : null;
+      }
+    }
+
+    if (finalIdDetalleGrado && finalIdPeriodo) {
+      const alignDgRes = await client.query(
+        `SELECT dg2.id_detallegrado
+         FROM detalle_grados dg1
+         JOIN periodo_academico p ON p.id_periodo = $2
+         JOIN detalle_grados dg2 
+           ON dg2.id_grupo = dg1.id_grupo 
+          AND dg2.id_materia = dg1.id_materia 
+          AND dg2.id_colegio = dg1.id_colegio 
+          AND dg2.id_anio = p.id_anio
+         WHERE dg1.id_detallegrado = $1
+         LIMIT 1`,
+        [finalIdDetalleGrado, finalIdPeriodo]
+      );
+      if (alignDgRes.rows.length > 0) {
+        finalIdDetalleGrado = alignDgRes.rows[0].id_detallegrado;
       }
     }
 
