@@ -348,7 +348,7 @@ export const getAnnualConsolidation = async (req: Request, res: Response): Promi
       .execute();
 
     const decisionsMap: Record<number, any> = {};
-    decisions.forEach(d => {
+    decisions.forEach((d: any) => {
       decisionsMap[d.id_estudiante] = d;
     });
 
@@ -513,7 +513,7 @@ export const getStudentAcademicHistory = async (req: Request, res: Response): Pr
       .leftJoin("grupos as g", "g.id_grupo", "m.id_grupo")
       .leftJoin("tipo_grado as tg", "tg.id_tipo_grado", "g.id_tipo_grado")
       .leftJoin("secciones as s", "s.id_seccion", "g.id_seccion")
-      .leftJoin("decision_promocion_directivo as dpd", (join) =>
+      .leftJoin("decision_promocion_directivo as dpd", (join: any) =>
         join
           .onRef("dpd.id_estudiante", "=", "m.id_estudiante")
           .onRef("dpd.id_anio_anterior", "=", "m.id_anio")
@@ -729,8 +729,8 @@ export const recordDirectiveDecision = async (req: Request, res: Response): Prom
         id_colegio: schoolId,
         id_estudiante: studentId,
         id_anio_anterior: previousYearId,
-        resultado_calculado: calculatedResult,
-        decision_tomada: decisionTaken,
+        resultado_calculado: calculatedResult as any,
+        decision_tomada: decisionTaken as any,
         id_grado_anterior: previousGradeId || null,
         id_grado_asignado: assignedGradeId || null,
         id_usuario_decision: userId,

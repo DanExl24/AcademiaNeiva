@@ -784,6 +784,7 @@ export interface DB {
   criterio_evaluacion: CriterioEvaluacion;
   dba: Dba;
   dba_dimensiones_preescolar: DbaDimensionesPreescolar;
+  decision_promocion_directivo: DecisionPromocionDirectivo;
   desempeno: Desempeno;
   detalle_grados: DetalleGrados;
   detalle_padrefamilia: DetallePadrefamilia;
