@@ -545,10 +545,14 @@ export class TrasladoService {
           .where('id_matricula', '=', solicitud.id_matricula)
           .execute();
 
-        // 5.2 Actualizar colegio activo del estudiante
+        // 5.2 Actualizar colegio activo del estudiante y asegurar su estado ACTIVO en la institución de destino
         await trx
           .updateTable('estudiante')
-          .set({ id_colegio: solicitud.id_colegio_destino })
+          .set({
+            id_colegio: solicitud.id_colegio_destino,
+            estado: 'ACTIVO' as any,
+            motivo_estado: null
+          })
           .where('id_usuario', '=', solicitud.id_usuario)
           .execute();
 
@@ -586,7 +590,7 @@ export class TrasladoService {
             await trx
               .updateTable('matricula')
               .set({
-                estado: 'APROBADA' as any,
+                estado: 'TRASLADADA' as any,
                 tipo: 'TRASLADO' as any,
                 es_traslado: true,
                 observaciones: obsTraslado,
@@ -604,7 +608,7 @@ export class TrasladoService {
                 id_usuario_responsable: origMat.id_usuario_responsable,
                 correo_padre: origMat.correo_padre,
                 id_nivel: origMat.id_nivel,
-                estado: 'APROBADA' as any,
+                estado: 'TRASLADADA' as any,
                 tipo: 'TRASLADO' as any,
                 es_traslado: true,
                 observaciones: obsTraslado,

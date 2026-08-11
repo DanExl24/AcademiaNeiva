@@ -12,6 +12,8 @@ import {
   AlertCircle,
   XCircle,
   ArrowLeftRight,
+  ArrowDownLeft,
+  ArrowUpRight,
   FileText,
   CheckCircle,
   ExternalLink,
@@ -92,8 +94,8 @@ const stats = computed<Record<string, number>>(() => ({
   PENDIENTE:  enrollments.value.filter(e => e.estado === 'PENDIENTE').length,
   CORREGIDA:  enrollments.value.filter(e => e.estado === 'CORREGIDA').length,
   CORRECCION: enrollments.value.filter(e => e.estado === 'CORRECCION').length,
-  ACTIVA:     enrollments.value.filter(e => e.estado === 'ACTIVA' || e.estado === 'APROBADA').length,
-  TRASLADADA: enrollments.value.filter(e => e.estado === 'TRASLADADA').length,
+  ACTIVA:     enrollments.value.filter(e => (e.estado === 'ACTIVA' || e.estado === 'APROBADA') && !e.es_traslado && e.tipo !== 'TRASLADO').length,
+  TRASLADADA: enrollments.value.filter(e => e.estado === 'TRASLADADA' || e.tipo === 'TRASLADO' || e.es_traslado).length,
   CANCELADA:  enrollments.value.filter(e => e.estado === 'CANCELADA' || e.estado === 'RECHAZADA').length,
 }))
 
@@ -176,9 +178,11 @@ const filteredEnrollments = computed(() => {
   let list = enrollments.value.filter(en => {
     // Status filter
     if (filterStatus.value === 'ACTIVA') {
-      if (en.estado !== 'ACTIVA' && en.estado !== 'APROBADA') return false
+      if ((en.estado !== 'ACTIVA' && en.estado !== 'APROBADA') || en.es_traslado || en.tipo === 'TRASLADO') return false
     } else if (filterStatus.value === 'CANCELADA') {
       if (en.estado !== 'CANCELADA' && en.estado !== 'RECHAZADA') return false
+    } else if (filterStatus.value === 'TRASLADADA') {
+      if (en.estado !== 'TRASLADADA' && en.tipo !== 'TRASLADO' && !en.es_traslado) return false
     } else if (filterStatus.value !== 'TODOS' && en.estado !== filterStatus.value) {
       return false
     }
@@ -1027,7 +1031,20 @@ const approveException = async (id: number) => {
                   <span :class="[getStatusMeta(en.estado).bg, 'px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest w-fit']">
                     {{ getStatusMeta(en.estado).label }}
                   </span>
-                  <div v-if="en.es_traslado && ['TRASLADADA','ACTIVA','PENDIENTE'].includes(en.estado)"
+                  <!-- Sentido del Traslado para visibilidad del Directivo -->
+                  <div v-if="en.sentido_traslado === 'ENTRANTE' || (en.es_traslado && en.colegio_origen_nombre && en.colegio_origen_nombre !== auth.user?.schoolName)"
+                       class="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300 text-[10px] font-black bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 px-2 py-0.5 rounded-lg w-fit"
+                       :title="`Matrícula recibida desde: ${en.colegio_origen_nombre || 'otro colegio'}`">
+                    <ArrowDownLeft :size="12" class="text-emerald-600 dark:text-emerald-400" />
+                    <span>📥 Traslado Entrante ({{ en.colegio_origen_nombre || 'Desde otro colegio' }})</span>
+                  </div>
+                  <div v-else-if="en.sentido_traslado === 'SALIENTE'"
+                       class="flex items-center gap-1.5 text-purple-700 dark:text-purple-300 text-[10px] font-black bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/60 px-2 py-0.5 rounded-lg w-fit"
+                       :title="`Matrícula emitida hacia: ${en.colegio_destino_nombre || 'otro colegio'}`">
+                    <ArrowUpRight :size="12" class="text-purple-600 dark:text-purple-400" />
+                    <span>📤 Traslado Saliente ({{ en.colegio_destino_nombre || 'Hacia otro colegio' }})</span>
+                  </div>
+                  <div v-else-if="en.es_traslado || en.tipo === 'TRASLADO'"
                        class="flex items-center gap-1 text-blue-600 dark:text-blue-400 text-[10px] font-bold bg-blue-50 dark:bg-blue-950/20 px-2 py-0.5 rounded-lg w-fit">
                     <ArrowLeftRight :size="10" /> Traslado
                   </div>

@@ -170,6 +170,19 @@ export class MatriculaService {
       .leftJoin('grupos as g', 'm.id_grupo', 'g.id_grupo')
       .leftJoin('tipo_grado as tg', 'g.id_tipo_grado', 'tg.id_tipo_grado')
       .leftJoin('secciones as s', 'g.id_seccion', 's.id_seccion')
+      .leftJoin('solicitud_traslado as st', (join) =>
+        join.on((eb) =>
+          eb.or([
+            eb('st.id_matricula', '=', eb.ref('m.id_matricula')),
+            eb.and([
+              eb('st.id_usuario', '=', eb.ref('e.id_usuario')),
+              eb('st.tipo', '=', eb.val('TRASLADO_MATRICULA'))
+            ])
+          ])
+        )
+      )
+      .leftJoin('colegio as co_orig', 'co_orig.id_colegio', 'st.id_colegio_origen')
+      .leftJoin('colegio as co_dest', 'co_dest.id_colegio', 'st.id_colegio_destino')
       .select([
         'm.id_matricula',
         'm.id_estudiante',
@@ -188,6 +201,17 @@ export class MatriculaService {
         'u.documento as student_documento',
         'e.motivo_estado as student_motivo_estado',
         'n.nombre as nivel_nombre',
+        'st.id_solicitud as id_solicitud_traslado',
+        'st.id_colegio_origen',
+        'st.id_colegio_destino',
+        'co_orig.nombre as colegio_origen_nombre',
+        'co_dest.nombre as colegio_destino_nombre',
+        sql<string>`CASE 
+          WHEN m.id_colegio = st.id_colegio_destino THEN 'ENTRANTE'
+          WHEN m.id_colegio = st.id_colegio_origen THEN 'SALIENTE'
+          WHEN m.es_traslado IS TRUE OR m.tipo = 'TRASLADO' THEN 'ENTRANTE'
+          ELSE NULL
+        END`.as('sentido_traslado'),
         sql<string>`CONCAT(tg.nombre, ' - ', s.nombre)`.as('grado_nombre'),
         sql<boolean>`(SELECT COUNT(*) FROM documento_matriculas WHERE id_matricula = m.id_matricula AND estado = 'PENDIENTE') > 0`.as('has_pending_docs')
       ])
@@ -197,7 +221,15 @@ export class MatriculaService {
       query = query.where('m.id_anio', '=', yearId);
     }
 
-    if (estado !== 'ALL') {
+    if (estado === 'TRASLADADA') {
+      query = query.where((eb) =>
+        eb.or([
+          eb('m.estado', '=', 'TRASLADADA'),
+          eb('m.tipo', '=', 'TRASLADO'),
+          eb('m.es_traslado', '=', true)
+        ])
+      );
+    } else if (estado !== 'ALL') {
       query = query.where('m.estado', '=', estado as any);
     }
 

@@ -703,6 +703,10 @@ const barChartOptions = {
                       ? 'bg-purple-100 text-purple-800 dark:bg-purple-950/50 dark:text-purple-300 border-purple-200 dark:border-purple-800'
                       : selectedChild.estado_matricula === 'PENDIENTE' || selectedChild.estado_matricula === 'PENDIENTE_RENOVACION'
                       ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300 border-amber-200 dark:border-amber-800'
+                      : selectedChild.estado_matricula === 'CANCELADA' || selectedChild.estado_matricula === 'RECHAZADA'
+                      ? 'bg-rose-100 text-rose-800 dark:bg-rose-950/50 dark:text-rose-300 border-rose-200 dark:border-rose-800'
+                      : selectedChild.estado_matricula === 'INACTIVA'
+                      ? 'bg-slate-200 text-slate-800 dark:bg-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-600'
                       : 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-600',
                     'px-3 py-1 rounded-xl text-xs font-black uppercase tracking-wider border shadow-xs'
                   ]">
