@@ -744,7 +744,8 @@ export const recordDirectiveDecision = async (req: Request, res: Response): Prom
       observation
     } = parseResult.data;
 
-    const userId = (req as any).user?.id_usuario;
+    const user = (req as any).user;
+    const userId = user?.id || user?.id_usuario;
     if (!userId) {
       res.status(401).json({ error: "Usuario no autenticado" });
       return;
