@@ -850,14 +850,14 @@ watch(schoolId, () => {
         </div>
 
         <!-- Banner Informativo de Protección de Datos -->
-        <div class="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-xl p-3.5 flex items-center gap-3">
-          <div class="p-2 bg-blue-600 text-white rounded-lg shrink-0">
+        <div class="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl p-3.5 flex items-center gap-3">
+          <div class="p-2 bg-amber-500 text-white rounded-lg shrink-0">
             <Info :size="18" />
           </div>
-          <div class="text-xs text-blue-950 dark:text-blue-200 leading-relaxed">
-            <p class="font-black uppercase tracking-wider text-[10px]">🔒 Protección de Identidad del Usuario:</p>
+          <div class="text-xs text-amber-950 dark:text-amber-200 leading-relaxed">
+            <p class="font-black uppercase tracking-wider text-[10px]">🔒 DATOS PERSONALES BLOQUEADOS:</p>
             <p class="font-medium mt-0.5">
-              Los datos personales (nombres, apellidos y documento de identidad) permanecen protegidos para no alterar la cuenta global de la persona. La única forma de modificar los datos personales de identidad es solicitándolo al <strong>Administrador General</strong> mediante un ticket de soporte. En esta ventana únicamente puede modificar el correo electrónico de contacto.
+              Los datos personales (nombres, apellidos y documento de identidad) pertenecen a la cuenta global del usuario. La única forma de modificar los datos personales de identidad es solicitándolo al <strong>Administrador General</strong> mediante un ticket de soporte. En esta ventana únicamente puede modificar el correo electrónico de contacto.
             </p>
           </div>
         </div>
