@@ -673,7 +673,10 @@ export const getParentDashboardData = async (req: Request, res: Response) => {
       .orderBy("id_matricula", "desc")
       .as("m");
 
-    const children = await db
+    const authReq = req as any;
+    const schoolId = authReq.user?.schoolId || (req.query.id_colegio ? parseInt(req.query.id_colegio as string) : null);
+
+    let childrenQuery = db
       .selectFrom("padre_familia as pf")
       .innerJoin("detalle_padrefamilia as dpf", "dpf.id_padrefamilia", "pf.id_padrefamilia")
       .innerJoin("estudiante as e", "e.id_estudiante", "dpf.id_estudiante")
@@ -700,12 +703,23 @@ export const getParentDashboardData = async (req: Request, res: Response) => {
         "j.nombre as jornada",
         "n.nombre as nivel",
         "e.id_colegio",
+        "dpf.id_colegio as dpf_colegio",
         "m.id_grupo",
         "m.id_anio",
         "m.estado as estado_matricula"
       ])
-      .where("pf.id_usuario", "=", userId)
-      .execute();
+      .where("pf.id_usuario", "=", userId);
+
+    if (schoolId) {
+      childrenQuery = childrenQuery.where((eb) =>
+        eb.or([
+          eb("dpf.id_colegio", "=", schoolId),
+          eb("e.id_colegio", "=", schoolId)
+        ])
+      );
+    }
+
+    const children = await childrenQuery.execute();
 
     if (children.length === 0) {
       return res.json({ 
@@ -717,19 +731,8 @@ export const getParentDashboardData = async (req: Request, res: Response) => {
       });
     }
 
-    const authReq = req as any;
-    const schoolId = authReq.user?.schoolId || (req.query.id_colegio ? parseInt(req.query.id_colegio as string) : children[0].id_colegio);
-    const filteredChildren = children.filter((c: any) => c.id_colegio === schoolId);
-
-    if (filteredChildren.length === 0) {
-      return res.json({ 
-        children, 
-        studentStats: [], 
-        recentActivity: [], 
-        activePeriod: null,
-        periods: [] 
-      });
-    }
+    const activeSchoolId = schoolId || children[0].id_colegio;
+    const filteredChildren = children;
 
     // 2. Get available periods for the selected year and school
     let periodsQuery = db
@@ -743,7 +746,7 @@ export const getParentDashboardData = async (req: Request, res: Response) => {
         sql<Date>`(al.calendario || '-' || lpad(pa.mes_inicio::text, 2, '0') || '-' || lpad(pa.dia_inicio::text, 2, '0'))::date`.as("fecha_inicio"),
         sql<Date>`(al.calendario || '-' || lpad(pa.mes_fin::text, 2, '0') || '-' || lpad(pa.dia_fin::text, 2, '0'))::date`.as("fecha_fin")
       ])
-      .where("pa.id_colegio", "=", schoolId)
+      .where("pa.id_colegio", "=", activeSchoolId)
       .where("pa.estado", "!=", "PENDIENTE");
 
     if (targetYearId) {
@@ -1046,7 +1049,7 @@ export const getParentDashboardData = async (req: Request, res: Response) => {
     }
 
     res.json({
-      children,
+      children: filteredChildren,
       studentStats,
       recentActivity,
       activePeriod,
