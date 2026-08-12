@@ -100,9 +100,15 @@ const fetchDetails = async () => {
 }
 
 const showCancelModal = ref(false)
-const cancelMotivo = ref('Retiro Voluntario')
+const cancelMotivo = ref('Inconsistencias Graves en Documentos')
 const cancelDetalles = ref('')
 const cancelling = ref(false)
+
+const openCancelModal = () => {
+  cancelMotivo.value = 'Inconsistencias Graves en Documentos'
+  cancelDetalles.value = ''
+  showCancelModal.value = true
+}
 
 const isReadonly = computed(() =>
   matricula.value && ['ACTIVA', 'TRASLADADA', 'CANCELADA'].includes(matricula.value.estado)
@@ -475,7 +481,7 @@ const formatRenewalStateLabel = (state?: string) => {
             <Download v-else :size="18" />
             Descargar Ficha (PDF)
           </button>
-          <button @click="showCancelModal = true" class="px-8 py-5 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 rounded-[2rem] font-black text-sm uppercase tracking-widest hover:bg-red-100 transition-all border border-red-100 dark:border-red-900 shrink-0">
+          <button @click="openCancelModal()" class="px-8 py-5 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 rounded-[2rem] font-black text-sm uppercase tracking-widest hover:bg-red-100 transition-all border border-red-100 dark:border-red-900 shrink-0">
             Cancelar Matrícula
           </button>
         </div>
@@ -493,7 +499,7 @@ const formatRenewalStateLabel = (state?: string) => {
               <p :class="[matricula.estado === 'ACTIVA' ? 'text-emerald-700 dark:text-emerald-400' : 'text-blue-700 dark:text-blue-400', 'text-xs font-medium']">Procesada exitosamente.</p>
             </div>
           </div>
-          <button @click="showCancelModal = true" class="px-4 py-2 bg-red-600 text-white rounded-xl font-black text-xs hover:bg-red-700 transition-all">Cancelar</button>
+          <button @click="openCancelModal()" class="px-4 py-2 bg-red-600 text-white rounded-xl font-black text-xs hover:bg-red-700 transition-all">Cancelar</button>
         </div>
 
         <!-- ⚠️ BANNER: Este padre es Docente/Directivo -->
@@ -769,6 +775,7 @@ const formatRenewalStateLabel = (state?: string) => {
               <option value="No Cumple Requisitos de Admisión">No Cumple Requisitos de Admisión</option>
               <option value="Incumplimiento de Plazos">Incumplimiento de Plazos</option>
               <option value="Retiro / Desistimiento Voluntario">Retiro / Desistimiento Voluntario</option>
+              <option value="Solicitud de Reingreso Rechazada / Cancelada">Solicitud de Reingreso Rechazada / Cancelada</option>
               <option value="Otro">Otro</option>
             </select>
           </div>

@@ -300,10 +300,17 @@ const confirmCorrection = async () => {
 
 // ─── Cancel Modal State ───────────────────────────────────────────────────────
 const showCancelModal = ref(false)
-const cancelMotivo = ref('Solicitud de Reingreso Rechazada / Cancelada')
+const cancelMotivo = ref('Inconsistencias Graves en Documentos')
 const cancelDetalles = ref('')
 const cancelStudentState = ref<'RETIRADO' | 'EXPULSADO'>('RETIRADO')
 const cancelling = ref(false)
+
+const openCancelModal = () => {
+  cancelMotivo.value = 'Inconsistencias Graves en Documentos'
+  cancelDetalles.value = ''
+  cancelStudentState.value = 'RETIRADO'
+  showCancelModal.value = true
+}
 
 const documentLabels: Record<string, string> = {
   registroCivil: 'Registro Civil',
@@ -1499,7 +1506,7 @@ const approveException = async (id: number) => {
                       </p>
                     </div>
                   </div>
-                  <button v-if="matricula.estado !== 'CANCELADA' && matricula.estado !== 'CULMINADA'" @click="showCancelModal = true" class="px-4 py-2 bg-red-600 text-white rounded-xl font-black text-xs uppercase tracking-wide hover:bg-red-700 transition-all shrink-0 flex items-center gap-1">
+                  <button v-if="matricula.estado !== 'CANCELADA' && matricula.estado !== 'CULMINADA'" @click="openCancelModal()" class="px-4 py-2 bg-red-600 text-white rounded-xl font-black text-xs uppercase tracking-wide hover:bg-red-700 transition-all shrink-0 flex items-center gap-1">
                     <XCircle :size="14" /> Cancelar / Denegar
                   </button>
                 </div>
@@ -1769,7 +1776,7 @@ const approveException = async (id: number) => {
                   <div v-else class="text-slate-500 dark:text-slate-400 text-xs font-medium">Valida todos los documentos para continuar.</div>
 
                   <div class="flex gap-2 flex-wrap">
-                    <button v-if="!isReadonly" @click="showCancelModal = true"
+                    <button v-if="!isReadonly" @click="openCancelModal()"
                             class="px-4 py-2.5 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900 rounded-xl font-black text-xs uppercase tracking-wide hover:bg-red-100 transition-all flex items-center gap-1.5">
                       <XCircle :size="14" /> Denegar Solicitud
                     </button>
@@ -1937,6 +1944,7 @@ const approveException = async (id: number) => {
               <option value="No Cumple Requisitos de Admisión">No Cumple Requisitos de Admisión</option>
               <option value="Incumplimiento de Plazos">Incumplimiento de Plazos</option>
               <option value="Retiro / Desistimiento Voluntario">Retiro / Desistimiento Voluntario</option>
+              <option value="Solicitud de Reingreso Rechazada / Cancelada">Solicitud de Reingreso Rechazada / Cancelada</option>
               <option value="Otro">Otro</option>
             </select>
           </div>
