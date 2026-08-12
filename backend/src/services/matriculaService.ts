@@ -584,12 +584,11 @@ export class MatriculaService {
                 renovacion.parent_name = parentFullName;
                 renovacion.candidates = candidates;
 
-                const eligibles = candidates.filter(c => c.eligible);
-                if (eligibles.length === 1) {
-                  renovacion.student = eligibles[0];
-                } else if (eligibles.length === 0 && candidates.length === 1) {
-                  renovacion.student = candidates[0];
-                  renovacion.error_message = candidates[0].error_message;
+                // Solo pre-asignar renovacion.student si la matrícula ya tenía explícitamente un id_estudiante asignado (ej: Reingreso / Ticket)
+                if (mat.id_estudiante) {
+                  renovacion.student = candidates.find(c => c.id_estudiante === mat.id_estudiante) || null;
+                } else {
+                  renovacion.student = null;
                 }
               }
             }

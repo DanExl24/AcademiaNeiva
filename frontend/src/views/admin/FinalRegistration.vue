@@ -17,7 +17,9 @@ import {
   XCircle,
   Users,
   UserCheck,
-  AlertTriangle
+  AlertTriangle,
+  UserPlus,
+  RotateCcw
 } from 'lucide-vue-next'
 
 const route = useRoute()
@@ -29,23 +31,15 @@ const matricula = ref<any>(null)
 const loading = ref(true)
 const step = ref(1) // 1: Student, 2: Parent
 
-// Selected candidate for multi-child flow
+// Selection state for candidate child vs new child
+const isNewStudent = ref(false)
 const selectedCandidate = ref<any>(null)
-const candidatePicked = computed(() => !!selectedCandidate.value)
 
-// Computed: resolve which student is active for this enrollment
-const activeStudent = computed(() => {
-  if (selectedCandidate.value) return selectedCandidate.value
-  if (matricula.value?.renovacion?.student) return matricula.value.renovacion.student
-  return null
-})
-
-// Is multi-child picker needed?
-const needsCandidatePicker = computed(() => {
-  const ren = matricula.value?.renovacion
-  if (!ren?.is_renovacion) return false
-  // Show picker if there are multiple candidates OR multiple eligible ones
-  return (ren.candidates || []).length > 1 && !candidatePicked.value && !ren.student
+// Is input fields locked?
+const isStudentInputsDisabled = computed(() => {
+  if (selectedCandidate.value) return true
+  if (matricula.value?.id_estudiante && !isNewStudent.value) return true
+  return false
 })
 
 const studentData = ref({
@@ -73,18 +67,19 @@ const fetchDetails = async () => {
     const response = await axios.get(`/api/matriculas/${idMatricula}`)
     matricula.value = response.data
 
-    // Pre-populate student data from autoselected candidate
-    if (response.data.renovacion?.student) {
-      const st = response.data.renovacion.student
-      studentData.value.nombre = st.nombre
-      studentData.value.apellido = st.apellido
-      studentData.value.documento = st.documento
-      studentData.value.id_tipodocumento = Number(st.id_tipodocumento) || 2
-    } else if (response.data.tipo === 'REINGRESO' || response.data.id_estudiante) {
+    // If explicit student is bound to enrollment (e.g. Reingreso / Ticket)
+    if (response.data.id_estudiante || response.data.tipo === 'REINGRESO') {
       studentData.value.nombre = response.data.student_firstname || ''
       studentData.value.apellido = response.data.student_lastname || ''
       studentData.value.documento = response.data.student_document || ''
       studentData.value.id_tipodocumento = Number(response.data.student_id_tipodocumento) || 2
+    } else if (response.data.renovacion?.student) {
+      const st = response.data.renovacion.student
+      selectedCandidate.value = st
+      studentData.value.nombre = st.nombre
+      studentData.value.apellido = st.apellido
+      studentData.value.documento = st.documento
+      studentData.value.id_tipodocumento = Number(st.id_tipodocumento) || 2
     }
 
     // Pre-populate parent data
@@ -104,7 +99,7 @@ const fetchDetails = async () => {
         parentData.value.id_tipodocumento = Number(eu.id_tipodocumento)
       }
     }
-    // Si hay documento de estudiante, consultar advertencias académicas previas
+
     if (studentData.value.documento) {
       checkAcademicWarningForStudent(studentData.value.documento)
     }
@@ -138,16 +133,26 @@ onMounted(fetchDetails)
 const selectCandidate = (candidate: any) => {
   if (!candidate.eligible) return
   selectedCandidate.value = candidate
-  // Pre-fill form with selected candidate data
+  isNewStudent.value = false
   studentData.value.nombre = candidate.nombre
   studentData.value.apellido = candidate.apellido
   studentData.value.documento = candidate.documento
-  studentData.value.id_tipodocumento = candidate.id_tipodocumento || 1
+  studentData.value.id_tipodocumento = Number(candidate.id_tipodocumento) || 2
+  checkAcademicWarningForStudent(candidate.documento)
+}
+
+const selectNewStudent = () => {
+  selectedCandidate.value = null
+  isNewStudent.value = true
+  studentData.value = { nombre: '', apellido: '', documento: '', id_tipodocumento: 2 }
+  academicWarning.value = null
 }
 
 const clearCandidateSelection = () => {
   selectedCandidate.value = null
-  studentData.value = { nombre: '', apellido: '', documento: '', id_tipodocumento: 1 }
+  isNewStudent.value = false
+  studentData.value = { nombre: '', apellido: '', documento: '', id_tipodocumento: 2 }
+  academicWarning.value = null
 }
 
 const nextDoc = () => {
@@ -163,11 +168,11 @@ const prevDoc = () => {
 }
 
 const handleFinalize = async () => {
-  // If multi-child picker and no selection yet, block
+  // If candidates exist and neither candidate nor new student selected
   if (matricula.value?.renovacion?.is_renovacion && 
-      (matricula.value?.renovacion?.candidates || []).length > 1 &&
-      !selectedCandidate.value && !matricula.value?.renovacion?.student) {
-    notify.addNotification('Debes seleccionar cuál hijo es el que se está renovando.', 'warning')
+      (matricula.value?.renovacion?.candidates || []).length > 0 &&
+      !selectedCandidate.value && !isNewStudent.value && !matricula.value?.id_estudiante) {
+    notify.addNotification('Por favor selecciona si se renovará un hijo existente o si se registrará un nuevo hijo.', 'warning')
     return
   }
 
@@ -206,12 +211,9 @@ const handleFinalize = async () => {
   }
 
   try {
-    // Resolve id_estudiante: prefer explicit selection, then autoselected student, then reingreso
     const resolvedIdEstudiante = 
       selectedCandidate.value?.id_estudiante ||
-      matricula.value?.renovacion?.student?.id_estudiante ||
-      matricula.value?.id_estudiante ||
-      null
+      (isNewStudent.value ? null : (matricula.value?.id_estudiante || null))
 
     const parsedGradeId = Number(route.query.gradeId)
     const validGradeId = (!isNaN(parsedGradeId) && parsedGradeId > 0) ? parsedGradeId : (matricula.value?.id_grupo || undefined)
@@ -258,101 +260,124 @@ const verifyDocument = async () => {
     } else {
       docMatchInfo.value = null
     }
-  } catch (e) {
-    console.error('Error al verificar documento')
+  } catch (err) {
+    docMatchInfo.value = null
   } finally {
     checkingDocument.value = false
   }
 }
 
-const formatUrl = (target: any) => {
-  if (!target) return '#'
-  if (typeof target === 'object' && target.id_documento) {
-    return `${API_BASE_URL}/api/matriculas/documentos/${target.id_documento}/archivo`
-  }
-  if (typeof target === 'number') {
-    return `${API_BASE_URL}/api/matriculas/documentos/${target}/archivo`
-  }
-  if (typeof target === 'string') {
-    const found = matricula.value?.documentos?.find((d: any) => d.url === target || d.url_anterior === target)
-    if (found && found.id_documento) {
-      return `${API_BASE_URL}/api/matriculas/documentos/${found.id_documento}/archivo`
-    }
-    return '#'
-  }
-  return '#'
+const formatUrl = (url: string) => {
+  if (!url) return ''
+  if (url.startsWith('http')) return url
+  return `${API_BASE_URL}/uploads/${url}`
 }
 
 const documentLabels: Record<string, string> = {
-  registroCivil: 'Registro Civil',
-  documentoIdentidad: 'Doc. Identidad Estudiante',
-  documentoPadre: 'Doc. Identidad Acudiente',
-  vacunas: 'Carné de Vacunas',
-  salud: 'Certificado Salud',
-  foto: 'Foto 3x4',
-  reciboPublico: 'Recibo Público',
-  visa: 'Visa / PPT',
-  certificadoDiscapacidad: 'Diagnóstico Médico',
-  certificadosEscolaridad: 'Certificados de Escolaridad'
+  documentoIdentidad: 'Documento de Identidad Estudiante',
+  documentoPadre: 'Documento del Acudiente',
+  registroCivil: 'Registro Civil de Nacimiento',
+  salud: 'Certificado de Salud / EPS',
+  foto: 'Fotografía 3x4',
+  reciboPublico: 'Recibo de Servicios Públicos',
+  certificadosEscolaridad: 'Certificados de Estudios Anteriores',
+  vacunas: 'Carnet de Vacunación',
+  certificadoDiscapacidad: 'Certificado de Discapacidad',
+  visa: 'Visa / Permiso de Permanencia'
 }
 
 const getStatusColor = (estado: string) => {
-  if (estado === 'ACTIVO') return 'bg-emerald-100 text-emerald-700 border-emerald-200'
-  if (estado === 'EXPULSADO' || estado === 'RETIRADO') return 'bg-red-100 text-red-700 border-red-200'
-  if (estado === 'SANCIONADO') return 'bg-amber-100 text-amber-700 border-amber-200'
-  if (estado === 'GRADUADO') return 'bg-indigo-100 text-indigo-700 border-indigo-200'
-  return 'bg-slate-100 text-slate-700 border-slate-200'
+  switch (estado) {
+    case 'ACTIVO': return 'bg-emerald-100 text-emerald-800 border-emerald-300'
+    case 'EXPULSADO': return 'bg-red-100 text-red-800 border-red-300'
+    case 'GRADUADO': return 'bg-purple-100 text-purple-800 border-purple-300'
+    case 'RETIRADO': return 'bg-amber-100 text-amber-800 border-amber-300'
+    case 'SANCIONADO': return 'bg-orange-100 text-orange-800 border-orange-300'
+    default: return 'bg-gray-100 text-gray-800 border-gray-300'
+  }
 }
 </script>
 
 <template>
-  <div class="h-[calc(100vh-100px)] flex overflow-hidden -m-8">
-    <!-- LEFT: Form (60%) -->
-    <div class="w-7/12 bg-white overflow-y-auto p-12 border-r border-gray-100">
-      <div class="max-w-xl mx-auto">
-        <!-- Header -->
-        <div class="mb-12">
-          <button @click="router.back()" class="flex items-center gap-2 text-gray-500 hover:text-indigo-600 transition-all font-medium mb-6">
-            <ArrowLeft :size="20" />
-            <span>Volver al detalle</span>
-          </button>
-          <h1 class="text-4xl font-extrabold text-gray-900 tracking-tight">Registro Final</h1>
-          <p class="text-gray-500 mt-2">Completa los datos personales para activar la matrícula.</p>
+  <div v-if="loading" class="min-h-screen bg-gray-50 flex items-center justify-center">
+    <div class="animate-spin rounded-full h-12 w-12 border-4 border-indigo-600 border-t-transparent"></div>
+  </div>
+
+  <div v-else-if="matricula" class="min-h-screen bg-gray-50 flex">
+    <!-- LEFT: Form Side (60%) -->
+    <div class="w-7/12 p-12 overflow-y-auto">
+      <div class="max-w-2xl mx-auto">
+        <button @click="router.back()" class="flex items-center gap-2 text-gray-500 hover:text-gray-800 transition-all font-bold mb-8">
+          <ArrowLeft :size="20" />
+          Volver a Gestión
+        </button>
+
+        <h1 class="text-3xl font-black text-gray-900 mb-2">Registro Final</h1>
+        <p class="text-gray-500 mb-8 font-medium">Completa los datos personales para activar la matrícula.</p>
+
+        <!-- BANNER DE EXPULSIÓN DE MATRÍCULA -->
+        <div v-if="matricula.expulsion" class="mb-8 font-sans">
+          <div class="p-5 bg-red-50 border border-red-200 rounded-3xl flex items-start gap-4">
+            <div class="p-2.5 bg-red-600 text-white rounded-xl shrink-0">
+              <XCircle :size="20" />
+            </div>
+            <div>
+              <p class="font-black text-red-900 text-sm">Estudiante Expulsado Institucionalmente</p>
+              <p class="text-red-800 text-xs mt-1 leading-relaxed">
+                Motivo de expulsión: <strong>{{ matricula.expulsion.motivo }}</strong>
+              </p>
+              <p v-if="matricula.expulsion.observaciones" class="text-red-700 text-xs mt-1 italic">
+                "{{ matricula.expulsion.observaciones }}"
+              </p>
+              <p class="text-red-600 text-[11px] mt-2 font-bold uppercase tracking-wider">
+                Ordenado por: {{ matricula.expulsion.directivo_nombre }}
+              </p>
+            </div>
+          </div>
         </div>
 
-        <!-- Banner de Advertencia Académica -->
-        <div v-if="academicWarning" class="p-5 bg-amber-50 border-2 border-amber-300 rounded-2xl mb-8 font-sans shadow-sm">
-          <div class="flex items-start gap-3">
-            <div class="p-2.5 bg-amber-500 text-white rounded-xl shrink-0">
-              <AlertTriangle :size="22" />
+        <!-- BANNER DE TRASLADO DE MATRÍCULA -->
+        <div v-if="matricula.traslado_info" class="mb-8 font-sans">
+          <div class="p-5 bg-amber-50 border border-amber-200 rounded-3xl flex items-start gap-4">
+            <div class="p-2.5 bg-amber-600 text-white rounded-xl shrink-0">
+              <GraduationCap :size="20" />
             </div>
-            <div class="flex-1">
-              <h4 class="font-extrabold text-amber-950 text-base flex items-center gap-2">
-                ⚠️ Advertencia académica
-              </h4>
-              <p class="text-amber-800 text-xs font-semibold mt-1">
-                Este estudiante no aprobó completamente el año lectivo anterior.
+            <div class="flex-1 min-w-0">
+              <p class="font-black text-amber-950 text-sm">Trazabilidad de Traslado de Matrícula</p>
+              <p class="text-amber-900 text-xs mt-1 leading-relaxed">
+                Origen: <strong>{{ matricula.traslado_info.colegio_origen_nombre || 'Plantel Origen' }}</strong>
+                → Destino: <strong>{{ matricula.traslado_info.colegio_destino_nombre || 'Plantel Destino' }}</strong>
               </p>
-              <div class="mt-3 grid grid-cols-2 gap-2 text-xs bg-amber-100/60 p-3 rounded-xl border border-amber-200">
-                <div><span class="text-amber-700 font-bold">Año:</span> {{ academicWarning.ultima_matricula?.calendario || academicWarning.ultima_matricula?.id_anio }}</div>
-                <div><span class="text-amber-700 font-bold">Curso:</span> {{ academicWarning.ultima_matricula?.grado_nombre }} {{ academicWarning.ultima_matricula?.grupo_nombre }}</div>
-                <div><span class="text-amber-700 font-bold">Resultado:</span> <span class="font-black text-red-700">{{ academicWarning.resultado_calculado }}</span></div>
-                <div><span class="text-amber-700 font-bold">Asignaturas reprobadas:</span> {{ academicWarning.cantidad_materias_reprobadas }}</div>
-              </div>
-              <div v-if="academicWarning.materias_reprobadas?.length > 0" class="mt-2 text-xs text-amber-900">
-                <strong>Detalle:</strong> {{ academicWarning.materias_reprobadas.map((m: any) => m.materia_nombre + ' (' + m.promedio + ')').join(', ') }}
-              </div>
-              <div class="mt-4 flex items-center justify-between border-t border-amber-200 pt-3">
-                <span class="text-xs text-amber-900 font-medium">Información relevante de apoyo a la toma de decisión.</span>
-                <router-link to="/dashboard/gestion-aprobados" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg shadow-sm">
-                  Ir a Gestión de Aprobados
+              <p v-if="matricula.traslado_info.motivo" class="text-amber-800 text-xs mt-1 italic">
+                Motivo: {{ matricula.traslado_info.motivo }}
+              </p>
+              <div class="mt-2 flex items-center justify-between">
+                <span class="px-2.5 py-1 bg-amber-200 text-amber-900 rounded-lg text-[10px] font-black uppercase">
+                  Estado: {{ matricula.traslado_info.estado_traslado }}
+                </span>
+                <router-link to="/dashboard/gestion-matriculas" class="text-xs text-amber-900 font-extrabold hover:underline">
+                  Ver en panel de traslados →
                 </router-link>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- ===== RENOVACIÓN: Multi-child Candidate Picker ===== -->
+        <!-- Advertencia Académica Previa -->
+        <div v-if="academicWarning" class="mb-8 font-sans">
+          <div class="p-5 bg-amber-50 border-2 border-amber-300 rounded-3xl flex items-start gap-4 shadow-sm">
+            <div class="p-2.5 bg-amber-500 text-white rounded-xl shrink-0"><AlertTriangle :size="20" /></div>
+            <div>
+              <p class="font-black text-amber-950 text-sm">⚠️ Antecedentes Académicos / Alertas en el Sistema</p>
+              <p class="text-amber-900 text-xs mt-1 leading-relaxed">
+                Este número de documento registra una advertencia previa: <strong>{{ academicWarning.warning.tipo }}</strong>.
+              </p>
+              <p class="text-amber-800 text-xs mt-1 italic">"{{ academicWarning.warning.mensaje }}"</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== RENOVACIÓN / ASOCIACIÓN: Candidate Selector ===== -->
         <div v-if="matricula?.renovacion?.is_renovacion" class="mb-8 font-sans space-y-4">
 
           <!-- Parent detected banner -->
@@ -361,95 +386,103 @@ const getStatusColor = (estado: string) => {
             <div>
               <p class="font-black text-sky-900 text-sm">Acudiente registrado detectado</p>
               <p class="text-sky-700 text-xs mt-0.5 font-medium">
-                <strong>{{ matricula.renovacion.parent_name }}</strong> ya tiene hijos registrados en este colegio. Verifica cuál corresponde a esta matrícula.
+                <strong>{{ matricula.renovacion.parent_name }}</strong> ya tiene hijo(s) registrado(s) en este colegio. Selecciona cuál corresponde a esta matrícula o registra un nuevo hijo.
               </p>
             </div>
           </div>
 
-          <!-- CASE A: Multiple children → show picker -->
-          <div v-if="needsCandidatePicker">
-            <p class="text-xs font-black uppercase tracking-widest text-gray-500 mb-3">Selecciona el hijo que se está renovando</p>
-            <div class="space-y-3">
+          <!-- STATE 1: Candidate Selected -->
+          <div v-if="selectedCandidate" class="p-4 bg-indigo-50 border-2 border-indigo-300 rounded-2xl flex items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+              <div class="p-2 bg-indigo-600 text-white rounded-xl shrink-0"><UserCheck :size="18" /></div>
+              <div>
+                <p class="font-black text-indigo-900 text-sm">Renovación — {{ selectedCandidate.apellido }}, {{ selectedCandidate.nombre }}</p>
+                <p class="text-indigo-700 text-xs font-medium">
+                  Doc: {{ selectedCandidate.documento }}
+                  <span v-if="selectedCandidate.grado_nombre" class="ml-2">· {{ selectedCandidate.nivel_nombre }} {{ selectedCandidate.grado_nombre }}</span>
+                </p>
+              </div>
+            </div>
+            <button @click="clearCandidateSelection()" class="px-3 py-1.5 bg-white border border-indigo-200 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer">
+              <RotateCcw :size="14" />
+              Cambiar / Limpiar
+            </button>
+          </div>
+
+          <!-- STATE 2: New Student Selected -->
+          <div v-else-if="isNewStudent" class="p-4 bg-emerald-50 border-2 border-emerald-300 rounded-2xl flex items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+              <div class="p-2 bg-emerald-600 text-white rounded-xl shrink-0"><UserPlus :size="18" /></div>
+              <div>
+                <p class="font-black text-emerald-900 text-sm">Registrando un Nuevo Hijo</p>
+                <p class="text-emerald-700 text-xs font-medium">Los campos de estudiante están habilitados. Ingresa nombres y documento del nuevo hijo.</p>
+              </div>
+            </div>
+            <button @click="clearCandidateSelection()" class="px-3 py-1.5 bg-white border border-emerald-200 hover:bg-emerald-100 text-emerald-700 rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer">
+              <RotateCcw :size="14" />
+              Cambiar / Limpiar
+            </button>
+          </div>
+
+          <!-- STATE 3: Unselected -> Show Options List -->
+          <div v-else class="space-y-3">
+            <p class="text-xs font-black uppercase tracking-widest text-gray-500 mb-1">Opciones de Matrícula para este Acudiente:</p>
+
+            <div v-for="candidate in matricula.renovacion.candidates" :key="candidate.id_estudiante">
               <button
-                v-for="candidate in matricula.renovacion.candidates"
-                :key="candidate.id_estudiante"
                 @click="selectCandidate(candidate)"
                 :disabled="!candidate.eligible"
                 :class="[
-                  'w-full text-left p-4 rounded-2xl border-2 transition-all',
+                  'w-full text-left p-4 rounded-2xl border-2 transition-all flex items-center gap-3',
                   !candidate.eligible
                     ? 'border-red-200 bg-red-50 opacity-60 cursor-not-allowed'
-                    : 'border-gray-200 bg-white hover:border-indigo-400 hover:bg-indigo-50 cursor-pointer'
+                    : 'border-gray-200 bg-white hover:border-indigo-400 hover:bg-indigo-50 cursor-pointer shadow-sm'
                 ]"
               >
-                <div class="flex items-center gap-3">
-                  <div :class="['p-2 rounded-xl shrink-0', candidate.eligible ? 'bg-indigo-100 text-indigo-600' : 'bg-red-100 text-red-500']">
-                    <UserCheck v-if="candidate.eligible" :size="18" />
-                    <AlertTriangle v-else :size="18" />
-                  </div>
-                  <div class="flex-1 min-w-0">
-                    <p class="font-black text-gray-900 text-sm">{{ candidate.apellido }}, {{ candidate.nombre }}</p>
-                    <p class="text-xs text-gray-500 font-medium">
-                      Doc: {{ candidate.documento }} 
-                      <span v-if="candidate.grado_nombre" class="ml-2">· {{ candidate.nivel_nombre }} {{ candidate.grado_nombre }}</span>
-                    </p>
-                    <p v-if="candidate.error_message" class="text-xs text-red-600 font-semibold mt-0.5">{{ candidate.error_message }}</p>
-                  </div>
-                  <span :class="['px-2 py-0.5 rounded-lg text-[10px] font-black uppercase border', getStatusColor(candidate.estado)]">
-                    {{ candidate.estado }}
-                  </span>
+                <div :class="['p-2 rounded-xl shrink-0', candidate.eligible ? 'bg-indigo-100 text-indigo-600' : 'bg-red-100 text-red-500']">
+                  <UserCheck v-if="candidate.eligible" :size="18" />
+                  <AlertTriangle v-else :size="18" />
                 </div>
+                <div class="flex-1 min-w-0">
+                  <p class="font-black text-gray-900 text-sm">{{ candidate.apellido }}, {{ candidate.nombre }}</p>
+                  <p class="text-xs text-gray-500 font-medium">
+                    Doc: {{ candidate.documento }} 
+                    <span v-if="candidate.grado_nombre" class="ml-2">· {{ candidate.nivel_nombre }} {{ candidate.grado_nombre }}</span>
+                  </p>
+                  <p v-if="candidate.error_message" class="text-xs text-red-600 font-semibold mt-0.5">{{ candidate.error_message }}</p>
+                </div>
+                <span :class="['px-2 py-0.5 rounded-lg text-[10px] font-black uppercase border', getStatusColor(candidate.estado)]">
+                  {{ candidate.estado }}
+                </span>
               </button>
             </div>
-          </div>
 
-          <!-- CASE B: Single autoselected candidate (existing behavior) -->
-          <div v-else-if="activeStudent">
-            <!-- Selected from picker -->
-            <div v-if="candidatePicked" class="p-4 bg-indigo-50 border-2 border-indigo-300 rounded-2xl flex items-center justify-between gap-3">
-              <div class="flex items-center gap-3">
-                <div class="p-2 bg-indigo-600 text-white rounded-xl shrink-0"><UserCheck :size="18" /></div>
-                <div>
-                  <p class="font-black text-indigo-900 text-sm">{{ activeStudent.apellido }}, {{ activeStudent.nombre }}</p>
-                  <p class="text-indigo-700 text-xs font-medium">Doc: {{ activeStudent.documento }}</p>
-                </div>
+            <!-- Option to Register a NEW Child -->
+            <button
+              @click="selectNewStudent()"
+              class="w-full text-left p-4 rounded-2xl border-2 border-dashed border-emerald-400 bg-emerald-50/60 hover:bg-emerald-100/70 hover:border-emerald-500 transition-all flex items-center gap-3 cursor-pointer shadow-sm"
+            >
+              <div class="p-2 bg-emerald-600 text-white rounded-xl shrink-0">
+                <UserPlus :size="18" />
               </div>
-              <button v-if="(matricula.renovacion.candidates || []).length > 1" @click="clearCandidateSelection()" class="text-xs text-indigo-600 font-bold hover:underline">Cambiar</button>
-            </div>
-
-            <!-- Autoselected (only 1 candidate) -->
-            <div v-else>
-              <div v-if="matricula.renovacion.error_message" class="p-5 bg-red-50 border border-red-200 rounded-2xl flex items-start gap-4">
-                <div class="p-2.5 bg-red-600 text-white rounded-xl shrink-0"><XCircle :size="20" /></div>
-                <div>
-                  <p class="font-black text-red-900 text-sm">Bloqueo de Renovación Académica</p>
-                  <p class="text-red-700 text-xs mt-1 font-semibold">{{ matricula.renovacion.error_message }}</p>
-                </div>
+              <div class="flex-1 min-w-0">
+                <p class="font-black text-emerald-950 text-sm">+ Registrar un nuevo hijo para este acudiente</p>
+                <p class="text-xs text-emerald-700 font-medium">Libera los campos para ingresar nombres y documento de un nuevo estudiante.</p>
               </div>
-              <div v-else class="p-5 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-start gap-4">
-                <div class="p-2.5 bg-emerald-600 text-white rounded-xl shrink-0"><CheckCircle :size="20" /></div>
-                <div>
-                  <p class="font-black text-emerald-900 text-sm">Renovación Automática — {{ activeStudent.apellido }}, {{ activeStudent.nombre }}</p>
-                  <p class="text-emerald-700 text-xs mt-0.5 font-semibold">Datos del año anterior pre-cargados. Verifica y confirma.</p>
-                </div>
-              </div>
-            </div>
+            </button>
           </div>
         </div>
-        <!-- ===== FIN Renovación ===== -->
+        <!-- ===== FIN Renovación Selector ===== -->
 
         <div v-else-if="matricula?.tipo === 'REINGRESO'" class="mb-8 font-sans">
           <div class="p-5 bg-violet-50 border border-violet-200 rounded-3xl flex items-start gap-4">
             <div class="p-2.5 bg-violet-600 text-white rounded-xl shrink-0"><CheckCircle :size="20" /></div>
             <div>
               <p class="font-black text-violet-900 text-sm">Reingreso Estudiantil Detectado</p>
-              <p class="text-violet-700 text-xs mt-0.5 font-semibold">
-                Estudiante reingresado (Estado previo: RETIRADO). Motivo: {{ matricula.motivo }}.
-              </p>
+              <p class="text-violet-700 text-xs mt-0.5 font-semibold">Estudiante retirado previamente. Se reactivará su ficha en estado ACTIVO.</p>
             </div>
           </div>
         </div>
-
 
         <!-- Stepper -->
         <div class="flex items-center gap-8 mb-12">
@@ -469,19 +502,19 @@ const getStatusColor = (estado: string) => {
           <div class="grid grid-cols-2 gap-6">
             <div class="space-y-2">
               <label class="text-sm font-bold text-gray-700">Nombres</label>
-              <input v-model="studentData.nombre" @input="studentData.nombre = sanitizeLettersOnly(studentData.nombre)" type="text" placeholder="Ej: Juan Andrés" :disabled="matricula?.renovacion?.is_renovacion"
+              <input v-model="studentData.nombre" @input="studentData.nombre = sanitizeLettersOnly(studentData.nombre)" type="text" placeholder="Ej: Juan Andrés" :disabled="isStudentInputsDisabled"
                 class="w-full rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-4 transition-all disabled:opacity-60 disabled:cursor-not-allowed">
             </div>
             <div class="space-y-2">
               <label class="text-sm font-bold text-gray-700">Apellidos</label>
-              <input v-model="studentData.apellido" @input="studentData.apellido = sanitizeLettersOnly(studentData.apellido)" type="text" placeholder="Ej: Pérez García" :disabled="matricula?.renovacion?.is_renovacion"
+              <input v-model="studentData.apellido" @input="studentData.apellido = sanitizeLettersOnly(studentData.apellido)" type="text" placeholder="Ej: Pérez García" :disabled="isStudentInputsDisabled"
                 class="w-full rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-4 transition-all disabled:opacity-60 disabled:cursor-not-allowed">
             </div>
           </div>
           <div class="grid grid-cols-2 gap-6">
             <div class="space-y-2">
               <label class="text-sm font-bold text-gray-700">Tipo de Documento</label>
-              <select v-model="studentData.id_tipodocumento" :disabled="matricula?.renovacion?.is_renovacion" class="w-full rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-4 transition-all disabled:opacity-60 disabled:cursor-not-allowed">
+              <select v-model="studentData.id_tipodocumento" :disabled="isStudentInputsDisabled" class="w-full rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-4 transition-all disabled:opacity-60 disabled:cursor-not-allowed">
                 <option :value="2">Tarjeta de Identidad</option>
                 <option :value="1">Registro Civil</option>
                 <option :value="3">Cédula de Ciudadanía</option>
@@ -492,12 +525,12 @@ const getStatusColor = (estado: string) => {
             </div>
             <div class="space-y-2">
               <label class="text-sm font-bold text-gray-700">Número de Documento</label>
-              <input v-model="studentData.documento" @input="studentData.documento = sanitizeDocumentNumber(studentData.documento)" type="text" placeholder="Ej: 1075..." :disabled="matricula?.renovacion?.is_renovacion"
+              <input v-model="studentData.documento" @input="studentData.documento = sanitizeDocumentNumber(studentData.documento)" type="text" placeholder="Ej: 1075..." :disabled="isStudentInputsDisabled"
                 class="w-full rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-4 transition-all disabled:opacity-60 disabled:cursor-not-allowed">
             </div>
           </div>
           <div class="pt-8 flex justify-end">
-            <button @click="step = 2" :disabled="!!matricula?.renovacion?.error_message" class="bg-gray-900 text-white px-10 py-4 rounded-2xl font-bold hover:bg-indigo-600 transition-all flex items-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed">
+            <button @click="step = 2" :disabled="selectedCandidate && !selectedCandidate.eligible" class="bg-gray-900 text-white px-10 py-4 rounded-2xl font-bold hover:bg-indigo-600 transition-all flex items-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed">
               Siguiente: Datos del Padre
               <ChevronRight :size="20" />
             </button>
@@ -585,7 +618,7 @@ const getStatusColor = (estado: string) => {
               <ChevronLeft :size="20" />
               Atrás
             </button>
-            <button @click="handleFinalize" :disabled="!!matricula?.renovacion?.error_message" class="bg-indigo-600 text-white px-10 py-4 rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 flex items-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed">
+            <button @click="handleFinalize" class="bg-indigo-600 text-white px-10 py-4 rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 flex items-center gap-2">
               Finalizar y Activar Matrícula
               <Save :size="20" />
             </button>
