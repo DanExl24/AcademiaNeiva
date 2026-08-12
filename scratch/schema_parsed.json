@@ -1,0 +1,5049 @@
+{
+  "enums": {
+    "accion_aprobacion_traslado": [
+      "APROBAR",
+      "RECHAZAR",
+      "CANCELAR"
+    ],
+    "decision_promocion_tipo": [
+      "PROMOVER_SIGUIENTE_GRADO",
+      "MANTENER_GRADO",
+      "MATRICULA_CONDICIONADA",
+      "OTRA_DECISION"
+    ],
+    "estado_asistencia": [
+      "PRESENTE",
+      "AUSENTE",
+      "TARDE",
+      "JUSTIFICADA"
+    ],
+    "estado_cierre_materia": [
+      "ABIERTO",
+      "CERRADO"
+    ],
+    "estado_colegio": [
+      "PENDIENTE",
+      "ACTIVO",
+      "SUSPENDIDO",
+      "RECHAZADO",
+      "ELIMINADO"
+    ],
+    "estado_dba": [
+      "ACTIVO",
+      "INACTIVO"
+    ],
+    "estado_documento": [
+      "PENDIENTE",
+      "VALIDADO",
+      "RECHAZADO"
+    ],
+    "estado_estudiante": [
+      "ACTIVO",
+      "SANCIONADO",
+      "EXPULSADO",
+      "RETIRADO",
+      "GRADUADO"
+    ],
+    "estado_matricula": [
+      "PENDIENTE",
+      "ACTIVA",
+      "CANCELADA",
+      "TRASLADADA",
+      "RECHAZADA",
+      "CORRECCION",
+      "APROBADA",
+      "CULMINADA",
+      "PENDIENTE_RENOVACION",
+      "CORREGIDA"
+    ],
+    "estado_periodo": [
+      "ABIERTO",
+      "CERRADO",
+      "PENDIENTE"
+    ],
+    "estado_renovacion_documento": [
+      "VIGENTE",
+      "RECOMENDADO_ACTUALIZAR",
+      "OBLIGATORIO_ACTUALIZAR",
+      "DESACTUALIZADO_POR_FECHA"
+    ],
+    "estado_resultado": [
+      "APROBADO",
+      "REPROBADO",
+      "EN_PROCESO"
+    ],
+    "estado_sancion": [
+      "ACTIVA",
+      "REVOCADA",
+      "VENCIDA"
+    ],
+    "estado_solicitud_traslado": [
+      "SOLICITADA",
+      "EN_APROBACION",
+      "APROBADA",
+      "RECHAZADA",
+      "CANCELADA",
+      "EJECUTADA"
+    ],
+    "estado_supervision": [
+      "SOLICITADA",
+      "APROBADA",
+      "ACTIVA",
+      "FINALIZADA",
+      "REVOCADA",
+      "EXPIRADA"
+    ],
+    "estado_ticket_soporte": [
+      "ABIERTO",
+      "EN_PROCESO",
+      "RESUELTO",
+      "ESCALADO"
+    ],
+    "estado_usuario_sistema": [
+      "ACTIVO",
+      "SUSPENDIDO",
+      "BANEADO",
+      "ELIMINADO"
+    ],
+    "resultado_consolidado_anual": [
+      "APROBADO",
+      "NO_PROMOVIDO",
+      "PENDIENTE_RECUPERACION",
+      "PENDIENTE_DECISION"
+    ],
+    "tipo_accion_auditoria": [
+      "LECTURA",
+      "CREACION",
+      "MODIFICACION",
+      "ELIMINACION",
+      "EXPORTACION"
+    ],
+    "tipo_documento_identidad": [
+      "TI",
+      "CC",
+      "CE",
+      "RC",
+      "PAS"
+    ],
+    "tipo_incidencia_soporte": [
+      "TECNICO",
+      "CALIFICACIONES",
+      "ASISTENCIA",
+      "AUTENTICACION",
+      "SOPORTE",
+      "REINGRESO",
+      "MATRICULA_EXTRAORDINARIA"
+    ],
+    "tipo_jornada": [
+      "MAÑANA",
+      "TARDE",
+      "NOCTURNA",
+      "UNICA"
+    ],
+    "tipo_matricula": [
+      "REGULAR",
+      "RENOVACION",
+      "REINGRESO",
+      "EXTRAORDINARIA",
+      "TRASLADO"
+    ],
+    "tipo_observacion": [
+      "ACADEMICA",
+      "CONVIVENCIA",
+      "OTRO",
+      "DISCIPLINARIA"
+    ],
+    "tipo_supervision": [
+      "SOLO_LECTURA",
+      "EDITOR"
+    ],
+    "tipo_traslado": [
+      "TRASLADO_USUARIO",
+      "TRASLADO_MATRICULA"
+    ]
+  },
+  "tables": {
+    "actividad_evidencia_dba": [
+      {
+        "name": "id_actividadmateria",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_evidencia_dba",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      }
+    ],
+    "actividad_materia": [
+      {
+        "name": "id_actividadmateria",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_detallegrado",
+        "type": "integer",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "id_periodo",
+        "type": "integer",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "nombre",
+        "type": "character varying(255)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "porcentaje",
+        "type": "numeric(5,2)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_colegio",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_competencia",
+        "type": "integer",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "id_evidencia",
+        "type": "integer",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "fecha_creacion",
+        "type": "timestamp with time zone",
+        "nullable": true,
+        "default": "now()"
+      },
+      {
+        "name": "motivo_extra",
+        "type": "character varying(100)",
+        "nullable": true,
+        "default": "NULL::character varying"
+      },
+      {
+        "name": "justificacion_extra",
+        "type": "text",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "id_docente_creador",
+        "type": "integer",
+        "nullable": true,
+        "default": null
+      }
+    ],
+    "anio_lectivo": [
+      {
+        "name": "id_anio",
+        "type": "integer CONSTRAINT \"año_lectivo_id_año_not_null\"",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "calendario",
+        "type": "character varying(10)",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "id_colegio",
+        "type": "integer CONSTRAINT \"año_lectivo_id_colegio_not_null\"",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "tipo_calendario",
+        "type": "character(1)",
+        "nullable": true,
+        "default": "'A'::bpchar"
+      },
+      {
+        "name": "estado",
+        "type": "public.estado_periodo",
+        "nullable": true,
+        "default": "'ABIERTO'::public.estado_periodo"
+      },
+      {
+        "name": "fecha_inicio",
+        "type": "date",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "fecha_fin",
+        "type": "date",
+        "nullable": true,
+        "default": null
+      }
+    ],
+    "auditoria_acciones_realizadas": [
+      {
+        "name": "id_accion",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_auditoria",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "fecha_accion",
+        "type": "timestamp with time zone",
+        "nullable": false,
+        "default": "now() NOT NULL"
+      },
+      {
+        "name": "modulo",
+        "type": "character varying(255)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "tipo_accion",
+        "type": "public.tipo_accion_auditoria",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "accion",
+        "type": "character varying(255)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "recurso_afectado",
+        "type": "text",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_usuario_afectado",
+        "type": "integer",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "valor_antiguo",
+        "type": "jsonb",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "valor_nuevo",
+        "type": "jsonb",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "motivo_cambio",
+        "type": "text",
+        "nullable": true,
+        "default": null
+      }
+    ],
+    "auditoria_supervision": [
+      {
+        "name": "id_auditoria",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_admin_general",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_colegio",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_directivo_aprobador",
+        "type": "integer",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "motivo_solicitud",
+        "type": "text",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "fecha_solicitud",
+        "type": "timestamp with time zone",
+        "nullable": false,
+        "default": "now() NOT NULL"
+      },
+      {
+        "name": "tipo_supervision",
+        "type": "public.tipo_supervision",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "estado_supervision",
+        "type": "public.estado_supervision",
+        "nullable": false,
+        "default": "'SOLICITADA'::public.estado_supervision NOT NULL"
+      },
+      {
+        "name": "fecha_aprobacion",
+        "type": "timestamp with time zone",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "motivo_entrada",
+        "type": "text",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "fecha_entrada",
+        "type": "timestamp with time zone",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "fecha_salida",
+        "type": "timestamp with time zone",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "duracion_maxima_minutos",
+        "type": "integer",
+        "nullable": false,
+        "default": "60 NOT NULL"
+      },
+      {
+        "name": "revocado_por",
+        "type": "integer",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "fecha_revocacion",
+        "type": "timestamp with time zone",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "ip_admin",
+        "type": "character varying(45)",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "eliminado",
+        "type": "boolean",
+        "nullable": false,
+        "default": "false NOT NULL"
+      },
+      {
+        "name": "fecha_retencion_hasta",
+        "type": "timestamp with time zone",
+        "nullable": false,
+        "default": "(now() + '5 years'::interval) NOT NULL"
+      },
+      {
+        "name": "motivo_revocacion",
+        "type": "text",
+        "nullable": true,
+        "default": null
+      }
+    ],
+    "cierre_materia": [
+      {
+        "name": "id_cierremateria",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_detallegrado",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_periodo",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "estado",
+        "type": "public.estado_cierre_materia",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "fecha_cierre",
+        "type": "timestamp with time zone",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "justificacion_evidencias_pendientes",
+        "type": "text",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "id_docente_cierre",
+        "type": "integer",
+        "nullable": true,
+        "default": null
+      }
+    ],
+    "colegio": [
+      {
+        "name": "id_colegio",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "nombre",
+        "type": "text",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "tipo_colegio",
+        "type": "character varying(20)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "sede",
+        "type": "character varying(255)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "contacto",
+        "type": "numeric",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "correo",
+        "type": "character varying(100)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "dane",
+        "type": "character varying(100)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "tipo_calendario",
+        "type": "character(1)",
+        "nullable": true,
+        "default": "'A'::bpchar"
+      },
+      {
+        "name": "estado",
+        "type": "public.estado_colegio",
+        "nullable": false,
+        "default": "'ACTIVO'::public.estado_colegio NOT NULL"
+      },
+      {
+        "name": "fecha_registro",
+        "type": "timestamp with time zone",
+        "nullable": false,
+        "default": "now() NOT NULL"
+      },
+      {
+        "name": "motivo_rechazo",
+        "type": "text",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "fecha_cambio_estado",
+        "type": "timestamp with time zone",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "escudo_url",
+        "type": "text",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "colores",
+        "type": "character varying(255)",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "color_primario",
+        "type": "character varying(50)",
+        "nullable": true,
+        "default": "NULL::character varying"
+      },
+      {
+        "name": "color_secundario",
+        "type": "character varying(50)",
+        "nullable": true,
+        "default": "NULL::character varying"
+      }
+    ],
+    "colegio_version_curricular": [
+      {
+        "name": "id",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_colegio",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "area",
+        "type": "character varying(100)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "grado",
+        "type": "character varying(50)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "version_curricular",
+        "type": "character varying(20)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "fecha_asignacion",
+        "type": "timestamp with time zone",
+        "nullable": false,
+        "default": "now() NOT NULL"
+      }
+    ],
+    "competencias": [
+      {
+        "name": "id_competencia",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_anio",
+        "type": "integer CONSTRAINT \"competencias_id_año_not_null\"",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_grupo",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_materia",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_periodo",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "descripcion",
+        "type": "text",
+        "nullable": false,
+        "default": "'Competencia pendiente por definir.'::text NOT NULL"
+      },
+      {
+        "name": "id_colegio",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "nombre",
+        "type": "character varying(200)",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "sync_uuid",
+        "type": "uuid",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "id_dimension",
+        "type": "integer",
+        "nullable": true,
+        "default": null
+      }
+    ],
+    "configuracion_base": [
+      {
+        "name": "id_config_base",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "clave",
+        "type": "character varying(100)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "descripcion",
+        "type": "text",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "valor_default",
+        "type": "character varying(255)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "tipo",
+        "type": "character varying(20)",
+        "nullable": false,
+        "default": null
+      }
+    ],
+    "configuracion_colegio": [
+      {
+        "name": "id_colegio",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "nota_minima",
+        "type": "numeric(5,2)",
+        "nullable": false,
+        "default": "0 NOT NULL"
+      },
+      {
+        "name": "nota_maxima",
+        "type": "numeric(5,2)",
+        "nullable": false,
+        "default": "5 NOT NULL"
+      },
+      {
+        "name": "nota_aprobacion",
+        "type": "numeric(5,2)",
+        "nullable": false,
+        "default": "3 NOT NULL"
+      },
+      {
+        "name": "escala_modo",
+        "type": "character varying(20)",
+        "nullable": false,
+        "default": "'AUTOMATICO'::character varying NOT NULL"
+      }
+    ],
+    "configuracion_inscripcion": [
+      {
+        "name": "id_configuracion",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_colegio",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_anio",
+        "type": "integer CONSTRAINT \"configuracion_inscripcion_id_año_not_null\"",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "fecha_inicio",
+        "type": "timestamp with time zone",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "fecha_cierre",
+        "type": "timestamp with time zone",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "habilitada",
+        "type": "boolean",
+        "nullable": false,
+        "default": "true NOT NULL"
+      }
+    ],
+    "configuracion_plataforma": [
+      {
+        "name": "clave",
+        "type": "character varying(100)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "valor",
+        "type": "character varying(255)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "descripcion",
+        "type": "text",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "actualizado_por",
+        "type": "integer",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "fecha_actualizacion",
+        "type": "timestamp with time zone",
+        "nullable": false,
+        "default": "now() NOT NULL"
+      }
+    ],
+    "configuracion_sistema": [
+      {
+        "name": "id_configuracion",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_colegio",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "clave",
+        "type": "character varying(100)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "valor",
+        "type": "character varying(255)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_config_base",
+        "type": "integer",
+        "nullable": true,
+        "default": null
+      }
+    ],
+    "contrato_docente": [
+      {
+        "name": "id_contratodocente",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "estado",
+        "type": "character varying(50)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_colegio",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      }
+    ],
+    "criterio_evaluacion": [
+      {
+        "name": "id_criterio",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_actividadmateria",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_evidencia",
+        "type": "integer",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "descripcion",
+        "type": "text",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "porcentaje",
+        "type": "numeric(5,2)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_colegio",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      }
+    ],
+    "dba": [
+      {
+        "name": "id_dba",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "area",
+        "type": "character varying(100)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "grado",
+        "type": "character varying(50)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "numero_dba",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "enunciado",
+        "type": "text",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "version_curricular",
+        "type": "character varying(20)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "estado",
+        "type": "public.estado_dba",
+        "nullable": false,
+        "default": "'ACTIVO'::public.estado_dba NOT NULL"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "nullable": false,
+        "default": "now() NOT NULL"
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone",
+        "nullable": false,
+        "default": "now() NOT NULL"
+      }
+    ],
+    "dba_dimensiones_preescolar": [
+      {
+        "name": "id_dba",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_dimension",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      }
+    ],
+    "decision_promocion_directivo": [
+      {
+        "name": "id_decision",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_estudiante",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_colegio",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_anio_anterior",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "resultado_calculado",
+        "type": "public.resultado_consolidado_anual",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "decision_tomada",
+        "type": "public.decision_promocion_tipo",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_grado_anterior",
+        "type": "integer",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "id_grado_asignado",
+        "type": "integer",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "id_usuario_decision",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "fecha_decision",
+        "type": "timestamp with time zone",
+        "nullable": true,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "observacion",
+        "type": "text",
+        "nullable": true,
+        "default": null
+      }
+    ],
+    "desempeno": [
+      {
+        "name": "id_desempeno",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "descripcion",
+        "type": "text",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_actividadmateria",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_colegio",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      }
+    ],
+    "detalle_grados": [
+      {
+        "name": "id_detallegrado",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_materia",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_docente",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_colegio",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_grupo",
+        "type": "integer",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "id_anio",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      }
+    ],
+    "detalle_padrefamilia": [
+      {
+        "name": "id_detallepadrefamilia",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_padrefamilia",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_estudiante",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_colegio",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      }
+    ],
+    "dimensiones_preescolar": [
+      {
+        "name": "id_dimension",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "nombre",
+        "type": "character varying(100)",
+        "nullable": false,
+        "default": null
+      }
+    ],
+    "directivo": [
+      {
+        "name": "id",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_colegio",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_usuario",
+        "type": "integer",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "cargo",
+        "type": "character varying(100)",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "estado",
+        "type": "public.estado_usuario_sistema",
+        "nullable": false,
+        "default": "'ACTIVO'::public.estado_usuario_sistema NOT NULL"
+      },
+      {
+        "name": "fecha_vinculacion",
+        "type": "timestamp with time zone",
+        "nullable": false,
+        "default": "now() NOT NULL"
+      },
+      {
+        "name": "fecha_desvinculacion",
+        "type": "timestamp with time zone",
+        "nullable": true,
+        "default": null
+      }
+    ],
+    "docente": [
+      {
+        "name": "id_docente",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "nombre",
+        "type": "character varying(255)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "apellido",
+        "type": "character varying(255)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_contratodocente",
+        "type": "integer",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "id_colegio",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_usuario",
+        "type": "integer",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "estado",
+        "type": "character varying(20)",
+        "nullable": false,
+        "default": "'ACTIVO'::character varying NOT NULL"
+      }
+    ],
+    "documento_matriculas": [
+      {
+        "name": "id_documento",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_matricula",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "tipo_documento",
+        "type": "character varying(100)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "url",
+        "type": "text",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "estado",
+        "type": "public.estado_documento",
+        "nullable": false,
+        "default": "'PENDIENTE'::public.estado_documento NOT NULL"
+      },
+      {
+        "name": "fecha",
+        "type": "timestamp with time zone",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_colegio",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "version",
+        "type": "integer",
+        "nullable": false,
+        "default": "1 NOT NULL"
+      },
+      {
+        "name": "fecha_expedicion",
+        "type": "date",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "estado_renovacion",
+        "type": "public.estado_renovacion_documento",
+        "nullable": true,
+        "default": "'VIGENTE'::public.estado_renovacion_documento"
+      },
+      {
+        "name": "contenido",
+        "type": "bytea",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "mime_type",
+        "type": "character varying(100)",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "nombre_original",
+        "type": "character varying(255)",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "tamano_bytes",
+        "type": "integer",
+        "nullable": true,
+        "default": null
+      }
+    ],
+    "email_change_tokens": [
+      {
+        "name": "id",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_usuario",
+        "type": "integer",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "nuevo_email",
+        "type": "character varying(255)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "codigo",
+        "type": "character varying(6)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "expires_at",
+        "type": "timestamp with time zone",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "used",
+        "type": "boolean",
+        "nullable": true,
+        "default": "false"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "nullable": true,
+        "default": "now()"
+      }
+    ],
+    "escala_valoracion": [
+      {
+        "name": "id_escalavaloracion",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "nivel",
+        "type": "character varying(20)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "valor_minimo",
+        "type": "numeric(5,2)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "valor_maximo",
+        "type": "numeric(5,2)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_colegio",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      }
+    ],
+    "estudiante": [
+      {
+        "name": "id_estudiante",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "nombre",
+        "type": "character varying(100)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "apellido",
+        "type": "character varying(100)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "codigo",
+        "type": "character varying(20)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_nivel",
+        "type": "integer",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "id_colegio",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_usuario",
+        "type": "integer",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "estado",
+        "type": "public.estado_estudiante",
+        "nullable": true,
+        "default": "'ACTIVO'::public.estado_estudiante"
+      },
+      {
+        "name": "motivo_estado",
+        "type": "text",
+        "nullable": true,
+        "default": null
+      }
+    ],
+    "evidencia_aprendizaje": [
+      {
+        "name": "id_evidencia",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_competencia",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "descripcion",
+        "type": "text",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "orden",
+        "type": "integer",
+        "nullable": false,
+        "default": "0 NOT NULL"
+      },
+      {
+        "name": "id_colegio",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_evidencia_dba",
+        "type": "integer",
+        "nullable": true,
+        "default": null
+      }
+    ],
+    "evidencias_dba": [
+      {
+        "name": "id_evidencia_dba",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_dba",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "descripcion",
+        "type": "text",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "orden",
+        "type": "integer",
+        "nullable": false,
+        "default": "1 NOT NULL"
+      },
+      {
+        "name": "estado",
+        "type": "public.estado_dba",
+        "nullable": false,
+        "default": "'ACTIVO'::public.estado_dba NOT NULL"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "nullable": false,
+        "default": "now() NOT NULL"
+      }
+    ],
+    "grados": [
+      {
+        "name": "id_grado",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "nivel",
+        "type": "character varying(50)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "tipo_grado",
+        "type": "character varying(50)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_jornada",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_colegio",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "cupos_totales",
+        "type": "integer",
+        "nullable": false,
+        "default": "30 NOT NULL"
+      },
+      {
+        "name": "seccion",
+        "type": "character varying(10)",
+        "nullable": true,
+        "default": "'A'::character varying"
+      }
+    ],
+    "grupos": [
+      {
+        "name": "id_grupo",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_nivel",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_jornada",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_colegio",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_seccion",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "cupos_totales",
+        "type": "integer",
+        "nullable": false,
+        "default": "0 NOT NULL"
+      },
+      {
+        "name": "id_tipo_grado",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_docente",
+        "type": "integer",
+        "nullable": true,
+        "default": null
+      }
+    ],
+    "jornada": [
+      {
+        "name": "id_jornada",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "nombre",
+        "type": "public.tipo_jornada",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_colegio",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      }
+    ],
+    "materias": [
+      {
+        "name": "id_materia",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "nombre",
+        "type": "character varying(100)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_colegio",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      }
+    ],
+    "matricula": [
+      {
+        "name": "id_matricula",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_estudiante",
+        "type": "integer",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "id_nivel",
+        "type": "integer",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "id_colegio",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_anio",
+        "type": "integer CONSTRAINT \"matricula_id_año_not_null\"",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "estado",
+        "type": "public.estado_matricula",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "correo_padre",
+        "type": "character varying(100)",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "tiene_discapacidad",
+        "type": "boolean",
+        "nullable": true,
+        "default": "false"
+      },
+      {
+        "name": "es_extranjero",
+        "type": "boolean",
+        "nullable": true,
+        "default": "false"
+      },
+      {
+        "name": "token_seguimiento",
+        "type": "uuid",
+        "nullable": false,
+        "default": "public.uuid_generate_v4() NOT NULL"
+      },
+      {
+        "name": "id_grupo",
+        "type": "integer",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "motivo_cancelacion",
+        "type": "character varying(100)",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "detalles_cancelacion",
+        "type": "text",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "es_traslado",
+        "type": "boolean",
+        "nullable": true,
+        "default": "false"
+      },
+      {
+        "name": "fecha_aprobacion",
+        "type": "timestamp without time zone",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "tipo",
+        "type": "public.tipo_matricula",
+        "nullable": false,
+        "default": "'REGULAR'::public.tipo_matricula NOT NULL"
+      },
+      {
+        "name": "motivo",
+        "type": "text",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "observaciones",
+        "type": "text",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "id_usuario_responsable",
+        "type": "integer",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "fecha_creacion",
+        "type": "timestamp without time zone",
+        "nullable": true,
+        "default": "now()"
+      },
+      {
+        "name": "id_ticket",
+        "type": "integer",
+        "nullable": true,
+        "default": null
+      }
+    ],
+    "nivel_escolar": [
+      {
+        "name": "id_nivel",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "nombre",
+        "type": "character varying(100)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_colegio",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      }
+    ],
+    "nota_criterio": [
+      {
+        "name": "id_nota_criterio",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_criterio",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_estudiante",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "nota",
+        "type": "numeric(5,2)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_colegio",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      }
+    ],
+    "notas_actividad": [
+      {
+        "name": "id_notaactividad",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_actividadmateria",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_estudiante",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_escalavaloracion",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "nota",
+        "type": "numeric(5,2)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_colegio",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      }
+    ],
+    "notificacion_colegio": [
+      {
+        "name": "id_notificacion",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_colegio",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_directivo",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "tipo",
+        "type": "character varying(50)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "mensaje",
+        "type": "text",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "estado_anterior",
+        "type": "character varying(20)",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "estado_nuevo",
+        "type": "character varying(20)",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "leida",
+        "type": "boolean",
+        "nullable": false,
+        "default": "false NOT NULL"
+      },
+      {
+        "name": "fecha_notificacion",
+        "type": "timestamp with time zone",
+        "nullable": false,
+        "default": "now() NOT NULL"
+      }
+    ],
+    "notificacion_supervision": [
+      {
+        "name": "id_notificacion",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_auditoria",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_directivo",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "tipo_notificacion",
+        "type": "character varying(50)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "mensaje",
+        "type": "text",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "leida",
+        "type": "boolean",
+        "nullable": false,
+        "default": "false NOT NULL"
+      },
+      {
+        "name": "fecha_notificacion",
+        "type": "timestamp with time zone",
+        "nullable": false,
+        "default": "now() NOT NULL"
+      }
+    ],
+    "observacion_estudiante": [
+      {
+        "name": "id_observacion",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_estudiante",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_detallegrado",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_periodo",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "fortalezas",
+        "type": "text",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "debilidades",
+        "type": "text",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "recomendaciones",
+        "type": "text",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "fecha",
+        "type": "timestamp with time zone",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_colegio",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "tipo",
+        "type": "public.tipo_observacion",
+        "nullable": true,
+        "default": "'ACADEMICA'::public.tipo_observacion"
+      }
+    ],
+    "padre_familia": [
+      {
+        "name": "id_padrefamilia",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "nombre",
+        "type": "character varying(50)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "apellido",
+        "type": "character varying(50)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_colegio",
+        "type": "integer",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "id_usuario",
+        "type": "integer",
+        "nullable": true,
+        "default": null
+      }
+    ],
+    "papelera_materias": [
+      {
+        "name": "id_papelera",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_colegio",
+        "type": "integer",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "nombre_materia",
+        "type": "character varying(255)",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "data_respaldo",
+        "type": "jsonb",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "fecha_borrado",
+        "type": "timestamp without time zone",
+        "nullable": true,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "fecha_expiracion",
+        "type": "timestamp without time zone",
+        "nullable": true,
+        "default": "(CURRENT_TIMESTAMP + '30 days'::interval)"
+      }
+    ],
+    "password_reset_tokens": [
+      {
+        "name": "id",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_usuario",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "token",
+        "type": "character varying(255)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "expires_at",
+        "type": "timestamp with time zone",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "used",
+        "type": "boolean",
+        "nullable": false,
+        "default": "false NOT NULL"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "nullable": false,
+        "default": "now() NOT NULL"
+      }
+    ],
+    "periodo_academico": [
+      {
+        "name": "id_periodo",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "nombre",
+        "type": "character varying(100)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "estado",
+        "type": "public.estado_periodo",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "porcentaje",
+        "type": "numeric(5,2)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_anio",
+        "type": "integer",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "id_colegio",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "trimestre",
+        "type": "integer",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "dia_inicio",
+        "type": "integer",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "dia_fin",
+        "type": "integer",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "mes_inicio",
+        "type": "integer",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "mes_fin",
+        "type": "integer",
+        "nullable": true,
+        "default": null
+      }
+    ],
+    "registro_asistencia": [
+      {
+        "name": "id_registroasistencia",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_estudiante",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_detallegrado",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "fecha",
+        "type": "timestamp with time zone",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "estado",
+        "type": "public.estado_asistencia",
+        "nullable": false,
+        "default": "'PRESENTE'::public.estado_asistencia NOT NULL"
+      },
+      {
+        "name": "id_colegio",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "justificacion",
+        "type": "text",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "hora_llegada",
+        "type": "time without time zone",
+        "nullable": true,
+        "default": null
+      }
+    ],
+    "registro_graduados": [
+      {
+        "name": "id_graduado",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_estudiante",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "fecha_graduacion",
+        "type": "timestamp with time zone",
+        "nullable": false,
+        "default": "CURRENT_TIMESTAMP NOT NULL"
+      },
+      {
+        "name": "observaciones",
+        "type": "text",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "id_usuario_registro",
+        "type": "integer",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "creado_en",
+        "type": "timestamp with time zone",
+        "nullable": false,
+        "default": "CURRENT_TIMESTAMP NOT NULL"
+      },
+      {
+        "name": "id_anio",
+        "type": "integer",
+        "nullable": true,
+        "default": null
+      }
+    ],
+    "resultado_academico": [
+      {
+        "name": "id_resultado",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_estudiante",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_detallegrado",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_periodo",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "promedio",
+        "type": "numeric(5,2)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "estado",
+        "type": "public.estado_resultado",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "fecha_cierre",
+        "type": "timestamp with time zone",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_docente",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "observacion",
+        "type": "text",
+        "nullable": true,
+        "default": null
+      }
+    ],
+    "rol": [
+      {
+        "name": "id_rol",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "nombre",
+        "type": "character varying(50)",
+        "nullable": false,
+        "default": null
+      }
+    ],
+    "sancion": [
+      {
+        "name": "id_sancion",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_estudiante",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_tipo_sancion",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "motivo",
+        "type": "text",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "fecha_inicio",
+        "type": "date",
+        "nullable": false,
+        "default": "CURRENT_DATE NOT NULL"
+      },
+      {
+        "name": "fecha_fin",
+        "type": "date",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "estado",
+        "type": "public.estado_sancion",
+        "nullable": true,
+        "default": "'ACTIVA'::public.estado_sancion"
+      },
+      {
+        "name": "observaciones",
+        "type": "text",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "id_directivo",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "creado_en",
+        "type": "timestamp with time zone",
+        "nullable": true,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "secciones": [
+      {
+        "name": "id_seccion",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "nombre",
+        "type": "character varying(10)",
+        "nullable": false,
+        "default": null
+      }
+    ],
+    "solicitud_traslado": [
+      {
+        "name": "id_solicitud",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "tipo",
+        "type": "public.tipo_traslado",
+        "nullable": false,
+        "default": "'TRASLADO_USUARIO'::public.tipo_traslado NOT NULL"
+      },
+      {
+        "name": "id_usuario",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_colegio_origen",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_colegio_destino",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_matricula",
+        "type": "integer",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "estado",
+        "type": "public.estado_solicitud_traslado",
+        "nullable": false,
+        "default": "'SOLICITADA'::public.estado_solicitud_traslado NOT NULL"
+      },
+      {
+        "name": "motivo",
+        "type": "text",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "creado_por",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "fecha_creacion",
+        "type": "timestamp with time zone",
+        "nullable": true,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "fecha_finalizacion",
+        "type": "timestamp with time zone",
+        "nullable": true,
+        "default": null
+      }
+    ],
+    "tickets_soporte": [
+      {
+        "name": "id_ticket",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_usuario",
+        "type": "integer",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "nombre_remitente",
+        "type": "character varying(155)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "correo_remitente",
+        "type": "character varying(155)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "telefono",
+        "type": "character varying(50)",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "tipo_incidencia",
+        "type": "public.tipo_incidencia_soporte",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "asunto",
+        "type": "character varying(255)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "descripcion",
+        "type": "text",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "estado",
+        "type": "public.estado_ticket_soporte",
+        "nullable": true,
+        "default": "'ABIERTO'::public.estado_ticket_soporte"
+      },
+      {
+        "name": "fecha_creacion",
+        "type": "timestamp with time zone",
+        "nullable": true,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "id_colegio",
+        "type": "integer",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "observaciones",
+        "type": "jsonb",
+        "nullable": true,
+        "default": "'[]'::jsonb"
+      },
+      {
+        "name": "codigo_ticket",
+        "type": "character varying(50)",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "fecha_escalado",
+        "type": "timestamp with time zone",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "id_estudiante",
+        "type": "integer",
+        "nullable": true,
+        "default": null
+      }
+    ],
+    "tipo_documento": [
+      {
+        "name": "id_tipodocumento",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "tipo",
+        "type": "character varying(255)",
+        "nullable": false,
+        "default": null
+      }
+    ],
+    "tipo_grado": [
+      {
+        "name": "id_tipo_grado",
+        "type": "integer CONSTRAINT tipo_grado_tabla_id_tipo_grado_not_null",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "nombre",
+        "type": "character varying(50) CONSTRAINT tipo_grado_tabla_nombre_not_null",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_nivel",
+        "type": "integer CONSTRAINT tipo_grado_tabla_id_nivel_not_null",
+        "nullable": false,
+        "default": null
+      }
+    ],
+    "tipo_sancion": [
+      {
+        "name": "id_tipo_sancion",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "nombre",
+        "type": "character varying(100)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "descripcion",
+        "type": "text",
+        "nullable": true,
+        "default": null
+      }
+    ],
+    "token_blacklist": [
+      {
+        "name": "id",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "jti",
+        "type": "character varying(255)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "expires_at",
+        "type": "timestamp with time zone",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "nullable": true,
+        "default": "now()"
+      }
+    ],
+    "traslado_aprobacion": [
+      {
+        "name": "id_aprobacion",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_solicitud",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_usuario",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "rol",
+        "type": "character varying(50)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "accion",
+        "type": "public.accion_aprobacion_traslado",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "comentario",
+        "type": "text",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "fecha",
+        "type": "timestamp with time zone",
+        "nullable": true,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "usuario": [
+      {
+        "name": "id_usuario",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "email",
+        "type": "character varying(255)",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "password",
+        "type": "character varying(255)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "nombre",
+        "type": "character varying(255)",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "apellido",
+        "type": "character varying(255)",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "id_colegio",
+        "type": "integer",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "activo",
+        "type": "boolean",
+        "nullable": true,
+        "default": "true"
+      },
+      {
+        "name": "fecha_creacion",
+        "type": "timestamp with time zone",
+        "nullable": true,
+        "default": "now()"
+      },
+      {
+        "name": "estado",
+        "type": "public.estado_usuario_sistema",
+        "nullable": false,
+        "default": "'ACTIVO'::public.estado_usuario_sistema NOT NULL"
+      },
+      {
+        "name": "motivo_baneo",
+        "type": "text",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "fecha_baneo",
+        "type": "timestamp with time zone",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "baneado_por",
+        "type": "integer",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "logged_out_at",
+        "type": "timestamp with time zone",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "id_tipodocumento",
+        "type": "integer",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "documento",
+        "type": "character varying(50)",
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "telefono",
+        "type": "character varying(50)",
+        "nullable": true,
+        "default": null
+      }
+    ],
+    "usuario_colegio": [
+      {
+        "name": "id_usuario_colegio",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_usuario",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_colegio",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_rol",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "estado",
+        "type": "character varying(20)",
+        "nullable": false,
+        "default": "'ACTIVO'::character varying NOT NULL"
+      },
+      {
+        "name": "fecha_inicio",
+        "type": "timestamp with time zone",
+        "nullable": true,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "fecha_fin",
+        "type": "timestamp with time zone",
+        "nullable": true,
+        "default": null
+      }
+    ],
+    "usuario_rol": [
+      {
+        "name": "id_usuario",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_rol",
+        "type": "integer",
+        "nullable": false,
+        "default": null
+      }
+    ]
+  },
+  "pks": {
+    "actividad_evidencia_dba": [
+      "id_actividadmateria",
+      "id_evidencia_dba"
+    ],
+    "actividad_materia": [
+      "id_actividadmateria"
+    ],
+    "auditoria_acciones_realizadas": [
+      "id_accion"
+    ],
+    "auditoria_supervision": [
+      "id_auditoria"
+    ],
+    "cierre_materia": [
+      "id_cierremateria"
+    ],
+    "colegio": [
+      "id_colegio"
+    ],
+    "colegio_version_curricular": [
+      "id"
+    ],
+    "competencias": [
+      "id_competencia"
+    ],
+    "configuracion_base": [
+      "id_config_base"
+    ],
+    "configuracion_colegio": [
+      "id_colegio"
+    ],
+    "configuracion_inscripcion": [
+      "id_configuracion"
+    ],
+    "configuracion_plataforma": [
+      "clave"
+    ],
+    "configuracion_sistema": [
+      "id_configuracion"
+    ],
+    "contrato_docente": [
+      "id_contratodocente"
+    ],
+    "criterio_evaluacion": [
+      "id_criterio"
+    ],
+    "dba_dimensiones_preescolar": [
+      "id_dba",
+      "id_dimension"
+    ],
+    "dba": [
+      "id_dba"
+    ],
+    "decision_promocion_directivo": [
+      "id_decision"
+    ],
+    "desempeno": [
+      "id_desempeno"
+    ],
+    "detalle_grados": [
+      "id_detallegrado"
+    ],
+    "detalle_padrefamilia": [
+      "id_detallepadrefamilia"
+    ],
+    "dimensiones_preescolar": [
+      "id_dimension"
+    ],
+    "directivo": [
+      "id"
+    ],
+    "docente": [
+      "id_docente"
+    ],
+    "documento_matriculas": [
+      "id_documento"
+    ],
+    "email_change_tokens": [
+      "id"
+    ],
+    "escala_valoracion": [
+      "id_escalavaloracion"
+    ],
+    "estudiante": [
+      "id_estudiante"
+    ],
+    "evidencia_aprendizaje": [
+      "id_evidencia"
+    ],
+    "evidencias_dba": [
+      "id_evidencia_dba"
+    ],
+    "grados": [
+      "id_grado"
+    ],
+    "grupos": [
+      "id_grupo"
+    ],
+    "jornada": [
+      "id_jornada"
+    ],
+    "materias": [
+      "id_materia"
+    ],
+    "matricula": [
+      "id_matricula"
+    ],
+    "nivel_escolar": [
+      "id_nivel"
+    ],
+    "nota_criterio": [
+      "id_nota_criterio"
+    ],
+    "notas_actividad": [
+      "id_notaactividad"
+    ],
+    "notificacion_colegio": [
+      "id_notificacion"
+    ],
+    "notificacion_supervision": [
+      "id_notificacion"
+    ],
+    "observacion_estudiante": [
+      "id_observacion"
+    ],
+    "padre_familia": [
+      "id_padrefamilia"
+    ],
+    "papelera_materias": [
+      "id_papelera"
+    ],
+    "password_reset_tokens": [
+      "id"
+    ],
+    "periodo_academico": [
+      "id_periodo"
+    ],
+    "registro_asistencia": [
+      "id_registroasistencia"
+    ],
+    "registro_graduados": [
+      "id_graduado"
+    ],
+    "resultado_academico": [
+      "id_resultado"
+    ],
+    "rol": [
+      "id_rol"
+    ],
+    "sancion": [
+      "id_sancion"
+    ],
+    "secciones": [
+      "id_seccion"
+    ],
+    "solicitud_traslado": [
+      "id_solicitud"
+    ],
+    "tickets_soporte": [
+      "id_ticket"
+    ],
+    "tipo_documento": [
+      "id_tipodocumento"
+    ],
+    "tipo_grado": [
+      "id_tipo_grado"
+    ],
+    "tipo_sancion": [
+      "id_tipo_sancion"
+    ],
+    "token_blacklist": [
+      "id"
+    ],
+    "traslado_aprobacion": [
+      "id_aprobacion"
+    ],
+    "usuario_colegio": [
+      "id_usuario_colegio"
+    ],
+    "usuario": [
+      "id_usuario"
+    ],
+    "usuario_rol": [
+      "id_usuario",
+      "id_rol"
+    ]
+  },
+  "fks": [
+    {
+      "table": "actividad_evidencia_dba",
+      "constraint_name": "actividad_evidencia_dba_id_actividadmateria_fkey",
+      "fk_cols": [
+        "id_actividadmateria"
+      ],
+      "target_table": "actividad_materia",
+      "target_cols": [
+        "id_actividadmateria"
+      ],
+      "on_delete": "CASCADE"
+    },
+    {
+      "table": "actividad_evidencia_dba",
+      "constraint_name": "actividad_evidencia_dba_id_evidencia_dba_fkey",
+      "fk_cols": [
+        "id_evidencia_dba"
+      ],
+      "target_table": "evidencias_dba",
+      "target_cols": [
+        "id_evidencia_dba"
+      ],
+      "on_delete": "CASCADE"
+    },
+    {
+      "table": "actividad_materia",
+      "constraint_name": "actividad_materia_id_colegio_fkey",
+      "fk_cols": [
+        "id_colegio"
+      ],
+      "target_table": "colegio",
+      "target_cols": [
+        "id_colegio"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "actividad_materia",
+      "constraint_name": "actividad_materia_id_competencia_fkey",
+      "fk_cols": [
+        "id_competencia"
+      ],
+      "target_table": "competencias",
+      "target_cols": [
+        "id_competencia"
+      ],
+      "on_delete": "CASCADE"
+    },
+    {
+      "table": "actividad_materia",
+      "constraint_name": "actividad_materia_id_detallegrado_fkey",
+      "fk_cols": [
+        "id_detallegrado"
+      ],
+      "target_table": "detalle_grados",
+      "target_cols": [
+        "id_detallegrado"
+      ],
+      "on_delete": "CASCADE"
+    },
+    {
+      "table": "actividad_materia",
+      "constraint_name": "actividad_materia_id_docente_creador_fkey",
+      "fk_cols": [
+        "id_docente_creador"
+      ],
+      "target_table": "docente",
+      "target_cols": [
+        "id_docente"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "actividad_materia",
+      "constraint_name": "actividad_materia_id_evidencia_fkey",
+      "fk_cols": [
+        "id_evidencia"
+      ],
+      "target_table": "evidencia_aprendizaje",
+      "target_cols": [
+        "id_evidencia"
+      ],
+      "on_delete": "SET NULL"
+    },
+    {
+      "table": "actividad_materia",
+      "constraint_name": "actividad_materia_id_periodo_fkey",
+      "fk_cols": [
+        "id_periodo"
+      ],
+      "target_table": "periodo_academico",
+      "target_cols": [
+        "id_periodo"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "auditoria_acciones_realizadas",
+      "constraint_name": "auditoria_acciones_realizadas_id_auditoria_fkey",
+      "fk_cols": [
+        "id_auditoria"
+      ],
+      "target_table": "auditoria_supervision",
+      "target_cols": [
+        "id_auditoria"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "auditoria_supervision",
+      "constraint_name": "auditoria_supervision_id_colegio_fkey",
+      "fk_cols": [
+        "id_colegio"
+      ],
+      "target_table": "colegio",
+      "target_cols": [
+        "id_colegio"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "auditoria_supervision",
+      "constraint_name": "auditoria_supervision_id_directivo_aprobador_fkey",
+      "fk_cols": [
+        "id_directivo_aprobador"
+      ],
+      "target_table": "directivo",
+      "target_cols": [
+        "id"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "auditoria_supervision",
+      "constraint_name": "auditoria_supervision_revocado_por_fkey",
+      "fk_cols": [
+        "revocado_por"
+      ],
+      "target_table": "directivo",
+      "target_cols": [
+        "id"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "cierre_materia",
+      "constraint_name": "cierre_materia_id_detallegrado_fkey",
+      "fk_cols": [
+        "id_detallegrado"
+      ],
+      "target_table": "detalle_grados",
+      "target_cols": [
+        "id_detallegrado"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "cierre_materia",
+      "constraint_name": "cierre_materia_id_docente_cierre_fkey",
+      "fk_cols": [
+        "id_docente_cierre"
+      ],
+      "target_table": "docente",
+      "target_cols": [
+        "id_docente"
+      ],
+      "on_delete": "SET NULL"
+    },
+    {
+      "table": "cierre_materia",
+      "constraint_name": "cierre_materia_id_periodo_fkey",
+      "fk_cols": [
+        "id_periodo"
+      ],
+      "target_table": "periodo_academico",
+      "target_cols": [
+        "id_periodo"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "colegio_version_curricular",
+      "constraint_name": "colegio_version_curricular_id_colegio_fkey",
+      "fk_cols": [
+        "id_colegio"
+      ],
+      "target_table": "colegio",
+      "target_cols": [
+        "id_colegio"
+      ],
+      "on_delete": "CASCADE"
+    },
+    {
+      "table": "competencias",
+      "constraint_name": "competencias_id_colegio_fkey",
+      "fk_cols": [
+        "id_colegio"
+      ],
+      "target_table": "colegio",
+      "target_cols": [
+        "id_colegio"
+      ],
+      "on_delete": "CASCADE"
+    },
+    {
+      "table": "competencias",
+      "constraint_name": "competencias_id_dimension_fkey",
+      "fk_cols": [
+        "id_dimension"
+      ],
+      "target_table": "dimensiones_preescolar",
+      "target_cols": [
+        "id_dimension"
+      ],
+      "on_delete": "SET NULL"
+    },
+    {
+      "table": "competencias",
+      "constraint_name": "competencias_id_grupo_fkey",
+      "fk_cols": [
+        "id_grupo"
+      ],
+      "target_table": "grupos",
+      "target_cols": [
+        "id_grupo"
+      ],
+      "on_delete": "CASCADE"
+    },
+    {
+      "table": "competencias",
+      "constraint_name": "competencias_id_materia_fkey",
+      "fk_cols": [
+        "id_materia"
+      ],
+      "target_table": "materias",
+      "target_cols": [
+        "id_materia"
+      ],
+      "on_delete": "CASCADE"
+    },
+    {
+      "table": "competencias",
+      "constraint_name": "competencias_id_periodo_fkey",
+      "fk_cols": [
+        "id_periodo"
+      ],
+      "target_table": "periodo_academico",
+      "target_cols": [
+        "id_periodo"
+      ],
+      "on_delete": "CASCADE"
+    },
+    {
+      "table": "configuracion_colegio",
+      "constraint_name": "configuracion_colegio_id_colegio_fkey",
+      "fk_cols": [
+        "id_colegio"
+      ],
+      "target_table": "colegio",
+      "target_cols": [
+        "id_colegio"
+      ],
+      "on_delete": "CASCADE"
+    },
+    {
+      "table": "configuracion_inscripcion",
+      "constraint_name": "configuracion_inscripcion_id_colegio_fkey",
+      "fk_cols": [
+        "id_colegio"
+      ],
+      "target_table": "colegio",
+      "target_cols": [
+        "id_colegio"
+      ],
+      "on_delete": "CASCADE"
+    },
+    {
+      "table": "contrato_docente",
+      "constraint_name": "contrato_docente_id_colegio_fkey",
+      "fk_cols": [
+        "id_colegio"
+      ],
+      "target_table": "colegio",
+      "target_cols": [
+        "id_colegio"
+      ],
+      "on_delete": "CASCADE"
+    },
+    {
+      "table": "criterio_evaluacion",
+      "constraint_name": "criterio_evaluacion_id_actividadmateria_fkey",
+      "fk_cols": [
+        "id_actividadmateria"
+      ],
+      "target_table": "actividad_materia",
+      "target_cols": [
+        "id_actividadmateria"
+      ],
+      "on_delete": "CASCADE"
+    },
+    {
+      "table": "criterio_evaluacion",
+      "constraint_name": "criterio_evaluacion_id_colegio_fkey",
+      "fk_cols": [
+        "id_colegio"
+      ],
+      "target_table": "colegio",
+      "target_cols": [
+        "id_colegio"
+      ],
+      "on_delete": "CASCADE"
+    },
+    {
+      "table": "criterio_evaluacion",
+      "constraint_name": "criterio_evaluacion_id_evidencia_fkey",
+      "fk_cols": [
+        "id_evidencia"
+      ],
+      "target_table": "evidencia_aprendizaje",
+      "target_cols": [
+        "id_evidencia"
+      ],
+      "on_delete": "SET NULL"
+    },
+    {
+      "table": "dba_dimensiones_preescolar",
+      "constraint_name": "dba_dimensiones_preescolar_id_dba_fkey",
+      "fk_cols": [
+        "id_dba"
+      ],
+      "target_table": "dba",
+      "target_cols": [
+        "id_dba"
+      ],
+      "on_delete": "CASCADE"
+    },
+    {
+      "table": "dba_dimensiones_preescolar",
+      "constraint_name": "dba_dimensiones_preescolar_id_dimension_fkey",
+      "fk_cols": [
+        "id_dimension"
+      ],
+      "target_table": "dimensiones_preescolar",
+      "target_cols": [
+        "id_dimension"
+      ],
+      "on_delete": "CASCADE"
+    },
+    {
+      "table": "decision_promocion_directivo",
+      "constraint_name": "decision_promocion_directivo_id_anio_anterior_fkey",
+      "fk_cols": [
+        "id_anio_anterior"
+      ],
+      "target_table": "anio_lectivo",
+      "target_cols": [
+        "id_anio"
+      ],
+      "on_delete": "CASCADE"
+    },
+    {
+      "table": "decision_promocion_directivo",
+      "constraint_name": "decision_promocion_directivo_id_colegio_fkey",
+      "fk_cols": [
+        "id_colegio"
+      ],
+      "target_table": "colegio",
+      "target_cols": [
+        "id_colegio"
+      ],
+      "on_delete": "CASCADE"
+    },
+    {
+      "table": "decision_promocion_directivo",
+      "constraint_name": "decision_promocion_directivo_id_estudiante_fkey",
+      "fk_cols": [
+        "id_estudiante"
+      ],
+      "target_table": "estudiante",
+      "target_cols": [
+        "id_estudiante"
+      ],
+      "on_delete": "CASCADE"
+    },
+    {
+      "table": "decision_promocion_directivo",
+      "constraint_name": "decision_promocion_directivo_id_grado_anterior_fkey",
+      "fk_cols": [
+        "id_grado_anterior"
+      ],
+      "target_table": "grados",
+      "target_cols": [
+        "id_grado"
+      ],
+      "on_delete": "SET NULL"
+    },
+    {
+      "table": "decision_promocion_directivo",
+      "constraint_name": "decision_promocion_directivo_id_grado_asignado_fkey",
+      "fk_cols": [
+        "id_grado_asignado"
+      ],
+      "target_table": "grados",
+      "target_cols": [
+        "id_grado"
+      ],
+      "on_delete": "SET NULL"
+    },
+    {
+      "table": "desempeno",
+      "constraint_name": "desempeno_id_actividadmateria_fkey",
+      "fk_cols": [
+        "id_actividadmateria"
+      ],
+      "target_table": "actividad_materia",
+      "target_cols": [
+        "id_actividadmateria"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "desempeno",
+      "constraint_name": "desempeno_id_colegio_fkey",
+      "fk_cols": [
+        "id_colegio"
+      ],
+      "target_table": "colegio",
+      "target_cols": [
+        "id_colegio"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "detalle_grados",
+      "constraint_name": "detalle_grados_id_anio_fkey",
+      "fk_cols": [
+        "id_anio"
+      ],
+      "target_table": "anio_lectivo",
+      "target_cols": [
+        "id_anio"
+      ],
+      "on_delete": "CASCADE"
+    },
+    {
+      "table": "detalle_grados",
+      "constraint_name": "detalle_grados_id_colegio_fkey",
+      "fk_cols": [
+        "id_colegio"
+      ],
+      "target_table": "colegio",
+      "target_cols": [
+        "id_colegio"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "detalle_grados",
+      "constraint_name": "detalle_grados_id_docente_fkey",
+      "fk_cols": [
+        "id_docente"
+      ],
+      "target_table": "docente",
+      "target_cols": [
+        "id_docente"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "detalle_grados",
+      "constraint_name": "detalle_grados_id_materia_fkey",
+      "fk_cols": [
+        "id_materia"
+      ],
+      "target_table": "materias",
+      "target_cols": [
+        "id_materia"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "detalle_padrefamilia",
+      "constraint_name": "detalle_padrefamilia_id_colegio_fkey",
+      "fk_cols": [
+        "id_colegio"
+      ],
+      "target_table": "colegio",
+      "target_cols": [
+        "id_colegio"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "detalle_padrefamilia",
+      "constraint_name": "detalle_padrefamilia_id_estudiante_fkey",
+      "fk_cols": [
+        "id_estudiante"
+      ],
+      "target_table": "estudiante",
+      "target_cols": [
+        "id_estudiante"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "detalle_padrefamilia",
+      "constraint_name": "detalle_padrefamilia_id_padrefamilia_fkey",
+      "fk_cols": [
+        "id_padrefamilia"
+      ],
+      "target_table": "padre_familia",
+      "target_cols": [
+        "id_padrefamilia"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "directivo",
+      "constraint_name": "directivo_id_colegio_fkey",
+      "fk_cols": [
+        "id_colegio"
+      ],
+      "target_table": "colegio",
+      "target_cols": [
+        "id_colegio"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "docente",
+      "constraint_name": "docente_id_colegio_fkey",
+      "fk_cols": [
+        "id_colegio"
+      ],
+      "target_table": "colegio",
+      "target_cols": [
+        "id_colegio"
+      ],
+      "on_delete": "CASCADE"
+    },
+    {
+      "table": "docente",
+      "constraint_name": "docente_id_contratodocente_fkey",
+      "fk_cols": [
+        "id_contratodocente"
+      ],
+      "target_table": "contrato_docente",
+      "target_cols": [
+        "id_contratodocente"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "documento_matriculas",
+      "constraint_name": "documento_matriculas_id_colegio_fkey",
+      "fk_cols": [
+        "id_colegio"
+      ],
+      "target_table": "colegio",
+      "target_cols": [
+        "id_colegio"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "documento_matriculas",
+      "constraint_name": "documento_matriculas_id_matricula_fkey",
+      "fk_cols": [
+        "id_matricula"
+      ],
+      "target_table": "matricula",
+      "target_cols": [
+        "id_matricula"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "estudiante",
+      "constraint_name": "estudiante_id_colegio_fkey",
+      "fk_cols": [
+        "id_colegio"
+      ],
+      "target_table": "colegio",
+      "target_cols": [
+        "id_colegio"
+      ],
+      "on_delete": "CASCADE"
+    },
+    {
+      "table": "evidencia_aprendizaje",
+      "constraint_name": "evidencia_aprendizaje_id_colegio_fkey",
+      "fk_cols": [
+        "id_colegio"
+      ],
+      "target_table": "colegio",
+      "target_cols": [
+        "id_colegio"
+      ],
+      "on_delete": "CASCADE"
+    },
+    {
+      "table": "evidencia_aprendizaje",
+      "constraint_name": "evidencia_aprendizaje_id_competencia_fkey",
+      "fk_cols": [
+        "id_competencia"
+      ],
+      "target_table": "competencias",
+      "target_cols": [
+        "id_competencia"
+      ],
+      "on_delete": "CASCADE"
+    },
+    {
+      "table": "evidencia_aprendizaje",
+      "constraint_name": "evidencia_aprendizaje_id_evidencia_dba_fkey",
+      "fk_cols": [
+        "id_evidencia_dba"
+      ],
+      "target_table": "evidencias_dba",
+      "target_cols": [
+        "id_evidencia_dba"
+      ],
+      "on_delete": "SET NULL"
+    },
+    {
+      "table": "evidencias_dba",
+      "constraint_name": "evidencias_dba_id_dba_fkey",
+      "fk_cols": [
+        "id_dba"
+      ],
+      "target_table": "dba",
+      "target_cols": [
+        "id_dba"
+      ],
+      "on_delete": "CASCADE"
+    },
+    {
+      "table": "configuracion_sistema",
+      "constraint_name": "fk_config_base",
+      "fk_cols": [
+        "id_config_base"
+      ],
+      "target_table": "configuracion_base",
+      "target_cols": [
+        "id_config_base"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "configuracion_sistema",
+      "constraint_name": "fk_configuracion_colegio",
+      "fk_cols": [
+        "id_colegio"
+      ],
+      "target_table": "colegio",
+      "target_cols": [
+        "id_colegio"
+      ],
+      "on_delete": "CASCADE"
+    },
+    {
+      "table": "detalle_grados",
+      "constraint_name": "fk_detalle_grupo",
+      "fk_cols": [
+        "id_grupo"
+      ],
+      "target_table": "grupos",
+      "target_cols": [
+        "id_grupo"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "grupos",
+      "constraint_name": "fk_grupo_colegio",
+      "fk_cols": [
+        "id_colegio"
+      ],
+      "target_table": "colegio",
+      "target_cols": [
+        "id_colegio"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "grupos",
+      "constraint_name": "fk_grupo_jornada",
+      "fk_cols": [
+        "id_jornada"
+      ],
+      "target_table": "jornada",
+      "target_cols": [
+        "id_jornada"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "grupos",
+      "constraint_name": "fk_grupo_nivel",
+      "fk_cols": [
+        "id_nivel"
+      ],
+      "target_table": "nivel_escolar",
+      "target_cols": [
+        "id_nivel"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "grupos",
+      "constraint_name": "fk_grupo_seccion",
+      "fk_cols": [
+        "id_seccion"
+      ],
+      "target_table": "secciones",
+      "target_cols": [
+        "id_seccion"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "grupos",
+      "constraint_name": "fk_grupos_tipo_grado",
+      "fk_cols": [
+        "id_tipo_grado"
+      ],
+      "target_table": "tipo_grado",
+      "target_cols": [
+        "id_tipo_grado"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "matricula",
+      "constraint_name": "fk_matricula_anio",
+      "fk_cols": [
+        "id_anio"
+      ],
+      "target_table": "anio_lectivo",
+      "target_cols": [
+        "id_anio"
+      ],
+      "on_delete": "RESTRICT"
+    },
+    {
+      "table": "matricula",
+      "constraint_name": "fk_matricula_estudiante",
+      "fk_cols": [
+        "id_estudiante"
+      ],
+      "target_table": "estudiante",
+      "target_cols": [
+        "id_estudiante"
+      ],
+      "on_delete": "RESTRICT"
+    },
+    {
+      "table": "matricula",
+      "constraint_name": "fk_matricula_grupo",
+      "fk_cols": [
+        "id_grupo"
+      ],
+      "target_table": "grupos",
+      "target_cols": [
+        "id_grupo"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "tipo_grado",
+      "constraint_name": "fk_tipo_grado_nivel",
+      "fk_cols": [
+        "id_nivel"
+      ],
+      "target_table": "nivel_escolar",
+      "target_cols": [
+        "id_nivel"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "grupos",
+      "constraint_name": "grupos_id_docente_fkey",
+      "fk_cols": [
+        "id_docente"
+      ],
+      "target_table": "docente",
+      "target_cols": [
+        "id_docente"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "jornada",
+      "constraint_name": "jornada_id_colegio_fkey",
+      "fk_cols": [
+        "id_colegio"
+      ],
+      "target_table": "colegio",
+      "target_cols": [
+        "id_colegio"
+      ],
+      "on_delete": "CASCADE"
+    },
+    {
+      "table": "materias",
+      "constraint_name": "materias_id_colegio_fkey",
+      "fk_cols": [
+        "id_colegio"
+      ],
+      "target_table": "colegio",
+      "target_cols": [
+        "id_colegio"
+      ],
+      "on_delete": "CASCADE"
+    },
+    {
+      "table": "matricula",
+      "constraint_name": "matricula_id_colegio_fkey",
+      "fk_cols": [
+        "id_colegio"
+      ],
+      "target_table": "colegio",
+      "target_cols": [
+        "id_colegio"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "matricula",
+      "constraint_name": "matricula_id_estudiante_fkey",
+      "fk_cols": [
+        "id_estudiante"
+      ],
+      "target_table": "estudiante",
+      "target_cols": [
+        "id_estudiante"
+      ],
+      "on_delete": "CASCADE"
+    },
+    {
+      "table": "matricula",
+      "constraint_name": "matricula_id_nivel_fkey",
+      "fk_cols": [
+        "id_nivel"
+      ],
+      "target_table": "nivel_escolar",
+      "target_cols": [
+        "id_nivel"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "matricula",
+      "constraint_name": "matricula_id_ticket_fkey",
+      "fk_cols": [
+        "id_ticket"
+      ],
+      "target_table": "tickets_soporte",
+      "target_cols": [
+        "id_ticket"
+      ],
+      "on_delete": "SET NULL"
+    },
+    {
+      "table": "nivel_escolar",
+      "constraint_name": "nivel_escolar_id_colegio_fkey",
+      "fk_cols": [
+        "id_colegio"
+      ],
+      "target_table": "colegio",
+      "target_cols": [
+        "id_colegio"
+      ],
+      "on_delete": "CASCADE"
+    },
+    {
+      "table": "nota_criterio",
+      "constraint_name": "nota_criterio_id_colegio_fkey",
+      "fk_cols": [
+        "id_colegio"
+      ],
+      "target_table": "colegio",
+      "target_cols": [
+        "id_colegio"
+      ],
+      "on_delete": "CASCADE"
+    },
+    {
+      "table": "nota_criterio",
+      "constraint_name": "nota_criterio_id_criterio_fkey",
+      "fk_cols": [
+        "id_criterio"
+      ],
+      "target_table": "criterio_evaluacion",
+      "target_cols": [
+        "id_criterio"
+      ],
+      "on_delete": "CASCADE"
+    },
+    {
+      "table": "nota_criterio",
+      "constraint_name": "nota_criterio_id_estudiante_fkey",
+      "fk_cols": [
+        "id_estudiante"
+      ],
+      "target_table": "estudiante",
+      "target_cols": [
+        "id_estudiante"
+      ],
+      "on_delete": "CASCADE"
+    },
+    {
+      "table": "notas_actividad",
+      "constraint_name": "notas_actividad_id_actividadmateria_fkey",
+      "fk_cols": [
+        "id_actividadmateria"
+      ],
+      "target_table": "actividad_materia",
+      "target_cols": [
+        "id_actividadmateria"
+      ],
+      "on_delete": "CASCADE"
+    },
+    {
+      "table": "notas_actividad",
+      "constraint_name": "notas_actividad_id_escalavaloracion_fkey",
+      "fk_cols": [
+        "id_escalavaloracion"
+      ],
+      "target_table": "escala_valoracion",
+      "target_cols": [
+        "id_escalavaloracion"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "notas_actividad",
+      "constraint_name": "notas_actividad_id_estudiante_fkey",
+      "fk_cols": [
+        "id_estudiante"
+      ],
+      "target_table": "estudiante",
+      "target_cols": [
+        "id_estudiante"
+      ],
+      "on_delete": "CASCADE"
+    },
+    {
+      "table": "notificacion_colegio",
+      "constraint_name": "notificacion_colegio_id_colegio_fkey",
+      "fk_cols": [
+        "id_colegio"
+      ],
+      "target_table": "colegio",
+      "target_cols": [
+        "id_colegio"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "notificacion_colegio",
+      "constraint_name": "notificacion_colegio_id_directivo_fkey",
+      "fk_cols": [
+        "id_directivo"
+      ],
+      "target_table": "directivo",
+      "target_cols": [
+        "id"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "notificacion_supervision",
+      "constraint_name": "notificacion_supervision_id_auditoria_fkey",
+      "fk_cols": [
+        "id_auditoria"
+      ],
+      "target_table": "auditoria_supervision",
+      "target_cols": [
+        "id_auditoria"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "notificacion_supervision",
+      "constraint_name": "notificacion_supervision_id_directivo_fkey",
+      "fk_cols": [
+        "id_directivo"
+      ],
+      "target_table": "directivo",
+      "target_cols": [
+        "id"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "observacion_estudiante",
+      "constraint_name": "observacion_estudiante_id_colegio_fkey",
+      "fk_cols": [
+        "id_colegio"
+      ],
+      "target_table": "colegio",
+      "target_cols": [
+        "id_colegio"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "observacion_estudiante",
+      "constraint_name": "observacion_estudiante_id_detallegrado_fkey",
+      "fk_cols": [
+        "id_detallegrado"
+      ],
+      "target_table": "detalle_grados",
+      "target_cols": [
+        "id_detallegrado"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "observacion_estudiante",
+      "constraint_name": "observacion_estudiante_id_estudiante_fkey",
+      "fk_cols": [
+        "id_estudiante"
+      ],
+      "target_table": "estudiante",
+      "target_cols": [
+        "id_estudiante"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "observacion_estudiante",
+      "constraint_name": "observacion_estudiante_id_periodo_fkey",
+      "fk_cols": [
+        "id_periodo"
+      ],
+      "target_table": "periodo_academico",
+      "target_cols": [
+        "id_periodo"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "padre_familia",
+      "constraint_name": "padre_familia_id_colegio_fkey",
+      "fk_cols": [
+        "id_colegio"
+      ],
+      "target_table": "colegio",
+      "target_cols": [
+        "id_colegio"
+      ],
+      "on_delete": "CASCADE"
+    },
+    {
+      "table": "periodo_academico",
+      "constraint_name": "periodo_academico_id_colegio_fkey",
+      "fk_cols": [
+        "id_colegio"
+      ],
+      "target_table": "colegio",
+      "target_cols": [
+        "id_colegio"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "registro_asistencia",
+      "constraint_name": "registro_asistencia_id_colegio_fkey",
+      "fk_cols": [
+        "id_colegio"
+      ],
+      "target_table": "colegio",
+      "target_cols": [
+        "id_colegio"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "registro_asistencia",
+      "constraint_name": "registro_asistencia_id_detallegrado_fkey",
+      "fk_cols": [
+        "id_detallegrado"
+      ],
+      "target_table": "detalle_grados",
+      "target_cols": [
+        "id_detallegrado"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "registro_asistencia",
+      "constraint_name": "registro_asistencia_id_estudiante_fkey",
+      "fk_cols": [
+        "id_estudiante"
+      ],
+      "target_table": "estudiante",
+      "target_cols": [
+        "id_estudiante"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "registro_graduados",
+      "constraint_name": "registro_graduados_id_estudiante_fkey",
+      "fk_cols": [
+        "id_estudiante"
+      ],
+      "target_table": "estudiante",
+      "target_cols": [
+        "id_estudiante"
+      ],
+      "on_delete": "CASCADE"
+    },
+    {
+      "table": "resultado_academico",
+      "constraint_name": "resultado_academico_id_detallegrado_fkey",
+      "fk_cols": [
+        "id_detallegrado"
+      ],
+      "target_table": "detalle_grados",
+      "target_cols": [
+        "id_detallegrado"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "resultado_academico",
+      "constraint_name": "resultado_academico_id_docente_fkey",
+      "fk_cols": [
+        "id_docente"
+      ],
+      "target_table": "docente",
+      "target_cols": [
+        "id_docente"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "resultado_academico",
+      "constraint_name": "resultado_academico_id_estudiante_fkey",
+      "fk_cols": [
+        "id_estudiante"
+      ],
+      "target_table": "estudiante",
+      "target_cols": [
+        "id_estudiante"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "resultado_academico",
+      "constraint_name": "resultado_academico_id_periodo_fkey",
+      "fk_cols": [
+        "id_periodo"
+      ],
+      "target_table": "periodo_academico",
+      "target_cols": [
+        "id_periodo"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "sancion",
+      "constraint_name": "sancion_id_directivo_fkey",
+      "fk_cols": [
+        "id_directivo"
+      ],
+      "target_table": "directivo",
+      "target_cols": [
+        "id"
+      ],
+      "on_delete": "CASCADE"
+    },
+    {
+      "table": "sancion",
+      "constraint_name": "sancion_id_estudiante_fkey",
+      "fk_cols": [
+        "id_estudiante"
+      ],
+      "target_table": "estudiante",
+      "target_cols": [
+        "id_estudiante"
+      ],
+      "on_delete": "CASCADE"
+    },
+    {
+      "table": "sancion",
+      "constraint_name": "sancion_id_tipo_sancion_fkey",
+      "fk_cols": [
+        "id_tipo_sancion"
+      ],
+      "target_table": "tipo_sancion",
+      "target_cols": [
+        "id_tipo_sancion"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "solicitud_traslado",
+      "constraint_name": "solicitud_traslado_id_colegio_destino_fkey",
+      "fk_cols": [
+        "id_colegio_destino"
+      ],
+      "target_table": "colegio",
+      "target_cols": [
+        "id_colegio"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "solicitud_traslado",
+      "constraint_name": "solicitud_traslado_id_colegio_origen_fkey",
+      "fk_cols": [
+        "id_colegio_origen"
+      ],
+      "target_table": "colegio",
+      "target_cols": [
+        "id_colegio"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "solicitud_traslado",
+      "constraint_name": "solicitud_traslado_id_matricula_fkey",
+      "fk_cols": [
+        "id_matricula"
+      ],
+      "target_table": "matricula",
+      "target_cols": [
+        "id_matricula"
+      ],
+      "on_delete": "SET NULL"
+    },
+    {
+      "table": "tickets_soporte",
+      "constraint_name": "tickets_soporte_id_colegio_fkey",
+      "fk_cols": [
+        "id_colegio"
+      ],
+      "target_table": "colegio",
+      "target_cols": [
+        "id_colegio"
+      ],
+      "on_delete": "CASCADE"
+    },
+    {
+      "table": "tickets_soporte",
+      "constraint_name": "tickets_soporte_id_estudiante_fkey",
+      "fk_cols": [
+        "id_estudiante"
+      ],
+      "target_table": "estudiante",
+      "target_cols": [
+        "id_estudiante"
+      ],
+      "on_delete": "SET NULL"
+    },
+    {
+      "table": "traslado_aprobacion",
+      "constraint_name": "traslado_aprobacion_id_solicitud_fkey",
+      "fk_cols": [
+        "id_solicitud"
+      ],
+      "target_table": "solicitud_traslado",
+      "target_cols": [
+        "id_solicitud"
+      ],
+      "on_delete": "CASCADE"
+    },
+    {
+      "table": "usuario",
+      "constraint_name": "usuario_baneado_por_fkey",
+      "fk_cols": [
+        "baneado_por"
+      ],
+      "target_table": "usuario",
+      "target_cols": [
+        "id_usuario"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "usuario_colegio",
+      "constraint_name": "usuario_colegio_id_colegio_fkey",
+      "fk_cols": [
+        "id_colegio"
+      ],
+      "target_table": "colegio",
+      "target_cols": [
+        "id_colegio"
+      ],
+      "on_delete": "CASCADE"
+    },
+    {
+      "table": "usuario",
+      "constraint_name": "usuario_id_colegio_fkey",
+      "fk_cols": [
+        "id_colegio"
+      ],
+      "target_table": "colegio",
+      "target_cols": [
+        "id_colegio"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "usuario",
+      "constraint_name": "usuario_id_tipodocumento_fkey",
+      "fk_cols": [
+        "id_tipodocumento"
+      ],
+      "target_table": "tipo_documento",
+      "target_cols": [
+        "id_tipodocumento"
+      ],
+      "on_delete": "NO ACTION"
+    },
+    {
+      "table": "usuario_rol",
+      "constraint_name": "usuario_rol_id_rol_fkey",
+      "fk_cols": [
+        "id_rol"
+      ],
+      "target_table": "rol",
+      "target_cols": [
+        "id_rol"
+      ],
+      "on_delete": "CASCADE"
+    },
+    {
+      "table": "usuario_rol",
+      "constraint_name": "usuario_rol_id_usuario_fkey",
+      "fk_cols": [
+        "id_usuario"
+      ],
+      "target_table": "usuario",
+      "target_cols": [
+        "id_usuario"
+      ],
+      "on_delete": "CASCADE"
+    }
+  ],
+  "uniques": [
+    {
+      "table": "configuracion_base",
+      "constraint_name": "configuracion_base_clave_key",
+      "cols": [
+        "clave"
+      ]
+    },
+    {
+      "table": "dimensiones_preescolar",
+      "constraint_name": "dimensiones_preescolar_nombre_key",
+      "cols": [
+        "nombre"
+      ]
+    },
+    {
+      "table": "directivo",
+      "constraint_name": "directivo_id_usuario_key",
+      "cols": [
+        "id_usuario"
+      ]
+    },
+    {
+      "table": "docente",
+      "constraint_name": "docente_id_usuario_id_colegio_key",
+      "cols": [
+        "id_usuario",
+        "id_colegio"
+      ]
+    },
+    {
+      "table": "estudiante",
+      "constraint_name": "estudiante_id_usuario_key",
+      "cols": [
+        "id_usuario"
+      ]
+    },
+    {
+      "table": "matricula",
+      "constraint_name": "matricula_token_key",
+      "cols": [
+        "token_seguimiento"
+      ]
+    },
+    {
+      "table": "nota_criterio",
+      "constraint_name": "nota_criterio_id_criterio_id_estudiante_key",
+      "cols": [
+        "id_criterio",
+        "id_estudiante"
+      ]
+    },
+    {
+      "table": "padre_familia",
+      "constraint_name": "padre_familia_id_usuario_key",
+      "cols": [
+        "id_usuario"
+      ]
+    },
+    {
+      "table": "password_reset_tokens",
+      "constraint_name": "password_reset_tokens_token_key",
+      "cols": [
+        "token"
+      ]
+    },
+    {
+      "table": "registro_graduados",
+      "constraint_name": "registro_graduados_id_estudiante_key",
+      "cols": [
+        "id_estudiante"
+      ]
+    },
+    {
+      "table": "rol",
+      "constraint_name": "rol_nombre_key",
+      "cols": [
+        "nombre"
+      ]
+    },
+    {
+      "table": "secciones",
+      "constraint_name": "secciones_nombre_key",
+      "cols": [
+        "nombre"
+      ]
+    },
+    {
+      "table": "tickets_soporte",
+      "constraint_name": "tickets_soporte_codigo_ticket_key",
+      "cols": [
+        "codigo_ticket"
+      ]
+    },
+    {
+      "table": "tipo_sancion",
+      "constraint_name": "tipo_sancion_nombre_key",
+      "cols": [
+        "nombre"
+      ]
+    },
+    {
+      "table": "token_blacklist",
+      "constraint_name": "token_blacklist_jti_key",
+      "cols": [
+        "jti"
+      ]
+    },
+    {
+      "table": "notas_actividad",
+      "constraint_name": "unique_actividad_estudiante",
+      "cols": [
+        "id_actividadmateria",
+        "id_estudiante"
+      ]
+    },
+    {
+      "table": "configuracion_sistema",
+      "constraint_name": "unique_configuracion",
+      "cols": [
+        "id_colegio",
+        "clave"
+      ]
+    },
+    {
+      "table": "configuracion_inscripcion",
+      "constraint_name": "uq_colegio_anio",
+      "cols": [
+        "id_colegio",
+        "id_anio"
+      ]
+    },
+    {
+      "table": "colegio_version_curricular",
+      "constraint_name": "uq_colegio_area_grado",
+      "cols": [
+        "id_colegio",
+        "area",
+        "grado"
+      ]
+    },
+    {
+      "table": "dba",
+      "constraint_name": "uq_dba_area_grado_num_version",
+      "cols": [
+        "area",
+        "grado",
+        "numero_dba",
+        "version_curricular"
+      ]
+    },
+    {
+      "table": "tipo_grado",
+      "constraint_name": "uq_tipo_grado",
+      "cols": [
+        "nombre",
+        "id_nivel"
+      ]
+    },
+    {
+      "table": "usuario_colegio",
+      "constraint_name": "uq_usuario_colegio_rol",
+      "cols": [
+        "id_usuario",
+        "id_colegio",
+        "id_rol"
+      ]
+    },
+    {
+      "table": "usuario",
+      "constraint_name": "usuario_email_key",
+      "cols": [
+        "email"
+      ]
+    }
+  ],
+  "checks": [],
+  "indexes": [
+    {
+      "is_unique": false,
+      "index_name": "idx_actividad_evidencia_dba_act",
+      "table": "actividad_evidencia_dba",
+      "columns": "id_actividadmateria",
+      "where": null
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_actividad_evidencia_dba_ev",
+      "table": "actividad_evidencia_dba",
+      "columns": "id_evidencia_dba",
+      "where": null
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_asistencia_estudiante",
+      "table": "registro_asistencia",
+      "columns": "id_estudiante",
+      "where": null
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_audit_acc_auditoria",
+      "table": "auditoria_acciones_realizadas",
+      "columns": "id_auditoria",
+      "where": null
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_audit_acc_fecha",
+      "table": "auditoria_acciones_realizadas",
+      "columns": "fecha_accion",
+      "where": null
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_audit_acc_tipo",
+      "table": "auditoria_acciones_realizadas",
+      "columns": "tipo_accion",
+      "where": null
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_audit_acc_usuario",
+      "table": "auditoria_acciones_realizadas",
+      "columns": "id_usuario_afectado",
+      "where": "(id_usuario_afectado IS NOT NULL)"
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_audit_sup_admin",
+      "table": "auditoria_supervision",
+      "columns": "id_admin_general",
+      "where": null
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_audit_sup_colegio",
+      "table": "auditoria_supervision",
+      "columns": "id_colegio",
+      "where": null
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_audit_sup_eliminado",
+      "table": "auditoria_supervision",
+      "columns": "eliminado",
+      "where": "(eliminado = false)"
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_audit_sup_estado",
+      "table": "auditoria_supervision",
+      "columns": "estado_supervision",
+      "where": null
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_audit_sup_fecha",
+      "table": "auditoria_supervision",
+      "columns": "fecha_solicitud",
+      "where": null
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_colegio_estado",
+      "table": "colegio",
+      "columns": "estado",
+      "where": null
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_colegio_version_colegio",
+      "table": "colegio_version_curricular",
+      "columns": "id_colegio",
+      "where": null
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_competencias_sync_uuid",
+      "table": "competencias",
+      "columns": "sync_uuid",
+      "where": null
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_config_inscripcion_colegio",
+      "table": "configuracion_inscripcion",
+      "columns": "id_colegio",
+      "where": null
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_dba_area_grado",
+      "table": "dba",
+      "columns": "area, grado",
+      "where": null
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_dba_estado",
+      "table": "dba",
+      "columns": "estado",
+      "where": "(estado = 'ACTIVO'::public.estado_dba)"
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_dba_version",
+      "table": "dba",
+      "columns": "version_curricular",
+      "where": null
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_decision_promocion_anio",
+      "table": "decision_promocion_directivo",
+      "columns": "id_anio_anterior",
+      "where": null
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_decision_promocion_estudiante",
+      "table": "decision_promocion_directivo",
+      "columns": "id_estudiante, id_colegio",
+      "where": null
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_detalle_padrefamilia_padrefamilia",
+      "table": "detalle_padrefamilia",
+      "columns": "id_padrefamilia",
+      "where": null
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_email_change_codigo",
+      "table": "email_change_tokens",
+      "columns": "codigo",
+      "where": null
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_email_change_usuario",
+      "table": "email_change_tokens",
+      "columns": "id_usuario",
+      "where": null
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_evidencia_aprendizaje_dba",
+      "table": "evidencia_aprendizaje",
+      "columns": "id_evidencia_dba",
+      "where": "(id_evidencia_dba IS NOT NULL)"
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_evidencia_competencia",
+      "table": "evidencia_aprendizaje",
+      "columns": "id_competencia",
+      "where": null
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_evidencias_dba_dba",
+      "table": "evidencias_dba",
+      "columns": "id_dba",
+      "where": null
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_grupos_tipo_grado",
+      "table": "grupos",
+      "columns": "id_tipo_grado",
+      "where": null
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_matricula_estudiante",
+      "table": "matricula",
+      "columns": "id_estudiante",
+      "where": null
+    },
+    {
+      "is_unique": true,
+      "index_name": "idx_matricula_estudiante_anio_colegio_activo",
+      "table": "matricula",
+      "columns": "id_estudiante, id_anio, id_colegio",
+      "where": "(estado <> ALL (ARRAY['CANCELADA'::public.estado_matricula, 'RECHAZADA'::public.estado_matricula]))"
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_notas_actividad",
+      "table": "notas_actividad",
+      "columns": "id_actividadmateria",
+      "where": null
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_notas_estudiante",
+      "table": "notas_actividad",
+      "columns": "id_estudiante",
+      "where": null
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_notif_col_colegio",
+      "table": "notificacion_colegio",
+      "columns": "id_colegio",
+      "where": null
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_notif_col_directivo",
+      "table": "notificacion_colegio",
+      "columns": "id_directivo",
+      "where": null
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_notif_col_leida",
+      "table": "notificacion_colegio",
+      "columns": "leida",
+      "where": "(leida = false)"
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_notif_sup_auditoria",
+      "table": "notificacion_supervision",
+      "columns": "id_auditoria",
+      "where": null
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_notif_sup_directivo",
+      "table": "notificacion_supervision",
+      "columns": "id_directivo",
+      "where": null
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_notif_sup_leida",
+      "table": "notificacion_supervision",
+      "columns": "leida",
+      "where": "(leida = false)"
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_observacion_estudiante",
+      "table": "observacion_estudiante",
+      "columns": "id_estudiante",
+      "where": null
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_password_reset_token",
+      "table": "password_reset_tokens",
+      "columns": "token",
+      "where": null
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_solicitud_traslado_destino",
+      "table": "solicitud_traslado",
+      "columns": "id_colegio_destino",
+      "where": null
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_solicitud_traslado_origen",
+      "table": "solicitud_traslado",
+      "columns": "id_colegio_origen",
+      "where": null
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_solicitud_traslado_usr",
+      "table": "solicitud_traslado",
+      "columns": "id_usuario",
+      "where": null
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_tickets_codigo",
+      "table": "tickets_soporte",
+      "columns": "codigo_ticket",
+      "where": null
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_tickets_colegio",
+      "table": "tickets_soporte",
+      "columns": "id_colegio",
+      "where": null
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_tickets_estado",
+      "table": "tickets_soporte",
+      "columns": "estado",
+      "where": null
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_tickets_usuario",
+      "table": "tickets_soporte",
+      "columns": "id_usuario",
+      "where": null
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_token_blacklist_expires_at",
+      "table": "token_blacklist",
+      "columns": "expires_at",
+      "where": null
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_traslado_aprobacion_sol",
+      "table": "traslado_aprobacion",
+      "columns": "id_solicitud",
+      "where": null
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_usuario_colegio",
+      "table": "usuario",
+      "columns": "id_colegio",
+      "where": null
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_usuario_colegio_activo",
+      "table": "usuario_colegio",
+      "columns": "id_usuario, id_colegio",
+      "where": "((estado)::text = 'ACTIVO'::text)"
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_usuario_colegio_col",
+      "table": "usuario_colegio",
+      "columns": "id_colegio",
+      "where": null
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_usuario_colegio_usr",
+      "table": "usuario_colegio",
+      "columns": "id_usuario",
+      "where": null
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_usuario_documento",
+      "table": "usuario",
+      "columns": "documento",
+      "where": null
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_usuario_email",
+      "table": "usuario",
+      "columns": "email",
+      "where": null
+    },
+    {
+      "is_unique": false,
+      "index_name": "idx_usuario_estado",
+      "table": "usuario",
+      "columns": "estado",
+      "where": null
+    }
+  ],
+  "functions": []
+}

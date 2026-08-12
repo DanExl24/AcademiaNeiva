@@ -250,11 +250,19 @@ const horizontalOptions = computed(() => {
 })
 
 const globalSelectedGrade = ref<string>('ALL')
+const schoolGradesCatalog = ref<string[]>([])
 
 const globalGradeOptions = computed(() => {
   const gradesRisk = dashboardData.value.lowPerformance.groupRisk.map(r => r.grado_nombre)
   const gradesPerf = dashboardData.value.charts.performanceByCourse.map(c => c.grado_nombre)
-  return [...new Set([...gradesRisk, ...gradesPerf])].filter(Boolean).sort()
+  const catalogGrades = schoolGradesCatalog.value
+  return [...new Set([...gradesRisk, ...gradesPerf, ...catalogGrades])].filter(Boolean).sort()
+})
+
+watch(globalGradeOptions, (newOptions) => {
+  if (globalSelectedGrade.value !== 'ALL' && !newOptions.includes(globalSelectedGrade.value)) {
+    globalSelectedGrade.value = 'ALL'
+  }
 })
 
 const availableCoursesForSelectedGrade = computed(() => {
@@ -636,12 +644,15 @@ const loadPeriods = async () => {
   if (!schoolId.value) return
   try {
     const headers = { Authorization: `Bearer ${auth.token}` }
-    const params: any = { keys: 'periods' }
+    const params: any = { keys: 'periods,tiposGrado' }
     if (selectedYearId.value) {
       params.yearId = selectedYearId.value
     }
     const response = await axios.get(`/api/academic-admin/settings/${schoolId.value}`, { headers, params })
     allPeriods.value = (response.data.periods || []).filter((p: any) => p.estado !== 'PENDIENTE')
+    if (response.data.tiposGrado) {
+      schoolGradesCatalog.value = (response.data.tiposGrado || []).map((g: any) => g.nombre).filter(Boolean)
+    }
 
     // Set active period by default if none selected
     if (!selectedPeriodId.value) {
@@ -658,9 +669,10 @@ const loadPeriods = async () => {
   }
 }
 
-// When year changes, reload periods for that specific year and reset selected period
+// When year changes, reload periods for that specific year and reset selected period and grade
 watch(selectedYearId, async () => {
   selectedPeriodId.value = null
+  globalSelectedGrade.value = 'ALL'
   await loadPeriods()
   const yearPeriods = periods.value
   const active = yearPeriods.find(p => p.estado === 'ABIERTO')
