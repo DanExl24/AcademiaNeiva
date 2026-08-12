@@ -14,6 +14,7 @@ import {
 } from "../controllers/matriculaController";
 import { upload } from "../config/multer";
 import { verifyToken, requireDirectivo } from "../middleware/authMiddleware";
+import { verifyDocumentToken } from "../middleware/documentSecurity";
 import { validateDto } from "../middleware/validateDto";
 import { SubmitEnrollmentSchema, ValidateDocumentSchema, FinalizeEnrollmentSchema, CancelEnrollmentSchema } from "../dtos/matricula.dto";
 
@@ -108,7 +109,7 @@ router.post("/submit", upload.fields([
 ]), submitEnrollment);
 
 // Specific sub-resource routes MUST be defined before generic /:id route
-router.get("/documentos/:idDocumento/archivo", downloadDocumentFile);
+router.get("/documentos/:idDocumento/archivo", verifyDocumentToken, downloadDocumentFile);
 router.patch("/document/:idDocumento", verifyToken, requireDirectivo, validateDto(ValidateDocumentSchema), validateDocument);
 
 router.get("/pending/:idColegio", verifyToken, requireDirectivo, getPendingMatriculas);

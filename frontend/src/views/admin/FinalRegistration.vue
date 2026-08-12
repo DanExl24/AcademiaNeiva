@@ -270,7 +270,8 @@ const verifyDocument = async () => {
 const formatUrl = (target: any) => {
   if (!target) return ''
   if (typeof target === 'object' && target.id_documento) {
-    return `${API_BASE_URL}/api/matriculas/documentos/${target.id_documento}/archivo`
+    const tokenQuery = target.token_acceso ? `?token=${encodeURIComponent(target.token_acceso)}` : ''
+    return `${API_BASE_URL}/api/matriculas/documentos/${target.id_documento}/archivo${tokenQuery}`
   }
   if (typeof target === 'number') {
     return `${API_BASE_URL}/api/matriculas/documentos/${target}/archivo`
@@ -279,7 +280,8 @@ const formatUrl = (target: any) => {
     if (target.startsWith('http')) return target
     const found = matricula.value?.documentos?.find((d: any) => d.url === target || d.nombre_original === target)
     if (found && found.id_documento) {
-      return `${API_BASE_URL}/api/matriculas/documentos/${found.id_documento}/archivo`
+      const tokenQuery = found.token_acceso ? `?token=${encodeURIComponent(found.token_acceso)}` : ''
+      return `${API_BASE_URL}/api/matriculas/documentos/${found.id_documento}/archivo${tokenQuery}`
     }
     return `${API_BASE_URL}/uploads/${target}`
   }

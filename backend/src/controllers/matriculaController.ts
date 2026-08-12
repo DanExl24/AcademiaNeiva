@@ -162,6 +162,9 @@ export const downloadDocumentFile = async (req: Request, res: Response) => {
         else contentType = 'application/octet-stream';
       }
 
+      res.setHeader('Cache-Control', 'private, no-store, no-cache, must-revalidate, max-age=0');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
       res.setHeader('Content-Type', contentType);
       res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
       res.send(doc.contenido);

@@ -4,6 +4,7 @@ import { NotificationService } from "./notificationService";
 import bcrypt from "bcrypt";
 import { validateDocumentUniqueness, normalizeDocument } from "../utils/documentValidation";
 import { upsertInstitutionalEmail } from "../utils/emailResolver";
+import { generateDocumentAccessToken } from "../middleware/documentSecurity";
 
 // Documentos siempre obligatorios
 const ALWAYS_REQUIRED = ['documentoPadre', 'salud', 'foto', 'reciboPublico'];
@@ -385,15 +386,19 @@ export class MatriculaService {
     // Agrupar documentos por tipo_documento: la versión superior es la activa, las anteriores van a versiones_anteriores
     const docsGroupedMap = new Map<string, any>();
     for (const docRow of rawDocs) {
+      const docWithToken = {
+        ...docRow,
+        token_acceso: generateDocumentAccessToken(docRow.id_documento)
+      };
       const key = docRow.tipo_documento;
       if (!docsGroupedMap.has(key)) {
         docsGroupedMap.set(key, {
-          ...docRow,
+          ...docWithToken,
           versiones_anteriores: []
         });
       } else {
         const parentDoc = docsGroupedMap.get(key);
-        parentDoc.versiones_anteriores.push(docRow);
+        parentDoc.versiones_anteriores.push(docWithToken);
       }
     }
     const docsWithHistory = Array.from(docsGroupedMap.values());
@@ -774,9 +779,14 @@ export class MatriculaService {
       .orderBy('id_documento', 'asc')
       .execute();
 
+    const docsWithToken = docs.map(d => ({
+      ...d,
+      token_acceso: generateDocumentAccessToken(d.id_documento)
+    }));
+
     return {
       ...mat,
-      documentos: docs
+      documentos: docsWithToken
     };
   }
 
