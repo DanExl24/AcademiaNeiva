@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, computed } from 'vue'
 import { useAuthStore } from '../../stores/auth'
 import axios from 'axios'
 import { 
@@ -7,7 +7,6 @@ import {
   CalendarCheck,
   AlertCircle, 
   BookOpen,
-  SearchX,
   CheckCircle2,
   XCircle,
   Clock,
@@ -16,12 +15,13 @@ import {
 } from 'lucide-vue-next'
 
 import { useAcademicYearStore } from '../../stores/academicYear'
+import NoAcademicRecordsBanner from '../../components/NoAcademicRecordsBanner.vue'
 
 const auth = useAuthStore()
 const yearStore = useAcademicYearStore()
 const loading = ref(true)
 const studentId = ref<number | null>(null)
-const selectedYear = ref<number | null>(null)
+const selectedYear = ref<number | null>(yearStore.selectedYearId || null)
 const selectedPeriod = ref<number | null>(null)
 const selectedSubject = ref<number | string>('all')
 const selectedStatus = ref<string>('all')
@@ -33,11 +33,28 @@ const subjects = ref<any[]>([])
 const attendanceData = ref<{ records: any[], stats: any } | null>(null)
 const studentInfo = ref<any>(null)
 
+const displayYears = computed(() => {
+  if (yearStore.availableYears.length > 0) return yearStore.availableYears
+  return years.value
+})
+
+const selectedYearCalendar = computed(() => {
+  const y = displayYears.value.find((a: any) => a.id_anio === selectedYear.value)
+  return y ? y.calendario : (yearStore.selectedYear?.calendario || '')
+})
+
 watch(() => yearStore.selectedYearId, (newYearId) => {
   if (newYearId && newYearId !== selectedYear.value) {
     selectedYear.value = newYearId
   }
 }, { immediate: true })
+
+watch(selectedYear, (newYear) => {
+  if (newYear && newYear !== yearStore.selectedYearId) {
+    yearStore.setSelectedYearId(newYear)
+  }
+  fetchPeriods()
+})
 
 const fetchStudentId = async () => {
   try {
@@ -60,12 +77,17 @@ const fetchInitialData = async () => {
     years.value = yearsRes.data
     studentInfo.value = infoRes.data
     
-    if (years.value.length > 0) {
-      const currentYearStr = new Date().getFullYear().toString()
-      const matchingYear = years.value.find((y: any) => y.calendario === currentYearStr)
-      selectedYear.value = matchingYear ? matchingYear.id_anio : years.value[0].id_anio
-      await fetchPeriods()
+    if (!selectedYear.value) {
+      if (yearStore.selectedYearId) {
+        selectedYear.value = yearStore.selectedYearId
+      } else if (displayYears.value.length > 0) {
+        const currentYearStr = new Date().getFullYear().toString()
+        const matchingYear = displayYears.value.find((y: any) => y.calendario === currentYearStr)
+        selectedYear.value = matchingYear ? matchingYear.id_anio : displayYears.value[0].id_anio
+        yearStore.setSelectedYearId(selectedYear.value!)
+      }
     }
+    await fetchPeriods()
   } catch (err) {
     console.error("Error fetching initial academic data:", err)
   } finally {
@@ -87,6 +109,10 @@ const fetchPeriods = async () => {
     }
   } catch (err) {
     console.error("Error fetching periods:", err)
+    periods.value = []
+    selectedPeriod.value = null
+    attendanceData.value = null
+    subjects.value = []
   }
 }
 
@@ -184,7 +210,7 @@ const formatDate = (dateString: string) => {
         <div class="flex items-center gap-2 bg-white dark:bg-slate-900 px-4 py-2 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm transition-all focus-within:ring-2 focus-within:ring-indigo-500/20">
           <Calendar :size="18" class="text-slate-400" />
           <select v-model="selectedYear" class="bg-transparent border-none text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-0 outline-none cursor-pointer">
-            <option v-for="y in years" :key="y.id_anio" :value="y.id_anio">Año {{ y.calendario }}</option>
+            <option v-for="y in displayYears" :key="y.id_anio" :value="y.id_anio">Año {{ y.calendario }}</option>
           </select>
         </div>
 
@@ -259,15 +285,7 @@ const formatDate = (dateString: string) => {
     </div>
 
     <!-- Empty State -->
-    <div v-else-if="!attendanceData || attendanceData.records.length === 0" class="flex flex-col items-center justify-center py-24 bg-white dark:bg-slate-900 rounded-3xl border border-dashed border-slate-200 dark:border-slate-800">
-      <div class="bg-slate-50 dark:bg-slate-800 p-6 rounded-full mb-6">
-        <SearchX :size="48" class="text-slate-300 dark:text-slate-600" />
-      </div>
-      <h3 class="text-xl font-bold text-slate-800 dark:text-white">Sin registros</h3>
-      <p class="text-slate-500 dark:text-slate-400 mt-2 max-w-sm text-center px-4 leading-relaxed">
-        No se encontraron registros de asistencia para los filtros seleccionados.
-      </p>
-    </div>
+    <NoAcademicRecordsBanner v-else-if="!periods || periods.length === 0 || !attendanceData || attendanceData.records.length === 0" :year-label="selectedYearCalendar" />
 
     <!-- Attendance Table -->
     <div v-else class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden transition-colors">

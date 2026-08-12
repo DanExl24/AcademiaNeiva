@@ -13,6 +13,8 @@ import {
 import { useAuthStore } from '../../stores/auth'
 import axios from 'axios'
 
+import NoAcademicRecordsBanner from '../../components/NoAcademicRecordsBanner.vue'
+
 const auth = useAuthStore()
 const route = useRoute()
 const router = useRouter()
@@ -102,6 +104,9 @@ const getNotaColor = (nota: number) => {
       <div class="w-12 h-12 border-4 border-indigo-600/20 border-t-indigo-600 rounded-full animate-spin"></div>
       <p class="mt-4 text-slate-500 dark:text-slate-400 font-medium italic">Obteniendo detalles de la materia...</p>
     </div>
+
+    <!-- Empty State -->
+    <NoAcademicRecordsBanner v-else-if="subjectDetails.length === 0" />
 
     <template v-else>
       <!-- Activity List -->

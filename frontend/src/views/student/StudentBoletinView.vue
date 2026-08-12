@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { onMounted, ref, watch, computed } from 'vue'
 import axios from 'axios'
 import { useAuthStore } from '../../stores/auth'
 import {
@@ -13,14 +13,25 @@ import BoletinExportModule from '../../components/boletines/BoletinExportModule.
 
 const auth = useAuthStore()
 import { useAcademicYearStore } from '../../stores/academicYear'
+import NoAcademicRecordsBanner from '../../components/NoAcademicRecordsBanner.vue'
 
 const yearStore = useAcademicYearStore()
 const studentId = ref<number | null>(null)
-const selectedYear = ref<number | null>(null)
+const selectedYear = ref<number | null>(yearStore.selectedYearId || null)
 const selectedPeriodId = ref<number | null>(null)
 const years = ref<any[]>([])
 const periods = ref<any[]>([])
 const loading = ref(true)
+
+const displayYears = computed(() => {
+  if (yearStore.availableYears.length > 0) return yearStore.availableYears
+  return years.value
+})
+
+const selectedYearCalendar = computed(() => {
+  const y = displayYears.value.find((a: any) => a.id_anio === selectedYear.value)
+  return y ? y.calendario : (yearStore.selectedYear?.calendario || '')
+})
 
 watch(() => yearStore.selectedYearId, (newYearId) => {
   if (newYearId && newYearId !== selectedYear.value) {
@@ -45,17 +56,18 @@ const fetchYears = async () => {
   try {
     const res = await axios.get(`/api/student/years/${studentId.value}`)
     years.value = res.data
-    if (years.value.length > 0) {
-      if (yearStore.selectedYearId && years.value.some((y: any) => y.id_anio === yearStore.selectedYearId)) {
+    
+    if (!selectedYear.value) {
+      if (yearStore.selectedYearId) {
         selectedYear.value = yearStore.selectedYearId
-      } else {
+      } else if (displayYears.value.length > 0) {
         const currentYearStr = new Date().getFullYear().toString()
-        const matchingYear = years.value.find((y: any) => y.calendario === currentYearStr)
-        selectedYear.value = matchingYear ? matchingYear.id_anio : years.value[0].id_anio
+        const matchingYear = displayYears.value.find((y: any) => y.calendario === currentYearStr)
+        selectedYear.value = matchingYear ? matchingYear.id_anio : displayYears.value[0].id_anio
         if (selectedYear.value) yearStore.setSelectedYearId(selectedYear.value)
       }
-      await fetchPeriods()
     }
+    await fetchPeriods()
   } catch (err) {
     console.error("Error fetching years:", err)
   }
@@ -73,6 +85,8 @@ const fetchPeriods = async () => {
     }
   } catch (err) {
     console.error("Error fetching periods:", err)
+    periods.value = []
+    selectedPeriodId.value = null
   }
 }
 
@@ -108,8 +122,11 @@ watch(selectedYear, (newYear) => {
       </div>
     </div>
 
+    <!-- Empty State if no periods/records for selected year -->
+    <NoAcademicRecordsBanner v-if="!loading && (!periods || periods.length === 0)" :year-label="selectedYearCalendar" />
+
     <!-- Period Selection Card -->
-    <div class="bg-white dark:bg-slate-900 rounded-[2.5rem] p-8 border border-slate-100 dark:border-slate-800 shadow-sm">
+    <div v-else class="bg-white dark:bg-slate-900 rounded-[2.5rem] p-8 border border-slate-100 dark:border-slate-800 shadow-sm">
       <div class="flex flex-col md:flex-row items-center gap-8">
         <div class="w-full md:w-1/2 space-y-6">
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -122,8 +139,8 @@ watch(selectedYear, (newYear) => {
                 v-model="selectedYear"
                 class="w-full h-12 bg-slate-50 dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-xl px-4 font-bold text-sm text-slate-700 dark:text-slate-200 focus:border-indigo-500 transition-all cursor-pointer outline-none"
               >
-                <option v-if="years.length === 0" disabled value="">Sin años</option>
-                <option v-for="y in years" :key="y.id_anio" :value="y.id_anio">Año {{ y.calendario }}</option>
+                <option v-if="displayYears.length === 0" disabled value="">Sin años</option>
+                <option v-for="y in displayYears" :key="y.id_anio" :value="y.id_anio">Año {{ y.calendario }}</option>
               </select>
             </div>
 

@@ -43,21 +43,39 @@ ChartJS.register(
 
 import { useAcademicYearStore } from '../../stores/academicYear'
 import PeriodCountdownBanner from '../../components/PeriodCountdownBanner.vue'
+import NoAcademicRecordsBanner from '../../components/NoAcademicRecordsBanner.vue'
 
 const auth = useAuthStore()
 const yearStore = useAcademicYearStore()
 const studentId = ref<number | null>(null)
 const selectedPeriodId = ref<number | null>(null)
-const selectedYearId = ref<number | null>(null)
+const selectedYearId = ref<number | null>(yearStore.selectedYearId || null)
 const academicYears = ref<any[]>([])
 const periods = ref<any[]>([])
 const loading = ref(true)
+
+const displayYears = computed(() => {
+  if (yearStore.availableYears.length > 0) return yearStore.availableYears
+  return academicYears.value
+})
+
+const selectedYearCalendar = computed(() => {
+  const y = displayYears.value.find((a: any) => a.id_anio === selectedYearId.value)
+  return y ? y.calendario : (yearStore.selectedYear?.calendario || '')
+})
 
 watch(() => yearStore.selectedYearId, (newYearId) => {
   if (newYearId && newYearId !== selectedYearId.value) {
     selectedYearId.value = newYearId
   }
 }, { immediate: true })
+
+watch(selectedYearId, (newYear) => {
+  if (newYear && newYear !== yearStore.selectedYearId) {
+    yearStore.setSelectedYearId(newYear)
+  }
+  loadPeriodsForYear()
+})
 
 // Stats state
 const dashboardStats = ref<any>(null)
@@ -75,19 +93,23 @@ const fetchStudentData = async () => {
     studentId.value = idRes.data.id_estudiante
 
     if (studentId.value) {
-      // Get all academic years
+      // Get academic years
       const yearsRes = await axios.get(`/api/student/years/${studentId.value}`)
       academicYears.value = yearsRes.data
       
-      if (academicYears.value.length > 0) {
-        // Default to current calendar year match, or first in list
-        const currentYearStr = new Date().getFullYear().toString()
-        const matchingYear = academicYears.value.find((y: any) => y.calendario === currentYearStr)
-        selectedYearId.value = matchingYear ? matchingYear['id_anio'] : academicYears.value[0]['id_anio']
-        await loadPeriodsForYear()
-      } else {
-        statsLoading.value = false
+      // If store has no selected year yet, pick current or first
+      if (!selectedYearId.value) {
+        if (yearStore.selectedYearId) {
+          selectedYearId.value = yearStore.selectedYearId
+        } else if (displayYears.value.length > 0) {
+          const currentYearStr = new Date().getFullYear().toString()
+          const matchingYear = displayYears.value.find((y: any) => y.calendario === currentYearStr)
+          selectedYearId.value = matchingYear ? matchingYear.id_anio : displayYears.value[0].id_anio
+          yearStore.setSelectedYearId(selectedYearId.value!)
+        }
       }
+
+      await loadPeriodsForYear()
     } else {
       statsLoading.value = false
     }
@@ -101,6 +123,7 @@ const fetchStudentData = async () => {
 
 const loadPeriodsForYear = async () => {
   if (!studentId.value || !selectedYearId.value) return
+  statsLoading.value = true
   try {
     const periodsRes = await axios.get(`/api/student/all-periods/${studentId.value}/${selectedYearId.value}`)
     periods.value = (periodsRes.data || []).filter((p: any) => p.estado !== 'PENDIENTE')
@@ -116,6 +139,9 @@ const loadPeriodsForYear = async () => {
     }
   } catch (err) {
     console.error('Error loading periods for year:', err)
+    periods.value = []
+    selectedPeriodId.value = null
+    dashboardStats.value = null
     statsLoading.value = false
   }
 }
@@ -283,7 +309,7 @@ const hasObservations = computed(() => {
           </p>
 
           <!-- Year & Period Selectors -->
-          <div v-if="academicYears.length > 0" class="mt-6 flex flex-wrap items-center gap-3">
+          <div v-if="displayYears.length > 0" class="mt-6 flex flex-wrap items-center gap-3">
             <div class="inline-flex items-center gap-3 bg-white/10 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/20">
               <CalendarDays :size="18" class="text-indigo-200" />
               <select 
@@ -291,7 +317,7 @@ const hasObservations = computed(() => {
                 class="bg-transparent text-white text-sm font-bold outline-none cursor-pointer appearance-none pr-6"
                 style="background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22white%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C/polyline%3E%3C/svg%3E'); background-repeat: no-repeat; background-position: right center; background-size: 1.2em;"
               >
-                <option v-for="y in academicYears" :key="y['id_anio']" :value="y['id_anio']" class="text-slate-900">
+                <option v-for="y in displayYears" :key="y['id_anio']" :value="y['id_anio']" class="text-slate-900">
                   Año {{ y.calendario }}
                 </option>
               </select>
@@ -325,8 +351,12 @@ const hasObservations = computed(() => {
       </div>
     </div>
 
-    <!-- Quick Stats Banner (KPIs Vivos con protección opcional) -->
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+    <!-- Empty State for Unregistered / Missing Year -->
+    <NoAcademicRecordsBanner v-if="!loading && (!periods || periods.length === 0)" :year-label="selectedYearCalendar" />
+
+    <template v-else>
+      <!-- Quick Stats Banner (KPIs Vivos con protección opcional) -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
       <!-- Card Promedio -->
       <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 p-6 flex items-center gap-4 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 shadow-sm">
         <div class="bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 p-4 rounded-2xl">
@@ -596,7 +626,7 @@ const hasObservations = computed(() => {
         </div>
       </div>
 
-    </div>
+    </template>
 
   </div>
 </template>

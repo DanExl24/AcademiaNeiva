@@ -6,7 +6,6 @@ import {
   MessageSquare, 
   Calendar, 
   Filter, 
-  SearchX,
   Target,
   AlertTriangle,
   Lightbulb,
@@ -16,12 +15,13 @@ import {
 } from 'lucide-vue-next'
 
 import { useAcademicYearStore } from '../../stores/academicYear'
+import NoAcademicRecordsBanner from '../../components/NoAcademicRecordsBanner.vue'
 
 const auth = useAuthStore()
 const yearStore = useAcademicYearStore()
 const loading = ref(true)
 const studentId = ref<number | null>(null)
-const selectedYear = ref<number | null>(null)
+const selectedYear = ref<number | null>(yearStore.selectedYearId || null)
 const selectedPeriod = ref<number | null>(null)
 const selectedType = ref<string>('all')
 const selectedFinding = ref<string>('all')
@@ -31,11 +31,28 @@ const periods = ref<any[]>([])
 const observations = ref<any[]>([])
 const studentInfo = ref<any>(null)
 
+const displayYears = computed(() => {
+  if (yearStore.availableYears.length > 0) return yearStore.availableYears
+  return years.value
+})
+
+const selectedYearCalendar = computed(() => {
+  const y = displayYears.value.find((a: any) => a.id_anio === selectedYear.value)
+  return y ? y.calendario : (yearStore.selectedYear?.calendario || '')
+})
+
 watch(() => yearStore.selectedYearId, (newYearId) => {
   if (newYearId && newYearId !== selectedYear.value) {
     selectedYear.value = newYearId
   }
 }, { immediate: true })
+
+watch(selectedYear, (newYear) => {
+  if (newYear && newYear !== yearStore.selectedYearId) {
+    yearStore.setSelectedYearId(newYear)
+  }
+  fetchPeriods()
+})
 
 const fetchStudentId = async () => {
   try {
@@ -58,12 +75,17 @@ const fetchInitialData = async () => {
     years.value = yearsRes.data
     studentInfo.value = infoRes.data
     
-    if (years.value.length > 0) {
-      const currentYearStr = new Date().getFullYear().toString()
-      const matchingYear = years.value.find((y: any) => y.calendario === currentYearStr)
-      selectedYear.value = matchingYear ? matchingYear.id_anio : years.value[0].id_anio
-      await fetchPeriods()
+    if (!selectedYear.value) {
+      if (yearStore.selectedYearId) {
+        selectedYear.value = yearStore.selectedYearId
+      } else if (displayYears.value.length > 0) {
+        const currentYearStr = new Date().getFullYear().toString()
+        const matchingYear = displayYears.value.find((y: any) => y.calendario === currentYearStr)
+        selectedYear.value = matchingYear ? matchingYear.id_anio : displayYears.value[0].id_anio
+        yearStore.setSelectedYearId(selectedYear.value!)
+      }
     }
+    await fetchPeriods()
   } catch (err) {
     console.error("Error fetching initial academic data:", err)
   }
@@ -76,14 +98,24 @@ const fetchPeriods = async () => {
     periods.value = (res.data || []).filter((p: any) => p.estado !== 'PENDIENTE')
     if (periods.value.length > 0) {
       selectedPeriod.value = periods.value[periods.value.length - 1].id_periodo
+    } else {
+      selectedPeriod.value = null
+      observations.value = []
     }
   } catch (err) {
     console.error("Error fetching periods:", err)
+    periods.value = []
+    selectedPeriod.value = null
+    observations.value = []
   }
 }
 
 const fetchObservations = async () => {
-  if (!studentId.value || !selectedPeriod.value) return
+  if (!studentId.value || !selectedPeriod.value) {
+    loading.value = false
+    observations.value = []
+    return
+  }
   loading.value = true
   try {
     let url = `/api/student/observations/${studentId.value}/${selectedPeriod.value}`
@@ -94,6 +126,7 @@ const fetchObservations = async () => {
     observations.value = res.data
   } catch (err) {
     console.error("Error fetching observations:", err)
+    observations.value = []
   } finally {
     loading.value = false
   }
@@ -104,7 +137,6 @@ onMounted(async () => {
   await fetchInitialData()
 })
 
-watch(selectedYear, fetchPeriods)
 watch(selectedPeriod, fetchObservations)
 watch(selectedType, fetchObservations)
 
@@ -171,7 +203,7 @@ const getTypeLabel = (type: string) => {
         <div class="flex items-center gap-2 bg-white dark:bg-slate-900 px-4 py-2 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
           <Calendar :size="18" class="text-slate-400" />
           <select v-model="selectedYear" class="bg-transparent border-none text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-0 outline-none cursor-pointer">
-            <option v-for="y in years" :key="y.id_anio" :value="y.id_anio">Año {{ y.calendario }}</option>
+            <option v-for="y in displayYears" :key="y.id_anio" :value="y.id_anio">Año {{ y.calendario }}</option>
           </select>
         </div>
 
@@ -213,15 +245,7 @@ const getTypeLabel = (type: string) => {
       <div v-for="i in 2" :key="i" class="h-64 bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 animate-pulse"></div>
     </div>
 
-    <div v-else-if="filteredObservations.length === 0" class="flex flex-col items-center justify-center py-32 bg-white dark:bg-slate-900 rounded-3xl border border-dashed border-slate-200 dark:border-slate-800">
-      <div class="bg-indigo-50 dark:bg-slate-800 p-6 rounded-full mb-6 text-indigo-500">
-        <SearchX :size="48" />
-      </div>
-      <h3 class="text-xl font-bold text-slate-800 dark:text-white">Sin observaciones</h3>
-      <p class="text-slate-500 dark:text-slate-400 mt-2 text-center max-w-xs">
-        {{ observations.length === 0 ? 'No se han registrado observaciones para este periodo académico aún.' : 'No se encontraron observaciones con los filtros aplicados.' }}
-      </p>
-    </div>
+    <NoAcademicRecordsBanner v-else-if="!periods || periods.length === 0 || observations.length === 0" :year-label="selectedYearCalendar" />
 
     <div v-else class="grid grid-cols-1 gap-8">
       <div 
