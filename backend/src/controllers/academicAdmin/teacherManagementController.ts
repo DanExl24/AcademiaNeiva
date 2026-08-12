@@ -202,8 +202,8 @@ export const createTeacher = async (req: Request, res: Response): Promise<void> 
       const parentInThisSchoolRes = await client.query(
         `SELECT 1 
          FROM padre_familia pf
-         JOIN padre_estudiante pe ON pe.id_padre = pf.id_padre
-         JOIN estudiante e ON e.id_estudiante = pe.id_estudiante
+         JOIN detalle_padrefamilia dp ON dp.id_padrefamilia = pf.id_padrefamilia
+         JOIN estudiante e ON e.id_estudiante = dp.id_estudiante
          WHERE pf.id_usuario = $1 AND e.id_colegio = $2
          LIMIT 1`,
         [existingUser.id_usuario, schoolId]
@@ -400,8 +400,8 @@ export const updateTeacher = async (req: Request, res: Response): Promise<void> 
     const isParentRes = await client.query(
       `SELECT 1 
        FROM padre_familia pf
-       JOIN padre_estudiante pe ON pe.id_padre = pf.id_padre
-       JOIN estudiante e ON e.id_estudiante = pe.id_estudiante
+       JOIN detalle_padrefamilia dp ON dp.id_padrefamilia = pf.id_padrefamilia
+       JOIN estudiante e ON e.id_estudiante = dp.id_estudiante
        WHERE pf.id_usuario = $1 AND e.id_colegio = $2
        LIMIT 1`,
       [id_usuario, schoolId]
@@ -769,8 +769,8 @@ export const getTeacherManagementData = async (req: Request, res: Response): Pro
           sql<string | null>`(
             SELECT u_parent.email
             FROM padre_familia pf
-            JOIN padre_estudiante pe ON pe.id_padre = pf.id_padre
-            JOIN estudiante e ON e.id_estudiante = pe.id_estudiante
+            JOIN detalle_padrefamilia dp ON dp.id_padrefamilia = pf.id_padrefamilia
+            JOIN estudiante e ON e.id_estudiante = dp.id_estudiante
             JOIN usuario u_parent ON u_parent.id_usuario = pf.id_usuario
             WHERE pf.id_usuario = d.id_usuario AND e.id_colegio = ${schoolId}
             LIMIT 1
@@ -778,8 +778,8 @@ export const getTeacherManagementData = async (req: Request, res: Response): Pro
           sql<boolean>`EXISTS (
             SELECT 1 
             FROM padre_familia pf
-            JOIN padre_estudiante pe ON pe.id_padre = pf.id_padre
-            JOIN estudiante e ON e.id_estudiante = pe.id_estudiante
+            JOIN detalle_padrefamilia dp ON dp.id_padrefamilia = pf.id_padrefamilia
+            JOIN estudiante e ON e.id_estudiante = dp.id_estudiante
             WHERE pf.id_usuario = d.id_usuario AND e.id_colegio = ${schoolId}
           )`.as("es_padre"),
           sql<number>`COUNT(DISTINCT CASE WHEN ${yearId}::int IS NULL OR dg.id_anio = ${yearId} THEN dg.id_detallegrado END)::int`.as("asignaciones_count")
