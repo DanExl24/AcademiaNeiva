@@ -320,7 +320,6 @@ export interface Directivo {
 
 export interface Docente {
   apellido: string;
-  email_institucional: string | null;
   estado: Generated<string>;
   id_colegio: number;
   id_docente: Generated<number>;
@@ -696,6 +695,14 @@ export interface UsuarioColegio {
   id_usuario_colegio: Generated<number>;
 }
 
+export interface UsuarioColegioEmail {
+  id: Generated<number>;
+  id_usuario: number;
+  id_colegio: number;
+  email_institucional: string;
+  fecha_asignacion: Generated<Timestamp>;
+}
+
 export interface UsuarioRol {
   id_rol: number;
   id_usuario: number;
@@ -819,5 +826,6 @@ export interface DB {
   traslado_aprobacion: TrasladoAprobacion;
   usuario: Usuario;
   usuario_colegio: UsuarioColegio;
+  usuario_colegio_email: UsuarioColegioEmail;
   usuario_rol: UsuarioRol;
 }

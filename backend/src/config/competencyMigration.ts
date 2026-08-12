@@ -409,19 +409,6 @@ export const ensureCompetencySchema = async (): Promise<void> => {
       await client.query(emailChangeTokensSql);
     }
 
-    // Ejecutar migración para email_institucional en la tabla docente
-    await client.query(`
-      DO $$
-      BEGIN
-        IF NOT EXISTS (
-          SELECT 1 FROM information_schema.columns 
-          WHERE table_name = 'docente' AND column_name = 'email_institucional'
-        ) THEN
-          ALTER TABLE public.docente ADD COLUMN email_institucional VARCHAR(255);
-        END IF;
-      END $$;
-    `);
-
     // Ejecutar migración 029 (remoción de documento e id_tipodocumento de docente, estudiante y padre_familia)
     const removeDocFromRolesPath = path.join(__dirname, "../migrations/029_remove_documento_from_role_tables.sql");
     if (fs.existsSync(removeDocFromRolesPath)) {
@@ -490,6 +477,13 @@ export const ensureCompetencySchema = async (): Promise<void> => {
     if (fs.existsSync(decisionPromocionPath)) {
       const decisionPromocionSql = fs.readFileSync(decisionPromocionPath, "utf8");
       await client.query(decisionPromocionSql);
+    }
+
+    // Ejecutar migración 046 (tabla usuario_colegio_email — correo institucional unificado por usuario × colegio)
+    const usuarioColegioEmailPath = path.join(__dirname, "../migrations/046_create_usuario_colegio_email.sql");
+    if (fs.existsSync(usuarioColegioEmailPath)) {
+      const usuarioColegioEmailSql = fs.readFileSync(usuarioColegioEmailPath, "utf8");
+      await client.query(usuarioColegioEmailSql);
     }
 
 

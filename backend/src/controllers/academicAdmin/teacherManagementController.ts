@@ -10,6 +10,7 @@ import { validateDocumentUniqueness, normalizeDocument, validateDocumentFormatBy
 import { formatFriendlyErrorMessage } from "../../utils/errorHelper";
 import { normalizeGradeName, isDuplicateOrSimilarGrade } from "../../utils/gradeNormalization";
 import { getDefaultMonthsLabelForPeriodOrder, getAcademicYearLabel } from "../../config/academicCalendarDefaults";
+import { upsertInstitutionalEmail } from "../../utils/emailResolver";
 import {
   DEFAULT_COMPETENCY_TEXT,
   ensureCompetencySchema,
@@ -249,16 +250,16 @@ export const createTeacher = async (req: Request, res: Response): Promise<void> 
         [existingUser.id_usuario, schoolId, roleRes.id_rol]
       );
 
-      const isSameAsUserEmail = email.trim().toLowerCase() === (existingUser.email || "").trim().toLowerCase();
-      const instEmailToStore = isSameAsUserEmail ? null : email.trim().toLowerCase();
-
-      // Guardar el correo institucional en la ficha del docente solo si es diferente al correo personal del usuario
+      // Guardar docente sin email_institucional (ya no existe esa columna)
       const teacherRes = await client.query(
-        `INSERT INTO docente (nombre, apellido, id_colegio, id_usuario, estado, email_institucional)
-         VALUES ($1, $2, $3, $4, 'ACTIVO', $5)
-         RETURNING id_docente, nombre, apellido, estado, email_institucional`,
-        [existingUser.nombre, existingUser.apellido, schoolId, existingUser.id_usuario, instEmailToStore]
+        `INSERT INTO docente (nombre, apellido, id_colegio, id_usuario, estado)
+         VALUES ($1, $2, $3, $4, 'ACTIVO')
+         RETURNING id_docente, nombre, apellido, estado`,
+        [existingUser.nombre, existingUser.apellido, schoolId, existingUser.id_usuario]
       );
+
+      // Persistir correo institucional en usuario_colegio_email si difiere del personal
+      await upsertInstitutionalEmail(existingUser.id_usuario, schoolId, email, existingUser.email, client);
 
       await client.query("COMMIT");
 
@@ -305,12 +306,17 @@ export const createTeacher = async (req: Request, res: Response): Promise<void> 
       [userRes.rows[0].id_usuario, schoolId, roleRes.id_rol]
     );
 
+    // Crear docente sin email_institucional (la columna ya no existe)
     const teacherRes = await client.query(
-      `INSERT INTO docente (nombre, apellido, id_colegio, id_usuario, estado, email_institucional)
-       VALUES ($1, $2, $3, $4, 'ACTIVO', $5)
-       RETURNING id_docente, nombre, apellido, estado, email_institucional`,
-      [nombre, apellido, schoolId, userRes.rows[0].id_usuario, email.trim().toLowerCase()]
+      `INSERT INTO docente (nombre, apellido, id_colegio, id_usuario, estado)
+       VALUES ($1, $2, $3, $4, 'ACTIVO')
+       RETURNING id_docente, nombre, apellido, estado`,
+      [nombre, apellido, schoolId, userRes.rows[0].id_usuario]
     );
+
+    // Persistir correo institucional — para usuario nuevo el email ya ES el institucional
+    // Se guarda siempre para que quede registrado el correo de este colegio
+    await upsertInstitutionalEmail(userRes.rows[0].id_usuario, schoolId, email, null, client);
 
     await client.query("COMMIT");
 
@@ -450,27 +456,27 @@ export const updateTeacher = async (req: Request, res: Response): Promise<void> 
       );
     }
 
-    // Obtener correo del usuario para comparar si es el mismo correo personal
-    const userEmailRes = id_usuario ? await client.query(
-      `SELECT email FROM usuario WHERE id_usuario = $1`,
-      [id_usuario]
-    ) : { rows: [] };
-    const userEmail = (userEmailRes.rows[0]?.email || "").trim().toLowerCase();
-    const isSameAsUserEmail = email.trim().toLowerCase() === userEmail;
-    const instEmailToStore = isSameAsUserEmail ? null : email.trim().toLowerCase();
-
-    // Actualizar datos del docente (si es correo institucional diferente al personal, se guarda en email_institucional)
+    // Actualizar datos del docente (solo nombre/apellido — email ya no va en docente)
     await client.query(
       `UPDATE docente 
-       SET nombre = $1, apellido = $2, email_institucional = $3
-       WHERE id_docente = $4`,
+       SET nombre = $1, apellido = $2
+       WHERE id_docente = $3`,
       [
-        isParent ? currentTeacher.nombre : nombre, 
-        isParent ? currentTeacher.apellido : apellido, 
-        instEmailToStore, 
+        isParent ? currentTeacher.nombre : nombre,
+        isParent ? currentTeacher.apellido : apellido,
         teacherId
       ]
     );
+
+    // Upsert correo institucional en usuario_colegio_email
+    if (id_usuario) {
+      const userEmailRes = await client.query(
+        `SELECT email FROM usuario WHERE id_usuario = $1`,
+        [id_usuario]
+      );
+      const personalEmail = userEmailRes.rows[0]?.email || null;
+      await upsertInstitutionalEmail(id_usuario, schoolId, email, personalEmail, client);
+    }
 
     await client.query("COMMIT");
     res.json({ message: "Docente actualizado con éxito." });
@@ -660,11 +666,12 @@ export const updateTeacherStatus = async (req: Request, res: Response): Promise<
          d.apellido,
          d.estado,
          u.id_usuario,
-         u.email,
+         COALESCE(uce.email_institucional, u.email) AS email,
          c.nombre AS colegio_nombre
        FROM docente d
        JOIN usuario u ON u.id_usuario = d.id_usuario
        JOIN colegio c ON c.id_colegio = d.id_colegio
+       LEFT JOIN usuario_colegio_email uce ON uce.id_usuario = d.id_usuario AND uce.id_colegio = d.id_colegio
        WHERE d.id_docente = $1
          AND d.id_colegio = $2`,
       [teacherId, schoolId]
@@ -747,6 +754,11 @@ export const getTeacherManagementData = async (req: Request, res: Response): Pro
         .leftJoin("usuario as u", "u.id_usuario", "d.id_usuario")
         .leftJoin("tipo_documento as td", "td.id_tipodocumento", "u.id_tipodocumento")
         .leftJoin("detalle_grados as dg", "dg.id_docente", "d.id_docente")
+        .leftJoin("usuario_colegio_email as uce", (join) =>
+          join
+            .onRef("uce.id_usuario", "=", "d.id_usuario")
+            .on("uce.id_colegio", "=", schoolId)
+        )
         .select([
           "d.id_docente",
           "d.nombre",
@@ -756,7 +768,9 @@ export const getTeacherManagementData = async (req: Request, res: Response): Pro
           "td.tipo as tipo_documento",
           "d.estado",
           "u.id_usuario",
-          "u.email",
+          // email_institucional toma precedencia sobre el email personal
+          sql<string>`COALESCE(uce.email_institucional, u.email)`.as("email"),
+          "uce.email_institucional",
           sql<boolean>`COALESCE(u.activo, true)`.as("activo"),
           sql<string | null>`(
             SELECT u_parent.email
@@ -785,7 +799,8 @@ export const getTeacherManagementData = async (req: Request, res: Response): Pro
           "d.estado",
           "u.id_usuario",
           "u.email",
-          "u.activo"
+          "u.activo",
+          "uce.email_institucional"
         ])
         .orderBy("d.nombre", "asc")
         .orderBy("d.apellido", "asc")
@@ -915,9 +930,15 @@ export const assignTeacherCourseSubject = async (req: Request, res: Response): P
       .innerJoin("tipo_grado as tg", "tg.id_tipo_grado", "g.id_tipo_grado")
       .innerJoin("secciones as s", "s.id_seccion", "g.id_seccion")
       .innerJoin("jornada as j", "j.id_jornada", "g.id_jornada")
+      .leftJoin("usuario_colegio_email as uce", (join) =>
+        join
+          .onRef("uce.id_usuario", "=", "d.id_usuario")
+          .onRef("uce.id_colegio", "=", "d.id_colegio")
+      )
       .select([
         "c.nombre as colegio_nombre",
-        "u.email",
+        // Usar email institucional si existe, de lo contrario el email personal
+        sql<string>`COALESCE(uce.email_institucional, u.email)`.as("email"),
         "d.nombre",
         "d.apellido",
         "m.nombre as materia_nombre",
@@ -1121,9 +1142,14 @@ export const deleteTeacherAssignment = async (req: Request, res: Response): Prom
       .innerJoin("tipo_grado as tg", "tg.id_tipo_grado", "g.id_tipo_grado")
       .innerJoin("secciones as s", "s.id_seccion", "g.id_seccion")
       .innerJoin("jornada as j", "j.id_jornada", "g.id_jornada")
+      .leftJoin("usuario_colegio_email as uce", (join) =>
+        join
+          .onRef("uce.id_usuario", "=", "d.id_usuario")
+          .onRef("uce.id_colegio", "=", "dg.id_colegio")
+      )
       .select([
         "dg.id_detallegrado",
-        "u.email",
+        sql<string>`COALESCE(uce.email_institucional, u.email)`.as("email"),
         "d.nombre",
         "d.apellido",
         "c.nombre as colegio_nombre",
