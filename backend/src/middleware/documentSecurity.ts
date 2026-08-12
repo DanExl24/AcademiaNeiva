@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 
-const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret";
+import { JWT_SECRET } from "../config/jwt";
 
 /**
  * Genera un token firmado de corta duración (30 minutos) para acceder a un documento específico.

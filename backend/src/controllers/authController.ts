@@ -7,7 +7,7 @@ import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import { NotificationService } from "../services/notificationService";
 
-const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret";
+import { JWT_SECRET } from "../config/jwt";
 
 export const login = async (req: Request, res: Response): Promise<void> => {
   const { email, password } = req.body;

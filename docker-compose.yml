@@ -17,9 +17,6 @@ services:
       - TZ=America/Bogota
       - DB_HOST=postgres
       - DB_PORT=5432
-      - DB_USER=postgres
-      - DB_PASSWORD=postgres
-      - DB_NAME=AcademiaNeiva
     env_file:
       - path: ./backend/.env
         required: false

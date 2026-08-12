@@ -16,6 +16,7 @@ import supportRoutes from "./routes/support.routes";
 import reingresoRoutes from "./routes/reingreso.routes";
 import parentRoutes from "./routes/parent.routes";
 import trasladoRoutes from "./routes/traslado.routes";
+import { verifyTokenOptional } from "./middleware/authMiddleware";
 
 const app = express();
 
@@ -94,8 +95,22 @@ app.use("/api/auth/login", loginLimiter);
 app.use("/api/auth/student-login", loginLimiter);
 app.use("/api/matriculas/submit", enrollmentLimiter);
 
-// Serve uploaded files
-app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
+// Serve uploaded files (public access allowed for logos/images, authentication required for documents)
+app.use("/uploads", (req, res, next) => {
+  const fileExt = path.extname(req.path).toLowerCase();
+  const isPublicImage = [".png", ".jpg", ".jpeg", ".webp", ".svg"].includes(fileExt) || req.path.includes("escudo");
+
+  if (isPublicImage) {
+    return next();
+  }
+
+  return verifyTokenOptional(req, res, () => {
+    if ((req as any).user) {
+      return next();
+    }
+    res.status(403).json({ error: "Acceso denegado: Este archivo requiere autenticación previa." });
+  });
+}, express.static(path.join(__dirname, "../uploads")));
 
 app.use("/api/matriculas", matriculaRoutes);
 app.use("/api/grados", gradoRoutes);
