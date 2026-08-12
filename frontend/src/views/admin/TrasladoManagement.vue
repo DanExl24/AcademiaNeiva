@@ -243,7 +243,9 @@ const fetchDirectivosColegio = async (schoolId?: number) => {
 
 const fetchEstudiantesByColegio = async (schoolId: number) => {
   try {
-    const params: Record<string, any> = {}
+    const params: Record<string, any> = {
+      estado: 'ACTIVO'
+    }
     if (yearStore.selectedYearId) {
       params.yearId = yearStore.selectedYearId
     }

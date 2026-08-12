@@ -675,6 +675,7 @@ export class TrasladoService {
       .innerJoin('colegio as cd', 'cd.id_colegio', 'st.id_colegio_destino')
       .innerJoin('usuario as uc', 'uc.id_usuario', 'st.creado_por')
       .leftJoin('matricula as m', 'm.id_matricula', 'st.id_matricula')
+      .leftJoin('anio_lectivo as al_m', 'al_m.id_anio', 'm.id_anio')
       .select([
         'st.id_solicitud',
         'st.tipo',
@@ -705,12 +706,30 @@ export class TrasladoService {
       .orderBy('st.fecha_creacion', 'desc');
 
     if (filter?.yearId) {
-      query = query.where((eb) =>
-        eb.or([
-          eb('m.id_anio', '=', filter.yearId!),
-          eb('st.id_matricula', 'is', null)
-        ])
-      );
+      const yearRow = await db
+        .selectFrom('anio_lectivo')
+        .select('calendario')
+        .where('id_anio', '=', filter.yearId)
+        .executeTakeFirst();
+
+      const yearCalendario = yearRow?.calendario;
+
+      if (yearCalendario) {
+        query = query.where((eb) =>
+          eb.or([
+            eb('al_m.calendario', '=', yearCalendario),
+            eb('st.id_matricula', 'is', null),
+            sql<boolean>`EXTRACT(YEAR FROM st.fecha_creacion)::text = ${yearCalendario}`
+          ])
+        );
+      } else {
+        query = query.where((eb) =>
+          eb.or([
+            eb('m.id_anio', '=', filter.yearId!),
+            eb('st.id_matricula', 'is', null)
+          ])
+        );
+      }
     }
 
     if (filter?.estado) {
