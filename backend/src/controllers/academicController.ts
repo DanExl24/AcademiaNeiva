@@ -106,7 +106,9 @@ export const getTeacherDashboard = async (req: Request, res: Response): Promise<
   const authUser = (req as any).user;
   const schoolId = req.headers['x-school-id'] ? Number(req.headers['x-school-id']) : (req.query.schoolId ? Number(req.query.schoolId) : (authUser?.schoolId ? Number(authUser.schoolId) : null));
   const yearIdParam = req.query.yearId ? Number(req.query.yearId) : null;
-  const periodIdParam = req.query.periodId ? Number(req.query.periodId) : null;
+  const periodIdRaw = req.query.periodId ? String(req.query.periodId) : null;
+  const isAllPeriods = periodIdRaw === 'all' || periodIdRaw === '0';
+  const periodIdParam = (periodIdRaw && !isAllPeriods) ? Number(periodIdRaw) : null;
 
   try {
     let docenteQuery = db
@@ -199,16 +201,18 @@ export const getTeacherDashboard = async (req: Request, res: Response): Promise<
     const availablePeriods = await periodsQuery.orderBy("pa.id_periodo", "asc").execute();
 
     let activePeriodInfo: any = null;
-    if (periodIdParam) {
+    if (isAllPeriods) {
+      activePeriodInfo = { id_periodo: 'all', nombre: 'Todos los Periodos (Acumulado)' };
+    } else if (periodIdParam) {
       activePeriodInfo = availablePeriods.find(p => p.id_periodo === periodIdParam) || null;
     }
-    if (!activePeriodInfo) {
-      activePeriodInfo = availablePeriods.find(p => p.estado === 'ABIERTO') || (availablePeriods.length > 0 ? availablePeriods[availablePeriods.length - 1] : null);
+    if (!activePeriodInfo && availablePeriods.length > 0) {
+      activePeriodInfo = availablePeriods.find(p => p.estado === 'ABIERTO') || availablePeriods[availablePeriods.length - 1];
     }
 
     const activePeriodId = activePeriodInfo ? activePeriodInfo.id_periodo : null;
 
-    if (!activePeriodId) {
+    if (!activePeriodId && !isAllPeriods) {
       res.json({
         coursesCount: courses.length,
         studentsCount: totalActiveStudents,
@@ -232,13 +236,20 @@ export const getTeacherDashboard = async (req: Request, res: Response): Promise<
       const courseName = `${course.grado_nombre} ${course.seccion} - ${course.materia_nombre} (${course.jornada})`;
 
       // 1. Actividades del curso
-      const activities = await db
+      let activitiesQuery = db
         .selectFrom("actividad_materia as am")
         .innerJoin("competencias as c", "c.id_competencia", "am.id_competencia")
-        .select(["am.id_actividadmateria", "am.porcentaje", "am.nombre"])
-        .where("am.id_detallegrado", "=", dgId)
-        .where("c.id_periodo", "=", activePeriodId)
-        .execute();
+        .innerJoin("periodo_academico as pa", "pa.id_periodo", "c.id_periodo")
+        .select(["am.id_actividadmateria", "am.porcentaje", "am.nombre", "c.id_periodo"])
+        .where("am.id_detallegrado", "=", dgId);
+
+      if (!isAllPeriods && activePeriodId) {
+        activitiesQuery = activitiesQuery.where("c.id_periodo", "=", Number(activePeriodId));
+      } else if (yearIdParam) {
+        activitiesQuery = activitiesQuery.where("pa.id_anio", "=", yearIdParam);
+      }
+
+      const activities = await activitiesQuery.execute();
 
       const activityCount = activities.length;
 

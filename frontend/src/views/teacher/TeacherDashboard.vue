@@ -194,68 +194,74 @@ const getAlertColors = (type: string) => {
     <!-- Contador Regresivo de Cierre de Período Académico -->
     <PeriodCountdownBanner :period-info="dashboardData?.activePeriodInfo" />
 
-    <!-- Filters Bar (Year & Academic Period) -->
-    <div class="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4 transition-colors">
-      <div class="flex items-center gap-2 text-slate-700 dark:text-slate-200">
-        <SlidersHorizontal :size="20" class="text-indigo-600 dark:text-indigo-400" />
-        <span class="font-black text-sm">Filtros del Dashboard</span>
-      </div>
+    <!-- Welcome Header Card with Integrated Filters -->
+    <div class="bg-gradient-to-br from-indigo-600 to-violet-700 rounded-3xl p-8 md:p-10 text-white shadow-xl flex flex-col gap-6 relative overflow-hidden">
+      
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
+        <div class="transition-transform hover:scale-[1.01] duration-300">
+          <h1 class="text-3xl md:text-4xl font-black mb-3 text-white tracking-tight">¡Hola, Profe {{ (auth.user as any)?.nombre?.split(' ')[0] || auth.user?.name?.split(' ')[0] || '' }}! 🍎</h1>
+          <p class="text-indigo-100 text-lg max-w-md font-medium leading-relaxed">
+            Manejas <span class="font-extrabold text-white bg-white/20 px-2 py-0.5 rounded-lg ml-1 whitespace-nowrap">{{ dashboardData.coursesCount }} cursos</span> activos actualmente. Cuentas con {{ dashboardData.studentsCount }} estudiantes en total.
+          </p>
+        </div>
 
-      <div class="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-        <!-- Year Selector -->
-        <div v-if="yearStore.availableYears.length > 0" class="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3.5 py-2 rounded-2xl">
-          <Calendar :size="16" class="text-slate-400" />
-          <label class="text-[10px] font-bold text-slate-400 dark:text-slate-400 uppercase">Año Lectivo:</label>
-          <select
-            :value="yearStore.selectedYearId"
-            @change="onYearChange"
-            class="bg-transparent text-xs font-bold text-slate-700 dark:text-slate-200 outline-none cursor-pointer"
+        <div class="flex flex-col sm:flex-row gap-4 relative z-10 shrink-0">
+          <router-link
+            v-if="!auth.isMonitoring"
+            to="/dashboard/calificaciones"
+            class="bg-white/10 hover:bg-white/25 active:scale-95 border border-white/20 backdrop-blur-md px-6 py-3 rounded-2xl font-bold transition-all flex items-center justify-center gap-2 shadow-lg ring-1 ring-white/10 text-white"
           >
-            <option v-for="y in yearStore.availableYears" :key="y.id_anio" :value="y.id_anio">
-              {{ y.calendario }}
-            </option>
-          </select>
+            <ClipboardList :size="20" class="text-indigo-200" />
+            Subir Notas
+          </router-link>
+          <div v-else class="bg-white/10 border border-white/20 px-6 py-3 rounded-2xl font-bold flex items-center gap-2 text-white/70">
+            <ClipboardList :size="20" />
+            Panel en solo lectura
+          </div>
+        </div>
+      </div>
+
+      <!-- Integrated Filters Bar (Inside Card Below Greeting) -->
+      <div class="pt-5 border-t border-white/15 relative z-10 flex flex-wrap items-center justify-between gap-4">
+        <div class="flex items-center gap-2 text-indigo-100 font-bold text-xs uppercase tracking-wider">
+          <SlidersHorizontal :size="16" class="text-indigo-200" />
+          <span>Filtros del Dashboard:</span>
         </div>
 
-        <!-- Period Selector -->
-        <div class="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3.5 py-2 rounded-2xl">
-          <CalendarCheck :size="16" class="text-indigo-500" />
-          <label class="text-[10px] font-bold text-slate-400 dark:text-slate-400 uppercase">Periodo:</label>
-          <select
-            v-model="selectedPeriodId"
-            @change="onPeriodChange"
-            class="bg-transparent text-xs font-bold text-slate-700 dark:text-slate-200 outline-none cursor-pointer"
-          >
-            <option v-for="p in availablePeriods" :key="p.id_periodo" :value="p.id_periodo">
-              {{ p.nombre }} {{ p.estado === 'ABIERTO' ? '(Abierto)' : '' }}
-            </option>
-          </select>
-        </div>
-      </div>
-    </div>
+        <div class="flex flex-wrap items-center gap-3">
+          <!-- Year Selector -->
+          <div v-if="yearStore.availableYears.length > 0" class="flex items-center gap-2 bg-white/10 hover:bg-white/15 backdrop-blur-md border border-white/20 px-3.5 py-2 rounded-2xl transition-all">
+            <Calendar :size="16" class="text-indigo-200" />
+            <label class="text-[10px] font-bold text-indigo-200 uppercase">Año Lectivo:</label>
+            <select
+              :value="yearStore.selectedYearId"
+              @change="onYearChange"
+              class="bg-transparent text-xs font-bold text-white outline-none cursor-pointer"
+            >
+              <option v-for="y in yearStore.availableYears" :key="y.id_anio" :value="y.id_anio" class="text-slate-900 bg-white">
+                {{ y.calendario }}
+              </option>
+            </select>
+          </div>
 
-    <!-- Welcome Header -->
-    <div class="bg-gradient-to-br from-indigo-600 to-violet-700 rounded-3xl p-8 md:p-10 text-white shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-6 relative overflow-hidden">
-      <div class="relative z-10 transition-transform hover:scale-[1.02] duration-300">
-        <h1 class="text-3xl md:text-4xl font-black mb-3 text-white tracking-tight">¡Hola, Profe {{ (auth.user as any)?.nombre?.split(' ')[0] || auth.user?.name?.split(' ')[0] || '' }}! 🍎</h1>
-        <p class="text-indigo-100 text-lg max-w-md font-medium leading-relaxed">
-          Manejas <span class="font-extrabold text-white bg-white/20 px-2 py-0.5 rounded-lg ml-1 whitespace-nowrap">{{ dashboardData.coursesCount }} cursos</span> activos actualmente. Cuentas con {{ dashboardData.studentsCount }} estudiantes en total.
-        </p>
-      </div>
-      <div class="flex flex-col sm:flex-row gap-4 relative z-10">
-        <router-link
-          v-if="!auth.isMonitoring"
-          to="/dashboard/calificaciones"
-          class="bg-white/10 hover:bg-white/25 active:scale-95 border border-white/20 backdrop-blur-md px-6 py-3 rounded-2xl font-bold transition-all flex items-center justify-center gap-2 shadow-lg ring-1 ring-white/10 text-white"
-        >
-          <ClipboardList :size="20" class="text-indigo-200" />
-          Subir Notas
-        </router-link>
-        <div v-else class="bg-white/10 border border-white/20 px-6 py-3 rounded-2xl font-bold flex items-center gap-2 text-white/70">
-          <ClipboardList :size="20" />
-          Panel en solo lectura
+          <!-- Period Selector with 'Todos los Periodos' -->
+          <div class="flex items-center gap-2 bg-white/10 hover:bg-white/15 backdrop-blur-md border border-white/20 px-3.5 py-2 rounded-2xl transition-all">
+            <CalendarCheck :size="16" class="text-indigo-200" />
+            <label class="text-[10px] font-bold text-indigo-200 uppercase">Periodo:</label>
+            <select
+              v-model="selectedPeriodId"
+              @change="onPeriodChange"
+              class="bg-transparent text-xs font-bold text-white outline-none cursor-pointer"
+            >
+              <option value="all" class="text-slate-900 bg-white">Todos los Periodos (Acumulado)</option>
+              <option v-for="p in availablePeriods" :key="p.id_periodo" :value="p.id_periodo" class="text-slate-900 bg-white">
+                {{ p.nombre }} {{ p.estado === 'ABIERTO' ? '(Abierto)' : '' }}
+              </option>
+            </select>
+          </div>
         </div>
       </div>
+
       <!-- Background Accents -->
       <div class="absolute -right-20 -bottom-20 h-96 w-96 bg-white/10 rounded-full blur-3xl pointer-events-none"></div>
       <div class="absolute right-40 top-0 h-40 w-40 bg-indigo-400/30 rounded-full blur-2xl animate-pulse pointer-events-none"></div>
