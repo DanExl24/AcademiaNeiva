@@ -12,7 +12,8 @@ import {
   ExternalLink,
   School,
   ShieldCheck,
-  Loader2
+  Loader2,
+  History
 } from 'lucide-vue-next'
 
 interface Child {
@@ -35,6 +36,7 @@ interface EnrollmentDoc {
   mime_type?: string
   nombre_original?: string
   token_acceso?: string
+  versiones_anteriores?: EnrollmentDoc[]
 }
 
 const auth = useAuthStore()
@@ -45,6 +47,7 @@ const selectedStudentId = ref<number | null>(null)
 const enrollmentData = ref<any>(null)
 const documents = ref<EnrollmentDoc[]>([])
 const selectedDocIndex = ref(0)
+const selectedVersionDocId = ref<number | null>(null)
 
 const documentLabels: Record<string, string> = {
   documentoIdentidad: 'Doc. Identidad Estudiante',
@@ -59,9 +62,23 @@ const documentLabels: Record<string, string> = {
   visa: 'Visa / Permiso de Permanencia'
 }
 
-const currentDoc = computed(() => {
+const currentGroupDoc = computed(() => {
   if (documents.value.length === 0) return null
   return documents.value[selectedDocIndex.value] || null
+})
+
+const activeDoc = computed(() => {
+  const main = currentGroupDoc.value
+  if (!main) return null
+  if (selectedVersionDocId.value && selectedVersionDocId.value !== main.id_documento) {
+    const historical = main.versiones_anteriores?.find(v => v.id_documento === selectedVersionDocId.value)
+    if (historical) return historical
+  }
+  return main
+})
+
+watch(selectedDocIndex, () => {
+  selectedVersionDocId.value = currentGroupDoc.value?.id_documento || null
 })
 
 // Load parent's children
@@ -92,6 +109,9 @@ const fetchEnrollmentData = async () => {
     const response = await axios.get(`/api/student/parent/enrollment/${selectedStudentId.value}`)
     enrollmentData.value = response.data.matricula || null
     documents.value = response.data.documentos || []
+    if (documents.value.length > 0) {
+      selectedVersionDocId.value = documents.value[0].id_documento
+    }
   } catch (error) {
     console.error('Error al cargar matrícula del estudiante:', error)
     enrollmentData.value = null
@@ -254,7 +274,7 @@ onMounted(async () => {
 
         </div>
 
-        <!-- Document Checklist Summary -->
+        <!-- Document Checklist Summary (UNIFICADO POR TIPO) -->
         <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 p-5 shadow-sm space-y-3">
           <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
             <h4 class="font-black text-xs uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-2">
@@ -283,9 +303,14 @@ onMounted(async () => {
                 </span>
               </div>
 
-              <span :class="[getStatusBadge(doc.estado).class, 'px-2 py-0.5 rounded-md text-[9px] font-black uppercase shrink-0']">
-                {{ getStatusBadge(doc.estado).label }}
-              </span>
+              <div class="flex items-center gap-1.5 shrink-0">
+                <span v-if="doc.versiones_anteriores && doc.versiones_anteriores.length > 0" class="px-1.5 py-0.5 bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 rounded text-[9px] font-bold">
+                  v{{ doc.version || 1 }} ({{ doc.versiones_anteriores.length + 1 }} vers)
+                </span>
+                <span :class="[getStatusBadge(doc.estado).class, 'px-2 py-0.5 rounded-md text-[9px] font-black uppercase']">
+                  {{ getStatusBadge(doc.estado).label }}
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -296,7 +321,7 @@ onMounted(async () => {
       <div class="lg:col-span-7 bg-slate-900 rounded-3xl overflow-hidden shadow-xl flex flex-col min-h-[580px] border border-slate-800">
         
         <!-- Visor Header Bar -->
-        <div class="p-4 bg-slate-800/90 border-b border-slate-700 flex items-center justify-between gap-3">
+        <div class="p-4 bg-slate-800/90 border-b border-slate-700 flex flex-wrap items-center justify-between gap-3">
           <div class="flex items-center gap-3 min-w-0">
             <div class="p-2 bg-indigo-600 text-white rounded-xl shrink-0">
               <Eye :size="18" />
@@ -304,13 +329,26 @@ onMounted(async () => {
             <div class="min-w-0">
               <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Visor Seguro de Documentos</p>
               <h4 class="text-xs font-black text-white truncate">
-                {{ currentDoc ? (documentLabels[currentDoc.tipo_documento] || currentDoc.tipo_documento) : 'Sin documento' }}
+                {{ activeDoc ? (documentLabels[activeDoc.tipo_documento] || activeDoc.tipo_documento) : 'Sin documento' }}
               </h4>
             </div>
           </div>
 
+          <!-- Selector de Versiones Históricas si existen correcciones previas -->
+          <div v-if="currentGroupDoc && currentGroupDoc.versiones_anteriores && currentGroupDoc.versiones_anteriores.length > 0" class="flex items-center gap-1 bg-slate-700/80 px-2 py-1 rounded-xl text-xs">
+            <History :size="14" class="text-indigo-400 shrink-0" />
+            <select v-model="selectedVersionDocId" class="bg-transparent text-white font-bold outline-none cursor-pointer text-xs">
+              <option :value="currentGroupDoc.id_documento" class="bg-slate-900 text-white">
+                v{{ currentGroupDoc.version || 1 }} (Actual - {{ currentGroupDoc.estado }})
+              </option>
+              <option v-for="v in currentGroupDoc.versiones_anteriores" :key="v.id_documento" :value="v.id_documento" class="bg-slate-900 text-white">
+                v{{ v.version || 1 }} (Anterior - {{ v.estado }})
+              </option>
+            </select>
+          </div>
+
           <!-- Viewer Navigation & Action Controls -->
-          <div v-if="currentDoc" class="flex items-center gap-2 shrink-0">
+          <div v-if="activeDoc" class="flex items-center gap-2 shrink-0">
             <button @click="prevDoc" :disabled="selectedDocIndex === 0" class="p-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg disabled:opacity-30 transition">
               <ChevronLeft :size="16" />
             </button>
@@ -320,7 +358,7 @@ onMounted(async () => {
             </button>
             
             <a
-              :href="formatDocUrl(currentDoc)"
+              :href="formatDocUrl(activeDoc)"
               target="_blank"
               class="ml-2 bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition shadow-sm"
               title="Abrir en pestaña nueva"
@@ -333,16 +371,16 @@ onMounted(async () => {
 
         <!-- Embedded Viewer Container -->
         <div class="flex-1 bg-slate-950 flex items-center justify-center p-4 min-h-[460px]">
-          <template v-if="currentDoc">
+          <template v-if="activeDoc">
             <iframe
-              v-if="(currentDoc.mime_type && currentDoc.mime_type.includes('pdf')) || (currentDoc.url && currentDoc.url.toLowerCase().endsWith('.pdf')) || (currentDoc.nombre_original && currentDoc.nombre_original.toLowerCase().endsWith('.pdf'))"
-              :src="formatDocUrl(currentDoc)"
+              v-if="(activeDoc.mime_type && activeDoc.mime_type.includes('pdf')) || (activeDoc.url && activeDoc.url.toLowerCase().endsWith('.pdf')) || (activeDoc.nombre_original && activeDoc.nombre_original.toLowerCase().endsWith('.pdf'))"
+              :src="formatDocUrl(activeDoc)"
               class="w-full h-full min-h-[460px] rounded-2xl border-0 bg-white"
             ></iframe>
             <img
               v-else
-              :src="formatDocUrl(currentDoc)"
-              :alt="documentLabels[currentDoc.tipo_documento] || 'Documento'"
+              :src="formatDocUrl(activeDoc)"
+              :alt="documentLabels[activeDoc.tipo_documento] || 'Documento'"
               class="max-w-full max-h-[500px] object-contain rounded-2xl shadow-2xl"
             />
           </template>
@@ -354,9 +392,9 @@ onMounted(async () => {
         </div>
 
         <!-- Visor Bottom Info Bar -->
-        <div v-if="currentDoc" class="p-3.5 bg-slate-900 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
-          <span>Archivo: <strong class="text-slate-200 font-mono">{{ currentDoc.nombre_original || currentDoc.url }}</strong></span>
-          <span>Estado: <strong class="text-indigo-400 font-bold uppercase">{{ currentDoc.estado }}</strong></span>
+        <div v-if="activeDoc" class="p-3.5 bg-slate-900 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
+          <span>Archivo: <strong class="text-slate-200 font-mono">{{ activeDoc.nombre_original || activeDoc.url }}</strong> (v{{ activeDoc.version || 1 }})</span>
+          <span>Estado: <strong class="text-indigo-400 font-bold uppercase">{{ activeDoc.estado }}</strong></span>
         </div>
 
       </div>

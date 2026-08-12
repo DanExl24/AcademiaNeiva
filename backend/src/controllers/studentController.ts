@@ -1150,14 +1150,28 @@ export const getParentStudentEnrollment = async (req: Request, res: Response) =>
       .orderBy("d.version", "desc")
       .execute();
 
-    const docsWithToken = rawDocs.map(d => ({
-      ...d,
-      token_acceso: generateDocumentAccessToken(d.id_documento)
-    }));
+    const docsGroupedMap = new Map<string, any>();
+    for (const docRow of rawDocs) {
+      const docWithToken = {
+        ...docRow,
+        token_acceso: generateDocumentAccessToken(docRow.id_documento)
+      };
+      const key = docRow.tipo_documento;
+      if (!docsGroupedMap.has(key)) {
+        docsGroupedMap.set(key, {
+          ...docWithToken,
+          versiones_anteriores: []
+        });
+      } else {
+        const parentDoc = docsGroupedMap.get(key);
+        parentDoc.versiones_anteriores.push(docWithToken);
+      }
+    }
+    const groupedDocs = Array.from(docsGroupedMap.values());
 
     res.json({
       matricula: mat,
-      documentos: docsWithToken
+      documentos: groupedDocs
     });
   } catch (error: any) {
     console.error("Error in getParentStudentEnrollment:", error);
