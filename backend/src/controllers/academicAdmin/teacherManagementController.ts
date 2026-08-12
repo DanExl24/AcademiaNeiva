@@ -197,7 +197,18 @@ export const createTeacher = async (req: Request, res: Response): Promise<void> 
         [existingUser.id_usuario]
       );
       const roles = userRolesRes.rows.map((row: any) => row.nombre.toLowerCase().trim());
-      const isParent = roles.includes("padre");
+
+      // Verificar si el usuario es Padre de Familia registrado ESPECÍFICAMENTE en esta institución (tiene acudidos matriculados en este colegio)
+      const parentInThisSchoolRes = await client.query(
+        `SELECT 1 
+         FROM padre_familia pf
+         JOIN padre_estudiante pe ON pe.id_padre = pf.id_padre
+         JOIN estudiante e ON e.id_estudiante = pe.id_estudiante
+         WHERE pf.id_usuario = $1 AND e.id_colegio = $2
+         LIMIT 1`,
+        [existingUser.id_usuario, schoolId]
+      );
+      const isParentInThisSchool = parentInThisSchoolRes.rows.length > 0;
       const isDocente = roles.includes("docente");
 
       if (isDocente) {
@@ -215,11 +226,11 @@ export const createTeacher = async (req: Request, res: Response): Promise<void> 
       const addRoleIfParent = Boolean(req.body.addRoleIfParent);
       const parentFullName = `${existingUser.nombre} ${existingUser.apellido}`.trim();
 
-      if (isParent && !addRoleIfParent && email === (existingUser.email || "").toLowerCase().trim()) {
+      if (isParentInThisSchool && !addRoleIfParent && email === (existingUser.email || "").toLowerCase().trim()) {
         await client.query("ROLLBACK");
         res.status(409).json({
           isParent: true,
-          message: `El correo "${email}" pertenece a un Padre de Familia registrado (${parentFullName}). ¿Desea vincular esta cuenta existente también como Docente?`
+          message: `El correo "${email}" pertenece a un Padre de Familia registrado en esta institución (${parentFullName}). ¿Desea vincular esta cuenta existente también como Docente?`
         });
         return;
       }
@@ -385,14 +396,15 @@ export const updateTeacher = async (req: Request, res: Response): Promise<void> 
     const currentTeacher = teacherRes.rows[0];
     const { id_usuario } = currentTeacher;
 
-    // Verificar si el usuario es también Padre de Familia
+    // Verificar si el usuario es también Padre de Familia en ESTA institución
     const isParentRes = await client.query(
       `SELECT 1 
-       FROM usuario_rol ur 
-       JOIN rol r ON r.id_rol = ur.id_rol 
-       WHERE ur.id_usuario = $1 AND LOWER(r.nombre) = 'padre'
+       FROM padre_familia pf
+       JOIN padre_estudiante pe ON pe.id_padre = pf.id_padre
+       JOIN estudiante e ON e.id_estudiante = pe.id_estudiante
+       WHERE pf.id_usuario = $1 AND e.id_colegio = $2
        LIMIT 1`,
-      [id_usuario]
+      [id_usuario, schoolId]
     );
     const isParent = isParentRes.rows.length > 0;
 
@@ -757,15 +769,18 @@ export const getTeacherManagementData = async (req: Request, res: Response): Pro
           sql<string | null>`(
             SELECT u_parent.email
             FROM padre_familia pf
+            JOIN padre_estudiante pe ON pe.id_padre = pf.id_padre
+            JOIN estudiante e ON e.id_estudiante = pe.id_estudiante
             JOIN usuario u_parent ON u_parent.id_usuario = pf.id_usuario
-            WHERE pf.id_usuario = d.id_usuario
+            WHERE pf.id_usuario = d.id_usuario AND e.id_colegio = ${schoolId}
             LIMIT 1
           )`.as("email_padre"),
           sql<boolean>`EXISTS (
             SELECT 1 
-            FROM usuario_rol ur 
-            JOIN rol r ON r.id_rol = ur.id_rol 
-            WHERE ur.id_usuario = d.id_usuario AND LOWER(r.nombre) = 'padre'
+            FROM padre_familia pf
+            JOIN padre_estudiante pe ON pe.id_padre = pf.id_padre
+            JOIN estudiante e ON e.id_estudiante = pe.id_estudiante
+            WHERE pf.id_usuario = d.id_usuario AND e.id_colegio = ${schoolId}
           )`.as("es_padre"),
           sql<number>`COUNT(DISTINCT CASE WHEN ${yearId}::int IS NULL OR dg.id_anio = ${yearId} THEN dg.id_detallegrado END)::int`.as("asignaciones_count")
         ])
