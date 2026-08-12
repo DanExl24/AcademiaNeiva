@@ -438,7 +438,8 @@ export const getParentChildren = async (req: Request, res: Response) => {
       .orderBy("id_matricula", "desc")
       .as("m");
 
-    const rows = await db
+    const authReq = req as any;
+    let query = db
       .selectFrom("padre_familia as pf")
       .innerJoin("detalle_padrefamilia as dpf", "dpf.id_padrefamilia", "pf.id_padrefamilia")
       .innerJoin("estudiante as e", "e.id_estudiante", "dpf.id_estudiante")
@@ -468,8 +469,18 @@ export const getParentChildren = async (req: Request, res: Response) => {
         "col.nombre as colegio_nombre",
         "m.estado as estado_matricula"
       ])
-      .where("pf.id_usuario", "=", Number(id_usuario))
-      .execute();
+      .where("pf.id_usuario", "=", Number(id_usuario));
+
+    if (authReq.user?.schoolId) {
+      query = query.where((eb) =>
+        eb.or([
+          eb("dpf.id_colegio", "=", authReq.user.schoolId),
+          eb("e.id_colegio", "=", authReq.user.schoolId)
+        ])
+      );
+    }
+
+    const rows = await query.execute();
 
     res.json(rows);
   } catch (error) {
@@ -706,7 +717,8 @@ export const getParentDashboardData = async (req: Request, res: Response) => {
       });
     }
 
-    const schoolId = req.query.id_colegio ? parseInt(req.query.id_colegio as string) : children[0].id_colegio;
+    const authReq = req as any;
+    const schoolId = authReq.user?.schoolId || (req.query.id_colegio ? parseInt(req.query.id_colegio as string) : children[0].id_colegio);
     const filteredChildren = children.filter((c: any) => c.id_colegio === schoolId);
 
     if (filteredChildren.length === 0) {
