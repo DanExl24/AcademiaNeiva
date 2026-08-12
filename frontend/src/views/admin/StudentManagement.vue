@@ -1063,6 +1063,7 @@ const exportToSIMAT = () => {
                 <span :class="[
                   studentSummary.estado_academico === 'Normal' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400' : 
                   studentSummary.estado_academico === 'En riesgo' ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400' : 
+                  studentSummary.estado_academico === 'Sin Notas' ? 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400' :
                   'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400',
                   'px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider'
                 ]">
@@ -1214,7 +1215,7 @@ const exportToSIMAT = () => {
               <div class="bg-slate-50 dark:bg-slate-800/40 rounded-2xl p-4 border border-slate-100 dark:border-slate-800/80">
                 <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Promedio General</span>
                 <span class="text-2xl font-black text-indigo-600 dark:text-indigo-400 mt-1 block">
-                  {{ studentSummary.gpa || '0.0' }}
+                  {{ (studentSummary.gpa !== null && studentSummary.gpa !== undefined) ? studentSummary.gpa : 'N/A' }}
                 </span>
               </div>
               <div class="bg-slate-50 dark:bg-slate-800/40 rounded-2xl p-4 border border-slate-100 dark:border-slate-800/80">
@@ -1249,7 +1250,7 @@ const exportToSIMAT = () => {
                     ❌ {{ sub.materia }}
                   </span>
                   <span class="text-sm font-black text-red-600 dark:text-red-400 bg-red-100/50 dark:bg-red-950/40 px-2.5 py-0.5 rounded-lg">
-                    {{ sub.calificacion }}
+                    {{ sub.calificacion !== null && sub.calificacion !== undefined ? sub.calificacion : 'N/A' }}
                   </span>
                 </div>
               </div>

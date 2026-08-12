@@ -678,7 +678,7 @@ export const getStudentSummary = async (req: Request, res: Response) => {
 
     // 4. Failed subjects and overall average
     let grades: any[] = [];
-    let promedioGeneral = 0;
+    let promedioGeneral: number | null = null;
     let materiasReprobadas: any[] = [];
 
     if (id_grupo && periodId) {
@@ -712,7 +712,7 @@ export const getStudentSummary = async (req: Request, res: Response) => {
         SELECT 
           m.id_materia,
           m.nombre as materia,
-          COALESCE(ROUND(AVG(pg.nota_periodo), 2), 0)::numeric as calificacion
+          ROUND(AVG(pg.nota_periodo), 2)::numeric as calificacion
         FROM period_grades pg
         JOIN materias m ON m.id_materia = pg.id_materia
         GROUP BY m.id_materia, m.nombre
@@ -722,15 +722,19 @@ export const getStudentSummary = async (req: Request, res: Response) => {
       grades = gradesRes.rows.map(g => ({
         id_materia: g.id_materia,
         materia: g.materia,
-        calificacion: parseFloat(g.calificacion || 0)
+        calificacion: (g.calificacion !== null && g.calificacion !== undefined) ? parseFloat(g.calificacion) : null
       }));
 
-      if (grades.length > 0) {
-        const sum = grades.reduce((acc, curr) => acc + curr.calificacion, 0);
-        promedioGeneral = parseFloat((sum / grades.length).toFixed(2));
+      const gradedList = grades.filter(g => g.calificacion !== null && g.calificacion !== undefined);
+
+      if (gradedList.length > 0) {
+        const sum = gradedList.reduce((acc, curr) => acc + curr.calificacion, 0);
+        promedioGeneral = parseFloat((sum / gradedList.length).toFixed(2));
+      } else {
+        promedioGeneral = null;
       }
 
-      materiasReprobadas = grades.filter(g => g.calificacion < 3.0);
+      materiasReprobadas = gradedList.filter(g => g.calificacion < 3.0);
     }
 
     // 5. Total Absences (where state is 'AUSENTE')
@@ -758,11 +762,17 @@ export const getStudentSummary = async (req: Request, res: Response) => {
     }
 
     // 8. Academic State classification
-    let estadoAcademico = 'Normal';
-    if (materiasReprobadas.length >= 3 || (promedioGeneral < 3.0 && grades.length > 0)) {
-      estadoAcademico = 'Crítico';
-    } else if (materiasReprobadas.length > 0) {
-      estadoAcademico = 'En riesgo';
+    let estadoAcademico = 'Sin Notas';
+    const gradedCount = grades.filter(g => g.calificacion !== null && g.calificacion !== undefined).length;
+
+    if (gradedCount > 0) {
+      if (materiasReprobadas.length >= 3 || (promedioGeneral !== null && promedioGeneral < 3.0)) {
+        estadoAcademico = 'Crítico';
+      } else if (materiasReprobadas.length > 0) {
+        estadoAcademico = 'En riesgo';
+      } else {
+        estadoAcademico = 'Normal';
+      }
     }
 
     // 9. Fetch graduation registry if graduated
