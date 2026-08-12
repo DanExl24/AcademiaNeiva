@@ -248,7 +248,13 @@ const verifyDocument = async () => {
     const response = await axios.get(`/api/auth/check-document/${parentData.value.documento}`)
     if (response.data.exists) {
       docMatchInfo.value = response.data
-      notify.addNotification(`Atención: Este documento pertenece a un ${response.data.role} (${response.data.user.nombre} ${response.data.user.apellido}). Se vinculará como padre.`, 'info')
+      const roles: string[] = response.data.roles || []
+      const isStaff = roles.includes('docente') || roles.includes('directivo') || roles.includes('admin')
+      if (isStaff) {
+        notify.addNotification(`Atención: Este documento pertenece a personal institucional (${response.data.role}: ${response.data.user.nombre} ${response.data.user.apellido}). Se le vinculará también el rol de acudiente.`, 'info')
+      } else {
+        notify.addNotification(`Usuario acudiente existente detectado: ${response.data.user.nombre} ${response.data.user.apellido}. Se asociará a esta nueva matrícula.`, 'info')
+      }
     } else {
       docMatchInfo.value = null
     }

@@ -22,10 +22,13 @@ export const checkDocument = async (req: Request, res: Response): Promise<void> 
       .executeTakeFirst();
 
     if (user) {
-      const roles: string[] = user.roles;
-      let displayRole = 'docente';
-      if (roles.includes('directivo')) displayRole = 'directivo';
-      else if (roles.includes('admin')) displayRole = 'admin';
+      const roles: string[] = user.roles || [];
+      let displayRole = 'usuario';
+      if (roles.includes('admin_general') || roles.includes('admin')) displayRole = 'admin';
+      else if (roles.includes('directivo')) displayRole = 'directivo';
+      else if (roles.includes('docente')) displayRole = 'docente';
+      else if (roles.includes('padre')) displayRole = 'padre de familia';
+      else if (roles.includes('estudiante')) displayRole = 'estudiante';
 
       res.json({
         exists: true,
