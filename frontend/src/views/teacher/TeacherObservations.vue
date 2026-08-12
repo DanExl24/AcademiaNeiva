@@ -15,7 +15,9 @@ import {
   MessageSquare,
   Users,
   CheckCircle2,
-  ChevronRight
+  Filter,
+  History,
+  FileText
 } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 import { useAcademicYearStore } from '../../stores/academicYear'
@@ -106,8 +108,11 @@ const fetchObservationTypes = async () => {
 }
 
 const formatObservationTypeLabel = (tipo: string) => {
-  switch (tipo) {
-    case 'ACADEMICA': return 'Académico'
+  if (!tipo) return 'Otro'
+  const normalized = tipo.toUpperCase()
+  switch (normalized) {
+    case 'ACADEMICA':
+    case 'ACADEMICO': return 'Académico'
     case 'CONVIVENCIAL':
     case 'CONVIVENCIA': return 'Convivencial'
     case 'DISCIPLINARIO':
@@ -156,7 +161,7 @@ const fetchMyCourses = async () => {
 
 // Load periods
 const fetchPeriods = async () => {
-  const schoolId = auth.user?.schoolId || (auth.user as any)?.id_colegio
+  const schoolId = auth.selectedSchoolId || auth.user?.schoolId || (auth.user as any)?.id_colegio || (auth.isSupervising ? (auth.supervision?.colegio_id || auth.supervision?.id_colegio) : null)
   if (!schoolId) return
   try {
     const params = yearStore.selectedYearId ? { yearId: yearStore.selectedYearId } : {}
@@ -300,18 +305,20 @@ const activeStudent = computed(() => {
   return students.value.find(s => s.id_estudiante === activeStudentId.value) || null
 })
 
-// Observations for focused active student
+// Observations for focused active student (with robust filtering)
 const activeStudentObservations = computed(() => {
   if (!activeStudentId.value) return []
   let list = observations.value.filter(o => o.id_estudiante === activeStudentId.value)
   if (selectedObservationTypeFilter.value !== 'all') {
-    const typeFilter = selectedObservationTypeFilter.value
+    const filterVal = selectedObservationTypeFilter.value.toUpperCase()
     list = list.filter(o => {
-      if (typeFilter === 'ACADEMICA') return o.tipo === 'ACADEMICA'
-      if (typeFilter === 'DISCIPLINARIA') return o.tipo === 'DISCIPLINARIO' || o.tipo === 'DISCIPLINARIA'
-      if (typeFilter === 'CONVIVENCIA') return o.tipo === 'CONVIVENCIAL' || o.tipo === 'CONVIVENCIA'
-      if (typeFilter === 'OTRO') return o.tipo === 'OTRO'
-      return o.tipo === typeFilter
+      if (!o.tipo) return filterVal === 'OTRO'
+      const obsType = o.tipo.toUpperCase()
+      if (filterVal === 'ACADEMICA') return obsType === 'ACADEMICA' || obsType === 'ACADEMICO'
+      if (filterVal === 'DISCIPLINARIA') return obsType === 'DISCIPLINARIO' || obsType === 'DISCIPLINARIA'
+      if (filterVal === 'CONVIVENCIA') return obsType === 'CONVIVENCIAL' || obsType === 'CONVIVENCIA'
+      if (filterVal === 'OTRO') return obsType === 'OTRO'
+      return obsType === filterVal
     })
   }
   return list
@@ -368,6 +375,7 @@ const formatDate = (dateStr: string) => {
 const selectStudent = (studentId: number) => {
   activeStudentId.value = studentId
   editingObservation.value = null
+  selectedObservationTypeFilter.value = 'all'
   resetForm()
 }
 
@@ -390,12 +398,16 @@ const resetForm = () => {
 // Edit existing observation inline
 const startEditObservation = (obs: Observation) => {
   editingObservation.value = obs
+  let obsTipo = obs.tipo || 'ACADEMICA'
+  if (obsTipo === 'CONVIVENCIAL') obsTipo = 'CONVIVENCIA'
+  if (obsTipo === 'DISCIPLINARIO') obsTipo = 'DISCIPLINARIA'
+
   formData.value = {
     fortalezas: obs.fortalezas || '',
     debilidades: obs.debilidades || '',
     recomendaciones: obs.recomendaciones || '',
     fecha: new Date(obs.fecha).toLocaleDateString('en-CA'),
-    tipo: obs.tipo || 'ACADEMICA'
+    tipo: obsTipo
   }
 }
 
@@ -450,9 +462,7 @@ const saveObservationAndAdvance = async () => {
     // Auto Advance Logic: Find next student without observation or simply next student in roster
     const currentIndex = students.value.findIndex(s => s.id_estudiante === savedStudentId)
     if (currentIndex !== -1) {
-      // Look for next pending student first
       let nextStudent = students.value.slice(currentIndex + 1).find(s => !studentStatusMap.value[s.id_estudiante]?.hasObservation)
-      // If no pending student ahead, pick the immediate next student in array
       if (!nextStudent && currentIndex < students.value.length - 1) {
         nextStudent = students.value[currentIndex + 1]
       }
@@ -524,41 +534,40 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="space-y-6 animate-in fade-in duration-500 pb-8">
+  <div class="space-y-4 animate-in fade-in duration-500 pb-4">
     
     <!-- Top Header Bar -->
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
       <div>
         <h1 class="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-3">
           <MessageSquare :size="28" class="text-amber-600 dark:text-amber-500" />
           Observador del Estudiante
         </h1>
-        <p class="text-slate-500 dark:text-slate-400 text-sm mt-0.5">Mesa de trabajo dividida: registro fluido sin scroll para todos tus estudiantes.</p>
+        <p class="text-slate-500 dark:text-slate-400 text-xs mt-0.5">Vista Acoplada en 3 Columnas: consulta historial y redacta en pantalla fija sin scroll.</p>
       </div>
 
       <!-- Quick Progress Badge -->
-      <div v-if="selectedCourse && selectedPeriodId && students.length > 0" class="flex items-center gap-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 px-5 rounded-2xl shadow-sm">
-        <div class="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-950/50 flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0 font-black text-xs">
+      <div v-if="selectedCourse && selectedPeriodId && students.length > 0" class="flex items-center gap-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-2.5 px-4 rounded-2xl shadow-sm">
+        <div class="w-9 h-9 rounded-xl bg-amber-100 dark:bg-amber-950/50 flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0 font-black text-xs">
           {{ rosterStats.percentage }}%
         </div>
         <div>
           <div class="flex items-center gap-2">
-            <span class="text-xs font-black text-slate-800 dark:text-slate-200">Progreso del Grupo</span>
+            <span class="text-xs font-black text-slate-800 dark:text-slate-200">Progreso Grupo</span>
             <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400">
               {{ rosterStats.completed }}/{{ rosterStats.total }} Evaluados
             </span>
           </div>
-          <p class="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">Quedan {{ rosterStats.pending }} pendientes por observar</p>
         </div>
       </div>
     </div>
 
-    <!-- Cascade Context Filters Bar (Compact Sticky Header) -->
-    <div class="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm transition-colors">
-      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
+    <!-- Cascade Context Filters Bar (Compact Header) -->
+    <div class="bg-white dark:bg-slate-900 p-3 sm:p-4 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm transition-colors">
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2.5">
         <div class="space-y-1">
           <label class="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">Grado</label>
-          <select v-model="selectedGradeName" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-xs font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-amber-500 outline-none">
+          <select v-model="selectedGradeName" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-amber-500 outline-none">
             <option :value="null">Selecciona</option>
             <option v-for="g in gradeOptions" :key="g" :value="g">{{ g }}</option>
           </select>
@@ -566,7 +575,7 @@ onMounted(() => {
 
         <div class="space-y-1">
           <label class="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">Sección</label>
-          <select v-model="selectedSection" :disabled="!selectedGradeName" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-xs font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-amber-500 outline-none disabled:opacity-50">
+          <select v-model="selectedSection" :disabled="!selectedGradeName" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-amber-500 outline-none disabled:opacity-50">
             <option :value="null">Selecciona</option>
             <option v-for="s in sectionOptions" :key="s" :value="s">{{ s }}</option>
           </select>
@@ -574,7 +583,7 @@ onMounted(() => {
 
         <div class="space-y-1">
           <label class="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">Jornada</label>
-          <select v-model="selectedJornada" :disabled="!selectedSection" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-xs font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-amber-500 outline-none disabled:opacity-50">
+          <select v-model="selectedJornada" :disabled="!selectedSection" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-amber-500 outline-none disabled:opacity-50">
             <option :value="null">Selecciona</option>
             <option v-for="j in jornadaOptions" :key="j" :value="j">{{ j }}</option>
           </select>
@@ -582,7 +591,7 @@ onMounted(() => {
 
         <div class="space-y-1">
           <label class="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">Materia</label>
-          <select v-model="selectedSubjectId" :disabled="!selectedJornada" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-xs font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-amber-500 outline-none disabled:opacity-50">
+          <select v-model="selectedSubjectId" :disabled="!selectedJornada" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-amber-500 outline-none disabled:opacity-50">
             <option :value="null">Selecciona</option>
             <option v-for="s in subjectsOptions" :key="s.id" :value="s.id">{{ s.label }}</option>
           </select>
@@ -590,7 +599,7 @@ onMounted(() => {
 
         <div class="space-y-1">
           <label class="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">Periodo</label>
-          <select v-model="selectedPeriodId" :disabled="periods.length === 0" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-xs font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-amber-500 outline-none disabled:opacity-50">
+          <select v-model="selectedPeriodId" :disabled="periods.length === 0" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-amber-500 outline-none disabled:opacity-50">
             <option :value="null">Selecciona</option>
             <option v-for="p in periods" :key="p.id_periodo" :value="p.id_periodo">
               {{ p.nombre }}
@@ -601,177 +610,242 @@ onMounted(() => {
     </div>
 
     <!-- Status Lock Warning -->
-    <div v-if="selectedCourse && selectedPeriodId && !isEditable" class="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-2xl p-4 flex items-center gap-3">
-      <AlertCircle class="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0" />
+    <div v-if="selectedCourse && selectedPeriodId && !isEditable" class="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-2xl p-3 flex items-center gap-3">
+      <AlertCircle class="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
       <div>
         <h4 class="font-bold text-xs text-amber-900 dark:text-amber-200">Modo de Solo Lectura</h4>
-        <p class="text-xs text-amber-700 dark:text-amber-400">{{ lockReason }}</p>
+        <p class="text-[11px] text-amber-700 dark:text-amber-400">{{ lockReason }}</p>
       </div>
     </div>
 
     <!-- Empty Prompt: Course Not Selected -->
-    <div v-if="!selectedCourse || !selectedPeriodId" class="bg-slate-50 dark:bg-slate-800/40 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-3xl p-16 text-center">
-      <div class="w-16 h-16 bg-white dark:bg-slate-800 rounded-full shadow-sm flex items-center justify-center mx-auto mb-4">
-        <Eye class="w-8 h-8 text-slate-300 dark:text-slate-600" />
+    <div v-if="!selectedCourse || !selectedPeriodId" class="bg-slate-50 dark:bg-slate-800/40 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-3xl p-14 text-center">
+      <div class="w-14 h-14 bg-white dark:bg-slate-800 rounded-full shadow-sm flex items-center justify-center mx-auto mb-3">
+        <Eye class="w-7 h-7 text-slate-300 dark:text-slate-600" />
       </div>
-      <h3 class="text-lg font-bold text-slate-400 dark:text-slate-500">Selecciona grado, materia y periodo para comenzar</h3>
-      <p class="text-slate-400 dark:text-slate-500 text-xs mt-1">Una vez seleccionado el grupo, la mesa de trabajo en 2 columnas se cargará automáticamente.</p>
+      <h3 class="text-base font-bold text-slate-500 dark:text-slate-400">Selecciona grado, materia y periodo para activar la mesa de trabajo en 3 columnas</h3>
     </div>
 
-    <!-- Main Workspace (Split View 2 Columns) -->
-    <div v-else class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+    <!-- MAIN WORKSPACE: 3 COLUMNS COUPLED VIEW (CERO SCROLL) -->
+    <div v-else class="grid grid-cols-1 lg:grid-cols-12 gap-3.5 items-start h-[calc(100vh-13.5rem)] min-h-[520px]">
 
-      <!-- LEFT COLUMN: Student Roster (45% Width / col-span-5) -->
-      <div class="lg:col-span-5 space-y-4">
-        <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm p-4 space-y-4">
-          
-          <!-- Search & Status Filter Pills -->
-          <div class="space-y-3">
-            <div class="relative">
-              <Search class="absolute left-3.5 top-3.5 text-slate-400" :size="16" />
-              <input
-                v-model="studentSearchQuery"
-                type="text"
-                placeholder="Buscar alumno por nombre o código..."
-                class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl pl-10 pr-4 py-2.5 text-xs font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
-              />
-            </div>
-
-            <!-- Filter Pills -->
-            <div class="flex items-center gap-1.5 overflow-x-auto pb-1">
-              <button
-                @click="rosterFilter = 'all'"
-                :class="[rosterFilter === 'all' ? 'bg-slate-900 dark:bg-slate-700 text-white' : 'bg-slate-50 dark:bg-slate-800 text-slate-500 hover:bg-slate-100', 'px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all shrink-0']"
-              >
-                Todos ({{ students.length }})
-              </button>
-              <button
-                @click="rosterFilter = 'pending'"
-                :class="[rosterFilter === 'pending' ? 'bg-amber-600 text-white' : 'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 hover:bg-amber-100', 'px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all shrink-0']"
-              >
-                ⚠️ Sin registrar ({{ rosterStats.pending }})
-              </button>
-              <button
-                @click="rosterFilter = 'completed'"
-                :class="[rosterFilter === 'completed' ? 'bg-emerald-600 text-white' : 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100', 'px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all shrink-0']"
-              >
-                ✓ Evaluados ({{ rosterStats.completed }})
-              </button>
-            </div>
+      <!-- COLUMN 1: STUDENT ROSTER (~25% / col-span-3) -->
+      <div class="lg:col-span-3 h-full flex flex-col bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden p-3.5 space-y-3">
+        
+        <!-- Search & Roster Filters -->
+        <div class="space-y-2 shrink-0">
+          <div class="relative">
+            <Search class="absolute left-3 top-2.5 text-slate-400" :size="14" />
+            <input
+              v-model="studentSearchQuery"
+              type="text"
+              placeholder="Buscar estudiante..."
+              class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl pl-9 pr-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
+            />
           </div>
 
-          <!-- Student Roster Scrollable List -->
-          <div v-if="loading" class="p-8 text-center space-y-3">
-            <Loader2 class="w-8 h-8 text-amber-600 animate-spin mx-auto" />
-            <p class="text-xs text-slate-400 font-bold">Cargando nómina del curso...</p>
-          </div>
-
-          <div v-else-if="filteredStudents.length === 0" class="p-8 text-center">
-            <p class="text-xs font-bold text-slate-400">No se encontraron estudiantes con el filtro actual.</p>
-          </div>
-
-          <div v-else class="space-y-2 max-h-[calc(100vh-280px)] overflow-y-auto pr-1">
-            <div
-              v-for="s in filteredStudents"
-              :key="s.id_estudiante"
-              @click="selectStudent(s.id_estudiante)"
-              :class="[
-                activeStudentId === s.id_estudiante
-                  ? 'bg-amber-500/10 border-amber-500 ring-2 ring-amber-500/20 shadow-md'
-                  : 'bg-slate-50/50 dark:bg-slate-800/40 border-slate-100 dark:border-slate-800 hover:border-amber-300 dark:hover:border-amber-700',
-                'p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3 group relative overflow-hidden'
-              ]"
+          <!-- Roster Filter Pills -->
+          <div class="flex items-center gap-1 overflow-x-auto pb-0.5">
+            <button
+              @click="rosterFilter = 'all'"
+              :class="[rosterFilter === 'all' ? 'bg-slate-900 dark:bg-slate-700 text-white' : 'bg-slate-50 dark:bg-slate-800 text-slate-500 hover:bg-slate-100', 'px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all shrink-0']"
             >
-              <div class="flex items-center gap-3 min-w-0">
-                <div :class="[activeStudentId === s.id_estudiante ? 'from-amber-500 to-amber-600 text-white' : 'from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-800 text-slate-700 dark:text-slate-200', 'w-9 h-9 rounded-xl bg-gradient-to-br flex items-center justify-center font-black text-xs shrink-0 shadow-sm']">
-                  {{ s.nombre.charAt(0) }}
-                </div>
-                <div class="min-w-0">
-                  <h4 class="font-bold text-xs text-slate-800 dark:text-white truncate group-hover:text-amber-600 transition-colors">
-                    {{ s.nombre }} {{ s.apellido }}
-                  </h4>
-                  <p class="text-[10px] font-mono text-slate-400 dark:text-slate-500 mt-0.5">
-                    Cód: {{ s.codigo }}
-                  </p>
-                </div>
-              </div>
+              Todos ({{ students.length }})
+            </button>
+            <button
+              @click="rosterFilter = 'pending'"
+              :class="[rosterFilter === 'pending' ? 'bg-amber-600 text-white' : 'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 hover:bg-amber-100', 'px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all shrink-0']"
+            >
+              ⚠️ Sin registrar ({{ rosterStats.pending }})
+            </button>
+            <button
+              @click="rosterFilter = 'completed'"
+              :class="[rosterFilter === 'completed' ? 'bg-emerald-600 text-white' : 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100', 'px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all shrink-0']"
+            >
+              ✓ Evaluados ({{ rosterStats.completed }})
+            </button>
+          </div>
+        </div>
 
-              <!-- Badges & Indicator -->
-              <div class="flex items-center gap-2 shrink-0">
-                <span
-                  v-if="studentStatusMap[s.id_estudiante]?.hasObservation"
-                  class="bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-tight flex items-center gap-1"
-                >
-                  <CheckCircle2 :size="10" />
-                  {{ studentStatusMap[s.id_estudiante].count }} Obs.
-                </span>
-                <span
-                  v-else
-                  class="bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-tight"
-                >
-                  Pendiente
-                </span>
-                <ChevronRight :size="14" :class="[activeStudentId === s.id_estudiante ? 'text-amber-600 translate-x-0.5' : 'text-slate-300 opacity-0 group-hover:opacity-100', 'transition-all']" />
+        <!-- Student Roster List -->
+        <div v-if="loading" class="p-6 text-center space-y-2 my-auto">
+          <Loader2 class="w-6 h-6 text-amber-600 animate-spin mx-auto" />
+          <p class="text-[11px] text-slate-400 font-bold">Cargando alumnos...</p>
+        </div>
+
+        <div v-else-if="filteredStudents.length === 0" class="p-6 text-center my-auto">
+          <p class="text-xs font-bold text-slate-400">Sin alumnos coincidentes.</p>
+        </div>
+
+        <div v-else class="flex-1 overflow-y-auto pr-1 space-y-1.5 custom-scrollbar">
+          <div
+            v-for="s in filteredStudents"
+            :key="s.id_estudiante"
+            @click="selectStudent(s.id_estudiante)"
+            :class="[
+              activeStudentId === s.id_estudiante
+                ? 'bg-amber-500/10 border-amber-500 ring-2 ring-amber-500/20 shadow-sm'
+                : 'bg-slate-50/50 dark:bg-slate-800/40 border-slate-100 dark:border-slate-800 hover:border-amber-300 dark:hover:border-amber-700',
+              'p-2.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-2 group'
+            ]"
+          >
+            <div class="flex items-center gap-2.5 min-w-0">
+              <div :class="[activeStudentId === s.id_estudiante ? 'from-amber-500 to-amber-600 text-white' : 'from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-800 text-slate-700 dark:text-slate-200', 'w-8 h-8 rounded-xl bg-gradient-to-br flex items-center justify-center font-black text-xs shrink-0 shadow-sm']">
+                {{ s.nombre.charAt(0) }}
               </div>
+              <div class="min-w-0">
+                <h4 class="font-bold text-[11px] text-slate-800 dark:text-white truncate group-hover:text-amber-600 transition-colors">
+                  {{ s.nombre }} {{ s.apellido }}
+                </h4>
+                <p class="text-[9px] font-mono text-slate-400 dark:text-slate-500">
+                  Cód: {{ s.codigo }}
+                </p>
+              </div>
+            </div>
+
+            <!-- Status Indicator Badge -->
+            <div class="flex items-center gap-1 shrink-0">
+              <span
+                v-if="studentStatusMap[s.id_estudiante]?.hasObservation"
+                class="bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 px-1.5 py-0.5 rounded-md text-[8px] font-black uppercase flex items-center gap-0.5"
+              >
+                <CheckCircle2 :size="9" />
+                {{ studentStatusMap[s.id_estudiante].count }}
+              </span>
+              <span
+                v-else
+                class="bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 px-1.5 py-0.5 rounded-md text-[8px] font-black uppercase"
+              >
+                Pend.
+              </span>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- RIGHT COLUMN: Fixed Observation Workbench (55% Width / col-span-7) -->
-      <div class="lg:col-span-7 space-y-4 lg:sticky lg:top-4">
+      <!-- COLUMN 2: STUDENT PREVIOUS HISTORY TIMELINE (~38% / col-span-4) -->
+      <div class="lg:col-span-4 h-full flex flex-col bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden p-3.5 space-y-3">
         
-        <div v-if="!activeStudent" class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 p-12 text-center shadow-sm">
-          <Users class="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
-          <p class="text-slate-400 font-bold text-sm">Selecciona un alumno de la nómina izquierda para registrar su observación.</p>
+        <!-- Header & Type Filter (ALWAYS VISIBLE - NEVER BREAKS OR VANISHES) -->
+        <div class="pb-2 border-b border-slate-100 dark:border-slate-800 space-y-2 shrink-0">
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2 min-w-0">
+              <History :size="16" class="text-amber-600 dark:text-amber-500 shrink-0" />
+              <h3 class="font-black text-xs text-slate-800 dark:text-white truncate">Historial de Observaciones</h3>
+            </div>
+            <span v-if="activeStudent" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 shrink-0">
+              {{ activeStudentObservations.length }} Reg.
+            </span>
+          </div>
+
+          <!-- Type Filter Selector -->
+          <div class="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 p-1.5 rounded-xl border border-slate-200 dark:border-slate-700">
+            <Filter :size="12" class="text-slate-400 ml-1 shrink-0" />
+            <select
+              v-model="selectedObservationTypeFilter"
+              class="w-full bg-transparent border-none text-[10px] font-bold text-slate-700 dark:text-slate-200 outline-none cursor-pointer"
+            >
+              <option value="all">Tipo: Todos</option>
+              <option v-for="t in (dbObservationTypes.length > 0 ? dbObservationTypes : ['ACADEMICA', 'CONVIVENCIA', 'DISCIPLINARIA', 'OTRO'])" :key="t" :value="t">
+                {{ formatObservationTypeLabel(t) }}
+              </option>
+            </select>
+          </div>
         </div>
 
-        <div v-else class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden transition-colors">
-          
-          <!-- Focused Student Header Bar -->
-          <div class="bg-slate-50/80 dark:bg-slate-800/60 p-5 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div class="flex items-center gap-3">
-              <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 text-white flex items-center justify-center font-black text-sm shadow-md">
-                {{ activeStudent.nombre.charAt(0) }}
+        <!-- Student History Timeline Content -->
+        <div v-if="!activeStudent" class="p-8 text-center my-auto space-y-2">
+          <Users class="w-8 h-8 text-slate-300 mx-auto" />
+          <p class="text-xs text-slate-400 font-bold">Selecciona un alumno para consultar su historial.</p>
+        </div>
+
+        <div v-else-if="activeStudentObservations.length === 0" class="p-8 text-center my-auto space-y-2">
+          <FileText class="w-8 h-8 text-slate-300 mx-auto" />
+          <p class="text-xs font-bold text-slate-500 dark:text-slate-400">No hay observaciones registradas con el filtro actual.</p>
+          <p class="text-[10px] text-slate-400">Prueba cambiando el filtro de tipo arriba a "Tipo: Todos".</p>
+        </div>
+
+        <div v-else class="flex-1 overflow-y-auto pr-1 space-y-2.5 custom-scrollbar">
+          <div
+            v-for="obs in activeStudentObservations"
+            :key="obs.id_observacion"
+            class="p-3 bg-slate-50/70 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 rounded-2xl space-y-2 text-xs transition-colors hover:border-amber-200 dark:hover:border-amber-900"
+          >
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 px-2 py-0.5 rounded-md text-[9px] font-black uppercase">
+                  {{ formatObservationTypeLabel(obs.tipo) }}
+                </span>
+                <span class="text-[10px] text-slate-400 font-semibold">{{ formatDate(obs.fecha) }}</span>
               </div>
-              <div>
-                <div class="flex items-center gap-2">
-                  <h3 class="font-black text-slate-900 dark:text-white text-base">{{ activeStudent.nombre }} {{ activeStudent.apellido }}</h3>
-                  <span
-                    v-if="studentStatusMap[activeStudent.id_estudiante]?.hasObservation"
-                    class="bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 px-2 py-0.5 rounded-md text-[9px] font-black uppercase"
-                  >
-                    ✓ Con Observación
-                  </span>
-                </div>
-                <p class="text-xs text-slate-400 dark:text-slate-500 font-mono mt-0.5">Código: {{ activeStudent.codigo }}</p>
+
+              <div v-if="isEditable && !auth.isMonitoring" class="flex items-center gap-1">
+                <button @click="startEditObservation(obs)" class="p-1 text-slate-400 hover:text-amber-600 transition-colors" title="Editar">
+                  <Pencil :size="12" />
+                </button>
+                <button v-if="confirmDeleteId !== obs.id_observacion" @click="confirmDeleteId = obs.id_observacion" class="p-1 text-rose-400 hover:text-rose-600 transition-colors" title="Eliminar">
+                  <Trash2 :size="12" />
+                </button>
+                <button v-else @click="deleteObservation(obs.id_observacion)" class="bg-rose-600 text-white px-2 py-0.5 rounded text-[9px] font-bold">
+                  Confirmar
+                </button>
               </div>
             </div>
 
-            <div v-if="editingObservation" class="flex items-center gap-2 bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 px-3 py-1 rounded-xl text-xs font-bold">
-              <Pencil :size="12" />
-              Editando observación
-              <button @click="cancelEdit" class="ml-2 underline text-[10px] hover:opacity-80">Cancelar</button>
+            <div class="space-y-1 text-slate-600 dark:text-slate-300 text-[11px] leading-relaxed">
+              <p v-if="obs.fortalezas"><strong class="text-emerald-600 dark:text-emerald-400">Fortalezas:</strong> {{ obs.fortalezas }}</p>
+              <p v-if="obs.debilidades"><strong class="text-rose-600 dark:text-rose-400">Debilidades:</strong> {{ obs.debilidades }}</p>
+              <p v-if="obs.recomendaciones"><strong class="text-blue-600 dark:text-blue-400">Recomendaciones:</strong> {{ obs.recomendaciones }}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- COLUMN 3: DIRECT OBSERVATION FORM (~37% / col-span-5) -->
+      <div class="lg:col-span-5 h-full flex flex-col bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden p-4 space-y-3">
+        
+        <div v-if="!activeStudent" class="p-8 text-center my-auto space-y-2">
+          <Users class="w-10 h-10 text-slate-300 mx-auto" />
+          <p class="text-xs font-bold text-slate-400">Selecciona un alumno para redactar su observación.</p>
+        </div>
+
+        <template v-else>
+          <!-- Active Student Header Bar -->
+          <div class="bg-slate-50/80 dark:bg-slate-800/60 p-3 rounded-2xl border border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2 shrink-0">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 text-white flex items-center justify-center font-black text-xs shadow-sm shrink-0">
+                {{ activeStudent.nombre.charAt(0) }}
+              </div>
+              <div class="min-w-0">
+                <h3 class="font-black text-slate-900 dark:text-white text-xs truncate">{{ activeStudent.nombre }} {{ activeStudent.apellido }}</h3>
+                <p class="text-[9px] text-slate-400 font-mono">Cód: {{ activeStudent.codigo }}</p>
+              </div>
+            </div>
+
+            <div v-if="editingObservation" class="flex items-center gap-1.5 bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 px-2.5 py-1 rounded-xl text-[10px] font-bold shrink-0">
+              <Pencil :size="10" />
+              Editando
+              <button @click="cancelEdit" class="ml-1 underline text-[9px]">X</button>
             </div>
           </div>
 
-          <!-- Registration Form Body -->
-          <div class="p-6 space-y-5">
+          <!-- Form Body -->
+          <div class="flex-1 overflow-y-auto space-y-3 pr-0.5 custom-scrollbar">
             
-            <!-- Type Selector (DB Driven) -->
-            <div class="space-y-2">
-              <label class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">Tipo de Observación (BD) *</label>
-              <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <!-- Type Selector Buttons -->
+            <div class="space-y-1">
+              <label class="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">Tipo de Seguimiento *</label>
+              <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
                 <button
                   v-for="t in (dbObservationTypes.length > 0 ? dbObservationTypes : ['ACADEMICA', 'CONVIVENCIA', 'DISCIPLINARIA', 'OTRO'])"
                   :key="t"
                   type="button"
-                  @click="formData.tipo = (t === 'CONVIVENCIA' ? 'CONVIVENCIAL' : (t === 'DISCIPLINARIA' ? 'DISCIPLINARIO' : t)) as any"
+                  @click="formData.tipo = t"
                   :class="[
-                    (formData.tipo === t || (t === 'CONVIVENCIA' && formData.tipo === 'CONVIVENCIAL') || (t === 'DISCIPLINARIA' && formData.tipo === 'DISCIPLINARIO'))
-                      ? 'bg-amber-600 text-white shadow-md shadow-amber-200/50'
+                    formData.tipo === t
+                      ? 'bg-amber-600 text-white shadow-sm'
                       : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100',
-                    'py-2.5 px-3 rounded-xl text-xs font-bold transition-all border border-transparent text-center'
+                    'py-2 px-2 rounded-xl text-[11px] font-bold transition-all text-center truncate'
                   ]"
                 >
                   {{ formatObservationTypeLabel(t) }}
@@ -779,134 +853,82 @@ onMounted(() => {
               </div>
             </div>
 
-            <!-- Date Picker (New Observation) -->
+            <!-- Registration Date -->
             <div v-if="!editingObservation" class="space-y-1">
-              <label class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">Fecha de Registro</label>
+              <label class="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">Fecha</label>
               <input
                 type="date"
                 v-model="formData.fecha"
                 :min="allowedDateRange.min"
                 :max="allowedDateRange.max"
-                class="w-full sm:w-auto bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 px-3 text-xs font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-amber-500 outline-none"
+                class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2 text-xs font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-amber-500 outline-none"
               />
             </div>
 
-            <!-- Text Areas: Fortalezas, Debilidades, Recomendaciones -->
-            <div class="space-y-4">
-              <!-- Fortalezas -->
-              <div class="space-y-1.5">
-                <label class="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest flex items-center gap-1.5 ml-1">
-                  <Award :size="12" />
-                  Fortalezas Académicas / Actitudinales
-                </label>
-                <textarea
-                  v-model="formData.fortalezas"
-                  rows="2"
-                  placeholder="Escribe los aspectos positivos destacados..."
-                  class="w-full bg-emerald-50/40 dark:bg-emerald-950/20 border border-emerald-200/70 dark:border-emerald-900/50 rounded-2xl p-3.5 text-xs font-medium text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-emerald-500 outline-none resize-none placeholder-emerald-300 dark:placeholder-emerald-800"
-                ></textarea>
-              </div>
-
-              <!-- Debilidades -->
-              <div class="space-y-1.5">
-                <label class="text-[10px] font-bold text-rose-600 dark:text-rose-400 uppercase tracking-widest flex items-center gap-1.5 ml-1">
-                  <ShieldAlert :size="12" />
-                  Debilidades / Puntos a Mejorar
-                </label>
-                <textarea
-                  v-model="formData.debilidades"
-                  rows="2"
-                  placeholder="Describe las áreas que requieren atención..."
-                  class="w-full bg-rose-50/40 dark:bg-rose-950/20 border border-rose-200/70 dark:border-rose-900/50 rounded-2xl p-3.5 text-xs font-medium text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-rose-500 outline-none resize-none placeholder-rose-300 dark:placeholder-rose-800"
-                ></textarea>
-              </div>
-
-              <!-- Recomendaciones -->
-              <div class="space-y-1.5">
-                <label class="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-widest flex items-center gap-1.5 ml-1">
-                  <Lightbulb :size="12" />
-                  Recomendaciones Pedagógicas
-                </label>
-                <textarea
-                  v-model="formData.recomendaciones"
-                  rows="2"
-                  placeholder="Indica sugerencias formativas..."
-                  class="w-full bg-blue-50/40 dark:bg-blue-950/20 border border-blue-200/70 dark:border-blue-900/50 rounded-2xl p-3.5 text-xs font-medium text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-blue-500 outline-none resize-none placeholder-blue-300 dark:placeholder-blue-800"
-                ></textarea>
-              </div>
+            <!-- Fortalezas -->
+            <div class="space-y-1">
+              <label class="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest flex items-center gap-1 ml-1">
+                <Award :size="10" />
+                Fortalezas
+              </label>
+              <textarea
+                v-model="formData.fortalezas"
+                rows="2"
+                placeholder="Aspectos positivos destacados..."
+                class="w-full bg-emerald-50/40 dark:bg-emerald-950/20 border border-emerald-200/70 dark:border-emerald-900/50 rounded-xl p-2.5 text-xs font-medium text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-emerald-500 outline-none resize-none placeholder-emerald-300 dark:placeholder-emerald-800"
+              ></textarea>
             </div>
 
-            <!-- Primary Action Button: Save & Advance -->
-            <div class="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-slate-100 dark:border-slate-800">
-              <button
-                @click="resetForm"
-                type="button"
-                class="text-xs font-bold text-slate-400 hover:text-slate-600 transition-colors"
-              >
-                Limpiar campos
-              </button>
+            <!-- Debilidades -->
+            <div class="space-y-1">
+              <label class="text-[9px] font-bold text-rose-600 dark:text-rose-400 uppercase tracking-widest flex items-center gap-1 ml-1">
+                <ShieldAlert :size="10" />
+                Debilidades / Puntos a Mejorar
+              </label>
+              <textarea
+                v-model="formData.debilidades"
+                rows="2"
+                placeholder="Áreas que requieren atención..."
+                class="w-full bg-rose-50/40 dark:bg-rose-950/20 border border-rose-200/70 dark:border-rose-900/50 rounded-xl p-2.5 text-xs font-medium text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-rose-500 outline-none resize-none placeholder-rose-300 dark:placeholder-rose-800"
+              ></textarea>
+            </div>
 
-              <button
-                @click="saveObservationAndAdvance"
-                :disabled="!formValid || saving || !isEditable || auth.isMonitoring"
-                class="w-full sm:w-auto bg-amber-600 dark:bg-amber-500 text-white px-6 py-3 rounded-2xl font-bold text-xs shadow-lg shadow-amber-200/50 dark:shadow-none hover:bg-amber-700 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Loader2 v-if="saving" class="w-4 h-4 animate-spin" />
-                <Save v-else :size="16" />
-                {{ saving ? 'Guardando...' : (editingObservation ? 'Actualizar Observación' : 'Guardar y Avanzar al Siguiente ➔') }}
-              </button>
+            <!-- Recomendaciones -->
+            <div class="space-y-1">
+              <label class="text-[9px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-widest flex items-center gap-1 ml-1">
+                <Lightbulb :size="10" />
+                Recomendaciones Pedagógicas
+              </label>
+              <textarea
+                v-model="formData.recomendaciones"
+                rows="2"
+                placeholder="Sugerencias formativas..."
+                class="w-full bg-blue-50/40 dark:bg-blue-950/20 border border-blue-200/70 dark:border-blue-900/50 rounded-xl p-2.5 text-xs font-medium text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-blue-500 outline-none resize-none placeholder-blue-300 dark:placeholder-blue-800"
+              ></textarea>
             </div>
           </div>
 
-          <!-- Existing Observations History for Active Student -->
-          <div v-if="activeStudentObservations.length > 0" class="p-6 pt-0 border-t border-slate-100 dark:border-slate-800 mt-2 space-y-3">
-            <h4 class="text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-widest pt-4 flex items-center justify-between">
-              <span>Historial del Alumno ({{ activeStudentObservations.length }})</span>
-              <!-- Filter by Type inside student history -->
-              <select v-model="selectedObservationTypeFilter" class="bg-slate-100 dark:bg-slate-800 border-none text-[10px] font-bold rounded-lg px-2 py-1 outline-none">
-                <option value="all">Filtro Tipo: Todos</option>
-                <option v-for="t in dbObservationTypes" :key="t" :value="t">{{ formatObservationTypeLabel(t) }}</option>
-              </select>
-            </h4>
+          <!-- Bottom Action Buttons -->
+          <div class="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2 shrink-0">
+            <button
+              @click="resetForm"
+              type="button"
+              class="text-[11px] font-bold text-slate-400 hover:text-slate-600 transition-colors"
+            >
+              Limpiar
+            </button>
 
-            <div class="space-y-2 max-h-60 overflow-y-auto">
-              <div
-                v-for="obs in activeStudentObservations"
-                :key="obs.id_observacion"
-                class="p-3.5 bg-slate-50/60 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 rounded-2xl space-y-2 text-xs"
-              >
-                <div class="flex items-center justify-between">
-                  <div class="flex items-center gap-2">
-                    <span class="bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 px-2 py-0.5 rounded-md text-[9px] font-black uppercase">
-                      {{ formatObservationTypeLabel(obs.tipo) }}
-                    </span>
-                    <span class="text-[10px] text-slate-400 font-semibold">{{ formatDate(obs.fecha) }}</span>
-                  </div>
-
-                  <div v-if="isEditable && !auth.isMonitoring" class="flex items-center gap-1">
-                    <button @click="startEditObservation(obs)" class="p-1 text-slate-400 hover:text-amber-600 transition-colors" title="Editar">
-                      <Pencil :size="12" />
-                    </button>
-                    <button v-if="confirmDeleteId !== obs.id_observacion" @click="confirmDeleteId = obs.id_observacion" class="p-1 text-rose-400 hover:text-rose-600 transition-colors" title="Eliminar">
-                      <Trash2 :size="12" />
-                    </button>
-                    <button v-else @click="deleteObservation(obs.id_observacion)" class="bg-rose-600 text-white px-2 py-0.5 rounded text-[9px] font-bold">
-                      Confirmar
-                    </button>
-                  </div>
-                </div>
-
-                <div class="space-y-1 text-slate-600 dark:text-slate-300 text-[11px] leading-relaxed">
-                  <p v-if="obs.fortalezas"><strong class="text-emerald-600 dark:text-emerald-400">Fortalezas:</strong> {{ obs.fortalezas }}</p>
-                  <p v-if="obs.debilidades"><strong class="text-rose-600 dark:text-rose-400">Debilidades:</strong> {{ obs.debilidades }}</p>
-                  <p v-if="obs.recomendaciones"><strong class="text-blue-600 dark:text-blue-400">Recomendaciones:</strong> {{ obs.recomendaciones }}</p>
-                </div>
-              </div>
-            </div>
+            <button
+              @click="saveObservationAndAdvance"
+              :disabled="!formValid || saving || !isEditable || auth.isMonitoring"
+              class="bg-amber-600 dark:bg-amber-500 text-white px-5 py-2.5 rounded-xl font-bold text-xs shadow-md shadow-amber-200/50 dark:shadow-none hover:bg-amber-700 active:scale-95 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Loader2 v-if="saving" class="w-3.5 h-3.5 animate-spin" />
+              <Save v-else :size="14" />
+              {{ saving ? 'Guardando...' : (editingObservation ? 'Actualizar' : 'Guardar y Avanzar ➔') }}
+            </button>
           </div>
-
-        </div>
-
+        </template>
       </div>
 
     </div>
@@ -915,4 +937,13 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  @apply bg-slate-200 dark:bg-slate-700 rounded-full;
+}
 </style>
