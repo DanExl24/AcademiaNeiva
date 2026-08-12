@@ -401,17 +401,12 @@ export const updateParent = async (req: Request, res: Response): Promise<void> =
       return;
     }
 
-    const { nombre, apellido, documento, id_tipodocumento } = req.body;
-
-    if (!nombre?.trim() || !apellido?.trim() || !documento?.trim()) {
-      res.status(400).json({ error: "Nombre, apellido y documento son obligatorios" });
-      return;
-    }
+    const { nombre, apellido, documento, id_tipodocumento, email } = req.body;
 
     await client.query("BEGIN");
 
     const checkRes = await client.query(
-      `SELECT pf.id_padrefamilia, pf.id_colegio, pf.nombre, pf.apellido, pf.id_usuario, u.documento, u.id_tipodocumento 
+      `SELECT pf.id_padrefamilia, pf.id_colegio, pf.nombre, pf.apellido, pf.id_usuario, u.documento, u.id_tipodocumento, u.email 
        FROM padre_familia pf 
        LEFT JOIN usuario u ON pf.id_usuario = u.id_usuario 
        WHERE pf.id_padrefamilia = $1`,
@@ -434,8 +429,14 @@ export const updateParent = async (req: Request, res: Response): Promise<void> =
       return;
     }
 
-    if (documento && documento.trim() !== oldParent.documento) {
-      await validateDocumentUniqueness(client, documento, "acudiente", { excludeUsuarioId: oldParent.id_usuario }, id_tipodocumento);
+    const finalNombre = isSupervision && nombre?.trim() ? nombre.trim() : oldParent.nombre;
+    const finalApellido = isSupervision && apellido?.trim() ? apellido.trim() : oldParent.apellido;
+    const finalDocumento = isSupervision && documento?.trim() ? documento.trim() : oldParent.documento;
+    const finalTipoDoc = isSupervision && id_tipodocumento ? id_tipodocumento : oldParent.id_tipodocumento;
+    const finalEmail = email?.trim() ? email.trim().toLowerCase() : oldParent.email;
+
+    if (isSupervision && finalDocumento && finalDocumento !== oldParent.documento) {
+      await validateDocumentUniqueness(client, finalDocumento, "acudiente", { excludeUsuarioId: oldParent.id_usuario }, finalTipoDoc);
     }
 
     const result = await client.query(
@@ -443,15 +444,15 @@ export const updateParent = async (req: Request, res: Response): Promise<void> =
        SET nombre = $1, apellido = $2
        WHERE id_padrefamilia = $3
        RETURNING *`,
-      [nombre.trim(), apellido.trim(), parentId]
+      [finalNombre, finalApellido, parentId]
     );
 
     if (oldParent.id_usuario) {
       await client.query(
         `UPDATE usuario 
-         SET nombre = $1, apellido = $2, documento = $3, id_tipodocumento = $4 
-         WHERE id_usuario = $5`,
-        [nombre.trim(), apellido.trim(), documento.trim(), id_tipodocumento, oldParent.id_usuario]
+         SET nombre = $1, apellido = $2, documento = $3, id_tipodocumento = $4, email = $5 
+         WHERE id_usuario = $6`,
+        [finalNombre, finalApellido, finalDocumento, finalTipoDoc, finalEmail, oldParent.id_usuario]
       );
     }
 

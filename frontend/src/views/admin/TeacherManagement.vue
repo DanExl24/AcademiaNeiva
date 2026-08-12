@@ -1382,7 +1382,7 @@ watch(() => yearStore.selectedYearId, () => {
             <div class="text-xs text-blue-950 dark:text-blue-200 leading-relaxed">
               <p class="font-black uppercase tracking-wider text-[10px]">🔒 Protección de Identidad del Usuario:</p>
               <p class="font-medium mt-0.5">
-                Los datos personales (nombres, apellidos y documento de identidad) permanecen protegidos para no alterar la cuenta global de la persona. En esta ventana únicamente se puede modificar el <strong>Email Institucional</strong> asignado a esta institución.
+                Los datos personales (nombres, apellidos y documento de identidad) pertenecen a la cuenta global de la persona. La única forma de modificar los datos personales de identidad es solicitándolo al <strong>Administrador General</strong> mediante un ticket de soporte. En esta ventana únicamente se puede modificar el <strong>Email Institucional</strong> asignado a este colegio.
               </p>
             </div>
           </div>
