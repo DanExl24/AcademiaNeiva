@@ -320,6 +320,7 @@ export interface Directivo {
 
 export interface Docente {
   apellido: string;
+  email_institucional: string | null;
   estado: Generated<string>;
   id_colegio: number;
   id_docente: Generated<number>;

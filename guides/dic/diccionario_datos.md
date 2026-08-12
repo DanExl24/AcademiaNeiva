@@ -405,6 +405,7 @@ A continuación se detallan las **62 tablas** pertenecientes al esquema `Academi
 | `id_contratodocente` | `integer` | SÍ | - | **FK** | Clave foránea que referencia a `contrato_docente(id_contratodocente)`. |
 | `id_colegio` | `integer` | NO | - | **FK** | Clave foránea que referencia a `colegio(id_colegio)`. |
 | `id_usuario` | `integer` | SÍ | - | **** | Atributo id_usuario. |
+| `email_institucional` | `character varying(255)` | SÍ | - | **** | Correo electrónico institucional específico asignado al docente para este colegio. |
 | `estado` | `character varying(20)` | NO | `'ACTIVO'::character varying NOT NULL` | **** | Atributo estado. |
 
 

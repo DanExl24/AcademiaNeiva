@@ -249,19 +249,12 @@ export const createTeacher = async (req: Request, res: Response): Promise<void> 
         [existingUser.id_usuario, schoolId, roleRes.id_rol]
       );
 
-      // Si el directivo especificó un correo institucional nuevo para sus funciones de docente, actualizamos su correo de acceso
-      if (email !== (existingUser.email || "").toLowerCase().trim()) {
-        await client.query(
-          `UPDATE usuario SET email = $1 WHERE id_usuario = $2`,
-          [email, existingUser.id_usuario]
-        );
-      }
-
+      // Guardar el correo institucional en la ficha del docente para este colegio sin alterar el email global del usuario
       const teacherRes = await client.query(
-        `INSERT INTO docente (nombre, apellido, id_colegio, id_usuario, estado)
-         VALUES ($1, $2, $3, $4, 'ACTIVO')
-         RETURNING id_docente, nombre, apellido, estado`,
-        [existingUser.nombre, existingUser.apellido, schoolId, existingUser.id_usuario]
+        `INSERT INTO docente (nombre, apellido, id_colegio, id_usuario, estado, email_institucional)
+         VALUES ($1, $2, $3, $4, 'ACTIVO', $5)
+         RETURNING id_docente, nombre, apellido, estado, email_institucional`,
+        [existingUser.nombre, existingUser.apellido, schoolId, existingUser.id_usuario, email.trim().toLowerCase()]
       );
 
       await client.query("COMMIT");
@@ -310,10 +303,10 @@ export const createTeacher = async (req: Request, res: Response): Promise<void> 
     );
 
     const teacherRes = await client.query(
-      `INSERT INTO docente (nombre, apellido, id_colegio, id_usuario, estado)
-       VALUES ($1, $2, $3, $4, 'ACTIVO')
-       RETURNING id_docente, nombre, apellido, estado`,
-      [nombre, apellido, schoolId, userRes.rows[0].id_usuario]
+      `INSERT INTO docente (nombre, apellido, id_colegio, id_usuario, estado, email_institucional)
+       VALUES ($1, $2, $3, $4, 'ACTIVO', $5)
+       RETURNING id_docente, nombre, apellido, estado, email_institucional`,
+      [nombre, apellido, schoolId, userRes.rows[0].id_usuario, email.trim().toLowerCase()]
     );
 
     await client.query("COMMIT");
@@ -444,40 +437,27 @@ export const updateTeacher = async (req: Request, res: Response): Promise<void> 
       return;
     }
 
-    // Verificar si otro usuario tiene el nuevo correo especificado
-    if (id_usuario) {
-      const duplicateEmail = await client.query(
-        `SELECT id_usuario FROM usuario WHERE LOWER(TRIM(email)) = $1 AND id_usuario != $2`,
-        [email, id_usuario]
-      );
-      if (duplicateEmail.rows.length > 0) {
-        await client.query("ROLLBACK");
-        res.status(409).json({ error: `El correo '${email}' ya está registrado por otro usuario en la plataforma.` });
-        return;
-      }
-
-      // Actualizar usuario (si es padre, nombre/apellido/doc se mantienen iguales, sólo se actualiza email)
+    // Actualizar datos del usuario si no es padre de familia
+    if (id_usuario && !isParent) {
       await client.query(
         `UPDATE usuario 
-         SET nombre = $1, apellido = $2, email = $3, id_tipodocumento = $4, documento = $5
-         WHERE id_usuario = $6`,
-        [
-          isParent ? currentTeacher.nombre : nombre,
-          isParent ? currentTeacher.apellido : apellido,
-          email,
-          isParent ? currentTeacher.id_tipodocumento : documentTypeId,
-          isParent ? currentTeacher.documento : documento,
-          id_usuario
-        ]
+         SET nombre = $1, apellido = $2, id_tipodocumento = $3, documento = $4
+         WHERE id_usuario = $5`,
+        [nombre, apellido, documentTypeId, documento, id_usuario]
       );
     }
 
-    // Actualizar tabla docente
+    // Actualizar datos del docente (incluyendo su correo institucional para este colegio)
     await client.query(
       `UPDATE docente 
-       SET nombre = $1, apellido = $2
-       WHERE id_docente = $3`,
-      [isParent ? currentTeacher.nombre : nombre, isParent ? currentTeacher.apellido : apellido, teacherId]
+       SET nombre = $1, apellido = $2, email_institucional = $3
+       WHERE id_docente = $4`,
+      [
+        isParent ? currentTeacher.nombre : nombre, 
+        isParent ? currentTeacher.apellido : apellido, 
+        email.trim().toLowerCase(), 
+        teacherId
+      ]
     );
 
     await client.query("COMMIT");
