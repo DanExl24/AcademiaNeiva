@@ -3,6 +3,7 @@ import { sql } from "kysely";
 import { NotificationService } from "./notificationService";
 import bcrypt from "bcrypt";
 import { validateDocumentUniqueness, normalizeDocument } from "../utils/documentValidation";
+import { upsertInstitutionalEmail } from "../utils/emailResolver";
 
 // Documentos siempre obligatorios
 const ALWAYS_REQUIRED = ['documentoPadre', 'salud', 'foto', 'reciboPublico'];
@@ -1022,17 +1023,19 @@ export class MatriculaService {
       // --- CREACIÓN / VINCULACIÓN DEL PADRE DE FAMILIA ---
       let idPadre: number;
       let idUsuarioPadre: number | null = null;
+      let personalParentEmail: string | null = null;
 
       const existingParentByDoc = await trx
         .selectFrom('padre_familia as pf')
         .innerJoin('usuario as u', 'pf.id_usuario', 'u.id_usuario')
-        .select(['pf.id_padrefamilia', 'pf.id_usuario', 'pf.nombre', 'pf.apellido'])
+        .select(['pf.id_padrefamilia', 'pf.id_usuario', 'pf.nombre', 'pf.apellido', 'u.email as parent_email'])
         .where('u.documento', '=', data.parent.documento)
         .executeTakeFirst();
 
       if (existingParentByDoc) {
         idPadre = existingParentByDoc.id_padrefamilia;
         idUsuarioPadre = existingParentByDoc.id_usuario;
+        personalParentEmail = existingParentByDoc.parent_email;
 
         if (idUsuarioPadre) {
           await trx
@@ -1074,6 +1077,7 @@ export class MatriculaService {
 
         if (existingUserRes) {
           idUsuarioPadre = existingUserRes.id_usuario;
+          personalParentEmail = existingUserRes.email;
 
           await trx
             .updateTable('usuario')
@@ -1103,6 +1107,7 @@ export class MatriculaService {
             .executeTakeFirstOrThrow();
 
           idUsuarioPadre = parentUserRes.id_usuario;
+          personalParentEmail = correo_padre;
         }
 
         const parentRes = await trx
@@ -1145,6 +1150,10 @@ export class MatriculaService {
             })
             .onConflict((oc) => oc.doNothing())
             .execute();
+
+          if (correo_padre) {
+            await upsertInstitutionalEmail(idUsuarioPadre, id_colegio, correo_padre, personalParentEmail, trx);
+          }
         }
       }
 

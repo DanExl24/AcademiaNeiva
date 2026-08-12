@@ -48,19 +48,20 @@ export async function upsertInstitutionalEmail(
   schoolId: number,
   email: string,
   personalEmail: string | null | undefined,
-  client?: PoolClient
+  client?: any
 ): Promise<void> {
   const normalized = email.trim().toLowerCase();
   const normalizedPersonal = (personalEmail || '').trim().toLowerCase();
 
   if (!normalized || normalized === normalizedPersonal) {
-    if (client) {
+    if (client && typeof client.query === 'function') {
       await client.query(
         'DELETE FROM usuario_colegio_email WHERE id_usuario = $1 AND id_colegio = $2',
         [userId, schoolId]
       );
     } else {
-      await db
+      const executor = client || db;
+      await executor
         .deleteFrom('usuario_colegio_email')
         .where('id_usuario', '=', userId)
         .where('id_colegio', '=', schoolId)
@@ -69,20 +70,21 @@ export async function upsertInstitutionalEmail(
     return;
   }
 
-  if (client) {
+  if (client && typeof client.query === 'function') {
     await client.query(
       'INSERT INTO usuario_colegio_email (id_usuario, id_colegio, email_institucional) VALUES ($1, $2, $3) ON CONFLICT (id_usuario, id_colegio) DO UPDATE SET email_institucional = EXCLUDED.email_institucional',
       [userId, schoolId, normalized]
     );
   } else {
-    await db
+    const executor = client || db;
+    await executor
       .insertInto('usuario_colegio_email')
       .values({
         id_usuario: userId,
         id_colegio: schoolId,
         email_institucional: normalized,
       })
-      .onConflict((oc) =>
+      .onConflict((oc: any) =>
         oc.constraint('uq_usuario_colegio_email').doUpdateSet({
           email_institucional: normalized,
         })
