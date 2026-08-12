@@ -29,6 +29,8 @@ import * as pdfjsLib from 'pdfjs-dist'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`
 
+import DatosAcademicosTrasladoModal from '../../components/traslados/DatosAcademicosTrasladoModal.vue'
+
 const route = useRoute()
 const router = useRouter()
 const notify = useNotificationStore()
@@ -38,6 +40,7 @@ const matricula = ref<any>(null)
 const loading = ref(true)
 const selectedGradeId = ref<number | null>(null)
 const savingGrade = ref(false)
+const showDatosAcademicosModal = ref(false)
 const pdfPagesMap = ref<Record<number, string[]>>({})
 
 const documentLabels: Record<string, string> = {
@@ -468,23 +471,39 @@ const formatRenewalStateLabel = (state?: string) => {
           </div>
         </div>
 
-        <div class="flex flex-col sm:flex-row gap-4 pt-4">
-          <button @click="router.push('/dashboard/gestion-matriculas')" class="flex-1 py-5 bg-slate-900 dark:bg-slate-800 text-white rounded-[2rem] font-black text-sm uppercase tracking-widest hover:bg-slate-800 dark:hover:bg-slate-700 transition-all shadow-xl">
+        <div class="flex flex-col sm:flex-row flex-wrap gap-4 pt-4">
+          <button @click="router.push('/dashboard/gestion-matriculas')" class="flex-1 min-w-[180px] py-5 bg-slate-900 dark:bg-slate-800 text-white rounded-[2rem] font-black text-sm uppercase tracking-widest hover:bg-slate-800 dark:hover:bg-slate-700 transition-all shadow-xl">
             Volver al Listado
           </button>
+
+          <button 
+            @click="showDatosAcademicosModal = true" 
+            class="flex-1 min-w-[240px] py-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-[2rem] font-black text-xs uppercase tracking-wider transition-all shadow-xl flex items-center justify-center gap-2 active:scale-95"
+          >
+            <ClipboardList :size="18" />
+            Datos académicos de traslados
+          </button>
+
           <button 
             @click="downloadEnrollmentPDF" 
             :disabled="isExportingPDF"
-            class="flex-1 py-5 bg-indigo-600 text-white rounded-[2rem] font-black text-sm uppercase tracking-widest hover:bg-indigo-750 transition-all shadow-xl flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
+            class="flex-1 min-w-[200px] py-5 bg-indigo-600 text-white rounded-[2rem] font-black text-xs uppercase tracking-wider hover:bg-indigo-750 transition-all shadow-xl flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
           >
             <span v-if="isExportingPDF" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
             <Download v-else :size="18" />
             Descargar Ficha (PDF)
           </button>
-          <button @click="openCancelModal()" class="px-8 py-5 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 rounded-[2rem] font-black text-sm uppercase tracking-widest hover:bg-red-100 transition-all border border-red-100 dark:border-red-900 shrink-0">
+
+          <button @click="openCancelModal()" class="px-8 py-5 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 rounded-[2rem] font-black text-xs uppercase tracking-wider hover:bg-red-100 transition-all border border-red-100 dark:border-red-900 shrink-0">
             Cancelar Matrícula
           </button>
         </div>
+
+        <DatosAcademicosTrasladoModal 
+          :show="showDatosAcademicosModal" 
+          :target-id="matricula?.id_matricula || null"
+          @close="showDatosAcademicosModal = false"
+        />
       </div>
 
       <!-- ── STEP 1 ── -->

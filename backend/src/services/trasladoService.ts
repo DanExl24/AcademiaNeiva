@@ -602,21 +602,51 @@ export class TrasladoService {
 
           const obsTraslado = `Matrícula ingresada por traslado interinstitucional desde ${origenColegio?.nombre || 'colegio origen'}`;
 
+          // Obtener el año lectivo (calendario) de la matrícula en la institución origen
+          const origAnioRow = await trx
+            .selectFrom('anio_lectivo')
+            .select('calendario')
+            .where('id_anio', '=', origMat.id_anio)
+            .executeTakeFirst();
+
+          const calendarioStr = origAnioRow?.calendario || String(new Date().getFullYear());
+
+          // Buscar el id_anio equivalente en la institución destino
+          let destAnioRow = await trx
+            .selectFrom('anio_lectivo')
+            .select('id_anio')
+            .where('id_colegio', '=', solicitud.id_colegio_destino)
+            .where('calendario', '=', calendarioStr)
+            .executeTakeFirst();
+
+          if (!destAnioRow) {
+            destAnioRow = await trx
+              .selectFrom('anio_lectivo')
+              .select('id_anio')
+              .where('id_colegio', '=', solicitud.id_colegio_destino)
+              .where('estado', '=', 'ABIERTO')
+              .orderBy('id_anio', 'desc')
+              .executeTakeFirst();
+          }
+
+          const destIdAnio = destAnioRow?.id_anio || origMat.id_anio;
+
           const destMatExistente = await trx
             .selectFrom('matricula')
             .select('id_matricula')
             .where('id_estudiante', '=', estRow.id_estudiante)
             .where('id_colegio', '=', solicitud.id_colegio_destino)
-            .where('id_anio', '=', origMat.id_anio)
+            .where('id_anio', '=', destIdAnio)
             .executeTakeFirst();
 
           if (destMatExistente) {
             await trx
               .updateTable('matricula')
               .set({
-                estado: 'TRASLADADA' as any,
+                estado: 'ACTIVA' as any,
                 tipo: 'TRASLADO' as any,
                 es_traslado: true,
+                id_anio: destIdAnio,
                 observaciones: obsTraslado,
                 fecha_aprobacion: sql`NOW()`
               })
@@ -628,11 +658,11 @@ export class TrasladoService {
               .values({
                 id_colegio: solicitud.id_colegio_destino,
                 id_estudiante: estRow.id_estudiante,
-                id_anio: origMat.id_anio,
+                id_anio: destIdAnio,
                 id_usuario_responsable: origMat.id_usuario_responsable,
                 correo_padre: origMat.correo_padre,
                 id_nivel: origMat.id_nivel,
-                estado: 'TRASLADADA' as any,
+                estado: 'ACTIVA' as any,
                 tipo: 'TRASLADO' as any,
                 es_traslado: true,
                 observaciones: obsTraslado,
@@ -998,6 +1028,276 @@ export class TrasladoService {
     }
 
     return false;
+  }
+
+  /**
+   * Obtener todos los datos académicos históricos del estudiante hasta el momento de su traslado.
+   */
+  static async getDatosAcademicosTraslado(targetId: number): Promise<any> {
+    // 1. Resolver estudiante y datos de la solicitud / matrícula
+    let solicitud: any = await db
+      .selectFrom('solicitud_traslado as st')
+      .innerJoin('usuario as u', 'u.id_usuario', 'st.id_usuario')
+      .innerJoin('colegio as co', 'co.id_colegio', 'st.id_colegio_origen')
+      .innerJoin('colegio as cd', 'cd.id_colegio', 'st.id_colegio_destino')
+      .select([
+        'st.id_solicitud',
+        'st.id_usuario',
+        'st.id_matricula',
+        'st.fecha_creacion',
+        'st.fecha_finalizacion',
+        'st.motivo',
+        'st.estado',
+        'u.nombre as estudiante_nombre',
+        'u.apellido as estudiante_apellido',
+        'u.documento as estudiante_documento',
+        'u.email as estudiante_email',
+        'co.nombre as colegio_origen_nombre',
+        'cd.nombre as colegio_destino_nombre'
+      ])
+      .where((eb) =>
+        eb.or([
+          eb('st.id_solicitud', '=', targetId),
+          eb('st.id_matricula', '=', targetId),
+          eb('st.id_usuario', '=', targetId)
+        ])
+      )
+      .orderBy('st.id_solicitud', 'desc')
+      .executeTakeFirst();
+
+    let studentRow: any = null;
+
+    if (solicitud) {
+      studentRow = await db
+        .selectFrom('estudiante as e')
+        .select(['e.id_estudiante', 'e.codigo', 'e.id_colegio'])
+        .where('e.id_usuario', '=', solicitud.id_usuario)
+        .executeTakeFirst();
+    } else {
+      // Intentar buscar por id_matricula
+      const matRow = await db
+        .selectFrom('matricula as m')
+        .innerJoin('estudiante as e', 'e.id_estudiante', 'm.id_estudiante')
+        .innerJoin('usuario as u', 'u.id_usuario', 'e.id_usuario')
+        .innerJoin('colegio as c', 'c.id_colegio', 'm.id_colegio')
+        .select([
+          'm.id_matricula',
+          'm.id_estudiante',
+          'm.fecha_creacion',
+          'e.id_usuario',
+          'e.codigo',
+          'u.nombre as estudiante_nombre',
+          'u.apellido as estudiante_apellido',
+          'u.documento as estudiante_documento',
+          'u.email as estudiante_email',
+          'c.nombre as colegio_origen_nombre'
+        ])
+        .where('m.id_matricula', '=', targetId)
+        .executeTakeFirst();
+
+      if (matRow) {
+        studentRow = { id_estudiante: matRow.id_estudiante, codigo: matRow.codigo };
+        solicitud = {
+          id_solicitud: 0,
+          id_usuario: matRow.id_usuario,
+          id_matricula: matRow.id_matricula,
+          fecha_creacion: matRow.fecha_creacion,
+          fecha_finalizacion: matRow.fecha_creacion,
+          motivo: 'Registro de Matrícula',
+          estado: 'EJECUTADA',
+          estudiante_nombre: matRow.estudiante_nombre,
+          estudiante_apellido: matRow.estudiante_apellido,
+          estudiante_documento: matRow.estudiante_documento,
+          estudiante_email: matRow.estudiante_email,
+          colegio_origen_nombre: matRow.colegio_origen_nombre,
+          colegio_destino_nombre: matRow.colegio_origen_nombre
+        };
+      } else {
+        // Intentar buscar por id_estudiante
+        studentRow = await db
+          .selectFrom('estudiante as e')
+          .innerJoin('usuario as u', 'u.id_usuario', 'e.id_usuario')
+          .innerJoin('colegio as c', 'c.id_colegio', 'e.id_colegio')
+          .select([
+            'e.id_estudiante',
+            'e.codigo',
+            'e.id_usuario',
+            'u.nombre as estudiante_nombre',
+            'u.apellido as estudiante_apellido',
+            'u.documento as estudiante_documento',
+            'u.email as estudiante_email',
+            'c.nombre as colegio_origen_nombre'
+          ])
+          .where('e.id_estudiante', '=', targetId)
+          .executeTakeFirst();
+
+        if (studentRow) {
+          solicitud = {
+            id_solicitud: 0,
+            id_usuario: studentRow.id_usuario,
+            id_matricula: 0,
+            fecha_creacion: new Date(),
+            fecha_finalizacion: new Date(),
+            motivo: 'Registro Académico del Estudiante',
+            estado: 'EJECUTADA',
+            estudiante_nombre: studentRow.estudiante_nombre,
+            estudiante_apellido: studentRow.estudiante_apellido,
+            estudiante_documento: studentRow.estudiante_documento,
+            estudiante_email: studentRow.estudiante_email,
+            colegio_origen_nombre: studentRow.colegio_origen_nombre,
+            colegio_destino_nombre: studentRow.colegio_origen_nombre
+          };
+        }
+      }
+    }
+
+    if (!solicitud || !studentRow) {
+      return null;
+    }
+
+    const studentId = Number(studentRow.id_estudiante);
+
+    // 2. Consultar notas detalladas por materia y periodo
+    const gradesRows = await db
+      .selectFrom('notas_actividad as na')
+      .innerJoin('actividad_materia as am', 'am.id_actividadmateria', 'na.id_actividadmateria')
+      .innerJoin('detalle_grados as dg', 'dg.id_detallegrado', 'am.id_detallegrado')
+      .innerJoin('materias as mat', 'mat.id_materia', 'dg.id_materia')
+      .innerJoin('periodo_academico as pa', 'pa.id_periodo', 'am.id_periodo')
+      .leftJoin('docente as d', 'd.id_docente', 'dg.id_docente')
+      .leftJoin('usuario as ud', 'ud.id_usuario', 'd.id_usuario')
+      .select([
+        'mat.id_materia',
+        'mat.nombre as materia_nombre',
+        'am.id_periodo',
+        'pa.nombre as periodo_nombre',
+        'am.nombre as actividad_nombre',
+        'am.porcentaje as actividad_porcentaje',
+        'na.nota',
+        sql<string>`COALESCE(ud.nombre || ' ' || ud.apellido, 'Sin Asignar')`.as('docente_nombre')
+      ])
+      .where('na.id_estudiante', '=', studentId)
+      .orderBy('mat.nombre', 'asc')
+      .orderBy('am.id_periodo', 'asc')
+      .execute();
+
+    // Agrupar calificaciones por materia
+    const materiasMap: Record<string, any> = {};
+    for (const r of gradesRows) {
+      const key = r.materia_nombre;
+      if (!materiasMap[key]) {
+        materiasMap[key] = {
+          materia_nombre: r.materia_nombre,
+          docente_nombre: r.docente_nombre,
+          periodos: {}
+        };
+      }
+
+      const pKey = r.periodo_nombre;
+      if (!materiasMap[key].periodos[pKey]) {
+        materiasMap[key].periodos[pKey] = {
+          periodo_nombre: pKey,
+          actividades: [],
+          suma_ponderada: 0,
+          suma_porcentaje: 0
+        };
+      }
+
+      const notaVal = parseFloat(String(r.nota || 0));
+      const pctVal = parseFloat(String(r.actividad_porcentaje || 0));
+
+      materiasMap[key].periodos[pKey].actividades.push({
+        actividad: r.actividad_nombre,
+        porcentaje: pctVal,
+        nota: notaVal
+      });
+
+      materiasMap[key].periodos[pKey].suma_ponderada += notaVal * (pctVal / 100.0);
+      materiasMap[key].periodos[pKey].suma_porcentaje += pctVal;
+    }
+
+    const materiasList = Object.values(materiasMap).map((m: any) => {
+      const periodosList = Object.values(m.periodos).map((p: any) => {
+        const promedio = parseFloat(p.suma_ponderada.toFixed(2));
+        let desempeno = 'Bajo';
+        if (promedio >= 4.6) desempeno = 'Superior';
+        else if (promedio >= 4.0) desempeno = 'Alto';
+        else if (promedio >= 3.0) desempeno = 'Básico';
+
+        return {
+          periodo_nombre: p.periodo_nombre,
+          actividades: p.actividades,
+          promedio,
+          desempeno
+        };
+      });
+
+      const promediosPeriodos = periodosList.map(p => p.promedio);
+      const promedioGeneral = promediosPeriodos.length > 0
+        ? parseFloat((promediosPeriodos.reduce((a: number, b: number) => a + b, 0) / promediosPeriodos.length).toFixed(2))
+        : 0;
+
+      return {
+        materia_nombre: m.materia_nombre,
+        docente_nombre: m.docente_nombre,
+        periodos: periodosList,
+        promedio_general: promedioGeneral
+      };
+    });
+
+    // 3. Consultar asistencia del estudiante
+    const attendanceRes = await db
+      .selectFrom('registro_asistencia as ra')
+      .select([
+        sql<number>`COUNT(*)`.as('total_registros'),
+        sql<number>`COUNT(*) FILTER (WHERE ra.estado = 'PRESENTE')`.as('asistencias'),
+        sql<number>`COUNT(*) FILTER (WHERE ra.estado IN ('AUSENTE', 'TARDE'))`.as('inasistencias'),
+        sql<number>`COUNT(*) FILTER (WHERE ra.estado = 'JUSTIFICADA')`.as('excusas')
+      ])
+      .where('ra.id_estudiante', '=', studentId)
+      .executeTakeFirst();
+
+    // 4. Consultar observaciones de convivencia
+    const obsRows = await db
+      .selectFrom('observacion_estudiante as oe')
+      .innerJoin('detalle_grados as dg', 'dg.id_detallegrado', 'oe.id_detallegrado')
+      .leftJoin('docente as d', 'd.id_docente', 'dg.id_docente')
+      .leftJoin('usuario as ud', 'ud.id_usuario', 'd.id_usuario')
+      .select([
+        'oe.id_observacion',
+        'oe.tipo as tipo_observacion',
+        sql<string>`COALESCE(oe.recomendaciones, 'Sin detalles')`.as('observacion'),
+        sql<string>`NOW()::text`.as('fecha'),
+        sql<string>`COALESCE(ud.nombre || ' ' || ud.apellido, 'Docente')`.as('docente_nombre')
+      ])
+      .where('oe.id_estudiante', '=', studentId)
+      .execute();
+
+    return {
+      solicitud,
+      estudiante: {
+        id_estudiante: studentId,
+        nombre: `${solicitud.estudiante_nombre} ${solicitud.estudiante_apellido}`,
+        documento: solicitud.estudiante_documento,
+        codigo: studentRow.codigo || 'Sin código',
+        email: solicitud.estudiante_email,
+        colegio_origen: solicitud.colegio_origen_nombre,
+        colegio_destino: solicitud.colegio_destino_nombre,
+        fecha_traslado: solicitud.fecha_finalizacion || solicitud.fecha_creacion,
+        motivo: solicitud.motivo
+      },
+      materias: materiasList,
+      asistencia: {
+        total: Number(attendanceRes?.total_registros || 0),
+        asistencias: Number(attendanceRes?.asistencias || 0),
+        inasistencias: Number(attendanceRes?.inasistencias || 0),
+        excusas: Number(attendanceRes?.excusas || 0),
+        porcentaje_asistencia: Number(attendanceRes?.total_registros || 0) > 0
+          ? parseFloat(((Number(attendanceRes?.asistencias || 0) / Number(attendanceRes?.total_registros)) * 100).toFixed(1))
+          : 100
+      },
+      observaciones: obsRows
+    };
   }
 }
 

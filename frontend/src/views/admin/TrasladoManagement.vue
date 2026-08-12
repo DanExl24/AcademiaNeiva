@@ -19,12 +19,17 @@ import {
   Check,
   X,
   ChevronRight,
-  Info
+  Info,
+  ClipboardList
 } from 'lucide-vue-next'
+import DatosAcademicosTrasladoModal from '../../components/traslados/DatosAcademicosTrasladoModal.vue'
 
 const auth = useAuthStore()
 const yearStore = useAcademicYearStore()
 const route = useRoute()
+
+const showAcademicDataModal = ref(false)
+const academicTargetId = ref<number | null>(null)
 
 // Types & Interfaces
 interface Aprobacion {
@@ -947,6 +952,17 @@ const canUserApproveCurrentModal = computed(() => {
             <p class="text-slate-400 font-bold uppercase text-[10px]">Motivo del Traslado</p>
             <p class="font-medium text-slate-700 dark:text-slate-300 mt-0.5 bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200/80 dark:border-slate-700/60">{{ selectedSolicitud.motivo }}</p>
           </div>
+
+          <!-- Botón de Exportar Datos Académicos de Traslado -->
+          <div class="md:col-span-2 pt-1">
+            <button 
+              @click="academicTargetId = selectedSolicitud.id_solicitud; showAcademicDataModal = true"
+              class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-3 px-4 rounded-xl shadow-sm flex items-center justify-center gap-2 uppercase tracking-wider transition-all"
+            >
+              <ClipboardList :size="16" />
+              Datos académicos de traslados
+            </button>
+          </div>
         </div>
 
         <!-- Consenso Matrix Section (Estado de Aprobaciones Requeridas) -->
@@ -1230,5 +1246,12 @@ const canUserApproveCurrentModal = computed(() => {
 
       </div>
     </div>
+
+    <!-- Modal de Exportación de Datos Académicos del Traslado -->
+    <DatosAcademicosTrasladoModal 
+      :show="showAcademicDataModal" 
+      :target-id="academicTargetId"
+      @close="showAcademicDataModal = false"
+    />
   </div>
 </template>

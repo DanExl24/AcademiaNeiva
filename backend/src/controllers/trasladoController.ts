@@ -104,6 +104,32 @@ export const getTrasladoById = async (req: AuthRequest, res: Response): Promise<
   }
 };
 
+export const getDatosAcademicosTraslado = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'No autenticado' });
+      return;
+    }
+
+    const targetId = parseInt(String(req.params.id), 10);
+    if (isNaN(targetId)) {
+      res.status(400).json({ error: 'Identificador inválido' });
+      return;
+    }
+
+    const datos = await TrasladoService.getDatosAcademicosTraslado(targetId);
+    if (!datos) {
+      res.status(404).json({ error: 'No se encontraron registros académicos de traslado' });
+      return;
+    }
+
+    res.json(datos);
+  } catch (error: any) {
+    console.error('Error en getDatosAcademicosTraslado:', error);
+    res.status(500).json({ error: 'Error al obtener los datos académicos de traslado' });
+  }
+};
+
 export const getMyVinculaciones = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     if (!req.user) {

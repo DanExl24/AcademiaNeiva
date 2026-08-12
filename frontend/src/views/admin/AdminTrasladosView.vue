@@ -24,12 +24,17 @@ import {
   BarChart3,
   Eye,
   AlertTriangle,
-  History
+  History,
+  ClipboardList
 } from 'lucide-vue-next'
+import DatosAcademicosTrasladoModal from '../../components/traslados/DatosAcademicosTrasladoModal.vue'
 
 const auth = useAuthStore()
 const yearStore = useAcademicYearStore()
 const route = useRoute()
+
+const showAcademicDataModal = ref(false)
+const academicTargetId = ref<number | null>(null)
 
 // Types
 interface Aprobacion {
@@ -743,6 +748,17 @@ const formatDate = (dateStr?: string | null) => {
               <p class="text-[10px] font-black uppercase text-slate-400 mb-0.5">Fecha Finalización</p>
               <p class="font-semibold text-emerald-600 dark:text-emerald-400">{{ formatDate(selectedSolicitud.fecha_finalizacion) }}</p>
             </div>
+
+            <!-- Botón de Exportar Datos Académicos de Traslado -->
+            <div class="col-span-2 pt-1">
+              <button 
+                @click="academicTargetId = selectedSolicitud.id_solicitud; showAcademicDataModal = true"
+                class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-3 px-4 rounded-xl shadow-sm flex items-center justify-center gap-2 uppercase tracking-wider transition-all"
+              >
+                <ClipboardList :size="16" />
+                Datos académicos de traslados
+              </button>
+            </div>
           </div>
 
           <!-- Approval Matrix Panel -->
@@ -957,5 +973,11 @@ const formatDate = (dateStr?: string | null) => {
       </div>
     </div>
 
+    <!-- Modal de Exportación de Datos Académicos del Traslado -->
+    <DatosAcademicosTrasladoModal 
+      :show="showAcademicDataModal" 
+      :target-id="academicTargetId"
+      @close="showAcademicDataModal = false"
+    />
   </div>
 </template>
