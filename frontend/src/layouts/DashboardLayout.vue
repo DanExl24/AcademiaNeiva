@@ -567,10 +567,10 @@ watch(() => auth.isSupervising, (supervising) => {
 }, { immediate: true })
 
 const currentSchoolId = computed(() => {
-  if (auth.isSupervising && auth.supervision?.colegio_id) {
-    return Number(auth.supervision.colegio_id)
+  if (auth.isSupervising && (auth.supervision?.colegio_id || auth.supervision?.id_colegio)) {
+    return Number(auth.supervision.colegio_id || auth.supervision.id_colegio)
   }
-  return Number(auth.selectedSchoolId || auth.user?.schoolId || auth.user?.schoolIds?.[0] || 0)
+  return Number(auth.selectedSchoolId || auth.user?.schoolId || (auth.user as any)?.id_colegio || auth.user?.schoolIds?.[0] || 0)
 })
 
 const loadYearStore = async () => {

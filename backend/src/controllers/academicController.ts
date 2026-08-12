@@ -102,8 +102,11 @@ export const getStudentsByGrade = async (req: Request, res: Response): Promise<v
 
 export const getTeacherDashboard = async (req: Request, res: Response): Promise<void> => {
   const { userId } = req.params;
+
   const authUser = (req as any).user;
   const schoolId = req.headers['x-school-id'] ? Number(req.headers['x-school-id']) : (req.query.schoolId ? Number(req.query.schoolId) : (authUser?.schoolId ? Number(authUser.schoolId) : null));
+  const yearIdParam = req.query.yearId ? Number(req.query.yearId) : null;
+  const periodIdParam = req.query.periodId ? Number(req.query.periodId) : null;
 
   try {
     let docenteQuery = db
@@ -124,7 +127,9 @@ export const getTeacherDashboard = async (req: Request, res: Response): Promise<
         noGradeActivities: 0,
         upToDateCourses: 0,
         courseAverages: [],
-        alerts: []
+        alerts: [],
+        availablePeriods: [],
+        activePeriodInfo: null
       });
       return;
     }
@@ -166,36 +171,51 @@ export const getTeacherDashboard = async (req: Request, res: Response): Promise<
     const studentCount = await studentCountQuery.executeTakeFirst();
     const totalActiveStudents = studentCount ? studentCount.total_students : 0;
 
-    let periodRes;
+    // Get available periods for yearIdParam (or schoolId)
+    let periodsQuery = db
+      .selectFrom("periodo_academico as pa")
+      .innerJoin("anio_lectivo as al", "al.id_anio", "pa.id_anio")
+      .select([
+        "pa.id_periodo",
+        "pa.nombre",
+        "pa.estado",
+        "pa.mes_inicio",
+        "pa.dia_inicio",
+        "pa.mes_fin",
+        "pa.dia_fin",
+        "pa.id_anio",
+        "al.calendario",
+        "al.estado as anio_estado"
+      ]);
+
     if (schoolId) {
-      periodRes = await pool.query(
-        `SELECT pa.id_periodo, pa.nombre, pa.estado, pa.mes_inicio, pa.dia_inicio, pa.mes_fin, pa.dia_fin, pa.id_anio, al.calendario, al.estado as anio_estado
-         FROM periodo_academico pa
-         JOIN anio_lectivo al ON pa.id_anio = al.id_anio
-         WHERE pa.id_colegio = $1 AND pa.estado = 'ABIERTO'
-         ORDER BY pa.id_periodo DESC LIMIT 1`,
-        [schoolId]
-      );
-    } else {
-      periodRes = await pool.query(
-        `SELECT pa.id_periodo, pa.nombre, pa.estado, pa.mes_inicio, pa.dia_inicio, pa.mes_fin, pa.dia_fin, pa.id_anio, al.calendario, al.estado as anio_estado
-         FROM periodo_academico pa
-         JOIN anio_lectivo al ON pa.id_anio = al.id_anio
-         WHERE pa.estado = 'ABIERTO'
-         ORDER BY pa.id_periodo DESC LIMIT 1`
-      );
+      periodsQuery = periodsQuery.where("pa.id_colegio", "=", schoolId);
     }
-    const activePeriodInfo = periodRes.rows.length > 0 ? periodRes.rows[0] : null;
+    if (yearIdParam) {
+      periodsQuery = periodsQuery.where("pa.id_anio", "=", yearIdParam);
+    }
+
+    const availablePeriods = await periodsQuery.orderBy("pa.id_periodo", "asc").execute();
+
+    let activePeriodInfo: any = null;
+    if (periodIdParam) {
+      activePeriodInfo = availablePeriods.find(p => p.id_periodo === periodIdParam) || null;
+    }
+    if (!activePeriodInfo) {
+      activePeriodInfo = availablePeriods.find(p => p.estado === 'ABIERTO') || (availablePeriods.length > 0 ? availablePeriods[availablePeriods.length - 1] : null);
+    }
+
     const activePeriodId = activePeriodInfo ? activePeriodInfo.id_periodo : null;
 
     if (!activePeriodId) {
-      res.json({ 
-        coursesCount: courses.length, 
-        studentsCount: totalActiveStudents, 
-        noGradeActivities: 0, 
+      res.json({
+        coursesCount: courses.length,
+        studentsCount: totalActiveStudents,
+        noGradeActivities: 0,
         upToDateCourses: courses.length,
-        courseAverages: [], 
+        courseAverages: [],
         alerts: [],
+        availablePeriods,
         activePeriodInfo: null
       });
       return;
@@ -211,24 +231,25 @@ export const getTeacherDashboard = async (req: Request, res: Response): Promise<
       const courseName = `${course.grado_nombre} ${course.seccion} - ${course.materia_nombre} (${course.jornada})`;
 
       // 1. Actividades del curso
-      const activitiesRes = await pool.query(`
-        SELECT am.id_actividadmateria, am.porcentaje, am.nombre
-        FROM actividad_materia am
-        JOIN competencias c ON am.id_competencia = c.id_competencia
-        WHERE am.id_detallegrado = $1 AND c.id_periodo = $2
-      `, [dgId, activePeriodId]);
-      const activities = activitiesRes.rows;
+      const activities = await db
+        .selectFrom("actividad_materia as am")
+        .innerJoin("competencias as c", "c.id_competencia", "am.id_competencia")
+        .select(["am.id_actividadmateria", "am.porcentaje", "am.nombre"])
+        .where("am.id_detallegrado", "=", dgId)
+        .where("c.id_periodo", "=", activePeriodId)
+        .execute();
+
       const activityCount = activities.length;
 
       // 2. Estudiantes del curso
-      const courseStudentsRes = await pool.query(`
-        SELECT e.id_estudiante, e.nombre, e.apellido
-        FROM estudiante e
-        JOIN matricula m ON e.id_estudiante = m.id_estudiante
-        JOIN detalle_grados dg ON m.id_grupo = dg.id_grupo
-        WHERE dg.id_detallegrado = $1 AND m.estado = 'ACTIVA'
-      `, [dgId]);
-      const courseStudents = courseStudentsRes.rows;
+      const courseStudents = await db
+        .selectFrom("estudiante as e")
+        .innerJoin("matricula as m", "m.id_estudiante", "e.id_estudiante")
+        .innerJoin("detalle_grados as dg", "dg.id_grupo", "m.id_grupo")
+        .select(["e.id_estudiante", "e.nombre", "e.apellido"])
+        .where("dg.id_detallegrado", "=", dgId)
+        .where("m.estado", "=", "ACTIVA")
+        .execute();
 
       if (courseStudents.length === 0 || activityCount === 0) {
         courseAverages.push({ name: courseName, shortName: `${course.grado_nombre} ${course.seccion} - ${course.materia_nombre}`, average: 0 });
@@ -239,10 +260,13 @@ export const getTeacherDashboard = async (req: Request, res: Response): Promise<
       let missingAnyGradeForCourse = false;
 
       for (const act of activities) {
-        const totalNotasRes = await pool.query(`
-          SELECT count(*) as count FROM notas_actividad WHERE id_actividadmateria = $1
-        `, [act.id_actividadmateria]);
-        if (Number(totalNotasRes.rows[0].count) === 0) {
+        const totalNotasRes = await db
+          .selectFrom("notas_actividad")
+          .select(sql<number>`count(*)::int`.as("count"))
+          .where("id_actividadmateria", "=", act.id_actividadmateria)
+          .executeTakeFirst();
+
+        if (totalNotasRes && Number(totalNotasRes.count) === 0) {
           noGradeActivitiesCount++;
         }
       }
@@ -253,17 +277,19 @@ export const getTeacherDashboard = async (req: Request, res: Response): Promise<
         let studentAverage = 0;
 
         for (const act of activities) {
-          const checkRes = await pool.query(`
-            SELECT nota FROM notas_actividad 
-            WHERE id_actividadmateria = $1 AND id_estudiante = $2
-          `, [act.id_actividadmateria, stu.id_estudiante]);
+          const checkRes = await db
+            .selectFrom("notas_actividad")
+            .select("nota")
+            .where("id_actividadmateria", "=", act.id_actividadmateria)
+            .where("id_estudiante", "=", stu.id_estudiante)
+            .executeTakeFirst();
 
-          if (checkRes.rows.length === 0) {
+          if (!checkRes) {
             missingAnyGradeForCourse = true;
             studentMissingDeliveries++;
           } else {
-            studentAverage += Number(checkRes.rows[0].nota) * (Number(act.porcentaje) / 100);
-            if (Number(checkRes.rows[0].nota) === 0) {
+            studentAverage += Number(checkRes.nota) * (Number(act.porcentaje) / 100);
+            if (Number(checkRes.nota) === 0) {
               studentMissingDeliveries++;
             }
           }
@@ -277,21 +303,24 @@ export const getTeacherDashboard = async (req: Request, res: Response): Promise<
           });
         }
         if (studentMissingDeliveries >= 2) {
-           alerts.push({
+          alerts.push({
             type: 'entregas',
             message: `El estudiante ${studentName} no ha entregado ${studentMissingDeliveries} actividades en ${course.materia_nombre}.`
           });
         }
 
-        const inasistenciasRes = await pool.query(`
-          SELECT count(*)::int as faltas
-          FROM registro_asistencia
-          WHERE id_estudiante = $1 AND id_detallegrado = $2 AND estado = 'AUSENTE'
-        `, [stu.id_estudiante, dgId]);
-        const faltas = Number(inasistenciasRes.rows[0].faltas);
-        
+        const inasistenciasRes = await db
+          .selectFrom("registro_asistencia")
+          .select(sql<number>`count(*)::int`.as("faltas"))
+          .where("id_estudiante", "=", stu.id_estudiante)
+          .where("id_detallegrado", "=", dgId)
+          .where("estado", "=", "AUSENTE")
+          .executeTakeFirst();
+
+        const faltas = inasistenciasRes ? Number(inasistenciasRes.faltas) : 0;
+
         if (faltas >= 3) {
-           alerts.push({
+          alerts.push({
             type: 'faltas',
             message: `El estudiante ${studentName} tiene ${faltas} faltas acumuladas en ${course.materia_nombre}.`
           });
@@ -324,6 +353,7 @@ export const getTeacherDashboard = async (req: Request, res: Response): Promise<
       upToDateCourses: upToDateCoursesCount,
       courseAverages,
       alerts,
+      availablePeriods,
       activePeriodInfo
     });
   } catch (error: any) {

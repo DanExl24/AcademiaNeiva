@@ -10,7 +10,9 @@ import {
   AlertCircle,
   FileX,
   Users,
-  BellRing
+  BellRing,
+  Calendar,
+  SlidersHorizontal
 } from 'lucide-vue-next'
 import {
   Chart as ChartJS,
@@ -34,6 +36,9 @@ const auth = useAuthStore()
 const yearStore = useAcademicYearStore()
 
 const loading = ref(true)
+const selectedPeriodId = ref<number | null>(null)
+const availablePeriods = ref<any[]>([])
+
 const dashboardData = ref({
   coursesCount: 0,
   studentsCount: 0,
@@ -113,6 +118,7 @@ const chartOptions = computed(() => {
 
 const fetchDashboard = async () => {
   try {
+    loading.value = true
     // When a directivo is monitoring, load data for the observed teacher
     const userId = auth.isMonitoring
       ? auth.monitoringUser?.id
@@ -120,9 +126,17 @@ const fetchDashboard = async () => {
     if (!userId) {
       return
     }
-    const params = yearStore.selectedYearId ? { yearId: yearStore.selectedYearId } : {}
+    const params: any = {}
+    if (yearStore.selectedYearId) params.yearId = yearStore.selectedYearId
+    if (selectedPeriodId.value) params.periodId = selectedPeriodId.value
+
     const response = await axios.get(`/api/teacher/dashboard/${userId}`, { params })
     dashboardData.value = response.data
+    availablePeriods.value = response.data.availablePeriods || []
+
+    if (response.data.activePeriodInfo && !selectedPeriodId.value) {
+      selectedPeriodId.value = response.data.activePeriodInfo.id_periodo
+    }
   } catch (error: any) {
   } finally {
     loading.value = false
@@ -133,7 +147,23 @@ onMounted(() => {
   fetchDashboard()
 })
 
-watch(() => yearStore.selectedYearId, fetchDashboard)
+watch(() => yearStore.selectedYearId, () => {
+  selectedPeriodId.value = null
+  fetchDashboard()
+})
+
+const onPeriodChange = () => {
+  fetchDashboard()
+}
+
+const onYearChange = (e: Event) => {
+  const target = e.target as HTMLSelectElement
+  if (target?.value) {
+    yearStore.setSelectedYearId(Number(target.value))
+    selectedPeriodId.value = null
+    fetchDashboard()
+  }
+}
 
 const getAlertIcon = (type: string) => {
   switch (type) {
@@ -161,6 +191,46 @@ const getAlertColors = (type: string) => {
     
     <!-- Contador Regresivo de Cierre de Período Académico -->
     <PeriodCountdownBanner :period-info="dashboardData?.activePeriodInfo" />
+
+    <!-- Filters Bar (Year & Academic Period) -->
+    <div class="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4 transition-colors">
+      <div class="flex items-center gap-2 text-slate-700 dark:text-slate-200">
+        <SlidersHorizontal :size="20" class="text-indigo-600 dark:text-indigo-400" />
+        <span class="font-black text-sm">Filtros del Dashboard</span>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+        <!-- Year Selector -->
+        <div v-if="yearStore.availableYears.length > 0" class="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3.5 py-2 rounded-2xl">
+          <Calendar :size="16" class="text-slate-400" />
+          <label class="text-[10px] font-bold text-slate-400 dark:text-slate-400 uppercase">Año Lectivo:</label>
+          <select
+            :value="yearStore.selectedYearId"
+            @change="onYearChange"
+            class="bg-transparent text-xs font-bold text-slate-700 dark:text-slate-200 outline-none cursor-pointer"
+          >
+            <option v-for="y in yearStore.availableYears" :key="y.id_anio" :value="y.id_anio">
+              {{ y.calendario }}
+            </option>
+          </select>
+        </div>
+
+        <!-- Period Selector -->
+        <div class="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3.5 py-2 rounded-2xl">
+          <CalendarCheck :size="16" class="text-indigo-500" />
+          <label class="text-[10px] font-bold text-slate-400 dark:text-slate-400 uppercase">Periodo:</label>
+          <select
+            v-model="selectedPeriodId"
+            @change="onPeriodChange"
+            class="bg-transparent text-xs font-bold text-slate-700 dark:text-slate-200 outline-none cursor-pointer"
+          >
+            <option v-for="p in availablePeriods" :key="p.id_periodo" :value="p.id_periodo">
+              {{ p.nombre }} {{ p.estado === 'ABIERTO' ? '(Abierto)' : '' }}
+            </option>
+          </select>
+        </div>
+      </div>
+    </div>
 
     <!-- Welcome Header -->
     <div class="bg-gradient-to-br from-indigo-600 to-violet-700 rounded-3xl p-8 md:p-10 text-white shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-6 relative overflow-hidden">
