@@ -23,6 +23,7 @@ import {
 } from "../controllers/attendanceController";
 import {
   getObservations,
+  getObservationTypes,
   createObservation,
   updateObservation,
   deleteObservation,
@@ -67,6 +68,7 @@ router.post("/attendance", saveAttendance);
 router.get("/attendance-history/:detailGradeId", getAttendanceHistory);
 
 // Rutas de Observaciones
+router.get("/observations/types", getObservationTypes);
 router.get("/observations/:detailGradeId/:periodId", getObservations);
 router.post("/observations", createObservation);
 router.put("/observations/:id", updateObservation);

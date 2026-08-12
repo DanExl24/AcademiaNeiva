@@ -62,7 +62,7 @@ interface Observation {
   debilidades: string | null
   recomendaciones: string | null
   fecha: string
-  tipo: 'ACADEMICA' | 'DISCIPLINARIO' | 'CONVIVENCIAL'
+  tipo: string
 }
 
 const route = useRoute()
@@ -91,6 +91,31 @@ const searchQuery = ref('')
 const filterType = ref<'all' | 'fortaleza' | 'debilidad' | 'recomendacion'>('all')
 const selectedStudentFilterId = ref<number | null>(null)
 
+// Database Observation Types filter
+const dbObservationTypes = ref<string[]>([])
+const selectedObservationTypeFilter = ref<string>('all')
+
+const fetchObservationTypes = async () => {
+  try {
+    const response = await axios.get('/api/teacher/observations/types')
+    dbObservationTypes.value = response.data.types || []
+  } catch (error) {
+    console.error('Error fetching observation types:', error)
+  }
+}
+
+const formatObservationTypeLabel = (tipo: string) => {
+  switch (tipo) {
+    case 'ACADEMICA': return 'Académico'
+    case 'CONVIVENCIAL':
+    case 'CONVIVENCIA': return 'Convivencial'
+    case 'DISCIPLINARIO':
+    case 'DISCIPLINARIA': return 'Disciplinario'
+    case 'OTRO': return 'Otro'
+    default: return tipo
+  }
+}
+
 // Modal state
 const showModal = ref(false)
 const editingObservation = ref<Observation | null>(null)
@@ -100,7 +125,7 @@ const formData = ref({
   debilidades: '',
   recomendaciones: '',
   fecha: new Date().toLocaleDateString('en-CA'),
-  tipo: 'ACADEMICA' as 'ACADEMICA' | 'DISCIPLINARIO' | 'CONVIVENCIAL'
+  tipo: 'ACADEMICA' as string
 })
 
 // Confirm delete
@@ -275,6 +300,17 @@ const filteredObservations = computed(() => {
       if (filterType.value === 'debilidad') return !!o.debilidades
       if (filterType.value === 'recomendacion') return !!o.recomendaciones
       return true
+    })
+  }
+
+  if (selectedObservationTypeFilter.value !== 'all') {
+    const dbType = selectedObservationTypeFilter.value
+    result = result.filter(o => {
+      if (dbType === 'ACADEMICA') return o.tipo === 'ACADEMICA'
+      if (dbType === 'DISCIPLINARIA') return o.tipo === 'DISCIPLINARIO' || o.tipo === 'DISCIPLINARIA'
+      if (dbType === 'CONVIVENCIA') return o.tipo === 'CONVIVENCIAL' || o.tipo === 'CONVIVENCIA'
+      if (dbType === 'OTRO') return o.tipo === 'OTRO'
+      return o.tipo === dbType
     })
   }
 
@@ -482,7 +518,7 @@ const paginatedObservations = computed(() => {
 })
 
 // Reset to page 1 on filter or search changes
-watch([selectedGradeName, selectedSection, selectedJornada, selectedSubjectId, selectedPeriodId, searchQuery, filterType, selectedStudentFilterId], () => {
+watch([selectedGradeName, selectedSection, selectedJornada, selectedSubjectId, selectedPeriodId, searchQuery, filterType, selectedStudentFilterId, selectedObservationTypeFilter], () => {
   currentPage.value = 1
 })
 
@@ -496,11 +532,13 @@ watch(() => yearStore.selectedYearId, () => {
   students.value = []
   fetchMyCourses()
   fetchPeriods()
+  fetchObservationTypes()
 })
 
 onMounted(() => {
   fetchMyCourses()
   fetchPeriods()
+  fetchObservationTypes()
 })
 
 </script>
@@ -676,6 +714,31 @@ onMounted(() => {
             </button>
           </div>
         </div>
+
+        <!-- Filter by Observation Type (DB) -->
+        <div class="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm space-y-4 transition-colors">
+          <h3 class="text-sm font-black text-slate-700 dark:text-slate-300 flex items-center gap-2">
+            <Filter :size="16" class="text-amber-600 dark:text-amber-500" />
+            Tipo de Observación (BD)
+          </h3>
+          <div class="space-y-2">
+            <button
+              @click="selectedObservationTypeFilter = 'all'"
+              :class="[selectedObservationTypeFilter === 'all' ? 'bg-slate-900 dark:bg-slate-700 text-white' : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700', 'w-full py-2.5 px-4 rounded-xl text-xs font-bold transition-all text-left']"
+            >
+              Todos los tipos
+            </button>
+            <button
+              v-for="t in dbObservationTypes"
+              :key="t"
+              @click="selectedObservationTypeFilter = t"
+              :class="[selectedObservationTypeFilter === t ? 'bg-amber-600 dark:bg-amber-500 text-white' : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700', 'w-full py-2.5 px-4 rounded-xl text-xs font-bold transition-all text-left flex items-center justify-between']"
+            >
+              <span>{{ formatObservationTypeLabel(t) }}</span>
+              <span class="text-[10px] opacity-70 font-mono uppercase">({{ t }})</span>
+            </button>
+          </div>
+        </div>
       </div>
 
       <!-- Right content: Observations List -->
@@ -748,12 +811,13 @@ onMounted(() => {
                       v-if="obs.tipo"
                       :class="[
                         obs.tipo === 'ACADEMICA' ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400' : '',
-                        obs.tipo === 'DISCIPLINARIO' ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400' : '',
-                        obs.tipo === 'CONVIVENCIAL' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400' : '',
+                        obs.tipo === 'DISCIPLINARIO' || obs.tipo === 'DISCIPLINARIA' ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400' : '',
+                        obs.tipo === 'CONVIVENCIAL' || obs.tipo === 'CONVIVENCIA' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400' : '',
+                        obs.tipo === 'OTRO' ? 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300' : '',
                         'px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-tighter'
                       ]"
                     >
-                      {{ obs.tipo === 'ACADEMICA' ? 'ACADÉMICO' : obs.tipo }}
+                      {{ formatObservationTypeLabel(obs.tipo) }}
                     </span>
                   </div>
                   <div class="flex items-center gap-1.5 text-[10px] text-slate-400 dark:text-slate-500 font-semibold mt-0.5">
@@ -921,30 +985,23 @@ onMounted(() => {
                 </p>
               </div>
 
-              <!-- Tipo de Seguimiento -->
+              <!-- Tipo de Seguimiento (Dinámico desde la BD) -->
               <div class="space-y-2">
                 <label class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">Tipo de Seguimiento *</label>
-                <div class="grid grid-cols-3 gap-3">
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <button
+                    v-for="t in (dbObservationTypes.length > 0 ? dbObservationTypes : ['ACADEMICA', 'CONVIVENCIA', 'DISCIPLINARIA', 'OTRO'])"
+                    :key="t"
                     type="button"
-                    @click="formData.tipo = 'ACADEMICA'"
-                    :class="[formData.tipo === 'ACADEMICA' ? 'bg-amber-600 text-white shadow-lg shadow-amber-200/50' : 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100', 'py-3 px-4 rounded-2xl text-xs font-bold transition-all border border-transparent']"
+                    @click="formData.tipo = (t === 'CONVIVENCIA' ? 'CONVIVENCIAL' : (t === 'DISCIPLINARIA' ? 'DISCIPLINARIO' : t)) as any"
+                    :class="[
+                      (formData.tipo === t || (t === 'CONVIVENCIA' && formData.tipo === 'CONVIVENCIAL') || (t === 'DISCIPLINARIA' && formData.tipo === 'DISCIPLINARIO'))
+                        ? 'bg-amber-600 text-white shadow-lg shadow-amber-200/50'
+                        : 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100',
+                      'py-3 px-3 rounded-2xl text-xs font-bold transition-all border border-transparent'
+                    ]"
                   >
-                    Académico
-                  </button>
-                  <button
-                    type="button"
-                    @click="formData.tipo = 'DISCIPLINARIO'"
-                    :class="[formData.tipo === 'DISCIPLINARIO' ? 'bg-rose-600 text-white shadow-lg shadow-rose-200/50' : 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100', 'py-3 px-4 rounded-2xl text-xs font-bold transition-all border border-transparent']"
-                  >
-                    Disciplinario
-                  </button>
-                  <button
-                    type="button"
-                    @click="formData.tipo = 'CONVIVENCIAL'"
-                    :class="[formData.tipo === 'CONVIVENCIAL' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200/50' : 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100', 'py-3 px-4 rounded-2xl text-xs font-bold transition-all border border-transparent']"
-                  >
-                    Convivencial
+                    {{ formatObservationTypeLabel(t) }}
                   </button>
                 </div>
               </div>

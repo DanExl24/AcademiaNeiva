@@ -1,26 +1,27 @@
 import { Request, Response } from "express";
-import { pool } from "../config/db";
+import { db } from "../config/kysely";
+import { sql } from "kysely";
 
-// Helper to check if period/class is editable (same logic as attendanceController)
+// Helper to check if period/class is editable
 const checkEditability = async (
   detailGradeId: number,
   schoolId: number,
   periodId: number
 ): Promise<{ editable: boolean; error?: string }> => {
   // 1. Check period and academic year are open
-  const periodRes = await pool.query(
-    `SELECT pa.estado AS periodo_estado, al.estado AS anio_estado 
-     FROM periodo_academico pa
-     JOIN anio_lectivo al ON al.id_anio = pa.id_anio
-     WHERE pa.id_periodo = $1 AND pa.id_colegio = $2`,
-    [periodId, schoolId]
-  );
+  const periodRes = await db
+    .selectFrom("periodo_academico as pa")
+    .innerJoin("anio_lectivo as al", "al.id_anio", "pa.id_anio")
+    .select(["pa.estado as periodo_estado", "al.estado as anio_estado"])
+    .where("pa.id_periodo", "=", periodId)
+    .where("pa.id_colegio", "=", schoolId)
+    .executeTakeFirst();
 
-  if (periodRes.rows.length === 0) {
+  if (!periodRes) {
     return { editable: false, error: "Periodo académico no encontrado." };
   }
 
-  const { periodo_estado, anio_estado } = periodRes.rows[0];
+  const { periodo_estado, anio_estado } = periodRes;
 
   if (anio_estado === "CERRADO") {
     return {
@@ -40,12 +41,14 @@ const checkEditability = async (
   }
 
   // 2. Check if subject is closed for this period
-  const closureRes = await pool.query(
-    `SELECT estado FROM cierre_materia WHERE id_detallegrado = $1 AND id_periodo = $2`,
-    [detailGradeId, periodId]
-  );
+  const closureRes = await db
+    .selectFrom("cierre_materia")
+    .select("estado")
+    .where("id_detallegrado", "=", detailGradeId)
+    .where("id_periodo", "=", periodId)
+    .executeTakeFirst();
 
-  if (closureRes.rows.length > 0 && closureRes.rows[0].estado === "CERRADO") {
+  if (closureRes && closureRes.estado === "CERRADO") {
     return {
       editable: false,
       error:
@@ -61,18 +64,17 @@ const checkDateInPeriod = async (
   periodId: number,
   dateInput: string | Date
 ): Promise<{ valid: boolean; error?: string }> => {
-  const periodRes = await pool.query(
-    `SELECT mes_inicio, dia_inicio, mes_fin, dia_fin, id_anio 
-     FROM periodo_academico 
-     WHERE id_periodo = $1`,
-    [periodId]
-  );
+  const periodRes = await db
+    .selectFrom("periodo_academico")
+    .select(["mes_inicio", "dia_inicio", "mes_fin", "dia_fin", "id_anio"])
+    .where("id_periodo", "=", periodId)
+    .executeTakeFirst();
 
-  if (periodRes.rows.length === 0) {
+  if (!periodRes) {
     return { valid: false, error: "Periodo académico no encontrado." };
   }
 
-  const { mes_inicio, dia_inicio, mes_fin, dia_fin, id_anio } = periodRes.rows[0];
+  const { mes_inicio, dia_inicio, mes_fin, dia_fin, id_anio } = periodRes;
   let year = id_anio ? Number(id_anio) : new Date().getFullYear();
   
   if (year < 2000) {
@@ -80,8 +82,6 @@ const checkDateInPeriod = async (
   }
 
   if (!mes_inicio || !dia_inicio || !mes_fin || !dia_fin) {
-    // Si no hay rango definido, permitimos cualquier fecha del año lectivo por defecto
-    // o podriamos ser mas estrictos. Por ahora, asumimos que deben estar definidos.
     return { valid: true }; 
   }
 
@@ -111,6 +111,28 @@ const checkDateInPeriod = async (
   return { valid: true };
 };
 
+// GET /api/teacher/observations/types
+export const getObservationTypes = async (
+  _req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    const result = await sql<{ tipo: string }>`
+      SELECT enumlabel AS tipo
+      FROM pg_enum e
+      JOIN pg_type t ON e.enumtypid = t.oid
+      WHERE t.typname = 'tipo_observacion'
+      ORDER BY e.enumsortorder ASC
+    `.execute(db);
+
+    const types = result.rows.map((r) => r.tipo);
+    res.json({ types });
+  } catch (error: any) {
+    console.error("Error fetching observation types:", error);
+    res.status(500).json({ error: "Error al obtener los tipos de observación" });
+  }
+};
+
 // GET /api/teacher/observations/:detailGradeId/:periodId
 export const getObservations = async (
   req: Request,
@@ -123,17 +145,18 @@ export const getObservations = async (
   try {
 
     // Get school id from teaching assignment
-    const dgRes = await pool.query(
-      `SELECT id_colegio, id_grupo FROM detalle_grados WHERE id_detallegrado = $1`,
-      [detailGradeId]
-    );
+    const dgRes = await db
+      .selectFrom("detalle_grados")
+      .select(["id_colegio", "id_grupo"])
+      .where("id_detallegrado", "=", detailGradeId)
+      .executeTakeFirst();
 
-    if (dgRes.rows.length === 0) {
+    if (!dgRes) {
       res.status(404).json({ error: "Asignación académica no encontrada" });
       return;
     }
 
-    const { id_colegio } = dgRes.rows[0];
+    const { id_colegio } = dgRes;
 
     const authReq = req as any;
     const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
@@ -146,28 +169,29 @@ export const getObservations = async (
     const editCheck = await checkEditability(detailGradeId, id_colegio, periodId);
 
     // Get all observations for this detailGrade and period, joined with student info
-    const observationsRes = await pool.query(
-      `SELECT 
-         o.id_observacion,
-         o.id_estudiante,
-         e.nombre,
-         e.apellido,
-         u.documento,
-         e.codigo,
-         o.fortalezas,
-         o.debilidades,
-         o.recomendaciones,
-         o.fecha,
-         o.tipo
-       FROM observacion_estudiante o
-       JOIN estudiante e ON e.id_estudiante = o.id_estudiante
-       LEFT JOIN usuario u ON e.id_usuario = u.id_usuario
-       WHERE o.id_detallegrado = $1 AND o.id_periodo = $2
-       ORDER BY o.fecha DESC`,
-      [detailGradeId, periodId]
-    );
+    const observationsRows = await db
+      .selectFrom("observacion_estudiante as o")
+      .innerJoin("estudiante as e", "e.id_estudiante", "o.id_estudiante")
+      .leftJoin("usuario as u", "u.id_usuario", "e.id_usuario")
+      .select([
+        "o.id_observacion",
+        "o.id_estudiante",
+        "e.nombre",
+        "e.apellido",
+        "u.documento",
+        "e.codigo",
+        "o.fortalezas",
+        "o.debilidades",
+        "o.recomendaciones",
+        "o.fecha",
+        "o.tipo",
+      ])
+      .where("o.id_detallegrado", "=", detailGradeId)
+      .where("o.id_periodo", "=", periodId)
+      .orderBy("o.fecha", "desc")
+      .execute();
 
-    const observations = observationsRes.rows.map((r) => {
+    const observations = observationsRows.map((r) => {
       let clientTipo = 'ACADEMICA';
       if (r.tipo === 'DISCIPLINARIA') {
         clientTipo = 'DISCIPLINARIO';
@@ -230,17 +254,18 @@ export const createObservation = async (
 
   try {
     // Get school id
-    const dgRes = await pool.query(
-      `SELECT id_colegio FROM detalle_grados WHERE id_detallegrado = $1`,
-      [detailGradeId]
-    );
+    const dgRes = await db
+      .selectFrom("detalle_grados")
+      .select("id_colegio")
+      .where("id_detallegrado", "=", detailGradeId)
+      .executeTakeFirst();
 
-    if (dgRes.rows.length === 0) {
+    if (!dgRes) {
       res.status(404).json({ error: "Asignación académica no encontrada" });
       return;
     }
 
-    const schoolId = dgRes.rows[0].id_colegio;
+    const schoolId = dgRes.id_colegio;
 
     const authReq = req as any;
     const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
@@ -276,27 +301,25 @@ export const createObservation = async (
       dbTipo = tipo;
     }
 
-    const result = await pool.query(
-      `INSERT INTO observacion_estudiante 
-         (id_estudiante, id_detallegrado, id_periodo, fortalezas, debilidades, recomendaciones, fecha, id_colegio, tipo)
-       VALUES ($1, $2, $3, $4, $5, $6, $7::timestamp with time zone, $8, $9)
-       RETURNING id_observacion`,
-      [
-        studentId,
-        detailGradeId,
-        periodId,
-        hasFortalezas ? fortalezas.trim() : null,
-        hasDebilidades ? debilidades.trim() : null,
-        hasRecomendaciones ? recomendaciones.trim() : null,
-        dateValue,
-        schoolId,
-        dbTipo,
-      ]
-    );
+    const inserted = await db
+      .insertInto("observacion_estudiante")
+      .values({
+        id_estudiante: studentId,
+        id_detallegrado: detailGradeId,
+        id_periodo: periodId,
+        fortalezas: hasFortalezas ? fortalezas.trim() : null,
+        debilidades: hasDebilidades ? debilidades.trim() : null,
+        recomendaciones: hasRecomendaciones ? recomendaciones.trim() : null,
+        fecha: dateValue,
+        id_colegio: schoolId,
+        tipo: dbTipo as any,
+      })
+      .returning("id_observacion")
+      .executeTakeFirstOrThrow();
 
     res.json({
       message: "Observación registrada exitosamente",
-      id_observacion: result.rows[0].id_observacion,
+      id_observacion: inserted.id_observacion,
     });
   } catch (error: any) {
     console.error("Error creating observation:", error);
@@ -326,17 +349,18 @@ export const updateObservation = async (
 
   try {
     // Get current observation to check ownership
-    const obsRes = await pool.query(
-      `SELECT id_detallegrado, id_periodo, id_colegio FROM observacion_estudiante WHERE id_observacion = $1`,
-      [observationId]
-    );
+    const obsRes = await db
+      .selectFrom("observacion_estudiante")
+      .select(["id_detallegrado", "id_periodo", "id_colegio"])
+      .where("id_observacion", "=", observationId)
+      .executeTakeFirst();
 
-    if (obsRes.rows.length === 0) {
+    if (!obsRes) {
       res.status(404).json({ error: "Observación no encontrada" });
       return;
     }
 
-    const { id_detallegrado, id_periodo, id_colegio } = obsRes.rows[0];
+    const { id_detallegrado, id_periodo, id_colegio } = obsRes;
 
     // Validate editability
     const editCheck = await checkEditability(id_detallegrado, id_colegio, id_periodo);
@@ -356,18 +380,16 @@ export const updateObservation = async (
       dbTipo = tipo;
     }
 
-    await pool.query(
-      `UPDATE observacion_estudiante 
-       SET fortalezas = $1, debilidades = $2, recomendaciones = $3, tipo = $4
-       WHERE id_observacion = $5`,
-      [
-        hasFortalezas ? fortalezas.trim() : null,
-        hasDebilidades ? debilidades.trim() : null,
-        hasRecomendaciones ? recomendaciones.trim() : null,
-        dbTipo,
-        observationId,
-      ]
-    );
+    await db
+      .updateTable("observacion_estudiante")
+      .set({
+        fortalezas: hasFortalezas ? fortalezas.trim() : null,
+        debilidades: hasDebilidades ? debilidades.trim() : null,
+        recomendaciones: hasRecomendaciones ? recomendaciones.trim() : null,
+        tipo: dbTipo as any,
+      })
+      .where("id_observacion", "=", observationId)
+      .execute();
 
     res.json({ message: "Observación actualizada exitosamente" });
   } catch (error: any) {
@@ -385,17 +407,18 @@ export const deleteObservation = async (
 
   try {
     // Get current observation
-    const obsRes = await pool.query(
-      `SELECT id_detallegrado, id_periodo, id_colegio FROM observacion_estudiante WHERE id_observacion = $1`,
-      [observationId]
-    );
+    const obsRes = await db
+      .selectFrom("observacion_estudiante")
+      .select(["id_detallegrado", "id_periodo", "id_colegio"])
+      .where("id_observacion", "=", observationId)
+      .executeTakeFirst();
 
-    if (obsRes.rows.length === 0) {
+    if (!obsRes) {
       res.status(404).json({ error: "Observación no encontrada" });
       return;
     }
 
-    const { id_detallegrado, id_periodo, id_colegio } = obsRes.rows[0];
+    const { id_detallegrado, id_periodo, id_colegio } = obsRes;
 
     // Validate editability
     const editCheck = await checkEditability(id_detallegrado, id_colegio, id_periodo);
@@ -404,10 +427,10 @@ export const deleteObservation = async (
       return;
     }
 
-    await pool.query(
-      `DELETE FROM observacion_estudiante WHERE id_observacion = $1`,
-      [observationId]
-    );
+    await db
+      .deleteFrom("observacion_estudiante")
+      .where("id_observacion", "=", observationId)
+      .execute();
 
     res.json({ message: "Observación eliminada exitosamente" });
   } catch (error: any) {

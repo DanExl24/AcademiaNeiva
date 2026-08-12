@@ -1,5 +1,4 @@
 ---
-
 ---
 
 Especificación de requisitos de software
@@ -10,8 +9,8 @@ Proyecto:
 
 ---
 
-![](media/image1.emf){width="1.125in"  
- height="0.5625in"}
+![](media/image1.emf){width="1.125in"
+height="0.5625in"}
 
 ---
 
@@ -54,7 +53,7 @@ http://www.qualitatis.org
 
 .
 
-# Ficha del documento {#ficha-del-documento .Titulo-1-sin-numeracion}
+# Ficha del documento
 
 ---
 
@@ -77,7 +76,7 @@ Fdo. D./ Dña Fdo. D./Dña
 
 ---
 
-# Contenido {#contenido .Titulo-1-sin-numeracion}
+# Contenido
 
 [Ficha del documento
 [3](#ficha-del-documento)](https://soysena-my.sharepoint.com/personal/jorge_apena3_soy_sena_edu_co/Documents/IS1_0809_Paco/webs/is1_web/doc/lab/02/plantilla_formato_ieee830.doc)
@@ -197,13 +196,11 @@ Fdo. D./ Dña Fdo. D./Dña
 ## Propósito
 
 - Propósito del documento
-
 - Audiencia a la que va dirigido
 
 ## Alcance
 
 - Identificación del producto(s) a desarrollar mediante un nombre
-
 - Consistencia con definiciones similares de documentos de mayor nivel
   (ej. Descripción del sistema) que puedan existir
 
@@ -215,13 +212,13 @@ Nombre
 
 Rol
 
-Categoría  
- profesional
+Categoría
+profesional
 
 Responsabilidades
 
-Información de  
- contacto
+Información de
+contacto
 
 Aprobación
 
@@ -256,7 +253,6 @@ Aprobación
 ## Resumen
 
 - Descripción del contenido del resto del documento
-
 - Explicación de la organización del documento
 
 # Descripción general
@@ -285,7 +281,7 @@ Aprobación
 
 ---
 
-Tipo de usuario
+Tipo de usuariol a
 
 Formación
 
@@ -383,9 +379,7 @@ software.
 > Para cada producto de software debe especificarse lo siguiente:
 
 - Descripción del producto software utilizado
-
 - Propósito del interfaz
-
 - Definición del interfaz: contiendo y formato
 
 ### Interfaces de comunicación
@@ -402,19 +396,13 @@ software.
 > En ellas se incluye:
 
 - Comprobación de validez de las entradas
-
 - Secuencia exacta de operaciones
-
 - Respuesta a situaciones anormales (desbordamientos, comunicaciones,
   recuperación de errores)
-
 - Parámetros
-
 - Generación de salidas
-
 - Relaciones entre entradas y salidas (secuencias de entradas y salidas,
   formulas para la conversión de información)
-
 - Especificación de los requisitos lógicos para la información que será
   almacenada en base de datos (tipo de información, requerido)
 
@@ -451,13 +439,9 @@ software.
 > especificar:
 
 - Empleo de técnicas criptográficas.
-
 - Registro de ficheros con "logs" de actividad.
-
 - Asignación de determinadas funcionalidades a determinados módulos.
-
 - Restricciones de comunicación entre determinados módulos.
-
 - Comprobaciones de integridad de información crítica.
 
 ### Fiabilidad
@@ -490,13 +474,9 @@ software.
 > incluirse:
 
 - Porcentaje de componentes dependientes del servidor.
-
 - Porcentaje de código dependiente del servidor.
-
 - Uso de un determinado lenguaje por su portabilidad.
-
 - Uso de un determinado compilador o plataforma de desarrollo.
-
 - Uso de un determinado sistema operativo.
 
 ## Otros requisitos
