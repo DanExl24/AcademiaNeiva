@@ -25,19 +25,20 @@ app.set("trust proxy", 1);
 // Rate Limiters
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
-  max: 1000,
+  max: Number(process.env.GLOBAL_RATE_LIMIT_MAX) || 2000,
   message: { error: "Demasiadas peticiones. Intenta de nuevo en 15 minutos." }
 });
 
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
-  max: 10,
-  message: { error: "Demasiados intentos de inicio de sesión. Intenta de nuevo en 15 minutos." }
+  max: Number(process.env.LOGIN_RATE_LIMIT_MAX) || 50, // 50 intentos fallidos por IP cada 15 min
+  skipSuccessfulRequests: true, // Inicios de sesión exitosos NO cuentan como intentos de fuerza bruta
+  message: { error: "Demasiados intentos fallidos de inicio de sesión. Intenta de nuevo en 15 minutos." }
 });
 
 const enrollmentLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
-  max: 20, // 20 solicitudes cada 15 min (solicitud del usuario)
+  max: Number(process.env.ENROLLMENT_RATE_LIMIT_MAX) || 100,
   message: { error: "Límite de solicitudes de matrícula alcanzado. Intenta de nuevo en 15 minutos." }
 });
 
