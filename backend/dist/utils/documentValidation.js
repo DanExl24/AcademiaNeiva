@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.normalizeDocument = normalizeDocument;
 exports.validateDocumentFormatByTipo = validateDocumentFormatByTipo;
 exports.validateDocumentUniqueness = validateDocumentUniqueness;
+exports.resolveTipoDocumentoId = resolveTipoDocumentoId;
 /**
  * Normaliza un número de documento removiendo espacios y convirtiendo letras a mayúsculas.
  */
@@ -125,4 +126,29 @@ exclude, tipoDoc) {
         const holder = `${usrRes.rows[0].nombre || ''} ${usrRes.rows[0].apellido || ''}`.trim();
         throw new Error(`El número de documento de identidad '${documentNum}' (${entityLabel}) no está permitido: ya se encuentra registrado en la plataforma a nombre de '${holder || 'otro usuario'}'.`);
     }
+}
+/**
+ * Convierte cualquier representación de tipo de documento (string como "CC", "TI", "CE", "RC", "PEP", "PASAPORTE", o nombre completo, o número) al ID entero correspondiente en la tabla tipo_documento (1-6).
+ */
+function resolveTipoDocumentoId(tipoDoc) {
+    if (typeof tipoDoc === "number" && tipoDoc >= 1 && tipoDoc <= 6) {
+        return tipoDoc;
+    }
+    const str = String(tipoDoc || "").trim().toLowerCase();
+    const num = Number(tipoDoc);
+    if (!isNaN(num) && num >= 1 && num <= 6)
+        return num;
+    if (str === "rc" || str.includes("registro"))
+        return 1;
+    if (str === "ti" || str.includes("tarjeta"))
+        return 2;
+    if (str === "cc" || str.includes("ciudadan") || str.includes("cedula"))
+        return 3;
+    if (str === "ce" || str.includes("extranjer"))
+        return 4;
+    if (str === "pep" || str === "ppt" || str.includes("pep") || str.includes("ppt"))
+        return 5;
+    if (str === "pasaporte" || str === "pas" || str.includes("pasaporte"))
+        return 6;
+    return 3; // Cédula de Ciudadanía por defecto
 }

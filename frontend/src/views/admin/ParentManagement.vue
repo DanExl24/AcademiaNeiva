@@ -111,7 +111,16 @@ const editForm = ref({
   id_tipodocumento: 0
 })
 
-const documentTypes = ref<DocumentType[]>([])
+const DEFAULT_DOCUMENT_TYPES: DocumentType[] = [
+  { id_tipodocumento: 1, tipo: 'Registro Civil' },
+  { id_tipodocumento: 2, tipo: 'Tarjeta de Identidad' },
+  { id_tipodocumento: 3, tipo: 'Cédula de Ciudadanía' },
+  { id_tipodocumento: 4, tipo: 'Cédula de Extranjería' },
+  { id_tipodocumento: 5, tipo: 'PEP / PPT' },
+  { id_tipodocumento: 6, tipo: 'Pasaporte' }
+]
+
+const documentTypes = ref<DocumentType[]>(DEFAULT_DOCUMENT_TYPES)
 
 const hasActiveFilters = computed(() => {
   return (

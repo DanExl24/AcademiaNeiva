@@ -5,7 +5,7 @@ import { sql } from 'kysely';
 import { AuthRequest } from '../middleware/authMiddleware';
 import { AdminGeneralNotificationService } from '../services/adminGeneralNotificationService';
 import bcrypt from 'bcrypt';
-import { validateDocumentUniqueness } from '../utils/documentValidation';
+import { validateDocumentUniqueness, resolveTipoDocumentoId } from '../utils/documentValidation';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // GESTIÓN DE COLEGIOS
@@ -2701,15 +2701,7 @@ export const modificarCredencialesConTicket = async (req: AuthRequest, res: Resp
     }
 
     // Mapear tipo_documento string a id_tipodocumento entero
-    let idTipoDoc = 3; // Cédula de Ciudadanía por defecto
-    const tdDb = await client.query(
-      `SELECT id_tipodocumento FROM tipo_documento 
-       WHERE tipo ILIKE $1 OR tipo ILIKE $2 LIMIT 1`,
-      [tipo_documento.trim(), `%${tipo_documento.trim()}%`]
-    );
-    if (tdDb.rows.length > 0) {
-      idTipoDoc = tdDb.rows[0].id_tipodocumento;
-    }
+    const idTipoDoc = resolveTipoDocumentoId(tipo_documento);
 
     // 3. Actualizar tabla usuario (nombres, id_tipodocumento, documento)
     await client.query(
@@ -2858,16 +2850,9 @@ export const crearUsuarioByAdminGeneral = async (req: AuthRequest, res: Response
     }
 
     // 3.5. Validar unicidad y formato del documento si fue proporcionado
-    let idTipoDoc: number | null = null;
-    if (tipo_documento && String(tipo_documento).trim()) {
-      const tdDb = await client.query(
-        `SELECT id_tipodocumento FROM tipo_documento WHERE tipo ILIKE $1 OR tipo ILIKE $2 LIMIT 1`,
-        [String(tipo_documento).trim(), `%${String(tipo_documento).trim()}%`]
-      );
-      if (tdDb.rows.length > 0) idTipoDoc = tdDb.rows[0].id_tipodocumento;
-    }
+    const idTipoDoc = resolveTipoDocumentoId(tipo_documento);
     if (documento && String(documento).trim()) {
-      await validateDocumentUniqueness(client, String(documento).trim(), rol, undefined, idTipoDoc || tipo_documento);
+      await validateDocumentUniqueness(client, String(documento).trim(), rol, undefined, idTipoDoc);
     }
 
     // 4. Encriptar contraseña

@@ -748,7 +748,7 @@ export const getTeacherManagementData = async (req: Request, res: Response): Pro
       db
         .selectFrom("tipo_documento")
         .select(["id_tipodocumento", "tipo"])
-        .orderBy("tipo", "asc")
+        .orderBy("id_tipodocumento", "asc")
         .execute(),
       db
         .selectFrom("docente as d")
@@ -861,6 +861,7 @@ export const getTeacherManagementData = async (req: Request, res: Response): Pro
 
     res.json({
       documentTypes: documentTypesRes,
+      tipos_documento: documentTypesRes,
       teachers: teachersRes,
       docentes: teachersRes,
       subjects: subjectsRes,

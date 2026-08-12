@@ -408,6 +408,35 @@ const goToTeacherMonitoring = () => {
   router.push('/dashboard')
 }
 
+const DEFAULT_DOCUMENT_TYPES: DocumentType[] = [
+  { id_tipodocumento: 1, tipo: 'Registro Civil' },
+  { id_tipodocumento: 2, tipo: 'Tarjeta de Identidad' },
+  { id_tipodocumento: 3, tipo: 'Cédula de Ciudadanía' },
+  { id_tipodocumento: 4, tipo: 'Cédula de Extranjería' },
+  { id_tipodocumento: 5, tipo: 'PEP / PPT' },
+  { id_tipodocumento: 6, tipo: 'Pasaporte' }
+]
+
+const documentTypes = ref<DocumentType[]>(DEFAULT_DOCUMENT_TYPES)
+const teachers = ref<TeacherItem[]>([])
+const subjects = ref<SubjectItem[]>([])
+const groups = ref<GroupItem[]>([])
+const assignments = ref<AssignmentItem[]>([])
+
+const newTeacher = ref({
+  nombre: '',
+  apellido: '',
+  documento: '',
+  id_tipodocumento: '',
+  email: '',
+  password: '',
+})
+
+const assignmentForm = ref({
+  id_materia: '',
+  id_grupo: '',
+})
+
 // Close drawer on Escape
 const handleKeydown = (e: KeyboardEvent) => {
   if (e.key === 'Escape') closeDrawer()
@@ -417,11 +446,14 @@ const fetchData = async () => {
   const params: Record<string, any> = {}
   if (yearStore.selectedYearId) params.yearId = yearStore.selectedYearId
   const response = await axios.get(`/api/academic-admin/teachers/${schoolId.value}`, { params })
-  documentTypes.value = response.data.documentTypes
-  teachers.value = response.data.teachers
-  subjects.value = response.data.subjects
-  groups.value = response.data.groups
-  assignments.value = response.data.assignments
+  const fetchedDocTypes = response.data.documentTypes || response.data.tipos_documento
+  if (Array.isArray(fetchedDocTypes) && fetchedDocTypes.length > 0) {
+    documentTypes.value = fetchedDocTypes
+  }
+  teachers.value = response.data.teachers || []
+  subjects.value = response.data.subjects || []
+  groups.value = response.data.groups || []
+  assignments.value = response.data.assignments || []
 }
 
 const isAutoFilledUser = ref(false)

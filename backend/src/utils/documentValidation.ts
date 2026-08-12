@@ -160,3 +160,24 @@ export async function validateDocumentUniqueness(
     );
   }
 }
+
+/**
+ * Convierte cualquier representación de tipo de documento (string como "CC", "TI", "CE", "RC", "PEP", "PASAPORTE", o nombre completo, o número) al ID entero correspondiente en la tabla tipo_documento (1-6).
+ */
+export function resolveTipoDocumentoId(tipoDoc: number | string | null | undefined): number {
+  if (typeof tipoDoc === "number" && tipoDoc >= 1 && tipoDoc <= 6) {
+    return tipoDoc;
+  }
+  const str = String(tipoDoc || "").trim().toLowerCase();
+  const num = Number(tipoDoc);
+  if (!isNaN(num) && num >= 1 && num <= 6) return num;
+
+  if (str === "rc" || str.includes("registro")) return 1;
+  if (str === "ti" || str.includes("tarjeta")) return 2;
+  if (str === "cc" || str.includes("ciudadan") || str.includes("cedula")) return 3;
+  if (str === "ce" || str.includes("extranjer")) return 4;
+  if (str === "pep" || str === "ppt" || str.includes("pep") || str.includes("ppt")) return 5;
+  if (str === "pasaporte" || str === "pas" || str.includes("pasaporte")) return 6;
+
+  return 3; // Cédula de Ciudadanía por defecto
+}

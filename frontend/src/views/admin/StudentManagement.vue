@@ -726,13 +726,24 @@ const exportToSIMAT = () => {
           </div>
           <div class="grid grid-cols-2 gap-4">
             <div class="space-y-1">
+              <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tipo Doc.</label>
+              <select v-model="studentForm.id_tipodocumento" class="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl p-3 text-sm font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/20">
+                <option :value="2">Tarjeta de Identidad (TI)</option>
+                <option :value="1">Registro Civil (RC)</option>
+                <option :value="3">Cédula de Ciudadanía (CC)</option>
+                <option :value="4">Cédula de Extranjería (CE)</option>
+                <option :value="5">PEP / PPT</option>
+                <option :value="6">Pasaporte</option>
+              </select>
+            </div>
+            <div class="space-y-1">
               <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Documento</label>
               <input v-model="studentForm.documento" type="text" class="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl p-3 text-sm font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/20" />
             </div>
-            <div class="space-y-1">
-               <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Código</label>
-              <input v-model="studentForm.codigo" type="text" class="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl p-3 text-sm font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/20" />
-            </div>
+          </div>
+          <div class="space-y-1">
+            <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Código Estudiantil</label>
+            <input v-model="studentForm.codigo" type="text" class="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl p-3 text-sm font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/20" />
           </div>
 
           <!-- Justificación del Cambio (Modo Supervisión) -->

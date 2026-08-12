@@ -2228,12 +2228,7 @@ const modificarCredencialesConTicket = async (req, res) => {
             oldTipoDoc = docSearch.rows[0].tipo_documento || 'No Registrado';
         }
         // Mapear tipo_documento string a id_tipodocumento entero
-        let idTipoDoc = 3; // Cédula de Ciudadanía por defecto
-        const tdDb = await client.query(`SELECT id_tipodocumento FROM tipo_documento 
-       WHERE tipo ILIKE $1 OR tipo ILIKE $2 LIMIT 1`, [tipo_documento.trim(), `%${tipo_documento.trim()}%`]);
-        if (tdDb.rows.length > 0) {
-            idTipoDoc = tdDb.rows[0].id_tipodocumento;
-        }
+        const idTipoDoc = (0, documentValidation_1.resolveTipoDocumentoId)(tipo_documento);
         // 3. Actualizar tabla usuario (nombres, id_tipodocumento, documento)
         await client.query("UPDATE usuario SET nombre = $1, apellido = $2, id_tipodocumento = $3, documento = $4 WHERE id_usuario = $5", [nombre.trim(), apellido.trim(), idTipoDoc, documento.trim(), id]);
         // 4. Sincronizar roles en usuario_rol
@@ -2342,14 +2337,9 @@ const crearUsuarioByAdminGeneral = async (req, res) => {
             }
         }
         // 3.5. Validar unicidad y formato del documento si fue proporcionado
-        let idTipoDoc = null;
-        if (tipo_documento && String(tipo_documento).trim()) {
-            const tdDb = await client.query(`SELECT id_tipodocumento FROM tipo_documento WHERE tipo ILIKE $1 OR tipo ILIKE $2 LIMIT 1`, [String(tipo_documento).trim(), `%${String(tipo_documento).trim()}%`]);
-            if (tdDb.rows.length > 0)
-                idTipoDoc = tdDb.rows[0].id_tipodocumento;
-        }
+        const idTipoDoc = (0, documentValidation_1.resolveTipoDocumentoId)(tipo_documento);
         if (documento && String(documento).trim()) {
-            await (0, documentValidation_1.validateDocumentUniqueness)(client, String(documento).trim(), rol, undefined, idTipoDoc || tipo_documento);
+            await (0, documentValidation_1.validateDocumentUniqueness)(client, String(documento).trim(), rol, undefined, idTipoDoc);
         }
         // 4. Encriptar contraseña
         const hashedPassword = await bcrypt_1.default.hash(password, 10);
