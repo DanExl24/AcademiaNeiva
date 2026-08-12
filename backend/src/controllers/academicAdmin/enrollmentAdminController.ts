@@ -166,6 +166,32 @@ export const createExtraordinaryEnrollment = async (req: Request, res: Response)
     }
     const finalAnioId = activeYearRes.rows[0].id_anio;
 
+    // 2.1. Validar que el período de inscripción ordinario NO esté vigente
+    const configRes = await client.query(
+      `SELECT habilitada, fecha_inicio, fecha_cierre 
+       FROM configuracion_matricula 
+       WHERE id_colegio = $1 AND id_anio = $2`,
+      [schoolId, finalAnioId]
+    );
+
+    if (configRes.rows.length > 0) {
+      const cfg = configRes.rows[0];
+      if (cfg.habilitada && cfg.fecha_inicio && cfg.fecha_cierre) {
+        const now = new Date();
+        const start = new Date(cfg.fecha_inicio);
+        const end = new Date(cfg.fecha_cierre);
+        end.setHours(23, 59, 59, 999);
+
+        if (now >= start && now <= end) {
+          await client.query("ROLLBACK");
+          res.status(400).json({
+            error: "No es posible registrar matrículas extraordinarias mientras el período de inscripción ordinario se encuentre ABIERTO y vigente."
+          });
+          return;
+        }
+      }
+    }
+
     // 3. Validar estado del estudiante si es existente
     if (id_estudiante) {
       const studentRes = await client.query(

@@ -649,10 +649,12 @@ const fetchExtraordinaryCatalogs = async () => {
   }
 }
 
-const isOrdinaryPeriodOpen = ref(false)
+const isOrdinaryPeriodOpen = ref(true) // Inicialmente bloqueado para evitar parpadeo de 5 segundos
+const checkingOrdinaryStatus = ref(true)
 const ordinaryClosureDate = ref<string | null>(null)
 
 const checkOrdinaryEnrollmentStatus = async () => {
+  checkingOrdinaryStatus.value = true
   try {
     const idColegio = auth.user?.schoolId || 1
     const res = await axios.get(`/api/matriculas/school/${idColegio}/enrollment-config`)
@@ -673,13 +675,21 @@ const checkOrdinaryEnrollmentStatus = async () => {
       } else {
         isOrdinaryPeriodOpen.value = false
       }
+    } else {
+      isOrdinaryPeriodOpen.value = false
     }
   } catch (err) {
     console.error('Error al consultar configuración de matrícula:', err)
+  } finally {
+    checkingOrdinaryStatus.value = false
   }
 }
 
 const openExtraordinaryModal = () => {
+  if (checkingOrdinaryStatus.value) {
+    notify.addNotification('Verificando disponibilidad de matrícula extraordinaria...', 'info')
+    return
+  }
   if (isOrdinaryPeriodOpen.value) {
     notify.addNotification(
       `Las matrículas extraordinarias están inhabilitadas: El periodo de inscripción ordinario se encuentra VIGENTE (Cierra el ${ordinaryClosureDate.value || 'calendario regular'}). Solo se autorizan cuando las fechas ordinarias hayan caducado.`,
@@ -690,9 +700,10 @@ const openExtraordinaryModal = () => {
   showExtraordinaryModal.value = true
 }
 
-onMounted(async () => {
-  await fetchExtraordinaryCatalogs()
-  await checkOrdinaryEnrollmentStatus()
+onMounted(() => {
+  // Ejecutar verificación de estado de forma inmediata y en paralelo con los catálogos
+  checkOrdinaryEnrollmentStatus()
+  fetchExtraordinaryCatalogs()
 })
 
 const getYearId = (y: any) => y.id_anio || y['id_anio'] || y.id_ao;
@@ -824,10 +835,10 @@ const approveException = async (id: number) => {
         <div class="flex flex-col items-end">
           <button 
             @click="openExtraordinaryModal" 
-            :disabled="isOrdinaryPeriodOpen"
+            :disabled="isOrdinaryPeriodOpen || checkingOrdinaryStatus"
             :title="isOrdinaryPeriodOpen ? `Inhabilitado: Periodo Ordinario Vigente (Cierra: ${ordinaryClosureDate})` : 'Nueva Matrícula Extraordinaria'"
             :class="[
-              isOrdinaryPeriodOpen 
+              (isOrdinaryPeriodOpen || checkingOrdinaryStatus)
                 ? 'opacity-50 cursor-not-allowed bg-slate-400 hover:bg-slate-400 dark:bg-slate-800 text-slate-200 shadow-none' 
                 : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-100 dark:shadow-none',
               'px-5 py-3 rounded-2xl font-black text-xs uppercase tracking-wide transition-all flex items-center gap-2'
