@@ -30,7 +30,8 @@ import {
   LifeBuoy,
   ArrowLeftRight,
   Building2,
-  Award
+  Award,
+  FolderCheck
 } from 'lucide-vue-next'
 import { useAuthStore } from '../stores/auth'
 import { useThemeStore } from '../stores/theme'
@@ -123,7 +124,7 @@ const menuItems = computed(() => {
       { name: 'Asistencia', icon: CalendarCheck, path: '/dashboard/asistencia-hijos' },
       { name: 'Observaciones', icon: MessageSquare, path: '/dashboard/observaciones-hijos' },
       { name: 'Boletines', icon: FileText, path: '/dashboard/boletines-hijos' },
-      { name: 'Matrícula y Documentos', icon: FileText, path: '/dashboard/matricula-hijos' },
+      { name: 'Matrícula y Documentos', icon: FolderCheck, path: '/dashboard/matricula-hijos' },
       { name: 'Gestión Traslados', icon: ArrowLeftRight, path: '/dashboard/gestion-traslados' }
     ]
   } else if (role === 'estudiante') {

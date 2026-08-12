@@ -490,6 +490,13 @@ const barChartOptions = {
                 🔄 Solicitar Reingreso Estudiantil
               </button>
 
+              <button 
+                @click="router.push('/dashboard/matricula-hijos')"
+                class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all shadow-lg flex items-center gap-2"
+              >
+                📄 Matrícula y Expediente Digital
+              </button>
+
               <!-- Child Switcher -->
       <div v-if="dashboardData?.children?.length > 1" class="flex flex-wrap items-center gap-2 bg-white/5 p-2 rounded-2xl border border-white/10">
         <button 
@@ -566,7 +573,7 @@ const barChartOptions = {
       
       <div class="lg:col-span-8 space-y-8">
         
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
           <div class="bg-white dark:bg-slate-900 p-6 rounded-[2rem] border border-slate-100 dark:border-slate-800 shadow-sm">
             <div class="flex items-center gap-3 mb-4">
               <div class="p-3 bg-rose-50 dark:bg-rose-950/30 text-rose-600 rounded-2xl">
@@ -610,6 +617,26 @@ const barChartOptions = {
             </div>
             <div class="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
                <div class="bg-indigo-600 h-full w-[45%] rounded-full"></div>
+            </div>
+          </div>
+
+          <!-- Quick Access: Expediente Digital Card -->
+          <div 
+            @click="router.push('/dashboard/matricula-hijos')"
+            class="bg-gradient-to-br from-indigo-50/70 to-purple-50/70 dark:from-indigo-950/40 dark:to-purple-950/40 p-6 rounded-[2rem] border border-indigo-100 dark:border-indigo-900/60 shadow-sm hover:shadow-md hover:border-indigo-300 dark:hover:border-indigo-700 transition cursor-pointer group flex flex-col justify-between"
+          >
+            <div class="flex items-center gap-3 mb-3">
+              <div class="p-3 bg-indigo-600 text-white rounded-2xl shadow-md group-hover:scale-110 transition-transform">
+                <FileText :size="22" />
+              </div>
+              <div>
+                <p class="text-[10px] font-black uppercase tracking-widest text-indigo-600 dark:text-indigo-400">Expediente Digital</p>
+                <p class="text-sm font-black text-slate-900 dark:text-white">Matrícula & Docs</p>
+              </div>
+            </div>
+            <div class="pt-2 flex items-center justify-between text-xs font-bold text-indigo-600 dark:text-indigo-400">
+              <span>Ver ficha y adjuntos</span>
+              <ChevronRight :size="16" class="group-hover:translate-x-1 transition-transform" />
             </div>
           </div>
         </div>
