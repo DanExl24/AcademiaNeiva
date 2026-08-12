@@ -21,7 +21,7 @@ import { pool } from "../config/db";
 
 const router = Router();
 
-// Helper helper middleware to protect routes that request an integer ID, but bypass for UUID tokens
+// Helper middleware to protect routes that request an integer ID, but bypass for UUID tokens
 const protectIfIntegerId = (req: any, res: any, next: any) => {
   const { id } = req.params;
   if (id && id.length <= 20) {
@@ -94,7 +94,6 @@ router.get("/school/:schoolId/enrollment-config", async (req, res) => {
   }
 });
 
-
 router.post("/submit", upload.fields([
   { name: 'registroCivil', maxCount: 1 },
   { name: 'documentoIdentidad', maxCount: 1 },
@@ -107,6 +106,10 @@ router.post("/submit", upload.fields([
   { name: 'certificadoDiscapacidad', maxCount: 1 },
   { name: 'certificadosEscolaridad', maxCount: 1 }
 ]), submitEnrollment);
+
+// Specific sub-resource routes MUST be defined before generic /:id route
+router.get("/documentos/:idDocumento/archivo", downloadDocumentFile);
+router.patch("/document/:idDocumento", verifyToken, requireDirectivo, validateDto(ValidateDocumentSchema), validateDocument);
 
 router.get("/pending/:idColegio", verifyToken, requireDirectivo, getPendingMatriculas);
 
@@ -124,21 +127,6 @@ router.get("/filtered/:idColegio", verifyToken, requireDirectivo, async (req, re
   }
 });
 
-router.get("/:id", protectIfIntegerId, async (req, res) => {
-  try {
-    const id = req.params.id;
-    let result;
-    if (id.length > 20) { // Probablemente un UUID token
-       result = await MatriculaService.getByToken(id);
-    } else {
-       result = await MatriculaService.getDetails(Number(id));
-    }
-    res.json(result);
-  } catch (e: any) {
-    res.status(500).json({ error: e.message });
-  }
-});
-router.patch("/document/:idDocumento", verifyToken, requireDirectivo, validateDto(ValidateDocumentSchema), validateDocument);
 router.post("/assign-grade/:id", verifyToken, requireDirectivo, assignGrade);
 router.post("/notify-inconsistencies/:id", verifyToken, requireDirectivo, notifyInconsistencies);
 router.post("/update-documents/:token", upload.fields([
@@ -161,9 +149,23 @@ router.post("/update-documents/:token", upload.fields([
   }
 });
 router.post("/finalize/:id", verifyToken, requireDirectivo, validateDto(FinalizeEnrollmentSchema), finalizeEnrollment);
-router.post("/cancel/:id", verifyToken, requireDirectivo, validateDto(CancelEnrollmentSchema), cancelEnrollment);
+router.post("/cancel/:id", verifyToken, requireDirectivo, cancelEnrollment);
 router.patch("/transfer-status/:id", verifyToken, requireDirectivo, toggleTransfer);
 
-router.get("/documentos/:idDocumento/archivo", downloadDocumentFile);
+// Generic catch-all /:id route MUST be at the end of the route definitions
+router.get("/:id", protectIfIntegerId, async (req, res) => {
+  try {
+    const id = req.params.id;
+    let result;
+    if (id.length > 20) { // Probablemente un UUID token
+       result = await MatriculaService.getByToken(id);
+    } else {
+       result = await MatriculaService.getDetails(Number(id));
+    }
+    res.json(result);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
 
 export default router;

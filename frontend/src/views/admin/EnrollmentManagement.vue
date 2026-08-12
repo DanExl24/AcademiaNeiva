@@ -1738,7 +1738,7 @@ const approveException = async (id: number) => {
                               Versión Anterior Subsanada (v{{ doc.versiones_anteriores[0].version }})
                             </span>
                             <a
-                              :href="`/api/matriculas/documentos/${doc.versiones_anteriores[0].id_documento}/archivo`"
+                              :href="formatUrl(doc.versiones_anteriores[0])"
                               target="_blank"
                               class="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-[10px] font-bold shadow-xs transition"
                             >
