@@ -1,4 +1,6 @@
 import { PoolClient } from "pg";
+import { db } from "../config/kysely";
+import { sql } from "kysely";
 
 export interface DocumentExclusion {
   excludeEstudianteId?: number | null;
@@ -144,20 +146,41 @@ export async function validateDocumentUniqueness(
 
   const normDoc = check.normalizedDocument;
 
-  let usrQuery = `SELECT id_usuario, nombre, apellido FROM usuario WHERE UPPER(TRIM(documento)) = $1`;
-  const usrParams: any[] = [normDoc];
+  if (client && typeof client.query === "function") {
+    let usrQuery = `SELECT id_usuario, nombre, apellido FROM usuario WHERE UPPER(TRIM(documento)) = $1`;
+    const usrParams: any[] = [normDoc];
 
-  if (exclude?.excludeUsuarioId) {
-    usrQuery += ` AND id_usuario != $2`;
-    usrParams.push(exclude.excludeUsuarioId);
-  }
+    if (exclude?.excludeUsuarioId) {
+      usrQuery += ` AND id_usuario != $2`;
+      usrParams.push(exclude.excludeUsuarioId);
+    }
 
-  const usrRes = await client.query(usrQuery, usrParams);
-  if (usrRes.rows.length > 0) {
-    const holder = `${usrRes.rows[0].nombre || ''} ${usrRes.rows[0].apellido || ''}`.trim();
-    throw new Error(
-      `El número de documento de identidad '${documentNum}' (${entityLabel}) no está permitido: ya se encuentra registrado en la plataforma a nombre de '${holder || 'otro usuario'}'.`
-    );
+    const usrRes = await client.query(usrQuery, usrParams);
+    if (usrRes.rows.length > 0) {
+      const holder = `${usrRes.rows[0].nombre || ''} ${usrRes.rows[0].apellido || ''}`.trim();
+      throw new Error(
+        `El número de documento de identidad '${documentNum}' (${entityLabel}) no está permitido: ya se encuentra registrado en la plataforma a nombre de '${holder || 'otro usuario'}'.`
+      );
+    }
+  } else {
+    // Kysely querybuilder (db / trx)
+    const executor = client || db;
+    let query = executor
+      .selectFrom("usuario")
+      .select(["id_usuario", "nombre", "apellido"])
+      .where(sql<boolean>`UPPER(TRIM(documento)) = ${normDoc}`);
+
+    if (exclude?.excludeUsuarioId) {
+      query = query.where("id_usuario", "!=", exclude.excludeUsuarioId);
+    }
+
+    const usrRes = await query.executeTakeFirst();
+    if (usrRes) {
+      const holder = `${usrRes.nombre || ""} ${usrRes.apellido || ""}`.trim();
+      throw new Error(
+        `El número de documento de identidad '${documentNum}' (${entityLabel}) no está permitido: ya se encuentra registrado en la plataforma a nombre de '${holder || "otro usuario"}'.`
+      );
+    }
   }
 }
 
