@@ -249,12 +249,15 @@ export const createTeacher = async (req: Request, res: Response): Promise<void> 
         [existingUser.id_usuario, schoolId, roleRes.id_rol]
       );
 
-      // Guardar el correo institucional en la ficha del docente para este colegio sin alterar el email global del usuario
+      const isSameAsUserEmail = email.trim().toLowerCase() === (existingUser.email || "").trim().toLowerCase();
+      const instEmailToStore = isSameAsUserEmail ? null : email.trim().toLowerCase();
+
+      // Guardar el correo institucional en la ficha del docente solo si es diferente al correo personal del usuario
       const teacherRes = await client.query(
         `INSERT INTO docente (nombre, apellido, id_colegio, id_usuario, estado, email_institucional)
          VALUES ($1, $2, $3, $4, 'ACTIVO', $5)
          RETURNING id_docente, nombre, apellido, estado, email_institucional`,
-        [existingUser.nombre, existingUser.apellido, schoolId, existingUser.id_usuario, email.trim().toLowerCase()]
+        [existingUser.nombre, existingUser.apellido, schoolId, existingUser.id_usuario, instEmailToStore]
       );
 
       await client.query("COMMIT");
@@ -447,7 +450,16 @@ export const updateTeacher = async (req: Request, res: Response): Promise<void> 
       );
     }
 
-    // Actualizar datos del docente (incluyendo su correo institucional para este colegio)
+    // Obtener correo del usuario para comparar si es el mismo correo personal
+    const userEmailRes = id_usuario ? await client.query(
+      `SELECT email FROM usuario WHERE id_usuario = $1`,
+      [id_usuario]
+    ) : { rows: [] };
+    const userEmail = (userEmailRes.rows[0]?.email || "").trim().toLowerCase();
+    const isSameAsUserEmail = email.trim().toLowerCase() === userEmail;
+    const instEmailToStore = isSameAsUserEmail ? null : email.trim().toLowerCase();
+
+    // Actualizar datos del docente (si es correo institucional diferente al personal, se guarda en email_institucional)
     await client.query(
       `UPDATE docente 
        SET nombre = $1, apellido = $2, email_institucional = $3
@@ -455,7 +467,7 @@ export const updateTeacher = async (req: Request, res: Response): Promise<void> 
       [
         isParent ? currentTeacher.nombre : nombre, 
         isParent ? currentTeacher.apellido : apellido, 
-        email.trim().toLowerCase(), 
+        instEmailToStore, 
         teacherId
       ]
     );
