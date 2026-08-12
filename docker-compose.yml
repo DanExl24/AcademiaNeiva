@@ -20,6 +20,11 @@ services:
       - DB_USER=postgres
       - DB_PASSWORD=postgres
       - DB_NAME=AcademiaNeiva
+      - SMTP_HOST=${SMTP_HOST:-smtp.gmail.com}
+      - SMTP_PORT=${SMTP_PORT:-465}
+      - SMTP_USER=${SMTP_USER:-alejopmotta@gmail.com}
+      - SMTP_PASS=${SMTP_PASS:-mzeiebmmwuluoqfz}
+      - EMAIL_FROM=${EMAIL_FROM:-AcademiaNeiva <alejopmotta@gmail.com>}
     env_file:
       - path: ./backend/.env
         required: false
