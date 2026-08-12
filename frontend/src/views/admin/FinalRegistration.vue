@@ -52,14 +52,14 @@ const studentData = ref({
   nombre: '',
   apellido: '',
   documento: '',
-  id_tipodocumento: 1, // CC por defecto
+  id_tipodocumento: 2, // Tarjeta de Identidad por defecto (ID 2)
 })
 
 const parentData = ref({
   nombre: '',
   apellido: '',
   documento: '',
-  id_tipodocumento: 1,
+  id_tipodocumento: 3, // Cédula de Ciudadanía por defecto (ID 3)
 })
 
 const currentDocIndex = ref(0)
@@ -79,12 +79,12 @@ const fetchDetails = async () => {
       studentData.value.nombre = st.nombre
       studentData.value.apellido = st.apellido
       studentData.value.documento = st.documento
-      studentData.value.id_tipodocumento = st.id_tipodocumento || 1
+      studentData.value.id_tipodocumento = Number(st.id_tipodocumento) || 2
     } else if (response.data.tipo === 'REINGRESO' || response.data.id_estudiante) {
       studentData.value.nombre = response.data.student_firstname || ''
       studentData.value.apellido = response.data.student_lastname || ''
       studentData.value.documento = response.data.student_document || ''
-      studentData.value.id_tipodocumento = response.data.student_id_tipodocumento || 1
+      studentData.value.id_tipodocumento = Number(response.data.student_id_tipodocumento) || 2
     }
 
     // Pre-populate parent data
@@ -92,7 +92,7 @@ const fetchDetails = async () => {
       parentData.value.nombre = response.data.parent_firstname
       parentData.value.apellido = response.data.parent_lastname
       parentData.value.documento = response.data.parent_document
-      parentData.value.id_tipodocumento = response.data.parent_id_tipodocumento || 2
+      parentData.value.id_tipodocumento = Number(response.data.parent_id_tipodocumento) || 3
     }
 
     // Si el padre ya tiene cuenta de personal (docente/directivo), pre-poblar formulario
@@ -100,6 +100,9 @@ const fetchDetails = async () => {
       const eu = response.data.existing_parent_user
       parentData.value.nombre = eu.nombre
       parentData.value.apellido = eu.apellido
+      if (eu.id_tipodocumento) {
+        parentData.value.id_tipodocumento = Number(eu.id_tipodocumento)
+      }
     }
     // Si hay documento de estudiante, consultar advertencias académicas previas
     if (studentData.value.documento) {
@@ -473,10 +476,12 @@ const getStatusColor = (estado: string) => {
             <div class="space-y-2">
               <label class="text-sm font-bold text-gray-700">Tipo de Documento</label>
               <select v-model="studentData.id_tipodocumento" :disabled="matricula?.renovacion?.is_renovacion" class="w-full rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-4 transition-all disabled:opacity-60 disabled:cursor-not-allowed">
-                <option :value="1">Tarjeta de Identidad</option>
-                <option :value="2">Cédula de Ciudadanía</option>
-                <option :value="3">Registro Civil</option>
+                <option :value="2">Tarjeta de Identidad</option>
+                <option :value="1">Registro Civil</option>
+                <option :value="3">Cédula de Ciudadanía</option>
                 <option :value="4">Cédula de Extranjería</option>
+                <option :value="5">PEP / PPT</option>
+                <option :value="6">Pasaporte</option>
               </select>
             </div>
             <div class="space-y-2">
@@ -536,9 +541,13 @@ const getStatusColor = (estado: string) => {
           <div class="grid grid-cols-2 gap-6">
             <div class="space-y-2">
               <label class="text-sm font-bold text-gray-700">Tipo de Documento</label>
-              <select v-model="parentData.id_tipodocumento" class="w-full rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-4 transition-all">
-                <option :value="2">Cédula de Ciudadanía</option>
+              <select v-model="parentData.id_tipodocumento" :disabled="!!matricula?.existing_parent_user" class="w-full rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-4 transition-all disabled:opacity-60 disabled:cursor-not-allowed">
+                <option :value="3">Cédula de Ciudadanía</option>
                 <option :value="4">Cédula de Extranjería</option>
+                <option :value="5">PEP / PPT</option>
+                <option :value="6">Pasaporte</option>
+                <option :value="2">Tarjeta de Identidad</option>
+                <option :value="1">Registro Civil</option>
               </select>
             </div>
             <div class="space-y-2">
