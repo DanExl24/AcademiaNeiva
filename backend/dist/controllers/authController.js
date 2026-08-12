@@ -32,12 +32,11 @@ const login = async (req, res) => {
                 "u.password",
                 "u.nombre",
                 "u.apellido",
-                "u.id_colegio",
                 "u.estado",
                 (0, kysely_2.sql) `array_agg(r.nombre)`.as("roles")
             ])
                 .where("u.email", "=", credential)
-                .groupBy(["u.id_usuario", "u.email", "u.password", "u.nombre", "u.apellido", "u.id_colegio", "u.estado"])
+                .groupBy(["u.id_usuario", "u.email", "u.password", "u.nombre", "u.apellido", "u.estado"])
                 .executeTakeFirst();
             if (!user) {
                 res.status(401).json({ error: "Credenciales incorrectas" });
@@ -64,7 +63,7 @@ const login = async (req, res) => {
                 .where("uc.id_usuario", "=", user.id_usuario)
                 .where("uc.estado", "=", "ACTIVO")
                 .execute();
-            let activeSchoolId = user.id_colegio || (activeSchools.length > 0 ? activeSchools[0].id_colegio : null);
+            let activeSchoolId = activeSchools.length > 0 ? activeSchools[0].id_colegio : null;
             if (activeSchools.length > 0) {
                 const firstSchool = activeSchools[0];
                 if (firstSchool.colegio_estado === 'PENDIENTE') {
@@ -122,10 +121,10 @@ const login = async (req, res) => {
                 .select([
                 "e.id_usuario",
                 "e.estado as estado_estudiante",
+                "e.id_colegio",
                 "u.email",
                 "u.nombre",
                 "u.password",
-                "u.id_colegio",
                 "u.estado",
                 (0, kysely_2.sql) `array_agg(r.nombre)`.as("roles")
             ])
@@ -134,7 +133,7 @@ const login = async (req, res) => {
                 eb("u.documento", "=", credential),
                 eb((0, kysely_2.sql) `LOWER(u.email)`, "=", credential.toLowerCase())
             ]))
-                .groupBy(["e.id_usuario", "e.estado", "u.email", "u.nombre", "u.password", "u.id_colegio", "u.estado"])
+                .groupBy(["e.id_usuario", "e.estado", "e.id_colegio", "u.email", "u.nombre", "u.password", "u.estado"])
                 .executeTakeFirst();
             if (!user) {
                 res.status(401).json({ error: "Código o contraseña incorrectos" });
@@ -145,10 +144,29 @@ const login = async (req, res) => {
                 res.status(403).json({ error: "Tu cuenta ha sido suspendida por expulsión. No tienes acceso al sistema." });
                 return;
             }
-            // Verificar estado del usuario
-            if (user.estado !== 'ACTIVO') {
-                res.status(403).json({ error: "Tu cuenta no se encuentra activa. Contacta al administrador." });
-                return;
+            // Consultar vinculaciones de institucion en usuario_colegio
+            const activeSchools = await kysely_1.db
+                .selectFrom("usuario_colegio as uc")
+                .innerJoin("colegio as c", "c.id_colegio", "uc.id_colegio")
+                .select(["uc.id_colegio", "c.estado as colegio_estado"])
+                .where("uc.id_usuario", "=", user.id_usuario)
+                .where("uc.estado", "=", "ACTIVO")
+                .execute();
+            let activeSchoolId = user.id_colegio || (activeSchools.length > 0 ? activeSchools[0].id_colegio : null);
+            if (activeSchools.length > 0) {
+                const firstSchool = activeSchools[0];
+                if (firstSchool.colegio_estado === 'PENDIENTE') {
+                    res.status(403).json({ error: "El colegio asociado aún no ha sido aprobado." });
+                    return;
+                }
+                if (firstSchool.colegio_estado === 'SUSPENDIDO') {
+                    res.status(403).json({ error: "El colegio asociado se encuentra suspendido." });
+                    return;
+                }
+                if (firstSchool.colegio_estado === 'RECHAZADO' || firstSchool.colegio_estado === 'ELIMINADO') {
+                    res.status(403).json({ error: "El colegio asociado no tiene acceso al sistema." });
+                    return;
+                }
             }
             // Verificar contraseña
             const validPassword = await bcrypt_1.default.compare(password, user.password);
@@ -156,24 +174,31 @@ const login = async (req, res) => {
                 res.status(401).json({ error: "Código o contraseña incorrectos" });
                 return;
             }
+            const schoolIds = activeSchools.map((s) => Number(s.id_colegio));
+            if (!schoolIds.includes(user.id_colegio) && user.id_colegio) {
+                schoolIds.push(user.id_colegio);
+            }
             // Generar JWT
             const jti = crypto_1.default.randomUUID();
             const token = jsonwebtoken_1.default.sign({
                 id: user.id_usuario,
                 email: user.email,
-                role: "estudiante",
+                role: user.roles[0],
                 roles: user.roles,
-                schoolId: user.id_colegio,
+                schoolId: activeSchoolId,
+                schoolIds: schoolIds.length > 0 ? schoolIds : undefined,
                 jti
             }, JWT_SECRET, { expiresIn: "8h" });
+            const { password: _, ...userWithoutPassword } = user;
             res.json({
                 user: {
-                    id: user.id_usuario,
-                    name: user.nombre,
-                    email: user.email,
-                    role: "estudiante",
-                    roles: user.roles,
-                    schoolId: user.id_colegio
+                    id: userWithoutPassword.id_usuario,
+                    name: userWithoutPassword.nombre,
+                    email: userWithoutPassword.email,
+                    role: userWithoutPassword.roles[0],
+                    roles: userWithoutPassword.roles,
+                    schoolId: activeSchoolId,
+                    schoolIds: schoolIds.length > 0 ? schoolIds : undefined
                 },
                 token
             });
@@ -197,15 +222,15 @@ const studentLogin = async (req, res) => {
             .select([
             "e.id_usuario",
             "e.estado as estado_estudiante",
+            "e.id_colegio",
             "u.email",
             "u.nombre",
             "u.password",
-            "u.id_colegio",
             "u.estado",
             (0, kysely_2.sql) `array_agg(r.nombre)`.as("roles")
         ])
             .where("e.codigo", "=", codigo)
-            .groupBy(["e.id_usuario", "e.estado", "u.email", "u.nombre", "u.password", "u.id_colegio", "u.estado"])
+            .groupBy(["e.id_usuario", "e.estado", "e.id_colegio", "u.email", "u.nombre", "u.password", "u.estado"])
             .executeTakeFirst();
         if (!user) {
             res.status(401).json({ error: "Código o contraseña incorrectos" });

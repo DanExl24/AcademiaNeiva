@@ -46,10 +46,9 @@ const createTicket = async (req, res) => {
         if (user) {
             // Usuario autenticado: resolvemos información desde la BD
             finalUserId = Number(user.id);
-            const userRes = await db_1.pool.query('SELECT nombre, apellido, email, id_colegio, rol FROM usuario WHERE id_usuario = $1', [finalUserId]);
+            const userRes = await db_1.pool.query('SELECT nombre, apellido, email, documento FROM usuario WHERE id_usuario = $1', [finalUserId]);
             if (userRes.rows.length > 0) {
                 const u = userRes.rows[0];
-                finalSchoolId = u.id_colegio ? Number(u.id_colegio) : finalSchoolId;
                 if (!finalSchoolId) {
                     const schoolLinkRes = await db_1.pool.query(`SELECT id_colegio FROM usuario_colegio WHERE id_usuario = $1 AND estado = 'ACTIVO' LIMIT 1`, [finalUserId]);
                     if (schoolLinkRes.rows.length > 0) {

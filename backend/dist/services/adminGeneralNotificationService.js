@@ -11,7 +11,7 @@ const transporter = nodemailer_1.default.createTransport({
     secure: Number(process.env.SMTP_PORT) === 465,
     auth: {
         user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS?.replace(/"/g, ''),
+        pass: process.env.SMTP_PASS?.replace(/"/g, '').replace(/\s+/g, ''),
     },
 });
 const getFrontendUrl = () => {

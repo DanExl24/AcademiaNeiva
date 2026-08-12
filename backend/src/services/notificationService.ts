@@ -8,7 +8,7 @@ const transporter = nodemailer.createTransport({
   secure: Number(process.env.SMTP_PORT) === 465, // true para 465, false para otros
   auth: {
     user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS?.replace(/"/g, ''), // Eliminar comillas si las hay
+    pass: process.env.SMTP_PASS?.replace(/"/g, '').replace(/\s+/g, ''), // Eliminar comillas y espacios de la contraseña de aplicación
   },
   logger: true,
   debug: true

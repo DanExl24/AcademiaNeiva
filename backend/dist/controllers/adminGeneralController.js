@@ -157,8 +157,7 @@ const registrarColegio = async (req, res) => {
             dane: cleanDane,
             tipo_calendario: tipo_calendario || 'A',
             estado: 'PENDIENTE',
-            escudo_url: escudo_url || null,
-            colores: colores || null
+            escudo_url: escudo_url || null
         })
             .returningAll()
             .executeTakeFirstOrThrow();
@@ -603,16 +602,17 @@ const eliminarUsuario = async (req, res) => {
     try {
         await client.query('BEGIN');
         // 4. Obtener datos completos del usuario a eliminar
-        const userRes = await client.query(`SELECT u.id_usuario, u.email, u.nombre, u.apellido, u.estado, u.id_colegio,
+        const userRes = await client.query(`SELECT u.id_usuario, u.email, u.nombre, u.apellido, u.estado, uc.id_colegio,
               u.fecha_creacion, u.documento, u.telefono,
               c.nombre AS colegio_nombre,
               array_agg(DISTINCT r.nombre) AS roles
        FROM usuario u
-       LEFT JOIN colegio c ON c.id_colegio = u.id_colegio
+       LEFT JOIN usuario_colegio uc ON uc.id_usuario = u.id_usuario AND uc.estado = 'ACTIVO'
+       LEFT JOIN colegio c ON c.id_colegio = uc.id_colegio
        LEFT JOIN usuario_rol ur ON ur.id_usuario = u.id_usuario
        LEFT JOIN rol r ON r.id_rol = ur.id_rol
        WHERE u.id_usuario = $1
-       GROUP BY u.id_usuario, c.nombre`, [id]);
+       GROUP BY u.id_usuario, uc.id_colegio, c.nombre`, [id]);
         if (userRes.rows.length === 0) {
             await client.query('ROLLBACK');
             res.status(404).json({ error: 'Usuario no encontrado.' });
@@ -646,10 +646,11 @@ const eliminarUsuario = async (req, res) => {
             res.status(400).json({ error: 'El ticket no está vinculado a un usuario registrado. Se requiere un ticket creado por el Directivo del colegio.' });
             return;
         }
-        const creatorRolesRes = await client.query(`SELECT r.nombre, u.id_colegio
+        const creatorRolesRes = await client.query(`SELECT r.nombre, uc.id_colegio
        FROM usuario_rol ur
        JOIN rol r ON ur.id_rol = r.id_rol
        JOIN usuario u ON u.id_usuario = ur.id_usuario
+       LEFT JOIN usuario_colegio uc ON uc.id_usuario = u.id_usuario AND uc.estado = 'ACTIVO'
        WHERE ur.id_usuario = $1`, [ticket.id_usuario]);
         const creatorRoles = creatorRolesRes.rows.map((r) => String(r.nombre).toUpperCase());
         const creatorSchoolId = creatorRolesRes.rows[0]?.id_colegio;
@@ -2116,10 +2117,11 @@ const verificarCorrespondenciaTicketUsuario = async (client, idUsuario, codigoTi
     }
     // Caso C: El remitente es un Directivo del mismo colegio del usuario destino
     if (ticket.id_usuario) {
-        const creatorRolesRes = await client.query(`SELECT r.nombre, u.id_colegio
+        const creatorRolesRes = await client.query(`SELECT r.nombre, uc.id_colegio
        FROM usuario_rol ur 
        JOIN rol r ON ur.id_rol = r.id_rol 
        JOIN usuario u ON u.id_usuario = ur.id_usuario
+       LEFT JOIN usuario_colegio uc ON uc.id_usuario = u.id_usuario AND uc.estado = 'ACTIVO'
        WHERE ur.id_usuario = $1`, [ticket.id_usuario]);
         const creatorRoles = creatorRolesRes.rows.map((r) => String(r.nombre).toUpperCase());
         const creatorSchoolId = creatorRolesRes.rows[0]?.id_colegio;
