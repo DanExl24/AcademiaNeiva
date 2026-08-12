@@ -269,6 +269,7 @@ async function insertSchool(
   await client.query(`INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2)`, [rectorUserId, roleIds.directivo]);
   await client.query(`INSERT INTO usuario_colegio (id_usuario, id_colegio, id_rol, estado, fecha_inicio) VALUES ($1, $2, $3, 'ACTIVO', NOW()) ON CONFLICT DO NOTHING`, [rectorUserId, school.id, roleIds.directivo]);
   await client.query(`INSERT INTO directivo (id_colegio, id_usuario, cargo) VALUES ($1, $2, $3)`, [school.id, rectorUserId, "RECTOR"]);
+  await client.query(`INSERT INTO usuario_colegio_email (id_usuario, id_colegio, email_institucional) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`, [rectorUserId, school.id, rectorEmail]);
 
   credentials.push({
     colegio: school.nombre, seccion: "staff", rol: "DIRECTIVO",
@@ -287,6 +288,7 @@ async function insertSchool(
   await client.query(`INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2)`, [directivoUserId, roleIds.directivo]);
   await client.query(`INSERT INTO usuario_colegio (id_usuario, id_colegio, id_rol, estado, fecha_inicio) VALUES ($1, $2, $3, 'ACTIVO', NOW()) ON CONFLICT DO NOTHING`, [directivoUserId, school.id, roleIds.directivo]);
   await client.query(`INSERT INTO directivo (id_colegio, id_usuario, cargo) VALUES ($1, $2, $3)`, [school.id, directivoUserId, "COORDINADOR"]);
+  await client.query(`INSERT INTO usuario_colegio_email (id_usuario, id_colegio, email_institucional) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`, [directivoUserId, school.id, directivoEmail]);
 
   credentials.push({
     colegio: school.nombre, seccion: "staff", rol: "DIRECTIVO",
@@ -315,6 +317,7 @@ async function insertSchool(
        VALUES ($1, $2, $3, $4)`,
       [teacher.firstName, fullLastName, school.id, teacherUserId]
     );
+    await client.query(`INSERT INTO usuario_colegio_email (id_usuario, id_colegio, email_institucional) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`, [teacherUserId, school.id, email]);
 
     credentials.push({
       colegio: school.nombre, seccion: "staff", rol: "DOCENTE",
