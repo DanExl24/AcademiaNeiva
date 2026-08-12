@@ -626,7 +626,9 @@ const hasObservations = computed(() => {
         </div>
       </div>
 
-    </template>
+    </div>
 
-  </div>
+  </template>
+
+</div>
 </template>
