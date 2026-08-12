@@ -104,7 +104,7 @@ export const getStudentGrades = async (req: Request, res: Response) => {
       .innerJoin("detalle_grados as dg_am", "dg_am.id_detallegrado", "am.id_detallegrado")
       .select([
         "dg_am.id_materia",
-        sql<number>`ROUND(AVG(na.nota)::numeric, 2)`.as("promedio_calculado")
+        sql<number>`ROUND(SUM(na.nota * (am.porcentaje / 100.0))::numeric, 2)`.as("promedio_calculado")
       ])
       .where("am.id_periodo", "=", Number(id_periodo))
       .where("na.id_estudiante", "=", Number(id_estudiante))
@@ -793,7 +793,7 @@ export const getParentDashboardData = async (req: Request, res: Response) => {
           .select([
             "am.id_detallegrado",
             "na.id_estudiante",
-            sql<number>`ROUND(AVG(na.nota)::numeric, 2)`.as("promedio_calculado")
+            sql<number>`ROUND(SUM(na.nota * (am.porcentaje / 100.0))::numeric, 2)`.as("promedio_calculado")
           ])
           .where("am.id_periodo", "=", id_periodo)
           .where("na.id_estudiante", "=", child.id_estudiante)
@@ -829,7 +829,7 @@ export const getParentDashboardData = async (req: Request, res: Response) => {
           .select([
             "am.id_detallegrado",
             "na.id_estudiante",
-            sql<number>`ROUND(AVG(na.nota)::numeric, 2)`.as("promedio_calculado")
+            sql<number>`ROUND(SUM(na.nota * (am.porcentaje / 100.0))::numeric, 2)`.as("promedio_calculado")
           ])
           .where("pa.id_anio", "=", Number(child.id_anio))
           .where("na.id_estudiante", "=", child.id_estudiante)
@@ -1141,7 +1141,7 @@ export const getStudentDashboardStats = async (req: Request, res: Response) => {
         .select([
           "am.id_detallegrado",
           "na.id_estudiante",
-          sql<number>`ROUND(AVG(na.nota)::numeric, 2)`.as("promedio_calculado")
+          sql<number>`ROUND(SUM(na.nota * (am.porcentaje / 100.0))::numeric, 2)`.as("promedio_calculado")
         ])
         .where("am.id_periodo", "=", periodIdInt)
         .where("na.id_estudiante", "=", studentIdInt)
@@ -1341,7 +1341,7 @@ export const getStudentDashboardStats = async (req: Request, res: Response) => {
         .select([
           "am.id_detallegrado",
           "na.id_estudiante",
-          sql<number>`AVG(na.nota)`.as("promedio_calculado")
+          sql<number>`SUM(na.nota * (am.porcentaje / 100.0))`.as("promedio_calculado")
         ])
         .where("am.id_periodo", "=", periodIdInt)
         .groupBy(["am.id_detallegrado", "na.id_estudiante"])

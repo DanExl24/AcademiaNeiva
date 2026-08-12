@@ -701,7 +701,7 @@ export const getStudentSummary = async (req: Request, res: Response) => {
                 AND ra.id_periodo = p.id_periodo 
                 AND ra.id_estudiante = $2
           LEFT JOIN (
-            SELECT am.id_detallegrado, am.id_periodo, ROUND(AVG(na.nota)::numeric, 2) as promedio_calculado
+            SELECT am.id_detallegrado, am.id_periodo, ROUND(SUM(na.nota * (am.porcentaje / 100.0))::numeric, 2) as promedio_calculado
             FROM notas_actividad na
             JOIN actividad_materia am ON am.id_actividadmateria = na.id_actividadmateria
             WHERE na.id_estudiante = $2
@@ -942,7 +942,7 @@ export const graduateStudent = async (req: Request, res: Response): Promise<void
               AND ra.id_periodo = p.id_periodo 
               AND ra.id_estudiante = $2
         LEFT JOIN (
-          SELECT am.id_detallegrado, am.id_periodo, ROUND(AVG(na.nota)::numeric, 2) as promedio_calculado
+          SELECT am.id_detallegrado, am.id_periodo, ROUND(SUM(na.nota * (am.porcentaje / 100.0))::numeric, 2) as promedio_calculado
           FROM notas_actividad na
           JOIN actividad_materia am ON am.id_actividadmateria = na.id_actividadmateria
           WHERE na.id_estudiante = $2
