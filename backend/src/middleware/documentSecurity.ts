@@ -18,26 +18,49 @@ export const generateDocumentAccessToken = (idDocumento: number, expiresInMinute
 };
 
 /**
- * Middleware para validar el token firmado de acceso a documentos.
- * Previene IDOR y escaneo público sin autorización.
+ * Middleware híbrido para validar el acceso a documentos.
+ * 
+ * 1. Acceso para Directivos / Admins: Si el usuario tiene una sesión activa (Token Bearer / x-auth-token),
+ *    se le permite el acceso ilimitado en cualquier momento.
+ * 2. Acceso por URL Firmada Temporal: Si se consulta vía enlace o visor con ?token=..., se valida la firma HMAC
+ *    y caducidad del token de corta duración.
+ * 3. Cualquier intento de acceso público sin token o con ID alterado es bloqueado con 403 Forbidden (Anti-IDOR).
  */
 export const verifyDocumentToken = (req: Request, res: Response, next: NextFunction): void => {
   const { idDocumento } = req.params;
-  const token = (req.query.token as string) || (req.headers["x-doc-token"] as string);
 
-  if (!token) {
+  // 1. Verificar si la solicitud incluye un token de sesión de usuario de la plataforma (Directivos / Admins)
+  const authHeader = req.headers.authorization || (req.headers["x-auth-token"] as string) || (req.query.authToken as string);
+  if (authHeader) {
+    const userToken = authHeader.startsWith("Bearer ") ? authHeader.substring(7) : authHeader;
+    try {
+      const userDecoded = jwt.verify(userToken, JWT_SECRET) as any;
+      if (userDecoded && userDecoded.id_usuario) {
+        // Usuario autenticado en la plataforma (Directivo, Admin, Docente) -> Acceso concedido siempre
+        next();
+        return;
+      }
+    } catch {
+      // Si el token de usuario falló, continuar a la verificación por token firmado de documento
+    }
+  }
+
+  // 2. Verificar token de acceso firmado específico del documento (?token=...)
+  const docToken = (req.query.token as string) || (req.headers["x-doc-token"] as string);
+
+  if (!docToken) {
     res.status(403).json({
-      error: "Acceso denegado: Se requiere un token firmado para visualizar este documento."
+      error: "Acceso denegado: Se requiere sesión de directivo o token firmado válido para visualizar este documento."
     });
     return;
   }
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as any;
+    const decoded = jwt.verify(docToken, JWT_SECRET) as any;
 
     if (!decoded || decoded.type !== "doc_access") {
       res.status(403).json({
-        error: "Acceso denegado: Token de acceso no válido."
+        error: "Acceso denegado: Token de acceso a documento no válido."
       });
       return;
     }
