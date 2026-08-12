@@ -30,7 +30,7 @@ const router = Router();
 
 // Administrative CRUD operations (require Directivo or Admin General)
 router.get("/sanctions/types", verifyToken, requireDirectivo, getTipoSanciones);
-router.get("/colegio/:idColegio", verifyToken, requireDirectivo, getAllStudents);
+router.get("/colegio/:idColegio", verifyToken, getAllStudents);
 router.get("/:id/summary", verifyToken, requireDirectivo, getStudentSummary);
 router.put("/:id", verifyToken, requireDirectivo, updateStudent);
 router.patch("/:id/status", verifyToken, requireDirectivo, updateStudentStatus);

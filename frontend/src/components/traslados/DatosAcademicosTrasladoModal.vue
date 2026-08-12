@@ -64,7 +64,30 @@ const exportToPDF = async () => {
       margin:       [0.4, 0.4, 0.4, 0.4] as [number, number, number, number],
       filename:     fileName,
       image:        { type: 'jpeg' as const, quality: 0.98 },
-      html2canvas:  { scale: 2, useCORS: true, logging: false },
+      html2canvas:  { 
+        scale: 2, 
+        useCORS: true, 
+        logging: false,
+        onclone: (clonedDoc: Document) => {
+          const allEls = clonedDoc.querySelectorAll('*')
+          allEls.forEach((el: any) => {
+            if (el.style) {
+              const bg = el.style.backgroundColor
+              const fg = el.style.color
+              const bc = el.style.borderColor
+              if (bg && (bg.includes('color(') || bg.includes('color-mix('))) {
+                el.style.backgroundColor = '#ffffff'
+              }
+              if (fg && (fg.includes('color(') || fg.includes('color-mix('))) {
+                el.style.color = '#0f172a'
+              }
+              if (bc && (bc.includes('color(') || bc.includes('color-mix('))) {
+                el.style.borderColor = '#cbd5e1'
+              }
+            }
+          })
+        }
+      },
       jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' as const },
       pagebreak:    { mode: ['css', 'legacy'] }
     }
@@ -138,10 +161,10 @@ const exportToExcel = () => {
 
 const getBadgeDesempeno = (desempeno: string) => {
   switch (desempeno) {
-    case 'Superior': return 'bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300'
-    case 'Alto':     return 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300'
-    case 'Básico':   return 'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300'
-    default:         return 'bg-rose-100 text-rose-800 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300'
+    case 'Superior': return 'bg-emerald-100 text-emerald-800 border-emerald-300'
+    case 'Alto':     return 'bg-blue-100 text-blue-800 border-blue-300'
+    case 'Básico':   return 'bg-amber-100 text-amber-800 border-amber-300'
+    default:         return 'bg-rose-100 text-rose-800 border-rose-300'
   }
 }
 </script>
@@ -151,7 +174,7 @@ const getBadgeDesempeno = (desempeno: string) => {
     <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
       
       <!-- Modal Header -->
-      <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/50">
+      <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800">
         <div class="flex items-center gap-3">
           <div class="p-2.5 bg-indigo-600 text-white rounded-2xl shadow-sm">
             <BookOpen :size="22" />
@@ -180,19 +203,19 @@ const getBadgeDesempeno = (desempeno: string) => {
         </div>
 
         <!-- Error State -->
-        <div v-else-if="errorMsg" class="p-6 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/50 rounded-2xl text-center">
+        <div v-else-if="errorMsg" class="p-6 bg-rose-50 dark:bg-rose-900 border border-rose-200 dark:border-rose-800 rounded-2xl text-center">
           <AlertCircle :size="36" class="text-rose-500 mx-auto mb-2" />
-          <p class="text-sm font-bold text-rose-700 dark:text-rose-400">{{ errorMsg }}</p>
+          <p class="text-sm font-bold text-rose-700 dark:text-rose-300">{{ errorMsg }}</p>
         </div>
 
         <!-- Report Printable Area -->
         <div v-else-if="reportData" ref="printableRef" class="bg-white dark:bg-slate-900 p-6 space-y-6 rounded-2xl">
           
           <!-- Student Header Banner -->
-          <div class="bg-gradient-to-br from-indigo-900 to-slate-900 text-white p-6 rounded-2xl shadow-md border border-indigo-800/40 relative overflow-hidden">
+          <div class="bg-indigo-900 text-white p-6 rounded-2xl shadow-md border border-indigo-800 relative overflow-hidden">
             <div class="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
-                <span class="inline-block bg-indigo-500/30 border border-indigo-400/30 text-indigo-200 px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider mb-2">
+                <span class="inline-block bg-indigo-700 text-indigo-100 px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider mb-2">
                   Registro de Traslado Interinstitucional
                 </span>
                 <h2 class="text-2xl font-black tracking-tight">{{ reportData.estudiante?.nombre }}</h2>
@@ -205,7 +228,7 @@ const getBadgeDesempeno = (desempeno: string) => {
                 </div>
               </div>
               
-              <div class="bg-white/10 backdrop-blur-md p-4 rounded-xl border border-white/10 text-xs space-y-1">
+              <div class="bg-indigo-950 p-4 rounded-xl border border-indigo-800 text-xs space-y-1">
                 <p><strong>Origen:</strong> <span class="text-indigo-200">{{ reportData.estudiante?.colegio_origen }}</span></p>
                 <p><strong>Destino:</strong> <span class="text-emerald-300 font-bold">{{ reportData.estudiante?.colegio_destino }}</span></p>
               </div>
@@ -214,21 +237,21 @@ const getBadgeDesempeno = (desempeno: string) => {
 
           <!-- Resumen de Asistencia -->
           <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div class="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 text-center">
-              <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Asistencia Total</p>
+            <div class="bg-slate-100 dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 text-center">
+              <p class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Asistencia Total</p>
               <p class="text-2xl font-black text-slate-800 dark:text-white font-mono mt-1">{{ reportData.asistencia?.porcentaje_asistencia }}%</p>
             </div>
-            <div class="bg-emerald-50 dark:bg-emerald-950/20 p-4 rounded-2xl border border-emerald-100 dark:border-emerald-900/30 text-center">
-              <p class="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">Asistencias</p>
-              <p class="text-2xl font-black text-emerald-700 dark:text-emerald-300 font-mono mt-1">{{ reportData.asistencia?.asistencias }}</p>
+            <div class="bg-emerald-50 dark:bg-emerald-900 p-4 rounded-2xl border border-emerald-200 dark:border-emerald-700 text-center">
+              <p class="text-[10px] font-black text-emerald-700 dark:text-emerald-300 uppercase tracking-widest">Asistencias</p>
+              <p class="text-2xl font-black text-emerald-800 dark:text-emerald-200 font-mono mt-1">{{ reportData.asistencia?.asistencias }}</p>
             </div>
-            <div class="bg-rose-50 dark:bg-rose-950/20 p-4 rounded-2xl border border-rose-100 dark:border-rose-900/30 text-center">
-              <p class="text-[10px] font-black text-rose-600 dark:text-rose-400 uppercase tracking-widest">Inasistencias</p>
-              <p class="text-2xl font-black text-rose-700 dark:text-rose-300 font-mono mt-1">{{ reportData.asistencia?.inasistencias }}</p>
+            <div class="bg-rose-50 dark:bg-rose-900 p-4 rounded-2xl border border-rose-200 dark:border-rose-700 text-center">
+              <p class="text-[10px] font-black text-rose-700 dark:text-rose-300 uppercase tracking-widest">Inasistencias</p>
+              <p class="text-2xl font-black text-rose-800 dark:text-rose-200 font-mono mt-1">{{ reportData.asistencia?.inasistencias }}</p>
             </div>
-            <div class="bg-amber-50 dark:bg-amber-950/20 p-4 rounded-2xl border border-amber-100 dark:border-amber-900/30 text-center">
-              <p class="text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest">Excusas</p>
-              <p class="text-2xl font-black text-amber-700 dark:text-amber-300 font-mono mt-1">{{ reportData.asistencia?.excusas }}</p>
+            <div class="bg-amber-50 dark:bg-amber-900 p-4 rounded-2xl border border-amber-200 dark:border-amber-700 text-center">
+              <p class="text-[10px] font-black text-amber-700 dark:text-amber-300 uppercase tracking-widest">Excusas</p>
+              <p class="text-2xl font-black text-amber-800 dark:text-amber-200 font-mono mt-1">{{ reportData.asistencia?.excusas }}</p>
             </div>
           </div>
 
@@ -239,12 +262,12 @@ const getBadgeDesempeno = (desempeno: string) => {
               Histórico de Calificaciones por Materia
             </h4>
 
-            <div v-if="reportData.materias?.length === 0" class="p-6 bg-slate-50 dark:bg-slate-800/40 rounded-2xl text-center text-xs text-slate-400 italic">
+            <div v-if="reportData.materias?.length === 0" class="p-6 bg-slate-100 dark:bg-slate-800 rounded-2xl text-center text-xs text-slate-400 italic">
               No hay calificaciones registradas antes del traslado.
             </div>
 
-            <div v-for="mat in reportData.materias" :key="mat.materia_nombre" class="bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-800 p-4 space-y-3">
-              <div class="flex items-center justify-between border-b border-slate-200/60 dark:border-slate-700/60 pb-2">
+            <div v-for="mat in reportData.materias" :key="mat.materia_nombre" class="bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-4 space-y-3">
+              <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-2">
                 <div>
                   <h5 class="text-sm font-black text-slate-800 dark:text-white">{{ mat.materia_nombre }}</h5>
                   <p class="text-[10px] font-bold text-slate-400">Docente: {{ mat.docente_nombre }}</p>
@@ -257,7 +280,7 @@ const getBadgeDesempeno = (desempeno: string) => {
 
               <!-- Tabla de periodos -->
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div v-for="p in mat.periodos" :key="p.periodo_nombre" class="bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-100 dark:border-slate-800 space-y-2">
+                <div v-for="p in mat.periodos" :key="p.periodo_nombre" class="bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-700 space-y-2">
                   <div class="flex items-center justify-between">
                     <span class="text-xs font-bold text-slate-700 dark:text-slate-300">{{ p.periodo_nombre }}</span>
                     <span :class="['px-2 py-0.5 rounded-md text-[10px] font-black border', getBadgeDesempeno(p.desempeno)]">
@@ -282,12 +305,12 @@ const getBadgeDesempeno = (desempeno: string) => {
               Observaciones de Convivencia
             </h4>
             <div class="space-y-2">
-              <div v-for="obs in reportData.observaciones" :key="obs.id_observador" class="p-3 bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-900/30 rounded-xl text-xs space-y-1">
-                <div class="flex items-center justify-between font-bold text-amber-900 dark:text-amber-300">
+              <div v-for="obs in reportData.observaciones" :key="obs.id_observador" class="p-3 bg-amber-50 dark:bg-amber-900 border border-amber-200 dark:border-amber-700 rounded-xl text-xs space-y-1">
+                <div class="flex items-center justify-between font-bold text-amber-900 dark:text-amber-200">
                   <span>{{ obs.tipo_observacion }} — {{ obs.docente_nombre }}</span>
-                  <span class="text-[10px] text-amber-700 font-mono">{{ new Date(obs.fecha).toLocaleDateString() }}</span>
+                  <span class="text-[10px] text-amber-700 dark:text-amber-300 font-mono">{{ new Date(obs.fecha).toLocaleDateString() }}</span>
                 </div>
-                <p class="text-slate-600 dark:text-slate-300 text-[11px] leading-relaxed">{{ obs.observacion }}</p>
+                <p class="text-slate-700 dark:text-slate-300 text-[11px] leading-relaxed">{{ obs.observacion }}</p>
               </div>
             </div>
           </div>
@@ -296,7 +319,7 @@ const getBadgeDesempeno = (desempeno: string) => {
       </div>
 
       <!-- Modal Actions Footer -->
-      <div class="px-6 py-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50 flex flex-wrap items-center justify-between gap-3">
+      <div class="px-6 py-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 flex flex-wrap items-center justify-between gap-3">
         <button 
           @click="emit('close')"
           class="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-bold text-xs hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
