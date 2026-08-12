@@ -6,6 +6,7 @@ import { AuthRequest } from '../middleware/authMiddleware';
 import { AdminGeneralNotificationService } from '../services/adminGeneralNotificationService';
 import bcrypt from 'bcrypt';
 import { validateDocumentUniqueness, resolveTipoDocumentoId } from '../utils/documentValidation';
+import { upsertInstitutionalEmail } from '../utils/emailResolver';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // GESTIÓN DE COLEGIOS
@@ -972,6 +973,13 @@ export const registrarDirectivo = async (req: AuthRequest, res: Response): Promi
          VALUES ($1, $2, $3, 'ACTIVO', NOW()) ON CONFLICT DO NOTHING`,
         [id_usuario, id_colegio, idRol]
       );
+
+      // Registrar el correo personal del usuario como email institucional inicial en este colegio
+      const userEmailRes = await client.query('SELECT email FROM usuario WHERE id_usuario = $1', [id_usuario]);
+      const userEmail = userEmailRes.rows[0]?.email || null;
+      if (userEmail) {
+        await upsertInstitutionalEmail(id_usuario, id_colegio, userEmail, null, client);
+      }
     }
 
     await client.query('COMMIT');
@@ -2910,6 +2918,13 @@ export const crearUsuarioByAdminGeneral = async (req: AuthRequest, res: Response
          VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING`,
         [newUserId, id_colegio, nombre.trim(), (apellido || '').trim() || '', documento || '']
       );
+    }
+
+    // 7.5 Registrar correo institucional en usuario_colegio_email si aplica
+    // Para directivos y docentes vinculados a un colegio, el email de creacion
+    // es su correo institucional inicial en esa institucion.
+    if (id_colegio && finalEmail && (rol === 'directivo' || rol === 'docente')) {
+      await upsertInstitutionalEmail(newUserId, id_colegio, finalEmail, null, client);
     }
 
     // 8. Registro de Auditoría de Supervisión si aplica
