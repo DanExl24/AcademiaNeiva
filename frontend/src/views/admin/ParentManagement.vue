@@ -108,7 +108,8 @@ const editForm = ref({
   nombre: '',
   apellido: '',
   documento: '',
-  id_tipodocumento: 0
+  id_tipodocumento: 0,
+  email: ''
 })
 
 const DEFAULT_DOCUMENT_TYPES: DocumentType[] = [
