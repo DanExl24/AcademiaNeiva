@@ -129,6 +129,8 @@ const fetchDashboard = async () => {
     const params: any = {}
     if (yearStore.selectedYearId) params.yearId = yearStore.selectedYearId
     if (selectedPeriodId.value) params.periodId = selectedPeriodId.value
+    const schoolId = auth.selectedSchoolId || auth.user?.schoolId || (auth.user as any)?.id_colegio || (auth.isSupervising ? (auth.supervision?.colegio_id || auth.supervision?.id_colegio) : null)
+    if (schoolId) params.schoolId = schoolId
 
     const response = await axios.get(`/api/teacher/dashboard/${userId}`, { params })
     dashboardData.value = response.data

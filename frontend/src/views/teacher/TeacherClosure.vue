@@ -81,16 +81,21 @@ const clearFilters = () => {
 
 const fetchPeriods = async () => {
   try {
+    const schoolId = auth.selectedSchoolId || auth.user?.schoolId || (auth.user as any)?.id_colegio || (auth.isSupervising ? (auth.supervision?.colegio_id || auth.supervision?.id_colegio) : null)
+    if (!schoolId) return
     const params = yearStore.selectedYearId ? { yearId: yearStore.selectedYearId } : {}
-    const response = await axios.get(`/api/teacher/periods/${auth.user?.schoolId}`, { params })
+    const response = await axios.get(`/api/teacher/periods/${schoolId}`, { params })
     periods.value = (response.data || []).filter((p: any) => p.estado !== 'PENDIENTE')
-    const openPeriod = periods.value.find((p: any) => p.estado === 'ABIERTO')
-    if (openPeriod) {
-      activePeriodId.value = openPeriod.id_periodo
-    } else if (periods.value.length > 0) {
-      activePeriodId.value = periods.value[periods.value.length - 1].id_periodo
-    } else {
-      activePeriodId.value = null
+    const exists = periods.value.some((p: any) => p.id_periodo === activePeriodId.value)
+    if (!exists) {
+      const openPeriod = periods.value.find((p: any) => p.estado === 'ABIERTO')
+      if (openPeriod) {
+        activePeriodId.value = openPeriod.id_periodo
+      } else if (periods.value.length > 0) {
+        activePeriodId.value = periods.value[periods.value.length - 1].id_periodo
+      } else {
+        activePeriodId.value = null
+      }
     }
   } catch (error) {
   }
@@ -262,6 +267,19 @@ onMounted(async () => {
               class="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-semibold text-slate-700 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all duration-300"
             />
             <Search class="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+          </div>
+
+          <!-- Period Selector -->
+          <div v-if="periods.length > 0" class="relative w-full sm:w-48">
+            <select 
+              v-model="activePeriodId"
+              @change="fetchCoursesWithStatus"
+              class="w-full pl-4 pr-10 py-2.5 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 rounded-2xl text-sm font-bold text-indigo-700 dark:text-indigo-300 outline-none appearance-none focus:ring-2 focus:ring-indigo-500 transition-all duration-300 cursor-pointer"
+            >
+              <option v-for="p in periods" :key="p.id_periodo" :value="p.id_periodo">
+                {{ p.nombre }} {{ p.estado === 'ABIERTO' ? '(Abierto)' : '' }}
+              </option>
+            </select>
           </div>
 
           <div class="relative w-full sm:w-44">

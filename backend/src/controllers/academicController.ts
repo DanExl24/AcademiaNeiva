@@ -134,6 +134,7 @@ export const getTeacherDashboard = async (req: Request, res: Response): Promise<
       return;
     }
     const idDocente = docente.id_docente;
+    const effectiveSchoolId = schoolId || docente.id_colegio;
 
     let coursesQuery = db
       .selectFrom("detalle_grados as dg")
@@ -151,8 +152,8 @@ export const getTeacherDashboard = async (req: Request, res: Response): Promise<
       ])
       .where("dg.id_docente", "=", idDocente);
 
-    if (schoolId) {
-      coursesQuery = coursesQuery.where("dg.id_colegio", "=", schoolId);
+    if (effectiveSchoolId) {
+      coursesQuery = coursesQuery.where("dg.id_colegio", "=", effectiveSchoolId);
     }
 
     const courses = await coursesQuery.execute();
@@ -164,14 +165,14 @@ export const getTeacherDashboard = async (req: Request, res: Response): Promise<
       .where("dg.id_docente", "=", idDocente)
       .where("m.estado", "=", "ACTIVA");
 
-    if (schoolId) {
-      studentCountQuery = studentCountQuery.where("dg.id_colegio", "=", schoolId);
+    if (effectiveSchoolId) {
+      studentCountQuery = studentCountQuery.where("dg.id_colegio", "=", effectiveSchoolId);
     }
 
     const studentCount = await studentCountQuery.executeTakeFirst();
     const totalActiveStudents = studentCount ? studentCount.total_students : 0;
 
-    // Get available periods for yearIdParam (or schoolId)
+    // Get available periods for yearIdParam (or effectiveSchoolId)
     let periodsQuery = db
       .selectFrom("periodo_academico as pa")
       .innerJoin("anio_lectivo as al", "al.id_anio", "pa.id_anio")
@@ -188,8 +189,8 @@ export const getTeacherDashboard = async (req: Request, res: Response): Promise<
         "al.estado as anio_estado"
       ]);
 
-    if (schoolId) {
-      periodsQuery = periodsQuery.where("pa.id_colegio", "=", schoolId);
+    if (effectiveSchoolId) {
+      periodsQuery = periodsQuery.where("pa.id_colegio", "=", effectiveSchoolId);
     }
     if (yearIdParam) {
       periodsQuery = periodsQuery.where("pa.id_anio", "=", yearIdParam);
