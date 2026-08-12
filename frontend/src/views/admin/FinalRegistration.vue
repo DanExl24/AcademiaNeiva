@@ -267,10 +267,23 @@ const verifyDocument = async () => {
   }
 }
 
-const formatUrl = (url: string) => {
-  if (!url) return ''
-  if (url.startsWith('http')) return url
-  return `${API_BASE_URL}/uploads/${url}`
+const formatUrl = (target: any) => {
+  if (!target) return ''
+  if (typeof target === 'object' && target.id_documento) {
+    return `${API_BASE_URL}/api/matriculas/documentos/${target.id_documento}/archivo`
+  }
+  if (typeof target === 'number') {
+    return `${API_BASE_URL}/api/matriculas/documentos/${target}/archivo`
+  }
+  if (typeof target === 'string') {
+    if (target.startsWith('http')) return target
+    const found = matricula.value?.documentos?.find((d: any) => d.url === target || d.nombre_original === target)
+    if (found && found.id_documento) {
+      return `${API_BASE_URL}/api/matriculas/documentos/${found.id_documento}/archivo`
+    }
+    return `${API_BASE_URL}/uploads/${target}`
+  }
+  return ''
 }
 
 const documentLabels: Record<string, string> = {
@@ -652,8 +665,17 @@ const getStatusColor = (estado: string) => {
 
       <div class="flex-1 bg-gray-800 flex items-center justify-center p-4">
         <template v-if="currentDoc">
-          <iframe v-if="currentDoc.url.toLowerCase().endsWith('.pdf')" :src="formatUrl(currentDoc.url)" class="w-full h-full rounded-xl shadow-2xl"></iframe>
-          <img v-else :src="formatUrl(currentDoc.url)" class="max-w-full max-h-full object-contain rounded-xl shadow-2xl" />
+          <iframe
+            v-if="(currentDoc.mime_type && currentDoc.mime_type.includes('pdf')) || (currentDoc.url && currentDoc.url.toLowerCase().endsWith('.pdf')) || (currentDoc.nombre_original && currentDoc.nombre_original.toLowerCase().endsWith('.pdf'))"
+            :src="formatUrl(currentDoc)"
+            class="w-full h-full rounded-xl shadow-2xl border-0"
+          ></iframe>
+          <img
+            v-else
+            :src="formatUrl(currentDoc)"
+            :alt="documentLabels[currentDoc.tipo_documento] || 'Documento'"
+            class="max-w-full max-h-full object-contain rounded-xl shadow-2xl"
+          />
         </template>
         <div v-else class="text-gray-500 text-center">
           <Eye :size="48" class="mx-auto mb-4 opacity-20" />
