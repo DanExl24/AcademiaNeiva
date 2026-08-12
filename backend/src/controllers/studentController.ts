@@ -1,8 +1,10 @@
 import { Request, Response } from "express";
 import { pool } from "../config/db";
+import { db } from "../config/kysely";
 import { NotificationService } from "../services/notificationService";
 import { validateDocumentUniqueness } from "../utils/documentValidation";
 import { formatFriendlyErrorMessage } from "../utils/errorHelper";
+import { generateDocumentAccessToken } from "../middleware/documentSecurity";
 
 export const getAllStudents = async (req: Request, res: Response) => {
   try {
@@ -1040,6 +1042,126 @@ export const graduateStudent = async (req: Request, res: Response): Promise<void
     res.status(500).json({ error: formatFriendlyErrorMessage(error) });
   } finally {
     client.release();
+  }
+};
+
+export const getParentStudentEnrollment = async (req: Request, res: Response) => {
+  try {
+    const { studentId } = req.params;
+    const authUser = (req as any).user;
+    const userId = authUser?.id_usuario || authUser?.id;
+
+    if (!userId) {
+      res.status(401).json({ error: "Usuario no autenticado" });
+      return;
+    }
+
+    const isStaff = authUser?.roles?.some((r: string) => ['admin', 'directivo', 'admin_general'].includes(r));
+
+    if (!isStaff) {
+      const parentUser = await db
+        .selectFrom("padre_familia as pf")
+        .innerJoin("detalle_padrefamilia as dp", "dp.id_padrefamilia", "pf.id_padrefamilia")
+        .select("dp.id_estudiante")
+        .where("pf.id_usuario", "=", Number(userId))
+        .where("dp.id_estudiante", "=", Number(studentId))
+        .executeTakeFirst();
+
+      if (!parentUser) {
+        const userEmailRes = await db
+          .selectFrom("usuario")
+          .select("email")
+          .where("id_usuario", "=", Number(userId))
+          .executeTakeFirst();
+
+        const matMatch = userEmailRes ? await db
+          .selectFrom("matricula")
+          .select("id_matricula")
+          .where("id_estudiante", "=", Number(studentId))
+          .where("correo_padre", "=", userEmailRes.email)
+          .executeTakeFirst() : null;
+
+        if (!matMatch) {
+          res.status(403).json({ error: "No tiene autorización para ver los documentos de este estudiante" });
+          return;
+        }
+      }
+    }
+
+    const mat = await db
+      .selectFrom("matricula as m")
+      .innerJoin("grupos as g", "m.id_grupo", "g.id_grupo")
+      .leftJoin("colegio as col", "col.id_colegio", "m.id_colegio")
+      .leftJoin("anio_lectivo as al", "al.id_anio", "m.id_anio")
+      .leftJoin("nivel_escolar as ne", "g.id_nivel", "ne.id_nivel")
+      .leftJoin("tipo_grado as tg", "g.id_tipo_grado", "tg.id_tipo_grado")
+      .leftJoin("secciones as s", "g.id_seccion", "s.id_seccion")
+      .leftJoin("jornada as j", "g.id_jornada", "j.id_jornada")
+      .leftJoin("estudiante as e", "e.id_estudiante", "m.id_estudiante")
+      .leftJoin("usuario as u_est", "e.id_usuario", "u_est.id_usuario")
+      .select([
+        "m.id_matricula",
+        "m.id_estudiante",
+        "m.id_colegio",
+        "m.id_anio",
+        "m.estado",
+        "m.tipo",
+        "m.correo_padre",
+        "m.token_seguimiento",
+        "m.fecha_creacion",
+        "m.fecha_aprobacion",
+        "col.nombre as school_name",
+        "col.escudo_url",
+        "al.calendario as year_label",
+        "ne.nombre as grado_nivel",
+        "tg.nombre as tipo_grado",
+        "s.nombre as seccion",
+        "j.nombre as jornada",
+        "e.nombre as student_firstname",
+        "e.apellido as student_lastname",
+        "e.codigo as student_code",
+        "u_est.documento as student_document"
+      ])
+      .where("m.id_estudiante", "=", Number(studentId))
+      .orderBy("m.id_matricula", "desc")
+      .executeTakeFirst();
+
+    if (!mat) {
+      res.status(404).json({ error: "Matrícula no encontrada para este estudiante" });
+      return;
+    }
+
+    const rawDocs = await db
+      .selectFrom("documento_matriculas as d")
+      .select([
+        "d.id_documento",
+        "d.id_matricula",
+        "d.tipo_documento",
+        "d.url",
+        "d.estado",
+        "d.fecha",
+        "d.version",
+        "d.mime_type",
+        "d.nombre_original",
+        "d.tamano_bytes"
+      ])
+      .where("d.id_matricula", "=", mat.id_matricula)
+      .orderBy("d.tipo_documento", "asc")
+      .orderBy("d.version", "desc")
+      .execute();
+
+    const docsWithToken = rawDocs.map(d => ({
+      ...d,
+      token_acceso: generateDocumentAccessToken(d.id_documento)
+    }));
+
+    res.json({
+      matricula: mat,
+      documentos: docsWithToken
+    });
+  } catch (error: any) {
+    console.error("Error in getParentStudentEnrollment:", error);
+    res.status(500).json({ error: formatFriendlyErrorMessage(error) });
   }
 };
 

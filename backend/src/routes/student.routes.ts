@@ -7,7 +7,8 @@ import {
   deleteStudent,
   getStudentSummary,
   graduateStudent,
-  getTipoSanciones
+  getTipoSanciones,
+  getParentStudentEnrollment
 } from "../controllers/studentController";
 import {
   getStudentAcademicYears,
@@ -52,6 +53,7 @@ router.get("/observations/:id_estudiante/:id_periodo", getStudentObservations);
 router.get("/parent-dashboard/:id_usuario", getParentDashboardData);
 router.get("/dashboard-stats/:id_estudiante/:id_periodo", getStudentDashboardStats);
 router.get("/parent-children/:id_usuario", getParentChildren);
+router.get("/parent/enrollment/:studentId", getParentStudentEnrollment);
 router.get("/academic-years/:id_estudiante", getStudentAcademicYears);
 router.get("/years/:id_estudiante", getStudentAcademicYears);
 

@@ -307,6 +307,12 @@ const router = createRouter({
           component: () => import('../views/parent/ParentObservationsView.vue'),
           meta: { roles: ['padre'] }
         },
+        {
+          path: 'matricula-hijos',
+          name: 'Matrícula y Documentos',
+          component: () => import('../views/parent/ParentEnrollmentView.vue'),
+          meta: { title: 'Matrícula y Documentos', roles: ['padre'] }
+        },
         // Rutas del Admin General
         {
           path: 'colegios',
