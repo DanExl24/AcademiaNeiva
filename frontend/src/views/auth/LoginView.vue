@@ -34,7 +34,8 @@ const handleLogin = async () => {
     const { user, token } = response.data
     auth.setUser(user, token)
     
-    if (user.schoolIds && user.schoolIds.length > 1) {
+    const uniqueSchoolIds = Array.from(new Set(user.schoolIds || []))
+    if (uniqueSchoolIds.length > 1) {
       router.push('/select-school')
     } else {
       router.push('/dashboard')

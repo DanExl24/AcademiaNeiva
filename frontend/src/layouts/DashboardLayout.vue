@@ -588,6 +588,11 @@ function onHeaderYearChange(e: Event) {
 
 const userSchools = ref<{ id_colegio: number; colegio_nombre: string; rol_nombre: string }[]>([])
 
+const hasMultipleSchools = computed(() => {
+  const uniqueIds = new Set(userSchools.value.map(s => s.id_colegio))
+  return uniqueIds.size > 1
+})
+
 const fetchUserSchools = async () => {
   if (!auth.token) return
   try {
@@ -846,7 +851,7 @@ onUnmounted(() => {
           <div class="hidden md:flex items-center gap-3">
             <!-- Botón Cambiar Colegio para usuarios multi-colegio -->
             <router-link 
-              v-if="userSchools.length > 1" 
+              v-if="hasMultipleSchools" 
               to="/select-school" 
               class="flex items-center gap-1.5 text-xs font-bold bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900 text-indigo-600 dark:text-indigo-300 px-3 py-1.5 rounded-xl border border-indigo-200 dark:border-indigo-800 transition-all shadow-sm"
               title="Cambiar de colegio de sesión"

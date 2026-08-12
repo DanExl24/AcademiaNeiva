@@ -92,7 +92,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         return;
       }
 
-      const schoolIds = activeSchools.map((s: { id_colegio: number }) => Number(s.id_colegio));
+      const schoolIds = Array.from(new Set(activeSchools.map((s: { id_colegio: number }) => Number(s.id_colegio))));
 
       // Generar JWT
       const jti = crypto.randomUUID();
@@ -194,10 +194,11 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         return;
       }
 
-      const schoolIds = activeSchools.map((s: { id_colegio: number }) => Number(s.id_colegio));
-      if (!schoolIds.includes(user.id_colegio) && user.id_colegio) {
-        schoolIds.push(user.id_colegio);
+      const rawSchoolIds = activeSchools.map((s: { id_colegio: number }) => Number(s.id_colegio));
+      if (!rawSchoolIds.includes(user.id_colegio) && user.id_colegio) {
+        rawSchoolIds.push(user.id_colegio);
       }
+      const schoolIds = Array.from(new Set(rawSchoolIds));
 
       // Generar JWT
       const jti = crypto.randomUUID();

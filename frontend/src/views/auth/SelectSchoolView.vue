@@ -41,9 +41,11 @@ const fetchSchools = async () => {
 
     schools.value = Array.from(uniqueMap.values())
     
-    // Si solo tiene 1 colegio, auto-seleccionar y redirigir
+    // Si solo tiene 1 colegio o menos, auto-seleccionar y redirigir inmediatamente sin parpadeo
     if (schools.value.length === 1) {
-      selectSchool(schools.value[0].id_colegio)
+      auth.setSelectedSchoolId(schools.value[0].id_colegio)
+      router.replace('/dashboard')
+      return
     }
   } catch (error) {
     console.error('Error fetching user schools:', error)
@@ -55,10 +57,7 @@ const fetchSchools = async () => {
 const selectSchool = (schoolId: number) => {
   selectingSchoolId.value = schoolId
   auth.setSelectedSchoolId(schoolId)
-  
-  setTimeout(() => {
-    router.push('/dashboard')
-  }, 200)
+  router.push('/dashboard')
 }
 
 const handleLogout = () => {
