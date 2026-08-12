@@ -1371,18 +1371,18 @@ watch(() => yearStore.selectedYearId, () => {
       <div class="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-[32px] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         <div class="px-8 pt-8 pb-6 border-b border-slate-100 dark:border-slate-800 shrink-0">
           <h2 class="text-xl font-black text-slate-900 dark:text-white flex items-center gap-3"><Edit2 :size="22" class="text-blue-600" />Modificar Datos de Docente</h2>
-          <p class="text-slate-400 dark:text-slate-500 text-sm font-medium mt-1">Actualiza los datos personales y de acceso del docente.</p>
+          <p class="text-slate-400 dark:text-slate-500 text-sm font-medium mt-1">Actualiza únicamente el correo electrónico institucional del docente para esta institución.</p>
         </div>
         <div class="p-8 space-y-5 overflow-y-auto font-sans">
-          <!-- Advertencia si el docente también es Padre de Familia -->
-          <div v-if="editTeacherForm.es_padre" class="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-2xl p-3.5 flex items-center gap-3 animate-in fade-in duration-200">
-            <div class="p-2 bg-amber-500 text-white rounded-xl shrink-0">
+          <!-- Advertencia de protección de identidad global -->
+          <div class="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-2xl p-3.5 flex items-center gap-3 animate-in fade-in duration-200">
+            <div class="p-2 bg-blue-600 text-white rounded-xl shrink-0">
               <Info :size="18" />
             </div>
-            <div class="text-xs text-amber-950 dark:text-amber-200 leading-relaxed">
-              <p class="font-black uppercase tracking-wider text-[10px]">🔒 Datos Personales Bloqueados:</p>
+            <div class="text-xs text-blue-950 dark:text-blue-200 leading-relaxed">
+              <p class="font-black uppercase tracking-wider text-[10px]">🔒 Protección de Identidad del Usuario:</p>
               <p class="font-medium mt-0.5">
-                Este docente también está registrado como <strong>Padre de Familia</strong> en el sistema. Para modificar sus nombres, apellidos o documento de identidad, debe hacerlo a través del módulo de <strong>Gestión de Padres de Familia</strong>. Aquí únicamente puede actualizar su correo electrónico.
+                Los datos personales (nombres, apellidos y documento de identidad) permanecen protegidos para no alterar la cuenta global de la persona. En esta ventana únicamente se puede modificar el <strong>Email Institucional</strong> asignado a esta institución.
               </p>
             </div>
           </div>
@@ -1390,26 +1390,26 @@ watch(() => yearStore.selectedYearId, () => {
           <div class="grid grid-cols-2 gap-4">
             <label class="space-y-1.5">
               <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nombres</span>
-              <input v-model="editTeacherForm.nombre" :disabled="editTeacherForm.es_padre" type="text" placeholder="Ej. Laura Elena" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-bold outline-none text-slate-900 dark:text-white disabled:opacity-75 disabled:cursor-not-allowed disabled:bg-slate-200/50 dark:disabled:bg-slate-800/80" />
+              <input v-model="editTeacherForm.nombre" :disabled="true" type="text" placeholder="Ej. Laura Elena" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-bold outline-none text-slate-900 dark:text-white disabled:opacity-75 disabled:cursor-not-allowed disabled:bg-slate-200/50 dark:disabled:bg-slate-800/80" />
             </label>
             <label class="space-y-1.5">
               <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Apellidos</span>
-              <input v-model="editTeacherForm.apellido" :disabled="editTeacherForm.es_padre" type="text" placeholder="Ej. Gómez" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-bold outline-none text-slate-900 dark:text-white disabled:opacity-75 disabled:cursor-not-allowed disabled:bg-slate-200/50 dark:disabled:bg-slate-800/80" />
+              <input v-model="editTeacherForm.apellido" :disabled="true" type="text" placeholder="Ej. Gómez" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-bold outline-none text-slate-900 dark:text-white disabled:opacity-75 disabled:cursor-not-allowed disabled:bg-slate-200/50 dark:disabled:bg-slate-800/80" />
             </label>
             <label class="space-y-1.5">
               <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tipo Doc.</span>
-              <select v-model="editTeacherForm.id_tipodocumento" :disabled="editTeacherForm.es_padre" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-bold outline-none text-slate-900 dark:text-white disabled:opacity-75 disabled:cursor-not-allowed disabled:bg-slate-200/50 dark:disabled:bg-slate-800/80">
+              <select v-model="editTeacherForm.id_tipodocumento" :disabled="true" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-bold outline-none text-slate-900 dark:text-white disabled:opacity-75 disabled:cursor-not-allowed disabled:bg-slate-200/50 dark:disabled:bg-slate-800/80">
                 <option value="">Seleccionar...</option>
                 <option v-for="type in documentTypes" :key="type.id_tipodocumento" :value="type.id_tipodocumento">{{ type.tipo }}</option>
               </select>
             </label>
             <label class="space-y-1.5">
               <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Número</span>
-              <input v-model="editTeacherForm.documento" :disabled="editTeacherForm.es_padre" type="text" placeholder="Documento de identidad" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-bold outline-none text-slate-900 dark:text-white disabled:opacity-75 disabled:cursor-not-allowed disabled:bg-slate-200/50 dark:disabled:bg-slate-800/80" />
+              <input v-model="editTeacherForm.documento" :disabled="true" type="text" placeholder="Documento de identidad" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-bold outline-none text-slate-900 dark:text-white disabled:opacity-75 disabled:cursor-not-allowed disabled:bg-slate-200/50 dark:disabled:bg-slate-800/80" />
             </label>
             <label class="col-span-2 space-y-1.5">
               <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Email Institucional</span>
-              <input v-model="editTeacherForm.email" type="email" placeholder="docente@institucion.edu" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-bold outline-none text-slate-900 dark:text-white" />
+              <input v-model="editTeacherForm.email" type="email" placeholder="docente@institucion.edu" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-bold outline-none text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20" />
             </label>
           </div>
           <div class="flex gap-3 pt-2">
