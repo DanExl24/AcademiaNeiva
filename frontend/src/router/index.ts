@@ -459,6 +459,12 @@ router.beforeEach(async (to) => {
       activeRole = userRoles[0]
     }
 
+    // Bloquear acceso a la vista de traslados durante el modo monitoreo/seguimiento
+    if (auth.isMonitoring && to.path.includes('gestion-traslados')) {
+      console.warn('[Auth Guard] El acceso a la gestión de traslados está deshabilitado en Modo Monitoreo.')
+      return '/dashboard'
+    }
+
     const allowedRoles = to.meta.roles as string[] | undefined
     if (allowedRoles && !allowedRoles.includes(activeRole || '')) {
       // Redirigir al dashboard home dispatcher si no tiene el rol

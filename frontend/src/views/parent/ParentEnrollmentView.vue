@@ -83,7 +83,7 @@ watch(selectedDocIndex, () => {
 
 // Load parent's children
 const fetchChildren = async () => {
-  const userId = (auth.isMonitoring && auth.monitoringUser?.id) ? auth.monitoringUser.id : auth.user?.id
+  const userId = (auth.isMonitoring && auth.monitoringUser) ? (auth.monitoringUser.id || (auth.monitoringUser as any).id_usuario) : (auth.user?.id_usuario || auth.user?.id)
   if (!userId) return
   try {
     loadingChildren.value = true

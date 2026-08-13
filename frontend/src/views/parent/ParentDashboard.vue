@@ -65,7 +65,7 @@ const dashboardData = ref<any>({
 
 const fetchDashboardData = async () => {
   try {
-    const id_usuario = (auth.isMonitoring && auth.monitoringUser?.id) ? auth.monitoringUser.id : auth.user?.id
+    const id_usuario = (auth.isMonitoring && auth.monitoringUser) ? (auth.monitoringUser.id || (auth.monitoringUser as any).id_usuario) : (auth.user?.id_usuario || auth.user?.id)
     const params: any = {}
     if (selectedPeriodId.value) params.id_periodo = selectedPeriodId.value
     if (yearStore.selectedYearId) params.yearId = yearStore.selectedYearId
@@ -479,7 +479,7 @@ const barChartOptions = {
               Intelligence Core Family
             </div>
             <h1 class="text-4xl md:text-6xl font-black tracking-tighter leading-tight">
-              {{ auth.user?.name.split(' ')[0] }}, <span class="text-indigo-400 italic">análisis familiar.</span>
+              {{ (auth.isMonitoring && auth.monitoringUser) ? auth.monitoringUser.nombre : (auth.user?.name?.split(' ')[0] || 'Acudiente') }}, <span class="text-indigo-400 italic">análisis familiar.</span>
             </h1>
             
             <div class="flex flex-wrap items-center gap-4">

@@ -159,6 +159,10 @@ const menuItems = computed(() => {
     { name: 'Directorio', icon: BookOpen, path: '/dashboard/directorio' }
   )
 
+  if (auth.isMonitoring) {
+    items = items.filter(i => i.path !== '/dashboard/gestion-traslados')
+  }
+
   if (!auth.isMonitoring) {
     items.push(
       { name: 'Soporte Técnico', icon: LifeBuoy, path: '/dashboard/soporte' }
@@ -890,17 +894,19 @@ onUnmounted(() => {
 
           <div class="flex items-center gap-4">
             <div class="text-right hidden sm:block">
-              <p class="text-sm font-bold text-gray-900 dark:text-white">{{ auth.user?.name || 'Usuario' }}</p>
+              <p class="text-sm font-bold text-gray-900 dark:text-white">
+                {{ auth.isMonitoring && auth.monitoringUser ? `${auth.monitoringUser.nombre} ${auth.monitoringUser.apellido || ''}`.trim() : (auth.user?.name || 'Usuario') }}
+              </p>
               <p class="text-xs text-gray-500 dark:text-slate-400 capitalize flex items-center justify-end gap-1">
                 {{ auth.activeRole || 'Rol' }}
-                <button v-if="hasMultipleRoles" @click="switchRole(otherRole!)" 
+                <button v-if="hasMultipleRoles && !auth.isMonitoring" @click="switchRole(otherRole!)" 
                   class="ml-2 text-[10px] bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded-full font-bold hover:bg-indigo-600 hover:text-white transition-all">
                   Cambiar a {{ otherRole }}
                 </button>
               </p>
             </div>
             <div class="h-10 w-10 rounded-full bg-indigo-100 dark:bg-indigo-900 border-2 border-white dark:border-slate-800 shadow-sm flex items-center justify-center text-indigo-600 dark:text-indigo-300 font-bold">
-              {{ (auth.user?.name || 'U').charAt(0) }}
+              {{ (auth.isMonitoring && auth.monitoringUser ? auth.monitoringUser.nombre : (auth.user?.name || 'U')).charAt(0) }}
             </div>
           </div>
         </div>

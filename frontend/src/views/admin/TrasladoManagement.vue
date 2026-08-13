@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch }  from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 import { API_BASE_URL } from '../../config/api'
 import { useAuthStore } from '../../stores/auth'
@@ -27,6 +27,7 @@ import DatosAcademicosTrasladoModal from '../../components/traslados/DatosAcadem
 const auth = useAuthStore()
 const yearStore = useAcademicYearStore()
 const route = useRoute()
+const router = useRouter()
 
 const showAcademicDataModal = ref(false)
 const academicTargetId = ref<number | null>(null)
@@ -151,6 +152,11 @@ const approvalForm = ref({
 
 // Fetch Data on Mount
 onMounted(async () => {
+  if (auth.isMonitoring) {
+    router.push('/dashboard')
+    return
+  }
+
   await Promise.all([
     fetchSolicitudes(),
     fetchVinculaciones(),
