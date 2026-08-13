@@ -364,7 +364,7 @@ const loadData = async () => {
 
   try {
     loading.value = true
-    const params: any = {}
+    const params: any = { keys: 'periods,assignments,competencies,dimensions' }
     if (yearStore.selectedYearId) {
       params.yearId = yearStore.selectedYearId
     }

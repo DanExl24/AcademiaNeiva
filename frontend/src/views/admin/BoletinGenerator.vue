@@ -166,7 +166,7 @@ const fetchInitialData = async () => {
     const headers = { Authorization: `Bearer ${auth.token}` }
     
     const schoolId = auth.user?.schoolId || 1
-    const yearIdParam = yearStore.selectedYearId ? `?id_anio=${yearStore.selectedYearId}` : ''
+    const yearIdParam = yearStore.selectedYearId ? `?id_anio=${yearStore.selectedYearId}&keys=periods,scales` : '?keys=periods,scales'
     const [settingsRes, gradesRes, studentsRes] = await Promise.all([
       fetch(`${API_BASE_URL}/api/academic-admin/settings/${schoolId}${yearIdParam}`, { headers }),
       fetch(`${API_BASE_URL}/api/academic-admin/grades/${schoolId}${yearIdParam}`, { headers }),

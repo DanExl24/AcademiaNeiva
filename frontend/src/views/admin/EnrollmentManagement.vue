@@ -638,7 +638,7 @@ const fetchExtraordinaryCatalogs = async () => {
     catalogGrupos.value = gradesRes.data.grupos || []
     
     // Fetch academic years
-    const settingsRes = await axios.get(`/api/academic-admin/settings/${idColegio}`)
+    const settingsRes = await axios.get(`/api/academic-admin/settings/${idColegio}?keys=years`)
     catalogYears.value = settingsRes.data.academicYears || []
     
     // Fetch students, filter out EXPULSADO & GRADUADO

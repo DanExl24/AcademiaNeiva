@@ -274,7 +274,7 @@ const loadInitialData = async () => {
   if (!schoolId.value) return
   try {
     loading.value = true
-    const params: any = {}
+    const params: any = { keys: 'periods' }
     if (yearStore.selectedYearId) {
       params.yearId = yearStore.selectedYearId
     }

@@ -466,7 +466,7 @@ const filteredCoberturaDetalles = computed(() => {
 const loadFilterOptions = async () => {
   if (!schoolId.value) return
   try {
-    const params: any = {}
+    const params: any = { keys: 'periods,assignments' }
     if (yearStore.selectedYearId) {
       params.yearId = yearStore.selectedYearId
     }

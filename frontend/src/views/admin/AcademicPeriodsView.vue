@@ -242,7 +242,7 @@ const loadData = async () => {
   if (!schoolId.value) return
   try {
     loading.value = true
-    const params: any = {}
+    const params: any = { keys: 'years,periods' }
     const activeYearId = selectedYearId.value || yearStore.selectedYearId
     if (activeYearId) {
       params.yearId = activeYearId

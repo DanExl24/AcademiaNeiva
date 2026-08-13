@@ -105,7 +105,7 @@ const loadCatalogs = async () => {
   if (!schoolId.value) return
   loading.value = true
   try {
-    const yearIdParam = yearStore.selectedYearId ? `?yearId=${yearStore.selectedYearId}` : ''
+    const yearIdParam = yearStore.selectedYearId ? `?yearId=${yearStore.selectedYearId}&keys=years,periods` : '?keys=years,periods'
     const [settingsRes, gradesRes] = await Promise.all([
       axios.get(`${API_BASE_URL}/api/academic-admin/settings/${schoolId.value}${yearIdParam}`, {
         headers: { Authorization: `Bearer ${auth.token}` }
