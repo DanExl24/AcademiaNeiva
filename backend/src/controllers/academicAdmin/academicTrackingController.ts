@@ -793,25 +793,52 @@ export const recordDirectiveDecision = async (req: Request, res: Response): Prom
       return;
     }
 
-    const inserted = await db
-      .insertInto("decision_promocion_directivo")
-      .values({
-        id_colegio: schoolId,
-        id_estudiante: studentId,
-        id_anio_anterior: previousYearId,
-        resultado_calculado: calculatedResult as any,
-        decision_tomada: decisionTaken as any,
-        id_grado_anterior: previousGradeId || null,
-        id_grado_asignado: assignedGradeId || null,
-        id_usuario_decision: userId,
-        observacion: observation || null
-      })
-      .returningAll()
+    const existingDecision = await db
+      .selectFrom("decision_promocion_directivo")
+      .select(["id_decision"])
+      .where("id_estudiante", "=", studentId)
+      .where("id_colegio", "=", schoolId)
+      .where("id_anio_anterior", "=", previousYearId)
       .executeTakeFirst();
 
+    let decisionResult;
+
+    if (existingDecision) {
+      decisionResult = await db
+        .updateTable("decision_promocion_directivo")
+        .set({
+          resultado_calculado: calculatedResult as any,
+          decision_tomada: decisionTaken as any,
+          id_grado_anterior: previousGradeId || null,
+          id_grado_asignado: assignedGradeId || null,
+          id_usuario_decision: userId,
+          fecha_decision: sql`CURRENT_TIMESTAMP`,
+          observacion: observation || null
+        })
+        .where("id_decision", "=", existingDecision.id_decision)
+        .returningAll()
+        .executeTakeFirst();
+    } else {
+      decisionResult = await db
+        .insertInto("decision_promocion_directivo")
+        .values({
+          id_colegio: schoolId,
+          id_estudiante: studentId,
+          id_anio_anterior: previousYearId,
+          resultado_calculado: calculatedResult as any,
+          decision_tomada: decisionTaken as any,
+          id_grado_anterior: previousGradeId || null,
+          id_grado_asignado: assignedGradeId || null,
+          id_usuario_decision: userId,
+          observacion: observation || null
+        })
+        .returningAll()
+        .executeTakeFirst();
+    }
+
     res.json({
-      message: "Decisión del directivo registrada correctamente.",
-      decision: inserted
+      message: existingDecision ? "Decisión del directivo actualizada correctamente." : "Decisión del directivo registrada correctamente.",
+      decision: decisionResult
     });
   } catch (error) {
     console.error("Error en recordDirectiveDecision:", error);

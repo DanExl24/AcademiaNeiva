@@ -486,6 +486,14 @@ export const ensureCompetencySchema = async (): Promise<void> => {
       await client.query(usuarioColegioEmailSql);
     }
 
+    // Ejecutar migración 047 (restricción UNIQUE en decision_promocion_directivo por estudiante, colegio y año)
+    const uniqueDecisionPath = path.join(__dirname, "../migrations/047_unique_decision_promocion.sql");
+    if (fs.existsSync(uniqueDecisionPath)) {
+      const uniqueDecisionSql = fs.readFileSync(uniqueDecisionPath, "utf8");
+      await client.query(uniqueDecisionSql);
+    }
+
+
 
     // Backfill sync_uuid for existing competencies
     const unmigratedRes = await client.query(`

@@ -20,11 +20,28 @@ import {
   Layers3,
   Calendar,
   AlertOctagon,
-  Save
+  Save,
+  Edit
 } from 'lucide-vue-next'
 
 const auth = useAuthStore()
 const yearStore = useAcademicYearStore()
+
+const formatDecisionLabel = (decision: string) => {
+  if (!decision) return ''
+  switch (decision) {
+    case 'PROMOVER_SIGUIENTE_GRADO':
+      return 'Promover al siguiente grado'
+    case 'MANTENER_GRADO':
+      return 'Mantener en el mismo grado'
+    case 'MATRICULA_CONDICIONADA':
+      return 'Matrícula condicionada'
+    case 'OTRA_DECISION':
+      return 'Otra decisión académica'
+    default:
+      return decision.replace(/_/g, ' ')
+  }
+}
 
 const activeTab = ref<'period' | 'annual' | 'history' | 'decisions'>('period')
 const loading = ref(false)
@@ -651,14 +668,21 @@ onMounted(async () => {
               </td>
               <td>
                 <span v-if="student.decision_directivo" class="badge badge-info">
-                  {{ student.decision_directivo.decision_tomada }}
+                  {{ formatDecisionLabel(student.decision_directivo.decision_tomada) }}
+                </span>
+                <span v-else-if="student.resultado_anual === 'APROBADO'" class="badge badge-success font-normal">
+                  Promovido automáticamente
                 </span>
                 <span v-else class="text-muted">Sin registrar</span>
               </td>
               <td>
-                <button class="btn-primary-sm" @click="openDecisionModal(student)">
-                  <UserCheck class="w-4 h-4 inline mr-1" />
-                  Registrar Decisión
+                <button 
+                  :class="student.decision_directivo ? 'btn-secondary-sm' : 'btn-primary-sm'" 
+                  @click="openDecisionModal(student)"
+                >
+                  <Edit v-if="student.decision_directivo" class="w-4 h-4 inline mr-1" />
+                  <UserCheck v-else class="w-4 h-4 inline mr-1" />
+                  {{ student.decision_directivo ? 'Editar Decisión' : 'Registrar Decisión' }}
                 </button>
               </td>
             </tr>
@@ -717,7 +741,7 @@ onMounted(async () => {
                   Resultado Anual Calculado: <strong>{{ mat.resultado_calculado }}</strong>
                 </p>
                 <p v-if="mat.decision_tomada">
-                  Decisión Institucional Registrada: <span class="text-primary font-semibold">{{ mat.decision_tomada }}</span>
+                  Decisión Institucional Registrada: <span class="text-primary font-semibold">{{ formatDecisionLabel(mat.decision_tomada) }}</span>
                 </p>
                 <p v-if="mat.observacion" class="text-sm italic text-muted mt-2">
                   Observación: "{{ mat.observacion }}"
@@ -733,7 +757,7 @@ onMounted(async () => {
     <div v-if="showDecisionModal" class="modal-backdrop">
       <div class="modal-card">
         <div class="modal-header">
-          <h3>Registro de Decisión Institucional de Promoción</h3>
+          <h3>{{ targetStudentForDecision?.decision_directivo ? 'Editar Decisión Institucional de Promoción' : 'Registro de Decisión Institucional de Promoción' }}</h3>
           <button class="btn-close" @click="showDecisionModal = false">×</button>
         </div>
 
@@ -1006,7 +1030,7 @@ onMounted(async () => {
 .badge-warning { background: #fef3c7; color: #b45309; }
 .badge-info { background: #dbeafe; color: #1d4ed8; }
 
-.btn-action, .btn-primary-sm, .btn-primary, .btn-secondary {
+.btn-action, .btn-primary-sm, .btn-primary, .btn-secondary, .btn-secondary-sm {
   display: inline-flex;
   align-items: center;
   padding: 0.4rem 0.75rem;
@@ -1015,6 +1039,17 @@ onMounted(async () => {
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
+}
+
+.btn-secondary-sm {
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+}
+
+.btn-secondary-sm:hover {
+  background: #e2e8f0;
+  color: #1e293b;
 }
 
 .btn-action {
