@@ -142,7 +142,7 @@ const getStudentBoletin = async (req, res) => {
             .select([
             "dg_am.id_materia",
             "am.id_periodo",
-            (0, kysely_2.sql) `ROUND(AVG(na.nota)::numeric, 2)`.as("promedio_calculado")
+            (0, kysely_2.sql) `ROUND(SUM(na.nota * (am.porcentaje / 100.0))::numeric, 2)`.as("promedio_calculado")
         ])
             .where("na.id_estudiante", "=", numEstudiante)
             .groupBy(["dg_am.id_materia", "am.id_periodo"])
@@ -262,7 +262,7 @@ const getStudentBoletin = async (req, res) => {
             .select([
             "am.id_detallegrado",
             "na.id_estudiante",
-            (0, kysely_2.sql) `ROUND(AVG(na.nota)::numeric, 2)`.as("promedio_calculado")
+            (0, kysely_2.sql) `ROUND(SUM(na.nota * (am.porcentaje / 100.0))::numeric, 2)`.as("promedio_calculado")
         ])
             .where("am.id_periodo", "=", numPeriodo)
             .groupBy(["am.id_detallegrado", "na.id_estudiante"])

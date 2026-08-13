@@ -8,5 +8,5 @@ const multer_1 = __importDefault(require("multer"));
 const storage = multer_1.default.memoryStorage();
 exports.upload = (0, multer_1.default)({
     storage,
-    limits: { fileSize: 100 * 1024 * 1024 } // 100MB
+    limits: { fileSize: 50 * 1024 * 1024 } // 50MB (alineado con Nginx client_max_body_size)
 });

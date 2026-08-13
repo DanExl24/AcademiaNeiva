@@ -10,6 +10,7 @@ const kysely_2 = require("kysely");
 const adminGeneralNotificationService_1 = require("../services/adminGeneralNotificationService");
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const documentValidation_1 = require("../utils/documentValidation");
+const emailResolver_1 = require("../utils/emailResolver");
 // ═══════════════════════════════════════════════════════════════════════════
 // GESTIÓN DE COLEGIOS
 // ═══════════════════════════════════════════════════════════════════════════
@@ -831,6 +832,12 @@ const registrarDirectivo = async (req, res) => {
             await client.query('INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2) ON CONFLICT DO NOTHING', [id_usuario, idRol]);
             await client.query(`INSERT INTO usuario_colegio (id_usuario, id_colegio, id_rol, estado, fecha_inicio)
          VALUES ($1, $2, $3, 'ACTIVO', NOW()) ON CONFLICT DO NOTHING`, [id_usuario, id_colegio, idRol]);
+            // Registrar el correo personal del usuario como email institucional inicial en este colegio
+            const userEmailRes = await client.query('SELECT email FROM usuario WHERE id_usuario = $1', [id_usuario]);
+            const userEmail = userEmailRes.rows[0]?.email || null;
+            if (userEmail) {
+                await (0, emailResolver_1.upsertInstitutionalEmail)(id_usuario, id_colegio, userEmail, null, client);
+            }
         }
         await client.query('COMMIT');
         res.status(201).json(result.rows[0]);
@@ -2375,6 +2382,12 @@ const crearUsuarioByAdminGeneral = async (req, res) => {
         else if (rol === 'padre' && id_colegio) {
             await client.query(`INSERT INTO padre_familia (id_usuario, id_colegio, nombre, apellido, documento)
          VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING`, [newUserId, id_colegio, nombre.trim(), (apellido || '').trim() || '', documento || '']);
+        }
+        // 7.5 Registrar correo institucional en usuario_colegio_email si aplica
+        // Para directivos y docentes vinculados a un colegio, el email de creacion
+        // es su correo institucional inicial en esa institucion.
+        if (id_colegio && finalEmail && (rol === 'directivo' || rol === 'docente')) {
+            await (0, emailResolver_1.upsertInstitutionalEmail)(newUserId, id_colegio, finalEmail, null, client);
         }
         // 8. Registro de Auditoría de Supervisión si aplica
         const authReq = req;

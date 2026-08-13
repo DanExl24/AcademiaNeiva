@@ -81,10 +81,46 @@ const getStudentHistoryForReingreso = async (req, res) => {
             }
             return {
                 ...doc,
+                estado_sugerido: suggestedState,
                 estado_renovacion_sugerido: suggestedState,
                 motivo_sugerencia: motivoSugerencia
             };
         });
+        // 4.5. Motor de Sugerencia Pedagógica de Grado Destino (Smart Auto-Suggestion)
+        let suggestedGrade = {
+            id_nivel: lastEnrollment?.id_nivel || null,
+            id_tipo_grado: lastEnrollment?.id_tipo_grado || null,
+            grado_nombre: '',
+            motivo: ''
+        };
+        if (lastEnrollment && lastEnrollment.id_tipo_grado) {
+            const isPromoted = ['PROMOVIDO', 'APROBADO'].includes(String(lastEnrollment.estado || '').toUpperCase()) ||
+                ['PROMOVIDO', 'APROBADO'].includes(String(lastEnrollment.estado_promocion || '').toUpperCase());
+            if (isPromoted) {
+                const nextGradeRes = await db_1.pool.query(`SELECT tg.id_tipo_grado, tg.nombre AS grado_nombre, tg.id_nivel
+           FROM tipo_grado tg
+           WHERE tg.id_tipo_grado > $1
+           ORDER BY tg.id_tipo_grado ASC
+           LIMIT 1`, [lastEnrollment.id_tipo_grado]);
+                if (nextGradeRes.rows.length > 0) {
+                    const ng = nextGradeRes.rows[0];
+                    suggestedGrade = {
+                        id_nivel: ng.id_nivel || lastEnrollment.id_nivel,
+                        id_tipo_grado: ng.id_tipo_grado,
+                        grado_nombre: ng.grado_nombre,
+                        motivo: 'Estudiante promovido en el año lectivo anterior. Sugerido: Grado Siguiente.'
+                    };
+                }
+                else {
+                    suggestedGrade.motivo = 'Estudiante promovido en el grado máximo registrado.';
+                }
+            }
+            else {
+                const currentGradeRes = await db_1.pool.query(`SELECT tg.nombre AS grado_nombre FROM tipo_grado tg WHERE tg.id_tipo_grado = $1`, [lastEnrollment.id_tipo_grado]);
+                suggestedGrade.grado_nombre = currentGradeRes.rows[0]?.grado_nombre || '';
+                suggestedGrade.motivo = 'Reingreso al mismo grado por retiro a mitad de año o no promoción.';
+            }
+        }
         // 5. Fetch parent info
         const parentRes = await db_1.pool.query(`SELECT pf.*, u.email
        FROM detalle_padrefamilia dp
@@ -97,7 +133,8 @@ const getStudentHistoryForReingreso = async (req, res) => {
             student,
             lastEnrollment,
             parent,
-            documents: evaluatedDocs
+            documents: evaluatedDocs,
+            suggestedGrade
         });
     }
     catch (error) {
@@ -132,9 +169,31 @@ const getTicketContextForReingreso = async (req, res) => {
        WHERE e.id_colegio = $1 
          AND (e.id_estudiante = $3 OR u.email = $2 OR u.documento = $2 OR u.id_usuario = $4)
          AND e.estado = 'RETIRADO'`, [schoolId, ticket.correo_remitente, ticket.id_estudiante || null, ticket.id_usuario || null]);
+        let gradoPretendido = null;
+        try {
+            if (ticket.observaciones) {
+                const obsArr = typeof ticket.observaciones === 'string' ? JSON.parse(ticket.observaciones) : ticket.observaciones;
+                if (Array.isArray(obsArr)) {
+                    const foundObs = obsArr.find((o) => o.id_tipo_grado_pretendido);
+                    if (foundObs && foundObs.id_tipo_grado_pretendido) {
+                        const grRes = await db_1.pool.query(`SELECT id_tipo_grado, nombre FROM tipo_grado WHERE id_tipo_grado = $1`, [foundObs.id_tipo_grado_pretendido]);
+                        if (grRes.rows.length > 0) {
+                            gradoPretendido = {
+                                id_tipo_grado: grRes.rows[0].id_tipo_grado,
+                                nombre: grRes.rows[0].nombre
+                            };
+                        }
+                    }
+                }
+            }
+        }
+        catch (e) {
+            // Ignore JSON parse errors
+        }
         res.json({
             ticket,
-            suggestedStudents: studentsRes.rows
+            suggestedStudents: studentsRes.rows,
+            gradoPretendido
         });
     }
     catch (error) {
@@ -150,9 +209,15 @@ const sendReingresoParentLink = async (req, res) => {
         res.status(400).json({ error: "No se pudo identificar el colegio del directivo" });
         return;
     }
-    const { id_estudiante, id_nivel, id_grupo, id_anio, id_ticket, document_config, correo_padre, observaciones } = req.body;
+    const { id_estudiante, id_nivel, id_grupo, id_anio, id_ticket, declaracion_presencial, document_config, correo_padre, observaciones } = req.body;
     if (!id_estudiante || !id_nivel || !id_grupo || !id_anio || !correo_padre) {
         res.status(400).json({ error: "Los campos id_estudiante, id_nivel, id_grupo, id_anio y correo_padre son obligatorios" });
+        return;
+    }
+    if (!id_ticket && !declaracion_presencial) {
+        res.status(400).json({
+            error: "Por gobernanza de consentimiento, el trámite debe originarse desde un Ticket de solicitud del acudiente o contar con la declaración de atención presencial en secretaría."
+        });
         return;
     }
     const client = await db_1.pool.connect();
@@ -168,6 +233,22 @@ const sendReingresoParentLink = async (req, res) => {
         if (student.estado === 'EXPULSADO' || student.estado === 'GRADUADO' || student.estado === 'SANCIONADO') {
             res.status(400).json({ error: `El estudiante se encuentra en estado '${student.estado}'${student.estado === 'SANCIONADO' ? ' (Sanción disciplinaria activa)' : ''} y no es elegible para reingreso hasta que la situación se resuelva.` });
             return;
+        }
+        // Auto-create audit ticket if processing presencial atención without existing ticket
+        let finalTicketId = id_ticket ? Number(id_ticket) : null;
+        if (!finalTicketId && declaracion_presencial) {
+            const presencialTicketRes = await client.query(`INSERT INTO tickets_soporte
+           (id_usuario, nombre_remitente, correo_remitente, tipo_incidencia, asunto, descripcion, id_colegio, estado, id_estudiante)
+         VALUES ($1, $2, $3, 'REINGRESO', 'Atención Presencial en Secretaría - Reingreso', $4, $5, 'EN_PROCESO', $6)
+         RETURNING id_ticket`, [
+                authReq.user.id,
+                'Atención Presencial (Secretaría)',
+                correo_padre,
+                `Trámite de reingreso iniciado directamente en secretaría para ${student.nombre} ${student.apellido}. Declaración de consentimiento confirmada por el directivo.`,
+                schoolId,
+                id_estudiante
+            ]);
+            finalTicketId = presencialTicketRes.rows[0].id_ticket;
         }
         // Auto-update student state to RETIRADO if currently active, to prepare for re-admission
         if (student.estado !== 'RETIRADO') {
@@ -193,7 +274,7 @@ const sendReingresoParentLink = async (req, res) => {
             correo_padre,
             observaciones || 'Matrícula de reingreso autorizada por directivo',
             authReq.user.id,
-            id_ticket || null
+            finalTicketId
         ]);
         const newMat = matRes.rows[0];
         // Save document configuration matrix
@@ -270,24 +351,64 @@ const notifyNonExistentStudent = async (req, res) => {
 exports.notifyNonExistentStudent = notifyNonExistentStudent;
 const getReingresoCatalogs = async (req, res) => {
     const authReq = req;
-    const schoolId = authReq.user?.schoolId;
-    if (!schoolId) {
-        res.status(400).json({ error: "No se pudo identificar el colegio del directivo" });
-        return;
-    }
+    const schoolId = (req.query.schoolId ? Number(req.query.schoolId) : null) || authReq.user?.schoolId;
     try {
-        const yearsRes = await db_1.pool.query(`SELECT id_anio, calendario AS anio, estado 
-       FROM anio_lectivo 
-       WHERE id_colegio = $1 
-       ORDER BY CASE WHEN estado = 'ABIERTO' THEN 0 ELSE 1 END, id_anio DESC`, [schoolId]);
-        const levelsRes = await db_1.pool.query(`SELECT id_nivel, nombre 
-       FROM nivel_escolar 
-       WHERE id_colegio = $1 OR id_colegio IS NULL 
-       ORDER BY id_nivel`, [schoolId]);
+        let yearsRes = { rows: [] };
+        let levelsRes = { rows: [] };
+        if (schoolId) {
+            yearsRes = await db_1.pool.query(`SELECT id_anio, calendario AS anio, estado 
+         FROM anio_lectivo 
+         WHERE id_colegio = $1 
+         ORDER BY CASE WHEN estado = 'ABIERTO' THEN 0 ELSE 1 END, id_anio DESC`, [schoolId]);
+            levelsRes = await db_1.pool.query(`SELECT id_nivel, nombre 
+         FROM nivel_escolar 
+         WHERE id_colegio = $1 OR id_colegio IS NULL 
+         ORDER BY id_nivel`, [schoolId]);
+        }
+        const rawGradosRes = await db_1.pool.query(`SELECT id_tipo_grado, nombre, id_nivel 
+       FROM tipo_grado 
+       ORDER BY id_tipo_grado`);
+        const gradeOrderMap = {
+            'PARVULOS': 1,
+            'PREJARDIN': 2,
+            'PRE-JARDIN': 2,
+            'JARDIN': 3,
+            'TRANSICION': 4,
+            'TRANSICIÓN': 4,
+            'PRIMERO': 5,
+            'SEGUNDO': 6,
+            'TERCERO': 7,
+            'CUARTO': 8,
+            'QUINTO': 9,
+            'SEXTO': 10,
+            'SEPTIMO': 11,
+            'SÉPTIMO': 11,
+            'OCTAVO': 12,
+            'NOVENO': 13,
+            'DECIMO': 14,
+            'DÉCIMO': 14,
+            'ONCE': 15,
+            'DOCE': 16
+        };
+        const seenNames = new Set();
+        const uniqueGrados = [];
+        for (const g of rawGradosRes.rows) {
+            const normalizedName = (g.nombre || '').trim().toUpperCase();
+            if (!seenNames.has(normalizedName)) {
+                seenNames.add(normalizedName);
+                uniqueGrados.push(g);
+            }
+        }
+        uniqueGrados.sort((a, b) => {
+            const orderA = gradeOrderMap[(a.nombre || '').trim().toUpperCase()] || 99;
+            const orderB = gradeOrderMap[(b.nombre || '').trim().toUpperCase()] || 99;
+            return orderA - orderB;
+        });
         res.json({
             anios: yearsRes.rows,
             years: yearsRes.rows,
-            niveles: levelsRes.rows
+            niveles: levelsRes.rows,
+            grados: uniqueGrados
         });
     }
     catch (error) {
@@ -298,7 +419,7 @@ const getReingresoCatalogs = async (req, res) => {
 exports.getReingresoCatalogs = getReingresoCatalogs;
 const getReingresoGroups = async (req, res) => {
     const authReq = req;
-    const schoolId = authReq.user?.schoolId;
+    const schoolId = (req.query.schoolId ? Number(req.query.schoolId) : null) || authReq.user?.schoolId;
     const { nivelId } = req.query;
     if (!schoolId || !nivelId) {
         res.status(400).json({ error: "Parámetros schoolId y nivelId son requeridos" });

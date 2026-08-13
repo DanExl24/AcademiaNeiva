@@ -7,7 +7,7 @@ const authMiddleware_1 = require("../middleware/authMiddleware");
 const router = (0, express_1.Router)();
 // Administrative CRUD operations (require Directivo or Admin General)
 router.get("/sanctions/types", authMiddleware_1.verifyToken, authMiddleware_1.requireDirectivo, studentController_1.getTipoSanciones);
-router.get("/colegio/:idColegio", authMiddleware_1.verifyToken, authMiddleware_1.requireDirectivo, studentController_1.getAllStudents);
+router.get("/colegio/:idColegio", authMiddleware_1.verifyToken, studentController_1.getAllStudents);
 router.get("/:id/summary", authMiddleware_1.verifyToken, authMiddleware_1.requireDirectivo, studentController_1.getStudentSummary);
 router.put("/:id", authMiddleware_1.verifyToken, authMiddleware_1.requireDirectivo, studentController_1.updateStudent);
 router.patch("/:id/status", authMiddleware_1.verifyToken, authMiddleware_1.requireDirectivo, studentController_1.updateStudentStatus);
@@ -27,6 +27,7 @@ router.get("/observations/:id_estudiante/:id_periodo", studentPortalController_1
 router.get("/parent-dashboard/:id_usuario", studentPortalController_1.getParentDashboardData);
 router.get("/dashboard-stats/:id_estudiante/:id_periodo", studentPortalController_1.getStudentDashboardStats);
 router.get("/parent-children/:id_usuario", studentPortalController_1.getParentChildren);
+router.get("/parent/enrollment/:studentId", studentController_1.getParentStudentEnrollment);
 router.get("/academic-years/:id_estudiante", studentPortalController_1.getStudentAcademicYears);
 router.get("/years/:id_estudiante", studentPortalController_1.getStudentAcademicYears);
 exports.default = router;

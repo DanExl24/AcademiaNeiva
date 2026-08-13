@@ -1310,6 +1310,9 @@ Las siguientes restricciones de unicidad están implementadas a nivel de base de
 | `dba`                        | `uq_dba_area_grado_num_version`                | `(area, grado, numero_dba, version_curricular)`                           | UNIQUE         |
 | `colegio_version_curricular` | `uq_colegio_area_grado`                        | `(id_colegio, area, grado)`                                               | UNIQUE         |
 | `registro_graduados`         | `registro_graduados_id_estudiante_key`         | `id_estudiante`                                                           | UNIQUE         |
+| `decision_promocion_directivo`| `uq_decision_promocion_estudiante_colegio_anio` | `(id_estudiante, id_colegio, id_anio_anterior)`                           | UNIQUE         |
+| `usuario_colegio_email`      | `uq_usuario_colegio_email`                     | `(id_usuario, id_colegio)`                                                | UNIQUE         |
+| `detalle_grados`             | `uq_detalle_grados_grupo_materia`              | `(id_grupo, id_materia, id_colegio)`                                      | UNIQUE         |
 
 ### Motivo
 
@@ -2115,6 +2118,75 @@ Endpoints que crean o modifican registros en las tablas listadas.
 ### Historias de usuario relacionadas
 
 Regla transversal sin HU específica.
+
+---
+
+# 16. Seguimiento y Promoción Académica
+
+---
+
+## RN-GEN-034
+
+### Nombre
+
+Advertencias Informativas, Unicidad y Cierre Mínimo para Decisiones de Promoción Anual
+
+### Descripción
+
+El módulo de Seguimiento Académico y Promoción (`decision_promocion_directivo`) implementa las siguientes condiciones estructurales:
+
+1. **Unicidad e Invariante de Decisión**: Para un estudiante (`id_estudiante`), colegio (`id_colegio`) y año lectivo anterior (`id_anio_anterior`), solo se permite **un único registro de decisión institucional**. Esta condición está garantizada a nivel de PostgreSQL mediante la restricción `uq_decision_promocion_estudiante_colegio_anio UNIQUE (id_estudiante, id_colegio, id_anio_anterior)`.
+2. **Edición mediante Operación UPSERT**: El backend procesa las solicitudes de decisión validando existencia previa mediante el querybuilder de Kysely. Si la decisión ya existe, realiza `UPDATE` (actualizando la decisión, observacion, fecha y usuario directivo); en caso contrario, realiza `INSERT INTO`.
+3. **Restricción por Cierre de Períodos**: La decisión de promoción anual solo se puede registrar cuando el año lectivo evaluado se encuentra en su período final (4° período) o ha cerrado al menos `N-1` períodos de su ciclo escolar. En caso contrario, el backend retorna HTTP 400.
+4. **Carácter Informativo**: El cálculo anual automático (`APROBADO`, `PENDIENTE_RECUPERACION`, `NO_PROMOVIDO`) es informativo y apoya la toma de decisiones sin bloquear rígida o automáticamente los procesos administrativos de matrícula.
+5. **Comportamiento en Interfaz Directiva**: Para estudiantes promovidos automáticamente (`APROBADO`), la interfaz despliega `"Promovido automáticamente"` sin obligar a registrar excepciones. Para estudiantes con decisión previa registrada, despliega la decisión formateada y habilita el botón en estado **"Editar Decisión"**.
+
+### Motivo
+
+Previene decisiones de promoción en momentos prematuros del año escolar, evita duplicidades en base de datos al actualizar criterios institucionales y garantiza la soberanía directiva sobre la matrícula.
+
+### Alcance
+
+Seguimiento Académico, Matrículas, Auditoría y Consolidado Anual.
+
+### Evidencia
+
+- Constraint UNIQUE `uq_decision_promocion_estudiante_colegio_anio`: [047_unique_decision_promocion.sql](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/migrations/047_unique_decision_promocion.sql)
+- Controller de Seguimiento: `recordDirectiveDecision` y `getAnnualConsolidation` en [academicTrackingController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdmin/academicTrackingController.ts)
+- Componente Frontend: [AcademicTrackingView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/AcademicTrackingView.vue)
+- Documentación de Módulo: [Reglas de Negocio Módulo 19](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/modules/19_seguimiento_y_promocion_academica/reglas_negocio.md)
+
+### Implementación
+
+Validación mediante `db.selectFrom("decision_promocion_directivo")` antes de `updateTable` / `insertInto` en Kysely, respaldado por la restricción UNIQUE `uq_decision_promocion_estudiante_colegio_anio` en PostgreSQL y comprobación de períodos cerrados `closedPeriodsCount >= totalPeriodsCount - 1`.
+
+### Excepciones
+
+No se identificaron excepciones en la implementación actual.
+
+### Módulos afectados
+
+Seguimiento y Promoción Académica (Módulo 19), Matrículas (Módulo 06), Seguimiento Directivo (Módulo 20).
+
+### Entidades afectadas
+
+`decision_promocion_directivo`, `estudiante`, `colegio`, `anio_lectivo`, `matricula`.
+
+### Endpoints relacionados
+
+- `GET /api/academic-admin/academic-tracking/annual-consolidation`
+- `POST /api/academic-admin/academic-tracking/record-decision`
+- `GET /api/academic-admin/academic-tracking/check-warning`
+
+### Archivos relacionados
+
+- [academicTrackingController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdmin/academicTrackingController.ts)
+- [AcademicTrackingView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/AcademicTrackingView.vue)
+- [047_unique_decision_promocion.sql](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/migrations/047_unique_decision_promocion.sql)
+
+### Historias de usuario relacionadas
+
+HU-SEG-001, HU-SEG-002, HU-MAT-005.
 
 ---
 

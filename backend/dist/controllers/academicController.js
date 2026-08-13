@@ -1,7 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getTeacherDashboard = exports.getStudentsByGrade = exports.getTeacherCourses = void 0;
-const db_1 = require("../config/db");
 const kysely_1 = require("../config/kysely");
 const kysely_2 = require("kysely");
 const getTeacherCourses = async (req, res) => {
@@ -94,6 +93,10 @@ const getTeacherDashboard = async (req, res) => {
     const { userId } = req.params;
     const authUser = req.user;
     const schoolId = req.headers['x-school-id'] ? Number(req.headers['x-school-id']) : (req.query.schoolId ? Number(req.query.schoolId) : (authUser?.schoolId ? Number(authUser.schoolId) : null));
+    const yearIdParam = req.query.yearId ? Number(req.query.yearId) : null;
+    const periodIdRaw = req.query.periodId ? String(req.query.periodId) : null;
+    const isAllPeriods = periodIdRaw === 'all' || periodIdRaw === '0';
+    const periodIdParam = (periodIdRaw && !isAllPeriods) ? Number(periodIdRaw) : null;
     try {
         let docenteQuery = kysely_1.db
             .selectFrom("docente")
@@ -110,11 +113,14 @@ const getTeacherDashboard = async (req, res) => {
                 noGradeActivities: 0,
                 upToDateCourses: 0,
                 courseAverages: [],
-                alerts: []
+                alerts: [],
+                availablePeriods: [],
+                activePeriodInfo: null
             });
             return;
         }
         const idDocente = docente.id_docente;
+        const effectiveSchoolId = schoolId || docente.id_colegio;
         let coursesQuery = kysely_1.db
             .selectFrom("detalle_grados as dg")
             .innerJoin("grupos as g", "g.id_grupo", "dg.id_grupo")
@@ -130,8 +136,8 @@ const getTeacherDashboard = async (req, res) => {
             "j.nombre as jornada"
         ])
             .where("dg.id_docente", "=", idDocente);
-        if (schoolId) {
-            coursesQuery = coursesQuery.where("dg.id_colegio", "=", schoolId);
+        if (effectiveSchoolId) {
+            coursesQuery = coursesQuery.where("dg.id_colegio", "=", effectiveSchoolId);
         }
         const courses = await coursesQuery.execute();
         let studentCountQuery = kysely_1.db
@@ -140,29 +146,46 @@ const getTeacherDashboard = async (req, res) => {
             .select((0, kysely_2.sql) `COUNT(DISTINCT m.id_estudiante)::int`.as("total_students"))
             .where("dg.id_docente", "=", idDocente)
             .where("m.estado", "=", "ACTIVA");
-        if (schoolId) {
-            studentCountQuery = studentCountQuery.where("dg.id_colegio", "=", schoolId);
+        if (effectiveSchoolId) {
+            studentCountQuery = studentCountQuery.where("dg.id_colegio", "=", effectiveSchoolId);
         }
         const studentCount = await studentCountQuery.executeTakeFirst();
         const totalActiveStudents = studentCount ? studentCount.total_students : 0;
-        let periodRes;
-        if (schoolId) {
-            periodRes = await db_1.pool.query(`SELECT pa.id_periodo, pa.nombre, pa.estado, pa.mes_inicio, pa.dia_inicio, pa.mes_fin, pa.dia_fin, pa.id_anio, al.calendario, al.estado as anio_estado
-         FROM periodo_academico pa
-         JOIN anio_lectivo al ON pa.id_anio = al.id_anio
-         WHERE pa.id_colegio = $1 AND pa.estado = 'ABIERTO'
-         ORDER BY pa.id_periodo DESC LIMIT 1`, [schoolId]);
+        // Get available periods for yearIdParam (or effectiveSchoolId)
+        let periodsQuery = kysely_1.db
+            .selectFrom("periodo_academico as pa")
+            .innerJoin("anio_lectivo as al", "al.id_anio", "pa.id_anio")
+            .select([
+            "pa.id_periodo",
+            "pa.nombre",
+            "pa.estado",
+            "pa.mes_inicio",
+            "pa.dia_inicio",
+            "pa.mes_fin",
+            "pa.dia_fin",
+            "pa.id_anio",
+            "al.calendario",
+            "al.estado as anio_estado"
+        ]);
+        if (effectiveSchoolId) {
+            periodsQuery = periodsQuery.where("pa.id_colegio", "=", effectiveSchoolId);
         }
-        else {
-            periodRes = await db_1.pool.query(`SELECT pa.id_periodo, pa.nombre, pa.estado, pa.mes_inicio, pa.dia_inicio, pa.mes_fin, pa.dia_fin, pa.id_anio, al.calendario, al.estado as anio_estado
-         FROM periodo_academico pa
-         JOIN anio_lectivo al ON pa.id_anio = al.id_anio
-         WHERE pa.estado = 'ABIERTO'
-         ORDER BY pa.id_periodo DESC LIMIT 1`);
+        if (yearIdParam) {
+            periodsQuery = periodsQuery.where("pa.id_anio", "=", yearIdParam);
         }
-        const activePeriodInfo = periodRes.rows.length > 0 ? periodRes.rows[0] : null;
+        const availablePeriods = await periodsQuery.orderBy("pa.id_periodo", "asc").execute();
+        let activePeriodInfo = null;
+        if (isAllPeriods) {
+            activePeriodInfo = { id_periodo: 'all', nombre: 'Todos los Periodos (Acumulado)' };
+        }
+        else if (periodIdParam) {
+            activePeriodInfo = availablePeriods.find(p => p.id_periodo === periodIdParam) || null;
+        }
+        if (!activePeriodInfo && availablePeriods.length > 0) {
+            activePeriodInfo = availablePeriods.find(p => p.estado === 'ABIERTO') || availablePeriods[availablePeriods.length - 1];
+        }
         const activePeriodId = activePeriodInfo ? activePeriodInfo.id_periodo : null;
-        if (!activePeriodId) {
+        if (!activePeriodId && !isAllPeriods) {
             res.json({
                 coursesCount: courses.length,
                 studentsCount: totalActiveStudents,
@@ -170,6 +193,7 @@ const getTeacherDashboard = async (req, res) => {
                 upToDateCourses: courses.length,
                 courseAverages: [],
                 alerts: [],
+                availablePeriods,
                 activePeriodInfo: null
             });
             return;
@@ -182,23 +206,29 @@ const getTeacherDashboard = async (req, res) => {
             const dgId = course.id_detallegrado;
             const courseName = `${course.grado_nombre} ${course.seccion} - ${course.materia_nombre} (${course.jornada})`;
             // 1. Actividades del curso
-            const activitiesRes = await db_1.pool.query(`
-        SELECT am.id_actividadmateria, am.porcentaje, am.nombre
-        FROM actividad_materia am
-        JOIN competencias c ON am.id_competencia = c.id_competencia
-        WHERE am.id_detallegrado = $1 AND c.id_periodo = $2
-      `, [dgId, activePeriodId]);
-            const activities = activitiesRes.rows;
+            let activitiesQuery = kysely_1.db
+                .selectFrom("actividad_materia as am")
+                .innerJoin("competencias as c", "c.id_competencia", "am.id_competencia")
+                .innerJoin("periodo_academico as pa", "pa.id_periodo", "c.id_periodo")
+                .select(["am.id_actividadmateria", "am.porcentaje", "am.nombre", "c.id_periodo"])
+                .where("am.id_detallegrado", "=", dgId);
+            if (!isAllPeriods && activePeriodId) {
+                activitiesQuery = activitiesQuery.where("c.id_periodo", "=", Number(activePeriodId));
+            }
+            else if (yearIdParam) {
+                activitiesQuery = activitiesQuery.where("pa.id_anio", "=", yearIdParam);
+            }
+            const activities = await activitiesQuery.execute();
             const activityCount = activities.length;
             // 2. Estudiantes del curso
-            const courseStudentsRes = await db_1.pool.query(`
-        SELECT e.id_estudiante, e.nombre, e.apellido
-        FROM estudiante e
-        JOIN matricula m ON e.id_estudiante = m.id_estudiante
-        JOIN detalle_grados dg ON m.id_grupo = dg.id_grupo
-        WHERE dg.id_detallegrado = $1 AND m.estado = 'ACTIVA'
-      `, [dgId]);
-            const courseStudents = courseStudentsRes.rows;
+            const courseStudents = await kysely_1.db
+                .selectFrom("estudiante as e")
+                .innerJoin("matricula as m", "m.id_estudiante", "e.id_estudiante")
+                .innerJoin("detalle_grados as dg", "dg.id_grupo", "m.id_grupo")
+                .select(["e.id_estudiante", "e.nombre", "e.apellido"])
+                .where("dg.id_detallegrado", "=", dgId)
+                .where("m.estado", "=", "ACTIVA")
+                .execute();
             if (courseStudents.length === 0 || activityCount === 0) {
                 courseAverages.push({ name: courseName, shortName: `${course.grado_nombre} ${course.seccion} - ${course.materia_nombre}`, average: 0 });
                 continue;
@@ -206,10 +236,12 @@ const getTeacherDashboard = async (req, res) => {
             let courseTotalSum = 0;
             let missingAnyGradeForCourse = false;
             for (const act of activities) {
-                const totalNotasRes = await db_1.pool.query(`
-          SELECT count(*) as count FROM notas_actividad WHERE id_actividadmateria = $1
-        `, [act.id_actividadmateria]);
-                if (Number(totalNotasRes.rows[0].count) === 0) {
+                const totalNotasRes = await kysely_1.db
+                    .selectFrom("notas_actividad")
+                    .select((0, kysely_2.sql) `count(*)::int`.as("count"))
+                    .where("id_actividadmateria", "=", act.id_actividadmateria)
+                    .executeTakeFirst();
+                if (totalNotasRes && Number(totalNotasRes.count) === 0) {
                     noGradeActivitiesCount++;
                 }
             }
@@ -218,17 +250,19 @@ const getTeacherDashboard = async (req, res) => {
                 let studentMissingDeliveries = 0;
                 let studentAverage = 0;
                 for (const act of activities) {
-                    const checkRes = await db_1.pool.query(`
-            SELECT nota FROM notas_actividad 
-            WHERE id_actividadmateria = $1 AND id_estudiante = $2
-          `, [act.id_actividadmateria, stu.id_estudiante]);
-                    if (checkRes.rows.length === 0) {
+                    const checkRes = await kysely_1.db
+                        .selectFrom("notas_actividad")
+                        .select("nota")
+                        .where("id_actividadmateria", "=", act.id_actividadmateria)
+                        .where("id_estudiante", "=", stu.id_estudiante)
+                        .executeTakeFirst();
+                    if (!checkRes) {
                         missingAnyGradeForCourse = true;
                         studentMissingDeliveries++;
                     }
                     else {
-                        studentAverage += Number(checkRes.rows[0].nota) * (Number(act.porcentaje) / 100);
-                        if (Number(checkRes.rows[0].nota) === 0) {
+                        studentAverage += Number(checkRes.nota) * (Number(act.porcentaje) / 100);
+                        if (Number(checkRes.nota) === 0) {
                             studentMissingDeliveries++;
                         }
                     }
@@ -246,12 +280,14 @@ const getTeacherDashboard = async (req, res) => {
                         message: `El estudiante ${studentName} no ha entregado ${studentMissingDeliveries} actividades en ${course.materia_nombre}.`
                     });
                 }
-                const inasistenciasRes = await db_1.pool.query(`
-          SELECT count(*)::int as faltas
-          FROM registro_asistencia
-          WHERE id_estudiante = $1 AND id_detallegrado = $2 AND estado = 'AUSENTE'
-        `, [stu.id_estudiante, dgId]);
-                const faltas = Number(inasistenciasRes.rows[0].faltas);
+                const inasistenciasRes = await kysely_1.db
+                    .selectFrom("registro_asistencia")
+                    .select((0, kysely_2.sql) `count(*)::int`.as("faltas"))
+                    .where("id_estudiante", "=", stu.id_estudiante)
+                    .where("id_detallegrado", "=", dgId)
+                    .where("estado", "=", "AUSENTE")
+                    .executeTakeFirst();
+                const faltas = inasistenciasRes ? Number(inasistenciasRes.faltas) : 0;
                 if (faltas >= 3) {
                     alerts.push({
                         type: 'faltas',
@@ -282,6 +318,7 @@ const getTeacherDashboard = async (req, res) => {
             upToDateCourses: upToDateCoursesCount,
             courseAverages,
             alerts,
+            availablePeriods,
             activePeriodInfo
         });
     }

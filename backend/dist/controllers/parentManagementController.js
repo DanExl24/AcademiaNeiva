@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.updateParentAccountStatus = exports.getDocumentTypes = exports.updateParent = exports.getParentDetail = exports.getParentsManagementData = void 0;
 const db_1 = require("../config/db");
+const kysely_1 = require("../config/kysely");
 const documentValidation_1 = require("../utils/documentValidation");
 const errorHelper_1 = require("../utils/errorHelper");
 const parseSchoolId = (value) => {
@@ -10,6 +11,28 @@ const parseSchoolId = (value) => {
         return null;
     }
     return parsed;
+};
+const hasParentSchoolAccess = async (userSchoolId, parentId, parentUserId, parentSchoolId) => {
+    if (parentSchoolId === userSchoolId)
+        return true;
+    if (parentUserId) {
+        const uc = await kysely_1.db
+            .selectFrom("usuario_colegio")
+            .select("id_usuario_colegio")
+            .where("id_usuario", "=", parentUserId)
+            .where("id_colegio", "=", userSchoolId)
+            .executeTakeFirst();
+        if (uc)
+            return true;
+    }
+    const dp = await kysely_1.db
+        .selectFrom("detalle_padrefamilia as dp")
+        .innerJoin("estudiante as e", "dp.id_estudiante", "e.id_estudiante")
+        .select("dp.id_detallepadrefamilia")
+        .where("dp.id_padrefamilia", "=", parentId)
+        .where("e.id_colegio", "=", userSchoolId)
+        .executeTakeFirst();
+    return !!dp;
 };
 /**
  * Lista todos los padres de familia del colegio con filtros avanzados:
@@ -241,9 +264,12 @@ const getParentDetail = async (req, res) => {
         const parent = parentRes.rows[0];
         const authReq = req;
         const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
-        if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== parent.id_colegio) {
-            res.status(403).json({ error: "No tiene permiso para consultar el detalle de este acudiente." });
-            return;
+        if (!isSupervision && authReq.user?.schoolId) {
+            const allowed = await hasParentSchoolAccess(authReq.user.schoolId, parentId, parent.id_usuario, parent.id_colegio);
+            if (!allowed) {
+                res.status(403).json({ error: "No tiene permiso para consultar el detalle de este acudiente." });
+                return;
+            }
         }
         const childrenRes = await db_1.pool.query(`SELECT
          e.id_estudiante,
@@ -356,10 +382,13 @@ const updateParent = async (req, res) => {
         const oldParent = checkRes.rows[0];
         const authReq = req;
         const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
-        if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== oldParent.id_colegio) {
-            await client.query("ROLLBACK");
-            res.status(403).json({ error: "No tiene permiso para actualizar acudientes de este colegio." });
-            return;
+        if (!isSupervision && authReq.user?.schoolId) {
+            const allowed = await hasParentSchoolAccess(authReq.user.schoolId, parentId, oldParent.id_usuario, oldParent.id_colegio);
+            if (!allowed) {
+                await client.query("ROLLBACK");
+                res.status(403).json({ error: "No tiene permiso para actualizar acudientes de este colegio." });
+                return;
+            }
         }
         const finalNombre = isSupervision && nombre?.trim() ? nombre.trim() : oldParent.nombre;
         const finalApellido = isSupervision && apellido?.trim() ? apellido.trim() : oldParent.apellido;
@@ -442,9 +471,12 @@ const updateParentAccountStatus = async (req, res) => {
         }
         const authReq = req;
         const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
-        if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== parentRes.rows[0].id_colegio) {
-            res.status(403).json({ error: "No tiene permiso para modificar acudientes de este colegio." });
-            return;
+        if (!isSupervision && authReq.user?.schoolId) {
+            const allowed = await hasParentSchoolAccess(authReq.user.schoolId, parentId, parentRes.rows[0].id_usuario, parentRes.rows[0].id_colegio);
+            if (!allowed) {
+                res.status(403).json({ error: "No tiene permiso para modificar acudientes de este colegio." });
+                return;
+            }
         }
         const userId = parentRes.rows[0].id_usuario;
         await db_1.pool.query(`UPDATE usuario 

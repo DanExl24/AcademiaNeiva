@@ -6,7 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.verifyTokenOptional = exports.requireEstudiante = exports.requirePadre = exports.requireDocente = exports.requireDirectivo = exports.requireAdminGeneral = exports.verifyToken = void 0;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const db_1 = require("../config/db");
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret';
+const jwt_1 = require("../config/jwt");
 /**
  * Middleware que verifica el token JWT, valida si está en la lista negra, y extrae la información del usuario.
  */
@@ -18,7 +18,7 @@ const verifyToken = async (req, res, next) => {
     }
     const token = authHeader.split(' ')[1];
     try {
-        const decoded = jsonwebtoken_1.default.verify(token, JWT_SECRET);
+        const decoded = jsonwebtoken_1.default.verify(token, jwt_1.JWT_SECRET);
         // Verificar si el token ha sido invalidado (blacklist)
         if (decoded.jti) {
             const blacklistRes = await db_1.pool.query('SELECT 1 FROM token_blacklist WHERE jti = $1', [decoded.jti]);
@@ -292,7 +292,7 @@ const verifyTokenOptional = async (req, res, next) => {
     }
     const token = authHeader.split(' ')[1];
     try {
-        const decoded = jsonwebtoken_1.default.verify(token, JWT_SECRET);
+        const decoded = jsonwebtoken_1.default.verify(token, jwt_1.JWT_SECRET);
         if (decoded.jti) {
             const blacklistRes = await db_1.pool.query('SELECT 1 FROM token_blacklist WHERE jti = $1', [decoded.jti]);
             if (blacklistRes.rows.length > 0) {

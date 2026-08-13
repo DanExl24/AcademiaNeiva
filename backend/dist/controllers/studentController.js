@@ -1,10 +1,12 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.graduateStudent = exports.getStudentSummary = exports.deleteStudent = exports.changeStudentGrade = exports.getTipoSanciones = exports.updateStudentStatus = exports.updateStudent = exports.getAllStudents = void 0;
+exports.getParentStudentEnrollment = exports.graduateStudent = exports.getStudentSummary = exports.deleteStudent = exports.changeStudentGrade = exports.getTipoSanciones = exports.updateStudentStatus = exports.updateStudent = exports.getAllStudents = void 0;
 const db_1 = require("../config/db");
+const kysely_1 = require("../config/kysely");
 const notificationService_1 = require("../services/notificationService");
 const documentValidation_1 = require("../utils/documentValidation");
 const errorHelper_1 = require("../utils/errorHelper");
+const documentSecurity_1 = require("../middleware/documentSecurity");
 const getAllStudents = async (req, res) => {
     try {
         const { idColegio } = req.params;
@@ -554,7 +556,7 @@ const getStudentSummary = async (req, res) => {
         const periodName = periodRes.rows[0]?.nombre || 'Sin Periodo Activo';
         // 4. Failed subjects and overall average
         let grades = [];
-        let promedioGeneral = 0;
+        let promedioGeneral = null;
         let materiasReprobadas = [];
         if (id_grupo && periodId) {
             const gradesRes = await db_1.pool.query(`
@@ -576,7 +578,7 @@ const getStudentSummary = async (req, res) => {
                 AND ra.id_periodo = p.id_periodo 
                 AND ra.id_estudiante = $2
           LEFT JOIN (
-            SELECT am.id_detallegrado, am.id_periodo, ROUND(AVG(na.nota)::numeric, 2) as promedio_calculado
+            SELECT am.id_detallegrado, am.id_periodo, ROUND(SUM(na.nota * (am.porcentaje / 100.0))::numeric, 2) as promedio_calculado
             FROM notas_actividad na
             JOIN actividad_materia am ON am.id_actividadmateria = na.id_actividadmateria
             WHERE na.id_estudiante = $2
@@ -587,7 +589,7 @@ const getStudentSummary = async (req, res) => {
         SELECT 
           m.id_materia,
           m.nombre as materia,
-          COALESCE(ROUND(AVG(pg.nota_periodo), 2), 0)::numeric as calificacion
+          ROUND(AVG(pg.nota_periodo), 2)::numeric as calificacion
         FROM period_grades pg
         JOIN materias m ON m.id_materia = pg.id_materia
         GROUP BY m.id_materia, m.nombre
@@ -596,13 +598,17 @@ const getStudentSummary = async (req, res) => {
             grades = gradesRes.rows.map(g => ({
                 id_materia: g.id_materia,
                 materia: g.materia,
-                calificacion: parseFloat(g.calificacion || 0)
+                calificacion: (g.calificacion !== null && g.calificacion !== undefined) ? parseFloat(g.calificacion) : null
             }));
-            if (grades.length > 0) {
-                const sum = grades.reduce((acc, curr) => acc + curr.calificacion, 0);
-                promedioGeneral = parseFloat((sum / grades.length).toFixed(2));
+            const gradedList = grades.filter(g => g.calificacion !== null && g.calificacion !== undefined);
+            if (gradedList.length > 0) {
+                const sum = gradedList.reduce((acc, curr) => acc + curr.calificacion, 0);
+                promedioGeneral = parseFloat((sum / gradedList.length).toFixed(2));
             }
-            materiasReprobadas = grades.filter(g => g.calificacion < 3.0);
+            else {
+                promedioGeneral = null;
+            }
+            materiasReprobadas = gradedList.filter(g => g.calificacion < 3.0);
         }
         // 5. Total Absences (where state is 'AUSENTE')
         const absencesRes = await db_1.pool.query(`
@@ -626,12 +632,18 @@ const getStudentSummary = async (req, res) => {
                 : 'Reciente';
         }
         // 8. Academic State classification
-        let estadoAcademico = 'Normal';
-        if (materiasReprobadas.length >= 3 || (promedioGeneral < 3.0 && grades.length > 0)) {
-            estadoAcademico = 'Crítico';
-        }
-        else if (materiasReprobadas.length > 0) {
-            estadoAcademico = 'En riesgo';
+        let estadoAcademico = 'Sin Notas';
+        const gradedCount = grades.filter(g => g.calificacion !== null && g.calificacion !== undefined).length;
+        if (gradedCount > 0) {
+            if (materiasReprobadas.length >= 3 || (promedioGeneral !== null && promedioGeneral < 3.0)) {
+                estadoAcademico = 'Crítico';
+            }
+            else if (materiasReprobadas.length > 0) {
+                estadoAcademico = 'En riesgo';
+            }
+            else {
+                estadoAcademico = 'Normal';
+            }
         }
         // 9. Fetch graduation registry if graduated
         let graduationInfo = null;
@@ -775,7 +787,7 @@ const graduateStudent = async (req, res) => {
               AND ra.id_periodo = p.id_periodo 
               AND ra.id_estudiante = $2
         LEFT JOIN (
-          SELECT am.id_detallegrado, am.id_periodo, ROUND(AVG(na.nota)::numeric, 2) as promedio_calculado
+          SELECT am.id_detallegrado, am.id_periodo, ROUND(SUM(na.nota * (am.porcentaje / 100.0))::numeric, 2) as promedio_calculado
           FROM notas_actividad na
           JOIN actividad_materia am ON am.id_actividadmateria = na.id_actividadmateria
           WHERE na.id_estudiante = $2
@@ -856,3 +868,128 @@ const graduateStudent = async (req, res) => {
     }
 };
 exports.graduateStudent = graduateStudent;
+const getParentStudentEnrollment = async (req, res) => {
+    try {
+        const { studentId } = req.params;
+        const authUser = req.user;
+        const userId = authUser?.id_usuario || authUser?.id;
+        if (!userId) {
+            res.status(401).json({ error: "Usuario no autenticado" });
+            return;
+        }
+        const isStaff = authUser?.roles?.some((r) => ['admin', 'directivo', 'admin_general'].includes(r));
+        if (!isStaff) {
+            const parentUser = await kysely_1.db
+                .selectFrom("padre_familia as pf")
+                .innerJoin("detalle_padrefamilia as dp", "dp.id_padrefamilia", "pf.id_padrefamilia")
+                .select("dp.id_estudiante")
+                .where("pf.id_usuario", "=", Number(userId))
+                .where("dp.id_estudiante", "=", Number(studentId))
+                .executeTakeFirst();
+            if (!parentUser) {
+                const userEmailRes = await kysely_1.db
+                    .selectFrom("usuario")
+                    .select("email")
+                    .where("id_usuario", "=", Number(userId))
+                    .executeTakeFirst();
+                const matMatch = userEmailRes ? await kysely_1.db
+                    .selectFrom("matricula")
+                    .select("id_matricula")
+                    .where("id_estudiante", "=", Number(studentId))
+                    .where("correo_padre", "=", userEmailRes.email)
+                    .executeTakeFirst() : null;
+                if (!matMatch) {
+                    res.status(403).json({ error: "No tiene autorización para ver los documentos de este estudiante" });
+                    return;
+                }
+            }
+        }
+        const mat = await kysely_1.db
+            .selectFrom("matricula as m")
+            .innerJoin("grupos as g", "m.id_grupo", "g.id_grupo")
+            .leftJoin("colegio as col", "col.id_colegio", "m.id_colegio")
+            .leftJoin("anio_lectivo as al", "al.id_anio", "m.id_anio")
+            .leftJoin("nivel_escolar as ne", "g.id_nivel", "ne.id_nivel")
+            .leftJoin("tipo_grado as tg", "g.id_tipo_grado", "tg.id_tipo_grado")
+            .leftJoin("secciones as s", "g.id_seccion", "s.id_seccion")
+            .leftJoin("jornada as j", "g.id_jornada", "j.id_jornada")
+            .leftJoin("estudiante as e", "e.id_estudiante", "m.id_estudiante")
+            .leftJoin("usuario as u_est", "e.id_usuario", "u_est.id_usuario")
+            .select([
+            "m.id_matricula",
+            "m.id_estudiante",
+            "m.id_colegio",
+            "m.id_anio",
+            "m.estado",
+            "m.tipo",
+            "m.correo_padre",
+            "m.token_seguimiento",
+            "m.fecha_creacion",
+            "m.fecha_aprobacion",
+            "col.nombre as school_name",
+            "col.escudo_url",
+            "al.calendario as year_label",
+            "ne.nombre as grado_nivel",
+            "tg.nombre as tipo_grado",
+            "s.nombre as seccion",
+            "j.nombre as jornada",
+            "e.nombre as student_firstname",
+            "e.apellido as student_lastname",
+            "e.codigo as student_code",
+            "u_est.documento as student_document"
+        ])
+            .where("m.id_estudiante", "=", Number(studentId))
+            .orderBy("m.id_matricula", "desc")
+            .executeTakeFirst();
+        if (!mat) {
+            res.status(404).json({ error: "Matrícula no encontrada para este estudiante" });
+            return;
+        }
+        const rawDocs = await kysely_1.db
+            .selectFrom("documento_matriculas as d")
+            .select([
+            "d.id_documento",
+            "d.id_matricula",
+            "d.tipo_documento",
+            "d.url",
+            "d.estado",
+            "d.fecha",
+            "d.version",
+            "d.mime_type",
+            "d.nombre_original",
+            "d.tamano_bytes"
+        ])
+            .where("d.id_matricula", "=", mat.id_matricula)
+            .orderBy("d.tipo_documento", "asc")
+            .orderBy("d.version", "desc")
+            .execute();
+        const docsGroupedMap = new Map();
+        for (const docRow of rawDocs) {
+            const docWithToken = {
+                ...docRow,
+                token_acceso: (0, documentSecurity_1.generateDocumentAccessToken)(docRow.id_documento)
+            };
+            const key = docRow.tipo_documento;
+            if (!docsGroupedMap.has(key)) {
+                docsGroupedMap.set(key, {
+                    ...docWithToken,
+                    versiones_anteriores: []
+                });
+            }
+            else {
+                const parentDoc = docsGroupedMap.get(key);
+                parentDoc.versiones_anteriores.push(docWithToken);
+            }
+        }
+        const groupedDocs = Array.from(docsGroupedMap.values());
+        res.json({
+            matricula: mat,
+            documentos: groupedDocs
+        });
+    }
+    catch (error) {
+        console.error("Error in getParentStudentEnrollment:", error);
+        res.status(500).json({ error: (0, errorHelper_1.formatFriendlyErrorMessage)(error) });
+    }
+};
+exports.getParentStudentEnrollment = getParentStudentEnrollment;

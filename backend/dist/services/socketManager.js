@@ -6,7 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.socketManager = void 0;
 const socket_io_1 = require("socket.io");
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret';
+const jwt_1 = require("../config/jwt");
 /**
  * Servicio centralizado de WebSockets (Socket.io).
  *
@@ -47,7 +47,7 @@ class SocketManager {
                 return next(new Error('Token de autenticación requerido'));
             }
             try {
-                const decoded = jsonwebtoken_1.default.verify(token, JWT_SECRET);
+                const decoded = jsonwebtoken_1.default.verify(token, jwt_1.JWT_SECRET);
                 socket.userId = decoded.id;
                 socket.userRoles = decoded.roles || [decoded.role];
                 next();

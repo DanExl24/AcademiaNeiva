@@ -11,7 +11,7 @@ const bcrypt_1 = __importDefault(require("bcrypt"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const crypto_1 = __importDefault(require("crypto"));
 const notificationService_1 = require("../services/notificationService");
-const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret";
+const jwt_1 = require("../config/jwt");
 const login = async (req, res) => {
     const { email, password } = req.body;
     if (typeof email !== "string" || !email.trim()) {
@@ -85,7 +85,7 @@ const login = async (req, res) => {
                 res.status(401).json({ error: "Credenciales incorrectas" });
                 return;
             }
-            const schoolIds = activeSchools.map((s) => Number(s.id_colegio));
+            const schoolIds = Array.from(new Set(activeSchools.map((s) => Number(s.id_colegio))));
             // Generar JWT
             const jti = crypto_1.default.randomUUID();
             const token = jsonwebtoken_1.default.sign({
@@ -96,7 +96,7 @@ const login = async (req, res) => {
                 schoolId: activeSchoolId,
                 schoolIds: schoolIds.length > 0 ? schoolIds : undefined,
                 jti
-            }, JWT_SECRET, { expiresIn: "8h" });
+            }, jwt_1.JWT_SECRET, { expiresIn: "8h" });
             const { password: _, ...userWithoutPassword } = user;
             res.json({
                 user: {
@@ -174,10 +174,11 @@ const login = async (req, res) => {
                 res.status(401).json({ error: "Código o contraseña incorrectos" });
                 return;
             }
-            const schoolIds = activeSchools.map((s) => Number(s.id_colegio));
-            if (!schoolIds.includes(user.id_colegio) && user.id_colegio) {
-                schoolIds.push(user.id_colegio);
+            const rawSchoolIds = activeSchools.map((s) => Number(s.id_colegio));
+            if (!rawSchoolIds.includes(user.id_colegio) && user.id_colegio) {
+                rawSchoolIds.push(user.id_colegio);
             }
+            const schoolIds = Array.from(new Set(rawSchoolIds));
             // Generar JWT
             const jti = crypto_1.default.randomUUID();
             const token = jsonwebtoken_1.default.sign({
@@ -188,7 +189,7 @@ const login = async (req, res) => {
                 schoolId: activeSchoolId,
                 schoolIds: schoolIds.length > 0 ? schoolIds : undefined,
                 jti
-            }, JWT_SECRET, { expiresIn: "8h" });
+            }, jwt_1.JWT_SECRET, { expiresIn: "8h" });
             const { password: _, ...userWithoutPassword } = user;
             res.json({
                 user: {
@@ -261,7 +262,7 @@ const studentLogin = async (req, res) => {
             roles: user.roles,
             schoolId: user.id_colegio,
             jti
-        }, JWT_SECRET, { expiresIn: "8h" });
+        }, jwt_1.JWT_SECRET, { expiresIn: "8h" });
         // 4. Responder
         res.json({
             user: {
@@ -325,7 +326,7 @@ const verifySession = async (req, res) => {
     }
     const token = authHeader.split(' ')[1];
     try {
-        const decoded = jsonwebtoken_1.default.verify(token, JWT_SECRET);
+        const decoded = jsonwebtoken_1.default.verify(token, jwt_1.JWT_SECRET);
         // Verificar blacklist
         if (decoded.jti) {
             const blacklistRes = await db_1.pool.query('SELECT 1 FROM token_blacklist WHERE jti = $1', [decoded.jti]);

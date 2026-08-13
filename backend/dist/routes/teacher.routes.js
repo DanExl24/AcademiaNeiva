@@ -34,6 +34,7 @@ router.get("/attendance/:detailGradeId/:date", attendanceController_1.getAttenda
 router.post("/attendance", attendanceController_1.saveAttendance);
 router.get("/attendance-history/:detailGradeId", attendanceController_1.getAttendanceHistory);
 // Rutas de Observaciones
+router.get("/observations/types", observationController_1.getObservationTypes);
 router.get("/observations/:detailGradeId/:periodId", observationController_1.getObservations);
 router.post("/observations", observationController_1.createObservation);
 router.put("/observations/:id", observationController_1.updateObservation);

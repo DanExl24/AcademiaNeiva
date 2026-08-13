@@ -49,8 +49,8 @@ const resetPassword = async (req, res) => {
         res.status(400).json({ error: "El token y la nueva contraseña son requeridos." });
         return;
     }
-    if (password.length < 6) {
-        res.status(400).json({ error: "La contraseña debe tener al menos 6 caracteres." });
+    if (password.length < 8) {
+        res.status(400).json({ error: "La contraseña debe tener al menos 8 caracteres." });
         return;
     }
     const client = await db_1.pool.connect();

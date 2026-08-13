@@ -102,7 +102,7 @@ const getStudentGrades = async (req, res) => {
             .innerJoin("detalle_grados as dg_am", "dg_am.id_detallegrado", "am.id_detallegrado")
             .select([
             "dg_am.id_materia",
-            (0, kysely_2.sql) `ROUND(AVG(na.nota)::numeric, 2)`.as("promedio_calculado")
+            (0, kysely_2.sql) `ROUND(SUM(na.nota * (am.porcentaje / 100.0))::numeric, 2)`.as("promedio_calculado")
         ])
             .where("am.id_periodo", "=", Number(id_periodo))
             .where("na.id_estudiante", "=", Number(id_estudiante))
@@ -405,7 +405,8 @@ const getParentChildren = async (req, res) => {
             .orderBy("id_anio", "desc")
             .orderBy("id_matricula", "desc")
             .as("m");
-        const rows = await kysely_1.db
+        const authReq = req;
+        let query = kysely_1.db
             .selectFrom("padre_familia as pf")
             .innerJoin("detalle_padrefamilia as dpf", "dpf.id_padrefamilia", "pf.id_padrefamilia")
             .innerJoin("estudiante as e", "e.id_estudiante", "dpf.id_estudiante")
@@ -416,11 +417,14 @@ const getParentChildren = async (req, res) => {
             .leftJoin("tipo_grado as tg", "tg.id_tipo_grado", "gr.id_tipo_grado")
             .leftJoin("jornada as j", "j.id_jornada", "gr.id_jornada")
             .leftJoin("nivel_escolar as n", "n.id_nivel", "gr.id_nivel")
+            .leftJoin("usuario as u_e", "u_e.id_usuario", "e.id_usuario")
             .select([
             "e.id_estudiante",
             "e.nombre",
             "e.apellido",
             "e.codigo",
+            "e.estado",
+            "u_e.documento",
             "tg.nombre as grado",
             "s.nombre as seccion",
             (0, kysely_2.sql) `CASE 
@@ -435,8 +439,14 @@ const getParentChildren = async (req, res) => {
             "col.nombre as colegio_nombre",
             "m.estado as estado_matricula"
         ])
-            .where("pf.id_usuario", "=", Number(id_usuario))
-            .execute();
+            .where("pf.id_usuario", "=", Number(id_usuario));
+        if (authReq.user?.schoolId) {
+            query = query.where((eb) => eb.or([
+                eb("dpf.id_colegio", "=", authReq.user.schoolId),
+                eb("e.id_colegio", "=", authReq.user.schoolId)
+            ]));
+        }
+        const rows = await query.execute();
         res.json(rows);
     }
     catch (error) {
@@ -608,7 +618,9 @@ const getParentDashboardData = async (req, res) => {
             .orderBy("id_anio", "desc")
             .orderBy("id_matricula", "desc")
             .as("m");
-        const children = await kysely_1.db
+        const authReq = req;
+        const schoolId = authReq.user?.schoolId || (req.query.id_colegio ? parseInt(req.query.id_colegio) : null);
+        let childrenQuery = kysely_1.db
             .selectFrom("padre_familia as pf")
             .innerJoin("detalle_padrefamilia as dpf", "dpf.id_padrefamilia", "pf.id_padrefamilia")
             .innerJoin("estudiante as e", "e.id_estudiante", "dpf.id_estudiante")
@@ -635,12 +647,19 @@ const getParentDashboardData = async (req, res) => {
             "j.nombre as jornada",
             "n.nombre as nivel",
             "e.id_colegio",
+            "dpf.id_colegio as dpf_colegio",
             "m.id_grupo",
             "m.id_anio",
             "m.estado as estado_matricula"
         ])
-            .where("pf.id_usuario", "=", userId)
-            .execute();
+            .where("pf.id_usuario", "=", userId);
+        if (schoolId) {
+            childrenQuery = childrenQuery.where((eb) => eb.or([
+                eb("dpf.id_colegio", "=", schoolId),
+                eb("e.id_colegio", "=", schoolId)
+            ]));
+        }
+        const children = await childrenQuery.execute();
         if (children.length === 0) {
             return res.json({
                 children: [],
@@ -650,17 +669,8 @@ const getParentDashboardData = async (req, res) => {
                 periods: []
             });
         }
-        const schoolId = req.query.id_colegio ? parseInt(req.query.id_colegio) : children[0].id_colegio;
-        const filteredChildren = children.filter((c) => c.id_colegio === schoolId);
-        if (filteredChildren.length === 0) {
-            return res.json({
-                children,
-                studentStats: [],
-                recentActivity: [],
-                activePeriod: null,
-                periods: []
-            });
-        }
+        const activeSchoolId = schoolId || children[0].id_colegio;
+        const filteredChildren = children;
         // 2. Get available periods for the selected year and school
         let periodsQuery = kysely_1.db
             .selectFrom("periodo_academico as pa")
@@ -673,7 +683,7 @@ const getParentDashboardData = async (req, res) => {
             (0, kysely_2.sql) `(al.calendario || '-' || lpad(pa.mes_inicio::text, 2, '0') || '-' || lpad(pa.dia_inicio::text, 2, '0'))::date`.as("fecha_inicio"),
             (0, kysely_2.sql) `(al.calendario || '-' || lpad(pa.mes_fin::text, 2, '0') || '-' || lpad(pa.dia_fin::text, 2, '0'))::date`.as("fecha_fin")
         ])
-            .where("pa.id_colegio", "=", schoolId)
+            .where("pa.id_colegio", "=", activeSchoolId)
             .where("pa.estado", "!=", "PENDIENTE");
         if (targetYearId) {
             periodsQuery = periodsQuery.where("pa.id_anio", "=", Number(targetYearId));
@@ -713,7 +723,7 @@ const getParentDashboardData = async (req, res) => {
                     .select([
                     "am.id_detallegrado",
                     "na.id_estudiante",
-                    (0, kysely_2.sql) `ROUND(AVG(na.nota)::numeric, 2)`.as("promedio_calculado")
+                    (0, kysely_2.sql) `ROUND(SUM(na.nota * (am.porcentaje / 100.0))::numeric, 2)`.as("promedio_calculado")
                 ])
                     .where("am.id_periodo", "=", id_periodo)
                     .where("na.id_estudiante", "=", child.id_estudiante)
@@ -746,7 +756,7 @@ const getParentDashboardData = async (req, res) => {
                     .select([
                     "am.id_detallegrado",
                     "na.id_estudiante",
-                    (0, kysely_2.sql) `ROUND(AVG(na.nota)::numeric, 2)`.as("promedio_calculado")
+                    (0, kysely_2.sql) `ROUND(SUM(na.nota * (am.porcentaje / 100.0))::numeric, 2)`.as("promedio_calculado")
                 ])
                     .where("pa.id_anio", "=", Number(child.id_anio))
                     .where("na.id_estudiante", "=", child.id_estudiante)
@@ -947,7 +957,7 @@ const getParentDashboardData = async (req, res) => {
             }
         }
         res.json({
-            children,
+            children: filteredChildren,
             studentStats,
             recentActivity,
             activePeriod,
@@ -1030,7 +1040,7 @@ const getStudentDashboardStats = async (req, res) => {
                 .select([
                 "am.id_detallegrado",
                 "na.id_estudiante",
-                (0, kysely_2.sql) `ROUND(AVG(na.nota)::numeric, 2)`.as("promedio_calculado")
+                (0, kysely_2.sql) `ROUND(SUM(na.nota * (am.porcentaje / 100.0))::numeric, 2)`.as("promedio_calculado")
             ])
                 .where("am.id_periodo", "=", periodIdInt)
                 .where("na.id_estudiante", "=", studentIdInt)
@@ -1206,7 +1216,7 @@ const getStudentDashboardStats = async (req, res) => {
                 .select([
                 "am.id_detallegrado",
                 "na.id_estudiante",
-                (0, kysely_2.sql) `AVG(na.nota)`.as("promedio_calculado")
+                (0, kysely_2.sql) `SUM(na.nota * (am.porcentaje / 100.0))`.as("promedio_calculado")
             ])
                 .where("am.id_periodo", "=", periodIdInt)
                 .groupBy(["am.id_detallegrado", "na.id_estudiante"])

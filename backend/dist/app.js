@@ -21,23 +21,25 @@ const support_routes_1 = __importDefault(require("./routes/support.routes"));
 const reingreso_routes_1 = __importDefault(require("./routes/reingreso.routes"));
 const parent_routes_1 = __importDefault(require("./routes/parent.routes"));
 const traslado_routes_1 = __importDefault(require("./routes/traslado.routes"));
+const authMiddleware_1 = require("./middleware/authMiddleware");
 const app = (0, express_1.default)();
 // Confiar en el Proxy Inverso (Nginx / Cloudflare) para obtener la IP real del cliente
 app.set("trust proxy", 1);
 // Rate Limiters
 const globalLimiter = (0, express_rate_limit_1.default)({
     windowMs: 15 * 60 * 1000, // 15 minutos
-    max: 1000,
+    max: Number(process.env.GLOBAL_RATE_LIMIT_MAX) || 2000,
     message: { error: "Demasiadas peticiones. Intenta de nuevo en 15 minutos." }
 });
 const loginLimiter = (0, express_rate_limit_1.default)({
     windowMs: 15 * 60 * 1000, // 15 minutos
-    max: 10,
-    message: { error: "Demasiados intentos de inicio de sesión. Intenta de nuevo en 15 minutos." }
+    max: Number(process.env.LOGIN_RATE_LIMIT_MAX) || 50, // 50 intentos fallidos por IP cada 15 min
+    skipSuccessfulRequests: true, // Inicios de sesión exitosos NO cuentan como intentos de fuerza bruta
+    message: { error: "Demasiados intentos fallidos de inicio de sesión. Intenta de nuevo en 15 minutos." }
 });
 const enrollmentLimiter = (0, express_rate_limit_1.default)({
     windowMs: 15 * 60 * 1000, // 15 minutos
-    max: 20, // 20 solicitudes cada 15 min (solicitud del usuario)
+    max: Number(process.env.ENROLLMENT_RATE_LIMIT_MAX) || 100,
     message: { error: "Límite de solicitudes de matrícula alcanzado. Intenta de nuevo en 15 minutos." }
 });
 // Middlewares
@@ -87,8 +89,20 @@ app.use(globalLimiter);
 app.use("/api/auth/login", loginLimiter);
 app.use("/api/auth/student-login", loginLimiter);
 app.use("/api/matriculas/submit", enrollmentLimiter);
-// Serve uploaded files
-app.use("/uploads", express_1.default.static(path_1.default.join(__dirname, "../uploads")));
+// Serve uploaded files (public access allowed for logos/images, authentication required for documents)
+app.use("/uploads", (req, res, next) => {
+    const fileExt = path_1.default.extname(req.path).toLowerCase();
+    const isPublicImage = [".png", ".jpg", ".jpeg", ".webp", ".svg"].includes(fileExt) || req.path.includes("escudo");
+    if (isPublicImage) {
+        return next();
+    }
+    return (0, authMiddleware_1.verifyTokenOptional)(req, res, () => {
+        if (req.user) {
+            return next();
+        }
+        res.status(403).json({ error: "Acceso denegado: Este archivo requiere autenticación previa." });
+    });
+}, express_1.default.static(path_1.default.join(__dirname, "../uploads")));
 app.use("/api/matriculas", matricula_routes_1.default);
 app.use("/api/grados", grado_routes_1.default);
 app.use("/api/auth", auth_routes_1.default);

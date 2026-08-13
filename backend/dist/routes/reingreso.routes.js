@@ -4,10 +4,10 @@ const express_1 = require("express");
 const authMiddleware_1 = require("../middleware/authMiddleware");
 const reingresoController_1 = require("../controllers/reingresoController");
 const router = (0, express_1.Router)();
-// Middleware: todas las rutas de este módulo requieren autenticación de Directivo o Admin General
-router.use(authMiddleware_1.verifyToken, authMiddleware_1.requireDirectivo);
-// Obtener catálogos (años y niveles) para la configuración de reingreso
+// Catálogos generales (Accesible para acudientes en soporte, padres y directivos)
 router.get("/catalogs", reingresoController_1.getReingresoCatalogs);
+// Middleware: todas las rutas administrativas de este módulo requieren autenticación de Directivo o Admin General
+router.use(authMiddleware_1.verifyToken, authMiddleware_1.requireDirectivo);
 // Obtener grupos del colegio por nivel y año lectivo
 router.get("/groups", reingresoController_1.getReingresoGroups);
 // Obtener ficha e historial de documentos del estudiante retirado
