@@ -56,9 +56,12 @@
 
     <!-- Ticket Context Banner (If opened from ticket) -->
     <div v-if="ticketContext" class="shrink-0 bg-amber-500/10 dark:bg-amber-950/20 border border-amber-500/30 px-4 py-2.5 rounded-2xl space-y-1.5 text-xs">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-2 text-amber-700 dark:text-amber-400 font-bold">
+      <div class="flex items-center justify-between flex-wrap gap-2">
+        <div class="flex items-center gap-2 text-amber-700 dark:text-amber-400 font-bold flex-wrap">
           <span>📩 Solicitud recibida vía Ticket ({{ ticketContext.correo_remitente }})</span>
+          <span v-if="parentPreferredGrade" class="px-2.5 py-0.5 bg-amber-500/20 border border-amber-500/40 text-amber-900 dark:text-amber-200 font-mono font-black rounded-lg text-[11px]">
+            🎯 Grado Pretendido por Acudiente: {{ parentPreferredGrade.nombre }}
+          </span>
         </div>
         <span class="px-2 py-0.5 bg-amber-500/20 text-amber-800 dark:text-amber-300 font-mono font-bold rounded-lg text-[11px]">
           {{ ticketContext.codigo_ticket || 'TKT-' + ticketContext.id_ticket }}
@@ -537,11 +540,12 @@ const selectSuggestedStudent = async (studentId: any) => {
 
 const fetchCatalogs = async () => {
   try {
-    const res = await axios.get('/api/reingreso/catalogs', getAuthHeaders())
-    academicYears.value = res.data.anios || []
+    const schoolId = getSchoolId()
+    const res = await axios.get(`/api/reingreso/catalogs?schoolId=${schoolId}`, getAuthHeaders())
+    academicYears.value = res.data.anios || res.data.years || []
     levels.value = res.data.niveles || []
     if (academicYears.value.length > 0) {
-      const active = academicYears.value.find(a => a.estado === 'ABIERTO') || academicYears.value[0]
+      const active = academicYears.value.find((a: any) => a.estado === 'ABIERTO') || academicYears.value[0]
       targetForm.id_anio = active.id_anio
     }
     if (levels.value.length > 0) {
@@ -556,10 +560,13 @@ const fetchCatalogs = async () => {
 const loadGroups = async () => {
   if (!targetForm.id_nivel) return
   try {
-    const res = await axios.get(`/api/reingreso/groups?nivelId=${targetForm.id_nivel}`, getAuthHeaders())
+    const schoolId = getSchoolId()
+    const res = await axios.get(`/api/reingreso/groups?nivelId=${targetForm.id_nivel}&schoolId=${schoolId}`, getAuthHeaders())
     groups.value = res.data || []
     if (availableGrados.value.length > 0) {
-      targetForm.id_tipo_grado = availableGrados.value[0].id_tipo_grado
+      if (!targetForm.id_tipo_grado) {
+        targetForm.id_tipo_grado = availableGrados.value[0].id_tipo_grado
+      }
       onGradeChange()
     }
   } catch (err) {
@@ -573,8 +580,6 @@ const loadStudentHistory = async () => {
   
   targetForm.correo_padre = ''
   targetForm.observaciones = ''
-  targetForm.id_tipo_grado = ''
-  targetForm.id_grupo = ''
 
   try {
     const res = await axios.get(`/api/reingreso/student-history/${selectedStudentId.value}`, getAuthHeaders())
@@ -598,20 +603,30 @@ const loadStudentHistory = async () => {
       targetForm.correo_padre = ticketContext.value.correo_remitente
     }
 
-    if (suggestedGradeInfo.value && suggestedGradeInfo.value.id_tipo_grado) {
-      if (suggestedGradeInfo.value.id_nivel) {
-        targetForm.id_nivel = suggestedGradeInfo.value.id_nivel
-      } else if (lastEnrollment.value && lastEnrollment.value.id_nivel) {
-        targetForm.id_nivel = lastEnrollment.value.id_nivel
-      }
-      await loadGroups()
-      targetForm.id_tipo_grado = suggestedGradeInfo.value.id_tipo_grado
-      onGradeChange()
-    } else if (lastEnrollment.value && lastEnrollment.value.id_nivel) {
+    const preferredGradeId = parentPreferredGrade.value?.id_tipo_grado || null
+    const targetGradeId = preferredGradeId || suggestedGradeInfo.value?.id_tipo_grado || null
+
+    if (suggestedGradeInfo.value?.id_nivel) {
+      targetForm.id_nivel = suggestedGradeInfo.value.id_nivel
+    } else if (lastEnrollment.value?.id_nivel) {
       targetForm.id_nivel = lastEnrollment.value.id_nivel
-      await loadGroups()
-    } else {
-      await loadGroups()
+    } else if (levels.value.length > 0) {
+      targetForm.id_nivel = levels.value[0].id_nivel
+    }
+    
+    await loadGroups()
+
+    if (targetGradeId) {
+      const matchGrado = availableGrados.value.find((g: any) => g.id_tipo_grado === targetGradeId)
+      if (matchGrado) {
+        targetForm.id_tipo_grado = targetGradeId
+      } else if (availableGrados.value.length > 0) {
+        targetForm.id_tipo_grado = availableGrados.value[0].id_tipo_grado
+      }
+      onGradeChange()
+    } else if (availableGrados.value.length > 0) {
+      targetForm.id_tipo_grado = availableGrados.value[0].id_tipo_grado
+      onGradeChange()
     }
   } catch (err: any) {
     alert(err.response?.data?.error || 'Error al cargar expediente del estudiante')

@@ -549,7 +549,7 @@ export const getReingresoCatalogs = async (req: Request, res: Response): Promise
 
 export const getReingresoGroups = async (req: Request, res: Response): Promise<void> => {
   const authReq = req as any;
-  const schoolId = authReq.user?.schoolId;
+  const schoolId = (req.query.schoolId ? Number(req.query.schoolId) : null) || authReq.user?.schoolId;
   const { nivelId } = req.query;
 
   if (!schoolId || !nivelId) {
