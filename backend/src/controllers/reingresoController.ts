@@ -465,29 +465,29 @@ export const notifyNonExistentStudent = async (req: Request, res: Response): Pro
 
 export const getReingresoCatalogs = async (req: Request, res: Response): Promise<void> => {
   const authReq = req as any;
-  const schoolId = authReq.user?.schoolId;
-
-  if (!schoolId) {
-    res.status(400).json({ error: "No se pudo identificar el colegio del directivo" });
-    return;
-  }
+  const schoolId = (req.query.schoolId ? Number(req.query.schoolId) : null) || authReq.user?.schoolId;
 
   try {
-    const yearsRes = await pool.query(
-      `SELECT id_anio, calendario AS anio, estado 
-       FROM anio_lectivo 
-       WHERE id_colegio = $1 
-       ORDER BY CASE WHEN estado = 'ABIERTO' THEN 0 ELSE 1 END, id_anio DESC`,
-      [schoolId]
-    );
+    let yearsRes = { rows: [] as any[] };
+    let levelsRes = { rows: [] as any[] };
 
-    const levelsRes = await pool.query(
-      `SELECT id_nivel, nombre 
-       FROM nivel_escolar 
-       WHERE id_colegio = $1 OR id_colegio IS NULL 
-       ORDER BY id_nivel`,
-      [schoolId]
-    );
+    if (schoolId) {
+      yearsRes = await pool.query(
+        `SELECT id_anio, calendario AS anio, estado 
+         FROM anio_lectivo 
+         WHERE id_colegio = $1 
+         ORDER BY CASE WHEN estado = 'ABIERTO' THEN 0 ELSE 1 END, id_anio DESC`,
+        [schoolId]
+      );
+
+      levelsRes = await pool.query(
+        `SELECT id_nivel, nombre 
+         FROM nivel_escolar 
+         WHERE id_colegio = $1 OR id_colegio IS NULL 
+         ORDER BY id_nivel`,
+        [schoolId]
+      );
+    }
 
     const gradosRes = await pool.query(
       `SELECT id_tipo_grado, nombre, id_nivel 

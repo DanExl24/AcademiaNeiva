@@ -227,7 +227,9 @@ const myTicketsFilter = ref('TODOS')
 
 const fetchGradosCatalog = async () => {
   try {
-    const res = await axios.get('/api/reingreso/catalogs')
+    const headers = auth.token ? { Authorization: `Bearer ${auth.token}` } : {}
+    const schoolParam = selectedSchoolId.value ? `?schoolId=${selectedSchoolId.value}` : ''
+    const res = await axios.get(`/api/reingreso/catalogs${schoolParam}`, { headers })
     catalogGrados.value = res.data.grados || []
   } catch (err) {
     console.error('Error cargando catálogos de grados:', err)
