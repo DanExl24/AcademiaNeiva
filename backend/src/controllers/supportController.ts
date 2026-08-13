@@ -37,7 +37,7 @@ function encodeTicketCode(idTicket: number, idColegio: number | null, documento:
 }
 
 export const createTicket = async (req: Request, res: Response) => {
-  const { nombre_remitente, correo_remitente, telefono, tipo_incidencia, asunto, descripcion, id_colegio, estado, id_estudiante } = req.body;
+  const { nombre_remitente, correo_remitente, telefono, tipo_incidencia, asunto, descripcion, id_colegio, estado, id_estudiante, id_tipo_grado_pretendido } = req.body;
   const user = (req as any).user; // Si está autenticado
 
   try {
@@ -98,11 +98,12 @@ export const createTicket = async (req: Request, res: Response) => {
     
     // Generar el código Base36 ofuscado
     const ticketCode = encodeTicketCode(idTicket, finalSchoolId, userDocument || telefono || null);
+    const initialObs = id_tipo_grado_pretendido ? JSON.stringify([{ autor: finalSenderName, fecha: new Date().toISOString(), texto: `Grado pretendido seleccionado por acudiente`, id_tipo_grado_pretendido: Number(id_tipo_grado_pretendido) }]) : '[]';
     
     // Persistir el código ofuscado
     await pool.query(
-      'UPDATE tickets_soporte SET codigo_ticket = $1 WHERE id_ticket = $2',
-      [ticketCode, idTicket]
+      'UPDATE tickets_soporte SET codigo_ticket = $1, observaciones = $2 WHERE id_ticket = $3',
+      [ticketCode, initialObs, idTicket]
     );
 
     return res.status(201).json({

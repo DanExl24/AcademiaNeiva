@@ -42,7 +42,7 @@
         </div>
         <span class="text-slate-300 dark:text-slate-600">➔</span>
         <div 
-          :class="selectedStudentId && targetForm.id_grupo && targetForm.correo_padre ? 'bg-emerald-600 text-white shadow-md animate-pulse' : 'bg-slate-200 text-slate-400 dark:bg-slate-700 dark:text-slate-500'"
+          :class="selectedStudentId && targetForm.id_grupo && targetForm.correo_padre && (ticketId || declaracionPresencial) ? 'bg-emerald-600 text-white shadow-md animate-pulse' : 'bg-slate-200 text-slate-400 dark:bg-slate-700 dark:text-slate-500'"
           class="px-2.5 py-1 rounded-lg flex items-center gap-1.5 transition-all text-[11px]"
         >
           <span>3. Matriz & Enviar</span>
@@ -179,6 +179,23 @@
                 <span>🎯 2. Destino Académico</span>
               </h2>
               <span class="text-[10px] font-semibold text-slate-400">Asignación de Salón</span>
+            </div>
+
+            <!-- Smart Auto-Suggestion Badge -->
+            <div v-if="suggestedGradeInfo && suggestedGradeInfo.grado_nombre" class="p-2.5 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl border border-emerald-200/60 dark:border-emerald-900/60 text-[11px] space-y-0.5">
+              <div class="flex items-center gap-1.5 font-bold text-emerald-700 dark:text-emerald-300">
+                <span>💡 Sugerencia Pedagógica del Sistema:</span>
+                <span class="underline font-black">{{ suggestedGradeInfo.grado_nombre }}</span>
+              </div>
+              <p class="text-[10px] text-slate-500 dark:text-slate-400 font-medium italic">{{ suggestedGradeInfo.motivo }}</p>
+            </div>
+
+            <!-- Parent Preferred Grade Badge (If Ticket) -->
+            <div v-if="parentPreferredGrade" class="p-2.5 bg-indigo-50 dark:bg-indigo-950/40 rounded-xl border border-indigo-200/60 dark:border-indigo-900/60 text-[11px] flex items-center justify-between">
+              <span class="font-bold text-indigo-700 dark:text-indigo-300">📩 Solicitado por Acudiente:</span>
+              <span class="font-mono font-bold text-indigo-800 dark:text-indigo-200 bg-indigo-100 dark:bg-indigo-900/60 px-2 py-0.5 rounded-md text-[10px]">
+                {{ parentPreferredGrade.nombre }}
+              </span>
             </div>
 
             <div class="space-y-3 text-xs">
@@ -341,8 +358,18 @@
           </div>
         </div>
 
-        <!-- Sticky Primary Action Footer Button -->
-        <div class="pt-3 border-t border-slate-100 dark:border-slate-800 shrink-0 space-y-2">
+        <!-- Sticky Primary Action Footer Button & Consent Governance Checkbox -->
+        <div class="pt-3 border-t border-slate-100 dark:border-slate-800 shrink-0 space-y-2.5">
+          
+          <!-- Presencial Consent Declaration (If processed without a ticket) -->
+          <div v-if="!ticketId && selectedStudentId" class="p-2.5 bg-amber-50 dark:bg-amber-950/30 rounded-xl border border-amber-200/60 dark:border-amber-900/40 space-y-1">
+            <span class="text-[10px] font-black uppercase text-amber-700 dark:text-amber-300 block">🛡️ Declaración de Consentimiento Presencial</span>
+            <label class="flex items-start gap-2 cursor-pointer text-[11px] text-slate-700 dark:text-slate-300 font-medium leading-tight">
+              <input type="checkbox" v-model="declaracionPresencial" class="mt-0.5 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer shrink-0" />
+              <span>Confirmo que el acudiente autorizó presencialmente en secretaría el inicio de este trámite de reingreso.</span>
+            </label>
+          </div>
+
           <div class="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
             <span>Configuración completa:</span>
             <span class="font-bold text-slate-700 dark:text-slate-300">
@@ -352,7 +379,7 @@
 
           <button 
             @click="submitReingresoLink" 
-            :disabled="submitting || !selectedStudentId || !targetForm.id_grupo || !targetForm.correo_padre"
+            :disabled="submitting || !selectedStudentId || !targetForm.id_grupo || !targetForm.correo_padre || (!ticketId && !declaracionPresencial)"
             class="w-full py-3 px-4 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-500 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs rounded-xl shadow-lg shadow-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all uppercase tracking-wider flex items-center justify-center gap-2"
           >
             <svg v-if="submitting" class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
@@ -388,6 +415,9 @@ const allStudents = ref<any[]>([])
 const searchQuery = ref('')
 const ticketContext = ref<any>(null)
 const suggestedStudents = ref<any[]>([])
+const suggestedGradeInfo = ref<any>(null)
+const parentPreferredGrade = ref<any>(null)
+const declaracionPresencial = ref(false)
 
 const student = ref<any>(null)
 const lastEnrollment = ref<any>(null)
@@ -487,6 +517,7 @@ const loadTicketContext = async () => {
     const res = await axios.get(`/api/reingreso/ticket-context/${ticketId.value}`, getAuthHeaders())
     ticketContext.value = res.data.ticket
     suggestedStudents.value = res.data.suggestedStudents || []
+    parentPreferredGrade.value = res.data.gradoPretendido || null
     if (ticketContext.value && ticketContext.value.correo_remitente) {
       targetForm.correo_padre = ticketContext.value.correo_remitente
     }
@@ -540,7 +571,6 @@ const loadStudentHistory = async () => {
   if (!selectedStudentId.value) return
   loading.value = true
   
-  // Reset fields to avoid stale values from previously selected student
   targetForm.correo_padre = ''
   targetForm.observaciones = ''
   targetForm.id_tipo_grado = ''
@@ -551,6 +581,7 @@ const loadStudentHistory = async () => {
     student.value = res.data.student
     lastEnrollment.value = res.data.lastEnrollment
     parent.value = res.data.parent
+    suggestedGradeInfo.value = res.data.suggestedGrade || null
     documents.value = (res.data.documents || []).map((d: any) => ({
       ...d,
       estado_renovacion: d.estado_renovacion_sugerido || 'VIGENTE'
@@ -562,11 +593,21 @@ const loadStudentHistory = async () => {
       targetForm.correo_padre = ticketContext.value.correo_remitente
     }
 
-    if (lastEnrollment.value && lastEnrollment.value.id_nivel) {
+    if (suggestedGradeInfo.value && suggestedGradeInfo.value.id_tipo_grado) {
+      if (suggestedGradeInfo.value.id_nivel) {
+        targetForm.id_nivel = suggestedGradeInfo.value.id_nivel
+      } else if (lastEnrollment.value && lastEnrollment.value.id_nivel) {
+        targetForm.id_nivel = lastEnrollment.value.id_nivel
+      }
+      await loadGroups()
+      targetForm.id_tipo_grado = suggestedGradeInfo.value.id_tipo_grado
+      onGradeChange()
+    } else if (lastEnrollment.value && lastEnrollment.value.id_nivel) {
       targetForm.id_nivel = lastEnrollment.value.id_nivel
+      await loadGroups()
+    } else {
+      await loadGroups()
     }
-
-    await loadGroups()
   } catch (err: any) {
     alert(err.response?.data?.error || 'Error al cargar expediente del estudiante')
     student.value = null
@@ -581,14 +622,20 @@ const submitReingresoLink = async () => {
     return
   }
 
+  if (!ticketId.value && !declaracionPresencial.value) {
+    alert('Por gobernanza de consentimiento, debes confirmar la declaración de atención presencial en secretaría para procesar el trámite sin ticket.')
+    return
+  }
+
   submitting.value = true
   try {
-    const payload: SendReingresoPayload = {
+    const payload: SendReingresoPayload & { declaracion_presencial?: boolean } = {
       id_estudiante: Number(selectedStudentId.value),
       id_nivel: Number(targetForm.id_nivel),
       id_grupo: Number(targetForm.id_grupo),
       id_anio: Number(targetForm.id_anio),
       id_ticket: ticketId.value ? Number(ticketId.value) : null,
+      declaracion_presencial: !ticketId.value ? declaracionPresencial.value : false,
       correo_padre: targetForm.correo_padre,
       observaciones: targetForm.observaciones,
       document_config: documents.value.map((d: any) => ({

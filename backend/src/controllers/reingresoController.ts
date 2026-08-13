@@ -104,6 +104,48 @@ export const getStudentHistoryForReingreso = async (req: Request, res: Response)
       };
     });
 
+    // 4.5. Motor de Sugerencia Pedagógica de Grado Destino (Smart Auto-Suggestion)
+    let suggestedGrade: { id_nivel: number | null; id_tipo_grado: number | null; grado_nombre: string; motivo: string } = {
+      id_nivel: lastEnrollment?.id_nivel || null,
+      id_tipo_grado: lastEnrollment?.id_tipo_grado || null,
+      grado_nombre: '',
+      motivo: ''
+    };
+
+    if (lastEnrollment && lastEnrollment.id_tipo_grado) {
+      const isPromoted = ['PROMOVIDO', 'APROBADO'].includes(String(lastEnrollment.estado || '').toUpperCase()) ||
+                        ['PROMOVIDO', 'APROBADO'].includes(String(lastEnrollment.estado_promocion || '').toUpperCase());
+
+      if (isPromoted) {
+        const nextGradeRes = await pool.query(
+          `SELECT tg.id_tipo_grado, tg.nombre AS grado_nombre, tg.id_nivel
+           FROM tipo_grado tg
+           WHERE tg.id_tipo_grado > $1
+           ORDER BY tg.id_tipo_grado ASC
+           LIMIT 1`,
+          [lastEnrollment.id_tipo_grado]
+        );
+        if (nextGradeRes.rows.length > 0) {
+          const ng = nextGradeRes.rows[0];
+          suggestedGrade = {
+            id_nivel: ng.id_nivel || lastEnrollment.id_nivel,
+            id_tipo_grado: ng.id_tipo_grado,
+            grado_nombre: ng.grado_nombre,
+            motivo: 'Estudiante promovido en el año lectivo anterior. Sugerido: Grado Siguiente.'
+          };
+        } else {
+          suggestedGrade.motivo = 'Estudiante promovido en el grado máximo registrado.';
+        }
+      } else {
+        const currentGradeRes = await pool.query(
+          `SELECT tg.nombre AS grado_nombre FROM tipo_grado tg WHERE tg.id_tipo_grado = $1`,
+          [lastEnrollment.id_tipo_grado]
+        );
+        suggestedGrade.grado_nombre = currentGradeRes.rows[0]?.grado_nombre || '';
+        suggestedGrade.motivo = 'Reingreso al mismo grado por retiro a mitad de año o no promoción.';
+      }
+    }
+
     // 5. Fetch parent info
     const parentRes = await pool.query(
       `SELECT pf.*, u.email
@@ -121,7 +163,8 @@ export const getStudentHistoryForReingreso = async (req: Request, res: Response)
       student,
       lastEnrollment,
       parent,
-      documents: evaluatedDocs
+      documents: evaluatedDocs,
+      suggestedGrade
     });
   } catch (error: any) {
     console.error("Error in getStudentHistoryForReingreso:", error);
@@ -167,9 +210,34 @@ export const getTicketContextForReingreso = async (req: Request, res: Response):
       [schoolId, ticket.correo_remitente, ticket.id_estudiante || null, ticket.id_usuario || null]
     );
 
+    let gradoPretendido: { id_tipo_grado: number; nombre: string } | null = null;
+    try {
+      if (ticket.observaciones) {
+        const obsArr = typeof ticket.observaciones === 'string' ? JSON.parse(ticket.observaciones) : ticket.observaciones;
+        if (Array.isArray(obsArr)) {
+          const foundObs = obsArr.find((o: any) => o.id_tipo_grado_pretendido);
+          if (foundObs && foundObs.id_tipo_grado_pretendido) {
+            const grRes = await pool.query(
+              `SELECT id_tipo_grado, nombre FROM tipo_grado WHERE id_tipo_grado = $1`,
+              [foundObs.id_tipo_grado_pretendido]
+            );
+            if (grRes.rows.length > 0) {
+              gradoPretendido = {
+                id_tipo_grado: grRes.rows[0].id_tipo_grado,
+                nombre: grRes.rows[0].nombre
+              };
+            }
+          }
+        }
+      }
+    } catch (e) {
+      // Ignore JSON parse errors
+    }
+
     res.json({
       ticket,
-      suggestedStudents: studentsRes.rows
+      suggestedStudents: studentsRes.rows,
+      gradoPretendido
     });
   } catch (error: any) {
     console.error("Error in getTicketContextForReingreso:", error);
@@ -192,6 +260,7 @@ export const sendReingresoParentLink = async (req: Request, res: Response): Prom
     id_grupo,
     id_anio,
     id_ticket,
+    declaracion_presencial,
     document_config,
     correo_padre,
     observaciones
@@ -199,6 +268,13 @@ export const sendReingresoParentLink = async (req: Request, res: Response): Prom
 
   if (!id_estudiante || !id_nivel || !id_grupo || !id_anio || !correo_padre) {
     res.status(400).json({ error: "Los campos id_estudiante, id_nivel, id_grupo, id_anio y correo_padre son obligatorios" });
+    return;
+  }
+
+  if (!id_ticket && !declaracion_presencial) {
+    res.status(400).json({ 
+      error: "Por gobernanza de consentimiento, el trámite debe originarse desde un Ticket de solicitud del acudiente o contar con la declaración de atención presencial en secretaría." 
+    });
     return;
   }
 
@@ -222,6 +298,26 @@ export const sendReingresoParentLink = async (req: Request, res: Response): Prom
     if (student.estado === 'EXPULSADO' || student.estado === 'GRADUADO' || student.estado === 'SANCIONADO') {
       res.status(400).json({ error: `El estudiante se encuentra en estado '${student.estado}'${student.estado === 'SANCIONADO' ? ' (Sanción disciplinaria activa)' : ''} y no es elegible para reingreso hasta que la situación se resuelva.` });
       return;
+    }
+
+    // Auto-create audit ticket if processing presencial atención without existing ticket
+    let finalTicketId = id_ticket ? Number(id_ticket) : null;
+    if (!finalTicketId && declaracion_presencial) {
+      const presencialTicketRes = await client.query(
+        `INSERT INTO tickets_soporte
+           (id_usuario, nombre_remitente, correo_remitente, tipo_incidencia, asunto, descripcion, id_colegio, estado, id_estudiante)
+         VALUES ($1, $2, $3, 'REINGRESO', 'Atención Presencial en Secretaría - Reingreso', $4, $5, 'EN_PROCESO', $6)
+         RETURNING id_ticket`,
+        [
+          authReq.user!.id,
+          'Atención Presencial (Secretaría)',
+          correo_padre,
+          `Trámite de reingreso iniciado directamente en secretaría para ${student.nombre} ${student.apellido}. Declaración de consentimiento confirmada por el directivo.`,
+          schoolId,
+          id_estudiante
+        ]
+      );
+      finalTicketId = presencialTicketRes.rows[0].id_ticket;
     }
 
     // Auto-update student state to RETIRADO if currently active, to prepare for re-admission
@@ -259,7 +355,7 @@ export const sendReingresoParentLink = async (req: Request, res: Response): Prom
         correo_padre,
         observaciones || 'Matrícula de reingreso autorizada por directivo',
         authReq.user!.id,
-        id_ticket || null
+        finalTicketId
       ]
     );
 
