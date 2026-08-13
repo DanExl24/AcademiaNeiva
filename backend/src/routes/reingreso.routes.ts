@@ -11,11 +11,11 @@ import {
 
 const router = Router();
 
-// Middleware: todas las rutas de este módulo requieren autenticación de Directivo o Admin General
-router.use(verifyToken, requireDirectivo);
-
-// Obtener catálogos (años y niveles) para la configuración de reingreso
+// Catálogos generales (Accesible para acudientes en soporte, padres y directivos)
 router.get("/catalogs", getReingresoCatalogs);
+
+// Middleware: todas las rutas administrativas de este módulo requieren autenticación de Directivo o Admin General
+router.use(verifyToken, requireDirectivo);
 
 // Obtener grupos del colegio por nivel y año lectivo
 router.get("/groups", getReingresoGroups);
