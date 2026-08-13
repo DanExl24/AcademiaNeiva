@@ -99,6 +99,7 @@ export const getStudentHistoryForReingreso = async (req: Request, res: Response)
 
       return {
         ...doc,
+        estado_sugerido: suggestedState,
         estado_renovacion_sugerido: suggestedState,
         motivo_sugerencia: motivoSugerencia
       };

@@ -318,7 +318,7 @@
                     :class="getBadgeClass(doc.estado_sugerido)"
                     class="px-2 py-0.5 text-[9px] font-black uppercase border rounded-md shrink-0"
                   >
-                    {{ doc.estado_sugerido === 'VIGENTE' ? 'Vigente' : 'Renovación Sugerida' }}
+                    {{ formatBadgeText(doc.estado_sugerido) }}
                   </span>
                 </div>
                 
@@ -582,10 +582,15 @@ const loadStudentHistory = async () => {
     lastEnrollment.value = res.data.lastEnrollment
     parent.value = res.data.parent
     suggestedGradeInfo.value = res.data.suggestedGrade || null
-    documents.value = (res.data.documents || []).map((d: any) => ({
-      ...d,
-      estado_renovacion: d.estado_renovacion_sugerido || 'VIGENTE'
-    }))
+    documents.value = (res.data.documents || []).map((d: any) => {
+      const sugerido = d.estado_sugerido || d.estado_renovacion_sugerido || 'VIGENTE'
+      const isObligatory = sugerido === 'OBLIGATORIO_ACTUALIZAR' || sugerido === 'DESACTUALIZADO_POR_FECHA'
+      return {
+        ...d,
+        estado_sugerido: sugerido,
+        estado_renovacion: isObligatory ? 'RENOVACION_REQUERIDA' : 'VIGENTE'
+      }
+    })
 
     if (parent.value && parent.value.email) {
       targetForm.correo_padre = parent.value.email
@@ -693,6 +698,16 @@ const getBadgeClass = (state: string) => {
     case 'OBLIGATORIO_ACTUALIZAR': return 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300'
     case 'DESACTUALIZADO_POR_FECHA': return 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300'
     default: return 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
+  }
+}
+
+const formatBadgeText = (state: string) => {
+  switch (state) {
+    case 'VIGENTE': return 'Vigente'
+    case 'OBLIGATORIO_ACTUALIZAR': return 'Renovación Obligatoria'
+    case 'RECOMENDADO_ACTUALIZAR': return 'Renovación Sugerida'
+    case 'DESACTUALIZADO_POR_FECHA': return 'Documento Vencido'
+    default: return 'Vigente'
   }
 }
 </script>
