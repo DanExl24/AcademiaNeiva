@@ -189,4 +189,24 @@ export const downloadDocumentFile = async (req: Request, res: Response) => {
   }
 };
 
+export const sendEnrollmentEmailCode = async (req: Request, res: Response) => {
+  try {
+    const { email } = req.body;
+    const result = await MatriculaService.sendEnrollmentEmailCode(email);
+    res.json(result);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+};
+
+export const verifyEnrollmentEmailCode = async (req: Request, res: Response) => {
+  try {
+    const { email, code } = req.body;
+    const result = await MatriculaService.verifyEnrollmentEmailCode(email, code);
+    res.json(result);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+};
+
 

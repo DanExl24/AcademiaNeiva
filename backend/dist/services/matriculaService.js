@@ -17,6 +17,65 @@ const REQUIRED_FOR_LOWER_LEVELS = ['registroCivil', 'vacunas']; // NO aplica a S
 const REQUIRED_NOT_INFANT = ['documentoIdentidad', 'certificadosEscolaridad']; // NO aplica a PI
 class MatriculaService {
     /**
+     * Genera y envía un código OTP de 6 dígitos para validar la existencia del correo electrónico.
+     */
+    static async sendEnrollmentEmailCode(email) {
+        if (!email || !/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(String(email).trim())) {
+            throw new Error("El correo electrónico proporcionado no es válido.");
+        }
+        const cleanEmail = String(email).trim().toLowerCase();
+        // Generar código numérico de 6 dígitos (entre 100000 y 999999)
+        const code = Math.floor(100000 + Math.random() * 900000).toString();
+        // Expiración: 15 minutos a partir de ahora
+        const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+        // Guardar nuevo código de verificación
+        await kysely_1.db
+            .insertInto("matricula_email_verifications")
+            .values({
+            email: cleanEmail,
+            codigo: code,
+            expires_at: expiresAt,
+            verified: false
+        })
+            .execute();
+        // Enviar correo electrónico con el código OTP
+        await notificationService_1.NotificationService.sendEnrollmentEmailVerificationCode(cleanEmail, code);
+        return {
+            message: "Código de verificación de 6 dígitos enviado exitosamente a tu correo electrónico. Válido por 15 minutos."
+        };
+    }
+    /**
+     * Verifica el código OTP de 6 dígitos ingresado por el usuario.
+     */
+    static async verifyEnrollmentEmailCode(email, code) {
+        if (!email || !code) {
+            throw new Error("El correo electrónico y el código de verificación son obligatorios.");
+        }
+        const cleanEmail = String(email).trim().toLowerCase();
+        const cleanCode = String(code).trim();
+        const record = await kysely_1.db
+            .selectFrom("matricula_email_verifications")
+            .selectAll()
+            .where("email", "=", cleanEmail)
+            .where("codigo", "=", cleanCode)
+            .where("verified", "=", false)
+            .where("expires_at", ">", (0, kysely_2.sql) `CURRENT_TIMESTAMP`)
+            .executeTakeFirst();
+        if (!record) {
+            throw new Error("El código de verificación es incorrecto o ha expirado. Por favor solicita uno nuevo.");
+        }
+        // Marcar como verificado
+        await kysely_1.db
+            .updateTable("matricula_email_verifications")
+            .set({ verified: true })
+            .where("id_verificacion", "=", record.id_verificacion)
+            .execute();
+        return {
+            verified: true,
+            message: "Correo electrónico verificado exitosamente."
+        };
+    }
+    /**
      * MR01 – El padre envía el formulario de matrícula.
      * Solo se persiste la solicitud en la tabla 'matricula' (con id_estudiante = NULL).
      */
@@ -24,6 +83,18 @@ class MatriculaService {
         const { level, hasDisability, isForeigner, parentEmail, id_colegio } = data;
         if (!parentEmail || !/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(String(parentEmail).trim())) {
             throw new Error("El correo electrónico del acudiente no es válido.");
+        }
+        const cleanEmail = String(parentEmail).trim().toLowerCase();
+        // Validar que el correo electrónico fue verificado previamente mediante OTP de 6 dígitos
+        const verifiedRecord = await kysely_1.db
+            .selectFrom("matricula_email_verifications")
+            .select(["id_verificacion"])
+            .where("email", "=", cleanEmail)
+            .where("verified", "=", true)
+            .where("created_at", ">", (0, kysely_2.sql) `CURRENT_TIMESTAMP - INTERVAL '2 hours'`)
+            .executeTakeFirst();
+        if (!verifiedRecord) {
+            throw new Error("Debes verificar la existencia de tu correo electrónico con el código de 6 dígitos antes de enviar el formulario de matrícula.");
         }
         // --- Validación de documentos ---
         const isHigher = level === 'SECUNDARIA' || level === 'MEDIA';

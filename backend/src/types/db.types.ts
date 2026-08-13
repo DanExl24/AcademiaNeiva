@@ -447,6 +447,15 @@ export interface Matricula {
   token_seguimiento: Generated<string>;
 }
 
+export interface MatriculaEmailVerifications {
+  id_verificacion: Generated<number>;
+  email: string;
+  codigo: string;
+  expires_at: Timestamp;
+  verified: Generated<boolean>;
+  created_at: Generated<Timestamp>;
+}
+
 export interface NivelEscolar {
   id_colegio: number;
   id_nivel: Generated<number>;
@@ -801,6 +810,7 @@ export interface DB {
   jornada: Jornada;
   materias: Materias;
   matricula: Matricula;
+  matricula_email_verifications: MatriculaEmailVerifications;
   nivel_escolar: NivelEscolar;
   nota_criterio: NotaCriterio;
   notas_actividad: NotasActividad;

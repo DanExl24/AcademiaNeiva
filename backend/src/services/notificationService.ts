@@ -756,4 +756,45 @@ export class NotificationService {
       console.error('Error enviando email de verificación de cambio de correo:', error);
     }
   }
+
+  static async sendEnrollmentEmailVerificationCode(
+    to: string,
+    code: string
+  ) {
+    if (!to) return;
+    const html = `
+      <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #1f2937;">
+        <div style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); padding: 40px; border-radius: 24px; text-align: center; color: white; margin-bottom: 30px;">
+          <h1 style="margin: 0; font-size: 26px; font-weight: 800;">Verificación de Correo Electrónico</h1>
+          <p style="opacity: 0.9; margin-top: 10px; font-size: 15px;">Academia Neiva - Proceso de Matrícula</p>
+        </div>
+        
+        <p style="font-size: 16px; font-weight: 600;">Hola,</p>
+        <p style="line-height: 1.6;">Estás realizando el registro de solicitud de matrícula en <strong>Academia Neiva</strong>. Para verificar la autenticidad de tu dirección de correo electrónico, utiliza el siguiente código de seguridad:</p>
+        
+        <div style="background-color: #f8fafc; border-radius: 20px; padding: 30px; margin: 25px 0; border: 2px dashed #2563eb; text-align: center;">
+          <p style="margin: 0; color: #64748b; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em;">Código de Verificación Único</p>
+          <p style="margin: 15px 0 0 0; color: #1d4ed8; font-size: 42px; font-weight: 900; letter-spacing: 0.25em;">${code}</p>
+        </div>
+
+        <p style="line-height: 1.6; font-size: 13px; color: #64748b;">Este código es de un solo uso y será válido durante los próximos <strong>15 minutos</strong>. Una vez verificado tu correo, podrás finalizar el envío de la matrícula.</p>
+
+        <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #f3f4f6; text-align: center; color: #9ca3af; font-size: 12px;">
+          <p>© Academia Neiva. Todos los derechos reservados.</p>
+        </div>
+      </div>
+    `;
+
+    try {
+      await transporter.sendMail({
+        from: `"Academia Neiva" <${process.env.SMTP_USER}>`,
+        to,
+        subject: `Código de Verificación de Matrícula: ${code}`,
+        html,
+      });
+      console.log(`Email de verificación de matrícula enviado exitosamente a ${to}`);
+    } catch (error) {
+      console.error('Error enviando email de verificación de matrícula:', error);
+    }
+  }
 }

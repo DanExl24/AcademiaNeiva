@@ -10,7 +10,9 @@ import {
   finalizeEnrollment,
   cancelEnrollment,
   toggleTransfer,
-  downloadDocumentFile
+  downloadDocumentFile,
+  sendEnrollmentEmailCode,
+  verifyEnrollmentEmailCode
 } from "../controllers/matriculaController";
 import { upload } from "../config/multer";
 import { verifyToken, requireDirectivo } from "../middleware/authMiddleware";
@@ -94,6 +96,9 @@ router.get("/school/:schoolId/enrollment-config", async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+
+router.post("/send-email-code", sendEnrollmentEmailCode);
+router.post("/verify-email-code", verifyEnrollmentEmailCode);
 
 router.post("/submit", upload.fields([
   { name: 'registroCivil', maxCount: 1 },

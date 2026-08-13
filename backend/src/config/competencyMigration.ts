@@ -493,6 +493,13 @@ export const ensureCompetencySchema = async (): Promise<void> => {
       await client.query(uniqueDecisionSql);
     }
 
+    // Ejecutar migración 048 (tabla matricula_email_verifications para verificación OTP de correo antes de matrícula)
+    const emailVerificationPath = path.join(__dirname, "../migrations/048_matricula_email_verifications.sql");
+    if (fs.existsSync(emailVerificationPath)) {
+      const emailVerificationSql = fs.readFileSync(emailVerificationPath, "utf8");
+      await client.query(emailVerificationSql);
+    }
+
 
 
     // Backfill sync_uuid for existing competencies

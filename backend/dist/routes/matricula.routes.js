@@ -71,6 +71,8 @@ router.get("/school/:schoolId/enrollment-config", async (req, res) => {
         res.status(500).json({ error: e.message });
     }
 });
+router.post("/send-email-code", matriculaController_1.sendEnrollmentEmailCode);
+router.post("/verify-email-code", matriculaController_1.verifyEnrollmentEmailCode);
 router.post("/submit", multer_1.upload.fields([
     { name: 'registroCivil', maxCount: 1 },
     { name: 'documentoIdentidad', maxCount: 1 },

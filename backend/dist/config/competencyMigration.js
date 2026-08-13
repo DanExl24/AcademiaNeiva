@@ -460,6 +460,12 @@ const ensureCompetencySchema = async () => {
             const uniqueDecisionSql = fs_1.default.readFileSync(uniqueDecisionPath, "utf8");
             await client.query(uniqueDecisionSql);
         }
+        // Ejecutar migración 048 (tabla matricula_email_verifications para verificación OTP de correo antes de matrícula)
+        const emailVerificationPath = path_1.default.join(__dirname, "../migrations/048_matricula_email_verifications.sql");
+        if (fs_1.default.existsSync(emailVerificationPath)) {
+            const emailVerificationSql = fs_1.default.readFileSync(emailVerificationPath, "utf8");
+            await client.query(emailVerificationSql);
+        }
         // Backfill sync_uuid for existing competencies
         const unmigratedRes = await client.query(`
       SELECT id_colegio, id_anio, id_materia, id_periodo, descripcion, ARRAY_AGG(id_competencia) AS ids

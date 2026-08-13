@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.downloadDocumentFile = exports.toggleTransfer = exports.cancelEnrollment = exports.finalizeEnrollment = exports.notifyInconsistencies = exports.assignGrade = exports.validateDocument = exports.getMatriculaDetails = exports.getPendingMatriculas = exports.submitEnrollment = void 0;
+exports.verifyEnrollmentEmailCode = exports.sendEnrollmentEmailCode = exports.downloadDocumentFile = exports.toggleTransfer = exports.cancelEnrollment = exports.finalizeEnrollment = exports.notifyInconsistencies = exports.assignGrade = exports.validateDocument = exports.getMatriculaDetails = exports.getPendingMatriculas = exports.submitEnrollment = void 0;
 const matriculaService_1 = require("../services/matriculaService");
 const db_1 = require("../config/db");
 const path_1 = __importDefault(require("path"));
@@ -190,3 +190,25 @@ const downloadDocumentFile = async (req, res) => {
     }
 };
 exports.downloadDocumentFile = downloadDocumentFile;
+const sendEnrollmentEmailCode = async (req, res) => {
+    try {
+        const { email } = req.body;
+        const result = await matriculaService_1.MatriculaService.sendEnrollmentEmailCode(email);
+        res.json(result);
+    }
+    catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+};
+exports.sendEnrollmentEmailCode = sendEnrollmentEmailCode;
+const verifyEnrollmentEmailCode = async (req, res) => {
+    try {
+        const { email, code } = req.body;
+        const result = await matriculaService_1.MatriculaService.verifyEnrollmentEmailCode(email, code);
+        res.json(result);
+    }
+    catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+};
+exports.verifyEnrollmentEmailCode = verifyEnrollmentEmailCode;

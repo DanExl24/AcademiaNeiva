@@ -12,7 +12,11 @@ import {
   Camera,
   AlertCircle,
   Calendar,
-  CalendarDays
+  CalendarDays,
+  ShieldCheck,
+  KeyRound,
+  Timer,
+  RefreshCw
 } from 'lucide-vue-next'
 
 const step = ref(1)
@@ -284,6 +288,77 @@ const docLabels: Record<string, string> = {
   certificadosEscolaridad: 'Certificados de Escolaridad'
 }
 
+const isEmailVerified = ref(false)
+const sendingCode = ref(false)
+const verifyingCode = ref(false)
+const otpCodeInput = ref('')
+const codeSent = ref(false)
+const countdownSeconds = ref(0)
+let timerInterval: any = null
+
+const formattedCountdown = computed(() => {
+  const mins = Math.floor(countdownSeconds.value / 60)
+  const secs = countdownSeconds.value % 60
+  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+})
+
+const startTimer = () => {
+  if (timerInterval) clearInterval(timerInterval)
+  countdownSeconds.value = 900 // 15 minutos
+  timerInterval = setInterval(() => {
+    if (countdownSeconds.value > 0) {
+      countdownSeconds.value--
+    } else {
+      clearInterval(timerInterval)
+    }
+  }, 1000)
+}
+
+const sendVerificationCode = async () => {
+  if (!formData.value.parentEmail || !isValidEmail(formData.value.parentEmail)) {
+    notify.addNotification('Por favor ingresa un correo electrónico válido antes de solicitar el código.', 'warning')
+    return
+  }
+  sendingCode.value = true
+  try {
+    const res = await axios.post('/api/matriculas/send-email-code', {
+      email: formData.value.parentEmail
+    })
+    codeSent.value = true
+    startTimer()
+    notify.addNotification(res.data.message || 'Código de 6 dígitos enviado a tu correo.', 'success')
+  } catch (error: any) {
+    const msg = error.response?.data?.error || 'Error al enviar el código de verificación.'
+    notify.addNotification(msg, 'error')
+  } finally {
+    sendingCode.value = false
+  }
+}
+
+const verifyOtpCode = async () => {
+  if (!otpCodeInput.value || otpCodeInput.value.trim().length !== 6) {
+    notify.addNotification('Ingresa el código completo de 6 dígitos.', 'warning')
+    return
+  }
+  verifyingCode.value = true
+  try {
+    const res = await axios.post('/api/matriculas/verify-email-code', {
+      email: formData.value.parentEmail,
+      code: otpCodeInput.value.trim()
+    })
+    if (res.data.verified) {
+      isEmailVerified.value = true
+      if (timerInterval) clearInterval(timerInterval)
+      notify.addNotification('¡Correo electrónico verificado exitosamente!', 'success')
+    }
+  } catch (error: any) {
+    const msg = error.response?.data?.error || 'Código incorrecto o expirado.'
+    notify.addNotification(msg, 'error')
+  } finally {
+    verifyingCode.value = false
+  }
+}
+
 const nextStep = () => {
   if (step.value === 1) {
     if (!schoolId.value || !level.value || !grade.value || !formData.value.parentEmail) {
@@ -292,6 +367,10 @@ const nextStep = () => {
     }
     if (!isValidEmail(formData.value.parentEmail)) {
       notify.addNotification('Por favor ingresa un correo electrónico válido (ejemplo: usuario@correo.com).', 'warning')
+      return
+    }
+    if (!isEmailVerified.value) {
+      notify.addNotification('Debes verificar tu correo electrónico ingresando el código de 6 dígitos enviado a tu email.', 'warning')
       return
     }
     if (!isEnrollmentOpen.value) {
@@ -473,8 +552,64 @@ const submitEnrollment = async () => {
               </div>
 
               <div class="space-y-2">
-                <label class="text-sm font-bold text-gray-700">Correo del Padre de Familia</label>
-                <input v-model="formData.parentEmail" type="email" class="w-full rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 focus:border-transparent p-4 transition-all" placeholder="ejemplo@correo.com">
+                <div class="flex items-center justify-between">
+                  <label class="text-sm font-bold text-gray-700">Correo del Padre de Familia</label>
+                  <span v-if="isEmailVerified" class="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+                    <ShieldCheck :size="14" class="text-emerald-600" /> Correo Verificado
+                  </span>
+                </div>
+
+                <div class="flex gap-2">
+                  <input 
+                    v-model="formData.parentEmail" 
+                    type="email" 
+                    :disabled="isEmailVerified || sendingCode"
+                    class="w-full rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 focus:border-transparent p-4 transition-all disabled:opacity-75 disabled:bg-gray-100" 
+                    placeholder="ejemplo@correo.com"
+                  >
+                  <button 
+                    v-if="!isEmailVerified"
+                    type="button" 
+                    @click="sendVerificationCode"
+                    :disabled="sendingCode || !formData.parentEmail"
+                    class="px-5 py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold text-sm shrink-0 transition-all disabled:opacity-50 flex items-center gap-2 shadow-sm active:scale-95"
+                  >
+                    <RefreshCw v-if="sendingCode" class="animate-spin" :size="16" />
+                    <span>{{ codeSent ? 'Reenviar Código' : 'Verificar Correo' }}</span>
+                  </button>
+                </div>
+
+                <!-- Bloque de Ingreso del Código OTP de 6 dígitos -->
+                <div v-if="codeSent && !isEmailVerified" class="mt-3 p-4 bg-indigo-50/70 border border-indigo-100 rounded-2xl space-y-3 animate-in fade-in duration-300">
+                  <div class="flex items-center justify-between">
+                    <span class="text-xs font-extrabold text-indigo-900 flex items-center gap-1.5">
+                      <KeyRound :size="14" class="text-indigo-600" /> Código de 6 dígitos enviado a tu correo
+                    </span>
+                    <span v-if="countdownSeconds > 0" class="text-xs font-mono font-bold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-md flex items-center gap-1">
+                      <Timer :size="12" /> Expira en: {{ formattedCountdown }}
+                    </span>
+                  </div>
+
+                  <div class="flex gap-2">
+                    <input 
+                      v-model="otpCodeInput" 
+                      type="text" 
+                      maxlength="6"
+                      placeholder="123456" 
+                      class="w-full rounded-xl border-gray-300 text-center font-mono text-lg font-black tracking-widest bg-white focus:ring-2 focus:ring-indigo-500 p-2.5"
+                    >
+                    <button 
+                      type="button"
+                      @click="verifyOtpCode"
+                      :disabled="verifyingCode || otpCodeInput.length !== 6"
+                      class="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm shrink-0 transition-all disabled:opacity-50 flex items-center gap-1.5 active:scale-95 shadow-sm"
+                    >
+                      <RefreshCw v-if="verifyingCode" class="animate-spin" :size="16" />
+                      <CheckCircle2 v-else :size="16" />
+                      <span>Validar</span>
+                    </button>
+                  </div>
+                </div>
               </div>
 
               <div class="space-y-2">
