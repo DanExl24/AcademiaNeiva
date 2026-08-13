@@ -263,7 +263,6 @@ Todos los endpoints de creación de usuarios.
 ### Archivos relacionados
 
 - [AcademiaNeivaBD.sql](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/AcademiaNeivaBD.sql)
-- [modulo_global/README.md](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/modules/modulo_global/README.md)
 
 ### Historias de usuario relacionadas
 
@@ -334,38 +333,57 @@ HU-AUT-001, HU-DIR-002, HU-DOC-001.
 
 ### Nombre
 
-Unicidad Global del Número de Documento de Identidad
+Unicidad Global, Normalización y Validación de Formato de Documentos de Identidad
 
 ### Descripción
 
-Un número de documento de identidad es único en toda la plataforma, independientemente del colegio o rol. Si un usuario ya existe con ese documento, el sistema rechaza la creación HTTP 409 (Conflict).
+Un número de documento de identidad es **único en toda la plataforma**, independientemente del colegio o rol del usuario. Si un usuario ya existe en la base de datos con ese número de documento, el sistema rechaza la creación con HTTP 409 (Conflict).
+
+Además, el sistema rige los formatos, expresiones regulares y normalizaciones para los tipos de documento reconocidos:
+
+| ID | Tipo de Documento | Abreviatura | Caracteres Permitidos | Rango de Longitud | Expresión Regular | Ejemplo Válido |
+| :-: | :--- | :-: | :--- | :--- | :--- | :--- |
+| `1` | **Registro Civil** | RC | Solo números | 6 a 11 dígitos | `/^\d{6,11}$/` | `1075123456` |
+| `2` | **Tarjeta de Identidad** | TI | Solo números | 6 a 11 dígitos | `/^\d{6,11}$/` | `1075654321` |
+| `3` | **Cédula de Ciudadanía** | CC | Solo números | 6 a 10 dígitos | `/^\d{6,10}$/` | `1234567890` |
+| `4` | **Cédula de Extranjería** | CE | Solo números | 1 a 10 dígitos | `/^\d{1,10}$/` | `123456789` |
+| `5` | **PEP / PPT** | PEP / PPT | Solo números | 1 a 10 dígitos | `/^\d{1,10}$/` | `987654321` |
+| `6` | **Pasaporte** | PAS | Alfanumérico (letras y números) | 1 a 15 caracteres | `/^[a-zA-Z0-9]{1,15}$/` | `AB1234567` |
 
 ### Motivo
 
-Evita la duplicidad de identidades en la base de datos y protege contra la suplantación de identidad del personal escolar y alumnado entre instituciones.
+Evita la duplicidad de identidades en la base de datos, estandariza el procesamiento de documentos de identidad y protege contra la suplantación de identidad del personal escolar y alumnado entre instituciones.
 
 ### Alcance
 
-Tabla `usuario`, todas las operaciones de creación y actualización de usuarios.
+Tabla `usuario`, todas las operaciones de creación, actualización y verificación de usuarios.
 
 ### Evidencia
 
 - Índice sobre `documento`: `CREATE INDEX idx_usuario_documento ON public.usuario USING btree (documento)` — [AcademiaNeivaBD.sql L4201](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/AcademiaNeivaBD.sql#L4201)
 - Constraint CHECK: `CHECK (documento IS NULL OR documento ~ '^[a-zA-Z0-9]+$')` — [L2746](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/AcademiaNeivaBD.sql#L2746)
-- [reglas_documentos.md](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/modules/modulo_global/reglas_documentos.md) — Documentación de unicidad absoluta
+- Helper de Validación y Normalización: [documentValidation.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/utils/documentValidation.ts)
 
 ### Implementación
 
-1. **Backend**: Las funciones `validateDocumentUniqueness` y `normalizeDocument` verifican la unicidad a nivel global consultando `SELECT ... FROM usuario WHERE documento = $1`.
-2. **Frontend**: Validación en tiempo real con máscaras dinámicas según el tipo de documento.
-3. **DTO (Zod)**: Validación de formatos y expresiones regulares.
-4. **Base de datos**: Constraint `CHECK` en la columna `documento`.
+La validación se realiza mediante una estrategia en múltiples capas (**Defense in Depth**):
 
-> **Nota importante**: No existe una restricción `UNIQUE` sobre la columna `documento` a nivel de base de datos. La unicidad se implementa **exclusivamente en la capa de aplicación** (backend). El índice `idx_usuario_documento` es un índice de rendimiento, no de unicidad.
+1. **Normalización (`normalizeDocument()`)**: Elimina espacios en blanco al inicio/final y convierte letras a mayúsculas en el caso de Pasaportes. No se permiten guiones, puntos ni símbolos especiales.
+2. **Mensajes de Error Estandarizados**:
+   - **CC**: *"La Cédula de Ciudadanía debe contener solo números (6 a 10 dígitos)."*
+   - **TI / RC**: *"El documento debe contener solo números (6 a 11 dígitos)."*
+   - **CE / PEP / PPT**: *"El documento debe contener solo números (hasta 10 dígitos)."*
+   - **PAS**: *"El Pasaporte debe ser alfanumérico (hasta 15 caracteres sin espacios ni símbolos)."*
+3. **Backend (`validateDocumentUniqueness`)**: Verifica la unicidad a nivel global consultando `SELECT id_usuario FROM usuario WHERE documento = $1`. Si existe, retorna HTTP 409 Conflict.
+4. **Frontend**: Validación en tiempo real con máscaras dinámicas y placeholders según el tipo de documento.
+5. **DTO (Zod)**: Validación de esquemas con expresiones regulares por tipo de documento.
+6. **Base de datos (PostgreSQL)**: Constraint `CHECK (documento IS NULL OR documento ~ '^[a-zA-Z0-9]+$')` en la tabla `usuario`.
+
+> **Nota importante**: No existe una restricción `UNIQUE` sobre la columna `documento` a nivel de base de datos debido a que permite valores `NULL`. La unicidad se implementa en la capa de aplicación (backend). El índice `idx_usuario_documento` es un índice de rendimiento.
 
 ### Excepciones
 
-La columna `documento` permite valores `NULL` para usuarios que aún no tienen documento registrado.
+La columna `documento` permite valores `NULL` para usuarios que aún no tienen documento registrado. En PostgreSQL, múltiples valores `NULL` no violan unicidad.
 
 ### Módulos afectados
 
@@ -373,7 +391,7 @@ Autenticación, Usuarios y Directivos, Docentes, Matrículas, Gestión de Padres
 
 ### Entidades afectadas
 
-`usuario`.
+`usuario`, `tipo_documento`.
 
 ### Endpoints relacionados
 
@@ -384,7 +402,7 @@ Autenticación, Usuarios y Directivos, Docentes, Matrículas, Gestión de Padres
 
 ### Archivos relacionados
 
-- [reglas_documentos.md](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/modules/modulo_global/reglas_documentos.md)
+- [documentValidation.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/utils/documentValidation.ts)
 - [AcademiaNeivaBD.sql](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/AcademiaNeivaBD.sql)
 - [academicAdminController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdminController.ts) — `createTeacher`
 - [adminGeneralController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/adminGeneralController.ts) — `registrarDirectivo`, `crearUsuarioByAdminGeneral`
@@ -1764,7 +1782,7 @@ Todas las operaciones de escritura del sistema.
 
 ### Evidencia
 
-- [modulo_global/README.md](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/modules/modulo_global/README.md) — Principio documentado "Validación en Múltiples Capas"
+- [RN-GEN-006](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/reglas_negocio_generales.md#rn-gen-006) — Principio documentado "Validación en Múltiples Capas"
 - [validateDto.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/middleware/validateDto.ts) — Middleware de validación Zod
 - DTOs en `backend/src/dtos/`: `matricula.dto.ts`, `adminUser.dto.ts`, `profile.dto.ts`, `reingreso.dto.ts`, `student.dto.ts`
 - Constraints en [AcademiaNeivaBD.sql](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/AcademiaNeivaBD.sql)
