@@ -489,10 +489,17 @@ export const getReingresoCatalogs = async (req: Request, res: Response): Promise
       [schoolId]
     );
 
+    const gradosRes = await pool.query(
+      `SELECT id_tipo_grado, nombre, id_nivel 
+       FROM tipo_grado 
+       ORDER BY id_tipo_grado`
+    );
+
     res.json({
       anios: yearsRes.rows,
       years: yearsRes.rows,
-      niveles: levelsRes.rows
+      niveles: levelsRes.rows,
+      grados: gradosRes.rows
     });
   } catch (error: any) {
     console.error("Error in getReingresoCatalogs:", error);

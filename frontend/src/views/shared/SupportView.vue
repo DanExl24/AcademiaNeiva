@@ -220,8 +220,19 @@ const handleNotifyNonExistent = async (ticketId: number) => {
 
 const myChildren = ref<any[]>([])
 const selectedChildIdForTicket = ref<number | null>(null)
+const catalogGrados = ref<any[]>([])
+const selectedPreferredGradeIdForTicket = ref<any>('')
 const myTickets = ref<any[]>([])
 const myTicketsFilter = ref('TODOS')
+
+const fetchGradosCatalog = async () => {
+  try {
+    const res = await axios.get('/api/reingreso/catalogs')
+    catalogGrados.value = res.data.grados || []
+  } catch (err) {
+    console.error('Error cargando catálogos de grados:', err)
+  }
+}
 const trackingCodeInput = ref('')
 const searchingTracking = ref(false)
 const trackingError = ref('')
@@ -378,6 +389,7 @@ const submitVisitorResponse = async () => {
 }
 
 onMounted(() => {
+  fetchGradosCatalog()
   if (isStaff.value) {
     fetchTickets()
   } else {
@@ -431,7 +443,8 @@ const handleSubmit = async () => {
       asunto: subject.value,
       descripcion: description.value,
       id_colegio: selectedSchoolId.value,
-      id_estudiante: category.value === 'REINGRESO' ? selectedChildIdForTicket.value : null
+      id_estudiante: category.value === 'REINGRESO' ? selectedChildIdForTicket.value : null,
+      id_tipo_grado_pretendido: category.value === 'REINGRESO' && selectedPreferredGradeIdForTicket.value ? Number(selectedPreferredGradeIdForTicket.value) : null
     }
 
     const response = await axios.post('/api/support/tickets', payload, { headers })
@@ -1307,19 +1320,47 @@ const getObservationText = (obs: any) => {
             </div>
           </div>
 
-          <!-- Selector de Hijo para Reingreso (Si es Padre autenticado y elige REINGRESO) -->
-          <div v-if="category === 'REINGRESO' && myChildren.length > 0" class="space-y-2 bg-emerald-500/10 p-4 rounded-2xl border border-emerald-500/30">
-            <label class="text-xs font-bold text-emerald-400 uppercase tracking-widest block">👤 Seleccionar Estudiante / Hijo a Reingresar *</label>
-            <select 
-              v-model="selectedChildIdForTicket"
-              class="w-full px-4 py-3 bg-slate-900 border border-emerald-500/50 rounded-xl text-sm font-semibold text-slate-100 focus:outline-none focus:border-emerald-400 transition"
-            >
-              <option v-for="child in myChildren" :key="child.id_estudiante" :value="child.id_estudiante">
-                {{ child.nombre }} {{ child.apellido }} (Doc: {{ child.documento }}) — Estado actual: {{ child.estado }}
-              </option>
-            </select>
-            <p class="text-[11px] text-slate-400 italic">
-              El directivo recibirá directamente el expediente de este estudiante para procesar la matriz de reingreso.
+          <!-- Mini Tarjeta de Configuración de Reingreso (Para el Acudiente) -->
+          <div v-if="category === 'REINGRESO' && myChildren.length > 0" class="p-4 bg-emerald-50/80 dark:bg-emerald-950/30 border border-emerald-200/80 dark:border-emerald-800/60 rounded-2xl space-y-3.5 shadow-sm">
+            <div class="flex items-center gap-2 border-b border-emerald-200/60 dark:border-emerald-800/40 pb-2">
+              <span class="text-base">🎓</span>
+              <div>
+                <h3 class="text-xs font-black uppercase tracking-wider text-emerald-800 dark:text-emerald-300">Datos de Reingreso Estudiantil</h3>
+                <p class="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Asocia al alumno y selecciona el grado pretendido sin necesidad de escribirlo.</p>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <!-- Selector de Estudiante -->
+              <div class="space-y-1">
+                <label class="text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 block">👤 Estudiante / Hijo a Reingresar *</label>
+                <select 
+                  v-model="selectedChildIdForTicket"
+                  class="w-full px-3 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:border-emerald-500 transition cursor-pointer shadow-sm"
+                >
+                  <option v-for="child in myChildren" :key="child.id_estudiante" :value="child.id_estudiante">
+                    {{ child.nombre }} {{ child.apellido }} (Doc: {{ child.documento || 'S/N' }}) — Estado: {{ child.estado || 'RETIRADO' }}
+                  </option>
+                </select>
+              </div>
+
+              <!-- Mini Tarjeta / Selector de Grado Requerido -->
+              <div class="space-y-1">
+                <label class="text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 block">🎯 Grado Requerido / Pretendido</label>
+                <select 
+                  v-model="selectedPreferredGradeIdForTicket"
+                  class="w-full px-3 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:border-emerald-500 transition cursor-pointer shadow-sm"
+                >
+                  <option value="">-- Sugerencia Automática por Sistema --</option>
+                  <option v-for="gr in catalogGrados" :key="gr.id_tipo_grado" :value="gr.id_tipo_grado">
+                    {{ gr.nombre }}
+                  </option>
+                </select>
+              </div>
+            </div>
+
+            <p class="text-[10px] text-slate-500 dark:text-slate-400 italic">
+              💡 El directivo recibirá directamente la sugerencia pedagógica y la preferencia del acudiente para asignar el salón correspondiente.
             </p>
           </div>
 

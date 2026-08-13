@@ -450,11 +450,14 @@ export const getParentChildren = async (req: Request, res: Response) => {
       .leftJoin("tipo_grado as tg", "tg.id_tipo_grado", "gr.id_tipo_grado")
       .leftJoin("jornada as j", "j.id_jornada", "gr.id_jornada")
       .leftJoin("nivel_escolar as n", "n.id_nivel", "gr.id_nivel")
+      .leftJoin("usuario as u_e", "u_e.id_usuario", "e.id_usuario")
       .select([
         "e.id_estudiante",
         "e.nombre",
         "e.apellido",
         "e.codigo",
+        "e.estado",
+        "u_e.documento",
         "tg.nombre as grado",
         "s.nombre as seccion",
         sql<string>`CASE 
