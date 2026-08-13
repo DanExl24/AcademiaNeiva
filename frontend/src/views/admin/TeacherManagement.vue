@@ -529,12 +529,15 @@ const createTeacher = async (addRoleIfParent: boolean | any = false) => {
   }
   try {
     savingTeacher.value = true
-    await axios.post('/api/academic-admin/teachers', {
+    const res = await axios.post('/api/academic-admin/teachers', {
       schoolId: schoolId.value, nombre: p.nombre, apellido: p.apellido,
       documento: p.documento, id_tipodocumento: Number(p.id_tipodocumento),
       email: p.email, password: p.password,
       addRoleIfParent: isParentFlag
     })
+    if (res.data?.infoMessage) {
+      alert(res.data.infoMessage)
+    }
     resetAutoFilledUser()
     p.password = ''
     createTeacherModal.value = false

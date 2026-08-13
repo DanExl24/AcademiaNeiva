@@ -157,9 +157,8 @@ export async function validateDocumentUniqueness(
 
     const usrRes = await client.query(usrQuery, usrParams);
     if (usrRes.rows.length > 0) {
-      const holder = `${usrRes.rows[0].nombre || ''} ${usrRes.rows[0].apellido || ''}`.trim();
       throw new Error(
-        `El número de documento de identidad '${documentNum}' (${entityLabel}) no está permitido: ya se encuentra registrado en la plataforma a nombre de '${holder || 'otro usuario'}'.`
+        `El número de documento de identidad '${documentNum}' ya se encuentra registrado en el sistema. Sus datos personales serán preservados al vincularse.`
       );
     }
   } else {
@@ -176,9 +175,8 @@ export async function validateDocumentUniqueness(
 
     const usrRes = await query.executeTakeFirst();
     if (usrRes) {
-      const holder = `${usrRes.nombre || ""} ${usrRes.apellido || ""}`.trim();
       throw new Error(
-        `El número de documento de identidad '${documentNum}' (${entityLabel}) no está permitido: ya se encuentra registrado en la plataforma a nombre de '${holder || "otro usuario"}'.`
+        `El número de documento de identidad '${documentNum}' ya se encuentra registrado en el sistema. Sus datos personales serán preservados al vincularse.`
       );
     }
   }

@@ -129,3 +129,20 @@ Cuando un docente labora simultáneamente en más de un colegio (ej. Colegio A y
    ```
 4. **Garantía de Soberanía e Aislamiento de Datos**:
    El Directivo del Colegio A **solo puede ver las asignaciones, materias, grupos, notas y asistencias correspondientes al Colegio A**. Las clases del Colegio B quedan completamente filtradas e invisibles, protegiendo la confidencialidad entre instituciones.
+
+---
+
+## 8. Registro de Usuarios Existentes y Mínima Divulgación de Información
+
+Cuando un usuario registrado en el Colegio A (ej. como Padre de Familia) es vinculado a un nuevo Colegio B (ej. como Docente):
+
+1. **Reutilización Transparente de la Cuenta**:
+   - El sistema detecta la coincidencia por número de documento o correo electrónico.
+   - En lugar de arrojar un error de discrepancia o intentar sobreescribir los nombres y apellidos, **preserva intactos los datos personales del usuario**.
+2. **Creación Exclusiva del Vínculo Institucional**:
+   - Se crea el registro de rol para Colegio B (`usuario_colegio` y tabla específica de rol `docente` / `padre_familia`).
+3. **Mínima Divulgación de Información**:
+   - El sistema **no notifica al Directivo del Colegio B dónde más está vinculado el usuario ni qué roles desempeña en otros colegios**, protegiendo la privacidad de la cuenta.
+4. **Respuesta Informativa Segura**:
+   - El sistema confirma la operación con un mensaje neutro y transparente:
+     > *"El usuario ya se encuentra registrado en el sistema. Sus datos personales existentes fueron preservados y no fueron sobrescritos. Se agregó únicamente su asignación a esta institución."*

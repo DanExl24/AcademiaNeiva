@@ -78,3 +78,13 @@ Cuando un docente labora simultáneamente en múltiples instituciones (Colegio A
 2. Durante el seguimiento iniciado por el Directivo del Colegio A, toda consulta al backend (`getTeacherCourses`, `getTeacherDashboard`, etc.) incluye obligatoriamente el encabezado `x-school-id = schoolId_A`.
 3. El backend filtra los datos agregando `.where("docente.id_colegio", "=", schoolId_A)` y `.where("detalle_grados.id_colegio", "=", schoolId_A)`.
 4. El Directivo del Colegio A **únicamente puede visibilizar los cursos, estudiantes, materias y cargas académicas correspondientes a su institución**, quedando la información del Colegio B totalmente aislada e inaccesible.
+
+---
+
+### RN-SEG-012: Principio de Mínima Divulgación de Información y Reutilización de Datos Personales
+Cuando un Directivo del Colegio B registra un usuario cuyo número de documento de identidad ya existe en la plataforma (por ejemplo, registrado previamente como Padre o Docente en el Colegio A):
+1. **Preservación Inmutable de Datos Personales**: Los nombres, apellidos, documento y tipo de documento originales almacenados en `usuario` no son modificados ni sobrescritos.
+2. **Reutilización Transparente**: Se reutiliza el registro `usuario` existente y se genera únicamente la vinculación institucional (`usuario_colegio` y tabla de rol del Colegio B).
+3. **Mínima Divulgación de Información**: El sistema **nunca revela al Directivo del Colegio B a qué otros colegios pertenece el usuario ni qué roles ostenta en otras instituciones**, protegiendo la privacidad de los usuarios.
+4. **Respuesta Informativa Segura**: El sistema confirma la operación con un mensaje neutro y profesional:
+   *"El usuario ya se encuentra registrado en el sistema. Sus datos personales existentes fueron preservados y no fueron sobrescritos. Se agregó únicamente su asignación a esta institución."*

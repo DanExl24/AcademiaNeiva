@@ -161,27 +161,11 @@ export const createTeacher = async (req: Request, res: Response): Promise<void> 
     const existingUser = userByDoc || userByEmail;
 
     if (existingUser) {
-      // VALIDACIÓN DE INTEGRIDAD DE DATOS PERSONALES
-      // No se permite modificar Nombres, Apellidos, Tipo o Número de Documento de un usuario existente.
-      const normNombreReq = nombre.toLowerCase().trim();
-      const normApellidoReq = apellido.toLowerCase().trim();
-      const normNombreExist = (existingUser.nombre || "").toLowerCase().trim();
-      const normApellidoExist = (existingUser.apellido || "").toLowerCase().trim();
-      const normDocExist = normalizeDocument(existingUser.documento);
-      const tipoDocExist = Number(existingUser.id_tipodocumento);
-
-      const nameMismatch = normNombreExist && normNombreReq !== normNombreExist;
-      const surnameMismatch = normApellidoExist && normApellidoReq !== normApellidoExist;
-      const docMismatch = normDocExist && documento !== normDocExist;
-      const tipoDocMismatch = tipoDocExist && documentTypeId !== tipoDocExist;
-
-      if (nameMismatch || surnameMismatch || docMismatch || tipoDocMismatch) {
-        await client.query("ROLLBACK");
-        res.status(400).json({
-          error: `Los datos personales ingresados no coinciden con la persona registrada en el sistema (${existingUser.nombre} ${existingUser.apellido}, Doc: ${existingUser.documento}). No se permite alterar el nombre, apellido, tipo o número de documento de un usuario existente.`
-        });
-        return;
-      }
+      // PRINCIPIO DE MÍNIMA DIVULGACIÓN DE INFORMACIÓN E INMUTABILIDAD DE DATOS PERSONALES:
+      // Si el usuario ya existe en la plataforma por documento o email:
+      // 1. No se modifica su nombre, apellido ni documento original (se preservan intactos).
+      // 2. No se revelan los colegios a los que pertenece ni otros roles de manera indiscreta.
+      // 3. Se asigna únicamente la vinculación con este colegio (schoolId) como Docente.
 
       // Si el correo ingresado difiere del del usuario existente pero está en uso por otro usuario distinto
       if (email !== (existingUser.email || "").toLowerCase().trim() && userByEmail && userByEmail.id_usuario !== existingUser.id_usuario) {
@@ -199,7 +183,17 @@ export const createTeacher = async (req: Request, res: Response): Promise<void> 
       );
       const roles = userRolesRes.rows.map((row: any) => row.nombre.toLowerCase().trim());
 
-      // Verificar si el usuario es Padre de Familia registrado ESPECÍFICAMENTE en esta institución (tiene acudidos matriculados en este colegio)
+      // Verificar si el usuario ya es docente en ESTA institución
+      const teacherInSchool = await client.query(
+        `SELECT id_docente FROM docente WHERE id_usuario = $1 AND id_colegio = $2`,
+        [existingUser.id_usuario, schoolId]
+      );
+      if (teacherInSchool.rows.length > 0) {
+        await client.query("ROLLBACK");
+        res.status(409).json({ error: `El usuario con documento ${existingUser.documento || documento} ya está registrado como docente en esta institución.` });
+        return;
+      }
+
       const parentInThisSchoolRes = await client.query(
         `SELECT 1 
          FROM padre_familia pf
@@ -210,28 +204,15 @@ export const createTeacher = async (req: Request, res: Response): Promise<void> 
         [existingUser.id_usuario, schoolId]
       );
       const isParentInThisSchool = parentInThisSchoolRes.rows.length > 0;
-      const isDocente = roles.includes("docente");
-
-      if (isDocente) {
-        const teacherInSchool = await client.query(
-          `SELECT id_docente FROM docente WHERE id_usuario = $1 AND id_colegio = $2`,
-          [existingUser.id_usuario, schoolId]
-        );
-        if (teacherInSchool.rows.length > 0) {
-          await client.query("ROLLBACK");
-          res.status(409).json({ error: `El usuario (${existingUser.nombre} ${existingUser.apellido}) ya está registrado como docente en esta institución.` });
-          return;
-        }
-      }
 
       const addRoleIfParent = Boolean(req.body.addRoleIfParent);
-      const parentFullName = `${existingUser.nombre} ${existingUser.apellido}`.trim();
+      const userFullName = `${existingUser.nombre} ${existingUser.apellido}`.trim();
 
       if (isParentInThisSchool && !addRoleIfParent && email === (existingUser.email || "").toLowerCase().trim()) {
         await client.query("ROLLBACK");
         res.status(409).json({
           isParent: true,
-          message: `El correo "${email}" pertenece a un Padre de Familia registrado en esta institución (${parentFullName}). ¿Desea vincular esta cuenta existente también como Docente?`
+          message: `El usuario ya se encuentra registrado en esta institución como Padre de Familia. ¿Desea vincular esta cuenta existente también como Docente?`
         });
         return;
       }
@@ -250,7 +231,7 @@ export const createTeacher = async (req: Request, res: Response): Promise<void> 
         [existingUser.id_usuario, schoolId, roleRes.id_rol]
       );
 
-      // Guardar docente sin email_institucional (ya no existe esa columna)
+      // Guardar docente asociando los datos personales preservados del usuario
       const teacherRes = await client.query(
         `INSERT INTO docente (nombre, apellido, id_colegio, id_usuario, estado)
          VALUES ($1, $2, $3, $4, 'ACTIVO')
@@ -265,7 +246,7 @@ export const createTeacher = async (req: Request, res: Response): Promise<void> 
 
       await NotificationService.sendTeacherWelcomeEmail(
         email,
-        parentFullName,
+        userFullName,
         schoolName,
         documentTypeRes.tipo,
         existingUser.documento || documento,
@@ -280,7 +261,9 @@ export const createTeacher = async (req: Request, res: Response): Promise<void> 
         email,
         activo: existingUser.activo,
         estado: teacherRes.rows[0].estado,
-        asignaciones_count: 0
+        asignaciones_count: 0,
+        userReused: true,
+        infoMessage: "El usuario ya se encuentra registrado en el sistema. Sus datos personales existentes fueron preservados y no fueron sobrescritos. Se agregó únicamente su asignación a esta institución."
       });
       return;
     }
