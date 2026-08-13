@@ -1,45 +1,21 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
-import axios from 'axios'
-import { BookMarked, Scale, SlidersHorizontal, CalendarDays } from 'lucide-vue-next'
+import { computed, onMounted } from 'vue'
+import { BookMarked, Scale } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 import { useAcademicYearStore } from '../../stores/academicYear'
-
-interface AcademicYear {
-  id_anio: number
-  calendario: string | null
-}
 
 const auth = useAuthStore()
 const yearStore = useAcademicYearStore()
 const schoolId = computed(() => Number(auth.user?.schoolId || 0))
 
-const loading = ref(true)
-const currentYear = ref<AcademicYear | null>(null)
-
-const loadData = async () => {
-  if (!schoolId.value) return
-  try {
-    loading.value = true
-    const params: any = { keys: 'years' }
-    if (yearStore.selectedYearId) {
-      params.yearId = yearStore.selectedYearId
-    }
-    const response = await axios.get(`/api/academic-admin/settings/${schoolId.value}`, { params })
-    currentYear.value = response.data.currentYear
-  } catch (error) {
-    console.error('Error loading academic settings:', error)
-  } finally {
-    loading.value = false
-  }
-}
+const loading = computed(() => yearStore.loading && yearStore.availableYears.length === 0)
+const currentYear = computed(() => yearStore.selectedYear)
 
 onMounted(() => {
-  yearStore.loadYearsForSchool(schoolId.value, auth.token || undefined)
-  loadData()
+  if (schoolId.value && yearStore.availableYears.length === 0) {
+    yearStore.loadYearsForSchool(schoolId.value, auth.token || undefined)
+  }
 })
-
-watch(() => yearStore.selectedYearId, loadData)
 </script>
 
 <template>
