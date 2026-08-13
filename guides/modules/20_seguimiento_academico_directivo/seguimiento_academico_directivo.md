@@ -100,3 +100,32 @@ sequenceDiagram
     AuthStore->>AuthStore: Restablece activeRole = 'directivo', limpia monitoringUser
     AuthStore->>Router: Redirige a /dashboard (Consola Directiva)
 ```
+
+---
+
+## 7. Resolución de Monitoreo para Docentes Multi-Colegio (Colegio A vs Colegio B)
+
+Cuando un docente labora simultáneamente en más de un colegio (ej. Colegio A y Colegio B):
+
+### Estructura en Base de Datos:
+- **Identidad Global Única**: Existe un único registro en la tabla `usuario` (`id_usuario = 50`).
+- **Fichas Institucionales Independientes**:
+  - Registro en `docente` para Colegio A: `{ id_docente: 10, id_usuario: 50, id_colegio: 1 }`
+  - Registro en `docente` para Colegio B: `{ id_docente: 20, id_usuario: 50, id_colegio: 2 }`
+  - Registros en `usuario_colegio`: Fichas activas independientes para `id_colegio: 1` e `id_colegio: 2`.
+
+### Resolución del Contexto durante el Seguimiento:
+1. **Conservación del `schoolId` del Directivo**:
+   Al iniciar el seguimiento, `auth.user` conserva el `schoolId = 1` del Directivo (Colegio A).
+2. **Inyección de Encabezado HTTP `x-school-id`**:
+   Cada llamada del frontend al backend envía el encabezado `x-school-id: 1`.
+3. **Filtrado en los Controladores del Backend (`academicController.ts`)**:
+   ```typescript
+   let docenteQuery = db
+     .selectFrom("docente")
+     .select(["id_docente", "id_colegio"])
+     .where("id_usuario", "=", Number(userId))
+     .where("id_colegio", "=", schoolId); // Filtra estrictamente por el colegio del Directivo
+   ```
+4. **Garantía de Soberanía e Aislamiento de Datos**:
+   El Directivo del Colegio A **solo puede ver las asignaciones, materias, grupos, notas y asistencias correspondientes al Colegio A**. Las clases del Colegio B quedan completamente filtradas e invisibles, protegiendo la confidencialidad entre instituciones.

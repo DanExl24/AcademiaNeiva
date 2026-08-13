@@ -69,3 +69,12 @@ Las variables reactivas `monitoringUser`, `monitoringType`, `previousRole` y `ac
 
 ### RN-SEG-009: Verificación de Cuenta Activa Obligatoria
 Antes de iniciar cualquier seguimiento, la interfaz debe validar que el registro de destino tenga un ID de usuario válido (`id_usuario !== null`) y una cuenta activa (`usuario_activo === true`). En caso contrario, la acción debe abortarse mostrando un mensaje de advertencia.
+
+---
+
+### RN-SEG-011: Aislamiento Estricto Multi-Colegio para Docentes Compartidos
+Cuando un docente labora simultáneamente en múltiples instituciones (Colegio A y Colegio B):
+1. La cuenta `usuario` posee un único `id_usuario`, pero existen registros independientes en la tabla `docente` para cada institución (`id_docente` A vs `id_docente` B).
+2. Durante el seguimiento iniciado por el Directivo del Colegio A, toda consulta al backend (`getTeacherCourses`, `getTeacherDashboard`, etc.) incluye obligatoriamente el encabezado `x-school-id = schoolId_A`.
+3. El backend filtra los datos agregando `.where("docente.id_colegio", "=", schoolId_A)` y `.where("detalle_grados.id_colegio", "=", schoolId_A)`.
+4. El Directivo del Colegio A **únicamente puede visibilizar los cursos, estudiantes, materias y cargas académicas correspondientes a su institución**, quedando la información del Colegio B totalmente aislada e inaccesible.
