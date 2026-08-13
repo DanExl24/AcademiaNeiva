@@ -674,17 +674,20 @@ const formatDocType = (type: string) => {
 
 const formatUrl = (target: any) => {
   if (!target || target === 'PENDIENTE') return '#'
+  const token = auth.token || localStorage.getItem('token') || ''
+  const tokenQuery = token ? `?authToken=${encodeURIComponent(token)}` : ''
+
   if (typeof target === 'object' && target.id_documento) {
-    return `/api/matriculas/documentos/${target.id_documento}/archivo`
+    return `${API_BASE_URL}/api/matriculas/documentos/${target.id_documento}/archivo${tokenQuery}`
   }
   if (typeof target === 'number') {
-    return `/api/matriculas/documentos/${target}/archivo`
+    return `${API_BASE_URL}/api/matriculas/documentos/${target}/archivo${tokenQuery}`
   }
   if (typeof target === 'string') {
     if (target.startsWith('http')) return target
     const found = documents.value?.find((d: any) => d.url === target)
     if (found && found.id_documento) {
-      return `${API_BASE_URL}/api/matriculas/documentos/${found.id_documento}/archivo`
+      return `${API_BASE_URL}/api/matriculas/documentos/${found.id_documento}/archivo${tokenQuery}`
     }
     return '#'
   }

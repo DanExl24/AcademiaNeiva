@@ -30,12 +30,16 @@ export const verifyDocumentToken = (req: Request, res: Response, next: NextFunct
   const { idDocumento } = req.params;
 
   // 1. Verificar si la solicitud incluye un token de sesión de usuario de la plataforma (Directivos / Admins)
-  const authHeader = req.headers.authorization || (req.headers["x-auth-token"] as string) || (req.query.authToken as string);
-  if (authHeader) {
-    const userToken = authHeader.startsWith("Bearer ") ? authHeader.substring(7) : authHeader;
+  const userTokenRaw = req.headers.authorization || 
+                       (req.headers["x-auth-token"] as string) || 
+                       (req.query.authToken as string) || 
+                       (req.query.token as string);
+
+  if (userTokenRaw) {
+    const userToken = userTokenRaw.startsWith("Bearer ") ? userTokenRaw.substring(7) : userTokenRaw;
     try {
       const userDecoded = jwt.verify(userToken, JWT_SECRET) as any;
-      if (userDecoded && userDecoded.id_usuario) {
+      if (userDecoded && (userDecoded.id || userDecoded.id_usuario)) {
         // Usuario autenticado en la plataforma (Directivo, Admin, Docente) -> Acceso concedido siempre
         next();
         return;
