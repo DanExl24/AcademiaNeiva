@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
-import { BookMarked, Scale } from 'lucide-vue-next'
+import { CalendarDays, Scale, Award, Lock, CalendarRange, FileBarChart } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 import { useAcademicYearStore } from '../../stores/academicYear'
 
@@ -46,7 +46,7 @@ onMounted(() => {
           <div class="flex h-full flex-col justify-between gap-6">
             <div>
               <div class="inline-flex rounded-2xl bg-sky-600 p-3 text-white shadow-sm">
-                <BookMarked class="h-6 w-6" />
+                <CalendarDays class="h-6 w-6" />
               </div>
               <h2 class="mt-5 text-2xl font-black text-slate-900 dark:text-white">Módulo de Años y Periodos</h2>
               <p class="mt-3 max-w-2xl text-sm font-semibold leading-6 text-slate-600 dark:text-slate-300">
@@ -102,7 +102,7 @@ onMounted(() => {
           <div class="flex h-full flex-col justify-between gap-6">
             <div>
               <div class="inline-flex rounded-2xl bg-emerald-600 p-3 text-white shadow-sm">
-                <SlidersHorizontal class="h-6 w-6" />
+                <Award class="h-6 w-6" />
               </div>
               <h2 class="mt-5 text-2xl font-black text-slate-900 dark:text-white">Módulo de Competencias</h2>
               <p class="mt-3 max-w-2xl text-sm font-semibold leading-6 text-slate-600 dark:text-slate-300">
@@ -130,7 +130,7 @@ onMounted(() => {
           <div class="flex h-full flex-col justify-between gap-6">
             <div>
               <div class="inline-flex rounded-2xl bg-rose-600 p-3 text-white shadow-sm">
-                <BookMarked class="h-6 w-6" />
+                <Lock class="h-6 w-6" />
               </div>
               <h2 class="mt-5 text-2xl font-black text-slate-900 dark:text-white">Módulo de Cierres Académicos</h2>
               <p class="mt-3 max-w-2xl text-sm font-semibold leading-6 text-slate-600 dark:text-slate-300">
@@ -158,7 +158,7 @@ onMounted(() => {
           <div class="flex h-full flex-col justify-between gap-6">
             <div>
               <div class="inline-flex rounded-2xl bg-violet-600 p-3 text-white shadow-sm">
-                <CalendarDays class="h-6 w-6" />
+                <CalendarRange class="h-6 w-6" />
               </div>
               <h2 class="mt-5 text-2xl font-black text-slate-900 dark:text-white">Fechas de Inscripción</h2>
               <p class="mt-3 max-w-2xl text-sm font-semibold leading-6 text-slate-600 dark:text-slate-300">
@@ -186,7 +186,7 @@ onMounted(() => {
           <div class="flex h-full flex-col justify-between gap-6">
             <div>
               <div class="inline-flex rounded-2xl bg-amber-600 p-3 text-white shadow-sm">
-                <SlidersHorizontal class="h-6 w-6" />
+                <FileBarChart class="h-6 w-6" />
               </div>
               <h2 class="mt-5 text-2xl font-black text-slate-900 dark:text-white">Reportes y Coherencia DBA</h2>
               <p class="mt-3 max-w-2xl text-sm font-semibold leading-6 text-slate-600 dark:text-slate-300">

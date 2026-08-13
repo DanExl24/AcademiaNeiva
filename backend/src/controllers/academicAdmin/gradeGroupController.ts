@@ -779,13 +779,15 @@ export const getAcademicSettingsData = async (req: Request, res: Response): Prom
     const includeDimensions = !requestedKeys || requestedKeys.includes('dimensions');
     const includeDefaults = !requestedKeys || requestedKeys.includes('defaults');
 
-    // Only run expensive auto-switch and harmonization if periods or competencies are requested (or full load)
-    const runSchedules = !requestedKeys || requestedKeys.includes('periods') || requestedKeys.includes('competencies');
-
-    if (runSchedules) {
-      // Auto-switch periods based on current date
+    // Auto-switch periods based on current date if periods are requested
+    const runPeriodSchedules = !requestedKeys || requestedKeys.includes('periods');
+    if (runPeriodSchedules) {
       await autoSwitchPeriodsForYear(pool, schoolId, currentYearId);
+    }
 
+    // Only run heavy competency harmonization if competencies are explicitly requested or on full load
+    const runCompetencyHarmonization = !requestedKeys || requestedKeys.includes('competencies');
+    if (runCompetencyHarmonization) {
       const competencyClient = await pool.connect();
       try {
         await competencyClient.query("BEGIN");
