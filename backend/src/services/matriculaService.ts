@@ -65,7 +65,7 @@ export class MatriculaService {
       .where("email", "=", cleanEmail)
       .where("codigo", "=", cleanCode)
       .where("verified", "=", false)
-      .where("expires_at", ">", sql`CURRENT_TIMESTAMP`)
+      .where("expires_at", ">", new Date())
       .executeTakeFirst();
 
     if (!record) {
@@ -97,6 +97,7 @@ export class MatriculaService {
     }
 
     const cleanEmail = String(parentEmail).trim().toLowerCase();
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
 
     // Validar que el correo electrónico fue verificado previamente mediante OTP de 6 dígitos
     const verifiedRecord = await db
@@ -104,7 +105,7 @@ export class MatriculaService {
       .select(["id_verificacion"])
       .where("email", "=", cleanEmail)
       .where("verified", "=", true)
-      .where("created_at", ">", sql`CURRENT_TIMESTAMP - INTERVAL '2 hours'`)
+      .where("created_at", ">", twoHoursAgo)
       .executeTakeFirst();
 
     if (!verifiedRecord) {
