@@ -489,17 +489,57 @@ export const getReingresoCatalogs = async (req: Request, res: Response): Promise
       );
     }
 
-    const gradosRes = await pool.query(
+    const rawGradosRes = await pool.query(
       `SELECT id_tipo_grado, nombre, id_nivel 
        FROM tipo_grado 
        ORDER BY id_tipo_grado`
     );
 
+    const gradeOrderMap: Record<string, number> = {
+      'PARVULOS': 1,
+      'PREJARDIN': 2,
+      'PRE-JARDIN': 2,
+      'JARDIN': 3,
+      'TRANSICION': 4,
+      'TRANSICIÓN': 4,
+      'PRIMERO': 5,
+      'SEGUNDO': 6,
+      'TERCERO': 7,
+      'CUARTO': 8,
+      'QUINTO': 9,
+      'SEXTO': 10,
+      'SEPTIMO': 11,
+      'SÉPTIMO': 11,
+      'OCTAVO': 12,
+      'NOVENO': 13,
+      'DECIMO': 14,
+      'DÉCIMO': 14,
+      'ONCE': 15,
+      'DOCE': 16
+    };
+
+    const seenNames = new Set<string>();
+    const uniqueGrados: any[] = [];
+
+    for (const g of rawGradosRes.rows) {
+      const normalizedName = (g.nombre || '').trim().toUpperCase();
+      if (!seenNames.has(normalizedName)) {
+        seenNames.add(normalizedName);
+        uniqueGrados.push(g);
+      }
+    }
+
+    uniqueGrados.sort((a, b) => {
+      const orderA = gradeOrderMap[(a.nombre || '').trim().toUpperCase()] || 99;
+      const orderB = gradeOrderMap[(b.nombre || '').trim().toUpperCase()] || 99;
+      return orderA - orderB;
+    });
+
     res.json({
       anios: yearsRes.rows,
       years: yearsRes.rows,
       niveles: levelsRes.rows,
-      grados: gradosRes.rows
+      grados: uniqueGrados
     });
   } catch (error: any) {
     console.error("Error in getReingresoCatalogs:", error);
