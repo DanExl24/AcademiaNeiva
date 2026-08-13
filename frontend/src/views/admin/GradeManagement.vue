@@ -822,7 +822,7 @@ watch(() => yearStore.selectedYearId, () => {
                     <p class="font-black text-slate-800 dark:text-slate-300 text-sm">{{ item.cursos_count }}</p>
                   </div>
                   <button 
-                    v-if="item.cursos_count > 0"
+                    v-if="item.cursos_count > 0 && !yearStore.isClosedYear"
                     @click.stop="openBulkRenameModal(item)"
                     class="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 rounded-xl transition-all"
                     title="Renombrar Cursos en Masa"
@@ -830,6 +830,7 @@ watch(() => yearStore.selectedYearId, () => {
                     <RefreshCw :size="18" />
                   </button>
                   <button 
+                    v-if="!yearStore.isClosedYear"
                     @click.stop="openDeleteGradeModal(item)"
                     class="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-xl transition-all"
                     title="Eliminar Grado"
@@ -855,7 +856,7 @@ watch(() => yearStore.selectedYearId, () => {
                 <span class="bg-indigo-600 text-white px-2 py-0.5 rounded text-[10px] font-black uppercase">Filtro Activo</span>
                 <button @click="selectedGradeId = null" class="text-[10px] font-bold text-slate-400 hover:text-indigo-600 transition-colors uppercase underline mr-2">Limpiar</button>
                 <button 
-                  v-if="selectedGrade && selectedGrade.cursos_count > 0"
+                  v-if="selectedGrade && selectedGrade.cursos_count > 0 && !yearStore.isClosedYear"
                   @click="openBulkRenameModal(selectedGrade)"
                   class="flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 rounded-lg text-[10px] font-black uppercase hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-all border border-indigo-100/50 dark:border-indigo-900/50"
                   title="Renombrar en Masa"
@@ -906,7 +907,7 @@ watch(() => yearStore.selectedYearId, () => {
             <div v-if="grupos.length === 0" class="h-full flex flex-col items-center justify-center text-slate-400">
               <School2 :size="64" class="mb-4 opacity-20" />
               <p class="font-bold">No hay cursos configurados</p>
-              <button @click="openCreateModal('course')" class="mt-4 text-indigo-600 font-bold text-sm hover:underline">Comenzar a crear cursos</button>
+              <button v-if="!yearStore.isClosedYear" @click="openCreateModal('course')" class="mt-4 text-indigo-600 font-bold text-sm hover:underline">Comenzar a crear cursos</button>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
