@@ -421,12 +421,12 @@ onMounted(async () => {
       </div>
     </transition>
 
-    <!-- Barra de Filtros Globales -->
+    <!-- Barra de Filtros Globales (Ultra Compacta en una sola fila) -->
     <div class="filters-card">
       <div class="filters-grid">
         <!-- Año Lectivo -->
         <div class="filter-item">
-          <label><Calendar class="w-4 h-4 text-indigo-600" /> Año Lectivo</label>
+          <label><Calendar class="w-3.5 h-3.5 text-indigo-600" /> Año Lectivo</label>
           <select v-model="selectedYearId" class="form-select">
             <option v-for="y in years" :key="y.id_anio" :value="y.id_anio">
               {{ y.calendario || 'Año ' + y.id_anio }} ({{ y.estado }})
@@ -436,7 +436,7 @@ onMounted(async () => {
 
         <!-- Modo acumulativo vs período individual (Solo pestaña periodo) -->
         <div v-if="activeTab === 'period'" class="filter-item">
-          <label><TrendingUp class="w-4 h-4 text-indigo-600" /> Modalidad de Consulta</label>
+          <label><TrendingUp class="w-3.5 h-3.5 text-indigo-600" /> Modalidad</label>
           <div class="toggle-group">
             <button 
               type="button" 
@@ -444,7 +444,7 @@ onMounted(async () => {
               :class="{ active: isCumulativeMode }"
               @click="isCumulativeMode = true"
             >
-              Acumulado (P1..PN)
+              Acumulado
             </button>
             <button 
               type="button" 
@@ -459,16 +459,16 @@ onMounted(async () => {
 
         <!-- Selección de Período o Período Acumulado -->
         <div v-if="activeTab === 'period' && isCumulativeMode" class="filter-item">
-          <label><Clock class="w-4 h-4 text-indigo-600" /> Acumulado Hasta Período</label>
+          <label><Clock class="w-3.5 h-3.5 text-indigo-600" /> Hasta Período</label>
           <select v-model="cumulativePeriodOrder" class="form-select">
             <option v-for="(p, idx) in availablePeriodsForYear" :key="p.id_periodo" :value="idx + 1">
-              Período 1 al Período {{ idx + 1 }} ({{ p.nombre }})
+              P1 al P{{ idx + 1 }} ({{ p.nombre }})
             </option>
           </select>
         </div>
 
         <div v-if="activeTab === 'period' && !isCumulativeMode" class="filter-item">
-          <label><Clock class="w-4 h-4 text-indigo-600" /> Período Académico</label>
+          <label><Clock class="w-3.5 h-3.5 text-indigo-600" /> Período</label>
           <select v-model="selectedPeriodId" class="form-select">
             <option v-for="p in availablePeriodsForYear" :key="p.id_periodo" :value="p.id_periodo">
               {{ p.nombre }}
@@ -478,7 +478,7 @@ onMounted(async () => {
 
         <!-- Grado -->
         <div class="filter-item">
-          <label><GraduationCap class="w-4 h-4 text-indigo-600" /> Grado</label>
+          <label><GraduationCap class="w-3.5 h-3.5 text-indigo-600" /> Grado</label>
           <select v-model="selectedGradeId" class="form-select">
             <option value="">Todos los grados</option>
             <option v-for="g in grades" :key="g.id_tipo_grado || g.id_grado" :value="g.id_tipo_grado || g.id_grado">
@@ -489,27 +489,13 @@ onMounted(async () => {
 
         <!-- Grupo -->
         <div class="filter-item">
-          <label><Layers3 class="w-4 h-4 text-indigo-600" /> Grupo</label>
+          <label><Layers3 class="w-3.5 h-3.5 text-indigo-600" /> Grupo</label>
           <select v-model="selectedGroupId" class="form-select">
             <option value="">Todos los grupos</option>
             <option v-for="grp in filteredGroups" :key="grp.id_grupo" :value="grp.id_grupo">
               {{ grp.nombre || (grp.tipo_grado_nombre ? grp.tipo_grado_nombre + ' ' + (grp.seccion_nombre || '') + (grp.jornada_nombre ? ' (' + grp.jornada_nombre + ')' : '') : 'Grupo ' + grp.id_grupo) }}
             </option>
           </select>
-        </div>
-
-        <!-- Buscador Rápido de Estudiante -->
-        <div v-if="activeTab !== 'history'" class="filter-item">
-          <label><Search class="w-4 h-4 text-indigo-600" /> Filtrar por Nombre / Documento</label>
-          <div class="relative">
-            <input 
-              v-model="searchQuery" 
-              type="text" 
-              placeholder="Buscar en la tabla..." 
-              class="form-input pr-8"
-            />
-            <span v-if="searchQuery" class="absolute right-2.5 top-2.5 text-xs text-slate-400 cursor-pointer" @click="searchQuery = ''">✕</span>
-          </div>
         </div>
       </div>
     </div>
@@ -550,7 +536,7 @@ onMounted(async () => {
           <div class="stat-icon"><Users class="w-6 h-6" /></div>
           <div class="stat-data">
             <span class="stat-value">{{ trackingData.total_estudiantes }}</span>
-            <span class="stat-label">Total Estudiantes Evaluados</span>
+            <span class="stat-label">Total Evaluados</span>
           </div>
         </div>
 
@@ -558,7 +544,7 @@ onMounted(async () => {
           <div class="stat-icon"><CheckCircle2 class="w-6 h-6" /></div>
           <div class="stat-data">
             <span class="stat-value">{{ trackingData.aprobados_count }}</span>
-            <span class="stat-label">Estudiantes Aprobados</span>
+            <span class="stat-label">Aprobados</span>
           </div>
         </div>
 
@@ -566,21 +552,40 @@ onMounted(async () => {
           <div class="stat-icon"><XCircle class="w-6 h-6" /></div>
           <div class="stat-data">
             <span class="stat-value">{{ trackingData.reprobados_count }}</span>
-            <span class="stat-label">Estudiantes Reprobados</span>
+            <span class="stat-label">Reprobados</span>
           </div>
         </div>
       </div>
 
       <!-- Tabla de Estudiantes -->
       <div class="table-container shadow-sm">
-        <div class="table-header-bar">
+        <div class="table-header-bar flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
-            <h3 class="text-slate-800 font-bold text-base">Rendimiento Académico por Estudiante</h3>
-            <p class="text-xs text-slate-500">
+            <h3 class="text-slate-800 font-bold text-sm">Rendimiento Académico por Estudiante</h3>
+            <p class="text-[11px] text-slate-500">
               Modalidad: {{ isCumulativeMode ? `Acumulado (Períodos 1 al ${cumulativePeriodOrder})` : 'Período Individual' }}
             </p>
           </div>
-          <span class="badge badge-info">Mínimo Aprobatorio: {{ trackingData.min_passing_score }}</span>
+
+          <div class="flex items-center gap-2.5 flex-wrap">
+            <!-- Buscador Integrado en Cabecera de Tabla -->
+            <div class="relative w-56 sm:w-64">
+              <Search class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+              <input 
+                v-model="searchQuery" 
+                type="text" 
+                placeholder="Buscar estudiante o documento..." 
+                class="form-input text-xs pl-8 pr-7 py-1.5"
+              />
+              <span 
+                v-if="searchQuery" 
+                class="absolute right-2.5 top-1.5 text-xs text-slate-400 hover:text-slate-600 cursor-pointer font-bold"
+                @click="searchQuery = ''"
+              >✕</span>
+            </div>
+
+            <span class="badge badge-info text-xs">Mínimo: {{ trackingData.min_passing_score }}</span>
+          </div>
         </div>
 
         <div v-if="loading" class="loading-spinner p-8 text-center text-slate-500">
@@ -729,12 +734,31 @@ onMounted(async () => {
       </div>
 
       <div class="table-container shadow-sm">
-        <div class="table-header-bar">
+        <div class="table-header-bar flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
-            <h3 class="text-slate-800 font-bold text-base">Consolidado de Resultados Anuales y Promoción</h3>
-            <p class="text-xs text-slate-500">Clasificación según reglas de promoción institucional</p>
+            <h3 class="text-slate-800 font-bold text-sm">Consolidado de Resultados Anuales y Promoción</h3>
+            <p class="text-[11px] text-slate-500">Clasificación según reglas de promoción institucional</p>
           </div>
-          <span class="badge badge-info">Escala Mínima: {{ annualData.min_passing_score }}</span>
+
+          <div class="flex items-center gap-2.5 flex-wrap">
+            <!-- Buscador Integrado en Cabecera de Tabla Anual -->
+            <div class="relative w-56 sm:w-64">
+              <Search class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+              <input 
+                v-model="searchQuery" 
+                type="text" 
+                placeholder="Buscar estudiante o documento..." 
+                class="form-input text-xs pl-8 pr-7 py-1.5"
+              />
+              <span 
+                v-if="searchQuery" 
+                class="absolute right-2.5 top-1.5 text-xs text-slate-400 hover:text-slate-600 cursor-pointer font-bold"
+                @click="searchQuery = ''"
+              >✕</span>
+            </div>
+
+            <span class="badge badge-info text-xs">Escala Mínima: {{ annualData.min_passing_score }}</span>
+          </div>
         </div>
 
         <div v-if="loading" class="loading-spinner p-8 text-center text-slate-500">
@@ -1056,35 +1080,36 @@ onMounted(async () => {
 .filters-card {
   background: #ffffff;
   border: 1px solid #e2e8f0;
-  border-radius: 1rem;
-  padding: 1.25rem;
-  margin-bottom: 1.5rem;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  border-radius: 0.875rem;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1.25rem;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.03);
 }
 
 .filters-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.75rem;
+  align-items: flex-end;
 }
 
 .filter-item label {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
-  font-size: 0.8rem;
+  gap: 0.25rem;
+  font-size: 0.75rem;
   font-weight: 700;
   color: #475569;
-  margin-bottom: 0.35rem;
+  margin-bottom: 0.25rem;
 }
 
 .form-select, .form-input, .form-textarea {
   width: 100%;
-  padding: 0.55rem 0.75rem;
+  padding: 0.4rem 0.65rem;
   border: 1px solid #cbd5e1;
-  border-radius: 0.625rem;
+  border-radius: 0.5rem;
   background: #f8fafc;
-  font-size: 0.875rem;
+  font-size: 0.8rem;
   color: #1e293b;
   transition: all 0.2s;
 }
@@ -1093,33 +1118,38 @@ onMounted(async () => {
   outline: none;
   border-color: #4f46e5;
   background: #ffffff;
-  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+  box-shadow: 0 0 0 2.5px rgba(79, 70, 229, 0.12);
 }
 
 .toggle-group {
   display: flex;
-  background: #e2e8f0;
-  padding: 0.2rem;
-  border-radius: 0.625rem;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  padding: 0.15rem;
+  border-radius: 0.5rem;
+  height: 2.1rem;
 }
 
 .toggle-btn {
   flex: 1;
-  padding: 0.4rem 0.6rem;
+  padding: 0.2rem 0.45rem;
   border: none;
   background: transparent;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   font-weight: 700;
   color: #64748b;
-  border-radius: 0.5rem;
+  border-radius: 0.375rem;
   cursor: pointer;
   transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .toggle-btn.active {
   background: #ffffff;
   color: #4f46e5;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.06);
 }
 
 .tabs-nav {
