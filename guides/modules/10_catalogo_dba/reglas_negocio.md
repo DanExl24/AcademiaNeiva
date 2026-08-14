@@ -61,15 +61,32 @@ Este documento detalla las reglas de negocio técnicas y funcionales del módulo
 
 ## Analíticas de Coherencia
 
-### RN-DBA-005: Indicadores del Reporte de Coherencia
-- **Descripción:** El Reporte de Coherencia clasifica el estado de cada evidencia en base a las actividades creadas:
-  - `Cumple`: Evidencia planeada en el periodo que posee al menos una actividad registrada por el docente en el trimestre.
-  - `Pendiente`: Evidencia planeada que no posee ninguna actividad registrada en el trimestre.
-  - `Extra`: Evidencia evaluada en el periodo en el cual no estaba planeada originalmente.
-- **Motivo:** Facilita la labor de auditoría del directivo escolar al proveerle de un resumen automático de desvíos y cumplimiento curricular.
+### RN-DBA-005: Indicadores del Reporte de Coherencia Curricular
+- **Descripción:** El Reporte de Coherencia evalúa la fidelidad de las evaluaciones de aula contra lo planeado en el currículo:
+  - `Planeada`: Actividad evaluativa cuya evidencia DBA vinculada pertenece a la planeación curricular del periodo.
+  - `Extra`: Actividad evaluativa cuya evidencia DBA vinculada no pertenecía a la planeación del periodo (desvío justificado).
+  - Fórmula: `Coherencia (%) = (Evaluaciones Planeadas / Total Evaluaciones) * 100`.
+- **Motivo:** Facilita la labor de auditoría del directivo escolar al proveerle un resumen automático de desvíos y disciplina curricular.
 - **Módulos afectados:** Catálogo DBA, Calificaciones.
 - **Archivos donde se implementa:** 
   - [dbaReportsController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/dbaReportsController.ts) (`obtenerReporteCoherenciaCurricular`)
 - **Endpoints relacionados:** 
   - `GET /api/academic-admin/settings/dba-reportes/coherencia/:schoolId`
 - **Historias de usuario relacionadas:** HU-DBA-004
+
+---
+
+### RN-DBA-006: Métrica de Cobertura del Catálogo Oficial
+- **Descripción:** El Reporte de Cobertura evalúa el avance temático institucional con respecto al total de estándares oficiales nacionales asignados:
+  - `Total Catálogo`: Suma total de evidencias oficiales del MEN para las áreas y grados asignados en el colegio.
+  - `Cubiertas`: Cantidad de evidencias del catálogo que tienen al menos una evaluación registrada en el año escolar.
+  - `Pendientes`: Evidencias del catálogo que aún no han sido evaluadas en ninguna clase.
+  - Fórmula: `Cobertura (%) = (Evidencias Cubiertas / Total Evidencias Catálogo) * 100`.
+- **Motivo:** Permite a la rectoría y directivos medir el porcentaje de avance del programa pedagógico nacional a lo largo del año lectivo.
+- **Módulos afectados:** Catálogo DBA, Calificaciones.
+- **Archivos donde se implementa:** 
+  - [dbaReportsController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/dbaReportsController.ts) (`obtenerReporteCoberturaDba`)
+- **Endpoints relacionados:** 
+  - `GET /api/academic-admin/settings/dba-reportes/cobertura/:schoolId`
+- **Historias de usuario relacionadas:** HU-DBA-004
+

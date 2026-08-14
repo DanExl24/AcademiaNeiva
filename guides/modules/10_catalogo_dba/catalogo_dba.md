@@ -161,3 +161,67 @@ Este módulo integra los lineamientos de los **Derechos Básicos de Aprendizaje 
 |---|---|
 | **Justificaciones en Tabla Principal** | Se guardan directamente en `actividad_materia` para agilizar los tiempos de carga del reporte de coherencia curricular de los directivos, evitando la necesidad de hacer joins complejos con tablas de auditoría. |
 | **Filtros Independientes** | Cada pestaña del panel analítico (`filterEvidenceStatus` en Cobertura y `filterCoherenciaStatus` en Coherencia) opera de forma independiente en el frontend, permitiendo la exploración de datos cruzados sin perder contexto. |
+
+---
+
+## 10. 🧠 Base de Conocimiento para Desarrolladores: Fórmulas de Cálculo de KPIs y Comparativa de Sub-vistas
+
+Esta sección detalla de forma exhaustiva la fundamentación matemática, los universos muestrales y las fuentes de datos de cada tarjeta KPI de las dos sub-vistas del módulo **Coherencia y Cobertura DBA** ([DbaReportsView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/DbaReportsView.vue)).
+
+### ⚖️ ¿Por qué los porcentajes difieren? (Coherencia vs Cobertura)
+
+Es común observar que en un mismo año lectivo la **Coherencia Curricular arroje 100%** mientras que la **Cobertura del Catálogo marque 53%**. Esto **no es un error**, sino dos métricas pedagógicas con objetivos y universos muestrales totalmente distintos:
+
+```mermaid
+graph TD
+    subgraph Catálogo Oficial MEN [Universo Catálogo: 1012 Evidencias]
+        E_Pendientes["475 Evidencias Pendientes (Sin evaluar)"]
+        E_Cubiertas["537 Evidencias Evaluadas al menos 1 vez"]
+    end
+
+    subgraph Evaluaciones Docentes en Aula [Universo Evaluaciones: 3080 Evaluaciones]
+        E_Planeadas["3080 Evaluadas dentro de Planeación (100%)"]
+        E_Extras["0 Evaluadas fuera de Planeación (0%)"]
+    end
+
+    E_Cubiertas -.->|"Generan"| E_Planeadas
+
+    Catálogo Oficial MEN -->|"COBERTURA DEL CATÁLOGO (53%)<br>¿Cuánto del temario nacional se avanzó?"| KPI_Cobertura["Cobertura = 537 / 1012 = 53%"]
+    Evaluaciones Docentes en Aula -->|"COHERENCIA CURRICULAR (100%)<br>¿Qué tan disciplinados fueron con el plan?"| KPI_Coherencia["Coherencia = 3080 / 3080 = 100%"]
+```
+
+| Dimensión | 🎯 Sub-vista 1: Coherencia Curricular | 📊 Sub-vista 2: Cobertura del Catálogo |
+|---|---|---|
+| **Pregunta Clave** | *¿De lo que los profesores evaluaron en clase, qué porcentaje siguió fielmente la planeación curricular vs cuántos desvíos/extras hubo?* | *¿Del catálogo completo oficial de DBA asignado al colegio, cuánto temario ya se cubrió al menos una vez vs cuánto está pendiente?* |
+| **Universo de Datos (Denominador)** | **Total de evaluaciones docentes aplicadas en el aula** (`actividad_evidencia_dba` enlazadas a `actividad_materia`). | **Total de evidencias oficiales vigentes en el catálogo nacional** (`colegio_version_curricular` ➔ `dba` ➔ `evidencias_dba`). |
+| **Enfoque Pedagógico** | Adherencia, disciplina curricular y control de desvíos docentes. | Alcance, avance global temático institucional y cumplimiento de estándares del MEN. |
+| **Ejemplo Numérico** | Evaluaron 3080 veces y las 3080 estaban planeadas = **100% Coherencia**. | De 1012 evidencias del catálogo, evaluaron 537 = **53% Cobertura** (quedan 475 pendientes para los siguientes periodos). |
+
+---
+
+### 🧮 Detalle Técnico de KPIs — Sub-vista 1: Coherencia Curricular
+
+- **Endpoint Backend:** `GET /api/academic-admin/settings/dba-reportes/coherencia/:schoolId` ([dbaReportsController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/dbaReportsController.ts))
+- **Objeto Frontend:** `coherenciaStats` en [DbaReportsView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/DbaReportsView.vue)
+
+| Tarjeta KPI | Variable / Propiedad | Origen / Query Backend | Fórmula de Cálculo | Descripción |
+|---|---|---|---|---|
+| **1. Evidencias Evaluadas** | `coherenciaStats.total` | `COUNT(*)` de registros retornados por `obtenerReporteCoherenciaCurricular`. | `total = filteredCoherencia.length` | Cantidad total de evaluaciones realizadas por docentes que vinculan evidencias DBA en el rango de búsqueda. |
+| **2. Evidencias Planeadas** | `coherenciaStats.planeadas` | Registros donde `estado_coherencia = 'PLANEADA'` (existe en `evidencia_aprendizaje` de la competencia para la materia/grado/periodo). | `planeadas = filter(r => r.estado_coherencia === 'PLANEADA').length` | Evaluaciones aplicadas que corresponden estrictamente al plan curricular aprobado. |
+| **3. Evidencias Extras (Desvíos)** | `coherenciaStats.extras` | Registros donde `estado_coherencia = 'EXTRA'` (la evidencia evaluada no estaba en la competencia de ese periodo). | `extras = total - planeadas` | Evaluaciones registradas como desvíos o adelantos con justificación docente (`motivo_extra`, `justificacion_extra`). |
+| **4. Coherencia Curricular (%)** | `coherenciaStats.pct` | Ratio matemático calculado en frontend. | $$\text{Coherencia} = \text{round}\left(\frac{\text{Planeadas}}{\text{Total Evaluadas}} \times 100\right)$$ | **Porcentaje de fidelidad curricular.** Escala: $\ge 85\%$ Alta (Verde), $\ge 60\%$ Media (Ámbar), $< 60\%$ Baja (Rojo). |
+
+---
+
+### 🧮 Detalle Técnico de KPIs — Sub-vista 2: Cobertura del Catálogo
+
+- **Endpoint Backend:** `GET /api/academic-admin/settings/dba-reportes/cobertura/:schoolId` ([dbaReportsController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/dbaReportsController.ts))
+- **Objeto Frontend:** `coberturaStats` y `coberturaResumen` en [DbaReportsView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/DbaReportsView.vue)
+
+| Tarjeta KPI | Variable / Propiedad | Origen / Query Backend | Fórmula de Cálculo | Descripción |
+|---|---|---|---|---|
+| **1. Total Evidencias Catálogo** | `coberturaStats.total` | Suma de `total_evidencias` agrupado por área/grado desde `colegio_version_curricular` unida con `evidencias_dba` activas. | $$\text{Total Catálogo} = \sum \text{resumen.total\_evidencias}$$ | Número total de evidencias oficiales del MEN asignadas por la versión curricular activa de la institución. |
+| **2. Evidencias Cubiertas** | `coherenciaStats.covered` | Suma de `evidencias_evaluadas` (evidencias oficiales que tienen al menos 1 evaluación registrada en `actividad_evidencia_dba`). | $$\text{Cubiertas} = \sum \text{resumen.evidencias\_evaluadas}$$ | Cantidad de evidencias del catálogo que ya fueron impartidas y evaluadas en el aula. |
+| **3. Evidencias Pendientes** | `coberturaStats.pending` | Diferencia entre el catálogo oficial y lo evaluado. | $$\text{Pendientes} = \text{Total Catálogo} - \text{Cubiertas}$$ | Evidencias oficiales que aún no registran ninguna actividad evaluativa en el año. |
+| **4. Cobertura del Catálogo (%)** | `coberturaStats.pct` | Ratio matemático global de cobertura. | $$\text{Cobertura} = \text{round}\left(\frac{\text{Cubiertas}}{\text{Total Catálogo}} \times 100\right)$$ | **Porcentaje de avance del estándar nacional.** Escala: $\ge 75\%$ Excelente (Verde), $\ge 50\%$ Regular (Ámbar), $< 50\%$ Crítica (Rojo). |
+
