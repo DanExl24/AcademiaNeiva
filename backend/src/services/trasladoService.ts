@@ -1056,7 +1056,7 @@ export class TrasladoService {
           )
           .select([
             'tg.nombre as grado',
-            'tg.seccion as seccion',
+            sql<string | null>`NULL`.as('seccion'),
             'j.nombre as jornada',
             'n.nombre as nivel'
           ])
@@ -1090,10 +1090,10 @@ export class TrasladoService {
               join.onRef('n.id_nivel', '=', sql<number>`COALESCE(m.id_nivel, g.id_nivel, tg.id_nivel)`)
             )
             .select([
-              'tg.nombre as grado',
-              'tg.seccion as seccion',
-              'j.nombre as jornada',
-              'n.nombre as nivel'
+              sql<string | null>`tg.nombre`.as('grado'),
+              sql<string | null>`NULL`.as('seccion'),
+              sql<string | null>`j.nombre`.as('jornada'),
+              sql<string | null>`n.nombre`.as('nivel')
             ])
             .where('m.id_estudiante', '=', est.id_estudiante)
             .where('m.id_colegio', '=', solicitud.id_colegio_origen)

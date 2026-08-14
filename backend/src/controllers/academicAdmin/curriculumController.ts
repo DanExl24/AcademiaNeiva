@@ -115,6 +115,8 @@ export const createSubject = async (req: Request, res: Response): Promise<void> 
   } finally {
     if (client) client.release();
   }
+};
+
 export const updateSubject = async (req: Request, res: Response): Promise<void> => {
   const subjectId = Number(req.params.id);
   const schoolId = parseSchoolId(req.body.schoolId);
@@ -1583,5 +1585,4 @@ export const vincularEvidenciasDbaACompetencia = async (req: Request, res: Respo
     client.release();
   }
 };
-}
 
