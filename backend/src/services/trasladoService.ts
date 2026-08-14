@@ -1037,7 +1037,82 @@ export class TrasladoService {
       }
     }
 
-    return { ...solicitud, aprobaciones, padre: padreInfo };
+    let datosOrigen: {
+      grado?: string | null;
+      seccion?: string | null;
+      jornada?: string | null;
+      nivel?: string | null;
+    } | null = null;
+
+    if (solicitud.tipo === 'TRASLADO_MATRICULA') {
+      if (solicitud.id_matricula) {
+        const origMat = await db
+          .selectFrom('matricula as m')
+          .leftJoin('grupos as g', 'g.id_grupo', 'm.id_grupo')
+          .leftJoin('tipo_grado as tg', 'tg.id_tipo_grado', 'g.id_tipo_grado')
+          .leftJoin('jornada as j', 'j.id_jornada', 'g.id_jornada')
+          .leftJoin('nivel_escolar as n', (join) =>
+            join.onRef('n.id_nivel', '=', sql<number>`COALESCE(m.id_nivel, g.id_nivel, tg.id_nivel)`)
+          )
+          .select([
+            'tg.nombre as grado',
+            'tg.seccion as seccion',
+            'j.nombre as jornada',
+            'n.nombre as nivel'
+          ])
+          .where('m.id_matricula', '=', solicitud.id_matricula)
+          .executeTakeFirst();
+
+        if (origMat && (origMat.grado || origMat.jornada)) {
+          datosOrigen = {
+            grado: origMat.grado || null,
+            seccion: origMat.seccion || null,
+            jornada: origMat.jornada || null,
+            nivel: origMat.nivel || null
+          };
+        }
+      }
+
+      if (!datosOrigen && solicitud.id_usuario) {
+        const est = await db
+          .selectFrom('estudiante as e')
+          .select('e.id_estudiante')
+          .where('e.id_usuario', '=', solicitud.id_usuario)
+          .executeTakeFirst();
+
+        if (est) {
+          const origMat = await db
+            .selectFrom('matricula as m')
+            .leftJoin('grupos as g', 'g.id_grupo', 'm.id_grupo')
+            .leftJoin('tipo_grado as tg', 'tg.id_tipo_grado', 'g.id_tipo_grado')
+            .leftJoin('jornada as j', 'j.id_jornada', 'g.id_jornada')
+            .leftJoin('nivel_escolar as n', (join) =>
+              join.onRef('n.id_nivel', '=', sql<number>`COALESCE(m.id_nivel, g.id_nivel, tg.id_nivel)`)
+            )
+            .select([
+              'tg.nombre as grado',
+              'tg.seccion as seccion',
+              'j.nombre as jornada',
+              'n.nombre as nivel'
+            ])
+            .where('m.id_estudiante', '=', est.id_estudiante)
+            .where('m.id_colegio', '=', solicitud.id_colegio_origen)
+            .orderBy('m.id_matricula', 'desc')
+            .executeTakeFirst();
+
+          if (origMat && (origMat.grado || origMat.jornada)) {
+            datosOrigen = {
+              grado: origMat.grado || null,
+              seccion: origMat.seccion || null,
+              jornada: origMat.jornada || null,
+              nivel: origMat.nivel || null
+            };
+          }
+        }
+      }
+    }
+
+    return { ...solicitud, aprobaciones, padre: padreInfo, datos_origen: datosOrigen };
   }
 
   /**

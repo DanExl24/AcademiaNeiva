@@ -115,6 +115,70 @@ export const createSubject = async (req: Request, res: Response): Promise<void> 
   } finally {
     if (client) client.release();
   }
+export const updateSubject = async (req: Request, res: Response): Promise<void> => {
+  const subjectId = Number(req.params.id);
+  const schoolId = parseSchoolId(req.body.schoolId);
+  const nombre = String(req.body.nombre || "").trim();
+
+  if (!subjectId || !schoolId || !nombre) {
+    res.status(400).json({ error: "ID de materia, colegio y nuevo nombre son obligatorios." });
+    return;
+  }
+
+  const authReq = req as AuthRequest;
+  const isSupervision = Boolean(authReq.user && authReq.user.roles.includes("admin_general"));
+  if (!isSupervision && authReq.user && authReq.user.schoolId !== schoolId) {
+    res.status(403).json({ error: "No tiene permiso para editar materias en este colegio." });
+    return;
+  }
+
+  try {
+    // 1. Verificar que la materia exista en este colegio
+    const currentSubject = await db
+      .selectFrom("materias")
+      .select(["id_materia", "nombre"])
+      .where("id_materia", "=", subjectId)
+      .where("id_colegio", "=", schoolId)
+      .executeTakeFirst();
+
+    if (!currentSubject) {
+      res.status(404).json({ error: "Materia no encontrada en esta institución." });
+      return;
+    }
+
+    // 2. Verificar que no exista OTRA materia con el mismo nombre en el colegio (case-insensitive)
+    const duplicateSubject = await db
+      .selectFrom("materias")
+      .select(["id_materia", "nombre"])
+      .where("id_colegio", "=", schoolId)
+      .where("id_materia", "!=", subjectId)
+      .where(sql`UPPER(TRIM(nombre))`, "=", nombre.toUpperCase())
+      .executeTakeFirst();
+
+    if (duplicateSubject) {
+      res.status(409).json({ 
+        error: `Ya existe otra materia registrada con el nombre '${duplicateSubject.nombre}' en la institución.` 
+      });
+      return;
+    }
+
+    // 3. Actualizar nombre de la materia
+    const updated = await db
+      .updateTable("materias")
+      .set({ nombre })
+      .where("id_materia", "=", subjectId)
+      .where("id_colegio", "=", schoolId)
+      .returning(["id_materia", "nombre", "id_colegio"])
+      .executeTakeFirst();
+
+    res.json({
+      message: "Nombre de la materia actualizado exitosamente.",
+      subject: updated
+    });
+  } catch (error: any) {
+    console.error("Error updating subject:", error);
+    res.status(500).json({ error: formatFriendlyErrorMessage(error) });
+  }
 };
 
 export const deleteSubject = async (req: Request, res: Response): Promise<void> => {
@@ -1519,4 +1583,5 @@ export const vincularEvidenciasDbaACompetencia = async (req: Request, res: Respo
     client.release();
   }
 };
+}
 

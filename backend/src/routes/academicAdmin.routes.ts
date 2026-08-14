@@ -13,6 +13,7 @@ import {
   deleteGradeType,
   deleteGroup,
   deleteScale,
+  updateSubject,
   deleteSubject,
   deleteTeacherAssignment,
   getAcademicCatalogs,
@@ -123,6 +124,7 @@ router.get("/subjects/:schoolId", getSubjects);
 router.get("/subjects/:id/curriculum-details", getSubjectCurriculumDetails);
 router.get("/subjects/trash/:schoolId", getSubjectTrash);
 router.post("/subjects", createSubject);
+router.put("/subjects/:id", updateSubject);
 router.delete("/subjects/:id", deleteSubject);
 router.get("/teachers/:schoolId", getTeacherManagementData);
 router.get("/users/lookup", lookupUserIdentity);

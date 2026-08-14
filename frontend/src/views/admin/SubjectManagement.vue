@@ -32,6 +32,10 @@ const subjects = ref<SubjectItem[]>([])
 const trashSubjects = ref<TrashItem[]>([])
 const searchTerm = ref('')
 const createModalOpen = ref(false)
+const editModalOpen = ref(false)
+const editingSubject = ref<SubjectItem | null>(null)
+const editSubjectName = ref('')
+const updatingSubject = ref(false)
 const deleteModal = ref<SubjectItem | null>(null)
 const showForceButton = ref(false)
 const impactDetails = ref<any>(null)
@@ -115,6 +119,49 @@ const createSubject = async () => {
 const handleTrashSelection = () => {
   if (reuseFromTrash.value) {
     newSubject.value.nombre = reuseFromTrash.value.nombre_materia
+  }
+}
+
+const openEditSubjectModal = (item: SubjectItem) => {
+  if (isReadOnly.value) return
+  editingSubject.value = item
+  editSubjectName.value = item.nombre
+  editModalOpen.value = true
+}
+
+const updateSubject = async () => {
+  if (isReadOnly.value) {
+    alert('El año académico se encuentra cerrado. No es posible editar materias.')
+    return
+  }
+  if (!editingSubject.value || updatingSubject.value) return
+  const trimmed = editSubjectName.value.trim()
+  if (!trimmed) {
+    alert('Escribe el nuevo nombre de la materia.')
+    return
+  }
+  if (trimmed === editingSubject.value.nombre) {
+    editModalOpen.value = false
+    editingSubject.value = null
+    return
+  }
+
+  try {
+    updatingSubject.value = true
+    await axios.put(`/api/academic-admin/subjects/${editingSubject.value.id_materia}`, {
+      schoolId: schoolId.value,
+      nombre: trimmed
+    }, {
+      headers: auth.token ? { Authorization: `Bearer ${auth.token}` } : {}
+    })
+    editModalOpen.value = false
+    editingSubject.value = null
+    editSubjectName.value = ''
+    await loadSubjects()
+  } catch (error: any) {
+    alert(error.response?.data?.error || 'Error al actualizar la materia')
+  } finally {
+    updatingSubject.value = false
   }
 }
 

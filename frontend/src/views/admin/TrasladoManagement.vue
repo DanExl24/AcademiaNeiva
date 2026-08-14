@@ -61,6 +61,12 @@ interface SolicitudTraslado {
     email: string
     documento: string
   } | null
+  datos_origen?: {
+    grado?: string | null
+    seccion?: string | null
+    jornada?: string | null
+    nivel?: string | null
+  } | null
 }
 
 const solicitudes = ref<SolicitudTraslado[]>([])
@@ -854,7 +860,16 @@ onMounted(() => {
             <h2 class="text-xl font-black text-slate-900 dark:text-white mt-1">
               {{ selectedSolicitud.usuario_nombre }} {{ selectedSolicitud.usuario_apellido }}
             </h2>
-            <p class="text-xs text-slate-400 font-mono">Doc: {{ selectedSolicitud.usuario_documento }} | ID Solicitud #{{ selectedSolicitud.id_solicitud }}</p>
+            <p class="text-xs text-slate-400 font-mono flex flex-wrap items-center gap-2 mt-0.5">
+              <span>Doc: {{ selectedSolicitud.usuario_documento }}</span>
+              <span>| ID Solicitud #{{ selectedSolicitud.id_solicitud }}</span>
+              <span v-if="selectedSolicitud.datos_origen?.grado" class="font-sans font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded-md border border-indigo-200 dark:border-indigo-800">
+                🎓 Grado {{ selectedSolicitud.datos_origen.grado }} <template v-if="selectedSolicitud.datos_origen?.seccion">({{ selectedSolicitud.datos_origen.seccion }})</template>
+              </span>
+              <span v-if="selectedSolicitud.datos_origen?.jornada" class="font-sans font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded-md border border-amber-200 dark:border-amber-800">
+                ☀️ Jornada {{ selectedSolicitud.datos_origen.jornada }}
+              </span>
+            </p>
           </div>
 
           <div class="flex items-center gap-2">
@@ -881,6 +896,14 @@ onMounted(() => {
           <div class="space-y-0.5 text-center md:text-left flex-1">
             <p class="text-[10px] font-black uppercase text-slate-400 tracking-wider">Institución de Origen</p>
             <p class="font-bold text-slate-800 dark:text-slate-200 text-sm">{{ selectedSolicitud.colegio_origen_nombre }}</p>
+            <div v-if="selectedSolicitud.datos_origen?.grado || selectedSolicitud.datos_origen?.jornada" class="flex flex-wrap items-center gap-1.5 mt-1 justify-center md:justify-start">
+              <span v-if="selectedSolicitud.datos_origen?.grado" class="text-[10px] font-black uppercase bg-indigo-50 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded-md border border-indigo-200 dark:border-indigo-900/60">
+                Grado {{ selectedSolicitud.datos_origen.grado }} <template v-if="selectedSolicitud.datos_origen?.seccion">({{ selectedSolicitud.datos_origen.seccion }})</template>
+              </span>
+              <span v-if="selectedSolicitud.datos_origen?.jornada" class="text-[10px] font-black uppercase bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-md border border-amber-200 dark:border-amber-900/60">
+                Jornada {{ selectedSolicitud.datos_origen.jornada }}
+              </span>
+            </div>
           </div>
 
           <div class="p-2 bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 rounded-full">
