@@ -5241,12 +5241,6 @@ ALTER TABLE ONLY public.matricula
     ADD CONSTRAINT matricula_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio);
 
 
---
--- Name: matricula matricula_id_estudiante_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.matricula
-    ADD CONSTRAINT matricula_id_estudiante_fkey FOREIGN KEY (id_estudiante) REFERENCES public.estudiante(id_estudiante) ON DELETE CASCADE;
 
 
 --
