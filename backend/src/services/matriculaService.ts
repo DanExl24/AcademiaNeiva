@@ -327,12 +327,14 @@ export class MatriculaService {
   static async getDetails(idMatricula: number) {
     const mat = await db
       .selectFrom('matricula as m')
-      .innerJoin('grupos as g', 'm.id_grupo', 'g.id_grupo')
+      .leftJoin('grupos as g', 'm.id_grupo', 'g.id_grupo')
       .leftJoin('colegio as col', 'col.id_colegio', 'm.id_colegio')
-      .leftJoin('nivel_escolar as ne', 'g.id_nivel', 'ne.id_nivel')
       .leftJoin('tipo_grado as tg', 'g.id_tipo_grado', 'tg.id_tipo_grado')
       .leftJoin('secciones as s', 'g.id_seccion', 's.id_seccion')
       .leftJoin('jornada as j', 'g.id_jornada', 'j.id_jornada')
+      .leftJoin('nivel_escolar as ne', (join) =>
+        join.onRef('ne.id_nivel', '=', sql<number>`COALESCE(m.id_nivel, g.id_nivel, tg.id_nivel)`)
+      )
       .leftJoin('estudiante as e', 'e.id_estudiante', 'm.id_estudiante')
       .leftJoin('usuario as u_est', 'e.id_usuario', 'u_est.id_usuario')
       .leftJoin(
@@ -382,29 +384,39 @@ export class MatriculaService {
         'u_par.id_tipodocumento as parent_id_tipodocumento',
         'col.escudo_url',
         'col.nombre as school_name',
-        sql<number>`(g.cupos_totales - (SELECT COUNT(*) FROM matricula WHERE id_grupo = g.id_grupo AND estado IN ('ACTIVA', 'TRASLADADA')))::int`.as('cupos_restantes')
+        sql<number>`CASE WHEN g.id_grupo IS NOT NULL THEN (g.cupos_totales - (SELECT COUNT(*) FROM matricula WHERE id_grupo = g.id_grupo AND estado IN ('ACTIVA', 'TRASLADADA')))::int ELSE 0 END`.as('cupos_restantes')
       ])
       .where('m.id_matricula', '=', idMatricula)
       .executeTakeFirst();
 
     if (!mat) throw new Error('Matrícula no encontrada');
 
-    // Buscar otras secciones del mismo grado/jornada/colegio
-    const sections = await db
-      .selectFrom('grupos as g')
-      .innerJoin('secciones as s', 'g.id_seccion', 's.id_seccion')
-      .innerJoin('tipo_grado as tg', 'g.id_tipo_grado', 'tg.id_tipo_grado')
-      .innerJoin('nivel_escolar as ne', 'g.id_nivel', 'ne.id_nivel')
-      .select([
-        'g.id_grupo as id_grado',
-        's.nombre as seccion',
-        sql<number>`(g.cupos_totales - (SELECT COUNT(*) FROM matricula WHERE id_grupo = g.id_grupo AND estado IN ('ACTIVA', 'TRASLADADA')))::int`.as('cupos_restantes')
-      ])
-      .where('g.id_colegio', '=', mat.id_colegio)
-      .where('ne.nombre', '=', mat.grado_nivel || '')
-      .where('tg.nombre', '=', mat.tipo_grado || '')
-      .where('g.id_jornada', '=', mat.id_jornada || 0)
-      .execute();
+    // Buscar otras secciones del mismo grado/jornada/colegio solo si existe tipo_grado y jornada
+    let sections: any[] = [];
+    if (mat.id_colegio && (mat.id_grupo || mat.tipo_grado)) {
+      let secQuery = db
+        .selectFrom('grupos as g')
+        .innerJoin('secciones as s', 'g.id_seccion', 's.id_seccion')
+        .innerJoin('tipo_grado as tg', 'g.id_tipo_grado', 'tg.id_tipo_grado')
+        .innerJoin('nivel_escolar as ne', 'g.id_nivel', 'ne.id_nivel')
+        .select([
+          'g.id_grupo as id_grado',
+          's.nombre as seccion',
+          sql<number>`(g.cupos_totales - (SELECT COUNT(*) FROM matricula WHERE id_grupo = g.id_grupo AND estado IN ('ACTIVA', 'TRASLADADA')))::int`.as('cupos_restantes')
+        ])
+        .where('g.id_colegio', '=', mat.id_colegio);
+
+      if (mat.grado_nivel) {
+        secQuery = secQuery.where('ne.nombre', '=', mat.grado_nivel);
+      }
+      if (mat.tipo_grado) {
+        secQuery = secQuery.where('tg.nombre', '=', mat.tipo_grado);
+      }
+      if (mat.id_jornada) {
+        secQuery = secQuery.where('g.id_jornada', '=', mat.id_jornada);
+      }
+      sections = await secQuery.execute();
+    }
 
     const rawDocs = await db
       .selectFrom('documento_matriculas as d')
