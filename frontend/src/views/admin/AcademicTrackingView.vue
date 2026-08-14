@@ -72,6 +72,7 @@ const trackingData = ref<{
   total_estudiantes: number
   aprobados_count: number
   reprobados_count: number
+  sin_calificar_count?: number
   min_passing_score: number
   periodos_analizados: number[]
   estudiantes: any[]
@@ -79,6 +80,7 @@ const trackingData = ref<{
   total_estudiantes: 0,
   aprobados_count: 0,
   reprobados_count: 0,
+  sin_calificar_count: 0,
   min_passing_score: 3.0,
   periodos_analizados: [],
   estudiantes: []
@@ -535,15 +537,15 @@ onMounted(async () => {
         <div class="stat-card stat-total">
           <div class="stat-icon"><Users class="w-6 h-6" /></div>
           <div class="stat-data">
-            <span class="stat-value">{{ trackingData.total_estudiantes }}</span>
-            <span class="stat-label">Total Evaluados</span>
+            <span class="stat-value">{{ trackingData.total_estudiantes || 0 }}</span>
+            <span class="stat-label">Total Estudiantes</span>
           </div>
         </div>
 
         <div class="stat-card stat-approved">
           <div class="stat-icon"><CheckCircle2 class="w-6 h-6" /></div>
           <div class="stat-data">
-            <span class="stat-value">{{ trackingData.aprobados_count }}</span>
+            <span class="stat-value">{{ trackingData.aprobados_count || 0 }}</span>
             <span class="stat-label">Aprobados</span>
           </div>
         </div>
@@ -551,8 +553,16 @@ onMounted(async () => {
         <div class="stat-card stat-failed">
           <div class="stat-icon"><XCircle class="w-6 h-6" /></div>
           <div class="stat-data">
-            <span class="stat-value">{{ trackingData.reprobados_count }}</span>
+            <span class="stat-value">{{ trackingData.reprobados_count || 0 }}</span>
             <span class="stat-label">Reprobados</span>
+          </div>
+        </div>
+
+        <div v-if="trackingData.sin_calificar_count" class="stat-card stat-warning">
+          <div class="stat-icon"><Clock class="w-6 h-6 text-slate-500" /></div>
+          <div class="stat-data">
+            <span class="stat-value">{{ trackingData.sin_calificar_count || 0 }}</span>
+            <span class="stat-label">Sin Calificaciones</span>
           </div>
         </div>
       </div>
@@ -615,16 +625,28 @@ onMounted(async () => {
                   <td>{{ student.documento }}</td>
                   <td>{{ student.grado_nombre }} {{ student.grupo_nombre }}</td>
                   <td>
-                    <span class="font-bold text-slate-700">{{ student.promedio_general }}</span>
+                    <span class="font-bold" :class="student.promedio_general !== null ? 'text-slate-700' : 'text-slate-400 italic'">
+                      {{ student.promedio_general !== null && student.promedio_general !== undefined ? student.promedio_general : 'N/A' }}
+                    </span>
                   </td>
                   <td>
-                    <span class="badge" :class="student.estado_academico === 'APROBADO' ? 'badge-success' : 'badge-danger'">
-                      {{ student.estado_academico }}
+                    <span 
+                      class="badge" 
+                      :class="{
+                        'badge-success': student.estado_academico === 'APROBADO',
+                        'badge-danger': student.estado_academico === 'REPROBADO',
+                        'bg-slate-100 text-slate-600 border border-slate-200': student.estado_academico === 'SIN_NOTAS'
+                      }"
+                    >
+                      {{ student.estado_academico === 'SIN_NOTAS' ? 'Sin calificaciones' : student.estado_academico }}
                     </span>
                   </td>
                   <td>
                     <span v-if="student.cantidad_reprobadas > 0" class="badge badge-warning">
                       {{ student.cantidad_reprobadas }} materia(s)
+                    </span>
+                    <span v-else-if="student.estado_academico === 'SIN_NOTAS'" class="text-slate-400 text-xs italic">
+                      Pendiente
                     </span>
                     <span v-else class="text-slate-400 text-xs font-medium">Ninguna</span>
                   </td>
@@ -646,7 +668,7 @@ onMounted(async () => {
                           <BookOpen class="w-4 h-4 text-indigo-600" />
                           Desglose de Asignaturas Cursadas:
                         </h4>
-                        <span class="text-xs text-slate-400">{{ student.todas_asignaturas?.length || 0 }} asignaturas registradas</span>
+                        <span class="text-xs text-slate-400">{{ student.todas_asignaturas?.length || 0 }} asignaturas asignadas</span>
                       </div>
                       
                       <div v-if="student.todas_asignaturas && student.todas_asignaturas.length > 0" class="subjects-grid">
@@ -654,14 +676,24 @@ onMounted(async () => {
                           v-for="sub in student.todas_asignaturas" 
                           :key="sub.id_materia"
                           class="subject-card"
-                          :class="{ 'subject-failed': sub.estado_materia === 'REPROBADA' }"
+                          :class="{ 
+                            'subject-failed': sub.estado_materia === 'REPROBADA',
+                            'opacity-75 bg-slate-50/50 border-dashed': sub.estado_materia === 'SIN_NOTAS'
+                          }"
                         >
                           <div class="subject-title">{{ sub.materia_nombre }}</div>
                           <div class="subject-teacher">Docente: {{ sub.docente_nombre }}</div>
                           <div class="subject-grade flex items-center justify-between mt-2 pt-2 border-t border-slate-200/60">
-                            <span>Nota: <strong>{{ sub.calificacion }}</strong></span>
-                            <span class="badge text-[11px]" :class="sub.estado_materia === 'REPROBADA' ? 'badge-danger' : 'badge-success'">
-                              {{ sub.estado_materia }}
+                            <span>Nota: <strong>{{ sub.calificacion !== null && sub.calificacion !== undefined ? sub.calificacion : 'N/A' }}</strong></span>
+                            <span 
+                              class="badge text-[11px]" 
+                              :class="{
+                                'badge-danger': sub.estado_materia === 'REPROBADA',
+                                'badge-success': sub.estado_materia === 'APROBADA',
+                                'bg-slate-100 text-slate-600 border border-slate-200': sub.estado_materia === 'SIN_NOTAS'
+                              }"
+                            >
+                              {{ sub.estado_materia === 'SIN_NOTAS' ? 'Sin notas' : sub.estado_materia }}
                             </span>
                           </div>
                         </div>
@@ -786,7 +818,9 @@ onMounted(async () => {
                 <td>{{ student.documento }}</td>
                 <td>{{ student.grado_nombre }} {{ student.grupo_nombre }}</td>
                 <td>
-                  <span class="font-bold text-slate-700">{{ student.promedio_anual_general }}</span>
+                  <span class="font-bold" :class="student.promedio_anual_general !== null ? 'text-slate-700' : 'text-slate-400 italic'">
+                    {{ student.promedio_anual_general !== null && student.promedio_anual_general !== undefined ? student.promedio_anual_general : 'N/A' }}
+                  </span>
                 </td>
                 <td>
                   <span 
@@ -794,10 +828,15 @@ onMounted(async () => {
                     :class="{
                       'badge-success': student.resultado_anual === 'APROBADO',
                       'badge-danger': student.resultado_anual === 'NO_PROMOVIDO',
-                      'badge-warning': student.resultado_anual === 'PENDIENTE_RECUPERACION'
+                      'badge-warning': student.resultado_anual === 'PENDIENTE_RECUPERACION',
+                      'bg-slate-100 text-slate-600 border border-slate-200': student.resultado_anual === 'SIN_CALIFICACIONES'
                     }"
                   >
-                    {{ student.resultado_anual === 'NO_PROMOVIDO' ? 'No Promovido' : (student.resultado_anual === 'APROBADO' ? 'Promovido' : 'Pendiente') }}
+                    {{ 
+                      student.resultado_anual === 'SIN_CALIFICACIONES' ? 'Sin Calificaciones' :
+                      student.resultado_anual === 'NO_PROMOVIDO' ? 'No Promovido' : 
+                      (student.resultado_anual === 'APROBADO' ? 'Promovido' : 'Pendiente') 
+                    }}
                   </span>
                 </td>
                 <td>

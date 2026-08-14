@@ -255,6 +255,7 @@ export const getPeriodAcademicTracking = async (req: Request, res: Response): Pr
 
     let aprobadosCount = 0;
     let reprobadosCount = 0;
+    let sinCalificarCount = 0;
 
     const studentResults = students.map(student => {
       const stId = student.id_estudiante;
@@ -286,11 +287,12 @@ export const getPeriodAcademicTracking = async (req: Request, res: Response): Pr
             }
           }
 
-          const avgGrade = periodScores.length > 0
+          const hasGrades = periodScores.length > 0;
+          const avgGrade = hasGrades
             ? parseFloat((periodScores.reduce((a, b) => a + b, 0) / periodScores.length).toFixed(2))
-            : 0;
+            : null;
 
-          const isFailed = avgGrade < minPassingScore;
+          const isFailed = avgGrade !== null && avgGrade < minPassingScore;
 
           const subjectItem = {
             id_materia: sub.id_materia,
@@ -298,7 +300,7 @@ export const getPeriodAcademicTracking = async (req: Request, res: Response): Pr
             docente_nombre: sub.docente_nombre,
             calificacion: avgGrade,
             periodos_evaluados: periodScores.length,
-            estado_materia: isFailed ? "REPROBADA" : "APROBADA"
+            estado_materia: avgGrade === null ? "SIN_NOTAS" : (isFailed ? "REPROBADA" : "APROBADA")
           };
 
           allSubjects.push(subjectItem);
@@ -306,8 +308,10 @@ export const getPeriodAcademicTracking = async (req: Request, res: Response): Pr
             failedSubjects.push(subjectItem);
           }
 
-          totalStudentSum += avgGrade;
-          totalSubjectsEvaluated++;
+          if (avgGrade !== null) {
+            totalStudentSum += avgGrade;
+            totalSubjectsEvaluated++;
+          }
         }
       } else {
         // En caso de que no haya detalle_grados configurado, buscar asignaturas que tengan alguna nota
@@ -329,10 +333,11 @@ export const getPeriodAcademicTracking = async (req: Request, res: Response): Pr
             if (grade !== undefined) periodScores.push(grade);
           }
 
-          const avgGrade = periodScores.length > 0
+          const hasGrades = periodScores.length > 0;
+          const avgGrade = hasGrades
             ? parseFloat((periodScores.reduce((a, b) => a + b, 0) / periodScores.length).toFixed(2))
-            : 0;
-          const isFailed = avgGrade < minPassingScore;
+            : null;
+          const isFailed = avgGrade !== null && avgGrade < minPassingScore;
 
           const subjectItem = {
             id_materia: matId,
@@ -340,23 +345,34 @@ export const getPeriodAcademicTracking = async (req: Request, res: Response): Pr
             docente_nombre: "Docente no asignado",
             calificacion: avgGrade,
             periodos_evaluados: periodScores.length,
-            estado_materia: isFailed ? "REPROBADA" : "APROBADA"
+            estado_materia: avgGrade === null ? "SIN_NOTAS" : (isFailed ? "REPROBADA" : "APROBADA")
           };
 
           allSubjects.push(subjectItem);
           if (isFailed) failedSubjects.push(subjectItem);
-          totalStudentSum += avgGrade;
-          totalSubjectsEvaluated++;
+
+          if (avgGrade !== null) {
+            totalStudentSum += avgGrade;
+            totalSubjectsEvaluated++;
+          }
         }
       }
 
-      const estadoAcademico = failedSubjects.length > 0 ? "REPROBADO" : "APROBADO";
-      if (estadoAcademico === "APROBADO") aprobadosCount++;
-      else reprobadosCount++;
+      let estadoAcademico = "APROBADO";
+      if (totalSubjectsEvaluated === 0) {
+        estadoAcademico = "SIN_NOTAS";
+        sinCalificarCount++;
+      } else if (failedSubjects.length > 0) {
+        estadoAcademico = "REPROBADO";
+        reprobadosCount++;
+      } else {
+        estadoAcademico = "APROBADO";
+        aprobadosCount++;
+      }
 
       const studentAverage = totalSubjectsEvaluated > 0
         ? parseFloat((totalStudentSum / totalSubjectsEvaluated).toFixed(2))
-        : 0;
+        : null;
 
       return {
         id_estudiante: student.id_estudiante,
@@ -377,6 +393,7 @@ export const getPeriodAcademicTracking = async (req: Request, res: Response): Pr
       total_estudiantes: students.length,
       aprobados_count: aprobadosCount,
       reprobados_count: reprobadosCount,
+      sin_calificar_count: sinCalificarCount,
       min_passing_score: minPassingScore,
       periodos_analizados: targetPeriodIds,
       estudiantes: studentResults
@@ -596,9 +613,9 @@ export const getAnnualConsolidation = async (req: Request, res: Response): Promi
           const evaluatedCount = Object.keys(scoresPerPeriod).length;
           const annualAvg = evaluatedCount > 0
             ? parseFloat((subjectSum / (isReadyForPromotion ? divisorPeriodos : evaluatedCount)).toFixed(2))
-            : 0;
+            : null;
 
-          const isFailed = annualAvg < minPassingScore;
+          const isFailed = annualAvg !== null && annualAvg < minPassingScore;
 
           const item = {
             id_materia: sub.id_materia,
@@ -606,7 +623,7 @@ export const getAnnualConsolidation = async (req: Request, res: Response): Promi
             docente_nombre: sub.docente_nombre,
             promedio_anual: annualAvg,
             periodos_registrados: evaluatedCount,
-            estado: isFailed ? "REPROBADA" : "APROBADA"
+            estado: annualAvg === null ? "SIN_NOTAS" : (isFailed ? "REPROBADA" : "APROBADA")
           };
 
           allSubjects.push(item);
@@ -614,8 +631,10 @@ export const getAnnualConsolidation = async (req: Request, res: Response): Promi
             failedSubjects.push(item);
           }
 
-          totalAnnualSum += annualAvg;
-          subjectsCount++;
+          if (annualAvg !== null) {
+            totalAnnualSum += annualAvg;
+            subjectsCount++;
+          }
         }
       }
 
@@ -624,19 +643,23 @@ export const getAnnualConsolidation = async (req: Request, res: Response): Promi
       // PENDIENTE_RECUPERACION: 1 a 2 materias reprobadas
       // NO_PROMOVIDO: 3 o más materias reprobadas
       let resultadoAnual = "APROBADO";
-      if (failedSubjects.length >= 3) {
+      if (subjectsCount === 0) {
+        resultadoAnual = "SIN_CALIFICACIONES";
+        pendientesCount++;
+      } else if (failedSubjects.length >= 3) {
         resultadoAnual = "NO_PROMOVIDO";
+        noPromovidosCount++;
       } else if (failedSubjects.length > 0) {
         resultadoAnual = "PENDIENTE_RECUPERACION";
+        pendientesCount++;
+      } else {
+        resultadoAnual = "APROBADO";
+        promovidosCount++;
       }
-
-      if (resultadoAnual === "APROBADO") promovidosCount++;
-      else if (resultadoAnual === "NO_PROMOVIDO") noPromovidosCount++;
-      else pendientesCount++;
 
       const studentAnnualAverage = subjectsCount > 0
         ? parseFloat((totalAnnualSum / subjectsCount).toFixed(2))
-        : 0;
+        : null;
 
       return {
         id_estudiante: student.id_estudiante,
@@ -901,8 +924,8 @@ export const checkStudentAcademicWarning = async (req: Request, res: Response): 
           }
         }
 
-        const avg = pCount > 0 ? parseFloat((matSum / Math.max(periodIds.length, 1)).toFixed(2)) : 0;
-        if (avg < minPassingScore) {
+        const avg = pCount > 0 ? parseFloat((matSum / Math.max(periodIds.length, 1)).toFixed(2)) : null;
+        if (avg !== null && avg < minPassingScore) {
           failedSubjectsCount++;
           failedSubjectsList.push({
             id_materia: matId,
