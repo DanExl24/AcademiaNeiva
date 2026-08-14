@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { PoolClient } from "pg";
 import { pool } from "../../config/db";
+import { db } from "../../config/kysely";
 import bcrypt from "bcrypt";
 import { randomUUID } from "crypto";
 import { NotificationService } from "../../services/notificationService";
@@ -202,49 +203,95 @@ export const deleteAcademicYear = async (req: Request, res: Response): Promise<v
     return;
   }
 
-  const client = await pool.connect();
   try {
-    await client.query("BEGIN");
+    const result = await db.transaction().execute(async (trx) => {
+      // 1. Check if this is the ONLY academic year in the school
+      const totalYears = await trx
+        .selectFrom("anio_lectivo")
+        .select((eb) => eb.fn.count("id_anio").as("count"))
+        .where("id_colegio", "=", schoolId)
+        .executeTakeFirst();
 
-    // Check if there are any active enrollments (matriculas) for this year
-    const matriculaCheck = await client.query(
-      `SELECT id_matricula
-       FROM matricula
-       WHERE id_anio = $1 AND id_colegio = $2
-       LIMIT 1`,
-      [yearId, schoolId]
-    );
+      if (Number(totalYears?.count || 0) <= 1) {
+        throw new Error("MIN_YEAR_LIMIT: No es posible eliminar este año lectivo porque la institución debe tener al menos un año lectivo registrado.");
+      }
 
-    if (matriculaCheck.rows.length > 0) {
-      await client.query("ROLLBACK");
-      res.status(409).json({
-        error: "No es posible eliminar el año lectivo porque ya tiene matrículas asociadas en el sistema.",
-      });
+      // 2. Check if there are any active enrollments (matriculas) for this year
+      const matriculaCheck = await trx
+        .selectFrom("matricula")
+        .select("id_matricula")
+        .where("id_anio", "=", yearId)
+        .where("id_colegio", "=", schoolId)
+        .limit(1)
+        .executeTakeFirst();
+
+      if (matriculaCheck) {
+        throw new Error("MATRICULAS_EXIST: No es posible eliminar el año lectivo porque ya tiene matrículas asociadas en el sistema.");
+      }
+
+      // 3. Delete associated periods first
+      await trx
+        .deleteFrom("periodo_academico")
+        .where("id_anio", "=", yearId)
+        .where("id_colegio", "=", schoolId)
+        .execute();
+
+      // 4. Delete the year
+      await trx
+        .deleteFrom("anio_lectivo")
+        .where("id_anio", "=", yearId)
+        .where("id_colegio", "=", schoolId)
+        .execute();
+
+      // 5. CRITICAL: Check if there is still at least one ABIERTO year for this school
+      const openYearCheck = await trx
+        .selectFrom("anio_lectivo")
+        .select("id_anio")
+        .where("id_colegio", "=", schoolId)
+        .where("estado", "=", "ABIERTO")
+        .limit(1)
+        .executeTakeFirst();
+
+      let reactivatedYearLabel = "";
+      if (!openYearCheck) {
+        // Find the most recent remaining year and automatically set it to ABIERTO
+        const latestYear = await trx
+          .selectFrom("anio_lectivo")
+          .select(["id_anio", "calendario"])
+          .where("id_colegio", "=", schoolId)
+          .orderBy("id_anio", "desc")
+          .limit(1)
+          .executeTakeFirst();
+
+        if (latestYear) {
+          await trx
+            .updateTable("anio_lectivo")
+            .set({ estado: "ABIERTO" })
+            .where("id_anio", "=", latestYear.id_anio)
+            .execute();
+          reactivatedYearLabel = latestYear.calendario || "";
+        }
+      }
+
+      return { reactivatedYearLabel };
+    });
+
+    res.json({
+      message: result.reactivatedYearLabel
+        ? `Año lectivo eliminado exitosamente. El año lectivo ${result.reactivatedYearLabel} ha sido reactivado automáticamente como año abierto.`
+        : "Año lectivo y sus periodos eliminados exitosamente.",
+    });
+  } catch (error: any) {
+    if (error.message?.startsWith("MIN_YEAR_LIMIT:")) {
+      res.status(400).json({ error: error.message.replace("MIN_YEAR_LIMIT: ", "") });
       return;
     }
-
-    // Delete associated periods first
-    await client.query(
-      `DELETE FROM periodo_academico
-       WHERE id_anio = $1 AND id_colegio = $2`,
-      [yearId, schoolId]
-    );
-
-    // Delete the year
-    await client.query(
-      `DELETE FROM anio_lectivo
-       WHERE id_anio = $1 AND id_colegio = $2`,
-      [yearId, schoolId]
-    );
-
-    await client.query("COMMIT");
-    res.json({ message: "Año lectivo y sus periodos eliminados exitosamente." });
-  } catch (error: any) {
-    await client.query("ROLLBACK");
+    if (error.message?.startsWith("MATRICULAS_EXIST:")) {
+      res.status(409).json({ error: error.message.replace("MATRICULAS_EXIST: ", "") });
+      return;
+    }
     console.error("Error deleting academic year:", error);
-    res.status(500).json({ error: "Error en el servidor" });
-  } finally {
-    client.release();
+    res.status(500).json({ error: error.message || "Error en el servidor" });
   }
 };
 
@@ -259,30 +306,58 @@ export const updateAcademicYearStatus = async (req: Request, res: Response): Pro
   }
 
   try {
-    if (nuevoEstado === "ABIERTO") {
-      await pool.query(
-        `UPDATE anio_lectivo SET estado = 'CERRADO' WHERE id_colegio = $1 AND id_anio != $2 AND estado = 'ABIERTO'`,
-        [schoolId, yearId]
-      );
-    }
+    const updated = await db.transaction().execute(async (trx) => {
+      if (nuevoEstado === "CERRADO") {
+        // Verify if this is the only open year in the school
+        const openYears = await trx
+          .selectFrom("anio_lectivo")
+          .select("id_anio")
+          .where("id_colegio", "=", schoolId)
+          .where("estado", "=", "ABIERTO")
+          .execute();
 
-    const resUpdate = await pool.query(
-      `UPDATE anio_lectivo
-       SET estado = $1
-       WHERE id_anio = $2 AND id_colegio = $3
-       RETURNING id_anio, calendario, tipo_calendario, estado, fecha_inicio, fecha_fin`,
-      [nuevoEstado, yearId, schoolId]
-    );
+        if (openYears.length <= 1 && openYears.some((y) => y.id_anio === yearId)) {
+          throw new Error("ONLY_OPEN_YEAR: Debe existir al menos un año lectivo abierto en la institución. Para cerrar este año, activa o abre otro año lectivo primero.");
+        }
+      }
 
-    if (resUpdate.rows.length === 0) {
-      res.status(404).json({ error: "Año lectivo no encontrado" });
+      if (nuevoEstado === "ABIERTO") {
+        await trx
+          .updateTable("anio_lectivo")
+          .set({ estado: "CERRADO" })
+          .where("id_colegio", "=", schoolId)
+          .where("id_anio", "!=", yearId)
+          .where("estado", "=", "ABIERTO")
+          .execute();
+      }
+
+      const resUpdate = await trx
+        .updateTable("anio_lectivo")
+        .set({ estado: nuevoEstado })
+        .where("id_anio", "=", yearId)
+        .where("id_colegio", "=", schoolId)
+        .returning(["id_anio", "calendario", "tipo_calendario", "estado", "fecha_inicio", "fecha_fin"])
+        .executeTakeFirst();
+
+      if (!resUpdate) {
+        throw new Error("NOT_FOUND: Año lectivo no encontrado");
+      }
+
+      return resUpdate;
+    });
+
+    res.json(updated);
+  } catch (error: any) {
+    if (error.message?.startsWith("ONLY_OPEN_YEAR:")) {
+      res.status(400).json({ error: error.message.replace("ONLY_OPEN_YEAR: ", "") });
       return;
     }
-
-    res.json(resUpdate.rows[0]);
-  } catch (error: any) {
+    if (error.message?.startsWith("NOT_FOUND:")) {
+      res.status(404).json({ error: error.message.replace("NOT_FOUND: ", "") });
+      return;
+    }
     console.error("Error updating academic year status:", error);
-    res.status(500).json({ error: "Error en el servidor" });
+    res.status(500).json({ error: error.message || "Error en el servidor" });
   }
 };
 

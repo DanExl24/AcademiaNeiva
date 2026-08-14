@@ -91,11 +91,11 @@ const deleteYear = async (year: AcademicYear) => {
 
   try {
     deletingYearId.value = year.id_anio
-    await axios.delete(`/api/academic-admin/settings/years/${year.id_anio}`, {
+    const response = await axios.delete(`/api/academic-admin/settings/years/${year.id_anio}`, {
       data: { schoolId: schoolId.value }
     })
     
-    alert(`Año lectivo ${year.calendario} eliminado correctamente.`)
+    alert(response.data?.message || `Año lectivo ${year.calendario} eliminado correctamente.`)
     
     if (selectedYearId.value === year.id_anio) {
       selectedYearId.value = null
