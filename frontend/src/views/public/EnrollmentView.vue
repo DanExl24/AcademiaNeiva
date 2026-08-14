@@ -155,10 +155,12 @@ const isEnrollmentOpen = computed(() => {
   if (!schoolId.value) return true
   if (!enrollmentConfig.value) return false
   if (!enrollmentConfig.value.habilitada) return false
+  if (!enrollmentConfig.value.fecha_inicio || !enrollmentConfig.value.fecha_cierre) return false
   
   const now = new Date()
   const start = new Date(enrollmentConfig.value.fecha_inicio)
   const end = new Date(enrollmentConfig.value.fecha_cierre)
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) return false
   return now >= start && now <= end
 })
 
@@ -180,11 +182,18 @@ const enrollmentStatusMessage = computed(() => {
   if (!enrollmentConfig.value.habilitada) {
     return 'Las inscripciones están deshabilitadas temporalmente por la institución.'
   }
+  if (!enrollmentConfig.value.fecha_inicio || !enrollmentConfig.value.fecha_cierre) {
+    return `Las fechas de inscripción para el año lectivo ${yearLabel.value || ''} aún no han sido programadas por la institución.`
+  }
   
   const now = new Date()
   const start = new Date(enrollmentConfig.value.fecha_inicio)
   const end = new Date(enrollmentConfig.value.fecha_cierre)
   
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+    return `Las fechas de inscripción para el año lectivo ${yearLabel.value || ''} aún no han sido programadas por la institución.`
+  }
+
   if (now < start) {
     return `Las inscripciones para el año lectivo ${yearLabel.value || ''} aún no han comenzado. Iniciarán el ${start.toLocaleString('es-CO')}.`
   }
@@ -515,7 +524,7 @@ const submitEnrollment = async () => {
                       isEnrollmentOpen ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800',
                       'px-2.5 py-0.5 rounded-full text-xs font-black uppercase tracking-wider'
                     ]">
-                      {{ isEnrollmentOpen ? 'Abiertas' : 'Cerradas / Inactivas' }}
+                      {{ isEnrollmentOpen ? 'Abiertas' : (enrollmentConfig?.fecha_inicio && enrollmentConfig?.fecha_cierre ? 'Cerradas / Inactivas' : 'Sin Programar') }}
                     </span>
                   </h4>
                   <p class="text-sm font-medium opacity-90 leading-relaxed">

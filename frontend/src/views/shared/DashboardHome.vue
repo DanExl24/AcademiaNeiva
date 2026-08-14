@@ -690,7 +690,7 @@ const checkEnrollmentDates = async () => {
     const headers = { Authorization: `Bearer ${auth.token}` }
     const response = await axios.get(`/api/matriculas/school/${schoolId.value}/enrollment-config`, { headers })
     const data = response.data
-    if (data && data.config && data.config.habilitada) {
+    if (data && data.config && data.config.habilitada && data.config.fecha_inicio && data.config.fecha_cierre) {
       const now = new Date()
       const start = new Date(data.config.fecha_inicio)
       const end = new Date(data.config.fecha_cierre)
