@@ -127,6 +127,7 @@ export const getPeriodAcademicTracking = async (req: Request, res: Response): Pr
       .leftJoin("grupos as g", "g.id_grupo", "m.id_grupo")
       .leftJoin("tipo_grado as tg", "tg.id_tipo_grado", "g.id_tipo_grado")
       .leftJoin("secciones as s", "s.id_seccion", "g.id_seccion")
+      .leftJoin("jornada as j", "j.id_jornada", "g.id_jornada")
       .select([
         "e.id_estudiante",
         "u.nombre",
@@ -135,7 +136,8 @@ export const getPeriodAcademicTracking = async (req: Request, res: Response): Pr
         "m.id_grupo",
         "s.nombre as grupo_nombre",
         "tg.id_tipo_grado as id_grado",
-        "tg.nombre as grado_nombre"
+        "tg.nombre as grado_nombre",
+        "j.nombre as jornada_nombre"
       ])
       .where("m.id_colegio", "=", schoolId)
       .where("m.id_anio", "=", yearId)
@@ -155,6 +157,7 @@ export const getPeriodAcademicTracking = async (req: Request, res: Response): Pr
         total_estudiantes: students.length,
         aprobados_count: students.length,
         reprobados_count: 0,
+        sin_calificar_count: 0,
         min_passing_score: minPassingScore,
         periodos_analizados: targetPeriodIds,
         estudiantes: students.map(s => ({
@@ -164,8 +167,9 @@ export const getPeriodAcademicTracking = async (req: Request, res: Response): Pr
           documento: s.documento,
           grado_nombre: s.grado_nombre || "Sin Grado",
           grupo_nombre: s.grupo_nombre || "Sin Grupo",
-          estado_academico: "APROBADO",
-          promedio_general: 0,
+          jornada_nombre: s.jornada_nombre || null,
+          estado_academico: "SIN_NOTAS",
+          promedio_general: null,
           cantidad_reprobadas: 0,
           asignaturas_reprobadas: [],
           todas_asignaturas: []
@@ -389,6 +393,7 @@ export const getPeriodAcademicTracking = async (req: Request, res: Response): Pr
         documento: student.documento,
         grado_nombre: student.grado_nombre || "Sin Grado",
         grupo_nombre: student.grupo_nombre || "Sin Grupo",
+        jornada_nombre: student.jornada_nombre || null,
         estado_academico: estadoAcademico,
         promedio_general: studentAverage,
         cantidad_reprobadas: failedSubjects.length,
@@ -452,6 +457,7 @@ export const getAnnualConsolidation = async (req: Request, res: Response): Promi
       .leftJoin("grupos as g", "g.id_grupo", "m.id_grupo")
       .leftJoin("tipo_grado as tg", "tg.id_tipo_grado", "g.id_tipo_grado")
       .leftJoin("secciones as s", "s.id_seccion", "g.id_seccion")
+      .leftJoin("jornada as j", "j.id_jornada", "g.id_jornada")
       .select([
         "e.id_estudiante",
         "u.nombre",
@@ -460,7 +466,8 @@ export const getAnnualConsolidation = async (req: Request, res: Response): Promi
         "m.id_grupo",
         "s.nombre as grupo_nombre",
         "tg.id_tipo_grado as id_grado",
-        "tg.nombre as grado_nombre"
+        "tg.nombre as grado_nombre",
+        "j.nombre as jornada_nombre"
       ])
       .where("m.id_colegio", "=", schoolId)
       .where("m.id_anio", "=", yearId)
@@ -684,6 +691,7 @@ export const getAnnualConsolidation = async (req: Request, res: Response): Promi
         documento: student.documento,
         grado_nombre: student.grado_nombre || "Sin Grado",
         grupo_nombre: student.grupo_nombre || "Sin Grupo",
+        jornada_nombre: student.jornada_nombre || null,
         id_grado: student.id_grado,
         resultado_anual: resultadoAnual,
         promedio_anual_general: studentAnnualAverage,
@@ -753,6 +761,7 @@ export const getStudentAcademicHistory = async (req: Request, res: Response): Pr
       .leftJoin("grupos as g", "g.id_grupo", "m.id_grupo")
       .leftJoin("tipo_grado as tg", "tg.id_tipo_grado", "g.id_tipo_grado")
       .leftJoin("secciones as s", "s.id_seccion", "g.id_seccion")
+      .leftJoin("jornada as j", "j.id_jornada", "g.id_jornada")
       .leftJoin("decision_promocion_directivo as dpd", (join: any) =>
         join
           .onRef("dpd.id_estudiante", "=", "m.id_estudiante")
@@ -768,6 +777,7 @@ export const getStudentAcademicHistory = async (req: Request, res: Response): Pr
         "tg.id_tipo_grado as id_grado",
         "tg.nombre as grado_nombre",
         "s.nombre as grupo_nombre",
+        "j.nombre as jornada_nombre",
         "m.estado as estado_matricula",
         "dpd.resultado_calculado",
         "dpd.decision_tomada",
@@ -836,6 +846,7 @@ export const checkStudentAcademicWarning = async (req: Request, res: Response): 
       .leftJoin("grupos as g", "g.id_grupo", "m.id_grupo")
       .leftJoin("tipo_grado as tg", "tg.id_tipo_grado", "g.id_tipo_grado")
       .leftJoin("secciones as s", "s.id_seccion", "g.id_seccion")
+      .leftJoin("jornada as j", "j.id_jornada", "g.id_jornada")
       .select([
         "m.id_matricula",
         "m.id_colegio",
@@ -844,7 +855,8 @@ export const checkStudentAcademicWarning = async (req: Request, res: Response): 
         "al.calendario",
         "tg.id_tipo_grado as id_grado",
         "tg.nombre as grado_nombre",
-        "s.nombre as grupo_nombre"
+        "s.nombre as grupo_nombre",
+        "j.nombre as jornada_nombre"
       ])
       .where("m.id_estudiante", "=", user.id_estudiante)
       .where("m.estado", "not in", ["CANCELADA", "RECHAZADA"])

@@ -623,7 +623,13 @@ onMounted(async () => {
                     {{ student.apellido }} {{ student.nombre }}
                   </td>
                   <td>{{ student.documento }}</td>
-                  <td>{{ student.grado_nombre }} {{ student.grupo_nombre }}</td>
+                  <td>
+                    <div class="font-medium text-slate-800">{{ student.grado_nombre }} {{ student.grupo_nombre }}</div>
+                    <div v-if="student.jornada_nombre" class="text-[11px] text-indigo-600 font-semibold flex items-center gap-1 mt-0.5">
+                      <span class="inline-block w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
+                      <span>Jornada {{ student.jornada_nombre }}</span>
+                    </div>
+                  </td>
                   <td>
                     <span class="font-bold" :class="student.promedio_general !== null ? 'text-slate-700' : 'text-slate-400 italic'">
                       {{ student.promedio_general !== null && student.promedio_general !== undefined ? student.promedio_general : 'N/A' }}
@@ -816,7 +822,13 @@ onMounted(async () => {
               <tr v-for="student in filteredAnnualStudents" :key="student.id_estudiante">
                 <td class="font-semibold text-slate-800">{{ student.apellido }} {{ student.nombre }}</td>
                 <td>{{ student.documento }}</td>
-                <td>{{ student.grado_nombre }} {{ student.grupo_nombre }}</td>
+                <td>
+                  <div class="font-medium text-slate-800">{{ student.grado_nombre }} {{ student.grupo_nombre }}</div>
+                  <div v-if="student.jornada_nombre" class="text-[11px] text-indigo-600 font-semibold flex items-center gap-1 mt-0.5">
+                    <span class="inline-block w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
+                    <span>Jornada {{ student.jornada_nombre }}</span>
+                  </div>
+                </td>
                 <td>
                   <span class="font-bold" :class="student.promedio_anual_general !== null ? 'text-slate-700' : 'text-slate-400 italic'">
                     {{ student.promedio_anual_general !== null && student.promedio_anual_general !== undefined ? student.promedio_anual_general : 'N/A' }}
@@ -939,6 +951,7 @@ onMounted(async () => {
                 <div class="timeline-header flex items-center justify-between flex-wrap gap-2 mb-2 pb-2 border-b border-slate-100">
                   <h5 class="font-bold text-slate-800 text-sm">
                     Año Lectivo {{ mat.calendario || mat.id_anio }} — Grado: {{ mat.grado_nombre }} {{ mat.grupo_nombre }}
+                    <span v-if="mat.jornada_nombre" class="text-xs text-indigo-600 font-normal ml-1">(Jornada {{ mat.jornada_nombre }})</span>
                   </h5>
                   <span class="badge" :class="mat.estado_matricula === 'CULMINADA' ? 'badge-success' : 'badge-info'">
                     Estado: {{ mat.estado_matricula }}
