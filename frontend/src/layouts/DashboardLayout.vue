@@ -954,7 +954,7 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <router-view />
+          <router-view :key="route.fullPath + '_' + (yearStore.selectedYearId || '')" />
         </div>
       </main>
     </div>

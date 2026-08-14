@@ -63,9 +63,10 @@ const resolveTeachingContext = async (
 // Obtener periodos del colegio
 export const getPeriods = async (req: Request, res: Response): Promise<void> => {
   const { schoolId } = req.params;
-  const targetYearId = req.query.yearId ? Number(req.query.yearId) : undefined;
-
   const authReq = req as any;
+  const targetYearId = req.query.yearId
+    ? Number(req.query.yearId)
+    : (req.headers["x-academic-year-id"] ? Number(req.headers["x-academic-year-id"]) : (authReq.academicYearId ? Number(authReq.academicYearId) : undefined));
   const isSupervision = authReq.user && authReq.user.roles?.includes("admin_general");
   const userSchoolIds = (authReq.user?.schoolIds || []).map(Number);
   const targetId = Number(schoolId);

@@ -34,7 +34,9 @@ export const getTeacherCourses = async (req: Request, res: Response): Promise<vo
     }
 
     const idDocente = docente.id_docente;
-    const yearId = req.query.yearId ? Number(req.query.yearId) : null;
+    const yearId = req.query.yearId
+      ? Number(req.query.yearId)
+      : (req.headers['x-academic-year-id'] ? Number(req.headers['x-academic-year-id']) : (req as any).academicYearId || null);
 
     let baseQuery = db
       .selectFrom("detalle_grados as dg")
@@ -74,9 +76,12 @@ export const getTeacherCourses = async (req: Request, res: Response): Promise<vo
 
 export const getStudentsByGrade = async (req: Request, res: Response): Promise<void> => {
   const { gradeId } = req.params;
+  const yearId = req.query.yearId
+    ? Number(req.query.yearId)
+    : (req.headers['x-academic-year-id'] ? Number(req.headers['x-academic-year-id']) : (req as any).academicYearId || null);
 
   try {
-    const students = await db
+    let query = db
       .selectFrom("estudiante as e")
       .leftJoin("usuario as u", "u.id_usuario", "e.id_usuario")
       .innerJoin("matricula as m", "m.id_estudiante", "e.id_estudiante")
@@ -88,7 +93,13 @@ export const getStudentsByGrade = async (req: Request, res: Response): Promise<v
         "e.codigo"
       ])
       .where("m.id_grupo", "=", Number(gradeId))
-      .where("m.estado", "in", ["ACTIVA", "TRASLADADA"])
+      .where("m.estado", "in", ["ACTIVA", "TRASLADADA"]);
+
+    if (yearId) {
+      query = query.where("m.id_anio", "=", yearId);
+    }
+
+    const students = await query
       .orderBy("e.apellido", "asc")
       .orderBy("e.nombre", "asc")
       .execute();

@@ -15,6 +15,7 @@ export interface AuthRequest extends Request {
     jti?: string;
     supervisionId?: number | null;
   };
+  academicYearId?: number | null;
   auditLogged?: boolean;
 }
 
@@ -89,6 +90,9 @@ export const verifyToken = async (req: AuthRequest, res: Response, next: NextFun
       jti: decoded.jti,
       supervisionId: null
     };
+
+    const headerYearId = req.headers['x-academic-year-id'] ? Number(req.headers['x-academic-year-id']) : (req.query.yearId ? Number(req.query.yearId) : null);
+    req.academicYearId = headerYearId && !Number.isNaN(headerYearId) ? headerYearId : null;
 
     // Bloquear modificaciones si la petición viene de Modo Monitoreo
     const isMonitoringHeader = req.headers['x-monitoring-mode'] === 'true' || req.headers['x-monitoring-mode'] === '1';

@@ -32,6 +32,12 @@ axios.interceptors.request.use(
       config.headers['x-school-id'] = selectedSchoolId
     }
 
+    // Inject x-academic-year-id header for academic year context
+    const selectedAcademicYearId = localStorage.getItem('selectedAcademicYearId')
+    if (selectedAcademicYearId && config.headers && !config.headers['x-academic-year-id']) {
+      config.headers['x-academic-year-id'] = selectedAcademicYearId
+    }
+
     return config
   },
   (error) => Promise.reject(error)
