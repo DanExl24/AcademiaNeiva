@@ -35,6 +35,7 @@ import {
 } from 'lucide-vue-next'
 import { useAuthStore } from '../stores/auth'
 import { useThemeStore } from '../stores/theme'
+import { useAcademicYearStore } from '../stores/academicYear'
 import { useRouter, useRoute } from 'vue-router'
 
 const auth = useAuthStore()
