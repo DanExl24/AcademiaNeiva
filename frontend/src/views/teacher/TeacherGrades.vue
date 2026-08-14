@@ -171,16 +171,7 @@ const dbaEvidencesInfo = ref<{
 } | null>(null)
 
 const selectedEvidencesNeedJustification = computed(() => {
-  if (!newActivity.value.evidencias_dba || newActivity.value.evidencias_dba.length === 0 || !dbaEvidencesInfo.value?.dba) return false
-  for (const id of newActivity.value.evidencias_dba) {
-    for (const dbaItem of dbaEvidencesInfo.value.dba) {
-      const ev = dbaItem.evidencias?.find((e: any) => e.id_evidencia_dba === id)
-      if (ev && ev.tipo === 'EXTRA' && (ev.planeada_otro_periodo_nombre || ev.planeada_otro_periodo_id)) {
-        return true
-      }
-    }
-  }
-  return false
+  return selectedExtraEvidencesCount.value > 0
 })
 
 // Drawer y filtros
@@ -572,7 +563,7 @@ const addActivity = async () => {
 
     if (selectedEvidencesNeedJustification.value) {
       if (!newActivity.value.motivo_extra) {
-        alert('Debes seleccionar un motivo para evaluar evidencias planificadas en otros periodos.')
+        alert('Debes seleccionar un motivo para evaluar evidencias extra o no planificadas en este periodo.')
         return
       }
       if (newActivity.value.motivo_extra === 'OTRO' && !newActivity.value.justificacion_extra.trim()) {
@@ -1596,10 +1587,10 @@ onMounted(() => {
                         <div class="pt-3 border-t border-slate-200/40 dark:border-slate-800 space-y-3">
                           <div class="space-y-1">
                             <label class="text-[9px] font-black text-indigo-500 dark:text-indigo-400 uppercase tracking-widest ml-1">
-                              Motivo del uso EXTRA {{ selectedEvidencesNeedJustification ? '*' : '(Opcional)' }}
+                              Motivo del uso EXTRA *
                             </label>
                             <select v-model="newActivity.motivo_extra" class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2.5 text-xs font-bold outline-none text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500">
-                              <option value="">Selecciona un motivo{{ selectedEvidencesNeedJustification ? '' : ' (opcional)' }}</option>
+                              <option value="">Selecciona un motivo</option>
                               <option value="RECUPERACION_REFUERZO">Recuperación o refuerzo</option>
                               <option value="ADELANTO_CURRICULAR">Adelanto curricular</option>
                               <option value="INTEGRACION_ASIGNATURA">Integración con otra asignatura</option>
