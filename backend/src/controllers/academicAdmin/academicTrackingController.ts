@@ -196,15 +196,23 @@ export const getPeriodAcademicTracking = async (req: Request, res: Response): Pr
       : [];
 
     const groupSubjectsMap: Record<number, Array<{ id_materia: number; id_detallegrado: number; materia_nombre: string; docente_nombre: string }>> = {};
+    const seenSubjectsPerGroup = new Set<string>();
+
     groupSubjects.forEach(gs => {
       const gId = Number(gs.id_grupo);
-      if (!groupSubjectsMap[gId]) groupSubjectsMap[gId] = [];
-      groupSubjectsMap[gId].push({
-        id_materia: Number(gs.id_materia),
-        id_detallegrado: Number(gs.id_detallegrado),
-        materia_nombre: gs.materia_nombre,
-        docente_nombre: gs.docente_nombre
-      });
+      const mId = Number(gs.id_materia);
+      const groupMatKey = `${gId}_${mId}`;
+
+      if (!seenSubjectsPerGroup.has(groupMatKey)) {
+        seenSubjectsPerGroup.add(groupMatKey);
+        if (!groupSubjectsMap[gId]) groupSubjectsMap[gId] = [];
+        groupSubjectsMap[gId].push({
+          id_materia: mId,
+          id_detallegrado: Number(gs.id_detallegrado),
+          materia_nombre: gs.materia_nombre,
+          docente_nombre: gs.docente_nombre
+        });
+      }
     });
 
     // 2. Consulta de notas consolidadas en resultado_academico
@@ -500,15 +508,23 @@ export const getAnnualConsolidation = async (req: Request, res: Response): Promi
       : [];
 
     const groupSubjectsMap: Record<number, Array<{ id_materia: number; id_detallegrado: number; materia_nombre: string; docente_nombre: string }>> = {};
+    const seenSubjectsPerGroup = new Set<string>();
+
     groupSubjects.forEach(gs => {
       const gId = Number(gs.id_grupo);
-      if (!groupSubjectsMap[gId]) groupSubjectsMap[gId] = [];
-      groupSubjectsMap[gId].push({
-        id_materia: Number(gs.id_materia),
-        id_detallegrado: Number(gs.id_detallegrado),
-        materia_nombre: gs.materia_nombre,
-        docente_nombre: gs.docente_nombre
-      });
+      const mId = Number(gs.id_materia);
+      const groupMatKey = `${gId}_${mId}`;
+
+      if (!seenSubjectsPerGroup.has(groupMatKey)) {
+        seenSubjectsPerGroup.add(groupMatKey);
+        if (!groupSubjectsMap[gId]) groupSubjectsMap[gId] = [];
+        groupSubjectsMap[gId].push({
+          id_materia: mId,
+          id_detallegrado: Number(gs.id_detallegrado),
+          materia_nombre: gs.materia_nombre,
+          docente_nombre: gs.docente_nombre
+        });
+      }
     });
 
     // 2. Decisiones directivas previas
@@ -910,7 +926,15 @@ export const checkStudentAcademicWarning = async (req: Request, res: Response): 
         activityMap[`${ag.id_materia}_${ag.id_periodo}`] = parseFloat(String(ag.nota_ponderada || 0));
       });
 
-      for (const gs of groupSubjects) {
+      const seenWarningMatIds = new Set<number>();
+      const uniqueGroupSubjects = groupSubjects.filter(gs => {
+        const mId = Number(gs.id_materia);
+        if (seenWarningMatIds.has(mId)) return false;
+        seenWarningMatIds.add(mId);
+        return true;
+      });
+
+      for (const gs of uniqueGroupSubjects) {
         const matId = Number(gs.id_materia);
         let matSum = 0;
         let pCount = 0;
