@@ -63,6 +63,17 @@ export const useAcademicYearStore = defineStore('academicYear', () => {
     localStorage.setItem('selectedAcademicYearId', String(id))
   }
 
+  const addOrUpdateYear = (year: AcademicYear) => {
+    const norm = { ...year, id_anio: year.id_anio ?? (year as any).id_año }
+    const idx = availableYears.value.findIndex(y => y.id_anio === norm.id_anio)
+    if (idx >= 0) {
+      availableYears.value[idx] = norm
+    } else {
+      availableYears.value.unshift(norm)
+    }
+    setSelectedYearId(norm.id_anio)
+  }
+
   return {
     selectedYearId,
     availableYears,
@@ -71,6 +82,7 @@ export const useAcademicYearStore = defineStore('academicYear', () => {
     isReadonlyYear,
     loading,
     loadYearsForSchool,
-    setSelectedYearId
+    setSelectedYearId,
+    addOrUpdateYear
   }
 })

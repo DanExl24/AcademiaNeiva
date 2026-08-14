@@ -71,6 +71,9 @@ const toggleYearStatus = async (year: AcademicYear) => {
     if (currentYear.value?.id_anio === year.id_anio) {
       currentYear.value.estado = updated.estado
     }
+    if (schoolId.value) {
+      await yearStore.loadYearsForSchool(schoolId.value, auth.token || undefined)
+    }
     await loadData()
   } catch (error: any) {
     alert(error.response?.data?.error || 'No fue posible actualizar el estado del año lectivo')
@@ -96,6 +99,9 @@ const deleteYear = async (year: AcademicYear) => {
     
     if (selectedYearId.value === year.id_anio) {
       selectedYearId.value = null
+    }
+    if (schoolId.value) {
+      await yearStore.loadYearsForSchool(schoolId.value, auth.token || undefined)
     }
     await loadData()
   } catch (error: any) {
@@ -432,8 +438,14 @@ const createAcademicYear = async () => {
     })
     
     alert(response.data.message || 'Año lectivo creado correctamente.')
+    
+    if (schoolId.value) {
+      await yearStore.loadYearsForSchool(schoolId.value, auth.token || undefined)
+    }
+
     if (response.data.id_anio) {
       selectedYearId.value = response.data.id_anio
+      yearStore.setSelectedYearId(response.data.id_anio)
     }
 
     yearModal.value = false
@@ -483,6 +495,9 @@ const changeYearCalendarType = async (year: AcademicYear, newType: string) => {
     })
 
     alert(response.data.message || 'Tipo de calendario actualizado correctamente.')
+    if (schoolId.value) {
+      await yearStore.loadYearsForSchool(schoolId.value, auth.token || undefined)
+    }
     await loadData()
   } catch (error: any) {
     alert(error.response?.data?.error || 'No fue posible cambiar el tipo de calendario')
