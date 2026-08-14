@@ -31,19 +31,31 @@ import {
   ArrowLeftRight,
   Building2,
   Award,
-  FolderCheck
+  FolderCheck,
+  Menu,
+  X
 } from 'lucide-vue-next'
 import { useAuthStore } from '../stores/auth'
 import { useThemeStore } from '../stores/theme'
 import { useAcademicYearStore } from '../stores/academicYear'
+import { useNotificationStore } from '../stores/notifications'
+import { useConfirm } from '../composables/useConfirm'
 import { useRouter, useRoute } from 'vue-router'
 
 const auth = useAuthStore()
 const theme = useThemeStore()
 const yearStore = useAcademicYearStore()
+const notify = useNotificationStore()
+const { confirm } = useConfirm()
 const router = useRouter()
 const route = useRoute()
+
 const isCollapsed = ref(false)
+const isMobileMenuOpen = ref(false)
+
+watch(() => route.path, () => {
+  isMobileMenuOpen.value = false
+})
 
 const isDedicatedEnrollmentView = computed(() => {
   return (
@@ -198,14 +210,23 @@ const currentSchoolRoles = computed(() => {
 })
 
 const hasMultipleRoles = computed(() => currentSchoolRoles.value.length > 1)
+
 const otherRole = computed(() => {
   if (!hasMultipleRoles.value) return null
   return currentSchoolRoles.value.find(r => r !== auth.activeRole)
 })
 
-const handleLogout = () => {
-  auth.logout()
-  router.push('/')
+const handleLogout = async () => {
+  const ok = await confirm({
+    title: 'Cerrar Sesión',
+    message: '¿Estás seguro de que deseas cerrar tu sesión en AcademiaNeiva?',
+    confirmText: 'Cerrar Sesión',
+    type: 'warning'
+  })
+  if (ok) {
+    auth.logout()
+    router.push('/')
+  }
 }
 
 const stopMonitoring = () => {
@@ -402,7 +423,13 @@ const handleExitSupervisionAuto = async () => {
 const handleExitSupervisionManual = async () => {
   const supId = auth.supervision?.id_auditoria
   if (supId) {
-    if (confirm('¿Estás seguro de que deseas salir del modo supervisión?')) {
+    const ok = await confirm({
+      title: 'Salir de Supervisión',
+      message: '¿Estás seguro de que deseas salir del modo supervisión?',
+      confirmText: 'Salir',
+      type: 'warning'
+    })
+    if (ok) {
       try {
         await axios.post(`/api/admin/supervision/${supId}/salir`, {}, {
           headers: { Authorization: `Bearer ${auth.token}` }
@@ -434,19 +461,8 @@ watch(() => auth.isSupervising, (newVal) => {
   }
 }, { immediate: true })
 
-// --- NOTIFICACIONES EN TIEMPO REAL ---
-const toasts = ref<{ id: number; message: string; type: string }[]>([])
-let toastId = 0
 const knownActions = new Set<string>()
 let checkInterval: any = null
-
-const showToast = (message: string, type = 'info') => {
-  const id = toastId++
-  toasts.value.push({ id, message, type })
-  setTimeout(() => {
-    toasts.value = toasts.value.filter(t => t.id !== id)
-  }, 6000)
-}
 
 const checkRecentActivity = async () => {
   if (auth.activeRole !== 'admin_general' || !auth.token) return
@@ -463,7 +479,7 @@ const checkRecentActivity = async () => {
     newActions.forEach((act: any) => {
       if (!knownActions.has(act.descripcion)) {
         knownActions.add(act.descripcion)
-        showToast(act.descripcion, 'success')
+        notify.addNotification(act.descripcion, 'success')
       }
     })
   } catch (e) {
@@ -487,7 +503,7 @@ const checkDirectivoActiveSupervision = async () => {
     const active = res.data.find((s: any) => s.estado_supervision === 'ACTIVA')
     
     if (active && !directivoActiveSupervision.value) {
-      showToast(`¡El Administrador General (${active.admin_nombre}) ha entrado al colegio en modo supervisión (${active.tipo_supervision === 'EDITOR' ? 'Editor' : 'Solo Lectura'})!`, 'warning')
+      notify.addNotification(`¡El Administrador General (${active.admin_nombre}) ha entrado al colegio en modo supervisión (${active.tipo_supervision === 'EDITOR' ? 'Editor' : 'Solo Lectura'})!`, 'warning')
     }
     
     directivoActiveSupervision.value = active || null
@@ -502,7 +518,6 @@ watch(() => auth.activeRole, (newRole) => {
     checkInterval = null
   }
   knownActions.clear()
-  toasts.value = []
   directivoActiveSupervision.value = null
   
   if (newRole === 'admin_general') {
@@ -523,34 +538,25 @@ const revocationDetails = ref({
 let supervisionCheckInterval: any = null
 
 const checkAdminSupervisionStatus = async () => {
-  console.log('[Supervision Poll] Running checkAdminSupervisionStatus. isSupervising:', auth.isSupervising, 'supervision:', auth.supervision)
-  if (!auth.isSupervising || !auth.supervision || !auth.token) {
-    console.log('[Supervision Poll] Bypassing check, criteria not met.')
-    return
-  }
+  if (!auth.isSupervising || !auth.supervision || !auth.token) return
   try {
     const headers = { Authorization: `Bearer ${auth.token}` }
     const res = await axios.get('/api/admin/supervision/verificar-activa', { headers })
-    console.log('[Supervision Poll] Backend response:', res.data)
     
     if (res.data.activa === false) {
       if (res.data.estado === 'REVOCADA') {
-        console.log('[Supervision Poll] Supervision has been REVOKED by directivo!')
         revocationDetails.value = {
           revocador: res.data.revocador_nombre || 'Un directivo',
           motivo: res.data.motivo_revocacion || 'No especificado'
         }
         showRevocationModal.value = true
-        // Limpiar el intervalo de verificación para que no siga consultando
         if (supervisionCheckInterval) {
           clearInterval(supervisionCheckInterval)
           supervisionCheckInterval = null
         }
       } else {
-        console.log('[Supervision Poll] Supervision expired or ended. Stopping supervision.')
-        // Expirada o finalizada por salida normal
         auth.stopSupervision()
-        showToast('La supervisión ha finalizado o expirado.', 'info')
+        notify.addNotification('La supervisión ha finalizado o expirado.', 'info')
         router.push('/dashboard')
       }
     }
@@ -560,21 +566,17 @@ const checkAdminSupervisionStatus = async () => {
 }
 
 const handleCloseRevocationModal = () => {
-  console.log('[Supervision Modal] Closing revocation modal, stopping supervision.')
   showRevocationModal.value = false
   auth.stopSupervision()
   router.push('/dashboard')
 }
 
 watch(() => auth.isSupervising, (supervising) => {
-  console.log('[Supervision Watch] auth.isSupervising changed to:', supervising)
   if (supervisionCheckInterval) {
-    console.log('[Supervision Watch] Clearing existing check interval')
     clearInterval(supervisionCheckInterval)
     supervisionCheckInterval = null
   }
   if (supervising) {
-    console.log('[Supervision Watch] Starting supervision poll interval')
     checkAdminSupervisionStatus()
     supervisionCheckInterval = setInterval(checkAdminSupervisionStatus, 5000)
   }
@@ -626,35 +628,11 @@ const fetchUserSchools = async () => {
         auth.setSelectedSchoolId(currentSchoolId)
       }
 
-      // Sincronizar el rol activo del usuario según la institución seleccionada
       const currentBindings = userSchools.value.filter(s => s.id_colegio === currentSchoolId)
       if (currentBindings.length > 0) {
         const rolesInSchool = currentBindings.map(s => s.rol_nombre)
         if (!rolesInSchool.includes(auth.activeRole || '')) {
           auth.setActiveRole(rolesInSchool[0])
-        }
-      }
-    } else if (auth.token && (auth.user?.id || (auth.user as any)?.id_usuario)) {
-      // Fallback para Padre y Estudiante (cuyo id_colegio está en la ficha del estudiante)
-      const uId = auth.user?.id || (auth.user as any)?.id_usuario
-      const role = (auth.activeRole || auth.user?.role || '').toLowerCase()
-      if (role === 'padre') {
-        const pRes = await axios.get(`${API_BASE_URL}/api/student/parent-dashboard/${uId}`, { headers })
-        const children = pRes.data?.children || []
-        if (children.length > 0 && children[0].id_colegio) {
-          const sId = Number(children[0].id_colegio)
-          if (!auth.selectedSchoolId) {
-            auth.setSelectedSchoolId(sId)
-          }
-        }
-      } else if (role === 'estudiante') {
-        const idRes = await axios.get(`${API_BASE_URL}/api/student/user-id/${uId}`, { headers })
-        const stuId = idRes.data?.id_estudiante
-        if (stuId) {
-          const infoRes = await axios.get(`${API_BASE_URL}/api/student/info/${stuId}`, { headers })
-          if (infoRes.data?.id_colegio && !auth.selectedSchoolId) {
-            auth.setSelectedSchoolId(Number(infoRes.data.id_colegio))
-          }
         }
       }
     }
@@ -679,16 +657,15 @@ onUnmounted(() => {
   if (supervisionCheckInterval) clearInterval(supervisionCheckInterval)
   clearThemeColors()
 })
-
 </script>
 
 <template>
   <div class="flex h-screen bg-gray-50 dark:bg-slate-950 overflow-hidden transition-colors duration-300">
-    <!-- Sidebar -->
+    <!-- Desktop Sidebar -->
     <aside 
       :class="[
         isCollapsed ? 'w-20' : 'w-64',
-        'bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-800 transition-all duration-300 flex flex-col z-40'
+        'hidden md:flex bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-800 transition-all duration-300 flex-col z-40'
       ]"
     >
       <!-- Logo Area -->
@@ -699,7 +676,6 @@ onUnmounted(() => {
         </div>
         <span v-if="!isCollapsed" class="font-bold text-gray-900 dark:text-white truncate text-xs leading-tight max-w-[150px]">{{ schoolName }}</span>
       </div>
-
 
       <!-- Navigation -->
       <nav class="flex-1 py-6 px-4 space-y-2 overflow-y-auto">
@@ -781,6 +757,98 @@ onUnmounted(() => {
       </div>
     </aside>
 
+    <!-- Mobile Drawer Overlay -->
+    <Teleport to="body">
+      <Transition
+        enter-active-class="transition duration-300 ease-out"
+        enter-from-class="opacity-0"
+        enter-to-class="opacity-100"
+        leave-active-class="transition duration-200 ease-in"
+        leave-from-class="opacity-100"
+        leave-to-class="opacity-0"
+      >
+        <div v-if="isMobileMenuOpen" class="fixed inset-0 z-[9999] flex md:hidden">
+          <!-- Backdrop -->
+          <div class="fixed inset-0 bg-slate-950/70 backdrop-blur-sm" @click="isMobileMenuOpen = false"></div>
+
+          <!-- Drawer Body -->
+          <div class="relative bg-white dark:bg-slate-900 w-4/5 max-w-xs h-full flex flex-col shadow-2xl z-10 animate-in slide-in-from-left duration-300">
+            <div class="h-16 flex items-center justify-between px-5 border-b border-gray-100 dark:border-slate-800">
+              <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-lg overflow-hidden shrink-0 flex items-center justify-center bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-800">
+                  <img v-if="schoolEscudo" :src="schoolEscudo" class="w-full h-full object-contain" alt="Escudo" @error="schoolEscudo = null" />
+                  <School v-else class="text-indigo-600 flex-shrink-0" :size="20" />
+                </div>
+                <span class="font-bold text-gray-900 dark:text-white truncate text-xs">{{ schoolName }}</span>
+              </div>
+              <button @click="isMobileMenuOpen = false" class="text-slate-400 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
+                <X :size="20" />
+              </button>
+            </div>
+
+            <!-- Mobile Nav -->
+            <nav class="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
+              <div v-for="item in menuItems" :key="item.name" class="space-y-1">
+                <div v-if="item.children">
+                  <button 
+                    @click="toggleSubmenu(item.name)"
+                    class="w-full flex items-center justify-between p-2.5 rounded-xl text-gray-600 dark:text-slate-400 hover:bg-indigo-50 dark:hover:bg-slate-800"
+                  >
+                    <div class="flex items-center gap-3">
+                      <component :is="item.icon" :size="20" />
+                      <span class="font-medium text-sm">{{ item.name }}</span>
+                    </div>
+                    <ChevronRight :class="['transition-transform', openSubmenus[item.name] ? 'transform rotate-90' : '']" :size="16" />
+                  </button>
+                  <div v-if="openSubmenus[item.name]" class="pl-8 space-y-1 mt-1">
+                    <router-link 
+                      v-for="sub in item.children" 
+                      :key="sub.name"
+                      :to="sub.path"
+                      @click="isMobileMenuOpen = false"
+                      class="flex items-center py-2 px-3 rounded-lg text-xs text-gray-500 dark:text-slate-400"
+                      active-class="text-indigo-600 dark:text-indigo-400 font-bold"
+                    >
+                      {{ sub.name }}
+                    </router-link>
+                  </div>
+                </div>
+
+                <router-link 
+                  v-else
+                  :to="item.path"
+                  @click="isMobileMenuOpen = false"
+                  class="flex items-center gap-3 p-2.5 rounded-xl text-gray-600 dark:text-slate-400 hover:bg-indigo-50 dark:hover:bg-slate-800 text-sm font-medium"
+                  active-class="bg-indigo-600 text-white hover:bg-indigo-600 hover:text-white"
+                >
+                  <component :is="item.icon" :size="20" />
+                  <span>{{ item.name }}</span>
+                </router-link>
+              </div>
+            </nav>
+
+            <!-- Mobile Bottom Actions -->
+            <div class="p-3 border-t border-gray-100 dark:border-slate-800 space-y-1">
+              <button 
+                @click="theme.toggleTheme"
+                class="w-full flex items-center gap-3 p-2.5 rounded-xl text-gray-600 dark:text-slate-400 text-sm"
+              >
+                <component :is="theme.isDark ? Sun : Moon" :size="20" />
+                <span>{{ theme.isDark ? 'Modo Claro' : 'Modo Oscuro' }}</span>
+              </button>
+              <button 
+                @click="handleLogout"
+                class="w-full flex items-center gap-3 p-2.5 rounded-xl text-red-500 text-sm"
+              >
+                <LogOut :size="20" />
+                <span>Cerrar Sesión</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
     <!-- Main Content -->
     <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
       <!-- Supervision Banner -->
@@ -819,7 +887,7 @@ onUnmounted(() => {
       <!-- Directivo Active Supervision Banner -->
       <div
         v-if="auth.activeRole === 'directivo' && directivoActiveSupervision"
-        class="bg-gradient-to-r from-red-700 via-red-650 to-red-800 text-white px-6 py-3.5 flex items-center gap-3 shrink-0 z-40 shadow-lg border-b border-red-500/20 animate-pulse"
+        class="bg-gradient-to-r from-red-700 via-red-600 to-red-800 text-white px-6 py-3.5 flex items-center gap-3 shrink-0 z-40 shadow-lg border-b border-red-500/20 animate-pulse"
       >
         <ShieldAlert :size="20" class="shrink-0 text-red-200 animate-bounce" />
         <span class="text-sm font-black tracking-wide">
@@ -855,15 +923,25 @@ onUnmounted(() => {
       </div>
 
       <!-- Navbar -->
-      <header class="h-16 bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 flex items-center justify-between px-8 z-30 transition-colors duration-300">
-        <h2 class="text-xl font-semibold text-gray-800 dark:text-white">
-          {{ auth.isMonitoring ? `Seguimiento: ${auth.monitoringUser?.nombre} ${auth.monitoringUser?.apellido}` : (auth.isSupervising ? `Supervisando: ${auth.supervision?.colegio_nombre}` : ($route.name || 'Panel de Gestión')) }}
-        </h2>
+      <header class="h-16 bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 flex items-center justify-between px-4 sm:px-8 z-30 transition-colors duration-300">
+        <div class="flex items-center gap-3">
+          <!-- Mobile Menu Toggle Button -->
+          <button 
+            @click="isMobileMenuOpen = true"
+            class="md:hidden p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            title="Abrir menú"
+          >
+            <Menu :size="22" />
+          </button>
+
+          <h2 class="text-lg sm:text-xl font-semibold text-gray-800 dark:text-white truncate">
+            {{ auth.isMonitoring ? `Seguimiento: ${auth.monitoringUser?.nombre} ${auth.monitoringUser?.apellido}` : (auth.isSupervising ? `Supervisando: ${auth.supervision?.colegio_nombre}` : ($route.name || 'Panel de Gestión')) }}
+          </h2>
+        </div>
         
-        <div class="flex items-center gap-6">
-          <!-- Selector Prominente de Año Lectivo, Colegio y Hora -->
+        <div class="flex items-center gap-3 sm:gap-6">
+          <!-- Selector de Año Lectivo y Hora -->
           <div class="hidden md:flex items-center gap-3">
-            <!-- Botón Cambiar Colegio para usuarios multi-colegio -->
             <router-link 
               v-if="hasMultipleSchools" 
               to="/select-school" 
@@ -874,7 +952,7 @@ onUnmounted(() => {
               <span class="hidden lg:inline">Cambiar Colegio</span>
             </router-link>
 
-            <!-- Selector Prominente de Año Lectivo (Oculto en vista dedicada de formalización) -->
+            <!-- Selector de Año Lectivo -->
             <div 
               v-if="!isDedicatedEnrollmentView"
               class="flex items-center gap-2 bg-gradient-to-r from-indigo-500/10 via-indigo-600/15 to-indigo-700/10 dark:from-indigo-950/40 dark:to-indigo-900/40 px-3.5 py-1.5 rounded-2xl border-2 border-indigo-200 dark:border-indigo-800/80 shadow-sm transition-all hover:border-indigo-400"
@@ -891,29 +969,17 @@ onUnmounted(() => {
                   Año {{ y.calendario }}{{ y.estado === 'CERRADO' ? ' 🔒 (Cerrado)' : ' ✨ (Activo)' }}
                 </option>
               </select>
-              <span v-else class="font-black text-xs text-indigo-600 dark:text-indigo-300 animate-pulse px-2">
-                Cargando años...
-              </span>
-            </div>
-
-            <!-- Badge Informativo cuando se está en la vista dedicada de matrícula -->
-            <div 
-              v-else
-              class="flex items-center gap-2 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/80 px-3.5 py-1.5 rounded-2xl text-emerald-700 dark:text-emerald-300 text-xs font-extrabold shadow-sm animate-in fade-in"
-            >
-              <FileText :size="16" class="text-emerald-600 dark:text-emerald-400 shrink-0" />
-              <span class="hidden sm:inline">Formalización de Matrícula</span>
             </div>
 
             <div class="flex items-center gap-1.5 font-mono text-xs bg-slate-50 dark:bg-slate-800/40 px-3 py-2 rounded-2xl border border-slate-100 dark:border-slate-800/50">
-              <span class="text-emerald-500 dark:text-emerald-400 font-black uppercase tracking-widest text-[9px]">Hora:</span>
+              <span class="text-emerald-600 dark:text-emerald-400 font-black uppercase tracking-widest text-[9px]">Hora:</span>
               <span class="font-bold text-slate-700 dark:text-slate-200">
                 {{ currentTime }}
               </span>
             </div>
           </div>
 
-          <div class="flex items-center gap-4">
+          <div class="flex items-center gap-3">
             <div class="text-right hidden sm:block">
               <p class="text-sm font-bold text-gray-900 dark:text-white">
                 {{ auth.isMonitoring && auth.monitoringUser ? `${auth.monitoringUser.nombre} ${auth.monitoringUser.apellido || ''}`.trim() : (auth.user?.name || 'Usuario') }}
@@ -934,10 +1000,10 @@ onUnmounted(() => {
       </header>
 
       <!-- Page Content -->
-      <main :class="['flex-1 overflow-y-auto p-8 bg-gray-50 dark:bg-slate-950 transition-colors duration-300', isReadOnlySupervision ? 'supervision-readonly-mode' : '']">
+      <main :class="['flex-1 overflow-y-auto p-4 sm:p-8 bg-gray-50 dark:bg-slate-950 transition-colors duration-300', isReadOnlySupervision ? 'supervision-readonly-mode' : '']">
         <div class="max-w-7xl mx-auto">
           <!-- Active Sanction Banner for Students -->
-          <div v-if="studentSanction" class="mb-6 p-5 rounded-3xl bg-gradient-to-r from-amber-50 to-orange-50/50 dark:from-amber-950/20 dark:to-orange-950/10 border border-amber-200/60 dark:border-amber-900/40 shadow-sm flex items-start gap-4 relative overflow-hidden transition-all duration-300 animate-pulse-slow">
+          <div v-if="studentSanction" class="mb-6 p-5 rounded-3xl bg-gradient-to-r from-amber-50 to-orange-50/50 dark:from-amber-950/20 dark:to-orange-950/10 border border-amber-200/60 dark:border-amber-900/40 shadow-sm flex items-start gap-4 relative overflow-hidden transition-all duration-300">
             <div class="h-10 w-10 shrink-0 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
               <ShieldAlert :size="20" />
             </div>
@@ -945,7 +1011,7 @@ onUnmounted(() => {
               <h4 class="text-xs font-black text-amber-700 dark:text-amber-400 uppercase tracking-wider leading-none flex items-center gap-2">
                 Sanción Académica / Disciplinaria Activa
               </h4>
-              <p class="text-xs font-bold text-slate-700 dark:text-slate-350 leading-normal">
+              <p class="text-xs font-bold text-slate-700 dark:text-slate-300 leading-normal">
                 Estimado estudiante, se encuentra bajo sanción de tipo <span class="font-black text-amber-600 dark:text-amber-400 uppercase">{{ studentSanction.tipo.replace(/_/g, ' ') }}</span> hasta el día <span class="font-black text-slate-900 dark:text-white">{{ new Date(studentSanction.hasta).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }) }}</span>.
               </p>
               <p class="text-xs font-medium text-slate-500 dark:text-slate-400 italic mt-1.5 leading-relaxed bg-white/40 dark:bg-slate-900/40 p-3 rounded-2xl border border-slate-100/50 dark:border-slate-800/40">
@@ -957,38 +1023,6 @@ onUnmounted(() => {
           <router-view :key="route.fullPath + '_' + (yearStore.selectedYearId || '')" />
         </div>
       </main>
-    </div>
-
-    <!-- Real-time Toast Notifications Container -->
-    <div class="fixed bottom-6 right-6 z-[9999] space-y-3 pointer-events-none w-full max-w-sm">
-      <TransitionGroup
-        enter-active-class="transition duration-300 ease-out"
-        enter-from-class="transform translate-y-4 opacity-0"
-        enter-to-class="transform translate-y-0 opacity-100"
-        leave-active-class="transition duration-200 ease-in"
-        leave-from-class="opacity-100"
-        leave-to-class="opacity-0"
-      >
-        <div 
-          v-for="toast in toasts" 
-          :key="toast.id"
-          class="pointer-events-auto bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-100 dark:border-slate-800 p-4 rounded-2xl shadow-2xl flex items-start gap-3 w-full"
-        >
-          <div class="p-2 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-650 dark:text-indigo-400 rounded-xl shrink-0">
-            <Bell :size="18" class="animate-bounce" />
-          </div>
-          <div class="flex-1 min-w-0">
-            <h4 class="text-xs font-black text-slate-800 dark:text-white uppercase tracking-wider">Aviso del Sistema</h4>
-            <p class="text-xs font-semibold text-slate-650 dark:text-slate-350 mt-1 leading-relaxed">{{ toast.message }}</p>
-          </div>
-          <button 
-            @click="toasts = toasts.filter(t => t.id !== toast.id)"
-            class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors shrink-0"
-          >
-            <XCircle :size="16" />
-          </button>
-        </div>
-      </TransitionGroup>
     </div>
 
     <!-- Modal de Supervisión Revocada (Admin General) -->
@@ -1027,7 +1061,7 @@ onUnmounted(() => {
               </div>
               <div class="pt-2 border-t border-rose-100/50 dark:border-rose-900/30">
                 <span class="text-[10px] font-bold text-rose-500 uppercase tracking-wider block">Motivo de revocación</span>
-                <p class="text-xs font-semibold text-slate-650 dark:text-slate-350 leading-relaxed mt-0.5">
+                <p class="text-xs font-semibold text-slate-600 dark:text-slate-300 leading-relaxed mt-0.5">
                   "{{ revocationDetails.motivo }}"
                 </p>
               </div>
@@ -1035,7 +1069,7 @@ onUnmounted(() => {
 
             <button
               @click="handleCloseRevocationModal"
-              class="w-full bg-rose-600 hover:bg-rose-700 text-white py-4 px-6 rounded-2xl font-bold shadow-lg shadow-rose-250 dark:shadow-none hover:scale-[1.01] active:scale-[0.99] transition-all allow-supervision-action"
+              class="w-full bg-rose-600 hover:bg-rose-700 text-white py-4 px-6 rounded-2xl font-bold shadow-lg shadow-rose-200 dark:shadow-none hover:scale-[1.01] active:scale-[0.99] transition-all allow-supervision-action"
             >
               Entendido y Salir
             </button>
@@ -1065,7 +1099,6 @@ onUnmounted(() => {
 .supervision-readonly-mode button.bg-red-600,
 .supervision-readonly-mode button.bg-emerald-600,
 .supervision-readonly-mode button.bg-rose-600,
-.supervision-readonly-mode button.text-red-650,
 .supervision-readonly-mode button.text-red-600,
 .supervision-readonly-mode button.text-indigo-600,
 .supervision-readonly-mode td.text-right button {
