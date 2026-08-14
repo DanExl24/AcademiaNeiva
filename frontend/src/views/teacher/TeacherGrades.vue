@@ -1724,6 +1724,7 @@ input::-webkit-inner-spin-button {
 }
 input[type=number] {
   -moz-appearance: textfield;
+  appearance: textfield;
 }
 
 .custom-scrollbar::-webkit-scrollbar {
