@@ -171,6 +171,33 @@ const submitButtonText = computed(() => {
   return 'Cargar Documentos'
 })
 
+const isFutureYear = computed(() => {
+  if (!yearLabel.value) return false
+  const match = yearLabel.value.match(/\d{4}/)
+  if (!match) return false
+  const targetYear = Number(match[0])
+  const currentCalendarYear = new Date().getFullYear()
+  return targetYear > currentCalendarYear
+})
+
+const enrollmentBannerTitle = computed(() => {
+  if (isExtraordinaryToken.value) {
+    return 'Autorización de Matrícula Extraordinaria'
+  }
+  if (isFutureYear.value) {
+    return `Convocatoria de Admisiones — Ingreso Año Escolar ${yearLabel.value || ''}`
+  }
+  return `Inscripciones — Año Escolar ${yearLabel.value || ''} (En Curso)`
+})
+
+const enrollmentContextSubtitle = computed(() => {
+  if (isExtraordinaryToken.value) return ''
+  if (isFutureYear.value) {
+    return `Estás solicitando cupo para iniciar clases en el periodo lectivo ${yearLabel.value || ''} en esta institución.`
+  }
+  return `Estás solicitando cupo para el año escolar ${yearLabel.value || ''} actualmente en curso.`
+})
+
 const enrollmentStatusMessage = computed(() => {
   if (isExtraordinaryToken.value) {
     return '⚡ Acceso Habilitado por Autorización de Matrícula Extraordinaria.'
@@ -517,9 +544,9 @@ const submitEnrollment = async () => {
             >
               <div class="flex items-start gap-3">
                 <component :is="isEnrollmentOpen ? CheckCircle2 : AlertCircle" class="h-6 w-6 shrink-0 mt-0.5" :class="isEnrollmentOpen ? 'text-emerald-600' : 'text-rose-600'" />
-                <div class="space-y-1">
+                <div class="space-y-1.5">
                   <h4 class="text-base font-extrabold flex flex-wrap items-center gap-2">
-                    <span>Estado de Inscripciones — Año Lectivo {{ yearLabel || '' }}</span>
+                    <span>{{ enrollmentBannerTitle }}</span>
                     <span :class="[
                       isEnrollmentOpen ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800',
                       'px-2.5 py-0.5 rounded-full text-xs font-black uppercase tracking-wider'
@@ -527,6 +554,9 @@ const submitEnrollment = async () => {
                       {{ isEnrollmentOpen ? 'Abiertas' : (enrollmentConfig?.fecha_inicio && enrollmentConfig?.fecha_cierre ? 'Cerradas / Inactivas' : 'Sin Programar') }}
                     </span>
                   </h4>
+                  <p v-if="enrollmentContextSubtitle" class="text-xs font-bold opacity-80 leading-relaxed">
+                    {{ enrollmentContextSubtitle }}
+                  </p>
                   <p class="text-sm font-medium opacity-90 leading-relaxed">
                     {{ enrollmentStatusMessage }}
                   </p>
