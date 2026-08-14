@@ -15,10 +15,11 @@ const checkDocument = async (req, res) => {
             "u.nombre",
             "u.apellido",
             "u.email",
+            "u.id_tipodocumento",
             (0, kysely_2.sql) `array_agg(r.nombre)`.as("roles")
         ])
             .where("u.documento", "=", document)
-            .groupBy(["u.id_usuario", "u.nombre", "u.apellido", "u.email"])
+            .groupBy(["u.id_usuario", "u.nombre", "u.apellido", "u.email", "u.id_tipodocumento"])
             .executeTakeFirst();
         if (user) {
             const roles = user.roles || [];
@@ -35,7 +36,13 @@ const checkDocument = async (req, res) => {
                 displayRole = 'estudiante';
             res.json({
                 exists: true,
-                user: { nombre: user.nombre, apellido: user.apellido, email: user.email },
+                user: {
+                    id_usuario: user.id_usuario,
+                    nombre: user.nombre,
+                    apellido: user.apellido,
+                    email: user.email,
+                    id_tipodocumento: user.id_tipodocumento
+                },
                 role: displayRole,
                 roles: roles
             });

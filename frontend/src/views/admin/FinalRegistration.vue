@@ -42,6 +42,12 @@ const isStudentInputsDisabled = computed(() => {
   return false
 })
 
+const isParentInputsDisabled = computed(() => {
+  if (docMatchInfo.value?.exists) return true
+  if (matricula.value?.existing_parent_user) return true
+  return false
+})
+
 const studentData = ref({
   nombre: '',
   apellido: '',
@@ -102,6 +108,10 @@ const fetchDetails = async () => {
 
     if (studentData.value.documento) {
       checkAcademicWarningForStudent(studentData.value.documento)
+    }
+
+    if (parentData.value.documento) {
+      verifyDocument()
     }
   } catch (error) {
     notify.addNotification('Error al cargar la solicitud', 'error')
@@ -238,18 +248,41 @@ const handleFinalize = async () => {
 // Nueva lógica de validación de documento en tiempo real
 const checkingDocument = ref(false)
 const docMatchInfo = ref<any>(null)
+let lastMatchedDoc = ''
+
+const onParentDocumentInput = () => {
+  parentData.value.documento = sanitizeDocumentNumber(parentData.value.documento)
+  if (docMatchInfo.value && parentData.value.documento !== lastMatchedDoc) {
+    docMatchInfo.value = null
+    parentData.value.nombre = ''
+    parentData.value.apellido = ''
+    lastMatchedDoc = ''
+  }
+}
 
 const verifyDocument = async () => {
-  if (parentData.value.documento.length < 5) {
-    docMatchInfo.value = null
+  const doc = parentData.value.documento ? parentData.value.documento.trim() : ''
+  if (doc.length < 5) {
+    if (docMatchInfo.value) {
+      docMatchInfo.value = null
+      parentData.value.nombre = ''
+      parentData.value.apellido = ''
+      lastMatchedDoc = ''
+    }
     return
   }
   
   checkingDocument.value = true
   try {
-    const response = await axios.get(`/api/auth/check-document/${parentData.value.documento}`)
-    if (response.data.exists) {
+    const response = await axios.get(`/api/auth/check-document/${doc}`)
+    if (response.data.exists && response.data.user) {
       docMatchInfo.value = response.data
+      lastMatchedDoc = doc
+      parentData.value.nombre = response.data.user.nombre || ''
+      parentData.value.apellido = response.data.user.apellido || ''
+      if (response.data.user.id_tipodocumento) {
+        parentData.value.id_tipodocumento = Number(response.data.user.id_tipodocumento)
+      }
       const roles: string[] = response.data.roles || []
       const isStaff = roles.includes('docente') || roles.includes('directivo') || roles.includes('admin')
       if (isStaff) {
@@ -258,10 +291,20 @@ const verifyDocument = async () => {
         notify.addNotification(`Usuario acudiente existente detectado: ${response.data.user.nombre} ${response.data.user.apellido}. Se asociará a esta nueva matrícula.`, 'info')
       }
     } else {
+      if (docMatchInfo.value) {
+        parentData.value.nombre = ''
+        parentData.value.apellido = ''
+      }
       docMatchInfo.value = null
+      lastMatchedDoc = ''
     }
   } catch (err) {
+    if (docMatchInfo.value) {
+      parentData.value.nombre = ''
+      parentData.value.apellido = ''
+    }
     docMatchInfo.value = null
+    lastMatchedDoc = ''
   } finally {
     checkingDocument.value = false
   }
@@ -638,20 +681,20 @@ const getStatusColor = (estado: string) => {
             <div class="space-y-2">
               <label class="text-sm font-bold text-gray-700">Nombres del Padre</label>
               <input v-model="parentData.nombre" @input="parentData.nombre = sanitizeLettersOnly(parentData.nombre)" type="text" placeholder="Ej: Carlos Mario"
-                :disabled="!!matricula?.existing_parent_user"
+                :disabled="isParentInputsDisabled"
                 class="w-full rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-4 transition-all disabled:opacity-60 disabled:cursor-not-allowed">
             </div>
             <div class="space-y-2">
               <label class="text-sm font-bold text-gray-700">Apellidos del Padre</label>
               <input v-model="parentData.apellido" @input="parentData.apellido = sanitizeLettersOnly(parentData.apellido)" type="text" placeholder="Ej: Pérez Motta"
-                :disabled="!!matricula?.existing_parent_user"
+                :disabled="isParentInputsDisabled"
                 class="w-full rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-4 transition-all disabled:opacity-60 disabled:cursor-not-allowed">
             </div>
           </div>
           <div class="grid grid-cols-2 gap-6">
             <div class="space-y-2">
               <label class="text-sm font-bold text-gray-700">Tipo de Documento</label>
-              <select v-model="parentData.id_tipodocumento" :disabled="!!matricula?.existing_parent_user" class="w-full rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-4 transition-all disabled:opacity-60 disabled:cursor-not-allowed">
+              <select v-model="parentData.id_tipodocumento" :disabled="isParentInputsDisabled" class="w-full rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-4 transition-all disabled:opacity-60 disabled:cursor-not-allowed">
                 <option :value="3">Cédula de Ciudadanía</option>
                 <option :value="4">Cédula de Extranjería</option>
                 <option :value="5">PEP / PPT</option>
@@ -663,7 +706,7 @@ const getStatusColor = (estado: string) => {
             <div class="space-y-2">
               <label class="text-sm font-bold text-gray-700">Número de Documento</label>
               <div class="relative">
-                <input v-model="parentData.documento" @input="parentData.documento = sanitizeDocumentNumber(parentData.documento)" type="text" placeholder="Ej: 1214..." @blur="verifyDocument"
+                <input v-model="parentData.documento" @input="onParentDocumentInput" type="text" placeholder="Ej: 1214..." @blur="verifyDocument"
                   class="w-full rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-4 transition-all"
                   :class="{'border-indigo-300 bg-indigo-50': docMatchInfo}">
                 <div v-if="checkingDocument" class="absolute right-4 top-4">
