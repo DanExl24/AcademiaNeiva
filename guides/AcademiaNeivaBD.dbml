@@ -1012,234 +1012,234 @@ Table "usuario_rol" {
   }
 }
 
-Ref "actividad_evidencia_dba_id_actividadmateria_fkey":"actividad_materia"."id_actividadmateria" <? "actividad_evidencia_dba"."id_actividadmateria" [delete: cascade]
+Ref "actividad_evidencia_dba_id_actividadmateria_fkey":"actividad_materia"."id_actividadmateria" < "actividad_evidencia_dba"."id_actividadmateria" [delete: cascade]
 
-Ref "actividad_evidencia_dba_id_evidencia_dba_fkey":"evidencias_dba"."id_evidencia_dba" <? "actividad_evidencia_dba"."id_evidencia_dba" [delete: cascade]
+Ref "actividad_evidencia_dba_id_evidencia_dba_fkey":"evidencias_dba"."id_evidencia_dba" < "actividad_evidencia_dba"."id_evidencia_dba" [delete: cascade]
 
-Ref "actividad_materia_id_colegio_fkey":"colegio"."id_colegio" <? "actividad_materia"."id_colegio"
+Ref "actividad_materia_id_colegio_fkey":"colegio"."id_colegio" < "actividad_materia"."id_colegio"
 
-Ref "actividad_materia_id_competencia_fkey":"competencias"."id_competencia" ?<? "actividad_materia"."id_competencia" [delete: cascade]
+Ref "actividad_materia_id_competencia_fkey":"competencias"."id_competencia" < "actividad_materia"."id_competencia" [delete: cascade]
 
-Ref "actividad_materia_id_detallegrado_fkey":"detalle_grados"."id_detallegrado" ?<? "actividad_materia"."id_detallegrado" [delete: cascade]
+Ref "actividad_materia_id_detallegrado_fkey":"detalle_grados"."id_detallegrado" < "actividad_materia"."id_detallegrado" [delete: cascade]
 
-Ref "actividad_materia_id_docente_creador_fkey":"docente"."id_docente" ?<? "actividad_materia"."id_docente_creador"
+Ref "actividad_materia_id_docente_creador_fkey":"docente"."id_docente" < "actividad_materia"."id_docente_creador"
 
-Ref "actividad_materia_id_evidencia_fkey":"evidencia_aprendizaje"."id_evidencia" ?<? "actividad_materia"."id_evidencia" [delete: set null]
+Ref "actividad_materia_id_evidencia_fkey":"evidencia_aprendizaje"."id_evidencia" < "actividad_materia"."id_evidencia" [delete: set null]
 
-Ref "actividad_materia_id_periodo_fkey":"periodo_academico"."id_periodo" ?<? "actividad_materia"."id_periodo"
+Ref "actividad_materia_id_periodo_fkey":"periodo_academico"."id_periodo" < "actividad_materia"."id_periodo"
 
-Ref "auditoria_acciones_realizadas_id_auditoria_fkey":"auditoria_supervision"."id_auditoria" <? "auditoria_acciones_realizadas"."id_auditoria"
+Ref "auditoria_acciones_realizadas_id_auditoria_fkey":"auditoria_supervision"."id_auditoria" < "auditoria_acciones_realizadas"."id_auditoria"
 
-Ref "auditoria_supervision_id_colegio_fkey":"colegio"."id_colegio" <? "auditoria_supervision"."id_colegio"
+Ref "auditoria_supervision_id_colegio_fkey":"colegio"."id_colegio" < "auditoria_supervision"."id_colegio"
 
-Ref "auditoria_supervision_id_directivo_aprobador_fkey":"directivo"."id" ?<? "auditoria_supervision"."id_directivo_aprobador"
+Ref "auditoria_supervision_id_directivo_aprobador_fkey":"directivo"."id" < "auditoria_supervision"."id_directivo_aprobador"
 
-Ref "auditoria_supervision_revocado_por_fkey":"directivo"."id" ?<? "auditoria_supervision"."revocado_por"
+Ref "auditoria_supervision_revocado_por_fkey":"directivo"."id" < "auditoria_supervision"."revocado_por"
 
-Ref "año_lectivo_id_colegio_fkey":"colegio"."id_colegio" <? "anio_lectivo"."id_colegio" [delete: cascade]
+Ref "año_lectivo_id_colegio_fkey":"colegio"."id_colegio" < "anio_lectivo"."id_colegio" [delete: cascade]
 
-Ref "cierre_materia_id_detallegrado_fkey":"detalle_grados"."id_detallegrado" <? "cierre_materia"."id_detallegrado"
+Ref "cierre_materia_id_detallegrado_fkey":"detalle_grados"."id_detallegrado" < "cierre_materia"."id_detallegrado"
 
-Ref "cierre_materia_id_docente_cierre_fkey":"docente"."id_docente" ?<? "cierre_materia"."id_docente_cierre" [delete: set null]
+Ref "cierre_materia_id_docente_cierre_fkey":"docente"."id_docente" < "cierre_materia"."id_docente_cierre" [delete: set null]
 
-Ref "cierre_materia_id_periodo_fkey":"periodo_academico"."id_periodo" <? "cierre_materia"."id_periodo"
+Ref "cierre_materia_id_periodo_fkey":"periodo_academico"."id_periodo" < "cierre_materia"."id_periodo"
 
-Ref "colegio_version_curricular_id_colegio_fkey":"colegio"."id_colegio" <? "colegio_version_curricular"."id_colegio" [delete: cascade]
+Ref "colegio_version_curricular_id_colegio_fkey":"colegio"."id_colegio" < "colegio_version_curricular"."id_colegio" [delete: cascade]
 
-Ref "competencias_id_año_fkey":"anio_lectivo"."id_anio" <? "competencias"."id_anio" [delete: cascade]
+Ref "competencias_id_año_fkey":"anio_lectivo"."id_anio" < "competencias"."id_anio" [delete: cascade]
 
-Ref "competencias_id_colegio_fkey":"colegio"."id_colegio" <? "competencias"."id_colegio" [delete: cascade]
+Ref "competencias_id_colegio_fkey":"colegio"."id_colegio" < "competencias"."id_colegio" [delete: cascade]
 
-Ref "competencias_id_dimension_fkey":"dimensiones_preescolar"."id_dimension" ?<? "competencias"."id_dimension" [delete: set null]
+Ref "competencias_id_dimension_fkey":"dimensiones_preescolar"."id_dimension" < "competencias"."id_dimension" [delete: set null]
 
-Ref "competencias_id_grupo_fkey":"grupos"."id_grupo" <? "competencias"."id_grupo" [delete: cascade]
+Ref "competencias_id_grupo_fkey":"grupos"."id_grupo" < "competencias"."id_grupo" [delete: cascade]
 
-Ref "competencias_id_materia_fkey":"materias"."id_materia" <? "competencias"."id_materia" [delete: cascade]
+Ref "competencias_id_materia_fkey":"materias"."id_materia" < "competencias"."id_materia" [delete: cascade]
 
-Ref "competencias_id_periodo_fkey":"periodo_academico"."id_periodo" <? "competencias"."id_periodo" [delete: cascade]
+Ref "competencias_id_periodo_fkey":"periodo_academico"."id_periodo" < "competencias"."id_periodo" [delete: cascade]
 
-Ref "configuracion_colegio_id_colegio_fkey":"colegio"."id_colegio" <? "configuracion_colegio"."id_colegio" [delete: cascade]
+Ref "configuracion_colegio_id_colegio_fkey":"colegio"."id_colegio" < "configuracion_colegio"."id_colegio" [delete: cascade]
 
-Ref "configuracion_inscripcion_id_año_fkey":"anio_lectivo"."id_anio" <? "configuracion_inscripcion"."id_anio" [delete: cascade]
+Ref "configuracion_inscripcion_id_año_fkey":"anio_lectivo"."id_anio" < "configuracion_inscripcion"."id_anio" [delete: cascade]
 
-Ref "configuracion_inscripcion_id_colegio_fkey":"colegio"."id_colegio" <? "configuracion_inscripcion"."id_colegio" [delete: cascade]
+Ref "configuracion_inscripcion_id_colegio_fkey":"colegio"."id_colegio" < "configuracion_inscripcion"."id_colegio" [delete: cascade]
 
-Ref "contrato_docente_id_colegio_fkey":"colegio"."id_colegio" <? "contrato_docente"."id_colegio" [delete: cascade]
+Ref "contrato_docente_id_colegio_fkey":"colegio"."id_colegio" < "contrato_docente"."id_colegio" [delete: cascade]
 
-Ref "criterio_evaluacion_id_actividadmateria_fkey":"actividad_materia"."id_actividadmateria" <? "criterio_evaluacion"."id_actividadmateria" [delete: cascade]
+Ref "criterio_evaluacion_id_actividadmateria_fkey":"actividad_materia"."id_actividadmateria" < "criterio_evaluacion"."id_actividadmateria" [delete: cascade]
 
-Ref "criterio_evaluacion_id_colegio_fkey":"colegio"."id_colegio" <? "criterio_evaluacion"."id_colegio" [delete: cascade]
+Ref "criterio_evaluacion_id_colegio_fkey":"colegio"."id_colegio" < "criterio_evaluacion"."id_colegio" [delete: cascade]
 
-Ref "criterio_evaluacion_id_evidencia_fkey":"evidencia_aprendizaje"."id_evidencia" ?<? "criterio_evaluacion"."id_evidencia" [delete: set null]
+Ref "criterio_evaluacion_id_evidencia_fkey":"evidencia_aprendizaje"."id_evidencia" < "criterio_evaluacion"."id_evidencia" [delete: set null]
 
-Ref "dba_dimensiones_preescolar_id_dba_fkey":"dba"."id_dba" <? "dba_dimensiones_preescolar"."id_dba" [delete: cascade]
+Ref "dba_dimensiones_preescolar_id_dba_fkey":"dba"."id_dba" < "dba_dimensiones_preescolar"."id_dba" [delete: cascade]
 
-Ref "dba_dimensiones_preescolar_id_dimension_fkey":"dimensiones_preescolar"."id_dimension" <? "dba_dimensiones_preescolar"."id_dimension" [delete: cascade]
+Ref "dba_dimensiones_preescolar_id_dimension_fkey":"dimensiones_preescolar"."id_dimension" < "dba_dimensiones_preescolar"."id_dimension" [delete: cascade]
 
-Ref "decision_promocion_directivo_id_anio_anterior_fkey":"anio_lectivo"."id_anio" <? "decision_promocion_directivo"."id_anio_anterior" [delete: cascade]
+Ref "decision_promocion_directivo_id_anio_anterior_fkey":"anio_lectivo"."id_anio" < "decision_promocion_directivo"."id_anio_anterior" [delete: cascade]
 
-Ref "decision_promocion_directivo_id_colegio_fkey":"colegio"."id_colegio" <? "decision_promocion_directivo"."id_colegio" [delete: cascade]
+Ref "decision_promocion_directivo_id_colegio_fkey":"colegio"."id_colegio" < "decision_promocion_directivo"."id_colegio" [delete: cascade]
 
-Ref "decision_promocion_directivo_id_estudiante_fkey":"estudiante"."id_estudiante" <? "decision_promocion_directivo"."id_estudiante" [delete: cascade]
+Ref "decision_promocion_directivo_id_estudiante_fkey":"estudiante"."id_estudiante" < "decision_promocion_directivo"."id_estudiante" [delete: cascade]
 
-Ref "decision_promocion_directivo_id_grado_anterior_fkey":"grados"."id_grado" ?<? "decision_promocion_directivo"."id_grado_anterior" [delete: set null]
+Ref "decision_promocion_directivo_id_grado_anterior_fkey":"grados"."id_grado" < "decision_promocion_directivo"."id_grado_anterior" [delete: set null]
 
-Ref "decision_promocion_directivo_id_grado_asignado_fkey":"grados"."id_grado" ?<? "decision_promocion_directivo"."id_grado_asignado" [delete: set null]
+Ref "decision_promocion_directivo_id_grado_asignado_fkey":"grados"."id_grado" < "decision_promocion_directivo"."id_grado_asignado" [delete: set null]
 
-Ref "desempeno_id_actividadmateria_fkey":"actividad_materia"."id_actividadmateria" <? "desempeno"."id_actividadmateria"
+Ref "desempeno_id_actividadmateria_fkey":"actividad_materia"."id_actividadmateria" < "desempeno"."id_actividadmateria"
 
-Ref "desempeno_id_colegio_fkey":"colegio"."id_colegio" <? "desempeno"."id_colegio"
+Ref "desempeno_id_colegio_fkey":"colegio"."id_colegio" < "desempeno"."id_colegio"
 
-Ref "detalle_grados_id_anio_fkey":"anio_lectivo"."id_anio" <? "detalle_grados"."id_anio" [delete: cascade]
+Ref "detalle_grados_id_anio_fkey":"anio_lectivo"."id_anio" < "detalle_grados"."id_anio" [delete: cascade]
 
-Ref "detalle_grados_id_colegio_fkey":"colegio"."id_colegio" <? "detalle_grados"."id_colegio"
+Ref "detalle_grados_id_colegio_fkey":"colegio"."id_colegio" < "detalle_grados"."id_colegio"
 
-Ref "detalle_grados_id_docente_fkey":"docente"."id_docente" <? "detalle_grados"."id_docente"
+Ref "detalle_grados_id_docente_fkey":"docente"."id_docente" < "detalle_grados"."id_docente"
 
-Ref "detalle_grados_id_materia_fkey":"materias"."id_materia" <? "detalle_grados"."id_materia"
+Ref "detalle_grados_id_materia_fkey":"materias"."id_materia" < "detalle_grados"."id_materia"
 
-Ref "detalle_padrefamilia_id_colegio_fkey":"colegio"."id_colegio" <? "detalle_padrefamilia"."id_colegio"
+Ref "detalle_padrefamilia_id_colegio_fkey":"colegio"."id_colegio" < "detalle_padrefamilia"."id_colegio"
 
-Ref "detalle_padrefamilia_id_estudiante_fkey":"estudiante"."id_estudiante" <? "detalle_padrefamilia"."id_estudiante"
+Ref "detalle_padrefamilia_id_estudiante_fkey":"estudiante"."id_estudiante" < "detalle_padrefamilia"."id_estudiante"
 
-Ref "detalle_padrefamilia_id_padrefamilia_fkey":"padre_familia"."id_padrefamilia" <? "detalle_padrefamilia"."id_padrefamilia"
+Ref "detalle_padrefamilia_id_padrefamilia_fkey":"padre_familia"."id_padrefamilia" < "detalle_padrefamilia"."id_padrefamilia"
 
-Ref "directivo_id_colegio_fkey":"colegio"."id_colegio" <? "directivo"."id_colegio"
+Ref "directivo_id_colegio_fkey":"colegio"."id_colegio" < "directivo"."id_colegio"
 
-Ref "docente_id_colegio_fkey":"colegio"."id_colegio" <? "docente"."id_colegio" [delete: cascade]
+Ref "docente_id_colegio_fkey":"colegio"."id_colegio" < "docente"."id_colegio" [delete: cascade]
 
-Ref "docente_id_contratodocente_fkey":"contrato_docente"."id_contratodocente" ?<? "docente"."id_contratodocente"
+Ref "docente_id_contratodocente_fkey":"contrato_docente"."id_contratodocente" < "docente"."id_contratodocente"
 
-Ref "documento_matriculas_id_colegio_fkey":"colegio"."id_colegio" <? "documento_matriculas"."id_colegio"
+Ref "documento_matriculas_id_colegio_fkey":"colegio"."id_colegio" < "documento_matriculas"."id_colegio"
 
-Ref "documento_matriculas_id_matricula_fkey":"matricula"."id_matricula" <? "documento_matriculas"."id_matricula"
+Ref "documento_matriculas_id_matricula_fkey":"matricula"."id_matricula" < "documento_matriculas"."id_matricula"
 
-Ref "estudiante_id_colegio_fkey":"colegio"."id_colegio" <? "estudiante"."id_colegio" [delete: cascade]
+Ref "estudiante_id_colegio_fkey":"colegio"."id_colegio" < "estudiante"."id_colegio" [delete: cascade]
 
-Ref "evidencia_aprendizaje_id_colegio_fkey":"colegio"."id_colegio" <? "evidencia_aprendizaje"."id_colegio" [delete: cascade]
+Ref "evidencia_aprendizaje_id_colegio_fkey":"colegio"."id_colegio" < "evidencia_aprendizaje"."id_colegio" [delete: cascade]
 
-Ref "evidencia_aprendizaje_id_competencia_fkey":"competencias"."id_competencia" <? "evidencia_aprendizaje"."id_competencia" [delete: cascade]
+Ref "evidencia_aprendizaje_id_competencia_fkey":"competencias"."id_competencia" < "evidencia_aprendizaje"."id_competencia" [delete: cascade]
 
-Ref "evidencia_aprendizaje_id_evidencia_dba_fkey":"evidencias_dba"."id_evidencia_dba" ?<? "evidencia_aprendizaje"."id_evidencia_dba" [delete: set null]
+Ref "evidencia_aprendizaje_id_evidencia_dba_fkey":"evidencias_dba"."id_evidencia_dba" < "evidencia_aprendizaje"."id_evidencia_dba" [delete: set null]
 
-Ref "evidencias_dba_id_dba_fkey":"dba"."id_dba" <? "evidencias_dba"."id_dba" [delete: cascade]
+Ref "evidencias_dba_id_dba_fkey":"dba"."id_dba" < "evidencias_dba"."id_dba" [delete: cascade]
 
-Ref "fk_config_base":"configuracion_base"."id_config_base" ?<? "configuracion_sistema"."id_config_base"
+Ref "fk_config_base":"configuracion_base"."id_config_base" < "configuracion_sistema"."id_config_base"
 
-Ref "fk_configuracion_colegio":"colegio"."id_colegio" <? "configuracion_sistema"."id_colegio" [update: cascade, delete: cascade]
+Ref "fk_configuracion_colegio":"colegio"."id_colegio" < "configuracion_sistema"."id_colegio" [update: cascade, delete: cascade]
 
-Ref "fk_detalle_grupo":"grupos"."id_grupo" ?<? "detalle_grados"."id_grupo"
+Ref "fk_detalle_grupo":"grupos"."id_grupo" < "detalle_grados"."id_grupo"
 
-Ref "fk_grupo_colegio":"colegio"."id_colegio" <? "grupos"."id_colegio"
+Ref "fk_grupo_colegio":"colegio"."id_colegio" < "grupos"."id_colegio"
 
-Ref "fk_grupo_jornada":"jornada"."id_jornada" <? "grupos"."id_jornada"
+Ref "fk_grupo_jornada":"jornada"."id_jornada" < "grupos"."id_jornada"
 
-Ref "fk_grupo_nivel":"nivel_escolar"."id_nivel" <? "grupos"."id_nivel"
+Ref "fk_grupo_nivel":"nivel_escolar"."id_nivel" < "grupos"."id_nivel"
 
-Ref "fk_grupo_seccion":"secciones"."id_seccion" <? "grupos"."id_seccion"
+Ref "fk_grupo_seccion":"secciones"."id_seccion" < "grupos"."id_seccion"
 
-Ref "fk_grupos_tipo_grado":"tipo_grado"."id_tipo_grado" <? "grupos"."id_tipo_grado"
+Ref "fk_grupos_tipo_grado":"tipo_grado"."id_tipo_grado" < "grupos"."id_tipo_grado"
 
-Ref "fk_matricula_anio":"anio_lectivo"."id_anio" <? "matricula"."id_anio" [update: cascade, delete: restrict]
+Ref "fk_matricula_anio":"anio_lectivo"."id_anio" < "matricula"."id_anio" [update: cascade, delete: restrict]
 
-Ref "fk_matricula_estudiante":"estudiante"."id_estudiante" ?<? "matricula"."id_estudiante" [update: cascade, delete: restrict]
+Ref "fk_matricula_estudiante":"estudiante"."id_estudiante" < "matricula"."id_estudiante" [update: cascade, delete: restrict]
 
-Ref "fk_matricula_grupo":"grupos"."id_grupo" ?<? "matricula"."id_grupo"
+Ref "fk_matricula_grupo":"grupos"."id_grupo" < "matricula"."id_grupo"
 
-Ref "fk_tipo_grado_nivel":"nivel_escolar"."id_nivel" <? "tipo_grado"."id_nivel"
+Ref "fk_tipo_grado_nivel":"nivel_escolar"."id_nivel" < "tipo_grado"."id_nivel"
 
-Ref "grupos_id_docente_fkey":"docente"."id_docente" ?<? "grupos"."id_docente"
+Ref "grupos_id_docente_fkey":"docente"."id_docente" < "grupos"."id_docente"
 
-Ref "jornada_id_colegio_fkey":"colegio"."id_colegio" <? "jornada"."id_colegio" [delete: cascade]
+Ref "jornada_id_colegio_fkey":"colegio"."id_colegio" < "jornada"."id_colegio" [delete: cascade]
 
-Ref "materias_id_colegio_fkey":"colegio"."id_colegio" <? "materias"."id_colegio" [delete: cascade]
+Ref "materias_id_colegio_fkey":"colegio"."id_colegio" < "materias"."id_colegio" [delete: cascade]
 
-Ref "matricula_id_colegio_fkey":"colegio"."id_colegio" <? "matricula"."id_colegio"
+Ref "matricula_id_colegio_fkey":"colegio"."id_colegio" < "matricula"."id_colegio"
 
-Ref "matricula_id_nivel_fkey":"nivel_escolar"."id_nivel" ?<? "matricula"."id_nivel"
+Ref "matricula_id_nivel_fkey":"nivel_escolar"."id_nivel" < "matricula"."id_nivel"
 
-Ref "matricula_id_ticket_fkey":"tickets_soporte"."id_ticket" ?<? "matricula"."id_ticket" [delete: set null]
+Ref "matricula_id_ticket_fkey":"tickets_soporte"."id_ticket" < "matricula"."id_ticket" [delete: set null]
 
-Ref "nivel_escolar_id_colegio_fkey":"colegio"."id_colegio" <? "nivel_escolar"."id_colegio" [delete: cascade]
+Ref "nivel_escolar_id_colegio_fkey":"colegio"."id_colegio" < "nivel_escolar"."id_colegio" [delete: cascade]
 
-Ref "nota_criterio_id_colegio_fkey":"colegio"."id_colegio" <? "nota_criterio"."id_colegio" [delete: cascade]
+Ref "nota_criterio_id_colegio_fkey":"colegio"."id_colegio" < "nota_criterio"."id_colegio" [delete: cascade]
 
-Ref "nota_criterio_id_criterio_fkey":"criterio_evaluacion"."id_criterio" <? "nota_criterio"."id_criterio" [delete: cascade]
+Ref "nota_criterio_id_criterio_fkey":"criterio_evaluacion"."id_criterio" < "nota_criterio"."id_criterio" [delete: cascade]
 
-Ref "nota_criterio_id_estudiante_fkey":"estudiante"."id_estudiante" <? "nota_criterio"."id_estudiante" [delete: cascade]
+Ref "nota_criterio_id_estudiante_fkey":"estudiante"."id_estudiante" < "nota_criterio"."id_estudiante" [delete: cascade]
 
-Ref "notas_actividad_id_actividadmateria_fkey":"actividad_materia"."id_actividadmateria" <? "notas_actividad"."id_actividadmateria" [delete: cascade]
+Ref "notas_actividad_id_actividadmateria_fkey":"actividad_materia"."id_actividadmateria" < "notas_actividad"."id_actividadmateria" [delete: cascade]
 
-Ref "notas_actividad_id_escalavaloracion_fkey":"escala_valoracion"."id_escalavaloracion" <? "notas_actividad"."id_escalavaloracion"
+Ref "notas_actividad_id_escalavaloracion_fkey":"escala_valoracion"."id_escalavaloracion" < "notas_actividad"."id_escalavaloracion"
 
-Ref "notas_actividad_id_estudiante_fkey":"estudiante"."id_estudiante" <? "notas_actividad"."id_estudiante" [delete: cascade]
+Ref "notas_actividad_id_estudiante_fkey":"estudiante"."id_estudiante" < "notas_actividad"."id_estudiante" [delete: cascade]
 
-Ref "notificacion_colegio_id_colegio_fkey":"colegio"."id_colegio" <? "notificacion_colegio"."id_colegio"
+Ref "notificacion_colegio_id_colegio_fkey":"colegio"."id_colegio" < "notificacion_colegio"."id_colegio"
 
-Ref "notificacion_colegio_id_directivo_fkey":"directivo"."id" <? "notificacion_colegio"."id_directivo"
+Ref "notificacion_colegio_id_directivo_fkey":"directivo"."id" < "notificacion_colegio"."id_directivo"
 
-Ref "notificacion_supervision_id_auditoria_fkey":"auditoria_supervision"."id_auditoria" <? "notificacion_supervision"."id_auditoria"
+Ref "notificacion_supervision_id_auditoria_fkey":"auditoria_supervision"."id_auditoria" < "notificacion_supervision"."id_auditoria"
 
-Ref "notificacion_supervision_id_directivo_fkey":"directivo"."id" <? "notificacion_supervision"."id_directivo"
+Ref "notificacion_supervision_id_directivo_fkey":"directivo"."id" < "notificacion_supervision"."id_directivo"
 
-Ref "observacion_estudiante_id_colegio_fkey":"colegio"."id_colegio" <? "observacion_estudiante"."id_colegio"
+Ref "observacion_estudiante_id_colegio_fkey":"colegio"."id_colegio" < "observacion_estudiante"."id_colegio"
 
-Ref "observacion_estudiante_id_detallegrado_fkey":"detalle_grados"."id_detallegrado" <? "observacion_estudiante"."id_detallegrado"
+Ref "observacion_estudiante_id_detallegrado_fkey":"detalle_grados"."id_detallegrado" < "observacion_estudiante"."id_detallegrado"
 
-Ref "observacion_estudiante_id_estudiante_fkey":"estudiante"."id_estudiante" <? "observacion_estudiante"."id_estudiante"
+Ref "observacion_estudiante_id_estudiante_fkey":"estudiante"."id_estudiante" < "observacion_estudiante"."id_estudiante"
 
-Ref "observacion_estudiante_id_periodo_fkey":"periodo_academico"."id_periodo" <? "observacion_estudiante"."id_periodo"
+Ref "observacion_estudiante_id_periodo_fkey":"periodo_academico"."id_periodo" < "observacion_estudiante"."id_periodo"
 
-Ref "padre_familia_id_colegio_fkey":"colegio"."id_colegio" ?<? "padre_familia"."id_colegio" [delete: cascade]
+Ref "padre_familia_id_colegio_fkey":"colegio"."id_colegio" < "padre_familia"."id_colegio" [delete: cascade]
 
-Ref "periodo_academico_id_año_fkey":"anio_lectivo"."id_anio" ?<? "periodo_academico"."id_anio"
+Ref "periodo_academico_id_año_fkey":"anio_lectivo"."id_anio" < "periodo_academico"."id_anio"
 
-Ref "periodo_academico_id_colegio_fkey":"colegio"."id_colegio" <? "periodo_academico"."id_colegio"
+Ref "periodo_academico_id_colegio_fkey":"colegio"."id_colegio" < "periodo_academico"."id_colegio"
 
-Ref "registro_asistencia_id_colegio_fkey":"colegio"."id_colegio" <? "registro_asistencia"."id_colegio"
+Ref "registro_asistencia_id_colegio_fkey":"colegio"."id_colegio" < "registro_asistencia"."id_colegio"
 
-Ref "registro_asistencia_id_detallegrado_fkey":"detalle_grados"."id_detallegrado" <? "registro_asistencia"."id_detallegrado"
+Ref "registro_asistencia_id_detallegrado_fkey":"detalle_grados"."id_detallegrado" < "registro_asistencia"."id_detallegrado"
 
-Ref "registro_asistencia_id_estudiante_fkey":"estudiante"."id_estudiante" <? "registro_asistencia"."id_estudiante"
+Ref "registro_asistencia_id_estudiante_fkey":"estudiante"."id_estudiante" < "registro_asistencia"."id_estudiante"
 
-Ref "registro_graduados_id_año_fkey":"anio_lectivo"."id_anio" ?<? "registro_graduados"."id_anio"
+Ref "registro_graduados_id_año_fkey":"anio_lectivo"."id_anio" < "registro_graduados"."id_anio"
 
-Ref "registro_graduados_id_estudiante_fkey":"estudiante"."id_estudiante" <? "registro_graduados"."id_estudiante" [delete: cascade]
+Ref "registro_graduados_id_estudiante_fkey":"estudiante"."id_estudiante" < "registro_graduados"."id_estudiante" [delete: cascade]
 
-Ref "resultado_academico_id_detallegrado_fkey":"detalle_grados"."id_detallegrado" <? "resultado_academico"."id_detallegrado"
+Ref "resultado_academico_id_detallegrado_fkey":"detalle_grados"."id_detallegrado" < "resultado_academico"."id_detallegrado"
 
-Ref "resultado_academico_id_docente_fkey":"docente"."id_docente" <? "resultado_academico"."id_docente"
+Ref "resultado_academico_id_docente_fkey":"docente"."id_docente" < "resultado_academico"."id_docente"
 
-Ref "resultado_academico_id_estudiante_fkey":"estudiante"."id_estudiante" <? "resultado_academico"."id_estudiante"
+Ref "resultado_academico_id_estudiante_fkey":"estudiante"."id_estudiante" < "resultado_academico"."id_estudiante"
 
-Ref "resultado_academico_id_periodo_fkey":"periodo_academico"."id_periodo" <? "resultado_academico"."id_periodo"
+Ref "resultado_academico_id_periodo_fkey":"periodo_academico"."id_periodo" < "resultado_academico"."id_periodo"
 
-Ref "sancion_id_directivo_fkey":"directivo"."id" <? "sancion"."id_directivo" [delete: cascade]
+Ref "sancion_id_directivo_fkey":"directivo"."id" < "sancion"."id_directivo" [delete: cascade]
 
-Ref "sancion_id_estudiante_fkey":"estudiante"."id_estudiante" <? "sancion"."id_estudiante" [delete: cascade]
+Ref "sancion_id_estudiante_fkey":"estudiante"."id_estudiante" < "sancion"."id_estudiante" [delete: cascade]
 
-Ref "sancion_id_tipo_sancion_fkey":"tipo_sancion"."id_tipo_sancion" <? "sancion"."id_tipo_sancion"
+Ref "sancion_id_tipo_sancion_fkey":"tipo_sancion"."id_tipo_sancion" < "sancion"."id_tipo_sancion"
 
-Ref "solicitud_traslado_id_colegio_destino_fkey":"colegio"."id_colegio" <? "solicitud_traslado"."id_colegio_destino"
+Ref "solicitud_traslado_id_colegio_destino_fkey":"colegio"."id_colegio" < "solicitud_traslado"."id_colegio_destino"
 
-Ref "solicitud_traslado_id_colegio_origen_fkey":"colegio"."id_colegio" <? "solicitud_traslado"."id_colegio_origen"
+Ref "solicitud_traslado_id_colegio_origen_fkey":"colegio"."id_colegio" < "solicitud_traslado"."id_colegio_origen"
 
-Ref "solicitud_traslado_id_matricula_fkey":"matricula"."id_matricula" ?<? "solicitud_traslado"."id_matricula" [delete: set null]
+Ref "solicitud_traslado_id_matricula_fkey":"matricula"."id_matricula" < "solicitud_traslado"."id_matricula" [delete: set null]
 
-Ref "tickets_soporte_id_colegio_fkey":"colegio"."id_colegio" ?<? "tickets_soporte"."id_colegio" [delete: cascade]
+Ref "tickets_soporte_id_colegio_fkey":"colegio"."id_colegio" < "tickets_soporte"."id_colegio" [delete: cascade]
 
-Ref "tickets_soporte_id_estudiante_fkey":"estudiante"."id_estudiante" ?<? "tickets_soporte"."id_estudiante" [delete: set null]
+Ref "tickets_soporte_id_estudiante_fkey":"estudiante"."id_estudiante" < "tickets_soporte"."id_estudiante" [delete: set null]
 
-Ref "traslado_aprobacion_id_solicitud_fkey":"solicitud_traslado"."id_solicitud" <? "traslado_aprobacion"."id_solicitud" [delete: cascade]
+Ref "traslado_aprobacion_id_solicitud_fkey":"solicitud_traslado"."id_solicitud" < "traslado_aprobacion"."id_solicitud" [delete: cascade]
 
-Ref "usuario_baneado_por_fkey":"usuario"."id_usuario" ?<? "usuario"."baneado_por"
+Ref "usuario_baneado_por_fkey":"usuario"."id_usuario" < "usuario"."baneado_por"
 
-Ref "usuario_colegio_id_colegio_fkey":"colegio"."id_colegio" <? "usuario_colegio"."id_colegio" [delete: cascade]
+Ref "usuario_colegio_id_colegio_fkey":"colegio"."id_colegio" < "usuario_colegio"."id_colegio" [delete: cascade]
 
-Ref "usuario_id_colegio_fkey":"colegio"."id_colegio" ?<? "usuario"."id_colegio"
+Ref "usuario_id_colegio_fkey":"colegio"."id_colegio" < "usuario"."id_colegio"
 
-Ref "usuario_id_tipodocumento_fkey":"tipo_documento"."id_tipodocumento" ?<? "usuario"."id_tipodocumento"
+Ref "usuario_id_tipodocumento_fkey":"tipo_documento"."id_tipodocumento" < "usuario"."id_tipodocumento"
 
-Ref "usuario_rol_id_rol_fkey":"rol"."id_rol" <? "usuario_rol"."id_rol" [delete: cascade]
+Ref "usuario_rol_id_rol_fkey":"rol"."id_rol" < "usuario_rol"."id_rol" [delete: cascade]
 
-Ref "usuario_rol_id_usuario_fkey":"usuario"."id_usuario" <? "usuario_rol"."id_usuario" [delete: cascade]
+Ref "usuario_rol_id_usuario_fkey":"usuario"."id_usuario" < "usuario_rol"."id_usuario" [delete: cascade]
