@@ -938,6 +938,7 @@ const openReassignJornadaModal = (group: Grupo) => {
   newTargetJornadaId.value = group.id_jornada
   reassignJornadaModal.value = true
 }
+void openReassignJornadaModal; // Preservado para cuando se reactive la reasignación de jornada
 
 const confirmReassignJornada = async () => {
   if (!targetGroupToReassign.value || !newTargetJornadaId.value || reassigningJornada.value) return
@@ -1704,13 +1705,12 @@ watch(() => yearStore.selectedYearId, () => {
             <!-- Actions on Card -->
             <div class="pt-3 border-t border-slate-200/60 dark:border-slate-800/80 flex items-center gap-2">
               <button 
-                v-if="!yearStore.isClosedYear"
-                @click="openReassignJornadaModal(item)"
-                class="flex-1 flex items-center justify-center gap-1.5 py-2 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-300 rounded-xl font-bold text-xs transition-all border border-indigo-200/40 dark:border-indigo-800/40"
-                title="Cambiar jornada del curso"
+                disabled
+                class="flex-1 flex items-center justify-center gap-1.5 py-2 bg-slate-100 dark:bg-slate-800/80 text-slate-400 dark:text-slate-500 rounded-xl font-bold text-xs cursor-not-allowed border border-slate-200/50 dark:border-slate-700/50 select-none opacity-80"
+                title="Reasignación de jornada deshabilitada temporalmente por política institucional de matrículas"
               >
-                <ArrowRightLeft :size="13" />
-                <span>Reasignar</span>
+                <Lock :size="12" class="text-slate-400" />
+                <span>Reasignación Restringida</span>
               </button>
 
               <button 

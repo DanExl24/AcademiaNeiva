@@ -1154,7 +1154,17 @@ export const deleteJornada = async (req: Request, res: Response): Promise<void> 
   }
 };
 
+const IS_JORNADA_REASSIGNMENT_ENABLED = false;
+
 export const reassignGroupJornada = async (req: Request, res: Response): Promise<void> => {
+  // FEATURE GUARD: Reasignación temporalmente restringida para proteger las jornadas seleccionadas en matrícula
+  if (!IS_JORNADA_REASSIGNMENT_ENABLED) {
+    res.status(403).json({ 
+      error: "La reasignación masiva de jornada para cursos se encuentra temporalmente restringida por política institucional de matrículas." 
+    });
+    return;
+  }
+
   const idGrupo = Number(req.params.id);
   const schoolId = parseSchoolId(req.body.schoolId);
   const targetIdJornada = Number(req.body.id_jornada);
@@ -1165,8 +1175,8 @@ export const reassignGroupJornada = async (req: Request, res: Response): Promise
   }
 
   const authReq = req as AuthRequest;
-  const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
-  if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== schoolId) {
+  const isSupervision = Boolean(authReq.user && authReq.user.roles.includes("admin_general"));
+  if (!isSupervision && authReq.user && authReq.user.schoolId !== schoolId) {
     res.status(403).json({ error: "No tiene permiso para reasignar cursos en este colegio." });
     return;
   }

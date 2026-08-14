@@ -29,7 +29,7 @@ El sub-módulo de **Gestión y Análisis de Jornadas Escolares** opera de forma 
 | **Consultar Estructura y Jornadas** | `GET` | `/api/academic-admin/grades/:schoolId` | Directivo / Admin General | Obtiene jornadas, niveles, grados, grupos y aforos del año lectivo seleccionado. |
 | **Habilitar Nueva Jornada** | `POST` | `/api/academic-admin/jornadas` | Directivo | Registra una jornada institucional válida (`MAÑANA`, `TARDE`, `UNICA`, `NOCTURNA`). |
 | **Eliminar Jornada** | `DELETE` | `/api/academic-admin/jornadas/:id` | Directivo | Retira una jornada del colegio (solo si no tiene cursos o grupos vinculados). |
-| **Reasignar Curso de Jornada** | `PATCH` | `/api/academic-admin/groups/:id/jornada` | Directivo | Mueve un curso y sus matrículas a otra jornada existente de la institución. |
+| **Reasignar Curso de Jornada** | `PATCH` | `/api/academic-admin/groups/:id/jornada` | Directivo | *(Temporalmente Restringido)* Operación protegida por política de matrículas. |
 
 ---
 
@@ -41,6 +41,7 @@ El sub-módulo de **Gestión y Análisis de Jornadas Escolares** opera de forma 
 - **RN-JOR-004 (Validación de Conflicto en Reasignación):** Al reasignar un curso a otra jornada, el sistema verifica que no exista previamente un curso con el mismo grado y sección en la jornada de destino (evitando duplicidades de salón como dos "Primero A" en la Tarde).
 - **RN-JOR-005 (Preservación de Matrículas e Integrantes):** La reasignación de jornada modifica el atributo `id_jornada` en la entidad `grupos`, manteniendo intactas las matrículas de los estudiantes, asignaciones de docentes y notas registradas.
 - **RN-JOR-006 (Restricción por Cierre de Año):** Si el año lectivo se encuentra en estado `CERRADO`, la sub-vista de jornadas se activa en modo de solo lectura (consulta histórica de aforos sin permisos de creación, eliminación ni reasignación).
+- **RN-JOR-007 (Bloqueo Preventivo de Reasignación de Jornada):** Debido a que la jornada es una preferencia contractualmente acordada por acudientes y padres de familia durante el proceso de admisión y matrícula, la acción de reasignación masiva de curso se mantiene estática e inactiva para evitar alteraciones no consensuadas en los horarios familiares.
 
 ---
 
