@@ -35,14 +35,21 @@ import {
 } from 'lucide-vue-next'
 import { useAuthStore } from '../stores/auth'
 import { useThemeStore } from '../stores/theme'
-import { useAcademicYearStore } from '../stores/academicYear'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 
 const auth = useAuthStore()
 const theme = useThemeStore()
 const yearStore = useAcademicYearStore()
 const router = useRouter()
+const route = useRoute()
 const isCollapsed = ref(false)
+
+const isDedicatedEnrollmentView = computed(() => {
+  return (
+    route.name === 'Finalizar Registro' ||
+    Boolean(route.path && route.path.includes('/gestion-matriculas/') && route.path.includes('/registro'))
+  )
+})
 
 const openSubmenus = ref<Record<string, boolean>>({})
 const toggleSubmenu = (name: string) => {
@@ -866,7 +873,11 @@ onUnmounted(() => {
               <span class="hidden lg:inline">Cambiar Colegio</span>
             </router-link>
 
-            <div class="flex items-center gap-2 bg-gradient-to-r from-indigo-500/10 via-indigo-600/15 to-indigo-700/10 dark:from-indigo-950/40 dark:to-indigo-900/40 px-3.5 py-1.5 rounded-2xl border-2 border-indigo-200 dark:border-indigo-800/80 shadow-sm transition-all hover:border-indigo-400">
+            <!-- Selector Prominente de Año Lectivo (Oculto en vista dedicada de formalización) -->
+            <div 
+              v-if="!isDedicatedEnrollmentView"
+              class="flex items-center gap-2 bg-gradient-to-r from-indigo-500/10 via-indigo-600/15 to-indigo-700/10 dark:from-indigo-950/40 dark:to-indigo-900/40 px-3.5 py-1.5 rounded-2xl border-2 border-indigo-200 dark:border-indigo-800/80 shadow-sm transition-all hover:border-indigo-400"
+            >
               <Calendar :size="18" class="text-indigo-600 dark:text-indigo-400 shrink-0" />
               <span class="text-xs font-black text-indigo-950 dark:text-indigo-200 uppercase tracking-wider hidden lg:inline">Año Lectivo:</span>
               <select 
@@ -882,6 +893,15 @@ onUnmounted(() => {
               <span v-else class="font-black text-xs text-indigo-600 dark:text-indigo-300 animate-pulse px-2">
                 Cargando años...
               </span>
+            </div>
+
+            <!-- Badge Informativo cuando se está en la vista dedicada de matrícula -->
+            <div 
+              v-else
+              class="flex items-center gap-2 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/80 px-3.5 py-1.5 rounded-2xl text-emerald-700 dark:text-emerald-300 text-xs font-extrabold shadow-sm animate-in fade-in"
+            >
+              <FileText :size="16" class="text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <span class="hidden sm:inline">Formalización de Matrícula</span>
             </div>
 
             <div class="flex items-center gap-1.5 font-mono text-xs bg-slate-50 dark:bg-slate-800/40 px-3 py-2 rounded-2xl border border-slate-100 dark:border-slate-800/50">
