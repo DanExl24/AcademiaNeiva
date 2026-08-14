@@ -151,7 +151,7 @@ const stats = computed(() => {
 // Current user role capabilities
 const isAdminGeneral = computed(() => {
   const roles = (auth.user?.roles as string[]) || (auth.user?.role ? [auth.user.role] : [])
-  return roles.includes('admin_general') || roles.includes('admin') || auth.isAdmin
+  return roles.includes('admin_general') || roles.includes('admin') || auth.user?.role === 'admin'
 })
 
 const canUserApproveCurrentModal = computed(() => {
