@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, nextTick, watch } from 'vue'
+import { ref, onMounted, onUnmounted, computed, nextTick, watch } from 'vue'
 import axios from 'axios'
 import { API_BASE_URL } from '../../config/api'
 import html2pdf from 'html2pdf.js'
@@ -118,6 +118,60 @@ const oldestPendingMap = computed(() => {
   })
   return map
 })
+
+const activeTransferPopupId = ref<number | null>(null)
+
+const handleDocumentClick = () => {
+  activeTransferPopupId.value = null
+}
+
+onMounted(() => {
+  document.addEventListener('click', handleDocumentClick)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleDocumentClick)
+})
+
+const hasTransferInfo = (en: any) => {
+  return Boolean(
+    en.sentido_traslado === 'ENTRANTE' ||
+    en.sentido_traslado === 'SALIENTE' ||
+    en.es_traslado ||
+    en.tipo === 'TRASLADO' ||
+    en.colegio_origen_nombre ||
+    en.colegio_destino_nombre
+  )
+}
+
+const toggleTransferInfo = (event: Event, id: number) => {
+  event.stopPropagation()
+  if (activeTransferPopupId.value === id) {
+    activeTransferPopupId.value = null
+  } else {
+    activeTransferPopupId.value = id
+  }
+}
+
+const getTransferPopupTitle = (en: any) => {
+  if (en.sentido_traslado === 'ENTRANTE' || (en.es_traslado && en.colegio_origen_nombre && String(en.id_colegio) === String(en.id_colegio_destino))) {
+    return 'Traslado Entrante'
+  }
+  if (en.sentido_traslado === 'SALIENTE') {
+    return 'Traslado Saliente'
+  }
+  return 'Matrícula por Traslado'
+}
+
+const getTransferPopupDesc = (en: any) => {
+  if (en.sentido_traslado === 'ENTRANTE' || (en.es_traslado && en.colegio_origen_nombre && String(en.id_colegio) === String(en.id_colegio_destino))) {
+    return `Estudiante recibido desde: ${en.colegio_origen_nombre || 'otra institución educativa'}.`
+  }
+  if (en.sentido_traslado === 'SALIENTE') {
+    return `Estudiante trasladado hacia: ${en.colegio_destino_nombre || 'otra institución educativa'}.`
+  }
+  return 'Matrícula gestionada mediante proceso de traslado interinstitucional.'
+}
 
 const availableLevels = computed(() => {
   const map = new Map<number, string>()
@@ -1053,27 +1107,45 @@ const approveException = async (id: number) => {
                 </div>
               </td>
               <td class="px-6 py-4">
-                <div class="flex flex-col gap-1.5">
-                  <span :class="[getStatusMeta(en.estado).bg, 'px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest w-fit']">
-                    {{ getStatusMeta(en.estado).label }}
-                  </span>
-                  <!-- Sentido del Traslado para visibilidad del Directivo -->
-                  <div v-if="en.sentido_traslado === 'ENTRANTE' || (en.es_traslado && en.colegio_origen_nombre && String(en.id_colegio) === String(en.id_colegio_destino))"
-                       class="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300 text-[10px] font-black bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 px-2 py-0.5 rounded-lg w-fit"
-                       :title="`Matrícula recibida desde: ${en.colegio_origen_nombre || 'otro colegio'}`">
-                    <ArrowDownLeft :size="12" class="text-emerald-600 dark:text-emerald-400" />
-                    <span>📥 Traslado Entrante ({{ en.colegio_origen_nombre || 'Desde otro colegio' }})</span>
+                <div class="relative flex flex-col gap-1.5">
+                  <div class="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      @click.stop="hasTransferInfo(en) ? toggleTransferInfo($event, en.id_matricula) : null"
+                      :class="[
+                        getStatusMeta(en.estado).bg, 
+                        'px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest w-fit inline-flex items-center gap-1.5 transition-all',
+                        hasTransferInfo(en) ? 'cursor-pointer hover:opacity-90 active:scale-95 ring-1 ring-inset ring-black/5 dark:ring-white/10 shadow-sm' : ''
+                      ]"
+                      :title="hasTransferInfo(en) ? 'Clic para ver detalles del traslado' : ''"
+                    >
+                      <span>{{ getStatusMeta(en.estado).label }}</span>
+                      <ArrowDownLeft v-if="en.sentido_traslado === 'ENTRANTE' || (en.es_traslado && en.colegio_origen_nombre && String(en.id_colegio) === String(en.id_colegio_destino))" :size="11" class="text-emerald-700 dark:text-emerald-300 stroke-[2.5]" />
+                      <ArrowUpRight v-else-if="en.sentido_traslado === 'SALIENTE'" :size="11" class="text-purple-700 dark:text-purple-300 stroke-[2.5]" />
+                      <ArrowLeftRight v-else-if="en.es_traslado || en.tipo === 'TRASLADO'" :size="11" class="text-blue-600 dark:text-blue-400 stroke-[2.5]" />
+                    </button>
                   </div>
-                  <div v-else-if="en.sentido_traslado === 'SALIENTE'"
-                       class="flex items-center gap-1.5 text-purple-700 dark:text-purple-300 text-[10px] font-black bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/60 px-2 py-0.5 rounded-lg w-fit"
-                       :title="`Matrícula emitida hacia: ${en.colegio_destino_nombre || 'otro colegio'}`">
-                    <ArrowUpRight :size="12" class="text-purple-600 dark:text-purple-400" />
-                    <span>📤 Traslado Saliente ({{ en.colegio_destino_nombre || 'Hacia otro colegio' }})</span>
+
+                  <!-- Popover Flotante de Traslado (No altera el alto de la fila ni rompe la tabla) -->
+                  <div 
+                    v-if="activeTransferPopupId === en.id_matricula && hasTransferInfo(en)"
+                    class="absolute left-0 top-full mt-1.5 z-50 w-72 p-3.5 bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 text-left animate-in fade-in zoom-in-95 duration-150"
+                    @click.stop
+                  >
+                    <div class="flex items-start justify-between gap-2 mb-1.5 border-b border-slate-100 dark:border-slate-700/60 pb-1.5">
+                      <div class="flex items-center gap-1.5 text-xs font-black text-slate-800 dark:text-white">
+                        <ArrowDownLeft v-if="en.sentido_traslado === 'ENTRANTE' || (en.es_traslado && en.colegio_origen_nombre && String(en.id_colegio) === String(en.id_colegio_destino))" :size="14" class="text-emerald-600" />
+                        <ArrowUpRight v-else-if="en.sentido_traslado === 'SALIENTE'" :size="14" class="text-purple-600" />
+                        <ArrowLeftRight v-else :size="14" class="text-blue-600" />
+                        <span>{{ getTransferPopupTitle(en) }}</span>
+                      </div>
+                      <button @click.stop="activeTransferPopupId = null" class="text-slate-400 hover:text-slate-600 dark:hover:text-white text-xs font-bold px-1 rounded">✕</button>
+                    </div>
+                    <p class="text-[11px] font-semibold text-slate-600 dark:text-slate-300 leading-relaxed">
+                      {{ getTransferPopupDesc(en) }}
+                    </p>
                   </div>
-                  <div v-else-if="en.es_traslado || en.tipo === 'TRASLADO'"
-                       class="flex items-center gap-1 text-blue-600 dark:text-blue-400 text-[10px] font-bold bg-blue-50 dark:bg-blue-950/20 px-2 py-0.5 rounded-lg w-fit">
-                    <ArrowLeftRight :size="10" /> Traslado
-                  </div>
+
                   <div v-if="en.has_pending_docs && en.estado === 'PENDIENTE'"
                        class="flex items-center gap-1 text-amber-600 dark:text-amber-400 text-[10px] font-bold bg-amber-50 dark:bg-amber-950/20 px-2 py-0.5 rounded-lg w-fit">
                     <AlertTriangle :size="10" /> Docs Diferidos
