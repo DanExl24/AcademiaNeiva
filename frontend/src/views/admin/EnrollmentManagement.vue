@@ -1034,11 +1034,17 @@ const approveException = async (id: number) => {
                 <p v-if="en.student_documento" class="text-[10px] text-slate-400 font-mono">Doc: {{ en.student_documento }}</p>
               </td>
               <td class="px-6 py-4">
-                <p v-if="en.grado_nombre" class="text-xs font-bold text-indigo-600 dark:text-indigo-400">
-                  {{ en.grado_nombre }}
-                </p>
-                <p v-else class="text-xs font-bold text-indigo-500 uppercase">ID {{ en.id_grado }}</p>
-                <p v-if="en.nivel_nombre" class="text-[10px] text-slate-400 font-medium">{{ en.nivel_nombre }}</p>
+                <div class="space-y-1">
+                  <div v-if="en.nivel_nombre" class="flex items-center gap-1.5">
+                    <span class="inline-block px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/60">
+                      {{ en.nivel_nombre }}
+                    </span>
+                  </div>
+                  <p v-if="en.grado_nombre" class="text-xs font-black text-slate-800 dark:text-slate-100">
+                    {{ en.grado_nombre }}
+                  </p>
+                  <p v-else class="text-xs font-bold text-indigo-500 uppercase">ID {{ en.id_grado }}</p>
+                </div>
               </td>
               <td class="px-6 py-4 whitespace-nowrap">
                 <div class="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">

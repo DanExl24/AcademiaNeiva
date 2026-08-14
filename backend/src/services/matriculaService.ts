@@ -75,7 +75,7 @@ export class MatriculaService {
       }
     }
 
-    return await db.transaction().execute(async (trx) => {
+    const result = await db.transaction().execute(async (trx) => {
       let idMatricula: number = 0;
       let tokenSeguimiento: string = '';
       let isExtraordinary = false;
@@ -131,18 +131,28 @@ export class MatriculaService {
         const end = new Date(configRes.fecha_cierre);
 
         if (now < start) {
-          throw new Error(`Las inscripciones aún no han comenzado. Abren el ${start.toLocaleDateString('es-CO')}.`);
+          throw new Error(`Las inscripciones aún no están abiertas. Inician el ${start.toLocaleDateString('es-CO')}.`);
         }
         if (now > end) {
           throw new Error(`Las inscripciones ya cerraron. Finalizaron el ${end.toLocaleDateString('es-CO')}.`);
         }
+
+        // Obtener el id_nivel a partir del grupo seleccionado
+        const grupoInfo = await trx
+          .selectFrom('grupos as g')
+          .innerJoin('tipo_grado as tg', 'g.id_tipo_grado', 'tg.id_tipo_grado')
+          .select(['g.id_nivel as g_nivel', 'tg.id_nivel as tg_nivel'])
+          .where('g.id_grupo', '=', Number(data.grade))
+          .executeTakeFirst();
+
+        const resolvedNivelId = grupoInfo?.g_nivel || grupoInfo?.tg_nivel || null;
 
         // Insertar nueva matrícula regular
         const matRes = await trx
           .insertInto("matricula")
           .values({
             id_estudiante: null,
-            id_nivel: null,
+            id_nivel: resolvedNivelId,
             id_grupo: Number(data.grade),
             id_colegio: Number(id_colegio),
             id_anio: activeYearId,
@@ -157,10 +167,21 @@ export class MatriculaService {
         idMatricula = matRes.id_matricula;
         tokenSeguimiento = matRes.token_seguimiento || "";
       } else {
+        // Obtener el id_nivel para la matrícula extraordinaria
+        const grupoInfo = await trx
+          .selectFrom('grupos as g')
+          .innerJoin('tipo_grado as tg', 'g.id_tipo_grado', 'tg.id_tipo_grado')
+          .select(['g.id_nivel as g_nivel', 'tg.id_nivel as tg_nivel'])
+          .where('g.id_grupo', '=', Number(data.grade))
+          .executeTakeFirst();
+
+        const resolvedNivelId = grupoInfo?.g_nivel || grupoInfo?.tg_nivel || null;
+
         // Actualizar la matrícula extraordinaria pre-creada con el grupo y datos del formulario
         await trx
           .updateTable("matricula")
           .set({
+            id_nivel: resolvedNivelId,
             id_grupo: Number(data.grade),
             tiene_discapacidad: hasDisability === 'true' || hasDisability === true,
             es_extranjero: isForeigner === 'true' || isForeigner === true,
@@ -173,33 +194,40 @@ export class MatriculaService {
       // 2. Guardar documentos en tabla documento_matriculas
       for (const [key, fileArray] of Object.entries(files)) {
         const file = (fileArray as any[])[0];
-        const filename = file.originalname || file.filename || `${key}.pdf`;
-        await trx
-          .insertInto("documento_matriculas")
-          .values({
-            id_matricula: idMatricula,
-            tipo_documento: key,
-            url: filename,
-            estado: 'PENDIENTE',
-            fecha: new Date(),
-            id_colegio: Number(id_colegio),
-            contenido: file.buffer || null,
-            mime_type: file.mimetype || null,
-            nombre_original: file.originalname || filename,
-            tamano_bytes: file.size || null
-          })
-          .execute();
+        if (file) {
+          const filename = file.originalname || file.filename || `${key}.pdf`;
+          await trx
+            .insertInto("documento_matriculas")
+            .values({
+              id_matricula: idMatricula,
+              tipo_documento: key,
+              url: filename,
+              estado: 'PENDIENTE',
+              fecha: new Date(),
+              id_colegio: Number(id_colegio),
+              contenido: file.buffer || null,
+              mime_type: file.mimetype || null,
+              nombre_original: file.originalname || filename,
+              tamano_bytes: file.size || null
+            })
+            .execute();
+        }
       }
 
-      // Enviar correo de confirmación de forma asíncrona
-      if (parentEmail) {
-        NotificationService.sendEnrollmentSubmittedEmail(parentEmail, 'Padre de Familia', 'Aspirante', tokenSeguimiento).catch(err => {
-          console.error('Error enviando correo de confirmación de matrícula:', err);
-        });
-      }
-
-      return { idMatricula, token_seguimiento: tokenSeguimiento };
+      return {
+        message: "Solicitud de matrícula radicada exitosamente",
+        id_matricula: idMatricula,
+        token_seguimiento: tokenSeguimiento
+      };
     });
+
+    if (parentEmail && result.token_seguimiento) {
+      NotificationService.sendEnrollmentSubmittedEmail(parentEmail, 'Padre de Familia', 'Aspirante', result.token_seguimiento).catch(err => {
+        console.error('Error enviando correo de confirmación de matrícula:', err);
+      });
+    }
+
+    return result;
   }
 
   /** MR02 – Ver matrículas filtradas por estado y año lectivo (Kysely Type-Safe Query) */
@@ -208,10 +236,12 @@ export class MatriculaService {
       .selectFrom('matricula as m')
       .leftJoin('estudiante as e', 'm.id_estudiante', 'e.id_estudiante')
       .leftJoin('usuario as u', 'e.id_usuario', 'u.id_usuario')
-      .leftJoin('nivel_escolar as n', 'm.id_nivel', 'n.id_nivel')
       .leftJoin('grupos as g', 'm.id_grupo', 'g.id_grupo')
       .leftJoin('tipo_grado as tg', 'g.id_tipo_grado', 'tg.id_tipo_grado')
       .leftJoin('secciones as s', 'g.id_seccion', 's.id_seccion')
+      .leftJoin('nivel_escolar as n', (join) =>
+        join.onRef('n.id_nivel', '=', sql<number>`COALESCE(m.id_nivel, g.id_nivel, tg.id_nivel)`)
+      )
       .leftJoin('solicitud_traslado as st', (join) =>
         join.on((eb) =>
           eb.or([
@@ -228,7 +258,7 @@ export class MatriculaService {
       .select([
         'm.id_matricula',
         'm.id_estudiante',
-        'm.id_nivel',
+        sql<number>`COALESCE(m.id_nivel, g.id_nivel, tg.id_nivel)`.as('id_nivel'),
         'm.id_grupo',
         'm.id_colegio',
         'm.id_anio',
