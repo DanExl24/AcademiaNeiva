@@ -62,6 +62,9 @@ import {
   correctReingresoEnrollment,
   renameSingleCourse,
   bulkRenameCourses,
+  createJornada,
+  deleteJornada,
+  reassignGroupJornada,
   getDbaPlaneacionDisponibles,
   vincularEvidenciasDbaACompetencia,
 } from "../controllers/academicAdminController";
@@ -111,8 +114,11 @@ router.delete("/grade-types/:id", deleteGradeType);
 router.post("/groups", createGroup);
 router.patch("/groups/:id/cupos", updateGroupCupos);
 router.patch("/groups/:id/rename", renameSingleCourse);
+router.patch("/groups/:id/jornada", reassignGroupJornada);
 router.patch("/grade-types/:id/bulk-rename", bulkRenameCourses);
 router.delete("/groups/:id", deleteGroup);
+router.post("/jornadas", createJornada);
+router.delete("/jornadas/:id", deleteJornada);
 router.get("/subjects/:schoolId", getSubjects);
 router.get("/subjects/:id/curriculum-details", getSubjectCurriculumDetails);
 router.get("/subjects/trash/:schoolId", getSubjectTrash);

@@ -25,20 +25,25 @@ Este módulo gestiona la estructura organizacional académica de cada colegio: l
 
 | Acción | Método | Endpoint | Rol |
 |---|---|---|---|
-| Datos de gestión de grados | `GET` | `/api/academic-admin/grades/:schoolId` | Directivo |
+| Datos de gestión de grados y jornadas | `GET` | `/api/academic-admin/grades/:schoolId` | Directivo |
 | Crear tipo de grado | `POST` | `/api/academic-admin/grade-types` | Directivo |
 | Eliminar tipo de grado | `DELETE` | `/api/academic-admin/grade-types/:id` | Directivo |
 | Crear grupo | `POST` | `/api/academic-admin/groups` | Directivo |
 | Actualizar cupos de grupo | `PATCH` | `/api/academic-admin/groups/:id/cupos` | Directivo |
 | Renombrar grupo individual | `PATCH` | `/api/academic-admin/groups/:id/rename` | Directivo |
+| Reasignar grupo de jornada | `PATCH` | `/api/academic-admin/groups/:id/jornada` | Directivo |
 | Renombrar en bloque por tipo de grado | `PATCH` | `/api/academic-admin/grade-types/:id/bulk-rename` | Directivo |
 | Eliminar grupo | `DELETE` | `/api/academic-admin/groups/:id` | Directivo |
+| Habilitar jornada | `POST` | `/api/academic-admin/jornadas` | Directivo |
+| Eliminar jornada libre | `DELETE` | `/api/academic-admin/jornadas/:id` | Directivo |
 | Listar materias del colegio | `GET` | `/api/academic-admin/subjects/:schoolId` | Directivo |
 | Detalles curriculares de materia | `GET` | `/api/academic-admin/subjects/:id/curriculum-details` | Directivo |
 | Papelera de materias eliminadas | `GET` | `/api/academic-admin/subjects/trash/:schoolId` | Directivo |
 | Crear materia | `POST` | `/api/academic-admin/subjects` | Directivo |
 | Eliminar materia (soft delete) | `DELETE` | `/api/academic-admin/subjects/:id` | Directivo |
 | Grados disponibles (público) | `GET` | `/api/grados/available/:idColegio` | Público |
+
+> 🌅 **Sub-Módulo Relacionado:** Para consultar los detalles específicos de turnos, aforos y reasignación, ver [04.1 — Sub-Módulo de Gestión de Jornadas](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/modules/04_estructura_escolar/submodules/gestion_jornadas.md).
 
 ---
 
@@ -50,6 +55,7 @@ Este módulo gestiona la estructura organizacional académica de cada colegio: l
 - **RN-EST-004 (Eliminación protegida de grados):** Un tipo de grado no puede eliminarse si tiene grupos con matrículas activas o asignaciones docentes.
 - **RN-EST-005 (Eliminación protegida de materias):** Una materia con asignaciones docentes activas o competencias registradas no puede eliminarse. Se envía a "papelera" (soft delete).
 - **RN-EST-006 (Renombramiento en bloque):** Los cursos paralelos pueden renombrarse en bloque manteniendo la consistencia de nomenclatura (ej. cambiar "1ro" a "Primero" en todos los grupos del tipo).
+- **RN-EST-007 (Gestión de Jornadas Institucionales):** Cada curso opera bajo una jornada específica (`MAÑANA`, `TARDE`, `UNICA`, `NOCTURNA`) con control estricto de aforos y opción de reasignación sin pérdida de matrículas (ver RN-JOR-001 a RN-JOR-006).
 
 ---
 
@@ -59,7 +65,7 @@ Este módulo gestiona la estructura organizacional académica de cada colegio: l
 
 | Tipo | Archivo |
 |---|---|
-| **Controller** | [academicAdminController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdminController.ts) — `getGradeManagementData`, `createGradeType`, `deleteGradeType`, `createGroup`, `updateGroupCupos`, `renameSingleCourse`, `bulkRenameCourses`, `deleteGroup`, `getSubjects`, `getSubjectCurriculumDetails`, `getSubjectTrash`, `createSubject`, `deleteSubject` |
+| **Controller** | [gradeGroupController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdmin/gradeGroupController.ts) — `getGradeManagementData`, `createGradeType`, `deleteGradeType`, `createGroup`, `updateGroupCupos`, `renameSingleCourse`, `bulkRenameCourses`, `reassignGroupJornada`, `createJornada`, `deleteJornada`, `deleteGroup` |
 | **Service** | [gradoService.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/services/gradoService.ts) — `getAvailable` |
 | **Routes** | [academicAdmin.routes.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/routes/academicAdmin.routes.ts), [grado.routes.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/routes/grado.routes.ts) |
 

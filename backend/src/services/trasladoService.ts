@@ -225,6 +225,10 @@ export class TrasladoService {
       const votoExistenteUsuario = await trx
         .selectFrom('traslado_aprobacion')
         .select('id_aprobacion')
+        .where('id_solicitud', '=', idSolicitud)
+        .where('id_usuario', '=', idUsuarioAprobador)
+        .executeTakeFirst();
+
       if (votoExistenteUsuario) {
         throw new Error('Ya has registrado tu decisión sobre esta solicitud de traslado.');
       }

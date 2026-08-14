@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import axios from 'axios'
-import { Layers3, Plus, Search, School2, Trash2, Info, Pencil, Tag, RefreshCw, Lock, Calendar, Eye, Users, GraduationCap, Mail, X } from 'lucide-vue-next'
+import { 
+  Layers3, Plus, Search, School2, Trash2, Info, Pencil, Tag, RefreshCw, Lock, 
+  Calendar, Eye, Users, GraduationCap, Mail, X, Sun, Sunset, Moon, Globe, 
+  ArrowRightLeft
+} from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 import { useNotificationStore } from '../../stores/notifications'
 import { useAcademicYearStore } from '../../stores/academicYear'
@@ -51,6 +55,19 @@ interface Grupo {
 const auth = useAuthStore()
 const schoolId = computed(() => Number(auth.user?.schoolId || 0))
 const notify = useNotificationStore()
+
+const activeMainTab = ref<'grades_courses' | 'jornadas'>('grades_courses')
+const selectedJornadaId = ref<number | null>(null)
+const showCreateJornadaModal = ref(false)
+const newJornadaName = ref<string>('MAÑANA')
+const savingJornada = ref(false)
+const deleteJornadaModal = ref(false)
+const targetJornadaToDelete = ref<Jornada | null>(null)
+const deletingJornada = ref(false)
+const reassignJornadaModal = ref(false)
+const targetGroupToReassign = ref<Grupo | null>(null)
+const newTargetJornadaId = ref<number | null>(null)
+const reassigningJornada = ref(false)
 
 const loading = ref(true)
 const savingGrade = ref(false)
@@ -690,6 +707,199 @@ const filteredTeachers = computed(() => {
 }   )
 
 
+interface JornadaStat {
+  id_jornada: number
+  nombre: string
+  grupos_count: number
+  cupos_totales: number
+  matriculas_count: number
+  porcentaje_ocupacion: number
+  grados_cubiertos: string[]
+  grupos: Grupo[]
+}
+
+const jornadasStats = computed<JornadaStat[]>(() => {
+  return jornadas.value.map((j) => {
+    const gruposJornada = grupos.value.filter((g) => g.id_jornada === j.id_jornada)
+    const grupos_count = gruposJornada.length
+    const cupos_totales = gruposJornada.reduce((acc, g) => acc + (g.cupos_totales || 0), 0)
+    const matriculas_count = gruposJornada.reduce((acc, g) => acc + (g.matriculas_count || 0), 0)
+    const porcentaje_ocupacion = cupos_totales > 0 ? Math.round((matriculas_count / cupos_totales) * 100) : 0
+    const grados_cubiertos = [...new Set(gruposJornada.map((g) => g.tipo_grado_nombre))].filter(Boolean)
+
+    return {
+      id_jornada: j.id_jornada,
+      nombre: j.nombre,
+      grupos_count,
+      cupos_totales,
+      matriculas_count,
+      porcentaje_ocupacion,
+      grados_cubiertos,
+      grupos: gruposJornada
+    }
+  })
+})
+
+const availableJornadasToAdd = computed(() => {
+  const all = ['MAÑANA', 'TARDE', 'UNICA', 'NOCTURNA']
+  const currentNames = jornadas.value.map(j => j.nombre)
+  return all.filter(name => !currentNames.includes(name))
+})
+
+const jornadaSearchTerm = ref('')
+
+const visibleJornadaCursos = computed(() => {
+  let list = grupos.value
+  if (selectedJornadaId.value) {
+    list = list.filter(g => g.id_jornada === selectedJornadaId.value)
+  }
+  const term = jornadaSearchTerm.value.trim().toLowerCase()
+  if (term) {
+    list = list.filter(g => 
+      g.tipo_grado_nombre.toLowerCase().includes(term) ||
+      g.seccion_nombre.toLowerCase().includes(term) ||
+      g.nivel_nombre.toLowerCase().includes(term) ||
+      g.jornada_nombre.toLowerCase().includes(term)
+    )
+  }
+  return list
+})
+
+const getJornadaColorConfig = (nombre: string) => {
+  const norm = String(nombre || '').toUpperCase()
+  if (norm.includes('MAÑANA')) {
+    return {
+      bg: 'bg-amber-50 dark:bg-amber-950/20',
+      border: 'border-amber-200 dark:border-amber-800/40',
+      borderActive: 'border-amber-500 ring-2 ring-amber-500/20',
+      text: 'text-amber-700 dark:text-amber-300',
+      badge: 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300',
+      accent: 'text-amber-500',
+      progress: 'bg-amber-500',
+      iconBg: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+      label: 'Jornada Mañana'
+    }
+  }
+  if (norm.includes('TARDE')) {
+    return {
+      bg: 'bg-orange-50 dark:bg-orange-950/20',
+      border: 'border-orange-200 dark:border-orange-800/40',
+      borderActive: 'border-orange-500 ring-2 ring-orange-500/20',
+      text: 'text-orange-700 dark:text-orange-300',
+      badge: 'bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-300',
+      accent: 'text-orange-500',
+      progress: 'bg-orange-500',
+      iconBg: 'bg-orange-500/10 text-orange-600 dark:text-orange-400',
+      label: 'Jornada Tarde'
+    }
+  }
+  if (norm.includes('UNICA') || norm.includes('COMPLETA')) {
+    return {
+      bg: 'bg-indigo-50 dark:bg-indigo-950/20',
+      border: 'border-indigo-200 dark:border-indigo-800/40',
+      borderActive: 'border-indigo-500 ring-2 ring-indigo-500/20',
+      text: 'text-indigo-700 dark:text-indigo-300',
+      badge: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-300',
+      accent: 'text-indigo-500',
+      progress: 'bg-indigo-600',
+      iconBg: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400',
+      label: 'Jornada Única / Completa'
+    }
+  }
+  return {
+    bg: 'bg-purple-50 dark:bg-purple-950/20',
+    border: 'border-purple-200 dark:border-purple-800/40',
+    borderActive: 'border-purple-500 ring-2 ring-purple-500/20',
+    text: 'text-purple-700 dark:text-purple-300',
+    badge: 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300',
+    accent: 'text-purple-500',
+    progress: 'bg-purple-600',
+    iconBg: 'bg-purple-500/10 text-purple-600 dark:text-purple-400',
+    label: 'Jornada Nocturna'
+  }
+}
+
+const openCreateJornadaModal = () => {
+  if (availableJornadasToAdd.value.length > 0) {
+    newJornadaName.value = availableJornadasToAdd.value[0]
+  }
+  showCreateJornadaModal.value = true
+}
+
+const handleCreateJornada = async () => {
+  if (!newJornadaName.value || savingJornada.value) return
+  savingJornada.value = true
+  try {
+    await axios.post('/api/academic-admin/jornadas', {
+      schoolId: schoolId.value,
+      nombre: newJornadaName.value
+    }, {
+      headers: { Authorization: `Bearer ${auth.token}` }
+    })
+    notify.addNotification(`Jornada ${newJornadaName.value} habilitada exitosamente.`, 'success')
+    showCreateJornadaModal.value = false
+    await loadData()
+  } catch (error: any) {
+    notify.addNotification(error.response?.data?.error || 'Error al habilitar jornada', 'error')
+  } finally {
+    savingJornada.value = false
+  }
+}
+
+const openDeleteJornadaModal = (j: Jornada) => {
+  targetJornadaToDelete.value = j
+  deleteJornadaModal.value = true
+}
+
+const confirmDeleteJornada = async () => {
+  if (!targetJornadaToDelete.value || deletingJornada.value) return
+  deletingJornada.value = true
+  try {
+    await axios.delete(`/api/academic-admin/jornadas/${targetJornadaToDelete.value.id_jornada}`, {
+      params: { schoolId: schoolId.value },
+      headers: { Authorization: `Bearer ${auth.token}` }
+    })
+    notify.addNotification(`Jornada eliminada con éxito.`, 'success')
+    deleteJornadaModal.value = false
+    if (selectedJornadaId.value === targetJornadaToDelete.value.id_jornada) {
+      selectedJornadaId.value = null
+    }
+    targetJornadaToDelete.value = null
+    await loadData()
+  } catch (error: any) {
+    notify.addNotification(error.response?.data?.error || 'Error al eliminar jornada', 'error')
+  } finally {
+    deletingJornada.value = false
+  }
+}
+
+const openReassignJornadaModal = (group: Grupo) => {
+  targetGroupToReassign.value = group
+  newTargetJornadaId.value = group.id_jornada
+  reassignJornadaModal.value = true
+}
+
+const confirmReassignJornada = async () => {
+  if (!targetGroupToReassign.value || !newTargetJornadaId.value || reassigningJornada.value) return
+  reassigningJornada.value = true
+  try {
+    await axios.patch(`/api/academic-admin/groups/${targetGroupToReassign.value.id_grupo}/jornada`, {
+      schoolId: schoolId.value,
+      id_jornada: newTargetJornadaId.value
+    }, {
+      headers: { Authorization: `Bearer ${auth.token}` }
+    })
+    notify.addNotification('Curso reasignado de jornada exitosamente.', 'success')
+    reassignJornadaModal.value = false
+    targetGroupToReassign.value = null
+    await loadData()
+  } catch (error: any) {
+    notify.addNotification(error.response?.data?.error || 'Error al reasignar curso de jornada', 'error')
+  } finally {
+    reassigningJornada.value = false
+  }
+}
+
 onMounted(async () => {
   await yearStore.loadYearsForSchool(schoolId.value, auth.token || undefined)
   loadData()
@@ -764,8 +974,40 @@ watch(() => yearStore.selectedYearId, () => {
       </div>
     </div>
 
-    <!-- Unified Dashboard -->
-    <div class="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+    <!-- Main Sub-Navigation Tabs -->
+    <div class="flex items-center gap-2 bg-slate-100 dark:bg-slate-800/80 p-1.5 rounded-2xl w-fit border border-slate-200 dark:border-slate-700/60 shadow-sm">
+      <button 
+        @click="activeMainTab = 'grades_courses'"
+        :class="[
+          'flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition-all',
+          activeMainTab === 'grades_courses'
+            ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-md'
+            : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+        ]"
+      >
+        <Layers3 :size="16" />
+        <span>Grados & Cursos</span>
+      </button>
+
+      <button 
+        @click="activeMainTab = 'jornadas'"
+        :class="[
+          'flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition-all',
+          activeMainTab === 'jornadas'
+            ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-md'
+            : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+        ]"
+      >
+        <Sun :size="16" />
+        <span>Gestión de Jornadas</span>
+        <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800">
+          {{ jornadas.length }}
+        </span>
+      </button>
+    </div>
+
+    <!-- SUB-VIEW 1: GRADOS & CURSOS (UNIFIED DASHBOARD) -->
+    <div v-if="activeMainTab === 'grades_courses'" class="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start animate-in fade-in duration-300">
       
       <!-- Left Panel: Grades (Compact List) -->
       <div class="xl:col-span-5 space-y-6">
@@ -919,9 +1161,18 @@ watch(() => yearStore.selectedYearId, () => {
               >
                 <div class="flex items-start justify-between mb-4">
                   <div>
-                    <h4 class="font-black text-slate-900 dark:text-white text-lg leading-tight">{{ getCourseDisplayName(item) }}</h4>
-                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">{{ item.tipo_grado_nombre }} | {{ item.jornada_nombre }} | {{ item.nivel_nombre }}</p>
+                    <h4 class="font-black text-slate-900 dark:text-white text-lg tracking-tight">
+                      {{ getCourseDisplayName(item) }}
+                    </h4>
+                    <div class="flex items-center gap-2 mt-1">
+                      <span class="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-[10px] font-black px-2 py-0.5 rounded uppercase">
+                        {{ item.nivel_nombre }}
+                      </span>
+                      <span class="text-xs font-bold text-slate-400">•</span>
+                      <span class="text-xs font-bold text-slate-500 dark:text-slate-400">{{ item.jornada_nombre }}</span>
+                    </div>
                   </div>
+                  
                   <div v-if="!yearStore.isClosedYear" class="flex items-center gap-1">
                     <button @click="openRenameModal(item)" class="p-2 text-slate-300 hover:text-indigo-500 transition-colors" title="Renombrar Curso">
                       <Tag :size="16" />
@@ -977,6 +1228,288 @@ watch(() => yearStore.selectedYearId, () => {
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- SUB-VIEW 2: GESTIÓN Y ANÁLISIS DE JORNADAS -->
+    <div v-else-if="activeMainTab === 'jornadas'" class="space-y-6 animate-in fade-in duration-300">
+      
+      <!-- Top Overview Stats Bar -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center justify-between">
+          <div>
+            <p class="text-[10px] font-black text-slate-400 uppercase tracking-wider">Jornadas Habilitadas</p>
+            <p class="text-2xl font-black text-slate-900 dark:text-white mt-1">{{ jornadas.length }}</p>
+          </div>
+          <div class="p-3 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 rounded-2xl">
+            <Sun :size="22" />
+          </div>
+        </div>
+
+        <div class="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center justify-between">
+          <div>
+            <p class="text-[10px] font-black text-slate-400 uppercase tracking-wider">Total Cursos / Salones</p>
+            <p class="text-2xl font-black text-slate-900 dark:text-white mt-1">{{ grupos.length }}</p>
+          </div>
+          <div class="p-3 bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:blue-400 rounded-2xl">
+            <School2 :size="22" />
+          </div>
+        </div>
+
+        <div class="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center justify-between">
+          <div>
+            <p class="text-[10px] font-black text-slate-400 uppercase tracking-wider">Matrículas Totales</p>
+            <p class="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1">
+              {{ grupos.reduce((acc, g) => acc + (g.matriculas_count || 0), 0) }}
+            </p>
+          </div>
+          <div class="p-3 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 rounded-2xl">
+            <GraduationCap :size="22" />
+          </div>
+        </div>
+
+        <div class="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center justify-between">
+          <div>
+            <p class="text-[10px] font-black text-slate-400 uppercase tracking-wider">Cupos Disponibles</p>
+            <p class="text-2xl font-black text-amber-600 dark:text-amber-400 mt-1">
+              {{ Math.max(0, grupos.reduce((acc, g) => acc + (g.cupos_totales || 0), 0) - grupos.reduce((acc, g) => acc + (g.matriculas_count || 0), 0)) }}
+            </p>
+          </div>
+          <div class="p-3 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 rounded-2xl">
+            <Users :size="22" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Action Bar for Jornadas -->
+      <div class="bg-white dark:bg-slate-900 p-4 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div class="flex items-center gap-2.5 flex-wrap">
+          <span class="text-xs font-black uppercase text-slate-400 tracking-wider">Filtro de Jornada:</span>
+          <button 
+            @click="selectedJornadaId = null"
+            :class="[
+              'px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all',
+              selectedJornadaId === null
+                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/20'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+            ]"
+          >
+            Todas ({{ jornadas.length }})
+          </button>
+          <button 
+            v-for="j in jornadas" 
+            :key="j.id_jornada"
+            @click="selectedJornadaId = selectedJornadaId === j.id_jornada ? null : j.id_jornada"
+            :class="[
+              'px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all',
+              selectedJornadaId === j.id_jornada
+                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/20'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+            ]"
+          >
+            {{ j.nombre }}
+          </button>
+        </div>
+
+        <button 
+          v-if="!yearStore.isClosedYear && availableJornadasToAdd.length > 0"
+          @click="openCreateJornadaModal"
+          class="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs uppercase tracking-wider transition-all shadow-md shadow-indigo-500/20 active:scale-95"
+        >
+          <Plus :size="16" />
+          <span>Habilitar Nueva Jornada</span>
+        </button>
+      </div>
+
+      <!-- Jornadas KPI Cards Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
+        <div 
+          v-for="j in jornadasStats" 
+          :key="j.id_jornada"
+          @click="selectedJornadaId = selectedJornadaId === j.id_jornada ? null : j.id_jornada"
+          :class="[
+            'p-6 rounded-3xl border transition-all cursor-pointer shadow-sm relative flex flex-col justify-between space-y-4 hover:shadow-md',
+            selectedJornadaId === j.id_jornada 
+              ? getJornadaColorConfig(j.nombre).borderActive + ' ' + getJornadaColorConfig(j.nombre).bg
+              : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800 hover:border-indigo-200 dark:hover:border-indigo-900'
+          ]"
+        >
+          <div>
+            <!-- Header of card -->
+            <div class="flex items-center justify-between mb-3">
+              <div class="flex items-center gap-3">
+                <div :class="['p-2.5 rounded-2xl', getJornadaColorConfig(j.nombre).iconBg]">
+                  <Sun v-if="j.nombre === 'MAÑANA'" :size="20" />
+                  <Sunset v-else-if="j.nombre === 'TARDE'" :size="20" />
+                  <Globe v-else-if="j.nombre === 'UNICA'" :size="20" />
+                  <Moon v-else :size="20" />
+                </div>
+                <div>
+                  <h3 class="text-base font-black text-slate-900 dark:text-white leading-tight">
+                    {{ j.nombre }}
+                  </h3>
+                  <span :class="['px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider', getJornadaColorConfig(j.nombre).badge]">
+                    {{ getJornadaColorConfig(j.nombre).label }}
+                  </span>
+                </div>
+              </div>
+
+              <button 
+                v-if="!yearStore.isClosedYear && j.grupos_count === 0"
+                @click.stop="openDeleteJornadaModal(j)"
+                class="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl transition-all"
+                title="Eliminar jornada sin cursos"
+              >
+                <Trash2 :size="16" />
+              </button>
+            </div>
+
+            <!-- Stats in Card -->
+            <div class="space-y-2.5 pt-2">
+              <div class="flex items-center justify-between text-xs font-bold">
+                <span class="text-slate-400 uppercase tracking-tight">Ocupación / Aforo</span>
+                <span class="text-slate-900 dark:text-white font-black">{{ j.matriculas_count }} / {{ j.cupos_totales }} Cupos</span>
+              </div>
+              <div class="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                <div 
+                  :class="['h-full transition-all duration-500 rounded-full', getJornadaColorConfig(j.nombre).progress]" 
+                  :style="`width: ${Math.min(100, j.porcentaje_ocupacion)}%`"
+                ></div>
+              </div>
+              <div class="flex items-center justify-between text-[11px]">
+                <span class="text-slate-400 font-medium">{{ j.porcentaje_ocupacion }}% ocupado</span>
+                <span class="font-bold text-slate-600 dark:text-slate-300">{{ j.grupos_count }} Curso(s) Activo(s)</span>
+              </div>
+            </div>
+
+            <!-- Grados Cubiertos Tags -->
+            <div class="pt-3 border-t border-slate-100 dark:border-slate-800/80">
+              <p class="text-[10px] font-black uppercase text-slate-400 tracking-wider mb-1.5">Grados Operando:</p>
+              <div v-if="j.grados_cubiertos.length === 0" class="text-[11px] text-slate-400 italic">
+                Sin cursos registrados
+              </div>
+              <div v-else class="flex flex-wrap gap-1">
+                <span 
+                  v-for="grado in j.grados_cubiertos" 
+                  :key="grado"
+                  class="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-md text-[10px] font-bold"
+                >
+                  {{ grado }}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div class="pt-2">
+            <button 
+              class="w-full py-2 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all"
+            >
+              <span>{{ selectedJornadaId === j.id_jornada ? '✓ Filtro Aplicado' : 'Ver Cursos de ' + j.nombre }}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Cursos Section under Jornadas -->
+      <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden p-6 space-y-5">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-slate-800">
+          <div>
+            <h3 class="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
+              <School2 class="text-indigo-600 dark:text-indigo-400" :size="20" />
+              <span>
+                {{ selectedJornadaId ? 'Cursos en ' + (jornadas.find(j => j.id_jornada === selectedJornadaId)?.nombre || '') : 'Todos los Cursos por Jornada' }}
+              </span>
+            </h3>
+            <p class="text-xs text-slate-400 font-medium">Reasigna cursos de jornada o inspecciona su cupo y miembros</p>
+          </div>
+
+          <div class="flex items-center gap-3">
+            <div class="relative w-64">
+              <Search class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" :size="14" />
+              <input 
+                v-model="jornadaSearchTerm" 
+                type="text" 
+                placeholder="Buscar curso o grado..."
+                class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl py-2 pl-9 pr-4 text-xs font-medium outline-none text-slate-900 dark:text-white"
+              />
+            </div>
+            <button 
+              v-if="selectedJornadaId"
+              @click="selectedJornadaId = null"
+              class="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline shrink-0"
+            >
+              Ver Todas
+            </button>
+          </div>
+        </div>
+
+        <!-- Cursos Grid -->
+        <div v-if="visibleJornadaCursos.length === 0" class="p-12 text-center text-slate-400 space-y-3">
+          <School2 :size="40" class="mx-auto opacity-20" />
+          <p class="font-bold text-sm">No se encontraron cursos para la jornada o búsqueda seleccionada.</p>
+        </div>
+
+        <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div 
+            v-for="item in visibleJornadaCursos" 
+            :key="item.id_grupo"
+            class="bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-5 flex flex-col justify-between space-y-4 hover:border-indigo-200 dark:hover:border-indigo-800 transition-all"
+          >
+            <div>
+              <div class="flex items-start justify-between">
+                <div>
+                  <h4 class="text-base font-black text-slate-900 dark:text-white">
+                    {{ getCourseDisplayName(item) }}
+                  </h4>
+                  <p class="text-[10px] font-black text-indigo-500 uppercase tracking-widest">{{ item.nivel_nombre }}</p>
+                </div>
+                <span :class="['px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border', getJornadaColorConfig(item.jornada_nombre).badge]">
+                  {{ item.jornada_nombre }}
+                </span>
+              </div>
+
+              <!-- Cupos Progress -->
+              <div class="mt-4 space-y-1.5">
+                <div class="flex items-center justify-between text-xs font-bold">
+                  <span class="text-slate-400">Estudiantes Inscritos:</span>
+                  <span class="text-slate-900 dark:text-white font-black">{{ item.matriculas_count }} / {{ item.cupos_totales }}</span>
+                </div>
+                <div class="h-2 w-full bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                  <div 
+                    class="h-full bg-indigo-600 rounded-full transition-all"
+                    :style="`width: ${Math.min(100, Math.round((item.matriculas_count / item.cupos_totales) * 100))}%`"
+                  ></div>
+                </div>
+                <div class="flex items-center justify-between text-[10px] text-slate-400">
+                  <span>{{ Math.round((item.matriculas_count / item.cupos_totales) * 100) }}% ocupación</span>
+                  <span>{{ item.asignaciones_count }} Materias</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Actions on Card -->
+            <div class="pt-3 border-t border-slate-200/60 dark:border-slate-800/80 flex items-center gap-2">
+              <button 
+                v-if="!yearStore.isClosedYear"
+                @click="openReassignJornadaModal(item)"
+                class="flex-1 flex items-center justify-center gap-1.5 py-2 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-300 rounded-xl font-bold text-xs transition-all border border-indigo-200/40 dark:border-indigo-800/40"
+                title="Cambiar jornada del curso"
+              >
+                <ArrowRightLeft :size="13" />
+                <span>Reasignar</span>
+              </button>
+
+              <button 
+                @click="openCourseMembersModal(item)"
+                class="p-2 bg-white dark:bg-slate-800 hover:bg-slate-100 text-slate-700 dark:text-slate-300 rounded-xl font-bold text-xs transition-all border border-slate-200 dark:border-slate-700"
+                title="Ver Estudiantes y Docentes"
+              >
+                <Eye :size="15" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </div>
 
     <!-- Modals (Remained roughly same but with better styling) -->
@@ -1419,6 +1952,138 @@ watch(() => yearStore.selectedYearId, () => {
                 </div>
               </div>
             </template>
+          </div>
+        </div>
+      </div>
+
+      <!-- Create Jornada Modal -->
+      <div v-if="showCreateJornadaModal" class="fixed inset-0 z-[110] flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" @click="showCreateJornadaModal = false"></div>
+        <div class="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-[32px] shadow-2xl overflow-hidden border border-white/20">
+          <div class="p-8 space-y-6">
+            <div class="flex items-center gap-3 border-b border-slate-100 dark:border-slate-800 pb-4">
+              <div class="p-3 bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 rounded-2xl">
+                <Sun :size="24" />
+              </div>
+              <div>
+                <h3 class="text-lg font-black text-slate-900 dark:text-white">Habilitar Nueva Jornada</h3>
+                <p class="text-xs text-slate-400 font-medium">Activa una jornada institucional para asociar cursos</p>
+              </div>
+            </div>
+
+            <div class="space-y-3">
+              <label class="text-xs font-bold text-slate-600 dark:text-slate-300">Seleccionar Tipo de Jornada:</label>
+              <div class="grid grid-cols-2 gap-2.5">
+                <button
+                  v-for="name in availableJornadasToAdd"
+                  :key="name"
+                  type="button"
+                  @click="newJornadaName = name"
+                  :class="[
+                    'p-3.5 rounded-2xl border text-center font-black text-xs transition-all',
+                    newJornadaName === name
+                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-500/20 ring-2 ring-indigo-500/30'
+                      : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-indigo-300'
+                  ]"
+                >
+                  {{ name }}
+                </button>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+              <button 
+                @click="showCreateJornadaModal = false"
+                class="flex-1 py-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs rounded-xl hover:bg-slate-200 transition-all"
+              >
+                Cancelar
+              </button>
+              <button 
+                @click="handleCreateJornada"
+                :disabled="savingJornada || !newJornadaName"
+                class="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-md shadow-indigo-500/20 disabled:opacity-50"
+              >
+                {{ savingJornada ? 'Habilitando...' : 'Habilitar Jornada' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Delete Jornada Modal -->
+      <div v-if="deleteJornadaModal && targetJornadaToDelete" class="fixed inset-0 z-[110] flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-red-950/30 backdrop-blur-md" @click="deleteJornadaModal = false"></div>
+        <div class="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-[32px] overflow-hidden shadow-2xl">
+          <div class="p-8 text-center">
+            <div class="w-16 h-16 bg-red-50 dark:bg-red-950/30 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Trash2 :size="32" />
+            </div>
+            <h2 class="text-xl font-black text-slate-900 dark:text-white">¿Eliminar Jornada {{ targetJornadaToDelete.nombre }}?</h2>
+            <p class="text-slate-500 dark:text-slate-400 font-medium mt-3 text-xs leading-relaxed">
+              Esta jornada no posee cursos asignados y será retirada de la institución. Esta acción no afecta cursos existentes.
+            </p>
+          </div>
+          
+          <div class="bg-slate-50 dark:bg-slate-800/50 p-6 flex gap-3">
+            <button @click="deleteJornadaModal = false" class="flex-1 px-6 py-3 rounded-xl font-black text-xs text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800 transition-all">Cancelar</button>
+            <button 
+              @click="confirmDeleteJornada"
+              :disabled="deletingJornada"
+              class="flex-1 bg-red-500 text-white px-6 py-3 rounded-xl font-black text-xs uppercase tracking-wider shadow-lg shadow-red-100 dark:shadow-none hover:bg-red-600 transition-all disabled:opacity-50"
+            >
+              {{ deletingJornada ? 'Eliminando...' : 'Sí, Retirar' }}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Reassign Group Jornada Modal -->
+      <div v-if="reassignJornadaModal && targetGroupToReassign" class="fixed inset-0 z-[110] flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" @click="reassignJornadaModal = false"></div>
+        <div class="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-[32px] shadow-2xl overflow-hidden border border-white/20">
+          <div class="p-8 space-y-6">
+            <div class="flex items-center gap-3 border-b border-slate-100 dark:border-slate-800 pb-4">
+              <div class="p-3 bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 rounded-2xl">
+                <ArrowRightLeft :size="24" />
+              </div>
+              <div>
+                <h3 class="text-lg font-black text-slate-900 dark:text-white">Reasignar Jornada</h3>
+                <p class="text-xs text-slate-400 font-medium">{{ getCourseDisplayName(targetGroupToReassign) }}</p>
+              </div>
+            </div>
+
+            <div class="space-y-3">
+              <div class="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-2xl text-xs space-y-1">
+                <p class="text-slate-400 font-medium">Jornada Actual: <span class="font-bold text-slate-900 dark:text-white">{{ targetGroupToReassign.jornada_nombre }}</span></p>
+                <p class="text-slate-400 font-medium">Estudiantes Vinculados: <span class="font-bold text-indigo-600 dark:text-indigo-400">{{ targetGroupToReassign.matriculas_count }}</span></p>
+              </div>
+
+              <label class="text-xs font-bold text-slate-600 dark:text-slate-300 block">Nueva Jornada de Destino:</label>
+              <select 
+                v-model="newTargetJornadaId"
+                class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-3.5 font-bold outline-none text-xs text-slate-900 dark:text-white"
+              >
+                <option v-for="j in jornadas" :key="j.id_jornada" :value="j.id_jornada">
+                  {{ j.nombre }} {{ j.id_jornada === targetGroupToReassign.id_jornada ? '(Actual)' : '' }}
+                </option>
+              </select>
+            </div>
+
+            <div class="flex items-center gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+              <button 
+                @click="reassignJornadaModal = false"
+                class="flex-1 py-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs rounded-xl hover:bg-slate-200 transition-all"
+              >
+                Cancelar
+              </button>
+              <button 
+                @click="confirmReassignJornada"
+                :disabled="reassigningJornada || !newTargetJornadaId || newTargetJornadaId === targetGroupToReassign.id_jornada"
+                class="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-md shadow-indigo-500/20 disabled:opacity-50"
+              >
+                {{ reassigningJornada ? 'Reasignando...' : 'Confirmar Cambio' }}
+              </button>
+            </div>
           </div>
         </div>
       </div>

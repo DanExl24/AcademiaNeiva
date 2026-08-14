@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { PoolClient } from "pg";
 import { pool } from "../../config/db";
+import { db } from "../../config/kysely";
 import bcrypt from "bcrypt";
 import { randomUUID } from "crypto";
 import { NotificationService } from "../../services/notificationService";
@@ -1043,4 +1044,192 @@ export const getAcademicSettingsData = async (req: Request, res: Response): Prom
     res.status(500).json({ error: "Error en el servidor" });
   }
 };
+
+export const createJornada = async (req: Request, res: Response): Promise<void> => {
+  const schoolId = parseSchoolId(req.body.schoolId);
+  const rawNombre = String(req.body.nombre || "").trim().toUpperCase();
+
+  if (!schoolId || !rawNombre) {
+    res.status(400).json({ error: "Colegio y nombre de la jornada son requeridos." });
+    return;
+  }
+
+  const authReq = req as AuthRequest;
+  const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+  if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== schoolId) {
+    res.status(403).json({ error: "No tiene permiso para registrar jornadas en este colegio." });
+    return;
+  }
+
+  const validJornadas = ["MAÑANA", "TARDE", "UNICA", "NOCTURNA"];
+  if (!validJornadas.includes(rawNombre)) {
+    res.status(400).json({ error: `Nombre de jornada inválido. Debe ser una de: ${validJornadas.join(", ")}` });
+    return;
+  }
+
+  try {
+    const existing = await db
+      .selectFrom("jornada")
+      .select(["id_jornada", "nombre"])
+      .where("id_colegio", "=", schoolId)
+      .where("nombre", "=", rawNombre as any)
+      .executeTakeFirst();
+
+    if (existing) {
+      res.status(409).json({ error: `La jornada '${rawNombre}' ya se encuentra registrada en esta institución.` });
+      return;
+    }
+
+    const created = await db
+      .insertInto("jornada")
+      .values({
+        id_colegio: schoolId,
+        nombre: rawNombre as any
+      })
+      .returning(["id_jornada", "nombre", "id_colegio"])
+      .executeTakeFirstOrThrow();
+
+    res.status(201).json(created);
+  } catch (error: any) {
+    console.error("Error creating jornada:", error);
+    res.status(500).json({ error: formatFriendlyErrorMessage(error) });
+  }
+};
+
+export const deleteJornada = async (req: Request, res: Response): Promise<void> => {
+  const idJornada = Number(req.params.id);
+  const schoolId = parseSchoolId(req.query.schoolId || req.body.schoolId);
+
+  if (!idJornada || !schoolId) {
+    res.status(400).json({ error: "Jornada y colegio son requeridos." });
+    return;
+  }
+
+  const authReq = req as AuthRequest;
+  const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+  if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== schoolId) {
+    res.status(403).json({ error: "No tiene permiso para eliminar jornadas en este colegio." });
+    return;
+  }
+
+  try {
+    const jornada = await db
+      .selectFrom("jornada")
+      .selectAll()
+      .where("id_jornada", "=", idJornada)
+      .where("id_colegio", "=", schoolId)
+      .executeTakeFirst();
+
+    if (!jornada) {
+      res.status(404).json({ error: "Jornada no encontrada para este colegio." });
+      return;
+    }
+
+    // Verificar si existen grupos vinculados a esta jornada
+    const groupsCountRes = await db
+      .selectFrom("grupos")
+      .select(db.fn.count("id_grupo").as("count"))
+      .where("id_jornada", "=", idJornada)
+      .where("id_colegio", "=", schoolId)
+      .executeTakeFirst();
+
+    const linkedGroups = Number(groupsCountRes?.count || 0);
+    if (linkedGroups > 0) {
+      res.status(409).json({ 
+        error: `No es posible eliminar la jornada '${jornada.nombre}' porque tiene ${linkedGroups} curso(s) asociado(s). Reasigna o elimina los cursos antes de retirar la jornada.` 
+      });
+      return;
+    }
+
+    await db
+      .deleteFrom("jornada")
+      .where("id_jornada", "=", idJornada)
+      .where("id_colegio", "=", schoolId)
+      .execute();
+
+    res.json({ message: `Jornada '${jornada.nombre}' eliminada exitosamente.` });
+  } catch (error: any) {
+    console.error("Error deleting jornada:", error);
+    res.status(500).json({ error: formatFriendlyErrorMessage(error) });
+  }
+};
+
+export const reassignGroupJornada = async (req: Request, res: Response): Promise<void> => {
+  const idGrupo = Number(req.params.id);
+  const schoolId = parseSchoolId(req.body.schoolId);
+  const targetIdJornada = Number(req.body.id_jornada);
+
+  if (!idGrupo || !schoolId || !targetIdJornada) {
+    res.status(400).json({ error: "Grupo, colegio y nueva jornada son requeridos." });
+    return;
+  }
+
+  const authReq = req as AuthRequest;
+  const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+  if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== schoolId) {
+    res.status(403).json({ error: "No tiene permiso para reasignar cursos en este colegio." });
+    return;
+  }
+
+  try {
+    const currentGroup = await db
+      .selectFrom("grupos")
+      .selectAll()
+      .where("id_grupo", "=", idGrupo)
+      .where("id_colegio", "=", schoolId)
+      .executeTakeFirst();
+
+    if (!currentGroup) {
+      res.status(404).json({ error: "Curso no encontrado." });
+      return;
+    }
+
+    if (currentGroup.id_jornada === targetIdJornada) {
+      res.status(400).json({ error: "El curso ya pertenece a la jornada seleccionada." });
+      return;
+    }
+
+    const targetJornada = await db
+      .selectFrom("jornada")
+      .selectAll()
+      .where("id_jornada", "=", targetIdJornada)
+      .where("id_colegio", "=", schoolId)
+      .executeTakeFirst();
+
+    if (!targetJornada) {
+      res.status(404).json({ error: "La jornada de destino no existe en esta institución." });
+      return;
+    }
+
+    // Validar si ya existe otro curso con la misma combinación (id_tipo_grado, id_seccion, targetIdJornada)
+    const conflictGroup = await db
+      .selectFrom("grupos")
+      .selectAll()
+      .where("id_colegio", "=", schoolId)
+      .where("id_tipo_grado", "=", currentGroup.id_tipo_grado)
+      .where("id_seccion", "=", currentGroup.id_seccion)
+      .where("id_jornada", "=", targetIdJornada)
+      .executeTakeFirst();
+
+    if (conflictGroup) {
+      res.status(409).json({ 
+        error: `Ya existe un curso equivalente en la jornada ${targetJornada.nombre}. No se pueden duplicar cursos con el mismo grado y sección en la misma jornada.` 
+      });
+      return;
+    }
+
+    await db
+      .updateTable("grupos")
+      .set({ id_jornada: targetIdJornada })
+      .where("id_grupo", "=", idGrupo)
+      .where("id_colegio", "=", schoolId)
+      .execute();
+
+    res.json({ message: `Curso reasignado exitosamente a la jornada ${targetJornada.nombre}.` });
+  } catch (error: any) {
+    console.error("Error reassigning group jornada:", error);
+    res.status(500).json({ error: formatFriendlyErrorMessage(error) });
+  }
+};
+
 
