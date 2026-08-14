@@ -32,10 +32,6 @@ const subjects = ref<SubjectItem[]>([])
 const trashSubjects = ref<TrashItem[]>([])
 const searchTerm = ref('')
 const createModalOpen = ref(false)
-const editModalOpen = ref(false)
-const editingSubject = ref<SubjectItem | null>(null)
-const editSubjectName = ref('')
-const updatingSubject = ref(false)
 const deleteModal = ref<SubjectItem | null>(null)
 const showForceButton = ref(false)
 const impactDetails = ref<any>(null)
@@ -119,49 +115,6 @@ const createSubject = async () => {
 const handleTrashSelection = () => {
   if (reuseFromTrash.value) {
     newSubject.value.nombre = reuseFromTrash.value.nombre_materia
-  }
-}
-
-const openEditSubjectModal = (item: SubjectItem) => {
-  if (isReadOnly.value) return
-  editingSubject.value = item
-  editSubjectName.value = item.nombre
-  editModalOpen.value = true
-}
-
-const updateSubject = async () => {
-  if (isReadOnly.value) {
-    alert('El año académico se encuentra cerrado. No es posible editar materias.')
-    return
-  }
-  if (!editingSubject.value || updatingSubject.value) return
-  const trimmed = editSubjectName.value.trim()
-  if (!trimmed) {
-    alert('Escribe el nuevo nombre de la materia.')
-    return
-  }
-  if (trimmed === editingSubject.value.nombre) {
-    editModalOpen.value = false
-    editingSubject.value = null
-    return
-  }
-
-  try {
-    updatingSubject.value = true
-    await axios.put(`/api/academic-admin/subjects/${editingSubject.value.id_materia}`, {
-      schoolId: schoolId.value,
-      nombre: trimmed
-    }, {
-      headers: auth.token ? { Authorization: `Bearer ${auth.token}` } : {}
-    })
-    editModalOpen.value = false
-    editingSubject.value = null
-    editSubjectName.value = ''
-    await loadSubjects()
-  } catch (error: any) {
-    alert(error.response?.data?.error || 'Error al actualizar la materia')
-  } finally {
-    updatingSubject.value = false
   }
 }
 
@@ -740,24 +693,14 @@ const deleteEvidence = async (id: number) => {
               </div>
               <h4 class="font-black text-slate-800 dark:text-white text-lg truncate max-w-[150px]">{{ item.nombre }}</h4>
             </div>
-            <div class="flex items-center gap-1">
-              <button 
-                v-if="!yearStore.isClosedYear"
-                @click.stop="openEditSubjectModal(item)" 
-                class="p-2 text-slate-300 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 rounded-xl transition-all"
-                title="Editar nombre de materia"
-              >
-                <Edit :size="18" />
-              </button>
-              <button 
-                v-if="!yearStore.isClosedYear"
-                @click.stop="deleteModal = item" 
-                class="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-xl transition-all"
-                title="Eliminar materia"
-              >
-                <Trash2 :size="18" />
-              </button>
-            </div>
+            <button 
+              v-if="!yearStore.isClosedYear"
+              @click.stop="deleteModal = item" 
+              class="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-xl transition-all"
+              title="Eliminar materia"
+            >
+              <Trash2 :size="18" />
+            </button>
           </div>
 
           <div class="flex items-center gap-4 mt-2">
@@ -871,40 +814,6 @@ const deleteEvidence = async (id: number) => {
               <button @click="createModalOpen = false; reuseFromTrash = null" class="flex-1 px-6 py-4 rounded-2xl font-black text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all">Cancelar</button>
               <button @click="createSubject" :disabled="saving" class="flex-[2] bg-slate-900 dark:bg-white dark:text-slate-900 text-white px-6 py-4 rounded-2xl font-black shadow-xl shadow-slate-200 dark:shadow-none hover:translate-y-[-2px] active:translate-y-0 transition-all disabled:opacity-50">
                 {{ saving ? (reuseFromTrash ? 'Restaurando...' : 'Registrando...') : (reuseFromTrash ? 'Restaurar Materia' : 'Confirmar Registro') }}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Edit Subject Modal -->
-      <div v-if="editModalOpen" class="fixed inset-0 z-[100] flex items-center justify-center p-4">
-        <div class="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" @click="editModalOpen = false"></div>
-        <div class="relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-[32px] shadow-2xl overflow-hidden border border-white/20">
-          <div class="px-8 pt-8 pb-6 bg-slate-50/50 dark:bg-slate-800/30 border-b border-slate-100 dark:border-slate-800">
-            <h2 class="text-2xl font-black text-slate-900 dark:text-white flex items-center gap-3">
-              <Edit :size="24" class="text-emerald-600" />
-              Editar Materia
-            </h2>
-            <p class="text-slate-500 dark:text-slate-400 text-sm font-medium mt-1">Actualiza el nombre institucional de la asignatura.</p>
-          </div>
-
-          <div class="p-8 space-y-6">
-            <div class="space-y-2">
-              <label class="text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Nombre de la Materia</label>
-              <input 
-                v-model="editSubjectName" 
-                type="text" 
-                placeholder="Ej. Física Teórica" 
-                class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-emerald-500/20 rounded-2xl p-4 font-bold outline-none text-slate-900 dark:text-white transition-all placeholder:text-slate-400"
-                @keyup.enter="updateSubject"
-              />
-            </div>
-
-            <div class="flex gap-3 pt-2">
-              <button @click="editModalOpen = false; editingSubject = null" class="flex-1 px-6 py-4 rounded-2xl font-black text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all">Cancelar</button>
-              <button @click="updateSubject" :disabled="updatingSubject" class="flex-[2] bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-4 rounded-2xl font-black shadow-xl shadow-emerald-200 dark:shadow-none hover:translate-y-[-2px] active:translate-y-0 transition-all disabled:opacity-50">
-                {{ updatingSubject ? 'Guardando cambios...' : 'Guardar Cambios' }}
               </button>
             </div>
           </div>
