@@ -9,16 +9,19 @@ const dbmlPath = path.join(rootDir, 'guides', 'AcademiaNeivaBD.dbml');
 console.log('🔄 Generando archivo DBML desde PostgreSQL DDL...');
 
 try {
-  // Ejecutar sql2dbml
+  // 1. Ejecutar sql2dbml
   execSync(`npx -y -p @dbml/cli sql2dbml "${sqlPath}" -o "${dbmlPath}" --postgres`, {
     cwd: rootDir,
     stdio: 'pipe'
   });
 
-  // Leer el DBML generado y normalizar operadores para máxima compatibilidad con DrawDB (DBML v2)
+  // 2. Leer el DBML generado y adaptarlo a la especificación estándar compatible con DrawDB
   let dbml = fs.readFileSync(dbmlPath, 'utf8');
 
-  // Reemplazar operadores con '?' (v3 nullability) por operadores universales v2
+  // a. Eliminar bloques 'Checks { ... }' completamente (DrawDB no soporta Checks dentro de Table)
+  dbml = dbml.replace(/\n\s*Checks\s*\{[\s\S]*?\n\s*\}/g, '');
+
+  // b. Normalizar operadores de relación con '?' (DBML v3 nullability) a operadores DBML v2 estándar
   dbml = dbml.replace(/\s*\?\<\?\s*/g, ' < ');
   dbml = dbml.replace(/\s*\<\?\s*/g, ' < ');
   dbml = dbml.replace(/\s*\?\<\s*/g, ' < ');
@@ -28,6 +31,9 @@ try {
   dbml = dbml.replace(/\s*\?-\?\s*/g, ' - ');
   dbml = dbml.replace(/\s*\?-\s*/g, ' - ');
   dbml = dbml.replace(/\s*-\?\s*/g, ' - ');
+
+  // c. Limpiar saltos de línea redundantes
+  dbml = dbml.replace(/\n{3,}/g, '\n\n');
 
   fs.writeFileSync(dbmlPath, dbml, 'utf8');
   console.log(`✅ Archivo DBML generado exitosamente y 100% compatible con DrawDB:`);

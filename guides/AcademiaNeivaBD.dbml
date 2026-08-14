@@ -219,10 +219,6 @@ Table "anio_lectivo" {
   "estado" estado_periodo [default: `'ABIERTO'::public.estado_periodo`]
   "fecha_inicio" date
   "fecha_fin" date
-
-  Checks {
-    `((calendario)::text ~ '^[0-9]{4}(-[0-9]{4})?$'::text)` [name: 'chk_calendario']
-  }
 }
 
 Table "auditoria_acciones_realizadas" {
@@ -237,10 +233,6 @@ Table "auditoria_acciones_realizadas" {
   "valor_antiguo" jsonb
   "valor_nuevo" jsonb
   "motivo_cambio" text
-
-  Checks {
-    `((tipo_accion <> 'MODIFICACION'::public.tipo_accion_auditoria) OR ((valor_antiguo IS NOT NULL) AND (valor_nuevo IS NOT NULL) AND (motivo_cambio IS NOT NULL)))` [name: 'chk_modificacion_completa']
-  }
 
   Indexes {
     id_auditoria [type: btree, name: "idx_audit_acc_auditoria"]
@@ -367,10 +359,6 @@ Table "configuracion_inscripcion" {
   "fecha_inicio" timestamp [not null]
   "fecha_cierre" timestamp [not null]
   "habilitada" boolean [not null, default: true]
-
-  Checks {
-    `(fecha_cierre > fecha_inicio)` [name: 'chk_fechas']
-  }
 
   Indexes {
     (id_colegio, id_anio) [unique, name: "uq_colegio_anio"]
@@ -615,10 +603,6 @@ Table "grupos" {
   "id_tipo_grado" integer [not null]
   "id_docente" integer
 
-  Checks {
-    `(cupos_totales >= 0)` [name: 'chk_cupos']
-  }
-
   Indexes {
     id_tipo_grado [type: btree, name: "idx_grupos_tipo_grado"]
   }
@@ -846,10 +830,6 @@ Table "sancion" {
   "observaciones" text
   "id_directivo" integer [not null]
   "creado_en" timestamp [default: `CURRENT_TIMESTAMP`]
-
-  Checks {
-    `(fecha_fin >= fecha_inicio)` [name: 'chk_fechas_sancion']
-  }
 }
 
 Table "secciones" {
@@ -869,10 +849,6 @@ Table "solicitud_traslado" {
   "creado_por" integer [not null]
   "fecha_creacion" timestamp [default: `CURRENT_TIMESTAMP`]
   "fecha_finalizacion" timestamp
-
-  Checks {
-    `(id_colegio_origen <> id_colegio_destino)` [name: 'chk_origen_destino_diff']
-  }
 
   Indexes {
     id_colegio_destino [type: btree, name: "idx_solicitud_traslado_destino"]
@@ -970,10 +946,6 @@ Table "usuario" {
   "documento" "character varying(50)"
   "telefono" "character varying(50)"
 
-  Checks {
-    `((documento IS NULL) OR ((documento)::text ~ '^[a-zA-Z0-9]+$'::text))` [name: 'chk_usuario_documento_format']
-  }
-
   Indexes {
     id_colegio [type: btree, name: "idx_usuario_colegio"]
     documento [type: btree, name: "idx_usuario_documento"]
@@ -990,10 +962,6 @@ Table "usuario_colegio" {
   "estado" "character varying(20)" [not null, default: `'ACTIVO'::charactervarying`]
   "fecha_inicio" timestamp [default: `CURRENT_TIMESTAMP`]
   "fecha_fin" timestamp
-
-  Checks {
-    `((estado)::text = ANY ((ARRAY['ACTIVO'::character varying, 'INACTIVO'::character varying, 'SUSPENDIDO'::character varying])::text[]))` [name: 'usuario_colegio_estado_check']
-  }
 
   Indexes {
     (id_usuario, id_colegio, id_rol) [unique, name: "uq_usuario_colegio_rol"]
