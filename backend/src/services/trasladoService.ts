@@ -241,9 +241,18 @@ export class TrasladoService {
           rol: rolAprobacion as any,
           accion: input.accion as any,
           comentario: input.comentario || null,
+          id_grupo_destino: input.id_grupo_destino || null,
           fecha: sql`NOW()`
         })
         .execute();
+
+      if (input.id_grupo_destino) {
+        await trx
+          .updateTable('solicitud_traslado')
+          .set({ id_grupo_destino: input.id_grupo_destino })
+          .where('id_solicitud', '=', idSolicitud)
+          .execute();
+      }
 
       if (input.accion === 'RECHAZAR' || input.accion === 'CANCELAR') {
         const nuevoEstado = input.accion === 'RECHAZAR' ? 'RECHAZADA' : 'CANCELADA';
@@ -350,6 +359,7 @@ export class TrasladoService {
         'st.id_colegio_origen',
         'st.id_colegio_destino',
         'st.id_matricula',
+        'st.id_grupo_destino',
         'st.estado',
         'st.motivo',
         'st.creado_por',
@@ -528,6 +538,19 @@ export class TrasladoService {
 
     if (!solicitud) return null;
 
+    let grupoDestinoFinal = idGrupoDestino || solicitud.id_grupo_destino || null;
+    if (!grupoDestinoFinal) {
+      const votoConGrupo = await runner
+        .selectFrom('traslado_aprobacion')
+        .select('id_grupo_destino')
+        .where('id_solicitud', '=', idSolicitud)
+        .where('id_grupo_destino', 'is not', null)
+        .executeTakeFirst();
+      if (votoConGrupo?.id_grupo_destino) {
+        grupoDestinoFinal = votoConGrupo.id_grupo_destino;
+      }
+    }
+
     const aprobaciones = await runner
       .selectFrom('traslado_aprobacion')
       .select(['rol', 'accion'])
@@ -554,7 +577,7 @@ export class TrasladoService {
         rolesAprobados.has('DIRECTIVO_ORIGEN') &&
         rolesAprobados.has('DIRECTIVO_DESTINO');
       if (completo) {
-        return await this.ejecutarTrasladoTransaccional(idSolicitud, trxPassed, idGrupoDestino);
+        return await this.ejecutarTrasladoTransaccional(idSolicitud, trxPassed, grupoDestinoFinal);
       }
     } else {
       // Traslado de USUARIO / MATRICULA: flujo estándar tripartita
@@ -563,7 +586,7 @@ export class TrasladoService {
       const tieneUsuario = rolesAprobados.has('USUARIO') || rolesAprobados.has('ADMIN_GENERAL');
 
       if (tieneOrigen && tieneDestino && tieneUsuario) {
-        return await this.ejecutarTrasladoTransaccional(idSolicitud, trxPassed, idGrupoDestino);
+        return await this.ejecutarTrasladoTransaccional(idSolicitud, trxPassed, grupoDestinoFinal);
       }
     }
 
@@ -668,7 +691,7 @@ export class TrasladoService {
 
       // 5. Si es traslado de estudiante con matrícula
       if (solicitud.tipo === 'TRASLADO_MATRICULA' && solicitud.id_matricula) {
-        // 5.1 Marcar matrícula en origen como TRASLADADA con tipo TRASLADO
+        // 5.1 Marcar matrícula en origen como TRASLADADA con tipo TRASLADO, preservando su id_grupo e id_nivel intactos
         await trx
           .updateTable('matricula')
           .set({
@@ -747,9 +770,21 @@ export class TrasladoService {
 
           const destIdAnio = destAnioRow?.id_anio || origMat.id_anio;
 
-          // Resolver grupo y nivel si idGrupoDestino fue provisto
-          let finalGrupoId = idGrupoDestino || null;
-          let finalNivelId = origMat.id_nivel || null;
+          // Resolver grupo y nivel de destino
+          let finalGrupoId = idGrupoDestino || solicitud.id_grupo_destino || null;
+          if (!finalGrupoId) {
+            const votoConGrupo = await trx
+              .selectFrom('traslado_aprobacion')
+              .select('id_grupo_destino')
+              .where('id_solicitud', '=', idSolicitud)
+              .where('id_grupo_destino', 'is not', null)
+              .executeTakeFirst();
+            if (votoConGrupo?.id_grupo_destino) {
+              finalGrupoId = votoConGrupo.id_grupo_destino;
+            }
+          }
+
+          let finalNivelId: number | null = null;
           let gradoNombreStr = 'Grado Ordinario';
           let grupoNombreStr: string | null = null;
 
@@ -771,9 +806,45 @@ export class TrasladoService {
               .executeTakeFirst();
 
             if (gInfo) {
-              finalNivelId = gInfo.id_nivel || finalNivelId;
+              finalNivelId = gInfo.id_nivel;
               gradoNombreStr = gInfo.grado_nombre;
               grupoNombreStr = `${gInfo.grado_nombre} - ${gInfo.seccion_nombre} (${gInfo.jornada_nombre || 'Jornada Ordinaria'})`;
+            }
+          }
+
+          if (!finalNivelId) {
+            // Resolver nivel escolar equivalente perteneciente a Colegio B
+            const origGradoInfo = await trx
+              .selectFrom('matricula as m')
+              .leftJoin('grupos as g', 'g.id_grupo', 'm.id_grupo')
+              .leftJoin('tipo_grado as tg', 'tg.id_tipo_grado', 'g.id_tipo_grado')
+              .select(['tg.nombre as grado_nombre'])
+              .where('m.id_matricula', '=', solicitud.id_matricula)
+              .executeTakeFirst();
+
+            if (origGradoInfo?.grado_nombre) {
+              const destGrado = await trx
+                .selectFrom('tipo_grado as tg')
+                .innerJoin('nivel_escolar as ne', 'ne.id_nivel', 'tg.id_nivel')
+                .select(['tg.id_nivel', 'tg.nombre as grado_nombre'])
+                .where('ne.id_colegio', '=', solicitud.id_colegio_destino)
+                .where('tg.nombre', '=', origGradoInfo.grado_nombre)
+                .executeTakeFirst();
+
+              if (destGrado) {
+                finalNivelId = destGrado.id_nivel;
+                gradoNombreStr = destGrado.grado_nombre;
+              }
+            }
+
+            if (!finalNivelId) {
+              const defaultNivel = await trx
+                .selectFrom('nivel_escolar')
+                .select('id_nivel')
+                .where('id_colegio', '=', solicitud.id_colegio_destino)
+                .orderBy('id_nivel', 'asc')
+                .executeTakeFirst();
+              finalNivelId = defaultNivel?.id_nivel || null;
             }
           }
 
@@ -883,6 +954,7 @@ export class TrasladoService {
         'st.id_colegio_origen',
         'st.id_colegio_destino',
         'st.id_matricula',
+        'st.id_grupo_destino',
         'st.estado',
         'st.motivo',
         'st.creado_por',
@@ -959,6 +1031,7 @@ export class TrasladoService {
         'st.id_colegio_origen',
         'st.id_colegio_destino',
         'st.id_matricula',
+        'st.id_grupo_destino',
         'st.estado',
         'st.motivo',
         'st.creado_por',
@@ -981,6 +1054,10 @@ export class TrasladoService {
     const aprobaciones = await db
       .selectFrom('traslado_aprobacion as ta')
       .innerJoin('usuario as u', 'u.id_usuario', 'ta.id_usuario')
+      .leftJoin('grupos as g', 'g.id_grupo', 'ta.id_grupo_destino')
+      .leftJoin('secciones as s', 'g.id_seccion', 's.id_seccion')
+      .leftJoin('tipo_grado as tg', 'g.id_tipo_grado', 'tg.id_tipo_grado')
+      .leftJoin('jornada as j', 'g.id_jornada', 'j.id_jornada')
       .select([
         'ta.id_aprobacion',
         'ta.id_solicitud',
@@ -989,9 +1066,13 @@ export class TrasladoService {
         'ta.accion',
         'ta.comentario',
         'ta.fecha',
+        'ta.id_grupo_destino',
         'u.nombre as usuario_nombre',
         'u.apellido as usuario_apellido',
         'u.email as usuario_email',
+        'tg.nombre as grupo_destino_grado',
+        's.nombre as grupo_destino_seccion',
+        'j.nombre as grupo_destino_jornada'
       ])
       .where('ta.id_solicitud', '=', idSolicitud)
       .orderBy('ta.fecha', 'asc')
@@ -1112,7 +1193,49 @@ export class TrasladoService {
       }
     }
 
-    return { ...solicitud, aprobaciones, padre: padreInfo, datos_origen: datosOrigen };
+    let datosDestino: {
+      id_grupo?: number | null;
+      grupo_nombre?: string | null;
+      grado?: string | null;
+      seccion?: string | null;
+      jornada?: string | null;
+    } | null = null;
+
+    let idGrupoDest = solicitud.id_grupo_destino;
+    if (!idGrupoDest) {
+      const apConGrupo = aprobaciones.find((a: any) => a.id_grupo_destino);
+      if (apConGrupo) {
+        idGrupoDest = apConGrupo.id_grupo_destino;
+      }
+    }
+
+    if (idGrupoDest) {
+      const gDest = await db
+        .selectFrom('grupos as g')
+        .innerJoin('secciones as s', 'g.id_seccion', 's.id_seccion')
+        .innerJoin('tipo_grado as tg', 'g.id_tipo_grado', 'tg.id_tipo_grado')
+        .leftJoin('jornada as j', 'g.id_jornada', 'j.id_jornada')
+        .select([
+          'g.id_grupo',
+          'tg.nombre as grado',
+          's.nombre as seccion',
+          'j.nombre as jornada'
+        ])
+        .where('g.id_grupo', '=', idGrupoDest)
+        .executeTakeFirst();
+
+      if (gDest) {
+        datosDestino = {
+          id_grupo: gDest.id_grupo,
+          grado: gDest.grado,
+          seccion: gDest.seccion,
+          jornada: gDest.jornada || 'Ordinaria',
+          grupo_nombre: `${gDest.grado} - ${gDest.seccion} (${gDest.jornada || 'Jornada Ordinaria'})`
+        };
+      }
+    }
+
+    return { ...solicitud, id_grupo_destino: idGrupoDest || null, aprobaciones, padre: padreInfo, datos_origen: datosOrigen, datos_destino: datosDestino };
   }
 
   /**

@@ -52,8 +52,12 @@ interface SolicitudTraslado {
     accion: string
     comentario: string | null
     fecha: string
+    id_grupo_destino?: number | null
     usuario_nombre: string
     usuario_apellido: string
+    grupo_destino_grado?: string | null
+    grupo_destino_seccion?: string | null
+    grupo_destino_jornada?: string | null
   }>
   padre?: {
     nombre: string
@@ -61,11 +65,19 @@ interface SolicitudTraslado {
     email: string
     documento: string
   } | null
+  id_grupo_destino?: number | null
   datos_origen?: {
     grado?: string | null
     seccion?: string | null
     jornada?: string | null
     nivel?: string | null
+  } | null
+  datos_destino?: {
+    id_grupo?: number | null
+    grupo_nombre?: string | null
+    grado?: string | null
+    seccion?: string | null
+    jornada?: string | null
   } | null
 }
 
@@ -342,6 +354,7 @@ const openDetailModal = async (solicitud: SolicitudTraslado) => {
       headers: { Authorization: `Bearer ${auth.token}` }
     })
     selectedSolicitud.value = res.data
+    selectedGrupoDestino.value = res.data.id_grupo_destino || res.data.datos_destino?.id_grupo || null
     showDetailModal.value = true
 
     if (solicitud.tipo === 'TRASLADO_MATRICULA') {
@@ -913,6 +926,14 @@ onMounted(() => {
           <div class="space-y-0.5 text-center md:text-right flex-1">
             <p class="text-[10px] font-black uppercase text-indigo-500 tracking-wider">Institución de Destino</p>
             <p class="font-bold text-indigo-900 dark:text-indigo-300 text-sm">{{ selectedSolicitud.colegio_destino_nombre }}</p>
+            <div v-if="selectedSolicitud.datos_destino?.grado || selectedSolicitud.datos_destino?.jornada || selectedSolicitud.datos_destino?.grupo_nombre" class="flex flex-wrap items-center gap-1.5 mt-1 justify-center md:justify-end">
+              <span v-if="selectedSolicitud.datos_destino?.grado" class="text-[10px] font-black uppercase bg-emerald-50 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800">
+                Grado {{ selectedSolicitud.datos_destino.grado }} <template v-if="selectedSolicitud.datos_destino?.seccion">({{ selectedSolicitud.datos_destino.seccion }})</template>
+              </span>
+              <span v-if="selectedSolicitud.datos_destino?.jornada" class="text-[10px] font-black uppercase bg-cyan-50 dark:bg-cyan-950/60 text-cyan-700 dark:text-cyan-300 px-2 py-0.5 rounded-md border border-cyan-200 dark:border-cyan-800">
+                Jornada {{ selectedSolicitud.datos_destino.jornada }}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -999,9 +1020,12 @@ onMounted(() => {
                   <X v-else :size="16" />
                 </div>
                 <div>
-                  <div class="flex items-center gap-2">
+                  <div class="flex flex-wrap items-center gap-2">
                     <span class="font-bold text-slate-900 dark:text-white">{{ ap.usuario_nombre }} {{ ap.usuario_apellido }}</span>
                     <span class="px-2 py-0.5 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-md text-[10px] font-black uppercase">{{ ap.rol }}</span>
+                    <span v-if="ap.grupo_destino_grado" class="px-2 py-0.5 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 rounded-md text-[10px] font-bold">
+                      🎯 Asignó: {{ ap.grupo_destino_grado }} - {{ ap.grupo_destino_seccion }} ({{ ap.grupo_destino_jornada }})
+                    </span>
                   </div>
                   <p v-if="ap.comentario" class="text-slate-600 dark:text-slate-400 mt-1 italic font-normal">"{{ ap.comentario }}"</p>
                   <p class="text-[10px] text-slate-400 mt-1">{{ formatDate(ap.fecha) }}</p>

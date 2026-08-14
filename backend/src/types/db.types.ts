@@ -621,6 +621,7 @@ export interface SolicitudTraslado {
   fecha_finalizacion: Timestamp | null;
   id_colegio_destino: number;
   id_colegio_origen: number;
+  id_grupo_destino: number | null;
   id_matricula: number | null;
   id_solicitud: Generated<number>;
   id_usuario: number;
@@ -675,6 +676,7 @@ export interface TrasladoAprobacion {
   comentario: string | null;
   fecha: Generated<Timestamp | null>;
   id_aprobacion: Generated<number>;
+  id_grupo_destino: number | null;
   id_solicitud: number;
   id_usuario: number;
   rol: string;

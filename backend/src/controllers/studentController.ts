@@ -64,7 +64,7 @@ export const getAllStudents = async (req: Request, res: Response) => {
       LEFT JOIN usuario u ON e.id_usuario = u.id_usuario
       LEFT JOIN tipo_documento td ON u.id_tipodocumento = td.id_tipodocumento
       LEFT JOIN nivel_escolar n ON e.id_nivel = n.id_nivel
-      LEFT JOIN matricula m ON e.id_estudiante = m.id_estudiante AND m.estado = 'ACTIVA'${yearCondition}
+      LEFT JOIN matricula m ON e.id_estudiante = m.id_estudiante AND m.id_colegio = $1 AND (m.estado = 'ACTIVA' OR (m.estado = 'TRASLADADA' AND $2::int IS NOT NULL))${yearCondition}
       LEFT JOIN grupos g ON m.id_grupo = g.id_grupo
       LEFT JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
       LEFT JOIN secciones s ON g.id_seccion = s.id_seccion
@@ -75,7 +75,7 @@ export const getAllStudents = async (req: Request, res: Response) => {
       ) dp ON e.id_estudiante = dp.id_estudiante
       LEFT JOIN padre_familia pf ON dp.id_padrefamilia = pf.id_padrefamilia
       LEFT JOIN usuario u_pf ON pf.id_usuario = u_pf.id_usuario
-      WHERE e.id_colegio = $1
+      WHERE (e.id_colegio = $1 OR EXISTS (SELECT 1 FROM matricula m_hist WHERE m_hist.id_estudiante = e.id_estudiante AND m_hist.id_colegio = $1))
     `;
 
     if (yearId) {
@@ -475,7 +475,7 @@ export const changeStudentGrade = async (req: Request, res: Response) => {
       JOIN detalle_padrefamilia dp ON e.id_estudiante = dp.id_estudiante
       JOIN padre_familia pf ON dp.id_padrefamilia = pf.id_padrefamilia
       JOIN usuario u_padre ON pf.id_usuario = u_padre.id_usuario
-      LEFT JOIN matricula m ON e.id_estudiante = m.id_estudiante AND m.estado = 'ACTIVA'
+      LEFT JOIN matricula m ON e.id_estudiante = m.id_estudiante AND m.id_colegio = e.id_colegio AND m.estado = 'ACTIVA'
       LEFT JOIN grupos g_old ON m.id_grupo = g_old.id_grupo
       LEFT JOIN tipo_grado tg_old ON g_old.id_tipo_grado = tg_old.id_tipo_grado
       LEFT JOIN secciones s_old ON g_old.id_seccion = s_old.id_seccion
@@ -505,7 +505,7 @@ export const changeStudentGrade = async (req: Request, res: Response) => {
     const oldGradingRes = await client.query(
       `SELECT e.id_nivel, m.id_grupo, e.id_usuario
        FROM estudiante e
-       LEFT JOIN matricula m ON e.id_estudiante = m.id_estudiante AND m.estado = 'ACTIVA'
+       LEFT JOIN matricula m ON e.id_estudiante = m.id_estudiante AND m.id_colegio = e.id_colegio AND m.estado = 'ACTIVA'
        WHERE e.id_estudiante = $1`,
       [id]
     );
@@ -635,7 +635,7 @@ export const getStudentSummary = async (req: Request, res: Response) => {
              m.id_grupo, u.email as student_email, u.fecha_creacion as user_created_at
       FROM estudiante e
       LEFT JOIN usuario u ON e.id_usuario = u.id_usuario
-      LEFT JOIN matricula m ON e.id_estudiante = m.id_estudiante AND m.estado IN ('ACTIVA', 'CULMINADA')
+      LEFT JOIN matricula m ON e.id_estudiante = m.id_estudiante AND m.id_colegio = e.id_colegio AND m.estado IN ('ACTIVA', 'CULMINADA')
       LEFT JOIN grupos g ON m.id_grupo = g.id_grupo
       LEFT JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
       LEFT JOIN secciones s ON g.id_seccion = s.id_seccion
@@ -881,7 +881,7 @@ export const graduateStudent = async (req: Request, res: Response): Promise<void
     const studentRes = await client.query(
       `SELECT e.id_estudiante, e.nombre, e.apellido, e.id_colegio, tg.nombre as grado_nombre, m.id_matricula, m.id_grupo
        FROM estudiante e
-       LEFT JOIN matricula m ON e.id_estudiante = m.id_estudiante AND m.estado = 'ACTIVA'
+       LEFT JOIN matricula m ON e.id_estudiante = m.id_estudiante AND m.id_colegio = e.id_colegio AND m.estado = 'ACTIVA'
        LEFT JOIN grupos g ON m.id_grupo = g.id_grupo
        LEFT JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
        WHERE e.id_estudiante = $1`,

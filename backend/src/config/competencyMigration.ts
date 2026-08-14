@@ -500,6 +500,13 @@ export const ensureCompetencySchema = async (): Promise<void> => {
       await client.query(emailVerificationSql);
     }
 
+    // Ejecutar migración 049 (id_grupo_destino en solicitud_traslado y traslado_aprobacion)
+    const addGrupoDestinoPath = path.join(__dirname, "../migrations/049_add_id_grupo_destino_to_traslados.sql");
+    if (fs.existsSync(addGrupoDestinoPath)) {
+      const addGrupoDestinoSql = fs.readFileSync(addGrupoDestinoPath, "utf8");
+      await client.query(addGrupoDestinoSql);
+    }
+
 
 
     // Backfill sync_uuid for existing competencies
