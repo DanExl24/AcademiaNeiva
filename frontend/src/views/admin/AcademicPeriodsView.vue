@@ -602,21 +602,21 @@ onMounted(loadData)
     <template v-else>
       <div class="grid grid-cols-1 gap-8 xl:grid-cols-2">
         <section class="overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-sm flex flex-col dark:bg-slate-900 dark:border-slate-800">
-          <div class="border-b border-slate-100 p-6 dark:border-slate-800 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div class="flex items-center gap-3">
-              <div class="rounded-2xl bg-sky-50 p-3 text-sky-600 dark:bg-sky-950/30 dark:text-sky-400">
+          <div class="border-b border-slate-100 p-6 dark:border-slate-800 flex flex-col gap-4 2xl:flex-row 2xl:items-center 2xl:justify-between">
+            <div class="flex items-center gap-3 min-w-0">
+              <div class="rounded-2xl bg-sky-50 p-3 text-sky-600 dark:bg-sky-950/30 dark:text-sky-400 shrink-0">
                 <BookMarked class="h-6 w-6" />
               </div>
-              <div>
+              <div class="min-w-0">
                 <h2 class="text-lg font-black text-slate-900 dark:text-white">Años lectivos del colegio</h2>
-                <p class="text-sm text-slate-500 dark:text-slate-400">Registra los años lectivos configurados. El más reciente queda como referencia activa.</p>
+                <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 leading-relaxed">Registra los años lectivos configurados. El más reciente queda como referencia activa.</p>
               </div>
             </div>
-            <div class="flex items-center gap-2">
+            <div class="flex flex-wrap items-center gap-2 shrink-0">
               <button
                 type="button"
                 @click="yearModal = true"
-                class="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-black transition-all shadow-md shrink-0 uppercase tracking-wider dark:bg-sky-500 dark:hover:bg-sky-400"
+                class="inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-black transition-all shadow-md shrink-0 uppercase tracking-wider dark:bg-sky-500 dark:hover:bg-sky-400"
               >
                 <Plus class="h-4 w-4" />
                 Agregar año
@@ -628,7 +628,7 @@ onMounted(loadData)
                   editorModeActive 
                     ? 'bg-rose-500 hover:bg-rose-600 text-white shadow-rose-200/50' 
                     : 'bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700',
-                  'inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black transition-all shadow-md dark:shadow-none shrink-0 uppercase tracking-wider'
+                  'inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-black transition-all shadow-md dark:shadow-none shrink-0 uppercase tracking-wider'
                 ]"
               >
                 <ShieldAlert class="h-4 w-4" />
