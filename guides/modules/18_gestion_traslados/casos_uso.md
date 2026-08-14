@@ -2,14 +2,14 @@
 
 **Sistema:** Academia Neiva  
 **Módulo:** Gestión de Traslados (Interinstitucionales e Internos)  
-**Última actualización:** 2026-08-10
+**Última actualización:** 2026-08-14
 
 ---
 
-## CU-TRA-01: Solicitud y Aprobación Tripartita de Traslado Interinstitucional
+## CU-TRA-01: Solicitud y Aprobación Tripartita de Traslado Interinstitucional con Validación de Cupos
 
 ### Descripción
-Un acudiente o directivo inicia una solicitud para trasladar a un estudiante desde una institución educativa de origen hacia una nueva institución de destino en AcademiaNeiva. El flujo requiere que las tres partes involucradas confirmen la decisión antes de aplicar los cambios en la base de datos.
+Un acudiente o directivo inicia una solicitud para trasladar a un estudiante desde una institución educativa de origen hacia una nueva institución de destino en AcademiaNeiva. El flujo requiere verificar la disponibilidad de cupos en el grado escolar en la sede receptora, asignar el grupo/jornada de destino y obtener el consenso de las tres partes antes de formalizar el cambio.
 
 ### Precondiciones
 - El usuario a trasladar existe en la base de datos con un vínculo activo (`ACTIVO`) en la institución de origen.
@@ -24,11 +24,12 @@ sequenceDiagram
     participant API as Backend (Express)
     participant Service as TrasladoService
     participant DB as PostgreSQL (Kysely)
+    participant Mail as NotificationService
     actor Origen as Directivo Origen
     actor Destino as Directivo Destino
     actor Padre as Padre / Acudiente Legal
 
-    Creador->>API: POST /api/traslados (id_usuario, origen, destino, motivo)
+    Creador->>API: POST /api/traslados (id_usuario, origen, destino, motivo, jornada_sugerida)
     API->>Service: crearSolicitud(input)
     Service->>DB: Validar vinculación origen y ausencia de duplicados
     Service->>DB: INSERT INTO solicitud_traslado (estado: EN_APROBACION)
@@ -47,8 +48,15 @@ sequenceDiagram
     Service->>DB: INSERT INTO traslado_aprobacion (USUARIO - Padre/Acudiente)
     Service->>Service: evaluarYEjecutarSiCompleto()
 
-    Destino->>API: POST /api/traslados/:id/aprobacion (accion: APROBAR)
+    Destino->>API: GET /api/traslados/:id/disponibilidad-cupos
+    API->>Service: getDisponibilidadCuposTraslado()
+    Service->>DB: SELECT grupos & cupos disponibles por grado
+    Service-->>API: Cupos por sección y totales
+    API-->>Destino: { hay_cupos: true, cupos_totales_grado: 15, grupos: [...] }
+
+    Destino->>API: POST /api/traslados/:id/aprobacion (accion: APROBAR, id_grupo_destino)
     API->>Service: registrarAprobacion(idSolicitud, input)
+    Service->>DB: Validar cupos en grado > 0
     Service->>DB: INSERT INTO traslado_aprobacion (DIRECTIVO_DESTINO)
     Service->>Service: evaluarYEjecutarSiCompleto() (¡Consenso Alcanzado!)
     
@@ -56,28 +64,34 @@ sequenceDiagram
     Service->>DB: UPDATE usuario_colegio (Origen -> INACTIVO)
     Service->>DB: INSERT/UPDATE usuario_colegio (Destino -> ACTIVO)
     Service->>DB: UPDATE matricula SET estado = 'TRASLADADA'
+    Service->>DB: INSERT/UPDATE matricula en Destino (id_grupo: id_grupo_destino, estado: 'ACTIVA')
     Service->>DB: UPDATE estudiante SET id_colegio = Destino
     Service->>DB: UPDATE solicitud_traslado SET estado = 'EJECUTADA'
     Service->>DB: COMMIT TRANSACTION
-    API-->>Destino: HTTP 200 OK (Traslado Ejecutado Exitosamente)
+    Service->>Mail: sendInterInstitutionalTransferApprovedEmail() (Notificación al acudiente)
+    API-->>Destino: HTTP 200 OK (Traslado y Matrícula Formalizados)
 ```
 
 ### Flujo Principal
-1. El creador envía los datos del traslado mediante `POST /api/traslados`.
+1. El creador envía los datos del traslado mediante `POST /api/traslados` incluyendo opcionalmente la `jornada_sugerida`.
 2. El sistema valida los datos con `CreateTrasladoSchema` de Zod.
 3. Se crea la solicitud en estado `EN_APROBACION` y se auto-aprueba el rol del creador.
-4. Los aprobadores restantes (Directivo Origen, Directivo Destino, Padre/Acudiente Legal) emiten sus votos en `POST /api/traslados/:id/aprobacion`.
-5. El servidor valida que no existan votos duplicados por rol o usuario, y rechaza intentos de aprobación directa por parte del estudiante menor de edad.
-6. Al detectar los 3 votos favorables, el sistema ejecuta la transacción atómica PostgreSQL mediante Kysely:
+4. El directivo del colegio destino consulta la disponibilidad de cupos en su institución (`GET /api/traslados/:id/disponibilidad-cupos`).
+5. Si existen cupos, el directivo receptor emite su voto de aprobación seleccionando el grupo (`id_grupo_destino`) en `POST /api/traslados/:id/aprobacion`.
+6. Los demás aprobadores (Directivo Origen y Padre/Acudiente Legal) registran su decisión.
+7. Al detectar los 3 votos favorables, el sistema ejecuta la transacción atómica PostgreSQL mediante Kysely:
    - Desactiva el vínculo con la sede origen en `usuario_colegio`.
    - Activa el vínculo con la sede destino en `usuario_colegio`.
    - Actualiza la matrícula previa a estado `TRASLADADA`.
-   - Actualiza el colegio del estudiante a la sede de destino.
+   - Genera/actualiza la matrícula en la institución receptora asignando el `id_grupo_destino` e `id_nivel`.
+   - Actualiza el colegio activo del estudiante a la sede de destino.
    - Marca la solicitud como `EJECUTADA`.
+   - Envía correo formal de confirmación y asignación de salón al acudiente mediante `NotificationService.sendInterInstitutionalTransferApprovedEmail`.
 
 ### Flujos Alternativos
-- **A1. Rechazo de la Solicitud:** Si cualquiera de los 3 actores emite un voto con `accion = 'RECHAZAR'`, la solicitud cambia inmediatamente a estado `RECHAZADA` y se congela la evaluación.
-- **A2. Cancelación por el Solicitante:** Si el creador envía `accion = 'CANCELAR'`, la solicitud pasa a `CANCELADA`.
+- **A1. Grado sin Cupos en Destino:** Si `cupos_totales_grado === 0`, el botón de aprobación se inhabilita para el directivo receptor. El directivo procede a rechazar la solicitud explicando el motivo en el comentario.
+- **A2. Rechazo de la Solicitud:** Si cualquiera de los 3 actores emite un voto con `accion = 'RECHAZAR'`, la solicitud cambia inmediatamente a estado `RECHAZADA` y se congela la evaluación.
+- **A3. Cancelación por el Solicitante:** Si el creador envía `accion = 'CANCELAR'`, la solicitud pasa a `CANCELADA`.
 
 ---
 
@@ -88,10 +102,10 @@ Un Administrador General revisa una solicitud de traslado interinstitucional pen
 
 ### Flujo Principal
 1. El Administrador General consulta la bandeja de solicitudes vía `GET /api/traslados`.
-2. Selecciona una solicitud en estado `EN_APROBACION` y envía `POST /api/traslados/:id/aprobacion` con `accion = 'APROBAR'`.
+2. Selecciona una solicitud en estado `EN_APROBACION`, verifica cupos y envía `POST /api/traslados/:id/aprobacion` con `accion = 'APROBAR'` y opcionalmente `id_grupo_destino`.
 3. El servicio detecta que el votante posee el rol `ADMIN_GENERAL` (`rolesAprobador.includes('admin_general')`).
 4. El sistema omite la espera de los votos faltantes de origen, destino o acudiente.
-5. Se desencadena inmediatamente la función `ejecutarTrasladoTransaccional(idSolicitud)` actualizando los registros en base de datos.
+5. Se desencadena inmediatamente la función `ejecutarTrasladoTransaccional(idSolicitud)` actualizando los registros en base de datos y notificando por correo al acudiente.
 6. La solicitud finaliza en estado `EJECUTADA`.
 
 ---
@@ -110,3 +124,4 @@ Un directivo cambia de grupo a un estudiante dentro del mismo colegio e informa 
 6. El backend actualiza `matricula.id_grupo` en la base de datos.
 7. El servicio invoca `NotificationService.sendStudentTransferEmail`, enviando un correo al acudiente con la información completa del cambio.
 8. La interfaz notifica éxito y refresca el listado de estudiantes.
+

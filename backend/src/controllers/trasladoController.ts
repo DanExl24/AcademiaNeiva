@@ -130,6 +130,34 @@ export const getDatosAcademicosTraslado = async (req: AuthRequest, res: Response
   }
 };
 
+export const getDisponibilidadCupos = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'No autenticado' });
+      return;
+    }
+
+    const idSolicitud = parseInt(String(req.params.id), 10);
+    if (isNaN(idSolicitud)) {
+      res.status(400).json({ error: 'ID de solicitud inválido' });
+      return;
+    }
+
+    const schoolId = req.user.schoolId;
+    const destSchoolId = schoolId || (req.query.id_colegio ? Number(req.query.id_colegio) : null);
+    if (!destSchoolId) {
+      res.status(400).json({ error: 'Se requiere una institución destino' });
+      return;
+    }
+
+    const result = await TrasladoService.getDisponibilidadCuposTraslado(idSolicitud, destSchoolId);
+    res.json(result);
+  } catch (error: any) {
+    console.error('Error en getDisponibilidadCupos:', error);
+    res.status(400).json({ error: error.message || 'Error al consultar disponibilidad de cupos' });
+  }
+};
+
 export const getMyVinculaciones = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     if (!req.user) {

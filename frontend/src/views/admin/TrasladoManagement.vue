@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch }  from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { ref, computed, onMounted, watch } from 'vue'
 import axios from 'axios'
 import { API_BASE_URL } from '../../config/api'
 import { useAuthStore } from '../../stores/auth'
@@ -13,180 +12,203 @@ import {
   XCircle, 
   Clock, 
   AlertCircle, 
+  AlertTriangle,
   Building2, 
   RefreshCw,
   Building,
   Check,
   X,
-  ChevronRight,
-  Info,
   ClipboardList
 } from 'lucide-vue-next'
 import DatosAcademicosTrasladoModal from '../../components/traslados/DatosAcademicosTrasladoModal.vue'
 
 const auth = useAuthStore()
 const yearStore = useAcademicYearStore()
-const route = useRoute()
-const router = useRouter()
-
-const showAcademicDataModal = ref(false)
-const academicTargetId = ref<number | null>(null)
-
-// Types & Interfaces
-interface Aprobacion {
-  id_aprobacion: number
-  id_solicitud: number
-  id_usuario: number
-  usuario_nombre?: string
-  usuario_apellido?: string
-  usuario_email?: string
-  rol: 'DIRECTIVO_ORIGEN' | 'DIRECTIVO_DESTINO' | 'USUARIO' | 'ADMIN_GENERAL' | 'CREADOR'
-  accion: 'APROBAR' | 'RECHAZAR' | 'CANCELAR'
-  comentario: string | null
-  fecha: string
-}
 
 interface SolicitudTraslado {
   id_solicitud: number
-  tipo: 'TRASLADO_USUARIO' | 'TRASLADO_MATRICULA'
+  tipo: string
   id_usuario: number
+  id_colegio_origen: number
+  id_colegio_destino: number
+  id_matricula: number | null
+  estado: string
+  motivo: string
+  creado_por: number
+  fecha_creacion: string
+  fecha_finalizacion: string | null
   usuario_nombre: string
   usuario_apellido: string
   usuario_email: string
   usuario_documento: string
-  id_colegio_origen: number
   colegio_origen_nombre: string
-  id_colegio_destino: number
   colegio_destino_nombre: string
-  id_matricula?: number | null
-  estado: 'SOLICITADA' | 'EN_APROBACION' | 'APROBADA' | 'RECHAZADA' | 'CANCELADA' | 'EJECUTADA'
-  motivo: string
-  creado_por: number
   creador_nombre: string
   creador_apellido: string
-  fecha_creacion: string
-  fecha_finalizacion?: string | null
-  aprobaciones?: Aprobacion[]
+  aprobaciones?: Array<{
+    id_aprobacion: number
+    id_usuario: number
+    rol: string
+    accion: string
+    comentario: string | null
+    fecha: string
+    usuario_nombre: string
+    usuario_apellido: string
+  }>
   padre?: {
-    id_usuario?: number
-    nombre?: string
-    apellido?: string
-    email?: string
+    nombre: string
+    apellido: string
+    email: string
+    documento: string
   } | null
 }
 
-interface Vinculacion {
-  id_usuario_colegio: number
-  id_usuario: number
-  id_colegio: number
-  colegio_nombre: string
-  escudo_url?: string | null
-  rol_nombre: string
-  estado: 'ACTIVO' | 'INACTIVO'
-  fecha_inicio: string
-  fecha_fin?: string | null
-}
-
-interface Colegio {
-  id_colegio: number
-  nombre: string
-  logo_url?: string
-}
-
-interface EstudianteOption {
-  id_estudiante: number
-  id_usuario: number
-  nombre: string
-  apellido: string
-  documento?: string
-  codigo?: string
-  grado?: string
-  seccion?: string
-  matricula_id?: number | null
-}
-
-// Active Tab
-const activeTab = ref<'solicitudes' | 'vinculaciones'>('solicitudes')
-
-// Data State
 const solicitudes = ref<SolicitudTraslado[]>([])
-const vinculaciones = ref<Vinculacion[]>([])
-const colegios = ref<Colegio[]>([])
-const estudiantesColegio = ref<EstudianteOption[]>([])
-const personalColegio = ref<{ id_usuario: number; nombre: string; apellido: string; email: string; documento?: string; rol_nombre: string }[]>([])
-const directivosColegio = ref<{ id_usuario: number; nombre: string; apellido: string; email: string; documento?: string; rol_nombre: string }[]>([])
-
+const vinculaciones = ref<any[]>([])
+const colegios = ref<any[]>([])
+const personalColegio = ref<any[]>([])
+const directivosColegio = ref<any[]>([])
+const estudiantesColegio = ref<any[]>([])
 const loading = ref(false)
 const submitting = ref(false)
-const errorMessage = ref('')
 const successMessage = ref('')
+const errorMessage = ref('')
 
-// Filters
 const searchQuery = ref('')
-const selectedStatusFilter = ref<string>('ALL')
-const selectedTypeFilter = ref<string>('ALL')
+const selectedStatusFilter = ref('ALL')
+const selectedTypeFilter = ref('ALL')
 
 // Modals
 const showCreateModal = ref(false)
 const showDetailModal = ref(false)
+const showAcademicDataModal = ref(false)
+const academicTargetId = ref<number | null>(null)
 const selectedSolicitud = ref<SolicitudTraslado | null>(null)
 
-// Create Form Data
-const newTraslado = ref({
-  tipo: 'TRASLADO_MATRICULA' as 'TRASLADO_MATRICULA' | 'TRASLADO_USUARIO' | 'TRASLADO_DIRECTIVO',
-  id_usuario: null as number | null,
-  id_colegio_origen: auth.user?.schoolId || 1,
-  id_colegio_destino: null as number | null,
-  id_matricula: null as number | null,
+// Disponibilidad de cupos en destino
+const disponibilidadCupos = ref<{
+  grado_nombre: string
+  nivel_nombre: string
+  cupos_totales_grado: number
+  hay_cupos: boolean
+  grupos: Array<{
+    id_grupo: number
+    nombre_completo: string
+    seccion: string
+    jornada: string
+    cupos_disponibles: number
+    cupos_totales: number
+  }>
+} | null>(null)
+const selectedGrupoDestino = ref<number | null>(null)
+
+const openAcademicDataModal = (targetId: number) => {
+  academicTargetId.value = targetId
+  showAcademicDataModal.value = true
+}
+
+const isDirectivoDestino = computed(() => {
+  if (!selectedSolicitud.value) return false
+  const mySchool = auth.selectedSchoolId || (auth.user?.schoolId ? Number(auth.user.schoolId) : null)
+  return mySchool === selectedSolicitud.value.id_colegio_destino
+})
+
+// Forms
+const newTraslado = ref<{
+  tipo: string
+  id_usuario: number | null
+  id_colegio_origen: number | null
+  id_colegio_destino: number | null
+  id_matricula: number | null
+  jornada_sugerida: string
+  motivo: string
+}>({
+  tipo: 'TRASLADO_MATRICULA',
+  id_usuario: null,
+  id_colegio_origen: 1,
+  id_colegio_destino: null,
+  id_matricula: null,
+  jornada_sugerida: 'INDIFERENTE',
   motivo: ''
 })
 
-// Computed
-const isAdminGeneral = computed(() => !!(auth.user?.roles?.includes('admin_general')))
-
-// Approval Form Data
 const approvalForm = ref({
-  accion: 'APROBAR' as 'APROBAR' | 'RECHAZAR' | 'CANCELAR',
+  accion: 'APROBAR',
   comentario: ''
 })
 
-// Fetch Data on Mount
-onMounted(async () => {
-  if (auth.isMonitoring) {
-    router.push('/dashboard')
-    return
-  }
-
-  await Promise.all([
-    fetchSolicitudes(),
-    fetchVinculaciones(),
-    fetchColegios(),
-    fetchEstudiantes(),
-    fetchPersonalColegio(),
-    fetchDirectivosColegio()
-  ])
-
-  if (route.query.id) {
-    const targetId = Number(route.query.id)
-    if (!isNaN(targetId)) {
-      const found = solicitudes.value.find(s => Number(s.id_solicitud) === targetId)
-      if (found) {
-        await openDetailModal(found)
-      } else {
-        await openDetailModal({ id_solicitud: targetId } as any)
-      }
-    }
+// Summary Stats
+const stats = computed(() => {
+  const list = solicitudes.value
+  return {
+    total: list.length,
+    pendientes: list.filter(s => s.estado === 'SOLICITADA' || s.estado === 'EN_APROBACION').length,
+    aprobados: list.filter(s => s.estado === 'APROBADA' || s.estado === 'EJECUTADA').length,
+    rechazados: list.filter(s => s.estado === 'RECHAZADA' || s.estado === 'CANCELADA').length
   }
 })
 
+// Current user role capabilities
+const isAdminGeneral = computed(() => {
+  const roles = (auth.user?.roles as string[]) || (auth.user?.role ? [auth.user.role] : [])
+  return roles.includes('admin_general') || roles.includes('admin') || auth.isAdmin
+})
+
+const canUserApproveCurrentModal = computed(() => {
+  if (!selectedSolicitud.value) return false
+  const s = selectedSolicitud.value
+  if (['EJECUTADA', 'RECHAZADA', 'CANCELADA'].includes(s.estado)) return false
+
+  const userId = auth.user?.id ? Number(auth.user.id) : null
+  const roles: string[] = (auth.user?.roles as string[]) || (auth.user?.role ? [auth.user.role] : [])
+  const currentSchoolId = auth.selectedSchoolId || (auth.user?.schoolId ? Number(auth.user.schoolId) : null)
+
+  if (isAdminGeneral.value) return true
+
+  // Verificar si ya emitió su voto
+  const yaVotoUsuario = s.aprobaciones?.some(a => a.id_usuario === userId)
+  if (yaVotoUsuario) return false
+
+  // Verificar roles
+  if (roles.includes('directivo')) {
+    if (currentSchoolId === s.id_colegio_origen) {
+      const yaVotoOrigen = s.aprobaciones?.some(a => a.rol === 'DIRECTIVO_ORIGEN')
+      if (!yaVotoOrigen) return true
+    }
+    if (currentSchoolId === s.id_colegio_destino) {
+      const yaVotoDestino = s.aprobaciones?.some(a => a.rol === 'DIRECTIVO_DESTINO')
+      if (!yaVotoDestino) return true
+    }
+  }
+
+  if (roles.includes('padre') || userId === s.id_usuario) {
+    const yaVotoUsuarioRol = s.aprobaciones?.some(a => a.rol === 'USUARIO')
+    if (!yaVotoUsuarioRol) return true
+  }
+
+  return false
+})
+
+const userAlreadyVotedMessage = computed(() => {
+  if (!selectedSolicitud.value) return null
+  const userId = auth.user?.id ? Number(auth.user.id) : null
+  const voto = selectedSolicitud.value.aprobaciones?.find(a => a.id_usuario === userId)
+  if (voto) {
+    return `Ya has registrado tu decisión (${voto.accion}) para esta solicitud.`
+  }
+  return null
+})
+
+// API Calls
 const fetchSolicitudes = async () => {
   loading.value = true
   errorMessage.value = ''
   try {
+    const schoolId = auth.selectedSchoolId || auth.user?.schoolId
     const params: Record<string, any> = {}
-    if (yearStore.selectedYearId) {
-      params.yearId = yearStore.selectedYearId
-    }
+    if (schoolId) params.id_colegio = schoolId
+    if (yearStore.selectedYearId) params.yearId = yearStore.selectedYearId
+
     const res = await axios.get(`${API_BASE_URL}/api/traslados`, {
       headers: { Authorization: `Bearer ${auth.token}` },
       params
@@ -220,11 +242,6 @@ const fetchColegios = async () => {
   } catch (err: any) {
     console.error('Error fetching colegios:', err)
   }
-}
-
-const fetchEstudiantes = async () => {
-  const schoolId = auth.user?.schoolId ? Number(auth.user.schoolId) : 1
-  await fetchEstudiantesByColegio(schoolId)
 }
 
 const fetchPersonalColegio = async (schoolId?: number) => {
@@ -311,6 +328,8 @@ watch(() => newTraslado.value.id_usuario, (newUserId) => {
 
 const openDetailModal = async (solicitud: SolicitudTraslado) => {
   selectedSolicitud.value = null
+  disponibilidadCupos.value = null
+  selectedGrupoDestino.value = null
   approvalForm.value = { accion: 'APROBAR', comentario: '' }
   try {
     const res = await axios.get(`${API_BASE_URL}/api/traslados/${solicitud.id_solicitud}`, {
@@ -318,6 +337,17 @@ const openDetailModal = async (solicitud: SolicitudTraslado) => {
     })
     selectedSolicitud.value = res.data
     showDetailModal.value = true
+
+    if (solicitud.tipo === 'TRASLADO_MATRICULA') {
+      try {
+        const cuposRes = await axios.get(`${API_BASE_URL}/api/traslados/${solicitud.id_solicitud}/disponibilidad-cupos?id_colegio=${solicitud.id_colegio_destino}`, {
+          headers: { Authorization: `Bearer ${auth.token}` }
+        })
+        disponibilidadCupos.value = cuposRes.data
+      } catch (cuposErr) {
+        console.error('Error fetching cupos disponibilidad:', cuposErr)
+      }
+    }
   } catch (err: any) {
     alert(err.response?.data?.error || 'Error al cargar detalle de solicitud')
   }
@@ -331,6 +361,7 @@ const openCreateModal = () => {
     id_colegio_origen: originSchoolId,
     id_colegio_destino: null,
     id_matricula: null,
+    jornada_sugerida: 'INDIFERENTE',
     motivo: ''
   }
   if (originSchoolId) {
@@ -360,7 +391,6 @@ const handleCreateTraslado = async () => {
   submitting.value = true
   errorMessage.value = ''
   try {
-    // TRASLADO_DIRECTIVO es un subtipo de TRASLADO_USUARIO en el backend
     const payload = {
       tipo: newTraslado.value.tipo === 'TRASLADO_DIRECTIVO' ? 'TRASLADO_USUARIO' : newTraslado.value.tipo,
       id_usuario: idUser,
@@ -368,6 +398,7 @@ const handleCreateTraslado = async () => {
       id_colegio_destino: idDestino,
       id_matricula: newTraslado.value.id_matricula ? Number(newTraslado.value.id_matricula) : null,
       yearId: yearStore.selectedYearId ? Number(yearStore.selectedYearId) : null,
+      jornada_sugerida: newTraslado.value.jornada_sugerida || null,
       motivo: motivoTxt
     }
     await axios.post(`${API_BASE_URL}/api/traslados`, payload, {
@@ -385,6 +416,7 @@ const handleCreateTraslado = async () => {
       id_colegio_origen: auth.selectedSchoolId || (auth.user?.schoolId ? Number(auth.user.schoolId) : 1),
       id_colegio_destino: null,
       id_matricula: null,
+      jornada_sugerida: 'INDIFERENTE',
       motivo: ''
     }
 
@@ -400,8 +432,15 @@ const handleCreateTraslado = async () => {
 const handleProcessApproval = async (accion: 'APROBAR' | 'RECHAZAR' | 'CANCELAR') => {
   if (!selectedSolicitud.value) return
 
+  if (accion === 'APROBAR' && disponibilidadCupos.value && !disponibilidadCupos.value.hay_cupos && disponibilidadCupos.value.grupos.length > 0) {
+    alert(`No hay cupos disponibles en el grado '${disponibilidadCupos.value.grado_nombre}'. Por favor rechaza la solicitud o habilita cupos en la institución destino.`)
+    return
+  }
+
   const confirmMsg = accion === 'APROBAR' 
-    ? '¿Estás seguro de aprobar este traslado?' 
+    ? (selectedGrupoDestino.value 
+        ? `¿Estás seguro de aprobar este traslado y asignar al estudiante en el grupo seleccionado?` 
+        : '¿Estás seguro de aprobar este traslado?')
     : accion === 'RECHAZAR'
     ? '¿Estás seguro de rechazar esta solicitud de traslado?'
     : '¿Estás seguro de cancelar esta solicitud?'
@@ -412,7 +451,8 @@ const handleProcessApproval = async (accion: 'APROBAR' | 'RECHAZAR' | 'CANCELAR'
   try {
     await axios.post(`${API_BASE_URL}/api/traslados/${selectedSolicitud.value.id_solicitud}/aprobacion`, {
       accion,
-      comentario: approvalForm.value.comentario || null
+      comentario: approvalForm.value.comentario || null,
+      id_grupo_destino: selectedGrupoDestino.value || null
     }, {
       headers: { Authorization: `Bearer ${auth.token}` }
     })
@@ -448,544 +488,419 @@ const filteredSolicitudes = computed(() => {
     if (searchQuery.value.trim()) {
       const q = searchQuery.value.toLowerCase()
       const fullName = `${s.usuario_nombre || ''} ${s.usuario_apellido || ''}`.toLowerCase()
-      const doc = (s.usuario_documento || '').toLowerCase()
       const origen = (s.colegio_origen_nombre || '').toLowerCase()
       const destino = (s.colegio_destino_nombre || '').toLowerCase()
+      const doc = (s.usuario_documento || '').toLowerCase()
 
-      return fullName.includes(q) || doc.includes(q) || origen.includes(q) || destino.includes(q)
+      return fullName.includes(q) || origen.includes(q) || destino.includes(q) || doc.includes(q)
     }
 
     return true
   })
 })
 
-// Stats Calculations
-const totalSolicitudes = computed(() => solicitudes.value.length)
-const enAprobacionCount = computed(() => solicitudes.value.filter(s => ['SOLICITADA', 'EN_APROBACION'].includes(s.estado)).length)
-const ejecutadasCount = computed(() => solicitudes.value.filter(s => ['EJECUTADA', 'APROBADA'].includes(s.estado)).length)
-const rechazadasCount = computed(() => solicitudes.value.filter(s => ['RECHAZADA', 'CANCELADA'].includes(s.estado)).length)
-
-// Helpers
 const getStatusBadge = (estado: string) => {
   switch (estado) {
-    case 'EN_APROBACION':
     case 'SOLICITADA':
-      return { label: 'En Aprobación', bg: 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300', icon: Clock }
-    case 'EJECUTADA':
+      return { label: 'Solicitada', class: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 border-amber-200' }
+    case 'EN_APROBACION':
+      return { label: 'En Proceso', class: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 border-blue-200' }
     case 'APROBADA':
-      return { label: 'Ejecutada / Aprobada', bg: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300', icon: CheckCircle2 }
+    case 'EJECUTADA':
+      return { label: 'Aprobada', class: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 border-emerald-200' }
     case 'RECHAZADA':
-      return { label: 'Rechazada', bg: 'bg-rose-100 text-rose-800 dark:bg-rose-950/40 dark:text-rose-300', icon: XCircle }
+      return { label: 'Rechazada', class: 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300 border-rose-200' }
     case 'CANCELADA':
-      return { label: 'Cancelada', bg: 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300', icon: AlertCircle }
+      return { label: 'Cancelada', class: 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300 border-slate-200' }
     default:
-      return { label: estado, bg: 'bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-300', icon: Info }
+      return { label: estado, class: 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300 border-slate-200' }
   }
 }
 
-const formatDate = (dateStr?: string | null) => {
-  if (!dateStr) return 'N/A'
-  return new Date(dateStr).toLocaleDateString('es-CO', {
-    year: 'numeric',
+const getTypeBadge = (tipo: string) => {
+  switch (tipo) {
+    case 'TRASLADO_MATRICULA':
+      return { label: 'Estudiante / Matrícula', class: 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 border-indigo-200' }
+    case 'TRASLADO_USUARIO':
+      return { label: 'Personal / Docente', class: 'bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-300 border-teal-200' }
+    default:
+      return { label: tipo, class: 'bg-slate-50 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-200' }
+  }
+}
+
+const getApprovalMatrix = (s: SolicitudTraslado) => {
+  const aprobaciones = s.aprobaciones || []
+  
+  const apOrigen = aprobaciones.find(a => a.rol === 'DIRECTIVO_ORIGEN')
+  const apDestino = aprobaciones.find(a => a.rol === 'DIRECTIVO_DESTINO')
+  const apUsuario = aprobaciones.find(a => a.rol === 'USUARIO')
+
+  return [
+    {
+      rol: 'DIRECTIVO_ORIGEN',
+      label: 'Colegio Origen',
+      entidad: s.colegio_origen_nombre,
+      aprobacion: apOrigen
+    },
+    {
+      rol: 'DIRECTIVO_DESTINO',
+      label: 'Colegio Destino',
+      entidad: s.colegio_destino_nombre,
+      aprobacion: apDestino
+    },
+    {
+      rol: 'USUARIO',
+      label: s.tipo === 'TRASLADO_MATRICULA' ? 'Acudiente Legal' : 'Usuario Trasladado',
+      entidad: s.tipo === 'TRASLADO_MATRICULA' 
+        ? (s.padre ? `${s.padre.nombre} ${s.padre.apellido}` : 'Padre / Acudiente') 
+        : `${s.usuario_nombre} ${s.usuario_apellido}`,
+      aprobacion: apUsuario
+    }
+  ]
+}
+
+const formatDate = (dateString?: string | null) => {
+  if (!dateString) return 'N/A'
+  const date = new Date(dateString)
+  return date.toLocaleDateString('es-CO', {
+    day: '2-digit',
     month: 'short',
-    day: 'numeric',
+    year: 'numeric',
     hour: '2-digit',
     minute: '2-digit'
   })
 }
 
-// Matriz de Aprobaciones Requeridas (Consenso Tripartito)
-const getApprovalMatrix = (sol: SolicitudTraslado) => {
-  const aprobaciones = sol.aprobaciones || []
-  const adminAprobacion = aprobaciones.find(a => a.rol === 'ADMIN_GENERAL' && a.accion === 'APROBAR')
-  
-  const origenAprobacion = aprobaciones.find(a => a.rol === 'DIRECTIVO_ORIGEN' && a.accion === 'APROBAR')
-  const destinoAprobacion = aprobaciones.find(a => a.rol === 'DIRECTIVO_DESTINO' && a.accion === 'APROBAR')
-  const usuarioAprobacion = aprobaciones.find(a => a.rol === 'USUARIO' && a.accion === 'APROBAR')
-
-  let entidadPadre = sol.tipo === 'TRASLADO_MATRICULA'
-    ? (sol.padre ? `${sol.padre.nombre || ''} ${sol.padre.apellido || ''}`.trim() : `Acudiente Legal de ${sol.usuario_nombre}`)
-    : `${sol.usuario_nombre} ${sol.usuario_apellido}`
-
-  return [
-    {
-      rol: 'DIRECTIVO_ORIGEN',
-      label: 'Directivo Institución Origen',
-      entidad: sol.colegio_origen_nombre,
-      aprobacion: origenAprobacion || adminAprobacion,
-      esBypassAdmin: !origenAprobacion && !!adminAprobacion
-    },
-    {
-      rol: 'DIRECTIVO_DESTINO',
-      label: 'Directivo Institución Destino',
-      entidad: sol.colegio_destino_nombre,
-      aprobacion: destinoAprobacion || adminAprobacion,
-      esBypassAdmin: !destinoAprobacion && !!adminAprobacion
-    },
-    {
-      rol: 'USUARIO',
-      label: sol.tipo === 'TRASLADO_MATRICULA' ? 'Padre de Familia / Acudiente Legal' : 'Usuario Afectado',
-      entidad: entidadPadre,
-      aprobacion: usuarioAprobacion || adminAprobacion,
-      esBypassAdmin: !usuarioAprobacion && !!adminAprobacion
-    }
-  ]
-}
-
-// Can User Approve in Modal?
-const userAlreadyVotedMessage = computed(() => {
-  if (!selectedSolicitud.value) return ''
-  const aprobaciones = selectedSolicitud.value.aprobaciones || []
-  const userId = auth.user?.id ? Number(auth.user.id) : null
-  const userSchool = auth.user?.schoolId ? Number(auth.user.schoolId) : null
-  const roles = auth.user?.roles || []
-
-  // 1. Verificar si el usuario específico por su ID ya votó
-  const userVote = aprobaciones.find(a => Number(a.id_usuario) === userId)
-  if (userVote) {
-    return `Ya has registrado tu decisión (${userVote.accion}) para esta solicitud.`
-  }
-
-  // 2. Evaluar roles específicos del usuario autenticado
-  const isPadre = roles.includes('padre')
-  const isTargetUser = userId !== null && userId === selectedSolicitud.value.id_usuario
-  const isParentOfStudent = selectedSolicitud.value.padre && Number(selectedSolicitud.value.padre.id_usuario) === userId
-  const isFamily = isPadre || isTargetUser || isParentOfStudent
-
-  const isDirectivo = roles.includes('directivo')
-  const isOrigenSchool = userSchool !== null && userSchool === selectedSolicitud.value.id_colegio_origen
-  const isDestinoSchool = userSchool !== null && userSchool === selectedSolicitud.value.id_colegio_destino
-  const isAdmin = roles.includes('admin_general')
-
-  const usuarioVote = aprobaciones.find(a => a.rol === 'USUARIO')
-  const origenVote = aprobaciones.find(a => a.rol === 'DIRECTIVO_ORIGEN')
-  const destinoVote = aprobaciones.find(a => a.rol === 'DIRECTIVO_DESTINO')
-  const adminVote = aprobaciones.find(a => a.rol === 'ADMIN_GENERAL')
-
-  // Si actúa como Padre / Familia / Usuario afectado:
-  if (isFamily) {
-    if (usuarioVote) {
-      return 'El voto del Padre de Familia / Acudiente ya se encuentra registrado.'
-    }
-    return '' // Habilitado para votar como USUARIO
-  }
-
-  // Si actúa como Directivo de Origen:
-  if (isDirectivo && isOrigenSchool) {
-    if (origenVote) {
-      return 'La institución de Origen (Directivo Origen) ya registró su voto para esta solicitud.'
-    }
-    return '' // Habilitado para votar como DIRECTIVO_ORIGEN
-  }
-
-  // Si actúa como Directivo de Destino:
-  if (isDirectivo && isDestinoSchool) {
-    if (destinoVote) {
-      return 'La institución de Destino (Directivo Destino) ya registró su voto para esta solicitud.'
-    }
-    return '' // Habilitado para votar como DIRECTIVO_DESTINO
-  }
-
-  // Si actúa como Administrador General:
-  if (isAdmin) {
-    if (adminVote) {
-      return 'El Administrador General ya registró su voto ejecutiva para esta solicitud.'
-    }
-    return ''
-  }
-
-  return 'No posees autorización o rol vigente para emitir voto en esta solicitud.'
-})
-
-const canUserApproveCurrentModal = computed(() => {
-  if (!selectedSolicitud.value) return false
-  if (['EJECUTADA', 'RECHAZADA', 'CANCELADA', 'APROBADA'].includes(selectedSolicitud.value.estado)) return false
-  if (userAlreadyVotedMessage.value) return false
-
-  const userSchool = auth.user?.schoolId ? Number(auth.user.schoolId) : null
-  const userId = auth.user?.id ? Number(auth.user.id) : null
-  const roles = auth.user?.roles || []
-
-  const isPadre = roles.includes('padre')
-  const isTargetUser = userId !== null && userId === selectedSolicitud.value.id_usuario
-  const isParentOfStudent = selectedSolicitud.value.padre && Number(selectedSolicitud.value.padre.id_usuario) === userId
-  const isFamily = isPadre || isTargetUser || isParentOfStudent
-
-  const isDirectivo = roles.includes('directivo')
-  const isOrigenSchool = userSchool !== null && userSchool === selectedSolicitud.value.id_colegio_origen
-  const isDestinoSchool = userSchool !== null && userSchool === selectedSolicitud.value.id_colegio_destino
-  const isAdmin = roles.includes('admin_general')
-
-  if (isAdmin) return true
-  if (isFamily) return true
-  if (isDirectivo && (isOrigenSchool || isDestinoSchool)) return true
-
-  return false
+onMounted(() => {
+  fetchSolicitudes()
+  fetchVinculaciones()
+  fetchColegios()
+  const schoolId = auth.user?.schoolId ? Number(auth.user.schoolId) : 1
+  fetchEstudiantesByColegio(schoolId)
 })
 </script>
 
 <template>
-  <div class="space-y-8 p-4 md:p-8 max-w-7xl mx-auto">
+  <div class="space-y-6">
+
     <!-- Header Section -->
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-6 md:p-8 rounded-3xl border border-slate-200/80 dark:border-slate-800/80 shadow-xl shadow-slate-200/50 dark:shadow-none backdrop-blur-xl">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
       <div>
-        <div class="flex items-center gap-3">
-          <div class="p-3 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-2xl text-white shadow-lg shadow-indigo-500/20">
-            <ArrowLeftRight :size="24" />
-          </div>
-          <div>
-            <h1 class="text-2xl font-black text-slate-800 dark:text-white tracking-tight">
-              Gestión de Traslados Interinstitucionales
-            </h1>
-            <p class="text-xs font-semibold text-slate-500 dark:text-slate-400 mt-0.5">
-              Administración de solicitudes de traslado, consenso de aprobaciones y trazabilidad de vinculaciones
-            </p>
-          </div>
-        </div>
+        <h1 class="text-2xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-3">
+          <ArrowLeftRight class="text-indigo-600 dark:text-indigo-400" :size="28" />
+          <span>Gestión de Traslados Interinstitucionales</span>
+        </h1>
+        <p class="text-xs font-semibold text-slate-500 dark:text-slate-400 mt-1">
+          Administración de solicitudes de traslado, consenso de aprobaciones y trazabilidad de vinculaciones
+        </p>
       </div>
 
       <div class="flex items-center gap-3">
         <button 
-          @click="fetchSolicitudes" 
-          class="p-3 rounded-2xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all"
-          title="Actualizar datos"
+          @click="fetchSolicitudes"
+          class="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all active:scale-95"
+          title="Recargar solicitudes"
         >
-          <RefreshCw :size="18" :class="{ 'animate-spin': loading }" />
+          <RefreshCw :size="16" :class="{ 'animate-spin': loading }" />
         </button>
 
         <button 
           @click="openCreateModal"
-          class="flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white px-5 py-3 rounded-2xl font-bold text-xs uppercase tracking-wider shadow-lg shadow-indigo-500/25 transition-all transform hover:-translate-y-0.5 active:translate-y-0"
+          class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-indigo-500/20 transition-all active:scale-95"
         >
-          <Plus :size="18" />
-          <span>Nueva Solicitud de Traslado</span>
+          <Plus :size="16" />
+          <span>Nueva Solicitud</span>
         </button>
       </div>
     </div>
 
-    <!-- Feedback Alerts -->
-    <div v-if="successMessage" class="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl text-emerald-600 dark:text-emerald-400 font-bold text-sm flex items-center gap-3">
-      <CheckCircle2 :size="20" />
+    <!-- Alert Messages -->
+    <div v-if="successMessage" class="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl text-emerald-700 dark:text-emerald-400 font-bold text-xs flex items-center gap-2">
+      <CheckCircle2 :size="16" />
       <span>{{ successMessage }}</span>
     </div>
 
-    <div v-if="errorMessage" class="p-4 bg-rose-500/10 border border-rose-500/20 rounded-2xl text-rose-600 dark:text-rose-400 font-bold text-sm flex items-center gap-3">
-      <AlertCircle :size="20" />
+    <div v-if="errorMessage" class="p-4 bg-rose-500/10 border border-rose-500/20 rounded-2xl text-rose-700 dark:text-rose-400 font-bold text-xs flex items-center gap-2">
+      <AlertCircle :size="16" />
       <span>{{ errorMessage }}</span>
     </div>
 
-    <!-- Navigation Tabs -->
-    <div class="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-2">
-      <button 
-        @click="activeTab = 'solicitudes'"
-        :class="[
-          'px-5 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition-all flex items-center gap-2',
-          activeTab === 'solicitudes'
-            ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/20'
-            : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-        ]"
-      >
-        <ArrowLeftRight :size="16" />
-        <span>Solicitudes de Traslado ({{ solicitudes.length }})</span>
-      </button>
+    <!-- Stats Counter Bar -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl flex items-center justify-between">
+        <div>
+          <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Solicitudes</p>
+          <p class="text-2xl font-black text-slate-900 dark:text-white mt-1">{{ stats.total }}</p>
+        </div>
+        <div class="p-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-xl">
+          <ArrowLeftRight :size="20" />
+        </div>
+      </div>
 
-      <button 
-        @click="activeTab = 'vinculaciones'"
-        :class="[
-          'px-5 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition-all flex items-center gap-2',
-          activeTab === 'vinculaciones'
-            ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/20'
-            : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-        ]"
-      >
-        <Building2 :size="16" />
-        <span>Mis Vinculaciones Institucionales ({{ vinculaciones.length }})</span>
-      </button>
+      <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl flex items-center justify-between">
+        <div>
+          <p class="text-xs font-bold text-amber-500 uppercase tracking-wider">En Trámite</p>
+          <p class="text-2xl font-black text-amber-600 dark:text-amber-400 mt-1">{{ stats.pendientes }}</p>
+        </div>
+        <div class="p-3 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 rounded-xl">
+          <Clock :size="20" />
+        </div>
+      </div>
+
+      <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl flex items-center justify-between">
+        <div>
+          <p class="text-xs font-bold text-emerald-500 uppercase tracking-wider">Aprobadas</p>
+          <p class="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1">{{ stats.aprobados }}</p>
+        </div>
+        <div class="p-3 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 rounded-xl">
+          <CheckCircle2 :size="20" />
+        </div>
+      </div>
+
+      <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl flex items-center justify-between">
+        <div>
+          <p class="text-xs font-bold text-rose-500 uppercase tracking-wider">Rechazadas</p>
+          <p class="text-2xl font-black text-rose-600 dark:text-rose-400 mt-1">{{ stats.rechazados }}</p>
+        </div>
+        <div class="p-3 bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 rounded-xl">
+          <XCircle :size="20" />
+        </div>
+      </div>
     </div>
 
-    <!-- TAB 1: SOLICITUDES DE TRASLADO -->
-    <div v-if="activeTab === 'solicitudes'" class="space-y-6">
-      <!-- Stat Cards -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div class="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm flex items-center justify-between">
-          <div>
-            <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Solicitudes</p>
-            <p class="text-2xl font-black text-slate-800 dark:text-white mt-1">{{ totalSolicitudes }}</p>
-          </div>
-          <div class="p-3 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-xl">
-            <ArrowLeftRight :size="20" />
-          </div>
-        </div>
-
-        <div class="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm flex items-center justify-between">
-          <div>
-            <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">En Aprobación</p>
-            <p class="text-2xl font-black text-amber-600 dark:text-amber-400 mt-1">{{ enAprobacionCount }}</p>
-          </div>
-          <div class="p-3 bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-xl">
-            <Clock :size="20" />
-          </div>
-        </div>
-
-        <div class="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm flex items-center justify-between">
-          <div>
-            <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Ejecutadas / Exitosas</p>
-            <p class="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1">{{ ejecutadasCount }}</p>
-          </div>
-          <div class="p-3 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl">
-            <CheckCircle2 :size="20" />
-          </div>
-        </div>
-
-        <div class="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm flex items-center justify-between">
-          <div>
-            <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Rechazadas / Canceladas</p>
-            <p class="text-2xl font-black text-rose-600 dark:text-rose-400 mt-1">{{ rechazadasCount }}</p>
-          </div>
-          <div class="p-3 bg-rose-500/10 text-rose-600 dark:text-rose-400 rounded-xl">
-            <XCircle :size="20" />
-          </div>
-        </div>
+    <!-- Filters & Search Toolbar -->
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4">
+      <div class="relative w-full md:w-80">
+        <Search class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" :size="16" />
+        <input 
+          v-model="searchQuery"
+          type="text"
+          placeholder="Buscar por usuario, documento o colegio..."
+          class="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        />
       </div>
 
-      <!-- Filters Toolbar -->
-      <div class="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
-        <!-- Search -->
-        <div class="relative w-full md:w-80">
-          <Search :size="16" class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input 
-            v-model="searchQuery"
-            type="text"
-            placeholder="Buscar por estudiante, documento o colegio..."
-            class="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-xl text-xs text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          />
-        </div>
+      <div class="flex items-center gap-3 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
+        <!-- Status Filter -->
+        <select 
+          v-model="selectedStatusFilter"
+          class="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-700 dark:text-slate-300 font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        >
+          <option value="ALL">Todos los Estados</option>
+          <option value="EN_APROBACION">En Proceso / Votación</option>
+          <option value="APROBADA">Aprobadas / Ejecutadas</option>
+          <option value="RECHAZADA">Rechazadas</option>
+          <option value="CANCELADA">Canceladas</option>
+        </select>
 
-        <!-- Filter Selects -->
-        <div class="flex items-center gap-3 w-full md:w-auto">
-          <select 
-            v-model="selectedStatusFilter"
-            class="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 text-xs rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          >
-            <option value="ALL">Todos los Estados</option>
-            <option value="EN_APROBACION">En Aprobación</option>
-            <option value="EJECUTADA">Ejecutada</option>
-            <option value="RECHAZADA">Rechazada</option>
-            <option value="CANCELADA">Cancelada</option>
-          </select>
+        <!-- Type Filter -->
+        <select 
+          v-model="selectedTypeFilter"
+          class="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-700 dark:text-slate-300 font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        >
+          <option value="ALL">Todos los Tipos</option>
+          <option value="TRASLADO_MATRICULA">Matrículas Escolares</option>
+          <option value="TRASLADO_USUARIO">Personal / Docentes</option>
+        </select>
+      </div>
+    </div>
 
-          <select 
-            v-model="selectedTypeFilter"
-            class="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 text-xs rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          >
-            <option value="ALL">Todos los Tipos</option>
-            <option value="TRASLADO_MATRICULA">Matrícula</option>
-            <option value="TRASLADO_USUARIO">Usuario / Personal</option>
-          </select>
-        </div>
+    <!-- Main List of Requests Table -->
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm">
+      
+      <div v-if="loading" class="p-12 text-center text-slate-400 flex flex-col items-center gap-3">
+        <RefreshCw class="animate-spin text-indigo-500" :size="32" />
+        <p class="text-xs font-semibold">Cargando solicitudes de traslado...</p>
       </div>
 
-      <!-- Solicitudes Table / List -->
-      <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800/80 shadow-xl overflow-hidden">
-        <div v-if="loading" class="p-12 text-center text-slate-400 space-y-3">
-          <RefreshCw :size="28" class="animate-spin mx-auto text-indigo-500" />
-          <p class="text-xs font-semibold">Cargando solicitudes de traslado...</p>
-        </div>
+      <div v-else-if="filteredSolicitudes.length === 0" class="p-12 text-center text-slate-400 flex flex-col items-center gap-3">
+        <ArrowLeftRight class="text-slate-300 dark:text-slate-700" :size="40" />
+        <p class="text-sm font-bold text-slate-600 dark:text-slate-300">No se encontraron solicitudes de traslado</p>
+        <p class="text-xs">No hay registros que coincidan con los filtros seleccionados o el año escolar activo.</p>
+      </div>
 
-        <div v-else-if="filteredSolicitudes.length === 0" class="p-12 text-center text-slate-400 space-y-3">
-          <Info :size="32" class="mx-auto text-slate-300 dark:text-slate-600" />
-          <p class="text-sm font-bold text-slate-600 dark:text-slate-300">No se encontraron solicitudes de traslado</p>
-          <p class="text-xs text-slate-400">Intenta cambiar los filtros de búsqueda o registra una nueva solicitud.</p>
-        </div>
+      <div v-else class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr class="border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50 text-[10px] font-black uppercase text-slate-400 tracking-wider">
+              <th class="px-6 py-4">Usuario / Estudiante</th>
+              <th class="px-6 py-4">Tipo</th>
+              <th class="px-6 py-4">Origen → Destino</th>
+              <th class="px-6 py-4">Consenso de Votos</th>
+              <th class="px-6 py-4">Estado</th>
+              <th class="px-6 py-4 text-right">Acción</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
+            <tr 
+              v-for="s in filteredSolicitudes" 
+              :key="s.id_solicitud"
+              class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors"
+            >
+              <!-- Usuario / Estudiante -->
+              <td class="px-6 py-4">
+                <div class="space-y-0.5">
+                  <p class="font-bold text-slate-900 dark:text-white text-sm leading-tight">
+                    {{ s.usuario_nombre }} {{ s.usuario_apellido }}
+                  </p>
+                  <p class="text-xs text-slate-400 font-mono">Doc: {{ s.usuario_documento }}</p>
+                  <p class="text-[10px] text-slate-400">{{ s.usuario_email }}</p>
+                </div>
+              </td>
 
-        <div v-else class="overflow-x-auto">
-          <table class="w-full text-left text-xs border-collapse">
-            <thead>
-              <tr class="border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50 text-slate-400 font-bold uppercase tracking-wider">
-                <th class="py-4 px-6">ID / Tipo</th>
-                <th class="py-4 px-6">Estudiante / Usuario</th>
-                <th class="py-4 px-6">Institución Origen ➔ Destino</th>
-                <th class="py-4 px-6">Estado</th>
-                <th class="py-4 px-6">Fecha Solicitud</th>
-                <th class="py-4 px-6 text-right">Acciones</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100 dark:divide-slate-800/60 font-medium text-slate-700 dark:text-slate-300">
-              <tr v-for="sol in filteredSolicitudes" :key="sol.id_solicitud" class="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
-                <td class="py-4 px-6">
-                  <span class="font-mono text-slate-400">#{{ sol.id_solicitud }}</span>
-                  <div class="mt-1">
-                    <span :class="[
-                      'px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider',
-                      sol.tipo === 'TRASLADO_MATRICULA' ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300' : 'bg-purple-100 text-purple-800 dark:bg-purple-950/40 dark:text-purple-300'
-                    ]">
-                      {{ sol.tipo === 'TRASLADO_MATRICULA' ? 'Matrícula' : 'Usuario' }}
-                    </span>
+              <!-- Tipo -->
+              <td class="px-6 py-4">
+                <span :class="[getTypeBadge(s.tipo).class, 'px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider border']">
+                  {{ getTypeBadge(s.tipo).label }}
+                </span>
+              </td>
+
+              <!-- Origen -> Destino -->
+              <td class="px-6 py-4">
+                <div class="space-y-1">
+                  <div class="flex items-center gap-1.5 text-slate-600 dark:text-slate-400">
+                    <Building :size="12" class="shrink-0 text-slate-400" />
+                    <span class="font-semibold truncate max-w-[180px]" :title="s.colegio_origen_nombre">{{ s.colegio_origen_nombre }}</span>
                   </div>
-                </td>
-
-                <td class="py-4 px-6">
-                  <p class="font-bold text-slate-900 dark:text-white">{{ sol.usuario_nombre }} {{ sol.usuario_apellido }}</p>
-                  <p class="text-[11px] text-slate-400 font-mono">{{ sol.usuario_email }} | Doc: {{ sol.usuario_documento || 'Sin doc' }}</p>
-                </td>
-
-                <td class="py-4 px-6">
-                  <div class="flex items-center gap-2 text-xs">
-                    <span class="font-bold text-slate-700 dark:text-slate-300">{{ sol.colegio_origen_nombre }}</span>
-                    <ChevronRight :size="14" class="text-slate-400" />
-                    <span class="font-bold text-indigo-600 dark:text-indigo-400">{{ sol.colegio_destino_nombre }}</span>
+                  <div class="flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400 font-bold">
+                    <span class="text-xs">→</span>
+                    <Building2 :size="12" class="shrink-0" />
+                    <span class="truncate max-w-[180px]" :title="s.colegio_destino_nombre">{{ s.colegio_destino_nombre }}</span>
                   </div>
-                </td>
+                </div>
+              </td>
 
-                <td class="py-4 px-6">
-                  <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold" :class="getStatusBadge(sol.estado).bg">
-                    <component :is="getStatusBadge(sol.estado).icon" :size="14" />
-                    <span>{{ getStatusBadge(sol.estado).label }}</span>
-                  </div>
-                </td>
-
-                <td class="py-4 px-6 text-slate-500 dark:text-slate-400">
-                  {{ formatDate(sol.fecha_creacion) }}
-                </td>
-
-                <td class="py-4 px-6 text-right">
-                  <button 
-                    @click="openDetailModal(sol)"
-                    class="bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 px-3.5 py-1.5 rounded-xl font-bold text-xs transition-all inline-flex items-center gap-1.5"
+              <!-- Consenso Tripartito de Votos -->
+              <td class="px-6 py-4">
+                <div class="flex items-center gap-2">
+                  <div 
+                    v-for="item in getApprovalMatrix(s)" 
+                    :key="item.rol"
+                    :title="`${item.label}: ${item.aprobacion ? 'Aprobado por ' + item.aprobacion.usuario_nombre : 'Pendiente'}`"
+                    :class="[
+                      'w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-black transition-all',
+                      item.aprobacion 
+                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 ring-2 ring-emerald-500/20' 
+                        : 'bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500'
+                    ]"
                   >
-                    <span>Ver Detalle</span>
-                    <ChevronRight :size="14" />
+                    <Check v-if="item.aprobacion" :size="14" />
+                    <Clock v-else :size="12" />
+                  </div>
+                </div>
+              </td>
+
+              <!-- Estado -->
+              <td class="px-6 py-4">
+                <span :class="[getStatusBadge(s.estado).class, 'px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border']">
+                  {{ getStatusBadge(s.estado).label }}
+                </span>
+              </td>
+
+              <!-- Acciones -->
+              <td class="px-6 py-4 text-right">
+                <div class="flex items-center justify-end gap-2">
+                  <button
+                    v-if="s.tipo === 'TRASLADO_MATRICULA'"
+                    @click.stop="openAcademicDataModal(s.id_solicitud)"
+                    class="p-2 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-300 rounded-xl text-xs font-bold transition-all"
+                    title="Ver/Exportar Datos Académicos"
+                  >
+                    <ClipboardList :size="15" />
                   </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+
+                  <button 
+                    @click="openDetailModal(s)"
+                    class="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-white rounded-xl font-bold text-xs transition-all active:scale-95"
+                  >
+                    Ver Detalle
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
+
     </div>
 
-    <!-- TAB 2: VINCULACIONES INSTITUCIONALES -->
-    <div v-if="activeTab === 'vinculaciones'" class="space-y-6">
-      <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800/80 shadow-xl p-6">
-        <h2 class="text-lg font-black text-slate-800 dark:text-white mb-1">Historial de Vinculaciones Institucionales</h2>
-        <p class="text-xs text-slate-500 dark:text-slate-400 mb-6">Muestra los colegios y roles a los que has estado vinculado dentro del ecosistema AcademiaNeiva</p>
-
-        <div v-if="vinculaciones.length === 0" class="p-8 text-center text-slate-400">
-          <Building :size="32" class="mx-auto text-slate-300 dark:text-slate-600 mb-2" />
-          <p class="text-xs">No tienes vinculaciones registradas en tu historial.</p>
-        </div>
-
-        <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          <div 
-            v-for="vinc in vinculaciones" 
-            :key="vinc.id_usuario_colegio"
-            class="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-200 dark:border-slate-700/60 relative overflow-hidden flex flex-col justify-between space-y-4"
-          >
-            <div class="flex items-start justify-between">
-              <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold">
-                  <Building2 :size="20" />
-                </div>
-                <div>
-                  <h3 class="font-bold text-slate-900 dark:text-white text-sm">{{ vinc.colegio_nombre }}</h3>
-                  <p class="text-xs font-semibold text-slate-500 dark:text-slate-400">Rol: {{ vinc.rol_nombre }}</p>
-                </div>
-              </div>
-              <span :class="[
-                'px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider',
-                vinc.estado === 'ACTIVO' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300' : 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-400'
-              ]">
-                {{ vinc.estado }}
+    <!-- MODAL: DETALLE Y APROBACIÓN DE SOLICITUD -->
+    <div v-if="showDetailModal && selectedSolicitud" class="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4">
+      <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-2xl w-full p-6 md:p-8 space-y-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+        
+        <!-- Header Modal -->
+        <div class="flex items-start justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
+          <div>
+            <div class="flex items-center gap-2">
+              <span :class="[getTypeBadge(selectedSolicitud.tipo).class, 'px-2.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider border']">
+                {{ getTypeBadge(selectedSolicitud.tipo).label }}
+              </span>
+              <span :class="[getStatusBadge(selectedSolicitud.estado).class, 'px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border']">
+                {{ getStatusBadge(selectedSolicitud.estado).label }}
               </span>
             </div>
-
-            <div class="text-[11px] text-slate-400 space-y-1 border-t border-slate-200/60 dark:border-slate-700/60 pt-3">
-              <p>Vinculado desde: <span class="font-semibold text-slate-700 dark:text-slate-300">{{ formatDate(vinc.fecha_inicio) }}</span></p>
-              <p v-if="vinc.fecha_fin">Vinculado hasta: <span class="font-semibold text-slate-700 dark:text-slate-300">{{ formatDate(vinc.fecha_fin) }}</span></p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- MODAL: DETALLE Y CRONOLOGÍA DE APROBACIONES -->
-    <div v-if="showDetailModal && selectedSolicitud" class="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4">
-      <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-2xl w-full p-6 md:p-8 space-y-6 max-h-[90vh] overflow-y-auto shadow-2xl">
-        
-        <!-- Modal Header -->
-        <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
-          <div class="flex items-center gap-3">
-            <div class="p-2.5 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-xl">
-              <ArrowLeftRight :size="20" />
-            </div>
-            <div>
-              <h2 class="text-lg font-black text-slate-900 dark:text-white">Detalle de Traslado #{{ selectedSolicitud.id_solicitud }}</h2>
-              <p class="text-xs text-slate-400">Cronología de votos y resolución institucional</p>
-            </div>
-          </div>
-          <button @click="showDetailModal = false" class="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
-            <X :size="20" />
-          </button>
-        </div>
-
-        <!-- Info Summary Grid -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-200/60 dark:border-slate-800/60">
-          <div>
-            <p class="text-slate-400 font-bold uppercase text-[10px]">Estudiante / Usuario</p>
-            <p class="font-bold text-slate-800 dark:text-white text-sm mt-0.5">{{ selectedSolicitud.usuario_nombre }} {{ selectedSolicitud.usuario_apellido }}</p>
-            <p class="text-slate-500 dark:text-slate-400 text-[11px]">Doc: {{ selectedSolicitud.usuario_documento }}</p>
+            <h2 class="text-xl font-black text-slate-900 dark:text-white mt-1">
+              {{ selectedSolicitud.usuario_nombre }} {{ selectedSolicitud.usuario_apellido }}
+            </h2>
+            <p class="text-xs text-slate-400 font-mono">Doc: {{ selectedSolicitud.usuario_documento }} | ID Solicitud #{{ selectedSolicitud.id_solicitud }}</p>
           </div>
 
-          <div>
-            <p class="text-slate-400 font-bold uppercase text-[10px]">Estado Actual</p>
-            <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold mt-1" :class="getStatusBadge(selectedSolicitud.estado).bg">
-              <component :is="getStatusBadge(selectedSolicitud.estado).icon" :size="14" />
-              <span>{{ getStatusBadge(selectedSolicitud.estado).label }}</span>
-            </div>
-          </div>
-
-          <div>
-            <p class="text-slate-400 font-bold uppercase text-[10px]">Colegio Origen</p>
-            <p class="font-bold text-slate-700 dark:text-slate-200 mt-0.5">{{ selectedSolicitud.colegio_origen_nombre }}</p>
-          </div>
-
-          <div>
-            <p class="text-slate-400 font-bold uppercase text-[10px]">Colegio Destino</p>
-            <p class="font-bold text-indigo-600 dark:text-indigo-400 mt-0.5">{{ selectedSolicitud.colegio_destino_nombre }}</p>
-          </div>
-
-          <div class="md:col-span-2">
-            <p class="text-slate-400 font-bold uppercase text-[10px]">Motivo del Traslado</p>
-            <p class="font-medium text-slate-700 dark:text-slate-300 mt-0.5 bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200/80 dark:border-slate-700/60">{{ selectedSolicitud.motivo }}</p>
-          </div>
-
-          <!-- Botón de Exportar Datos Académicos de Traslado -->
-          <div class="md:col-span-2 pt-1">
+          <div class="flex items-center gap-2">
             <button 
-              @click="academicTargetId = selectedSolicitud.id_solicitud; showAcademicDataModal = true"
-              class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-3 px-4 rounded-xl shadow-sm flex items-center justify-center gap-2 uppercase tracking-wider transition-all"
+              v-if="selectedSolicitud.tipo === 'TRASLADO_MATRICULA'"
+              @click="openAcademicDataModal(selectedSolicitud.id_solicitud)"
+              class="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:hover:bg-indigo-900/80 text-indigo-600 dark:text-indigo-300 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all"
             >
-              <ClipboardList :size="16" />
-              Datos académicos de traslados
+              <ClipboardList :size="14" />
+              <span>Datos Académicos</span>
+            </button>
+
+            <button 
+              @click="showDetailModal = false"
+              class="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-white rounded-xl"
+            >
+              <X :size="20" />
             </button>
           </div>
         </div>
 
-        <!-- Consenso Matrix Section (Estado de Aprobaciones Requeridas) -->
-        <div class="space-y-3">
-          <div class="flex items-center justify-between">
-            <h3 class="text-xs font-black uppercase text-slate-400 tracking-wider">Estado de Aprobaciones Requeridas (Consenso)</h3>
-            <span class="text-[10px] font-bold text-slate-400">3 Votos Requeridos</span>
+        <!-- Transfer Route Info -->
+        <div class="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 flex flex-col md:flex-row items-center justify-between gap-4">
+          <div class="space-y-0.5 text-center md:text-left flex-1">
+            <p class="text-[10px] font-black uppercase text-slate-400 tracking-wider">Institución de Origen</p>
+            <p class="font-bold text-slate-800 dark:text-slate-200 text-sm">{{ selectedSolicitud.colegio_origen_nombre }}</p>
           </div>
 
+          <div class="p-2 bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 rounded-full">
+            <ArrowLeftRight :size="16" />
+          </div>
+
+          <div class="space-y-0.5 text-center md:text-right flex-1">
+            <p class="text-[10px] font-black uppercase text-indigo-500 tracking-wider">Institución de Destino</p>
+            <p class="font-bold text-indigo-900 dark:text-indigo-300 text-sm">{{ selectedSolicitud.colegio_destino_nombre }}</p>
+          </div>
+        </div>
+
+        <!-- Reason -->
+        <div class="space-y-1">
+          <label class="text-[10px] font-black uppercase text-slate-400 tracking-wider">Motivo Declarado</label>
+          <div class="p-3.5 bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 rounded-xl text-xs text-slate-700 dark:text-slate-300 italic">
+            "{{ selectedSolicitud.motivo }}"
+          </div>
+        </div>
+
+        <!-- Consenso Tripartito Visual Cards -->
+        <div class="space-y-3">
+          <h3 class="text-xs font-black uppercase text-slate-400 tracking-wider">Consenso Tripartito de Autorización</h3>
+
           <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div
-              v-for="item in getApprovalMatrix(selectedSolicitud)"
+            <div 
+              v-for="item in getApprovalMatrix(selectedSolicitud)" 
               :key="item.rol"
               :class="[
                 'p-3.5 rounded-2xl border transition-all flex flex-col justify-between space-y-2',
-                item.aprobacion
-                  ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/40'
+                item.aprobacion 
+                  ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/40' 
                   : 'bg-amber-50/50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/40'
               ]"
             >
@@ -994,8 +909,8 @@ const canUserApproveCurrentModal = computed(() => {
                   <span class="text-[10px] font-black uppercase tracking-wider text-slate-400">{{ item.label }}</span>
                   <span :class="[
                     'px-2 py-0.5 rounded-full text-[9px] font-black uppercase flex items-center gap-1',
-                    item.aprobacion
-                      ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300'
+                    item.aprobacion 
+                      ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300' 
                       : 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300'
                   ]">
                     <CheckCircle2 v-if="item.aprobacion" :size="10" />
@@ -1061,6 +976,55 @@ const canUserApproveCurrentModal = computed(() => {
           </div>
         </div>
 
+        <!-- Verificación de Cupos y Selección de Grupo para Colegio Destino -->
+        <div v-if="selectedSolicitud.tipo === 'TRASLADO_MATRICULA' && canUserApproveCurrentModal && (isDirectivoDestino || isAdminGeneral)" class="p-4 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 rounded-2xl space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-black uppercase text-slate-600 dark:text-slate-300">
+              Disponibilidad en Grado: <span class="text-indigo-600 dark:text-indigo-400">{{ disponibilidadCupos?.grado_nombre || 'Consultando...' }}</span>
+            </span>
+            <span v-if="disponibilidadCupos" :class="[
+              'px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase',
+              disponibilidadCupos.hay_cupos ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300'
+            ]">
+              {{ disponibilidadCupos.hay_cupos ? `${disponibilidadCupos.cupos_totales_grado} Cupos Disponibles` : 'Sin Cupos' }}
+            </span>
+          </div>
+
+          <div v-if="disponibilidadCupos && !disponibilidadCupos.hay_cupos && disponibilidadCupos.grupos.length > 0" class="p-3 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800 rounded-xl text-xs text-rose-700 dark:text-rose-300 font-semibold flex items-center gap-2">
+            <AlertTriangle :size="16" class="shrink-0" />
+            <span>No hay cupos disponibles en el grado solicitado. No es posible aprobar el traslado; debe rechazarlo o habilitar cupos en su institución.</span>
+          </div>
+
+          <div v-else-if="disponibilidadCupos && disponibilidadCupos.grupos.length > 0" class="space-y-1.5">
+            <label class="block text-[11px] font-bold text-slate-500 uppercase">Seleccionar Grupo / Jornada de Destino (Recomendado):</label>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <button 
+                v-for="g in disponibilidadCupos.grupos" 
+                :key="g.id_grupo"
+                type="button"
+                @click="selectedGrupoDestino = selectedGrupoDestino === g.id_grupo ? null : g.id_grupo"
+                :disabled="g.cupos_disponibles <= 0"
+                :class="[
+                  'p-2.5 rounded-xl border text-left text-xs transition-all flex items-center justify-between gap-2',
+                  selectedGrupoDestino === g.id_grupo 
+                    ? 'bg-indigo-50 dark:bg-indigo-950/50 border-indigo-500 text-indigo-900 dark:text-indigo-200 ring-2 ring-indigo-500' 
+                    : g.cupos_disponibles > 0 
+                    ? 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-indigo-300' 
+                    : 'bg-slate-100 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800 opacity-50 cursor-not-allowed'
+                ]"
+              >
+                <div>
+                  <p class="font-bold text-slate-800 dark:text-slate-100">{{ g.nombre_completo }}</p>
+                  <p class="text-[10px] text-slate-400 font-medium">Jornada: {{ g.jornada }}</p>
+                </div>
+                <span class="text-[10px] font-black shrink-0 px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
+                  {{ g.cupos_disponibles }} cupos
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+
         <!-- Already Voted Banner -->
         <div v-if="userAlreadyVotedMessage && !['EJECUTADA', 'RECHAZADA', 'CANCELADA'].includes(selectedSolicitud.estado)" class="border-t border-slate-100 dark:border-slate-800 pt-4">
           <div class="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl text-emerald-700 dark:text-emerald-400 font-bold text-xs flex items-center gap-3">
@@ -1086,8 +1050,8 @@ const canUserApproveCurrentModal = computed(() => {
           <div class="flex items-center gap-3">
             <button 
               @click="handleProcessApproval('APROBAR')"
-              :disabled="submitting"
-              class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition-all disabled:opacity-50"
+              :disabled="submitting || Boolean(disponibilidadCupos && !disponibilidadCupos.hay_cupos && disponibilidadCupos.grupos.length > 0)"
+              class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition-all disabled:opacity-40"
             >
               Aprobar Traslado
             </button>
@@ -1117,106 +1081,127 @@ const canUserApproveCurrentModal = computed(() => {
             </div>
             <div>
               <h2 class="text-lg font-black text-slate-900 dark:text-white">Nueva Solicitud de Traslado</h2>
-              <p class="text-xs text-slate-400">Completa la información para iniciar el flujo de aprobación tripartita</p>
+              <p class="text-xs text-slate-400">Registrar traslado interinstitucional de estudiante o usuario</p>
             </div>
           </div>
-          <button @click="showCreateModal = false" class="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+          <button 
+            @click="showCreateModal = false"
+            class="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-white rounded-xl"
+          >
             <X :size="20" />
           </button>
         </div>
 
-        <!-- Form Body -->
+        <!-- Form Fields -->
         <div class="space-y-4 text-xs">
-          <!-- Tipo -->
+          
+          <!-- Tipo de Traslado -->
           <div>
             <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Tipo de Traslado</label>
             <select 
               v-model="newTraslado.tipo"
-              class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
-              <option value="TRASLADO_MATRICULA">Traslado de Estudiante (con Matrícula)</option>
-              <option value="TRASLADO_USUARIO">Traslado de Usuario / Personal</option>
-              <option v-if="isAdminGeneral" value="TRASLADO_DIRECTIVO">Traslado de Directivo Institucional</option>
+              <option value="TRASLADO_MATRICULA">Estudiante (Matrícula Escolar)</option>
+              <option value="TRASLADO_USUARIO">Personal / Docente</option>
+              <option v-if="isAdminGeneral" value="TRASLADO_DIRECTIVO">Directivo (Requiere Autorización)</option>
             </select>
-            <p v-if="newTraslado.tipo === 'TRASLADO_DIRECTIVO'" class="mt-1 text-[10px] text-purple-600 dark:text-purple-400 font-semibold">
-              ⚠️ Solo disponible para el Administrador General. Requiere aprobación del Admin + Directivo Origen + Directivo Destino.
-            </p>
           </div>
 
-          <!-- Selección de Colegio Origen (solo admin_general puede elegirlo) -->
-          <div v-if="isAdminGeneral">
+          <!-- Colegio Origen (Solo editable para Admin General) -->
+          <div>
             <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Institución de Origen</label>
-            <select
-              v-model.number="newTraslado.id_colegio_origen"
-              class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            <select 
+              v-if="isAdminGeneral"
+              v-model="newTraslado.id_colegio_origen"
+              class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
-              <option :value="null" disabled>-- Selecciona la institución de origen --</option>
-              <option v-for="col in colegios" :key="col.id_colegio" :value="col.id_colegio">
-                {{ col.nombre }}
+              <option v-for="c in colegios" :key="c.id_colegio" :value="c.id_colegio">
+                {{ c.nombre }}
               </option>
             </select>
+            <input 
+              v-else
+              type="text"
+              disabled
+              :value="colegios.find(c => c.id_colegio === newTraslado.id_colegio_origen)?.nombre || 'Mi Institución Actual'"
+              class="w-full px-4 py-2.5 bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-500 font-bold"
+            />
           </div>
 
-          <!-- Estudiante / Usuario Selector (cambia según tipo) -->
-          <div v-if="newTraslado.tipo === 'TRASLADO_MATRICULA'">
-            <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Seleccionar Estudiante</label>
+          <!-- Usuario / Estudiante a trasladar -->
+          <div>
+            <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+              {{ newTraslado.tipo === 'TRASLADO_MATRICULA' ? 'Estudiante a Trasladar' : 'Usuario / Funcionario a Trasladar' }}
+            </label>
+
+            <!-- Selector para Matrícula de Estudiante -->
             <select 
-              v-model.number="newTraslado.id_usuario"
-              class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              v-if="newTraslado.tipo === 'TRASLADO_MATRICULA'"
+              v-model="newTraslado.id_usuario"
+              class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
-              <option :value="null" disabled>-- Selecciona un estudiante --</option>
-              <option v-for="est in estudiantesColegio" :key="est.id_estudiante" :value="est.id_usuario">
-                {{ est.nombre }} {{ est.apellido }} ({{ est.codigo || est.documento || 'Sin código' }}) - {{ est.grado || '' }} {{ est.seccion || '' }}
+              <option :value="null">Selecciona un estudiante activo...</option>
+              <option v-for="e in estudiantesColegio" :key="e.id_usuario" :value="e.id_usuario">
+                {{ e.nombre }} {{ e.apellido }} (Doc: {{ e.documento }} | {{ e.grado_seccion || 'Sin Grupo' }})
               </option>
             </select>
-          </div>
 
-          <!-- Selector de Personal (Docentes, Padres, etc.) para TRASLADO_USUARIO -->
-          <div v-else-if="newTraslado.tipo === 'TRASLADO_USUARIO'">
-            <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Seleccionar Personal (Docente / Acudiente / otro)</label>
+            <!-- Selector para Personal / Docente -->
             <select 
-              v-model.number="newTraslado.id_usuario"
-              class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              v-else-if="newTraslado.tipo === 'TRASLADO_USUARIO'"
+              v-model="newTraslado.id_usuario"
+              class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
-              <option :value="null" disabled>-- Selecciona el usuario --</option>
+              <option :value="null">Selecciona un docente/funcionario...</option>
               <option v-for="p in personalColegio" :key="p.id_usuario" :value="p.id_usuario">
-                {{ p.nombre }} {{ p.apellido }} ({{ p.rol_nombre }}) - {{ p.email }}
+                {{ p.nombre }} {{ p.apellido }} (Doc: {{ p.documento }} - {{ p.rol }})
               </option>
             </select>
-            <p v-if="personalColegio.length === 0" class="text-[10px] text-amber-600 dark:text-amber-400 mt-1">No se encontró personal disponible para traslado en esta institución.</p>
-          </div>
 
-          <!-- Selector de Directivos para TRASLADO_DIRECTIVO (solo admin_general) -->
-          <div v-else-if="newTraslado.tipo === 'TRASLADO_DIRECTIVO'">
-            <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Seleccionar Directivo a Trasladar</label>
+            <!-- Selector para Directivos (Admin General) -->
             <select 
-              v-model.number="newTraslado.id_usuario"
-              class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+              v-else
+              v-model="newTraslado.id_usuario"
+              class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
-              <option :value="null" disabled>-- Selecciona el directivo --</option>
+              <option :value="null">Selecciona un directivo...</option>
               <option v-for="d in directivosColegio" :key="d.id_usuario" :value="d.id_usuario">
-                {{ d.nombre }} {{ d.apellido }} (Directivo) - {{ d.email }}
+                {{ d.nombre }} {{ d.apellido }} (Doc: {{ d.documento }})
               </option>
             </select>
-            <p v-if="directivosColegio.length === 0" class="text-[10px] text-amber-600 dark:text-amber-400 mt-1">No se encontraron directivos en la institución seleccionada.</p>
           </div>
 
-          <!-- Colegio Destino Selector -->
+          <!-- Colegio Destino -->
           <div>
             <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Institución de Destino</label>
             <select 
-              v-model.number="newTraslado.id_colegio_destino"
+              v-model="newTraslado.id_colegio_destino"
+              class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option :value="null">Selecciona la institución receptora...</option>
+              <option 
+                v-for="c in colegios.filter(col => col.id_colegio !== newTraslado.id_colegio_origen)" 
+                :key="c.id_colegio" 
+                :value="c.id_colegio"
+              >
+                {{ c.nombre }}
+              </option>
+            </select>
+          </div>
+
+          <!-- Jornada Sugerida (Solo para matrícula) -->
+          <div v-if="newTraslado.tipo === 'TRASLADO_MATRICULA'">
+            <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Jornada de Preferencia (Opcional)</label>
+            <select 
+              v-model="newTraslado.jornada_sugerida"
               class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
-              <option :value="null" disabled>-- Selecciona la institución de destino --</option>
-              <option 
-                v-for="col in colegios" 
-                :key="col.id_colegio" 
-                :value="col.id_colegio"
-                :disabled="col.id_colegio === newTraslado.id_colegio_origen"
-              >
-                {{ col.nombre }} {{ col.id_colegio === newTraslado.id_colegio_origen ? '(Colegio Origen Actual)' : '' }}
-              </option>
+              <option value="INDIFERENTE">Cualquier Jornada (Indiferente)</option>
+              <option value="MAÑANA">Jornada Mañana</option>
+              <option value="TARDE">Jornada Tarde</option>
+              <option value="COMPLETA">Jornada Completa / Única</option>
+              <option value="NOCHE">Jornada Nocturna</option>
             </select>
           </div>
 
@@ -1259,5 +1244,6 @@ const canUserApproveCurrentModal = computed(() => {
       :target-id="academicTargetId"
       @close="showAcademicDataModal = false"
     />
+
   </div>
 </template>

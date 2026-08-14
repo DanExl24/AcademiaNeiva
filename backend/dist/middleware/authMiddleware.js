@@ -62,6 +62,8 @@ const verifyToken = async (req, res, next) => {
             jti: decoded.jti,
             supervisionId: null
         };
+        const headerYearId = req.headers['x-academic-year-id'] ? Number(req.headers['x-academic-year-id']) : (req.query.yearId ? Number(req.query.yearId) : null);
+        req.academicYearId = headerYearId && !Number.isNaN(headerYearId) ? headerYearId : null;
         // Bloquear modificaciones si la petición viene de Modo Monitoreo
         const isMonitoringHeader = req.headers['x-monitoring-mode'] === 'true' || req.headers['x-monitoring-mode'] === '1';
         if (isMonitoringHeader) {

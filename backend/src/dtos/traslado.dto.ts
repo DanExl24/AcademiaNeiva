@@ -13,6 +13,7 @@ export const CreateTrasladoSchema = z.object({
     (val) => (val === '' || val === null || val === undefined ? null : Number(val)),
     z.number().positive().nullable().optional()
   ),
+  jornada_sugerida: z.string().optional().nullable(),
   motivo: z.string().min(5, { message: 'El motivo debe contener al menos 5 caracteres' })
 }).refine(data => Number(data.id_colegio_origen) !== Number(data.id_colegio_destino), {
   message: 'La institución de origen y destino deben ser diferentes',
@@ -21,7 +22,11 @@ export const CreateTrasladoSchema = z.object({
 
 export const ApproveTrasladoSchema = z.object({
   accion: z.enum(['APROBAR', 'RECHAZAR', 'CANCELAR']),
-  comentario: z.string().optional().nullable()
+  comentario: z.string().optional().nullable(),
+  id_grupo_destino: z.preprocess(
+    (val) => (val === '' || val === null || val === undefined ? null : Number(val)),
+    z.number().positive().nullable().optional()
+  )
 });
 
 export const FilterTrasladoSchema = z.object({

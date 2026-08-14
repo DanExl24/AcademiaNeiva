@@ -15,6 +15,14 @@ exports.pool = new pg_1.Pool({
     user: process.env.DB_USER || 'postgres',
     password: process.env.DB_PASSWORD || 'postgres',
     database: process.env.DB_NAME || 'AcademiaNeiva',
+    max: 20,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 10000,
+    keepAlive: true,
+});
+// Manejo de errores en clientes inactivos para evitar caídas del proceso (Unhandled 'error' event)
+exports.pool.on('error', (err) => {
+    console.warn('⚠️ [PostgreSQL Pool] Error o desconexión en cliente inactivo:', err.message);
 });
 exports.pool.query(`
   ALTER TABLE public.anio_lectivo ADD COLUMN IF NOT EXISTS fecha_inicio DATE;

@@ -72,7 +72,7 @@ class MatriculaService {
                 throw new Error(`Documento requerido faltante: ${doc}`);
             }
         }
-        return await kysely_1.db.transaction().execute(async (trx) => {
+        const result = await kysely_1.db.transaction().execute(async (trx) => {
             let idMatricula = 0;
             let tokenSeguimiento = '';
             let isExtraordinary = false;
@@ -119,17 +119,25 @@ class MatriculaService {
                 const start = new Date(configRes.fecha_inicio);
                 const end = new Date(configRes.fecha_cierre);
                 if (now < start) {
-                    throw new Error(`Las inscripciones aún no han comenzado. Abren el ${start.toLocaleDateString('es-CO')}.`);
+                    throw new Error(`Las inscripciones aún no están abiertas. Inician el ${start.toLocaleDateString('es-CO')}.`);
                 }
                 if (now > end) {
                     throw new Error(`Las inscripciones ya cerraron. Finalizaron el ${end.toLocaleDateString('es-CO')}.`);
                 }
+                // Obtener el id_nivel a partir del grupo seleccionado
+                const grupoInfo = await trx
+                    .selectFrom('grupos as g')
+                    .innerJoin('tipo_grado as tg', 'g.id_tipo_grado', 'tg.id_tipo_grado')
+                    .select(['g.id_nivel as g_nivel', 'tg.id_nivel as tg_nivel'])
+                    .where('g.id_grupo', '=', Number(data.grade))
+                    .executeTakeFirst();
+                const resolvedNivelId = grupoInfo?.g_nivel || grupoInfo?.tg_nivel || null;
                 // Insertar nueva matrícula regular
                 const matRes = await trx
                     .insertInto("matricula")
                     .values({
                     id_estudiante: null,
-                    id_nivel: null,
+                    id_nivel: resolvedNivelId,
                     id_grupo: Number(data.grade),
                     id_colegio: Number(id_colegio),
                     id_anio: activeYearId,
@@ -144,10 +152,19 @@ class MatriculaService {
                 tokenSeguimiento = matRes.token_seguimiento || "";
             }
             else {
+                // Obtener el id_nivel para la matrícula extraordinaria
+                const grupoInfo = await trx
+                    .selectFrom('grupos as g')
+                    .innerJoin('tipo_grado as tg', 'g.id_tipo_grado', 'tg.id_tipo_grado')
+                    .select(['g.id_nivel as g_nivel', 'tg.id_nivel as tg_nivel'])
+                    .where('g.id_grupo', '=', Number(data.grade))
+                    .executeTakeFirst();
+                const resolvedNivelId = grupoInfo?.g_nivel || grupoInfo?.tg_nivel || null;
                 // Actualizar la matrícula extraordinaria pre-creada con el grupo y datos del formulario
                 await trx
                     .updateTable("matricula")
                     .set({
+                    id_nivel: resolvedNivelId,
                     id_grupo: Number(data.grade),
                     tiene_discapacidad: hasDisability === 'true' || hasDisability === true,
                     es_extranjero: isForeigner === 'true' || isForeigner === true,
@@ -159,31 +176,37 @@ class MatriculaService {
             // 2. Guardar documentos en tabla documento_matriculas
             for (const [key, fileArray] of Object.entries(files)) {
                 const file = fileArray[0];
-                const filename = file.originalname || file.filename || `${key}.pdf`;
-                await trx
-                    .insertInto("documento_matriculas")
-                    .values({
-                    id_matricula: idMatricula,
-                    tipo_documento: key,
-                    url: filename,
-                    estado: 'PENDIENTE',
-                    fecha: new Date(),
-                    id_colegio: Number(id_colegio),
-                    contenido: file.buffer || null,
-                    mime_type: file.mimetype || null,
-                    nombre_original: file.originalname || filename,
-                    tamano_bytes: file.size || null
-                })
-                    .execute();
+                if (file) {
+                    const filename = file.originalname || file.filename || `${key}.pdf`;
+                    await trx
+                        .insertInto("documento_matriculas")
+                        .values({
+                        id_matricula: idMatricula,
+                        tipo_documento: key,
+                        url: filename,
+                        estado: 'PENDIENTE',
+                        fecha: new Date(),
+                        id_colegio: Number(id_colegio),
+                        contenido: file.buffer || null,
+                        mime_type: file.mimetype || null,
+                        nombre_original: file.originalname || filename,
+                        tamano_bytes: file.size || null
+                    })
+                        .execute();
+                }
             }
-            // Enviar correo de confirmación de forma asíncrona
-            if (parentEmail) {
-                notificationService_1.NotificationService.sendEnrollmentSubmittedEmail(parentEmail, 'Padre de Familia', 'Aspirante', tokenSeguimiento).catch(err => {
-                    console.error('Error enviando correo de confirmación de matrícula:', err);
-                });
-            }
-            return { idMatricula, token_seguimiento: tokenSeguimiento };
+            return {
+                message: "Solicitud de matrícula radicada exitosamente",
+                id_matricula: idMatricula,
+                token_seguimiento: tokenSeguimiento
+            };
         });
+        if (parentEmail && result.token_seguimiento) {
+            notificationService_1.NotificationService.sendEnrollmentSubmittedEmail(parentEmail, 'Padre de Familia', 'Aspirante', result.token_seguimiento).catch(err => {
+                console.error('Error enviando correo de confirmación de matrícula:', err);
+            });
+        }
+        return result;
     }
     /** MR02 – Ver matrículas filtradas por estado y año lectivo (Kysely Type-Safe Query) */
     static async getFiltered(idColegio, estado, yearId) {
@@ -191,10 +214,10 @@ class MatriculaService {
             .selectFrom('matricula as m')
             .leftJoin('estudiante as e', 'm.id_estudiante', 'e.id_estudiante')
             .leftJoin('usuario as u', 'e.id_usuario', 'u.id_usuario')
-            .leftJoin('nivel_escolar as n', 'm.id_nivel', 'n.id_nivel')
             .leftJoin('grupos as g', 'm.id_grupo', 'g.id_grupo')
             .leftJoin('tipo_grado as tg', 'g.id_tipo_grado', 'tg.id_tipo_grado')
             .leftJoin('secciones as s', 'g.id_seccion', 's.id_seccion')
+            .leftJoin('nivel_escolar as n', (join) => join.onRef('n.id_nivel', '=', (0, kysely_2.sql) `COALESCE(m.id_nivel, g.id_nivel, tg.id_nivel)`))
             .leftJoin('solicitud_traslado as st', (join) => join.on((eb) => eb.or([
             eb('st.id_matricula', '=', eb.ref('m.id_matricula')),
             eb.and([
@@ -207,7 +230,7 @@ class MatriculaService {
             .select([
             'm.id_matricula',
             'm.id_estudiante',
-            'm.id_nivel',
+            (0, kysely_2.sql) `COALESCE(m.id_nivel, g.id_nivel, tg.id_nivel)`.as('id_nivel'),
             'm.id_grupo',
             'm.id_colegio',
             'm.id_anio',
@@ -268,12 +291,12 @@ class MatriculaService {
     static async getDetails(idMatricula) {
         const mat = await kysely_1.db
             .selectFrom('matricula as m')
-            .innerJoin('grupos as g', 'm.id_grupo', 'g.id_grupo')
+            .leftJoin('grupos as g', 'm.id_grupo', 'g.id_grupo')
             .leftJoin('colegio as col', 'col.id_colegio', 'm.id_colegio')
-            .leftJoin('nivel_escolar as ne', 'g.id_nivel', 'ne.id_nivel')
             .leftJoin('tipo_grado as tg', 'g.id_tipo_grado', 'tg.id_tipo_grado')
             .leftJoin('secciones as s', 'g.id_seccion', 's.id_seccion')
             .leftJoin('jornada as j', 'g.id_jornada', 'j.id_jornada')
+            .leftJoin('nivel_escolar as ne', (join) => join.onRef('ne.id_nivel', '=', (0, kysely_2.sql) `COALESCE(m.id_nivel, g.id_nivel, tg.id_nivel)`))
             .leftJoin('estudiante as e', 'e.id_estudiante', 'm.id_estudiante')
             .leftJoin('usuario as u_est', 'e.id_usuario', 'u_est.id_usuario')
             .leftJoin((eb) => eb
@@ -319,28 +342,37 @@ class MatriculaService {
             'u_par.id_tipodocumento as parent_id_tipodocumento',
             'col.escudo_url',
             'col.nombre as school_name',
-            (0, kysely_2.sql) `(g.cupos_totales - (SELECT COUNT(*) FROM matricula WHERE id_grupo = g.id_grupo AND estado IN ('ACTIVA', 'TRASLADADA')))::int`.as('cupos_restantes')
+            (0, kysely_2.sql) `CASE WHEN g.id_grupo IS NOT NULL THEN (g.cupos_totales - (SELECT COUNT(*) FROM matricula WHERE id_grupo = g.id_grupo AND estado IN ('ACTIVA', 'TRASLADADA')))::int ELSE 0 END`.as('cupos_restantes')
         ])
             .where('m.id_matricula', '=', idMatricula)
             .executeTakeFirst();
         if (!mat)
             throw new Error('Matrícula no encontrada');
-        // Buscar otras secciones del mismo grado/jornada/colegio
-        const sections = await kysely_1.db
-            .selectFrom('grupos as g')
-            .innerJoin('secciones as s', 'g.id_seccion', 's.id_seccion')
-            .innerJoin('tipo_grado as tg', 'g.id_tipo_grado', 'tg.id_tipo_grado')
-            .innerJoin('nivel_escolar as ne', 'g.id_nivel', 'ne.id_nivel')
-            .select([
-            'g.id_grupo as id_grado',
-            's.nombre as seccion',
-            (0, kysely_2.sql) `(g.cupos_totales - (SELECT COUNT(*) FROM matricula WHERE id_grupo = g.id_grupo AND estado IN ('ACTIVA', 'TRASLADADA')))::int`.as('cupos_restantes')
-        ])
-            .where('g.id_colegio', '=', mat.id_colegio)
-            .where('ne.nombre', '=', mat.grado_nivel || '')
-            .where('tg.nombre', '=', mat.tipo_grado || '')
-            .where('g.id_jornada', '=', mat.id_jornada || 0)
-            .execute();
+        // Buscar otras secciones del mismo grado/jornada/colegio solo si existe tipo_grado y jornada
+        let sections = [];
+        if (mat.id_colegio && (mat.id_grupo || mat.tipo_grado)) {
+            let secQuery = kysely_1.db
+                .selectFrom('grupos as g')
+                .innerJoin('secciones as s', 'g.id_seccion', 's.id_seccion')
+                .innerJoin('tipo_grado as tg', 'g.id_tipo_grado', 'tg.id_tipo_grado')
+                .innerJoin('nivel_escolar as ne', 'g.id_nivel', 'ne.id_nivel')
+                .select([
+                'g.id_grupo as id_grado',
+                's.nombre as seccion',
+                (0, kysely_2.sql) `(g.cupos_totales - (SELECT COUNT(*) FROM matricula WHERE id_grupo = g.id_grupo AND estado IN ('ACTIVA', 'TRASLADADA')))::int`.as('cupos_restantes')
+            ])
+                .where('g.id_colegio', '=', mat.id_colegio);
+            if (mat.grado_nivel) {
+                secQuery = secQuery.where('ne.nombre', '=', mat.grado_nivel);
+            }
+            if (mat.tipo_grado) {
+                secQuery = secQuery.where('tg.nombre', '=', mat.tipo_grado);
+            }
+            if (mat.id_jornada) {
+                secQuery = secQuery.where('g.id_jornada', '=', mat.id_jornada);
+            }
+            sections = await secQuery.execute();
+        }
         const rawDocs = await kysely_1.db
             .selectFrom('documento_matriculas as d')
             .leftJoin('matricula as m', 'd.id_matricula', 'm.id_matricula')

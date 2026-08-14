@@ -2,7 +2,7 @@
 
 **Sistema:** Academia Neiva  
 **Módulo:** Gestión de Traslados (Interinstitucionales e Internos)  
-**Última actualización:** 2026-08-10
+**Última actualización:** 2026-08-14
 
 ---
 
@@ -15,7 +15,7 @@
 ### Criterios de Aceptación
 
 1. **Dado** que el usuario origen tiene una vinculación activa (`ACTIVO`) en `usuario_colegio` con el colegio de origen,  
-2. **Cuando** se envía la solicitud mediante `POST /api/traslados` especificando `id_usuario`, `id_colegio_origen`, `id_colegio_destino`, `tipo` y `motivo`,  
+2. **Cuando** se envía la solicitud mediante `POST /api/traslados` especificando `id_usuario`, `id_colegio_origen`, `id_colegio_destino`, `tipo`, `motivo` y opcionalmente `jornada_sugerida`,  
 3. **Entonces** el sistema valida que las instituciones sean diferentes y que no exista otra solicitud en trámite entre los mismos colegios.  
 4. **Y** registra la solicitud en estado `EN_APROBACION`, creando automáticamente el primer registro de aprobación (`APROBAR`) para el creador.
 
@@ -51,7 +51,8 @@
 3. **Entonces** el sistema desactiva la vinculación en el colegio de origen (`estado = 'INACTIVO'`, `fecha_fin = NOW()`),  
 4. **Y** crea/activa la vinculación en el colegio de destino (`estado = 'ACTIVO'`, `fecha_inicio = NOW()`),  
 5. **Y** actualiza `usuario.id_colegio` e `estudiante.id_colegio` a la nueva institución,  
-6. **Y** si es un `TRASLADO_MATRICULA`, marca la matrícula original como `TRASLADADA` y finaliza la solicitud como `EJECUTADA`.
+6. **Y** si es un `TRASLADO_MATRICULA`, marca la matrícula original como `TRASLADADA`, genera la matrícula en destino asignando `id_grupo_destino` e `id_nivel`, y finaliza la solicitud como `EJECUTADA`,  
+7. **Y** envía automáticamente un correo formal al acudiente mediante `NotificationService.sendInterInstitutionalTransferApprovedEmail` detallando la sede destino, grado y aula asignada.
 
 ---
 
@@ -81,3 +82,35 @@
 1. **Dado** que el usuario ha iniciado sesión en la plataforma,  
 2. **Cuando** accede a `GET /api/traslados/mis-vinculaciones`,  
 3. **Entonces** el sistema retorna la lista de registros de `usuario_colegio` junto con el nombre del colegio, logo/escudo y el rol desempeñado en cada período.
+
+---
+
+## HU-TRA-006: Validación de Cupos por Grado y Asignación de Aula en Traslado Escolar
+
+**Como** Directivo de Colegio Destino,  
+**Quiero** consultar en tiempo real si dispongo de cupos disponibles en el grado solicitado y asignar directamente la sección y jornada al estudiante al aprobar el traslado,  
+**Para** asegurar que no se sobrepase el aforo institucional y vincular al alumno a su aula de clases inmediatamente.
+
+### Criterios de Aceptación
+
+1. **Dado** que el directivo receptor abre una solicitud de `TRASLADO_MATRICULA` en el modal de detalle,  
+2. **Cuando** la interfaz consulta `GET /api/traslados/:id/disponibilidad-cupos`,  
+3. **Entonces** el sistema despliega el aforo y cupos disponibles sumados de todas las secciones del grado correspondiente en la institución de destino.  
+4. **Si** el grado carece de cupos (`cupos_totales_grado === 0`), el sistema bloquea el botón de aprobación y notifica la indisponibilidad de cupos.  
+5. **Si** existen cupos, el directivo puede marcar una sección/grupo (`id_grupo_destino`) de la lista disponible y confirmar la aprobación.  
+6. **Y** al ejecutarse el traslado, la matrícula queda creada con el grupo asignado y se descuenta el cupo correspondiente.
+
+---
+
+## HU-TRA-007: Declaración de Preferencia de Jornada en Solicitud de Traslado
+
+**Como** Acudiente o Directivo solicitante,  
+**Quiero** sugerir la jornada de estudio preferida (Mañana, Tarde, Completa o Nocturna) al crear la solicitud de traslado,  
+**Para** orientar a la institución receptora sobre la disponibilidad horaria del estudiante.
+
+### Criterios de Aceptación
+
+1. **Dado** que el solicitante está en el formulario de nueva solicitud de traslado de matrícula,  
+2. **Cuando** selecciona la `jornada_sugerida` en el campo desplegable,  
+3. **Entonces** el valor se almacena y se expone claramente en el motivo y ficha técnica del traslado para la revisión del directivo receptor.
+

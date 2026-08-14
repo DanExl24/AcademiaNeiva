@@ -2,7 +2,7 @@
 
 **Sistema:** Academia Neiva  
 **Módulo:** Gestión de Traslados (Interinstitucionales e Internos)  
-**Última actualización:** 2026-08-10
+**Última actualización:** 2026-08-14
 
 ---
 
@@ -57,7 +57,7 @@ Para que una solicitud de traslado interinstitucional regular complete su ciclo 
 
 ---
 
-## 4. Traslados Internos, Notificaciones y Votos Únicos
+## 4. Validación de Cupos, Asignación de Aula y Notificaciones
 
 ### RN-TRA-009: Traslado Interno de Grupo y Notificación por Correo
 - Al reasignar un estudiante de grupo o sección dentro de la misma sede:
@@ -72,3 +72,18 @@ Para que una solicitud de traslado interinstitucional regular complete su ciclo 
 ### RN-TRA-011: Unicidad e Imposibilidad de Votos Duplicados
 - Cada rol participante (`DIRECTIVO_ORIGEN`, `DIRECTIVO_DESTINO`, `USUARIO`, `ADMIN_GENERAL`) o usuario solo puede emitir un único voto por solicitud de traslado.
 - Si una solicitud ya posee una decisión registrada para un determinado rol o por un determinado usuario, el servidor rechazará los intentos posteriores con un error `400 Bad Request` impidiendo duplicidades en el consenso.
+
+### RN-TRA-012: Validación Obligatoria de Cupos por Grado en Destino
+- Al momento de recibir una solicitud de `TRASLADO_MATRICULA`, el sistema consulta en tiempo real las secciones del grado correspondiente al estudiante en la institución de destino (`GET /api/traslados/:id/disponibilidad-cupos`).
+- Si la sumatoria de cupos disponibles en todas las secciones del grado receptor es igual a 0 (`cupos_totales_grado === 0`), el sistema **inhabilita y bloquea la acción de aprobación** para el directivo de destino y el Administrador General.
+- El directivo debe obligatoriamente rechazar la solicitud o proceder con la apertura formal de cupos antes de poder admitir el traslado.
+
+### RN-TRA-013: Asignación Directa de Sección y Jornada en el Acto de Aprobación
+- Durante la aprobación del traslado, el directivo receptor (o Admin General) puede seleccionar el grupo y jornada de destino específico (`id_grupo_destino`).
+- Si se suministra `id_grupo_destino`, la transacción de traslado asigna directamente dicho grupo y nivel escolar a la nueva matrícula en el colegio destino, garantizando la inserción del cupo de forma atómica.
+- Si no se especifica grupo en el momento de la aprobación, la matrícula en destino se crea con estado `ACTIVA` y grupo nulo, exhibiendo en la bandeja de matrículas el distintivo `⚠️ PENDIENTE ASIGNAR SALÓN` para su asignación posterior en el cajón de matrícula.
+
+### RN-TRA-014: Notificación Email Formal de Traslado Interinstitucional Aprobado
+- Al completarse la transacción atómica de un traslado de matrícula, el sistema despacha automáticamente un correo formal al acudiente (`NotificationService.sendInterInstitutionalTransferApprovedEmail`).
+- El correo detalla el nombre del estudiante, colegio origen, colegio receptor, grado lectivo y el grupo/jornada escolar asignado.
+

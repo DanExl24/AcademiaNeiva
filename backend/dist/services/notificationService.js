@@ -537,6 +537,62 @@ class NotificationService {
             console.error('Error enviando email de traslado de estudiante:', error);
         }
     }
+    static async sendInterInstitutionalTransferApprovedEmail(to, parentName, studentName, originSchoolName, destSchoolName, gradeName, groupName) {
+        if (!to)
+            return;
+        const html = `
+      <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 640px; margin: 0 auto; padding: 20px; color: #1f2937;">
+        <div style="background: linear-gradient(135deg, #059669 0%, #047857 100%); padding: 40px; border-radius: 24px; text-align: center; color: white; margin-bottom: 30px;">
+          <h1 style="margin: 0; font-size: 28px; font-weight: 800;">¡Traslado Aprobado!</h1>
+          <p style="opacity: 0.92; margin-top: 10px; font-size: 16px;">${destSchoolName}</p>
+        </div>
+
+        <p style="font-size: 18px; font-weight: 600;">Hola, ${parentName},</p>
+        <p style="line-height: 1.6;">Nos complace informarte que la solicitud de traslado para el estudiante <strong>${studentName}</strong> ha sido <strong>APROBADA Y FORMALIZADA</strong> con éxito.</p>
+
+        <div style="background-color: #f8fafc; border-radius: 18px; padding: 24px; margin: 28px 0; border: 1px solid #e2e8f0;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px dashed #e2e8f0; padding-bottom: 15px;">
+            <div style="text-align: center; flex: 1;">
+              <p style="margin: 0; color: #64748b; font-size: 11px; text-transform: uppercase; font-weight: 700;">Institución Origen</p>
+              <p style="margin: 5px 0 0 0; font-weight: 800; color: #64748b;">${originSchoolName}</p>
+            </div>
+            <div style="padding: 0 15px; color: #10b981; font-size: 20px; font-weight: bold;">→</div>
+            <div style="text-align: center; flex: 1;">
+              <p style="margin: 0; color: #047857; font-size: 11px; text-transform: uppercase; font-weight: 700;">Nueva Institución</p>
+              <p style="margin: 5px 0 0 0; font-weight: 800; color: #059669;">${destSchoolName}</p>
+            </div>
+          </div>
+          
+          <div style="margin-top: 15px;">
+            <p style="margin: 0 0 8px 0; color: #475569; font-weight: 700; font-size: 12px; text-transform: uppercase;">Ubicación Académica Asignada:</p>
+            <div style="margin: 0; color: #1e2937; line-height: 1.6; background: #ffffff; padding: 15px; border-radius: 12px; border: 1px solid #f1f5f9;">
+              <p style="margin: 0 0 4px 0;"><strong>Grado:</strong> ${gradeName}</p>
+              <p style="margin: 0;"><strong>Grupo / Sección:</strong> ${groupName || 'Pendiente de asignación interna por rectoría'}</p>
+            </div>
+          </div>
+        </div>
+
+        <p style="line-height: 1.6; font-size: 14px; color: #64748b; text-align: center;">El estudiante ya se encuentra activo en el nuevo plantel educativo.</p>
+
+        <div style="text-align: center; margin-top: 30px;">
+          <a href="${FRONTEND_URL}/login" style="background-color: #059669; color: white; padding: 16px 32px; border-radius: 12px; text-decoration: none; font-weight: 700; display: inline-block;">
+            Ingresar al Portal
+          </a>
+        </div>
+      </div>
+    `;
+        try {
+            await transporter.sendMail({
+                from: '"Academia Neiva" <' + process.env.SMTP_USER + '>',
+                to,
+                subject: `¡Traslado Aprobado a ${destSchoolName}!: ${studentName}`,
+                html,
+            });
+        }
+        catch (error) {
+            console.error('Error enviando email de aprobación de traslado interinstitucional:', error);
+        }
+    }
     static async sendPasswordResetEmail(to, userName, resetLink) {
         if (!to) {
             console.error('❌ Error: No se puede enviar email de restablecimiento de contraseña porque no hay destinatario (to)');

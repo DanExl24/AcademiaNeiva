@@ -1,6 +1,7 @@
 import { sql } from 'kysely';
 import { db } from '../config/kysely';
 import { CreateTrasladoInput, ApproveTrasladoInput, FilterTrasladoInput } from '../dtos/traslado.dto';
+import { NotificationService } from './notificationService';
 
 export class TrasladoService {
   /**
@@ -86,6 +87,11 @@ export class TrasladoService {
 
       // 6. Insertar solicitud de traslado usando Kysely
       const tipoFinal = esDirectivo ? 'TRASLADO_USUARIO' : tipo;
+      let motivoFinal = motivo.trim();
+      if (input.jornada_sugerida && input.jornada_sugerida !== 'INDIFERENTE') {
+        motivoFinal = `[Jornada Sugerida: ${input.jornada_sugerida}] ${motivoFinal}`;
+      }
+
       const solicitud = await trx
         .insertInto('solicitud_traslado')
         .values({
@@ -95,7 +101,7 @@ export class TrasladoService {
           id_colegio_destino,
           id_matricula: id_matricula || null,
           estado: 'EN_APROBACION' as any,
-          motivo,
+          motivo: motivoFinal,
           creado_por: idUsuarioCreador,
           fecha_creacion: sql`NOW()`
         })
@@ -219,10 +225,6 @@ export class TrasladoService {
       const votoExistenteUsuario = await trx
         .selectFrom('traslado_aprobacion')
         .select('id_aprobacion')
-        .where('id_solicitud', '=', idSolicitud)
-        .where('id_usuario', '=', idUsuarioAprobador)
-        .executeTakeFirst();
-
       if (votoExistenteUsuario) {
         throw new Error('Ya has registrado tu decisión sobre esta solicitud de traslado.');
       }
@@ -253,7 +255,15 @@ export class TrasladoService {
         return await this.getSolicitudDetalle(idSolicitud);
       }
 
-      return await this.evaluarYEjecutarSiCompleto(idSolicitud, trx);
+      // Validar cupos en institución destino si es aprobación de directivo destino / admin
+      if (input.accion === 'APROBAR' && (rolAprobacion === 'DIRECTIVO_DESTINO' || rolAprobacion === 'ADMIN_GENERAL') && solicitud.tipo === 'TRASLADO_MATRICULA') {
+        const disp = await this.getDisponibilidadCuposTraslado(idSolicitud, solicitud.id_colegio_destino);
+        if (!disp.hay_cupos && disp.grupos.length > 0) {
+          throw new Error(`No hay cupos disponibles en el colegio receptor para el grado '${disp.grado_nombre}'. Por favor rechace la solicitud o habilite cupos en la sede.`);
+        }
+      }
+
+      return await this.evaluarYEjecutarSiCompleto(idSolicitud, trx, input.id_grupo_destino);
     });
   }
 
@@ -413,9 +423,97 @@ export class TrasladoService {
   }
 
   /**
+   * Consultar disponibilidad de cupos por grado y secciones activas en el colegio destino
+   */
+  static async getDisponibilidadCuposTraslado(idSolicitud: number, idColegioDestino: number): Promise<any> {
+    const solicitud = await db
+      .selectFrom('solicitud_traslado as st')
+      .selectAll()
+      .where('st.id_solicitud', '=', idSolicitud)
+      .executeTakeFirst();
+
+    if (!solicitud) throw new Error('Solicitud de traslado no encontrada');
+
+    let idTipoGrado: number | null = null;
+    let gradoNombre: string = 'Grado no especificado';
+    let nivelNombre: string = 'Nivel no especificado';
+
+    if (solicitud.id_matricula) {
+      const origMat = await db
+        .selectFrom('matricula as m')
+        .leftJoin('grupos as g', 'm.id_grupo', 'g.id_grupo')
+        .leftJoin('tipo_grado as tg', 'g.id_tipo_grado', 'tg.id_tipo_grado')
+        .leftJoin('nivel_escolar as ne', (join) =>
+          join.onRef('ne.id_nivel', '=', sql<number>`COALESCE(m.id_nivel, g.id_nivel, tg.id_nivel)`)
+        )
+        .select([
+          'm.id_matricula',
+          'm.id_nivel',
+          'm.id_grupo',
+          'g.id_tipo_grado',
+          'tg.nombre as grado_nombre',
+          'ne.nombre as nivel_nombre'
+        ])
+        .where('m.id_matricula', '=', solicitud.id_matricula)
+        .executeTakeFirst();
+
+      if (origMat) {
+        idTipoGrado = origMat.id_tipo_grado || null;
+        gradoNombre = origMat.grado_nombre || gradoNombre;
+        nivelNombre = origMat.nivel_nombre || nivelNombre;
+      }
+    }
+
+    const gruposQuery = db
+      .selectFrom('grupos as g')
+      .innerJoin('secciones as s', 'g.id_seccion', 's.id_seccion')
+      .innerJoin('tipo_grado as tg', 'g.id_tipo_grado', 'tg.id_tipo_grado')
+      .leftJoin('jornada as j', 'g.id_jornada', 'j.id_jornada')
+      .leftJoin('nivel_escolar as ne', 'g.id_nivel', 'ne.id_nivel')
+      .select([
+        'g.id_grupo',
+        'g.id_tipo_grado',
+        'tg.nombre as grado_nombre',
+        's.nombre as seccion_nombre',
+        'j.nombre as jornada_nombre',
+        'g.cupos_totales',
+        sql<number>`(g.cupos_totales - (SELECT COUNT(*) FROM matricula WHERE id_grupo = g.id_grupo AND estado IN ('ACTIVA', 'TRASLADADA')))::int`.as('cupos_disponibles')
+      ])
+      .where('g.id_colegio', '=', idColegioDestino);
+
+    let grupos = await (idTipoGrado ? gruposQuery.where('g.id_tipo_grado', '=', idTipoGrado) : gruposQuery).execute();
+
+    if (grupos.length === 0 && gradoNombre !== 'Grado no especificado') {
+      grupos = await gruposQuery.where('tg.nombre', '=', gradoNombre).execute();
+    }
+
+    const cuposTotalesGrado = grupos.reduce((acc: number, curr: any) => {
+      const disp = Math.max(0, Number(curr.cupos_disponibles) || 0);
+      return acc + disp;
+    }, 0);
+
+    return {
+      id_solicitud: idSolicitud,
+      id_colegio_destino: idColegioDestino,
+      grado_nombre: gradoNombre,
+      nivel_nombre: nivelNombre,
+      cupos_totales_grado: cuposTotalesGrado,
+      hay_cupos: cuposTotalesGrado > 0 || grupos.length === 0,
+      grupos: grupos.map((g: any) => ({
+        id_grupo: g.id_grupo,
+        nombre_completo: `${g.grado_nombre} - ${g.seccion_nombre} (${g.jornada_nombre || 'Jornada Ordinaria'})`,
+        seccion: g.seccion_nombre,
+        jornada: g.jornada_nombre || 'Ordinaria',
+        cupos_disponibles: Math.max(0, Number(g.cupos_disponibles) || 0),
+        cupos_totales: g.cupos_totales
+      }))
+    };
+  }
+
+  /**
    * Verifica si una solicitud posee las aprobaciones requeridas y la ejecuta en transacción.
    */
-  private static async evaluarYEjecutarSiCompleto(idSolicitud: number, trxPassed?: any): Promise<any> {
+  private static async evaluarYEjecutarSiCompleto(idSolicitud: number, trxPassed?: any, idGrupoDestino?: number | null): Promise<any> {
     const runner = trxPassed || db;
 
     const solicitud = await runner
@@ -452,7 +550,7 @@ export class TrasladoService {
         rolesAprobados.has('DIRECTIVO_ORIGEN') &&
         rolesAprobados.has('DIRECTIVO_DESTINO');
       if (completo) {
-        return await this.ejecutarTrasladoTransaccional(idSolicitud, trxPassed);
+        return await this.ejecutarTrasladoTransaccional(idSolicitud, trxPassed, idGrupoDestino);
       }
     } else {
       // Traslado de USUARIO / MATRICULA: flujo estándar tripartita
@@ -461,7 +559,7 @@ export class TrasladoService {
       const tieneUsuario = rolesAprobados.has('USUARIO') || rolesAprobados.has('ADMIN_GENERAL');
 
       if (tieneOrigen && tieneDestino && tieneUsuario) {
-        return await this.ejecutarTrasladoTransaccional(idSolicitud, trxPassed);
+        return await this.ejecutarTrasladoTransaccional(idSolicitud, trxPassed, idGrupoDestino);
       }
     }
 
@@ -471,7 +569,7 @@ export class TrasladoService {
   /**
    * Ejecución final del traslado dentro de una transacción atómica PostgreSQL con Kysely
    */
-  private static async ejecutarTrasladoTransaccional(idSolicitud: number, trxPassed?: any): Promise<any> {
+  private static async ejecutarTrasladoTransaccional(idSolicitud: number, trxPassed?: any, idGrupoDestino?: number | null): Promise<any> {
     const executeLogic = async (trx: any) => {
       const solicitud = await trx
         .selectFrom('solicitud_traslado')
@@ -493,7 +591,15 @@ export class TrasladoService {
         .where('estado', '=', 'ACTIVO')
         .executeTakeFirst();
 
-      const idRol = linkOrigenRow?.id_rol ?? 1;
+      let idRol: number = linkOrigenRow?.id_rol || 0;
+      if (!idRol) {
+        const usrRol = await trx
+          .selectFrom('usuario_rol')
+          .select('id_rol')
+          .where('id_usuario', '=', solicitud.id_usuario)
+          .executeTakeFirst();
+        idRol = usrRol?.id_rol || 4; // Por defecto estudiante (4)
+      }
 
       // 2. Inactivar vinculación con Colegio Origen
       await trx
@@ -600,6 +706,12 @@ export class TrasladoService {
             .where('id_colegio', '=', solicitud.id_colegio_origen)
             .executeTakeFirst();
 
+          const destColegio = await trx
+            .selectFrom('colegio')
+            .select('nombre')
+            .where('id_colegio', '=', solicitud.id_colegio_destino)
+            .executeTakeFirst();
+
           const obsTraslado = `Matrícula ingresada por traslado interinstitucional desde ${origenColegio?.nombre || 'colegio origen'}`;
 
           // Obtener el año lectivo (calendario) de la matrícula en la institución origen
@@ -631,6 +743,36 @@ export class TrasladoService {
 
           const destIdAnio = destAnioRow?.id_anio || origMat.id_anio;
 
+          // Resolver grupo y nivel si idGrupoDestino fue provisto
+          let finalGrupoId = idGrupoDestino || null;
+          let finalNivelId = origMat.id_nivel || null;
+          let gradoNombreStr = 'Grado Ordinario';
+          let grupoNombreStr: string | null = null;
+
+          if (finalGrupoId) {
+            const gInfo = await trx
+              .selectFrom('grupos as g')
+              .innerJoin('secciones as s', 'g.id_seccion', 's.id_seccion')
+              .innerJoin('tipo_grado as tg', 'g.id_tipo_grado', 'tg.id_tipo_grado')
+              .leftJoin('jornada as j', 'g.id_jornada', 'j.id_jornada')
+              .select([
+                'g.id_grupo',
+                'g.id_nivel',
+                'tg.nombre as grado_nombre',
+                's.nombre as seccion_nombre',
+                'j.nombre as jornada_nombre'
+              ])
+              .where('g.id_grupo', '=', finalGrupoId)
+              .where('g.id_colegio', '=', solicitud.id_colegio_destino)
+              .executeTakeFirst();
+
+            if (gInfo) {
+              finalNivelId = gInfo.id_nivel || finalNivelId;
+              gradoNombreStr = gInfo.grado_nombre;
+              grupoNombreStr = `${gInfo.grado_nombre} - ${gInfo.seccion_nombre} (${gInfo.jornada_nombre || 'Jornada Ordinaria'})`;
+            }
+          }
+
           const destMatExistente = await trx
             .selectFrom('matricula')
             .select('id_matricula')
@@ -647,6 +789,8 @@ export class TrasladoService {
                 tipo: 'TRASLADO' as any,
                 es_traslado: true,
                 id_anio: destIdAnio,
+                id_grupo: finalGrupoId,
+                id_nivel: finalNivelId,
                 observaciones: obsTraslado,
                 fecha_aprobacion: sql`NOW()`
               })
@@ -659,9 +803,10 @@ export class TrasladoService {
                 id_colegio: solicitud.id_colegio_destino,
                 id_estudiante: estRow.id_estudiante,
                 id_anio: destIdAnio,
+                id_grupo: finalGrupoId,
+                id_nivel: finalNivelId,
                 id_usuario_responsable: origMat.id_usuario_responsable,
                 correo_padre: origMat.correo_padre,
-                id_nivel: origMat.id_nivel,
                 estado: 'ACTIVA' as any,
                 tipo: 'TRASLADO' as any,
                 es_traslado: true,
@@ -670,6 +815,27 @@ export class TrasladoService {
                 fecha_creacion: sql`NOW()`
               })
               .execute();
+          }
+
+          // Disparar correo de notificación al acudiente
+          if (origMat.correo_padre) {
+            const usuarioEst = await trx
+              .selectFrom('usuario')
+              .select(['nombre', 'apellido'])
+              .where('id_usuario', '=', solicitud.id_usuario)
+              .executeTakeFirst();
+
+            const studentFullName = `${usuarioEst?.nombre || 'Estudiante'} ${usuarioEst?.apellido || ''}`.trim();
+
+            NotificationService.sendInterInstitutionalTransferApprovedEmail(
+              origMat.correo_padre,
+              'Padre de Familia / Acudiente',
+              studentFullName,
+              origenColegio?.nombre || 'Plantel Origen',
+              destColegio?.nombre || 'Plantel Destino',
+              gradoNombreStr,
+              grupoNombreStr
+            ).catch((err: any) => console.error('Error enviando correo de confirmación de traslado:', err));
           }
         }
       }

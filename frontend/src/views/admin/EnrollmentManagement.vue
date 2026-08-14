@@ -1098,6 +1098,9 @@ const approveException = async (id: number) => {
                     {{ en.grado_nombre }}
                   </p>
                   <p v-else class="text-xs font-bold text-indigo-500 uppercase">ID {{ en.id_grado }}</p>
+                  <span v-if="(en.es_traslado || en.tipo === 'TRASLADO') && !en.id_grupo" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-amber-50 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300 border border-amber-300/80">
+                    ⚠️ Pendiente Salón
+                  </span>
                 </div>
               </td>
               <td class="px-6 py-4 whitespace-nowrap">

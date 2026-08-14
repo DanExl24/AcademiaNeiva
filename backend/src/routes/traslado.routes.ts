@@ -13,6 +13,7 @@ import {
   getDirectivosColegio,
   getAdminTrasladosGlobal,
   getAdminEstadisticas,
+  getDisponibilidadCupos,
   intervenirTraslado
 } from '../controllers/trasladoController';
 
@@ -29,6 +30,7 @@ router.get('/directivos/:schoolId', requireAdminGeneral, getDirectivosColegio);
 router.get('/mis-vinculaciones', getMyVinculaciones);
 router.get('/personal/:schoolId', getPersonalColegio);
 router.get('/datos-academicos/:id', getDatosAcademicosTraslado);
+router.get('/:id/disponibilidad-cupos', getDisponibilidadCupos);
 router.get('/', getTraslados);
 router.get('/:id', getTrasladoById);
 
