@@ -175,6 +175,8 @@ export const deleteSubject = async (req: Request, res: Response): Promise<void> 
 
     if (force) {
       await client.query("BEGIN");
+      // Permitir bypass administrativo de triggers para cascada limpia y respaldo
+      await client.query("SET LOCAL my.app.bypass_triggers = 'true'");
 
       // OBTENER DATOS PARA RESPALDO DETALLADO ANTES DE BORRAR (Granularidad mejorada con Grado y Sección)
       const assignmentsBackupRes = await client.query(`
@@ -202,7 +204,7 @@ export const deleteSubject = async (req: Request, res: Response): Promise<void> 
         competencies: competenciesBackupRes.rows
       };
 
-      // 1. Notas
+      // 1. Notas y Criterios
       await client.query(`
         DELETE FROM nota_criterio 
         WHERE id_criterio IN (
@@ -222,7 +224,16 @@ export const deleteSubject = async (req: Request, res: Response): Promise<void> 
         )
       `, [subjectId]);
 
-      // 2. Criterios y Actividades
+      // 2. Desempeños, Criterios y Actividades
+      await client.query(`
+        DELETE FROM desempeno 
+        WHERE id_actividadmateria IN (
+          SELECT aa.id_actividadmateria FROM actividad_materia aa
+          JOIN detalle_grados dg ON dg.id_detallegrado = aa.id_detallegrado
+          WHERE dg.id_materia = $1
+        )
+      `, [subjectId]);
+
       await client.query(`
         DELETE FROM criterio_evaluacion 
         WHERE id_actividadmateria IN (
@@ -301,26 +312,23 @@ export const deleteSubject = async (req: Request, res: Response): Promise<void> 
           details: impact
         }
       });
-
-    res.json({
-      message: "Materia y todas sus relaciones eliminadas correctamente",
-      report: {
-        subjectName,
-        timestamp: new Date().toISOString(),
-        details: impact
+    } else {
+      await client.query("DELETE FROM materias WHERE id_materia = $1", [subjectId]);
+      res.json({ message: "Materia eliminada correctamente" });
+    }
+  } catch (error: any) {
+    if (client) {
+      try {
+        await client.query("ROLLBACK");
+      } catch (rbErr) {
+        console.error("Error on rollback:", rbErr);
       }
-    });
-  } else {
-    await client.query("DELETE FROM materias WHERE id_materia = $1", [subjectId]);
-    res.json({ message: "Materia eliminada correctamente" });
+    }
+    console.error("Error deleting subject:", error);
+    res.status(500).json({ error: formatFriendlyErrorMessage(error) });
+  } finally {
+    if (client) client.release();
   }
-} catch (error: any) {
-  await client.query("ROLLBACK");
-  console.error("Error deleting subject:", error);
-  res.status(500).json({ error: "Error en el servidor" });
-} finally {
-  client.release();
-}
 };
 
 export const getSubjects = async (req: Request, res: Response): Promise<void> => {
