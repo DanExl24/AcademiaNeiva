@@ -14,7 +14,6 @@ import {
   Calendar,
   CalendarDays,
   ShieldCheck,
-  KeyRound,
   Timer,
   RefreshCw
 } from 'lucide-vue-next'
