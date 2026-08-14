@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
-import { PoolClient } from "pg";
+import { sql } from "kysely";
+import { db } from "../config/kysely";
 import { pool } from "../config/db";
 import {
   ensureCompetencyForContext,
@@ -10,10 +11,9 @@ import {
 import {
   ensurePeriodOpen,
   ensureSubjectOpen,
-  getCurrentAllowedPeriodForSchool,
   ensureCurrentPeriodForSchool,
   ensureCurrentPeriodOrRespond,
-  getAllPeriodsForSchool
+  getAllPeriodsForSchool,
 } from "../utils/periodHelpers";
 
 const resolveTeachingContext = async (
@@ -22,36 +22,42 @@ const resolveTeachingContext = async (
   periodId: number,
   userId?: number
 ): Promise<TeachingContext | null> => {
-  const params: Array<number> = [gradeId, subjectId, periodId];
-  let teacherFilter = "";
+  let query = db
+    .selectFrom("detalle_grados as dg")
+    .innerJoin("periodo_academico as p", (join) =>
+      join
+        .onRef("p.id_colegio", "=", "dg.id_colegio")
+        .onRef("p.id_anio", "=", "dg.id_anio")
+        .on("p.id_periodo", "=", periodId)
+    )
+    .leftJoin("docente as d", "d.id_docente", "dg.id_docente")
+    .where("dg.id_grupo", "=", gradeId)
+    .where("dg.id_materia", "=", subjectId)
+    .select([
+      "dg.id_detallegrado as idDetalleGrado",
+      "dg.id_grupo as idGrupo",
+      "dg.id_materia as idMateria",
+      "dg.id_colegio as idColegio",
+      "p.id_anio as idAnio",
+    ])
+    .orderBy("dg.id_detallegrado", "desc")
+    .limit(1);
 
   if (typeof userId === "number" && !Number.isNaN(userId)) {
-    teacherFilter = "AND d.id_usuario = $4";
-    params.push(userId);
+    query = query.where("d.id_usuario", "=", userId);
   }
 
-  const result = await pool.query<TeachingContext>(
-    `SELECT
-       dg.id_detallegrado AS "idDetalleGrado",
-       dg.id_grupo AS "idGrupo",
-       dg.id_materia AS "idMateria",
-       dg.id_colegio AS "idColegio",
-       p.id_anio AS "idAnio"
-     FROM detalle_grados dg
-     JOIN periodo_academico p
-       ON p.id_periodo = $3
-      AND p.id_colegio = dg.id_colegio
-      AND p.id_anio = dg.id_anio
-     LEFT JOIN docente d ON dg.id_docente = d.id_docente
-     WHERE dg.id_grupo = $1
-       AND dg.id_materia = $2
-       ${teacherFilter}
-     ORDER BY dg.id_detallegrado DESC
-     LIMIT 1`,
-    params
-  );
-
-  return result.rows[0] ?? null;
+  const result = await query.executeTakeFirst();
+  if (!result || result.idGrupo === null || result.idAnio === null) {
+    return null;
+  }
+  return {
+    idDetalleGrado: result.idDetalleGrado,
+    idGrupo: result.idGrupo,
+    idMateria: result.idMateria,
+    idColegio: result.idColegio,
+    idAnio: result.idAnio,
+  };
 };
 
 // Obtener periodos del colegio
@@ -63,7 +69,10 @@ export const getPeriods = async (req: Request, res: Response): Promise<void> => 
   const isSupervision = authReq.user && authReq.user.roles?.includes("admin_general");
   const userSchoolIds = (authReq.user?.schoolIds || []).map(Number);
   const targetId = Number(schoolId);
-  const isAllowed = isSupervision || (authReq.user?.schoolId && Number(authReq.user.schoolId) === targetId) || (userSchoolIds.includes(targetId));
+  const isAllowed =
+    isSupervision ||
+    (authReq.user?.schoolId && Number(authReq.user.schoolId) === targetId) ||
+    userSchoolIds.includes(targetId);
   if (authReq.user && !isAllowed) {
     res.status(403).json({ error: "No tiene permiso para ver los periodos de este colegio." });
     return;
@@ -74,7 +83,7 @@ export const getPeriods = async (req: Request, res: Response): Promise<void> => 
     console.log(`[DEV] getPeriods - result count: ${periods.length}`);
     res.json(periods);
   } catch (error: any) {
-    console.error(`[DEV] getPeriods ERROR - schoolId=${schoolId}:`, error.message, error.detail || '');
+    console.error(`[DEV] getPeriods ERROR - schoolId=${schoolId}:`, error.message, error.detail || "");
     res.status(500).json({ error: "Error en el servidor" });
   }
 };
@@ -94,22 +103,36 @@ export const getActivities = async (req: Request, res: Response): Promise<void> 
 
   try {
     const contextPreview = await resolveTeachingContext(gradeId, subjectId, periodId, userId);
-    console.log(`[DEV] getActivities - resolveTeachingContext result: ${contextPreview ? JSON.stringify(contextPreview) : 'null (not found)'}`);
+    console.log(`[DEV] getActivities - resolveTeachingContext result: ${contextPreview ? JSON.stringify(contextPreview) : "null (not found)"}`);
     if (!contextPreview) {
       res.status(404).json({ error: "No se encontró la asignación académica" });
       return;
     }
 
-    // Permite lectura de periodos cerrados (solo se protegen escrituras)
-    const context = contextPreview;    const client = await pool.connect();
+    const context = contextPreview;
+    const client = await pool.connect();
     try {
       const competenciaBase = await ensureCompetencyForContext(client, context, periodId);
 
       // Obtener todas las competencias del periodo/materia con sus evidencias anidadas y el número de DBA
-      const compsRes = await client.query<any>(
-        `SELECT c.*,
-                COALESCE(
-                  (SELECT json_agg(
+      const allComps = await db
+        .selectFrom("competencias as c")
+        .where("c.id_anio", "=", context.idAnio)
+        .where("c.id_grupo", "=", context.idGrupo)
+        .where("c.id_materia", "=", context.idMateria)
+        .where("c.id_periodo", "=", periodId)
+        .where("c.id_colegio", "=", context.idColegio)
+        .selectAll("c")
+        .select((eb) => [
+          eb.fn
+            .coalesce(
+              eb
+                .selectFrom("evidencia_aprendizaje as ea")
+                .leftJoin("evidencias_dba as edba", "edba.id_evidencia_dba", "ea.id_evidencia_dba")
+                .leftJoin("dba as d", "d.id_dba", "edba.id_dba")
+                .whereRef("ea.id_competencia", "=", "c.id_competencia")
+                .select(
+                  sql<any>`json_agg(
                      json_build_object(
                        'id_evidencia', ea.id_evidencia,
                        'id_evidencia_dba', ea.id_evidencia_dba,
@@ -117,78 +140,85 @@ export const getActivities = async (req: Request, res: Response): Promise<void> 
                        'orden', ea.orden,
                        'numero_dba', d.numero_dba
                      ) ORDER BY ea.orden, ea.id_evidencia
-                   )
-                   FROM evidencia_aprendizaje ea
-                   LEFT JOIN evidencias_dba edba ON edba.id_evidencia_dba = ea.id_evidencia_dba
-                   LEFT JOIN dba d ON d.id_dba = edba.id_dba
-                   WHERE ea.id_competencia = c.id_competencia
-                  ), '[]'::json
-                ) AS evidencias
-         FROM public.competencias c
-         WHERE c.id_anio = $1 AND c.id_grupo = $2 AND c.id_materia = $3 AND c.id_periodo = $4 AND c.id_colegio = $5
-         ORDER BY c.id_competencia ASC`,
-        [context.idAnio, context.idGrupo, context.idMateria, periodId, context.idColegio]
-      );
-      const allComps = compsRes.rows;
+                   )`.as("evidencias")
+                ),
+              sql<any>`'[]'::json`
+            )
+            .as("evidencias"),
+        ])
+        .orderBy("c.id_competencia", "asc")
+        .execute();
 
       // Filtrar competencias que tengan descripciones válidas (no vacías)
-      const validComps = allComps.filter(c => c.descripcion && c.descripcion.trim());
+      const validComps = allComps.filter((c) => c.descripcion && c.descripcion.trim());
 
       // Unificar descripciones de las competencias
       let competencia = competenciaBase;
       if (competenciaBase && validComps.length > 1) {
         const descripcionUnificada = validComps
-          .map((c, idx) => `${idx + 1}. ${c.descripcion.trim()}`)
+          .map((c, idx) => `${idx + 1}. ${c.descripcion!.trim()}`)
           .join("\n\n");
         competencia = {
           ...competenciaBase,
-          descripcion: descripcionUnificada
+          descripcion: descripcionUnificada,
         };
       }
 
-      const activities = await client.query(
-        `SELECT am.*,
-                COALESCE(
-                  (SELECT json_agg(aedba.id_evidencia_dba)
-                   FROM actividad_evidencia_dba aedba
-                   WHERE aedba.id_actividadmateria = am.id_actividadmateria
-                  ), '[]'::json
-                ) AS evidencias_dba
-         FROM actividad_materia am
-         WHERE am.id_detallegrado = $1 AND am.id_periodo = $2
-         ORDER BY am.id_actividadmateria ASC`,
-        [context.idDetalleGrado, periodId]
-      );
+      const rawActivities = await db
+        .selectFrom("actividad_materia as am")
+        .where("am.id_detallegrado", "=", context.idDetalleGrado)
+        .where("am.id_periodo", "=", periodId)
+        .selectAll("am")
+        .select((eb) => [
+          eb.fn
+            .coalesce(
+              eb
+                .selectFrom("actividad_evidencia_dba as aedba")
+                .whereRef("aedba.id_actividadmateria", "=", "am.id_actividadmateria")
+                .select(sql<any>`json_agg(aedba.id_evidencia_dba)`.as("evidencias_dba")),
+              sql<any>`'[]'::json`
+            )
+            .as("evidencias_dba"),
+        ])
+        .orderBy("am.id_actividadmateria", "asc")
+        .execute();
 
       // Traer las evidencias de aprendizaje de todas las competencias de este periodo
-      const evidencias = await client.query(
-        `SELECT ea.id_evidencia, ea.descripcion, ea.orden
-         FROM evidencia_aprendizaje ea
-         JOIN competencias c ON c.id_competencia = ea.id_competencia
-         WHERE c.id_anio = $1 AND c.id_grupo = $2 AND c.id_materia = $3 AND c.id_periodo = $4 AND c.id_colegio = $5
-         ORDER BY c.id_competencia ASC, ea.orden ASC, ea.id_evidencia ASC`,
-        [context.idAnio, context.idGrupo, context.idMateria, periodId, context.idColegio]
-      );
+      const evidencias = await db
+        .selectFrom("evidencia_aprendizaje as ea")
+        .innerJoin("competencias as c", "c.id_competencia", "ea.id_competencia")
+        .where("c.id_anio", "=", context.idAnio)
+        .where("c.id_grupo", "=", context.idGrupo)
+        .where("c.id_materia", "=", context.idMateria)
+        .where("c.id_periodo", "=", periodId)
+        .where("c.id_colegio", "=", context.idColegio)
+        .select(["ea.id_evidencia", "ea.descripcion", "ea.orden"])
+        .orderBy("c.id_competencia", "asc")
+        .orderBy("ea.orden", "asc")
+        .orderBy("ea.id_evidencia", "asc")
+        .execute();
 
-      const activityIds = activities.rows.map(a => a.id_actividadmateria);
+      const activityIds = rawActivities.map((a) => a.id_actividadmateria);
       let criterios: any[] = [];
       if (activityIds.length > 0) {
-        const critRes = await client.query(
-          `SELECT * FROM criterio_evaluacion WHERE id_actividadmateria = ANY($1::int[]) ORDER BY id_criterio ASC`,
-          [activityIds]
-        );
-        criterios = critRes.rows;
+        criterios = await db
+          .selectFrom("criterio_evaluacion")
+          .where("id_actividadmateria", "in", activityIds)
+          .selectAll()
+          .orderBy("id_criterio", "asc")
+          .execute();
       }
 
-      activities.rows.forEach(a => {
-        a.criterios = criterios.filter(c => c.id_actividadmateria === a.id_actividadmateria);
-      });
+      const activities = rawActivities.map((a) => ({
+        ...a,
+        criterios: criterios.filter((c) => c.id_actividadmateria === a.id_actividadmateria),
+      }));
 
       res.json({
         competencia,
-        activities: activities.rows,
-        evidencias: evidencias.rows,
-        competenciasList: validComps
+        activities,
+        evidencias,
+        competenciasList: validComps,
       });
     } finally {
       client.release();
@@ -208,66 +238,72 @@ export const updateCompetency = async (req: Request, res: Response): Promise<voi
     return;
   }
 
-  const client = await pool.connect();
   try {
-    const periodRes = await client.query(
-      `SELECT c.id_periodo, c.id_materia, c.id_grupo, c.id_anio, c.id_colegio
-       FROM competencias
-       WHERE id_competencia = $1`,
-      [id]
-    );
+    const periodRes = await db
+      .selectFrom("competencias as c")
+      .where("c.id_competencia", "=", Number(id))
+      .select(["c.id_periodo", "c.id_materia", "c.id_grupo", "c.id_anio", "c.id_colegio"])
+      .executeTakeFirst();
 
-    if (periodRes.rows.length === 0) {
+    if (!periodRes) {
       res.status(404).json({ error: "Competencia no encontrada" });
       return;
     }
 
-    const periodStatusRes = await client.query(
-      `SELECT estado FROM periodo_academico WHERE id_periodo = $1`,
-      [Number(periodRes.rows[0].id_periodo)]
-    );
-    if (periodStatusRes.rows.length > 0 && periodStatusRes.rows[0].estado === "CERRADO") {
+    const periodStatusRes = await db
+      .selectFrom("periodo_academico")
+      .where("id_periodo", "=", Number(periodRes.id_periodo))
+      .select("estado")
+      .executeTakeFirst();
+
+    if (periodStatusRes && periodStatusRes.estado === "CERRADO") {
       res.status(409).json({ error: "No se puede modificar la competencia porque el periodo está cerrado institucionalmente" });
       return;
     }
 
-    const dgRes = await client.query(
-      `SELECT id_detallegrado FROM detalle_grados
-       WHERE id_grupo = $1 AND id_materia = $2 AND id_colegio = $3
-       LIMIT 1`,
-      [periodRes.rows[0].id_grupo, periodRes.rows[0].id_materia, periodRes.rows[0].id_colegio]
-    );
+    const dgRes = await db
+      .selectFrom("detalle_grados")
+      .where("id_grupo", "=", periodRes.id_grupo)
+      .where("id_materia", "=", periodRes.id_materia)
+      .where("id_colegio", "=", periodRes.id_colegio)
+      .select("id_detallegrado")
+      .limit(1)
+      .executeTakeFirst();
 
-    if (dgRes.rows.length > 0 && !(await ensureSubjectOpen(dgRes.rows[0].id_detallegrado, Number(periodRes.rows[0].id_periodo)))) {
+    if (dgRes && !(await ensureSubjectOpen(dgRes.id_detallegrado, Number(periodRes.id_periodo)))) {
       res.status(409).json({ error: "No se puede modificar la competencia porque ya has cerrado esta materia para este periodo" });
       return;
     }
 
     const context: TeachingContext = {
       idDetalleGrado: 0,
-      idGrupo: Number(periodRes.rows[0].id_grupo),
-      idMateria: Number(periodRes.rows[0].id_materia),
-      idColegio: Number(periodRes.rows[0].id_colegio),
-      idAnio: Number(periodRes.rows[0].id_anio),
+      idGrupo: Number(periodRes.id_grupo),
+      idMateria: Number(periodRes.id_materia),
+      idColegio: Number(periodRes.id_colegio),
+      idAnio: Number(periodRes.id_anio),
     };
 
-    await client.query("BEGIN");
-    const updated = await syncCompetencyAcrossGrade(
-      client,
-      context,
-      Number(periodRes.rows[0].id_periodo),
-      descripcion.trim(),
-      Number(id)
-    );
-    await client.query("COMMIT");
-
-    res.json(updated);
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const updated = await syncCompetencyAcrossGrade(
+        client,
+        context,
+        Number(periodRes.id_periodo),
+        descripcion.trim(),
+        Number(id)
+      );
+      await client.query("COMMIT");
+      res.json(updated);
+    } catch (error: any) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
   } catch (error: any) {
-    await client.query("ROLLBACK");
     console.error("Error updating competency:", error);
     res.status(500).json({ error: "Error en el servidor" });
-  } finally {
-    client.release();
   }
 };
 
@@ -280,146 +316,151 @@ export const createActivity = async (req: Request, res: Response): Promise<void>
     return;
   }
 
-  const client = await pool.connect();
   try {
-    await client.query("BEGIN");
-
     let finalIdPeriodo = id_periodo ? Number(id_periodo) : null;
     let finalIdDetalleGrado = id_detallegrado ? Number(id_detallegrado) : null;
     let finalIdColegio = id_colegio ? Number(id_colegio) : null;
     const finalIdCompetencia = id_competencia ? Number(id_competencia) : null;
 
     if (finalIdCompetencia) {
-      const competencyRes = await client.query(
-        "SELECT id_competencia, id_periodo, id_grupo, id_materia, id_colegio FROM competencias WHERE id_competencia = $1",
-        [finalIdCompetencia]
-      );
+      const comp = await db
+        .selectFrom("competencias")
+        .where("id_competencia", "=", finalIdCompetencia)
+        .select(["id_competencia", "id_periodo", "id_grupo", "id_materia", "id_colegio"])
+        .executeTakeFirst();
 
-      if (competencyRes.rows.length === 0) {
-        await client.query("ROLLBACK");
+      if (!comp) {
         res.status(404).json({ error: "Competencia no encontrada" });
         return;
       }
 
-      const comp = competencyRes.rows[0];
       if (!finalIdPeriodo) finalIdPeriodo = Number(comp.id_periodo);
       if (!finalIdColegio) finalIdColegio = Number(comp.id_colegio);
 
       // Resolver id_detallegrado desde el contexto de la competencia y el id_anio del periodo
       if (!finalIdDetalleGrado) {
-        const dgRes = await client.query(
-          `SELECT dg.id_detallegrado 
-           FROM detalle_grados dg
-           JOIN periodo_academico p ON p.id_periodo = $4 AND p.id_colegio = dg.id_colegio AND p.id_anio = dg.id_anio
-           WHERE dg.id_grupo = $1 AND dg.id_materia = $2 AND dg.id_colegio = $3
-           ORDER BY dg.id_detallegrado DESC
-           LIMIT 1`,
-          [comp.id_grupo, comp.id_materia, comp.id_colegio, finalIdPeriodo]
-        );
-        finalIdDetalleGrado = dgRes.rows.length > 0 ? dgRes.rows[0].id_detallegrado : null;
+        const dgRes = await db
+          .selectFrom("detalle_grados as dg")
+          .innerJoin("periodo_academico as p", (join) =>
+            join
+              .onRef("p.id_colegio", "=", "dg.id_colegio")
+              .onRef("p.id_anio", "=", "dg.id_anio")
+              .on("p.id_periodo", "=", finalIdPeriodo!)
+          )
+          .where("dg.id_grupo", "=", comp.id_grupo)
+          .where("dg.id_materia", "=", comp.id_materia)
+          .where("dg.id_colegio", "=", comp.id_colegio)
+          .select("dg.id_detallegrado")
+          .orderBy("dg.id_detallegrado", "desc")
+          .limit(1)
+          .executeTakeFirst();
+        finalIdDetalleGrado = dgRes?.id_detallegrado ?? null;
       }
     }
 
     if (finalIdDetalleGrado && finalIdPeriodo) {
-      const alignDgRes = await client.query(
-        `SELECT dg2.id_detallegrado
-         FROM detalle_grados dg1
-         JOIN periodo_academico p ON p.id_periodo = $2
-         JOIN detalle_grados dg2 
-           ON dg2.id_grupo = dg1.id_grupo 
-          AND dg2.id_materia = dg1.id_materia 
-          AND dg2.id_colegio = dg1.id_colegio 
-          AND dg2.id_anio = p.id_anio
-         WHERE dg1.id_detallegrado = $1
-         LIMIT 1`,
-        [finalIdDetalleGrado, finalIdPeriodo]
-      );
-      if (alignDgRes.rows.length > 0) {
-        finalIdDetalleGrado = alignDgRes.rows[0].id_detallegrado;
+      const alignDgRes = await db
+        .selectFrom("detalle_grados as dg1")
+        .innerJoin("periodo_academico as p", (join) => join.on("p.id_periodo", "=", finalIdPeriodo!))
+        .innerJoin("detalle_grados as dg2", (join) =>
+          join
+            .onRef("dg2.id_grupo", "=", "dg1.id_grupo")
+            .onRef("dg2.id_materia", "=", "dg1.id_materia")
+            .onRef("dg2.id_colegio", "=", "dg1.id_colegio")
+            .onRef("dg2.id_anio", "=", "p.id_anio")
+        )
+        .where("dg1.id_detallegrado", "=", finalIdDetalleGrado)
+        .select("dg2.id_detallegrado")
+        .limit(1)
+        .executeTakeFirst();
+
+      if (alignDgRes) {
+        finalIdDetalleGrado = alignDgRes.id_detallegrado;
       }
     }
 
     if (!finalIdPeriodo || !finalIdDetalleGrado || !finalIdColegio) {
-      await client.query("ROLLBACK");
       res.status(400).json({ error: "Faltan datos de asignación académica (periodo, grado/materia)" });
       return;
     }
 
     if (!(await ensureCurrentPeriodOrRespond(res, finalIdColegio, finalIdPeriodo))) {
-      await client.query("ROLLBACK");
       return;
     }
 
     const periodOpen = await ensurePeriodOpen(finalIdPeriodo);
     if (!periodOpen) {
-      await client.query("ROLLBACK");
       res.status(409).json({ error: "No se pueden crear actividades porque el periodo está cerrado" });
       return;
     }
 
     if (finalIdDetalleGrado && !(await ensureSubjectOpen(finalIdDetalleGrado, finalIdPeriodo))) {
-      await client.query("ROLLBACK");
       res.status(409).json({ error: "No se pueden crear actividades porque ya has cerrado esta materia para este periodo" });
       return;
     }
 
-    const sumRes = await client.query(
-      `SELECT COALESCE(SUM(porcentaje), 0) AS total
-       FROM actividad_materia
-       WHERE id_detallegrado = $1 AND id_periodo = $2`,
-      [finalIdDetalleGrado, finalIdPeriodo]
-    );
+    const sumRes = await db
+      .selectFrom("actividad_materia")
+      .where("id_detallegrado", "=", finalIdDetalleGrado)
+      .where("id_periodo", "=", finalIdPeriodo)
+      .select((eb) => eb.fn.coalesce(eb.fn.sum<string>("porcentaje"), sql<string>`'0'`).as("total"))
+      .executeTakeFirst();
 
-    const currentTotal = parseFloat(sumRes.rows[0].total || "0");
+    const currentTotal = parseFloat(sumRes?.total || "0");
     if (currentTotal + parseFloat(porcentaje) > 100) {
-      await client.query("ROLLBACK");
       res.status(400).json({
         error: `La suma de porcentajes no puede exceder el 100%. Actual: ${currentTotal}%`,
       });
       return;
     }
 
-    // Validar si la evidencia es de otro periodo y requiere justificación
+    // Validar si la evidencia es de otro periodo / extra y requiere justificación
     if (Array.isArray(evidencias_dba) && evidencias_dba.length > 0) {
-      const dgInfo = await client.query(
-        `SELECT id_grupo, id_materia FROM detalle_grados WHERE id_detallegrado = $1`,
-        [finalIdDetalleGrado]
-      );
-      if (dgInfo.rows.length > 0) {
-        const { id_grupo, id_materia } = dgInfo.rows[0];
+      const dgInfo = await db
+        .selectFrom("detalle_grados")
+        .where("id_detallegrado", "=", finalIdDetalleGrado)
+        .select(["id_grupo", "id_materia"])
+        .executeTakeFirst();
+
+      if (dgInfo) {
+        const { id_grupo, id_materia } = dgInfo;
 
         // 1. Obtener evidencias planificadas en el periodo ACTUAL para este grado/materia
-        const currentPeriodAssigned = await client.query(
-          `SELECT DISTINCT ea.id_evidencia_dba
-           FROM evidencia_aprendizaje ea
-           JOIN competencias c ON c.id_competencia = ea.id_competencia
-           JOIN periodo_academico p ON p.id_periodo = c.id_periodo
-           WHERE c.id_colegio = $1
-             AND p.id_anio = (SELECT id_anio FROM periodo_academico WHERE id_periodo = $4)
-             AND c.id_materia = $2
-             AND c.id_grupo IN (
-               SELECT g2.id_grupo
-               FROM grupos g1
-               JOIN grupos g2 ON g2.id_nivel = g1.id_nivel AND g2.id_tipo_grado = g1.id_tipo_grado
-               WHERE g1.id_grupo = $3 AND g1.id_colegio = $1
-             )
-             AND c.id_periodo = $4
-             AND ea.id_evidencia_dba = ANY($5::int[])`,
-          [finalIdColegio, id_materia, id_grupo, finalIdPeriodo, evidencias_dba]
-        );
+        const currentPeriodAssigned = await db
+          .selectFrom("evidencia_aprendizaje as ea")
+          .innerJoin("competencias as c", "c.id_competencia", "ea.id_competencia")
+          .innerJoin("periodo_academico as p", "p.id_periodo", "c.id_periodo")
+          .where("c.id_colegio", "=", finalIdColegio)
+          .where("p.id_anio", "=", (eb) =>
+            eb.selectFrom("periodo_academico").where("id_periodo", "=", finalIdPeriodo!).select("id_anio")
+          )
+          .where("c.id_materia", "=", id_materia)
+          .where("c.id_grupo", "in", (eb) =>
+            eb
+              .selectFrom("grupos as g1")
+              .innerJoin("grupos as g2", (join) =>
+                join.onRef("g2.id_nivel", "=", "g1.id_nivel").onRef("g2.id_tipo_grado", "=", "g1.id_tipo_grado")
+              )
+              .where("g1.id_grupo", "=", id_grupo)
+              .where("g1.id_colegio", "=", finalIdColegio)
+              .select("g2.id_grupo")
+          )
+          .where("c.id_periodo", "=", finalIdPeriodo)
+          .where("ea.id_evidencia_dba", "in", evidencias_dba)
+          .select("ea.id_evidencia_dba")
+          .distinct()
+          .execute();
 
-        const plannedInCurrentIds = new Set(currentPeriodAssigned.rows.map((r: any) => Number(r.id_evidencia_dba)));
+        const plannedInCurrentIds = new Set(currentPeriodAssigned.map((r) => Number(r.id_evidencia_dba)));
         const unassignedInCurrent = evidencias_dba.filter((id: number) => !plannedInCurrentIds.has(Number(id)));
 
         // 2. Si hay evidencias NO planificadas en el periodo actual (extras), exigir motivo y justificación
         if (unassignedInCurrent.length > 0) {
           if (!motivo_extra || typeof motivo_extra !== "string" || !motivo_extra.trim()) {
-            await client.query("ROLLBACK");
             res.status(400).json({ error: "Debes seleccionar un motivo para evaluar evidencias extra o no planificadas en este periodo." });
             return;
           }
           if (motivo_extra === "OTRO" && (!justificacion_extra || typeof justificacion_extra !== "string" || !justificacion_extra.trim())) {
-            await client.query("ROLLBACK");
             res.status(400).json({ error: "Debes escribir una justificación detallada para el motivo 'Otro'." });
             return;
           }
@@ -430,64 +471,65 @@ export const createActivity = async (req: Request, res: Response): Promise<void>
     // Resolver id_evidencia para compatibilidad con código antiguo
     let finalIdEvidencia = id_evidencia ? Number(id_evidencia) : null;
     if (!finalIdEvidencia && Array.isArray(evidencias_dba) && evidencias_dba.length > 0 && finalIdCompetencia) {
-      const localEvRes = await client.query(
-        `SELECT id_evidencia FROM evidencia_aprendizaje 
-         WHERE id_competencia = $1 AND id_evidencia_dba = $2 
-         LIMIT 1`,
-        [finalIdCompetencia, evidencias_dba[0]]
-      );
-      if (localEvRes.rows.length > 0) {
-        finalIdEvidencia = localEvRes.rows[0].id_evidencia;
+      const localEvRes = await db
+        .selectFrom("evidencia_aprendizaje")
+        .where("id_competencia", "=", finalIdCompetencia)
+        .where("id_evidencia_dba", "=", evidencias_dba[0])
+        .select("id_evidencia")
+        .limit(1)
+        .executeTakeFirst();
+      if (localEvRes) {
+        finalIdEvidencia = localEvRes.id_evidencia;
       }
     }
 
-    const dgTeacherRes = await client.query(
-      `SELECT id_docente FROM detalle_grados WHERE id_detallegrado = $1`,
-      [finalIdDetalleGrado]
-    );
-    const creatorTeacherId = dgTeacherRes.rows[0]?.id_docente || null;
+    const dgTeacherRes = await db
+      .selectFrom("detalle_grados")
+      .where("id_detallegrado", "=", finalIdDetalleGrado)
+      .select("id_docente")
+      .executeTakeFirst();
+    const creatorTeacherId = dgTeacherRes?.id_docente ?? null;
 
-    const newActivityRes = await client.query(
-      `INSERT INTO actividad_materia (id_competencia, id_evidencia, id_detallegrado, id_periodo, nombre, porcentaje, id_colegio, motivo_extra, justificacion_extra, id_docente_creador)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-       RETURNING *`,
-      [
-        finalIdCompetencia,
-        finalIdEvidencia,
-        finalIdDetalleGrado,
-        finalIdPeriodo,
-        nombre,
-        porcentaje,
-        finalIdColegio,
-        motivo_extra || null,
-        justificacion_extra || null,
-        creatorTeacherId,
-      ]
-    );
-    const newActivity = newActivityRes.rows[0];
+    const newActivity = await db.transaction().execute(async (trx) => {
+      const inserted = await trx
+        .insertInto("actividad_materia")
+        .values({
+          id_competencia: finalIdCompetencia,
+          id_evidencia: finalIdEvidencia,
+          id_detallegrado: finalIdDetalleGrado,
+          id_periodo: finalIdPeriodo,
+          nombre,
+          porcentaje,
+          id_colegio: finalIdColegio!,
+          motivo_extra: motivo_extra || null,
+          justificacion_extra: justificacion_extra || null,
+          id_docente_creador: creatorTeacherId,
+        })
+        .returningAll()
+        .executeTakeFirstOrThrow();
 
-    // Vincular evidencias del DBA si vienen especificadas
-    if (Array.isArray(evidencias_dba) && evidencias_dba.length > 0) {
-      for (const dbaEvId of evidencias_dba) {
-        await client.query(
-          `INSERT INTO actividad_evidencia_dba (id_actividadmateria, id_evidencia_dba)
-           VALUES ($1, $2)
-           ON CONFLICT DO NOTHING`,
-          [newActivity.id_actividadmateria, dbaEvId]
-        );
+      // Vincular evidencias del DBA si vienen especificadas
+      if (Array.isArray(evidencias_dba) && evidencias_dba.length > 0) {
+        for (const dbaEvId of evidencias_dba) {
+          await trx
+            .insertInto("actividad_evidencia_dba")
+            .values({
+              id_actividadmateria: inserted.id_actividadmateria,
+              id_evidencia_dba: dbaEvId,
+            })
+            .onConflict((oc) => oc.doNothing())
+            .execute();
+        }
       }
-    }
 
-    await client.query("COMMIT");
+      return inserted;
+    });
 
-    newActivity.evidencias_dba = evidencias_dba || [];
+    (newActivity as any).evidencias_dba = evidencias_dba || [];
     res.status(201).json(newActivity);
   } catch (error: any) {
-    await client.query("ROLLBACK");
     console.error("Error creating activity:", error);
     res.status(500).json({ error: "Error en el servidor" });
-  } finally {
-    client.release();
   }
 };
 
@@ -496,57 +538,48 @@ export const updateActivity = async (req: Request, res: Response): Promise<void>
   const { id } = req.params;
   const { nombre, porcentaje, id_evidencia, evidencias_dba, motivo_extra, justificacion_extra } = req.body;
 
-  const client = await pool.connect();
   try {
-    await client.query("BEGIN");
+    const currentAct = await db
+      .selectFrom("actividad_materia")
+      .where("id_actividadmateria", "=", Number(id))
+      .select(["id_competencia", "id_evidencia", "id_periodo", "id_detallegrado", "id_colegio", "motivo_extra", "justificacion_extra"])
+      .executeTakeFirst();
 
-    const currentActRes = await client.query(
-      `SELECT id_competencia, id_evidencia, id_periodo, id_detallegrado, id_colegio
-       FROM actividad_materia
-       WHERE id_actividadmateria = $1`,
-      [id]
-    );
-
-    if (currentActRes.rows.length === 0) {
-      await client.query("ROLLBACK");
+    if (!currentAct) {
       res.status(404).json({ error: "Actividad no encontrada" });
       return;
     }
 
-    const currentAct = currentActRes.rows[0];
-
     if (!(await ensureCurrentPeriodOrRespond(res, Number(currentAct.id_colegio), Number(currentAct.id_periodo)))) {
-      await client.query("ROLLBACK");
       return;
     }
 
-    const periodOpen = await client.query(
-      `SELECT estado FROM periodo_academico WHERE id_periodo = $1`,
-      [currentAct.id_periodo]
-    );
-    if (periodOpen.rows.length > 0 && periodOpen.rows[0].estado === 'CERRADO') {
-      await client.query("ROLLBACK");
+    const periodOpen = await db
+      .selectFrom("periodo_academico")
+      .where("id_periodo", "=", Number(currentAct.id_periodo))
+      .select("estado")
+      .executeTakeFirst();
+
+    if (periodOpen && periodOpen.estado === "CERRADO") {
       res.status(409).json({ error: "No se puede modificar la actividad porque el periodo está cerrado institucionalmente" });
       return;
     }
 
     if (currentAct.id_detallegrado && !(await ensureSubjectOpen(currentAct.id_detallegrado, Number(currentAct.id_periodo)))) {
-      await client.query("ROLLBACK");
       res.status(409).json({ error: "No se puede modificar la actividad porque ya has cerrado esta materia para este periodo" });
       return;
     }
 
-    const sumRes = await client.query(
-      `SELECT COALESCE(SUM(porcentaje), 0) AS total
-       FROM actividad_materia
-       WHERE id_detallegrado = $1 AND id_periodo = $2
-         AND id_actividadmateria != $3`,
-      [currentAct.id_detallegrado, currentAct.id_periodo, id]
-    );
+    const sumRes = await db
+      .selectFrom("actividad_materia")
+      .where("id_detallegrado", "=", currentAct.id_detallegrado)
+      .where("id_periodo", "=", currentAct.id_periodo)
+      .where("id_actividadmateria", "!=", Number(id))
+      .select((eb) => eb.fn.coalesce(eb.fn.sum<string>("porcentaje"), sql<string>`'0'`).as("total"))
+      .executeTakeFirst();
 
-    const otherTotal = parseFloat(sumRes.rows[0].total || "0");
+    const otherTotal = parseFloat(sumRes?.total || "0");
     if (otherTotal + parseFloat(porcentaje) > 100) {
-      await client.query("ROLLBACK");
       res.status(400).json({
         error: `La suma de porcentajes no puede exceder el 100%. Otros: ${otherTotal}%`,
       });
@@ -554,48 +587,54 @@ export const updateActivity = async (req: Request, res: Response): Promise<void>
     }
 
     // Validar si la evidencia es de otro periodo y requiere justificación
-    if (Array.isArray(evidencias_dba) && evidencias_dba.length > 0) {
-      const dgInfo = await client.query(
-        `SELECT id_grupo, id_materia FROM detalle_grados WHERE id_detallegrado = $1`,
-        [currentAct.id_detallegrado]
-      );
-      if (dgInfo.rows.length > 0) {
-        const { id_grupo, id_materia } = dgInfo.rows[0];
+    if (Array.isArray(evidencias_dba) && evidencias_dba.length > 0 && currentAct.id_detallegrado) {
+      const dgInfo = await db
+        .selectFrom("detalle_grados")
+        .where("id_detallegrado", "=", currentAct.id_detallegrado)
+        .select(["id_grupo", "id_materia"])
+        .executeTakeFirst();
+
+      if (dgInfo) {
+        const { id_grupo, id_materia } = dgInfo;
 
         // 1. Obtener evidencias planificadas en el periodo ACTUAL para este grado/materia
-        const currentPeriodAssigned = await client.query(
-          `SELECT DISTINCT ea.id_evidencia_dba
-           FROM evidencia_aprendizaje ea
-           JOIN competencias c ON c.id_competencia = ea.id_competencia
-           JOIN periodo_academico p ON p.id_periodo = c.id_periodo
-           WHERE c.id_colegio = $1
-             AND p.id_anio = (SELECT id_anio FROM periodo_academico WHERE id_periodo = $4)
-             AND c.id_materia = $2
-             AND c.id_grupo IN (
-               SELECT g2.id_grupo
-               FROM grupos g1
-               JOIN grupos g2 ON g2.id_nivel = g1.id_nivel AND g2.id_tipo_grado = g1.id_tipo_grado
-               WHERE g1.id_grupo = $3 AND g1.id_colegio = $1
-             )
-             AND c.id_periodo = $4
-             AND ea.id_evidencia_dba = ANY($5::int[])`,
-          [currentAct.id_colegio, id_materia, id_grupo, currentAct.id_periodo, evidencias_dba]
-        );
+        const currentPeriodAssigned = await db
+          .selectFrom("evidencia_aprendizaje as ea")
+          .innerJoin("competencias as c", "c.id_competencia", "ea.id_competencia")
+          .innerJoin("periodo_academico as p", "p.id_periodo", "c.id_periodo")
+          .where("c.id_colegio", "=", currentAct.id_colegio)
+          .where("p.id_anio", "=", (eb) =>
+            eb.selectFrom("periodo_academico").where("id_periodo", "=", currentAct.id_periodo!).select("id_anio")
+          )
+          .where("c.id_materia", "=", id_materia)
+          .where("c.id_grupo", "in", (eb) =>
+            eb
+              .selectFrom("grupos as g1")
+              .innerJoin("grupos as g2", (join) =>
+                join.onRef("g2.id_nivel", "=", "g1.id_nivel").onRef("g2.id_tipo_grado", "=", "g1.id_tipo_grado")
+              )
+              .where("g1.id_grupo", "=", id_grupo)
+              .where("g1.id_colegio", "=", currentAct.id_colegio)
+              .select("g2.id_grupo")
+          )
+          .where("c.id_periodo", "=", currentAct.id_periodo)
+          .where("ea.id_evidencia_dba", "in", evidencias_dba)
+          .select("ea.id_evidencia_dba")
+          .distinct()
+          .execute();
 
-        const plannedInCurrentIds = new Set(currentPeriodAssigned.rows.map((r: any) => Number(r.id_evidencia_dba)));
-        const unassignedInCurrent = evidencias_dba.filter((id: number) => !plannedInCurrentIds.has(Number(id)));
+        const plannedInCurrentIds = new Set(currentPeriodAssigned.map((r) => Number(r.id_evidencia_dba)));
+        const unassignedInCurrent = evidencias_dba.filter((dbaId: number) => !plannedInCurrentIds.has(Number(dbaId)));
 
         // 2. Si hay evidencias NO planificadas en el periodo actual (extras), exigir motivo y justificación
         if (unassignedInCurrent.length > 0) {
           const checkMotivo = motivo_extra !== undefined ? motivo_extra : currentAct.motivo_extra;
           const checkJustificacion = justificacion_extra !== undefined ? justificacion_extra : currentAct.justificacion_extra;
           if (!checkMotivo || typeof checkMotivo !== "string" || !checkMotivo.trim()) {
-            await client.query("ROLLBACK");
             res.status(400).json({ error: "Debes seleccionar un motivo para evaluar evidencias extra o no planificadas en este periodo." });
             return;
           }
           if (checkMotivo === "OTRO" && (!checkJustificacion || typeof checkJustificacion !== "string" || !checkJustificacion.trim())) {
-            await client.query("ROLLBACK");
             res.status(400).json({ error: "Debes escribir una justificación detallada para el motivo 'Otro'." });
             return;
           }
@@ -606,14 +645,15 @@ export const updateActivity = async (req: Request, res: Response): Promise<void>
     // Resolver id_evidencia para compatibilidad con código antiguo
     let finalIdEvidencia = id_evidencia ? Number(id_evidencia) : currentAct.id_evidencia;
     if (Array.isArray(evidencias_dba) && evidencias_dba.length > 0 && currentAct.id_competencia) {
-      const localEvRes = await client.query(
-        `SELECT id_evidencia FROM evidencia_aprendizaje 
-         WHERE id_competencia = $1 AND id_evidencia_dba = $2 
-         LIMIT 1`,
-        [currentAct.id_competencia, evidencias_dba[0]]
-      );
-      if (localEvRes.rows.length > 0) {
-        finalIdEvidencia = localEvRes.rows[0].id_evidencia;
+      const localEvRes = await db
+        .selectFrom("evidencia_aprendizaje")
+        .where("id_competencia", "=", currentAct.id_competencia)
+        .where("id_evidencia_dba", "=", evidencias_dba[0])
+        .select("id_evidencia")
+        .limit(1)
+        .executeTakeFirst();
+      if (localEvRes) {
+        finalIdEvidencia = localEvRes.id_evidencia;
       } else {
         finalIdEvidencia = null;
       }
@@ -624,47 +664,53 @@ export const updateActivity = async (req: Request, res: Response): Promise<void>
     const finalMotivoExtra = motivo_extra !== undefined ? (motivo_extra || null) : currentAct.motivo_extra;
     const finalJustificacionExtra = justificacion_extra !== undefined ? (justificacion_extra || null) : currentAct.justificacion_extra;
 
-    const updatedRes = await client.query(
-      `UPDATE actividad_materia
-       SET nombre = $1, porcentaje = $2, id_evidencia = $3, motivo_extra = $4, justificacion_extra = $5
-       WHERE id_actividadmateria = $6
-       RETURNING *`,
-      [nombre, porcentaje, finalIdEvidencia, finalMotivoExtra, finalJustificacionExtra, id]
-    );
-    const updatedActivity = updatedRes.rows[0];
+    const updatedActivity = await db.transaction().execute(async (trx) => {
+      const updated = await trx
+        .updateTable("actividad_materia")
+        .set({
+          nombre,
+          porcentaje,
+          id_evidencia: finalIdEvidencia,
+          motivo_extra: finalMotivoExtra,
+          justificacion_extra: finalJustificacionExtra,
+        })
+        .where("id_actividadmateria", "=", Number(id))
+        .returningAll()
+        .executeTakeFirstOrThrow();
 
-    // Sincronizar evidencias del DBA si vienen en la petición
-    if (Array.isArray(evidencias_dba)) {
-      await client.query(
-        `DELETE FROM actividad_evidencia_dba WHERE id_actividadmateria = $1`,
-        [id]
-      );
+      // Sincronizar evidencias del DBA si vienen en la petición
+      if (Array.isArray(evidencias_dba)) {
+        await trx
+          .deleteFrom("actividad_evidencia_dba")
+          .where("id_actividadmateria", "=", Number(id))
+          .execute();
 
-      for (const dbaEvId of evidencias_dba) {
-        await client.query(
-          `INSERT INTO actividad_evidencia_dba (id_actividadmateria, id_evidencia_dba)
-           VALUES ($1, $2)
-           ON CONFLICT DO NOTHING`,
-          [id, dbaEvId]
-        );
+        for (const dbaEvId of evidencias_dba) {
+          await trx
+            .insertInto("actividad_evidencia_dba")
+            .values({
+              id_actividadmateria: Number(id),
+              id_evidencia_dba: dbaEvId,
+            })
+            .onConflict((oc) => oc.doNothing())
+            .execute();
+        }
       }
-    }
 
-    await client.query("COMMIT");
+      return updated;
+    });
 
-    const finalDbaEvsRes = await client.query(
-      `SELECT id_evidencia_dba FROM actividad_evidencia_dba WHERE id_actividadmateria = $1`,
-      [id]
-    );
-    updatedActivity.evidencias_dba = finalDbaEvsRes.rows.map(r => r.id_evidencia_dba);
+    const finalDbaEvsRes = await db
+      .selectFrom("actividad_evidencia_dba")
+      .where("id_actividadmateria", "=", Number(id))
+      .select("id_evidencia_dba")
+      .execute();
+    (updatedActivity as any).evidencias_dba = finalDbaEvsRes.map((r) => r.id_evidencia_dba);
 
     res.json(updatedActivity);
   } catch (error: any) {
-    await client.query("ROLLBACK");
     console.error("Error updating activity:", error);
     res.status(500).json({ error: "Error en el servidor" });
-  } finally {
-    client.release();
   }
 };
 
@@ -673,19 +719,16 @@ export const deleteActivity = async (req: Request, res: Response): Promise<void>
   const { id } = req.params;
 
   try {
-    const currentActRes = await pool.query(
-      `SELECT id_periodo, id_colegio, id_detallegrado
-       FROM actividad_materia
-       WHERE id_actividadmateria = $1`,
-      [id]
-    );
+    const currentAct = await db
+      .selectFrom("actividad_materia")
+      .where("id_actividadmateria", "=", Number(id))
+      .select(["id_periodo", "id_colegio", "id_detallegrado"])
+      .executeTakeFirst();
 
-    if (currentActRes.rows.length === 0) {
+    if (!currentAct) {
       res.status(404).json({ error: "Actividad no encontrada" });
       return;
     }
-
-    const currentAct = currentActRes.rows[0];
 
     if (!(await ensureCurrentPeriodOrRespond(res, Number(currentAct.id_colegio), Number(currentAct.id_periodo)))) {
       return;
@@ -702,7 +745,7 @@ export const deleteActivity = async (req: Request, res: Response): Promise<void>
       return;
     }
 
-    await pool.query("DELETE FROM actividad_materia WHERE id_actividadmateria = $1", [id]);
+    await db.deleteFrom("actividad_materia").where("id_actividadmateria", "=", Number(id)).execute();
     res.json({ message: "Actividad eliminada correctamente" });
   } catch (error: any) {
     console.error("Error deleting activity:", error);
@@ -720,47 +763,47 @@ export const createCriterion = async (req: Request, res: Response): Promise<void
   }
 
   try {
-    const actRes = await pool.query(
-      `SELECT a.id_competencia, c.id_periodo
-       FROM actividad_materia a
-       JOIN competencias c ON c.id_competencia = a.id_competencia
-       WHERE a.id_actividadmateria = $1 AND a.id_colegio = $2`,
-      [id_actividadmateria, id_colegio]
-    );
+    const actRes = await db
+      .selectFrom("actividad_materia as a")
+      .innerJoin("competencias as c", "c.id_competencia", "a.id_competencia")
+      .where("a.id_actividadmateria", "=", Number(id_actividadmateria))
+      .where("a.id_colegio", "=", Number(id_colegio))
+      .select(["a.id_competencia", "c.id_periodo"])
+      .executeTakeFirst();
 
-    if (actRes.rows.length === 0) {
+    if (!actRes) {
       res.status(404).json({ error: "Actividad no encontrada" });
       return;
     }
 
-    if (!(await ensureCurrentPeriodOrRespond(res, id_colegio, Number(actRes.rows[0].id_periodo)))) {
+    if (!(await ensureCurrentPeriodOrRespond(res, Number(id_colegio), Number(actRes.id_periodo)))) {
       return;
     }
 
-    const periodOpen = await ensurePeriodOpen(Number(actRes.rows[0].id_periodo));
+    const periodOpen = await ensurePeriodOpen(Number(actRes.id_periodo));
     if (!periodOpen) {
       res.status(409).json({ error: "No se puede modificar la actividad porque el periodo está cerrado institucionalmente" });
       return;
     }
 
-    const dgRes = await pool.query(
-      `SELECT id_detallegrado FROM actividad_materia WHERE id_actividadmateria = $1`,
-      [id_actividadmateria]
-    );
+    const dgRes = await db
+      .selectFrom("actividad_materia")
+      .where("id_actividadmateria", "=", Number(id_actividadmateria))
+      .select("id_detallegrado")
+      .executeTakeFirst();
 
-    if (dgRes.rows.length > 0 && !(await ensureSubjectOpen(dgRes.rows[0].id_detallegrado, Number(actRes.rows[0].id_periodo)))) {
+    if (dgRes && dgRes.id_detallegrado && !(await ensureSubjectOpen(dgRes.id_detallegrado, Number(actRes.id_periodo)))) {
       res.status(409).json({ error: "No se puede agregar criterios porque ya has cerrado esta materia para este periodo" });
       return;
     }
 
-    const sumRes = await pool.query(
-      `SELECT COALESCE(SUM(porcentaje), 0) AS total
-       FROM criterio_evaluacion
-       WHERE id_actividadmateria = $1`,
-      [id_actividadmateria]
-    );
+    const sumRes = await db
+      .selectFrom("criterio_evaluacion")
+      .where("id_actividadmateria", "=", Number(id_actividadmateria))
+      .select((eb) => eb.fn.coalesce(eb.fn.sum<string>("porcentaje"), sql<string>`'0'`).as("total"))
+      .executeTakeFirst();
 
-    const currentTotal = parseFloat(sumRes.rows[0].total || "0");
+    const currentTotal = parseFloat(sumRes?.total || "0");
     if (currentTotal + parseFloat(porcentaje) > 100) {
       res.status(400).json({
         error: `La suma de porcentajes de los criterios no puede exceder el 100%. Actual: ${currentTotal}%`,
@@ -768,14 +811,19 @@ export const createCriterion = async (req: Request, res: Response): Promise<void
       return;
     }
 
-    const newCrit = await pool.query(
-      `INSERT INTO criterio_evaluacion (id_actividadmateria, id_evidencia, descripcion, porcentaje, id_colegio)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING *`,
-      [id_actividadmateria, id_evidencia || null, descripcion, porcentaje, id_colegio]
-    );
+    const newCrit = await db
+      .insertInto("criterio_evaluacion")
+      .values({
+        id_actividadmateria: Number(id_actividadmateria),
+        id_evidencia: id_evidencia || null,
+        descripcion,
+        porcentaje,
+        id_colegio: Number(id_colegio),
+      })
+      .returningAll()
+      .executeTakeFirstOrThrow();
 
-    res.status(201).json(newCrit.rows[0]);
+    res.status(201).json(newCrit);
   } catch (error: any) {
     console.error("Error creating criterion:", error);
     res.status(500).json({ error: "Error en el servidor" });
@@ -787,44 +835,35 @@ export const deleteCriterion = async (req: Request, res: Response): Promise<void
   const { id } = req.params;
 
   try {
-    const critRes = await pool.query(
-      `SELECT c.id_periodo, ce.id_colegio
-       FROM criterio_evaluacion ce
-       JOIN actividad_materia a ON a.id_actividadmateria = ce.id_actividadmateria
-       JOIN competencias c ON c.id_competencia = a.id_competencia
-       WHERE ce.id_criterio = $1`,
-      [id]
-    );
+    const critRes = await db
+      .selectFrom("criterio_evaluacion as ce")
+      .innerJoin("actividad_materia as a", "a.id_actividadmateria", "ce.id_actividadmateria")
+      .innerJoin("competencias as c", "c.id_competencia", "a.id_competencia")
+      .where("ce.id_criterio", "=", Number(id))
+      .select(["c.id_periodo", "ce.id_colegio", "a.id_detallegrado"])
+      .executeTakeFirst();
 
-    if (critRes.rows.length === 0) {
+    if (!critRes) {
       res.status(404).json({ error: "Criterio no encontrado" });
       return;
     }
 
-    if (!(await ensureCurrentPeriodOrRespond(res, Number(critRes.rows[0].id_colegio), Number(critRes.rows[0].id_periodo)))) {
+    if (!(await ensureCurrentPeriodOrRespond(res, Number(critRes.id_colegio), Number(critRes.id_periodo)))) {
       return;
     }
 
-    const periodOpen = await ensurePeriodOpen(Number(critRes.rows[0].id_periodo));
+    const periodOpen = await ensurePeriodOpen(Number(critRes.id_periodo));
     if (!periodOpen) {
       res.status(409).json({ error: "No se puede eliminar el criterio porque el periodo está cerrado institucionalmente" });
       return;
     }
 
-    const dgRes = await pool.query(
-      `SELECT a.id_detallegrado 
-       FROM criterion_evaluacion ce 
-       JOIN actividad_materia a ON ce.id_actividadmateria = a.id_actividadmateria 
-       WHERE ce.id_criterio = $1`,
-      [id]
-    );
-
-    if (dgRes.rows.length > 0 && !(await ensureSubjectOpen(dgRes.rows[0].id_detallegrado, Number(critRes.rows[0].id_periodo)))) {
+    if (critRes.id_detallegrado && !(await ensureSubjectOpen(critRes.id_detallegrado, Number(critRes.id_periodo)))) {
       res.status(409).json({ error: "No se puede eliminar el criterio porque ya has cerrado esta materia para este periodo" });
       return;
     }
 
-    await pool.query("DELETE FROM criterio_evaluacion WHERE id_criterio = $1", [id]);
+    await db.deleteFrom("criterio_evaluacion").where("id_criterio", "=", Number(id)).execute();
     res.json({ message: "Criterio eliminado correctamente" });
   } catch (error: any) {
     console.error("Error deleting criterion:", error);
@@ -846,38 +885,37 @@ export const getGrades = async (req: Request, res: Response): Promise<void> => {
     }
 
     const authReq = req as any;
-    const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+    const isSupervision = authReq.user && authReq.user.roles?.includes("admin_general");
     if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== context.idColegio) {
       res.status(403).json({ error: "No tiene permiso para acceder a las calificaciones de este colegio." });
       return;
     }
 
-    const grades = await pool.query(
-      `SELECT n.*
-       FROM notas_actividad n
-       JOIN actividad_materia a ON n.id_actividadmateria = a.id_actividadmateria
-       JOIN competencias c ON a.id_competencia = c.id_competencia
-       WHERE c.id_grupo = $1
-         AND c.id_materia = $2
-         AND c.id_periodo = $3`,
-      [gradeId, subjectId, periodId]
-    );
+    const grades = await db
+      .selectFrom("notas_actividad as n")
+      .innerJoin("actividad_materia as a", "a.id_actividadmateria", "n.id_actividadmateria")
+      .innerJoin("competencias as c", "c.id_competencia", "a.id_competencia")
+      .where("c.id_grupo", "=", gradeId)
+      .where("c.id_materia", "=", subjectId)
+      .where("c.id_periodo", "=", periodId)
+      .selectAll("n")
+      .execute();
 
-    const criteriaGrades = await pool.query(
-      `SELECT nc.*, ce.id_actividadmateria
-       FROM nota_criterio nc
-       JOIN criterio_evaluacion ce ON nc.id_criterio = ce.id_criterio
-       JOIN actividad_materia a ON ce.id_actividadmateria = a.id_actividadmateria
-       JOIN competencias c ON a.id_competencia = c.id_competencia
-       WHERE c.id_grupo = $1
-         AND c.id_materia = $2
-         AND c.id_periodo = $3`,
-      [gradeId, subjectId, periodId]
-    );
+    const criteriaGrades = await db
+      .selectFrom("nota_criterio as nc")
+      .innerJoin("criterio_evaluacion as ce", "ce.id_criterio", "nc.id_criterio")
+      .innerJoin("actividad_materia as a", "a.id_actividadmateria", "ce.id_actividadmateria")
+      .innerJoin("competencias as c", "c.id_competencia", "a.id_competencia")
+      .where("c.id_grupo", "=", gradeId)
+      .where("c.id_materia", "=", subjectId)
+      .where("c.id_periodo", "=", periodId)
+      .selectAll("nc")
+      .select("ce.id_actividadmateria")
+      .execute();
 
     res.json({
-      activityGrades: grades.rows,
-      criteriaGrades: criteriaGrades.rows
+      activityGrades: grades,
+      criteriaGrades: criteriaGrades,
     });
   } catch (error: any) {
     console.error("Error fetching grades:", error);
@@ -888,10 +926,7 @@ export const getGrades = async (req: Request, res: Response): Promise<void> => {
 export const saveGrades = async (req: Request, res: Response): Promise<void> => {
   const { activityGrades = [], criteriaGrades = [], schoolId } = req.body;
 
-  const client = await pool.connect();
   try {
-    await client.query("BEGIN");
-
     const activityIds = Array.from(
       new Set(
         (Array.isArray(activityGrades) ? activityGrades : [])
@@ -909,207 +944,242 @@ export const saveGrades = async (req: Request, res: Response): Promise<void> => 
     );
 
     if (activityIds.length === 0 && criteriaIds.length === 0) {
-      await client.query("ROLLBACK");
       res.status(400).json({ error: "No hay notas válidas para guardar" });
       return;
     }
 
-    let periodIds = new Set<number>();
-    let colIds = new Set<number>();
+    const periodIds = new Set<number>();
+    const colIds = new Set<number>();
 
     if (activityIds.length > 0) {
-      const periodsRes = await client.query(
-        `SELECT DISTINCT c.id_periodo, c.id_colegio
-         FROM actividad_materia a
-         JOIN competencias c ON c.id_competencia = a.id_competencia
-         WHERE a.id_actividadmateria = ANY($1::int[])`,
-        [activityIds]
-      );
-      periodsRes.rows.forEach(r => {
-        periodIds.add(Number(r.id_periodo));
-        colIds.add(Number(r.id_colegio));
+      const periodsRes = await db
+        .selectFrom("actividad_materia as a")
+        .innerJoin("competencias as c", "c.id_competencia", "a.id_competencia")
+        .where("a.id_actividadmateria", "in", activityIds)
+        .select(["c.id_periodo", "c.id_colegio"])
+        .distinct()
+        .execute();
+      periodsRes.forEach((r) => {
+        if (r.id_periodo) periodIds.add(Number(r.id_periodo));
+        if (r.id_colegio) colIds.add(Number(r.id_colegio));
       });
     }
 
     if (criteriaIds.length > 0) {
-      const periodsRes = await client.query(
-        `SELECT DISTINCT c.id_periodo, c.id_colegio
-         FROM criterio_evaluacion ce
-         JOIN actividad_materia a ON a.id_actividadmateria = ce.id_actividadmateria
-         JOIN competencias c ON c.id_competencia = a.id_competencia
-         WHERE ce.id_criterio = ANY($1::int[])`,
-        [criteriaIds]
-      );
-      periodsRes.rows.forEach(r => {
-        periodIds.add(Number(r.id_periodo));
-        colIds.add(Number(r.id_colegio));
+      const periodsRes = await db
+        .selectFrom("criterio_evaluacion as ce")
+        .innerJoin("actividad_materia as a", "a.id_actividadmateria", "ce.id_actividadmateria")
+        .innerJoin("competencias as c", "c.id_competencia", "a.id_competencia")
+        .where("ce.id_criterio", "in", criteriaIds)
+        .select(["c.id_periodo", "c.id_colegio"])
+        .distinct()
+        .execute();
+      periodsRes.forEach((r) => {
+        if (r.id_periodo) periodIds.add(Number(r.id_periodo));
+        if (r.id_colegio) colIds.add(Number(r.id_colegio));
       });
     }
 
     for (const pId of Array.from(periodIds)) {
       for (const cId of Array.from(colIds)) {
         if (!(await ensureCurrentPeriodForSchool(cId, pId))) {
-          await client.query("ROLLBACK");
           res.status(409).json({ error: "Solo se pueden guardar notas en el periodo académico actual" });
           return;
         }
       }
-      
+
       const periodOpen = await ensurePeriodOpen(pId);
       if (!periodOpen) {
-        await client.query("ROLLBACK");
         res.status(409).json({ error: "No se pueden guardar notas porque el periodo está cerrado institucionalmente" });
         return;
       }
 
       // Lock por cierre de docente
-      const assignments = await client.query(
-        `SELECT DISTINCT id_detallegrado FROM actividad_materia WHERE id_actividadmateria = ANY($1::int[])
-         UNION
-         SELECT DISTINCT ce.id_actividadmateria as id_detallegrado 
-         FROM criterio_evaluacion ce WHERE ce.id_criterio = ANY($2::int[])`,
-        [activityIds, criteriaIds]
+      const actAssignments = activityIds.length > 0
+        ? await db
+            .selectFrom("actividad_materia")
+            .where("id_actividadmateria", "in", activityIds)
+            .where("id_detallegrado", "is not", null)
+            .select("id_detallegrado")
+            .distinct()
+            .execute()
+        : [];
+      const critAssignments = criteriaIds.length > 0
+        ? await db
+            .selectFrom("criterio_evaluacion as ce")
+            .innerJoin("actividad_materia as am", "am.id_actividadmateria", "ce.id_actividadmateria")
+            .where("ce.id_criterio", "in", criteriaIds)
+            .where("am.id_detallegrado", "is not", null)
+            .select("am.id_detallegrado")
+            .distinct()
+            .execute()
+        : [];
+
+      const combinedAssignments = Array.from(
+        new Set([...actAssignments.map((a) => a.id_detallegrado!), ...critAssignments.map((c) => c.id_detallegrado!)])
       );
 
-      for (const assig of assignments.rows) {
-        if (!(await ensureSubjectOpen(assig.id_detallegrado, pId))) {
-          await client.query("ROLLBACK");
+      for (const detailGradeId of combinedAssignments) {
+        if (!(await ensureSubjectOpen(detailGradeId, pId))) {
           res.status(409).json({ error: "No se pueden guardar notas porque ya has cerrado la materia para este periodo" });
           return;
         }
       }
     }
 
-    const escalaRes = await client.query(
-      "SELECT id_escalavaloracion, valor_minimo, valor_maximo FROM escala_valoracion WHERE id_colegio = $1",
-      [schoolId]
-    );
-    const escalas = escalaRes.rows;
+    const escalas = await db
+      .selectFrom("escala_valoracion")
+      .where("id_colegio", "=", Number(schoolId))
+      .select(["id_escalavaloracion", "valor_minimo", "valor_maximo"])
+      .execute();
 
-    const settingsRes = await client.query(
-      `SELECT nota_minima, nota_maxima
-       FROM configuracion_colegio
-       WHERE id_colegio = $1`,
-      [schoolId]
-    );
+    const settingsRes = await db
+      .selectFrom("configuracion_colegio")
+      .where("id_colegio", "=", Number(schoolId))
+      .select(["nota_minima", "nota_maxima"])
+      .executeTakeFirst();
 
-    const notaMinima = settingsRes.rows.length > 0 ? Number(settingsRes.rows[0].nota_minima) : 0;
-    const notaMaxima = settingsRes.rows.length > 0 ? Number(settingsRes.rows[0].nota_maxima) : 5;
+    const notaMinima = settingsRes ? Number(settingsRes.nota_minima) : 0;
+    const notaMaxima = settingsRes ? Number(settingsRes.nota_maxima) : 5;
 
-    // Guardar activityGrades
-    for (const item of activityGrades) {
-      const notaNum = Number(parseFloat(item.nota).toFixed(1));
-      if (Number.isNaN(notaNum) || notaNum < notaMinima || notaNum > notaMaxima) {
-        await client.query("ROLLBACK");
-        res.status(400).json({
-          error: `Todas las notas deben estar dentro del rango institucional ${notaMinima.toFixed(1)} - ${notaMaxima.toFixed(1)}`,
-        });
-        return;
-      }
+    await db.transaction().execute(async (trx) => {
+      // Guardar activityGrades
+      for (const item of activityGrades) {
+        const notaNum = Number(parseFloat(item.nota).toFixed(1));
+        if (Number.isNaN(notaNum) || notaNum < notaMinima || notaNum > notaMaxima) {
+          throw new Error(`Todas las notas deben estar dentro del rango institucional ${notaMinima.toFixed(1)} - ${notaMaxima.toFixed(1)}`);
+        }
 
-      const escala = escalas.find(
-        (entry) =>
-          notaNum >= parseFloat(entry.valor_minimo) &&
-          notaNum <= parseFloat(entry.valor_maximo)
-      );
-      const idEscala =
-        escala?.id_escalavaloracion ??
-        escalas[escalas.length - 1]?.id_escalavaloracion;
-
-      await client.query(
-        `INSERT INTO notas_actividad (id_actividadmateria, id_estudiante, nota, id_escalavaloracion, id_colegio)
-         VALUES ($1, $2, $3, $4, $5)
-         ON CONFLICT (id_actividadmateria, id_estudiante)
-         DO UPDATE SET nota = EXCLUDED.nota, id_escalavaloracion = EXCLUDED.id_escalavaloracion`,
-        [item.id_actividadmateria, item.id_estudiante, notaNum, idEscala, schoolId]
-      );
-    }
-
-    // Guardar criteriaGrades
-    const touchedActivities = new Set<number>();
-    for (const item of criteriaGrades) {
-      const notaNum = Number(parseFloat(item.nota).toFixed(1));
-      if (Number.isNaN(notaNum) || notaNum < notaMinima || notaNum > notaMaxima) {
-        await client.query("ROLLBACK");
-        res.status(400).json({
-          error: `Todas las notas deben estar dentro del rango institucional ${notaMinima.toFixed(1)} - ${notaMaxima.toFixed(1)}`,
-        });
-        return;
-      }
-
-      await client.query(
-        `INSERT INTO nota_criterio (id_criterio, id_estudiante, nota, id_colegio)
-         VALUES ($1, $2, $3, $4)
-         ON CONFLICT (id_criterio, id_estudiante)
-         DO UPDATE SET nota = EXCLUDED.nota`,
-        [item.id_criterio, item.id_estudiante, notaNum, schoolId]
-      );
-
-      const actRes = await client.query(
-        `SELECT id_actividadmateria FROM criterio_evaluacion WHERE id_criterio = $1`,
-        [item.id_criterio]
-      );
-      if (actRes.rows.length > 0) {
-        touchedActivities.add(actRes.rows[0].id_actividadmateria);
-      }
-    }
-
-    // Sincronizar notas_actividad para actividades con criterios modificados
-    for (const actId of touchedActivities) {
-      const studentsRes = await client.query(
-        `SELECT DISTINCT nc.id_estudiante
-         FROM nota_criterio nc
-         JOIN criterio_evaluacion ce ON ce.id_criterio = nc.id_criterio
-         WHERE ce.id_actividadmateria = $1`,
-        [actId]
-      );
-
-      for (const st of studentsRes.rows) {
-        const studentId = st.id_estudiante;
-        const calcRes = await client.query(
-          `SELECT 
-             COUNT(ce.id_criterio) as total_criterios,
-             COUNT(nc.id_nota_criterio) as calificados,
-             SUM(ce.porcentaje) as total_peso,
-             SUM(nc.nota * ce.porcentaje) as suma_ponderada
-           FROM criterio_evaluacion ce
-           LEFT JOIN nota_criterio nc ON nc.id_criterio = ce.id_criterio AND nc.id_estudiante = $2
-           WHERE ce.id_actividadmateria = $1`,
-          [actId, studentId]
+        const escala = escalas.find(
+          (entry) =>
+            notaNum >= parseFloat(entry.valor_minimo) &&
+            notaNum <= parseFloat(entry.valor_maximo)
         );
+        const idEscala =
+          escala?.id_escalavaloracion ??
+          escalas[escalas.length - 1]?.id_escalavaloracion ??
+          null;
 
-        const { total_criterios, calificados, total_peso, suma_ponderada } = calcRes.rows[0];
-        if (Number(total_criterios) > 0 && Number(total_criterios) === Number(calificados) && Number(total_peso) > 0) {
-          const notaPonderada = Number((Number(suma_ponderada) / Number(total_peso)).toFixed(1));
-          
-          const escala = escalas.find(
-            (entry) =>
-              notaPonderada >= parseFloat(entry.valor_minimo) &&
-              notaPonderada <= parseFloat(entry.valor_maximo)
-          );
-          const idEscala =
-            escala?.id_escalavaloracion ??
-            escalas[escalas.length - 1]?.id_escalavaloracion;
+        await trx
+          .insertInto("notas_actividad")
+          .values({
+            id_actividadmateria: Number(item.id_actividadmateria),
+            id_estudiante: Number(item.id_estudiante),
+            nota: notaNum,
+            id_escalavaloracion: idEscala,
+            id_colegio: Number(schoolId),
+          })
+          .onConflict((oc) =>
+            oc.columns(["id_actividadmateria", "id_estudiante"]).doUpdateSet({
+              nota: sql`EXCLUDED.nota`,
+              id_escalavaloracion: sql`EXCLUDED.id_escalavaloracion`,
+            })
+          )
+          .execute();
+      }
 
-          await client.query(
-            `INSERT INTO notas_actividad (id_actividadmateria, id_estudiante, nota, id_escalavaloracion, id_colegio)
-             VALUES ($1, $2, $3, $4, $5)
-             ON CONFLICT (id_actividadmateria, id_estudiante)
-             DO UPDATE SET nota = EXCLUDED.nota, id_escalavaloracion = EXCLUDED.id_escalavaloracion`,
-            [actId, studentId, notaPonderada, idEscala, schoolId]
-          );
+      // Guardar criteriaGrades
+      const touchedActivities = new Set<number>();
+      for (const item of criteriaGrades) {
+        const notaNum = Number(parseFloat(item.nota).toFixed(1));
+        if (Number.isNaN(notaNum) || notaNum < notaMinima || notaNum > notaMaxima) {
+          throw new Error(`Todas las notas deben estar dentro del rango institucional ${notaMinima.toFixed(1)} - ${notaMaxima.toFixed(1)}`);
+        }
+
+        await trx
+          .insertInto("nota_criterio")
+          .values({
+            id_criterio: Number(item.id_criterio),
+            id_estudiante: Number(item.id_estudiante),
+            nota: notaNum,
+            id_colegio: Number(schoolId),
+          })
+          .onConflict((oc) =>
+            oc.columns(["id_criterio", "id_estudiante"]).doUpdateSet({
+              nota: sql`EXCLUDED.nota`,
+            })
+          )
+          .execute();
+
+        const actRes = await trx
+          .selectFrom("criterio_evaluacion")
+          .where("id_criterio", "=", Number(item.id_criterio))
+          .select("id_actividadmateria")
+          .executeTakeFirst();
+        if (actRes) {
+          touchedActivities.add(actRes.id_actividadmateria);
         }
       }
-    }
 
-    await client.query("COMMIT");
+      // Sincronizar notas_actividad para actividades con criterios modificados
+      for (const actId of touchedActivities) {
+        const studentsRes = await trx
+          .selectFrom("nota_criterio as nc")
+          .innerJoin("criterio_evaluacion as ce", "ce.id_criterio", "nc.id_criterio")
+          .where("ce.id_actividadmateria", "=", actId)
+          .select("nc.id_estudiante")
+          .distinct()
+          .execute();
+
+        for (const st of studentsRes) {
+          const studentId = st.id_estudiante;
+          const calcRes = await trx
+            .selectFrom("criterio_evaluacion as ce")
+            .leftJoin("nota_criterio as nc", (join) =>
+              join.onRef("nc.id_criterio", "=", "ce.id_criterio").on("nc.id_estudiante", "=", studentId)
+            )
+            .where("ce.id_actividadmateria", "=", actId)
+            .select([
+              (eb) => eb.fn.count<string>("ce.id_criterio").as("total_criterios"),
+              (eb) => eb.fn.count<string>("nc.id_nota_criterio").as("calificados"),
+              (eb) => eb.fn.sum<string>("ce.porcentaje").as("total_peso"),
+              (eb) => eb.fn.sum<string>(sql`nc.nota * ce.porcentaje`).as("suma_ponderada"),
+            ])
+            .executeTakeFirst();
+
+          if (calcRes) {
+            const { total_criterios, calificados, total_peso, suma_ponderada } = calcRes;
+            if (Number(total_criterios) > 0 && Number(total_criterios) === Number(calificados) && Number(total_peso) > 0) {
+              const notaPonderada = Number((Number(suma_ponderada) / Number(total_peso)).toFixed(1));
+
+              const escala = escalas.find(
+                (entry) =>
+                  notaPonderada >= parseFloat(entry.valor_minimo) &&
+                  notaPonderada <= parseFloat(entry.valor_maximo)
+              );
+              const idEscala =
+                escala?.id_escalavaloracion ??
+                escalas[escalas.length - 1]?.id_escalavaloracion ??
+                null;
+
+              await trx
+                .insertInto("notas_actividad")
+                .values({
+                  id_actividadmateria: actId,
+                  id_estudiante: studentId,
+                  nota: notaPonderada,
+                  id_escalavaloracion: idEscala,
+                  id_colegio: Number(schoolId),
+                })
+                .onConflict((oc) =>
+                  oc.columns(["id_actividadmateria", "id_estudiante"]).doUpdateSet({
+                    nota: sql`EXCLUDED.nota`,
+                    id_escalavaloracion: sql`EXCLUDED.id_escalavaloracion`,
+                  })
+                )
+                .execute();
+            }
+          }
+        }
+      }
+    });
+
     res.json({ message: "Notas guardadas correctamente" });
   } catch (error: any) {
-    await client.query("ROLLBACK");
     console.error("Error saving grades:", error);
-    res.status(500).json({ error: "Error al guardar notas" });
-  } finally {
-    client.release();
+    res.status(error.message?.includes("rango institucional") ? 400 : 500).json({
+      error: error.message || "Error al guardar notas",
+    });
   }
 };
 
@@ -1118,122 +1188,155 @@ export const getClosureStatus = async (req: Request, res: Response): Promise<voi
   const periodId = Number(req.params.periodId);
 
   try {
-    const closedRes = await pool.query(
-      `SELECT cm.estado, cm.fecha_cierre,
-              d.nombre || ' ' || d.apellido AS docente_cierre_nombre,
-              cm.id_docente_cierre
-       FROM cierre_materia cm
-       LEFT JOIN docente d ON d.id_docente = cm.id_docente_cierre
-       WHERE cm.id_detallegrado = $1 AND cm.id_periodo = $2`,
-      [detailGradeId, periodId]
-    );
+    const closedRes = await db
+      .selectFrom("cierre_materia as cm")
+      .leftJoin("docente as d", "d.id_docente", "cm.id_docente_cierre")
+      .where("cm.id_detallegrado", "=", detailGradeId)
+      .where("cm.id_periodo", "=", periodId)
+      .select([
+        "cm.estado",
+        "cm.fecha_cierre",
+        sql<string>`d.nombre || ' ' || d.apellido`.as("docente_cierre_nombre"),
+        "cm.id_docente_cierre",
+      ])
+      .executeTakeFirst();
 
-    const isClosed = closedRes.rows.length > 0 && closedRes.rows[0].estado === 'CERRADO';
+    const isClosed = closedRes ? closedRes.estado === "CERRADO" : false;
 
     // También verificamos si faltan alumnos por calificar (soporta tanto notas directas como notas por criterios)
-    const studentsRes = await pool.query(
-      `SELECT e.id_estudiante, e.nombre, e.apellido
-       FROM estudiante e
-       JOIN matricula m ON e.id_estudiante = m.id_estudiante
-       JOIN detalle_grados dg ON m.id_grupo = dg.id_grupo
-       WHERE dg.id_detallegrado = $1 AND m.estado = 'ACTIVA'`,
-      [detailGradeId]
-    );
+    const students = await db
+      .selectFrom("estudiante as e")
+      .innerJoin("matricula as m", "m.id_estudiante", "e.id_estudiante")
+      .innerJoin("detalle_grados as dg", "dg.id_grupo", "m.id_grupo")
+      .where("dg.id_detallegrado", "=", detailGradeId)
+      .where("m.estado", "=", "ACTIVA")
+      .select(["e.id_estudiante", "e.nombre", "e.apellido"])
+      .execute();
 
     const missingGrades = [];
-    for (const student of studentsRes.rows) {
-      const gradeCheck = await pool.query(
-        `SELECT COUNT(*) as count
-         FROM actividad_materia am
-         JOIN competencias c ON am.id_competencia = c.id_competencia
-         JOIN detalle_grados dg ON am.id_detallegrado = dg.id_detallegrado
-         WHERE dg.id_detallegrado = $1 AND c.id_periodo = $2
-           AND (
-             (
-               NOT EXISTS (SELECT 1 FROM criterio_evaluacion ce WHERE ce.id_actividadmateria = am.id_actividadmateria)
-               AND NOT EXISTS (
-                 SELECT 1 FROM notas_actividad na 
-                 WHERE na.id_actividadmateria = am.id_actividadmateria 
-                   AND na.id_estudiante = $3
-               )
-             )
-             OR
-             (
-               EXISTS (SELECT 1 FROM criterio_evaluacion ce WHERE ce.id_actividadmateria = am.id_actividadmateria)
-               AND EXISTS (
-                 SELECT 1 FROM criterio_evaluacion ce
-                 WHERE ce.id_actividadmateria = am.id_actividadmateria
-                   AND NOT EXISTS (
-                     SELECT 1 FROM nota_criterio nc
-                     WHERE nc.id_criterio = ce.id_criterio
-                       AND nc.id_estudiante = $3
-                   )
-               )
-             )
-           )`,
-        [detailGradeId, periodId, student.id_estudiante]
-      );
+    for (const student of students) {
+      const gradeCheck = await db
+        .selectFrom("actividad_materia as am")
+        .innerJoin("competencias as c", "c.id_competencia", "am.id_competencia")
+        .innerJoin("detalle_grados as dg", "dg.id_detallegrado", "am.id_detallegrado")
+        .where("dg.id_detallegrado", "=", detailGradeId)
+        .where("c.id_periodo", "=", periodId)
+        .where((eb) =>
+          eb.or([
+            eb.and([
+              eb.not(
+                eb.exists(
+                  eb.selectFrom("criterio_evaluacion as ce").whereRef("ce.id_actividadmateria", "=", "am.id_actividadmateria").select(sql`1`.as("one"))
+                )
+              ),
+              eb.not(
+                eb.exists(
+                  eb.selectFrom("notas_actividad as na")
+                    .whereRef("na.id_actividadmateria", "=", "am.id_actividadmateria")
+                    .where("na.id_estudiante", "=", student.id_estudiante)
+                    .select(sql`1`.as("one"))
+                )
+              ),
+            ]),
+            eb.and([
+              eb.exists(
+                eb.selectFrom("criterio_evaluacion as ce").whereRef("ce.id_actividadmateria", "=", "am.id_actividadmateria").select(sql`1`.as("one"))
+              ),
+              eb.exists(
+                eb.selectFrom("criterio_evaluacion as ce")
+                  .whereRef("ce.id_actividadmateria", "=", "am.id_actividadmateria")
+                  .where((eb2) =>
+                    eb2.not(
+                      eb2.exists(
+                        eb2.selectFrom("nota_criterio as nc")
+                          .whereRef("nc.id_criterio", "=", "ce.id_criterio")
+                          .where("nc.id_estudiante", "=", student.id_estudiante)
+                          .select(sql`1`.as("one"))
+                      )
+                    )
+                  )
+                  .select(sql`1`.as("one"))
+              ),
+            ]),
+          ])
+        )
+        .select((eb) => eb.fn.count<string>("am.id_actividadmateria").as("count"))
+        .executeTakeFirst();
 
-      if (Number(gradeCheck.rows[0].count) > 0) {
+      const count = Number(gradeCheck?.count || 0);
+      if (count > 0) {
         missingGrades.push({
           id_estudiante: student.id_estudiante,
           nombre: `${student.nombre} ${student.apellido}`,
-          missing_count: Number(gradeCheck.rows[0].count)
+          missing_count: count,
         });
       }
     }
 
     // Calcular suma de porcentajes y conteo de actividades
-    const statsRes = await pool.query(
-      `SELECT COALESCE(SUM(am.porcentaje), 0) AS total_percentage, COUNT(am.id_actividadmateria) as activity_count
-       FROM actividad_materia am
-       JOIN competencias c ON am.id_competencia = c.id_competencia
-       WHERE am.id_detallegrado = $1 AND c.id_periodo = $2`,
-      [detailGradeId, periodId]
-    );
+    const statsRes = await db
+      .selectFrom("actividad_materia as am")
+      .innerJoin("competencias as c", "c.id_competencia", "am.id_competencia")
+      .where("am.id_detallegrado", "=", detailGradeId)
+      .where("c.id_periodo", "=", periodId)
+      .select([
+        (eb) => eb.fn.coalesce(eb.fn.sum<string>("am.porcentaje"), sql<string>`'0'`).as("total_percentage"),
+        (eb) => eb.fn.count<string>("am.id_actividadmateria").as("activity_count"),
+      ])
+      .executeTakeFirst();
 
-    const totalPercentage = Number(statsRes.rows[0].total_percentage);
-    const activityCount = Number(statsRes.rows[0].activity_count);
+    const totalPercentage = Number(statsRes?.total_percentage || 0);
+    const activityCount = Number(statsRes?.activity_count || 0);
 
     // Calcular promedio grupal actual (soporta notas directas y notas de criterios)
     let groupAverage = null;
     if (activityCount > 0) {
-      const avgRes = await pool.query(
-        `SELECT AVG(promedio_estudiante) as group_avg 
-         FROM (
-           SELECT SUM(
-             COALESCE(
-               na.nota,
-               (
-                 SELECT SUM(nc.nota * (ce.porcentaje / 100))
-                 FROM nota_criterio nc
-                 JOIN criterio_evaluacion ce ON ce.id_criterio = nc.id_criterio
-                 WHERE ce.id_actividadmateria = am.id_actividadmateria
-                   AND nc.id_estudiante = est.id_estudiante
-               )
-             ) * (am.porcentaje / 100)
-           ) as promedio_estudiante
-           FROM estudiante est
-           JOIN matricula m ON m.id_estudiante = est.id_estudiante
-           JOIN detalle_grados dg ON dg.id_grupo = m.id_grupo
-           JOIN actividad_materia am ON am.id_detallegrado = dg.id_detallegrado
-           JOIN competencias c ON c.id_competencia = am.id_competencia
-           LEFT JOIN notas_actividad na ON na.id_actividadmateria = am.id_actividadmateria AND na.id_estudiante = est.id_estudiante
-           WHERE dg.id_detallegrado = $1 AND c.id_periodo = $2 AND m.estado = 'ACTIVA'
-           GROUP BY est.id_estudiante
-         ) as promedios`,
-        [detailGradeId, periodId]
-      );
-      groupAverage = avgRes.rows[0]?.group_avg ? Number(Number(avgRes.rows[0].group_avg).toFixed(2)) : null;
+      const avgRes = await db
+        .selectFrom(
+          db
+            .selectFrom("estudiante as est")
+            .innerJoin("matricula as m", "m.id_estudiante", "est.id_estudiante")
+            .innerJoin("detalle_grados as dg", "dg.id_grupo", "m.id_grupo")
+            .innerJoin("actividad_materia as am", "am.id_detallegrado", "dg.id_detallegrado")
+            .innerJoin("competencias as c", "c.id_competencia", "am.id_competencia")
+            .leftJoin("notas_actividad as na", (join) =>
+              join.onRef("na.id_actividadmateria", "=", "am.id_actividadmateria").onRef("na.id_estudiante", "=", "est.id_estudiante")
+            )
+            .where("dg.id_detallegrado", "=", detailGradeId)
+            .where("c.id_periodo", "=", periodId)
+            .where("m.estado", "=", "ACTIVA")
+            .groupBy("est.id_estudiante")
+            .select((eb) =>
+              eb.fn
+                .sum(
+                  sql`COALESCE(
+                    na.nota,
+                    (
+                      SELECT SUM(nc.nota * (ce.porcentaje / 100))
+                      FROM nota_criterio nc
+                      JOIN criterio_evaluacion ce ON ce.id_criterio = nc.id_criterio
+                      WHERE ce.id_actividadmateria = am.id_actividadmateria
+                        AND nc.id_estudiante = est.id_estudiante
+                    )
+                  ) * (am.porcentaje / 100)`
+                )
+                .as("promedio_estudiante")
+            )
+            .as("promedios")
+        )
+        .select((eb) => eb.fn.avg<string>("promedio_estudiante").as("group_avg"))
+        .executeTakeFirst();
+
+      groupAverage = avgRes?.group_avg ? Number(Number(avgRes.group_avg).toFixed(2)) : null;
     }
 
     res.json({
       isClosed,
-      closureData: closedRes.rows[0] || null,
+      closureData: closedRes || null,
       missingGrades,
       totalPercentage,
       activityCount,
-      groupAverage
+      groupAverage,
     });
   } catch (error: any) {
     console.error("Error getting closure status:", error);
@@ -1245,188 +1348,218 @@ export const closeTeacherSubject = async (req: Request, res: Response): Promise<
   const { detailGradeId, periodId, justificacion_evidencias_pendientes } = req.body;
   const userId = (req as any).user.id;
 
-  const client = await pool.connect();
   try {
-    await client.query('BEGIN');
-
     // 1. Obtener docente a partir de su id_usuario
-    const docRes = await client.query(
-      'SELECT id_docente FROM docente WHERE id_usuario = $1',
-      [userId]
-    );
+    const docRes = await db
+      .selectFrom("docente")
+      .where("id_usuario", "=", Number(userId))
+      .select("id_docente")
+      .executeTakeFirst();
 
-    if (!docRes.rows.length) {
-      res.status(403).json({ error: 'No tienes perfil de docente' });
+    if (!docRes) {
+      res.status(403).json({ error: "No tienes perfil de docente" });
       return;
     }
 
-    const teacherId = docRes.rows[0].id_docente;
+    const teacherId = docRes.id_docente;
 
     // 2. Verificar que este id_detallegrado pertenece al docente
-    const dgRes = await client.query(
-      'SELECT id_grupo, id_materia FROM detalle_grados WHERE id_detallegrado = $1 AND id_docente = $2',
-      [detailGradeId, teacherId]
-    );
+    const dgRes = await db
+      .selectFrom("detalle_grados")
+      .where("id_detallegrado", "=", Number(detailGradeId))
+      .where("id_docente", "=", teacherId)
+      .select(["id_grupo", "id_materia", "id_colegio"])
+      .executeTakeFirst();
 
-    if (!dgRes.rows.length) {
-      res.status(403).json({ error: 'No tienes asignada esta materia' });
+    if (!dgRes) {
+      res.status(403).json({ error: "No tienes asignada esta materia" });
       return;
     }
 
     // 3. Verificar que el periodo institucional NO esté CERRADO (administrador)
-    const periodRes = await client.query(
-      'SELECT estado FROM periodo_academico WHERE id_periodo = $1',
-      [periodId]
-    );
+    const periodRes = await db
+      .selectFrom("periodo_academico")
+      .where("id_periodo", "=", Number(periodId))
+      .select("estado")
+      .executeTakeFirst();
 
-    if (!periodRes.rows.length) {
-      res.status(404).json({ error: 'Periodo no encontrado' });
+    if (!periodRes) {
+      res.status(404).json({ error: "Periodo no encontrado" });
       return;
     }
 
-    if (periodRes.rows[0].estado === 'CERRADO') {
-      res.status(400).json({ error: 'El periodo ya fue cerrado institucionalmente por el administrador.' });
+    if (periodRes.estado === "CERRADO") {
+      res.status(400).json({ error: "El periodo ya fue cerrado institucionalmente por el administrador." });
       return;
     }
 
     // 4. Verificar si la materia YA FUE CERRADA por el docente
-    const existingClosure = await client.query(
-      'SELECT id_cierremateria FROM cierre_materia WHERE id_detallegrado = $1 AND id_periodo = $2',
-      [detailGradeId, periodId]
-    );
+    const existingClosure = await db
+      .selectFrom("cierre_materia")
+      .where("id_detallegrado", "=", Number(detailGradeId))
+      .where("id_periodo", "=", Number(periodId))
+      .select("id_cierremateria")
+      .executeTakeFirst();
 
-    if (existingClosure.rows.length > 0) {
-      res.status(400).json({ error: 'Ya has cerrado esta materia para este periodo.' });
+    if (existingClosure) {
+      res.status(400).json({ error: "Ya has cerrado esta materia para este periodo." });
       return;
     }
 
-    // 5. Validar que todos los estudiantes activos tengan todas las notas (soporta tanto notas directas como notas por criterios)
-    const studentsRes = await client.query(
-      `SELECT e.id_estudiante
-       FROM estudiante e
-       JOIN matricula m ON e.id_estudiante = m.id_estudiante
-       JOIN detalle_grados dg ON m.id_grupo = dg.id_grupo
-       WHERE dg.id_detallegrado = $1 AND m.estado = 'ACTIVA'`,
-      [detailGradeId]
-    );
+    // 5. Validar que todos los estudiantes activos tengan todas las notas
+    const students = await db
+      .selectFrom("estudiante as e")
+      .innerJoin("matricula as m", "m.id_estudiante", "e.id_estudiante")
+      .innerJoin("detalle_grados as dg", "dg.id_grupo", "m.id_grupo")
+      .where("dg.id_detallegrado", "=", Number(detailGradeId))
+      .where("m.estado", "=", "ACTIVA")
+      .select("e.id_estudiante")
+      .execute();
 
-    for (const student of studentsRes.rows) {
-      const gradeCheck = await client.query(
-        `SELECT COUNT(*) as count
-         FROM actividad_materia am
-         JOIN competencias c ON am.id_competencia = c.id_competencia
-         WHERE am.id_detallegrado = $1 AND c.id_periodo = $2
-           AND (
-             (
-               NOT EXISTS (SELECT 1 FROM criterio_evaluacion ce WHERE ce.id_actividadmateria = am.id_actividadmateria)
-               AND NOT EXISTS (
-                 SELECT 1 FROM notas_actividad na 
-                 WHERE na.id_actividadmateria = am.id_actividadmateria 
-                   AND na.id_estudiante = $3
-               )
-             )
-             OR
-             (
-               EXISTS (SELECT 1 FROM criterio_evaluacion ce WHERE ce.id_actividadmateria = am.id_actividadmateria)
-               AND EXISTS (
-                 SELECT 1 FROM criterio_evaluacion ce
-                 WHERE ce.id_actividadmateria = am.id_actividadmateria
-                   AND NOT EXISTS (
-                     SELECT 1 FROM nota_criterio nc
-                     WHERE nc.id_criterio = ce.id_criterio
-                       AND nc.id_estudiante = $3
-                   )
-               )
-             )
-           )`,
-        [detailGradeId, periodId, student.id_estudiante]
-      );
+    for (const student of students) {
+      const gradeCheck = await db
+        .selectFrom("actividad_materia as am")
+        .innerJoin("competencias as c", "c.id_competencia", "am.id_competencia")
+        .where("am.id_detallegrado", "=", Number(detailGradeId))
+        .where("c.id_periodo", "=", Number(periodId))
+        .where((eb) =>
+          eb.or([
+            eb.and([
+              eb.not(
+                eb.exists(
+                  eb.selectFrom("criterio_evaluacion as ce").whereRef("ce.id_actividadmateria", "=", "am.id_actividadmateria").select(sql`1`.as("one"))
+                )
+              ),
+              eb.not(
+                eb.exists(
+                  eb.selectFrom("notas_actividad as na")
+                    .whereRef("na.id_actividadmateria", "=", "am.id_actividadmateria")
+                    .where("na.id_estudiante", "=", student.id_estudiante)
+                    .select(sql`1`.as("one"))
+                )
+              ),
+            ]),
+            eb.and([
+              eb.exists(
+                eb.selectFrom("criterio_evaluacion as ce").whereRef("ce.id_actividadmateria", "=", "am.id_actividadmateria").select(sql`1`.as("one"))
+              ),
+              eb.exists(
+                eb.selectFrom("criterio_evaluacion as ce")
+                  .whereRef("ce.id_actividadmateria", "=", "am.id_actividadmateria")
+                  .where((eb2) =>
+                    eb2.not(
+                      eb2.exists(
+                        eb2.selectFrom("nota_criterio as nc")
+                          .whereRef("nc.id_criterio", "=", "ce.id_criterio")
+                          .where("nc.id_estudiante", "=", student.id_estudiante)
+                          .select(sql`1`.as("one"))
+                      )
+                    )
+                  )
+                  .select(sql`1`.as("one"))
+              ),
+            ]),
+          ])
+        )
+        .select((eb) => eb.fn.count<string>("am.id_actividadmateria").as("count"))
+        .executeTakeFirst();
 
-      if (Number(gradeCheck.rows[0].count) > 0) {
-        res.status(400).json({ error: `Existen estudiantes con actividades sin calificar` });
+      if (Number(gradeCheck?.count || 0) > 0) {
+        res.status(400).json({ error: "Existen estudiantes con actividades sin calificar" });
         return;
       }
     }
 
     // 5.1 Verificar si hay evidencias DBA planeadas para este periodo/materia que no fueron evaluadas en ninguna actividad
-    const dgInfo = await client.query(
-      `SELECT id_grupo, id_materia, id_colegio FROM detalle_grados WHERE id_detallegrado = $1`,
-      [detailGradeId]
-    );
+    const { id_grupo, id_materia, id_colegio } = dgRes;
+    const unevaluatedEvidences = await db
+      .selectFrom("evidencia_aprendizaje as ea")
+      .innerJoin("competencias as c", "c.id_competencia", "ea.id_competencia")
+      .innerJoin("evidencias_dba as edba", "edba.id_evidencia_dba", "ea.id_evidencia_dba")
+      .innerJoin("dba as d", "d.id_dba", "edba.id_dba")
+      .where("c.id_colegio", "=", id_colegio)
+      .where("c.id_materia", "=", id_materia)
+      .where("c.id_grupo", "in", (eb) =>
+        eb
+          .selectFrom("grupos as g1")
+          .innerJoin("grupos as g2", (join) =>
+            join.onRef("g2.id_nivel", "=", "g1.id_nivel").onRef("g2.id_tipo_grado", "=", "g1.id_tipo_grado")
+          )
+          .where("g1.id_grupo", "=", id_grupo)
+          .where("g1.id_colegio", "=", id_colegio)
+          .select("g2.id_grupo")
+      )
+      .where("c.id_periodo", "=", Number(periodId))
+      .where((eb) =>
+        eb.not(
+          eb.exists(
+            eb
+              .selectFrom("actividad_evidencia_dba as aedba")
+              .innerJoin("actividad_materia as am", "am.id_actividadmateria", "aedba.id_actividadmateria")
+              .whereRef("aedba.id_evidencia_dba", "=", "edba.id_evidencia_dba")
+              .where("am.id_detallegrado", "=", Number(detailGradeId))
+              .where("am.id_periodo", "=", Number(periodId))
+              .select(sql`1`.as("one"))
+          )
+        )
+      )
+      .select(["edba.id_evidencia_dba", "d.numero_dba", "edba.descripcion"])
+      .distinct()
+      .execute();
 
-    let unevaluatedEvidences: any[] = [];
-    if (dgInfo.rows.length > 0) {
-      const { id_grupo, id_materia, id_colegio } = dgInfo.rows[0];
-      const pendingEvRes = await client.query(
-        `SELECT DISTINCT edba.id_evidencia_dba, d.numero_dba, edba.descripcion
-         FROM evidencia_aprendizaje ea
-         JOIN competencias c ON c.id_competencia = ea.id_competencia
-         JOIN evidencias_dba edba ON edba.id_evidencia_dba = ea.id_evidencia_dba
-         JOIN dba d ON d.id_dba = edba.id_dba
-         WHERE c.id_colegio = $1
-           AND c.id_materia = $2
-           AND c.id_grupo IN (
-             SELECT g2.id_grupo
-             FROM grupos g1
-             JOIN grupos g2 ON g2.id_nivel = g1.id_nivel AND g2.id_tipo_grado = g1.id_tipo_grado
-             WHERE g1.id_grupo = $3 AND g1.id_colegio = $1
-           )
-           AND c.id_periodo = $4
-           AND NOT EXISTS (
-             SELECT 1
-             FROM actividad_evidencia_dba aedba
-             JOIN actividad_materia am ON am.id_actividadmateria = aedba.id_actividadmateria
-             WHERE aedba.id_evidencia_dba = edba.id_evidencia_dba
-               AND am.id_detallegrado = $5
-               AND am.id_periodo = $4
-           )`,
-        [id_colegio, id_materia, id_grupo, periodId, detailGradeId]
-      );
-      unevaluatedEvidences = pendingEvRes.rows;
-    }
-
-    const { justificacion_evidencias_pendientes } = req.body;
-
-    if (unevaluatedEvidences.length > 0 && (!justificacion_evidencias_pendientes || typeof justificacion_evidencias_pendientes !== 'string' || !justificacion_evidencias_pendientes.trim())) {
+    if (
+      unevaluatedEvidences.length > 0 &&
+      (!justificacion_evidencias_pendientes ||
+        typeof justificacion_evidencias_pendientes !== "string" ||
+        !justificacion_evidencias_pendientes.trim())
+    ) {
       res.status(422).json({
         requires_justification: true,
         unevaluated_evidences: unevaluatedEvidences,
-        error: `Existen ${unevaluatedEvidences.length} evidencia(s) DBA planeadas para este periodo que aún no han sido evaluadas en ninguna actividad.`
+        error: `Existen ${unevaluatedEvidences.length} evidencia(s) DBA planeadas para este periodo que aún no han sido evaluadas en ninguna actividad.`,
       });
       return;
     }
 
-    await client.query("BEGIN");
-
     // 6. Marcar como CERRADO guardando la justificación si existían evidencias pendientes
-    const existingRes = await client.query(
-      `SELECT id_cierremateria FROM cierre_materia WHERE id_detallegrado = $1 AND id_periodo = $2`,
-      [detailGradeId, periodId]
-    );
+    await db.transaction().execute(async (trx) => {
+      const existingRes = await trx
+        .selectFrom("cierre_materia")
+        .where("id_detallegrado", "=", Number(detailGradeId))
+        .where("id_periodo", "=", Number(periodId))
+        .select("id_cierremateria")
+        .executeTakeFirst();
 
-    if (existingRes.rows.length > 0) {
-      await client.query(
-        `UPDATE cierre_materia 
-         SET estado = 'CERRADO', fecha_cierre = NOW(), justificacion_evidencias_pendientes = $2, id_docente_cierre = $3
-         WHERE id_cierremateria = $1`,
-        [existingRes.rows[0].id_cierremateria, justificacion_evidencias_pendientes || null, teacherId]
-      );
-    } else {
-      await client.query(
-        `INSERT INTO cierre_materia (id_detallegrado, id_periodo, estado, fecha_cierre, justificacion_evidencias_pendientes, id_docente_cierre)
-         VALUES ($1, $2, 'CERRADO', NOW(), $3, $4)`,
-        [detailGradeId, periodId, justificacion_evidencias_pendientes || null, teacherId]
-      );
-    }
+      if (existingRes) {
+        await trx
+          .updateTable("cierre_materia")
+          .set({
+            estado: "CERRADO",
+            fecha_cierre: sql`NOW()`,
+            justificacion_evidencias_pendientes: justificacion_evidencias_pendientes || null,
+            id_docente_cierre: teacherId,
+          })
+          .where("id_cierremateria", "=", existingRes.id_cierremateria)
+          .execute();
+      } else {
+        await trx
+          .insertInto("cierre_materia")
+          .values({
+            id_detallegrado: Number(detailGradeId),
+            id_periodo: Number(periodId),
+            estado: "CERRADO",
+            fecha_cierre: sql`NOW()`,
+            justificacion_evidencias_pendientes: justificacion_evidencias_pendientes || null,
+            id_docente_cierre: teacherId,
+          })
+          .execute();
+      }
+    });
 
-    await client.query("COMMIT");
     res.json({ message: "Periodo cerrado exitosamente para esta materia" });
   } catch (error: any) {
-    await client.query("ROLLBACK");
     console.error("Error closing period:", error);
     res.status(500).json({ error: "Error al cerrar el periodo" });
-  } finally {
-    client.release();
   }
 };
 
@@ -1446,80 +1579,86 @@ export const getCompetenciaEvidenciasDba = async (req: Request, res: Response): 
 
   try {
     // 1. Obtener la competencia
-    const compRes = await pool.query(
-      `SELECT id_competencia, id_grupo, id_materia, id_colegio FROM competencias WHERE id_competencia = $1`,
-      [competencyId]
-    );
+    const comp = await db
+      .selectFrom("competencias")
+      .where("id_competencia", "=", competencyId)
+      .select(["id_competencia", "id_grupo", "id_materia", "id_colegio"])
+      .executeTakeFirst();
 
-    if (compRes.rows.length === 0) {
+    if (!comp) {
       res.status(404).json({ error: "Competencia no encontrada" });
       return;
     }
 
-    const comp = compRes.rows[0];
-
     // 2. Obtener versión curricular asignada al colegio para esta materia y grado
-    const cvcRes = await pool.query(
-      `SELECT cvc.version_curricular
-       FROM colegio_version_curricular cvc
-       WHERE cvc.id_colegio = $1
-         AND cvc.area = (SELECT nombre FROM materias WHERE id_materia = $2)
-         AND cvc.grado = (
-           SELECT tg.nombre 
-           FROM grupos g 
-           JOIN tipo_grado tg ON tg.id_tipo_grado = g.id_tipo_grado 
-           WHERE g.id_grupo = $3
-         )`,
-      [comp.id_colegio, comp.id_materia, comp.id_grupo]
-    );
+    const cvcRes = await db
+      .selectFrom("colegio_version_curricular as cvc")
+      .where("cvc.id_colegio", "=", comp.id_colegio)
+      .where("cvc.area", "=", (eb) =>
+        eb.selectFrom("materias").where("id_materia", "=", comp.id_materia).select("nombre")
+      )
+      .where("cvc.grado", "=", (eb) =>
+        eb
+          .selectFrom("grupos as g")
+          .innerJoin("tipo_grado as tg", "tg.id_tipo_grado", "g.id_tipo_grado")
+          .where("g.id_grupo", "=", comp.id_grupo)
+          .select("tg.nombre")
+      )
+      .select("cvc.version_curricular")
+      .executeTakeFirst();
 
-    if (cvcRes.rows.length === 0) {
-      // Si el colegio no tiene asignación de versión para esta materia/grado, no maneja DBA
+    if (!cvcRes) {
       res.json({ usaDba: false, planeadas: [], extras: [] });
       return;
     }
 
-    const versionCurricular = cvcRes.rows[0].version_curricular;
+    const versionCurricular = cvcRes.version_curricular;
 
     // 3. Obtener las evidencias planeadas (vinculadas a la competencia)
-    const planeadasRes = await pool.query(
-      `SELECT ea.id_evidencia, ea.id_evidencia_dba, ea.descripcion, ea.orden, d.numero_dba
-       FROM evidencia_aprendizaje ea
-       JOIN evidencias_dba edba ON edba.id_evidencia_dba = ea.id_evidencia_dba
-       JOIN dba d ON d.id_dba = edba.id_dba
-       WHERE ea.id_competencia = $1 AND ea.id_evidencia_dba IS NOT NULL
-       ORDER BY ea.orden, ea.id_evidencia`,
-      [competencyId]
-    );
-    const planeadasIds = planeadasRes.rows.map(r => r.id_evidencia_dba);
+    const planeadasRes = await db
+      .selectFrom("evidencia_aprendizaje as ea")
+      .innerJoin("evidencias_dba as edba", "edba.id_evidencia_dba", "ea.id_evidencia_dba")
+      .innerJoin("dba as d", "d.id_dba", "edba.id_dba")
+      .where("ea.id_competencia", "=", competencyId)
+      .where("ea.id_evidencia_dba", "is not", null)
+      .select(["ea.id_evidencia", "ea.id_evidencia_dba", "ea.descripcion", "ea.orden", "d.numero_dba"])
+      .orderBy("ea.orden", "asc")
+      .orderBy("ea.id_evidencia", "asc")
+      .execute();
+
+    const planeadasIds = planeadasRes.map((r) => r.id_evidencia_dba!);
 
     // 4. Obtener todas las evidencias activas del DBA de este grado/área
-    const dbaEvsRes = await pool.query(
-      `SELECT e.id_evidencia_dba, e.descripcion, e.orden, d.numero_dba
-       FROM evidencias_dba e
-       JOIN dba d ON d.id_dba = e.id_dba
-       WHERE d.area = (SELECT nombre FROM materias WHERE id_materia = $1)
-         AND d.grado = (
-           SELECT tg.nombre 
-           FROM grupos g 
-           JOIN tipo_grado tg ON tg.id_tipo_grado = g.id_tipo_grado 
-           WHERE g.id_grupo = $2
-         )
-         AND d.version_curricular = $3
-         AND d.estado = 'ACTIVO' AND e.estado = 'ACTIVO'
-       ORDER BY d.numero_dba, e.orden`,
-      [comp.id_materia, comp.id_grupo, versionCurricular]
-    );
+    const dbaEvsRes = await db
+      .selectFrom("evidencias_dba as e")
+      .innerJoin("dba as d", "d.id_dba", "e.id_dba")
+      .where("d.area", "=", (eb) =>
+        eb.selectFrom("materias").where("id_materia", "=", comp.id_materia).select("nombre")
+      )
+      .where("d.grado", "=", (eb) =>
+        eb
+          .selectFrom("grupos as g")
+          .innerJoin("tipo_grado as tg", "tg.id_tipo_grado", "g.id_tipo_grado")
+          .where("g.id_grupo", "=", comp.id_grupo)
+          .select("tg.nombre")
+      )
+      .where("d.version_curricular", "=", versionCurricular)
+      .where("d.estado", "=", "ACTIVO")
+      .where("e.estado", "=", "ACTIVO")
+      .select(["e.id_evidencia_dba", "e.descripcion", "e.orden", "d.numero_dba"])
+      .orderBy("d.numero_dba", "asc")
+      .orderBy("e.orden", "asc")
+      .execute();
 
     // Separar en planeadas y extras
-    const planeadas = planeadasRes.rows;
-    const extras = dbaEvsRes.rows.filter(r => !planeadasIds.includes(r.id_evidencia_dba));
+    const planeadas = planeadasRes;
+    const extras = dbaEvsRes.filter((r) => !planeadasIds.includes(r.id_evidencia_dba));
 
     res.json({
       usaDba: true,
       versionCurricular,
       planeadas,
-      extras
+      extras,
     });
   } catch (error: any) {
     console.error("Error al obtener evidencias DBA de la competencia:", error);
@@ -1540,92 +1679,122 @@ export const getCourseEvidenciasDba = async (req: Request, res: Response): Promi
 
   try {
     // 1. Obtener versión curricular asignada al colegio para esta materia y grado
-    const cvcRes = await pool.query(
-      `SELECT cvc.version_curricular
-       FROM colegio_version_curricular cvc
-       WHERE cvc.id_colegio = $1
-         AND cvc.area = (SELECT nombre FROM materias WHERE id_materia = $2)
-         AND cvc.grado = (
-           SELECT tg.nombre 
-           FROM grupos g 
-           JOIN tipo_grado tg ON tg.id_tipo_grado = g.id_tipo_grado 
-           WHERE g.id_grupo = $3
-         )`,
-      [schoolId, subjectId, gradeId]
-    );
+    const cvcRes = await db
+      .selectFrom("colegio_version_curricular as cvc")
+      .where("cvc.id_colegio", "=", schoolId)
+      .where("cvc.area", "=", (eb) =>
+        eb.selectFrom("materias").where("id_materia", "=", subjectId).select("nombre")
+      )
+      .where("cvc.grado", "=", (eb) =>
+        eb
+          .selectFrom("grupos as g")
+          .innerJoin("tipo_grado as tg", "tg.id_tipo_grado", "g.id_tipo_grado")
+          .where("g.id_grupo", "=", gradeId)
+          .select("tg.nombre")
+      )
+      .select("cvc.version_curricular")
+      .executeTakeFirst();
 
-    if (cvcRes.rows.length === 0) {
+    if (!cvcRes) {
       res.json({ usaDba: false, dba: [] });
       return;
     }
 
-    const versionCurricular = cvcRes.rows[0].version_curricular;
+    const versionCurricular = cvcRes.version_curricular;
 
     // 2. Obtener las evidencias planeadas (vinculadas a la competencia del periodo actual)
-    const planeadasParams: any[] = [gradeId, subjectId, schoolId];
-    let planeadasFilter = "";
+    let planeadasQuery = db
+      .selectFrom("evidencia_aprendizaje as ea")
+      .innerJoin("competencias as c", "c.id_competencia", "ea.id_competencia")
+      .innerJoin("evidencias_dba as edba", "edba.id_evidencia_dba", "ea.id_evidencia_dba")
+      .innerJoin("dba as d", "d.id_dba", "edba.id_dba")
+      .where("c.id_grupo", "in", (eb) =>
+        eb
+          .selectFrom("grupos as g1")
+          .innerJoin("grupos as g2", (join) =>
+            join.onRef("g2.id_nivel", "=", "g1.id_nivel").onRef("g2.id_tipo_grado", "=", "g1.id_tipo_grado")
+          )
+          .where("g1.id_grupo", "=", gradeId)
+          .where("g1.id_colegio", "=", schoolId)
+          .select("g2.id_grupo")
+      )
+      .where("c.id_materia", "=", subjectId)
+      .where("c.id_colegio", "=", schoolId)
+      .where("ea.id_evidencia_dba", "is not", null)
+      .select([
+        "ea.id_evidencia",
+        "ea.id_evidencia_dba",
+        "ea.descripcion",
+        "ea.orden",
+        "d.numero_dba",
+        "d.id_dba",
+        "d.enunciado as dba_enunciado",
+        "ea.id_competencia",
+      ])
+      .orderBy("d.numero_dba", "asc")
+      .orderBy("ea.orden", "asc")
+      .orderBy("ea.id_evidencia", "asc");
+
     if (periodId) {
-      planeadasParams.push(periodId);
-      planeadasFilter = ` AND c.id_periodo = $${planeadasParams.length}`;
+      planeadasQuery = planeadasQuery.where("c.id_periodo", "=", periodId);
     }
 
-    const planeadasRes = await pool.query(
-      `SELECT ea.id_evidencia, ea.id_evidencia_dba, ea.descripcion, ea.orden, d.numero_dba, d.id_dba, d.enunciado AS dba_enunciado, ea.id_competencia
-       FROM evidencia_aprendizaje ea
-       JOIN competencias c ON c.id_competencia = ea.id_competencia
-       JOIN evidencias_dba edba ON edba.id_evidencia_dba = ea.id_evidencia_dba
-       JOIN dba d ON d.id_dba = edba.id_dba
-       WHERE c.id_grupo IN (
-         SELECT g2.id_grupo
-         FROM grupos g1
-         JOIN grupos g2 ON g2.id_nivel = g1.id_nivel AND g2.id_tipo_grado = g1.id_tipo_grado
-         WHERE g1.id_grupo = $1 AND g1.id_colegio = $3
-       ) AND c.id_materia = $2 AND c.id_colegio = $3 AND ea.id_evidencia_dba IS NOT NULL${planeadasFilter}
-       ORDER BY d.numero_dba, ea.orden, ea.id_evidencia`,
-      planeadasParams
-    );
-    const planeadasIds = planeadasRes.rows.map(r => r.id_evidencia_dba);
+    const planeadasRes = await planeadasQuery.execute();
+    const planeadasIds = planeadasRes.map((r) => r.id_evidencia_dba!);
 
     // 3. Obtener evidencias ya evaluadas en periodos CERRADOS (para excluirlas de extras)
-    // RN-DBA-022: Una evidencia evaluada en un periodo cerrado no debe reaparecer
-    // Excepción: si fue re-planeada explícitamente en el periodo actual (ya está en planeadasIds)
     let evaluadasEnCerradosIds: number[] = [];
     if (periodId) {
-      const evaluadasRes = await pool.query(
-        `SELECT DISTINCT aedba.id_evidencia_dba
-         FROM actividad_evidencia_dba aedba
-         JOIN actividad_materia am ON am.id_actividadmateria = aedba.id_actividadmateria
-         JOIN periodo_academico p ON p.id_periodo = am.id_periodo
-         WHERE p.estado = 'CERRADO'
-           AND am.id_colegio = $1
-           AND am.id_periodo != $2
-           AND am.id_detallegrado IN (
-             SELECT id_detallegrado FROM detalle_grados 
-             WHERE id_grupo = $3 AND id_materia = $4 AND id_colegio = $1
-           )`,
-        [schoolId, periodId, gradeId, subjectId]
-      );
-      evaluadasEnCerradosIds = evaluadasRes.rows.map(r => r.id_evidencia_dba);
+      const evaluadasRes = await db
+        .selectFrom("actividad_evidencia_dba as aedba")
+        .innerJoin("actividad_materia as am", "am.id_actividadmateria", "aedba.id_actividadmateria")
+        .innerJoin("periodo_academico as p", "p.id_periodo", "am.id_periodo")
+        .where("p.estado", "=", "CERRADO")
+        .where("am.id_colegio", "=", schoolId)
+        .where("am.id_periodo", "!=", periodId)
+        .where("am.id_detallegrado", "in", (eb) =>
+          eb
+            .selectFrom("detalle_grados")
+            .where("id_grupo", "=", gradeId)
+            .where("id_materia", "=", subjectId)
+            .where("id_colegio", "=", schoolId)
+            .select("id_detallegrado")
+        )
+        .select("aedba.id_evidencia_dba")
+        .distinct()
+        .execute();
+
+      evaluadasEnCerradosIds = evaluadasRes.map((r) => r.id_evidencia_dba);
     }
 
     // 4. Obtener todos los DBA con evidencias del catálogo para este grado/materia
-    const dbaEvsRes = await pool.query(
-      `SELECT d.id_dba, d.numero_dba, d.enunciado AS dba_enunciado,
-              e.id_evidencia_dba, e.descripcion, e.orden
-       FROM evidencias_dba e
-       JOIN dba d ON d.id_dba = e.id_dba
-       WHERE d.area = (SELECT nombre FROM materias WHERE id_materia = $1)
-         AND d.grado = (
-           SELECT tg.nombre 
-           FROM grupos g 
-           JOIN tipo_grado tg ON tg.id_tipo_grado = g.id_tipo_grado 
-           WHERE g.id_grupo = $2
-         )
-         AND d.version_curricular = $3
-         AND d.estado = 'ACTIVO' AND e.estado = 'ACTIVO'
-       ORDER BY d.numero_dba, e.orden`,
-      [subjectId, gradeId, versionCurricular]
-    );
+    const dbaEvsRes = await db
+      .selectFrom("evidencias_dba as e")
+      .innerJoin("dba as d", "d.id_dba", "e.id_dba")
+      .where("d.area", "=", (eb) =>
+        eb.selectFrom("materias").where("id_materia", "=", subjectId).select("nombre")
+      )
+      .where("d.grado", "=", (eb) =>
+        eb
+          .selectFrom("grupos as g")
+          .innerJoin("tipo_grado as tg", "tg.id_tipo_grado", "g.id_tipo_grado")
+          .where("g.id_grupo", "=", gradeId)
+          .select("tg.nombre")
+      )
+      .where("d.version_curricular", "=", versionCurricular)
+      .where("d.estado", "=", "ACTIVO")
+      .where("e.estado", "=", "ACTIVO")
+      .select([
+        "d.id_dba",
+        "d.numero_dba",
+        "d.enunciado as dba_enunciado",
+        "e.id_evidencia_dba",
+        "e.descripcion",
+        "e.orden",
+      ])
+      .orderBy("d.numero_dba", "asc")
+      .orderBy("e.orden", "asc")
+      .execute();
 
     // Obtener evidencias ya asociadas a competencias en otros periodos para la misma asignatura, año lectivo y grado/grupo
     interface PlaneadaOtroPeriodo {
@@ -1635,49 +1804,59 @@ export const getCourseEvidenciasDba = async (req: Request, res: Response): Promi
     }
     let planeadasOtrosPeriodos: PlaneadaOtroPeriodo[] = [];
     if (periodId) {
-      const otrosRes = await pool.query(
-        `SELECT DISTINCT ea.id_evidencia_dba, c.id_periodo, p.nombre as periodo_nombre
-         FROM evidencia_aprendizaje ea
-         JOIN competencias c ON c.id_competencia = ea.id_competencia
-         JOIN periodo_academico p ON p.id_periodo = c.id_periodo
-         WHERE c.id_colegio = $1
-           AND p.id_anio = (SELECT id_anio FROM periodo_academico WHERE id_periodo = $4)
-           AND c.id_materia = $2
-           AND c.id_grupo IN (
-             SELECT g2.id_grupo
-             FROM grupos g1
-             JOIN grupos g2 ON g2.id_nivel = g1.id_nivel AND g2.id_tipo_grado = g1.id_tipo_grado
-             WHERE g1.id_grupo = $3 AND g1.id_colegio = $1
-           )
-           AND c.id_periodo != $4
-           AND ea.id_evidencia_dba IS NOT NULL`,
-        [schoolId, subjectId, gradeId, periodId]
-      );
-      planeadasOtrosPeriodos = otrosRes.rows.map(r => ({
+      const otrosRes = await db
+        .selectFrom("evidencia_aprendizaje as ea")
+        .innerJoin("competencias as c", "c.id_competencia", "ea.id_competencia")
+        .innerJoin("periodo_academico as p", "p.id_periodo", "c.id_periodo")
+        .where("c.id_colegio", "=", schoolId)
+        .where("p.id_anio", "=", (eb) =>
+          eb.selectFrom("periodo_academico").where("id_periodo", "=", periodId).select("id_anio")
+        )
+        .where("c.id_materia", "=", subjectId)
+        .where("c.id_grupo", "in", (eb) =>
+          eb
+            .selectFrom("grupos as g1")
+            .innerJoin("grupos as g2", (join) =>
+              join.onRef("g2.id_nivel", "=", "g1.id_nivel").onRef("g2.id_tipo_grado", "=", "g1.id_tipo_grado")
+            )
+            .where("g1.id_grupo", "=", gradeId)
+            .where("g1.id_colegio", "=", schoolId)
+            .select("g2.id_grupo")
+        )
+        .where("c.id_periodo", "!=", periodId)
+        .where("ea.id_evidencia_dba", "is not", null)
+        .select(["ea.id_evidencia_dba", "c.id_periodo", "p.nombre as periodo_nombre"])
+        .distinct()
+        .execute();
+
+      planeadasOtrosPeriodos = otrosRes.map((r) => ({
         id_evidencia_dba: Number(r.id_evidencia_dba),
         id_periodo: Number(r.id_periodo),
-        periodo_nombre: r.periodo_nombre
+        periodo_nombre: r.periodo_nombre,
       }));
     }
 
     // 5. Agrupar por DBA y clasificar cada evidencia
-    const dbaMap = new Map<number, {
-      id_dba: number;
-      numero_dba: number;
-      enunciado: string;
-      evidencias: Array<{
-        id_evidencia_dba: number;
-        descripcion: string;
-        orden: number;
-        tipo: 'PLANEADA' | 'EXTRA';
-        evaluada_en_cerrado: boolean;
-        id_competencia: number | null;
-        planeada_otro_periodo_id?: number | null;
-        planeada_otro_periodo_nombre?: string | null;
-      }>;
-    }>();
+    const dbaMap = new Map<
+      number,
+      {
+        id_dba: number;
+        numero_dba: number;
+        enunciado: string;
+        evidencias: Array<{
+          id_evidencia_dba: number;
+          descripcion: string;
+          orden: number;
+          tipo: "PLANEADA" | "EXTRA";
+          evaluada_en_cerrado: boolean;
+          id_competencia: number | null;
+          planeada_otro_periodo_id?: number | null;
+          planeada_otro_periodo_nombre?: string | null;
+        }>;
+      }
+    >();
 
-    for (const row of dbaEvsRes.rows) {
+    for (const row of dbaEvsRes) {
       if (!dbaMap.has(row.id_dba)) {
         dbaMap.set(row.id_dba, {
           id_dba: row.id_dba,
@@ -1695,24 +1874,24 @@ export const getCourseEvidenciasDba = async (req: Request, res: Response): Promi
         continue;
       }
 
-      const otroPeriodo = planeadasOtrosPeriodos.find(p => p.id_evidencia_dba === row.id_evidencia_dba);
-      const planeadaInfo = planeadasRes.rows.find(p => Number(p.id_evidencia_dba) === Number(row.id_evidencia_dba));
+      const otroPeriodo = planeadasOtrosPeriodos.find((p) => p.id_evidencia_dba === row.id_evidencia_dba);
+      const planeadaInfo = planeadasRes.find((p) => Number(p.id_evidencia_dba) === Number(row.id_evidencia_dba));
       const idCompetencia = planeadaInfo ? planeadaInfo.id_competencia : null;
 
       dbaMap.get(row.id_dba)!.evidencias.push({
         id_evidencia_dba: row.id_evidencia_dba,
         descripcion: row.descripcion,
         orden: row.orden,
-        tipo: esPlaneada ? 'PLANEADA' : 'EXTRA',
+        tipo: esPlaneada ? "PLANEADA" : "EXTRA",
         evaluada_en_cerrado: evaluadaEnCerrado,
         id_competencia: idCompetencia,
         planeada_otro_periodo_id: otroPeriodo ? otroPeriodo.id_periodo : null,
-        planeada_otro_periodo_nombre: otroPeriodo ? otroPeriodo.periodo_nombre : null
+        planeada_otro_periodo_nombre: otroPeriodo ? otroPeriodo.periodo_nombre : null,
       });
     }
 
     // También incluir planeadas que no estaban en el catálogo filtrado (por seguridad)
-    for (const pl of planeadasRes.rows) {
+    for (const pl of planeadasRes) {
       if (!dbaMap.has(pl.id_dba)) {
         dbaMap.set(pl.id_dba, {
           id_dba: pl.id_dba,
@@ -1722,14 +1901,14 @@ export const getCourseEvidenciasDba = async (req: Request, res: Response): Promi
         });
       }
       const dbaEntry = dbaMap.get(pl.id_dba)!;
-      if (!dbaEntry.evidencias.some(e => e.id_evidencia_dba === pl.id_evidencia_dba)) {
+      if (!dbaEntry.evidencias.some((e) => e.id_evidencia_dba === pl.id_evidencia_dba)) {
         dbaEntry.evidencias.push({
-          id_evidencia_dba: pl.id_evidencia_dba,
+          id_evidencia_dba: pl.id_evidencia_dba!,
           descripcion: pl.descripcion,
           orden: pl.orden,
-          tipo: 'PLANEADA',
-          evaluada_en_cerrado: evaluadasEnCerradosIds.includes(pl.id_evidencia_dba),
-          id_competencia: pl.id_competencia
+          tipo: "PLANEADA",
+          evaluada_en_cerrado: evaluadasEnCerradosIds.includes(pl.id_evidencia_dba!),
+          id_competencia: pl.id_competencia,
         });
       }
     }
@@ -1738,15 +1917,15 @@ export const getCourseEvidenciasDba = async (req: Request, res: Response): Promi
     const dbaList = Array.from(dbaMap.values()).sort((a, b) => a.numero_dba - b.numero_dba);
 
     // Mantener compatibilidad: también enviar planeadas y extras planas
-    const planeadasFlat = planeadasRes.rows;
-    const extrasFlat = dbaEvsRes.rows
-      .filter(r => !planeadasIds.includes(r.id_evidencia_dba) && !(evaluadasEnCerradosIds.includes(r.id_evidencia_dba)))
-      .map(row => {
-        const otroPeriodo = planeadasOtrosPeriodos.find(p => p.id_evidencia_dba === row.id_evidencia_dba);
+    const planeadasFlat = planeadasRes;
+    const extrasFlat = dbaEvsRes
+      .filter((r) => !planeadasIds.includes(r.id_evidencia_dba) && !evaluadasEnCerradosIds.includes(r.id_evidencia_dba))
+      .map((row) => {
+        const otroPeriodo = planeadasOtrosPeriodos.find((p) => p.id_evidencia_dba === row.id_evidencia_dba);
         return {
           ...row,
           planeada_otro_periodo_id: otroPeriodo ? otroPeriodo.id_periodo : null,
-          planeada_otro_periodo_nombre: otroPeriodo ? otroPeriodo.periodo_nombre : null
+          planeada_otro_periodo_nombre: otroPeriodo ? otroPeriodo.periodo_nombre : null,
         };
       });
 
