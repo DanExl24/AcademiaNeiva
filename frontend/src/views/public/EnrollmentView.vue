@@ -289,6 +289,7 @@ const docLabels: Record<string, string> = {
 }
 
 const isEmailVerified = ref(false)
+const isVerifyingScreen = ref(false)
 const sendingCode = ref(false)
 const verifyingCode = ref(false)
 const otpCodeInput = ref('')
@@ -316,7 +317,7 @@ const startTimer = () => {
 
 const sendVerificationCode = async () => {
   if (!formData.value.parentEmail || !isValidEmail(formData.value.parentEmail)) {
-    notify.addNotification('Por favor ingresa un correo electrónico válido antes de solicitar el código.', 'warning')
+    notify.addNotification('Por favor ingresa un correo electrónico válido.', 'warning')
     return
   }
   sendingCode.value = true
@@ -335,7 +336,16 @@ const sendVerificationCode = async () => {
   }
 }
 
-const verifyOtpCode = async () => {
+const proceedToVerification = async () => {
+  if (!formData.value.parentEmail || !isValidEmail(formData.value.parentEmail)) {
+    notify.addNotification('Por favor ingresa un correo electrónico válido.', 'warning')
+    return
+  }
+  isVerifyingScreen.value = true
+  await sendVerificationCode()
+}
+
+const verifyAndSubmit = async () => {
   if (!otpCodeInput.value || otpCodeInput.value.trim().length !== 6) {
     notify.addNotification('Ingresa el código completo de 6 dígitos.', 'warning')
     return
@@ -349,12 +359,12 @@ const verifyOtpCode = async () => {
     if (res.data.verified) {
       isEmailVerified.value = true
       if (timerInterval) clearInterval(timerInterval)
-      notify.addNotification('¡Correo electrónico verificado exitosamente!', 'success')
+      // Procesar y enviar la matrícula inmediatamente
+      await submitEnrollment()
     }
   } catch (error: any) {
     const msg = error.response?.data?.error || 'Código incorrecto o expirado.'
     notify.addNotification(msg, 'error')
-  } finally {
     verifyingCode.value = false
   }
 }
@@ -367,10 +377,6 @@ const nextStep = () => {
     }
     if (!isValidEmail(formData.value.parentEmail)) {
       notify.addNotification('Por favor ingresa un correo electrónico válido (ejemplo: usuario@correo.com).', 'warning')
-      return
-    }
-    if (!isEmailVerified.value) {
-      notify.addNotification('Debes verificar tu correo electrónico ingresando el código de 6 dígitos enviado a tu email.', 'warning')
       return
     }
     if (!isEnrollmentOpen.value) {
@@ -395,12 +401,16 @@ const nextStep = () => {
 
   step.value++
 }
-const prevStep = () => step.value--
+
+const prevStep = () => {
+  isVerifyingScreen.value = false
+  step.value--
+}
 
 const submitting = ref(false)
 
 const submitEnrollment = async () => {
-  if (submitting.value) return   // guard against double-click
+  if (submitting.value) return
   submitting.value = true
   try {
     const formDataPayload = new FormData()
@@ -430,14 +440,15 @@ const submitEnrollment = async () => {
       }
     })
 
-    notify.addNotification('Matrícula enviada exitosamente. Los datos personales se solicitarán una vez validados estos documentos.', 'success')
+    notify.addNotification('¡Matrícula enviada exitosamente! Los datos personales se solicitarán una vez validados estos documentos.', 'success')
     setTimeout(() => {
       window.location.href = '/'
     }, 1500)
   } catch (error) {
     console.error('Error al enviar:', error)
     notify.addNotification('Hubo un error al enviar el formulario. Por favor intenta de nuevo.', 'error')
-    submitting.value = false   // re-enable only on error so user can retry
+    submitting.value = false
+    verifyingCode.value = false
   }
 }
 </script>
@@ -552,64 +563,13 @@ const submitEnrollment = async () => {
               </div>
 
               <div class="space-y-2">
-                <div class="flex items-center justify-between">
-                  <label class="text-sm font-bold text-gray-700">Correo del Padre de Familia</label>
-                  <span v-if="isEmailVerified" class="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
-                    <ShieldCheck :size="14" class="text-emerald-600" /> Correo Verificado
-                  </span>
-                </div>
-
-                <div class="flex gap-2">
-                  <input 
-                    v-model="formData.parentEmail" 
-                    type="email" 
-                    :disabled="isEmailVerified || sendingCode"
-                    class="w-full rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 focus:border-transparent p-4 transition-all disabled:opacity-75 disabled:bg-gray-100" 
-                    placeholder="ejemplo@correo.com"
-                  >
-                  <button 
-                    v-if="!isEmailVerified"
-                    type="button" 
-                    @click="sendVerificationCode"
-                    :disabled="sendingCode || !formData.parentEmail"
-                    class="px-5 py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold text-sm shrink-0 transition-all disabled:opacity-50 flex items-center gap-2 shadow-sm active:scale-95"
-                  >
-                    <RefreshCw v-if="sendingCode" class="animate-spin" :size="16" />
-                    <span>{{ codeSent ? 'Reenviar Código' : 'Verificar Correo' }}</span>
-                  </button>
-                </div>
-
-                <!-- Bloque de Ingreso del Código OTP de 6 dígitos -->
-                <div v-if="codeSent && !isEmailVerified" class="mt-3 p-4 bg-indigo-50/70 border border-indigo-100 rounded-2xl space-y-3 animate-in fade-in duration-300">
-                  <div class="flex items-center justify-between">
-                    <span class="text-xs font-extrabold text-indigo-900 flex items-center gap-1.5">
-                      <KeyRound :size="14" class="text-indigo-600" /> Código de 6 dígitos enviado a tu correo
-                    </span>
-                    <span v-if="countdownSeconds > 0" class="text-xs font-mono font-bold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-md flex items-center gap-1">
-                      <Timer :size="12" /> Expira en: {{ formattedCountdown }}
-                    </span>
-                  </div>
-
-                  <div class="flex gap-2">
-                    <input 
-                      v-model="otpCodeInput" 
-                      type="text" 
-                      maxlength="6"
-                      placeholder="123456" 
-                      class="w-full rounded-xl border-gray-300 text-center font-mono text-lg font-black tracking-widest bg-white focus:ring-2 focus:ring-indigo-500 p-2.5"
-                    >
-                    <button 
-                      type="button"
-                      @click="verifyOtpCode"
-                      :disabled="verifyingCode || otpCodeInput.length !== 6"
-                      class="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm shrink-0 transition-all disabled:opacity-50 flex items-center gap-1.5 active:scale-95 shadow-sm"
-                    >
-                      <RefreshCw v-if="verifyingCode" class="animate-spin" :size="16" />
-                      <CheckCircle2 v-else :size="16" />
-                      <span>Validar</span>
-                    </button>
-                  </div>
-                </div>
+                <label class="text-sm font-bold text-gray-700">Correo del Padre de Familia</label>
+                <input 
+                  v-model="formData.parentEmail" 
+                  type="email" 
+                  class="w-full rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 focus:border-transparent p-4 transition-all" 
+                  placeholder="ejemplo@correo.com"
+                >
               </div>
 
               <div class="space-y-2">
@@ -727,26 +687,118 @@ const submitEnrollment = async () => {
             </div>
           </div>
 
-          <!-- PASO 3: Finalizar -->
-          <div v-if="step === 3" class="text-center py-12 animate-in zoom-in duration-500">
-            <div class="h-24 w-24 bg-indigo-600 text-white rounded-[2rem] flex items-center justify-center mx-auto shadow-2xl shadow-indigo-200 mb-8">
-              <Send :size="40" />
+          <!-- PASO 3: Finalizar y Verificación de Correo -->
+          <!-- 3.1 Vista Inicial de Confirmación -->
+          <div v-if="step === 3 && !isVerifyingScreen" class="text-center py-10 animate-in zoom-in duration-500">
+            <div class="h-20 w-20 bg-indigo-600 text-white rounded-[2rem] flex items-center justify-center mx-auto shadow-2xl shadow-indigo-200 mb-6">
+              <Send :size="36" />
             </div>
-            <h3 class="text-4xl font-extrabold text-gray-900">Confirmación de Envío</h3>
-            <p class="text-gray-500 mt-6 max-w-lg mx-auto">
-              Al enviar el formulario, los documentos pasarán a validación por un Directivo. Una vez aprobados, se te solicitarán los datos personales detallados del estudiante.
+            <h3 class="text-3xl font-extrabold text-gray-900">Confirmación de Envío</h3>
+            <p class="text-gray-500 mt-4 max-w-lg mx-auto text-sm leading-relaxed">
+              Para garantizar la autenticidad y seguridad del trámite, al presionar el botón enviaremos un <strong>código de verificación de 6 dígitos</strong> a tu correo electrónico.
             </p>
+
+            <!-- Resumen de datos -->
+            <div class="mt-8 max-w-md mx-auto bg-gray-50/80 rounded-2xl p-6 border border-gray-100 text-left space-y-3 shadow-inner">
+              <div class="flex justify-between items-center text-sm border-b border-gray-200/60 pb-2">
+                <span class="text-gray-500">Institución:</span>
+                <span class="font-bold text-gray-900">{{ schools.find(s => s.id_colegio == schoolId)?.nombre }}</span>
+              </div>
+              <div class="flex justify-between items-center text-sm border-b border-gray-200/60 pb-2">
+                <span class="text-gray-500">Grado:</span>
+                <span class="font-bold text-gray-900">{{ selectedTipoGrado }}</span>
+              </div>
+              <div class="flex justify-between items-center text-sm">
+                <span class="text-gray-500">Correo del Acudiente:</span>
+                <span class="font-bold text-indigo-600 font-mono">{{ formData.parentEmail }}</span>
+              </div>
+            </div>
             
-            <div class="mt-12 flex flex-col sm:flex-row items-center justify-center gap-4">
-              <button @click="prevStep" class="w-full sm:w-auto text-gray-500 font-bold px-12 py-4">Revisar</button>
-              <button
-                @click="submitEnrollment"
-                :disabled="submitting"
-                class="w-full sm:w-auto bg-indigo-600 text-white px-16 py-5 rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-2xl active:scale-95 text-lg disabled:opacity-60 disabled:cursor-not-allowed disabled:pointer-events-none flex items-center justify-center gap-3"
-              >
-                <span v-if="submitting" class="inline-block w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                {{ submitting ? 'Enviando...' : 'Enviar Solicitud' }}
+            <div class="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
+              <button @click="prevStep" class="w-full sm:w-auto text-gray-500 font-bold px-10 py-4 hover:text-gray-700 transition-colors">
+                ← Volver y Revisar
               </button>
+              <button
+                @click="proceedToVerification"
+                :disabled="sendingCode"
+                class="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white px-14 py-4 rounded-2xl font-bold transition-all shadow-xl shadow-indigo-100 active:scale-95 text-base flex items-center justify-center gap-3 disabled:opacity-60"
+              >
+                <span v-if="sendingCode" class="inline-block w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                <span>{{ sendingCode ? 'Enviando Código...' : 'Enviar y Validar Correo' }}</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- 3.2 Vista Exclusiva y Dedicada de Verificación de Correo OTP -->
+          <div v-if="step === 3 && isVerifyingScreen" class="py-8 max-w-md mx-auto text-center animate-in zoom-in duration-500">
+            <div class="relative mx-auto w-20 h-20 mb-6">
+              <div class="absolute inset-0 bg-indigo-100 rounded-3xl animate-ping opacity-30"></div>
+              <div class="relative h-20 w-20 bg-gradient-to-tr from-indigo-600 to-blue-600 text-white rounded-3xl flex items-center justify-center shadow-xl shadow-indigo-200">
+                <ShieldCheck :size="40" />
+              </div>
+            </div>
+
+            <h3 class="text-2xl font-black text-gray-900 tracking-tight">Verificación de Correo</h3>
+            <p class="text-gray-500 mt-2 text-sm">
+              Ingresa el código de 6 dígitos que enviamos a:
+            </p>
+            <div class="inline-block mt-2 px-4 py-1 bg-indigo-50 border border-indigo-100 text-indigo-700 font-extrabold rounded-full text-xs font-mono">
+              {{ formData.parentEmail }}
+            </div>
+
+            <div class="mt-8 space-y-6">
+              <div class="space-y-2">
+                <div class="flex items-center justify-between text-xs font-bold text-gray-500 px-1">
+                  <span>Código de 6 dígitos</span>
+                  <span v-if="countdownSeconds > 0" class="text-indigo-600 font-mono flex items-center gap-1">
+                    <Timer :size="13" /> Expira en {{ formattedCountdown }}
+                  </span>
+                </div>
+
+                <input 
+                  v-model="otpCodeInput" 
+                  type="text" 
+                  maxlength="6"
+                  placeholder="000000" 
+                  class="w-full text-center font-mono text-3xl font-black tracking-[0.35em] rounded-2xl border-2 border-indigo-200 bg-gray-50 focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-100 p-4 transition-all shadow-inner"
+                  @keyup.enter="verifyAndSubmit"
+                >
+              </div>
+
+              <div class="flex items-center justify-center gap-2 text-xs">
+                <span class="text-gray-400">¿No recibiste el correo?</span>
+                <button 
+                  type="button" 
+                  @click="sendVerificationCode"
+                  :disabled="sendingCode || countdownSeconds > 840"
+                  class="font-bold text-indigo-600 hover:text-indigo-800 disabled:opacity-50 flex items-center gap-1 transition-colors"
+                >
+                  <RefreshCw v-if="sendingCode" class="animate-spin" :size="12" />
+                  <span>{{ sendingCode ? 'Reenviando...' : 'Reenviar código' }}</span>
+                </button>
+              </div>
+
+              <div class="pt-2 space-y-3">
+                <button
+                  @click="verifyAndSubmit"
+                  :disabled="verifyingCode || submitting || otpCodeInput.trim().length !== 6"
+                  class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 px-8 rounded-2xl font-bold text-base shadow-xl shadow-indigo-100 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  <span v-if="verifyingCode || submitting" class="inline-block w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                  <span>{{ (verifyingCode || submitting) ? 'Procesando Matrícula...' : 'Confirmar y Radicar Matrícula' }}</span>
+                </button>
+
+                <div>
+                  <button 
+                    type="button" 
+                    @click="isVerifyingScreen = false" 
+                    :disabled="verifyingCode || submitting"
+                    class="text-xs font-bold text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    ← Modificar correo o datos
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 
