@@ -1,7 +1,8 @@
 import { db } from "../config/kysely";
+import { TipoVerificacionEmail } from "../types/db.types";
 import { NotificationService } from "./notificationService";
 
-export type EmailVerificationTipo = 'MATRICULA_NUEVA' | 'CAMBIO_CORREO' | 'RECUPERACION_PASSWORD';
+export type EmailVerificationTipo = TipoVerificacionEmail;
 
 export interface SendVerificationCodeParams {
   email: string;

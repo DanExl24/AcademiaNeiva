@@ -77,6 +77,8 @@ export type TipoSupervision = "EDITOR" | "SOLO_LECTURA";
 
 export type TipoTraslado = "TRASLADO_MATRICULA" | "TRASLADO_USUARIO";
 
+export type TipoVerificacionEmail = "CAMBIO_CORREO" | "MATRICULA_NUEVA" | "RECUPERACION_PASSWORD";
+
 export interface ActividadEvidenciaDba {
   id_actividadmateria: number;
   id_evidencia_dba: number;
@@ -451,7 +453,7 @@ export interface CodigoVerificacionEmail {
   id_verificacion: Generated<number>;
   email: string;
   codigo: string;
-  tipo: string;
+  tipo: TipoVerificacionEmail;
   id_usuario: number | null;
   expires_at: Timestamp;
   verified: Generated<boolean>;
