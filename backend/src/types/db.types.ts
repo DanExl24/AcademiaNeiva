@@ -447,10 +447,12 @@ export interface Matricula {
   token_seguimiento: Generated<string>;
 }
 
-export interface MatriculaEmailVerifications {
+export interface CodigoVerificacionEmail {
   id_verificacion: Generated<number>;
   email: string;
   codigo: string;
+  tipo: string;
+  id_usuario: number | null;
   expires_at: Timestamp;
   verified: Generated<boolean>;
   created_at: Generated<Timestamp>;
@@ -786,6 +788,7 @@ export interface DB {
   cierre_materia: CierreMateria;
   colegio: Colegio;
   colegio_version_curricular: ColegioVersionCurricular;
+  codigo_verificacion_email: CodigoVerificacionEmail;
   competencias: Competencias;
   configuracion_colegio: ConfiguracionColegio;
   configuracion_inscripcion: ConfiguracionInscripcion;
@@ -800,7 +803,6 @@ export interface DB {
   directivo: Directivo;
   docente: Docente;
   documento_matriculas: DocumentoMatriculas;
-  email_change_tokens: EmailChangeTokens;
   escala_valoracion: EscalaValoracion;
   estudiante: Estudiante;
   evidencia_aprendizaje: EvidenciaAprendizaje;
@@ -810,7 +812,6 @@ export interface DB {
   jornada: Jornada;
   materias: Materias;
   matricula: Matricula;
-  matricula_email_verifications: MatriculaEmailVerifications;
   nivel_escolar: NivelEscolar;
   nota_criterio: NotaCriterio;
   notas_actividad: NotasActividad;

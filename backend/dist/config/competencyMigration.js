@@ -460,8 +460,8 @@ const ensureCompetencySchema = async () => {
             const uniqueDecisionSql = fs_1.default.readFileSync(uniqueDecisionPath, "utf8");
             await client.query(uniqueDecisionSql);
         }
-        // Ejecutar migración 048 (tabla matricula_email_verifications para verificación OTP de correo antes de matrícula)
-        const emailVerificationPath = path_1.default.join(__dirname, "../migrations/048_matricula_email_verifications.sql");
+        // Ejecutar migración 048 (tabla centralizada codigo_verificacion_email para verificación OTP de correos)
+        const emailVerificationPath = path_1.default.join(__dirname, "../migrations/048_codigo_verificacion_email.sql");
         if (fs_1.default.existsSync(emailVerificationPath)) {
             const emailVerificationSql = fs_1.default.readFileSync(emailVerificationPath, "utf8");
             await client.query(emailVerificationSql);

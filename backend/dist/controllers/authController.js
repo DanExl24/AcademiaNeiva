@@ -10,7 +10,7 @@ const kysely_2 = require("kysely");
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const crypto_1 = __importDefault(require("crypto"));
-const notificationService_1 = require("../services/notificationService");
+const emailVerificationService_1 = require("../services/emailVerificationService");
 const jwt_1 = require("../config/jwt");
 const login = async (req, res) => {
     const { email, password } = req.body;
@@ -375,42 +375,45 @@ const requestEmailChange = async (req, res) => {
     }
     try {
         const userId = Number(user.id);
-        // 1. Obtener datos del usuario
-        const userRes = await db_1.pool.query('SELECT email, nombre, apellido FROM usuario WHERE id_usuario = $1', [userId]);
-        if (userRes.rows.length === 0) {
+        // 1. Obtener datos actuales del usuario usando Kysely
+        const userRes = await kysely_1.db
+            .selectFrom("usuario")
+            .select(["email", "nombre", "apellido"])
+            .where("id_usuario", "=", userId)
+            .executeTakeFirst();
+        if (!userRes) {
             res.status(404).json({ error: "Usuario no encontrado." });
             return;
         }
-        const currentEmail = (userRes.rows[0].email || '').trim().toLowerCase();
-        const userName = `${userRes.rows[0].nombre} ${userRes.rows[0].apellido || ''}`.trim();
+        const currentEmail = (userRes.email || '').trim().toLowerCase();
+        const userName = `${userRes.nombre} ${userRes.apellido || ''}`.trim();
         if (currentEmail === targetEmail) {
             res.status(400).json({ error: "El nuevo correo electrónico es idéntico al actual." });
             return;
         }
         // 2. Verificar que el nuevo correo no esté registrado por otro usuario
-        const checkRes = await db_1.pool.query('SELECT 1 FROM usuario WHERE LOWER(email) = $1 AND id_usuario != $2', [targetEmail, userId]);
-        if (checkRes.rows.length > 0) {
+        const checkRes = await kysely_1.db
+            .selectFrom("usuario")
+            .select(["id_usuario"])
+            .where((0, kysely_2.sql) `LOWER(email)`, "=", targetEmail)
+            .where("id_usuario", "!=", userId)
+            .executeTakeFirst();
+        if (checkRes) {
             res.status(400).json({ error: "El correo electrónico ya se encuentra registrado en la plataforma por otra cuenta." });
             return;
         }
-        // 3. Generar código numérico de 6 dígitos aleatorio
-        const code = Math.floor(100000 + Math.random() * 900000).toString();
-        // Expiración en 15 minutos
-        const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
-        // Inactivar tokens anteriores no usados de este usuario
-        await db_1.pool.query('UPDATE email_change_tokens SET used = TRUE WHERE id_usuario = $1 AND used = FALSE', [userId]);
-        // Insertar nuevo token
-        await db_1.pool.query(`INSERT INTO email_change_tokens (id_usuario, nuevo_email, codigo, expires_at)
-       VALUES ($1, $2, $3, $4)`, [userId, targetEmail, code, expiresAt]);
-        // 4. Enviar email con el código de 6 dígitos al NUEVO correo electrónico
-        await notificationService_1.NotificationService.sendEmailChangeCode(targetEmail, userName, code);
-        res.json({
-            message: `Código de verificación enviado exitosamente al correo ${targetEmail}. Por favor ingresa los 6 dígitos para confirmar el cambio.`
+        // 3. Generar y enviar el código vía EmailVerificationService
+        const result = await emailVerificationService_1.EmailVerificationService.sendCode({
+            email: targetEmail,
+            tipo: 'CAMBIO_CORREO',
+            id_usuario: userId,
+            userName
         });
+        res.json(result);
     }
     catch (error) {
         console.error("Error requesting email change:", error);
-        res.status(500).json({ error: "Error al generar la solicitud de cambio de correo." });
+        res.status(500).json({ error: error.message || "Error al generar la solicitud de cambio de correo." });
     }
 };
 exports.requestEmailChange = requestEmailChange;
@@ -429,36 +432,35 @@ const verifyEmailChange = async (req, res) => {
     }
     try {
         const userId = Number(user.id);
-        // 1. Buscar token activo matching id_usuario, nuevo_email y codigo
-        const tokenRes = await db_1.pool.query(`SELECT id, expires_at 
-       FROM email_change_tokens 
-       WHERE id_usuario = $1 
-         AND LOWER(nuevo_email) = $2 
-         AND codigo = $3 
-         AND used = FALSE 
-         AND expires_at > NOW()
-       ORDER BY created_at DESC 
-       LIMIT 1`, [userId, targetEmail, inputCode]);
-        if (tokenRes.rows.length === 0) {
-            res.status(400).json({ error: "El código de verificación es incorrecto o ha expirado. Por favor solicita uno nuevo." });
-            return;
-        }
-        const tokenId = tokenRes.rows[0].id;
+        // 1. Validar código en servicio centralizado
+        await emailVerificationService_1.EmailVerificationService.verifyCode({
+            email: targetEmail,
+            codigo: inputCode,
+            tipo: 'CAMBIO_CORREO',
+            id_usuario: userId
+        });
         // 2. Verificar por seguridad que el correo no se haya ocupado mientras tanto
-        const checkRes = await db_1.pool.query('SELECT 1 FROM usuario WHERE LOWER(email) = $1 AND id_usuario != $2', [targetEmail, userId]);
-        if (checkRes.rows.length > 0) {
+        const checkRes = await kysely_1.db
+            .selectFrom("usuario")
+            .select(["id_usuario"])
+            .where((0, kysely_2.sql) `LOWER(email)`, "=", targetEmail)
+            .where("id_usuario", "!=", userId)
+            .executeTakeFirst();
+        if (checkRes) {
             res.status(400).json({ error: "El correo electrónico ya se encuentra registrado por otro usuario." });
             return;
         }
         // 3. Actualizar correo en la tabla usuario
-        await db_1.pool.query('UPDATE usuario SET email = $1 WHERE id_usuario = $2', [targetEmail, userId]);
-        // 4. Marcar token como usado
-        await db_1.pool.query('UPDATE email_change_tokens SET used = TRUE WHERE id = $1', [tokenId]);
+        await kysely_1.db
+            .updateTable("usuario")
+            .set({ email: targetEmail })
+            .where("id_usuario", "=", userId)
+            .execute();
         res.json({ message: "Correo electrónico verificado y actualizado exitosamente." });
     }
     catch (error) {
         console.error("Error verifying email change:", error);
-        res.status(500).json({ error: "Error al verificar el código de cambio de correo." });
+        res.status(400).json({ error: error.message || "Error al verificar el código de cambio de correo." });
     }
 };
 exports.verifyEmailChange = verifyEmailChange;

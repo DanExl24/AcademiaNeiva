@@ -1,6 +1,7 @@
 import { db } from "../config/kysely";
 import { sql } from "kysely";
 import { NotificationService } from "./notificationService";
+import { EmailVerificationService } from "./emailVerificationService";
 import bcrypt from "bcrypt";
 import { validateDocumentUniqueness, normalizeDocument } from "../utils/documentValidation";
 import { upsertInstitutionalEmail } from "../utils/emailResolver";
@@ -17,72 +18,21 @@ export class MatriculaService {
    * Genera y envía un código OTP de 6 dígitos para validar la existencia del correo electrónico.
    */
   static async sendEnrollmentEmailCode(email: string) {
-    if (!email || !/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(String(email).trim())) {
-      throw new Error("El correo electrónico proporcionado no es válido.");
-    }
-
-    const cleanEmail = String(email).trim().toLowerCase();
-
-    // Generar código numérico de 6 dígitos (entre 100000 y 999999)
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-
-    // Expiración: 15 minutos a partir de ahora
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
-
-    // Guardar nuevo código de verificación
-    await db
-      .insertInto("matricula_email_verifications")
-      .values({
-        email: cleanEmail,
-        codigo: code,
-        expires_at: expiresAt,
-        verified: false
-      })
-      .execute();
-
-    // Enviar correo electrónico con el código OTP
-    await NotificationService.sendEnrollmentEmailVerificationCode(cleanEmail, code);
-
-    return {
-      message: "Código de verificación de 6 dígitos enviado exitosamente a tu correo electrónico. Válido por 15 minutos."
-    };
+    return await EmailVerificationService.sendCode({
+      email,
+      tipo: 'MATRICULA_NUEVA'
+    });
   }
 
   /**
    * Verifica el código OTP de 6 dígitos ingresado por el usuario.
    */
   static async verifyEnrollmentEmailCode(email: string, code: string) {
-    if (!email || !code) {
-      throw new Error("El correo electrónico y el código de verificación son obligatorios.");
-    }
-
-    const cleanEmail = String(email).trim().toLowerCase();
-    const cleanCode = String(code).trim();
-
-    const record = await db
-      .selectFrom("matricula_email_verifications")
-      .selectAll()
-      .where("email", "=", cleanEmail)
-      .where("codigo", "=", cleanCode)
-      .where("verified", "=", false)
-      .where("expires_at", ">", new Date())
-      .executeTakeFirst();
-
-    if (!record) {
-      throw new Error("El código de verificación es incorrecto o ha expirado. Por favor solicita uno nuevo.");
-    }
-
-    // Marcar como verificado
-    await db
-      .updateTable("matricula_email_verifications")
-      .set({ verified: true })
-      .where("id_verificacion", "=", record.id_verificacion)
-      .execute();
-
-    return {
-      verified: true,
-      message: "Correo electrónico verificado exitosamente."
-    };
+    return await EmailVerificationService.verifyCode({
+      email,
+      codigo: code,
+      tipo: 'MATRICULA_NUEVA'
+    });
   }
 
   /**
@@ -97,18 +47,15 @@ export class MatriculaService {
     }
 
     const cleanEmail = String(parentEmail).trim().toLowerCase();
-    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
 
     // Validar que el correo electrónico fue verificado previamente mediante OTP de 6 dígitos
-    const verifiedRecord = await db
-      .selectFrom("matricula_email_verifications")
-      .select(["id_verificacion"])
-      .where("email", "=", cleanEmail)
-      .where("verified", "=", true)
-      .where("created_at", ">", twoHoursAgo)
-      .executeTakeFirst();
+    const isEmailVerified = await EmailVerificationService.isVerified({
+      email: cleanEmail,
+      tipo: 'MATRICULA_NUEVA',
+      maxAgeHours: 2
+    });
 
-    if (!verifiedRecord) {
+    if (!isEmailVerified) {
       throw new Error("Debes verificar la existencia de tu correo electrónico con el código de 6 dígitos antes de enviar el formulario de matrícula.");
     }
 
