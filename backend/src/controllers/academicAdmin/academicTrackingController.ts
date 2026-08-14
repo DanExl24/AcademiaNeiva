@@ -41,18 +41,6 @@ const recordDecisionSchema = z.object({
   observation: z.string().optional().nullable()
 });
 
-interface SubjectAccumulator {
-  materia_nombre: string;
-  docente_nombre: string;
-  notasPerPeriod: Record<number, number>;
-}
-
-interface AnnualSubjectAccumulator {
-  materia_nombre: string;
-  docente_nombre: string;
-  periodos: Record<number, number>;
-}
-
 /**
  * Auxiliar para obtener el valor mínimo aprobatorio según la escala del colegio.
  */
@@ -114,7 +102,7 @@ export const getPeriodAcademicTracking = async (req: Request, res: Response): Pr
     // Obtener períodos del año
     const periodsInYear = await db
       .selectFrom("periodo_academico")
-      .select(["id_periodo", "nombre"])
+      .select(["id_periodo", "nombre", "estado"])
       .where("id_colegio", "=", schoolId)
       .where("id_anio", "=", yearId)
       .orderBy("id_periodo", "asc")
@@ -177,6 +165,7 @@ export const getPeriodAcademicTracking = async (req: Request, res: Response): Pr
           grado_nombre: s.grado_nombre || "Sin Grado",
           grupo_nombre: s.grupo_nombre || "Sin Grupo",
           estado_academico: "APROBADO",
+          promedio_general: 0,
           cantidad_reprobadas: 0,
           asignaturas_reprobadas: [],
           todas_asignaturas: []
@@ -186,21 +175,67 @@ export const getPeriodAcademicTracking = async (req: Request, res: Response): Pr
     }
 
     const studentIds = students.map(s => s.id_estudiante);
+    const uniqueGroupIds = Array.from(new Set(students.map(s => s.id_grupo).filter((id): id is number => id != null)));
 
-    // Consulta de notas por actividad
-    const gradesData = await db
+    // 1. Obtener todas las materias asignadas a los grupos evaluados
+    const groupSubjects = uniqueGroupIds.length > 0
+      ? await db
+          .selectFrom("detalle_grados as dg")
+          .innerJoin("materias as mat", "mat.id_materia", "dg.id_materia")
+          .leftJoin("docente as d", "d.id_docente", "dg.id_docente")
+          .leftJoin("usuario as ud", "ud.id_usuario", "d.id_usuario")
+          .select([
+            "dg.id_grupo",
+            "dg.id_detallegrado",
+            "dg.id_materia",
+            "mat.nombre as materia_nombre",
+            sql<string>`COALESCE(ud.nombre || ' ' || ud.apellido, 'Sin Docente Asignado')`.as("docente_nombre")
+          ])
+          .where("dg.id_grupo", "in", uniqueGroupIds)
+          .execute()
+      : [];
+
+    const groupSubjectsMap: Record<number, Array<{ id_materia: number; id_detallegrado: number; materia_nombre: string; docente_nombre: string }>> = {};
+    groupSubjects.forEach(gs => {
+      const gId = Number(gs.id_grupo);
+      if (!groupSubjectsMap[gId]) groupSubjectsMap[gId] = [];
+      groupSubjectsMap[gId].push({
+        id_materia: Number(gs.id_materia),
+        id_detallegrado: Number(gs.id_detallegrado),
+        materia_nombre: gs.materia_nombre,
+        docente_nombre: gs.docente_nombre
+      });
+    });
+
+    // 2. Consulta de notas consolidadas en resultado_academico
+    const consolidatedGrades = await db
+      .selectFrom("resultado_academico as ra")
+      .innerJoin("detalle_grados as dg", "dg.id_detallegrado", "ra.id_detallegrado")
+      .select([
+        "ra.id_estudiante",
+        "ra.id_periodo",
+        "dg.id_materia",
+        "ra.promedio"
+      ])
+      .where("ra.id_estudiante", "in", studentIds)
+      .where("ra.id_periodo", "in", targetPeriodIds)
+      .execute();
+
+    const consolidatedMap: Record<string, number> = {};
+    consolidatedGrades.forEach(cg => {
+      const key = `${cg.id_estudiante}_${cg.id_materia}_${cg.id_periodo}`;
+      consolidatedMap[key] = parseFloat(String(cg.promedio || 0));
+    });
+
+    // 3. Consulta de notas por actividad en curso
+    const activityGrades = await db
       .selectFrom("notas_actividad as na")
       .innerJoin("actividad_materia as am", "am.id_actividadmateria", "na.id_actividadmateria")
       .innerJoin("detalle_grados as dg", "dg.id_detallegrado", "am.id_detallegrado")
-      .innerJoin("materias as mat", "mat.id_materia", "dg.id_materia")
-      .leftJoin("docente as d", "d.id_docente", "dg.id_docente")
-      .leftJoin("usuario as ud", "ud.id_usuario", "d.id_usuario")
       .select([
         "na.id_estudiante",
         "am.id_periodo",
         "dg.id_materia",
-        "mat.nombre as materia_nombre",
-        sql<string>`MAX(COALESCE(ud.nombre || ' ' || ud.apellido, 'Sin Asignar'))`.as("docente_nombre"),
         sql<number>`COALESCE(SUM(na.nota * am.porcentaje / 100.0), 0)`.as("nota_ponderada_actividades")
       ])
       .where("na.id_estudiante", "in", studentIds)
@@ -208,67 +243,120 @@ export const getPeriodAcademicTracking = async (req: Request, res: Response): Pr
       .groupBy([
         "na.id_estudiante",
         "am.id_periodo",
-        "dg.id_materia",
-        "mat.nombre"
+        "dg.id_materia"
       ])
       .execute();
 
-    const studentGradesMap: Record<number, Record<number, SubjectAccumulator>> = {};
-
-    for (const row of gradesData) {
-      const stId = Number(row.id_estudiante);
-      const matId = Number(row.id_materia);
-      const perId = Number(row.id_periodo);
-      const nota = parseFloat(String(row.nota_ponderada_actividades || 0));
-
-      if (!studentGradesMap[stId]) studentGradesMap[stId] = {};
-      if (!studentGradesMap[stId][matId]) {
-        studentGradesMap[stId][matId] = {
-          materia_nombre: row.materia_nombre,
-          docente_nombre: row.docente_nombre,
-          notasPerPeriod: {}
-        };
-      }
-      studentGradesMap[stId][matId].notasPerPeriod[perId] = nota;
-    }
+    const activityMap: Record<string, number> = {};
+    activityGrades.forEach(ag => {
+      const key = `${ag.id_estudiante}_${ag.id_materia}_${ag.id_periodo}`;
+      activityMap[key] = parseFloat(String(ag.nota_ponderada_actividades || 0));
+    });
 
     let aprobadosCount = 0;
     let reprobadosCount = 0;
 
     const studentResults = students.map(student => {
       const stId = student.id_estudiante;
-      const subjectsMap = studentGradesMap[stId] || {};
-      
+      const gId = student.id_grupo ? Number(student.id_grupo) : null;
+      const assignedSubjects = (gId && groupSubjectsMap[gId]) ? groupSubjectsMap[gId] : [];
+
       const failedSubjects: any[] = [];
       const allSubjects: any[] = [];
+      let totalStudentSum = 0;
+      let totalSubjectsEvaluated = 0;
 
-      for (const [matIdStr, subjectData] of Object.entries(subjectsMap)) {
-        const matId = Number(matIdStr);
-        const periodScores = Object.values(subjectData.notasPerPeriod) as number[];
-        
-        const avgGrade = periodScores.length > 0
-          ? parseFloat((periodScores.reduce((a: number, b: number) => a + b, 0) / periodScores.length).toFixed(2))
-          : 0;
+      // Si el grupo tiene asignaturas estructuradas
+      if (assignedSubjects.length > 0) {
+        for (const sub of assignedSubjects) {
+          const periodScores: number[] = [];
 
-        const isFailed = avgGrade < minPassingScore;
+          for (const perId of targetPeriodIds) {
+            const key = `${stId}_${sub.id_materia}_${perId}`;
+            let periodGrade: number | null = null;
 
-        const subjectItem = {
-          id_materia: matId,
-          materia_nombre: subjectData.materia_nombre,
-          docente_nombre: subjectData.docente_nombre,
-          calificacion: avgGrade,
-          estado_materia: isFailed ? "REPROBADA" : "APROBADA"
-        };
+            if (consolidatedMap[key] !== undefined) {
+              periodGrade = consolidatedMap[key];
+            } else if (activityMap[key] !== undefined) {
+              periodGrade = activityMap[key];
+            }
 
-        allSubjects.push(subjectItem);
-        if (isFailed) {
-          failedSubjects.push(subjectItem);
+            if (periodGrade !== null) {
+              periodScores.push(periodGrade);
+            }
+          }
+
+          const avgGrade = periodScores.length > 0
+            ? parseFloat((periodScores.reduce((a, b) => a + b, 0) / periodScores.length).toFixed(2))
+            : 0;
+
+          const isFailed = avgGrade < minPassingScore;
+
+          const subjectItem = {
+            id_materia: sub.id_materia,
+            materia_nombre: sub.materia_nombre,
+            docente_nombre: sub.docente_nombre,
+            calificacion: avgGrade,
+            periodos_evaluados: periodScores.length,
+            estado_materia: isFailed ? "REPROBADA" : "APROBADA"
+          };
+
+          allSubjects.push(subjectItem);
+          if (isFailed) {
+            failedSubjects.push(subjectItem);
+          }
+
+          totalStudentSum += avgGrade;
+          totalSubjectsEvaluated++;
+        }
+      } else {
+        // En caso de que no haya detalle_grados configurado, buscar asignaturas que tengan alguna nota
+        const subjectIdsFound = new Set<number>();
+        for (const perId of targetPeriodIds) {
+          Object.keys(consolidatedMap).concat(Object.keys(activityMap)).forEach(k => {
+            const [sId, mId, pId] = k.split("_").map(Number);
+            if (sId === stId && pId === perId) {
+              subjectIdsFound.add(mId);
+            }
+          });
+        }
+
+        for (const matId of subjectIdsFound) {
+          const periodScores: number[] = [];
+          for (const perId of targetPeriodIds) {
+            const key = `${stId}_${matId}_${perId}`;
+            const grade = consolidatedMap[key] ?? activityMap[key];
+            if (grade !== undefined) periodScores.push(grade);
+          }
+
+          const avgGrade = periodScores.length > 0
+            ? parseFloat((periodScores.reduce((a, b) => a + b, 0) / periodScores.length).toFixed(2))
+            : 0;
+          const isFailed = avgGrade < minPassingScore;
+
+          const subjectItem = {
+            id_materia: matId,
+            materia_nombre: `Materia ${matId}`,
+            docente_nombre: "Docente no asignado",
+            calificacion: avgGrade,
+            periodos_evaluados: periodScores.length,
+            estado_materia: isFailed ? "REPROBADA" : "APROBADA"
+          };
+
+          allSubjects.push(subjectItem);
+          if (isFailed) failedSubjects.push(subjectItem);
+          totalStudentSum += avgGrade;
+          totalSubjectsEvaluated++;
         }
       }
 
       const estadoAcademico = failedSubjects.length > 0 ? "REPROBADO" : "APROBADO";
       if (estadoAcademico === "APROBADO") aprobadosCount++;
       else reprobadosCount++;
+
+      const studentAverage = totalSubjectsEvaluated > 0
+        ? parseFloat((totalStudentSum / totalSubjectsEvaluated).toFixed(2))
+        : 0;
 
       return {
         id_estudiante: student.id_estudiante,
@@ -278,6 +366,7 @@ export const getPeriodAcademicTracking = async (req: Request, res: Response): Pr
         grado_nombre: student.grado_nombre || "Sin Grado",
         grupo_nombre: student.grupo_nombre || "Sin Grupo",
         estado_academico: estadoAcademico,
+        promedio_general: studentAverage,
         cantidad_reprobadas: failedSubjects.length,
         asignaturas_reprobadas: failedSubjects,
         todas_asignaturas: allSubjects
@@ -320,12 +409,16 @@ export const getAnnualConsolidation = async (req: Request, res: Response): Promi
 
     const yearPeriods = await db
       .selectFrom("periodo_academico")
-      .select(["id_periodo", "nombre"])
+      .select(["id_periodo", "nombre", "estado"])
       .where("id_colegio", "=", schoolId)
       .where("id_anio", "=", yearId)
+      .orderBy("id_periodo", "asc")
       .execute();
 
     const periodIds = yearPeriods.map(p => p.id_periodo);
+    const closedPeriodsCount = yearPeriods.filter(p => p.estado === "CERRADO").length;
+    const totalPeriodsCount = yearPeriods.length;
+    const isReadyForPromotion = totalPeriodsCount <= 1 || closedPeriodsCount >= totalPeriodsCount - 1;
 
     let query = db
       .selectFrom("matricula as m")
@@ -351,7 +444,7 @@ export const getAnnualConsolidation = async (req: Request, res: Response): Promi
     if (gradeId) query = query.where("tg.id_tipo_grado", "=", gradeId);
     if (groupId) query = query.where("m.id_grupo", "=", groupId);
 
-    const students = await query.orderBy("u.apellido", "asc").execute();
+    const students = await query.orderBy("u.apellido", "asc").orderBy("u.nombre", "asc").execute();
     const studentIds = students.map(s => s.id_estudiante);
 
     if (students.length === 0) {
@@ -361,11 +454,47 @@ export const getAnnualConsolidation = async (req: Request, res: Response): Promi
         no_promovidos_count: 0,
         pendientes_count: 0,
         min_passing_score: minPassingScore,
+        total_periodos: totalPeriodsCount,
+        periodos_cerrados: closedPeriodsCount,
+        habilitado_para_promocion: isReadyForPromotion,
         estudiantes: []
       });
       return;
     }
 
+    const uniqueGroupIds = Array.from(new Set(students.map(s => s.id_grupo).filter((id): id is number => id != null)));
+
+    // 1. Obtener materias asignadas a los grupos
+    const groupSubjects = uniqueGroupIds.length > 0
+      ? await db
+          .selectFrom("detalle_grados as dg")
+          .innerJoin("materias as mat", "mat.id_materia", "dg.id_materia")
+          .leftJoin("docente as d", "d.id_docente", "dg.id_docente")
+          .leftJoin("usuario as ud", "ud.id_usuario", "d.id_usuario")
+          .select([
+            "dg.id_grupo",
+            "dg.id_detallegrado",
+            "dg.id_materia",
+            "mat.nombre as materia_nombre",
+            sql<string>`COALESCE(ud.nombre || ' ' || ud.apellido, 'Sin Docente Asignado')`.as("docente_nombre")
+          ])
+          .where("dg.id_grupo", "in", uniqueGroupIds)
+          .execute()
+      : [];
+
+    const groupSubjectsMap: Record<number, Array<{ id_materia: number; id_detallegrado: number; materia_nombre: string; docente_nombre: string }>> = {};
+    groupSubjects.forEach(gs => {
+      const gId = Number(gs.id_grupo);
+      if (!groupSubjectsMap[gId]) groupSubjectsMap[gId] = [];
+      groupSubjectsMap[gId].push({
+        id_materia: Number(gs.id_materia),
+        id_detallegrado: Number(gs.id_detallegrado),
+        materia_nombre: gs.materia_nombre,
+        docente_nombre: gs.docente_nombre
+      });
+    });
+
+    // 2. Decisiones directivas previas
     const decisions = studentIds.length > 0
       ? await db
           .selectFrom("decision_promocion_directivo")
@@ -381,20 +510,38 @@ export const getAnnualConsolidation = async (req: Request, res: Response): Promi
       decisionsMap[d.id_estudiante] = d;
     });
 
-    const gradesData = (studentIds.length > 0 && periodIds.length > 0)
+    // 3. Notas de resultado_academico
+    const consolidatedGrades = (studentIds.length > 0 && periodIds.length > 0)
+      ? await db
+          .selectFrom("resultado_academico as ra")
+          .innerJoin("detalle_grados as dg", "dg.id_detallegrado", "ra.id_detallegrado")
+          .select([
+            "ra.id_estudiante",
+            "ra.id_periodo",
+            "dg.id_materia",
+            "ra.promedio"
+          ])
+          .where("ra.id_estudiante", "in", studentIds)
+          .where("ra.id_periodo", "in", periodIds)
+          .execute()
+      : [];
+
+    const consolidatedMap: Record<string, number> = {};
+    consolidatedGrades.forEach(cg => {
+      const key = `${cg.id_estudiante}_${cg.id_materia}_${cg.id_periodo}`;
+      consolidatedMap[key] = parseFloat(String(cg.promedio || 0));
+    });
+
+    // 4. Notas de actividades
+    const activityGrades = (studentIds.length > 0 && periodIds.length > 0)
       ? await db
           .selectFrom("notas_actividad as na")
           .innerJoin("actividad_materia as am", "am.id_actividadmateria", "na.id_actividadmateria")
           .innerJoin("detalle_grados as dg", "dg.id_detallegrado", "am.id_detallegrado")
-          .innerJoin("materias as mat", "mat.id_materia", "dg.id_materia")
-          .leftJoin("docente as d", "d.id_docente", "dg.id_docente")
-          .leftJoin("usuario as ud", "ud.id_usuario", "d.id_usuario")
           .select([
             "na.id_estudiante",
             "am.id_periodo",
             "dg.id_materia",
-            "mat.nombre as materia_nombre",
-            sql<string>`MAX(COALESCE(ud.nombre || ' ' || ud.apellido, 'Sin Asignar'))`.as("docente_nombre"),
             sql<number>`COALESCE(SUM(na.nota * am.porcentaje / 100.0), 0)`.as("nota_ponderada")
           ])
           .where("na.id_estudiante", "in", studentIds)
@@ -402,66 +549,80 @@ export const getAnnualConsolidation = async (req: Request, res: Response): Promi
           .groupBy([
             "na.id_estudiante",
             "am.id_periodo",
-            "dg.id_materia",
-            "mat.nombre"
+            "dg.id_materia"
           ])
           .execute()
       : [];
 
-    const gradesMap: Record<number, Record<number, AnnualSubjectAccumulator>> = {};
-    
-    for (const row of gradesData) {
-      const stId = Number(row.id_estudiante);
-      const matId = Number(row.id_materia);
-      const perId = Number(row.id_periodo);
-      const nota = parseFloat(String(row.nota_ponderada || 0));
-
-      if (!gradesMap[stId]) gradesMap[stId] = {};
-      if (!gradesMap[stId][matId]) {
-        gradesMap[stId][matId] = {
-          materia_nombre: row.materia_nombre,
-          docente_nombre: row.docente_nombre,
-          periodos: {}
-        };
-      }
-      gradesMap[stId][matId].periodos[perId] = nota;
-    }
+    const activityMap: Record<string, number> = {};
+    activityGrades.forEach(ag => {
+      const key = `${ag.id_estudiante}_${ag.id_materia}_${ag.id_periodo}`;
+      activityMap[key] = parseFloat(String(ag.nota_ponderada || 0));
+    });
 
     let promovidosCount = 0;
     let noPromovidosCount = 0;
     let pendientesCount = 0;
 
+    const divisorPeriodos = Math.max(periodIds.length, 1);
+
     const studentConsolidated = students.map(student => {
       const stId = student.id_estudiante;
-      const subjects = gradesMap[stId] || {};
+      const gId = student.id_grupo ? Number(student.id_grupo) : null;
+      const assignedSubjects = (gId && groupSubjectsMap[gId]) ? groupSubjectsMap[gId] : [];
 
       const failedSubjects: any[] = [];
       const allSubjects: any[] = [];
+      let totalAnnualSum = 0;
+      let subjectsCount = 0;
 
-      for (const [matIdStr, subjectData] of Object.entries(subjects)) {
-        const matId = Number(matIdStr);
-        const scores = Object.values(subjectData.periodos) as number[];
-        const annualAvg = scores.length > 0
-          ? parseFloat((scores.reduce((a: number, b: number) => a + b, 0) / Math.max(yearPeriods.length, 1)).toFixed(2))
-          : 0;
+      if (assignedSubjects.length > 0) {
+        for (const sub of assignedSubjects) {
+          const scoresPerPeriod: Record<number, number> = {};
+          let subjectSum = 0;
 
-        const isFailed = annualAvg < minPassingScore;
+          for (const perId of periodIds) {
+            const key = `${stId}_${sub.id_materia}_${perId}`;
+            let score: number | null = null;
+            if (consolidatedMap[key] !== undefined) score = consolidatedMap[key];
+            else if (activityMap[key] !== undefined) score = activityMap[key];
 
-        const item = {
-          id_materia: matId,
-          materia_nombre: subjectData.materia_nombre,
-          docente_nombre: subjectData.docente_nombre,
-          promedio_anual: annualAvg,
-          periodos_registrados: Object.keys(subjectData.periodos).length,
-          estado: isFailed ? "REPROBADA" : "APROBADA"
-        };
+            if (score !== null) {
+              scoresPerPeriod[perId] = score;
+              subjectSum += score;
+            }
+          }
 
-        allSubjects.push(item);
-        if (isFailed) {
-          failedSubjects.push(item);
+          const evaluatedCount = Object.keys(scoresPerPeriod).length;
+          const annualAvg = evaluatedCount > 0
+            ? parseFloat((subjectSum / (isReadyForPromotion ? divisorPeriodos : evaluatedCount)).toFixed(2))
+            : 0;
+
+          const isFailed = annualAvg < minPassingScore;
+
+          const item = {
+            id_materia: sub.id_materia,
+            materia_nombre: sub.materia_nombre,
+            docente_nombre: sub.docente_nombre,
+            promedio_anual: annualAvg,
+            periodos_registrados: evaluatedCount,
+            estado: isFailed ? "REPROBADA" : "APROBADA"
+          };
+
+          allSubjects.push(item);
+          if (isFailed) {
+            failedSubjects.push(item);
+          }
+
+          totalAnnualSum += annualAvg;
+          subjectsCount++;
         }
       }
 
+      // Regla de Negocio RN-19.3:
+      // APROBADO: 0 materias reprobadas
+      // PENDIENTE_RECUPERACION: 1 a 2 materias reprobadas
+      // NO_PROMOVIDO: 3 o más materias reprobadas
       let resultadoAnual = "APROBADO";
       if (failedSubjects.length >= 3) {
         resultadoAnual = "NO_PROMOVIDO";
@@ -473,6 +634,10 @@ export const getAnnualConsolidation = async (req: Request, res: Response): Promi
       else if (resultadoAnual === "NO_PROMOVIDO") noPromovidosCount++;
       else pendientesCount++;
 
+      const studentAnnualAverage = subjectsCount > 0
+        ? parseFloat((totalAnnualSum / subjectsCount).toFixed(2))
+        : 0;
+
       return {
         id_estudiante: student.id_estudiante,
         nombre: student.nombre,
@@ -480,7 +645,9 @@ export const getAnnualConsolidation = async (req: Request, res: Response): Promi
         documento: student.documento,
         grado_nombre: student.grado_nombre || "Sin Grado",
         grupo_nombre: student.grupo_nombre || "Sin Grupo",
+        id_grado: student.id_grado,
         resultado_anual: resultadoAnual,
+        promedio_anual_general: studentAnnualAverage,
         cantidad_reprobadas: failedSubjects.length,
         asignaturas_reprobadas: failedSubjects,
         todas_asignaturas: allSubjects,
@@ -494,6 +661,9 @@ export const getAnnualConsolidation = async (req: Request, res: Response): Promi
       no_promovidos_count: noPromovidosCount,
       pendientes_count: pendientesCount,
       min_passing_score: minPassingScore,
+      total_periodos: totalPeriodsCount,
+      periodos_cerrados: closedPeriodsCount,
+      habilitado_para_promocion: isReadyForPromotion,
       estudiantes: studentConsolidated
     });
   } catch (error) {
@@ -519,6 +689,7 @@ export const getStudentAcademicHistory = async (req: Request, res: Response): Pr
       .leftJoin("colegio as c", "c.id_colegio", "e.id_colegio")
       .select([
         "e.id_estudiante",
+        "e.id_colegio",
         "u.nombre",
         "u.apellido",
         "u.documento",
@@ -534,6 +705,9 @@ export const getStudentAcademicHistory = async (req: Request, res: Response): Pr
       return;
     }
 
+    const schoolId = studentInfo.id_colegio || 1;
+    const minPassingScore = await getMinPassingScore(schoolId);
+
     const enrollments = await db
       .selectFrom("matricula as m")
       .innerJoin("anio_lectivo as al", "al.id_anio", "m.id_anio")
@@ -548,9 +722,11 @@ export const getStudentAcademicHistory = async (req: Request, res: Response): Pr
       .select([
         "m.id_matricula",
         "m.id_anio",
+        "m.id_grupo",
         "al.calendario",
         "al.fecha_inicio",
         "al.fecha_fin",
+        "tg.id_tipo_grado as id_grado",
         "tg.nombre as grado_nombre",
         "s.nombre as grupo_nombre",
         "m.estado as estado_matricula",
@@ -565,6 +741,7 @@ export const getStudentAcademicHistory = async (req: Request, res: Response): Pr
 
     res.json({
       estudiante: studentInfo,
+      min_passing_score: minPassingScore,
       historial_matriculas: enrollments
     });
   } catch (error) {
@@ -624,12 +801,14 @@ export const checkStudentAcademicWarning = async (req: Request, res: Response): 
         "m.id_matricula",
         "m.id_colegio",
         "m.id_anio",
+        "m.id_grupo",
         "al.calendario",
         "tg.id_tipo_grado as id_grado",
         "tg.nombre as grado_nombre",
         "s.nombre as grupo_nombre"
       ])
       .where("m.id_estudiante", "=", user.id_estudiante)
+      .where("m.estado", "not in", ["CANCELADA", "RECHAZADA"])
       .orderBy("al.fecha_inicio", "desc")
       .executeTakeFirst();
 
@@ -658,39 +837,76 @@ export const checkStudentAcademicWarning = async (req: Request, res: Response): 
     let failedSubjectsCount = 0;
     const failedSubjectsList: any[] = [];
 
-    if (periodIds.length > 0) {
-      const gradesData = await db
-        .selectFrom("notas_actividad as na")
-        .innerJoin("actividad_materia as am", "am.id_actividadmateria", "na.id_actividadmateria")
-        .innerJoin("detalle_grados as dg", "dg.id_detallegrado", "am.id_detallegrado")
+    if (periodIds.length > 0 && lastEnrollment.id_grupo) {
+      // 1. Obtener materias del grupo
+      const groupSubjects = await db
+        .selectFrom("detalle_grados as dg")
         .innerJoin("materias as mat", "mat.id_materia", "dg.id_materia")
         .select([
           "dg.id_materia",
-          "mat.nombre as materia_nombre",
+          "mat.nombre as materia_nombre"
+        ])
+        .where("dg.id_grupo", "=", lastEnrollment.id_grupo)
+        .execute();
+
+      // 2. Notas de resultado_academico
+      const consolidatedGrades = await db
+        .selectFrom("resultado_academico as ra")
+        .innerJoin("detalle_grados as dg", "dg.id_detallegrado", "ra.id_detallegrado")
+        .select([
+          "ra.id_periodo",
+          "dg.id_materia",
+          "ra.promedio"
+        ])
+        .where("ra.id_estudiante", "=", user.id_estudiante)
+        .where("ra.id_periodo", "in", periodIds)
+        .execute();
+
+      const consolidatedMap: Record<string, number> = {};
+      consolidatedGrades.forEach(cg => {
+        consolidatedMap[`${cg.id_materia}_${cg.id_periodo}`] = parseFloat(String(cg.promedio || 0));
+      });
+
+      // 3. Notas de actividades
+      const activityGrades = await db
+        .selectFrom("notas_actividad as na")
+        .innerJoin("actividad_materia as am", "am.id_actividadmateria", "na.id_actividadmateria")
+        .innerJoin("detalle_grados as dg", "dg.id_detallegrado", "am.id_detallegrado")
+        .select([
+          "am.id_periodo",
+          "dg.id_materia",
           sql<number>`COALESCE(SUM(na.nota * am.porcentaje / 100.0), 0)`.as("nota_ponderada")
         ])
         .where("na.id_estudiante", "=", user.id_estudiante)
         .where("am.id_periodo", "in", periodIds)
-        .groupBy(["dg.id_materia", "mat.nombre"])
+        .groupBy(["am.id_periodo", "dg.id_materia"])
         .execute();
 
-      const subjectScores: Record<number, { materia_nombre: string; total: number; count: number }> = {};
-      for (const row of gradesData) {
-        const matId = Number(row.id_materia);
-        if (!subjectScores[matId]) {
-          subjectScores[matId] = { materia_nombre: row.materia_nombre, total: 0, count: 0 };
-        }
-        subjectScores[matId].total += parseFloat(String(row.nota_ponderada || 0));
-        subjectScores[matId].count += 1;
-      }
+      const activityMap: Record<string, number> = {};
+      activityGrades.forEach(ag => {
+        activityMap[`${ag.id_materia}_${ag.id_periodo}`] = parseFloat(String(ag.nota_ponderada || 0));
+      });
 
-      for (const [matId, data] of Object.entries(subjectScores)) {
-        const avg = data.count > 0 ? parseFloat((data.total / Math.max(periodIds.length, 1)).toFixed(2)) : 0;
+      for (const gs of groupSubjects) {
+        const matId = Number(gs.id_materia);
+        let matSum = 0;
+        let pCount = 0;
+
+        for (const perId of periodIds) {
+          const key = `${matId}_${perId}`;
+          const grade = consolidatedMap[key] ?? activityMap[key];
+          if (grade !== undefined) {
+            matSum += grade;
+            pCount++;
+          }
+        }
+
+        const avg = pCount > 0 ? parseFloat((matSum / Math.max(periodIds.length, 1)).toFixed(2)) : 0;
         if (avg < minPassingScore) {
           failedSubjectsCount++;
           failedSubjectsList.push({
-            id_materia: Number(matId),
-            materia_nombre: data.materia_nombre,
+            id_materia: matId,
+            materia_nombre: gs.materia_nombre,
             promedio: avg
           });
         }
@@ -705,16 +921,26 @@ export const checkStudentAcademicWarning = async (req: Request, res: Response): 
       .executeTakeFirst();
 
     const isNotPromoted = failedSubjectsCount >= 3 || (existingDecision && existingDecision.decision_tomada === "MANTENER_GRADO");
+    const isWarning = failedSubjectsCount > 0 || isNotPromoted || Boolean(existingDecision);
+
+    const calculatedResult = failedSubjectsCount >= 3
+      ? "NO_PROMOVIDO"
+      : (failedSubjectsCount > 0 ? "PENDIENTE_RECUPERACION" : "APROBADO");
 
     res.json({
       exists: true,
-      warning: isNotPromoted,
+      warning: isWarning,
       estudiante: user,
       ultima_matricula: lastEnrollment,
-      resultado_calculado: isNotPromoted ? "NO_PROMOVIDO" : (failedSubjectsCount > 0 ? "PENDIENTE_RECUPERACION" : "APROBADO"),
+      resultado_calculado: calculatedResult,
       cantidad_materias_reprobadas: failedSubjectsCount,
       materias_reprobadas: failedSubjectsList,
-      decision_existente: existingDecision || null
+      decision_existente: existingDecision || null,
+      message: isNotPromoted
+        ? `El estudiante reprobó ${failedSubjectsCount} asignatura(s) en el año lectivo ${lastEnrollment.calendario || lastEnrollment.id_anio}.`
+        : (failedSubjectsCount > 0
+            ? `El estudiante tiene ${failedSubjectsCount} asignatura(s) pendiente(s) de recuperación en el año lectivo anterior.`
+            : "El estudiante aprobó el año lectivo anterior satisfactoriamente.")
     });
   } catch (error) {
     console.error("Error en checkStudentAcademicWarning:", error);
@@ -780,15 +1006,12 @@ export const recordDirectiveDecision = async (req: Request, res: Response): Prom
     const closedPeriodsCount = allPeriods.filter(p => p.estado === "CERRADO").length;
     const totalPeriodsCount = allPeriods.length;
 
-    // Regla de Negocio: Para registrar la decisión de promoción anual, el año lectivo debe:
-    // 1) Haber cerrado al menos N-1 períodos (ej: tener cerrados P1, P2 y P3 para estar evaluando P4), O
-    // 2) Haber completado/cerrado TODOS los períodos del año.
-    // Aunque el directivo haya cerrado el año antes de tiempo, si solo pasaron 1 o 2 períodos de 4, no es válido promocionar.
+    // Regla de Negocio RN-19.5: Cierre Mínimo de Períodos
     const isAtOrPastFinalPeriod = totalPeriodsCount <= 1 || closedPeriodsCount >= totalPeriodsCount - 1;
 
     if (!isAtOrPastFinalPeriod) {
       res.status(400).json({
-        error: `No es posible registrar la decisión de promoción anual para el año lectivo ${academicYear.calendario} porque apenas se han completado ${closedPeriodsCount} de ${totalPeriodsCount} períodos. La promoción anual únicamente se puede evaluar y registrar cuando el año lectivo se encuentre en su 4° período final o haya culminado todos sus períodos.`
+        error: `No es posible registrar la decisión de promoción anual para el año lectivo ${academicYear.calendario} porque apenas se han completado ${closedPeriodsCount} de ${totalPeriodsCount} períodos. La promoción anual únicamente se puede evaluar y registrar cuando el año lectivo se encuentre en su período final o haya culminado todos sus períodos.`
       });
       return;
     }
@@ -845,3 +1068,4 @@ export const recordDirectiveDecision = async (req: Request, res: Response): Prom
     res.status(500).json({ error: "Error al registrar la decisión del directivo" });
   }
 };
+

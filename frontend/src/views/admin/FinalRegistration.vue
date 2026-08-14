@@ -380,14 +380,70 @@ const getStatusColor = (estado: string) => {
 
         <!-- Advertencia Académica Previa -->
         <div v-if="academicWarning" class="mb-8 font-sans">
-          <div class="p-5 bg-amber-50 border-2 border-amber-300 rounded-3xl flex items-start gap-4 shadow-sm">
-            <div class="p-2.5 bg-amber-500 text-white rounded-xl shrink-0"><AlertTriangle :size="20" /></div>
-            <div>
-              <p class="font-black text-amber-950 text-sm">⚠️ Antecedentes Académicos / Alertas en el Sistema</p>
-              <p class="text-amber-900 text-xs mt-1 leading-relaxed">
-                Este número de documento registra una advertencia previa: <strong>{{ academicWarning.warning.tipo }}</strong>.
+          <div 
+            class="p-5 rounded-3xl flex items-start gap-4 shadow-sm border-2"
+            :class="academicWarning.resultado_calculado === 'NO_PROMOVIDO' ? 'bg-red-50/80 border-red-300' : 'bg-amber-50/80 border-amber-300'"
+          >
+            <div 
+              class="p-2.5 rounded-xl text-white shrink-0 shadow-sm"
+              :class="academicWarning.resultado_calculado === 'NO_PROMOVIDO' ? 'bg-red-600' : 'bg-amber-500'"
+            >
+              <AlertTriangle :size="20" />
+            </div>
+            <div class="space-y-2 flex-1">
+              <div class="flex items-center justify-between flex-wrap gap-2">
+                <p 
+                  class="font-black text-sm tracking-tight"
+                  :class="academicWarning.resultado_calculado === 'NO_PROMOVIDO' ? 'text-red-950' : 'text-amber-950'"
+                >
+                  ⚠️ Advertencia Académica Informativa — Año Anterior
+                </p>
+                <span 
+                  class="px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider"
+                  :class="academicWarning.resultado_calculado === 'NO_PROMOVIDO' ? 'bg-red-100 text-red-700 border border-red-200' : 'bg-amber-100 text-amber-800 border border-amber-200'"
+                >
+                  {{ academicWarning.resultado_calculado === 'NO_PROMOVIDO' ? 'No Promovido' : (academicWarning.resultado_calculado === 'APROBADO' ? 'Promovido' : 'Pendiente') }}
+                </span>
+              </div>
+
+              <p 
+                class="text-xs leading-relaxed"
+                :class="academicWarning.resultado_calculado === 'NO_PROMOVIDO' ? 'text-red-900' : 'text-amber-900'"
+              >
+                {{ academicWarning.message }} 
+                <span v-if="academicWarning.ultima_matricula">
+                  (Grado cursado: <strong>{{ academicWarning.ultima_matricula.grado_nombre }} {{ academicWarning.ultima_matricula.grupo_nombre }}</strong>)
+                </span>
               </p>
-              <p class="text-amber-800 text-xs mt-1 italic">"{{ academicWarning.warning.mensaje }}"</p>
+
+              <!-- Materias Reprobadas -->
+              <div v-if="academicWarning.materias_reprobadas && academicWarning.materias_reprobadas.length > 0" class="pt-1">
+                <p class="text-xs font-bold text-slate-700 mb-1">Asignaturas reprobadas:</p>
+                <div class="flex flex-wrap gap-1.5">
+                  <span 
+                    v-for="mat in academicWarning.materias_reprobadas" 
+                    :key="mat.id_materia"
+                    class="px-2 py-0.5 bg-red-100/90 text-red-800 border border-red-200 text-xs font-medium rounded-lg"
+                  >
+                    {{ mat.materia_nombre }} (Nota: {{ mat.promedio }})
+                  </span>
+                </div>
+              </div>
+
+              <!-- Decisión Institucional Previa si existe -->
+              <div v-if="academicWarning.decision_existente" class="mt-2 p-2.5 bg-white/80 border border-amber-200 rounded-xl text-xs space-y-1">
+                <p class="font-bold text-slate-800">
+                  📋 Decisión Institucional Registrada: 
+                  <span class="text-indigo-600 font-extrabold">{{ academicWarning.decision_existente.decision_tomada?.replace(/_/g, ' ') }}</span>
+                </p>
+                <p v-if="academicWarning.decision_existente.observacion" class="text-slate-600 italic">
+                  "{{ academicWarning.decision_existente.observacion }}"
+                </p>
+              </div>
+
+              <p class="text-[11px] text-slate-500 italic pt-1">
+                * Nota: Esta advertencia es estrictamente informativa para orientar la asignación del grado. No bloquea el proceso de matrícula.
+              </p>
             </div>
           </div>
         </div>

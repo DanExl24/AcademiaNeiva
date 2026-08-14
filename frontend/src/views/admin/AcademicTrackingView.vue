@@ -21,7 +21,11 @@ import {
   Calendar,
   AlertOctagon,
   Save,
-  Edit
+  Edit,
+  Users,
+  BookOpen,
+  RefreshCw,
+  ShieldAlert
 } from 'lucide-vue-next'
 
 const auth = useAuthStore()
@@ -43,7 +47,7 @@ const formatDecisionLabel = (decision: string) => {
   }
 }
 
-const activeTab = ref<'period' | 'annual' | 'history' | 'decisions'>('period')
+const activeTab = ref<'period' | 'annual' | 'history'>('period')
 const loading = ref(false)
 const errorMessage = ref('')
 const successMessage = ref('')
@@ -55,6 +59,7 @@ const isCumulativeMode = ref(true)
 const cumulativePeriodOrder = ref<number>(1)
 const selectedGradeId = ref<number | ''>('')
 const selectedGroupId = ref<number | ''>('')
+const searchQuery = ref('')
 
 // Catálogos
 const years = ref<any[]>([])
@@ -86,6 +91,9 @@ const annualData = ref<{
   no_promovidos_count: number
   pendientes_count: number
   min_passing_score: number
+  total_periodos?: number
+  periodos_cerrados?: number
+  habilitado_para_promocion?: boolean
   estudiantes: any[]
 }>({
   total_estudiantes: 0,
@@ -93,6 +101,9 @@ const annualData = ref<{
   no_promovidos_count: 0,
   pendientes_count: 0,
   min_passing_score: 3.0,
+  total_periodos: 4,
+  periodos_cerrados: 0,
+  habilitado_para_promocion: true,
   estudiantes: []
 })
 
@@ -112,6 +123,7 @@ const showDecisionModal = ref(false)
 const targetStudentForDecision = ref<any>(null)
 const decisionForm = ref({
   decisionTaken: 'PROMOVER_SIGUIENTE_GRADO',
+  assignedGradeId: '' as number | '',
   observation: ''
 })
 
@@ -165,6 +177,29 @@ const availablePeriodsForYear = computed(() => {
 const filteredGroups = computed(() => {
   if (!selectedGradeId.value) return groups.value
   return groups.value.filter(g => g.id_tipo_grado === selectedGradeId.value || g.id_grado === selectedGradeId.value)
+})
+
+// Filtrar estudiantes por texto de búsqueda
+const filteredPeriodStudents = computed(() => {
+  if (!searchQuery.value.trim()) return trackingData.value.estudiantes
+  const q = searchQuery.value.toLowerCase().trim()
+  return trackingData.value.estudiantes.filter(s =>
+    (s.nombre && s.nombre.toLowerCase().includes(q)) ||
+    (s.apellido && s.apellido.toLowerCase().includes(q)) ||
+    (s.documento && s.documento.toLowerCase().includes(q)) ||
+    (s.grado_nombre && s.grado_nombre.toLowerCase().includes(q))
+  )
+})
+
+const filteredAnnualStudents = computed(() => {
+  if (!searchQuery.value.trim()) return annualData.value.estudiantes
+  const q = searchQuery.value.toLowerCase().trim()
+  return annualData.value.estudiantes.filter(s =>
+    (s.nombre && s.nombre.toLowerCase().includes(q)) ||
+    (s.apellido && s.apellido.toLowerCase().includes(q)) ||
+    (s.documento && s.documento.toLowerCase().includes(q)) ||
+    (s.grado_nombre && s.grado_nombre.toLowerCase().includes(q))
+  )
 })
 
 // Cargar seguimiento por período / acumulativo
@@ -268,7 +303,8 @@ const searchStudentHistory = async (studentId?: number) => {
 const openDecisionModal = (student: any) => {
   targetStudentForDecision.value = student
   decisionForm.value = {
-    decisionTaken: student.decision_directivo?.decision_tomada || 'PROMOVER_SIGUIENTE_GRADO',
+    decisionTaken: student.decision_directivo?.decision_tomada || (student.resultado_anual === 'NO_PROMOVIDO' ? 'MANTENER_GRADO' : 'PROMOVER_SIGUIENTE_GRADO'),
+    assignedGradeId: student.decision_directivo?.id_grado_asignado || '',
     observation: student.decision_directivo?.observacion || ''
   }
   showDecisionModal.value = true
@@ -287,12 +323,14 @@ const saveDirectiveDecision = async () => {
       previousYearId: selectedYearId.value,
       calculatedResult: targetStudentForDecision.value.resultado_anual || targetStudentForDecision.value.estado_academico,
       decisionTaken: decisionForm.value.decisionTaken,
+      previousGradeId: targetStudentForDecision.value.id_grado || null,
+      assignedGradeId: decisionForm.value.assignedGradeId ? Number(decisionForm.value.assignedGradeId) : null,
       observation: decisionForm.value.observation
     }, {
       headers: { Authorization: `Bearer ${auth.token}` }
     })
 
-    successMessage.value = "Decisión registrada exitosamente."
+    successMessage.value = "Decisión institucional registrada exitosamente."
     showDecisionModal.value = false
     
     // Recargar datos activos
@@ -343,34 +381,52 @@ onMounted(async () => {
   <div class="tracking-container">
     <!-- Header principal -->
     <header class="tracking-header">
-      <div class="header-titles">
-        <div class="header-badge">
-          <Award class="w-4 h-4" />
-          <span>Gestión Académica Institucional</span>
+      <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+          <div class="header-badge">
+            <Award class="w-4 h-4" />
+            <span>Gestión Académica Institucional</span>
+          </div>
+          <h1 class="header-title">Gestión de Aprobados y Seguimiento Académico</h1>
+          <p class="header-subtitle">
+            Consulte los resultados por período acumulativo, evalúe el desempeño anual y registre decisiones de promoción informadas.
+          </p>
         </div>
-        <h1 class="header-title">Gestión de Aprobados y Seguimiento Académico</h1>
-        <p class="header-subtitle">
-          Consulte los resultados por período acumulativo, evalúe el desempeño anual y registre decisiones de promoción informadas.
-        </p>
+
+        <button 
+          class="btn-refresh inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl hover:bg-slate-50 transition shadow-sm font-semibold text-sm self-start md:self-auto"
+          :disabled="loading"
+          @click="fetchDataForActiveTab()"
+        >
+          <RefreshCw class="w-4 h-4" :class="{ 'animate-spin': loading }" />
+          <span>Actualizar Datos</span>
+        </button>
       </div>
     </header>
 
     <!-- Alertas -->
-    <div v-if="errorMessage" class="alert alert-error">
-      <AlertTriangle class="w-5 h-5 shrink-0" />
-      <span>{{ errorMessage }}</span>
-    </div>
-    <div v-if="successMessage" class="alert alert-success">
-      <CheckCircle2 class="w-5 h-5 shrink-0" />
-      <span>{{ successMessage }}</span>
-    </div>
+    <transition name="fade">
+      <div v-if="errorMessage" class="alert alert-error">
+        <AlertTriangle class="w-5 h-5 shrink-0" />
+        <span class="flex-1">{{ errorMessage }}</span>
+        <button class="text-rose-800 hover:text-rose-950 font-bold" @click="errorMessage = ''">×</button>
+      </div>
+    </transition>
+
+    <transition name="fade">
+      <div v-if="successMessage" class="alert alert-success">
+        <CheckCircle2 class="w-5 h-5 shrink-0" />
+        <span class="flex-1">{{ successMessage }}</span>
+        <button class="text-emerald-800 hover:text-emerald-950 font-bold" @click="successMessage = ''">×</button>
+      </div>
+    </transition>
 
     <!-- Barra de Filtros Globales -->
     <div class="filters-card">
       <div class="filters-grid">
         <!-- Año Lectivo -->
         <div class="filter-item">
-          <label><Calendar class="w-4 h-4" /> Año Lectivo</label>
+          <label><Calendar class="w-4 h-4 text-indigo-600" /> Año Lectivo</label>
           <select v-model="selectedYearId" class="form-select">
             <option v-for="y in years" :key="y.id_anio" :value="y.id_anio">
               {{ y.calendario || 'Año ' + y.id_anio }} ({{ y.estado }})
@@ -378,9 +434,9 @@ onMounted(async () => {
           </select>
         </div>
 
-        <!-- Modo acumulativo vs período individual -->
+        <!-- Modo acumulativo vs período individual (Solo pestaña periodo) -->
         <div v-if="activeTab === 'period'" class="filter-item">
-          <label><TrendingUp class="w-4 h-4" /> Modalidad de Consulta</label>
+          <label><TrendingUp class="w-4 h-4 text-indigo-600" /> Modalidad de Consulta</label>
           <div class="toggle-group">
             <button 
               type="button" 
@@ -388,7 +444,7 @@ onMounted(async () => {
               :class="{ active: isCumulativeMode }"
               @click="isCumulativeMode = true"
             >
-              Acumulado
+              Acumulado (P1..PN)
             </button>
             <button 
               type="button" 
@@ -403,7 +459,7 @@ onMounted(async () => {
 
         <!-- Selección de Período o Período Acumulado -->
         <div v-if="activeTab === 'period' && isCumulativeMode" class="filter-item">
-          <label><Clock class="w-4 h-4" /> Acumulado Hasta Período</label>
+          <label><Clock class="w-4 h-4 text-indigo-600" /> Acumulado Hasta Período</label>
           <select v-model="cumulativePeriodOrder" class="form-select">
             <option v-for="(p, idx) in availablePeriodsForYear" :key="p.id_periodo" :value="idx + 1">
               Período 1 al Período {{ idx + 1 }} ({{ p.nombre }})
@@ -412,7 +468,7 @@ onMounted(async () => {
         </div>
 
         <div v-if="activeTab === 'period' && !isCumulativeMode" class="filter-item">
-          <label><Clock class="w-4 h-4" /> Período Académico</label>
+          <label><Clock class="w-4 h-4 text-indigo-600" /> Período Académico</label>
           <select v-model="selectedPeriodId" class="form-select">
             <option v-for="p in availablePeriodsForYear" :key="p.id_periodo" :value="p.id_periodo">
               {{ p.nombre }}
@@ -422,7 +478,7 @@ onMounted(async () => {
 
         <!-- Grado -->
         <div class="filter-item">
-          <label><GraduationCap class="w-4 h-4" /> Grado</label>
+          <label><GraduationCap class="w-4 h-4 text-indigo-600" /> Grado</label>
           <select v-model="selectedGradeId" class="form-select">
             <option value="">Todos los grados</option>
             <option v-for="g in grades" :key="g.id_tipo_grado || g.id_grado" :value="g.id_tipo_grado || g.id_grado">
@@ -433,13 +489,27 @@ onMounted(async () => {
 
         <!-- Grupo -->
         <div class="filter-item">
-          <label><Layers3 class="w-4 h-4" /> Grupo</label>
+          <label><Layers3 class="w-4 h-4 text-indigo-600" /> Grupo</label>
           <select v-model="selectedGroupId" class="form-select">
             <option value="">Todos los grupos</option>
             <option v-for="grp in filteredGroups" :key="grp.id_grupo" :value="grp.id_grupo">
               {{ grp.nombre || (grp.tipo_grado_nombre ? grp.tipo_grado_nombre + ' ' + (grp.seccion_nombre || '') + (grp.jornada_nombre ? ' (' + grp.jornada_nombre + ')' : '') : 'Grupo ' + grp.id_grupo) }}
             </option>
           </select>
+        </div>
+
+        <!-- Buscador Rápido de Estudiante -->
+        <div v-if="activeTab !== 'history'" class="filter-item">
+          <label><Search class="w-4 h-4 text-indigo-600" /> Filtrar por Nombre / Documento</label>
+          <div class="relative">
+            <input 
+              v-model="searchQuery" 
+              type="text" 
+              placeholder="Buscar en la tabla..." 
+              class="form-input pr-8"
+            />
+            <span v-if="searchQuery" class="absolute right-2.5 top-2.5 text-xs text-slate-400 cursor-pointer" @click="searchQuery = ''">✕</span>
+          </div>
         </div>
       </div>
     </div>
@@ -504,91 +574,126 @@ onMounted(async () => {
       <!-- Tabla de Estudiantes -->
       <div class="table-container shadow-sm">
         <div class="table-header-bar">
-          <h3>Rendimiento Académico por Estudiante</h3>
+          <div>
+            <h3 class="text-slate-800 font-bold text-base">Rendimiento Académico por Estudiante</h3>
+            <p class="text-xs text-slate-500">
+              Modalidad: {{ isCumulativeMode ? `Acumulado (Períodos 1 al ${cumulativePeriodOrder})` : 'Período Individual' }}
+            </p>
+          </div>
           <span class="badge badge-info">Mínimo Aprobatorio: {{ trackingData.min_passing_score }}</span>
         </div>
 
-        <div v-if="loading" class="loading-spinner">
-          Cargando información del período...
+        <div v-if="loading" class="loading-spinner p-8 text-center text-slate-500">
+          <RefreshCw class="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-600" />
+          <span>Cargando información del período...</span>
         </div>
 
-        <table v-else class="data-table">
-          <thead>
-            <tr>
-              <th>Estudiante</th>
-              <th>Documento</th>
-              <th>Curso</th>
-              <th>Estado Académico</th>
-              <th>Materias Reprobadas</th>
-              <th>Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            <template v-for="student in trackingData.estudiantes" :key="student.id_estudiante">
-              <tr :class="{ 'row-reprobado': student.estado_academico === 'REPROBADO' }">
-                <td class="font-medium">
-                  {{ student.apellido }} {{ student.nombre }}
-                </td>
-                <td>{{ student.documento }}</td>
-                <td>{{ student.grado_nombre }} {{ student.grupo_nombre }}</td>
-                <td>
-                  <span class="badge" :class="student.estado_academico === 'APROBADO' ? 'badge-success' : 'badge-danger'">
-                    {{ student.estado_academico }}
-                  </span>
-                </td>
-                <td>
-                  <span v-if="student.cantidad_reprobadas > 0" class="badge badge-warning">
-                    {{ student.cantidad_reprobadas }} materia(s)
-                  </span>
-                  <span v-else class="text-muted">Ninguna</span>
-                </td>
-                <td>
-                  <button class="btn-action" @click="toggleStudentExpand(student.id_estudiante)">
-                    <ChevronDown v-if="expandedStudentId !== student.id_estudiante" class="w-4 h-4" />
-                    <ChevronUp v-else class="w-4 h-4" />
-                    Detalle
-                  </button>
-                </td>
+        <div v-else class="overflow-x-auto">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Estudiante</th>
+                <th>Documento</th>
+                <th>Curso</th>
+                <th>Promedio General</th>
+                <th>Estado Académico</th>
+                <th>Materias Reprobadas</th>
+                <th class="text-right">Acciones</th>
               </tr>
+            </thead>
+            <tbody>
+              <template v-for="student in filteredPeriodStudents" :key="student.id_estudiante">
+                <tr :class="{ 'row-reprobado': student.estado_academico === 'REPROBADO' }">
+                  <td class="font-semibold text-slate-800">
+                    {{ student.apellido }} {{ student.nombre }}
+                  </td>
+                  <td>{{ student.documento }}</td>
+                  <td>{{ student.grado_nombre }} {{ student.grupo_nombre }}</td>
+                  <td>
+                    <span class="font-bold text-slate-700">{{ student.promedio_general }}</span>
+                  </td>
+                  <td>
+                    <span class="badge" :class="student.estado_academico === 'APROBADO' ? 'badge-success' : 'badge-danger'">
+                      {{ student.estado_academico }}
+                    </span>
+                  </td>
+                  <td>
+                    <span v-if="student.cantidad_reprobadas > 0" class="badge badge-warning">
+                      {{ student.cantidad_reprobadas }} materia(s)
+                    </span>
+                    <span v-else class="text-slate-400 text-xs font-medium">Ninguna</span>
+                  </td>
+                  <td class="text-right">
+                    <button class="btn-action" @click="toggleStudentExpand(student.id_estudiante)">
+                      <ChevronDown v-if="expandedStudentId !== student.id_estudiante" class="w-4 h-4 mr-1" />
+                      <ChevronUp v-else class="w-4 h-4 mr-1" />
+                      {{ expandedStudentId === student.id_estudiante ? 'Ocultar' : 'Detalle' }}
+                    </button>
+                  </td>
+                </tr>
 
-              <!-- Detalle expandible con asignaturas y docentes -->
-              <tr v-if="expandedStudentId === student.id_estudiante" class="expandable-row">
-                <td colspan="6">
-                  <div class="student-details-box">
-                    <h4>Desglose de Asignaturas:</h4>
-                    <div class="subjects-grid">
-                      <div 
-                        v-for="sub in student.todas_asignaturas" 
-                        :key="sub.id_materia"
-                        class="subject-card"
-                        :class="{ 'subject-failed': sub.estado_materia === 'REPROBADA' }"
-                      >
-                        <div class="subject-title">{{ sub.materia_nombre }}</div>
-                        <div class="subject-teacher">Docente: {{ sub.docente_nombre }}</div>
-                        <div class="subject-grade">
-                          Nota: <strong>{{ sub.calificacion }}</strong>
-                          <span class="badge" :class="sub.estado_materia === 'REPROBADA' ? 'badge-danger' : 'badge-success'">
-                            {{ sub.estado_materia }}
-                          </span>
+                <!-- Detalle expandible con asignaturas y docentes -->
+                <tr v-if="expandedStudentId === student.id_estudiante" class="expandable-row">
+                  <td colspan="7">
+                    <div class="student-details-box">
+                      <div class="flex items-center justify-between mb-2">
+                        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
+                          <BookOpen class="w-4 h-4 text-indigo-600" />
+                          Desglose de Asignaturas Cursadas:
+                        </h4>
+                        <span class="text-xs text-slate-400">{{ student.todas_asignaturas?.length || 0 }} asignaturas registradas</span>
+                      </div>
+                      
+                      <div v-if="student.todas_asignaturas && student.todas_asignaturas.length > 0" class="subjects-grid">
+                        <div 
+                          v-for="sub in student.todas_asignaturas" 
+                          :key="sub.id_materia"
+                          class="subject-card"
+                          :class="{ 'subject-failed': sub.estado_materia === 'REPROBADA' }"
+                        >
+                          <div class="subject-title">{{ sub.materia_nombre }}</div>
+                          <div class="subject-teacher">Docente: {{ sub.docente_nombre }}</div>
+                          <div class="subject-grade flex items-center justify-between mt-2 pt-2 border-t border-slate-200/60">
+                            <span>Nota: <strong>{{ sub.calificacion }}</strong></span>
+                            <span class="badge text-[11px]" :class="sub.estado_materia === 'REPROBADA' ? 'badge-danger' : 'badge-success'">
+                              {{ sub.estado_materia }}
+                            </span>
+                          </div>
                         </div>
                       </div>
+                      <div v-else class="text-xs text-slate-400 italic p-3 text-center bg-slate-50 rounded-lg">
+                        No hay materias ni calificaciones registradas para este estudiante en el período evaluado.
+                      </div>
                     </div>
-                  </div>
+                  </td>
+                </tr>
+              </template>
+              <tr v-if="filteredPeriodStudents.length === 0">
+                <td colspan="7" class="text-center py-8 text-slate-400">
+                  No se encontraron estudiantes para los filtros o búsqueda especificada.
                 </td>
               </tr>
-            </template>
-            <tr v-if="trackingData.estudiantes.length === 0">
-              <td colspan="6" class="text-center py-6 text-muted">
-                No hay registros académicos para los filtros seleccionados.
-              </td>
-            </tr>
-          </tbody>
-        </table>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
 
     <!-- CONTENIDO DE PESTAÑA 2: CONSOLIDADO ANUAL -->
     <div v-if="activeTab === 'annual'" class="tab-content">
+      <!-- Alerta Informativa RN-19.5: Cierre Mínimo de Períodos -->
+      <div v-if="!annualData.habilitado_para_promocion" class="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3 text-xs text-amber-900 shadow-sm">
+        <ShieldAlert class="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+        <div class="space-y-1">
+          <p class="font-bold text-amber-950 text-sm">Aviso de Regla Institucional (RN-19.5): Promoción en Curso</p>
+          <p>
+            El año lectivo seleccionado cuenta con <strong>{{ annualData.periodos_cerrados || 0 }} de {{ annualData.total_periodos || 4 }}</strong> períodos cerrados. 
+            La promoción anual institucional únicamente se habilita para registro formal cuando el ciclo lectivo se encuentre en su período final o haya culminado todos sus períodos. 
+            La siguiente información se presenta de forma preliminar y de apoyo al seguimiento.
+          </p>
+        </div>
+      </div>
+
       <div class="stats-grid">
         <div class="stat-card stat-total">
           <div class="stat-icon"><Users class="w-6 h-6" /></div>
@@ -602,15 +707,7 @@ onMounted(async () => {
           <div class="stat-icon"><CheckCircle2 class="w-6 h-6" /></div>
           <div class="stat-data">
             <span class="stat-value">{{ annualData.promovidos_count }}</span>
-            <span class="stat-label">Promovidos</span>
-          </div>
-        </div>
-
-        <div class="stat-card stat-failed">
-          <div class="stat-icon"><XCircle class="w-6 h-6" /></div>
-          <div class="stat-data">
-            <span class="stat-value">{{ annualData.no_promovidos_count }}</span>
-            <span class="stat-label">No Promovidos</span>
+            <span class="stat-label">Promovidos (0 Reprobadas)</span>
           </div>
         </div>
 
@@ -618,136 +715,199 @@ onMounted(async () => {
           <div class="stat-icon"><AlertOctagon class="w-6 h-6" /></div>
           <div class="stat-data">
             <span class="stat-value">{{ annualData.pendientes_count }}</span>
-            <span class="stat-label">Pendientes / Recuperación</span>
+            <span class="stat-label">Pendientes (1-2 Reprobadas)</span>
+          </div>
+        </div>
+
+        <div class="stat-card stat-failed">
+          <div class="stat-icon"><XCircle class="w-6 h-6" /></div>
+          <div class="stat-data">
+            <span class="stat-value">{{ annualData.no_promovidos_count }}</span>
+            <span class="stat-label">No Promovidos (3+ Reprobadas)</span>
           </div>
         </div>
       </div>
 
       <div class="table-container shadow-sm">
         <div class="table-header-bar">
-          <h3>Consolidado de Resultados Anuales</h3>
-          <span class="text-muted text-sm">Información institucional de promoción</span>
+          <div>
+            <h3 class="text-slate-800 font-bold text-base">Consolidado de Resultados Anuales y Promoción</h3>
+            <p class="text-xs text-slate-500">Clasificación según reglas de promoción institucional</p>
+          </div>
+          <span class="badge badge-info">Escala Mínima: {{ annualData.min_passing_score }}</span>
         </div>
 
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Estudiante</th>
-              <th>Documento</th>
-              <th>Curso</th>
-              <th>Resultado Calculado</th>
-              <th>Materias Reprobadas Anual</th>
-              <th>Decisión Institucional</th>
-              <th>Acción Directivo</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="student in annualData.estudiantes" :key="student.id_estudiante">
-              <td class="font-medium">{{ student.apellido }} {{ student.nombre }}</td>
-              <td>{{ student.documento }}</td>
-              <td>{{ student.grado_nombre }} {{ student.grupo_nombre }}</td>
-              <td>
-                <span 
-                  class="badge" 
-                  :class="{
-                    'badge-success': student.resultado_anual === 'APROBADO',
-                    'badge-danger': student.resultado_anual === 'NO_PROMOVIDO',
-                    'badge-warning': student.resultado_anual === 'PENDIENTE_RECUPERACION'
-                  }"
-                >
-                  {{ student.resultado_anual === 'NO_PROMOVIDO' ? 'No Promovido' : (student.resultado_anual === 'APROBADO' ? 'Promovido' : 'Pendiente') }}
-                </span>
-              </td>
-              <td>
-                <div v-if="student.asignaturas_reprobadas.length > 0" class="failed-tags">
-                  <span v-for="sub in student.asignaturas_reprobadas" :key="sub.id_materia" class="tag-failed">
-                    {{ sub.materia_nombre }} ({{ sub.promedio_anual }})
+        <div v-if="loading" class="loading-spinner p-8 text-center text-slate-500">
+          <RefreshCw class="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-600" />
+          <span>Calculando consolidado anual...</span>
+        </div>
+
+        <div v-else class="overflow-x-auto">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Estudiante</th>
+                <th>Documento</th>
+                <th>Curso</th>
+                <th>Promedio Anual</th>
+                <th>Resultado Calculado</th>
+                <th>Materias Reprobadas</th>
+                <th>Decisión Institucional</th>
+                <th class="text-right">Acción Directivo</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="student in filteredAnnualStudents" :key="student.id_estudiante">
+                <td class="font-semibold text-slate-800">{{ student.apellido }} {{ student.nombre }}</td>
+                <td>{{ student.documento }}</td>
+                <td>{{ student.grado_nombre }} {{ student.grupo_nombre }}</td>
+                <td>
+                  <span class="font-bold text-slate-700">{{ student.promedio_anual_general }}</span>
+                </td>
+                <td>
+                  <span 
+                    class="badge" 
+                    :class="{
+                      'badge-success': student.resultado_anual === 'APROBADO',
+                      'badge-danger': student.resultado_anual === 'NO_PROMOVIDO',
+                      'badge-warning': student.resultado_anual === 'PENDIENTE_RECUPERACION'
+                    }"
+                  >
+                    {{ student.resultado_anual === 'NO_PROMOVIDO' ? 'No Promovido' : (student.resultado_anual === 'APROBADO' ? 'Promovido' : 'Pendiente') }}
                   </span>
-                </div>
-                <span v-else class="text-muted">Ninguna</span>
-              </td>
-              <td>
-                <span v-if="student.decision_directivo" class="badge badge-info">
-                  {{ formatDecisionLabel(student.decision_directivo.decision_tomada) }}
-                </span>
-                <span v-else-if="student.resultado_anual === 'APROBADO'" class="badge badge-success font-normal">
-                  Promovido automáticamente
-                </span>
-                <span v-else class="text-muted">Sin registrar</span>
-              </td>
-              <td>
-                <button 
-                  :class="student.decision_directivo ? 'btn-secondary-sm' : 'btn-primary-sm'" 
-                  @click="openDecisionModal(student)"
-                >
-                  <Edit v-if="student.decision_directivo" class="w-4 h-4 inline mr-1" />
-                  <UserCheck v-else class="w-4 h-4 inline mr-1" />
-                  {{ student.decision_directivo ? 'Editar Decisión' : 'Registrar Decisión' }}
-                </button>
-              </td>
-            </tr>
-            <tr v-if="annualData.estudiantes.length === 0">
-              <td colspan="7" class="text-center py-6 text-muted">
-                No hay resultados anuales consolidados para el año seleccionado.
-              </td>
-            </tr>
-          </tbody>
-        </table>
+                </td>
+                <td>
+                  <div v-if="student.asignaturas_reprobadas.length > 0" class="failed-tags flex flex-wrap gap-1">
+                    <span v-for="sub in student.asignaturas_reprobadas" :key="sub.id_materia" class="tag-failed">
+                      {{ sub.materia_nombre }} ({{ sub.promedio_anual }})
+                    </span>
+                  </div>
+                  <span v-else class="text-slate-400 text-xs font-medium">Ninguna</span>
+                </td>
+                <td>
+                  <span v-if="student.decision_directivo" class="badge badge-info">
+                    {{ formatDecisionLabel(student.decision_directivo.decision_tomada) }}
+                  </span>
+                  <span v-else-if="student.resultado_anual === 'APROBADO'" class="badge badge-success font-normal">
+                    Promovido automáticamente
+                  </span>
+                  <span v-else class="text-slate-400 text-xs italic">Sin registrar</span>
+                </td>
+                <td class="text-right">
+                  <button 
+                    :class="student.decision_directivo ? 'btn-secondary-sm' : 'btn-primary-sm'" 
+                    @click="openDecisionModal(student)"
+                  >
+                    <Edit v-if="student.decision_directivo" class="w-3.5 h-3.5 inline mr-1" />
+                    <UserCheck v-else class="w-3.5 h-3.5 inline mr-1" />
+                    {{ student.decision_directivo ? 'Editar Decisión' : 'Registrar Decisión' }}
+                  </button>
+                </td>
+              </tr>
+              <tr v-if="filteredAnnualStudents.length === 0">
+                <td colspan="8" class="text-center py-8 text-slate-400">
+                  No hay resultados consolidados para los filtros seleccionados.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
 
     <!-- CONTENIDO DE PESTAÑA 3: HISTORIAL DEL ESTUDIANTE -->
     <div v-if="activeTab === 'history'" class="tab-content">
       <div class="search-box-card">
-        <label>Buscar estudiante por número de documento:</label>
+        <label class="block text-sm font-bold text-slate-700 mb-2">Buscar estudiante por número de documento:</label>
         <div class="search-input-group">
           <input 
             v-model="historySearchQuery" 
             type="text" 
-            placeholder="Ingrese documento de identidad..."
+            placeholder="Ingrese documento de identidad (ej: 1075283921)..."
             class="form-input"
             @keyup.enter="searchStudentHistory()"
           />
-          <button class="btn-primary" @click="searchStudentHistory()">
-            <Search class="w-4 h-4" /> Buscar Historial
+          <button class="btn-primary" :disabled="historyLoading" @click="searchStudentHistory()">
+            <Search class="w-4 h-4 mr-1.5" /> 
+            {{ historyLoading ? 'Buscando...' : 'Buscar Historial' }}
           </button>
         </div>
       </div>
 
-      <div v-if="historyLoading" class="loading-spinner">
-        Consultando historial del estudiante...
+      <div v-if="historyLoading" class="loading-spinner p-8 text-center text-slate-500">
+        <RefreshCw class="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-600" />
+        <span>Consultando historial del estudiante...</span>
       </div>
 
-      <div v-if="studentHistory" class="history-results">
+      <div v-if="studentHistory" class="history-results mt-6 space-y-6">
+        <!-- Tarjeta de Perfil -->
         <div class="student-profile-card">
-          <h3>{{ studentHistory.estudiante.apellido }} {{ studentHistory.estudiante.nombre }}</h3>
-          <p>Documento: <strong>{{ studentHistory.estudiante.documento }}</strong> | Colegio: {{ studentHistory.estudiante.colegio_nombre }}</p>
+          <div class="flex items-center gap-4">
+            <div class="w-14 h-14 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-black text-xl shadow-md">
+              {{ studentHistory.estudiante.nombre?.charAt(0) }}{{ studentHistory.estudiante.apellido?.charAt(0) }}
+            </div>
+            <div>
+              <h3 class="text-xl font-black text-slate-800">{{ studentHistory.estudiante.apellido }} {{ studentHistory.estudiante.nombre }}</h3>
+              <p class="text-xs text-slate-500 mt-0.5">
+                Documento: <strong class="text-slate-700">{{ studentHistory.estudiante.documento }}</strong> • 
+                Colegio: <span class="text-indigo-600 font-semibold">{{ studentHistory.estudiante.colegio_nombre }}</span>
+              </p>
+            </div>
+          </div>
         </div>
 
-        <div class="timeline">
-          <div v-for="mat in studentHistory.historial_matriculas" :key="mat.id_matricula" class="timeline-item">
-            <div class="timeline-badge">
-              <GraduationCap class="w-5 h-5" />
-            </div>
-            <div class="timeline-card">
-              <div class="timeline-header">
-                <h4>Grado: {{ mat.grado_nombre }} {{ mat.grupo_nombre }} (Año {{ mat.calendario || mat.id_anio }})</h4>
-                <span class="badge" :class="mat.estado_matricula === 'CULMINADA' ? 'badge-success' : 'badge-info'">
-                  Matrícula {{ mat.estado_matricula }}
-                </span>
+        <!-- Línea de Tiempo de Matrículas y Promociones -->
+        <div class="timeline-container bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+          <h4 class="text-sm font-bold uppercase tracking-wider text-slate-700 mb-6 flex items-center gap-2">
+            <GraduationCap class="w-4 h-4 text-indigo-600" />
+            Trayectoria Académica y Matrículas Registradas
+          </h4>
+
+          <div v-if="studentHistory.historial_matriculas && studentHistory.historial_matriculas.length > 0" class="timeline">
+            <div 
+              v-for="mat in studentHistory.historial_matriculas" 
+              :key="mat.id_matricula" 
+              class="timeline-item"
+            >
+              <div class="timeline-badge">
+                <Calendar class="w-4 h-4" />
               </div>
-              <div class="timeline-body">
-                <p v-if="mat.resultado_calculado">
-                  Resultado Anual Calculado: <strong>{{ mat.resultado_calculado }}</strong>
-                </p>
-                <p v-if="mat.decision_tomada">
-                  Decisión Institucional Registrada: <span class="text-primary font-semibold">{{ formatDecisionLabel(mat.decision_tomada) }}</span>
-                </p>
-                <p v-if="mat.observacion" class="text-sm italic text-muted mt-2">
-                  Observación: "{{ mat.observacion }}"
-                </p>
+              <div class="timeline-card">
+                <div class="timeline-header flex items-center justify-between flex-wrap gap-2 mb-2 pb-2 border-b border-slate-100">
+                  <h5 class="font-bold text-slate-800 text-sm">
+                    Año Lectivo {{ mat.calendario || mat.id_anio }} — Grado: {{ mat.grado_nombre }} {{ mat.grupo_nombre }}
+                  </h5>
+                  <span class="badge" :class="mat.estado_matricula === 'CULMINADA' ? 'badge-success' : 'badge-info'">
+                    Estado: {{ mat.estado_matricula }}
+                  </span>
+                </div>
+                <div class="timeline-body space-y-1.5 text-xs text-slate-600">
+                  <p v-if="mat.resultado_calculado">
+                    Resultado Anual: 
+                    <span 
+                      class="font-bold ml-1"
+                      :class="{
+                        'text-emerald-700': mat.resultado_calculado === 'APROBADO',
+                        'text-rose-700': mat.resultado_calculado === 'NO_PROMOVIDO',
+                        'text-amber-700': mat.resultado_calculado === 'PENDIENTE_RECUPERACION'
+                      }"
+                    >
+                      {{ mat.resultado_calculado }}
+                    </span>
+                  </p>
+                  <p v-if="mat.decision_tomada">
+                    Decisión Institucional: 
+                    <span class="text-indigo-600 font-bold ml-1">{{ formatDecisionLabel(mat.decision_tomada) }}</span>
+                  </p>
+                  <p v-if="mat.observacion" class="p-2 bg-slate-50 rounded-lg text-slate-600 italic mt-1 border border-slate-100">
+                    "{{ mat.observacion }}"
+                  </p>
+                </div>
               </div>
             </div>
+          </div>
+          <div v-else class="text-center py-6 text-slate-400 text-xs italic">
+            El estudiante no posee historial de matrículas registrado en el sistema.
           </div>
         </div>
       </div>
@@ -757,43 +917,98 @@ onMounted(async () => {
     <div v-if="showDecisionModal" class="modal-backdrop">
       <div class="modal-card">
         <div class="modal-header">
-          <h3>{{ targetStudentForDecision?.decision_directivo ? 'Editar Decisión Institucional de Promoción' : 'Registro de Decisión Institucional de Promoción' }}</h3>
+          <div class="flex items-center gap-2">
+            <Award class="w-5 h-5 text-indigo-600" />
+            <h3 class="font-black text-slate-800 text-base">
+              {{ targetStudentForDecision?.decision_directivo ? 'Editar Decisión Institucional' : 'Registro de Decisión Institucional' }}
+            </h3>
+          </div>
           <button class="btn-close" @click="showDecisionModal = false">×</button>
         </div>
 
-        <div class="modal-body">
-          <p>
-            Estudiante: <strong>{{ targetStudentForDecision?.apellido }} {{ targetStudentForDecision?.nombre }}</strong>
-          </p>
-          <p class="text-sm text-muted mb-4">
-            Resultado calculado por el sistema: <strong>{{ targetStudentForDecision?.resultado_anual || targetStudentForDecision?.estado_academico }}</strong>
-          </p>
+        <div class="modal-body space-y-4">
+          <!-- Resumen del Estudiante -->
+          <div class="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5 text-xs">
+            <div class="flex justify-between items-center">
+              <span class="font-bold text-slate-800 text-sm">
+                {{ targetStudentForDecision?.apellido }} {{ targetStudentForDecision?.nombre }}
+              </span>
+              <span 
+                class="badge" 
+                :class="{
+                  'badge-success': (targetStudentForDecision?.resultado_anual || targetStudentForDecision?.estado_academico) === 'APROBADO',
+                  'badge-danger': (targetStudentForDecision?.resultado_anual || targetStudentForDecision?.estado_academico) === 'NO_PROMOVIDO',
+                  'badge-warning': (targetStudentForDecision?.resultado_anual || targetStudentForDecision?.estado_academico) === 'PENDIENTE_RECUPERACION'
+                }"
+              >
+                {{ targetStudentForDecision?.resultado_anual || targetStudentForDecision?.estado_academico }}
+              </span>
+            </div>
+            <p class="text-slate-500">
+              Documento: <strong>{{ targetStudentForDecision?.documento }}</strong> • 
+              Curso: <strong>{{ targetStudentForDecision?.grado_nombre }} {{ targetStudentForDecision?.grupo_nombre }}</strong>
+            </p>
 
-          <div class="form-group mb-4">
-            <label>Decisión tomada por la institución / directivo:</label>
+            <!-- Resumen de materias reprobadas -->
+            <div v-if="targetStudentForDecision?.asignaturas_reprobadas && targetStudentForDecision?.asignaturas_reprobadas.length > 0" class="pt-1">
+              <p class="font-bold text-rose-800 mb-1">Materias reprobadas por el estudiante:</p>
+              <div class="flex flex-wrap gap-1">
+                <span 
+                  v-for="sub in targetStudentForDecision.asignaturas_reprobadas" 
+                  :key="sub.id_materia"
+                  class="tag-failed text-[11px]"
+                >
+                  {{ sub.materia_nombre }} ({{ sub.promedio_anual || sub.calificacion }})
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Selector de Decisión -->
+          <div class="form-group">
+            <label class="block text-xs font-bold text-slate-700 mb-1.5">
+              Decisión adoptada por la institución / directivo:
+            </label>
             <select v-model="decisionForm.decisionTaken" class="form-select">
-              <option value="PROMOVER_SIGUIENTE_GRADO">Promover al siguiente grado</option>
-              <option value="MANTENER_GRADO">Mantener en el mismo grado</option>
-              <option value="MATRICULA_CONDICIONADA">Matrícula condicionada</option>
-              <option value="OTRA_DECISION">Otra decisión académica institucional</option>
+              <option value="PROMOVER_SIGUIENTE_GRADO">Promover al siguiente grado (Excepción / Aprobación)</option>
+              <option value="MANTENER_GRADO">Mantener en el mismo grado (No promovido)</option>
+              <option value="MATRICULA_CONDICIONADA">Matrícula condicionada con compromisos</option>
+              <option value="OTRA_DECISION">Otra decisión institucional personalizada</option>
             </select>
           </div>
 
-          <div class="form-group mb-4">
-            <label>Justificación u observaciones:</label>
+          <!-- Grado asignado opcional -->
+          <div class="form-group">
+            <label class="block text-xs font-bold text-slate-700 mb-1.5">
+              Grado institucional sugerido / asignado (Opcional):
+            </label>
+            <select v-model="decisionForm.assignedGradeId" class="form-select">
+              <option value="">Mantener grado por defecto</option>
+              <option v-for="g in grades" :key="g.id_tipo_grado || g.id_grado" :value="g.id_tipo_grado || g.id_grado">
+                {{ g.nombre }}
+              </option>
+            </select>
+          </div>
+
+          <!-- Justificación u observaciones -->
+          <div class="form-group">
+            <label class="block text-xs font-bold text-slate-700 mb-1.5">
+              Justificación u observaciones institucionales:
+            </label>
             <textarea 
               v-model="decisionForm.observation" 
               rows="3" 
               class="form-textarea"
-              placeholder="Escriba la justificación institucional..."
+              placeholder="Indique los motivos, actas o acuerdos de la comisión de evaluación y promoción..."
             ></textarea>
           </div>
         </div>
 
         <div class="modal-footer">
           <button class="btn-secondary" @click="showDecisionModal = false">Cancelar</button>
-          <button class="btn-primary" @click="saveDirectiveDecision()">
-            <Save class="w-4 h-4 inline mr-1" /> Guardar Decisión
+          <button class="btn-primary" :disabled="loading" @click="saveDirectiveDecision()">
+            <Save class="w-4 h-4 inline mr-1.5" /> 
+            {{ loading ? 'Guardando...' : 'Guardar Decisión' }}
           </button>
         </div>
       </div>
@@ -817,39 +1032,39 @@ onMounted(async () => {
   align-items: center;
   gap: 0.5rem;
   padding: 0.25rem 0.75rem;
-  background: var(--color-primary-rgb, rgba(37, 99, 235, 0.1));
-  color: var(--color-primary, #2563eb);
+  background: rgba(37, 99, 235, 0.1);
+  color: #2563eb;
   border-radius: 9999px;
-  font-size: 0.875rem;
-  font-weight: 600;
+  font-size: 0.8rem;
+  font-weight: 700;
   margin-bottom: 0.5rem;
 }
 
 .header-title {
-  font-size: 1.875rem;
-  font-weight: 800;
-  color: #1e293b;
-
+  font-size: 1.75rem;
+  font-weight: 900;
+  color: #0f172a;
+  letter-spacing: -0.025em;
   margin-bottom: 0.25rem;
 }
 
 .header-subtitle {
   color: #64748b;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
 }
 
 .filters-card {
   background: #ffffff;
   border: 1px solid #e2e8f0;
-  border-radius: 0.75rem;
+  border-radius: 1rem;
   padding: 1.25rem;
   margin-bottom: 1.5rem;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
 }
 
 .filters-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 1rem;
 }
 
@@ -857,54 +1072,54 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 0.35rem;
-  font-size: 0.85rem;
-  font-weight: 600;
+  font-size: 0.8rem;
+  font-weight: 700;
   color: #475569;
   margin-bottom: 0.35rem;
 }
 
 .form-select, .form-input, .form-textarea {
   width: 100%;
-  padding: 0.5rem 0.75rem;
+  padding: 0.55rem 0.75rem;
   border: 1px solid #cbd5e1;
-  border-radius: 0.5rem;
+  border-radius: 0.625rem;
   background: #f8fafc;
-  font-size: 0.9rem;
+  font-size: 0.875rem;
   color: #1e293b;
   transition: all 0.2s;
 }
 
 .form-select:focus, .form-input:focus, .form-textarea:focus {
   outline: none;
-  border-color: #2563eb;
+  border-color: #4f46e5;
   background: #ffffff;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
 }
 
 .toggle-group {
   display: flex;
   background: #e2e8f0;
   padding: 0.2rem;
-  border-radius: 0.5rem;
+  border-radius: 0.625rem;
 }
 
 .toggle-btn {
   flex: 1;
-  padding: 0.4rem 0.75rem;
+  padding: 0.4rem 0.6rem;
   border: none;
   background: transparent;
-  font-size: 0.85rem;
-  font-weight: 600;
+  font-size: 0.8rem;
+  font-weight: 700;
   color: #64748b;
-  border-radius: 0.375rem;
+  border-radius: 0.5rem;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .toggle-btn.active {
   background: #ffffff;
-  color: #2563eb;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+  color: #4f46e5;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.08);
 }
 
 .tabs-nav {
@@ -921,8 +1136,8 @@ onMounted(async () => {
   padding: 0.75rem 1.25rem;
   border: none;
   background: transparent;
-  font-size: 0.95rem;
-  font-weight: 600;
+  font-size: 0.9rem;
+  font-weight: 700;
   color: #64748b;
   border-bottom: 3px solid transparent;
   cursor: pointer;
@@ -931,18 +1146,18 @@ onMounted(async () => {
 }
 
 .tab-btn:hover {
-  color: #2563eb;
+  color: #4f46e5;
 }
 
 .tab-btn.active {
-  color: #2563eb;
-  border-bottom-color: #2563eb;
+  color: #4f46e5;
+  border-bottom-color: #4f46e5;
 }
 
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 1.25rem;
+  gap: 1rem;
   margin-bottom: 1.5rem;
 }
 
@@ -952,14 +1167,17 @@ onMounted(async () => {
   gap: 1rem;
   padding: 1.25rem;
   background: #ffffff;
-  border-radius: 0.75rem;
+  border-radius: 1rem;
   border: 1px solid #e2e8f0;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
 }
 
 .stat-icon {
   padding: 0.75rem;
-  border-radius: 0.5rem;
+  border-radius: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .stat-total .stat-icon { background: #eff6ff; color: #2563eb; }
@@ -970,19 +1188,20 @@ onMounted(async () => {
 .stat-value {
   display: block;
   font-size: 1.5rem;
-  font-weight: 800;
+  font-weight: 900;
   color: #0f172a;
 }
 
 .stat-label {
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   color: #64748b;
+  font-weight: 600;
 }
 
 .table-container {
   background: #ffffff;
   border: 1px solid #e2e8f0;
-  border-radius: 0.75rem;
+  border-radius: 1rem;
   overflow: hidden;
 }
 
@@ -1004,39 +1223,54 @@ onMounted(async () => {
 .data-table th, .data-table td {
   padding: 0.875rem 1.25rem;
   border-bottom: 1px solid #e2e8f0;
-  font-size: 0.9rem;
+  font-size: 0.875rem;
 }
 
 .data-table th {
   background: #f1f5f9;
   font-weight: 700;
   color: #334155;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
 }
 
 .row-reprobado {
-  background: #fff5f5;
+  background: #fffafa;
 }
 
 .badge {
   display: inline-flex;
-  padding: 0.2rem 0.6rem;
+  align-items: center;
+  padding: 0.25rem 0.65rem;
   border-radius: 9999px;
   font-size: 0.75rem;
   font-weight: 700;
 }
 
-.badge-success { background: #dcfce7; color: #15803d; }
-.badge-danger { background: #fee2e2; color: #b91c1c; }
-.badge-warning { background: #fef3c7; color: #b45309; }
-.badge-info { background: #dbeafe; color: #1d4ed8; }
+.badge-success { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
+.badge-danger { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; }
+.badge-warning { background: #fef3c7; color: #b45309; border: 1px solid #fde68a; }
+.badge-info { background: #e0e7ff; color: #4338ca; border: 1px solid #c7d2fe; }
+
+.tag-failed {
+  display: inline-flex;
+  padding: 0.15rem 0.5rem;
+  background: #fee2e2;
+  color: #b91c1c;
+  border-radius: 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
 
 .btn-action, .btn-primary-sm, .btn-primary, .btn-secondary, .btn-secondary-sm {
   display: inline-flex;
   align-items: center;
-  padding: 0.4rem 0.75rem;
-  border-radius: 0.375rem;
-  font-size: 0.85rem;
-  font-weight: 600;
+  justify-content: center;
+  padding: 0.45rem 0.85rem;
+  border-radius: 0.5rem;
+  font-size: 0.825rem;
+  font-weight: 700;
   cursor: pointer;
   transition: all 0.2s;
 }
@@ -1049,24 +1283,29 @@ onMounted(async () => {
 
 .btn-secondary-sm:hover {
   background: #e2e8f0;
-  color: #1e293b;
+  color: #0f172a;
 }
 
 .btn-action {
-  background: #f1f5f9;
+  background: #f8fafc;
   border: 1px solid #cbd5e1;
-  color: #334155;
+  color: #475569;
 }
 
-.btn-action:hover { background: #e2e8f0; }
+.btn-action:hover {
+  background: #f1f5f9;
+  color: #1e293b;
+}
 
 .btn-primary, .btn-primary-sm {
-  background: #2563eb;
+  background: #4f46e5;
   color: #ffffff;
   border: none;
 }
 
-.btn-primary:hover, .btn-primary-sm:hover { background: #1d4ed8; }
+.btn-primary:hover, .btn-primary-sm:hover {
+  background: #4338ca;
+}
 
 .btn-secondary {
   background: #f1f5f9;
@@ -1074,56 +1313,71 @@ onMounted(async () => {
   color: #475569;
 }
 
+.btn-secondary:hover {
+  background: #e2e8f0;
+}
+
 .expandable-row {
   background: #f8fafc;
 }
 
 .student-details-box {
-  padding: 1rem;
+  padding: 1.25rem;
   background: #ffffff;
-  border: 1px solid #cbd5e1;
-  border-radius: 0.5rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  margin: 0.5rem 0;
 }
 
 .subjects-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 0.75rem;
-  margin-top: 0.5rem;
 }
 
 .subject-card {
-  padding: 0.75rem;
-  border-radius: 0.5rem;
+  padding: 0.85rem;
+  border-radius: 0.625rem;
   border: 1px solid #e2e8f0;
   background: #f8fafc;
 }
 
 .subject-card.subject-failed {
   border-color: #fca5a5;
-  background: #fef2f2;
+  background: #fff5f5;
 }
 
-.subject-title { font-weight: 700; font-size: 0.9rem; color: #1e293b; }
-.subject-teacher { font-size: 0.8rem; color: #64748b; margin-bottom: 0.3rem; }
+.subject-title {
+  font-weight: 700;
+  font-size: 0.875rem;
+  color: #1e293b;
+}
+
+.subject-teacher {
+  font-size: 0.75rem;
+  color: #64748b;
+  margin-top: 0.15rem;
+}
 
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.5);
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
+  padding: 1rem;
 }
 
 .modal-card {
   background: #ffffff;
-  border-radius: 0.75rem;
-  width: 90%;
-  max-width: 500px;
+  border-radius: 1rem;
+  width: 100%;
+  max-width: 520px;
   padding: 1.5rem;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
 }
 
 .modal-header {
@@ -1131,16 +1385,22 @@ onMounted(async () => {
   justify-content: space-between;
   align-items: center;
   border-bottom: 1px solid #e2e8f0;
-  padding-bottom: 0.75rem;
-  margin-bottom: 1rem;
+  padding-bottom: 0.85rem;
+  margin-bottom: 1.25rem;
 }
 
 .btn-close {
   background: none;
   border: none;
   font-size: 1.5rem;
+  line-height: 1;
   cursor: pointer;
-  color: #64748b;
+  color: #94a3b8;
+  transition: color 0.2s;
+}
+
+.btn-close:hover {
+  color: #0f172a;
 }
 
 .modal-footer {
@@ -1148,8 +1408,8 @@ onMounted(async () => {
   justify-content: flex-end;
   gap: 0.75rem;
   border-top: 1px solid #e2e8f0;
-  padding-top: 1rem;
-  margin-top: 1rem;
+  padding-top: 1.25rem;
+  margin-top: 1.25rem;
 }
 
 .alert {
@@ -1157,11 +1417,95 @@ onMounted(async () => {
   align-items: center;
   gap: 0.75rem;
   padding: 0.875rem 1.25rem;
-  border-radius: 0.5rem;
-  margin-bottom: 1rem;
-  font-size: 0.9rem;
+  border-radius: 0.75rem;
+  margin-bottom: 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 500;
 }
 
-.alert-error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
-.alert-success { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+.alert-error {
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+.alert-success {
+  background: #f0fdf4;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+}
+
+/* Timeline Historial */
+.search-box-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 1rem;
+  padding: 1.25rem;
+}
+
+.search-input-group {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.student-profile-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 1rem;
+  padding: 1.25rem;
+}
+
+.timeline {
+  position: relative;
+  padding-left: 2rem;
+}
+
+.timeline::before {
+  content: '';
+  position: absolute;
+  left: 0.75rem;
+  top: 0.5rem;
+  bottom: 0.5rem;
+  width: 2px;
+  background: #e2e8f0;
+}
+
+.timeline-item {
+  position: relative;
+  margin-bottom: 1.5rem;
+}
+
+.timeline-item:last-child {
+  margin-bottom: 0;
+}
+
+.timeline-badge {
+  position: absolute;
+  left: -2rem;
+  top: 0.25rem;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 9999px;
+  background: #4f46e5;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 0 4px #ffffff;
+}
+
+.timeline-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  padding: 1rem;
+}
+
+.fade-enter-active, .fade-leave-active {
+  transition: opacity 0.3s;
+}
+.fade-enter-from, .fade-leave-to {
+  opacity: 0;
+}
 </style>
+
