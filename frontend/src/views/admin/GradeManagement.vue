@@ -4,7 +4,7 @@ import axios from 'axios'
 import { 
   Layers3, Plus, Search, School2, Trash2, Info, Pencil, Tag, RefreshCw, Lock, 
   Calendar, Eye, Users, GraduationCap, Mail, X, Sun, Sunset, Moon, Globe, 
-  ArrowRightLeft
+  ArrowRightLeft, SlidersHorizontal, Layers
 } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 import { useNotificationStore } from '../../stores/notifications'
@@ -133,14 +133,64 @@ const filteredGradeTypes = computed(() =>
   )
 )
 
-const visibleGradeTypes = computed(() => {
-  const term = searchTerm.value.trim().toLowerCase()
-  if (!term) return tiposGrado.value
+// Grados & Cursos Filters State
+const selectedNivelFilter = ref<number | null>(null)
+const selectedJornadaFilter = ref<number | null>(null)
+const gradeStatusFilter = ref<'TODOS' | 'CON_CURSOS' | 'SIN_CURSOS'>('TODOS')
 
-  return tiposGrado.value.filter((item) =>
-    item.nombre.toLowerCase().includes(term) ||
-    item.nivel_nombre.toLowerCase().includes(term)
-  )
+// Grados & Cursos KPI Metrics
+const totalMatriculas = computed(() => grupos.value.reduce((acc, g) => acc + (g.matriculas_count || 0), 0))
+const totalCupos = computed(() => grupos.value.reduce((acc, g) => acc + (g.cupos_totales || 0), 0))
+const globalOcupacionPct = computed(() => totalCupos.value > 0 ? Math.round((totalMatriculas.value / totalCupos.value) * 100) : 0)
+const avgEstudiantesPorCurso = computed(() => grupos.value.length > 0 ? (totalMatriculas.value / grupos.value.length).toFixed(1) : '0')
+const fullCapacityCoursesCount = computed(() => grupos.value.filter(g => (g.matriculas_count || 0) >= (g.cupos_totales || 30)).length)
+const availableCapacityCoursesCount = computed(() => grupos.value.filter(g => (g.matriculas_count || 0) < (g.cupos_totales || 30)).length)
+const uniqueNivelesCount = computed(() => new Set(tiposGrado.value.map(t => t.id_nivel)).size)
+const gradesWithoutCoursesCount = computed(() => tiposGrado.value.filter(t => t.cursos_count === 0).length)
+
+const hasActiveFilters = computed(() => {
+  return selectedGradeId.value !== null ||
+    selectedNivelFilter.value !== null ||
+    selectedJornadaFilter.value !== null ||
+    cupoFilter.value !== 'TODOS' ||
+    gradeStatusFilter.value !== 'TODOS' ||
+    searchTerm.value.trim() !== ''
+})
+
+const resetAllFilters = () => {
+  selectedGradeId.value = null
+  selectedNivelFilter.value = null
+  selectedJornadaFilter.value = null
+  cupoFilter.value = 'TODOS'
+  gradeStatusFilter.value = 'TODOS'
+  searchTerm.value = ''
+}
+
+const visibleGradeTypes = computed(() => {
+  let list = tiposGrado.value
+
+  // Filter by level
+  if (selectedNivelFilter.value !== null) {
+    list = list.filter(item => item.id_nivel === selectedNivelFilter.value)
+  }
+
+  // Filter by status (with or without courses)
+  if (gradeStatusFilter.value === 'CON_CURSOS') {
+    list = list.filter(item => item.cursos_count > 0)
+  } else if (gradeStatusFilter.value === 'SIN_CURSOS') {
+    list = list.filter(item => item.cursos_count === 0)
+  }
+
+  // Filter by search term
+  const term = searchTerm.value.trim().toLowerCase()
+  if (term) {
+    list = list.filter((item) =>
+      item.nombre.toLowerCase().includes(term) ||
+      item.nivel_nombre.toLowerCase().includes(term)
+    )
+  }
+
+  return list
 })
 
 type CupoFilterOption = 'TODOS' | 'CON_CUPOS' | 'SIN_CUPOS' | 'BAJA_OCUPACION' | 'ALTA_OCUPACION' | 'MENOS_10' | 'ENTRE_10_25' | 'MAS_25'
@@ -166,6 +216,16 @@ const visibleGroups = computed(() => {
   // Filter by selected grade if any
   if (selectedGradeId.value) {
     list = list.filter(item => item.id_tipo_grado === selectedGradeId.value)
+  }
+
+  // Filter by level
+  if (selectedNivelFilter.value !== null) {
+    list = list.filter(item => item.id_nivel === selectedNivelFilter.value)
+  }
+
+  // Filter by jornada
+  if (selectedJornadaFilter.value !== null) {
+    list = list.filter(item => item.id_jornada === selectedJornadaFilter.value)
   }
 
   // Filter by search term
@@ -1006,8 +1066,162 @@ watch(() => yearStore.selectedYearId, () => {
       </button>
     </div>
 
-    <!-- SUB-VIEW 1: GRADOS & CURSOS (UNIFIED DASHBOARD) -->
-    <div v-if="activeMainTab === 'grades_courses'" class="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start animate-in fade-in duration-300">
+    <!-- SUB-VIEW 1: GRADOS & CURSOS -->
+    <div v-if="activeMainTab === 'grades_courses'" class="space-y-6 animate-in fade-in duration-300">
+      
+      <!-- Top Overview KPI Cards -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <!-- KPI 1: Grados Base -->
+        <div class="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center justify-between">
+          <div>
+            <p class="text-[10px] font-black text-slate-400 uppercase tracking-wider">Grados Base</p>
+            <p class="text-2xl font-black text-slate-900 dark:text-white mt-1">{{ tiposGrado.length }}</p>
+            <p class="text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-0.5">
+              {{ uniqueNivelesCount }} niveles educativos <span v-if="gradesWithoutCoursesCount > 0" class="text-amber-500 font-bold">({{ gradesWithoutCoursesCount }} sin salones)</span>
+            </p>
+          </div>
+          <div class="p-3 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 rounded-2xl">
+            <Layers3 :size="22" />
+          </div>
+        </div>
+
+        <!-- KPI 2: Cursos / Aulas -->
+        <div class="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center justify-between">
+          <div>
+            <p class="text-[10px] font-black text-slate-400 uppercase tracking-wider">Cursos & Salones</p>
+            <p class="text-2xl font-black text-blue-600 dark:text-blue-400 mt-1">{{ grupos.length }}</p>
+            <p class="text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-0.5">
+              {{ availableCapacityCoursesCount }} con cupos libres
+            </p>
+          </div>
+          <div class="p-3 bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 rounded-2xl">
+            <School2 :size="22" />
+          </div>
+        </div>
+
+        <!-- KPI 3: Aforo & Matrículas -->
+        <div class="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center justify-between">
+          <div>
+            <p class="text-[10px] font-black text-slate-400 uppercase tracking-wider">Aforo & Matrículas</p>
+            <p class="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1">
+              {{ totalMatriculas }} <span class="text-sm font-bold text-slate-400">/ {{ totalCupos }}</span>
+            </p>
+            <div class="flex items-center gap-1.5 mt-1">
+              <div class="h-1.5 w-16 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                <div class="h-full bg-emerald-500 rounded-full" :style="`width: ${Math.min(100, globalOcupacionPct)}%`"></div>
+              </div>
+              <span class="text-[10px] font-black text-slate-400">{{ globalOcupacionPct }}% ocupado</span>
+            </div>
+          </div>
+          <div class="p-3 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 rounded-2xl">
+            <GraduationCap :size="22" />
+          </div>
+        </div>
+
+        <!-- KPI 4: Densidad de Estudiantes -->
+        <div class="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center justify-between">
+          <div>
+            <p class="text-[10px] font-black text-slate-400 uppercase tracking-wider">Promedio por Aula</p>
+            <p class="text-2xl font-black text-amber-600 dark:text-amber-400 mt-1">
+              ~{{ avgEstudiantesPorCurso }} <span class="text-xs font-bold text-slate-400">est/curso</span>
+            </p>
+            <p class="text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-0.5">
+              {{ fullCapacityCoursesCount }} cursos llenos (100%)
+            </p>
+          </div>
+          <div class="p-3 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 rounded-2xl">
+            <Users :size="22" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Interactive Filters Toolbar -->
+      <div class="bg-white dark:bg-slate-900 p-4 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        
+        <!-- Filter Pills / Dropdowns Group -->
+        <div class="flex flex-wrap items-center gap-3">
+          <!-- Level Filter Pills -->
+          <div class="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800/60 p-1 rounded-2xl border border-slate-200/70 dark:border-slate-700/60">
+            <span class="text-[10px] font-black uppercase text-slate-400 px-2 flex items-center gap-1">
+              <Layers :size="12" /> Nivel:
+            </span>
+            <button
+              @click="selectedNivelFilter = null"
+              :class="[
+                'px-3 py-1 rounded-xl text-xs font-bold transition-all',
+                selectedNivelFilter === null
+                  ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+              ]"
+            >
+              Todos
+            </button>
+            <button
+              v-for="nivel in niveles"
+              :key="nivel.id_nivel"
+              @click="selectedNivelFilter = selectedNivelFilter === nivel.id_nivel ? null : nivel.id_nivel"
+              :class="[
+                'px-3 py-1 rounded-xl text-xs font-bold transition-all',
+                selectedNivelFilter === nivel.id_nivel
+                  ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+              ]"
+            >
+              {{ nivel.nombre }}
+            </button>
+          </div>
+
+          <!-- Jornada Quick Dropdown Filter -->
+          <div class="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800/60 p-1 rounded-2xl border border-slate-200/70 dark:border-slate-700/60">
+            <span class="text-[10px] font-black uppercase text-slate-400 px-2 flex items-center gap-1">
+              <Sun :size="12" /> Jornada:
+            </span>
+            <select
+              v-model="selectedJornadaFilter"
+              class="bg-transparent text-xs font-bold text-slate-700 dark:text-slate-200 outline-none cursor-pointer pr-2"
+            >
+              <option :value="null">Todas las Jornadas</option>
+              <option v-for="j in jornadas" :key="j.id_jornada" :value="j.id_jornada">
+                {{ j.nombre }}
+              </option>
+            </select>
+          </div>
+
+          <!-- Grade Status Filter Dropdown -->
+          <div class="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800/60 p-1 rounded-2xl border border-slate-200/70 dark:border-slate-700/60">
+            <span class="text-[10px] font-black uppercase text-slate-400 px-2 flex items-center gap-1">
+              <SlidersHorizontal :size="12" /> Estado Grado:
+            </span>
+            <select
+              v-model="gradeStatusFilter"
+              class="bg-transparent text-xs font-bold text-slate-700 dark:text-slate-200 outline-none cursor-pointer pr-2"
+            >
+              <option value="TODOS">Todos los grados</option>
+              <option value="CON_CURSOS">Con cursos asignados</option>
+              <option value="SIN_CURSOS">Sin cursos asignados (0)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Reset & Status indicator -->
+        <div class="flex items-center gap-3">
+          <button
+            v-if="hasActiveFilters"
+            @click="resetAllFilters"
+            class="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 rounded-xl transition-all border border-rose-200/60 dark:border-rose-900/60"
+          >
+            <X :size="14" />
+            <span>Limpiar Filtros</span>
+          </button>
+          
+          <span class="text-xs font-bold text-slate-400">
+            Mostrando: <span class="text-slate-900 dark:text-white font-black">{{ visibleGradeTypes.length }}</span> grados / <span class="text-slate-900 dark:text-white font-black">{{ visibleGroups.length }}</span> cursos
+          </span>
+        </div>
+      </div>
+
+      <!-- Unified Dashboard: 2 Column Layout -->
+      <div class="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
       
       <!-- Left Panel: Grades (Compact List) -->
       <div class="xl:col-span-5 space-y-6">
@@ -1229,6 +1443,7 @@ watch(() => yearStore.selectedYearId, () => {
         </div>
       </div>
     </div>
+  </div>
 
     <!-- SUB-VIEW 2: GESTIÓN Y ANÁLISIS DE JORNADAS -->
     <div v-else-if="activeMainTab === 'jornadas'" class="space-y-6 animate-in fade-in duration-300">
