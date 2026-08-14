@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import axios from 'axios'
-import { BookOpen, Plus, Trash2, Search, Info, Layers, GraduationCap, X, Edit, Calendar, PlusCircle } from 'lucide-vue-next'
+import { BookOpen, Plus, Trash2, Search, Info, Layers, GraduationCap, X, Edit, Calendar, PlusCircle, Lock } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 import { useAcademicYearStore } from '../../stores/academicYear'
 import { getCourseDisplayName } from '../../utils/courseHelper'
@@ -23,6 +23,7 @@ interface TrashItem {
 const auth = useAuthStore()
 const yearStore = useAcademicYearStore()
 const schoolId = computed(() => Number(auth.user?.schoolId || 0))
+const isReadOnly = computed(() => Boolean(yearStore.isClosedYear))
 
 const loading = ref(true)
 const saving = ref(false)
@@ -52,33 +53,40 @@ const loadSubjects = async () => {
   try {
     loading.value = true
     const params = yearStore.selectedYearId ? { yearId: yearStore.selectedYearId } : {}
+    const headers = auth.token ? { Authorization: `Bearer ${auth.token}` } : {}
     const [subRes, trashRes] = await Promise.all([
-      axios.get(`/api/academic-admin/subjects/${schoolId.value}`, { params }),
-      axios.get(`/api/academic-admin/subjects/trash/${schoolId.value}`)
+      axios.get(`/api/academic-admin/subjects/${schoolId.value}`, { params, headers }),
+      axios.get(`/api/academic-admin/subjects/trash/${schoolId.value}`, { headers })
     ])
-    subjects.value = subRes.data
-    trashSubjects.value = trashRes.data
+    subjects.value = Array.isArray(subRes.data) ? subRes.data : []
+    trashSubjects.value = Array.isArray(trashRes.data) ? trashRes.data : []
   } catch (error) {
     console.error('Error loading subjects:', error)
+    subjects.value = []
+    trashSubjects.value = []
   } finally {
     loading.value = false
   }
 }
 
-onMounted(() => {
-  yearStore.loadYearsForSchool(schoolId.value, auth.token || undefined)
-  loadSubjects()
+onMounted(async () => {
+  await yearStore.loadYearsForSchool(schoolId.value, auth.token || undefined)
+  await loadSubjects()
 })
 
-watch(() => yearStore.selectedYearId, () => {
-  loadSubjects()
+watch(() => yearStore.selectedYearId, async () => {
+  await loadSubjects()
   if (detailDrawerOpen.value && selectedSubjectId.value) {
     selectedPeriodId.value = null
-    fetchSubjectDetails()
+    await fetchSubjectDetails()
   }
 })
 
 const createSubject = async () => {
+  if (isReadOnly.value) {
+    alert('El año académico se encuentra cerrado. No es posible crear materias.')
+    return
+  }
   if (saving.value) return
   if (!newSubject.value.nombre.trim()) {
     alert('Escribe el nombre de la materia antes de crearla.')
@@ -91,6 +99,8 @@ const createSubject = async () => {
       schoolId: schoolId.value,
       nombre: newSubject.value.nombre,
       trashId: reuseFromTrash.value?.id_papelera || null
+    }, {
+      headers: auth.token ? { Authorization: `Bearer ${auth.token}` } : {}
     })
     newSubject.value.nombre = ''
     reuseFromTrash.value = null
@@ -152,6 +162,10 @@ const generateAndDownloadReport = (data: any) => {
 }
 
 const confirmDelete = async (item: SubjectItem, force = false) => {
+  if (isReadOnly.value) {
+    alert('El año académico se encuentra cerrado. No es posible eliminar materias.')
+    return
+  }
   try {
     deleting.value = true
     const response = await axios.delete(`/api/academic-admin/subjects/${item.id_materia}`, {
@@ -159,6 +173,7 @@ const confirmDelete = async (item: SubjectItem, force = false) => {
         schoolId: schoolId.value,
         force: force ? 'true' : 'false'
       },
+      headers: auth.token ? { Authorization: `Bearer ${auth.token}` } : {}
     })
     
     if (force && response.data.report) {
@@ -419,8 +434,10 @@ const fetchSubjectDetails = async () => {
     if (yearStore.selectedYearId) {
       params.yearId = yearStore.selectedYearId
     }
+    const headers = auth.token ? { Authorization: `Bearer ${auth.token}` } : {}
     const response = await axios.get(`/api/academic-admin/subjects/${selectedSubjectId.value}/curriculum-details`, {
-      params
+      params,
+      headers
     })
     subjectDetails.value = response.data
     
@@ -445,6 +462,7 @@ const fetchSubjectDetails = async () => {
 
 // COMPETENCIES
 const openAddCompetency = () => {
+  if (isReadOnly.value) return
   competencyForm.value = {
     id_competencia: null,
     id_grupo: subjectDetails.value.groups?.[0]?.id_grupo || null,
@@ -455,6 +473,7 @@ const openAddCompetency = () => {
 }
 
 const openEditCompetency = (comp: any) => {
+  if (isReadOnly.value) return
   competencyForm.value = {
     id_competencia: comp.id_competencia,
     id_grupo: comp.id_grupo,
@@ -465,6 +484,10 @@ const openEditCompetency = (comp: any) => {
 }
 
 const saveCompetency = async () => {
+  if (isReadOnly.value) {
+    alert('El año académico se encuentra cerrado. No es posible guardar competencias.')
+    return
+  }
   if (!competencyForm.value.descripcion.trim()) {
     alert('Escribe la descripción de la competencia.')
     return
@@ -477,6 +500,8 @@ const saveCompetency = async () => {
       subjectId: selectedSubjectId.value,
       periodId: competencyForm.value.id_periodo,
       descripcion: competencyForm.value.descripcion.trim()
+    }, {
+      headers: auth.token ? { Authorization: `Bearer ${auth.token}` } : {}
     })
     showCompetencyModal.value = false
     await fetchSubjectDetails()
@@ -488,10 +513,15 @@ const saveCompetency = async () => {
 }
 
 const deleteCompetency = async (id: number) => {
+  if (isReadOnly.value) {
+    alert('El año académico se encuentra cerrado. No es posible eliminar competencias.')
+    return
+  }
   if (!confirm('¿Estás seguro de que deseas eliminar esta competencia? Se eliminarán todas sus evidencias y notas asociadas.')) return
   try {
     await axios.delete(`/api/academic-admin/settings/competencies/${id}`, {
-      params: { schoolId: schoolId.value }
+      params: { schoolId: schoolId.value },
+      headers: auth.token ? { Authorization: `Bearer ${auth.token}` } : {}
     })
     await fetchSubjectDetails()
   } catch (error: any) {
@@ -501,6 +531,7 @@ const deleteCompetency = async (id: number) => {
 
 // EVIDENCES
 const openAddEvidence = (competenciaId: number) => {
+  if (isReadOnly.value) return
   evidenceForm.value = {
     id_evidencia: null,
     id_competencia: competenciaId,
@@ -510,6 +541,7 @@ const openAddEvidence = (competenciaId: number) => {
 }
 
 const openEditEvidence = (ev: any) => {
+  if (isReadOnly.value) return
   evidenceForm.value = {
     id_evidencia: ev.id_evidencia,
     id_competencia: ev.id_competencia,
@@ -519,22 +551,27 @@ const openEditEvidence = (ev: any) => {
 }
 
 const saveEvidence = async () => {
+  if (isReadOnly.value) {
+    alert('El año académico se encuentra cerrado. No es posible guardar evidencias.')
+    return
+  }
   if (!evidenceForm.value.descripcion.trim()) {
     alert('Escribe la descripción de la evidencia.')
     return
   }
   try {
     savingEvidence.value = true
+    const headers = auth.token ? { Authorization: `Bearer ${auth.token}` } : {}
     if (evidenceForm.value.id_evidencia) {
       await axios.put(`/api/academic-admin/settings/evidencias/${evidenceForm.value.id_evidencia}`, {
         schoolId: schoolId.value,
         descripcion: evidenceForm.value.descripcion.trim()
-      })
+      }, { headers })
     } else {
       await axios.post(`/api/academic-admin/settings/competencies/${evidenceForm.value.id_competencia}/evidencias`, {
         schoolId: schoolId.value,
         descripcion: evidenceForm.value.descripcion.trim()
-      })
+      }, { headers })
     }
     showEvidenceModal.value = false
     await fetchSubjectDetails()
@@ -546,18 +583,21 @@ const saveEvidence = async () => {
 }
 
 const deleteEvidence = async (id: number) => {
+  if (isReadOnly.value) {
+    alert('El año académico se encuentra cerrado. No es posible eliminar evidencias.')
+    return
+  }
   if (!confirm('¿Estás seguro de que deseas eliminar esta evidencia?')) return
   try {
     await axios.delete(`/api/academic-admin/settings/evidencias/${id}`, {
-      params: { schoolId: schoolId.value }
+      params: { schoolId: schoolId.value },
+      headers: auth.token ? { Authorization: `Bearer ${auth.token}` } : {}
     })
     await fetchSubjectDetails()
   } catch (error: any) {
     alert(error.response?.data?.error || 'Error al eliminar la evidencia')
   }
 }
-
-onMounted(loadSubjects)
 </script>
 
 <template>
@@ -575,10 +615,34 @@ onMounted(loadSubjects)
           </div>
         </div>
         
-        <button @click="createModalOpen = true" class="flex items-center gap-2 px-6 py-3.5 bg-emerald-600 text-white rounded-xl font-bold text-sm hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 dark:shadow-none whitespace-nowrap">
+        <button 
+          v-if="!yearStore.isClosedYear"
+          @click="createModalOpen = true" 
+          class="flex items-center gap-2 px-6 py-3.5 bg-emerald-600 text-white rounded-xl font-bold text-sm hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 dark:shadow-none whitespace-nowrap"
+        >
           <Plus :size="20" />
           Nueva Materia
         </button>
+        <div 
+          v-else 
+          class="flex items-center gap-2 px-5 py-3.5 bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300 rounded-xl font-bold text-xs uppercase tracking-wider border border-amber-200 dark:border-amber-900/60 shadow-sm"
+        >
+          <Lock :size="16" />
+          Año Cerrado (Solo Lectura)
+        </div>
+      </div>
+    </div>
+
+    <!-- Closed Year Warning Banner -->
+    <div v-if="yearStore.isClosedYear" class="bg-amber-50 dark:bg-amber-950/40 border-2 border-amber-300 dark:border-amber-800/80 rounded-3xl p-5 flex items-center gap-4 text-amber-950 dark:text-amber-200 shadow-sm animate-in fade-in duration-300">
+      <div class="p-3 bg-amber-500 text-white rounded-2xl shrink-0 shadow-md">
+        <Lock :size="24" />
+      </div>
+      <div class="flex-1 text-left">
+        <h3 class="text-sm font-black uppercase tracking-wider">Año Lectivo {{ yearStore.selectedYear?.calendario }} — CERRADO (Solo Lectura)</h3>
+        <p class="text-xs text-amber-800 dark:text-amber-300 font-medium mt-0.5">
+          Este año académico se encuentra cerrado. El catálogo de asignaturas institucionales y la planeación curricular se presentan en modo de consulta histórica y no se pueden realizar modificaciones.
+        </p>
       </div>
     </div>
 
@@ -629,7 +693,11 @@ onMounted(loadSubjects)
               </div>
               <h4 class="font-black text-slate-800 dark:text-white text-lg truncate max-w-[150px]">{{ item.nombre }}</h4>
             </div>
-            <button @click.stop="deleteModal = item" class="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-xl transition-all">
+            <button 
+              v-if="!yearStore.isClosedYear"
+              @click.stop="deleteModal = item" 
+              class="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-xl transition-all"
+            >
               <Trash2 :size="18" />
             </button>
           </div>
@@ -954,14 +1022,17 @@ onMounted(loadSubjects)
                         </div>
 
                         <button 
-                          v-if="!isSelectedPeriodClosed" 
+                          v-if="!isSelectedPeriodClosed && !isReadOnly" 
                           @click="openAddCompetency" 
                           class="px-4 py-2.5 bg-emerald-600 text-white rounded-xl font-bold text-xs uppercase tracking-wide flex items-center gap-1.5 hover:bg-emerald-700 transition-all shadow-md"
                         >
                           <PlusCircle :size="14" />
                           Agregar Competencia
                         </button>
-                        <div v-else class="px-4 py-2 bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-455 border border-amber-100 dark:border-amber-900 rounded-xl text-[10px] font-black uppercase tracking-widest leading-none flex items-center gap-1">
+                        <div v-else-if="isReadOnly" class="px-4 py-2 bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-900 rounded-xl text-[10px] font-black uppercase tracking-widest leading-none flex items-center gap-1">
+                          <Lock :size="14" /> Año Cerrado (Solo Lectura)
+                        </div>
+                        <div v-else class="px-4 py-2 bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-900 rounded-xl text-[10px] font-black uppercase tracking-widest leading-none flex items-center gap-1">
                           <Info :size="14" /> Periodo Cerrado (Solo Lectura)
                         </div>
                       </div>
@@ -1040,7 +1111,7 @@ onMounted(loadSubjects)
                               </p>
                             </div>
                             <!-- Actions -->
-                            <div v-if="!isSelectedPeriodClosed" class="flex items-center gap-1.5 shrink-0">
+                            <div v-if="!isSelectedPeriodClosed && !isReadOnly" class="flex items-center gap-1.5 shrink-0">
                               <button @click="openEditCompetency(comp)" class="p-1.5 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-350 hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-emerald-950/40 rounded-lg transition-colors">
                                 <Edit :size="14" />
                               </button>
@@ -1054,7 +1125,7 @@ onMounted(loadSubjects)
                           <div class="p-4 bg-white dark:bg-slate-800/25 space-y-3">
                             <div class="flex items-center justify-between px-1">
                               <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Evidencias de Aprendizaje</span>
-                              <button v-if="!isSelectedPeriodClosed" @click="openAddEvidence(comp.id_competencia)" class="text-xs font-black text-emerald-600 dark:text-emerald-450 hover:underline flex items-center gap-1">
+                              <button v-if="!isSelectedPeriodClosed && !isReadOnly" @click="openAddEvidence(comp.id_competencia)" class="text-xs font-black text-emerald-600 dark:text-emerald-450 hover:underline flex items-center gap-1">
                                 <Plus :size="12" /> Añadir
                               </button>
                             </div>
@@ -1083,7 +1154,7 @@ onMounted(loadSubjects)
                                   </div>
                                 </div>
                                 <!-- Actions -->
-                                <div v-if="!isSelectedPeriodClosed" class="flex items-center gap-1 shrink-0 opacity-0 group-hover/ev:opacity-100 transition-opacity">
+                                <div v-if="!isSelectedPeriodClosed && !isReadOnly" class="flex items-center gap-1 shrink-0 opacity-0 group-hover/ev:opacity-100 transition-opacity">
                                   <button @click="openEditEvidence(ev)" class="p-1 text-slate-400 hover:text-emerald-600 rounded">
                                     <Edit :size="12" />
                                   </button>

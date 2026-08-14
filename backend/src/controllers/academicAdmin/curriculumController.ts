@@ -1,6 +1,8 @@
 import { Request, Response } from "express";
 import { PoolClient } from "pg";
 import { pool } from "../../config/db";
+import { db } from "../../config/kysely";
+import { sql } from "kysely";
 import bcrypt from "bcrypt";
 import { randomUUID } from "crypto";
 import { NotificationService } from "../../services/notificationService";
@@ -329,33 +331,42 @@ export const getSubjects = async (req: Request, res: Response): Promise<void> =>
   }
 
   try {
-    const { yearId } = req.query;
-    let compYearFilter = '';
-    let dgYearFilter = '';
-    const queryParams: any[] = [schoolId];
-    if (yearId) {
-      queryParams.push(yearId);
-      compYearFilter = ` AND c.id_anio = $${queryParams.length}`;
-      dgYearFilter = ` AND dg.id_anio = $${queryParams.length}`;
-    }
+    const rawYearId = req.query.yearId ? Number(req.query.yearId) : null;
+    const yearId = rawYearId && !isNaN(rawYearId) ? rawYearId : null;
 
-    const subjectsRes = await pool.query(
-      `SELECT
-         m.id_materia,
-         m.nombre,
-         COUNT(DISTINCT dg.id_detallegrado)::int AS asignaciones_count,
-         COUNT(DISTINCT (g.id_tipo_grado, c.id_periodo, c.descripcion))::int AS competencias_count
-       FROM materias m
-       LEFT JOIN detalle_grados dg ON dg.id_materia = m.id_materia${dgYearFilter}
-       LEFT JOIN competencias c ON c.id_materia = m.id_materia${compYearFilter}
-       LEFT JOIN grupos g ON c.id_grupo = g.id_grupo
-       WHERE m.id_colegio = $1
-       GROUP BY m.id_materia, m.nombre
-       ORDER BY m.nombre`,
-      queryParams
-    );
+    const subjects = await db
+      .selectFrom("materias as m")
+      .select([
+        "m.id_materia",
+        "m.nombre",
+        (eb) => {
+          let asigSubquery = eb
+            .selectFrom("detalle_grados as dg")
+            .select(sql<number>`COALESCE(COUNT(DISTINCT dg.id_detallegrado), 0)::int`.as("count"))
+            .whereRef("dg.id_materia", "=", "m.id_materia");
 
-    res.json(subjectsRes.rows);
+          if (yearId) {
+            asigSubquery = asigSubquery.where("dg.id_anio", "=", yearId);
+          }
+          return asigSubquery.as("asignaciones_count");
+        },
+        (eb) => {
+          let compSubquery = eb
+            .selectFrom("competencias as c")
+            .select(sql<number>`COALESCE(COUNT(DISTINCT c.id_competencia), 0)::int`.as("count"))
+            .whereRef("c.id_materia", "=", "m.id_materia");
+
+          if (yearId) {
+            compSubquery = compSubquery.where("c.id_anio", "=", yearId);
+          }
+          return compSubquery.as("competencias_count");
+        },
+      ])
+      .where("m.id_colegio", "=", schoolId)
+      .orderBy("m.nombre", "asc")
+      .execute();
+
+    res.json(subjects);
   } catch (error: any) {
     console.error("Error fetching subjects:", error);
     res.status(500).json({ error: "Error en el servidor" });
