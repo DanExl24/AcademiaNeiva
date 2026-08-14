@@ -47,6 +47,11 @@ const getAllStudents = async (req, res) => {
              tg.nombre as grado_nombre,
              s.nombre as seccion_nombre,
              j.nombre as jornada_nombre,
+             CASE 
+               WHEN tg.nombre IS NOT NULL AND s.nombre IS NOT NULL THEN CONCAT(tg.nombre, ' ', s.nombre)
+               WHEN tg.nombre IS NOT NULL THEN tg.nombre
+               ELSE NULL 
+             END as grado_seccion,
              pf.nombre as acudiente_nombre,
              pf.apellido as acudiente_apellido,
              u_pf.documento as acudiente_documento,

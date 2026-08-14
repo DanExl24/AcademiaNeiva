@@ -571,6 +571,18 @@ const formatDate = (dateString?: string | null) => {
   })
 }
 
+const formatStudentGrade = (e: any) => {
+  if (!e) return 'Sin Grupo'
+  if (e.grado_nombre) {
+    const parts = [e.grado_nombre]
+    if (e.seccion_nombre) parts.push(e.seccion_nombre)
+    let str = parts.join(' ')
+    if (e.jornada_nombre) str += ` (${e.jornada_nombre})`
+    return str
+  }
+  return e.grado_seccion || 'Sin Grupo'
+}
+
 onMounted(() => {
   fetchSolicitudes()
   fetchVinculaciones()
@@ -1071,10 +1083,10 @@ onMounted(() => {
 
     <!-- MODAL: CREAR SOLICITUD DE TRASLADO -->
     <div v-if="showCreateModal" class="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4">
-      <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-xl w-full p-6 md:p-8 space-y-6 shadow-2xl">
+      <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
         
         <!-- Header -->
-        <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
+        <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 p-6 md:p-7 shrink-0">
           <div class="flex items-center gap-3">
             <div class="p-2.5 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-xl">
               <Plus :size="20" />
@@ -1092,8 +1104,8 @@ onMounted(() => {
           </button>
         </div>
 
-        <!-- Form Fields -->
-        <div class="space-y-4 text-xs">
+        <!-- Form Fields (Scrollable) -->
+        <div class="p-6 md:p-7 space-y-4 text-xs overflow-y-auto flex-1">
           
           <!-- Tipo de Traslado -->
           <div>
@@ -1143,7 +1155,7 @@ onMounted(() => {
             >
               <option :value="null">Selecciona un estudiante activo...</option>
               <option v-for="e in estudiantesColegio" :key="e.id_usuario" :value="e.id_usuario">
-                {{ e.nombre }} {{ e.apellido }} (Doc: {{ e.documento }} | {{ e.grado_seccion || 'Sin Grupo' }})
+                {{ e.nombre }} {{ e.apellido }} (Doc: {{ e.documento }} | {{ formatStudentGrade(e) }})
               </option>
             </select>
 
@@ -1217,8 +1229,8 @@ onMounted(() => {
           </div>
         </div>
 
-        <!-- Form Actions -->
-        <div class="flex items-center justify-end gap-3 border-t border-slate-100 dark:border-slate-800 pt-4">
+        <!-- Form Actions (Fixed at bottom) -->
+        <div class="flex items-center justify-end gap-3 border-t border-slate-100 dark:border-slate-800 p-4 md:p-6 shrink-0 bg-slate-50/50 dark:bg-slate-900/50">
           <button 
             @click="showCreateModal = false"
             class="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-bold text-xs hover:bg-slate-50 dark:hover:bg-slate-800 transition-all"
