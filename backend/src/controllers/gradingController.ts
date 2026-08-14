@@ -393,7 +393,9 @@ export const createActivity = async (req: Request, res: Response): Promise<void>
           `SELECT DISTINCT ea.id_evidencia_dba
            FROM evidencia_aprendizaje ea
            JOIN competencias c ON c.id_competencia = ea.id_competencia
+           JOIN periodo_academico p ON p.id_periodo = c.id_periodo
            WHERE c.id_colegio = $1
+             AND p.id_anio = (SELECT id_anio FROM periodo_academico WHERE id_periodo = $4)
              AND c.id_materia = $2
              AND c.id_grupo IN (
                SELECT g2.id_grupo
@@ -417,6 +419,7 @@ export const createActivity = async (req: Request, res: Response): Promise<void>
              JOIN competencias c ON c.id_competencia = ea.id_competencia
              JOIN periodo_academico p ON p.id_periodo = c.id_periodo
              WHERE c.id_colegio = $1
+               AND p.id_anio = (SELECT id_anio FROM periodo_academico WHERE id_periodo = $4)
                AND c.id_materia = $2
                AND c.id_grupo IN (
                  SELECT g2.id_grupo
@@ -585,7 +588,9 @@ export const updateActivity = async (req: Request, res: Response): Promise<void>
           `SELECT DISTINCT ea.id_evidencia_dba
            FROM evidencia_aprendizaje ea
            JOIN competencias c ON c.id_competencia = ea.id_competencia
+           JOIN periodo_academico p ON p.id_periodo = c.id_periodo
            WHERE c.id_colegio = $1
+             AND p.id_anio = (SELECT id_anio FROM periodo_academico WHERE id_periodo = $4)
              AND c.id_materia = $2
              AND c.id_grupo IN (
                SELECT g2.id_grupo
@@ -609,6 +614,7 @@ export const updateActivity = async (req: Request, res: Response): Promise<void>
              JOIN competencias c ON c.id_competencia = ea.id_competencia
              JOIN periodo_academico p ON p.id_periodo = c.id_periodo
              WHERE c.id_colegio = $1
+               AND p.id_anio = (SELECT id_anio FROM periodo_academico WHERE id_periodo = $4)
                AND c.id_materia = $2
                AND c.id_grupo IN (
                  SELECT g2.id_grupo
@@ -622,12 +628,14 @@ export const updateActivity = async (req: Request, res: Response): Promise<void>
           );
 
           if (otherPeriodAssigned.rows.length > 0) {
-            if (!motivo_extra || typeof motivo_extra !== "string" || !motivo_extra.trim()) {
+            const checkMotivo = motivo_extra !== undefined ? motivo_extra : currentAct.motivo_extra;
+            const checkJustificacion = justificacion_extra !== undefined ? justificacion_extra : currentAct.justificacion_extra;
+            if (!checkMotivo || typeof checkMotivo !== "string" || !checkMotivo.trim()) {
               await client.query("ROLLBACK");
               res.status(400).json({ error: "Debes seleccionar un motivo para evaluar evidencias planificadas en otros periodos." });
               return;
             }
-            if (motivo_extra === "OTRO" && (!justificacion_extra || typeof justificacion_extra !== "string" || !justificacion_extra.trim())) {
+            if (checkMotivo === "OTRO" && (!checkJustificacion || typeof checkJustificacion !== "string" || !checkJustificacion.trim())) {
               await client.query("ROLLBACK");
               res.status(400).json({ error: "Debes escribir una justificación detallada para el motivo 'Otro'." });
               return;
@@ -655,12 +663,15 @@ export const updateActivity = async (req: Request, res: Response): Promise<void>
       finalIdEvidencia = null;
     }
 
+    const finalMotivoExtra = motivo_extra !== undefined ? (motivo_extra || null) : currentAct.motivo_extra;
+    const finalJustificacionExtra = justificacion_extra !== undefined ? (justificacion_extra || null) : currentAct.justificacion_extra;
+
     const updatedRes = await client.query(
       `UPDATE actividad_materia
        SET nombre = $1, porcentaje = $2, id_evidencia = $3, motivo_extra = $4, justificacion_extra = $5
        WHERE id_actividadmateria = $6
        RETURNING *`,
-      [nombre, porcentaje, finalIdEvidencia, motivo_extra || null, justificacion_extra || null, id]
+      [nombre, porcentaje, finalIdEvidencia, finalMotivoExtra, finalJustificacionExtra, id]
     );
     const updatedActivity = updatedRes.rows[0];
 
@@ -1672,7 +1683,7 @@ export const getCourseEvidenciasDba = async (req: Request, res: Response): Promi
          JOIN competencias c ON c.id_competencia = ea.id_competencia
          JOIN periodo_academico p ON p.id_periodo = c.id_periodo
          WHERE c.id_colegio = $1
-           AND c.id_anio = (SELECT id_anio FROM anio_lectivo WHERE id_colegio = $1 ORDER BY id_anio DESC LIMIT 1)
+           AND p.id_anio = (SELECT id_anio FROM periodo_academico WHERE id_periodo = $4)
            AND c.id_materia = $2
            AND c.id_grupo IN (
              SELECT g2.id_grupo
