@@ -45,6 +45,8 @@ const loadingEnrollment = ref(false)
 const children = ref<Child[]>([])
 const selectedStudentId = ref<number | null>(null)
 const enrollmentData = ref<any>(null)
+const allEnrollments = ref<any[]>([])
+const selectedMatriculaId = ref<number | null>(null)
 const documents = ref<EnrollmentDoc[]>([])
 const selectedDocIndex = ref(0)
 const selectedVersionDocId = ref<number | null>(null)
@@ -101,13 +103,17 @@ const fetchChildren = async () => {
 }
 
 // Load enrollment and documents for selected student
-const fetchEnrollmentData = async () => {
+const fetchEnrollmentData = async (forcedMatriculaId?: number) => {
   if (!selectedStudentId.value) return
   try {
     loadingEnrollment.value = true
     selectedDocIndex.value = 0
-    const response = await axios.get(`/api/student/parent/enrollment/${selectedStudentId.value}`)
+    const targetMatId = forcedMatriculaId || selectedMatriculaId.value
+    const queryParam = targetMatId ? `?matriculaId=${targetMatId}` : ''
+    const response = await axios.get(`/api/student/parent/enrollment/${selectedStudentId.value}${queryParam}`)
     enrollmentData.value = response.data.matricula || null
+    allEnrollments.value = response.data.matriculas || (enrollmentData.value ? [enrollmentData.value] : [])
+    selectedMatriculaId.value = enrollmentData.value?.id_matricula || null
     documents.value = response.data.documentos || []
     if (documents.value.length > 0) {
       selectedVersionDocId.value = documents.value[0].id_documento
@@ -115,10 +121,17 @@ const fetchEnrollmentData = async () => {
   } catch (error) {
     console.error('Error al cargar matrícula del estudiante:', error)
     enrollmentData.value = null
+    allEnrollments.value = []
     documents.value = []
   } finally {
     loadingEnrollment.value = false
   }
+}
+
+const selectMatricula = (matriculaId: number) => {
+  if (selectedMatriculaId.value === matriculaId) return
+  selectedMatriculaId.value = matriculaId
+  fetchEnrollmentData(matriculaId)
 }
 
 const formatDocUrl = (doc: EnrollmentDoc | null) => {
@@ -132,9 +145,12 @@ const getStatusBadge = (estado: string) => {
     case 'VALIDADO':
     case 'APROBADA':
     case 'ACTIVA': return { label: estado, class: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400' }
+    case 'TRASLADADA': return { label: 'TRASLADADA', class: 'bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300' }
     case 'PENDIENTE': return { label: 'PENDIENTE', class: 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400' }
     case 'RECHAZADO':
+    case 'RECHAZADA':
     case 'CORRECCION': return { label: 'EN CORRECCIÓN', class: 'bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400' }
+    case 'CANCELADA': return { label: 'CANCELADA', class: 'bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400' }
     default: return { label: estado, class: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300' }
   }
 }
@@ -153,6 +169,7 @@ const nextDoc = () => {
 }
 
 watch(selectedStudentId, () => {
+  selectedMatriculaId.value = null
   fetchEnrollmentData()
 })
 
@@ -171,7 +188,7 @@ onMounted(async () => {
           <FileText :size="28" class="text-indigo-600 dark:text-indigo-400" />
           Matrícula y Expediente Digital
         </h1>
-        <p class="text-slate-500 dark:text-slate-400 text-xs mt-1">Consulta el estado oficial de la matrícula activa de tu hijo y visualiza sus documentos adjuntos entregados.</p>
+        <p class="text-slate-500 dark:text-slate-400 text-xs mt-1">Consulta el estado oficial de la matrícula de tu hijo y visualiza sus documentos adjuntos entregados.</p>
       </div>
 
       <!-- Child Selector Pills -->
@@ -206,12 +223,50 @@ onMounted(async () => {
       <div class="w-14 h-14 bg-white dark:bg-slate-800 rounded-2xl shadow-sm flex items-center justify-center mx-auto text-slate-400">
         <GraduationCap :size="32" />
       </div>
-      <h3 class="text-base font-bold text-slate-700 dark:text-slate-300">No se encontró una matrícula activa registrada</h3>
+      <h3 class="text-base font-bold text-slate-700 dark:text-slate-300">No se encontró una matrícula registrada</h3>
       <p class="text-xs text-slate-400 max-w-md mx-auto">Comunícate con la secretaría del colegio si necesitas gestionar la inscripción o reactivación de matrícula.</p>
     </div>
 
     <!-- MAIN WORKSPACE: GRID LAYOUT (FICHA + VISOR DIGITAL) -->
-    <div v-else class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+    <div v-else class="space-y-4">
+      
+      <!-- School / Enrollment Switcher (Pills) When Multiple Enrollments Exist -->
+      <div v-if="allEnrollments.length > 1" class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-2xl bg-indigo-50 dark:bg-indigo-950/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0">
+            <History :size="18" />
+          </div>
+          <div>
+            <h4 class="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider">Historial de Matrículas / Traslados</h4>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400">Selecciona el colegio para ver los documentos y datos correspondientes a cada matrícula:</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0">
+          <button
+            v-for="mat in allEnrollments"
+            :key="mat.id_matricula"
+            @click="selectMatricula(mat.id_matricula)"
+            :class="[
+              selectedMatriculaId === mat.id_matricula
+                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200 dark:shadow-none ring-2 ring-indigo-300 dark:ring-indigo-600'
+                : 'bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 hover:bg-slate-100 border border-slate-200 dark:border-slate-700',
+              'px-3.5 py-2 rounded-2xl text-xs font-bold transition-all flex items-center gap-2.5 shrink-0'
+            ]"
+          >
+            <School :size="15" />
+            <span>{{ mat.school_name || 'Colegio' }} ({{ mat.year_label || 'Año' }})</span>
+            <span :class="[getStatusBadge(mat.estado).class, 'px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider']">
+              {{ getStatusBadge(mat.estado).label }}
+            </span>
+            <span v-if="mat.es_traslado || mat.tipo === 'TRASLADO'" class="px-1.5 py-0.5 bg-purple-200/60 dark:bg-purple-950/80 text-purple-800 dark:text-purple-200 rounded-md text-[9px] font-black">
+              Traslado
+            </span>
+          </button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
       
       <!-- LEFT COLUMN: FICHA OFICIAL + RESUMEN DOCUMENTOS (~42% / col-span-5) -->
       <div class="lg:col-span-5 space-y-5">

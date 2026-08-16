@@ -1099,9 +1099,11 @@ export const getParentStudentEnrollment = async (req: Request, res: Response) =>
       }
     }
 
-    const mat = await db
+    const matriculaIdQuery = req.query.matriculaId ? Number(req.query.matriculaId) : null;
+
+    const allMatriculas = await db
       .selectFrom("matricula as m")
-      .innerJoin("grupos as g", "m.id_grupo", "g.id_grupo")
+      .leftJoin("grupos as g", "m.id_grupo", "g.id_grupo")
       .leftJoin("colegio as col", "col.id_colegio", "m.id_colegio")
       .leftJoin("anio_lectivo as al", "al.id_anio", "m.id_anio")
       .leftJoin("nivel_escolar as ne", "g.id_nivel", "ne.id_nivel")
@@ -1117,6 +1119,7 @@ export const getParentStudentEnrollment = async (req: Request, res: Response) =>
         "m.id_anio",
         "m.estado",
         "m.tipo",
+        "m.es_traslado",
         "m.correo_padre",
         "m.token_seguimiento",
         "m.fecha_creacion",
@@ -1135,11 +1138,20 @@ export const getParentStudentEnrollment = async (req: Request, res: Response) =>
       ])
       .where("m.id_estudiante", "=", Number(studentId))
       .orderBy("m.id_matricula", "desc")
-      .executeTakeFirst();
+      .execute();
 
-    if (!mat) {
+    if (allMatriculas.length === 0) {
       res.status(404).json({ error: "Matrícula no encontrada para este estudiante" });
       return;
+    }
+
+    let mat = allMatriculas[0];
+    if (matriculaIdQuery) {
+      const found = allMatriculas.find(m => m.id_matricula === matriculaIdQuery);
+      if (found) mat = found;
+    } else {
+      const activeMat = allMatriculas.find(m => m.estado === 'ACTIVA' || m.estado === 'APROBADA');
+      if (activeMat) mat = activeMat;
     }
 
     const rawDocs = await db
@@ -1182,6 +1194,7 @@ export const getParentStudentEnrollment = async (req: Request, res: Response) =>
 
     res.json({
       matricula: mat,
+      matriculas: allMatriculas,
       documentos: groupedDocs
     });
   } catch (error: any) {
