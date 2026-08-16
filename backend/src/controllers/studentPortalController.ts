@@ -362,10 +362,17 @@ export const getStudentInfo = async (req: Request, res: Response) => {
 
     const activeMatriculaSubquery = db
       .selectFrom("matricula")
-      .select(["id_estudiante", "id_grupo", "id_anio", "estado"])
+      .select(["id_estudiante", "id_grupo", "id_anio", "id_colegio", "estado"])
       .distinctOn("id_estudiante")
-      .where("estado", "in", ["ACTIVA", "APROBADA"])
+      .where("estado", "in", ["ACTIVA", "APROBADA", "PENDIENTE", "PENDIENTE_RENOVACION", "CORREGIDA", "CULMINADA", "TRASLADADA"])
       .orderBy("id_estudiante")
+      .orderBy(sql`CASE 
+        WHEN estado IN ('ACTIVA', 'APROBADA') THEN 1
+        WHEN estado IN ('PENDIENTE', 'PENDIENTE_RENOVACION', 'CORREGIDA') THEN 2
+        WHEN estado = 'CULMINADA' THEN 3
+        WHEN estado = 'TRASLADADA' THEN 4
+        ELSE 5
+      END`, "asc")
       .orderBy("id_anio", "desc")
       .orderBy("id_matricula", "desc")
       .as("m");
@@ -439,8 +446,15 @@ export const getParentChildren = async (req: Request, res: Response) => {
       .selectFrom("matricula")
       .select(["id_estudiante", "id_grupo", "id_anio", "id_colegio", "estado"])
       .distinctOn("id_estudiante")
-      .where("estado", "in", ["ACTIVA", "APROBADA", "PENDIENTE", "PENDIENTE_RENOVACION", "CORREGIDA", "TRASLADADA", "CULMINADA"])
+      .where("estado", "in", ["ACTIVA", "APROBADA", "PENDIENTE", "PENDIENTE_RENOVACION", "CORREGIDA", "CULMINADA", "TRASLADADA"])
       .orderBy("id_estudiante")
+      .orderBy(sql`CASE 
+        WHEN estado IN ('ACTIVA', 'APROBADA') THEN 1
+        WHEN estado IN ('PENDIENTE', 'PENDIENTE_RENOVACION', 'CORREGIDA') THEN 2
+        WHEN estado = 'CULMINADA' THEN 3
+        WHEN estado = 'TRASLADADA' THEN 4
+        ELSE 5
+      END`, "asc")
       .orderBy("id_anio", "desc")
       .orderBy("id_matricula", "desc")
       .as("m");
@@ -674,7 +688,7 @@ export const getParentDashboardData = async (req: Request, res: Response) => {
       .selectFrom("matricula")
       .select(["id_estudiante", "id_grupo", "id_anio", "id_colegio", "estado"])
       .distinctOn("id_estudiante")
-      .where("estado", "in", ["ACTIVA", "APROBADA", "PENDIENTE", "PENDIENTE_RENOVACION", "CORREGIDA", "TRASLADADA", "CULMINADA"]);
+      .where("estado", "in", ["ACTIVA", "APROBADA", "PENDIENTE", "PENDIENTE_RENOVACION", "CORREGIDA", "CULMINADA", "TRASLADADA"]);
 
     if (targetYearId) {
       activeMatriculaQuery = activeMatriculaQuery.where("id_anio", "=", Number(targetYearId));
@@ -682,6 +696,13 @@ export const getParentDashboardData = async (req: Request, res: Response) => {
 
     const activeMatriculaSubquery = activeMatriculaQuery
       .orderBy("id_estudiante")
+      .orderBy(sql`CASE 
+        WHEN estado IN ('ACTIVA', 'APROBADA') THEN 1
+        WHEN estado IN ('PENDIENTE', 'PENDIENTE_RENOVACION', 'CORREGIDA') THEN 2
+        WHEN estado = 'CULMINADA' THEN 3
+        WHEN estado = 'TRASLADADA' THEN 4
+        ELSE 5
+      END`, "asc")
       .orderBy("id_anio", "desc")
       .orderBy("id_matricula", "desc")
       .as("m");

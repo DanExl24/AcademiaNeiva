@@ -41,9 +41,14 @@ const fetchSchools = async () => {
 
     schools.value = Array.from(uniqueMap.values())
     
-    // Si solo tiene 1 colegio o menos, auto-seleccionar y redirigir inmediatamente sin parpadeo
-    if (schools.value.length === 1) {
-      auth.setSelectedSchoolId(schools.value[0].id_colegio)
+    // Si solo tiene 1 colegio o es exclusivamente acudiente/padre, auto-seleccionar y redirigir inmediatamente
+    const userRoles: string[] = (auth.user?.roles as string[]) || (auth.user?.role ? [auth.user.role] : [])
+    const isOnlyPadre = userRoles.length === 1 && userRoles[0] === 'padre'
+
+    if (schools.value.length === 1 || isOnlyPadre) {
+      if (schools.value[0]?.id_colegio) {
+        auth.setSelectedSchoolId(schools.value[0].id_colegio)
+      }
       router.replace('/dashboard')
       return
     }

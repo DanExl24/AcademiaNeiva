@@ -34,8 +34,11 @@ const handleLogin = async () => {
     const { user, token } = response.data
     auth.setUser(user, token)
     
+    const userRoles: string[] = user.roles || (user.role ? [user.role] : [])
+    const isOnlyPadre = userRoles.length === 1 && userRoles[0] === 'padre'
+
     const uniqueSchoolIds = Array.from(new Set(user.schoolIds || []))
-    if (uniqueSchoolIds.length > 1) {
+    if (uniqueSchoolIds.length > 1 && !isOnlyPadre) {
       router.push('/select-school')
     } else {
       router.push('/dashboard')
