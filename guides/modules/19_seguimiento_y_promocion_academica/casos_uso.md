@@ -35,3 +35,17 @@
 2. El sistema detecta que el estudiante reprueba el año lectivo anterior (3 materias reprobadas).
 3. Muestra el bloque prominente **⚠️ Advertencia académica** con año, grado anterior y asignaturas reprobadas.
 4. El directivo revisa la advertencia y procede a matricular al estudiante en el grado correspondiente según la decisión institucional acordada.
+
+---
+
+## CU-19.4: Promoción y Graduación Automática para Estudiantes del Último Año
+**Actor Principal**: Directivo Institucional  
+**Precondiciones**: Estudiante matriculado en el último grado de la institución (`is_final_grade = true`).
+
+### Flujo Principal:
+1. En la pestaña "Consolidado Anual de Promoción", el directivo ubica a un estudiante del último grado (resaltado con el distintivo **🎓 Último Año** o utilizando el filtro **"Solo Graduandos"**).
+2. Presiona "Registrar Decisión" o "Editar Decisión".
+3. El modal muestra la alerta informativa de graduación y el selector ajustado a **"Promover y Graduar Estudiante 🎓"**.
+4. El directivo confirma la decisión y escribe observaciones adicionales.
+5. El backend actualiza `estudiante.estado = 'GRADUADO'`, registra la entrada en `registro_graduados`, establece `id_grado_asignado = null` y almacena la trazabilidad en `decision_promocion_directivo`.
+6. La interfaz confirma el mensaje exitoso y actualiza el estado del alumno a graduado.

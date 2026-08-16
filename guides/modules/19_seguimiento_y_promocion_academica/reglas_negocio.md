@@ -37,3 +37,17 @@
 - Las consultas de seguimiento por período (`/api/academic-admin/academic-tracking/period-tracking`) y consolidación anual (`/api/academic-admin/academic-tracking/annual-consolidation`) filtran y procesan únicamente matrículas en estado `ACTIVA`, `APROBADA` o `CULMINADA` en la institución.
 - Los estudiantes cuya matrícula pasó a estado `TRASLADADA` (trasladados a otro plantel) o que no tienen matrícula vigente en el año escolar se excluyen de los cálculos estadísticos, listados de rendimiento y decisiones de promoción del colegio de origen.
 
+## RN-19.8: Detección Dinámica del Último Grado (Graduandos)
+- La determinación de cuál es el "último grado" de la institución se calcula de forma **totalmente dinámica** consultando la jerarquía de niveles y tipos de grado configurados para el colegio (`getMaxGradeIdForSchool`), en lugar de asumir rígida o estáticamente el Grado 11 (ONCE).
+- Esto garantiza que el sistema sea adaptable a futuros cambios o adiciones de grados superiores en cualquier estructura educativa.
+
+## RN-19.9: Promoción y Graduación Automática de Último Grado
+- Cuando el directivo autoriza la decisión de promoción (`PROMOVER_SIGUIENTE_GRADO`) para un estudiante matriculado en el último grado de la institución:
+  - El sistema **cambia automáticamente el estado del estudiante** en la tabla `estudiante` a **`GRADUADO`**.
+  - Crea o actualiza la inscripción correspondiente en la tabla **`registro_graduados`** con la fecha y observaciones del evento.
+  - Al no existir un grado posterior en la estructura curricular del plantel, asigna `id_grado_asignado = NULL` en la trazabilidad de la decisión institucional.
+  - Si el directivo revoca o modifica posteriormente la decisión a `MANTENER_GRADO` o `MATRICULA_CONDICIONADA`, el estado del estudiante se revierte a **`ACTIVO`**.
+
+## RN-19.10: Resaltado Visual y Filtro de Graduandos
+- Los estudiantes pertenecientes al último grado de la institución se identifican visualmente en las tablas de seguimiento y consolidación anual mediante un borde dorado/índigo destacado (`border-l-4 border-l-amber-500 bg-amber-50/20`) y el distintivo **🎓 Último Año**.
+- La interfaz directiva provee el botón de filtro rápido **"Solo Graduandos"** para aislar instantáneamente la cohorte saliente del plantel.
