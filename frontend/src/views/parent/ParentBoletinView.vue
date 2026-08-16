@@ -133,7 +133,7 @@ watch(selectedYear, async (newVal) => {
           class="bg-transparent border-none text-sm font-black text-slate-700 dark:text-slate-200 focus:ring-0 outline-none cursor-pointer min-w-[200px]"
         >
           <option v-for="child in children" :key="child.id_estudiante" :value="child.id_estudiante">
-            {{ child.nombre }} {{ child.apellido }}
+            {{ child.nombre }} {{ child.apellido }} {{ child.colegio_nombre ? '· ' + child.colegio_nombre : '' }}
           </option>
         </select>
       </div>

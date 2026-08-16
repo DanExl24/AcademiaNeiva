@@ -78,3 +78,25 @@ Este documento detalla las reglas de negocio técnicas y funcionales del módulo
 - **Endpoints relacionados:** `POST /api/traslados/:id/aprobacion`
 - **Historias de usuario relacionadas:** HU-PAD-001, HU-PAD-003
 
+---
+
+### RN-PAD-007: Vista Unificada Multi-Colegio del Portal de Acudientes y Reactivación de Rol
+- **Descripción:** Cuando un padre de familia tiene hijos matriculados en diferentes instituciones (por ejemplo, hijo 1 en Colegio B e hijo 2 en Colegio A):
+  1. Al registrar o formalizar una nueva matrícula en cualquier institución, el sistema reactiva de forma atómica (`upsert`) la vinculación del padre en `usuario_colegio` con `estado = 'ACTIVO'` y `fecha_fin = null`.
+  2. El portal de padres consulta y muestra de forma global a todos los hijos vinculados en `detalle_padrefamilia` en una lista unificada, mostrando una insignia con el nombre de su institución educativa respectiva.
+  3. Al seleccionar a un hijo en el Dashboard, Calificaciones, Asistencia, Observador, Boletines o Matrícula, las consultas académicas cargan los datos y el esquema de evaluación de la institución a la que pertenece dicho estudiante.
+- **Motivo:** Permite a las familias con hijos en diferentes planteles consultar todo su seguimiento académico en una sola cuenta sin necesidad de cambiar manualmente de sesión.
+- **Módulos afectados:** Portal del Estudiante y Padres, Gestión de Matrículas, Autenticación.
+- **Archivos donde se implementa:** 
+  - [matriculaService.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/services/matriculaService.ts)
+  - [studentPortalController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/studentPortalController.ts) (`getParentChildren`, `getParentDashboardData`)
+  - [ParentDashboard.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/parent/ParentDashboard.vue)
+  - [ParentGradesView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/parent/ParentGradesView.vue)
+  - [ParentAttendanceView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/parent/ParentAttendanceView.vue)
+  - [ParentObservationsView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/parent/ParentObservationsView.vue)
+  - [ParentBoletinView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/parent/ParentBoletinView.vue)
+  - [ParentEnrollmentView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/parent/ParentEnrollmentView.vue)
+- **Endpoints relacionados:** `GET /api/student/parent-children/:id_usuario`, `GET /api/student/parent-dashboard/:id_usuario`
+- **Historias de usuario relacionadas:** HU-PAD-001, HU-PAD-002
+
+

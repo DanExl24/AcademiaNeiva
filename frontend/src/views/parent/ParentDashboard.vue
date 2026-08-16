@@ -513,11 +513,14 @@ const barChartOptions = {
           :key="child.id_estudiante"
           @click="selectedChildId = child.id_estudiante"
           :class="[
-            'px-6 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all whitespace-nowrap',
+            'px-6 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all whitespace-nowrap flex items-center gap-2',
             selectedChildId === child.id_estudiante ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'
           ]"
         >
-          {{ child.nombre }}
+          <span>{{ child.nombre }}</span>
+          <span v-if="child.colegio_nombre" :class="selectedChildId === child.id_estudiante ? 'bg-white/20 text-white' : 'bg-white/10 text-slate-300'" class="px-2 py-0.5 rounded-lg text-[9px] font-bold">
+            {{ child.colegio_nombre }}
+          </span>
         </button>
       </div>
 

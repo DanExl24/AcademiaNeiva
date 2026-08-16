@@ -208,6 +208,9 @@ onMounted(async () => {
             {{ child.nombre.charAt(0) }}
           </div>
           <span>{{ child.nombre }} {{ child.apellido.split(' ')[0] }}</span>
+          <span v-if="(child as any).colegio_nombre" class="px-1.5 py-0.5 bg-black/10 dark:bg-white/10 rounded-md text-[9px] font-semibold opacity-90">
+            {{ (child as any).colegio_nombre }}
+          </span>
         </button>
       </div>
     </div>

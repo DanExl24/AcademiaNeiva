@@ -8,14 +8,25 @@ import { sql } from 'kysely';
 export const getStudentAcademicYears = async (req: Request, res: Response) => {
   const { id_estudiante } = req.params;
   try {
-    const rows = await db
-      .selectFrom("anio_lectivo as al")
-      .innerJoin("estudiante as e", "e.id_colegio", "al.id_colegio")
+    let rows = await db
+      .selectFrom("matricula as m")
+      .innerJoin("anio_lectivo as al", "al.id_anio", "m.id_anio")
       .select(["al.id_anio", "al.calendario"])
       .distinct()
-      .where("e.id_estudiante", "=", Number(id_estudiante))
+      .where("m.id_estudiante", "=", Number(id_estudiante))
       .orderBy("al.calendario", "desc")
       .execute();
+
+    if (rows.length === 0) {
+      rows = await db
+        .selectFrom("anio_lectivo as al")
+        .innerJoin("estudiante as e", "e.id_colegio", "al.id_colegio")
+        .select(["al.id_anio", "al.calendario"])
+        .distinct()
+        .where("e.id_estudiante", "=", Number(id_estudiante))
+        .orderBy("al.calendario", "desc")
+        .execute();
+    }
 
     res.json(rows);
   } catch (error) {
@@ -32,9 +43,7 @@ export const getStudentClosedPeriods = async (req: Request, res: Response) => {
   try {
     const rows = await db
       .selectFrom("periodo_academico as p")
-      .innerJoin("estudiante as e", "e.id_colegio", "p.id_colegio")
       .select(["p.id_periodo", "p.nombre", "p.trimestre", "p.porcentaje"])
-      .where("e.id_estudiante", "=", Number(id_estudiante))
       .where("p.id_anio", "=", Number(id_anio))
       .where("p.estado", "=", "CERRADO")
       .orderBy("p.trimestre", "asc")
@@ -55,9 +64,7 @@ export const getStudentAllPeriods = async (req: Request, res: Response) => {
   try {
     const rows = await db
       .selectFrom("periodo_academico as p")
-      .innerJoin("estudiante as e", "e.id_colegio", "p.id_colegio")
       .select(["p.id_periodo", "p.nombre", "p.trimestre", "p.porcentaje", "p.estado"])
-      .where("e.id_estudiante", "=", Number(id_estudiante))
       .where("p.id_anio", "=", Number(id_anio))
       .where("p.estado", "!=", "PENDIENTE")
       .orderBy("p.trimestre", "asc")
@@ -134,7 +141,7 @@ export const getStudentGrades = async (req: Request, res: Response) => {
       ])
       .where("mat.id_estudiante", "=", Number(id_estudiante))
       .where("mat.id_anio", "=", period.id_anio)
-      .where("mat.estado", "in", ["ACTIVA", "APROBADA"])
+      .where("mat.estado", "in", ["ACTIVA", "APROBADA", "CULMINADA", "TRASLADADA"])
       .orderBy("m.id_materia")
       .orderBy("dg.id_detallegrado", "desc")
       .execute();
@@ -430,9 +437,9 @@ export const getParentChildren = async (req: Request, res: Response) => {
   try {
     const activeMatriculaSubquery = db
       .selectFrom("matricula")
-      .select(["id_estudiante", "id_grupo", "id_anio", "estado"])
+      .select(["id_estudiante", "id_grupo", "id_anio", "id_colegio", "estado"])
       .distinctOn("id_estudiante")
-      .where("estado", "in", ["ACTIVA", "APROBADA"])
+      .where("estado", "in", ["ACTIVA", "APROBADA", "PENDIENTE", "PENDIENTE_RENOVACION", "CORREGIDA", "TRASLADADA", "CULMINADA"])
       .orderBy("id_estudiante")
       .orderBy("id_anio", "desc")
       .orderBy("id_matricula", "desc")
@@ -443,8 +450,10 @@ export const getParentChildren = async (req: Request, res: Response) => {
       .selectFrom("padre_familia as pf")
       .innerJoin("detalle_padrefamilia as dpf", "dpf.id_padrefamilia", "pf.id_padrefamilia")
       .innerJoin("estudiante as e", "e.id_estudiante", "dpf.id_estudiante")
-      .leftJoin("colegio as col", "col.id_colegio", "dpf.id_colegio")
       .leftJoin(activeMatriculaSubquery, "m.id_estudiante", "e.id_estudiante")
+      .leftJoin("colegio as col", (join) =>
+        join.on("col.id_colegio", "=", sql`COALESCE(m.id_colegio, e.id_colegio, dpf.id_colegio)`)
+      )
       .leftJoin("grupos as gr", "gr.id_grupo", "m.id_grupo")
       .leftJoin("secciones as s", "s.id_seccion", "gr.id_seccion")
       .leftJoin("tipo_grado as tg", "tg.id_tipo_grado", "gr.id_tipo_grado")
@@ -468,13 +477,14 @@ export const getParentChildren = async (req: Request, res: Response) => {
         END`.as("grupo"),
         "j.nombre as jornada",
         "n.nombre as nivel",
-        "dpf.id_colegio",
+        sql<number>`COALESCE(m.id_colegio, e.id_colegio, dpf.id_colegio)`.as("id_colegio"),
         "col.nombre as colegio_nombre",
+        "col.escudo_url as colegio_escudo",
         "m.estado as estado_matricula"
       ])
       .where("pf.id_usuario", "=", Number(id_usuario));
 
-    if (authReq.user?.schoolId) {
+    if (authReq.user?.schoolId && authReq.user?.roles?.some((r: string) => ['admin', 'directivo'].includes(r)) && authReq.isMonitoring) {
       query = query.where((eb) =>
         eb.or([
           eb("dpf.id_colegio", "=", authReq.user.schoolId),
@@ -662,7 +672,7 @@ export const getParentDashboardData = async (req: Request, res: Response) => {
     // 1. Get children basic info and enrollment for selected year
     let activeMatriculaQuery = db
       .selectFrom("matricula")
-      .select(["id_estudiante", "id_grupo", "id_anio", "estado"])
+      .select(["id_estudiante", "id_grupo", "id_anio", "id_colegio", "estado"])
       .distinctOn("id_estudiante")
       .where("estado", "in", ["ACTIVA", "APROBADA", "PENDIENTE", "PENDIENTE_RENOVACION", "CORREGIDA", "TRASLADADA", "CULMINADA"]);
 
@@ -684,6 +694,9 @@ export const getParentDashboardData = async (req: Request, res: Response) => {
       .innerJoin("detalle_padrefamilia as dpf", "dpf.id_padrefamilia", "pf.id_padrefamilia")
       .innerJoin("estudiante as e", "e.id_estudiante", "dpf.id_estudiante")
       .leftJoin(activeMatriculaSubquery, "m.id_estudiante", "e.id_estudiante")
+      .leftJoin("colegio as col", (join) =>
+        join.on("col.id_colegio", "=", sql`COALESCE(m.id_colegio, e.id_colegio, dpf.id_colegio)`)
+      )
       .leftJoin("grupos as gr", "gr.id_grupo", "m.id_grupo")
       .leftJoin("secciones as s", "s.id_seccion", "gr.id_seccion")
       .leftJoin("tipo_grado as tg", "tg.id_tipo_grado", "gr.id_tipo_grado")
@@ -705,15 +718,16 @@ export const getParentDashboardData = async (req: Request, res: Response) => {
         END`.as("grupo"),
         "j.nombre as jornada",
         "n.nombre as nivel",
-        "e.id_colegio",
-        "dpf.id_colegio as dpf_colegio",
+        sql<number>`COALESCE(m.id_colegio, e.id_colegio, dpf.id_colegio)`.as("id_colegio"),
+        "col.nombre as colegio_nombre",
+        "col.escudo_url as colegio_escudo",
         "m.id_grupo",
         "m.id_anio",
         "m.estado as estado_matricula"
       ])
       .where("pf.id_usuario", "=", userId);
 
-    if (schoolId) {
+    if (schoolId && authReq.user?.roles?.some((r: string) => ['admin', 'directivo'].includes(r)) && authReq.isMonitoring) {
       childrenQuery = childrenQuery.where((eb) =>
         eb.or([
           eb("dpf.id_colegio", "=", schoolId),

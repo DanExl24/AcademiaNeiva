@@ -1097,9 +1097,16 @@ export class MatriculaService {
               id_colegio: id_colegio,
               id_rol: idRolEst,
               estado: 'ACTIVO',
-              fecha_inicio: new Date()
+              fecha_inicio: sql`NOW()`,
+              fecha_fin: null
             })
-            .onConflict((oc) => oc.doNothing())
+            .onConflict((oc: any) =>
+              oc.columns(['id_usuario', 'id_colegio', 'id_rol']).doUpdateSet({
+                estado: 'ACTIVO',
+                fecha_inicio: sql`NOW()`,
+                fecha_fin: null
+              })
+            )
             .execute();
         }
 
@@ -1245,9 +1252,16 @@ export class MatriculaService {
               id_colegio: id_colegio,
               id_rol: idRolPadre,
               estado: 'ACTIVO',
-              fecha_inicio: new Date()
+              fecha_inicio: sql`NOW()`,
+              fecha_fin: null
             })
-            .onConflict((oc) => oc.doNothing())
+            .onConflict((oc: any) =>
+              oc.columns(['id_usuario', 'id_colegio', 'id_rol']).doUpdateSet({
+                estado: 'ACTIVO',
+                fecha_inicio: sql`NOW()`,
+                fecha_fin: null
+              })
+            )
             .execute();
 
           if (correo_padre) {
@@ -1272,6 +1286,12 @@ export class MatriculaService {
             id_estudiante: idEstudiante!,
             id_colegio: id_colegio
           })
+          .execute();
+      } else {
+        await trx
+          .updateTable('detalle_padrefamilia')
+          .set({ id_colegio: id_colegio })
+          .where('id_detallepadrefamilia', '=', linkRes.id_detallepadrefamilia)
           .execute();
       }
 

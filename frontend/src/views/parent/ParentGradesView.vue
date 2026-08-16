@@ -177,7 +177,7 @@ const getPerformanceColor = (level: string | null | undefined) => {
             class="bg-transparent border-none text-sm font-black text-slate-700 dark:text-slate-200 focus:ring-0 outline-none cursor-pointer"
           >
             <option v-for="child in children" :key="child.id_estudiante" :value="child.id_estudiante">
-              {{ child.nombre }} {{ child.apellido }}
+              {{ child.nombre }} {{ child.apellido }} {{ child.colegio_nombre ? '· ' + child.colegio_nombre : '' }}
             </option>
           </select>
         </div>
@@ -194,9 +194,12 @@ const getPerformanceColor = (level: string | null | undefined) => {
     <!-- Context & Period Filters -->
     <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm">
       <div v-if="studentInfo">
-        <div class="flex items-center gap-2 mb-1">
+        <div class="flex items-center gap-2 mb-1 flex-wrap">
           <span class="text-[10px] font-black uppercase tracking-widest text-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded-md">Grado Actual</span>
           <span class="text-sm font-bold text-slate-700 dark:text-slate-200">{{ studentInfo.grado }} - Grupo {{ studentInfo.grupo }}</span>
+          <span v-if="children.find(c => c.id_estudiante === selectedChildId)?.colegio_nombre" class="text-[10px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md">
+            {{ children.find(c => c.id_estudiante === selectedChildId)?.colegio_nombre }}
+          </span>
         </div>
         <p class="text-xs text-slate-400 dark:text-slate-500 flex items-center gap-2">
           <CreditCard :size="14" />
