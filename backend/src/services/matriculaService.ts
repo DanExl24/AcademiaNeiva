@@ -430,7 +430,7 @@ export class MatriculaService {
       sections = await secQuery.execute();
     }
 
-    const rawDocs = await db
+    let rawDocs = await db
       .selectFrom('documento_matriculas as d')
       .leftJoin('matricula as m', 'd.id_matricula', 'm.id_matricula')
       .select([
@@ -471,6 +471,78 @@ export class MatriculaService {
       .orderBy('d.version', 'desc')
       .orderBy('d.id_documento', 'desc')
       .execute();
+
+    // Auto-recuperación: si la matrícula no tiene documentos propios (ej. matrícula creada por un traslado previo),
+    // consultar y clonar los documentos existentes del estudiante en el colegio correspondiente
+    if (rawDocs.length === 0 && mat.id_estudiante) {
+      const prevDocs = await db
+        .selectFrom('documento_matriculas as d')
+        .innerJoin('matricula as m', 'd.id_matricula', 'm.id_matricula')
+        .selectAll('d')
+        .where('m.id_estudiante', '=', mat.id_estudiante)
+        .where('d.id_matricula', '!=', idMatricula)
+        .orderBy('d.version', 'desc')
+        .orderBy('d.id_documento', 'desc')
+        .execute();
+
+      const tiposGuardados = new Set<string>();
+      for (const doc of prevDocs) {
+        const key = (doc.tipo_documento || '').trim().toLowerCase();
+        if (!key || tiposGuardados.has(key)) continue;
+        tiposGuardados.add(key);
+
+        try {
+          await db
+            .insertInto('documento_matriculas')
+            .values({
+              id_matricula: idMatricula,
+              id_colegio: mat.id_colegio,
+              tipo_documento: doc.tipo_documento,
+              url: doc.url,
+              estado: 'VALIDADO' as any,
+              fecha: sql`NOW()`,
+              fecha_expedicion: doc.fecha_expedicion || null,
+              estado_renovacion: doc.estado_renovacion || null,
+              version: doc.version || 1,
+              nombre_original: doc.nombre_original || null,
+              mime_type: doc.mime_type || null,
+              tamano_bytes: doc.tamano_bytes || null,
+              contenido: doc.contenido || null
+            })
+            .execute();
+        } catch (insertErr) {
+          console.error('Error auto-migrando doc para matricula:', insertErr);
+        }
+      }
+
+      if (tiposGuardados.size > 0) {
+        rawDocs = await db
+          .selectFrom('documento_matriculas as d')
+          .leftJoin('matricula as m', 'd.id_matricula', 'm.id_matricula')
+          .select([
+            'd.id_documento',
+            'd.id_matricula',
+            'd.id_colegio',
+            'd.tipo_documento',
+            'd.url',
+            'd.estado',
+            'd.fecha',
+            'd.version',
+            'd.fecha_expedicion',
+            'd.estado_renovacion',
+            'd.mime_type',
+            'd.nombre_original',
+            'd.tamano_bytes',
+            sql<string | null>`NULL`.as('url_anterior'),
+            sql<number | null>`NULL`.as('version_anterior')
+          ])
+          .where('d.id_matricula', '=', idMatricula)
+          .orderBy('d.tipo_documento', 'asc')
+          .orderBy('d.version', 'desc')
+          .orderBy('d.id_documento', 'desc')
+          .execute();
+      }
+    }
 
     // Agrupar documentos por tipo_documento: la versión superior es la activa, las anteriores van a versiones_anteriores
     const docsGroupedMap = new Map<string, any>();

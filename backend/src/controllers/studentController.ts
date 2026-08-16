@@ -1154,7 +1154,7 @@ export const getParentStudentEnrollment = async (req: Request, res: Response) =>
       if (activeMat) mat = activeMat;
     }
 
-    const rawDocs = await db
+    let rawDocs = await db
       .selectFrom("documento_matriculas as d")
       .select([
         "d.id_documento",
@@ -1172,6 +1172,28 @@ export const getParentStudentEnrollment = async (req: Request, res: Response) =>
       .orderBy("d.tipo_documento", "asc")
       .orderBy("d.version", "desc")
       .execute();
+
+    if (rawDocs.length === 0 && allMatriculas.length > 0) {
+      const allMatIds = allMatriculas.map(m => m.id_matricula);
+      rawDocs = await db
+        .selectFrom("documento_matriculas as d")
+        .select([
+          "d.id_documento",
+          "d.id_matricula",
+          "d.tipo_documento",
+          "d.url",
+          "d.estado",
+          "d.fecha",
+          "d.version",
+          "d.mime_type",
+          "d.nombre_original",
+          "d.tamano_bytes"
+        ])
+        .where("d.id_matricula", "in", allMatIds)
+        .orderBy("d.tipo_documento", "asc")
+        .orderBy("d.version", "desc")
+        .execute();
+    }
 
     const docsGroupedMap = new Map<string, any>();
     for (const docRow of rawDocs) {

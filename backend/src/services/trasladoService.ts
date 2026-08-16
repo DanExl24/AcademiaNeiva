@@ -920,6 +920,7 @@ export class TrasladoService {
             .where('id_anio', '=', destIdAnio)
             .executeTakeFirst();
 
+          let finalDestMatId: number;
           if (destMatExistente) {
             await trx
               .updateTable('matricula')
@@ -935,8 +936,9 @@ export class TrasladoService {
               })
               .where('id_matricula', '=', destMatExistente.id_matricula)
               .execute();
+            finalDestMatId = destMatExistente.id_matricula;
           } else {
-            await trx
+            const insMat = await trx
               .insertInto('matricula')
               .values({
                 id_colegio: solicitud.id_colegio_destino,
@@ -953,7 +955,98 @@ export class TrasladoService {
                 fecha_aprobacion: sql`NOW()`,
                 fecha_creacion: sql`NOW()`
               })
-              .execute();
+              .returning('id_matricula')
+              .executeTakeFirstOrThrow();
+            finalDestMatId = insMat.id_matricula;
+          }
+
+          // 5.3.1 Migración y Conservación de Documentación Adjunta en Colegio Destino
+          const docsOrigen = await trx
+            .selectFrom('documento_matriculas')
+            .selectAll()
+            .where('id_matricula', '=', origMat.id_matricula)
+            .execute();
+
+          const tiposProcesados = new Set<string>();
+
+          if (docsOrigen.length > 0) {
+            for (const doc of docsOrigen) {
+              const key = (doc.tipo_documento || '').trim().toLowerCase();
+              if (key) tiposProcesados.add(key);
+
+              const yaExisteDoc = await trx
+                .selectFrom('documento_matriculas')
+                .select('id_documento')
+                .where('id_matricula', '=', finalDestMatId)
+                .where(sql`LOWER(TRIM(tipo_documento))`, '=', key)
+                .executeTakeFirst();
+
+              if (!yaExisteDoc) {
+                await trx
+                  .insertInto('documento_matriculas')
+                  .values({
+                    id_matricula: finalDestMatId,
+                    id_colegio: solicitud.id_colegio_destino,
+                    tipo_documento: doc.tipo_documento,
+                    url: doc.url,
+                    estado: 'VALIDADO' as any,
+                    fecha: sql`NOW()`,
+                    fecha_expedicion: doc.fecha_expedicion || null,
+                    estado_renovacion: doc.estado_renovacion || null,
+                    version: doc.version || 1,
+                    nombre_original: doc.nombre_original || null,
+                    mime_type: doc.mime_type || null,
+                    tamano_bytes: doc.tamano_bytes || null,
+                    contenido: doc.contenido || null
+                  })
+                  .execute();
+              }
+            }
+          }
+
+          // Fallback: Si la matrícula origen no tenía documentos o faltaban algunos, buscar documentos previos del estudiante
+          const docsPrevEstudiante = await trx
+            .selectFrom('documento_matriculas as d')
+            .innerJoin('matricula as m', 'm.id_matricula', 'd.id_matricula')
+            .selectAll('d')
+            .where('m.id_estudiante', '=', estRow.id_estudiante)
+            .where('d.id_matricula', '!=', finalDestMatId)
+            .orderBy('d.version', 'desc')
+            .orderBy('d.id_documento', 'desc')
+            .execute();
+
+          for (const doc of docsPrevEstudiante) {
+            const key = (doc.tipo_documento || '').trim().toLowerCase();
+            if (!key || tiposProcesados.has(key)) continue;
+            tiposProcesados.add(key);
+
+            const yaExisteDoc = await trx
+              .selectFrom('documento_matriculas')
+              .select('id_documento')
+              .where('id_matricula', '=', finalDestMatId)
+              .where(sql`LOWER(TRIM(tipo_documento))`, '=', key)
+              .executeTakeFirst();
+
+            if (!yaExisteDoc) {
+              await trx
+                .insertInto('documento_matriculas')
+                .values({
+                  id_matricula: finalDestMatId,
+                  id_colegio: solicitud.id_colegio_destino,
+                  tipo_documento: doc.tipo_documento,
+                  url: doc.url,
+                  estado: 'VALIDADO' as any,
+                  fecha: sql`NOW()`,
+                  fecha_expedicion: doc.fecha_expedicion || null,
+                  estado_renovacion: doc.estado_renovacion || null,
+                  version: doc.version || 1,
+                  nombre_original: doc.nombre_original || null,
+                  mime_type: doc.mime_type || null,
+                  tamano_bytes: doc.tamano_bytes || null,
+                  contenido: doc.contenido || null
+                })
+                .execute();
+            }
           }
 
           // 5.4 Gestión de Vinculación Multi-Institucional del Padre de Familia / Acudiente
