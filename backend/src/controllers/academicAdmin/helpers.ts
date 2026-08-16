@@ -207,13 +207,24 @@ export const ensureAcademicYearForSchool = async (schoolId: number): Promise<num
   return Number(created.rows[0].id_anio);
 };
 
-export const ensureSchoolSettingsTable = async () => {};
+export const ensureSchoolSettingsTable = async () => {
+  try {
+    await pool.query(
+      `ALTER TABLE public.configuracion_colegio 
+       ADD COLUMN IF NOT EXISTS materias_reprobatorias_promocion INTEGER NOT NULL DEFAULT 3`
+    );
+  } catch (err) {
+    console.error("Error al asegurar columna materias_reprobatorias_promocion:", err);
+  }
+};
 export const ensureAcademicPeriodTrimesterColumn = async () => {};
 export const ensureAcademicPeriodDayColumns = async () => {};
 export const ensureAcademicPeriodMonthColumns = async () => {};
 export const ensureAcademicPeriodPendingStatus = async () => {};
 
 export const ensureSchoolDefaultSettings = async (schoolId: number) => {
+  await ensureSchoolSettingsTable();
+
   const existing = await pool.query(
     `SELECT id_colegio, nota_minima, nota_maxima, nota_aprobacion, escala_modo, COALESCE(materias_reprobatorias_promocion, 3) AS materias_reprobatorias_promocion
      FROM configuracion_colegio

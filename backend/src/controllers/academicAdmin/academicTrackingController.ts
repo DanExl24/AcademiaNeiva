@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { db } from "../../config/kysely";
 import { sql } from "kysely";
 import { z } from "zod";
+import { ensureSchoolSettingsTable } from "./helpers";
 
 // --- ESQUEMAS DE VALIDACIÓN ZOD ---
 
@@ -82,6 +83,7 @@ async function getMinPassingScore(schoolId: number): Promise<number> {
  */
 async function getMinFailingSubjectsCount(schoolId: number): Promise<number> {
   try {
+    await ensureSchoolSettingsTable();
     const config = await db
       .selectFrom("configuracion_colegio")
       .select(["materias_reprobatorias_promocion"])
