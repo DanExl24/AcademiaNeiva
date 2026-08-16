@@ -11,7 +11,7 @@ Este documento centraliza todos los defectos funcionales (**Tipo D: Bug Real**) 
 | Módulo | Total Defectos | Críticos (P0) | Importantes (P1) | Secundarios (P2) | Estado |
 |---|---|---|---|---|---|
 | 01. Autenticación y Sesiones | 0 | 0 | 0 | 0 | ✅ Validado (15/15 PASS) |
-| 02. Gestión de Colegios | 0 | 0 | 0 | 0 | Pendiente |
+| 02. Gestión de Colegios | 0 | 0 | 0 | 0 | ✅ Validado (8/8 PASS) |
 | 03. Usuarios y Directivos | 0 | 0 | 0 | 0 | Pendiente |
 | 04. Estructura Escolar | 0 | 0 | 0 | 0 | Pendiente |
 | 05. Docentes | 0 | 0 | 0 | 0 | Pendiente |
