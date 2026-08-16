@@ -21,22 +21,28 @@ export const getAllStudents = async (req: Request, res: Response) => {
     const params: any[] = [idColegio];
     let paramCount = 1;
     let yearCondition = '';
+    let yearParamIndex: number | null = null;
 
     if (yearId) {
       paramCount++;
       params.push(yearId);
-      yearCondition = ` AND m.id_anio = $${paramCount}`;
+      yearParamIndex = paramCount;
+      yearCondition = ` AND m.id_anio = $${yearParamIndex}`;
     }
 
     // When filtering by a specific year, estado_vigente reflects whether the student
     // has an active enrollment that year. Without a year filter, it mirrors e.estado.
     const estadoVigenteExpr = yearId
       ? `CASE
+           WHEN m.id_matricula IS NOT NULL AND m.estado = 'TRASLADADA' THEN 'TRASLADADO'
            WHEN m.id_matricula IS NOT NULL AND e.estado::text NOT IN ('EXPULSADO','RETIRADO','GRADUADO') THEN e.estado::text
            WHEN e.estado::text IN ('EXPULSADO','RETIRADO','GRADUADO','SANCIONADO') THEN e.estado::text
            ELSE 'INACTIVO'
          END`
-      : `e.estado::text`;
+      : `CASE
+           WHEN m.id_matricula IS NOT NULL AND m.estado = 'TRASLADADA' THEN 'TRASLADADO'
+           ELSE e.estado::text
+         END`;
 
     let query = `
       SELECT e.*, 
@@ -64,7 +70,7 @@ export const getAllStudents = async (req: Request, res: Response) => {
       LEFT JOIN usuario u ON e.id_usuario = u.id_usuario
       LEFT JOIN tipo_documento td ON u.id_tipodocumento = td.id_tipodocumento
       LEFT JOIN nivel_escolar n ON e.id_nivel = n.id_nivel
-      LEFT JOIN matricula m ON e.id_estudiante = m.id_estudiante AND m.id_colegio = $1 AND (m.estado = 'ACTIVA' OR (m.estado = 'TRASLADADA' AND $2::int IS NOT NULL))${yearCondition}
+      LEFT JOIN matricula m ON e.id_estudiante = m.id_estudiante AND m.id_colegio = $1 AND m.estado IN ('ACTIVA', 'CULMINADA', 'TRASLADADA')${yearCondition}
       LEFT JOIN grupos g ON m.id_grupo = g.id_grupo
       LEFT JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
       LEFT JOIN secciones s ON g.id_seccion = s.id_seccion
@@ -78,10 +84,10 @@ export const getAllStudents = async (req: Request, res: Response) => {
       WHERE (e.id_colegio = $1 OR EXISTS (SELECT 1 FROM matricula m_hist WHERE m_hist.id_estudiante = e.id_estudiante AND m_hist.id_colegio = $1))
     `;
 
-    if (yearId) {
+    if (yearId && yearParamIndex) {
       query += ` AND NOT EXISTS (
         SELECT 1 FROM anio_lectivo al
-        WHERE al.id_anio = $2
+        WHERE al.id_anio = $${yearParamIndex}
           AND (
             EXTRACT(YEAR FROM u.fecha_creacion) > NULLIF(regexp_replace(al.calendario, '\\D', '', 'g'), '')::int
             OR (al.fecha_fin IS NOT NULL AND DATE(u.fecha_creacion) > al.fecha_fin)
@@ -100,10 +106,10 @@ export const getAllStudents = async (req: Request, res: Response) => {
           query += ` AND 1=0`;
         }
       } else if (estado === 'ACTIVO' && yearId) {
-        // ACTIVO with a year filter = student has estado ACTIVO *and* an active enrollment this year
-        paramCount++;
-        query += ` AND e.estado = $${paramCount} AND m.id_matricula IS NOT NULL`;
-        params.push(estado);
+        // ACTIVO with a year filter = student has an active enrollment in this school this year
+        query += ` AND e.estado = 'ACTIVO' AND m.id_matricula IS NOT NULL AND m.estado = 'ACTIVA'`;
+      } else if (estado === 'TRASLADADO') {
+        query += ` AND m.id_matricula IS NOT NULL AND m.estado = 'TRASLADADA'`;
       } else {
         paramCount++;
         query += ` AND e.estado = $${paramCount}`;
