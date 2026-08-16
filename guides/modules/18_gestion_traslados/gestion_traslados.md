@@ -68,6 +68,10 @@ Debido al modelo de **Identidad Global Multi-Institucional**, la cuenta de usuar
 - **RN-TRA-013 (Asignación Directa de Grupo y Jornada en Aprobación):** El directivo de destino puede seleccionar el grupo específico (`id_grupo_destino`) en el modal de aprobación. La matrícula creada/actualizada en destino vinculará de forma atómica el `id_grupo` e `id_nivel` correspondientes.
 - **RN-TRA-014 (Notificación Email Formal con Asignación de Aula):** Al ejecutarse el traslado interinstitucional, se envía un correo al acudiente informando la admisión en la institución receptora, el grado escolar y el salón/jornada asignado.
 - **RN-TRA-015 (Aislamiento y Bloqueo Operativo en Colegio Origen):** Tras ejecutarse el traslado interinstitucional, la matrícula original pasa a `TRASLADADA` y queda exclusivamente como histórico. El estudiante se desvincula de las listas operativas activas del colegio de origen (notas, asistencia, observador, boletines y promoción anual) y cualquier intento de registro de calificaciones o asistencias en origen es rechazado con error `409 Conflict`. En el colegio destino, el estudiante se activa de inmediato con matrícula en estado `ACTIVA` (`tipo = 'TRASLADO'`, `es_traslado = true`).
+- **RN-TRA-016 (Sincronización Multi-Institucional del Acudiente y Preservación de Roles):** Al completarse el traslado de un alumno a un nuevo colegio:
+  - El sistema crea/activa la relación `usuario_colegio` con rol `padre` (`ACTIVO`) y `detalle_padrefamilia` en el colegio destino.
+  - El sistema verifica si el acudiente posee otros hijos con matrícula activa en el colegio de origen. Si no tiene más hijos en origen, se inactiva únicamente su rol de `padre` en dicho colegio. Si aún conserva otros hijos matriculados en origen, su rol de `padre` en origen permanece `ACTIVO`.
+  - Si el acudiente desempeña funciones laborales en el colegio de origen (ej. `docente` o `directivo`), **dichos roles permanecen 100% ACTIVOS**, garantizando la total independencia entre las vinculaciones familiares y laborales.
 
 ---
 

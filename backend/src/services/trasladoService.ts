@@ -946,6 +946,83 @@ export class TrasladoService {
               .execute();
           }
 
+          // 5.4 Gestión de Vinculación Multi-Institucional del Padre de Familia / Acudiente
+          const idRolPadreRes = await trx
+            .selectFrom('rol')
+            .select('id_rol')
+            .where('nombre', '=', 'padre')
+            .executeTakeFirst();
+          const idRolPadre = idRolPadreRes?.id_rol || 3;
+
+          // Buscar todos los acudientes vinculados al estudiante trasladado
+          const padresVinculados = await trx
+            .selectFrom('detalle_padrefamilia as dpf')
+            .innerJoin('padre_familia as pf', 'pf.id_padrefamilia', 'dpf.id_padrefamilia')
+            .select([
+              'dpf.id_detallepadrefamilia',
+              'dpf.id_padrefamilia',
+              'pf.id_usuario as id_usuario_padre'
+            ])
+            .where('dpf.id_estudiante', '=', estRow.id_estudiante)
+            .execute();
+
+          for (const padre of padresVinculados) {
+            // A. Actualizar la relación en detalle_padrefamilia al colegio destino
+            await trx
+              .updateTable('detalle_padrefamilia')
+              .set({ id_colegio: solicitud.id_colegio_destino })
+              .where('id_detallepadrefamilia', '=', padre.id_detallepadrefamilia)
+              .execute();
+
+            if (padre.id_usuario_padre) {
+              // B. Crear / Activar vinculación del Padre con el Colegio Destino en usuario_colegio
+              await trx
+                .insertInto('usuario_colegio')
+                .values({
+                  id_usuario: padre.id_usuario_padre,
+                  id_colegio: solicitud.id_colegio_destino,
+                  id_rol: idRolPadre,
+                  estado: 'ACTIVO',
+                  fecha_inicio: sql`NOW()`,
+                  fecha_fin: null
+                })
+                .onConflict((oc: any) =>
+                  oc.columns(['id_usuario', 'id_colegio', 'id_rol']).doUpdateSet({
+                    estado: 'ACTIVO',
+                    fecha_inicio: sql`NOW()`,
+                    fecha_fin: null
+                  })
+                )
+                .execute();
+
+              // C. Evaluar si el padre tiene OTROS hijos con matrícula ACTIVA en el Colegio Origen
+              const otrosHijosActivos = await trx
+                .selectFrom('detalle_padrefamilia as dpf')
+                .innerJoin('estudiante as e', 'e.id_estudiante', 'dpf.id_estudiante')
+                .innerJoin('matricula as m', 'm.id_estudiante', 'e.id_estudiante')
+                .select('m.id_matricula')
+                .where('dpf.id_padrefamilia', '=', padre.id_padrefamilia)
+                .where('m.id_colegio', '=', solicitud.id_colegio_origen)
+                .where('m.id_estudiante', '!=', estRow.id_estudiante)
+                .where('m.estado', 'in', ['ACTIVA', 'APROBADA'])
+                .execute();
+
+              // D. Si NO le quedan otros hijos activos en Colegio Origen, inactivar ÚNICAMENTE su rol 'padre' en Colegio Origen
+              if (otrosHijosActivos.length === 0) {
+                await trx
+                  .updateTable('usuario_colegio')
+                  .set({
+                    estado: 'INACTIVO',
+                    fecha_fin: sql`NOW()`
+                  })
+                  .where('id_usuario', '=', padre.id_usuario_padre)
+                  .where('id_colegio', '=', solicitud.id_colegio_origen)
+                  .where('id_rol', '=', idRolPadre)
+                  .execute();
+              }
+            }
+          }
+
           // Disparar correo de notificación al acudiente
           if (origMat.correo_padre) {
             const usuarioEst = await trx

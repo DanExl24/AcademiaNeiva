@@ -125,3 +125,34 @@ Un directivo cambia de grupo a un estudiante dentro del mismo colegio e informa 
 7. El servicio invoca `NotificationService.sendStudentTransferEmail`, enviando un correo al acudiente con la información completa del cambio.
 8. La interfaz notifica éxito y refresca el listado de estudiantes.
 
+---
+
+## CU-TRA-04: Sincronización Multi-Institucional del Acudiente y Preservación de Roles
+
+### Descripción
+Al ejecutarse el traslado de un estudiante del Colegio A al Colegio B, el sistema administra automáticamente las vinculaciones institucionales y los roles del acudiente/padre de familia, evaluando si el padre conserva otros hijos en el colegio de origen o si desempeña roles laborales adicionales (docente/directivo).
+
+### Escenarios de Prueba y Resolución:
+
+#### Escenario 1: Padre con un único hijo trasladado (A -> B)
+1. El estudiante se traslada al Colegio B.
+2. El sistema vincula al padre en el Colegio B (`usuario_colegio` con rol `padre` en estado `ACTIVO` y `detalle_padrefamilia` con `id_colegio = Colegio B`).
+3. El sistema evalúa el Colegio A y confirma que el padre no tiene más hijos con matrícula activa en dicha institución.
+4. Se inactiva la relación `usuario_colegio` del rol `padre` en el Colegio A (`estado = 'INACTIVO'`, `fecha_fin = NOW()`).
+5. **Resultado:** Al iniciar sesión, el acudiente accede al Colegio B para consultar el boletín y seguimiento del alumno.
+
+#### Escenario 2: Padre con múltiples hijos en Colegio A y traslada sólo a uno (A -> B)
+1. El estudiante 1 se traslada al Colegio B.
+2. El sistema activa el rol de `padre` en el Colegio B para el Estudiante 1.
+3. El sistema evalúa el Colegio A y detecta que el **Estudiante 2 continúa con matrícula `ACTIVA`** en el Colegio A.
+4. El rol de `padre` en el Colegio A **permanece ACTIVO**.
+5. **Resultado:** El padre mantiene acceso a ambos colegios mediante el selector de instituciones (`SelectSchoolView.vue`) y puede gestionar el seguimiento de ambos hijos de manera independiente.
+
+#### Escenario 3: Padre que es Docente o Directivo en Colegio A
+1. El docente traslada a su hijo al Colegio B.
+2. El sistema activa la vinculación de `padre` en el Colegio B.
+3. En el Colegio A, el sistema inactiva únicamente la fila `(id_usuario, Colegio A, rol_padre)`.
+4. Las filas correspondientes a sus funciones laborales `(id_usuario, Colegio A, rol_docente)` o `(id_usuario, Colegio A, rol_directivo)` **permanecen 100% ACTIVAS**.
+5. **Resultado:** El usuario continúa dictando sus materias y accediendo a sus cursos en el Colegio A con total normalidad, sin bloqueos en su perfil docente/administrativo.
+
+

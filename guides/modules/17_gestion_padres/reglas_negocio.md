@@ -63,3 +63,18 @@ Este documento detalla las reglas de negocio técnicas y funcionales del módulo
   - [parentManagementController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/parentManagementController.ts)
 - **Endpoints relacionados:** `GET /api/parents/school/:schoolId`
 - **Historias de usuario relacionadas:** HU-PAD-001, HU-PAD-002
+
+---
+
+### RN-PAD-006: Sincronización Multi-Colegio por Traslados y Preservación de Roles
+- **Descripción:** Al trasladar un estudiante a una nueva institución educativa, el acudiente se vincula automáticamente al nuevo colegio (`usuario_colegio` con rol `padre` ACTIVO). El sistema evalúa si el acudiente conserva otros hijos activos en la institución de origen:
+  1. Si conserva otros hijos con matrícula activa en origen, su rol de `padre` en la institución de origen **permanece ACTIVO**.
+  2. Si no le quedan más hijos activos en origen, su rol de `padre` en origen pasa a **`INACTIVO`**.
+  3. Si el acudiente cuenta con roles laborales en la institución de origen (`docente` o `directivo`), **dichos roles permanecen 100% ACTIVOS e intactos**, preservando su acceso funcional y laboral.
+- **Motivo:** Evita desvinculaciones indebidas de padres con múltiples hijos o con funciones laborales dentro de la institución educativa.
+- **Módulos afectados:** Gestión de Padres de Familia, Gestión de Traslados, Autenticación.
+- **Archivos donde se implementa:** 
+  - [trasladoService.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/services/trasladoService.ts) (`ejecutarTrasladoTransaccional`)
+- **Endpoints relacionados:** `POST /api/traslados/:id/aprobacion`
+- **Historias de usuario relacionadas:** HU-PAD-001, HU-PAD-003
+

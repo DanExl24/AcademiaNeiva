@@ -87,3 +87,16 @@ Para que una solicitud de traslado interinstitucional regular complete su ciclo 
 - Al completarse la transacción atómica de un traslado de matrícula, el sistema despacha automáticamente un correo formal al acudiente (`NotificationService.sendInterInstitutionalTransferApprovedEmail`).
 - El correo detalla el nombre del estudiante, colegio origen, colegio receptor, grado lectivo y el grupo/jornada escolar asignado.
 
+### RN-TRA-015: Aislamiento Operativo del Estudiante en Colegio Origen
+- Una vez ejecutado el traslado, la matrícula anterior en el colegio origen pasa a estado `TRASLADADA` y queda exclusivamente como registro histórico.
+- El estudiante es excluido de las planillas de calificaciones, control de asistencia, observador del alumno, generación de boletines y promoción anual del colegio de origen.
+- Toda operación de inserción o actualización académica sobre el estudiante en el colegio de origen es rechazada con código HTTP `409 Conflict`.
+
+### RN-TRA-016: Gestión Multi-Institucional del Acudiente y Preservación de Roles
+- Al trasladar a un estudiante de un Colegio A a un Colegio B:
+  1. Se vincula al padre/acudiente con el Colegio B (`usuario_colegio` con rol `padre` en estado `ACTIVO` y `detalle_padrefamilia` con `id_colegio = Colegio B`).
+  2. Si el acudiente **no tiene otros hijos con matrícula activa en el Colegio A**, se inactiva únicamente su vínculo como `padre` en el Colegio A (`usuario_colegio.estado = 'INACTIVO'`).
+  3. Si el acudiente **aún tiene otros hijos con matrícula activa en el Colegio A**, su rol de `padre` en el Colegio A **permanece ACTIVO**.
+  4. Si el acudiente desempeña roles laborales en el Colegio A (ej. `docente` o `directivo`), **dichos roles permanecen 100% ACTIVOS**, garantizando la continuidad de sus funciones sin interferir con el traslado de su acudido.
+
+
