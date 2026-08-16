@@ -167,10 +167,11 @@ const fetchInitialData = async () => {
     
     const schoolId = auth.user?.schoolId || 1
     const yearIdParam = yearStore.selectedYearId ? `?id_anio=${yearStore.selectedYearId}&keys=periods,scales` : '?keys=periods,scales'
+    const studentYearParam = yearStore.selectedYearId ? `?estado=ACTIVO&yearId=${yearStore.selectedYearId}` : '?estado=ACTIVO'
     const [settingsRes, gradesRes, studentsRes] = await Promise.all([
       fetch(`${API_BASE_URL}/api/academic-admin/settings/${schoolId}${yearIdParam}`, { headers }),
       fetch(`${API_BASE_URL}/api/academic-admin/grades/${schoolId}${yearIdParam}`, { headers }),
-      fetch(`${API_BASE_URL}/api/student/colegio/${schoolId}`, { headers })
+      fetch(`${API_BASE_URL}/api/student/colegio/${schoolId}${studentYearParam}`, { headers })
     ])
     
     if (settingsRes.ok && gradesRes.ok) {
@@ -187,12 +188,18 @@ const fetchInitialData = async () => {
       groups.value = gradesData.grupos
     }
 
-    // Build set of groups that have enrolled students
+    // Build set of groups that have enrolled active students
     if (studentsRes.ok) {
       allStudents.value = await studentsRes.json()
       const gSet = new Set<number>()
       for (const s of allStudents.value) {
-        if (s.id_grupo) gSet.add(s.id_grupo)
+        if (
+          s.id_grupo &&
+          s.matricula_estado !== 'TRASLADADA' &&
+          (s.matricula_estado === 'ACTIVA' || s.estado_vigente === 'ACTIVO' || s.estado === 'ACTIVO')
+        ) {
+          gSet.add(s.id_grupo)
+        }
       }
       groupsWithStudents.value = gSet
     }
@@ -208,13 +215,24 @@ onMounted(() => {
 
 watch(() => yearStore.selectedYearId, () => {
   selectedPeriodo.value = ''
+  selectedGroup.value = ''
+  selectedStudent.value = ''
+  students.value = []
   fetchInitialData()
 })
 
 const fetchStudentsForGroup = async () => {
-  if (!selectedGroup.value) return
-  // Filter from already-loaded students instead of another API call
-  students.value = allStudents.value.filter((s: any) => s.id_grupo === selectedGroup.value)
+  if (!selectedGroup.value) {
+    students.value = []
+    return
+  }
+  // Filter from already-loaded students, ensuring only active students in the selected group
+  students.value = allStudents.value.filter(
+    (s: any) =>
+      s.id_grupo === selectedGroup.value &&
+      s.matricula_estado !== 'TRASLADADA' &&
+      (s.matricula_estado === 'ACTIVA' || s.estado_vigente === 'ACTIVO' || s.estado === 'ACTIVO')
+  )
 }
 
 const collectPreviewRefs = (el: any, index: number) => {
