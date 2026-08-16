@@ -78,6 +78,43 @@ async function getMinPassingScore(schoolId: number): Promise<number> {
 }
 
 /**
+ * Auxiliar para obtener dinámicamente el id_tipo_grado del "último grado" de la institución.
+ */
+async function getMaxGradeIdForSchool(schoolId: number): Promise<number | null> {
+  try {
+    const maxGradeFromGroups = await db
+      .selectFrom("grupos as g")
+      .innerJoin("tipo_grado as tg", "tg.id_tipo_grado", "g.id_tipo_grado")
+      .innerJoin("nivel_escolar as n", "n.id_nivel", "g.id_nivel")
+      .select([
+        "tg.id_tipo_grado",
+        "tg.nombre as grado_nombre",
+        "n.nombre as nivel_nombre"
+      ])
+      .where("g.id_colegio", "=", schoolId)
+      .orderBy("g.id_nivel", "desc")
+      .orderBy("tg.id_tipo_grado", "desc")
+      .executeTakeFirst();
+
+    if (maxGradeFromGroups && maxGradeFromGroups.id_tipo_grado) {
+      return maxGradeFromGroups.id_tipo_grado;
+    }
+
+    const maxGeneralGrade = await db
+      .selectFrom("tipo_grado")
+      .select(["id_tipo_grado", "nombre"])
+      .orderBy("id_nivel", "desc")
+      .orderBy("id_tipo_grado", "desc")
+      .executeTakeFirst();
+
+    return maxGeneralGrade?.id_tipo_grado || null;
+  } catch (err) {
+    console.error("Error al obtener el último grado del colegio:", err);
+    return null;
+  }
+}
+
+/**
  * 1. SEGUIMIENTO ACADÉMICO POR PERÍODO (INDIVIDUAL O ACUMULATIVO)
  */
 export const getPeriodAcademicTracking = async (req: Request, res: Response): Promise<void> => {
@@ -98,6 +135,7 @@ export const getPeriodAcademicTracking = async (req: Request, res: Response): Pr
 
     const { schoolId, yearId, periodId, cumulativeUpToPeriodOrder, gradeId, groupId } = parseResult.data;
     const minPassingScore = await getMinPassingScore(schoolId);
+    const maxGradeId = await getMaxGradeIdForSchool(schoolId);
 
     // Obtener períodos del año
     const periodsInYear = await db
@@ -394,6 +432,9 @@ export const getPeriodAcademicTracking = async (req: Request, res: Response): Pr
         grado_nombre: student.grado_nombre || "Sin Grado",
         grupo_nombre: student.grupo_nombre || "Sin Grupo",
         jornada_nombre: student.jornada_nombre || null,
+        id_grado: student.id_grado,
+        is_final_grade: maxGradeId != null && student.id_grado === maxGradeId,
+        es_ultimo_grado: maxGradeId != null && student.id_grado === maxGradeId,
         estado_academico: estadoAcademico,
         promedio_general: studentAverage,
         cantidad_reprobadas: failedSubjects.length,
@@ -436,6 +477,7 @@ export const getAnnualConsolidation = async (req: Request, res: Response): Promi
 
     const { schoolId, yearId, gradeId, groupId } = parseResult.data;
     const minPassingScore = await getMinPassingScore(schoolId);
+    const maxGradeId = await getMaxGradeIdForSchool(schoolId);
 
     const yearPeriods = await db
       .selectFrom("periodo_academico")
@@ -693,6 +735,8 @@ export const getAnnualConsolidation = async (req: Request, res: Response): Promi
         grupo_nombre: student.grupo_nombre || "Sin Grupo",
         jornada_nombre: student.jornada_nombre || null,
         id_grado: student.id_grado,
+        is_final_grade: maxGradeId != null && student.id_grado === maxGradeId,
+        es_ultimo_grado: maxGradeId != null && student.id_grado === maxGradeId,
         resultado_anual: resultadoAnual,
         promedio_anual_general: studentAnnualAverage,
         cantidad_reprobadas: failedSubjects.length,
@@ -1075,6 +1119,88 @@ export const recordDirectiveDecision = async (req: Request, res: Response): Prom
       return;
     }
 
+    // Verificar si el estudiante está en el último grado de la institución
+    const maxGradeId = await getMaxGradeIdForSchool(schoolId);
+    let targetGradeId = previousGradeId;
+
+    if (!targetGradeId) {
+      const studentMat = await db
+        .selectFrom("matricula as m")
+        .innerJoin("grupos as g", "g.id_grupo", "m.id_grupo")
+        .select(["g.id_tipo_grado"])
+        .where("m.id_estudiante", "=", studentId)
+        .where("m.id_colegio", "=", schoolId)
+        .where("m.id_anio", "=", previousYearId)
+        .executeTakeFirst();
+      if (studentMat) {
+        targetGradeId = studentMat.id_tipo_grado;
+      }
+    }
+
+    const isFinalGradeStudent = maxGradeId != null && targetGradeId === maxGradeId;
+    let finalAssignedGradeId = assignedGradeId || null;
+    let autoGraduated = false;
+
+    if (decisionTaken === "PROMOVER_SIGUIENTE_GRADO" && isFinalGradeStudent) {
+      autoGraduated = true;
+      finalAssignedGradeId = null;
+
+      // 1. Actualizar estado del estudiante a GRADUADO
+      await db
+        .updateTable("estudiante")
+        .set({ estado: "GRADUADO" as any })
+        .where("id_estudiante", "=", studentId)
+        .execute();
+
+      // 2. Insertar o actualizar registro_graduados
+      const existingGrad = await db
+        .selectFrom("registro_graduados")
+        .select("id_graduado")
+        .where("id_estudiante", "=", studentId)
+        .executeTakeFirst();
+
+      const gradObs = observation || "Graduación procesada automáticamente por decisión de promoción del último año.";
+
+      if (existingGrad) {
+        await db
+          .updateTable("registro_graduados")
+          .set({
+            fecha_graduacion: sql`CURRENT_TIMESTAMP`,
+            observaciones: gradObs,
+            id_usuario_registro: userId,
+            id_anio: previousYearId
+          })
+          .where("id_graduado", "=", existingGrad.id_graduado)
+          .execute();
+      } else {
+        await db
+          .insertInto("registro_graduados")
+          .values({
+            id_estudiante: studentId,
+            fecha_graduacion: sql`CURRENT_TIMESTAMP`,
+            observaciones: gradObs,
+            id_usuario_registro: userId,
+            id_anio: previousYearId
+          })
+          .execute();
+      }
+    } else if (decisionTaken !== "PROMOVER_SIGUIENTE_GRADO" && isFinalGradeStudent) {
+      // Revertir a ACTIVO si el directivo cambia la decisión de un estudiante previamente graduado
+      const st = await db
+        .selectFrom("estudiante")
+        .select("estado")
+        .where("id_estudiante", "=", studentId)
+        .executeTakeFirst();
+
+      if (st && st.estado === "GRADUADO") {
+        await db
+          .updateTable("estudiante")
+          .set({ estado: "ACTIVO" as any })
+          .where("id_estudiante", "=", studentId)
+          .execute();
+      }
+    }
+
     const existingDecision = await db
       .selectFrom("decision_promocion_directivo")
       .select(["id_decision"])
@@ -1092,10 +1218,10 @@ export const recordDirectiveDecision = async (req: Request, res: Response): Prom
           resultado_calculado: calculatedResult as any,
           decision_tomada: decisionTaken as any,
           id_grado_anterior: previousGradeId || null,
-          id_grado_asignado: assignedGradeId || null,
+          id_grado_asignado: finalAssignedGradeId,
           id_usuario_decision: userId,
           fecha_decision: sql`CURRENT_TIMESTAMP`,
-          observacion: observation || null
+          observacion: observation || (autoGraduated ? "Estudiante promovido y graduado exitosamente del ciclo escolar." : null)
         })
         .where("id_decision", "=", existingDecision.id_decision)
         .returningAll()
@@ -1110,17 +1236,20 @@ export const recordDirectiveDecision = async (req: Request, res: Response): Prom
           resultado_calculado: calculatedResult as any,
           decision_tomada: decisionTaken as any,
           id_grado_anterior: previousGradeId || null,
-          id_grado_asignado: assignedGradeId || null,
+          id_grado_asignado: finalAssignedGradeId,
           id_usuario_decision: userId,
-          observacion: observation || null
+          observacion: observation || (autoGraduated ? "Estudiante promovido y graduado exitosamente del ciclo escolar." : null)
         })
         .returningAll()
         .executeTakeFirst();
     }
 
     res.json({
-      message: existingDecision ? "Decisión del directivo actualizada correctamente." : "Decisión del directivo registrada correctamente.",
-      decision: decisionResult
+      message: autoGraduated 
+        ? "¡Estudiante promovido y graduado exitosamente! Su estado ha pasado a GRADUADO."
+        : (existingDecision ? "Decisión del directivo actualizada correctamente." : "Decisión del directivo registrada correctamente."),
+      decision: decisionResult,
+      autoGraduated
     });
   } catch (error) {
     console.error("Error en recordDirectiveDecision:", error);

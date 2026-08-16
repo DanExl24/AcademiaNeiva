@@ -181,11 +181,17 @@ const filteredGroups = computed(() => {
   return groups.value.filter(g => g.id_tipo_grado === selectedGradeId.value || g.id_grado === selectedGradeId.value)
 })
 
-// Filtrar estudiantes por texto de búsqueda
+const showOnlyGraduands = ref(false)
+
+// Filtrar estudiantes por texto de búsqueda y por graduandos
 const filteredPeriodStudents = computed(() => {
-  if (!searchQuery.value.trim()) return trackingData.value.estudiantes
+  let list = trackingData.value.estudiantes || []
+  if (showOnlyGraduands.value) {
+    list = list.filter(s => s.is_final_grade || s.es_ultimo_grado)
+  }
+  if (!searchQuery.value.trim()) return list
   const q = searchQuery.value.toLowerCase().trim()
-  return trackingData.value.estudiantes.filter(s =>
+  return list.filter(s =>
     (s.nombre && s.nombre.toLowerCase().includes(q)) ||
     (s.apellido && s.apellido.toLowerCase().includes(q)) ||
     (s.documento && s.documento.toLowerCase().includes(q)) ||
@@ -194,9 +200,13 @@ const filteredPeriodStudents = computed(() => {
 })
 
 const filteredAnnualStudents = computed(() => {
-  if (!searchQuery.value.trim()) return annualData.value.estudiantes
+  let list = annualData.value.estudiantes || []
+  if (showOnlyGraduands.value) {
+    list = list.filter(s => s.is_final_grade || s.es_ultimo_grado)
+  }
+  if (!searchQuery.value.trim()) return list
   const q = searchQuery.value.toLowerCase().trim()
-  return annualData.value.estudiantes.filter(s =>
+  return list.filter(s =>
     (s.nombre && s.nombre.toLowerCase().includes(q)) ||
     (s.apellido && s.apellido.toLowerCase().includes(q)) ||
     (s.documento && s.documento.toLowerCase().includes(q)) ||
@@ -578,6 +588,17 @@ onMounted(async () => {
           </div>
 
           <div class="flex items-center gap-2.5 flex-wrap">
+            <!-- Filtro de Graduandos -->
+            <button 
+              @click="showOnlyGraduands = !showOnlyGraduands"
+              :class="showOnlyGraduands ? 'bg-amber-500 text-white border-amber-600 shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border-slate-200'"
+              class="px-3 py-1.5 rounded-xl border text-xs font-bold transition-all flex items-center gap-1.5"
+              title="Filtrar estudiantes en último año de estudio"
+            >
+              <GraduationCap class="w-4 h-4 text-amber-500 inline" />
+              <span>{{ showOnlyGraduands ? 'Mostrando Graduandos' : 'Solo Graduandos' }}</span>
+            </button>
+
             <!-- Buscador Integrado en Cabecera de Tabla -->
             <div class="relative w-56 sm:w-64">
               <Search class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
@@ -618,9 +639,15 @@ onMounted(async () => {
             </thead>
             <tbody>
               <template v-for="student in filteredPeriodStudents" :key="student.id_estudiante">
-                <tr :class="{ 'row-reprobado': student.estado_academico === 'REPROBADO' }">
-                  <td class="font-semibold text-slate-800">
-                    {{ student.apellido }} {{ student.nombre }}
+                <tr :class="{ 
+                  'row-reprobado': student.estado_academico === 'REPROBADO',
+                  'border-l-4 border-l-amber-500 bg-amber-50/20': student.is_final_grade || student.es_ultimo_grado
+                }">
+                  <td class="font-semibold text-slate-800 flex items-center flex-wrap gap-1">
+                    <span>{{ student.apellido }} {{ student.nombre }}</span>
+                    <span v-if="student.is_final_grade || student.es_ultimo_grado" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-300 ml-1.5" title="Estudiante en último año escolar">
+                      <GraduationCap class="w-3.5 h-3.5 text-amber-600 inline" /> 🎓 Último Año
+                    </span>
                   </td>
                   <td>{{ student.documento }}</td>
                   <td>
@@ -779,6 +806,17 @@ onMounted(async () => {
           </div>
 
           <div class="flex items-center gap-2.5 flex-wrap">
+            <!-- Filtro de Graduandos -->
+            <button 
+              @click="showOnlyGraduands = !showOnlyGraduands"
+              :class="showOnlyGraduands ? 'bg-amber-500 text-white border-amber-600 shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border-slate-200'"
+              class="px-3 py-1.5 rounded-xl border text-xs font-bold transition-all flex items-center gap-1.5"
+              title="Filtrar estudiantes en último año de estudio"
+            >
+              <GraduationCap class="w-4 h-4 text-amber-500 inline" />
+              <span>{{ showOnlyGraduands ? 'Mostrando Graduandos' : 'Solo Graduandos' }}</span>
+            </button>
+
             <!-- Buscador Integrado en Cabecera de Tabla Anual -->
             <div class="relative w-56 sm:w-64">
               <Search class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
@@ -819,8 +857,19 @@ onMounted(async () => {
               </tr>
             </thead>
             <tbody>
-              <tr v-for="student in filteredAnnualStudents" :key="student.id_estudiante">
-                <td class="font-semibold text-slate-800">{{ student.apellido }} {{ student.nombre }}</td>
+              <tr 
+                v-for="student in filteredAnnualStudents" 
+                :key="student.id_estudiante"
+                :class="{
+                  'border-l-4 border-l-amber-500 bg-amber-50/20': student.is_final_grade || student.es_ultimo_grado
+                }"
+              >
+                <td class="font-semibold text-slate-800 flex items-center flex-wrap gap-1">
+                  <span>{{ student.apellido }} {{ student.nombre }}</span>
+                  <span v-if="student.is_final_grade || student.es_ultimo_grado" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-300 ml-1.5" title="Estudiante en último año escolar">
+                    <GraduationCap class="w-3.5 h-3.5 text-amber-600 inline" /> 🎓 Último Año
+                  </span>
+                </td>
                 <td>{{ student.documento }}</td>
                 <td>
                   <div class="font-medium text-slate-800">{{ student.grado_nombre }} {{ student.grupo_nombre }}</div>
@@ -1040,13 +1089,23 @@ onMounted(async () => {
             </div>
           </div>
 
+          <!-- Alerta Informativa para Último Año -->
+          <div v-if="targetStudentForDecision?.is_final_grade || targetStudentForDecision?.es_ultimo_grado" class="p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs flex items-center gap-2.5 shadow-sm">
+            <GraduationCap class="w-5 h-5 text-amber-600 shrink-0" />
+            <div>
+              <strong>Estudiante en Año de Graduación:</strong> Al aprobar la promoción, su estado cambiará automáticamente a <span class="font-black text-indigo-700 uppercase">GRADUADO</span> y se inscribirá en el libro oficial de graduados.
+            </div>
+          </div>
+
           <!-- Selector de Decisión -->
           <div class="form-group">
             <label class="block text-xs font-bold text-slate-700 mb-1.5">
               Decisión adoptada por la institución / directivo:
             </label>
             <select v-model="decisionForm.decisionTaken" class="form-select">
-              <option value="PROMOVER_SIGUIENTE_GRADO">Promover al siguiente grado (Excepción / Aprobación)</option>
+              <option value="PROMOVER_SIGUIENTE_GRADO">
+                {{ (targetStudentForDecision?.is_final_grade || targetStudentForDecision?.es_ultimo_grado) ? 'Promover y Graduar Estudiante 🎓' : 'Promover al siguiente grado (Excepción / Aprobación)' }}
+              </option>
               <option value="MANTENER_GRADO">Mantener en el mismo grado (No promovido)</option>
               <option value="MATRICULA_CONDICIONADA">Matrícula condicionada con compromisos</option>
               <option value="OTRA_DECISION">Otra decisión institucional personalizada</option>
