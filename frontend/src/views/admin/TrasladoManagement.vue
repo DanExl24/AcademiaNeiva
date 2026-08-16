@@ -466,12 +466,15 @@ const handleProcessApproval = async (accion: 'APROBAR' | 'RECHAZAR' | 'CANCELAR'
 
   if (!confirm(confirmMsg)) return
 
+  const isDestinoOrAdmin = isDirectivoDestino.value || isAdminGeneral.value
+  const idGrupoDestinoToSend = (accion === 'APROBAR' && isDestinoOrAdmin) ? (selectedGrupoDestino.value || null) : null
+
   submitting.value = true
   try {
     await axios.post(`${API_BASE_URL}/api/traslados/${selectedSolicitud.value.id_solicitud}/aprobacion`, {
       accion,
       comentario: approvalForm.value.comentario || null,
-      id_grupo_destino: selectedGrupoDestino.value || null
+      id_grupo_destino: idGrupoDestinoToSend
     }, {
       headers: { Authorization: `Bearer ${auth.token}` }
     })
@@ -955,9 +958,11 @@ onMounted(() => {
               :key="item.rol"
               :class="[
                 'p-3.5 rounded-2xl border transition-all flex flex-col justify-between space-y-2',
-                item.aprobacion 
-                  ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/40' 
-                  : 'bg-amber-50/50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/40'
+                !item.aprobacion 
+                  ? 'bg-amber-50/50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/40' 
+                  : item.aprobacion.accion === 'APROBAR'
+                  ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/40'
+                  : 'bg-rose-50/50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-800/40'
               ]"
             >
               <div>
@@ -965,13 +970,28 @@ onMounted(() => {
                   <span class="text-[10px] font-black uppercase tracking-wider text-slate-400">{{ item.label }}</span>
                   <span :class="[
                     'px-2 py-0.5 rounded-full text-[9px] font-black uppercase flex items-center gap-1',
-                    item.aprobacion 
-                      ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300' 
-                      : 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300'
+                    !item.aprobacion 
+                      ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300' 
+                      : item.aprobacion.accion === 'APROBAR'
+                      ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300'
+                      : item.aprobacion.accion === 'RECHAZAR'
+                      ? 'bg-rose-100 text-rose-800 dark:bg-rose-900/50 dark:text-rose-300'
+                      : 'bg-slate-200 text-slate-800 dark:bg-slate-700 dark:text-slate-300'
                   ]">
-                    <CheckCircle2 v-if="item.aprobacion" :size="10" />
-                    <Clock v-else :size="10" />
-                    <span>{{ item.aprobacion ? 'Aprobado' : 'Pendiente' }}</span>
+                    <Clock v-if="!item.aprobacion" :size="10" />
+                    <CheckCircle2 v-else-if="item.aprobacion.accion === 'APROBAR'" :size="10" />
+                    <XCircle v-else :size="10" />
+                    <span>
+                      {{ 
+                        !item.aprobacion 
+                          ? 'Pendiente' 
+                          : item.aprobacion.accion === 'APROBAR' 
+                          ? 'Aprobado' 
+                          : item.aprobacion.accion === 'RECHAZAR' 
+                          ? 'Rechazado' 
+                          : 'Cancelado' 
+                      }}
+                    </span>
                   </span>
                 </div>
                 <p class="font-bold text-slate-800 dark:text-white text-xs truncate" :title="item.entidad">{{ item.entidad }}</p>
@@ -979,14 +999,17 @@ onMounted(() => {
 
               <div class="text-[10px] pt-2 border-t border-slate-200/50 dark:border-slate-800">
                 <template v-if="item.aprobacion">
-                  <p class="text-emerald-700 dark:text-emerald-400 font-bold truncate">
-                    ✓ {{ item.aprobacion.usuario_nombre }} {{ item.aprobacion.usuario_apellido }}
+                  <p :class="[
+                    'font-bold truncate',
+                    item.aprobacion.accion === 'APROBAR' ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'
+                  ]">
+                    {{ item.aprobacion.accion === 'APROBAR' ? '✓' : '✗' }} {{ item.aprobacion.usuario_nombre }} {{ item.aprobacion.usuario_apellido }}
                   </p>
                   <p class="text-slate-400 font-mono text-[9px] mt-0.5">{{ formatDate(item.aprobacion.fecha) }}</p>
                 </template>
                 <template v-else>
                   <p class="text-amber-700 dark:text-amber-400 font-semibold italic">
-                    ⏳ Pendiente por aprobar
+                    ⏳ Pendiente por responder
                   </p>
                 </template>
               </div>
@@ -1023,7 +1046,10 @@ onMounted(() => {
                   <div class="flex flex-wrap items-center gap-2">
                     <span class="font-bold text-slate-900 dark:text-white">{{ ap.usuario_nombre }} {{ ap.usuario_apellido }}</span>
                     <span class="px-2 py-0.5 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-md text-[10px] font-black uppercase">{{ ap.rol }}</span>
-                    <span v-if="ap.grupo_destino_grado" class="px-2 py-0.5 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 rounded-md text-[10px] font-bold">
+                    <span 
+                      v-if="ap.accion === 'APROBAR' && ap.grupo_destino_grado && (ap.rol === 'DIRECTIVO_DESTINO' || ap.rol === 'ADMIN_GENERAL')" 
+                      class="px-2 py-0.5 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 rounded-md text-[10px] font-bold"
+                    >
                       🎯 Asignó: {{ ap.grupo_destino_grado }} - {{ ap.grupo_destino_seccion }} ({{ ap.grupo_destino_jornada }})
                     </span>
                   </div>

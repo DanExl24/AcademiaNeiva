@@ -13,4 +13,8 @@ BEGIN
   ) THEN
     ALTER TABLE public.traslado_aprobacion ADD COLUMN id_grupo_destino INTEGER REFERENCES public.grupos(id_grupo) ON DELETE SET NULL;
   END IF;
+
+  UPDATE public.traslado_aprobacion 
+  SET id_grupo_destino = NULL 
+  WHERE accion != 'APROBAR' OR rol NOT IN ('DIRECTIVO_DESTINO', 'ADMIN_GENERAL');
 END $$;

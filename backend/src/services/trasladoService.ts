@@ -233,6 +233,10 @@ export class TrasladoService {
         throw new Error('Ya has registrado tu decisión sobre esta solicitud de traslado.');
       }
 
+      const idGrupoDestinoPersistir = (input.accion === 'APROBAR' && (rolAprobacion === 'DIRECTIVO_DESTINO' || rolAprobacion === 'ADMIN_GENERAL'))
+        ? (input.id_grupo_destino || null)
+        : null;
+
       await trx
         .insertInto('traslado_aprobacion')
         .values({
@@ -241,15 +245,15 @@ export class TrasladoService {
           rol: rolAprobacion as any,
           accion: input.accion as any,
           comentario: input.comentario || null,
-          id_grupo_destino: input.id_grupo_destino || null,
+          id_grupo_destino: idGrupoDestinoPersistir,
           fecha: sql`NOW()`
         })
         .execute();
 
-      if (input.id_grupo_destino) {
+      if (idGrupoDestinoPersistir) {
         await trx
           .updateTable('solicitud_traslado')
-          .set({ id_grupo_destino: input.id_grupo_destino })
+          .set({ id_grupo_destino: idGrupoDestinoPersistir })
           .where('id_solicitud', '=', idSolicitud)
           .execute();
       }
