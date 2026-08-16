@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict F9agizTJraPdbZyQ0agGX51TxGtsOEs5ygY3feHYgt8pX3KvBlnNdbSakfDccsu
+\restrict 5ow7lZxpZtbKsDDo0NWlhyrFHgdTJU6aw2qvhw5n5EMaaofYynXUmG8wjZ40Spe
 
 -- Dumped from database version 18.4
 -- Dumped by pg_dump version 18.4
@@ -5241,8 +5241,6 @@ ALTER TABLE ONLY public.matricula
     ADD CONSTRAINT matricula_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio);
 
 
-
-
 --
 -- Name: matricula matricula_id_nivel_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
@@ -5606,5 +5604,5 @@ REVOKE USAGE ON SCHEMA public FROM PUBLIC;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict F9agizTJraPdbZyQ0agGX51TxGtsOEs5ygY3feHYgt8pX3KvBlnNdbSakfDccsu
+\unrestrict 5ow7lZxpZtbKsDDo0NWlhyrFHgdTJU6aw2qvhw5n5EMaaofYynXUmG8wjZ40Spe
 

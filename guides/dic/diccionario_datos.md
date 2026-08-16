@@ -2,7 +2,7 @@
 
 **Documentación Técnica y Especificación del Esquema de Base de Datos SQL (`AcademiaNeivaBD`)**
 
-> **Fecha de generación:** 2026-08-11
+> **Fecha de generación:** 2026-08-16
 > **Fidelidad:** 100% extractada directamente del esquema DDL nativo `AcademiaNeivaBD.sql`.
 
 ## 1. Introducción
@@ -222,7 +222,7 @@ A continuación se detallan las **62 tablas** pertenecientes al esquema `Academi
 
 
 ### 5.11 Tabla: `configuracion_colegio`
-**Descripción:** Parámetros académicos por colegio (notas mínimas, máximas, de aprobación y escala).
+**Descripción:** Parámetros académicos por colegio (notas mínimas, máximas, de aprobación, materias reprobatorias S.I.E.E. y escala).
 
 | Campo | Tipo de Dato | Nulo | Valor por Defecto | Clave | Descripción / Dominio |
 | :--- | :--- | :---: | :--- | :---: | :--- |
@@ -230,7 +230,8 @@ A continuación se detallan las **62 tablas** pertenecientes al esquema `Academi
 | `nota_minima` | `numeric(5,2)` | NO | `0 NOT NULL` | **** | Atributo nota_minima. |
 | `nota_maxima` | `numeric(5,2)` | NO | `5 NOT NULL` | **** | Atributo nota_maxima. |
 | `nota_aprobacion` | `numeric(5,2)` | NO | `3 NOT NULL` | **** | Atributo nota_aprobacion. |
-| `escala_modo` | `character varying(20)` | NO | `'AUTOMATICO'::character varying NOT NULL` | **** | Atributo escala_modo. |
+| `escala_modo` | `character varying(20)` | NO | `'AUTOMATICO'::character varying NOT NULL` | **** | Modo de escala valorativa (`AUTOMATICO` / `MANUAL`). |
+| `materias_reprobatorias_promocion` | `integer` | NO | `3` | **** | Número mínimo de asignaturas reprobadas que ocasionan la no promoción escolar según el S.I.E.E. del colegio (Decreto 1290 de 2009). |
 
 
 ### 5.12 Tabla: `configuracion_inscripcion`

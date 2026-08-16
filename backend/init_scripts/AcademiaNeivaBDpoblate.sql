@@ -2,12 +2,15 @@
 -- PostgreSQL database dump
 --
 
-\restrict gogt0e2xUelcVFeEx8RYWSkHXWpHEbbAgbdQTe6aylv7aO282KO3c1hbtBIqwlQ
+\restrict oyTigWM9kVUMJeHDwQo5CLnRsA3E5EgG2hcPlZRkLPSJeH4OzTl18tlecWJdZQA
 
 -- Dumped from database version 18.4
 -- Dumped by pg_dump version 18.4
 
+SET statement_timeout = 0;
 SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET transaction_timeout = 0;
 SET client_encoding = 'UTF8';
 SET standard_conforming_strings = on;
 SELECT pg_catalog.set_config('search_path', '', false);
@@ -213817,14 +213820,6 @@ ALTER TABLE ONLY public.matricula
 
 
 --
--- Name: matricula matricula_id_estudiante_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.matricula
-    ADD CONSTRAINT matricula_id_estudiante_fkey FOREIGN KEY (id_estudiante) REFERENCES public.estudiante(id_estudiante) ON DELETE CASCADE;
-
-
---
 -- Name: matricula matricula_id_nivel_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -214187,5 +214182,5 @@ REVOKE USAGE ON SCHEMA public FROM PUBLIC;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict gogt0e2xUelcVFeEx8RYWSkHXWpHEbbAgbdQTe6aylv7aO282KO3c1hbtBIqwlQ
+\unrestrict oyTigWM9kVUMJeHDwQo5CLnRsA3E5EgG2hcPlZRkLPSJeH4OzTl18tlecWJdZQA
 
