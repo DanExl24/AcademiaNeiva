@@ -15,10 +15,12 @@ import {
   ThumbsUp,
   ThumbsDown,
   Calendar,
-  CalendarDays
+  CalendarDays,
+  BarChart3
 } from 'lucide-vue-next'
 import BoletinExportModule from '../../components/boletines/BoletinExportModule.vue'
 import { Bar, Doughnut } from 'vue-chartjs'
+import EmptyChartState from '../../components/charts/EmptyChartState.vue'
 import {
   Chart as ChartJS,
   Title,
@@ -476,13 +478,16 @@ const hasObservations = computed(() => {
           </div>
         </div>
 
-        <div class="flex-1 relative min-h-[200px]">
+        <div class="flex-1 relative min-h-[200px] flex items-center justify-center">
           <div v-if="statsLoading" class="absolute inset-0 flex items-center justify-center">
             <div class="w-8 h-8 border-4 border-indigo-600/20 border-t-indigo-600 rounded-full animate-spin"></div>
           </div>
-          <div v-else-if="!dashboardStats || !dashboardStats?.has_calificaciones || dashboardStats?.top_materias_mejores?.length === 0" class="absolute inset-0 flex items-center justify-center text-slate-400 italic text-sm">
-            Faltan datos para cubrir este registro.
-          </div>
+          <EmptyChartState 
+            v-else-if="!dashboardStats || !dashboardStats?.has_calificaciones || dashboardStats?.top_materias_mejores?.length === 0"
+            :icon="BarChart3"
+            title="En espera de calificaciones"
+            description="Tus materias evaluadas y promedios se graficarán automáticamente conforme tus docentes asienten notas."
+          />
           <Bar v-else :data="barChartData" :options="barChartOptions" />
         </div>
       </div>

@@ -24,6 +24,7 @@ import {
   LinearScale
 } from 'chart.js'
 import { Bar } from 'vue-chartjs'
+import EmptyChartState from '../../components/charts/EmptyChartState.vue'
 import { useThemeStore } from '../../stores/theme'
 import { useAcademicYearStore } from '../../stores/academicYear'
 import { watch } from 'vue'
@@ -38,6 +39,10 @@ const yearStore = useAcademicYearStore()
 const loading = ref(true)
 const selectedPeriodId = ref<number | null>(null)
 const availablePeriods = ref<any[]>([])
+
+const hasCourseGrades = computed(() => {
+  return (dashboardData.value.courseAverages || []).some((c: any) => typeof c.promedio === 'number' && c.promedio > 0)
+})
 
 const dashboardData = ref({
   coursesCount: 0,
@@ -306,20 +311,18 @@ const getAlertColors = (type: string) => {
             </span>
           </div>
           
-          <div class="flex-1 w-full relative min-h-[300px]">
+          <div class="flex-1 w-full relative min-h-[300px] flex items-center justify-center">
             <Bar 
-              v-if="dashboardData.courseAverages.length > 0"
+              v-if="hasCourseGrades"
               :data="chartData" 
               :options="chartOptions as any" 
             />
-            <div 
+            <EmptyChartState 
               v-else 
-              class="absolute inset-0 flex flex-col items-center justify-center text-center opacity-70"
-            >
-              <FileX :size="48" class="text-slate-300 dark:text-slate-600 mb-4" />
-              <p class="text-slate-500 dark:text-slate-400 font-semibold">No hay promedios calculados aún.</p>
-              <p class="text-xs text-slate-400 dark:text-slate-500">Agrega calificaciones para ver la gráfica.</p>
-            </div>
+              :icon="TrendingUp"
+              title="Sin promedios calculados aún"
+              description="La gráfica de rendimiento por curso se generará automáticamente a medida que califiques las actividades del periodo."
+            />
           </div>
         </div>
 

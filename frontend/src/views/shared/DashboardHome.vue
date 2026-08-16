@@ -36,6 +36,7 @@ import {
   Filler
 } from 'chart.js'
 import { Bar, Line } from 'vue-chartjs'
+import EmptyChartState from '../../components/charts/EmptyChartState.vue'
 import { useThemeStore } from '../../stores/theme'
 
 ChartJS.register(
@@ -548,6 +549,23 @@ const evolutionChartData = computed(() => {
   }
 })
 
+const hasGradeChartData = computed(() => {
+  return (gradeChartData.value?.datasets?.[0]?.data || []).some((v: any) => typeof v === 'number' && v > 0)
+})
+
+const hasSubjectChartData = computed(() => {
+  return (subjectChartData.value?.datasets?.[0]?.data || []).some((v: any) => typeof v === 'number' && v > 0)
+})
+
+const hasEvolutionChartData = computed(() => {
+  return (evolutionChartData.value?.datasets?.[0]?.data || []).some((v: any) => typeof v === 'number' && v > 0)
+})
+
+const hasRiskChartData = computed(() => {
+  const datasets = riskChartData.value?.datasets || []
+  return datasets.some((d: any) => (d.data || []).some((v: any) => typeof v === 'number' && v > 0))
+})
+
 const filteredAlertsData = computed(() => {
   if (globalSelectedGrade.value === 'ALL') {
     return dashboardData.value.lowPerformance.gradeAlerts.map(g => ({
@@ -885,8 +903,14 @@ onMounted(() => {
               {{ globalSelectedGrade === 'ALL' ? 'Rendimiento por Grado' : 'Rendimiento por Curso' }}
             </h3>
           </div>
-          <div class="flex-1 w-full">
-            <Bar v-if="!loading" :data="gradeChartData" :options="horizontalOptions as any" />
+          <div class="flex-1 w-full flex items-center justify-center">
+            <Bar v-if="!loading && hasGradeChartData" :data="gradeChartData" :options="horizontalOptions as any" />
+            <EmptyChartState 
+              v-else-if="!loading"
+              :icon="TrendingUp"
+              title="Sin datos consolidados de rendimiento"
+              description="Las barras de promedio por grado o curso se generarán en cuanto existan notas registradas en el periodo."
+            />
           </div>
         </div>
 
@@ -919,11 +943,17 @@ onMounted(() => {
             </div>
           </div>
           
-          <div class="flex-1 w-full relative">
+          <div class="flex-1 w-full relative flex items-center justify-center">
             <div v-if="globalSelectedGrade !== 'ALL' && !selectedCourseForSubjects && availableCoursesForSelectedGrade.length > 0" class="absolute inset-0 flex items-center justify-center bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm z-10 rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
               <p class="text-slate-500 font-medium">Selecciona un curso arriba para ver su rendimiento.</p>
             </div>
-            <Bar v-if="!loading" :data="subjectChartData" :options="horizontalOptions as any" />
+            <Bar v-if="!loading && hasSubjectChartData" :data="subjectChartData" :options="horizontalOptions as any" />
+            <EmptyChartState 
+              v-else-if="!loading"
+              :icon="BookOpen"
+              title="Sin calificaciones por asignatura"
+              description="El consolidado de asignaturas se trazará automáticamente conforme se publiquen evaluaciones."
+            />
           </div>
         </div>
 
@@ -956,11 +986,17 @@ onMounted(() => {
             </div>
           </div>
           
-          <div class="flex-1 w-full relative">
+          <div class="flex-1 w-full relative flex items-center justify-center">
             <div v-if="globalSelectedGrade !== 'ALL' && !selectedCourseForEvolution && availableCoursesForSelectedGrade.length > 0" class="absolute inset-0 flex items-center justify-center bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm z-10 rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
               <p class="text-slate-500 font-medium">Selecciona un curso arriba para ver su evolución.</p>
             </div>
-            <Line v-if="!loading" :data="evolutionChartData" :options="chartOptionsBase as any" />
+            <Line v-if="!loading && hasEvolutionChartData" :data="evolutionChartData" :options="chartOptionsBase as any" />
+            <EmptyChartState 
+              v-else-if="!loading"
+              :icon="Target"
+              title="Evolución institucional en preparación"
+              description="La trayectoria histórica de promedios se activará con el avance de los periodos evaluativos."
+            />
           </div>
         </div>
       </div>
@@ -980,7 +1016,7 @@ onMounted(() => {
 
           <div class="grid grid-cols-1 gap-12">
             <!-- Risk by Course (STACKED HORIZONTAL) -->
-            <div class="bg-white/5 backdrop-blur-xl border border-white/10 p-8 rounded-[3rem] flex flex-col h-[550px]">
+            <div class="bg-white/5 backdrop-blur-xl border border-white/10 p-8 rounded-[3rem] flex flex-col min-h-[450px]">
               <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
                 <div class="flex flex-col sm:flex-row sm:items-center gap-4">
                   <h3 class="text-xl font-bold flex items-center gap-2 text-indigo-400">
@@ -997,8 +1033,15 @@ onMounted(() => {
                   </span>
                 </div>
               </div>
-              <div class="flex-1 w-full">
-                <Bar v-if="!loading" :data="riskChartData" :options="riskChartOptions as any" />
+              <div class="flex-1 w-full flex items-center justify-center">
+                <Bar v-if="!loading && hasRiskChartData" :data="riskChartData" :options="riskChartOptions as any" />
+                <EmptyChartState 
+                  v-else-if="!loading"
+                  :icon="LayoutDashboard"
+                  badge-text="Sin Estudiantes en Riesgo"
+                  title="Semáforo académico despejado"
+                  description="No se registran estudiantes en riesgo crítico de reprobación en los grados y cursos seleccionados."
+                />
               </div>
             </div>
 

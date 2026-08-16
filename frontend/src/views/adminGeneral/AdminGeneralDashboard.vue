@@ -4,6 +4,7 @@ import axios from 'axios'
 import { useAuthStore } from '../../stores/auth'
 import { socketService } from '../../services/socketService'
 import { Doughnut, Line } from 'vue-chartjs'
+import EmptyChartState from '../../components/charts/EmptyChartState.vue'
 import {
   Chart as ChartJS,
   Title,
@@ -25,7 +26,8 @@ import {
   Mail, 
   Network, 
   Sparkles,
-  RefreshCw
+  RefreshCw,
+  TrendingUp
 } from 'lucide-vue-next'
 
 // Register Chart.js components
@@ -145,6 +147,16 @@ const distributionChartData = computed(() => {
       borderWidth: 0
     }]
   }
+})
+
+const hasGrowthData = computed(() => {
+  const data = growthChartData.value?.datasets?.[0]?.data || []
+  return data.length > 0 && data.some((v: any) => typeof v === 'number' && v > 0)
+})
+
+const hasDistributionData = computed(() => {
+  const data = distributionChartData.value?.datasets?.[0]?.data || []
+  return data.length > 0 && data.some((v: any) => typeof v === 'number' && v > 0)
 })
 
 const distributionChartOptions = {
@@ -344,11 +356,17 @@ const distributionChartOptions = {
           <h3 class="text-lg font-black text-slate-800 dark:text-white">Crecimiento de la Plataforma</h3>
           <p class="text-xs text-slate-400 font-bold uppercase tracking-wider mt-0.5">Nuevos colegios registrados por mes</p>
         </div>
-        <div class="flex-1 relative min-h-[220px]">
+        <div class="flex-1 relative min-h-[220px] flex items-center justify-center">
           <div v-if="loading" class="absolute inset-0 flex items-center justify-center">
             <div class="w-8 h-8 border-4 border-indigo-650/20 border-t-indigo-600 rounded-full animate-spin"></div>
           </div>
-          <Line v-else :data="growthChartData" :options="growthChartOptions" />
+          <Line v-else-if="hasGrowthData" :data="growthChartData" :options="growthChartOptions" />
+          <EmptyChartState 
+            v-else 
+            :icon="TrendingUp"
+            title="Sin registros de crecimiento mensual"
+            description="La curva de crecimiento se generará automáticamente al registrarse colegios e instituciones en la plataforma."
+          />
         </div>
       </div>
 
@@ -362,9 +380,16 @@ const distributionChartOptions = {
           <div v-if="loading" class="absolute inset-0 flex items-center justify-center">
             <div class="w-8 h-8 border-4 border-indigo-650/20 border-t-indigo-600 rounded-full animate-spin"></div>
           </div>
-          <div v-else class="w-full h-full relative min-h-[200px]">
+          <div v-else-if="hasDistributionData" class="w-full h-full relative min-h-[200px]">
             <Doughnut :data="distributionChartData" :options="distributionChartOptions" />
           </div>
+          <EmptyChartState 
+            v-else 
+            :icon="Users"
+            :compact="true"
+            title="Sin usuarios activos registrados"
+            description="La distribución de roles se generará en cuanto existan usuarios activos en el sistema."
+          />
         </div>
       </div>
 

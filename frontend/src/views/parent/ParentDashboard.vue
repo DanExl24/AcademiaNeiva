@@ -15,7 +15,8 @@ import {
   Clock,
   ChevronRight,
   Info,
-  BarChart3
+  BarChart3,
+  CalendarCheck
 } from 'lucide-vue-next'
 import {
   Chart as ChartJS,
@@ -31,6 +32,7 @@ import {
   BarElement
 } from 'chart.js'
 import { Line, Doughnut, Bar } from 'vue-chartjs'
+import EmptyChartState from '../../components/charts/EmptyChartState.vue'
 
 ChartJS.register(
   Title,
@@ -197,6 +199,27 @@ const cumulativeStats = computed(() => {
 const activeStats = computed(() => {
   if (selectedChildId.value === null) return cumulativeStats.value
   return dashboardData.value?.studentStats?.find((s: any) => s.id_estudiante === selectedChildId.value)
+})
+
+const hasFamilyGrades = computed(() => {
+  const stats = dashboardData.value?.studentStats || []
+  return stats.length > 0 && stats.some((s: any) => typeof s.average === 'number' && s.average > 0)
+})
+
+const hasEvolutionData = computed(() => {
+  const datasets = lineChartData.value?.datasets || []
+  return datasets.length > 0 && datasets.some((d: any) => d.data?.some((v: any) => typeof v === 'number' && v > 0))
+})
+
+const hasSubjectGrades = computed(() => {
+  const list = activeChartTab.value === 'best' 
+    ? (activeStats.value?.top_materias_mejores || [])
+    : (activeStats.value?.top_materias_peores || [])
+  return list.length > 0 && list.some((m: any) => typeof m.calificacion === 'number' && m.calificacion > 0)
+})
+
+const hasAttendanceData = computed(() => {
+  return Boolean(activeStats.value?.attendanceDetails && activeStats.value.attendanceDetails.total > 0)
 })
 
 const formatDate = (dateString: string | null) => {
@@ -541,13 +564,15 @@ const barChartOptions = {
           </div>
 
           <div v-if="activeStats" class="flex gap-4 w-full lg:w-auto">
-            <div class="flex-1 lg:w-48 bg-white/5 backdrop-blur-md rounded-[2.5rem] p-6 border border-white/10 text-center">
+            <div class="flex-1 lg:w-48 bg-white/5 backdrop-blur-md rounded-[2.5rem] p-6 border border-white/10 text-center flex flex-col justify-center">
               <p class="text-[10px] font-black text-indigo-300 uppercase tracking-widest mb-1">Promedio Actual</p>
-              <p class="text-5xl font-black">{{ activeStats.average }}</p>
+              <p class="text-5xl font-black">{{ activeStats.average > 0 ? activeStats.average : 'S/C' }}</p>
+              <p v-if="!activeStats.average || activeStats.average === 0" class="text-[10px] text-indigo-300/80 font-bold uppercase tracking-wider mt-1">Sin Calificaciones</p>
             </div>
-            <div class="flex-1 lg:w-48 bg-emerald-600/20 backdrop-blur-md rounded-[2.5rem] p-6 border border-emerald-500/20 text-center">
+            <div class="flex-1 lg:w-48 bg-emerald-600/20 backdrop-blur-md rounded-[2.5rem] p-6 border border-emerald-500/20 text-center flex flex-col justify-center">
               <p class="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-1">Asistencia</p>
-              <p class="text-5xl font-black text-emerald-400">{{ activeStats.attendanceRate }}%</p>
+              <p class="text-5xl font-black text-emerald-400">{{ hasAttendanceData ? `${activeStats.attendanceRate}%` : '100%' }}</p>
+              <p v-if="!hasAttendanceData" class="text-[10px] text-emerald-300/80 font-bold uppercase tracking-wider mt-1">Sin Inasistencias</p>
             </div>
           </div>
         </div>
@@ -567,7 +592,13 @@ const barChartOptions = {
         </div>
       </div>
       <div class="h-64">
-        <Bar :data="familyChartData" :options="familyChartOptions" />
+        <Bar v-if="hasFamilyGrades" :data="familyChartData" :options="familyChartOptions" />
+        <EmptyChartState 
+          v-else 
+          :icon="BarChart3"
+          title="En espera de calificaciones familiares" 
+          description="La comparativa general de rendimiento entre tus hijos se activará automáticamente al registrarse las primeras evaluaciones del año lectivo." 
+        />
       </div>
     </div>
 
@@ -657,7 +688,13 @@ const barChartOptions = {
             </div>
           </div>
           <div class="h-80 w-full">
-            <Line :data="lineChartData" :options="lineChartOptions" />
+            <Line v-if="hasEvolutionData" :data="lineChartData" :options="lineChartOptions" />
+            <EmptyChartState 
+              v-else 
+              :icon="TrendingUp"
+              title="Evolución académica en preparación" 
+              description="La trayectoria del promedio por periodos se trazará automáticamente al cerrar o evaluar los periodos académicos del año lectivo." 
+            />
           </div>
         </div>
 
@@ -698,19 +735,29 @@ const barChartOptions = {
             </div>
           </div>
           <div class="h-80 relative">
-            <div v-if="!activeStats || !activeStats.top_materias_mejores?.length" class="flex flex-col items-center justify-center h-full opacity-35">
-              <BarChart3 :size="48" />
-              <span class="text-xs font-bold uppercase tracking-widest mt-2">Sin datos disponibles</span>
-            </div>
-            <Bar v-else :data="barChartData" :options="barChartOptions" />
+            <Bar v-if="hasSubjectGrades" :data="barChartData" :options="barChartOptions" />
+            <EmptyChartState 
+              v-else 
+              :icon="BarChart3"
+              title="Sin calificaciones en este periodo" 
+              description="Aún no se han publicado notas para las asignaturas del periodo académico seleccionado." 
+            />
           </div>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
            <div class="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-sm">
              <h3 class="text-xl font-black text-slate-800 dark:text-white mb-6">Asistencia Anual</h3>
-             <div class="h-60">
-               <Doughnut :data="doughnutChartData" :options="doughnutChartOptions" />
+             <div class="h-60 flex items-center justify-center">
+               <Doughnut v-if="hasAttendanceData" :data="doughnutChartData" :options="doughnutChartOptions" />
+               <EmptyChartState 
+                 v-else 
+                 :icon="CalendarCheck"
+                 :compact="true"
+                 badge-text="Asistencia al 100%"
+                 title="Sin inasistencias reportadas" 
+                 description="El estudiante registra puntualidad completa y no tiene inasistencias reportadas en el año." 
+               />
              </div>
            </div>
 
