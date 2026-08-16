@@ -1693,6 +1693,14 @@ async function seedDbaCompetenciesAndEvidences(): Promise<void> {
       const directiveUserId = directivoUserRes.rows[0]?.id_usuario || 1;
 
       if (yearId2025) {
+        const maxGradeRes = await client.query<{ max_grade: number }>(
+          `SELECT MAX(g.id_tipo_grado) as max_grade 
+           FROM grupos g 
+           WHERE g.id_colegio = $1`,
+          [school.id_colegio]
+        );
+        const maxGradeId = maxGradeRes.rows[0]?.max_grade;
+
         const enrollments2025 = await client.query<{
           id_estudiante: number;
           id_grupo: number;
@@ -1705,22 +1713,59 @@ async function seedDbaCompetenciesAndEvidences(): Promise<void> {
           [school.id_colegio, yearId2025]
         );
 
+        let graduatedCount = 0;
+
         for (const enr of enrollments2025.rows) {
+          const isFinalGradeStudent = maxGradeId != null && enr.id_tipo_grado === maxGradeId;
+
           const existCheck = await client.query(
             "SELECT 1 FROM decision_promocion_directivo WHERE id_estudiante = $1 AND id_anio_anterior = $2",
             [enr.id_estudiante, yearId2025]
           );
 
           if (existCheck.rows.length === 0) {
+            const assignedGrade = isFinalGradeStudent ? null : enr.id_tipo_grado;
+            const obs = isFinalGradeStudent
+              ? "Estudiante del último año escolar promovido y graduado exitosamente por decisión del Consejo Académico (S.I.E.E. / Decreto 1290)."
+              : "Estudiante promovido satisfactoriamente al siguiente grado lectivo por el Consejo Académico.";
+
             await client.query(
               `INSERT INTO decision_promocion_directivo 
                (id_colegio, id_estudiante, id_anio_anterior, resultado_calculado, decision_tomada, id_grado_anterior, id_grado_asignado, id_usuario_decision, observacion)
-               VALUES ($1, $2, $3, 'APROBADO', 'PROMOVER_SIGUIENTE_GRADO', $4, $4, $5, 'Estudiante promovido satisfactoriamente al siguiente grado lectivo por el Consejo AcadÃ©mico.')`,
-              [school.id_colegio, enr.id_estudiante, yearId2025, enr.id_tipo_grado, directiveUserId]
+               VALUES ($1, $2, $3, 'APROBADO', 'PROMOVER_SIGUIENTE_GRADO', $4, $5, $6, $7)`,
+              [school.id_colegio, enr.id_estudiante, yearId2025, enr.id_tipo_grado, assignedGrade, directiveUserId, obs]
             );
+
+            if (isFinalGradeStudent) {
+              graduatedCount++;
+              // 1. Actualizar estado del estudiante a GRADUADO
+              await client.query(
+                `UPDATE estudiante SET estado = 'GRADUADO' WHERE id_estudiante = $1`,
+                [enr.id_estudiante]
+              );
+
+              // 2. Registrar en el libro de graduados (registro_graduados)
+              const checkGrad = await client.query(
+                "SELECT id_graduado FROM registro_graduados WHERE id_estudiante = $1",
+                [enr.id_estudiante]
+              );
+
+              if (checkGrad.rows.length > 0) {
+                await client.query(
+                  `UPDATE registro_graduados SET fecha_graduacion = NOW(), observaciones = $1, id_usuario_registro = $2, id_anio = $3 WHERE id_estudiante = $4`,
+                  ["Graduación del último año lectivo procesada en siembra de datos de prueba.", directiveUserId, yearId2025, enr.id_estudiante]
+                );
+              } else {
+                await client.query(
+                  `INSERT INTO registro_graduados (id_estudiante, fecha_graduacion, observaciones, id_usuario_registro, id_anio)
+                   VALUES ($1, NOW(), $2, $3, $4)`,
+                  [enr.id_estudiante, "Graduación del último año lectivo procesada en siembra de datos de prueba.", directiveUserId, yearId2025]
+                );
+              }
+            }
           }
         }
-        console.log(`âœ… Decisiones de promociÃ³n 2025 registradas para ${enrollments2025.rows.length} estudiantes de ${school.nombre}.`);
+        console.log(`✅ Decisiones de promoción 2025 registradas para ${enrollments2025.rows.length} estudiantes (${graduatedCount} graduados 🎓) en ${school.nombre}.`);
       }
     }
     console.log("âœ… Siembra de competencias y evidencias basada en DBA completada exitosamente.");
