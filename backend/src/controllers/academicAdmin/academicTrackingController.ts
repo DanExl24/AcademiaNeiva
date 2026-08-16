@@ -194,6 +194,7 @@ export const getPeriodAcademicTracking = async (req: Request, res: Response): Pr
       res.json({
         total_estudiantes: students.length,
         aprobados_count: students.length,
+        pendientes_count: 0,
         reprobados_count: 0,
         sin_calificar_count: 0,
         min_passing_score: minPassingScore,
@@ -206,6 +207,9 @@ export const getPeriodAcademicTracking = async (req: Request, res: Response): Pr
           grado_nombre: s.grado_nombre || "Sin Grado",
           grupo_nombre: s.grupo_nombre || "Sin Grupo",
           jornada_nombre: s.jornada_nombre || null,
+          id_grado: s.id_grado,
+          is_final_grade: maxGradeId != null && s.id_grado === maxGradeId,
+          es_ultimo_grado: maxGradeId != null && s.id_grado === maxGradeId,
           estado_academico: "SIN_NOTAS",
           promedio_general: null,
           cantidad_reprobadas: 0,
@@ -304,6 +308,7 @@ export const getPeriodAcademicTracking = async (req: Request, res: Response): Pr
     });
 
     let aprobadosCount = 0;
+    let pendientesCount = 0;
     let reprobadosCount = 0;
     let sinCalificarCount = 0;
 
@@ -408,13 +413,17 @@ export const getPeriodAcademicTracking = async (req: Request, res: Response): Pr
         }
       }
 
+      // Clasificación según RN-19.3 (0: APROBADO, 1-2: PENDIENTE, 3+: REPROBADO)
       let estadoAcademico = "APROBADO";
       if (totalSubjectsEvaluated === 0) {
         estadoAcademico = "SIN_NOTAS";
         sinCalificarCount++;
-      } else if (failedSubjects.length > 0) {
+      } else if (failedSubjects.length >= 3) {
         estadoAcademico = "REPROBADO";
         reprobadosCount++;
+      } else if (failedSubjects.length > 0) {
+        estadoAcademico = "PENDIENTE";
+        pendientesCount++;
       } else {
         estadoAcademico = "APROBADO";
         aprobadosCount++;
@@ -446,6 +455,7 @@ export const getPeriodAcademicTracking = async (req: Request, res: Response): Pr
     res.json({
       total_estudiantes: students.length,
       aprobados_count: aprobadosCount,
+      pendientes_count: pendientesCount,
       reprobados_count: reprobadosCount,
       sin_calificar_count: sinCalificarCount,
       min_passing_score: minPassingScore,

@@ -73,6 +73,7 @@ const groups = ref<any[]>([])
 const trackingData = ref<{
   total_estudiantes: number
   aprobados_count: number
+  pendientes_count?: number
   reprobados_count: number
   sin_calificar_count?: number
   min_passing_score: number
@@ -81,6 +82,7 @@ const trackingData = ref<{
 }>({
   total_estudiantes: 0,
   aprobados_count: 0,
+  pendientes_count: 0,
   reprobados_count: 0,
   sin_calificar_count: 0,
   min_passing_score: 3.0,
@@ -568,7 +570,15 @@ onMounted(async () => {
           <div class="stat-icon"><CheckCircle2 class="w-6 h-6" /></div>
           <div class="stat-data">
             <span class="stat-value">{{ trackingData.aprobados_count || 0 }}</span>
-            <span class="stat-label">Aprobados</span>
+            <span class="stat-label">Aprobados (0 Reprobadas)</span>
+          </div>
+        </div>
+
+        <div class="stat-card stat-warning">
+          <div class="stat-icon"><AlertTriangle class="w-6 h-6 text-amber-500" /></div>
+          <div class="stat-data">
+            <span class="stat-value">{{ trackingData.pendientes_count || 0 }}</span>
+            <span class="stat-label">Pendientes (1-2 Reprobadas)</span>
           </div>
         </div>
 
@@ -576,7 +586,7 @@ onMounted(async () => {
           <div class="stat-icon"><XCircle class="w-6 h-6" /></div>
           <div class="stat-data">
             <span class="stat-value">{{ trackingData.reprobados_count || 0 }}</span>
-            <span class="stat-label">Reprobados</span>
+            <span class="stat-label">No Promovidos (3+ Reprobadas)</span>
           </div>
         </div>
 
@@ -679,11 +689,16 @@ onMounted(async () => {
                       class="badge" 
                       :class="{
                         'badge-success': student.estado_academico === 'APROBADO',
+                        'badge-warning': student.estado_academico === 'PENDIENTE',
                         'badge-danger': student.estado_academico === 'REPROBADO',
                         'bg-slate-100 text-slate-600 border border-slate-200': student.estado_academico === 'SIN_NOTAS'
                       }"
                     >
-                      {{ student.estado_academico === 'SIN_NOTAS' ? 'Sin calificaciones' : student.estado_academico }}
+                      {{ 
+                        student.estado_academico === 'SIN_NOTAS' ? 'Sin calificaciones' : 
+                        student.estado_academico === 'PENDIENTE' ? 'Pendiente' : 
+                        (student.estado_academico === 'REPROBADO' ? 'No Promovido' : student.estado_academico) 
+                      }}
                     </span>
                   </td>
                   <td>
