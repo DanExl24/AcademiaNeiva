@@ -603,6 +603,10 @@ function onHeaderYearChange(e: Event) {
 const userSchools = ref<{ id_colegio: number; colegio_nombre: string; rol_nombre: string }[]>([])
 
 const hasMultipleSchools = computed(() => {
+  // Para padres y estudiantes, la vista es familiar/personal y unificada; no aplica cambiar sede de trabajo
+  if (auth.activeRole === 'padre' || auth.activeRole === 'estudiante') {
+    return false
+  }
   const uniqueIds = new Set(userSchools.value.map(s => s.id_colegio))
   return uniqueIds.size > 1
 })
