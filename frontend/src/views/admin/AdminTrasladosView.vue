@@ -111,6 +111,9 @@ const activeSection = ref<'listado' | 'estadisticas'>('listado')
 const showDetailModal = ref(false)
 const selectedSolicitud = ref<SolicitudTraslado | null>(null)
 const loadingDetail = ref(false)
+const disponibilidadCupos = ref<any>(null)
+const selectedGrupoDestino = ref<number | null>(null)
+const showAllGroups = ref(false)
 
 // Intervention modal
 const showIntervencionModal = ref(false)
@@ -218,6 +221,9 @@ const resetFilters = () => {
 
 const openDetailModal = async (sol: SolicitudTraslado) => {
   selectedSolicitud.value = null
+  disponibilidadCupos.value = null
+  selectedGrupoDestino.value = null
+  showAllGroups.value = false
   showDetailModal.value = true
   loadingDetail.value = true
   try {
@@ -225,6 +231,24 @@ const openDetailModal = async (sol: SolicitudTraslado) => {
       headers: { Authorization: `Bearer ${auth.token}` }
     })
     selectedSolicitud.value = res.data
+    selectedGrupoDestino.value = (res.data as any).id_grupo_destino || (res.data as any).datos_destino?.id_grupo || null
+
+    if (res.data.tipo === 'TRASLADO_MATRICULA') {
+      try {
+        const destId = res.data.id_colegio_destino || sol.id_colegio_destino
+        const cuposRes = await axios.get(`${API_BASE_URL}/api/traslados/${sol.id_solicitud}/disponibilidad-cupos?id_colegio=${destId}`, {
+          headers: { Authorization: `Bearer ${auth.token}` }
+        })
+        disponibilidadCupos.value = cuposRes.data
+        if (!selectedGrupoDestino.value && cuposRes.data?.grupos?.length > 0) {
+          if (cuposRes.data.grupos.length === 1 && cuposRes.data.grupos[0].cupos_disponibles > 0) {
+            selectedGrupoDestino.value = cuposRes.data.grupos[0].id_grupo
+          }
+        }
+      } catch (cuposErr) {
+        console.error('Error fetching cupos en admin view:', cuposErr)
+      }
+    }
   } catch (err: any) {
     alert(err.response?.data?.error || 'Error al cargar detalle')
     showDetailModal.value = false
@@ -808,6 +832,91 @@ const formatDate = (dateStr?: string | null) => {
                       ⏳ Pendiente por aprobar
                     </p>
                   </template>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Verificación de Cupos y Asignación de Grado/Curso/Jornada para Colegio Destino -->
+          <div v-if="selectedSolicitud.tipo === 'TRASLADO_MATRICULA'" class="p-5 bg-indigo-50/40 dark:bg-slate-800/60 border border-indigo-100 dark:border-slate-700 rounded-2xl space-y-4 shadow-sm">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-indigo-100 dark:border-slate-700/80 pb-3">
+              <div>
+                <h3 class="text-xs font-black uppercase text-indigo-950 dark:text-indigo-200 tracking-wider flex items-center gap-2">
+                  <Building2 :size="15" class="text-indigo-600 dark:text-indigo-400" />
+                  Asignación de Grado / Curso / Jornada Destino ({{ selectedSolicitud.colegio_destino_nombre }})
+                </h3>
+                <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                  Grado Solicitado: <strong class="text-slate-800 dark:text-slate-200">{{ disponibilidadCupos?.grado_nombre || (selectedSolicitud as any).datos_origen?.grado || 'General' }}</strong>
+                </p>
+              </div>
+              
+              <div class="flex items-center gap-2">
+                <span v-if="disponibilidadCupos" :class="[
+                  'px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider',
+                  disponibilidadCupos.hay_cupos ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300' : 'bg-rose-100 text-rose-800 dark:bg-rose-900/50 dark:text-rose-300'
+                ]">
+                  {{ disponibilidadCupos.hay_cupos ? `${disponibilidadCupos.cupos_totales_grado} Cupos en Grado` : 'Sin Cupos en Grado' }}
+                </span>
+
+                <button
+                  v-if="disponibilidadCupos?.todos_los_grupos && disponibilidadCupos.todos_los_grupos.length > (disponibilidadCupos.grupos?.length || 0)"
+                  type="button"
+                  @click="showAllGroups = !showAllGroups"
+                  class="px-2.5 py-1 bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 text-indigo-600 dark:text-indigo-300 border border-slate-200 dark:border-slate-600 rounded-lg text-[10px] font-bold transition-all shadow-xs"
+                >
+                  {{ showAllGroups ? 'Ver solo grado sugerido' : 'Ver todos los cursos' }}
+                </button>
+              </div>
+            </div>
+
+            <!-- Alerta sin cupos -->
+            <div v-if="disponibilidadCupos && !disponibilidadCupos.hay_cupos && (!disponibilidadCupos.grupos || disponibilidadCupos.grupos.length === 0)" class="p-3 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800 rounded-xl text-xs text-rose-700 dark:text-rose-300 font-semibold flex items-center gap-2">
+              <AlertTriangle :size="16" class="shrink-0" />
+              <span>No hay cupos disponibles en el grado solicitado en la institución destino.</span>
+            </div>
+
+            <!-- Lista de grupos disponibles -->
+            <div v-if="disponibilidadCupos && (showAllGroups ? disponibilidadCupos.todos_los_grupos : disponibilidadCupos.grupos)?.length > 0" class="space-y-2">
+              <div class="flex items-center justify-between">
+                <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase">
+                  {{ showAllGroups ? 'Todos los grupos disponibles en el colegio receptor:' : 'Grupos y jornadas disponibles en el grado solicitado:' }}
+                </label>
+                <span v-if="selectedGrupoDestino" class="text-[10px] font-black text-indigo-600 dark:text-indigo-400 bg-indigo-100/60 dark:bg-indigo-950/80 px-2 py-0.5 rounded-md">
+                  ✓ Grupo Asignado/Seleccionado
+                </span>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-56 overflow-y-auto pr-1">
+                <div 
+                  v-for="g in (showAllGroups ? disponibilidadCupos.todos_los_grupos : disponibilidadCupos.grupos)" 
+                  :key="g.id_grupo"
+                  :class="[
+                    'p-3 rounded-xl border text-left text-xs transition-all flex items-center justify-between gap-3 shadow-xs',
+                    selectedGrupoDestino === g.id_grupo 
+                      ? 'bg-indigo-600 text-white border-indigo-600 ring-2 ring-indigo-400/40' 
+                      : g.cupos_disponibles > 0 
+                      ? 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700' 
+                      : 'bg-slate-100 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800 opacity-50'
+                  ]"
+                >
+                  <div>
+                    <p :class="selectedGrupoDestino === g.id_grupo ? 'font-black text-white text-sm' : 'font-bold text-slate-800 dark:text-slate-100'">
+                      {{ g.nombre_completo }}
+                    </p>
+                    <p :class="selectedGrupoDestino === g.id_grupo ? 'text-indigo-100 text-[10px]' : 'text-slate-500 dark:text-slate-400 text-[10px]'">
+                      Nivel: {{ g.nivel || disponibilidadCupos.nivel_nombre || 'General' }}
+                    </p>
+                  </div>
+                  <span :class="[
+                    'text-[10px] font-black shrink-0 px-2 py-1 rounded-md border',
+                    selectedGrupoDestino === g.id_grupo
+                      ? 'bg-white text-indigo-700 border-transparent font-black'
+                      : g.cupos_disponibles > 0
+                      ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                      : 'bg-slate-100 dark:bg-slate-700 text-slate-500 border-transparent'
+                  ]">
+                    {{ g.cupos_disponibles }} cupos
+                  </span>
                 </div>
               </div>
             </div>

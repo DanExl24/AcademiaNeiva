@@ -125,10 +125,25 @@ const openAcademicDataModal = (targetId: number) => {
   showAcademicDataModal.value = true
 }
 
+const showAllGroups = ref(false)
+
 const isDirectivoDestino = computed(() => {
   if (!selectedSolicitud.value) return false
-  const mySchool = auth.selectedSchoolId || (auth.user?.schoolId ? Number(auth.user.schoolId) : null)
-  return mySchool !== null && Number(mySchool) === Number(selectedSolicitud.value.id_colegio_destino)
+  const destId = Number(selectedSolicitud.value.id_colegio_destino)
+  const currentSchoolId = auth.selectedSchoolId !== null && auth.selectedSchoolId !== undefined
+    ? Number(auth.selectedSchoolId)
+    : (auth.user?.schoolId ? Number(auth.user.schoolId) : null)
+
+  const roles = (auth.user?.roles as string[]) || (auth.user?.role ? [auth.user.role] : [])
+  const isDirectivo = roles.includes('directivo') || auth.user?.role === 'directivo' || auth.activeRole === 'directivo'
+
+  if (isDirectivo) {
+    if (currentSchoolId === destId) return true
+    if (auth.user?.schoolIds && auth.user.schoolIds.map(Number).includes(destId)) return true
+    if (auth.user?.schoolId && Number(auth.user.schoolId) === destId) return true
+  }
+
+  return false
 })
 
 // Forms
@@ -177,31 +192,42 @@ const canUserApproveCurrentModal = computed(() => {
   const s = selectedSolicitud.value
   if (['EJECUTADA', 'RECHAZADA', 'CANCELADA'].includes(s.estado)) return false
 
-  const userId = auth.user?.id ? Number(auth.user.id) : null
+  const userId = auth.user?.id ? Number(auth.user.id) : (auth.user?.id_usuario ? Number(auth.user.id_usuario) : null)
   const roles: string[] = (auth.user?.roles as string[]) || (auth.user?.role ? [auth.user.role] : [])
-  const currentSchoolId = auth.selectedSchoolId || (auth.user?.schoolId ? Number(auth.user.schoolId) : null)
+  const currentSchoolId = auth.selectedSchoolId !== null && auth.selectedSchoolId !== undefined
+    ? Number(auth.selectedSchoolId)
+    : (auth.user?.schoolId ? Number(auth.user.schoolId) : null)
 
   if (isAdminGeneral.value) return true
 
-  // Verificar si ya emitió su voto
-  const yaVotoUsuario = s.aprobaciones?.some(a => a.id_usuario === userId)
-  if (yaVotoUsuario) return false
-
-  // Verificar roles directivos
   const isDirectivo = roles.includes('directivo') || auth.user?.role === 'directivo' || auth.activeRole === 'directivo'
-  if (isDirectivo && currentSchoolId !== null) {
-    if (Number(currentSchoolId) === Number(s.id_colegio_origen)) {
-      const yaVotoOrigen = s.aprobaciones?.some(a => a.rol === 'DIRECTIVO_ORIGEN')
-      if (!yaVotoOrigen) return true
-    }
-    if (Number(currentSchoolId) === Number(s.id_colegio_destino)) {
+  if (isDirectivo) {
+    const destSchoolId = Number(s.id_colegio_destino)
+    const origSchoolId = Number(s.id_colegio_origen)
+
+    // Directivo destino
+    if (
+      currentSchoolId === destSchoolId ||
+      (auth.user?.schoolIds && auth.user.schoolIds.map(Number).includes(destSchoolId)) ||
+      (auth.user?.schoolId && Number(auth.user.schoolId) === destSchoolId)
+    ) {
       const yaVotoDestino = s.aprobaciones?.some(a => a.rol === 'DIRECTIVO_DESTINO')
       if (!yaVotoDestino) return true
+    }
+
+    // Directivo origen
+    if (
+      currentSchoolId === origSchoolId ||
+      (auth.user?.schoolIds && auth.user.schoolIds.map(Number).includes(origSchoolId)) ||
+      (auth.user?.schoolId && Number(auth.user.schoolId) === origSchoolId)
+    ) {
+      const yaVotoOrigen = s.aprobaciones?.some(a => a.rol === 'DIRECTIVO_ORIGEN')
+      if (!yaVotoOrigen) return true
     }
   }
 
   const isPadre = roles.includes('padre') || auth.user?.role === 'padre' || auth.activeRole === 'padre'
-  if (isPadre || userId === s.id_usuario) {
+  if (isPadre || (userId !== null && userId === s.id_usuario)) {
     const yaVotoUsuarioRol = s.aprobaciones?.some(a => a.rol === 'USUARIO')
     if (!yaVotoUsuarioRol) return true
   }
@@ -211,8 +237,27 @@ const canUserApproveCurrentModal = computed(() => {
 
 const userAlreadyVotedMessage = computed(() => {
   if (!selectedSolicitud.value) return null
-  const userId = auth.user?.id ? Number(auth.user.id) : null
-  const voto = selectedSolicitud.value.aprobaciones?.find(a => a.id_usuario === userId)
+  const s = selectedSolicitud.value
+  const userId = auth.user?.id ? Number(auth.user.id) : (auth.user?.id_usuario ? Number(auth.user.id_usuario) : null)
+  const currentSchoolId = auth.selectedSchoolId !== null && auth.selectedSchoolId !== undefined
+    ? Number(auth.selectedSchoolId)
+    : (auth.user?.schoolId ? Number(auth.user.schoolId) : null)
+
+  const roles = (auth.user?.roles as string[]) || (auth.user?.role ? [auth.user.role] : [])
+  const isDirectivo = roles.includes('directivo') || auth.user?.role === 'directivo' || auth.activeRole === 'directivo'
+
+  if (isDirectivo && currentSchoolId) {
+    if (currentSchoolId === Number(s.id_colegio_destino)) {
+      const voto = s.aprobaciones?.find(a => a.rol === 'DIRECTIVO_DESTINO')
+      if (voto) return `La institución destino ya registró su decisión (${voto.accion}) para esta solicitud.`
+    }
+    if (currentSchoolId === Number(s.id_colegio_origen)) {
+      const voto = s.aprobaciones?.find(a => a.rol === 'DIRECTIVO_ORIGEN')
+      if (voto) return `La institución de origen ya registró su decisión (${voto.accion}) para esta solicitud.`
+    }
+  }
+
+  const voto = s.aprobaciones?.find(a => a.id_usuario === userId)
   if (voto) {
     return `Ya has registrado tu decisión (${voto.accion}) para esta solicitud.`
   }
@@ -350,6 +395,7 @@ const openDetailModal = async (solicitud: SolicitudTraslado) => {
   selectedSolicitud.value = null
   disponibilidadCupos.value = null
   selectedGrupoDestino.value = null
+  showAllGroups.value = false
   approvalForm.value = { accion: 'APROBAR', comentario: '' }
   try {
     const res = await axios.get(`${API_BASE_URL}/api/traslados/${solicitud.id_solicitud}`, {
@@ -359,12 +405,18 @@ const openDetailModal = async (solicitud: SolicitudTraslado) => {
     selectedGrupoDestino.value = res.data.id_grupo_destino || res.data.datos_destino?.id_grupo || null
     showDetailModal.value = true
 
-    if (solicitud.tipo === 'TRASLADO_MATRICULA') {
+    if (solicitud.tipo === 'TRASLADO_MATRICULA' || res.data.tipo === 'TRASLADO_MATRICULA') {
       try {
-        const cuposRes = await axios.get(`${API_BASE_URL}/api/traslados/${solicitud.id_solicitud}/disponibilidad-cupos?id_colegio=${solicitud.id_colegio_destino}`, {
+        const destId = res.data.id_colegio_destino || solicitud.id_colegio_destino
+        const cuposRes = await axios.get(`${API_BASE_URL}/api/traslados/${solicitud.id_solicitud}/disponibilidad-cupos?id_colegio=${destId}`, {
           headers: { Authorization: `Bearer ${auth.token}` }
         })
         disponibilidadCupos.value = cuposRes.data
+        if (!selectedGrupoDestino.value && cuposRes.data?.grupos?.length > 0) {
+          if (cuposRes.data.grupos.length === 1 && cuposRes.data.grupos[0].cupos_disponibles > 0) {
+            selectedGrupoDestino.value = cuposRes.data.grupos[0].id_grupo
+          }
+        }
       } catch (cuposErr) {
         console.error('Error fetching cupos disponibilidad:', cuposErr)
       }
@@ -1063,57 +1115,97 @@ onMounted(() => {
           </div>
         </div>
 
-        <!-- Verificación de Cupos y Selección de Grupo para Colegio Destino -->
-        <div v-if="selectedSolicitud.tipo === 'TRASLADO_MATRICULA' && canUserApproveCurrentModal && (isDirectivoDestino || isAdminGeneral)" class="p-4 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 rounded-2xl space-y-3">
-          <div class="flex items-center justify-between">
-            <span class="text-xs font-black uppercase text-slate-600 dark:text-slate-300">
-              Disponibilidad en Grado: <span class="text-indigo-600 dark:text-indigo-400">{{ disponibilidadCupos?.grado_nombre || selectedSolicitud.datos_origen?.grado || 'Consultando...' }}</span>
-            </span>
-            <span v-if="disponibilidadCupos" :class="[
-              'px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase',
-              disponibilidadCupos.hay_cupos ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300'
-            ]">
-              {{ disponibilidadCupos.hay_cupos ? `${disponibilidadCupos.cupos_totales_grado} Cupos Disponibles` : 'Sin Cupos' }}
-            </span>
+        <!-- Verificación de Cupos y Selección de Grado/Curso/Jornada para Colegio Destino -->
+        <div v-if="selectedSolicitud.tipo === 'TRASLADO_MATRICULA' && (isDirectivoDestino || isAdminGeneral)" class="p-5 bg-indigo-50/40 dark:bg-slate-800/60 border border-indigo-100 dark:border-slate-700 rounded-2xl space-y-4 shadow-sm">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-indigo-100 dark:border-slate-700/80 pb-3">
+            <div>
+              <h3 class="text-xs font-black uppercase text-indigo-950 dark:text-indigo-200 tracking-wider flex items-center gap-2">
+                <Building2 :size="15" class="text-indigo-600 dark:text-indigo-400" />
+                Asignación de Grado / Curso / Jornada Destino
+              </h3>
+              <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                Grado Solicitado: <strong class="text-slate-800 dark:text-slate-200">{{ disponibilidadCupos?.grado_nombre || selectedSolicitud.datos_origen?.grado || 'General' }}</strong>
+              </p>
+            </div>
+            
+            <div class="flex items-center gap-2">
+              <span v-if="disponibilidadCupos" :class="[
+                'px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider',
+                disponibilidadCupos.hay_cupos ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300' : 'bg-rose-100 text-rose-800 dark:bg-rose-900/50 dark:text-rose-300'
+              ]">
+                {{ disponibilidadCupos.hay_cupos ? `${disponibilidadCupos.cupos_totales_grado} Cupos en Grado` : 'Sin Cupos en Grado' }}
+              </span>
+
+              <button
+                v-if="disponibilidadCupos?.todos_los_grupos && disponibilidadCupos.todos_los_grupos.length > (disponibilidadCupos.grupos?.length || 0)"
+                type="button"
+                @click="showAllGroups = !showAllGroups"
+                class="px-2.5 py-1 bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 text-indigo-600 dark:text-indigo-300 border border-slate-200 dark:border-slate-600 rounded-lg text-[10px] font-bold transition-all shadow-xs"
+              >
+                {{ showAllGroups ? 'Ver solo grado sugerido' : 'Ver todos los cursos' }}
+              </button>
+            </div>
           </div>
 
-          <div v-if="disponibilidadCupos && !disponibilidadCupos.hay_cupos && disponibilidadCupos.grupos.length > 0" class="p-3 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800 rounded-xl text-xs text-rose-700 dark:text-rose-300 font-semibold flex items-center gap-2">
+          <!-- Alerta sin cupos -->
+          <div v-if="disponibilidadCupos && !disponibilidadCupos.hay_cupos && (!disponibilidadCupos.grupos || disponibilidadCupos.grupos.length === 0)" class="p-3 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800 rounded-xl text-xs text-rose-700 dark:text-rose-300 font-semibold flex items-center gap-2">
             <AlertTriangle :size="16" class="shrink-0" />
-            <span>No hay cupos disponibles en el grado solicitado. No es posible aprobar el traslado; debe rechazarlo o habilitar cupos en su institución.</span>
+            <span>No hay cupos disponibles en el grado solicitado en la institución destino. Puedes habilitar cupos o asignar otro curso disponible.</span>
           </div>
 
-          <div v-else-if="disponibilidadCupos && disponibilidadCupos.grupos.length > 0" class="space-y-1.5">
-            <label class="block text-[11px] font-bold text-slate-500 uppercase">Seleccionar Grupo / Jornada de Destino (Recomendado):</label>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <!-- Lista de grupos seleccionables -->
+          <div v-if="disponibilidadCupos && (showAllGroups ? disponibilidadCupos.todos_los_grupos : disponibilidadCupos.grupos)?.length > 0" class="space-y-2">
+            <div class="flex items-center justify-between">
+              <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase">
+                {{ showAllGroups ? 'Todos los grupos disponibles en la institución destino:' : 'Selecciona el Grupo y Jornada para el estudiante:' }}
+              </label>
+              <span v-if="selectedGrupoDestino" class="text-[10px] font-black text-indigo-600 dark:text-indigo-400 bg-indigo-100/60 dark:bg-indigo-950/80 px-2 py-0.5 rounded-md">
+                ✓ Grupo Seleccionado
+              </span>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-56 overflow-y-auto pr-1">
               <button 
-                v-for="g in disponibilidadCupos.grupos" 
+                v-for="g in (showAllGroups ? disponibilidadCupos.todos_los_grupos : disponibilidadCupos.grupos)" 
                 :key="g.id_grupo"
                 type="button"
-                @click="selectedGrupoDestino = selectedGrupoDestino === g.id_grupo ? null : g.id_grupo"
-                :disabled="g.cupos_disponibles <= 0"
+                @click="canUserApproveCurrentModal ? (selectedGrupoDestino = selectedGrupoDestino === g.id_grupo ? null : g.id_grupo) : null"
+                :disabled="!canUserApproveCurrentModal || g.cupos_disponibles <= 0"
                 :class="[
-                  'p-2.5 rounded-xl border text-left text-xs transition-all flex items-center justify-between gap-2',
+                  'p-3 rounded-xl border text-left text-xs transition-all flex items-center justify-between gap-3 shadow-xs',
                   selectedGrupoDestino === g.id_grupo 
-                    ? 'bg-indigo-50 dark:bg-indigo-950/50 border-indigo-500 text-indigo-900 dark:text-indigo-200 ring-2 ring-indigo-500' 
+                    ? 'bg-indigo-600 text-white border-indigo-600 ring-2 ring-indigo-400/40' 
                     : g.cupos_disponibles > 0 
-                    ? 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-indigo-300' 
-                    : 'bg-slate-100 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800 opacity-50 cursor-not-allowed'
+                    ? 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-indigo-400 hover:bg-slate-50 dark:hover:bg-slate-750' 
+                    : 'bg-slate-100 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800 opacity-40 cursor-not-allowed'
                 ]"
               >
                 <div>
-                  <p class="font-bold text-slate-800 dark:text-slate-100">{{ g.nombre_completo }}</p>
-                  <p class="text-[10px] text-slate-400 font-medium">Jornada: {{ g.jornada }}</p>
+                  <p :class="selectedGrupoDestino === g.id_grupo ? 'font-black text-white text-sm' : 'font-bold text-slate-800 dark:text-slate-100'">
+                    {{ g.nombre_completo }}
+                  </p>
+                  <p :class="selectedGrupoDestino === g.id_grupo ? 'text-indigo-100 text-[10px]' : 'text-slate-500 dark:text-slate-400 text-[10px]'">
+                    Nivel: {{ g.nivel || disponibilidadCupos.nivel_nombre || 'General' }}
+                  </p>
                 </div>
-                <span class="text-[10px] font-black shrink-0 px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
+                <span :class="[
+                  'text-[10px] font-black shrink-0 px-2 py-1 rounded-md border',
+                  selectedGrupoDestino === g.id_grupo
+                    ? 'bg-white text-indigo-700 border-transparent font-black'
+                    : g.cupos_disponibles > 0
+                    ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                    : 'bg-slate-100 dark:bg-slate-700 text-slate-500 border-transparent'
+                ]">
                   {{ g.cupos_disponibles }} cupos
                 </span>
               </button>
             </div>
           </div>
 
-          <div v-else-if="disponibilidadCupos && disponibilidadCupos.grupos.length === 0" class="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl text-xs text-amber-700 dark:text-amber-300 flex items-center gap-2">
+          <!-- Si no hay grupos configurados -->
+          <div v-else-if="disponibilidadCupos && (!disponibilidadCupos.grupos || disponibilidadCupos.grupos.length === 0)" class="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl text-xs text-amber-700 dark:text-amber-300 flex items-center gap-2">
             <AlertCircle :size="16" class="shrink-0" />
-            <span>No se encontraron grupos específicos para este grado en la institución destino. El traslado asignará el nivel escolar por defecto.</span>
+            <span>No se encontraron grupos configurados para este grado en la sede receptora. La matrícula se asociará al nivel escolar correspondiente.</span>
           </div>
         </div>
 

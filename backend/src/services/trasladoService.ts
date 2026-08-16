@@ -522,37 +522,53 @@ export class TrasladoService {
 
     const baseGruposQuery = () => db
       .selectFrom('grupos as g')
-      .innerJoin('secciones as s', 'g.id_seccion', 's.id_seccion')
-      .innerJoin('tipo_grado as tg', 'g.id_tipo_grado', 'tg.id_tipo_grado')
+      .leftJoin('secciones as s', 'g.id_seccion', 's.id_seccion')
+      .leftJoin('tipo_grado as tg', 'g.id_tipo_grado', 'tg.id_tipo_grado')
       .leftJoin('jornada as j', 'g.id_jornada', 'j.id_jornada')
       .leftJoin('nivel_escolar as ne', 'g.id_nivel', 'ne.id_nivel')
       .select([
         'g.id_grupo',
         'g.id_tipo_grado',
-        'tg.nombre as grado_nombre',
-        's.nombre as seccion_nombre',
-        'j.nombre as jornada_nombre',
-        'g.cupos_totales',
-        sql<number>`(g.cupos_totales - (SELECT COUNT(*) FROM matricula WHERE id_grupo = g.id_grupo AND estado IN ('ACTIVA', 'TRASLADADA')))::int`.as('cupos_disponibles')
+        sql<string>`COALESCE(tg.nombre, 'Grado General')`.as('grado_nombre'),
+        sql<string>`COALESCE(s.nombre, 'A')`.as('seccion_nombre'),
+        sql<string>`COALESCE(j.nombre::text, 'Ordinaria')`.as('jornada_nombre'),
+        sql<string>`COALESCE(ne.nombre, 'Sin Nivel')`.as('nivel_nombre'),
+        sql<number>`COALESCE(g.cupos_totales, 35)`.as('cupos_totales'),
+        sql<number>`(COALESCE(g.cupos_totales, 35) - (SELECT COUNT(*) FROM matricula WHERE id_grupo = g.id_grupo AND estado IN ('ACTIVA', 'TRASLADADA')))::int`.as('cupos_disponibles')
       ])
       .where('g.id_colegio', '=', destSchoolId);
+
+    const todosGruposRaw = await baseGruposQuery()
+      .orderBy('tg.id_tipo_grado', 'asc')
+      .orderBy('s.nombre', 'asc')
+      .execute();
+
+    const todosLosGrupos = todosGruposRaw.map((g: any) => ({
+      id_grupo: g.id_grupo,
+      id_tipo_grado: g.id_tipo_grado,
+      grado_nombre: g.grado_nombre,
+      seccion: g.seccion_nombre,
+      jornada: g.jornada_nombre,
+      nivel: g.nivel_nombre,
+      nombre_completo: `${g.grado_nombre} - ${g.seccion_nombre} (${g.jornada_nombre})`,
+      cupos_disponibles: Math.max(0, Number(g.cupos_disponibles) || 0),
+      cupos_totales: Number(g.cupos_totales) || 35
+    }));
 
     let grupos: any[] = [];
 
     if (gradoNombre && gradoNombre !== 'Grado no especificado') {
-      grupos = await baseGruposQuery()
-        .where(sql`LOWER(TRIM(tg.nombre))`, '=', gradoNombre.trim().toLowerCase())
-        .execute();
+      grupos = todosLosGrupos.filter(
+        g => g.grado_nombre.trim().toLowerCase() === gradoNombre.trim().toLowerCase()
+      );
     }
 
     if (grupos.length === 0 && idTipoGrado) {
-      grupos = await baseGruposQuery()
-        .where('g.id_tipo_grado', '=', idTipoGrado)
-        .execute();
+      grupos = todosLosGrupos.filter(g => g.id_tipo_grado === idTipoGrado);
     }
 
     if (grupos.length === 0) {
-      grupos = await baseGruposQuery().execute();
+      grupos = todosLosGrupos;
     }
 
     const cuposTotalesGrado = grupos.reduce((acc: number, curr: any) => {
@@ -566,15 +582,9 @@ export class TrasladoService {
       grado_nombre: gradoNombre,
       nivel_nombre: nivelNombre,
       cupos_totales_grado: cuposTotalesGrado,
-      hay_cupos: cuposTotalesGrado > 0 || grupos.length === 0,
-      grupos: grupos.map((g: any) => ({
-        id_grupo: g.id_grupo,
-        nombre_completo: `${g.grado_nombre} - ${g.seccion_nombre} (${g.jornada_nombre || 'Jornada Ordinaria'})`,
-        seccion: g.seccion_nombre,
-        jornada: g.jornada_nombre || 'Ordinaria',
-        cupos_disponibles: Math.max(0, Number(g.cupos_disponibles) || 0),
-        cupos_totales: g.cupos_totales
-      }))
+      hay_cupos: cuposTotalesGrado > 0 || todosLosGrupos.length === 0,
+      grupos,
+      todos_los_grupos: todosLosGrupos
     };
   }
 
