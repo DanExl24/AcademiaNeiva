@@ -876,7 +876,7 @@ const formatDate = (dateStr?: string | null) => {
             </div>
 
             <!-- Lista de grupos disponibles -->
-            <div v-if="disponibilidadCupos && (showAllGroups ? disponibilidadCupos.todos_los_grupos : disponibilidadCupos.grupos)?.length > 0" class="space-y-2">
+            <div v-if="disponibilidadCupos && (showAllGroups ? (disponibilidadCupos.todos_los_grupos || []) : (disponibilidadCupos.grupos || [])).length > 0" class="space-y-2">
               <div class="flex items-center justify-between">
                 <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase">
                   {{ showAllGroups ? 'Todos los grupos disponibles en el colegio receptor:' : 'Grupos y jornadas disponibles en el grado solicitado:' }}
@@ -888,7 +888,7 @@ const formatDate = (dateStr?: string | null) => {
 
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-56 overflow-y-auto pr-1">
                 <div 
-                  v-for="g in (showAllGroups ? disponibilidadCupos.todos_los_grupos : disponibilidadCupos.grupos)" 
+                  v-for="g in (showAllGroups ? (disponibilidadCupos.todos_los_grupos || []) : (disponibilidadCupos.grupos || []))" 
                   :key="g.id_grupo"
                   :class="[
                     'p-3 rounded-xl border text-left text-xs transition-all flex items-center justify-between gap-3 shadow-xs',

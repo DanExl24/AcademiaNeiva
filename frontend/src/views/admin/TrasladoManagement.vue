@@ -114,6 +114,16 @@ const disponibilidadCupos = ref<{
     nombre_completo: string
     seccion: string
     jornada: string
+    nivel?: string
+    cupos_disponibles: number
+    cupos_totales: number
+  }>
+  todos_los_grupos?: Array<{
+    id_grupo: number
+    nombre_completo: string
+    seccion: string
+    jornada: string
+    nivel?: string
     cupos_disponibles: number
     cupos_totales: number
   }>
@@ -1154,7 +1164,7 @@ onMounted(() => {
           </div>
 
           <!-- Lista de grupos seleccionables -->
-          <div v-if="disponibilidadCupos && (showAllGroups ? disponibilidadCupos.todos_los_grupos : disponibilidadCupos.grupos)?.length > 0" class="space-y-2">
+          <div v-if="disponibilidadCupos && (showAllGroups ? (disponibilidadCupos.todos_los_grupos || []) : (disponibilidadCupos.grupos || [])).length > 0" class="space-y-2">
             <div class="flex items-center justify-between">
               <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase">
                 {{ showAllGroups ? 'Todos los grupos disponibles en la institución destino:' : 'Selecciona el Grupo y Jornada para el estudiante:' }}
@@ -1166,7 +1176,7 @@ onMounted(() => {
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-56 overflow-y-auto pr-1">
               <button 
-                v-for="g in (showAllGroups ? disponibilidadCupos.todos_los_grupos : disponibilidadCupos.grupos)" 
+                v-for="g in (showAllGroups ? (disponibilidadCupos.todos_los_grupos || []) : (disponibilidadCupos.grupos || []))" 
                 :key="g.id_grupo"
                 type="button"
                 @click="canUserApproveCurrentModal ? (selectedGrupoDestino = selectedGrupoDestino === g.id_grupo ? null : g.id_grupo) : null"
