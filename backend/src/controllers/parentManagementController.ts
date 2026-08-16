@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { pool } from "../config/db";
 import { db } from "../config/kysely";
+import { sql } from "kysely";
 import { validateDocumentUniqueness } from "../utils/documentValidation";
 import { formatFriendlyErrorMessage } from "../utils/errorHelper";
 
@@ -193,7 +194,7 @@ export const getParentsManagementData = async (req: Request, res: Response): Pro
             )
           ) AS tiene_hijo_riesgo,
 
-          ARRAY_REMOVE(ARRAY_AGG(DISTINCT e.id_nivel), NULL) AS niveles_hijos,
+          ARRAY_REMOVE(ARRAY_AGG(DISTINCT COALESCE(m.id_nivel, g.id_nivel, tg.id_nivel)), NULL) AS niveles_hijos,
           ARRAY_REMOVE(ARRAY_AGG(DISTINCT ne.nombre), NULL) AS nombres_niveles_hijos,
           ARRAY_REMOVE(ARRAY_AGG(DISTINCT g.id_tipo_grado), NULL) AS grados_hijos,
           ARRAY_REMOVE(ARRAY_AGG(DISTINCT tg.nombre), NULL) AS nombres_grados_hijos,
@@ -206,13 +207,17 @@ export const getParentsManagementData = async (req: Request, res: Response): Pro
           doc.id_usuario IS NOT NULL AND pf.id_usuario IS NOT NULL AND doc.id_usuario = pf.id_usuario AND doc.id_colegio = pf.id_colegio
         )
         LEFT JOIN usuario u_doc ON u_doc.id_usuario = doc.id_usuario
-        LEFT JOIN detalle_padrefamilia dpf ON dpf.id_padrefamilia = pf.id_padrefamilia
-        LEFT JOIN estudiante e ON e.id_estudiante = dpf.id_estudiante
-        LEFT JOIN matricula m ON (m.id_estudiante = e.id_estudiante AND ($2::int IS NULL OR m.id_anio = $2::int))
+        LEFT JOIN detalle_padrefamilia dpf ON (dpf.id_padrefamilia = pf.id_padrefamilia AND (dpf.id_colegio = $1 OR dpf.id_colegio IS NULL))
+        LEFT JOIN estudiante e ON (e.id_estudiante = dpf.id_estudiante AND e.id_colegio = $1)
+        LEFT JOIN matricula m ON (m.id_estudiante = e.id_estudiante AND m.id_colegio = $1 AND ($2::int IS NULL OR m.id_anio = $2::int))
         LEFT JOIN grupos g ON g.id_grupo = m.id_grupo
         LEFT JOIN tipo_grado tg ON tg.id_tipo_grado = g.id_tipo_grado
-        LEFT JOIN nivel_escolar ne ON ne.id_nivel = g.id_nivel OR ne.id_nivel = e.id_nivel
-        WHERE (pf.id_colegio = $1 OR EXISTS (SELECT 1 FROM usuario_colegio uc WHERE uc.id_usuario = u.id_usuario AND uc.id_colegio = $1 AND uc.estado = 'ACTIVO'))
+        LEFT JOIN nivel_escolar ne ON ne.id_nivel = COALESCE(m.id_nivel, g.id_nivel, tg.id_nivel)
+        WHERE (
+          pf.id_colegio = $1 
+          OR EXISTS (SELECT 1 FROM usuario_colegio uc WHERE uc.id_usuario = u.id_usuario AND uc.id_colegio = $1 AND uc.estado = 'ACTIVO')
+          OR EXISTS (SELECT 1 FROM detalle_padrefamilia dpf_c JOIN estudiante e_c ON e_c.id_estudiante = dpf_c.id_estudiante WHERE dpf_c.id_padrefamilia = pf.id_padrefamilia AND (dpf_c.id_colegio = $1 OR e_c.id_colegio = $1))
+        )
         GROUP BY pf.id_padrefamilia, pf.nombre, pf.apellido, u.documento,
                  u.id_tipodocumento, td.tipo, u.email, u.id_usuario, u.activo, doc.id_docente, u_doc.email
       )
@@ -256,7 +261,7 @@ export const getParentsManagementData = async (req: Request, res: Response): Pro
 
 /**
  * Obtiene el detalle completo de un padre de familia con sus hijos vinculados
- * y estadisticas basicas de cada hijo
+ * y estadisticas basicas de cada hijo filtrados estrictamente por la institución actual
  */
 export const getParentDetail = async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params;
@@ -264,46 +269,50 @@ export const getParentDetail = async (req: Request, res: Response): Promise<void
   const selectedYearId = req.query.yearId ? Number(req.query.yearId) : null;
 
   if (isNaN(parentId)) {
-    res.status(400).json({ error: "ID de padre de familia invalido" });
+    res.status(400).json({ error: "ID de padre de familia inválido" });
     return;
   }
 
   try {
-    const parentRes = await pool.query(
-      `SELECT
-         pf.id_padrefamilia,
-         pf.nombre,
-         pf.apellido,
-         u.documento,
-         u.id_tipodocumento,
-         pf.id_colegio,
-         td.tipo AS tipo_documento,
-         u.email,
-         u.id_usuario,
-         u.activo AS usuario_activo,
-         u.fecha_creacion AS cuenta_creada,
-         (doc.id_docente IS NOT NULL) AS es_docente,
-         u_doc.email AS email_docente
-       FROM padre_familia pf
-       LEFT JOIN usuario u ON pf.id_usuario = u.id_usuario
-       LEFT JOIN tipo_documento td ON u.id_tipodocumento = td.id_tipodocumento
-       LEFT JOIN docente doc ON (
-         doc.id_usuario IS NOT NULL AND pf.id_usuario IS NOT NULL AND doc.id_usuario = pf.id_usuario AND doc.id_colegio = pf.id_colegio
-       )
-       LEFT JOIN usuario u_doc ON u_doc.id_usuario = doc.id_usuario
-       WHERE pf.id_padrefamilia = $1`,
-      [parentId]
-    );
+    const authReq = req as any;
+    const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+    const targetSchoolId = (!isSupervision && authReq.user?.schoolId)
+      ? authReq.user.schoolId
+      : (req.query.id_colegio ? Number(req.query.id_colegio) : null);
 
-    if (parentRes.rows.length === 0) {
+    const parent = await db
+      .selectFrom("padre_familia as pf")
+      .leftJoin("usuario as u", "pf.id_usuario", "u.id_usuario")
+      .leftJoin("tipo_documento as td", "u.id_tipodocumento", "td.id_tipodocumento")
+      .leftJoin("docente as doc", (join) =>
+        join
+          .onRef("doc.id_usuario", "=", "pf.id_usuario")
+          .onRef("doc.id_colegio", "=", "pf.id_colegio")
+      )
+      .leftJoin("usuario as u_doc", "u_doc.id_usuario", "doc.id_usuario")
+      .select([
+        "pf.id_padrefamilia",
+        "pf.nombre",
+        "pf.apellido",
+        "u.documento",
+        "u.id_tipodocumento",
+        "pf.id_colegio",
+        "td.tipo as tipo_documento",
+        "u.email",
+        "u.id_usuario",
+        "u.activo as usuario_activo",
+        "u.fecha_creacion as cuenta_creada",
+        sql<boolean>`(doc.id_docente IS NOT NULL)`.as("es_docente"),
+        "u_doc.email as email_docente"
+      ])
+      .where("pf.id_padrefamilia", "=", parentId)
+      .executeTakeFirst();
+
+    if (!parent) {
       res.status(404).json({ error: "Padre de familia no encontrado" });
       return;
     }
 
-    const parent = parentRes.rows[0];
-
-    const authReq = req as any;
-    const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
     if (!isSupervision && authReq.user?.schoolId) {
       const allowed = await hasParentSchoolAccess(authReq.user.schoolId, parentId, parent.id_usuario, parent.id_colegio);
       if (!allowed) {
@@ -312,107 +321,135 @@ export const getParentDetail = async (req: Request, res: Response): Promise<void
       }
     }
 
-    const childrenRes = await pool.query(
-      `SELECT
-         e.id_estudiante,
-         e.nombre,
-         e.apellido,
-         u_e.documento,
-         e.codigo,
-         e.estado,
-         e.motivo_estado,
-         tg.nombre AS grado_nombre,
-         sec.nombre AS seccion_nombre,
-         n.nombre AS nivel_nombre,
-         j.nombre AS jornada_nombre,
-         m.estado AS matricula_estado,
-         m.id_grupo,
-         m.id_anio,
-         al.calendario AS anio_lectivo
-       FROM detalle_padrefamilia dpf
-       JOIN estudiante e ON dpf.id_estudiante = e.id_estudiante
-       LEFT JOIN usuario u_e ON e.id_usuario = u_e.id_usuario
-       LEFT JOIN matricula m ON (
-         m.id_estudiante = e.id_estudiante 
-         AND m.estado IN ('ACTIVA', 'CULMINADA')
-         AND ($2::int IS NULL OR m.id_anio = $2::int)
-       )
-       LEFT JOIN grupos g ON g.id_grupo = m.id_grupo
-       LEFT JOIN tipo_grado tg ON tg.id_tipo_grado = g.id_tipo_grado
-       LEFT JOIN secciones sec ON sec.id_seccion = g.id_seccion
-       LEFT JOIN jornada j ON j.id_jornada = g.id_jornada
-       LEFT JOIN nivel_escolar n ON n.id_nivel = e.id_nivel
-       LEFT JOIN anio_lectivo al ON al.id_anio = m.id_anio
-       WHERE dpf.id_padrefamilia = $1
-       ORDER BY e.apellido ASC, e.nombre ASC`,
-      [parentId, selectedYearId]
-    );
+    // Subquery de matrícula para seleccionar la mejor matrícula de cada estudiante
+    let matriculaSubquery = db
+      .selectFrom("matricula as m_inner")
+      .select(["id_matricula", "id_estudiante", "id_grupo", "id_anio", "id_nivel", "id_colegio", "estado"])
+      .distinctOn("id_estudiante")
+      .where("estado", "in", ["ACTIVA", "APROBADA", "CULMINADA", "PENDIENTE", "PENDIENTE_RENOVACION", "TRASLADADA"]);
 
-    const children = childrenRes.rows;
+    if (selectedYearId) {
+      matriculaSubquery = matriculaSubquery.where("id_anio", "=", selectedYearId);
+    }
+    if (targetSchoolId) {
+      matriculaSubquery = matriculaSubquery.where("id_colegio", "=", targetSchoolId);
+    }
+
+    const activeMatSub = matriculaSubquery
+      .orderBy("id_estudiante")
+      .orderBy(sql`CASE WHEN estado IN ('ACTIVA', 'APROBADA') THEN 1 WHEN estado = 'CULMINADA' THEN 2 ELSE 3 END`, "asc")
+      .orderBy("id_anio", "desc")
+      .orderBy("id_matricula", "desc")
+      .as("m");
+
+    let childrenQuery = db
+      .selectFrom("detalle_padrefamilia as dpf")
+      .innerJoin("estudiante as e", "dpf.id_estudiante", "e.id_estudiante")
+      .leftJoin("usuario as u_e", "e.id_usuario", "u_e.id_usuario")
+      .leftJoin(activeMatSub, "m.id_estudiante", "e.id_estudiante")
+      .leftJoin("grupos as g", "g.id_grupo", "m.id_grupo")
+      .leftJoin("tipo_grado as tg", "tg.id_tipo_grado", "g.id_tipo_grado")
+      .leftJoin("secciones as sec", "sec.id_seccion", "g.id_seccion")
+      .leftJoin("jornada as j", "j.id_jornada", "g.id_jornada")
+      .leftJoin("nivel_escolar as n", (join) =>
+        join.onRef("n.id_nivel", "=", sql<number>`COALESCE(m.id_nivel, g.id_nivel, tg.id_nivel)`)
+      )
+      .leftJoin("anio_lectivo as al", "al.id_anio", "m.id_anio")
+      .select([
+        "e.id_estudiante",
+        "e.nombre",
+        "e.apellido",
+        "u_e.documento",
+        "e.codigo",
+        "e.estado",
+        "e.motivo_estado",
+        "tg.nombre as grado_nombre",
+        "sec.nombre as seccion_nombre",
+        "n.nombre as nivel_nombre",
+        "j.nombre as jornada_nombre",
+        "m.estado as matricula_estado",
+        "m.id_grupo",
+        "m.id_anio",
+        "al.calendario as anio_lectivo",
+        "dpf.id_colegio as dpf_colegio",
+        "e.id_colegio as e_colegio"
+      ])
+      .where("dpf.id_padrefamilia", "=", parentId);
+
+    // Aislamiento: El colegio actual solo ve los estudiantes adscritos a su propia institución
+    if (targetSchoolId && !isSupervision) {
+      childrenQuery = childrenQuery.where((eb) =>
+        eb.or([
+          eb("dpf.id_colegio", "=", targetSchoolId),
+          eb("e.id_colegio", "=", targetSchoolId),
+          eb("m.id_colegio", "=", targetSchoolId)
+        ])
+      );
+    }
+
+    const children = await childrenQuery
+      .orderBy("e.apellido", "asc")
+      .orderBy("e.nombre", "asc")
+      .execute();
 
     const childrenWithStats = await Promise.all(
-      children.map(async (child) => {
+      children.map(async (child: any) => {
         let promedio = null;
         let inasistencias = 0;
         let sanciones_activas = 0;
 
-        if (child.id_grupo && child.id_anio) {
-          const avgRes = await pool.query(
-            `SELECT ROUND(AVG(ra.promedio)::numeric, 2) AS promedio
-             FROM resultado_academico ra
-             JOIN periodo_academico pa ON pa.id_periodo = ra.id_periodo
-             WHERE ra.id_estudiante = $1
-               AND pa.id_anio = $2
-               AND pa.estado != 'PENDIENTE'`,
-            [child.id_estudiante, child.id_anio]
-          );
-          promedio = avgRes.rows[0]?.promedio ?? null;
+        if (child.id_anio) {
+          const avgRes = await db
+            .selectFrom("resultado_academico as ra")
+            .innerJoin("periodo_academico as pa", "pa.id_periodo", "ra.id_periodo")
+            .select(sql<number>`ROUND(AVG(ra.promedio)::numeric, 2)`.as("promedio"))
+            .where("ra.id_estudiante", "=", child.id_estudiante)
+            .where("pa.id_anio", "=", child.id_anio)
+            .where("pa.estado", "!=", "PENDIENTE")
+            .executeTakeFirst();
 
-          const attRes = await pool.query(
-            `SELECT COUNT(*)::integer AS count
-             FROM registro_asistencia ra
-             JOIN detalle_grados dg ON dg.id_detallegrado = ra.id_detallegrado
-             WHERE ra.id_estudiante = $1 
-               AND ra.estado = 'AUSENTE'
-               AND dg.id_anio = $2`,
-            [child.id_estudiante, child.id_anio]
-          );
-          inasistencias = attRes.rows[0]?.count ?? 0;
+          promedio = avgRes?.promedio ?? null;
+
+          const attRes = await db
+            .selectFrom("registro_asistencia as ra")
+            .innerJoin("detalle_grados as dg", "dg.id_detallegrado", "ra.id_detallegrado")
+            .select(sql<number>`COUNT(*)::int`.as("count"))
+            .where("ra.id_estudiante", "=", child.id_estudiante)
+            .where("ra.estado", "=", "AUSENTE")
+            .where("dg.id_anio", "=", child.id_anio)
+            .executeTakeFirst();
+
+          inasistencias = attRes?.count ?? 0;
         }
 
-        const sanctionRes = await pool.query(
-          `SELECT COUNT(*)::integer AS count
-           FROM sancion sa
-           WHERE sa.id_estudiante = $1 
-             AND sa.estado = 'ACTIVA'
-             AND (
-               $2::int IS NULL OR EXISTS (
-                 SELECT 1 FROM anio_lectivo al_s 
-                 WHERE al_s.id_anio = $2::int 
-                   AND EXTRACT(YEAR FROM sa.fecha_inicio) = NULLIF(regexp_replace(al_s.calendario, '\D', '', 'g'), '')::int
-               )
-             )`,
-          [child.id_estudiante, selectedYearId]
-        );
-        sanciones_activas = sanctionRes.rows[0]?.count ?? 0;
+        const sanctionRes = await db
+          .selectFrom("sancion as sa")
+          .select(sql<number>`COUNT(*)::int`.as("count"))
+          .where("sa.id_estudiante", "=", child.id_estudiante)
+          .where("sa.estado", "=", "ACTIVA")
+          .executeTakeFirst();
+
+        sanciones_activas = sanctionRes?.count ?? 0;
 
         return {
           ...child,
-          promedio: promedio !== null ? parseFloat(promedio) : null,
+          promedio: promedio !== null ? parseFloat(String(promedio)) : null,
           inasistencias,
           sanciones_activas
         };
       })
     );
 
-    const tiposDocRes = await pool.query(
-      "SELECT id_tipodocumento, tipo FROM tipo_documento ORDER BY id_tipodocumento ASC"
-    );
+    const tiposDocRes = await db
+      .selectFrom("tipo_documento")
+      .select(["id_tipodocumento", "tipo"])
+      .orderBy("id_tipodocumento", "asc")
+      .execute();
 
     res.json({
       parent,
       children: childrenWithStats,
-      tipos_documento: tiposDocRes.rows
+      tipos_documento: tiposDocRes
     });
   } catch (error: any) {
     console.error("Error en getParentDetail:", error);
