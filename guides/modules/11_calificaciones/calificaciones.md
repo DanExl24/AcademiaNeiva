@@ -27,6 +27,7 @@ Este módulo gestiona la evaluación del rendimiento académico de los estudiant
 
 | Acción | Método | Endpoint | Rol Requerido |
 |---|---|---|---|
+| Listar estudiantes activos del curso/grupo | `GET` | `/api/teacher/students/:gradeId` | Docente |
 | Listar actividades creadas para un curso | `GET` | `/api/teacher/activities/:gradeId/:subjectId/:periodId` | Docente |
 | Crear actividad evaluativa de asignatura | `POST` | `/api/teacher/activities` | Docente |
 | Actualizar ponderación o nombre de actividad | `PUT` | `/api/teacher/activities/:id` | Docente |
@@ -59,6 +60,7 @@ Este módulo gestiona la evaluación del rendimiento académico de los estudiant
   - Nota básica (3.0 a 3.9): 35% de probabilidad.
   - Nota alta (4.0 a 4.5): 30% de probabilidad.
   - Nota superior (4.6 a 5.0): 20% de probabilidad.
+- **RN-CAL-005 (Restricción de Calificación por Estado de Matrícula):** La planilla de calificaciones y el endpoint de guardado (`POST /api/teacher/grades`) validan estrictamente que cada alumno posea matrícula en estado `ACTIVA` o `APROBADA` en la institución educativa. Los estudiantes en estado `TRASLADADA` o inactivos no se muestran en la planilla editable y cualquier intento de calificación sobre ellos es rechazado con error `409 Conflict`.
 
 ---
 

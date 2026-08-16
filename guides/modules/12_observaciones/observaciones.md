@@ -50,6 +50,7 @@ Este módulo facilita a los docentes el registro de observaciones pedagógicas y
   - Observaciones `DISCIPLINARIA`: ~10% de estudiantes.
   - Observaciones `OTRO`: ~10% de estudiantes.
 - **RN-OBS-005 (Protección contra Modificaciones en Periodo Cerrado):** Al igual que las calificaciones, la creación, edición o eliminación de cualquier registro de observación se bloquea a nivel de trigger de base de datos (`fn_bloquear_periodo_cerrado`) si el periodo escolar correspondiente se encuentra en estado `CERRADO`.
+- **RN-OBS-006 (Bloqueo de Observaciones en Matrículas Inactivas/Trasladadas):** El registro de observaciones (`POST /api/teacher/observations`) valida que el estudiante posea matrícula activa (`m.estado IN ('ACTIVA', 'APROBADA')`) en la institución. Estudiantes en estado `TRASLADADA` no admiten nuevas anotaciones en el colegio de origen.
 
 ---
 

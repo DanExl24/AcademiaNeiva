@@ -143,7 +143,6 @@ export const getObservations = async (
   console.log(`[DEV] getObservations called - detailGradeId=${detailGradeId}, periodId=${periodId}`);
 
   try {
-
     // Get school id from teaching assignment
     const dgRes = await db
       .selectFrom("detalle_grados")
@@ -278,6 +277,22 @@ export const createObservation = async (
     const editCheck = await checkEditability(detailGradeId, schoolId, periodId);
     if (!editCheck.editable) {
       res.status(409).json({ error: editCheck.error });
+      return;
+    }
+
+    // Validar que el estudiante tenga matrícula ACTIVA en el colegio
+    const activeEnrollment = await db
+      .selectFrom("matricula")
+      .select("id_matricula")
+      .where("id_estudiante", "=", Number(studentId))
+      .where("id_colegio", "=", Number(schoolId))
+      .where("estado", "in", ["ACTIVA", "APROBADA"])
+      .executeTakeFirst();
+
+    if (!activeEnrollment) {
+      res.status(409).json({
+        error: "No es posible registrar observaciones para este estudiante porque no cuenta con matrícula activa en esta institución (trasladado o inactivo).",
+      });
       return;
     }
 

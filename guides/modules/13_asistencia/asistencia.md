@@ -47,6 +47,7 @@ Este módulo gestiona el registro diario y el ausentismo escolar de los estudian
 - **RN-ASI-003 (Actualizaciones de Bloque Académico):** La regla de límite diario permite corregir y actualizar asistencias ya existentes para la misma materia, fecha y grupo, ya que el sistema reconoce que se trata del mismo bloque académico y modifica el registro existente en lugar de contabilizarlo como una nueva asistencia.
 - **RN-ASI-004 (Bloqueo por Periodo Cerrado):** La inserción, actualización o eliminación de registros de asistencia se bloquea a nivel de trigger de base de datos (`fn_bloquear_periodo_cerrado`) si la fecha elegida corresponde a un periodo académico que se encuentra en estado `CERRADO`.
 - **RN-ASI-005 (Consolidado para Boletín):** Al cierre del periodo escolar, las fallas no justificadas (`AUSENTE`) se suman por asignatura y el total consolidado se escribe de forma permanente en el reporte del Boletín de Calificaciones.
+- **RN-ASI-006 (Exclusión de Estudiantes Trasladados e Inactivos):** La lista de toma de asistencia (`GET /api/teacher/attendance/:detailGradeId/:date`) y el registro de la misma (`POST /api/teacher/attendance`) restringen las operaciones a estudiantes con matrícula en estado `ACTIVA` o `APROBADA`. Los estudiantes trasladados o retirados se excluyen de la planilla y no admiten nuevos registros de asistencia en la institución de origen.
 
 ---
 

@@ -83,7 +83,7 @@ export const getAttendanceByDate = async (req: Request, res: Response): Promise<
        FROM estudiante e
        LEFT JOIN usuario u ON e.id_usuario = u.id_usuario
        JOIN matricula m ON e.id_estudiante = m.id_estudiante
-       WHERE m.id_grupo = $1 AND m.estado IN ('ACTIVA', 'TRASLADADA')
+       WHERE m.id_grupo = $1 AND m.estado IN ('ACTIVA', 'APROBADA')
        ORDER BY e.apellido, e.nombre`,
       [id_grupo]
     );
@@ -176,6 +176,35 @@ export const saveAttendance = async (req: Request, res: Response): Promise<void>
     }
 
     await client.query("BEGIN");
+
+    // 2.5. Validar que todos los estudiantes a registrar tengan matrícula ACTIVA en el colegio
+    const studentIds = records.map((r: any) => Number(r.id_estudiante)).filter((id: number) => !isNaN(id) && id > 0);
+    if (studentIds.length > 0) {
+      const activeEnrollments = await client.query(
+        `SELECT id_estudiante 
+         FROM matricula 
+         WHERE id_estudiante = ANY($1) 
+           AND id_colegio = $2 
+           AND estado IN ('ACTIVA', 'APROBADA')`,
+        [studentIds, schoolId]
+      );
+      const activeSet = new Set(activeEnrollments.rows.map((r: any) => Number(r.id_estudiante)));
+      const invalidStudents = studentIds.filter((id: number) => !activeSet.has(id));
+
+      if (invalidStudents.length > 0) {
+        const namesRes = await client.query(
+          `SELECT nombre, apellido FROM estudiante WHERE id_estudiante = ANY($1)`,
+          [invalidStudents]
+        );
+        const namesStr = namesRes.rows.map((r: any) => `${r.nombre} ${r.apellido}`).join(', ');
+        await client.query("ROLLBACK");
+        client.release();
+        res.status(409).json({
+          error: `No es posible registrar asistencias. Los siguientes estudiantes no cuentan con matrícula activa en esta institución (trasladados o inactivos): ${namesStr}`
+        });
+        return;
+      }
+    }
 
     // 3. Enforce 7-block daily limit per student
     const studentsWithStatus = records.filter(r => r.estado).map(r => Number(r.id_estudiante));
@@ -310,7 +339,7 @@ export const getAttendanceHistory = async (req: Request, res: Response): Promise
        FROM estudiante e
        LEFT JOIN usuario u ON e.id_usuario = u.id_usuario
        JOIN matricula m ON e.id_estudiante = m.id_estudiante
-       WHERE m.id_grupo = $1 AND m.estado IN ('ACTIVA', 'TRASLADADA')
+       WHERE m.id_grupo = $1 AND m.estado IN ('ACTIVA', 'APROBADA')
        ORDER BY e.apellido, e.nombre`,
       [id_grupo]
     );

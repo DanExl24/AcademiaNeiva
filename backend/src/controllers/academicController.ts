@@ -93,7 +93,7 @@ export const getStudentsByGrade = async (req: Request, res: Response): Promise<v
         "e.codigo"
       ])
       .where("m.id_grupo", "=", Number(gradeId))
-      .where("m.estado", "in", ["ACTIVA", "TRASLADADA"]);
+      .where("m.estado", "in", ["ACTIVA", "APROBADA"]);
 
     if (yearId) {
       query = query.where("m.id_anio", "=", yearId);

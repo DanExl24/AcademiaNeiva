@@ -1043,6 +1043,40 @@ export const saveGrades = async (req: Request, res: Response): Promise<void> => 
     const notaMinima = settingsRes ? Number(settingsRes.nota_minima) : 0;
     const notaMaxima = settingsRes ? Number(settingsRes.nota_maxima) : 5;
 
+    // Validar que todos los estudiantes a calificar tengan matrícula ACTIVA en el colegio
+    const studentIds = Array.from(
+      new Set([
+        ...activityGrades.map((a: any) => Number(a.id_estudiante)),
+        ...criteriaGrades.map((c: any) => Number(c.id_estudiante)),
+      ])
+    ).filter((id) => !isNaN(id) && id > 0);
+
+    if (studentIds.length > 0) {
+      const activeEnrollments = await db
+        .selectFrom("matricula")
+        .select("id_estudiante")
+        .where("id_estudiante", "in", studentIds)
+        .where("id_colegio", "=", Number(schoolId))
+        .where("estado", "in", ["ACTIVA", "APROBADA"])
+        .execute();
+
+      const activeSet = new Set(activeEnrollments.map((e) => Number(e.id_estudiante)));
+      const invalidStudents = studentIds.filter((id) => !activeSet.has(id));
+
+      if (invalidStudents.length > 0) {
+        const namesRes = await db
+          .selectFrom("estudiante")
+          .select(["nombre", "apellido"])
+          .where("id_estudiante", "in", invalidStudents)
+          .execute();
+        const namesStr = namesRes.map((r) => `${r.nombre} ${r.apellido}`).join(", ");
+        res.status(409).json({
+          error: `No es posible registrar calificaciones. Los siguientes estudiantes no poseen matrícula activa en esta institución (trasladados o inactivos): ${namesStr}`,
+        });
+        return;
+      }
+    }
+
     await db.transaction().execute(async (trx) => {
       // Guardar activityGrades
       for (const item of activityGrades) {
