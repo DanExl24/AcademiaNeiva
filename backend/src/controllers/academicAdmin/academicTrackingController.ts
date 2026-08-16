@@ -78,6 +78,27 @@ async function getMinPassingScore(schoolId: number): Promise<number> {
 }
 
 /**
+ * Auxiliar para obtener el número de materias reprobatorias para no promoción según la configuración del colegio (o 3 por defecto).
+ */
+async function getMinFailingSubjectsCount(schoolId: number): Promise<number> {
+  try {
+    const config = await db
+      .selectFrom("configuracion_colegio")
+      .select(["materias_reprobatorias_promocion"])
+      .where("id_colegio", "=", schoolId)
+      .executeTakeFirst();
+
+    if (config && config.materias_reprobatorias_promocion != null) {
+      const val = Number(config.materias_reprobatorias_promocion);
+      if (!isNaN(val) && val > 0) return val;
+    }
+  } catch (err) {
+    console.error("Error al obtener materias reprobatorias de promoción:", err);
+  }
+  return 3;
+}
+
+/**
  * Auxiliar para obtener dinámicamente el id_tipo_grado del "último grado" de la institución.
  */
 async function getMaxGradeIdForSchool(schoolId: number): Promise<number | null> {
@@ -135,6 +156,7 @@ export const getPeriodAcademicTracking = async (req: Request, res: Response): Pr
 
     const { schoolId, yearId, periodId, cumulativeUpToPeriodOrder, gradeId, groupId } = parseResult.data;
     const minPassingScore = await getMinPassingScore(schoolId);
+    const minFailingSubjects = await getMinFailingSubjectsCount(schoolId);
     const maxGradeId = await getMaxGradeIdForSchool(schoolId);
 
     // Obtener períodos del año
@@ -413,12 +435,12 @@ export const getPeriodAcademicTracking = async (req: Request, res: Response): Pr
         }
       }
 
-      // Clasificación según RN-19.3 (0: APROBADO, 1-2: PENDIENTE, 3+: REPROBADO)
+      // Clasificación según RN-19.3 & S.I.E.E. (0: APROBADO, 1 a (N-1): PENDIENTE, N+: REPROBADO)
       let estadoAcademico = "APROBADO";
       if (totalSubjectsEvaluated === 0) {
         estadoAcademico = "SIN_NOTAS";
         sinCalificarCount++;
-      } else if (failedSubjects.length >= 3) {
+      } else if (failedSubjects.length >= minFailingSubjects) {
         estadoAcademico = "REPROBADO";
         reprobadosCount++;
       } else if (failedSubjects.length > 0) {
@@ -459,6 +481,7 @@ export const getPeriodAcademicTracking = async (req: Request, res: Response): Pr
       reprobados_count: reprobadosCount,
       sin_calificar_count: sinCalificarCount,
       min_passing_score: minPassingScore,
+      min_failing_subjects: minFailingSubjects,
       periodos_analizados: targetPeriodIds,
       estudiantes: studentResults
     });
@@ -487,6 +510,7 @@ export const getAnnualConsolidation = async (req: Request, res: Response): Promi
 
     const { schoolId, yearId, gradeId, groupId } = parseResult.data;
     const minPassingScore = await getMinPassingScore(schoolId);
+    const minFailingSubjects = await getMinFailingSubjectsCount(schoolId);
     const maxGradeId = await getMaxGradeIdForSchool(schoolId);
 
     const yearPeriods = await db
@@ -713,15 +737,12 @@ export const getAnnualConsolidation = async (req: Request, res: Response): Promi
         }
       }
 
-      // Regla de Negocio RN-19.3:
-      // APROBADO: 0 materias reprobadas
-      // PENDIENTE_RECUPERACION: 1 a 2 materias reprobadas
-      // NO_PROMOVIDO: 3 o más materias reprobadas
+      // Regla de Negocio RN-19.3 & RN-19.12 (S.I.E.E. Institucional):
       let resultadoAnual = "APROBADO";
       if (subjectsCount === 0) {
         resultadoAnual = "SIN_CALIFICACIONES";
         pendientesCount++;
-      } else if (failedSubjects.length >= 3) {
+      } else if (failedSubjects.length >= minFailingSubjects) {
         resultadoAnual = "NO_PROMOVIDO";
         noPromovidosCount++;
       } else if (failedSubjects.length > 0) {
@@ -762,6 +783,7 @@ export const getAnnualConsolidation = async (req: Request, res: Response): Promi
       no_promovidos_count: noPromovidosCount,
       pendientes_count: pendientesCount,
       min_passing_score: minPassingScore,
+      min_failing_subjects: minFailingSubjects,
       total_periodos: totalPeriodsCount,
       periodos_cerrados: closedPeriodsCount,
       habilitado_para_promocion: isReadyForPromotion,

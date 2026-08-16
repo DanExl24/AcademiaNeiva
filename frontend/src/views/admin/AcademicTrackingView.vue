@@ -77,6 +77,7 @@ const trackingData = ref<{
   reprobados_count: number
   sin_calificar_count?: number
   min_passing_score: number
+  min_failing_subjects?: number
   periodos_analizados: number[]
   estudiantes: any[]
 }>({
@@ -86,6 +87,7 @@ const trackingData = ref<{
   reprobados_count: 0,
   sin_calificar_count: 0,
   min_passing_score: 3.0,
+  min_failing_subjects: 3,
   periodos_analizados: [],
   estudiantes: []
 })
@@ -97,6 +99,7 @@ const annualData = ref<{
   no_promovidos_count: number
   pendientes_count: number
   min_passing_score: number
+  min_failing_subjects?: number
   total_periodos?: number
   periodos_cerrados?: number
   habilitado_para_promocion?: boolean
@@ -107,6 +110,7 @@ const annualData = ref<{
   no_promovidos_count: 0,
   pendientes_count: 0,
   min_passing_score: 3.0,
+  min_failing_subjects: 3,
   total_periodos: 4,
   periodos_cerrados: 0,
   habilitado_para_promocion: true,
@@ -578,7 +582,7 @@ onMounted(async () => {
           <div class="stat-icon"><AlertTriangle class="w-6 h-6 text-amber-500" /></div>
           <div class="stat-data">
             <span class="stat-value">{{ trackingData.pendientes_count || 0 }}</span>
-            <span class="stat-label">Pendientes (1-2 Reprobadas)</span>
+            <span class="stat-label">Pendientes (1-{{ (trackingData.min_failing_subjects || 3) - 1 }} Reprobadas)</span>
           </div>
         </div>
 
@@ -586,7 +590,7 @@ onMounted(async () => {
           <div class="stat-icon"><XCircle class="w-6 h-6" /></div>
           <div class="stat-data">
             <span class="stat-value">{{ trackingData.reprobados_count || 0 }}</span>
-            <span class="stat-label">No Promovidos (3+ Reprobadas)</span>
+            <span class="stat-label">No Promovidos ({{ trackingData.min_failing_subjects || 3 }}+ Reprobadas)</span>
           </div>
         </div>
 
@@ -637,7 +641,7 @@ onMounted(async () => {
               >✕</span>
             </div>
 
-            <span class="badge badge-info text-xs">Mínimo: {{ trackingData.min_passing_score }}</span>
+            <span class="badge badge-info text-xs">Mínimo: {{ trackingData.min_failing_subjects || 3 }}</span>
           </div>
         </div>
 
@@ -812,7 +816,7 @@ onMounted(async () => {
           <div class="stat-icon"><AlertOctagon class="w-6 h-6" /></div>
           <div class="stat-data">
             <span class="stat-value">{{ annualData.pendientes_count }}</span>
-            <span class="stat-label">Pendientes (1-2 Reprobadas)</span>
+            <span class="stat-label">Pendientes (1-{{ (annualData.min_failing_subjects || 3) - 1 }} Reprobadas)</span>
           </div>
         </div>
 
@@ -820,7 +824,7 @@ onMounted(async () => {
           <div class="stat-icon"><XCircle class="w-6 h-6" /></div>
           <div class="stat-data">
             <span class="stat-value">{{ annualData.no_promovidos_count }}</span>
-            <span class="stat-label">No Promovidos (3+ Reprobadas)</span>
+            <span class="stat-label">No Promovidos ({{ annualData.min_failing_subjects || 3 }}+ Reprobadas)</span>
           </div>
         </div>
       </div>
@@ -860,7 +864,7 @@ onMounted(async () => {
               >✕</span>
             </div>
 
-            <span class="badge badge-info text-xs">Escala Mínima: {{ annualData.min_passing_score }}</span>
+            <span class="badge badge-info text-xs">Escala Mínima: {{ annualData.min_passing_score }} | Mínimo: {{ annualData.min_failing_subjects || 3 }}</span>
           </div>
         </div>
 

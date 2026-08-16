@@ -215,7 +215,7 @@ export const ensureAcademicPeriodPendingStatus = async () => {};
 
 export const ensureSchoolDefaultSettings = async (schoolId: number) => {
   const existing = await pool.query(
-    `SELECT id_colegio, nota_minima, nota_maxima, nota_aprobacion, escala_modo
+    `SELECT id_colegio, nota_minima, nota_maxima, nota_aprobacion, escala_modo, COALESCE(materias_reprobatorias_promocion, 3) AS materias_reprobatorias_promocion
      FROM configuracion_colegio
      WHERE id_colegio = $1`,
     [schoolId]
@@ -239,9 +239,9 @@ export const ensureSchoolDefaultSettings = async (schoolId: number) => {
   const inferredApproval = inferredMin <= 3 && 3 <= inferredMax ? 3 : Number(((inferredMin + inferredMax) / 2).toFixed(1));
 
   const created = await pool.query(
-    `INSERT INTO configuracion_colegio (id_colegio, nota_minima, nota_maxima, nota_aprobacion, escala_modo)
-     VALUES ($1, $2, $3, $4, 'AUTOMATICO')
-     RETURNING id_colegio, nota_minima, nota_maxima, nota_aprobacion, escala_modo`,
+    `INSERT INTO configuracion_colegio (id_colegio, nota_minima, nota_maxima, nota_aprobacion, escala_modo, materias_reprobatorias_promocion)
+     VALUES ($1, $2, $3, $4, 'AUTOMATICO', 3)
+     RETURNING id_colegio, nota_minima, nota_maxima, nota_aprobacion, escala_modo, materias_reprobatorias_promocion`,
     [schoolId, inferredMin, inferredMax, inferredApproval]
   );
 

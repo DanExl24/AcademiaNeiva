@@ -889,7 +889,7 @@ export const updateSchoolDefaultSettings = async (req: Request, res: Response): 
     await ensureSchoolSettingsTable();
 
     const existingSettingsRes = await client.query(
-      `SELECT nota_minima, nota_maxima, nota_aprobacion, escala_modo
+      `SELECT nota_minima, nota_maxima, nota_aprobacion, escala_modo, COALESCE(materias_reprobatorias_promocion, 3) AS materias_reprobatorias_promocion
        FROM configuracion_colegio
        WHERE id_colegio = $1
        FOR UPDATE`,
@@ -900,6 +900,9 @@ export const updateSchoolDefaultSettings = async (req: Request, res: Response): 
       existingSettingsRes.rows[0] ??
       (await ensureSchoolDefaultSettings(schoolId));
     const nextScaleMode = (requestedScaleMode || previous.escala_modo || "AUTOMATICO") as "AUTOMATICO" | "MANUAL";
+    const nextMateriasReprobatorias = req.body.materias_reprobatorias_promocion !== undefined && !Number.isNaN(Number(req.body.materias_reprobatorias_promocion))
+      ? Math.max(1, Math.min(10, Math.round(Number(req.body.materias_reprobatorias_promocion))))
+      : Number(previous.materias_reprobatorias_promocion || 3);
 
     const currentScalesRes = await client.query(
       `SELECT nivel, valor_maximo
@@ -912,16 +915,17 @@ export const updateSchoolDefaultSettings = async (req: Request, res: Response): 
     const currentHigh = currentScalesRes.rows.find((row) => row.nivel === "ALTO");
 
     const updated = await client.query(
-      `INSERT INTO configuracion_colegio (id_colegio, nota_minima, nota_maxima, nota_aprobacion, escala_modo)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO configuracion_colegio (id_colegio, nota_minima, nota_maxima, nota_aprobacion, escala_modo, materias_reprobatorias_promocion)
+       VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (id_colegio)
        DO UPDATE SET
          nota_minima = EXCLUDED.nota_minima,
          nota_maxima = EXCLUDED.nota_maxima,
          nota_aprobacion = EXCLUDED.nota_aprobacion,
-         escala_modo = EXCLUDED.escala_modo
-       RETURNING id_colegio, nota_minima, nota_maxima, nota_aprobacion, escala_modo`,
-      [schoolId, notaMinima, notaMaxima, notaAprobacion, nextScaleMode]
+         escala_modo = EXCLUDED.escala_modo,
+         materias_reprobatorias_promocion = EXCLUDED.materias_reprobatorias_promocion
+       RETURNING id_colegio, nota_minima, nota_maxima, nota_aprobacion, escala_modo, materias_reprobatorias_promocion`,
+      [schoolId, notaMinima, notaMaxima, notaAprobacion, nextScaleMode, nextMateriasReprobatorias]
     );
 
     const syncedScales = await syncSchoolScalesAndGrades(

@@ -9,6 +9,7 @@ interface SchoolDefaultSettings {
   nota_maxima: number
   nota_aprobacion: number
   escala_modo: 'AUTOMATICO' | 'MANUAL'
+  materias_reprobatorias_promocion?: number
 }
 
 interface ValuationScale {
@@ -36,6 +37,7 @@ const defaultsForm = ref({
   nota_maxima: '',
   nota_aprobacion: '',
   escala_modo: 'AUTOMATICO' as 'AUTOMATICO' | 'MANUAL',
+  materias_reprobatorias_promocion: '3'
 })
 
 const manualScaleForm = ref({
@@ -70,6 +72,7 @@ const loadData = async () => {
         nota_maxima: String(response.data.defaultSettings.nota_maxima),
         nota_aprobacion: String(response.data.defaultSettings.nota_aprobacion),
         escala_modo: response.data.defaultSettings.escala_modo || 'AUTOMATICO',
+        materias_reprobatorias_promocion: String(response.data.defaultSettings.materias_reprobatorias_promocion || 3)
       }
     }
     if (response.data.scales) {
@@ -81,7 +84,7 @@ const loadData = async () => {
       }
     }
   } catch (error) {
-    console.error('Error loading academic settings:', error)
+    console.error('Error al cargar ajustes académicos:', error)
   } finally {
     loading.value = false
   }
@@ -105,6 +108,7 @@ const saveDefaultSettings = async (bypassConfirm = false) => {
   const nextMax = Number(defaultsForm.value.nota_maxima)
   const nextAprob = Number(defaultsForm.value.nota_aprobacion)
   const nextMode = defaultsForm.value.escala_modo
+  const nextMateriasReprobatorias = Number(defaultsForm.value.materias_reprobatorias_promocion || 3)
 
   // Verificar si hay cambio de rango para mostrar advertencia
   if (!bypassConfirm && defaultSettings.value) {
@@ -133,6 +137,7 @@ const saveDefaultSettings = async (bypassConfirm = false) => {
       nota_maxima: nextMax,
       nota_aprobacion: nextAprob,
       escala_modo: nextMode,
+      materias_reprobatorias_promocion: nextMateriasReprobatorias
     })
     showConfirmModal.value = false
     pendingSettings.value = null
@@ -200,7 +205,7 @@ onMounted(loadData)
             </div>
           </div>
 
-          <div class="grid grid-cols-1 gap-6 p-6 md:grid-cols-3">
+          <div class="grid grid-cols-1 gap-6 p-6 md:grid-cols-2 lg:grid-cols-4">
             <label class="space-y-2">
               <span class="block text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Nota mínima</span>
               <input v-model="defaultsForm.nota_minima" type="number" step="0.1" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-semibold outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-amber-500/20" />
@@ -212,6 +217,10 @@ onMounted(loadData)
             <label class="space-y-2">
               <span class="block text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Nota aprobatoria</span>
               <input v-model="defaultsForm.nota_aprobacion" type="number" step="0.1" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-semibold outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-amber-500/20" />
+            </label>
+            <label class="space-y-2">
+              <span class="block text-sm font-black text-slate-700 dark:text-slate-300 ml-1" title="Mínimo de materias reprobadas para reprobación de año escolar (S.I.E.E.)">Materias para no promoción (S.I.E.E.)</span>
+              <input v-model="defaultsForm.materias_reprobatorias_promocion" type="number" min="1" max="10" step="1" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-semibold outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-amber-500/20" placeholder="3" />
             </label>
           </div>
 

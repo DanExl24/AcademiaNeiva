@@ -58,3 +58,12 @@
   - Al abrir el modal emergente, se despliega la alerta informativa **"🔒 Año Lectivo Cerrado (Modo Solo Lectura)"** y todos los controles de entrada (decisión adoptada, grado asignado y observaciones) permanecen deshabilitados en modo de solo lectura.
   - El botón de acción "Guardar Decisión" se oculta del pie del modal, ofreciendo únicamente la opción "Cerrar".
   - El backend valida y rechaza con HTTP 400 cualquier intento de registrar o alterar decisiones de promoción si el ciclo lectivo evaluado está en estado `CERRADO`.
+
+## RN-19.12: Umbral Dinámico Institucional de Materias Reprobatorias (S.I.E.E. / Decreto 1290)
+- De conformidad con el Decreto 1290 de 2009 y el Sistema Institucional de Evaluación de los Estudiantes (S.I.E.E.), cada colegio puede definir el número mínimo de materias reprobadas que provocan la no promoción del estudiante (`materias_reprobatorias_promocion` en `configuracion_colegio`, por defecto **3**).
+- **Clasificación Automática Ajustada**:
+  - `0` materias reprobadas $\rightarrow$ `APROBADO` (Promovido).
+  - `1` a `(N_reprobatorias - 1)` materias reprobadas $\rightarrow$ `PENDIENTE` (En proceso de recuperación).
+  - `≥ N_reprobatorias` materias reprobadas $\rightarrow$ `NO_PROMOVIDO` (Reprobado).
+- Los directivos pueden ajustar este parámetro en cualquier momento desde el menú **Configuración** $\rightarrow$ **Escalas y Parámetros Académicos** (`/dashboard/configuracion`), y las vistas de seguimiento y consolidado anual actualizarán instantáneamente sus estadísticas, etiquetas de cabecera (`Mínimo: X`) y clasificaciones automáticas.
+

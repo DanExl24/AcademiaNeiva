@@ -220,6 +220,7 @@ export interface ConfiguracionBase {
 export interface ConfiguracionColegio {
   escala_modo: Generated<string>;
   id_colegio: number;
+  materias_reprobatorias_promocion: Generated<number>;
   nota_aprobacion: Generated<Numeric>;
   nota_maxima: Generated<Numeric>;
   nota_minima: Generated<Numeric>;
