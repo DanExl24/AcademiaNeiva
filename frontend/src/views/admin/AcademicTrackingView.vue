@@ -25,7 +25,9 @@ import {
   Users,
   BookOpen,
   RefreshCw,
-  ShieldAlert
+  ShieldAlert,
+  Lock,
+  Eye
 } from 'lucide-vue-next'
 
 const auth = useAuthStore()
@@ -130,6 +132,16 @@ const decisionForm = ref({
 })
 
 const schoolId = computed(() => auth.selectedSchoolId || (auth.user as any)?.id_colegio || (auth.user?.schoolId ? Number(auth.user.schoolId) : undefined))
+
+// Determinar si el año lectivo seleccionado está cerrado
+const isYearClosed = computed(() => {
+  if (!selectedYearId.value) return yearStore.isClosedYear
+  const selectedYear = years.value.find((y: any) => Number(y.id_anio) === Number(selectedYearId.value))
+  if (selectedYear) {
+    return selectedYear.estado === 'CERRADO' || selectedYear.cerrado === true
+  }
+  return yearStore.isClosedYear
+})
 
 // Cargar catálogos iniciales
 const loadCatalogs = async () => {
@@ -919,12 +931,13 @@ onMounted(async () => {
                 </td>
                 <td class="text-right">
                   <button 
-                    :class="student.decision_directivo ? 'btn-secondary-sm' : 'btn-primary-sm'" 
+                    :class="isYearClosed ? 'btn-secondary-sm bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-200' : (student.decision_directivo ? 'btn-secondary-sm' : 'btn-primary-sm')" 
                     @click="openDecisionModal(student)"
                   >
-                    <Edit v-if="student.decision_directivo" class="w-3.5 h-3.5 inline mr-1" />
+                    <Eye v-if="isYearClosed" class="w-3.5 h-3.5 inline mr-1 text-slate-500" />
+                    <Edit v-else-if="student.decision_directivo" class="w-3.5 h-3.5 inline mr-1" />
                     <UserCheck v-else class="w-3.5 h-3.5 inline mr-1" />
-                    {{ student.decision_directivo ? 'Editar Decisión' : 'Registrar Decisión' }}
+                    {{ isYearClosed ? 'Visualizar Decisión' : (student.decision_directivo ? 'Editar Decisión' : 'Registrar Decisión') }}
                   </button>
                 </td>
               </tr>
@@ -1043,15 +1056,24 @@ onMounted(async () => {
       <div class="modal-card">
         <div class="modal-header">
           <div class="flex items-center gap-2">
-            <Award class="w-5 h-5 text-indigo-600" />
+            <Lock v-if="isYearClosed" class="w-5 h-5 text-slate-500" />
+            <Award v-else class="w-5 h-5 text-indigo-600" />
             <h3 class="font-black text-slate-800 text-base">
-              {{ targetStudentForDecision?.decision_directivo ? 'Editar Decisión Institucional' : 'Registro de Decisión Institucional' }}
+              {{ isYearClosed ? 'Visualizar Decisión Institucional (Solo Lectura)' : (targetStudentForDecision?.decision_directivo ? 'Editar Decisión Institucional' : 'Registro de Decisión Institucional') }}
             </h3>
           </div>
           <button class="btn-close" @click="showDecisionModal = false">×</button>
         </div>
 
         <div class="modal-body space-y-4">
+          <!-- Alerta de Año Cerrado -->
+          <div v-if="isYearClosed" class="p-3.5 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-300 text-xs flex items-center gap-2.5 shadow-sm">
+            <Lock class="w-5 h-5 text-slate-500 shrink-0" />
+            <div>
+              <strong>Año Lectivo Cerrado (Modo Solo Lectura):</strong> Las decisiones institucionales de este ciclo escolar son de carácter histórico e inmodificables.
+            </div>
+          </div>
+
           <!-- Resumen del Estudiante -->
           <div class="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5 text-xs">
             <div class="flex justify-between items-center">
@@ -1090,7 +1112,7 @@ onMounted(async () => {
           </div>
 
           <!-- Alerta Informativa para Último Año -->
-          <div v-if="targetStudentForDecision?.is_final_grade || targetStudentForDecision?.es_ultimo_grado" class="p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs flex items-center gap-2.5 shadow-sm">
+          <div v-if="!isYearClosed && (targetStudentForDecision?.is_final_grade || targetStudentForDecision?.es_ultimo_grado)" class="p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs flex items-center gap-2.5 shadow-sm">
             <GraduationCap class="w-5 h-5 text-amber-600 shrink-0" />
             <div>
               <strong>Estudiante en Año de Graduación:</strong> Al aprobar la promoción, su estado cambiará automáticamente a <span class="font-black text-indigo-700 uppercase">GRADUADO</span> y se inscribirá en el libro oficial de graduados.
@@ -1102,7 +1124,7 @@ onMounted(async () => {
             <label class="block text-xs font-bold text-slate-700 mb-1.5">
               Decisión adoptada por la institución / directivo:
             </label>
-            <select v-model="decisionForm.decisionTaken" class="form-select">
+            <select v-model="decisionForm.decisionTaken" :disabled="isYearClosed" class="form-select disabled:opacity-65 disabled:bg-slate-100 dark:disabled:bg-slate-800">
               <option value="PROMOVER_SIGUIENTE_GRADO">
                 {{ (targetStudentForDecision?.is_final_grade || targetStudentForDecision?.es_ultimo_grado) ? 'Promover y Graduar Estudiante 🎓' : 'Promover al siguiente grado (Excepción / Aprobación)' }}
               </option>
@@ -1117,7 +1139,7 @@ onMounted(async () => {
             <label class="block text-xs font-bold text-slate-700 mb-1.5">
               Grado institucional sugerido / asignado (Opcional):
             </label>
-            <select v-model="decisionForm.assignedGradeId" class="form-select">
+            <select v-model="decisionForm.assignedGradeId" :disabled="isYearClosed" class="form-select disabled:opacity-65 disabled:bg-slate-100 dark:disabled:bg-slate-800">
               <option value="">Mantener grado por defecto</option>
               <option v-for="g in grades" :key="g.id_tipo_grado || g.id_grado" :value="g.id_tipo_grado || g.id_grado">
                 {{ g.nombre }}
@@ -1133,15 +1155,18 @@ onMounted(async () => {
             <textarea 
               v-model="decisionForm.observation" 
               rows="3" 
-              class="form-textarea"
+              :disabled="isYearClosed"
+              class="form-textarea disabled:opacity-65 disabled:bg-slate-100 dark:disabled:bg-slate-800"
               placeholder="Indique los motivos, actas o acuerdos de la comisión de evaluación y promoción..."
             ></textarea>
           </div>
         </div>
 
-        <div class="modal-footer">
-          <button class="btn-secondary" @click="showDecisionModal = false">Cancelar</button>
-          <button class="btn-primary" :disabled="loading" @click="saveDirectiveDecision()">
+        <div class="modal-footer flex items-center justify-between">
+          <button class="btn-secondary" @click="showDecisionModal = false">
+            {{ isYearClosed ? 'Cerrar' : 'Cancelar' }}
+          </button>
+          <button v-if="!isYearClosed" class="btn-primary" :disabled="loading" @click="saveDirectiveDecision()">
             <Save class="w-4 h-4 inline mr-1.5" /> 
             {{ loading ? 'Guardando...' : 'Guardar Decisión' }}
           </button>

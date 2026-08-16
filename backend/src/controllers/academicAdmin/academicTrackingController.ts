@@ -1092,6 +1092,13 @@ export const recordDirectiveDecision = async (req: Request, res: Response): Prom
       return;
     }
 
+    if (academicYear.estado === "CERRADO") {
+      res.status(400).json({
+        error: `El año lectivo ${academicYear.calendario || previousYearId} se encuentra CERRADO. No es posible registrar ni modificar decisiones de promoción en un ciclo escolar cerrado.`
+      });
+      return;
+    }
+
     // Verificar períodos del año lectivo evaluado
     const allPeriods = await db
       .selectFrom("periodo_academico")

@@ -51,3 +51,10 @@
 ## RN-19.10: Resaltado Visual y Filtro de Graduandos
 - Los estudiantes pertenecientes al último grado de la institución se identifican visualmente en las tablas de seguimiento y consolidación anual mediante un borde dorado/índigo destacado (`border-l-4 border-l-amber-500 bg-amber-50/20`) y el distintivo **🎓 Último Año**.
 - La interfaz directiva provee el botón de filtro rápido **"Solo Graduandos"** para aislar instantáneamente la cohorte saliente del plantel.
+
+## RN-19.11: Bloqueo de Edición y Modo Solo Lectura en Años Lectivos Cerrados
+- Cuando el año lectivo seleccionado se encuentra en estado **`CERRADO`** (`isYearClosed = true`):
+  - El botón de acción en la tabla de consolidado anual cambia su etiqueta a **"Visualizar Decisión"** (con ícono de consulta `<Eye />`).
+  - Al abrir el modal emergente, se despliega la alerta informativa **"🔒 Año Lectivo Cerrado (Modo Solo Lectura)"** y todos los controles de entrada (decisión adoptada, grado asignado y observaciones) permanecen deshabilitados en modo de solo lectura.
+  - El botón de acción "Guardar Decisión" se oculta del pie del modal, ofreciendo únicamente la opción "Cerrar".
+  - El backend valida y rechaza con HTTP 400 cualquier intento de registrar o alterar decisiones de promoción si el ciclo lectivo evaluado está en estado `CERRADO`.
