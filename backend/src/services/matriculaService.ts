@@ -242,16 +242,28 @@ export class MatriculaService {
       .leftJoin('nivel_escolar as n', (join) =>
         join.onRef('n.id_nivel', '=', sql<number>`COALESCE(m.id_nivel, g.id_nivel, tg.id_nivel)`)
       )
-      .leftJoin('solicitud_traslado as st', (join) =>
-        join.on((eb) =>
-          eb.or([
-            eb('st.id_matricula', '=', eb.ref('m.id_matricula')),
-            eb.and([
-              eb('st.id_usuario', '=', eb.ref('e.id_usuario')),
-              eb('st.tipo', '=', eb.val('TRASLADO_MATRICULA'))
+      .leftJoin(
+        (eb) =>
+          eb
+            .selectFrom('solicitud_traslado as st_sub')
+            .select([
+              'st_sub.id_solicitud',
+              'st_sub.id_matricula',
+              'st_sub.id_usuario',
+              'st_sub.id_colegio_origen',
+              'st_sub.id_colegio_destino'
             ])
-          ])
-        )
+            .distinctOn(['st_sub.id_usuario'])
+            .orderBy('st_sub.id_usuario')
+            .orderBy('st_sub.id_solicitud', 'desc')
+            .as('st'),
+        (join) =>
+          join.on((eb) =>
+            eb.or([
+              eb('st.id_matricula', '=', eb.ref('m.id_matricula')),
+              eb('st.id_usuario', '=', eb.ref('e.id_usuario'))
+            ])
+          )
       )
       .leftJoin('colegio as co_orig', 'co_orig.id_colegio', 'st.id_colegio_origen')
       .leftJoin('colegio as co_dest', 'co_dest.id_colegio', 'st.id_colegio_destino')
