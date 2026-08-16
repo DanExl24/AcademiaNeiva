@@ -1,4 +1,4 @@
-﻿# =============================================
+# =============================================
 # AcademiaNeiva — Root .gitignore
 # =============================================
 
@@ -62,3 +62,7 @@ postgres-data/
 *.key
 *.cer
 *.crt
+
+# ---- Playwright Reports & Test Results ----
+playwright/reports/
+playwright/test-results/
