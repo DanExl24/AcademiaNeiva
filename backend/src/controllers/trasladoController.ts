@@ -143,14 +143,9 @@ export const getDisponibilidadCupos = async (req: AuthRequest, res: Response): P
       return;
     }
 
-    const schoolId = req.user.schoolId;
-    const destSchoolId = schoolId || (req.query.id_colegio ? Number(req.query.id_colegio) : null);
-    if (!destSchoolId) {
-      res.status(400).json({ error: 'Se requiere una institución destino' });
-      return;
-    }
+    const targetSchoolId = req.query.id_colegio ? Number(req.query.id_colegio) : (req.user.schoolId ? Number(req.user.schoolId) : undefined);
 
-    const result = await TrasladoService.getDisponibilidadCuposTraslado(idSolicitud, destSchoolId);
+    const result = await TrasladoService.getDisponibilidadCuposTraslado(idSolicitud, targetSchoolId);
     res.json(result);
   } catch (error: any) {
     console.error('Error en getDisponibilidadCupos:', error);

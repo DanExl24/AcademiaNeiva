@@ -443,7 +443,7 @@ export class TrasladoService {
   /**
    * Consultar disponibilidad de cupos por grado y secciones activas en el colegio destino
    */
-  static async getDisponibilidadCuposTraslado(idSolicitud: number, idColegioDestino: number): Promise<any> {
+  static async getDisponibilidadCuposTraslado(idSolicitud: number, idColegioDestino?: number): Promise<any> {
     const solicitud = await db
       .selectFrom('solicitud_traslado as st')
       .selectAll()
@@ -451,6 +451,8 @@ export class TrasladoService {
       .executeTakeFirst();
 
     if (!solicitud) throw new Error('Solicitud de traslado no encontrada');
+
+    const destSchoolId = idColegioDestino || solicitud.id_colegio_destino;
 
     let idTipoGrado: number | null = null;
     let gradoNombre: string = 'Grado no especificado';
@@ -482,7 +484,43 @@ export class TrasladoService {
       }
     }
 
-    const gruposQuery = db
+    if ((gradoNombre === 'Grado no especificado' || !idTipoGrado) && solicitud.id_usuario) {
+      const est = await db
+        .selectFrom('estudiante as e')
+        .select('e.id_estudiante')
+        .where('e.id_usuario', '=', solicitud.id_usuario)
+        .executeTakeFirst();
+
+      if (est) {
+        const origMat = await db
+          .selectFrom('matricula as m')
+          .leftJoin('grupos as g', 'm.id_grupo', 'g.id_grupo')
+          .leftJoin('tipo_grado as tg', 'g.id_tipo_grado', 'tg.id_tipo_grado')
+          .leftJoin('nivel_escolar as ne', (join) =>
+            join.onRef('ne.id_nivel', '=', sql<number>`COALESCE(m.id_nivel, g.id_nivel, tg.id_nivel)`)
+          )
+          .select([
+            'm.id_matricula',
+            'm.id_nivel',
+            'm.id_grupo',
+            'g.id_tipo_grado',
+            'tg.nombre as grado_nombre',
+            'ne.nombre as nivel_nombre'
+          ])
+          .where('m.id_estudiante', '=', est.id_estudiante)
+          .where('m.id_colegio', '=', solicitud.id_colegio_origen)
+          .orderBy('m.id_matricula', 'desc')
+          .executeTakeFirst();
+
+        if (origMat) {
+          idTipoGrado = origMat.id_tipo_grado || null;
+          gradoNombre = origMat.grado_nombre || gradoNombre;
+          nivelNombre = origMat.nivel_nombre || nivelNombre;
+        }
+      }
+    }
+
+    const baseGruposQuery = () => db
       .selectFrom('grupos as g')
       .innerJoin('secciones as s', 'g.id_seccion', 's.id_seccion')
       .innerJoin('tipo_grado as tg', 'g.id_tipo_grado', 'tg.id_tipo_grado')
@@ -497,12 +535,24 @@ export class TrasladoService {
         'g.cupos_totales',
         sql<number>`(g.cupos_totales - (SELECT COUNT(*) FROM matricula WHERE id_grupo = g.id_grupo AND estado IN ('ACTIVA', 'TRASLADADA')))::int`.as('cupos_disponibles')
       ])
-      .where('g.id_colegio', '=', idColegioDestino);
+      .where('g.id_colegio', '=', destSchoolId);
 
-    let grupos = await (idTipoGrado ? gruposQuery.where('g.id_tipo_grado', '=', idTipoGrado) : gruposQuery).execute();
+    let grupos: any[] = [];
 
-    if (grupos.length === 0 && gradoNombre !== 'Grado no especificado') {
-      grupos = await gruposQuery.where('tg.nombre', '=', gradoNombre).execute();
+    if (gradoNombre && gradoNombre !== 'Grado no especificado') {
+      grupos = await baseGruposQuery()
+        .where(sql`LOWER(TRIM(tg.nombre))`, '=', gradoNombre.trim().toLowerCase())
+        .execute();
+    }
+
+    if (grupos.length === 0 && idTipoGrado) {
+      grupos = await baseGruposQuery()
+        .where('g.id_tipo_grado', '=', idTipoGrado)
+        .execute();
+    }
+
+    if (grupos.length === 0) {
+      grupos = await baseGruposQuery().execute();
     }
 
     const cuposTotalesGrado = grupos.reduce((acc: number, curr: any) => {
@@ -512,7 +562,7 @@ export class TrasladoService {
 
     return {
       id_solicitud: idSolicitud,
-      id_colegio_destino: idColegioDestino,
+      id_colegio_destino: destSchoolId,
       grado_nombre: gradoNombre,
       nivel_nombre: nivelNombre,
       cupos_totales_grado: cuposTotalesGrado,

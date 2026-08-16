@@ -128,7 +128,7 @@ const openAcademicDataModal = (targetId: number) => {
 const isDirectivoDestino = computed(() => {
   if (!selectedSolicitud.value) return false
   const mySchool = auth.selectedSchoolId || (auth.user?.schoolId ? Number(auth.user.schoolId) : null)
-  return mySchool === selectedSolicitud.value.id_colegio_destino
+  return mySchool !== null && Number(mySchool) === Number(selectedSolicitud.value.id_colegio_destino)
 })
 
 // Forms
@@ -169,7 +169,7 @@ const stats = computed(() => {
 // Current user role capabilities
 const isAdminGeneral = computed(() => {
   const roles = (auth.user?.roles as string[]) || (auth.user?.role ? [auth.user.role] : [])
-  return roles.includes('admin_general') || roles.includes('admin') || auth.user?.role === 'admin'
+  return roles.includes('admin_general') || roles.includes('admin') || auth.user?.role === 'admin' || auth.activeRole === 'admin_general'
 })
 
 const canUserApproveCurrentModal = computed(() => {
@@ -187,19 +187,21 @@ const canUserApproveCurrentModal = computed(() => {
   const yaVotoUsuario = s.aprobaciones?.some(a => a.id_usuario === userId)
   if (yaVotoUsuario) return false
 
-  // Verificar roles
-  if (roles.includes('directivo')) {
-    if (currentSchoolId === s.id_colegio_origen) {
+  // Verificar roles directivos
+  const isDirectivo = roles.includes('directivo') || auth.user?.role === 'directivo' || auth.activeRole === 'directivo'
+  if (isDirectivo && currentSchoolId !== null) {
+    if (Number(currentSchoolId) === Number(s.id_colegio_origen)) {
       const yaVotoOrigen = s.aprobaciones?.some(a => a.rol === 'DIRECTIVO_ORIGEN')
       if (!yaVotoOrigen) return true
     }
-    if (currentSchoolId === s.id_colegio_destino) {
+    if (Number(currentSchoolId) === Number(s.id_colegio_destino)) {
       const yaVotoDestino = s.aprobaciones?.some(a => a.rol === 'DIRECTIVO_DESTINO')
       if (!yaVotoDestino) return true
     }
   }
 
-  if (roles.includes('padre') || userId === s.id_usuario) {
+  const isPadre = roles.includes('padre') || auth.user?.role === 'padre' || auth.activeRole === 'padre'
+  if (isPadre || userId === s.id_usuario) {
     const yaVotoUsuarioRol = s.aprobaciones?.some(a => a.rol === 'USUARIO')
     if (!yaVotoUsuarioRol) return true
   }
@@ -1065,7 +1067,7 @@ onMounted(() => {
         <div v-if="selectedSolicitud.tipo === 'TRASLADO_MATRICULA' && canUserApproveCurrentModal && (isDirectivoDestino || isAdminGeneral)" class="p-4 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 rounded-2xl space-y-3">
           <div class="flex items-center justify-between">
             <span class="text-xs font-black uppercase text-slate-600 dark:text-slate-300">
-              Disponibilidad en Grado: <span class="text-indigo-600 dark:text-indigo-400">{{ disponibilidadCupos?.grado_nombre || 'Consultando...' }}</span>
+              Disponibilidad en Grado: <span class="text-indigo-600 dark:text-indigo-400">{{ disponibilidadCupos?.grado_nombre || selectedSolicitud.datos_origen?.grado || 'Consultando...' }}</span>
             </span>
             <span v-if="disponibilidadCupos" :class="[
               'px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase',
@@ -1107,6 +1109,11 @@ onMounted(() => {
                 </span>
               </button>
             </div>
+          </div>
+
+          <div v-else-if="disponibilidadCupos && disponibilidadCupos.grupos.length === 0" class="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl text-xs text-amber-700 dark:text-amber-300 flex items-center gap-2">
+            <AlertCircle :size="16" class="shrink-0" />
+            <span>No se encontraron grupos específicos para este grado en la institución destino. El traslado asignará el nivel escolar por defecto.</span>
           </div>
         </div>
 
