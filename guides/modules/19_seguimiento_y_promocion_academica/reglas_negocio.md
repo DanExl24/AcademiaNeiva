@@ -32,3 +32,8 @@
 ## RN-19.6: Gestión del Estado de Decisión en Interfaz Directiva
 - **Estudiantes Promovidos**: Para estudiantes en estado `APROBADO` (100% asignaturas aprobadas) sin decisión manual previa, la interfaz muestra la etiqueta de estado `"Promovido automáticamente"` sin exigir la creación de un registro de excepción.
 - **Edición de Decisiones**: Cuando un estudiante ya posee una decisión registrada en la base de datos, la interfaz despliega la decisión formateada amigablemente y habilita el botón en estado **"Editar Decisión"** (con ícono y estilo de edición), permitiendo al directivo ajustar la decisión u observaciones sin crear registros duplicados.
+
+## RN-19.7: Exclusión de Estudiantes Trasladados e Inactivos
+- Las consultas de seguimiento por período (`/api/academic-admin/academic-tracking/period-tracking`) y consolidación anual (`/api/academic-admin/academic-tracking/annual-consolidation`) filtran y procesan únicamente matrículas en estado `ACTIVA`, `APROBADA` o `CULMINADA` en la institución.
+- Los estudiantes cuya matrícula pasó a estado `TRASLADADA` (trasladados a otro plantel) o que no tienen matrícula vigente en el año escolar se excluyen de los cálculos estadísticos, listados de rendimiento y decisiones de promoción del colegio de origen.
+
