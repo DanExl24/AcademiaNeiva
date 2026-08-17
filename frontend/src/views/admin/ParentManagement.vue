@@ -18,6 +18,15 @@ import {
 import { useAuthStore } from '../../stores/auth'
 import { useAcademicYearStore } from '../../stores/academicYear'
 import { useRouter } from 'vue-router'
+import { useConfirm } from '../../composables/useConfirm'
+import { useToast } from '../../composables/useToast'
+
+const auth = useAuthStore()
+const yearStore = useAcademicYearStore()
+const router = useRouter()
+const { confirm } = useConfirm()
+const toast = useToast()
+
 
 interface ParentItem {
   id_padrefamilia: number
@@ -68,10 +77,8 @@ interface CatalogOption {
   nombre: string
 }
 
-const auth = useAuthStore()
-const yearStore = useAcademicYearStore()
-const router = useRouter()
 const schoolId = computed(() => Number(auth.user?.schoolId || 0))
+
 
 const loading = ref(true)
 const parents = ref<ParentItem[]>([])
@@ -294,16 +301,20 @@ const toggleParentAccountStatus = async () => {
   const p = selectedParentDetail.value.parent
 
   if (!p.id_usuario) {
-    alert('Este acudiente no posee una cuenta de usuario registrada en el sistema.')
+    toast.warning('Este acudiente no posee una cuenta de usuario registrada en el sistema.')
     return
   }
 
   const newStatus = !p.usuario_activo
   const actionText = newStatus ? 'ACTIVAR' : 'INACTIVAR'
   
-  if (!confirm(`¿Está seguro de que desea ${actionText} la cuenta de acceso de ${p.nombre} ${p.apellido}?`)) {
-    return
-  }
+  const ok = await confirm({
+    title: `${actionText} Cuenta de Acudiente`,
+    message: `¿Está seguro de que desea ${actionText.toLowerCase()} la cuenta de acceso de ${p.nombre} ${p.apellido}?`,
+    confirmText: actionText,
+    type: newStatus ? 'primary' : 'danger'
+  })
+  if (!ok) return
 
   try {
     togglingStatus.value = true
@@ -313,17 +324,18 @@ const toggleParentAccountStatus = async () => {
       { headers: { Authorization: `Bearer ${auth.token}` } }
     )
 
-    alert(res.data.message || `Cuenta ${newStatus ? 'activada' : 'inactivada'} correctamente.`)
+    toast.success(res.data.message || `Cuenta ${newStatus ? 'activada' : 'inactivada'} correctamente.`)
     await loadParents()
     if (selectedParentId.value) {
       await openDrawer(selectedParentId.value)
     }
   } catch (error: any) {
-    alert(error.response?.data?.error || 'Error al actualizar el estado de la cuenta.')
+    toast.error(error.response?.data?.error || 'Error al actualizar el estado de la cuenta.')
   } finally {
     togglingStatus.value = false
   }
 }
+
 
 const getChildStatusBadge = (estado: string) => {
   switch (estado) {

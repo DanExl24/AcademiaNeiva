@@ -8,9 +8,14 @@ import {
   Mail, School, Shield, Calendar, Lock, Clipboard, Check, Ban, Loader2,
   UserPlus, RefreshCw
 } from 'lucide-vue-next'
+import { useConfirm } from '../../composables/useConfirm'
+import { useToast } from '../../composables/useToast'
 
 const auth = useAuthStore()
 const route = useRoute()
+const { confirm } = useConfirm()
+const toast = useToast()
+
 
 interface Usuario {
   id_usuario: number
@@ -355,8 +360,13 @@ const openDetails = async (user: Usuario) => {
 }
 
 const updateStatus = async (user: Usuario, estado: string, motivo?: string) => {
-  const confirmMsg = `¿Confirmas el cambio de estado de ${user.nombre} a ${estado}?`
-  if (!confirm(confirmMsg)) return
+  const ok = await confirm({
+    title: 'Cambiar Estado de Usuario',
+    message: `¿Confirmas el cambio de estado de ${user.nombre} a ${estado}?`,
+    confirmText: 'Confirmar Cambio',
+    type: estado === 'BANEADO' || estado === 'SUSPENDIDO' ? 'danger' : 'primary'
+  })
+  if (!ok) return
 
   try {
     const headers = { Authorization: `Bearer ${auth.token}` }
@@ -364,12 +374,13 @@ const updateStatus = async (user: Usuario, estado: string, motivo?: string) => {
       estado,
       motivo
     }, { headers })
+    toast.success(`Estado actualizado a ${estado}`)
     await fetchUsers()
     if (selectedUser.value?.id_usuario === user.id_usuario) {
       selectedUser.value.estado = estado as any
     }
   } catch (error: any) {
-    alert(error.response?.data?.error || 'Error al cambiar estado')
+    toast.error(error.response?.data?.error || 'Error al cambiar estado')
   }
 }
 
@@ -382,7 +393,7 @@ const openBan = (user: Usuario) => {
 const handleBan = async () => {
   if (!selectedUser.value) return
   if (!banReason.value.trim()) {
-    alert('Por favor indica un motivo para el baneo.')
+    toast.warning('Por favor indica un motivo para el baneo.')
     return
   }
   await updateStatus(selectedUser.value, 'BANEADO', banReason.value)
@@ -390,7 +401,13 @@ const handleBan = async () => {
 }
 
 const handleResetPassword = async (user: Usuario) => {
-  if (!confirm(`¿Estás seguro de que deseas restablecer la contraseña de ${user.nombre} ${user.apellido || ''}? Se generará una contraseña temporal.`)) return
+  const ok = await confirm({
+    title: 'Restablecer Contraseña',
+    message: `¿Estás seguro de que deseas restablecer la contraseña de ${user.nombre} ${user.apellido || ''}? Se generará una contraseña temporal.`,
+    confirmText: 'Restablecer Contraseña',
+    type: 'warning'
+  })
+  if (!ok) return
 
   try {
     resetting.value = true
@@ -400,8 +417,9 @@ const handleResetPassword = async (user: Usuario) => {
     const headers = { Authorization: `Bearer ${auth.token}` }
     const res = await axios.post(`/api/admin/usuarios/${user.id_usuario}/restablecer-password`, {}, { headers })
     tempPassword.value = res.data.password_temporal || res.data.tempPassword || ''
+    toast.success('Contraseña temporal generada con éxito')
   } catch (error: any) {
-    alert(error.response?.data?.error || 'Error al restablecer contraseña')
+    toast.error(error.response?.data?.error || 'Error al restablecer contraseña')
     showResetModal.value = false
   } finally {
     resetting.value = false
@@ -411,19 +429,28 @@ const handleResetPassword = async (user: Usuario) => {
 const copyPassword = () => {
   navigator.clipboard.writeText(tempPassword.value)
   copied.value = true
+  toast.info('Contraseña copiada al portapapeles')
   setTimeout(() => copied.value = false, 2000)
 }
 
 const handleForceLogout = async (user: Usuario) => {
-  if (!confirm(`¿Deseas forzar el cierre de todas las sesiones activas de ${user.nombre}?`)) return
+  const ok = await confirm({
+    title: 'Forzar Cierre de Sesión',
+    message: `¿Deseas forzar el cierre de todas las sesiones activas de ${user.nombre}?`,
+    confirmText: 'Cerrar Sesiones',
+    type: 'danger'
+  })
+  if (!ok) return
+
   try {
     const headers = { Authorization: `Bearer ${auth.token}` }
     await axios.post(`/api/admin/usuarios/${user.id_usuario}/cerrar-sesion`, {}, { headers })
-    alert('Sesiones cerradas con éxito.')
+    toast.success('Sesiones cerradas con éxito.')
   } catch (error: any) {
-    alert(error.response?.data?.error || 'Error al forzar cierre de sesión')
+    toast.error(error.response?.data?.error || 'Error al forzar cierre de sesión')
   }
 }
+
 
 const openDeleteModal = (user: Usuario) => {
   userToDelete.value = user

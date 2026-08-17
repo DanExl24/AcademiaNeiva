@@ -28,10 +28,15 @@ import {
   ClipboardList
 } from 'lucide-vue-next'
 import DatosAcademicosTrasladoModal from '../../components/traslados/DatosAcademicosTrasladoModal.vue'
+import { useConfirm } from '../../composables/useConfirm'
+import { useToast } from '../../composables/useToast'
 
 const auth = useAuthStore()
 const yearStore = useAcademicYearStore()
 const route = useRoute()
+const { confirm } = useConfirm()
+const toast = useToast()
+
 
 const showAcademicDataModal = ref(false)
 const academicTargetId = ref<number | null>(null)
@@ -266,13 +271,20 @@ const openIntervencion = (sol: SolicitudTraslado) => {
 const handleIntervencion = async () => {
   if (!intervencionSolicitud.value) return
   if (!intervencionForm.value.motivo.trim() || intervencionForm.value.motivo.trim().length < 10) {
-    alert('El motivo de intervención debe tener al menos 10 caracteres.')
+    toast.warning('El motivo de intervención debe tener al menos 10 caracteres.')
     return
   }
 
-  if (!confirm(`¿Confirmas que deseas ${intervencionForm.value.accion.toLowerCase()} esta solicitud por intervención administrativa? Esta acción quedará registrada en el historial de auditoría.`)) return
+  const ok = await confirm({
+    title: 'Confirmar Intervención Administrativa',
+    message: `¿Confirmas que deseas ${intervencionForm.value.accion.toLowerCase()} esta solicitud por intervención administrativa? Esta acción quedará registrada en el historial de auditoría.`,
+    confirmText: 'Confirmar Intervención',
+    type: 'warning'
+  })
+  if (!ok) return
 
   submitting.value = true
+
   try {
     await axios.post(
       `${API_BASE_URL}/api/traslados/${intervencionSolicitud.value.id_solicitud}/intervencion`,

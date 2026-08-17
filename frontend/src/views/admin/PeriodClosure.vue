@@ -8,10 +8,15 @@ import {
 import { useAuthStore } from '../../stores/auth'
 import { getCourseDisplayName } from '../../utils/courseHelper'
 import { useAcademicYearStore } from '../../stores/academicYear'
+import { useConfirm } from '../../composables/useConfirm'
+import { useToast } from '../../composables/useToast'
 
 const auth = useAuthStore()
 const yearStore = useAcademicYearStore()
+const { confirm } = useConfirm()
+const toast = useToast()
 const schoolId = computed(() => Number(auth.user?.schoolId || 0))
+
 
 const loading = ref(true)
 const detailsLoading = ref(false)
@@ -385,7 +390,13 @@ const reopeningPeriod = ref(false)
 
 const attemptReopenPeriod = async () => {
   if (!selectedPeriodId.value) return
-  if (!confirm('¿Estás seguro de que deseas REABRIR el periodo académico? Esto cambiará globalmente el periodo de nuevo a ABIERTO.')) return
+  const ok = await confirm({
+    title: 'Reabrir Periodo Académico',
+    message: '¿Estás seguro de que deseas REABRIR el periodo académico? Esto cambiará globalmente el estado del periodo de nuevo a ABIERTO.',
+    confirmText: 'Reabrir Periodo',
+    type: 'warning'
+  })
+  if (!ok) return
   
   try {
     reopeningPeriod.value = true
@@ -399,9 +410,10 @@ const attemptReopenPeriod = async () => {
     const targetPeriod = periods.value.find(p => p.id_periodo === selectedPeriodId.value)
     if (targetPeriod) targetPeriod.estado = 'ABIERTO'
     
+    toast.success('Periodo reabierto correctamente')
     await loadClosureDetails()
   } catch (error: any) {
-    alert(error.response?.data?.error || 'No fue posible reabrir el periodo')
+    toast.error(error.response?.data?.error || 'No fue posible reabrir el periodo')
   } finally {
     reopeningPeriod.value = false
   }
@@ -411,7 +423,13 @@ const reopeningSubject = ref<number | null>(null)
 
 const attemptReopenSubject = async (curso: any) => {
   if (!selectedPeriodId.value) return
-  if (!confirm(`¿Estás seguro de que deseas DESHACER el cierre de ${curso.grado || curso.materia_nombre}? El docente podrá volver a modificar e ingresar notas.`)) return
+  const ok = await confirm({
+    title: 'Deshacer Cierre de Materia',
+    message: `¿Estás seguro de que deseas DESHACER el cierre de ${curso.grado || curso.materia_nombre}? El docente podrá volver a modificar e ingresar notas.`,
+    confirmText: 'Deshacer Cierre',
+    type: 'warning'
+  })
+  if (!ok) return
   
   try {
     reopeningSubject.value = curso.id_detallegrado
@@ -419,13 +437,15 @@ const attemptReopenSubject = async (curso: any) => {
       schoolId: schoolId.value
     })
     
+    toast.success('Cierre de materia deshecho exitosamente')
     await loadClosureDetails()
   } catch (error: any) {
-    alert(error.response?.data?.error || 'No fue posible deshacer el cierre de esta materia.')
+    toast.error(error.response?.data?.error || 'No fue posible deshacer el cierre de esta materia.')
   } finally {
     reopeningSubject.value = null
   }
 }
+
 
 onMounted(() => {
   loadInitialData()

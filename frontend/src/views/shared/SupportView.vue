@@ -21,10 +21,15 @@ import {
   ShieldAlert
 } from 'lucide-vue-next'
 import axios from 'axios'
+import { useConfirm } from '../../composables/useConfirm'
+import { useToast } from '../../composables/useToast'
 
 const auth = useAuthStore()
 const router = useRouter()
 const route = useRoute()
+const { confirm } = useConfirm()
+const toast = useToast()
+
 
 // Comprobar si es directivo o admin general
 const isStaff = computed(() => {
@@ -119,7 +124,12 @@ const updateTicketStatus = async (ticketId: number, newStatus: string) => {
   if (!t) return
 
   if (newStatus === 'EN_PROCESO' && (t.tipo_incidencia === 'REINGRESO' || t.estado === 'ABIERTO')) {
-    const okProcess = confirm('⚠️ ADVERTENCIA: Esta acción NO se puede revertir.\n\nAl cambiar el estado del ticket a EN PROCESO, se enviará automáticamente un correo electrónico al acudiente notificándole que el trámite de reingreso ha comenzado. Este ticket ya NO podrá volver al estado ABIERTO.\n\n¿Deseas continuar?')
+    const okProcess = await confirm({
+      title: 'Iniciar Trámite de Reingreso',
+      message: 'Al cambiar el estado del ticket a EN PROCESO, se enviará automáticamente un correo electrónico al acudiente notificándole que el trámite ha comenzado. Este ticket ya no podrá volver al estado ABIERTO.',
+      confirmText: 'Pasar a En Proceso',
+      type: 'warning'
+    })
     if (!okProcess) {
       fetchTickets()
       return
@@ -127,7 +137,12 @@ const updateTicketStatus = async (ticketId: number, newStatus: string) => {
   }
 
   if (newStatus === 'RESUELTO') {
-    const ok = confirm('¿Estás seguro de pasar el estado de este ticket a RESUELTO? Una vez resuelto, el ticket pasará a ser de solo lectura y no se podrán agregar más comentarios ni modificar su estado.');
+    const ok = await confirm({
+      title: 'Resolver Incidencia',
+      message: '¿Estás seguro de pasar el estado de este ticket a RESUELTO? Una vez resuelto, el ticket pasará a ser de solo lectura y no se podrán agregar más comentarios ni modificar su estado.',
+      confirmText: 'Marcar como Resuelto',
+      type: 'primary'
+    })
     if (!ok) {
       fetchTickets()
       return
@@ -140,29 +155,38 @@ const updateTicketStatus = async (ticketId: number, newStatus: string) => {
     
     // Actualizar localmente el estado del ticket
     t.estado = newStatus
+    toast.success(`Estado del ticket actualizado a ${newStatus}`)
     // Si el directivo lo marca como ESCALADO (si correspondiese), lo removemos de la lista local
     if (newStatus === 'ESCALADO' && !showEscalatedOnly.value && auth.activeRole?.toUpperCase() === 'DIRECTIVO') {
       tickets.value = tickets.value.filter(ticket => ticket.id_ticket !== ticketId)
     }
   } catch (error: any) {
-    alert(error.response?.data?.error || 'Error al actualizar el estado del ticket.')
+    toast.error(error.response?.data?.error || 'Error al actualizar el estado del ticket.')
     fetchTickets()
   }
 }
 
 const escalateTicketFrontend = async (ticketId: number) => {
-  if (!confirm('¿Estás seguro de que deseas escalar esta incidencia al Administrador General?')) return
+  const ok = await confirm({
+    title: 'Escalar Incidencia',
+    message: '¿Estás seguro de que deseas escalar esta incidencia al Administrador General?',
+    confirmText: 'Escalar al Admin',
+    type: 'warning'
+  })
+  if (!ok) return
+
   try {
     const headers = { Authorization: `Bearer ${auth.token}` }
     await axios.post(`/api/support/tickets/${ticketId}/escalar`, {}, { headers })
-    alert('Incidencia escalada exitosamente al Administrador General.')
+    toast.success('Incidencia escalada exitosamente al Administrador General.')
     
     // Remover localmente de la lista, ya que ahora es exclusiva del Admin General (o de ver escalados)
     tickets.value = tickets.value.filter(t => t.id_ticket !== ticketId)
   } catch (error: any) {
-    alert(error.response?.data?.error || 'Error al escalar la incidencia.')
+    toast.error(error.response?.data?.error || 'Error al escalar la incidencia.')
   }
 }
+
 
 const fetchTrackingTicket = async () => {
   if (!trackingCodeInput.value.trim()) return

@@ -7,9 +7,14 @@ import {
   ShieldAlert, ShieldCheck, Check, X, Eye, 
   AlertCircle, History, User
 } from 'lucide-vue-next'
+import { useConfirm } from '../../composables/useConfirm'
+import { useToast } from '../../composables/useToast'
 
 const auth = useAuthStore()
 const yearStore = useAcademicYearStore()
+const { confirm } = useConfirm()
+const toast = useToast()
+
 
 interface Supervision {
   id_auditoria: number
@@ -136,18 +141,25 @@ const countRechazadas = computed(() => supervisions.value.filter(s => s.estado_s
 // Approving
 const handleApprove = async (sup: Supervision) => {
   if (yearStore.isReadonlyYear) {
-    alert('Acción no permitida: El año lectivo seleccionado se encuentra CERRADO.')
+    toast.error('Acción no permitida: El año lectivo seleccionado se encuentra CERRADO.')
     return
   }
-  if (!confirm(`¿Estás seguro de que deseas APROBAR la solicitud de supervisión de ${sup.admin_nombre}?`)) return
+  const ok = await confirm({
+    title: 'Aprobar Solicitud de Supervisión',
+    message: `¿Estás seguro de que deseas APROBAR la solicitud de supervisión de ${sup.admin_nombre}?`,
+    confirmText: 'Aprobar Supervisión',
+    type: 'primary'
+  })
+  if (!ok) return
+
   try {
     processingAction.value = true
     const headers = { Authorization: `Bearer ${auth.token}` }
     await axios.post(`/api/admin/supervision/${sup.id_auditoria}/aprobar`, {}, { headers })
-    alert('Supervisión aprobada exitosamente. Se ha notificado al Administrador General.')
+    toast.success('Supervisión aprobada exitosamente. Se ha notificado al Administrador General.')
     await fetchSupervisions()
   } catch (error: any) {
-    alert(error.response?.data?.error || 'Error al aprobar la supervisión')
+    toast.error(error.response?.data?.error || 'Error al aprobar la supervisión')
   } finally {
     processingAction.value = false
   }
@@ -156,7 +168,7 @@ const handleApprove = async (sup: Supervision) => {
 // Rejecting or Revoking (Both map to setting REVOCADA with reason)
 const openRejectOrRevoke = (sup: Supervision) => {
   if (yearStore.isReadonlyYear) {
-    alert('Acción no permitida: El año lectivo seleccionado se encuentra CERRADO.')
+    toast.error('Acción no permitida: El año lectivo seleccionado se encuentra CERRADO.')
     return
   }
   selectedSupervision.value = sup
@@ -166,12 +178,12 @@ const openRejectOrRevoke = (sup: Supervision) => {
 
 const handleRejectOrRevoke = async () => {
   if (yearStore.isReadonlyYear) {
-    alert('Acción no permitida: El año lectivo seleccionado se encuentra CERRADO.')
+    toast.error('Acción no permitida: El año lectivo seleccionado se encuentra CERRADO.')
     return
   }
   if (!selectedSupervision.value) return
   if (!revocationReason.value.trim()) {
-    alert('Por favor ingrese el motivo del rechazo o la revocación.')
+    toast.warning('Por favor ingrese el motivo del rechazo o la revocación.')
     return
   }
 
@@ -185,16 +197,17 @@ const handleRejectOrRevoke = async () => {
       motivo: revocationReason.value
     }, { headers })
     
-    alert(`Supervisión ${isReject ? 'rechazada' : 'revocada'} exitosamente.`)
+    toast.success(`Supervisión ${isReject ? 'rechazada' : 'revocada'} exitosamente.`)
     showRevocationModal.value = false
     selectedSupervision.value = null
     await fetchSupervisions()
   } catch (error: any) {
-    alert(error.response?.data?.error || `Error al ${actionText}`)
+    toast.error(error.response?.data?.error || `Error al ${actionText}`)
   } finally {
     processingAction.value = false
   }
 }
+
 
 // Visualizing actions
 const viewActions = async (sup: Supervision) => {

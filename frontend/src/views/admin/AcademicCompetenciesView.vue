@@ -1,10 +1,15 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import axios from 'axios'
-import { ArrowLeft, BookOpenCheck, PenSquare, Plus, Search, Sparkles, Check, Trash2, X, AlertTriangle, RefreshCw } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 import { useNotificationStore } from '../../stores/notifications'
 import { getCourseDisplayName } from '../../utils/courseHelper'
+import { useConfirm } from '../../composables/useConfirm'
+import { useToast } from '../../composables/useToast'
+
+const { confirm } = useConfirm()
+const toast = useToast()
+
 
 interface AcademicPeriod {
   id_periodo: number
@@ -596,7 +601,13 @@ const saveEditEvidencia = async (evidencia: any) => {
 }
 
 const removeEvidencia = async (competencia: CompetencyItem, evidenciaId: number) => {
-  if (!confirm('¿Eliminar esta evidencia?')) return
+  const ok = await confirm({
+    title: 'Eliminar Evidencia Curricular',
+    message: '¿Está seguro de que desea eliminar esta evidencia?',
+    confirmText: 'Eliminar Evidencia',
+    type: 'danger'
+  })
+  if (!ok) return
 
   try {
     saving.value = true
@@ -604,13 +615,14 @@ const removeEvidencia = async (competencia: CompetencyItem, evidenciaId: number)
       params: { schoolId: schoolId.value }
     })
     competencia.evidencias = competencia.evidencias.filter((e: any) => e.id_evidencia !== evidenciaId)
-    notify.addNotification('Evidencia eliminada correctamente', 'success')
+    toast.success('Evidencia eliminada correctamente')
   } catch (error: any) {
-    notify.addNotification(error.response?.data?.error || 'Error al eliminar evidencia', 'error')
+    toast.error(error.response?.data?.error || 'Error al eliminar evidencia')
   } finally {
     saving.value = false
   }
 }
+
 
 const openDbaModal = async (competencia: CompetencyItem) => {
   selectedCompetenciaForDba.value = competencia

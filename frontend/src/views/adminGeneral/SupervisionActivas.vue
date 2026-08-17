@@ -5,8 +5,13 @@ import { useAuthStore } from '../../stores/auth'
 import { 
   ShieldAlert, StopCircle, Clock
 } from 'lucide-vue-next'
+import { useConfirm } from '../../composables/useConfirm'
+import { useToast } from '../../composables/useToast'
 
 const auth = useAuthStore()
+const { confirm } = useConfirm()
+const toast = useToast()
+
 
 interface SupervisionActiva {
   id_auditoria: number
@@ -74,11 +79,18 @@ const handleAutoExit = async (id: number) => {
 }
 
 const handleExit = async (sup: SupervisionActiva) => {
-  if (!confirm(`¿Estás seguro de que deseas finalizar la supervisión de ${sup.colegio_nombre}?`)) return
+  const ok = await confirm({
+    title: 'Finalizar Supervisión',
+    message: `¿Estás seguro de que deseas finalizar la sesión de supervisión en ${sup.colegio_nombre}?`,
+    confirmText: 'Finalizar Supervisión',
+    type: 'danger'
+  })
+  if (!ok) return
+
   try {
     const headers = { Authorization: `Bearer ${auth.token}` }
     const res = await axios.post(`/api/admin/supervision/${sup.id_auditoria}/salir`, {}, { headers })
-    alert(`Supervisión finalizada. Duración: ${res.data.duracion}. Acciones auditadas: ${res.data.total_acciones}`)
+    toast.success(`Supervisión finalizada. Duración: ${res.data.duracion}. Acciones auditadas: ${res.data.total_acciones}`)
     
     // Stop local Pinia supervision context if this is the supervision we were in
     if (auth.supervision?.id_auditoria === sup.id_auditoria) {
@@ -88,9 +100,10 @@ const handleExit = async (sup: SupervisionActiva) => {
       await fetchActiveSupervisions()
     }
   } catch (error: any) {
-    alert(error.response?.data?.error || 'Error al salir de la supervisión')
+    toast.error(error.response?.data?.error || 'Error al salir de la supervisión')
   }
 }
+
 
 onMounted(() => {
   fetchActiveSupervisions()

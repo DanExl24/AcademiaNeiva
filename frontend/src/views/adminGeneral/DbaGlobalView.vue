@@ -7,8 +7,13 @@ import {
   ChevronDown, ChevronUp, Book, Layers, Award, School, Settings, X,
   Upload, Trash2, AlertTriangle
 } from 'lucide-vue-next'
+import { useConfirm } from '../../composables/useConfirm'
+import { useToast } from '../../composables/useToast'
 
 const auth = useAuthStore()
+const { confirm } = useConfirm()
+const toast = useToast()
+
 
 // Interfaces
 interface EvidenciaDba {
@@ -270,7 +275,7 @@ const openEditDba = (dba: Dba) => {
 
 const handleSaveDba = async () => {
   if (!dbaForm.value.area || !dbaForm.value.enunciado || !dbaForm.value.version_curricular) {
-    alert('Por favor complete los campos obligatorios.')
+    toast.warning('Por favor complete los campos obligatorios.')
     return
   }
   
@@ -283,10 +288,11 @@ const handleSaveDba = async () => {
       // Create
       await axios.post('/api/admin/dba', dbaForm.value, getHeaders())
     }
+    toast.success('DBA guardado exitosamente')
     showDbaModal.value = false
     await Promise.all([fetchStats(), fetchMeta(), fetchDbaList()])
   } catch (error: any) {
-    alert(error.response?.data?.error || 'Error al guardar DBA')
+    toast.error(error.response?.data?.error || 'Error al guardar DBA')
   } finally {
     saving.value = false
   }
@@ -295,28 +301,42 @@ const handleSaveDba = async () => {
 const toggleDbaStatus = async (dba: Dba) => {
   const newStatus = dba.estado === 'ACTIVO' ? 'INACTIVO' : 'ACTIVO'
   const action = newStatus === 'ACTIVO' ? 'activar' : 'desactivar'
-  if (confirm(`¿Estás seguro de que deseas ${action} el DBA #${dba.numero_dba}?`)) {
-    try {
-      await axios.patch(`/api/admin/dba/${dba.id_dba}/estado`, { estado: newStatus }, getHeaders())
-      dba.estado = newStatus
-      await fetchStats()
-    } catch (error: any) {
-      alert(error.response?.data?.error || 'Error al cambiar estado del DBA')
-    }
+  const ok = await confirm({
+    title: `${newStatus === 'ACTIVO' ? 'Activar' : 'Desactivar'} DBA`,
+    message: `¿Estás seguro de que deseas ${action} el DBA #${dba.numero_dba}?`,
+    confirmText: newStatus === 'ACTIVO' ? 'Activar' : 'Desactivar',
+    type: newStatus === 'ACTIVO' ? 'primary' : 'warning'
+  })
+  if (!ok) return
+
+  try {
+    await axios.patch(`/api/admin/dba/${dba.id_dba}/estado`, { estado: newStatus }, getHeaders())
+    dba.estado = newStatus
+    toast.success(`DBA #${dba.numero_dba} ${newStatus.toLowerCase()} exitosamente`)
+    await fetchStats()
+  } catch (error: any) {
+    toast.error(error.response?.data?.error || 'Error al cambiar estado del DBA')
   }
 }
 
 const handleDeleteDba = async (dba: Dba) => {
-  if (confirm(`¿Estás seguro de que deseas eliminar permanentemente el DBA #${dba.numero_dba}? Esta acción borrará todas sus evidencias y no se puede deshacer.`)) {
-    try {
-      await axios.delete(`/api/admin/dba/${dba.id_dba}`, getHeaders())
-      await Promise.all([fetchStats(), fetchMeta(), fetchDbaList()])
-      alert('DBA eliminado exitosamente.')
-    } catch (error: any) {
-      alert(error.response?.data?.error || 'Error al eliminar el DBA')
-    }
+  const ok = await confirm({
+    title: 'Eliminar DBA',
+    message: `¿Estás seguro de que deseas eliminar permanentemente el DBA #${dba.numero_dba}? Esta acción borrará todas sus evidencias y no se puede deshacer.`,
+    confirmText: 'Eliminar DBA',
+    type: 'danger'
+  })
+  if (!ok) return
+
+  try {
+    await axios.delete(`/api/admin/dba/${dba.id_dba}`, getHeaders())
+    await Promise.all([fetchStats(), fetchMeta(), fetchDbaList()])
+    toast.success('DBA eliminado exitosamente.')
+  } catch (error: any) {
+    toast.error(error.response?.data?.error || 'Error al eliminar el DBA')
   }
 }
+
 
 // Evidence Actions
 const openCreateEvidence = (dba: Dba) => {
@@ -341,7 +361,7 @@ const openEditEvidence = (dba: Dba, ev: EvidenciaDba) => {
 
 const handleSaveEvidence = async () => {
   if (!evidenceForm.value.descripcion) {
-    alert('La descripción es obligatoria.')
+    toast.warning('La descripción es obligatoria.')
     return
   }
 
@@ -362,10 +382,11 @@ const handleSaveEvidence = async () => {
       parentDba.value.evidencias.push(res.data)
       parentDba.value.total_evidencias = (parentDba.value.total_evidencias || 0) + 1
     }
+    toast.success('Evidencia guardada exitosamente')
     showEvidenceModal.value = false
     await fetchStats()
   } catch (error: any) {
-    alert(error.response?.data?.error || 'Error al guardar evidencia')
+    toast.error(error.response?.data?.error || 'Error al guardar evidencia')
   } finally {
     saving.value = false
   }
@@ -376,12 +397,14 @@ const toggleEvidenceStatus = async (ev: EvidenciaDba) => {
   try {
     const res = await axios.patch(`/api/admin/dba/evidencias/${ev.id_evidencia_dba}/estado`, { estado: newStatus }, getHeaders())
     ev.estado = res.data.estado
+    toast.success(`Estado de evidencia actualizado a ${newStatus}`)
   } catch (error: any) {
-    alert(error.response?.data?.error || 'Error al cambiar estado de la evidencia')
+    toast.error(error.response?.data?.error || 'Error al cambiar estado de la evidencia')
   }
 }
 
 // Assignment Actions
+
 const openAssignVersion = () => {
   assignForm.value = {
     id_colegio: colleges.value[0]?.id_colegio?.toString() || '',
@@ -409,7 +432,12 @@ const handleAssignVersion = async () => {
       if (isBulkArea) parts.push('TODAS las materias')
       else parts.push(`"${assignForm.value.area}"`)
       if (isBulkSchool) parts.push('TODOS los colegios activos')
-      const confirmed = confirm(`¿Está seguro de asignar ${parts.join(' a ')} (${assignForm.value.version_curricular})?\n\nEsta acción asignará la versión curricular masivamente.`)
+      const confirmed = await confirm({
+        title: 'Asignación Masiva de Versión Curricular',
+        message: `¿Está seguro de asignar ${parts.join(' a ')} (${assignForm.value.version_curricular})? Esta acción asignará la versión curricular masivamente.`,
+        confirmText: 'Asignar Versión',
+        type: 'warning'
+      })
       if (!confirmed) {
         saving.value = false
         return
@@ -423,13 +451,14 @@ const handleAssignVersion = async () => {
       version_curricular: assignForm.value.version_curricular
     }, getHeaders())
     
-    alert(response.data?.message || 'Versión curricular asignada exitosamente.')
+    toast.success(response.data?.message || 'Versión curricular asignada exitosamente.')
     showAssignModal.value = false
   } catch (error: any) {
-    alert(error.response?.data?.error || 'Error al asignar versión al colegio')
+    toast.error(error.response?.data?.error || 'Error al asignar versión al colegio')
   } finally {
     saving.value = false
   }
+
 }
 
 const viewAssignments = async (college: Colegio) => {

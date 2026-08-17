@@ -21,9 +21,12 @@ import {
   ClipboardList
 } from 'lucide-vue-next'
 import DatosAcademicosTrasladoModal from '../../components/traslados/DatosAcademicosTrasladoModal.vue'
+import { useConfirm } from '../../composables/useConfirm'
 
 const auth = useAuthStore()
 const yearStore = useAcademicYearStore()
+const { confirm } = useConfirm()
+
 
 interface SolicitudTraslado {
   id_solicitud: number
@@ -528,9 +531,16 @@ const handleProcessApproval = async (accion: 'APROBAR' | 'RECHAZAR' | 'CANCELAR'
     ? '¿Estás seguro de rechazar esta solicitud de traslado?'
     : '¿Estás seguro de cancelar esta solicitud?'
 
-  if (!confirm(confirmMsg)) return
+  const ok = await confirm({
+    title: 'Confirmar Decisión de Traslado',
+    message: confirmMsg,
+    confirmText: accion === 'APROBAR' ? 'Aprobar Traslado' : accion === 'RECHAZAR' ? 'Rechazar' : 'Cancelar',
+    type: accion === 'APROBAR' ? 'primary' : 'danger'
+  })
+  if (!ok) return
 
   const isDestinoOrAdmin = isDirectivoDestino.value || isAdminGeneral.value
+
   const idGrupoDestinoToSend = (accion === 'APROBAR' && isDestinoOrAdmin) ? (selectedGrupoDestino.value || null) : null
 
   submitting.value = true

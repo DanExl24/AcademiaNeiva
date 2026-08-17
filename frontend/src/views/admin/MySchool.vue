@@ -8,6 +8,8 @@ import {
   Palette, RefreshCw, Check, Undo, HelpCircle, ShieldAlert, FileText, Sliders, AlertCircle, Sparkles, Eraser
 } from 'lucide-vue-next'
 import { removeBackground } from '@imgly/background-removal'
+import { useConfirm } from '../../composables/useConfirm'
+import { useToast } from '../../composables/useToast'
 
 const getShieldUrl = (url: string | null | undefined): string => {
   if (!url || typeof url !== 'string') return ''
@@ -22,8 +24,12 @@ const getShieldUrl = (url: string | null | undefined): string => {
 }
 
 const auth = useAuthStore()
+const { confirm } = useConfirm()
+const toast = useToast()
 const schoolId = computed(() => Number(auth.user?.schoolId || auth.supervision?.id_colegio || 0))
 const isSupervision = computed(() => auth.activeRole === 'admin_general')
+
+
 
 // Component State
 const activeTab = ref<'general' | 'identity'>('general')
@@ -432,30 +438,37 @@ const undoChanges = () => {
 }
 
 const resetToDefaults = async () => {
-  if (confirm('¿Estás seguro de que deseas restablecer los colores y escudo por defecto del colegio?')) {
-    if (isSupervision.value && !justification.value.trim()) {
-      alert('Por favor escribe la justificación para registrar esta modificación en la auditoría.')
-      return
-    }
-    try {
-      saving.value = true
-      const headers = { Authorization: `Bearer ${auth.token}` }
-      const payload = { motivo_cambio: isSupervision.value ? justification.value : undefined }
-      
-      await axios.post(`/api/academic-admin/my-school/${schoolId.value}/identidad/reset`, payload, { headers })
-      
-      form.value = { escudo_url: '', color_primario: '#4f46e5', color_secundario: '#0f172a' }
-      originalForm.value = { escudo_url: '', color_primario: '#4f46e5', color_secundario: '#0f172a' }
-      justification.value = ''
-      alert('Identidad restablecida a los valores por defecto del sistema.')
-      window.location.reload() // Reload page to immediately apply global stylesheet reset
-    } catch (error: any) {
-      alert(error.response?.data?.error || 'Error al restablecer valores por defecto.')
-    } finally {
-      saving.value = false
-    }
+  const ok = await confirm({
+    title: 'Restablecer Identidad Institucional',
+    message: '¿Estás seguro de que deseas restablecer los colores y escudo por defecto del colegio?',
+    confirmText: 'Restablecer Valores',
+    type: 'warning'
+  })
+  if (!ok) return
+
+  if (isSupervision.value && !justification.value.trim()) {
+    toast.warning('Por favor escribe la justificación para registrar esta modificación en la auditoría.')
+    return
+  }
+  try {
+    saving.value = true
+    const headers = { Authorization: `Bearer ${auth.token}` }
+    const payload = { motivo_cambio: isSupervision.value ? justification.value : undefined }
+    
+    await axios.post(`/api/academic-admin/my-school/${schoolId.value}/identidad/reset`, payload, { headers })
+    
+    form.value = { escudo_url: '', color_primario: '#4f46e5', color_secundario: '#0f172a' }
+    originalForm.value = { escudo_url: '', color_primario: '#4f46e5', color_secundario: '#0f172a' }
+    justification.value = ''
+    toast.success('Identidad restablecida a los valores por defecto del sistema.')
+    window.location.reload() // Reload page to immediately apply global stylesheet reset
+  } catch (error: any) {
+    toast.error(error.response?.data?.error || 'Error al restablecer valores por defecto.')
+  } finally {
+    saving.value = false
   }
 }
+
 
 const saveChanges = async () => {
   if (isSupervision.value && !justification.value.trim()) {

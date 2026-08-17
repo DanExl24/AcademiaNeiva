@@ -26,12 +26,17 @@ import { useAuthStore } from '../../stores/auth'
 import { useNotificationStore } from '../../stores/notifications'
 import { useAcademicYearStore } from '../../stores/academicYear'
 import { getCourseDisplayName } from '../../utils/courseHelper'
+import { useConfirm } from '../../composables/useConfirm'
+import { useToast } from '../../composables/useToast'
 
 const router = useRouter()
 
 const auth = useAuthStore()
 const notify = useNotificationStore()
 const yearStore = useAcademicYearStore()
+const { confirm } = useConfirm()
+const toast = useToast()
+
 
 // --- State ---
 const students = ref<any[]>([])
@@ -295,10 +300,15 @@ const saveStudent = async () => {
 
 const deleteStudent = async (student: any) => {
   if (yearStore.isReadonlyYear) {
-    alert('Acción no permitida: El año académico seleccionado se encuentra CERRADO.')
+    toast.error('Acción no permitida: El año académico seleccionado se encuentra CERRADO.')
     return
   }
-  const confirmDelete = confirm(`¿Estás seguro de que deseas ELIMINAR permanentemente al estudiante "${student.nombre} ${student.apellido}"? Esta acción borrará su matrícula, calificaciones y usuario asociado de forma irreversible.`)
+  const confirmDelete = await confirm({
+    title: 'Eliminar Estudiante',
+    message: `¿Estás seguro de que deseas ELIMINAR permanentemente al estudiante "${student.nombre} ${student.apellido}"? Esta acción borrará su matrícula, calificaciones y usuario asociado de forma irreversible.`,
+    confirmText: 'Eliminar Permanentemente',
+    type: 'danger'
+  })
   if (!confirmDelete) return
 
   try {
@@ -310,6 +320,7 @@ const deleteStudent = async (student: any) => {
     notify.addNotification(error.response?.data?.error || 'Error al eliminar el estudiante', 'error')
   }
 }
+
 
 const openStatusModal = async (student: any, status: string) => {
   selectedStudent.value = student

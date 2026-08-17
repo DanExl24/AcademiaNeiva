@@ -18,11 +18,16 @@ import { useAcademicYearStore } from '../../stores/academicYear'
 import { watch } from 'vue'
 import axios from 'axios'
 import { getCourseDisplayName } from '../../utils/courseHelper'
+import { useConfirm } from '../../composables/useConfirm'
+import { useToast } from '../../composables/useToast'
 
 const auth = useAuthStore()
 const yearStore = useAcademicYearStore()
 const router = useRouter()
+const { confirm } = useConfirm()
+const toast = useToast()
 const loading = ref(true)
+
 const courses = ref<any[]>([])
 const periods = ref<any[]>([])
 const activePeriodId = ref<number | null>(null)
@@ -181,20 +186,24 @@ const handleConfirmClosureWithJustification = async () => {
       justificacion_evidencias_pendientes: justification
     })
     
-    alert(response.data.message || 'Periodo cerrado correctamente')
+    toast.success(response.data.message || 'Periodo cerrado correctamente')
     showJustificationModal.value = false
     await fetchCoursesWithStatus()
   } catch (error: any) {
-    alert(error.response?.data?.error || 'Error al cerrar el periodo')
+    toast.error(error.response?.data?.error || 'Error al cerrar el periodo')
   } finally {
     processingId.value = null
   }
 }
 
 const handleClosePeriod = async (course: any) => {
-  if (!confirm(`¿Estás seguro de cerrar el periodo para ${course.materia_nombre} en ${course.grado_nombre}?`)) {
-    return
-  }
+  const ok = await confirm({
+    title: 'Confirmar Cierre de Materia',
+    message: `¿Estás seguro de cerrar el periodo para ${course.materia_nombre} en ${course.grado_nombre}? Una vez cerrada, las notas no podrán modificarse.`,
+    confirmText: 'Cerrar Materia',
+    type: 'warning'
+  })
+  if (!ok) return
 
   try {
     processingId.value = course.id_detallegrado
@@ -204,18 +213,19 @@ const handleClosePeriod = async (course: any) => {
       userId: auth.user?.id
     })
     
-    alert(response.data.message || 'Periodo cerrado correctamente')
+    toast.success(response.data.message || 'Periodo cerrado correctamente')
     await fetchCoursesWithStatus()
   } catch (error: any) {
     if (error.response?.status === 422 && error.response?.data?.requires_justification) {
       openJustificationModal(course, error.response.data.unevaluated_evidences || [])
     } else {
-      alert(error.response?.data?.error || 'Error al cerrar el periodo')
+      toast.error(error.response?.data?.error || 'Error al cerrar el periodo')
     }
   } finally {
     processingId.value = null
   }
 }
+
 
 const activePeriodName = computed(() => {
   const name = periods.value.find(p => p.id_periodo === activePeriodId.value)?.nombre || 'Cargando...'

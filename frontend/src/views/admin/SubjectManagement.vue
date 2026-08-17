@@ -5,6 +5,9 @@ import { BookOpen, Plus, Trash2, Search, Info, Layers, GraduationCap, X, Edit, C
 import { useAuthStore } from '../../stores/auth'
 import { useAcademicYearStore } from '../../stores/academicYear'
 import { getCourseDisplayName } from '../../utils/courseHelper'
+import { useConfirm } from '../../composables/useConfirm'
+import { useToast } from '../../composables/useToast'
+
 
 interface SubjectItem {
   id_materia: number
@@ -22,6 +25,8 @@ interface TrashItem {
 
 const auth = useAuthStore()
 const yearStore = useAcademicYearStore()
+const { confirm } = useConfirm()
+const toast = useToast()
 const schoolId = computed(() => Number(auth.user?.schoolId || 0))
 const isReadOnly = computed(() => Boolean(yearStore.isClosedYear))
 
@@ -514,18 +519,26 @@ const saveCompetency = async () => {
 
 const deleteCompetency = async (id: number) => {
   if (isReadOnly.value) {
-    alert('El año académico se encuentra cerrado. No es posible eliminar competencias.')
+    toast.error('El año académico se encuentra cerrado. No es posible eliminar competencias.')
     return
   }
-  if (!confirm('¿Estás seguro de que deseas eliminar esta competencia? Se eliminarán todas sus evidencias y notas asociadas.')) return
+  const ok = await confirm({
+    title: 'Eliminar Competencia',
+    message: '¿Estás seguro de que deseas eliminar esta competencia? Se eliminarán todas sus evidencias y notas asociadas.',
+    confirmText: 'Eliminar Competencia',
+    type: 'danger'
+  })
+  if (!ok) return
+
   try {
     await axios.delete(`/api/academic-admin/settings/competencies/${id}`, {
       params: { schoolId: schoolId.value },
       headers: auth.token ? { Authorization: `Bearer ${auth.token}` } : {}
     })
+    toast.success('Competencia eliminada exitosamente')
     await fetchSubjectDetails()
   } catch (error: any) {
-    alert(error.response?.data?.error || 'Error al eliminar la competencia')
+    toast.error(error.response?.data?.error || 'Error al eliminar la competencia')
   }
 }
 
@@ -552,11 +565,11 @@ const openEditEvidence = (ev: any) => {
 
 const saveEvidence = async () => {
   if (isReadOnly.value) {
-    alert('El año académico se encuentra cerrado. No es posible guardar evidencias.')
+    toast.error('El año académico se encuentra cerrado. No es posible guardar evidencias.')
     return
   }
   if (!evidenceForm.value.descripcion.trim()) {
-    alert('Escribe la descripción de la evidencia.')
+    toast.warning('Escribe la descripción de la evidencia.')
     return
   }
   try {
@@ -573,10 +586,11 @@ const saveEvidence = async () => {
         descripcion: evidenceForm.value.descripcion.trim()
       }, { headers })
     }
+    toast.success('Evidencia guardada exitosamente')
     showEvidenceModal.value = false
     await fetchSubjectDetails()
   } catch (error: any) {
-    alert(error.response?.data?.error || 'Error al guardar la evidencia')
+    toast.error(error.response?.data?.error || 'Error al guardar la evidencia')
   } finally {
     savingEvidence.value = false
   }
@@ -584,20 +598,29 @@ const saveEvidence = async () => {
 
 const deleteEvidence = async (id: number) => {
   if (isReadOnly.value) {
-    alert('El año académico se encuentra cerrado. No es posible eliminar evidencias.')
+    toast.error('El año académico se encuentra cerrado. No es posible eliminar evidencias.')
     return
   }
-  if (!confirm('¿Estás seguro de que deseas eliminar esta evidencia?')) return
+  const ok = await confirm({
+    title: 'Eliminar Evidencia',
+    message: '¿Estás seguro de que deseas eliminar esta evidencia?',
+    confirmText: 'Eliminar Evidencia',
+    type: 'danger'
+  })
+  if (!ok) return
+
   try {
     await axios.delete(`/api/academic-admin/settings/evidencias/${id}`, {
       params: { schoolId: schoolId.value },
       headers: auth.token ? { Authorization: `Bearer ${auth.token}` } : {}
     })
+    toast.success('Evidencia eliminada exitosamente')
     await fetchSubjectDetails()
   } catch (error: any) {
-    alert(error.response?.data?.error || 'Error al eliminar la evidencia')
+    toast.error(error.response?.data?.error || 'Error al eliminar la evidencia')
   }
 }
+
 </script>
 
 <template>

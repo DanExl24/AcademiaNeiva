@@ -8,6 +8,8 @@ import {
   School, Plus, Search, Trash2, Edit3, CheckCircle, XCircle, AlertTriangle, 
   Mail, Phone, MapPin, Calendar, Hash, Users, Eye
 } from 'lucide-vue-next'
+import { useConfirm } from '../../composables/useConfirm'
+import { useToast } from '../../composables/useToast'
 
 const getShieldUrl = (url: string) => {
   if (!url || url === 'undefined' || url.includes('undefined')) return ''
@@ -17,6 +19,10 @@ const getShieldUrl = (url: string) => {
 
 const auth = useAuthStore()
 const route = useRoute()
+const { confirm } = useConfirm()
+const toast = useToast()
+
+
 
 interface Colegio {
   id_colegio: number
@@ -209,8 +215,13 @@ const openDetails = async (college: Colegio) => {
 }
 
 const updateStatus = async (college: Colegio, estado: string, motivo?: string) => {
-  const confirmMsg = `¿Confirmas el cambio de estado de ${college.nombre} a ${estado}?`
-  if (!confirm(confirmMsg)) return
+  const ok = await confirm({
+    title: 'Cambiar Estado de Colegio',
+    message: `¿Confirmas el cambio de estado de ${college.nombre} a ${estado}?`,
+    confirmText: 'Confirmar Cambio',
+    type: estado === 'SUSPENDIDO' || estado === 'RECHAZADO' ? 'danger' : 'primary'
+  })
+  if (!ok) return
 
   try {
     const headers = { Authorization: `Bearer ${auth.token}` }
@@ -218,12 +229,13 @@ const updateStatus = async (college: Colegio, estado: string, motivo?: string) =
       estado,
       motivo
     }, { headers })
+    toast.success(`Estado de ${college.nombre} actualizado a ${estado}`)
     await fetchColleges()
     if (selectedCollege.value?.id_colegio === college.id_colegio) {
       selectedCollege.value.estado = estado as any
     }
   } catch (error: any) {
-    alert(error.response?.data?.error || 'Error al cambiar estado')
+    toast.error(error.response?.data?.error || 'Error al cambiar estado')
   }
 }
 
@@ -236,7 +248,7 @@ const openReject = (college: Colegio) => {
 const handleReject = async () => {
   if (!selectedCollege.value) return
   if (!rejectReason.value.trim()) {
-    alert('Por favor indica un motivo para el rechazo.')
+    toast.warning('Por favor indica un motivo para el rechazo.')
     return
   }
   await updateStatus(selectedCollege.value, 'RECHAZADO', rejectReason.value)
@@ -244,16 +256,24 @@ const handleReject = async () => {
 }
 
 const handleDelete = async (college: Colegio) => {
-  if (confirm(`¿Estás seguro de que deseas eliminar permanentemente a ${college.nombre}? Todos los directivos y usuarios serán desvinculados.`)) {
-    try {
-      const headers = { Authorization: `Bearer ${auth.token}` }
-      await axios.delete(`/api/admin/colegios/${college.id_colegio}`, { headers })
-      await fetchColleges()
-    } catch (error: any) {
-      alert(error.response?.data?.error || 'Error al eliminar colegio')
-    }
+  const ok = await confirm({
+    title: 'Eliminar Colegio',
+    message: `¿Estás seguro de que deseas eliminar permanentemente a ${college.nombre}? Todos los directivos y usuarios serán desvinculados.`,
+    confirmText: 'Eliminar Permanentemente',
+    type: 'danger'
+  })
+  if (!ok) return
+
+  try {
+    const headers = { Authorization: `Bearer ${auth.token}` }
+    await axios.delete(`/api/admin/colegios/${college.id_colegio}`, { headers })
+    toast.success(`Colegio ${college.nombre} eliminado exitosamente`)
+    await fetchColleges()
+  } catch (error: any) {
+    toast.error(error.response?.data?.error || 'Error al eliminar colegio')
   }
 }
+
 </script>
 
 <template>

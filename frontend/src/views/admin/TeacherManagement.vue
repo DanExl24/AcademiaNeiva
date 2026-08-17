@@ -25,6 +25,15 @@ import { useAuthStore } from '../../stores/auth'
 import { useRouter } from 'vue-router'
 import { getCourseDisplayName } from '../../utils/courseHelper'
 import { useAcademicYearStore } from '../../stores/academicYear'
+import { useConfirm } from '../../composables/useConfirm'
+import { useToast } from '../../composables/useToast'
+
+const router = useRouter()
+const auth = useAuthStore()
+const yearStore = useAcademicYearStore()
+const { confirm } = useConfirm()
+const toast = useToast()
+
 
 interface DocumentType {
   id_tipodocumento: number
@@ -81,10 +90,8 @@ interface ConflictTeacher {
   apellido: string
 }
 
-const auth = useAuthStore()
-const router = useRouter()
-const yearStore = useAcademicYearStore()
 const schoolId = computed(() => Number(auth.user?.schoolId || 0))
+
 
 const loading = ref(true)
 const savingTeacher = ref(false)
@@ -542,7 +549,9 @@ const createTeacher = async (addRoleIfParent: boolean | any = false) => {
       addRoleIfParent: isParentFlag
     })
     if (res.data?.infoMessage) {
-      alert(res.data.infoMessage)
+      toast.info(res.data.infoMessage)
+    } else {
+      toast.success('Docente registrado exitosamente')
     }
     resetAutoFilledUser()
     p.password = ''
@@ -550,18 +559,24 @@ const createTeacher = async (addRoleIfParent: boolean | any = false) => {
     await loadData()
   } catch (error: any) {
     if (error.response?.status === 409 && error.response?.data?.isParent) {
-      const confirmAdd = confirm(`${error.response.data.message}`)
+      const confirmAdd = await confirm({
+        title: 'Asignar Rol Docente',
+        message: `${error.response.data.message}`,
+        confirmText: 'Asignar Rol',
+        type: 'primary'
+      })
       if (confirmAdd) {
         await createTeacher(true)
         return
       }
     } else {
-      alert(error.response?.data?.error || 'No fue posible crear el docente')
+      toast.error(error.response?.data?.error || 'No fue posible crear el docente')
     }
   } finally {
     savingTeacher.value = false
   }
 }
+
 
 const editTeacherModal = ref(false)
 const editTeacherForm = ref({
@@ -618,7 +633,7 @@ const updateTeacher = async () => {
     drawerOpen.value = false
     await loadData()
   } catch (error: any) {
-    alert(error.response?.data?.error || 'No fue posible actualizar el docente')
+    toast.error(error.response?.data?.error || 'No fue posible actualizar el docente')
   } finally {
     loading.value = false
   }
@@ -626,10 +641,15 @@ const updateTeacher = async () => {
 
 const deleteTeacher = async (teacher: TeacherItem) => {
   if (yearStore.isReadonlyYear) {
-    alert('Acción no permitida: El año académico seleccionado se encuentra CERRADO.')
+    toast.error('Acción no permitida: El año académico seleccionado se encuentra CERRADO.')
     return
   }
-  const confirmDelete = confirm(`¿Estás seguro de que deseas ELIMINAR permanentemente al docente "${teacher.nombre} ${teacher.apellido}"? Esta acción borrará todas sus asignaciones académicas y su usuario asociado de forma irreversible.`)
+  const confirmDelete = await confirm({
+    title: 'Eliminar Docente',
+    message: `¿Estás seguro de que deseas ELIMINAR permanentemente al docente "${teacher.nombre} ${teacher.apellido}"? Esta acción borrará todas sus asignaciones académicas y su usuario asociado de forma irreversible.`,
+    confirmText: 'Eliminar Permanentemente',
+    type: 'danger'
+  })
   if (!confirmDelete) return
 
   try {
@@ -637,11 +657,11 @@ const deleteTeacher = async (teacher: TeacherItem) => {
     await axios.delete(`/api/academic-admin/teachers/${teacher.id_docente}`, {
       params: { schoolId: schoolId.value }
     })
-    alert('Docente eliminado con éxito.')
+    toast.success('Docente eliminado con éxito.')
     drawerOpen.value = false
     await loadData()
   } catch (error: any) {
-    alert(error.response?.data?.error || 'No fue posible eliminar el docente')
+    toast.error(error.response?.data?.error || 'No fue posible eliminar el docente')
   } finally {
     loading.value = false
   }
@@ -649,13 +669,15 @@ const deleteTeacher = async (teacher: TeacherItem) => {
 
 const assignCourseSubject = async (replaceExisting = false) => {
   if (yearStore.isReadonlyYear) {
-    alert('Acción no permitida: El año académico seleccionado se encuentra CERRADO.')
+    toast.error('Acción no permitida: El año académico seleccionado se encuentra CERRADO.')
     return
   }
   if (!selectedTeacher.value || savingAssignment.value) return
+
   if (!assignmentForm.value.id_grupo || !assignmentForm.value.id_materia) {
-    alert('Selecciona curso y materia.'); return
+    toast.warning('Selecciona curso y materia.'); return
   }
+
   const selectedGroup = groups.value.find((g: any) => g.id_grupo === Number(assignmentForm.value.id_grupo))
   const selectedSubject = subjects.value.find((s: any) => s.id_materia === Number(assignmentForm.value.id_materia))
   if (selectedGroup && selectedGroup.tipo_grado_nombre === 'TRANSICION') {

@@ -38,6 +38,10 @@ import { useAuthStore } from '../stores/auth'
 import { useThemeStore } from '../stores/theme'
 import { useAcademicYearStore } from '../stores/academicYear'
 import { useRouter, useRoute } from 'vue-router'
+import { useConfirm } from '../composables/useConfirm'
+
+const { confirm } = useConfirm()
+
 
 const auth = useAuthStore()
 const theme = useThemeStore()
@@ -414,7 +418,13 @@ const handleExitSupervisionAuto = async () => {
 const handleExitSupervisionManual = async () => {
   const supId = auth.supervision?.id_auditoria
   if (supId) {
-    if (confirm('¿Estás seguro de que deseas salir del modo supervisión?')) {
+    const ok = await confirm({
+      title: 'Salir de Supervisión',
+      message: '¿Estás seguro de que deseas salir del modo supervisión?',
+      confirmText: 'Salir de Supervisión',
+      type: 'warning'
+    })
+    if (ok) {
       try {
         await axios.post(`/api/admin/supervision/${supId}/salir`, {}, {
           headers: { Authorization: `Bearer ${auth.token}` }
@@ -430,6 +440,7 @@ const handleExitSupervisionManual = async () => {
     window.location.href = '/dashboard'
   }
 }
+
 
 watch(() => auth.isSupervising, (newVal) => {
   if (newVal) {

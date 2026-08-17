@@ -45,11 +45,14 @@ import { useRouter } from 'vue-router'
 import { getCourseDisplayName } from '../../utils/courseHelper'
 
 import { useAcademicYearStore } from '../../stores/academicYear'
+import { useConfirm } from '../../composables/useConfirm'
 
 const auth = useAuthStore()
 const notify = useNotificationStore()
 const router = useRouter()
 const yearStore = useAcademicYearStore()
+const { confirm } = useConfirm()
+
 
 // ─── List State ───────────────────────────────────────────────────────────────
 const enrollments = ref<any[]>([])
@@ -858,7 +861,14 @@ const submitExtraordinary = async () => {
 
 
 const approveException = async (id: number) => {
-  if (!confirm('¿Deseas aprobar esta solicitud? Se enviará una notificación por correo al acudiente.')) return;
+  const ok = await confirm({
+    title: 'Aprobar Solicitud de Excepción',
+    message: '¿Deseas aprobar esta solicitud? Se enviará una notificación por correo al acudiente.',
+    confirmText: 'Aprobar Solicitud',
+    type: 'primary'
+  })
+  if (!ok) return;
+
   try {
     const headers = { Authorization: `Bearer ${auth.token}` }
     const endpoint = matricula.value?.tipo === 'REINGRESO'
@@ -872,6 +882,7 @@ const approveException = async (id: number) => {
     notify.addNotification(error.response?.data?.error || 'Error al aprobar solicitud', 'error')
   }
 }
+
 </script>
 
 <template>

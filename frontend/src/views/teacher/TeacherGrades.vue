@@ -20,9 +20,14 @@ import {
 } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 import { useAcademicYearStore } from '../../stores/academicYear'
+import { useConfirm } from '../../composables/useConfirm'
+import { useToast } from '../../composables/useToast'
 import axios from 'axios'
 
 const yearStore = useAcademicYearStore()
+const { confirm } = useConfirm()
+const toast = useToast()
+
 
 interface Course {
   id_grado: number
@@ -709,12 +714,20 @@ const getDbaEvidenceDetails = (act: Activity) => {
 
 // Eliminar actividad
 const removeActivity = async (id: number) => {
-  if (!confirm('¿Estás seguro de eliminar esta actividad?')) return
+  const ok = await confirm({
+    title: 'Eliminar Actividad',
+    message: '¿Estás seguro de eliminar esta actividad evaluativa? Se eliminarán todas las calificaciones y criterios asociados.',
+    confirmText: 'Eliminar Actividad',
+    type: 'danger'
+  })
+  if (!ok) return
+
   try {
     await axios.delete(`/api/teacher/activities/${id}`)
     activities.value = activities.value.filter(a => a.id_actividadmateria !== id)
-  } catch (error) {
-    console.error('Error deleting activity:', error)
+    toast.success('Actividad eliminada correctamente')
+  } catch (error: any) {
+    toast.error(error.response?.data?.error || 'Error al eliminar actividad')
   }
 }
 
@@ -722,7 +735,7 @@ const removeActivity = async (id: number) => {
 const updateActivityWeight = async (act: Activity) => {
   const percentage = parseFloat(act.porcentaje.toString())
   if (isNaN(percentage) || percentage <= 0) {
-    alert('El peso debe ser un número mayor a 0.')
+    toast.warning('El peso debe ser un número mayor a 0.')
     await fetchActivities()
     return
   }
@@ -734,12 +747,14 @@ const updateActivityWeight = async (act: Activity) => {
       evidencias_dba: act.evidencias_dba || []
     }
     await axios.put(`/api/teacher/activities/${act.id_actividadmateria}`, payload)
+    toast.success('Peso de actividad actualizado')
     await fetchActivities() // Recargar para actualizar los totales y consolidar matrices
   } catch (error: any) {
-    alert(error.response?.data?.error || 'Error al actualizar el porcentaje de la actividad')
+    toast.error(error.response?.data?.error || 'Error al actualizar el porcentaje de la actividad')
     await fetchActivities()
   }
 }
+
 
 // Calcular la nota computada de una actividad si tiene criterios
 const calculateActivityGrade = (studentId: number, act: Activity) => {
@@ -849,22 +864,32 @@ const addCriterion = async (act: Activity) => {
     act.criterios.push(response.data)
     
     delete newCriterion.value[act.id_actividadmateria]
+    toast.success('Criterio creado exitosamente')
   } catch (error: any) {
-    alert(error.response?.data?.error || 'Error al crear el criterio')
+    toast.error(error.response?.data?.error || 'Error al crear el criterio')
   }
 }
 
 const removeCriterion = async (act: Activity, criterionId: number) => {
-  if (!confirm('¿Estás seguro de eliminar este criterio?')) return
+  const ok = await confirm({
+    title: 'Eliminar Criterio',
+    message: '¿Estás seguro de eliminar este criterio de evaluación?',
+    confirmText: 'Eliminar Criterio',
+    type: 'danger'
+  })
+  if (!ok) return
+
   try {
     await axios.delete(`/api/teacher/activities/criteria/${criterionId}`)
     if (act.criterios) {
       act.criterios = act.criterios.filter(c => c.id_criterio !== criterionId)
     }
+    toast.success('Criterio eliminado exitosamente')
   } catch (error: any) {
-    alert(error.response?.data?.error || 'Error al eliminar el criterio')
+    toast.error(error.response?.data?.error || 'Error al eliminar el criterio')
   }
 }
+
 
 // Computados
 interface TableColumn {
