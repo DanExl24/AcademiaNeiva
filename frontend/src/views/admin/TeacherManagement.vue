@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import axios from 'axios'
+import { teacherService } from '../../services/teacherService'
+
 import {
   Briefcase,
   GraduationCap,
@@ -433,15 +434,15 @@ const handleKeydown = (e: KeyboardEvent) => {
 const fetchData = async () => {
   const params: Record<string, any> = {}
   if (yearStore.selectedYearId) params.yearId = yearStore.selectedYearId
-  const response = await axios.get(`/api/academic-admin/teachers/${schoolId.value}`, { params })
-  const fetchedDocTypes = response.data.documentTypes || response.data.tipos_documento
+  const data = await teacherService.getTeachersData(schoolId.value, params)
+  const fetchedDocTypes = data.documentTypes || data.tipos_documento
   if (Array.isArray(fetchedDocTypes) && fetchedDocTypes.length > 0) {
     documentTypes.value = fetchedDocTypes
   }
-  teachers.value = response.data.teachers || []
-  subjects.value = response.data.subjects || []
-  groups.value = response.data.groups || []
-  assignments.value = response.data.assignments || []
+  teachers.value = data.teachers || []
+  subjects.value = data.subjects || []
+  groups.value = data.groups || []
+  assignments.value = data.assignments || []
 }
 
 const isAutoFilledUser = ref(false)
@@ -471,13 +472,10 @@ const handleAutoLookup = async () => {
     if (doc) params.documento = doc
     else if (email) params.email = email
 
-    const res = await axios.get('/api/academic-admin/users/lookup', {
-      params,
-      headers: { Authorization: `Bearer ${auth.token}` }
-    })
+    const data = await teacherService.lookupUser(params)
 
-    if (res.data && res.data.found && res.data.user) {
-      const u = res.data.user
+    if (data && data.found && data.user) {
+      const u = data.user
       existingUserEmail.value = u.email || ''
 
       if (u.nombre) newTeacher.value.nombre = u.nombre
@@ -541,15 +539,15 @@ const createTeacher = async (addRoleIfParent: boolean | any = false) => {
   }
   try {
     savingTeacher.value = true
-    const res = await axios.post('/api/academic-admin/teachers', {
+    const resData = await teacherService.createTeacher({
       schoolId: schoolId.value, nombre: p.nombre, apellido: p.apellido,
       documento: p.documento, id_tipodocumento: Number(p.id_tipodocumento),
       email: p.email, password: p.password,
       telefono: p.telefono?.trim() || null,
       addRoleIfParent: isParentFlag
     })
-    if (res.data?.infoMessage) {
-      toast.info(res.data.infoMessage)
+    if (resData?.infoMessage) {
+      toast.info(resData.infoMessage)
     } else {
       toast.success('Docente registrado exitosamente')
     }
@@ -619,7 +617,7 @@ const updateTeacher = async () => {
 
   try {
     loading.value = true
-    await axios.put(`/api/academic-admin/teachers/${f.id_docente}`, {
+    await teacherService.updateTeacher(f.id_docente, {
       schoolId: schoolId.value,
       nombre: f.nombre.trim(),
       apellido: f.apellido.trim(),
@@ -654,9 +652,7 @@ const deleteTeacher = async (teacher: TeacherItem) => {
 
   try {
     loading.value = true
-    await axios.delete(`/api/academic-admin/teachers/${teacher.id_docente}`, {
-      params: { schoolId: schoolId.value }
-    })
+    await teacherService.deleteTeacher(teacher.id_docente, schoolId.value)
     toast.success('Docente eliminado con éxito.')
     drawerOpen.value = false
     await loadData()
@@ -688,7 +684,7 @@ const assignCourseSubject = async (replaceExisting = false) => {
   }
   try {
     savingAssignment.value = true
-    await axios.post('/api/academic-admin/teacher-assignments', {
+    await teacherService.assignCourseSubject({
       schoolId: schoolId.value,
       id_docente: selectedTeacher.value.id_docente,
       id_grupo: Number(assignmentForm.value.id_grupo),
@@ -724,9 +720,7 @@ const removeAssignment = async () => {
   if (!deleteAssignmentModal.value || deletingAssignment.value) return
   try {
     deletingAssignment.value = true
-    await axios.delete(`/api/academic-admin/teacher-assignments/${deleteAssignmentModal.value.id_detallegrado}`, {
-      params: { schoolId: schoolId.value },
-    })
+    await teacherService.removeAssignment(deleteAssignmentModal.value.id_detallegrado, schoolId.value)
     deleteAssignmentModal.value = null
     await loadData()
   } catch (error: any) {
@@ -744,7 +738,7 @@ const submitTeacherStatus = async () => {
   if (!selectedTeacher.value || !statusModal.value || updatingStatus.value) return
   try {
     updatingStatus.value = true
-    await axios.patch(`/api/academic-admin/teachers/${selectedTeacher.value.id_docente}/status`, {
+    await teacherService.updateTeacherStatus(selectedTeacher.value.id_docente, {
       schoolId: schoolId.value, estado: statusModal.value.estado, reason: statusReason.value,
     })
     statusModal.value = null; statusReason.value = ''
@@ -755,6 +749,7 @@ const submitTeacherStatus = async () => {
     updatingStatus.value = false
   }
 }
+
 
 const exportTeachersToCSV = () => {
   if (teachers.value.length === 0) return

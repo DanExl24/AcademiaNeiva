@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed } from 'vue'
-import axios from 'axios'
+import { academicService } from '../../services/academicService'
 import { useAuthStore } from '../../stores/auth'
-import { API_BASE_URL } from '../../config/api'
+import { API_BASE_URL } from '../../services/api'
+
 import { 
   School, Hash, MapPin, Mail, Phone, Calendar, Users, Upload,
   Palette, RefreshCw, Check, Undo, HelpCircle, ShieldAlert, FileText, Sliders, AlertCircle, Sparkles, Eraser
@@ -67,15 +68,14 @@ const fetchSchoolData = async () => {
   if (!schoolId.value) return
   try {
     loading.value = true
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const response = await axios.get(`${API_BASE_URL}/api/academic-admin/my-school/${schoolId.value}`, { headers })
-    if (response.data) {
-      schoolData.value = response.data.school
-      kpis.value = response.data.kpis
+    const data = await academicService.getMySchool(schoolId.value)
+    if (data) {
+      schoolData.value = data.school
+      kpis.value = data.kpis
       
-      const shield = response.data.school.escudo_url || ''
-      const prim = response.data.school.color_primario || '#4f46e5'
-      const sec = response.data.school.color_secundario || '#0f172a'
+      const shield = data.school.escudo_url || ''
+      const prim = data.school.color_primario || '#4f46e5'
+      const sec = data.school.color_secundario || '#0f172a'
       
       form.value = { escudo_url: shield, color_primario: prim, color_secundario: sec }
       originalForm.value = { escudo_url: shield, color_primario: prim, color_secundario: sec }
@@ -91,6 +91,7 @@ const fetchSchoolData = async () => {
     loading.value = false
   }
 }
+
 
 const activeColorMenu = ref<number | null>(null)
 
@@ -234,18 +235,15 @@ const uploadShieldFile = async (file: File) => {
     const formData = new FormData()
     formData.append('escudo', file)
     
-    const headers = { 
-      Authorization: `Bearer ${auth.token}`,
-      'Content-Type': 'multipart/form-data'
-    }
-    const res = await axios.post(`${API_BASE_URL}/api/academic-admin/my-school/${schoolId.value}/identidad/upload-escudo`, formData, { headers })
-    form.value.escudo_url = res.data.url
+    const res = await academicService.uploadSchoolEscudo(schoolId.value, formData)
+    form.value.escudo_url = res.url
   } catch (error: any) {
     validationError.value = error.response?.data?.error || 'Error al cargar escudo.'
   } finally {
     uploading.value = false
   }
 }
+
 
 const handleFileChange = async (event: Event) => {
   const target = event.target as HTMLInputElement
@@ -452,10 +450,9 @@ const resetToDefaults = async () => {
   }
   try {
     saving.value = true
-    const headers = { Authorization: `Bearer ${auth.token}` }
     const payload = { motivo_cambio: isSupervision.value ? justification.value : undefined }
     
-    await axios.post(`/api/academic-admin/my-school/${schoolId.value}/identidad/reset`, payload, { headers })
+    await academicService.resetSchoolEscudo(schoolId.value, payload)
     
     form.value = { escudo_url: '', color_primario: '#4f46e5', color_secundario: '#0f172a' }
     originalForm.value = { escudo_url: '', color_primario: '#4f46e5', color_secundario: '#0f172a' }
@@ -478,7 +475,6 @@ const saveChanges = async () => {
 
   try {
     saving.value = true
-    const headers = { Authorization: `Bearer ${auth.token}` }
     const payload = {
       escudo_url: form.value.escudo_url,
       color_primario: form.value.color_primario,
@@ -486,7 +482,7 @@ const saveChanges = async () => {
       motivo_cambio: isSupervision.value ? justification.value : undefined
     }
     
-    await axios.put(`/api/academic-admin/my-school/${schoolId.value}/identidad`, payload, { headers })
+    await academicService.updateSchoolIdentity(schoolId.value, payload)
     originalForm.value = { ...form.value }
     justification.value = ''
     alert('Identidad visual actualizada exitosamente.')
@@ -497,6 +493,7 @@ const saveChanges = async () => {
     saving.value = false
   }
 }
+
 </script>
 
 <template>

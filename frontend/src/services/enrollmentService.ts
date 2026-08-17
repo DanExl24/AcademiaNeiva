@@ -58,6 +58,11 @@ export const enrollmentService = {
     return res.data
   },
 
+  async cancelEnrollment(idMatricula: number | string, payload: any): Promise<any> {
+    const res = await api.post(`/matriculas/cancel/${idMatricula}`, payload)
+    return res.data
+  },
+
   async cancelOrReject(idMatricula: number | string, tipo: string | undefined, payload: CancelEnrollmentPayload, isPending = false): Promise<any> {
     const fullReason = `${payload.motivo}${payload.detalles ? ': ' + payload.detalles : ''}`
     if (tipo === 'REINGRESO') {

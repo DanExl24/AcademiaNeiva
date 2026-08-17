@@ -6,6 +6,21 @@ export const trasladoService = {
     return res.data || []
   },
 
+  async getGlobalTraslados(params?: any): Promise<any[]> {
+    const res = await api.get('/traslados/admin/global', { params })
+    return res.data || []
+  },
+
+  async getEstadisticas(): Promise<any> {
+    const res = await api.get('/traslados/admin/estadisticas')
+    return res.data
+  },
+
+  async getColegios(): Promise<any[]> {
+    const res = await api.get('/colegios')
+    return res.data || []
+  },
+
   async getTrasladoById(id: number | string): Promise<any> {
     const res = await api.get(`/traslados/${id}`)
     return res.data
@@ -18,6 +33,11 @@ export const trasladoService = {
 
   async processApproval(id: number | string, payload: any): Promise<any> {
     const res = await api.post(`/traslados/${id}/aprobacion`, payload)
+    return res.data
+  },
+
+  async recordIntervencion(id: number | string, payload: any): Promise<any> {
+    const res = await api.post(`/traslados/${id}/intervencion`, payload)
     return res.data
   },
 

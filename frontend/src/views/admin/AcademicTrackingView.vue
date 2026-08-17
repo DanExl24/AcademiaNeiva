@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
-import axios from 'axios'
-import { API_BASE_URL } from '../../config/api'
+import { academicService } from '../../services/academicService'
 import { useAuthStore } from '../../stores/auth'
 import { useAcademicYearStore } from '../../stores/academicYear'
+
 import {
   Award,
   TrendingUp,
@@ -154,20 +154,18 @@ const loadCatalogs = async () => {
   if (!schoolId.value) return
   loading.value = true
   try {
-    const yearIdParam = yearStore.selectedYearId ? `?yearId=${yearStore.selectedYearId}&keys=years,periods` : '?keys=years,periods'
+    const params: any = { keys: 'years,periods' }
+    if (yearStore.selectedYearId) params.yearId = yearStore.selectedYearId
+
     const [settingsRes, gradesRes] = await Promise.all([
-      axios.get(`${API_BASE_URL}/api/academic-admin/settings/${schoolId.value}${yearIdParam}`, {
-        headers: { Authorization: `Bearer ${auth.token}` }
-      }),
-      axios.get(`${API_BASE_URL}/api/academic-admin/grades/${schoolId.value}${yearIdParam}`, {
-        headers: { Authorization: `Bearer ${auth.token}` }
-      })
+      academicService.getSettings(schoolId.value, params),
+      academicService.getGradesAndGroups(schoolId.value, yearStore.selectedYearId ? { yearId: yearStore.selectedYearId } : undefined)
     ])
 
-    years.value = settingsRes.data.academicYears || settingsRes.data.years || []
-    periods.value = settingsRes.data.periods || []
-    grades.value = gradesRes.data.tiposGrado || gradesRes.data.grados || gradesRes.data.grades || []
-    groups.value = gradesRes.data.grupos || gradesRes.data.groups || []
+    years.value = settingsRes.academicYears || settingsRes.years || []
+    periods.value = settingsRes.periods || []
+    grades.value = gradesRes.tiposGrado || gradesRes.grados || gradesRes.grades || []
+    groups.value = gradesRes.grupos || gradesRes.groups || []
 
     if (yearStore.selectedYearId && years.value.some((y: any) => Number(y.id_anio) === Number(yearStore.selectedYearId))) {
       selectedYearId.value = Number(yearStore.selectedYearId)
@@ -252,12 +250,8 @@ const fetchPeriodTracking = async () => {
     if (selectedGradeId.value) params.gradeId = selectedGradeId.value
     if (selectedGroupId.value) params.groupId = selectedGroupId.value
 
-    const response = await axios.get(`${API_BASE_URL}/api/academic-admin/academic-tracking/period-tracking`, {
-      params,
-      headers: { Authorization: `Bearer ${auth.token}` }
-    })
-
-    trackingData.value = response.data
+    const data = await academicService.getPeriodTracking(params)
+    trackingData.value = data
   } catch (err: any) {
     console.error("Error al cargar seguimiento por período:", err)
     errorMessage.value = err.response?.data?.error || "Error al consultar el seguimiento académico."
@@ -279,12 +273,8 @@ const fetchAnnualConsolidation = async () => {
     if (selectedGradeId.value) params.gradeId = selectedGradeId.value
     if (selectedGroupId.value) params.groupId = selectedGroupId.value
 
-    const response = await axios.get(`${API_BASE_URL}/api/academic-admin/academic-tracking/annual-consolidation`, {
-      params,
-      headers: { Authorization: `Bearer ${auth.token}` }
-    })
-
-    annualData.value = response.data
+    const data = await academicService.getAnnualConsolidation(params)
+    annualData.value = data
   } catch (err: any) {
     console.error("Error al cargar consolidación anual:", err)
     errorMessage.value = err.response?.data?.error || "Error al consultar la consolidación anual."
@@ -302,12 +292,9 @@ const searchStudentHistory = async (studentId?: number) => {
     let targetId = studentId
     if (!targetId && historySearchQuery.value) {
       // Buscar primero por documento
-      const warningRes = await axios.get(`${API_BASE_URL}/api/academic-admin/academic-tracking/check-warning`, {
-        params: { documento: historySearchQuery.value.trim() },
-        headers: { Authorization: `Bearer ${auth.token}` }
-      })
-      if (warningRes.data.exists && warningRes.data.estudiante?.id_estudiante) {
-        targetId = warningRes.data.estudiante.id_estudiante
+      const warningRes = await academicService.checkAcademicWarning({ documento: historySearchQuery.value.trim() })
+      if (warningRes.exists && warningRes.estudiante?.id_estudiante) {
+        targetId = warningRes.estudiante.id_estudiante
       } else {
         errorMessage.value = "Estudiante no encontrado con ese número de documento."
         historyLoading.value = false
@@ -316,10 +303,8 @@ const searchStudentHistory = async (studentId?: number) => {
     }
 
     if (targetId) {
-      const historyRes = await axios.get(`${API_BASE_URL}/api/academic-admin/academic-tracking/student-history/${targetId}`, {
-        headers: { Authorization: `Bearer ${auth.token}` }
-      })
-      studentHistory.value = historyRes.data
+      const data = await academicService.getStudentTrackingHistory(targetId)
+      studentHistory.value = data
     }
   } catch (err: any) {
     console.error("Error al buscar historial del estudiante:", err)
@@ -347,7 +332,7 @@ const saveDirectiveDecision = async () => {
   errorMessage.value = ''
   successMessage.value = ''
   try {
-    await axios.post(`${API_BASE_URL}/api/academic-admin/academic-tracking/record-decision`, {
+    await academicService.recordPromotionDecision({
       schoolId: schoolId.value,
       studentId: targetStudentForDecision.value.id_estudiante,
       previousYearId: selectedYearId.value,
@@ -356,8 +341,6 @@ const saveDirectiveDecision = async () => {
       previousGradeId: targetStudentForDecision.value.id_grado || null,
       assignedGradeId: decisionForm.value.assignedGradeId ? Number(decisionForm.value.assignedGradeId) : null,
       observation: decisionForm.value.observation
-    }, {
-      headers: { Authorization: `Bearer ${auth.token}` }
     })
 
     successMessage.value = "Decisión institucional registrada exitosamente."
@@ -373,6 +356,7 @@ const saveDirectiveDecision = async () => {
     loading.value = false
   }
 }
+
 
 // Helper para refrescar datos según la pestaña activa
 const fetchDataForActiveTab = () => {

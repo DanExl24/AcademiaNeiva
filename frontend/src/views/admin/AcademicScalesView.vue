@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import axios from 'axios'
+import { academicService } from '../../services/academicService'
+
 import { ArrowLeft, HelpCircle, Lock, PenSquare, Scale, SlidersHorizontal } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 
@@ -67,22 +68,22 @@ const loadData = async () => {
     if (yearStore.selectedYearId) {
       params.yearId = yearStore.selectedYearId
     }
-    const response = await axios.get(`/api/academic-admin/settings/${schoolId.value}`, { params })
-    scales.value = response.data.scales || []
-    defaultSettings.value = response.data.defaultSettings || null
+    const response = await academicService.getSettings(schoolId.value, params)
+    scales.value = response.scales || []
+    defaultSettings.value = response.defaultSettings || null
     
-    if (response.data.defaultSettings) {
+    if (response.defaultSettings) {
       defaultsForm.value = {
-        nota_minima: String(response.data.defaultSettings.nota_minima),
-        nota_maxima: String(response.data.defaultSettings.nota_maxima),
-        nota_aprobacion: String(response.data.defaultSettings.nota_aprobacion),
-        escala_modo: response.data.defaultSettings.escala_modo || 'AUTOMATICO',
-        materias_reprobatorias_promocion: String(response.data.defaultSettings.materias_reprobatorias_promocion || 3)
+        nota_minima: String(response.defaultSettings.nota_minima),
+        nota_maxima: String(response.defaultSettings.nota_maxima),
+        nota_aprobacion: String(response.defaultSettings.nota_aprobacion),
+        escala_modo: response.defaultSettings.escala_modo || 'AUTOMATICO',
+        materias_reprobatorias_promocion: String(response.defaultSettings.materias_reprobatorias_promocion || 3)
       }
     }
-    if (response.data.scales) {
-      const basico = response.data.scales.find((item: ValuationScale) => item.nivel === 'BASICO')
-      const alto = response.data.scales.find((item: ValuationScale) => item.nivel === 'ALTO')
+    if (response.scales) {
+      const basico = response.scales.find((item: ValuationScale) => item.nivel === 'BASICO')
+      const alto = response.scales.find((item: ValuationScale) => item.nivel === 'ALTO')
       manualScaleForm.value = {
         basico_max: basico ? String(basico.valor_maximo) : '',
         alto_max: alto ? String(alto.valor_maximo) : '',
@@ -140,7 +141,7 @@ const saveDefaultSettings = async (bypassConfirm = false) => {
 
   try {
     defaultsSaving.value = true
-    await axios.put('/api/academic-admin/settings/defaults', {
+    await academicService.updateDefaultScales({
       schoolId: schoolId.value,
       yearId: yearStore.selectedYearId,
       nota_minima: nextMin,
@@ -173,7 +174,7 @@ const saveManualScales = async () => {
   try {
     defaultsSaving.value = true
     defaultsForm.value.escala_modo = 'MANUAL'
-    await axios.put('/api/academic-admin/settings/scales/manual', {
+    await academicService.updateManualScales({
       schoolId: schoolId.value,
       yearId: yearStore.selectedYearId,
       basico_max: Number(manualScaleForm.value.basico_max),
@@ -186,6 +187,7 @@ const saveManualScales = async () => {
     defaultsSaving.value = false
   }
 }
+
 
 onMounted(loadData)
 </script>

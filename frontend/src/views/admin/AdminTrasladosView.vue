@@ -1,10 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import axios from 'axios'
-import { API_BASE_URL } from '../../config/api'
-import { useAuthStore } from '../../stores/auth'
+import { trasladoService } from '../../services/trasladoService'
 import { useAcademicYearStore } from '../../stores/academicYear'
+
 import {
   ArrowLeftRight,
   Search,
@@ -34,7 +33,6 @@ import EmptyState from '../../components/feedback/EmptyState.vue'
 import { useConfirm } from '../../composables/useConfirm'
 import { useToast } from '../../composables/useToast'
 
-const auth = useAuthStore()
 const yearStore = useAcademicYearStore()
 const route = useRoute()
 const { confirm } = useConfirm()
@@ -178,11 +176,8 @@ const fetchSolicitudes = async () => {
     if (filterFechaDesde.value) params.fecha_desde = filterFechaDesde.value
     if (filterFechaHasta.value) params.fecha_hasta = filterFechaHasta.value
 
-    const res = await axios.get(`${API_BASE_URL}/api/traslados/admin/global`, {
-      headers: { Authorization: `Bearer ${auth.token}` },
-      params
-    })
-    solicitudes.value = res.data || []
+    const data = await trasladoService.getGlobalTraslados(params)
+    solicitudes.value = data || []
   } catch (err: any) {
     console.error('Error fetching traslados globales:', err)
     errorMessage.value = err.response?.data?.error || 'Error al cargar los traslados del sistema'
@@ -193,10 +188,8 @@ const fetchSolicitudes = async () => {
 
 const fetchEstadisticas = async () => {
   try {
-    const res = await axios.get(`${API_BASE_URL}/api/traslados/admin/estadisticas`, {
-      headers: { Authorization: `Bearer ${auth.token}` }
-    })
-    estadisticas.value = res.data
+    const data = await trasladoService.getEstadisticas()
+    estadisticas.value = data
   } catch (err: any) {
     console.error('Error fetching estadisticas:', err)
   }
@@ -204,10 +197,8 @@ const fetchEstadisticas = async () => {
 
 const fetchColegios = async () => {
   try {
-    const res = await axios.get(`${API_BASE_URL}/api/colegios`, {
-      headers: { Authorization: `Bearer ${auth.token}` }
-    })
-    colegios.value = res.data || []
+    const data = await trasladoService.getColegios()
+    colegios.value = data || []
   } catch (err: any) {
     console.error('Error fetching colegios:', err)
   }
@@ -235,22 +226,18 @@ const openDetailModal = async (sol: SolicitudTraslado) => {
   showDetailModal.value = true
   loadingDetail.value = true
   try {
-    const res = await axios.get(`${API_BASE_URL}/api/traslados/${sol.id_solicitud}`, {
-      headers: { Authorization: `Bearer ${auth.token}` }
-    })
-    selectedSolicitud.value = res.data
-    selectedGrupoDestino.value = (res.data as any).id_grupo_destino || (res.data as any).datos_destino?.id_grupo || null
+    const data = await trasladoService.getTrasladoById(sol.id_solicitud)
+    selectedSolicitud.value = data
+    selectedGrupoDestino.value = (data as any).id_grupo_destino || (data as any).datos_destino?.id_grupo || null
 
-    if (res.data.tipo === 'TRASLADO_MATRICULA') {
+    if (data.tipo === 'TRASLADO_MATRICULA') {
       try {
-        const destId = res.data.id_colegio_destino || sol.id_colegio_destino
-        const cuposRes = await axios.get(`${API_BASE_URL}/api/traslados/${sol.id_solicitud}/disponibilidad-cupos?id_colegio=${destId}`, {
-          headers: { Authorization: `Bearer ${auth.token}` }
-        })
-        disponibilidadCupos.value = cuposRes.data
-        if (!selectedGrupoDestino.value && cuposRes.data?.grupos?.length > 0) {
-          if (cuposRes.data.grupos.length === 1 && cuposRes.data.grupos[0].cupos_disponibles > 0) {
-            selectedGrupoDestino.value = cuposRes.data.grupos[0].id_grupo
+        const destId = data.id_colegio_destino || sol.id_colegio_destino
+        const cuposData = await trasladoService.getDisponibilidadCupos(sol.id_solicitud, destId)
+        disponibilidadCupos.value = cuposData
+        if (!selectedGrupoDestino.value && cuposData?.grupos?.length > 0) {
+          if (cuposData.grupos.length === 1 && cuposData.grupos[0].cupos_disponibles > 0) {
+            selectedGrupoDestino.value = cuposData.grupos[0].id_grupo
           }
         }
       } catch (cuposErr) {
@@ -289,10 +276,9 @@ const handleIntervencion = async () => {
   submitting.value = true
 
   try {
-    await axios.post(
-      `${API_BASE_URL}/api/traslados/${intervencionSolicitud.value.id_solicitud}/intervencion`,
-      intervencionForm.value,
-      { headers: { Authorization: `Bearer ${auth.token}` } }
+    await trasladoService.recordIntervencion(
+      intervencionSolicitud.value.id_solicitud,
+      intervencionForm.value
     )
 
     successMessage.value = 'Intervención administrativa registrada exitosamente en el historial de auditoría.'
@@ -309,6 +295,7 @@ const handleIntervencion = async () => {
     submitting.value = false
   }
 }
+
 
 // Computed filters on client side (for search text)
 const filteredSolicitudes = computed(() => {
