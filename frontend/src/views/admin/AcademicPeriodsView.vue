@@ -816,66 +816,65 @@ onMounted(loadData)
               <div class="flex items-center gap-3">
                 <span class="rounded-full bg-orange-50 px-3 py-1 text-sm font-black text-orange-700 dark:bg-orange-950/40 dark:text-orange-400">{{ Number(period.porcentaje).toFixed(2) }}%</span>
                 
-                <button
-                  v-if="period.estado === 'PENDIENTE'"
-                  type="button"
-                  @click="approvePeriod(period)"
-                  :disabled="isYearClosed"
-                  :class="[isYearClosed ? 'opacity-40 cursor-not-allowed bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/20 dark:text-emerald-400 dark:hover:bg-emerald-950/40']"
-                  class="inline-flex items-center justify-center gap-1.5 rounded-2xl px-3.5 py-3 text-xs font-black transition-all"
-                  title="Aprobar y activar periodo"
-                >
-                  <Check class="h-4 w-4" />
-                  Aprobar
-                </button>
+                <div v-if="isYearClosed" class="inline-flex items-center gap-1.5 rounded-2xl bg-slate-100 dark:bg-slate-800/80 px-3.5 py-2.5 text-xs font-black text-slate-400 dark:text-slate-500 border border-slate-200/50 dark:border-slate-700/50 select-none">
+                  <Lock class="h-3.5 w-3.5" />
+                  <span>Bloqueado</span>
+                </div>
 
-                <button
-                  v-if="period.estado === 'ABIERTO'"
-                  type="button"
-                  @click="closePeriod(period)"
-                  :disabled="closingPeriodId === period.id_periodo || isYearClosed"
-                  :class="[isYearClosed ? 'opacity-40 cursor-not-allowed bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500' : 'bg-rose-50 text-rose-700 hover:bg-rose-100 dark:bg-rose-950/20 dark:text-rose-400 dark:hover:bg-rose-950/40']"
-                  class="inline-flex items-center justify-center gap-1.5 rounded-2xl px-3.5 py-3 text-xs font-black transition-all disabled:opacity-50"
-                  title="Cerrar periodo"
-                >
-                  <Lock class="h-4 w-4" />
-                  Cerrar
-                </button>
+                <template v-else>
+                  <button
+                    v-if="period.estado === 'PENDIENTE'"
+                    type="button"
+                    @click="approvePeriod(period)"
+                    class="inline-flex items-center justify-center gap-1.5 rounded-2xl bg-emerald-50 px-3.5 py-3 text-xs font-black text-emerald-700 hover:bg-emerald-100 transition-all dark:bg-emerald-950/20 dark:text-emerald-400 dark:hover:bg-emerald-950/40"
+                    title="Aprobar y activar periodo"
+                  >
+                    <Check class="h-4 w-4" />
+                    Aprobar
+                  </button>
 
-                <button
-                  v-if="period.estado === 'CERRADO'"
-                  type="button"
-                  @click="reopenPeriod(period)"
-                  :disabled="reopeningPeriodId === period.id_periodo || isYearClosed"
-                  :class="[isYearClosed ? 'opacity-40 cursor-not-allowed bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500' : 'bg-sky-50 text-sky-700 hover:bg-sky-100 dark:bg-sky-950/20 dark:text-sky-400 dark:hover:bg-sky-950/40']"
-                  class="inline-flex items-center justify-center gap-1.5 rounded-2xl px-3.5 py-3 text-xs font-black transition-all disabled:opacity-50"
-                  title="Reabrir periodo"
-                >
-                  <Play class="h-4 w-4" />
-                  Reabrir
-                </button>
+                  <button
+                    v-if="period.estado === 'ABIERTO'"
+                    type="button"
+                    @click="closePeriod(period)"
+                    :disabled="closingPeriodId === period.id_periodo"
+                    class="inline-flex items-center justify-center gap-1.5 rounded-2xl bg-rose-50 px-3.5 py-3 text-xs font-black text-rose-700 hover:bg-rose-100 transition-all dark:bg-rose-950/20 dark:text-rose-400 dark:hover:bg-rose-950/40 disabled:opacity-50"
+                    title="Cerrar periodo"
+                  >
+                    <Lock class="h-4 w-4" />
+                    Cerrar
+                  </button>
 
-                <button
-                  type="button"
-                  @click="periodEditModal = period; periodEdit.porcentaje = String(period.porcentaje); periodEdit.mes_inicio = String(period.mes_inicio); periodEdit.dia_inicio = String(period.dia_inicio); periodEdit.mes_fin = String(period.mes_fin); periodEdit.dia_fin = String(period.dia_fin)"
-                  :disabled="isYearClosed"
-                  :class="[isYearClosed ? 'opacity-40 cursor-not-allowed' : 'hover:bg-slate-200 dark:hover:bg-slate-700 dark:hover:text-white']"
-                  class="inline-flex items-center justify-center rounded-2xl bg-slate-100 p-3 text-slate-600 transition-all dark:bg-slate-800 dark:text-slate-400"
-                  title="Editar periodo"
-                >
-                  <PenSquare class="h-4 w-4" />
-                </button>
+                  <button
+                    v-if="period.estado === 'CERRADO'"
+                    type="button"
+                    @click="reopenPeriod(period)"
+                    :disabled="reopeningPeriodId === period.id_periodo"
+                    class="inline-flex items-center justify-center gap-1.5 rounded-2xl bg-sky-50 px-3.5 py-3 text-xs font-black text-sky-700 hover:bg-sky-100 transition-all dark:bg-sky-950/20 dark:text-sky-400 dark:hover:bg-sky-950/40 disabled:opacity-50"
+                    title="Reabrir periodo"
+                  >
+                    <Play class="h-4 w-4" />
+                    Reabrir
+                  </button>
 
-                <button
-                  type="button"
-                  @click="deletePeriod(period)"
-                  :disabled="isYearClosed"
-                  :class="[isYearClosed ? 'opacity-40 cursor-not-allowed' : 'hover:bg-rose-100 dark:hover:bg-rose-950/40']"
-                  class="inline-flex items-center justify-center rounded-2xl bg-rose-50 p-3 text-rose-600 transition-all dark:bg-rose-950/20 dark:text-rose-400"
-                  title="Eliminar periodo académico"
-                >
-                  <Trash2 class="h-4 w-4" />
-                </button>
+                  <button
+                    type="button"
+                    @click="periodEditModal = period; periodEdit.porcentaje = String(period.porcentaje); periodEdit.mes_inicio = String(period.mes_inicio); periodEdit.dia_inicio = String(period.dia_inicio); periodEdit.mes_fin = String(period.mes_fin); periodEdit.dia_fin = String(period.dia_fin)"
+                    class="inline-flex items-center justify-center rounded-2xl bg-slate-100 p-3 text-slate-600 transition-all hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-white"
+                    title="Editar periodo"
+                  >
+                    <PenSquare class="h-4 w-4" />
+                  </button>
+
+                  <button
+                    type="button"
+                    @click="deletePeriod(period)"
+                    class="inline-flex items-center justify-center rounded-2xl bg-rose-50 p-3 text-rose-600 transition-all hover:bg-rose-100 dark:bg-rose-950/20 dark:text-rose-400 dark:hover:bg-rose-950/40"
+                    title="Eliminar periodo académico"
+                  >
+                    <Trash2 class="h-4 w-4" />
+                  </button>
+                </template>
               </div>
             </div>
           </div>
