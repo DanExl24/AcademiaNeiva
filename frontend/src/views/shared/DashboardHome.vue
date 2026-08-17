@@ -458,7 +458,7 @@ const gradeChartData = computed(() => {
       labels: dashboardData.value.charts.performanceByGrade.map(g => g.nombre),
       datasets: [{
         label: 'Promedio Grado',
-        data: dashboardData.value.charts.performanceByGrade.map(g => g.average),
+        data: dashboardData.value.charts.performanceByGrade.map(g => Number(g.average || 0)),
         backgroundColor: '#6366f1',
         borderRadius: 8
       }]
@@ -471,7 +471,7 @@ const gradeChartData = computed(() => {
       labels: filteredCourses.map(c => `${getCourseDisplayName(c)} - ${c.jornada_nombre}`),
       datasets: [{
         label: 'Promedio Curso',
-        data: filteredCourses.map(c => c.average),
+        data: filteredCourses.map(c => Number(c.average || 0)),
         backgroundColor: '#6366f1',
         borderRadius: 8
       }]
@@ -485,7 +485,7 @@ const subjectChartData = computed(() => {
       labels: dashboardData.value.charts.performanceBySubject.map(s => s.nombre),
       datasets: [{
         label: 'Promedio Materia',
-        data: dashboardData.value.charts.performanceBySubject.map(s => s.average),
+        data: dashboardData.value.charts.performanceBySubject.map(s => Number(s.average || 0)),
         backgroundColor: '#10b981',
         borderRadius: 8
       }]
@@ -496,14 +496,14 @@ const subjectChartData = computed(() => {
     }
     const filtered = dashboardData.value.charts.performanceBySubjectCourse
       .filter(item => item.id_grupo === selectedCourseForSubjects.value)
-      .sort((a, b) => b.average - a.average)
+      .sort((a, b) => Number(b.average || 0) - Number(a.average || 0))
       .slice(0, 15);
       
     return {
       labels: filtered.map(f => f.subject_nombre),
       datasets: [{
         label: 'Promedio Materia',
-        data: filtered.map(f => f.average),
+        data: filtered.map(f => Number(f.average || 0)),
         backgroundColor: '#10b981',
         borderRadius: 8
       }]
@@ -517,7 +517,7 @@ const evolutionChartData = computed(() => {
       labels: dashboardData.value.charts.evolution.map(e => e.nombre),
       datasets: [{
         label: 'Media Institucional',
-        data: dashboardData.value.charts.evolution.map(e => e.average),
+        data: dashboardData.value.charts.evolution.map(e => Number(e.average || 0)),
         borderColor: '#f59e0b',
         backgroundColor: 'rgba(245, 158, 11, 0.1)',
         fill: true,
@@ -537,7 +537,7 @@ const evolutionChartData = computed(() => {
       labels: filtered.map(e => e.periodo_nombre),
       datasets: [{
         label: 'Promedio Curso',
-        data: filtered.map(e => e.average),
+        data: filtered.map(e => Number(e.average || 0)),
         borderColor: '#f59e0b',
         backgroundColor: 'rgba(245, 158, 11, 0.1)',
         fill: true,
@@ -550,20 +550,20 @@ const evolutionChartData = computed(() => {
 })
 
 const hasGradeChartData = computed(() => {
-  return (gradeChartData.value?.datasets?.[0]?.data || []).some((v: any) => typeof v === 'number' && v > 0)
+  return (gradeChartData.value?.datasets?.[0]?.data || []).some((v: any) => Number(v) > 0)
 })
 
 const hasSubjectChartData = computed(() => {
-  return (subjectChartData.value?.datasets?.[0]?.data || []).some((v: any) => typeof v === 'number' && v > 0)
+  return (subjectChartData.value?.datasets?.[0]?.data || []).some((v: any) => Number(v) > 0)
 })
 
 const hasEvolutionChartData = computed(() => {
-  return (evolutionChartData.value?.datasets?.[0]?.data || []).some((v: any) => typeof v === 'number' && v > 0)
+  return (evolutionChartData.value?.datasets?.[0]?.data || []).some((v: any) => Number(v) > 0)
 })
 
 const hasRiskChartData = computed(() => {
   const datasets = riskChartData.value?.datasets || []
-  return datasets.some((d: any) => (d.data || []).some((v: any) => typeof v === 'number' && v > 0))
+  return datasets.some((d: any) => (d.data || []).some((v: any) => Number(v) > 0))
 })
 
 const filteredAlertsData = computed(() => {
@@ -908,6 +908,7 @@ onMounted(() => {
             <EmptyChartState 
               v-else-if="!loading"
               :icon="TrendingUp"
+              :badge-text="dashboardData.activePeriodInfo?.estado === 'CERRADO' ? 'Periodo Cerrado' : 'Periodo en curso'"
               title="Sin datos consolidados de rendimiento"
               description="Las barras de promedio por grado o curso se generarán en cuanto existan notas registradas en el periodo."
             />
@@ -951,6 +952,7 @@ onMounted(() => {
             <EmptyChartState 
               v-else-if="!loading"
               :icon="BookOpen"
+              :badge-text="dashboardData.activePeriodInfo?.estado === 'CERRADO' ? 'Periodo Cerrado' : 'Periodo en curso'"
               title="Sin calificaciones por asignatura"
               description="El consolidado de asignaturas se trazará automáticamente conforme se publiquen evaluaciones."
             />
@@ -994,6 +996,7 @@ onMounted(() => {
             <EmptyChartState 
               v-else-if="!loading"
               :icon="Target"
+              :badge-text="dashboardData.activePeriodInfo?.estado === 'CERRADO' ? 'Periodo Cerrado' : 'Periodo en curso'"
               title="Evolución institucional en preparación"
               description="La trayectoria histórica de promedios se activará con el avance de los periodos evaluativos."
             />
