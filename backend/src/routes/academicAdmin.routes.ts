@@ -36,6 +36,7 @@ import {
   getPeriodClosureDetails,
   updateManualScaleConfiguration,
   updateSchoolDefaultSettings,
+  updatePromotionPolicy,
   updateScale,
   updateTeacherStatus,
   updateGroupCupos,
@@ -139,6 +140,7 @@ router.delete("/settings/years/:id", deleteAcademicYear);
 router.patch("/settings/years/:id/status", updateAcademicYearStatus);
 router.patch("/settings/years/:id/calendar-type", updateAcademicYearCalendarType);
 router.put("/settings/defaults", updateSchoolDefaultSettings);
+router.put("/settings/promotion-policy", updatePromotionPolicy);
 router.put("/settings/scales/manual", updateManualScaleConfiguration);
 router.post("/settings/periods", createAcademicPeriod);
 router.delete("/settings/periods/:id", deleteAcademicPeriod);

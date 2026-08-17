@@ -992,6 +992,55 @@ export const updateSchoolDefaultSettings = async (req: Request, res: Response): 
   }
 };
 
+export const updatePromotionPolicy = async (req: Request, res: Response): Promise<void> => {
+  const schoolId = parseSchoolId(req.body.schoolId);
+  const rawMaterias = Number(req.body.materias_reprobatorias_promocion);
+
+  if (!schoolId || Number.isNaN(rawMaterias) || rawMaterias < 1 || rawMaterias > 10) {
+    res.status(400).json({ error: "Debe especificar un número válido de materias reprobatorias entre 1 y 10" });
+    return;
+  }
+
+  const materiasReprobatorias = Math.round(rawMaterias);
+  const yearId = req.body.yearId ? Number(req.body.yearId) : null;
+
+  if (yearId && schoolId) {
+    const yearCheck = await pool.query(
+      `SELECT estado, calendario FROM anio_lectivo WHERE id_anio = $1 AND id_colegio = $2`,
+      [yearId, schoolId]
+    );
+    if (yearCheck.rows[0]?.estado === 'CERRADO') {
+      res.status(400).json({ 
+        error: `El año lectivo ${yearCheck.rows[0]?.calendario || ''} se encuentra CERRADO. No es posible modificar la política de promoción en un ciclo escolar cerrado.` 
+      });
+      return;
+    }
+  }
+
+  try {
+    await ensureSchoolSettingsTable();
+    await ensureSchoolDefaultSettings(schoolId);
+
+    const updated = await pool.query(
+      `UPDATE configuracion_colegio
+       SET materias_reprobatorias_promocion = $1
+       WHERE id_colegio = $2
+       RETURNING id_colegio, nota_minima, nota_maxima, nota_aprobacion, escala_modo, materias_reprobatorias_promocion`,
+      [materiasReprobatorias, schoolId]
+    );
+
+    res.json({
+      success: true,
+      ...updated.rows[0],
+      message: "Criterio de promoción institucional (S.I.E.E.) actualizado correctamente"
+    });
+  } catch (error: any) {
+    console.error("Error updating promotion policy:", error);
+    res.status(500).json({ error: "Error al actualizar la política de promoción" });
+  }
+};
+
+
 export const getEnrollmentConfig = async (req: Request, res: Response): Promise<void> => {
   const schoolId = parseSchoolId(req.params.schoolId);
   const yearId = Number(req.params.yearId);
