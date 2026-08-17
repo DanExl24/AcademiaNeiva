@@ -41,15 +41,19 @@
   - [6.4 Detección automática y gestión de Doble Rol (Padre + Docente)](#64-detección-automática-y-gestión-de-doble-rol-padre--docente)
   - [6.5 Activación, suspensión, baneo y desconexión atómica de cuentas](#65-activación-suspensión-baneo-y-desconexión-atómica-de-cuentas)
 - [7. Módulo de Matrícula e Inscripción Escolar](#7-módulo-de-matrícula-e-inscripción-escolar)
-  - [7.1 [PENDIENTE DE REVISIÓN] Formulario de admisión pública](#71-pendiente-de-revisión-formulario-de-admisión-pública)
-  - [7.2 [PENDIENTE DE REVISIÓN] Consola de evaluación y oficialización directiva](#72-pendiente-de-revisión-consola-de-evaluación-y-oficialización-directiva)
-  - [7.3 [PENDIENTE DE REVISIÓN] Renovación y matriz documental de reingresos](#73-pendiente-de-revisión-renovación-y-matriz-documental-de-reingresos)
-  - [7.4 [PENDIENTE DE REVISIÓN] Consulta pública mediante Token UUID](#74-pendiente-de-revisión-consulta-pública-mediante-token-uuid)
-- [8. Estructura Escolar, Grados y Jornadas Institucionales](#8-estructura-escolar-grados-y-jornadas-institucionales)
-  - [8.1 Jerarquía escolar: Niveles, Tipos de Grado y Salones](#81-jerarquía-escolar-niveles-tipos-de-grado-y-salones)
-  - [8.2 Gestión de Jornadas Escolares, aforos y reasignación de cursos](#82-gestión-de-jornadas-escolares-aforos-y-reasignación-de-cursos)
-  - [8.3 Catálogo de materias institucionales y papelera protegida](#83-catálogo-de-materias-institucionales-y-papelera-protegida)
-  - [8.4 Asignación Académica (`detalle_grados`): Docente-Grupo-Materia](#84-asignación-académica-detalle_grados-docente-grupo-materia)
+  - [7.1 Formulario de admisión pública y verificación previa OTP](#71-formulario-de-admisión-pública-y-verificación-previa-otp)
+  - [7.2 Modalidad de matrícula extraordinaria por Mesa de Soporte](#72-modalidad-de-matrícula-extraordinaria-por-mesa-de-soporte)
+  - [7.3 Consola de evaluación y revisión documental directiva](#73-consola-de-evaluación-y-revisión-documental-directiva)
+  - [7.4 Formalización final, detección de múltiples hijos y doble rol](#74-formalización-final-detección-de-múltiples-hijos-y-doble-rol)
+  - [7.5 Reingreso de estudiantes retirados y matriz documental](#75-reingreso-de-estudiantes-retirados-y-matriz-documental)
+  - [7.6 Cancelación formal de matrícula y definición del estado disciplinario](#76-cancelación-formal-de-matrícula-y-definición-del-estado-disciplinario)
+- [8. Estructura Escolar, Grados, Jornadas y Catálogo Curricular](#8-estructura-escolar-grados-jornadas-y-catálogo-curricular)
+  - [8.1 Jerarquía escolar y normalización inteligente de grados](#81-jerarquía-escolar-y-normalización-inteligente-de-grados)
+  - [8.2 Parametrización de cursos físicos, cupos y consulta de integrantes](#82-parametrización-de-cursos-físicos-cupos-y-consulta-de-integrantes)
+  - [8.3 Nomenclatura y renombramiento inteligente de cursos](#83-nomenclatura-y-renombramiento-inteligente-de-cursos)
+  - [8.4 Gestión de Jornadas Escolares y aforos por turno](#84-gestión-de-jornadas-escolares-y-aforos-por-turno)
+  - [8.5 Catálogo curricular y Papelera de Materias con Snapshot JSON](#85-catálogo-curricular-y-papelera-de-materias-con-snapshot-json)
+  - [8.6 Asignación Académica (`detalle_grados`): Docente-Grupo-Materia](#86-asignación-académica-detalle_grados-docente-grupo-materia)
 - [9. Gestión Curricular, Catálogo DBA y Coherencia](#9-gestión-curricular-catálogo-dba-y-coherencia)
   - [9.1 Catálogo Nacional de Derechos Básicos de Aprendizaje (DBA)](#91-catálogo-nacional-de-derechos-básicos-de-aprendizaje-dba)
   - [9.2 Importación masiva desde PDF y asignación de versiones curriculares](#92-importación-masiva-desde-pdf-y-asignación-de-versiones-curriculares)
@@ -59,9 +63,10 @@
   - [9.6 Analítica: Reporte de Coherencia Curricular vs. Cobertura del Catálogo](#96-analítica-reporte-de-coherencia-curricular-vs-cobertura-del-catálogo)
 - [10. Evaluación del Aprendizaje y Calificaciones](#10-evaluación-del-aprendizaje-y-calificaciones)
   - [10.1 Estructura evaluativa ponderada (Actividades y Criterios al 100%)](#101-estructura-evaluativa-ponderada-actividades-y-criterios-al-100)
-  - [10.2 Planilla de calificaciones interactiva y cálculo en caliente](#102-planilla-de-calificaciones-interactiva-y-cálculo-en-caliente)
-  - [10.3 Restricción de calificación por estado de matrícula](#103-restricción-de-calificación-por-estado-de-matrícula)
-  - [10.4 Portal de consulta para estudiantes y acudientes](#104-portal-de-consulta-para-estudiantes-y-acudientes)
+  - [10.2 Planilla de calificaciones interactiva y cálculo en tiempo real](#102-planilla-de-calificaciones-interactiva-y-cálculo-en-tiempo-real)
+  - [10.3 Evaluación de evidencias extra de DBA y justificación pedagógica](#103-evaluación-de-evidencias-extra-de-dba-y-justificación-pedagógica)
+  - [10.4 Restricción de calificación por estado de matrícula y candados de cierre](#104-restricción-de-calificación-por-estado-de-matrícula-y-candados-de-cierre)
+  - [10.5 Portal de consulta para estudiantes y acudientes](#105-portal-de-consulta-para-estudiantes-y-acudientes)
 - [11. Convivencia Escolar y Control de Asistencia](#11-convivencia-escolar-y-control-de-asistencia)
   - [11.1 Registro diario de asistencia y estados tipificados](#111-registro-diario-de-asistencia-y-estados-tipificados)
   - [11.2 Regla de límite físico diario: Máximo 7 bloques de clase](#112-regla-de-límite-físico-diario-máximo-7-bloques-de-clase)
@@ -74,8 +79,8 @@
   - [12.4 Reapertura excepcional de cierre por materia](#124-reapertura-excepcional-de-cierre-por-materia)
 - [13. Seguimiento Académico, Promoción y Graduación Anual](#13-seguimiento-académico-promoción-y-graduación-anual)
   - [13.1 Consola de Aprobados: Rendimiento por Periodo vs. Acumulado (P1..PN)](#131-consola-de-aprobados-rendimiento-por-periodo-vs-acumulado-p1pn)
-  - [13.2 Registro de decisiones directivas de promoción anual](#132-registro-de-decisiones-directivas-de-promoción-anual)
-  - [13.3 Detección de Graduandos (Último Año) y generación del libro de graduados](#133-detección-de-graduandos-último-año-y-generación-del-libro-de-graduados)
+  - [13.2 Matriz de promoción y registro de decisiones directivas](#132-matriz-de-promoción-y-registro-de-decisiones-directivas)
+  - [13.3 Detección de Graduandos (Último Año) y libro oficial de graduados](#133-detección-de-graduandos-último-año-y-libro-oficial-de-graduados)
   - [13.4 Advertencias académicas informativas en matrícula](#134-advertencias-académicas-informativas-en-matrícula)
 - [14. Gestión de Traslados de Estudiantes y Personal](#14-gestión-de-traslados-de-estudiantes-y-personal)
   - [14.1 Modelo de Identidad Global: `TRASLADO_MATRICULA` vs. `TRASLADO_USUARIO`](#141-modelo-de-identidad-global-traslado_matricula-vs-traslado_usuario)
@@ -482,20 +487,31 @@ En el panel directivo (`DbaReportsView.vue`), los directivos disponen de dos tab
 
 # 10. Evaluación del Aprendizaje y Calificaciones
 
+El módulo de **Calificaciones y Evaluación** permite a los docentes diseñar su plan evaluativo por periodo, registrar calificaciones numéricas de forma ágil y calcular automáticamente el rendimiento formativo de cada estudiante.
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                   ESTRUCTURA DE EVALUACIÓN EN AULA                     │
+├────────────────────────────────────────────────────────────────────────┤
+│ Asignatura (Materia en el Periodo)                                     │
+│    └── Actividades Académicas (Sumatoria de porcentajes = 100.00%)     │
+│           ├── Directa ──> Calificación directa sobre la actividad      │
+│           └── Con Criterios (Sumatoria = 100.00%)                      │
+│                  └── Calificación por criterio ──> [Promedio Ponderado]│
+└────────────────────────────────────────────────────────────────────────┘
+```
+
 ## 10.1 Estructura evaluativa ponderada (Actividades y Criterios al 100%)
 La evaluación de los estudiantes se rige bajo una estructura porcentual estricta:
-```
-Asignatura (Materia en el Periodo)
-   └── Actividades Académicas (Sumatoria de porcentajes = 100.00%)
-          └── Criterios Evaluativos Opcionales (Sumatoria de porcentajes = 100.00%)
-```
-- Si la actividad tiene criterios (ej. Taller: 50% Presentación, 50% Sustentación), las notas se registran por criterio y el sistema promedia la actividad.
-- Si no tiene criterios, la nota se asienta directamente sobre la actividad.
+1. **Actividades Académicas:** Cada docente define las actividades evaluativas del periodo (talleres, quices, proyectos, exámenes). La suma de los porcentajes de todas las actividades debe dar exactamente el **100.00%** (`RN-CAL-001`).
+2. **Criterios Opcionales:** Si una actividad requiere una rúbrica desglosada (ej. Proyecto: 40% Sustentación, 60% Informe Escrito), el docente crea criterios cuya suma porcentual también equivale al **100.00%** de dicha actividad.
+3. **Sincronización Automática:** Al guardar las notas de los criterios, el sistema calcula de forma instantánea el promedio ponderado y actualiza la nota definitiva de la actividad (`RN-CAL-002`).
 
-## 10.2 Planilla de calificaciones interactiva y cálculo en caliente
-1. El docente ingresa a **"Planilla de Calificaciones"**, seleccionando curso, materia y periodo activo.
-2. Digita las calificaciones de los estudiantes dentro de la escala oficial (ej. 1.0 a 5.0).
-3. La interfaz calcula en tiempo real los promedios ponderados y resalta en rojo las notas reprobatorias.
+## 10.2 Planilla de calificaciones interactiva y cálculo en tiempo real
+En **"Planilla de Calificaciones"** (`TeacherGrades.vue`):
+1. El docente selecciona su curso, asignatura y periodo activo.
+2. Ingresa las calificaciones dentro de la escala oficial configurada en la institución (ej. de 1.0 a 5.0).
+3. La interfaz calcula en tiempo real los promedios acumulados, resalta en color rojo las notas reprobatorias y vincula automáticamente la escala descriptiva nacional del MEN (Bajo, Básico, Alto, Superior) (`RN-CAL-005`).
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
@@ -508,11 +524,18 @@ Asignatura (Materia en el Periodo)
 └───────────────────────┴────────────┴────────────┴──────────┴───────────┘
 ```
 
-## 10.3 Restricción de calificación por estado de matrícula
-La planilla de notas valida que los alumnos cuenten con matrícula en estado `ACTIVA` o `APROBADA`. Cualquier intento de calificar a estudiantes en estado `TRASLADADA`, `CANCELADA` o retirados es rechazado por el backend con error `409 Conflict`.
+## 10.3 Evaluación de evidencias extra de DBA y justificación pedagógica
+Si el docente decide evaluar una evidencia oficial de DBA que no formaba parte de la planeación del periodo en curso (por ejemplo, para realizar un refuerzo formativo):
+1. El formulario detecta la evidencia extra y despliega los campos de justificación obligatoria.
+2. El docente selecciona el motivo pedagógico (`REFUERZO`, `NIVELACION`, `AVANCE_PROGRAMATICO`, `OTRO`).
+3. Si selecciona `OTRO`, redacta obligatoriamente la justificación del desvío curricular antes de guardar (`RN-CAL-003`).
 
-## 10.4 Portal de consulta para estudiantes y acudientes
-Estudiantes y acudientes pueden ingresar a sus respectivos portales para consultar el desglose detallado de las actividades evaluadas, los porcentajes de cada tarea y la nota acumulada de la materia.
+## 10.4 Restricción de calificación por estado de matrícula y candados de cierre
+- **Solo Matrículas Activas:** El sistema verifica que los estudiantes calificados cuenten con matrícula `ACTIVA` o `APROBADA`. Alumnos trasladados o retirados no pueden ser calificados (`RN-CAL-004`).
+- **Candados de Cierre y Triggers SQL:** Las calificaciones quedan bloqueadas contra cualquier modificación si el periodo institucional o la materia han sido cerrados formalmente (`RN-CAL-006` y `RN-CAL-007`).
+
+## 10.5 Portal de consulta para estudiantes y acudientes
+Estudiantes y acudientes pueden ingresar a sus respectivos portales para consultar el desglose detallado de las actividades evaluadas, los porcentajes de cada tarea y la nota acumulada de la materia en tiempo real.
 
 ---
 
@@ -521,7 +544,7 @@ Estudiantes y acudientes pueden ingresar a sus respectivos portales para consult
 ## 11.1 Registro diario de asistencia y estados tipificados
 El docente toma asistencia en cada bloque académico marcando a los estudiantes bajo 4 estados:
 - **`PRESENTE`:** Asistencia normal a la clase (cargado por defecto para agilizar el proceso).
-- **`AUSENTE`:** Inasistencia injustificada. Suma al ausentismo general del estudiante.
+- **`AUSENTE`:** Inasistencia injustificada. Suma al ausentismo general del estudiante en el boletín.
 - **`TARDE`:** Llegada con retraso al aula de clase.
 - **`JUSTIFICADA`:** Inasistencia justificada por excusa médica o calamidad familiar (no penaliza en el boletín).
 
@@ -532,7 +555,7 @@ Para garantizar la veracidad de la jornada escolar y evitar errores de duplicaci
 
 ## 11.3 Observador del Alumno: Tipología de anotaciones formativas
 Las anotaciones de seguimiento pedagógico y convivencia se clasifican en:
-1. **`ACADEMICA`:** Recomendaciones formativas sobre el aprendizaje (obligatoria para el boletín).
+1. **`ACADEMICA`:** Recomendaciones formativas sobre el aprendizaje (desglosadas en fortalezas, debilidades y recomendaciones para el boletín).
 2. **`CONVIVENCIA`:** Relaciones interpersonales, respeto y trabajo en equipo.
 3. **`DISCIPLINARIA`:** Llamados de atención formales del manual de convivencia.
 4. **`OTRO`:** Reconocimientos deportivos, culturales o destrezas destacadas.
@@ -544,48 +567,95 @@ Para poder ejecutar el cierre de periodo de una materia, el docente debe haber r
 
 # 12. Cierre de Periodos, Consolidación y Boletines Oficiales
 
+El módulo de **Cierre y Boletines** estructura la fase de clausura del periodo académico en dos etapas escalonadas para asegurar la total veracidad de las calificaciones.
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                   FLUJO ESCALONADO DE CIERRE Y BOLETINES               │
+├────────────────────────────────────────────────────────────────────────┤
+│ 1. Cierre de Materia (Docente):                                        │
+│    Verifica notas completas -> Justifica evidencias pendientes (422)   │
+│    -> Registra cierre_materia (estado = 'CERRADO')                     │
+│                                                                        │
+│ 2. Cierre Institucional (Directivo):                                   │
+│    Audita 100% de materias cerradas -> Aprueba periodo académico       │
+│                                                                        │
+│ 3. Generación de Boletines PDF (BoletinGenerator.vue):                 │
+│    - Ranking grupal dinámico (Puesto y Total Grupo)                    │
+│    - Histórico de trimestres, inasistencias, desempeños y firmas       │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
 ## 12.1 Consolidación y Cierre de Materia por el Docente
-1. Al culminar el periodo, el docente ingresa a **"Cierre de Materia"**.
-2. Verifica los promedios calculados y las observaciones académicas.
-3. Presiona **"Cerrar Materia"**. El sistema consolida los resultados en la tabla `resultado_academico` y estampa el estado `CERRADO` en `cierre_materia`.
+1. Al culminar el periodo lectivo, el docente ingresa a **"Cierre de Materia"** (`TeacherClosure.vue`).
+2. **Validación de Notas Completas:** El sistema comprueba que todos los alumnos activos tengan todas sus notas asentadas (`RN-CIE-001`).
+3. **Justificación de Evidencias DBA Pendientes:** Si existen evidencias oficiales de DBA que fueron planificadas pero no se evaluaron en ninguna actividad, el sistema despliega una solicitud obligatoria de justificación pedagógica (`justificacion_evidencias_pendientes`) (`RN-CIE-002`).
+4. **Formalización del Cierre:** Al confirmar, el sistema registra el estado `CERRADO` en `cierre_materia`, estampando la fecha y el ID del docente autor (`RN-CIE-003`).
 
 ## 12.2 Cierre Institucional del Periodo por el Rector
 1. El directivo ingresa a **"Cierres de Periodo"** (`PeriodClosure.vue`).
 2. La consola muestra una barra de progreso con el porcentaje de materias cerradas por los profesores.
-3. Una vez alcanzado el **100% de materias cerradas**, se habilita el botón **"Ejecutar Cierre Institucional"**, congelando el periodo de forma oficial e inmutable.
+3. Una vez alcanzado el **100% de materias cerradas**, se habilita el botón **"Aprobar y Cerrar Periodo Institucional"**, congelando el periodo de forma oficial e inmutable (`RN-CIE-004`).
 
 ## 12.3 Motor de generación de Boletines PDF oficiales
-Una vez cerrado el periodo institucionalmente, se desbloquea el generador de boletines en PDF (`BoletinGenerator.vue`):
-- **Descarga en Bloque:** Genera un archivo consolidado con los boletines de todo un salón.
-- **Descarga Individual:** Permite a directivos, acudientes y estudiantes descargar el boletín oficial con las notas definitivas, la escala valorativa, el total de inasistencias y las observaciones del docente.
+Una vez cerrado el periodo institucionalmente, se desbloquea el generador de boletines en PDF (`BoletinGenerator.vue`) (`RN-CIE-006`):
+- **Descarga en Bloque:** Genera un consolidado completo con los boletines de todos los estudiantes activos del curso (`getGradeBoletines`), excluyendo alumnos inactivos o trasladados.
+- **Descarga Individual:** Permite a directivos, acudientes y estudiantes consultar el boletín oficial en PDF estructurado con:
+  - Escudo institucional, código DANE y tipo de calendario escolar.
+  - Histórico de calificaciones de trimestres anteriores y actual por materia.
+  - Promedio general y puesto de mérito relativo en el grupo (`puesto` y `total_grupo`) (`RN-CIE-007`).
+  - Inasistencias injustificadas acumuladas en el periodo.
+  - Observaciones pedagógicas estructuradas (fortalezas, debilidades y recomendaciones).
+  - Firmas digitales del Docente Titular de grupo y del Rector.
 
 ## 12.4 Reapertura excepcional de cierre por materia
-Si un docente cometió un error justificado de digitación, el Rector puede ejecutar la opción **"Reabrir Materia"** (`reopenSubjectClosure`). Esto rehabilita temporalmente la planilla de esa materia específica para ese docente, sin necesidad de reabrir el periodo institucional completo de la escuela.
+Si un docente cometió un error justificado de digitación, el directivo puede ejecutar la opción **"Reabrir Materia"** (`reopenSubjectClosure`). Esto elimina el registro de `cierre_materia` para esa asignatura específica y rehabilita temporalmente la planilla del docente sin necesidad de reabrir el periodo de todo el colegio (`RN-CIE-005`).
 
 ---
 
 # 13. Seguimiento Académico, Promoción y Graduación Anual
 
+El módulo de **Seguimiento y Promoción** administra la evaluación anual integral, el análisis de rendimiento longitudinal y la graduación de estudiantes.
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                   SEGUIMIENTO ANUAL Y MATRIZ DE PROMOCIÓN              │
+├────────────────────────────────────────────────────────────────────────┤
+│ 1. Seguimiento Longitudinal: Periodo Individual vs. Acumulado (P1..PN) │
+│ 2. Matriz de Promoción: APROBADO (0), PENDIENTE (1-2), NO_PROMOVIDO (3)│
+│ 3. Graduación Automática de Graduandos (Último Año 🎓)                 │
+│ 4. Advertencias Académicas no bloqueantes en Matrícula                 │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
 ## 13.1 Consola de Aprobados: Rendimiento por Periodo vs. Acumulado (P1..PN)
-En la consola de seguimiento directivo (`/dashboard/gestion-aprobados`), los directivos disponen de tres herramientas de análisis:
+En la consola directiva (`/dashboard/gestion-aprobados`), los directivos disponen de tres herramientas de análisis:
 1. **Seguimiento por Periodo Individual:** Desglose de aprobados y reprobados en un trimestre concreto.
 2. **Seguimiento Acumulado (Períodos 1..N):** Calcula el promedio ponderado consolidado desde el Periodo 1 hasta el Periodo N actual, identificando asignaturas en riesgo de reprobación anual.
 3. **Historial del Estudiante:** Línea de tiempo académica multianual del alumno en la institución.
 
-## 13.2 Registro de decisiones directivas de promoción anual
-Al finalizar el último periodo del año lectivo, el directivo registra la resolución institucional en `decision_promocion_directivo`:
+## 13.2 Matriz de promoción y registro de decisiones directivas
+Al finalizar el ciclo escolar, el sistema calcula la consolidación anual (`RN-PRO-001`) y clasifica a cada estudiante (`RN-PRO-002`):
+- **`APROBADO`:** 0 materias reprobadas.
+- **`PENDIENTE_RECUPERACION`:** 1 a 2 materias reprobadas.
+- **`NO_PROMOVIDO`:** 3 o más materias reprobadas (o umbral configurado).
+
+El directivo registra la resolución formal en el acta de promoción (`decision_promocion_directivo`):
 - `PROMOVER_SIGUIENTE_GRADO`
 - `MANTENER_GRADO` (Reprobación)
 - `MATRICULA_CONDICIONADA`
 - `OTRA_DECISION`
 
-## 13.3 Detección de Graduandos (Último Año) y generación del libro de graduados
-- **Detección Dinámica:** El sistema identifica automáticamente cuál es el grado de mayor nivel configurado en el colegio (ej. Grado Once) sin nombres fijos en código.
+> [!NOTE]
+> Para garantizar la culminación de los estudios, el registro de decisiones solo se habilita cuando el año lectivo se encuentra en su periodo final (`RN-PRO-004`).
+
+## 13.3 Detección de Graduandos (Último Año) y libro oficial de graduados
+- **Detección Dinámica:** El sistema identifica automáticamente cuál es el grado de mayor nivel configurado en el colegio (`getMaxGradeIdForSchool`), sin nombres fijos en código (`RN-PRO-003`).
 - **Distintivo Visual:** Los estudiantes del último año se resaltan con la etiqueta 🎓 **"Último Año"** y se dispone del filtro rápido **"Solo Graduandos"**.
 - **Graduación Automática:** Al registrar la decisión `PROMOVER_SIGUIENTE_GRADO` sobre un graduando, el sistema cambia su estado personal a `GRADUADO`, inscribe su registro oficial en la tabla `registro_graduados` y finaliza su ciclo escolar.
 
 ## 13.4 Advertencias académicas informativas en matrícula
-Durante el proceso de matrícula regular en `FinalRegistration.vue`, si el estudiante reprobó el año lectivo anterior, el sistema despliega una **⚠️ Advertencia Académica Informativa** detallando las asignaturas reprobadas para apoyar la decisión directiva, sin bloquear administrativamente el trámite.
+Durante el proceso de matrícula regular en `FinalRegistration.vue`, si el estudiante reprobó materias en el año lectivo anterior, el sistema despliega una **⚠️ Advertencia Académica Informativa** detallando las asignaturas reprobadas para apoyar la decisión directiva, sin bloquear administrativamente el trámite (`RN-PRO-005`).
 
 ---
 
