@@ -644,6 +644,7 @@ const getObservationText = (obs: any) => {
             <option value="TODOS">Todos los estados</option>
             <option value="ABIERTO">Abiertos</option>
             <option value="EN_PROCESO">En Proceso</option>
+            <option value="ESCALADO">Escalados</option>
             <option value="RESUELTO">Resueltos</option>
           </select>
         </div>
@@ -696,7 +697,7 @@ const getObservationText = (obs: any) => {
               
               <!-- RN-005: Si está escalado y es un Directivo, o si el ticket está RESUELTO, mostrar solo texto plano -->
               <span 
-                v-if="t.estado === 'RESUELTO' || (t.fecha_escalado && auth.activeRole?.toUpperCase() === 'DIRECTIVO')"
+                v-if="t.estado === 'RESUELTO' || ((t.fecha_escalado || t.estado === 'ESCALADO') && auth.activeRole?.toUpperCase() === 'DIRECTIVO')"
                 class="px-3 py-1.5 text-xs font-black uppercase tracking-wider rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100/50 dark:bg-slate-800/80"
                 :class="{
                   'text-rose-600 dark:text-rose-455': t.estado === 'ABIERTO',
@@ -721,7 +722,8 @@ const getObservationText = (obs: any) => {
                   'text-indigo-650 dark:text-indigo-400': t.estado === 'ESCALADO'
                 }"
               >
-                <option v-if="!t.fecha_escalado && (!t.observaciones || t.observaciones.length === 0) && t.estado !== 'EN_PROCESO' && t.tipo_incidencia !== 'REINGRESO'" value="ABIERTO">Abierto</option>
+                <option v-if="t.estado === 'ABIERTO'" value="ABIERTO">Abierto</option>
+                <option v-if="t.estado === 'ESCALADO'" value="ESCALADO">Escalado</option>
                 <option value="EN_PROCESO">En Proceso</option>
                 <option value="RESUELTO">Resuelto</option>
               </select>
