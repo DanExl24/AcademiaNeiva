@@ -942,22 +942,40 @@ export const updateSchoolDefaultSettings = async (req: Request, res: Response): 
       [schoolId, notaMinima, notaMaxima, notaAprobacion, nextScaleMode, nextMateriasReprobatorias]
     );
 
-    const syncedScales = await syncSchoolScalesAndGrades(
-      client,
-      schoolId,
-      Number(previous.nota_minima),
-      Number(previous.nota_maxima),
-      notaMinima,
-      notaMaxima,
-      notaAprobacion,
-      nextScaleMode,
-      nextScaleMode === "MANUAL"
-        ? {
-            basicMax: currentBasic ? Number(currentBasic.valor_maximo) : undefined,
-            altoMax: currentHigh ? Number(currentHigh.valor_maximo) : undefined,
-          }
-        : undefined
-    );
+    const scalesChanged =
+      Number(previous.nota_minima) !== notaMinima ||
+      Number(previous.nota_maxima) !== notaMaxima ||
+      Number(previous.nota_aprobacion) !== notaAprobacion ||
+      (previous.escala_modo || "AUTOMATICO") !== nextScaleMode;
+
+    let syncedScales;
+    if (scalesChanged) {
+      syncedScales = await syncSchoolScalesAndGrades(
+        client,
+        schoolId,
+        Number(previous.nota_minima),
+        Number(previous.nota_maxima),
+        notaMinima,
+        notaMaxima,
+        notaAprobacion,
+        nextScaleMode,
+        nextScaleMode === "MANUAL"
+          ? {
+              basicMax: currentBasic ? Number(currentBasic.valor_maximo) : undefined,
+              altoMax: currentHigh ? Number(currentHigh.valor_maximo) : undefined,
+            }
+          : undefined
+      );
+    } else {
+      const currentScales = await client.query(
+        `SELECT id_escalavaloracion, nivel, valor_minimo, valor_maximo
+         FROM escala_valoracion
+         WHERE id_colegio = $1
+         ORDER BY valor_minimo`,
+        [schoolId]
+      );
+      syncedScales = currentScales.rows;
+    }
 
     await client.query("COMMIT");
     res.json({
