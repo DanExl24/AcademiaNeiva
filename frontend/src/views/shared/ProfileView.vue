@@ -6,7 +6,6 @@ import {
   Mail, 
   Lock, 
   Send, 
-  Users, 
   CheckCircle2, 
   AlertCircle, 
   ArrowLeft,
@@ -26,7 +25,6 @@ const router = useRouter()
 // Comprobar rol activo
 const activeRole = computed(() => auth.activeRole?.toUpperCase() || '')
 const isDirectivo = computed(() => activeRole.value === 'DIRECTIVO')
-const isAdmin = computed(() => activeRole.value === 'ADMIN_GENERAL')
 const isStudent = computed(() => activeRole.value === 'ESTUDIANTE')
 const isParentOrTeacher = computed(() => activeRole.value === 'PADRE' || activeRole.value === 'DOCENTE')
 
@@ -91,16 +89,6 @@ const openDirectivoModal = () => {
   showDirectivoModal.value = true
 }
 
-// Panel de Admin General: Cambiar contraseña de otro usuario
-const usersList = ref<any[]>([])
-const searchUserQuery = ref('')
-const loadingUsers = ref(false)
-const selectedUserToReset = ref<any>(null)
-const adminResetPasswordVal = ref('')
-const adminResetSuccess = ref('')
-const adminResetError = ref('')
-const resettingPasswordIndex = ref<number | null>(null)
-
 const fetchProfile = async () => {
   try {
     loadingProfile.value = true
@@ -122,29 +110,12 @@ const fetchProfile = async () => {
   }
 }
 
-const fetchAllUsers = async () => {
-  if (!isAdmin.value) return
-  try {
-    loadingUsers.value = true
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get('/api/admin/usuarios', { headers })
-    usersList.value = res.data || []
-  } catch (error) {
-    console.error('Error fetching users:', error)
-  } finally {
-    loadingUsers.value = false
-  }
-}
-
 watch(() => auth.monitoringUser, () => {
   fetchProfile()
 })
 
 onMounted(() => {
   fetchProfile()
-  if (isAdmin.value) {
-    fetchAllUsers()
-  }
 })
 
 const handleRequestEmailCode = async () => {
@@ -328,46 +299,6 @@ const handleContactAdminGeneral = async () => {
     submittingDirectivoMessage.value = false
   }
 }
-
-// Resetear contraseña de otro usuario (Solo Admin General)
-const handleAdminResetPassword = async (targetUser: any) => {
-  if (!adminResetPasswordVal.value.trim()) {
-    adminResetError.value = 'Escribe la nueva contraseña.'
-    return
-  }
-
-  try {
-    resettingPasswordIndex.value = targetUser.id_usuario
-    adminResetSuccess.value = ''
-    adminResetError.value = ''
-
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.post(
-      `/api/admin/usuarios/${targetUser.id_usuario}/restablecer-password`, 
-      { nueva_password: adminResetPasswordVal.value }, 
-      { headers }
-    )
-
-    adminResetSuccess.value = `Contraseña del usuario ${targetUser.nombre} ${targetUser.apellido} cambiada a: ${adminResetPasswordVal.value}`
-    adminResetPasswordVal.value = ''
-    selectedUserToReset.value = null
-  } catch (error: any) {
-    adminResetError.value = error.response?.data?.error || 'Error al cambiar la contraseña del usuario.'
-  } finally {
-    resettingPasswordIndex.value = null
-  }
-}
-
-const filteredUsers = computed(() => {
-  if (!searchUserQuery.value.trim()) return []
-  const q = searchUserQuery.value.toLowerCase()
-  return usersList.value.filter(u => 
-    (u.nombre && u.nombre.toLowerCase().includes(q)) ||
-    (u.apellido && u.apellido.toLowerCase().includes(q)) ||
-    (u.email && u.email.toLowerCase().includes(q)) ||
-    (u.documento && u.documento.includes(q))
-  ).slice(0, 5) // Mostramos un listado top de 5 coincidencias rápidas
-})
 
 const goBack = () => {
   router.push('/dashboard')
@@ -687,89 +618,6 @@ const goBack = () => {
                 Actualizar Contraseña
               </button>
             </form>
-          </div>
-        </div>
-
-        <!-- 3. ADMIN PANEL: Change other user password -->
-        <div v-if="isAdmin" class="pt-8 border-t border-slate-100 dark:border-slate-800/60 space-y-6">
-          <h2 class="text-sm font-black text-slate-800 dark:text-white uppercase tracking-wider ml-1 flex items-center gap-2">
-            <ShieldAlert class="text-amber-500" :size="18" />
-            Cambiar Contraseña de Otro Usuario
-          </h2>
-
-          <div class="space-y-4">
-            <!-- Search User -->
-            <div class="bg-slate-50 dark:bg-slate-800/60 px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 flex items-center gap-3">
-              <Users class="text-slate-400 shrink-0" :size="18" />
-              <input 
-                v-model="searchUserQuery"
-                type="text"
-                placeholder="Escribe el nombre, correo o documento del usuario..."
-                class="w-full bg-transparent border-none text-slate-850 dark:text-slate-200 placeholder-slate-400 focus:outline-none text-sm font-semibold"
-              />
-            </div>
-
-            <!-- Users suggestion box -->
-            <div v-if="filteredUsers.length > 0" class="border border-slate-100 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-900 divide-y divide-slate-100 dark:divide-slate-800 overflow-hidden shadow-inner">
-              <div 
-                v-for="u in filteredUsers" 
-                :key="u.id_usuario"
-                @click="selectedUserToReset = u"
-                class="p-4 flex items-center justify-between cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
-                :class="{'bg-indigo-50/30 dark:bg-indigo-950/20': selectedUserToReset?.id_usuario === u.id_usuario}"
-              >
-                <div>
-                  <h4 class="text-xs font-black text-slate-800 dark:text-slate-200">{{ u.nombre }} {{ u.apellido }}</h4>
-                  <p class="text-[10px] text-slate-500 dark:text-slate-450 font-bold mt-0.5">{{ u.email }} • Rol: {{ u.rol }}</p>
-                </div>
-                <button 
-                  class="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-[10px] font-black uppercase tracking-wider"
-                >
-                  Seleccionar
-                </button>
-              </div>
-            </div>
-
-            <!-- Restructuring actions -->
-            <div v-if="selectedUserToReset" class="p-6 bg-slate-50/40 dark:bg-slate-800/10 border border-dashed border-slate-200 dark:border-slate-800 rounded-3xl space-y-4 animate-in fade-in duration-300">
-              <div class="flex items-center justify-between">
-                <div>
-                  <span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Usuario Seleccionado</span>
-                  <h3 class="font-black text-slate-850 dark:text-slate-200 text-sm mt-0.5">
-                    {{ selectedUserToReset.nombre }} {{ selectedUserToReset.apellido }}
-                  </h3>
-                </div>
-                <button 
-                  @click="selectedUserToReset = null"
-                  class="text-xs font-bold text-slate-405 hover:text-slate-655"
-                >
-                  Cancelar
-                </button>
-              </div>
-
-              <!-- Input password update -->
-              <div class="flex flex-col sm:flex-row gap-3">
-                <div class="relative flex-1">
-                  <input 
-                    v-model="adminResetPasswordVal"
-                    type="text"
-                    placeholder="Escribe la nueva contraseña..."
-                    class="w-full pl-4 pr-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-750 rounded-xl text-xs font-bold text-slate-850 dark:text-slate-200"
-                  />
-                </div>
-                <button 
-                  @click="handleAdminResetPassword(selectedUserToReset)"
-                  :disabled="resettingPasswordIndex === selectedUserToReset.id_usuario"
-                  class="px-5 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all disabled:opacity-50 flex items-center gap-1.5 shrink-0 justify-center"
-                >
-                  <Loader2 v-if="resettingPasswordIndex === selectedUserToReset.id_usuario" class="w-3.5 h-3.5 animate-spin" />
-                  Cambiar Contraseña
-                </button>
-              </div>
-
-              <div v-if="adminResetSuccess" class="text-emerald-600 dark:text-emerald-400 text-xs font-bold ml-1">{{ adminResetSuccess }}</div>
-              <div v-if="adminResetError" class="text-rose-600 dark:text-rose-455 text-xs font-bold ml-1">{{ adminResetError }}</div>
-            </div>
           </div>
         </div>
 
