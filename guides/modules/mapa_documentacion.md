@@ -1,6 +1,6 @@
 # 🗺️ Mapa General de Módulos del Sistema — AcademiaNeiva
 
-Bienvenido a la carpeta central de módulos. A continuación se presenta el mapa de navegación con el acceso a la documentación **técnica**, **historias de usuario**, **reglas de negocio** y **casos de uso** de cada uno de los 18 módulos del sistema:
+Bienvenido a la carpeta central de módulos. A continuación se presenta el mapa de navegación con el acceso a la documentación **técnica**, **historias de usuario**, **reglas de negocio** y **casos de uso** de cada uno de los 21 módulos del sistema:
 
 ---
 
