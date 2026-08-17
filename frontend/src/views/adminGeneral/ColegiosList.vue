@@ -152,16 +152,25 @@ const handleCreate = async () => {
   }
 }
 
+const normalizeTipoColegio = (tipo?: string | null): string => {
+  if (!tipo) return 'OFICIAL'
+  const t = String(tipo).trim().toUpperCase()
+  if (t.includes('PRIVAD') || t.includes('NO OFICIAL') || t.includes('NO_OFICIAL')) {
+    return 'NO OFICIAL'
+  }
+  return 'OFICIAL'
+}
+
 const openEdit = (college: Colegio) => {
   selectedCollege.value = college
   form.value = {
     nombre: college.nombre,
-    tipo_colegio: college.tipo_colegio,
+    tipo_colegio: normalizeTipoColegio(college.tipo_colegio),
     sede: college.sede,
-    contacto: String(college.contacto),
+    contacto: String(college.contacto || ''),
     correo: college.correo,
     dane: college.dane,
-    tipo_calendario: college.tipo_calendario,
+    tipo_calendario: college.tipo_calendario || 'A',
     escudo_url: college.escudo_url || '',
     colores: college.colores || ''
   }
