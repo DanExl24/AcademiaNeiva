@@ -7,10 +7,12 @@ import {
 } from 'lucide-vue-next'
 import { useConfirm } from '../../composables/useConfirm'
 import { useToast } from '../../composables/useToast'
+import EmptyState from '../../components/feedback/EmptyState.vue'
 
 const auth = useAuthStore()
 const { confirm } = useConfirm()
 const toast = useToast()
+
 
 
 interface SupervisionActiva {
@@ -138,10 +140,16 @@ onUnmounted(() => {
         <span class="animate-pulse font-bold">Cargando supervisiones activas...</span>
       </div>
 
-      <div v-else-if="activeSupervisions.length === 0" class="bg-white dark:bg-slate-900 rounded-3xl p-12 text-center border border-slate-100 dark:border-slate-800">
-        <ShieldAlert class="mx-auto mb-4 text-slate-300 dark:text-slate-700" :size="48" />
-        <p class="font-bold text-slate-500">No hay ninguna supervisión en ejecución en este momento</p>
-      </div>
+      <EmptyState 
+        v-else-if="activeSupervisions.length === 0"
+        title="No hay supervisiones en ejecución"
+        description="Actualmente ningún auditor o administrador general tiene una sesión activa abierta en los colegios."
+      >
+        <template #icon>
+          <ShieldAlert class="w-8 h-8 text-indigo-500" />
+        </template>
+      </EmptyState>
+
 
       <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div 

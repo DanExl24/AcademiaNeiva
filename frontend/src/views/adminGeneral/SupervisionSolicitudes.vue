@@ -6,6 +6,8 @@ import { useAuthStore } from '../../stores/auth'
 import { 
   ShieldAlert, Plus, ShieldCheck, Clock, Lock, Play, AlertCircle
 } from 'lucide-vue-next'
+import EmptyState from '../../components/feedback/EmptyState.vue'
+
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -228,11 +230,21 @@ const handleEnter = async () => {
         <span class="animate-pulse font-bold">Cargando solicitudes...</span>
       </div>
 
-      <div v-else-if="requests.length === 0" class="bg-white dark:bg-slate-900 rounded-3xl p-12 text-center border border-slate-100 dark:border-slate-800">
-        <ShieldAlert class="mx-auto mb-4 text-slate-300 dark:text-slate-700" :size="48" />
-        <p class="font-bold text-slate-500">No hay solicitudes activas pendientes ni aprobadas</p>
-        <button v-if="!auth.isSupervising" @click="openRequest" class="mt-4 text-indigo-600 font-bold text-sm hover:underline">Crear primera solicitud</button>
-      </div>
+      <EmptyState 
+        v-else-if="requests.length === 0"
+        title="No hay solicitudes activas pendientes ni aprobadas"
+        description="Puedes crear una nueva solicitud de acceso temporal a cualquier institución educativa."
+      >
+        <template #icon>
+          <ShieldAlert class="w-8 h-8 text-indigo-500" />
+        </template>
+        <template v-if="!auth.isSupervising" #action>
+          <button @click="openRequest" class="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-all shadow-sm">
+            Crear primera solicitud
+          </button>
+        </template>
+      </EmptyState>
+
 
       <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div 

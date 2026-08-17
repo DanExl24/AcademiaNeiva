@@ -5,6 +5,8 @@ import { useAuthStore } from '../../stores/auth'
 import { 
   History, Search, Eye, Download, Calendar, Clock, ShieldCheck, Info
 } from 'lucide-vue-next'
+import EmptyState from '../../components/feedback/EmptyState.vue'
+
 
 const auth = useAuthStore()
 
@@ -204,16 +206,22 @@ const handleExport = async (sup: Supervision) => {
       </div>
     </div>
 
-    <!-- History List -->
-    <div class="space-y-4">
-      <div v-if="loading" class="h-64 flex items-center justify-center text-slate-400 bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800">
-        <span class="animate-pulse font-bold">Cargando historial...</span>
-      </div>
+      <!-- History List -->
+      <div class="space-y-4">
+        <div v-if="loading" class="h-64 flex items-center justify-center text-slate-400 bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800">
+          <span class="animate-pulse font-bold">Cargando historial...</span>
+        </div>
 
-      <div v-else-if="history.length === 0" class="bg-white dark:bg-slate-900 rounded-3xl p-12 text-center border border-slate-100 dark:border-slate-800">
-        <History class="mx-auto mb-4 text-slate-300 dark:text-slate-700" :size="48" />
-        <p class="font-bold text-slate-500">No hay registros en el historial de supervisión</p>
-      </div>
+        <EmptyState 
+          v-else-if="history.length === 0"
+          title="No hay registros en el historial"
+          description="No se encontraron sesiones de supervisión que coincidan con los filtros seleccionados."
+        >
+          <template #icon>
+            <History class="w-8 h-8 text-indigo-500" />
+          </template>
+        </EmptyState>
+
 
       <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div 
@@ -306,10 +314,16 @@ const handleExport = async (sup: Supervision) => {
               <span class="animate-pulse font-bold">Cargando bitácora...</span>
             </div>
 
-            <div v-else-if="actions.length === 0" class="h-full flex flex-col items-center justify-center text-slate-400">
-              <Info :size="48" class="opacity-20 mb-4" />
-              <p class="font-bold">No se registraron acciones durante este periodo de supervisión</p>
-            </div>
+            <EmptyState 
+              v-else-if="actions.length === 0"
+              title="Sin acciones registradas"
+              description="No se registraron modificaciones o acciones durante esta sesión de supervisión."
+            >
+              <template #icon>
+                <Info class="w-8 h-8 text-slate-400" />
+              </template>
+            </EmptyState>
+
 
             <div v-else class="space-y-4">
               <div 

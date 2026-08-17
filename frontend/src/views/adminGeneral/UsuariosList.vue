@@ -10,6 +10,11 @@ import {
 } from 'lucide-vue-next'
 import { useConfirm } from '../../composables/useConfirm'
 import { useToast } from '../../composables/useToast'
+import StatCard from '../../components/ui/StatCard.vue'
+import DataTable from '../../components/ui/DataTable.vue'
+import SkeletonTable from '../../components/feedback/SkeletonTable.vue'
+import EmptyState from '../../components/feedback/EmptyState.vue'
+
 
 const auth = useAuthStore()
 const route = useRoute()
@@ -514,46 +519,31 @@ const handleDelete = async () => {
 
     <!-- KPIs Row -->
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-      <div class="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center gap-4">
-        <div class="p-3 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 rounded-2xl">
-          <Users :size="22" />
-        </div>
-        <div>
-          <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Filtrados</p>
-          <h3 class="text-xl font-black text-slate-900 dark:text-white font-mono mt-0.5">{{ stats.total }}</h3>
-        </div>
-      </div>
+      <StatCard title="Total Filtrados" :value="stats.total">
+        <template #icon>
+          <Users :size="20" class="text-indigo-600 dark:text-indigo-400" />
+        </template>
+      </StatCard>
 
-      <div class="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center gap-4">
-        <div class="p-3 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 rounded-2xl">
-          <UserCheck :size="22" />
-        </div>
-        <div>
-          <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Activos</p>
-          <h3 class="text-xl font-black text-slate-900 dark:text-white font-mono mt-0.5">{{ stats.activos }}</h3>
-        </div>
-      </div>
+      <StatCard title="Activos" :value="stats.activos">
+        <template #icon>
+          <UserCheck :size="20" class="text-emerald-600 dark:text-emerald-400" />
+        </template>
+      </StatCard>
 
-      <div class="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center gap-4">
-        <div class="p-3 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 rounded-2xl">
-          <Ban :size="22" />
-        </div>
-        <div>
-          <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Baneados</p>
-          <h3 class="text-xl font-black text-slate-900 dark:text-white font-mono mt-0.5">{{ stats.baneados }}</h3>
-        </div>
-      </div>
+      <StatCard title="Baneados" :value="stats.baneados">
+        <template #icon>
+          <Ban :size="20" class="text-red-600 dark:text-red-400" />
+        </template>
+      </StatCard>
 
-      <div class="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center gap-4">
-        <div class="p-3 bg-orange-50 dark:bg-orange-950/30 text-orange-600 dark:text-orange-400 rounded-2xl">
-          <ShieldAlert :size="22" />
-        </div>
-        <div>
-          <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Suspendidos</p>
-          <h3 class="text-xl font-black text-slate-900 dark:text-white font-mono mt-0.5">{{ stats.suspendidos }}</h3>
-        </div>
-      </div>
+      <StatCard title="Suspendidos" :value="stats.suspendidos">
+        <template #icon>
+          <ShieldAlert :size="20" class="text-orange-600 dark:text-orange-400" />
+        </template>
+      </StatCard>
     </div>
+
 
     <!-- Filters and Table -->
     <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden transition-all duration-300">
@@ -598,28 +588,31 @@ const handleDelete = async () => {
       </div>
 
       <!-- User Table -->
-      <div class="overflow-x-auto">
-        <div v-if="loading" class="h-64 flex items-center justify-center text-slate-400">
-          <span class="animate-pulse font-bold">Cargando cuentas...</span>
-        </div>
+      <div class="p-4">
+        <SkeletonTable v-if="loading" :rows="6" :cols="5" />
 
-        <div v-else-if="users.length === 0" class="p-12 text-center text-slate-400">
-          <Users class="mx-auto mb-4 opacity-20" :size="48" />
-          <p class="font-bold">No se encontraron usuarios con los filtros seleccionados</p>
-        </div>
+        <EmptyState 
+          v-else-if="users.length === 0"
+          title="No se encontraron usuarios"
+          description="No hay cuentas de usuario que coincidan con los filtros seleccionados."
+        >
+          <template #icon>
+            <Users class="w-8 h-8 text-indigo-500" />
+          </template>
+        </EmptyState>
 
-        <table v-else class="w-full text-left border-collapse">
-          <thead>
-            <tr class="text-xs font-black uppercase text-slate-400 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+        <DataTable v-else>
+          <template #header>
+            <tr>
               <th class="p-4">Usuario</th>
               <th class="p-4">Rol</th>
               <th class="p-4">Institución</th>
               <th class="p-4">Estado</th>
               <th class="p-4 text-center">Acciones</th>
             </tr>
-          </thead>
-          <tbody class="text-sm font-medium text-slate-700 dark:text-slate-300 divide-y divide-slate-100 dark:divide-slate-800/50">
-            <tr v-for="user in users" :key="user.id_usuario" class="hover:bg-slate-50/30 dark:hover:bg-slate-800/10 transition-colors">
+          </template>
+          <tr v-for="user in users" :key="user.id_usuario" class="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
+
               <td class="p-4">
                 <div>
                   <h4 class="font-bold text-slate-900 dark:text-white">{{ user.nombre }} {{ user.apellido || '' }}</h4>
@@ -706,10 +699,10 @@ const handleDelete = async () => {
                 </div>
               </td>
             </tr>
-          </tbody>
-        </table>
+        </DataTable>
       </div>
     </div>
+
 
     <!-- Modals -->
     <Teleport to="body">
