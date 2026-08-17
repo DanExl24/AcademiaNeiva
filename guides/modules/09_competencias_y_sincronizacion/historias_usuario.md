@@ -1,109 +1,63 @@
-# Historias de Usuario — Competencias y Sincronización
+# Historias de Usuario — Competencias Pedagógicas y Sincronización en Caliente
 
-Este documento contiene las historias de usuario implementadas para el módulo de Competencias y Sincronización de AcademiaNeiva.
-
----
-
-# HU-COM-001: Registrar Competencia con Sincronización Automática en Paralelo
-
-## Historia
-**Como** directivo del colegio  
-**Quiero** registrar una competencia en una materia para un periodo académico y un grupo específico  
-**Para** que la planeación curricular se propague de forma automática a todos los cursos paralelos del mismo grado escolar.
-
-## Criterios de Aceptación
-- Al guardar la competencia en el grupo seleccionado, el sistema localiza todos los cursos del mismo tipo de grado (ej. Primero B y C si se guardó en Primero A) en el año lectivo.
-- Crea un registro de competencia idéntico para cada grupo paralelo.
-- A todos los registros del lote creados se les asigna el mismo identificador único `sync_uuid` para mantenerlos sincronizados en caliente.
-- La creación asocia automáticamente 3 evidencias de aprendizaje por defecto para facilitar el trabajo inicial del docente.
-
-## Detalles Técnicos
-- **Prioridad:** Alta
-- **Roles involucrados:** Directivo
-- **Reglas de negocio relacionadas:** RN-COM-001, RN-COM-002, RN-COM-004
-- **Endpoints relacionados:** 
-  - `POST /api/academic-admin/settings/competencies`
-- **Componentes frontend relacionados:** 
-  - [AcademicCompetenciesView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/AcademicCompetenciesView.vue)
-- **Controllers/Services relacionados:** 
-  - [academicAdminController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdminController.ts) (`upsertCompetencyByAdmin`)
+Este documento detalla las Historias de Usuario del módulo de **Competencias y Sincronización** de AcademiaNeiva.
 
 ---
 
-# HU-COM-002: Editar Descripción de Competencia (Propagación Masiva)
+## 1. Planeación Curricular Directiva
 
-## Historia
-**Como** directivo o docente asignado  
-**Quiero** actualizar el texto descriptivo de una competencia  
-**Para** ajustar los objetivos pedagógicos y que el cambio se refleje simultáneamente en todos los cursos paralelos de mi nivel.
-
-## Criterios de Aceptación
-- El directivo o docente edita el texto en la planilla o panel de configuración.
-- Al guardar, el backend actualiza de forma masiva en base de datos la columna `descripcion` de todos los registros de competencia que compartan el mismo `sync_uuid`.
-- La operación debe realizarse dentro de una transacción atómica; si falla en algún paralelo, se revierte por completo.
-- Se deniega la edición si el periodo se encuentra en estado `CERRADO`.
-
-## Detalles Técnicos
-- **Prioridad:** Alta
-- **Roles involucrados:** Directivo, Docente
-- **Reglas de negocio relacionadas:** RN-COM-002, RN-COM-003
-- **Endpoints relacionados:** 
-  - `POST /api/academic-admin/settings/competencies`
-  - `PUT /api/teacher/competencies/:id`
-- **Componentes frontend relacionados:** 
-  - [AcademicCompetenciesView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/AcademicCompetenciesView.vue)
-  - [TeacherGrades.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/teacher/TeacherGrades.vue)
-- **Controllers/Services relacionados:** 
-  - [academicAdminController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdminController.ts) (`upsertCompetencyByAdmin`)
-  - [gradingController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/gradingController.ts) (`updateCompetency`)
+### HU-COMP-001: Creación de Multicompetencias con Evidencias por Defecto
+- **Como:** Directivo Escolar (Coordinador Académico).
+- **Quiero:** Registrar una nueva competencia pedagógica para una asignatura y periodo escolar.
+- **Para:** Definir los objetivos de aprendizaje del plan de estudios con indicadores de logro inmediatos.
+- **Criterios de Aceptación:**
+  1. El formulario permite ingresar la descripción y asociar opcionalmente una dimensión preescolar (`id_dimension`).
+  2. Si el periodo académico se encuentra cerrado institucionalmente, el sistema bloquea el registro con error `409 Conflict`.
+  3. Si no se asocian evidencias DBA, el sistema inyecta automáticamente 3 evidencias formativas estándar (`ensureDefaultEvidencias`).
+  4. La competencia queda disponible para que los docentes creen actividades evaluativas de aula.
 
 ---
 
-# HU-COM-003: Crear Evidencia de Aprendizaje en Competencia
-
-## Historia
-**Como** directivo del colegio  
-**Quiero** registrar una evidencia de aprendizaje personalizada dentro de una competencia  
-**Para** definir los entregables y tareas específicas mediante los cuales los docentes evaluarán los objetivos del periodo.
-
-## Criterios de Aceptación
-- El directivo ingresa el texto de la evidencia.
-- La evidencia se registra con un número de orden correlativo para su organización en las planillas.
-- El sistema deniega el registro si el periodo correspondiente está cerrado.
-
-## Detalles Técnicos
-- **Prioridad:** Alta
-- **Roles involucrados:** Directivo
-- **Reglas de negocio relacionadas:** N/A
-- **Endpoints relacionados:** 
-  - `POST /api/academic-admin/settings/competencies/:competenciaId/evidencias`
-- **Componentes frontend relacionados:** 
-  - [AcademicCompetenciesView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/AcademicCompetenciesView.vue)
-- **Controllers/Services relacionados:** 
-  - [academicAdminController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdminController.ts) (`createEvidencia`)
+### HU-COMP-002: Sincronización Transaccional en Cursos Paralelos
+- **Como:** Directivo Escolar.
+- **Quiero:** Que al crear o editar una competencia en un grupo (ej. 10-A), los cambios se propaguen automáticamente a los cursos paralelos (10-B y 10-C).
+- **Para:** Mantener la consistencia del plan de estudios en todo el grado sin realizar parametrizaciones repetitivas.
+- **Criterios de Aceptación:**
+  1. El backend genera un identificador único `sync_uuid` y replica la competencia en todos los grupos paralelos (`getGradePeerGroups`).
+  2. Si ocurre un fallo en la inserción de algún curso paralelo, la transacción se aborta completamente (`ROLLBACK`).
+  3. Al editar la descripción, la modificación se propaga a todos los registros con el mismo `sync_uuid`.
 
 ---
 
-# HU-COM-004: Eliminar Competencia Curricular
+### HU-COMP-003: Vinculación Exclusiva de Evidencias Oficiales DBA
+- **Como:** Directivo Escolar.
+- **Quiero:** Vincular evidencias oficiales del catálogo de Derechos Básicos de Aprendizaje (DBA) del MEN a una competencia.
+- **Para:** Alinear la planeación del colegio con los estándares nacionales de educación.
+- **Criterios de Aceptación:**
+  1. El sistema valida que ninguna evidencia seleccionada esté vinculada a otra competencia del mismo año y grado en otro periodo (`alreadyAssignedRes`).
+  2. Al confirmarse la vinculación, se eliminan las 3 evidencias por defecto autogeneradas y se asocian las oficiales de DBA.
+  3. Las evidencias oficiales se sincronizan en todos los cursos paralelos del grado escolar.
 
-## Historia
-**Como** directivo del colegio  
-**Quiero** eliminar una competencia del plan de estudios  
-**Para** corregir errores de planificación o retirar metas de aprendizaje descartadas.
+---
 
-## Criterios de Aceptación
-- El directivo presiona "Eliminar Competencia" en el panel.
-- El sistema realiza un control de uso (`usage-check`). Si algún docente ya tiene actividades evaluativas de clase vinculadas a esta competencia o a sus evidencias de aprendizaje, el borrado se bloquea y se muestra un error en pantalla.
-- Si no está en uso, se eliminan físicamente en bloque todos los registros del colegio que compartan el mismo `sync_uuid` junto con sus evidencias de aprendizaje hijas.
+### HU-COMP-004: Auditoría y Protección de Uso Evaluativo (`usage-check`)
+- **Como:** Directivo Escolar.
+- **Quiero:** Comprobar si una competencia ya tiene actividades evaluativas o calificaciones antes de modificarla o eliminarla.
+- **Para:** No afectar las notas históricas ni el trabajo evaluativo ya adelantado por los docentes.
+- **Criterios de Aceptación:**
+  1. El endpoint `/usage-check` expone si la competencia tiene actividades registradas (`isUsed: true`) y desglosa docentes y cursos involucrados.
+  2. El intento de eliminar una competencia con actividades evaluativas asociadas responde con error `409 Conflict`.
+  3. Si no tiene actividades, la eliminación remueve en cascada las evidencias y réplicas hermanas (`sync_uuid`).
 
-## Detalles Técnicos
-- **Prioridad:** Media
-- **Roles involucrados:** Directivo
-- **Reglas de negocio relacionadas:** RN-COM-005
-- **Endpoints relacionados:** 
-  - `GET /api/academic-admin/settings/competencies/:id/usage-check`
-  - `DELETE /api/academic-admin/settings/competencies/:id`
-- **Componentes frontend relacionados:** 
-  - [AcademicCompetenciesView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/AcademicCompetenciesView.vue)
-- **Controllers/Services relacionados:** 
-  - [academicAdminController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdminController.ts) (`checkCompetenciaUsage`, `deleteCompetencyByAdmin`)
+---
+
+## 2. Gestión de Aula por el Docente
+
+### HU-COMP-005: Edición Contextual de Competencias por el Docente
+- **Como:** Docente Titular de Asignatura.
+- **Quiero:** Ajustar la redacción de la competencia de mi materia desde la planilla de calificaciones.
+- **Para:** Contextualizar la meta de aprendizaje según la dinámica pedagógica del aula.
+- **Criterios de Aceptación:**
+  1. El docente puede modificar la descripción desde su vista de calificaciones (`TeacherGrades.vue`).
+  2. La modificación se sincroniza en caliente en todos los cursos paralelos vía `sync_uuid`.
+  3. Si el periodo está cerrado o el docente ya cerró la materia en el periodo (`ensureSubjectOpen`), la edición se bloquea con error `409 Conflict`.
