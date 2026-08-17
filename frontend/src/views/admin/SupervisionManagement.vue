@@ -1,13 +1,15 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import axios from 'axios'
 import { useAuthStore } from '../../stores/auth'
+import { useAcademicYearStore } from '../../stores/academicYear'
 import { 
   ShieldAlert, ShieldCheck, Check, X, Eye, 
   AlertCircle, History, User
 } from 'lucide-vue-next'
 
 const auth = useAuthStore()
+const yearStore = useAcademicYearStore()
 
 interface Supervision {
   id_auditoria: number
@@ -78,7 +80,11 @@ const fetchSupervisions = async () => {
   try {
     loading.value = true
     const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get(`/api/admin/colegio/${schoolId.value}/supervisiones`, { headers })
+    const params: any = {}
+    if (yearStore.selectedYearId) {
+      params.yearId = yearStore.selectedYearId
+    }
+    const res = await axios.get(`/api/admin/colegio/${schoolId.value}/supervisiones`, { headers, params })
     supervisions.value = res.data
   } catch (error) {
     console.error('Error fetching supervisions for school:', error)
@@ -86,6 +92,10 @@ const fetchSupervisions = async () => {
     loading.value = false
   }
 }
+
+watch(() => yearStore.selectedYearId, () => {
+  fetchSupervisions()
+})
 
 onMounted(() => {
   fetchSupervisions()
@@ -125,6 +135,10 @@ const countRechazadas = computed(() => supervisions.value.filter(s => s.estado_s
 
 // Approving
 const handleApprove = async (sup: Supervision) => {
+  if (yearStore.isReadonlyYear) {
+    alert('Acción no permitida: El año lectivo seleccionado se encuentra CERRADO.')
+    return
+  }
   if (!confirm(`¿Estás seguro de que deseas APROBAR la solicitud de supervisión de ${sup.admin_nombre}?`)) return
   try {
     processingAction.value = true
@@ -141,12 +155,20 @@ const handleApprove = async (sup: Supervision) => {
 
 // Rejecting or Revoking (Both map to setting REVOCADA with reason)
 const openRejectOrRevoke = (sup: Supervision) => {
+  if (yearStore.isReadonlyYear) {
+    alert('Acción no permitida: El año lectivo seleccionado se encuentra CERRADO.')
+    return
+  }
   selectedSupervision.value = sup
   revocationReason.value = ''
   showRevocationModal.value = true
 }
 
 const handleRejectOrRevoke = async () => {
+  if (yearStore.isReadonlyYear) {
+    alert('Acción no permitida: El año lectivo seleccionado se encuentra CERRADO.')
+    return
+  }
   if (!selectedSupervision.value) return
   if (!revocationReason.value.trim()) {
     alert('Por favor ingrese el motivo del rechazo o la revocación.')
@@ -225,6 +247,19 @@ const openJsonInspector = (action: AccionAuditoria) => {
     </div>
 
     <template v-else>
+      <!-- Alerta Informativa: Año Lectivo Cerrado (Modo Solo Lectura) -->
+      <div v-if="yearStore.isReadonlyYear" class="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-3xl p-5 flex items-center gap-4 text-amber-900 dark:text-amber-200 shadow-sm animate-in fade-in duration-200">
+        <div class="p-3 bg-amber-500 text-white rounded-2xl shrink-0">
+          <AlertCircle :size="24" />
+        </div>
+        <div class="text-sm">
+          <h3 class="font-black uppercase tracking-wider text-xs">🔒 Año Lectivo {{ yearStore.selectedYear?.calendario }} — CERRADO (Histórico)</h3>
+          <p class="text-xs opacity-90 mt-0.5">
+            El año lectivo seleccionado se encuentra cerrado. Las solicitudes y sesiones de supervisión mostradas corresponden al historial de este ciclo escolar y no admiten nuevas aprobaciones o revocaciones.
+          </p>
+        </div>
+      </div>
+
       <!-- Navigation & Tabs -->
       <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white dark:bg-slate-900 p-4 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm">
         <div class="flex flex-wrap gap-2">

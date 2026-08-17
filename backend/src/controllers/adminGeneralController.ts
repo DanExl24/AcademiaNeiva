@@ -2253,6 +2253,7 @@ export const listarNotificacionesSistema = async (req: AuthRequest, res: Respons
 export const listarSupervisionesColegio = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { colegioId } = req.params;
+    const { yearId } = req.query;
     const schoolId = Number(colegioId);
 
     // Verificar que el usuario es directivo del colegio o Administrador General
@@ -2260,12 +2261,14 @@ export const listarSupervisionesColegio = async (req: AuthRequest, res: Response
     if (req.user!.roles.includes('admin_general')) {
       isAuthorized = true;
     } else {
-      const directivo = await pool.query(
-        `SELECT d.id FROM directivo d
-         WHERE d.id_usuario = $1 AND d.id_colegio = $2 AND d.estado = 'ACTIVO'`,
-        [req.user!.id, schoolId]
-      );
-      if (directivo.rows.length > 0) {
+      const directivo = await db
+        .selectFrom('directivo as d')
+        .select('d.id')
+        .where('d.id_usuario', '=', req.user!.id)
+        .where('d.id_colegio', '=', schoolId)
+        .where('d.estado', '=', 'ACTIVO')
+        .executeTakeFirst();
+      if (directivo) {
         isAuthorized = true;
       }
     }
@@ -2275,23 +2278,70 @@ export const listarSupervisionesColegio = async (req: AuthRequest, res: Response
       return;
     }
 
-    const query = `
-      SELECT a.*,
-             u.nombre AS admin_nombre, u.email AS admin_email,
-             ud.nombre AS directivo_nombre, ud.apellido AS directivo_apellido,
-             udr.nombre AS directivo_revocador_nombre, udr.apellido AS directivo_revocador_apellido,
-             (SELECT COUNT(*) FROM auditoria_acciones_realizadas acc WHERE acc.id_auditoria = a.id_auditoria) AS total_acciones
-      FROM auditoria_supervision a
-      JOIN usuario u ON u.id_usuario = a.id_admin_general
-      LEFT JOIN directivo d ON d.id = a.id_directivo_aprobador
-      LEFT JOIN usuario ud ON ud.id_usuario = d.id_usuario
-      LEFT JOIN directivo dr ON dr.id = a.revocado_por
-      LEFT JOIN usuario udr ON udr.id_usuario = dr.id_usuario
-      WHERE a.id_colegio = $1 AND a.eliminado = FALSE
-      ORDER BY a.fecha_solicitud DESC
-    `;
-    const result = await pool.query(query, [schoolId]);
-    res.json(result.rows);
+    let yearFilterSql = sql<boolean>`1=1`;
+    if (yearId) {
+      const anio = await db
+        .selectFrom('anio_lectivo')
+        .select(['id_anio', 'calendario', 'fecha_inicio', 'fecha_fin'])
+        .where('id_anio', '=', Number(yearId))
+        .where('id_colegio', '=', schoolId)
+        .executeTakeFirst();
+
+      if (anio) {
+        if (anio.fecha_inicio && anio.fecha_fin) {
+          yearFilterSql = sql<boolean>`(a.fecha_solicitud >= ${anio.fecha_inicio} AND a.fecha_solicitud <= (${anio.fecha_fin}::timestamptz + INTERVAL '1 day'))`;
+        } else if (anio.calendario) {
+          yearFilterSql = sql<boolean>`EXTRACT(YEAR FROM a.fecha_solicitud)::text = ${anio.calendario}`;
+        }
+      }
+    }
+
+    const result = await db
+      .selectFrom('auditoria_supervision as a')
+      .innerJoin('usuario as u', 'u.id_usuario', 'a.id_admin_general')
+      .leftJoin('directivo as d', 'd.id', 'a.id_directivo_aprobador')
+      .leftJoin('usuario as ud', 'ud.id_usuario', 'd.id_usuario')
+      .leftJoin('directivo as dr', 'dr.id', 'a.revocado_por')
+      .leftJoin('usuario as udr', 'udr.id_usuario', 'dr.id_usuario')
+      .select([
+        'a.id_auditoria',
+        'a.id_colegio',
+        'a.id_admin_general',
+        'a.tipo_supervision',
+        'a.estado_supervision',
+        'a.motivo_solicitud',
+        'a.fecha_solicitud',
+        'a.fecha_aprobacion',
+        'a.fecha_entrada',
+        'a.fecha_salida',
+        'a.duracion_maxima_minutos',
+        'a.motivo_entrada',
+        'a.id_directivo_aprobador',
+        'a.revocado_por',
+        'a.motivo_revocacion',
+        'a.fecha_revocacion',
+        'a.fecha_retencion_hasta',
+        'a.ip_admin',
+        'a.eliminado',
+        'u.nombre as admin_nombre',
+        'u.email as admin_email',
+        'ud.nombre as directivo_nombre',
+        'ud.apellido as directivo_apellido',
+        'udr.nombre as directivo_revocador_nombre',
+        'udr.apellido as directivo_revocador_apellido',
+        (eb) => eb
+          .selectFrom('auditoria_acciones_realizadas as acc')
+          .select(sql<number>`COUNT(acc.id_accion)::int`.as('count'))
+          .whereRef('acc.id_auditoria', '=', 'a.id_auditoria')
+          .as('total_acciones')
+      ])
+      .where('a.id_colegio', '=', schoolId)
+      .where('a.eliminado', '=', false)
+      .where(yearFilterSql)
+      .orderBy('a.fecha_solicitud', 'desc')
+      .execute();
+
+    res.json(result);
   } catch (error: any) {
     console.error('Error obteniendo supervisiones del colegio:', error);
     res.status(500).json({ error: 'Error al obtener supervisiones del colegio' });
