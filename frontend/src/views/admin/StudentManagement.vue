@@ -28,6 +28,9 @@ import { useAcademicYearStore } from '../../stores/academicYear'
 import { getCourseDisplayName } from '../../utils/courseHelper'
 import { useConfirm } from '../../composables/useConfirm'
 import { useToast } from '../../composables/useToast'
+import DataTable from '../../components/ui/DataTable.vue'
+import SkeletonTable from '../../components/feedback/SkeletonTable.vue'
+import EmptyState from '../../components/feedback/EmptyState.vue'
 
 const router = useRouter()
 
@@ -612,107 +615,110 @@ const exportToSIMAT = () => {
     </div>
 
     <!-- List -->
-    <div v-if="loading" class="h-64 flex items-center justify-center bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800">
-      <div class="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-    </div>
+    <SkeletonTable v-if="loading" :rows="6" :cols="5" />
 
-    <div v-else class="bg-white dark:bg-slate-900 rounded-[28px] border border-slate-100 dark:border-slate-800 overflow-hidden shadow-sm">
-      <table class="w-full text-left">
-        <thead class="bg-slate-50 dark:bg-slate-800/50">
-          <tr class="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400 dark:text-slate-500">
-            <th class="px-8 py-4">Estudiante</th>
-            <th class="px-8 py-4">Identificación</th>
-            <th class="px-8 py-4">Curso / Grupo</th>
-            <th class="px-8 py-4">Estado</th>
-            <th class="px-8 py-4 text-right">Acciones</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-50 dark:divide-slate-800">
-          <tr v-for="s in students" :key="s.id_estudiante" class="group hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-all">
-            <td class="px-8 py-5 cursor-pointer hover:bg-indigo-50/40 dark:hover:bg-slate-800/40 rounded-l-2xl transition-all" @click="openDrawer(s.id_estudiante)">
-              <div class="flex items-center gap-4">
-                <div class="h-10 w-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-black text-sm">
-                  {{ s.nombre.charAt(0) }}{{ s.apellido.charAt(0) }}
-                </div>
-                <div>
-                  <p class="font-black text-slate-900 dark:text-white text-sm uppercase group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">{{ s.nombre }} {{ s.apellido }}</p>
-                  <p class="text-[10px] font-bold text-slate-400 uppercase leading-none mt-0.5">CÓD: {{ s.codigo }}</p>
-                </div>
-              </div>
-            </td>
-            <td class="px-8 py-5">
-              <p class="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase leading-none">{{ s.tipo_documento_nombre || 'DOC' }}</p>
-              <p class="text-sm font-black text-slate-900 dark:text-white mt-1">{{ s.documento }}</p>
-            </td>
-            <td class="px-8 py-5">
-              <div v-if="s.grado_nombre" class="flex flex-col">
-                <p class="text-sm font-black text-slate-900 dark:text-white">
-                  {{ getCourseDisplayName({ grado_nombre: s.grado_nombre, seccion_nombre: s.seccion_nombre || '' }) }}
-                </p>
-                <p class="text-[10px] font-bold text-indigo-500 uppercase">{{ s.nivel_nombre }}</p>
-              </div>
-              <span v-else class="text-[10px] font-bold text-red-400 uppercase tracking-widest italic">Sin grupo asignado</span>
-            </td>
-            <td class="px-8 py-5">
-              <span :class="[getStatusClass(s.estado_vigente || s.estado), 'px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest block w-fit']">
-                {{ s.estado_vigente || s.estado }}
-              </span>
-              <p v-if="s.motivo_estado" class="text-[10px] text-red-500 dark:text-red-400 font-semibold italic mt-1 max-w-[200px] leading-tight" :title="s.motivo_estado">
-                {{ s.motivo_estado }}
-              </p>
-            </td>
-            <td class="px-8 py-5 text-right">
-              <div v-if="yearStore.isClosedYear" class="flex items-center justify-end gap-2">
-                <button v-if="s.estado === 'SANCIONADO' || s.estado === 'EXPULSADO'" @click="openDrawer(s.id_estudiante)" 
-                  :class="s.estado === 'EXPULSADO' ? 'text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30' : 'text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30'"
-                  class="p-2 rounded-xl transition-all" 
-                  :title="s.estado === 'EXPULSADO' ? 'Revisar Expulsión' : 'Revisar Sanción'"
-                >
-                  <ShieldAlert :size="16" />
-                </button>
-                <span class="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 text-slate-400 rounded-lg text-[10px] font-black uppercase tracking-widest inline-flex items-center gap-1">
-                  <Lock :size="12" /> Solo Lectura
-                </span>
-              </div>
-              <div v-else class="flex items-center justify-end gap-2">
-                <!-- Revisar Sanción / Expulsión -->
-                <button v-if="s.estado === 'SANCIONADO' || s.estado === 'EXPULSADO'" @click="openDrawer(s.id_estudiante)" 
-                  :class="s.estado === 'EXPULSADO' ? 'text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30' : 'text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30'"
-                  class="p-2 rounded-xl transition-all" 
-                  :title="s.estado === 'EXPULSADO' ? 'Revisar Expulsión' : 'Revisar Sanción'"
-                >
-                  <ShieldAlert :size="16" />
-                </button>
-                <button @click="openEditModal(s)" class="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 rounded-xl transition-all" title="Editar datos">
-                  <Edit2 :size="16" />
-                </button>
-                <button v-if="s.estado !== 'GRADUADO'" @click="openChangeGradeModal(s)" class="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 rounded-xl transition-all" title="Cambiar Grado">
-                  <ArrowRight :size="16" />
-                </button>
-                <button v-if="s.estado === 'ACTIVO' && s.grado_nombre === 'ONCE'" @click="openGraduationModal(s)" class="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 rounded-xl transition-all" title="Graduar Estudiante">
-                  <Award :size="16" />
-                </button>
-                <button v-if="s.estado === 'ACTIVO'" @click="openStatusModal(s, 'RETIRADO')" class="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded-xl transition-all" title="Retirar Estudiante">
-                  <UserMinus :size="16" />
-                </button>
-                <button v-if="s.estado === 'ACTIVO'" @click="openStatusModal(s, 'SANCIONADO')" class="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded-xl transition-all" title="Sancionar">
-                  <ShieldAlert :size="16" />
-                </button>
-                <button v-if="s.estado !== 'EXPULSADO' && s.estado !== 'GRADUADO'" @click="openStatusModal(s, 'EXPULSADO')" class="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-xl transition-all" title="Expulsar">
-                  <UserX :size="16" />
-                </button>
-                <button v-if="s.estado !== 'ACTIVO' && s.estado !== 'RETIRADO' && s.estado !== 'GRADUADO'" @click="openStatusModal(s, 'ACTIVO')" class="p-2 text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 rounded-xl transition-all" title="Reactivar">
-                  <UserCheck :size="16" />
-                </button>
-                <button @click="deleteStudent(s)" class="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-xl transition-all" title="Eliminar Estudiante">
-                  <Trash2 :size="16" />
-                </button>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+    <EmptyState
+      v-else-if="students.length === 0"
+      title="No se encontraron estudiantes"
+      description="No hay estudiantes que coincidan con los filtros seleccionados."
+    >
+      <template #icon>
+        <Users class="w-8 h-8 text-indigo-500" />
+      </template>
+    </EmptyState>
+
+    <DataTable v-else>
+      <template #header>
+        <tr>
+          <th class="py-4 px-8">Estudiante</th>
+          <th class="py-4 px-8">Identificación</th>
+          <th class="py-4 px-8">Curso / Grupo</th>
+          <th class="py-4 px-8">Estado</th>
+          <th class="py-4 px-8 text-right">Acciones</th>
+        </tr>
+      </template>
+      <tr v-for="s in students" :key="s.id_estudiante" class="group hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-all">
+        <td class="py-5 px-8 cursor-pointer" @click="openDrawer(s.id_estudiante)">
+          <div class="flex items-center gap-4">
+            <div class="h-10 w-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-black text-sm">
+              {{ s.nombre.charAt(0) }}{{ s.apellido.charAt(0) }}
+            </div>
+            <div>
+              <p class="font-black text-slate-900 dark:text-white text-sm uppercase group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">{{ s.nombre }} {{ s.apellido }}</p>
+              <p class="text-[10px] font-bold text-slate-400 uppercase leading-none mt-0.5">CÓD: {{ s.codigo }}</p>
+            </div>
+          </div>
+        </td>
+        <td class="py-5 px-8">
+          <p class="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase leading-none">{{ s.tipo_documento_nombre || 'DOC' }}</p>
+          <p class="text-sm font-black text-slate-900 dark:text-white mt-1">{{ s.documento }}</p>
+        </td>
+        <td class="py-5 px-8">
+          <div v-if="s.grado_nombre" class="flex flex-col">
+            <p class="text-sm font-black text-slate-900 dark:text-white">
+              {{ getCourseDisplayName({ grado_nombre: s.grado_nombre, seccion_nombre: s.seccion_nombre || '' }) }}
+            </p>
+            <p class="text-[10px] font-bold text-indigo-500 uppercase">{{ s.nivel_nombre }}</p>
+          </div>
+          <span v-else class="text-[10px] font-bold text-red-400 uppercase tracking-widest italic">Sin grupo asignado</span>
+        </td>
+        <td class="py-5 px-8">
+          <span :class="[getStatusClass(s.estado_vigente || s.estado), 'px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest block w-fit']">
+            {{ s.estado_vigente || s.estado }}
+          </span>
+          <p v-if="s.motivo_estado" class="text-[10px] text-red-500 dark:text-red-400 font-semibold italic mt-1 max-w-[200px] leading-tight" :title="s.motivo_estado">
+            {{ s.motivo_estado }}
+          </p>
+        </td>
+        <td class="py-5 px-8 text-right">
+          <div v-if="yearStore.isClosedYear" class="flex items-center justify-end gap-2">
+            <button v-if="s.estado === 'SANCIONADO' || s.estado === 'EXPULSADO'" @click="openDrawer(s.id_estudiante)"
+              :class="s.estado === 'EXPULSADO' ? 'text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30' : 'text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30'"
+              class="p-2 rounded-xl transition-all"
+              :title="s.estado === 'EXPULSADO' ? 'Revisar Expulsión' : 'Revisar Sanción'"
+            >
+              <ShieldAlert :size="16" />
+            </button>
+            <span class="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 text-slate-400 rounded-lg text-[10px] font-black uppercase tracking-widest inline-flex items-center gap-1">
+              <Lock :size="12" /> Solo Lectura
+            </span>
+          </div>
+          <div v-else class="flex items-center justify-end gap-2">
+            <button v-if="s.estado === 'SANCIONADO' || s.estado === 'EXPULSADO'" @click="openDrawer(s.id_estudiante)"
+              :class="s.estado === 'EXPULSADO' ? 'text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30' : 'text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30'"
+              class="p-2 rounded-xl transition-all"
+              :title="s.estado === 'EXPULSADO' ? 'Revisar Expulsión' : 'Revisar Sanción'"
+            >
+              <ShieldAlert :size="16" />
+            </button>
+            <button @click="openEditModal(s)" class="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 rounded-xl transition-all" title="Editar datos">
+              <Edit2 :size="16" />
+            </button>
+            <button v-if="s.estado !== 'GRADUADO'" @click="openChangeGradeModal(s)" class="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 rounded-xl transition-all" title="Cambiar Grado">
+              <ArrowRight :size="16" />
+            </button>
+            <button v-if="s.estado === 'ACTIVO' && s.grado_nombre === 'ONCE'" @click="openGraduationModal(s)" class="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 rounded-xl transition-all" title="Graduar Estudiante">
+              <Award :size="16" />
+            </button>
+            <button v-if="s.estado === 'ACTIVO'" @click="openStatusModal(s, 'RETIRADO')" class="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded-xl transition-all" title="Retirar Estudiante">
+              <UserMinus :size="16" />
+            </button>
+            <button v-if="s.estado === 'ACTIVO'" @click="openStatusModal(s, 'SANCIONADO')" class="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded-xl transition-all" title="Sancionar">
+              <ShieldAlert :size="16" />
+            </button>
+            <button v-if="s.estado !== 'EXPULSADO' && s.estado !== 'GRADUADO'" @click="openStatusModal(s, 'EXPULSADO')" class="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-xl transition-all" title="Expulsar">
+              <UserX :size="16" />
+            </button>
+            <button v-if="s.estado !== 'ACTIVO' && s.estado !== 'RETIRADO' && s.estado !== 'GRADUADO'" @click="openStatusModal(s, 'ACTIVO')" class="p-2 text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 rounded-xl transition-all" title="Reactivar">
+              <UserCheck :size="16" />
+            </button>
+            <button @click="deleteStudent(s)" class="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-xl transition-all" title="Eliminar Estudiante">
+              <Trash2 :size="16" />
+            </button>
+          </div>
+        </td>
+      </tr>
+    </DataTable>
 
     <!-- Modals -->
     

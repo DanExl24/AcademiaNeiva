@@ -28,6 +28,9 @@ import {
   ClipboardList
 } from 'lucide-vue-next'
 import DatosAcademicosTrasladoModal from '../../components/traslados/DatosAcademicosTrasladoModal.vue'
+import DataTable from '../../components/ui/DataTable.vue'
+import SkeletonTable from '../../components/feedback/SkeletonTable.vue'
+import EmptyState from '../../components/feedback/EmptyState.vue'
 import { useConfirm } from '../../composables/useConfirm'
 import { useToast } from '../../composables/useToast'
 
@@ -539,103 +542,85 @@ const formatDate = (dateStr?: string | null) => {
       </div>
 
       <!-- TABLE -->
-      <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800/80 shadow-xl overflow-hidden">
-        <div v-if="loading" class="p-12 text-center space-y-3">
-          <RefreshCw :size="28" class="animate-spin mx-auto text-violet-500" />
-          <p class="text-xs font-semibold text-slate-400">Cargando traslados del sistema...</p>
-        </div>
+      <div>
+        <SkeletonTable v-if="loading" :rows="5" :cols="6" />
 
-        <div v-else-if="filteredSolicitudes.length === 0" class="p-12 text-center space-y-3">
-          <Info :size="32" class="mx-auto text-slate-300 dark:text-slate-700" />
-          <p class="text-sm font-bold text-slate-600 dark:text-slate-300">No se encontraron solicitudes</p>
-          <p class="text-xs text-slate-400">Intenta ajustar los filtros de búsqueda.</p>
-        </div>
+        <EmptyState
+          v-else-if="filteredSolicitudes.length === 0"
+          title="No se encontraron solicitudes"
+          description="Intenta ajustar los filtros de búsqueda."
+        >
+          <template #icon>
+            <ArrowLeftRight class="w-8 h-8 text-violet-500" />
+          </template>
+        </EmptyState>
 
-        <div v-else class="overflow-x-auto">
-          <table class="w-full text-left text-xs border-collapse">
-            <thead>
-              <tr class="border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/60 text-slate-400 font-black uppercase tracking-wider">
-                <th class="py-3.5 px-5">ID / Tipo</th>
-                <th class="py-3.5 px-5">Persona Afectada</th>
-                <th class="py-3.5 px-5">Origen ➔ Destino</th>
-                <th class="py-3.5 px-5">Estado</th>
-                <th class="py-3.5 px-5">Fecha</th>
-                <th class="py-3.5 px-5 text-right">Acciones</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100 dark:divide-slate-800/60 font-medium text-slate-700 dark:text-slate-300">
-              <tr
-                v-for="sol in filteredSolicitudes"
-                :key="sol.id_solicitud"
-                class="hover:bg-violet-50/30 dark:hover:bg-slate-800/30 transition-colors"
-              >
-                <td class="py-4 px-5">
-                  <span class="font-mono text-slate-400 text-[11px]">#{{ sol.id_solicitud }}</span>
-                  <div class="mt-1">
-                    <span :class="[
-                      'px-2 py-0.5 rounded-full text-[10px] font-black uppercase',
-                      sol.tipo === 'TRASLADO_MATRICULA' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300' : 'bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300'
-                    ]">{{ sol.tipo === 'TRASLADO_MATRICULA' ? 'Matrícula' : 'Usuario' }}</span>
-                  </div>
-                </td>
-
-                <td class="py-4 px-5">
-                  <p class="font-bold text-slate-900 dark:text-white">{{ sol.usuario_nombre }} {{ sol.usuario_apellido }}</p>
-                  <p class="text-[11px] text-slate-400 mt-0.5">{{ sol.usuario_email }}</p>
-                  <p class="text-[10px] font-mono text-slate-400">Doc: {{ sol.usuario_documento || 'S/D' }}</p>
-                </td>
-
-                <td class="py-4 px-5">
-                  <div class="space-y-1">
-                    <div class="flex items-center gap-1.5 text-xs">
-                      <Building2 :size="12" class="text-slate-400 shrink-0" />
-                      <span class="font-semibold text-slate-600 dark:text-slate-300">{{ sol.colegio_origen_nombre }}</span>
-                    </div>
-                    <ChevronRight :size="14" class="text-slate-300 dark:text-slate-600 ml-1" />
-                    <div class="flex items-center gap-1.5 text-xs">
-                      <Building2 :size="12" class="text-violet-500 shrink-0" />
-                      <span class="font-bold text-violet-600 dark:text-violet-400">{{ sol.colegio_destino_nombre }}</span>
-                    </div>
-                  </div>
-                </td>
-
-                <td class="py-4 px-5">
-                  <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold" :class="getStatusBadge(sol.estado).bg">
-                    <component :is="getStatusBadge(sol.estado).icon" :size="12" />
-                    {{ getStatusBadge(sol.estado).label }}
-                  </div>
-                </td>
-
-                <td class="py-4 px-5 text-slate-500 dark:text-slate-400 text-[11px]">
-                  {{ formatDate(sol.fecha_creacion) }}
-                  <p v-if="sol.fecha_finalizacion" class="text-[10px] text-emerald-600 dark:text-emerald-400 mt-0.5">
-                    Fin: {{ formatDate(sol.fecha_finalizacion) }}
-                  </p>
-                </td>
-
-                <td class="py-4 px-5">
-                  <div class="flex items-center justify-end gap-2">
-                    <button
-                      @click="openDetailModal(sol)"
-                      class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-violet-50 dark:bg-violet-950/30 text-violet-600 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-900/40 rounded-xl font-bold text-[11px] transition-all"
-                    >
-                      <Eye :size="13" />
-                      <span>Detalle</span>
-                    </button>
-                    <button
-                      v-if="canIntervene(sol)"
-                      @click="openIntervencion(sol)"
-                      class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/40 rounded-xl font-bold text-[11px] transition-all"
-                    >
-                      <AlertTriangle :size="13" />
-                      <span>Intervenir</span>
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <DataTable v-else>
+          <template #header>
+            <tr>
+              <th class="py-4 px-5">ID / Tipo</th>
+              <th class="py-4 px-5">Persona Afectada</th>
+              <th class="py-4 px-5">Origen ➔ Destino</th>
+              <th class="py-4 px-5">Estado</th>
+              <th class="py-4 px-5">Fecha</th>
+              <th class="py-4 px-5 text-right">Acciones</th>
+            </tr>
+          </template>
+          <tr
+            v-for="sol in filteredSolicitudes"
+            :key="sol.id_solicitud"
+            class="hover:bg-violet-50/30 dark:hover:bg-slate-800/30 transition-colors"
+          >
+            <td class="py-4 px-5">
+              <span class="font-mono text-slate-400 text-[11px]">#{{ sol.id_solicitud }}</span>
+              <div class="mt-1">
+                <span :class="['px-2 py-0.5 rounded-full text-[10px] font-black uppercase', sol.tipo === 'TRASLADO_MATRICULA' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300' : 'bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300']">{{ sol.tipo === 'TRASLADO_MATRICULA' ? 'Matrícula' : 'Usuario' }}</span>
+              </div>
+            </td>
+            <td class="py-4 px-5">
+              <p class="font-bold text-slate-900 dark:text-white">{{ sol.usuario_nombre }} {{ sol.usuario_apellido }}</p>
+              <p class="text-[11px] text-slate-400 mt-0.5">{{ sol.usuario_email }}</p>
+              <p class="text-[10px] font-mono text-slate-400">Doc: {{ sol.usuario_documento || 'S/D' }}</p>
+            </td>
+            <td class="py-4 px-5">
+              <div class="space-y-1">
+                <div class="flex items-center gap-1.5 text-xs">
+                  <Building2 :size="12" class="text-slate-400 shrink-0" />
+                  <span class="font-semibold text-slate-600 dark:text-slate-300">{{ sol.colegio_origen_nombre }}</span>
+                </div>
+                <ChevronRight :size="14" class="text-slate-300 dark:text-slate-600 ml-1" />
+                <div class="flex items-center gap-1.5 text-xs">
+                  <Building2 :size="12" class="text-violet-500 shrink-0" />
+                  <span class="font-bold text-violet-600 dark:text-violet-400">{{ sol.colegio_destino_nombre }}</span>
+                </div>
+              </div>
+            </td>
+            <td class="py-4 px-5">
+              <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold" :class="getStatusBadge(sol.estado).bg">
+                <component :is="getStatusBadge(sol.estado).icon" :size="12" />
+                {{ getStatusBadge(sol.estado).label }}
+              </div>
+            </td>
+            <td class="py-4 px-5 text-slate-500 dark:text-slate-400 text-[11px]">
+              {{ formatDate(sol.fecha_creacion) }}
+              <p v-if="sol.fecha_finalizacion" class="text-[10px] text-emerald-600 dark:text-emerald-400 mt-0.5">
+                Fin: {{ formatDate(sol.fecha_finalizacion) }}
+              </p>
+            </td>
+            <td class="py-4 px-5">
+              <div class="flex items-center justify-end gap-2">
+                <button @click="openDetailModal(sol)" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-violet-50 dark:bg-violet-950/30 text-violet-600 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-900/40 rounded-xl font-bold text-[11px] transition-all">
+                  <Eye :size="13" />
+                  <span>Detalle</span>
+                </button>
+                <button v-if="canIntervene(sol)" @click="openIntervencion(sol)" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/40 rounded-xl font-bold text-[11px] transition-all">
+                  <AlertTriangle :size="13" />
+                  <span>Intervenir</span>
+                </button>
+              </div>
+            </td>
+          </tr>
+        </DataTable>
       </div>
     </div>
 

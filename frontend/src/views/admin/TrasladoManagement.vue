@@ -22,6 +22,9 @@ import {
 } from 'lucide-vue-next'
 import DatosAcademicosTrasladoModal from '../../components/traslados/DatosAcademicosTrasladoModal.vue'
 import { useConfirm } from '../../composables/useConfirm'
+import DataTable from '../../components/ui/DataTable.vue'
+import SkeletonTable from '../../components/feedback/SkeletonTable.vue'
+import EmptyState from '../../components/feedback/EmptyState.vue'
 
 const auth = useAuthStore()
 const yearStore = useAcademicYearStore()
@@ -814,122 +817,84 @@ onMounted(() => {
     </div>
 
     <!-- Main List of Requests Table -->
-    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm">
-      
-      <div v-if="loading" class="p-12 text-center text-slate-400 flex flex-col items-center gap-3">
-        <RefreshCw class="animate-spin text-indigo-500" :size="32" />
-        <p class="text-xs font-semibold">Cargando solicitudes de traslado...</p>
-      </div>
+    <div>
+      <SkeletonTable v-if="loading" :rows="5" :cols="6" />
 
-      <div v-else-if="filteredSolicitudes.length === 0" class="p-12 text-center text-slate-400 flex flex-col items-center gap-3">
-        <ArrowLeftRight class="text-slate-300 dark:text-slate-700" :size="40" />
-        <p class="text-sm font-bold text-slate-600 dark:text-slate-300">No se encontraron solicitudes de traslado</p>
-        <p class="text-xs">No hay registros que coincidan con los filtros seleccionados o el año escolar activo.</p>
-      </div>
+      <EmptyState
+        v-else-if="filteredSolicitudes.length === 0"
+        title="No se encontraron solicitudes de traslado"
+        description="No hay registros que coincidan con los filtros seleccionados o el año escolar activo."
+      >
+        <template #icon>
+          <ArrowLeftRight class="w-8 h-8 text-indigo-500" />
+        </template>
+      </EmptyState>
 
-      <div v-else class="overflow-x-auto">
-        <table class="w-full text-left border-collapse">
-          <thead>
-            <tr class="border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50 text-[10px] font-black uppercase text-slate-400 tracking-wider">
-              <th class="px-6 py-4">Usuario / Estudiante</th>
-              <th class="px-6 py-4">Tipo</th>
-              <th class="px-6 py-4">Origen → Destino</th>
-              <th class="px-6 py-4">Consenso de Votos</th>
-              <th class="px-6 py-4">Estado</th>
-              <th class="px-6 py-4 text-right">Acción</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
-            <tr 
-              v-for="s in filteredSolicitudes" 
-              :key="s.id_solicitud"
-              class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors"
-            >
-              <!-- Usuario / Estudiante -->
-              <td class="px-6 py-4">
-                <div class="space-y-0.5">
-                  <p class="font-bold text-slate-900 dark:text-white text-sm leading-tight">
-                    {{ s.usuario_nombre }} {{ s.usuario_apellido }}
-                  </p>
-                  <p class="text-xs text-slate-400 font-mono">Doc: {{ s.usuario_documento }}</p>
-                  <p class="text-[10px] text-slate-400">{{ s.usuario_email }}</p>
-                </div>
-              </td>
-
-              <!-- Tipo -->
-              <td class="px-6 py-4">
-                <span :class="[getTypeBadge(s.tipo).class, 'px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider border']">
-                  {{ getTypeBadge(s.tipo).label }}
-                </span>
-              </td>
-
-              <!-- Origen -> Destino -->
-              <td class="px-6 py-4">
-                <div class="space-y-1">
-                  <div class="flex items-center gap-1.5 text-slate-600 dark:text-slate-400">
-                    <Building :size="12" class="shrink-0 text-slate-400" />
-                    <span class="font-semibold truncate max-w-[180px]" :title="s.colegio_origen_nombre">{{ s.colegio_origen_nombre }}</span>
-                  </div>
-                  <div class="flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400 font-bold">
-                    <span class="text-xs">→</span>
-                    <Building2 :size="12" class="shrink-0" />
-                    <span class="truncate max-w-[180px]" :title="s.colegio_destino_nombre">{{ s.colegio_destino_nombre }}</span>
-                  </div>
-                </div>
-              </td>
-
-              <!-- Consenso Tripartito de Votos -->
-              <td class="px-6 py-4">
-                <div class="flex items-center gap-2">
-                  <div 
-                    v-for="item in getApprovalMatrix(s)" 
-                    :key="item.rol"
-                    :title="`${item.label}: ${item.aprobacion ? 'Aprobado por ' + item.aprobacion.usuario_nombre : 'Pendiente'}`"
-                    :class="[
-                      'w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-black transition-all',
-                      item.aprobacion 
-                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 ring-2 ring-emerald-500/20' 
-                        : 'bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500'
-                    ]"
-                  >
-                    <Check v-if="item.aprobacion" :size="14" />
-                    <Clock v-else :size="12" />
-                  </div>
-                </div>
-              </td>
-
-              <!-- Estado -->
-              <td class="px-6 py-4">
-                <span :class="[getStatusBadge(s.estado).class, 'px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border']">
-                  {{ getStatusBadge(s.estado).label }}
-                </span>
-              </td>
-
-              <!-- Acciones -->
-              <td class="px-6 py-4 text-right">
-                <div class="flex items-center justify-end gap-2">
-                  <button
-                    v-if="s.tipo === 'TRASLADO_MATRICULA'"
-                    @click.stop="openAcademicDataModal(s.id_solicitud)"
-                    class="p-2 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-300 rounded-xl text-xs font-bold transition-all"
-                    title="Ver/Exportar Datos Académicos"
-                  >
-                    <ClipboardList :size="15" />
-                  </button>
-
-                  <button 
-                    @click="openDetailModal(s)"
-                    class="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-white rounded-xl font-bold text-xs transition-all active:scale-95"
-                  >
-                    Ver Detalle
-                  </button>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
+      <DataTable v-else>
+        <template #header>
+          <tr>
+            <th class="py-4 px-6">Usuario / Estudiante</th>
+            <th class="py-4 px-6">Tipo</th>
+            <th class="py-4 px-6">Origen → Destino</th>
+            <th class="py-4 px-6">Consenso de Votos</th>
+            <th class="py-4 px-6">Estado</th>
+            <th class="py-4 px-6 text-right">Acción</th>
+          </tr>
+        </template>
+        <tr
+          v-for="s in filteredSolicitudes"
+          :key="s.id_solicitud"
+          class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors"
+        >
+          <td class="py-4 px-6">
+            <div class="space-y-0.5">
+              <p class="font-bold text-slate-900 dark:text-white text-sm leading-tight">{{ s.usuario_nombre }} {{ s.usuario_apellido }}</p>
+              <p class="text-xs text-slate-400 font-mono">Doc: {{ s.usuario_documento }}</p>
+              <p class="text-[10px] text-slate-400">{{ s.usuario_email }}</p>
+            </div>
+          </td>
+          <td class="py-4 px-6">
+            <span :class="[getTypeBadge(s.tipo).class, 'px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider border']">{{ getTypeBadge(s.tipo).label }}</span>
+          </td>
+          <td class="py-4 px-6">
+            <div class="space-y-1">
+              <div class="flex items-center gap-1.5 text-slate-600 dark:text-slate-400">
+                <Building :size="12" class="shrink-0 text-slate-400" />
+                <span class="font-semibold truncate max-w-[180px]" :title="s.colegio_origen_nombre">{{ s.colegio_origen_nombre }}</span>
+              </div>
+              <div class="flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400 font-bold">
+                <span class="text-xs">→</span>
+                <Building2 :size="12" class="shrink-0" />
+                <span class="truncate max-w-[180px]" :title="s.colegio_destino_nombre">{{ s.colegio_destino_nombre }}</span>
+              </div>
+            </div>
+          </td>
+          <td class="py-4 px-6">
+            <div class="flex items-center gap-2">
+              <div
+                v-for="item in getApprovalMatrix(s)"
+                :key="item.rol"
+                :title="`${item.label}: ${item.aprobacion ? 'Aprobado por ' + item.aprobacion.usuario_nombre : 'Pendiente'}`"
+                :class="['w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-black transition-all', item.aprobacion ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 ring-2 ring-emerald-500/20' : 'bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500']"
+              >
+                <Check v-if="item.aprobacion" :size="14" />
+                <Clock v-else :size="12" />
+              </div>
+            </div>
+          </td>
+          <td class="py-4 px-6">
+            <span :class="[getStatusBadge(s.estado).class, 'px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border']">{{ getStatusBadge(s.estado).label }}</span>
+          </td>
+          <td class="py-4 px-6 text-right">
+            <div class="flex items-center justify-end gap-2">
+              <button v-if="s.tipo === 'TRASLADO_MATRICULA'" @click.stop="openAcademicDataModal(s.id_solicitud)" class="p-2 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300 rounded-xl text-xs font-bold transition-all" title="Ver/Exportar Datos Académicos">
+                <ClipboardList :size="15" />
+              </button>
+              <button @click="openDetailModal(s)" class="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-white rounded-xl font-bold text-xs transition-all active:scale-95">Ver Detalle</button>
+            </div>
+          </td>
+        </tr>
+      </DataTable>
     </div>
 
     <!-- MODAL: DETALLE Y APROBACIÓN DE SOLICITUD -->
