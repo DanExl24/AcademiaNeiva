@@ -245,6 +245,12 @@ const isYearClosed = computed(() => {
   return status === 'CERRADO' || status === 'INACTIVO'
 })
 
+watch(isYearClosed, (closed) => {
+  if (closed) {
+    editorModeActive.value = false
+  }
+})
+
 const filteredPeriods = computed(() => {
   if (!selectedYearId.value) return periods.value
   return periods.value.filter(p => p.id_anio === selectedYearId.value)
@@ -657,22 +663,35 @@ onMounted(loadData)
               <button
                 type="button"
                 @click="yearModal = true"
-                class="inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-black transition-all shadow-md shrink-0 uppercase tracking-wider dark:bg-sky-500 dark:hover:bg-sky-400"
+                :disabled="isYearClosed"
+                :title="isYearClosed ? 'Año lectivo cerrado (Solo lectura)' : 'Agregar año lectivo'"
+                :class="[
+                  isYearClosed 
+                    ? 'bg-slate-200 dark:bg-slate-800/80 text-slate-400 dark:text-slate-600 cursor-not-allowed shadow-none' 
+                    : 'bg-sky-600 hover:bg-sky-500 text-white shadow-md dark:bg-sky-500 dark:hover:bg-sky-400',
+                  'inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-black transition-all shrink-0 uppercase tracking-wider'
+                ]"
               >
-                <Plus class="h-4 w-4" />
+                <Lock v-if="isYearClosed" class="h-4 w-4" />
+                <Plus v-else class="h-4 w-4" />
                 Agregar año
               </button>
               <button
                 type="button"
-                @click="editorModeActive ? editorModeActive = false : showEditorWarningModal = true"
+                @click="isYearClosed ? null : (editorModeActive ? editorModeActive = false : showEditorWarningModal = true)"
+                :disabled="isYearClosed"
+                :title="isYearClosed ? 'Año lectivo cerrado (Solo lectura)' : (editorModeActive ? 'Salir del Modo Editor' : 'Activar Modo Editor')"
                 :class="[
-                  editorModeActive 
-                    ? 'bg-rose-500 hover:bg-rose-600 text-white shadow-rose-200/50' 
-                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700',
-                  'inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-black transition-all shadow-md dark:shadow-none shrink-0 uppercase tracking-wider'
+                  isYearClosed
+                    ? 'bg-slate-100 dark:bg-slate-800/60 text-slate-400 dark:text-slate-600 cursor-not-allowed shadow-none'
+                    : (editorModeActive 
+                        ? 'bg-rose-500 hover:bg-rose-600 text-white shadow-rose-200/50' 
+                        : 'bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 shadow-md dark:shadow-none'),
+                  'inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-black transition-all shrink-0 uppercase tracking-wider'
                 ]"
               >
-                <ShieldAlert class="h-4 w-4" />
+                <Lock v-if="isYearClosed" class="h-4 w-4" />
+                <ShieldAlert v-else class="h-4 w-4" />
                 {{ editorModeActive ? 'Salir Editor' : 'Modo Editor' }}
               </button>
             </div>
