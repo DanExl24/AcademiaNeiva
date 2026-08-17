@@ -582,23 +582,31 @@ export const cambiarEstadoUsuario = async (req: AuthRequest, res: Response): Pro
  */
 export const restablecerPassword = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { id } = req.params;
+    const userId = Number(req.params.id);
     const { nueva_password } = req.body;
 
-    const password = nueva_password || 'temporal123';
+    const generatedPassword = `Temp-${Math.random().toString(36).substring(2, 6).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const password = nueva_password || generatedPassword;
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const result = await pool.query(
-      'UPDATE usuario SET password = $1 WHERE id_usuario = $2 RETURNING id_usuario, email, nombre',
-      [hashedPassword, id]
-    );
+    const result = await db
+      .updateTable("usuario")
+      .set({ password: hashedPassword })
+      .where("id_usuario", "=", userId)
+      .returning(["id_usuario", "email", "nombre"])
+      .executeTakeFirst();
 
-    if (result.rows.length === 0) {
+    if (!result) {
       res.status(404).json({ error: 'Usuario no encontrado' });
       return;
     }
 
-    res.json({ message: 'Contraseña restablecida exitosamente', usuario: result.rows[0], password_temporal: password });
+    res.json({ 
+      message: 'Contraseña restablecida exitosamente', 
+      usuario: result, 
+      password_temporal: password,
+      tempPassword: password 
+    });
   } catch (error: any) {
     console.error('Error restableciendo contraseña:', error);
     res.status(500).json({ error: 'Error al restablecer contraseña' });

@@ -399,7 +399,7 @@ const handleResetPassword = async (user: Usuario) => {
     showResetModal.value = true
     const headers = { Authorization: `Bearer ${auth.token}` }
     const res = await axios.post(`/api/admin/usuarios/${user.id_usuario}/restablecer-password`, {}, { headers })
-    tempPassword.value = res.data.tempPassword
+    tempPassword.value = res.data.password_temporal || res.data.tempPassword || ''
   } catch (error: any) {
     alert(error.response?.data?.error || 'Error al restablecer contraseña')
     showResetModal.value = false
