@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import axios from 'axios'
+import { academicService } from '../../services/academicService'
 import { BookOpen, Plus, Trash2, Search, Info, Layers, GraduationCap, X, Edit, Calendar, PlusCircle, Lock } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 import { useAcademicYearStore } from '../../stores/academicYear'
 import { getCourseDisplayName } from '../../utils/courseHelper'
 import { useConfirm } from '../../composables/useConfirm'
 import { useToast } from '../../composables/useToast'
+
 
 
 interface SubjectItem {
@@ -58,13 +59,12 @@ const loadSubjects = async () => {
   try {
     loading.value = true
     const params = yearStore.selectedYearId ? { yearId: yearStore.selectedYearId } : {}
-    const headers = auth.token ? { Authorization: `Bearer ${auth.token}` } : {}
     const [subRes, trashRes] = await Promise.all([
-      axios.get(`/api/academic-admin/subjects/${schoolId.value}`, { params, headers }),
-      axios.get(`/api/academic-admin/subjects/trash/${schoolId.value}`, { headers })
+      academicService.getSubjects(schoolId.value, params),
+      academicService.getTrashSubjects(schoolId.value)
     ])
-    subjects.value = Array.isArray(subRes.data) ? subRes.data : []
-    trashSubjects.value = Array.isArray(trashRes.data) ? trashRes.data : []
+    subjects.value = subRes
+    trashSubjects.value = trashRes
   } catch (error) {
     console.error('Error loading subjects:', error)
     subjects.value = []
@@ -100,12 +100,10 @@ const createSubject = async () => {
 
   try {
     saving.value = true
-    await axios.post('/api/academic-admin/subjects', {
+    await academicService.createSubject({
       schoolId: schoolId.value,
       nombre: newSubject.value.nombre,
       trashId: reuseFromTrash.value?.id_papelera || null
-    }, {
-      headers: auth.token ? { Authorization: `Bearer ${auth.token}` } : {}
     })
     newSubject.value.nombre = ''
     reuseFromTrash.value = null
@@ -117,6 +115,7 @@ const createSubject = async () => {
     saving.value = false
   }
 }
+
 const handleTrashSelection = () => {
   if (reuseFromTrash.value) {
     newSubject.value.nombre = reuseFromTrash.value.nombre_materia
@@ -173,16 +172,10 @@ const confirmDelete = async (item: SubjectItem, force = false) => {
   }
   try {
     deleting.value = true
-    const response = await axios.delete(`/api/academic-admin/subjects/${item.id_materia}`, {
-      params: { 
-        schoolId: schoolId.value,
-        force: force ? 'true' : 'false'
-      },
-      headers: auth.token ? { Authorization: `Bearer ${auth.token}` } : {}
-    })
+    const response = await academicService.deleteSubject(item.id_materia, schoolId.value, force)
     
-    if (force && response.data.report) {
-      generateAndDownloadReport(response.data.report)
+    if (force && response?.report) {
+      generateAndDownloadReport(response.report)
     }
 
     deleteModal.value = null
@@ -200,6 +193,7 @@ const confirmDelete = async (item: SubjectItem, force = false) => {
     deleting.value = false
   }
 }
+
 
 // ─── Curriculum Detail State & Methods ───────────────────────────────────────
 const detailDrawerOpen = ref(false)
@@ -435,21 +429,17 @@ const fetchSubjectDetails = async () => {
   if (!selectedSubjectId.value || !schoolId.value) return
   try {
     detailLoading.value = true
-    const params: Record<string, any> = { schoolId: schoolId.value }
-    if (yearStore.selectedYearId) {
-      params.yearId = yearStore.selectedYearId
-    }
-    const headers = auth.token ? { Authorization: `Bearer ${auth.token}` } : {}
-    const response = await axios.get(`/api/academic-admin/subjects/${selectedSubjectId.value}/curriculum-details`, {
-      params,
-      headers
-    })
-    subjectDetails.value = response.data
+    const response = await academicService.getSubjectCurriculumDetails(
+      selectedSubjectId.value,
+      schoolId.value,
+      yearStore.selectedYearId || undefined
+    )
+    subjectDetails.value = response
     
     // Set default filter period if not set
-    if (response.data.periods?.length > 0 && !selectedPeriodId.value) {
-      const openPeriod = response.data.periods.find((p: any) => p.estado === 'ABIERTO')
-      selectedPeriodId.value = openPeriod ? openPeriod.id_periodo : response.data.periods[0].id_periodo
+    if (response.periods?.length > 0 && !selectedPeriodId.value) {
+      const openPeriod = response.periods.find((p: any) => p.estado === 'ABIERTO')
+      selectedPeriodId.value = openPeriod ? openPeriod.id_periodo : response.periods[0].id_periodo
     }
 
     // Set default grade filter to first assigned grade to keep list clean
@@ -499,14 +489,12 @@ const saveCompetency = async () => {
   }
   try {
     savingCompetency.value = true
-    await axios.post('/api/academic-admin/settings/competencies', {
+    await academicService.saveCompetency({
       schoolId: schoolId.value,
       groupId: competencyForm.value.id_grupo,
       subjectId: selectedSubjectId.value,
       periodId: competencyForm.value.id_periodo,
       descripcion: competencyForm.value.descripcion.trim()
-    }, {
-      headers: auth.token ? { Authorization: `Bearer ${auth.token}` } : {}
     })
     showCompetencyModal.value = false
     await fetchSubjectDetails()
@@ -531,10 +519,7 @@ const deleteCompetency = async (id: number) => {
   if (!ok) return
 
   try {
-    await axios.delete(`/api/academic-admin/settings/competencies/${id}`, {
-      params: { schoolId: schoolId.value },
-      headers: auth.token ? { Authorization: `Bearer ${auth.token}` } : {}
-    })
+    await academicService.deleteCompetency(id, schoolId.value)
     toast.success('Competencia eliminada exitosamente')
     await fetchSubjectDetails()
   } catch (error: any) {
@@ -574,17 +559,16 @@ const saveEvidence = async () => {
   }
   try {
     savingEvidence.value = true
-    const headers = auth.token ? { Authorization: `Bearer ${auth.token}` } : {}
     if (evidenceForm.value.id_evidencia) {
-      await axios.put(`/api/academic-admin/settings/evidencias/${evidenceForm.value.id_evidencia}`, {
+      await academicService.updateCurriculumEvidence(evidenceForm.value.id_evidencia, {
         schoolId: schoolId.value,
         descripcion: evidenceForm.value.descripcion.trim()
-      }, { headers })
+      })
     } else {
-      await axios.post(`/api/academic-admin/settings/competencies/${evidenceForm.value.id_competencia}/evidencias`, {
+      await academicService.createCurriculumEvidence(evidenceForm.value.id_competencia!, {
         schoolId: schoolId.value,
         descripcion: evidenceForm.value.descripcion.trim()
-      }, { headers })
+      })
     }
     toast.success('Evidencia guardada exitosamente')
     showEvidenceModal.value = false
@@ -610,18 +594,15 @@ const deleteEvidence = async (id: number) => {
   if (!ok) return
 
   try {
-    await axios.delete(`/api/academic-admin/settings/evidencias/${id}`, {
-      params: { schoolId: schoolId.value },
-      headers: auth.token ? { Authorization: `Bearer ${auth.token}` } : {}
-    })
+    await academicService.deleteCurriculumEvidence(id, schoolId.value)
     toast.success('Evidencia eliminada exitosamente')
     await fetchSubjectDetails()
   } catch (error: any) {
     toast.error(error.response?.data?.error || 'Error al eliminar la evidencia')
   }
 }
-
 </script>
+
 
 <template>
   <div class="max-w-[1200px] mx-auto space-y-6">

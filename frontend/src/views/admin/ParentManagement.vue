@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import axios from 'axios'
+import { parentService } from '../../services/parentService'
+
 import {
   Users,
   Search,
@@ -163,8 +164,6 @@ const totalChildrenLinked = computed(() =>
 )
 const parentsWithAccount = computed(() => parents.value.filter(p => p.email).length)
 
-const apiBase = import.meta.env.VITE_API_URL || ''
-
 const loadParents = async () => {
   if (!schoolId.value) return
   try {
@@ -181,15 +180,12 @@ const loadParents = async () => {
     if (filterEstadoMatricula.value !== 'TODOS') params.estadoMatricula = filterEstadoMatricula.value
     if (filterSoloDocentes.value) params.soloDocentes = 'true'
 
-    const res = await axios.get(`/api/parents/school/${schoolId.value}`, {
-      params,
-      headers: { Authorization: `Bearer ${auth.token}` }
-    })
+    const res = await parentService.getParentsBySchool(schoolId.value, params)
 
-    parents.value = res.data.parents || []
-    if (res.data.catalogs) {
-      nivelesCatalog.value = (res.data.catalogs.niveles || []).map((n: any) => ({ id: n.id_nivel, nombre: n.nombre }))
-      gradosCatalog.value = (res.data.catalogs.grados || []).map((g: any) => ({ id: g.id_tipo_grado, nombre: g.nombre }))
+    parents.value = res.parents || []
+    if (res.catalogs) {
+      nivelesCatalog.value = (res.catalogs.niveles || []).map((n: any) => ({ id: n.id_nivel, nombre: n.nombre }))
+      gradosCatalog.value = (res.catalogs.grados || []).map((g: any) => ({ id: g.id_tipo_grado, nombre: g.nombre }))
     }
   } catch (error) {
     console.error('Error al cargar lista de padres:', error)
@@ -217,13 +213,10 @@ const openDrawer = async (parentId: number) => {
   selectedParentDetail.value = null
 
   try {
-    const res = await axios.get(`${apiBase}/api/parents/${parentId}/detail`, {
-      params: { yearId: yearStore.selectedYearId },
-      headers: { Authorization: `Bearer ${auth.token}` }
-    })
-    selectedParentDetail.value = res.data
-    if (res.data.tipos_documento) {
-      documentTypes.value = res.data.tipos_documento
+    const res = await parentService.getParentDetail(parentId, { yearId: yearStore.selectedYearId })
+    selectedParentDetail.value = res
+    if (res.tipos_documento) {
+      documentTypes.value = res.tipos_documento
     }
   } catch (error) {
     console.error('Error al cargar detalle del padre:', error)
@@ -260,11 +253,7 @@ const saveParentEdit = async () => {
 
   try {
     savingEdit.value = true
-    await axios.put(
-      `/api/parents/${selectedParentId.value}`,
-      editForm.value,
-      { headers: { Authorization: `Bearer ${auth.token}` } }
-    )
+    await parentService.updateParent(selectedParentId.value, editForm.value)
     editModalOpen.value = false
     await loadParents()
     if (selectedParentId.value) {
@@ -320,13 +309,9 @@ const toggleParentAccountStatus = async () => {
 
   try {
     togglingStatus.value = true
-    const res = await axios.patch(
-      `/api/parents/${selectedParentId.value}/status`,
-      { activo: newStatus },
-      { headers: { Authorization: `Bearer ${auth.token}` } }
-    )
+    const res = await parentService.toggleAccountStatus(selectedParentId.value, newStatus)
 
-    toast.success(res.data.message || `Cuenta ${newStatus ? 'activada' : 'inactivada'} correctamente.`)
+    toast.success(res.message || `Cuenta ${newStatus ? 'activada' : 'inactivada'} correctamente.`)
     await loadParents()
     if (selectedParentId.value) {
       await openDrawer(selectedParentId.value)
@@ -337,6 +322,7 @@ const toggleParentAccountStatus = async () => {
     togglingStatus.value = false
   }
 }
+
 
 
 const getChildStatusBadge = (estado: string) => {

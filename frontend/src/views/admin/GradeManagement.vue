@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import axios from 'axios'
+import { academicService } from '../../services/academicService'
 import { 
   Layers3, Plus, Search, School2, Trash2, Info, Pencil, Tag, RefreshCw, Lock, 
   Calendar, Eye, Users, GraduationCap, Mail, X, Sun, Sunset, Moon, Globe, 
@@ -10,6 +10,7 @@ import { useAuthStore } from '../../stores/auth'
 import { useNotificationStore } from '../../stores/notifications'
 import { useAcademicYearStore } from '../../stores/academicYear'
 import { getCourseDisplayName, getNextSectionName } from '../../utils/courseHelper'
+
 
 const yearStore = useAcademicYearStore()
 
@@ -464,16 +465,16 @@ const closeEditCuposModal = () => {
 
 const fetchCatalogs = async () => {
   const params = yearStore.selectedYearId ? { yearId: yearStore.selectedYearId } : {}
-  const [catalogsRes, gradesRes] = await Promise.all([
-    axios.get('/api/academic-admin/catalogs'),
-    axios.get(`/api/academic-admin/grades/${schoolId.value}`, { params }),
+  const [catalogsData, gradesData] = await Promise.all([
+    academicService.getCatalogs(),
+    academicService.getGradesAndGroups(schoolId.value, params),
   ])
 
-  secciones.value = catalogsRes.data.secciones
-  niveles.value = gradesRes.data.niveles
-  jornadas.value = gradesRes.data.jornadas
-  tiposGrado.value = gradesRes.data.tiposGrado
-  grupos.value = gradesRes.data.grupos
+  secciones.value = catalogsData.secciones
+  niveles.value = gradesData.niveles
+  jornadas.value = gradesData.jornadas
+  tiposGrado.value = gradesData.tiposGrado
+  grupos.value = gradesData.grupos
 }
 
 const loadData = async () => {
@@ -497,7 +498,7 @@ const createGradeType = async () => {
 
   try {
     savingGrade.value = true
-    await axios.post('/api/academic-admin/grade-types', {
+    await academicService.createGradeType({
       schoolId: schoolId.value,
       id_nivel: Number(newGradeType.value.id_nivel),
       nombre: newGradeType.value.nombre,
@@ -527,7 +528,7 @@ const createGroup = async () => {
 
   try {
     savingGroup.value = true
-    await axios.post('/api/academic-admin/groups', {
+    await academicService.createGroup({
       schoolId: schoolId.value,
       id_nivel: Number(payload.id_nivel),
       id_tipo_grado: Number(payload.id_tipo_grado),
@@ -555,9 +556,7 @@ const createGroup = async () => {
 const deleteGradeType = async (item: TipoGrado) => {
   try {
     deleting.value = true
-    await axios.delete(`/api/academic-admin/grade-types/${item.id_tipo_grado}`, {
-      params: { schoolId: schoolId.value },
-    })
+    await academicService.deleteGradeType(item.id_tipo_grado, schoolId.value)
     closeDeleteModal()
     await loadData()
     notify.addNotification('Grado eliminado exitosamente.', 'success')
@@ -570,9 +569,7 @@ const deleteGradeType = async (item: TipoGrado) => {
 const deleteGroup = async (item: Grupo) => {
   try {
     deleting.value = true
-    await axios.delete(`/api/academic-admin/groups/${item.id_grupo}`, {
-      params: { schoolId: schoolId.value },
-    })
+    await academicService.deleteGroup(item.id_grupo, schoolId.value)
     closeDeleteModal()
     await loadData()
     notify.addNotification('Curso eliminado exitosamente.', 'success')
@@ -593,7 +590,7 @@ const updateGroupCupos = async () => {
 
   try {
     savingCupos.value = true
-    await axios.patch(`/api/academic-admin/groups/${selectedGroup.value.id_grupo}/cupos`, {
+    await academicService.updateGroupCupos(selectedGroup.value.id_grupo, {
       schoolId: schoolId.value,
       cupos_totales: selectedGroup.value.cupos_totales
     })
@@ -627,11 +624,10 @@ const confirmRename = async () => {
 
   renaming.value = true
   try {
-    await axios.patch(
-      `/api/academic-admin/groups/${renameTarget.value.id_grupo}/rename`,
-      { schoolId: schoolId.value, nuevo_nombre: nombre },
-      { headers: { Authorization: `Bearer ${auth.token}` } }
-    )
+    await academicService.renameGroup(renameTarget.value.id_grupo, {
+      schoolId: schoolId.value,
+      nuevo_nombre: nombre
+    })
     await loadData()
     closeRenameModal()
     notify.addNotification('Curso renombrado exitosamente.', 'success')
@@ -656,16 +652,12 @@ const confirmBulkRename = async () => {
   if (!bulkTarget.value || bulkRenaming.value || bulkPrefijoError.value) return
   bulkRenaming.value = true
   try {
-    await axios.patch(
-      `/api/academic-admin/grade-types/${bulkTarget.value.id_tipo_grado}/bulk-rename`,
-      {
-        schoolId: schoolId.value,
-        prefijo: bulkPrefijo.value.trim().toUpperCase(),
-        separador: bulkSeparador.value,
-        tipo_ordinal: bulkOrdinalType.value
-      },
-      { headers: { Authorization: `Bearer ${auth.token}` } }
-    )
+    await academicService.bulkRenameGroups(bulkTarget.value.id_tipo_grado, {
+      schoolId: schoolId.value,
+      prefijo: bulkPrefijo.value.trim().toUpperCase(),
+      separador: bulkSeparador.value,
+      tipo_ordinal: bulkOrdinalType.value
+    })
     await loadData()
     closeBulkModal()
     notify.addNotification('Cursos renombrados masivamente con éxito.', 'success')
@@ -727,15 +719,8 @@ const openCourseMembersModal = async (group: Grupo) => {
     activeMembersTab.value = 'students'
     membersSearchTerm.value = ''
 
-    const res = await axios.get(`/api/academic-admin/groups/${group.id_grupo}/members`, {
-      params: {
-        schoolId: schoolId.value,
-        yearId: yearStore.selectedYearId
-      },
-      headers: { Authorization: `Bearer ${auth.token}` }
-    })
-
-    membersData.value = res.data
+    const res = await academicService.getCourseMembers(group.id_grupo, schoolId.value, yearStore.selectedYearId || undefined)
+    membersData.value = res
   } catch (error: any) {
     console.error('Error fetching course members:', error)
     notify.addNotification('No se pudieron cargar los integrantes del curso', 'error')
@@ -743,6 +728,7 @@ const openCourseMembersModal = async (group: Grupo) => {
     loadingMembers.value = false
   }
 }
+
 
 const filteredStudents = computed(() => {
   if (!membersData.value) return []
@@ -890,11 +876,9 @@ const handleCreateJornada = async () => {
   if (!newJornadaName.value || savingJornada.value) return
   savingJornada.value = true
   try {
-    await axios.post('/api/academic-admin/jornadas', {
+    await academicService.createJornada({
       schoolId: schoolId.value,
       nombre: newJornadaName.value
-    }, {
-      headers: { Authorization: `Bearer ${auth.token}` }
     })
     notify.addNotification(`Jornada ${newJornadaName.value} habilitada exitosamente.`, 'success')
     showCreateJornadaModal.value = false
@@ -915,10 +899,7 @@ const confirmDeleteJornada = async () => {
   if (!targetJornadaToDelete.value || deletingJornada.value) return
   deletingJornada.value = true
   try {
-    await axios.delete(`/api/academic-admin/jornadas/${targetJornadaToDelete.value.id_jornada}`, {
-      params: { schoolId: schoolId.value },
-      headers: { Authorization: `Bearer ${auth.token}` }
-    })
+    await academicService.deleteJornada(targetJornadaToDelete.value.id_jornada, schoolId.value)
     notify.addNotification(`Jornada eliminada con éxito.`, 'success')
     deleteJornadaModal.value = false
     if (selectedJornadaId.value === targetJornadaToDelete.value.id_jornada) {
@@ -944,11 +925,9 @@ const confirmReassignJornada = async () => {
   if (!targetGroupToReassign.value || !newTargetJornadaId.value || reassigningJornada.value) return
   reassigningJornada.value = true
   try {
-    await axios.patch(`/api/academic-admin/groups/${targetGroupToReassign.value.id_grupo}/jornada`, {
+    await academicService.reassignGroupJornada(targetGroupToReassign.value.id_grupo, {
       schoolId: schoolId.value,
       id_jornada: newTargetJornadaId.value
-    }, {
-      headers: { Authorization: `Bearer ${auth.token}` }
     })
     notify.addNotification('Curso reasignado de jornada exitosamente.', 'success')
     reassignJornadaModal.value = false
@@ -960,6 +939,7 @@ const confirmReassignJornada = async () => {
     reassigningJornada.value = false
   }
 }
+
 
 onMounted(async () => {
   await yearStore.loadYearsForSchool(schoolId.value, auth.token || undefined)

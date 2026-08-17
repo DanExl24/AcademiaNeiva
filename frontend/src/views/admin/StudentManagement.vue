@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import axios from 'axios'
+import { studentService } from '../../services/studentService'
+import { academicService } from '../../services/academicService'
+
 import {
   Users,
   Search,
@@ -92,9 +94,7 @@ const openDrawer = async (studentId: number) => {
   loadingSummary.value = true
   studentSummary.value = null
   try {
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get(`/api/student/${studentId}/summary`, { headers })
-    studentSummary.value = res.data
+    studentSummary.value = await studentService.getStudentSummary(studentId)
   } catch (error) {
     console.error('Error fetching student summary:', error)
     notify.addNotification('Error al cargar el resumen del estudiante', 'error')
@@ -147,9 +147,7 @@ const openGraduationModal = async (student: any) => {
   loadingEligibility.value = true
   eligibilityInfo.value = null
   try {
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get(`/api/student/${student.id_estudiante}/summary`, { headers })
-    const summary = res.data
+    const summary = await studentService.getStudentSummary(student.id_estudiante)
     const gpa = summary.gpa || 0.0
     const failedCount = summary.failed_subjects_count || 0
     const failedSubjects = summary.failed_subjects || []
@@ -179,12 +177,11 @@ const confirmGraduation = async () => {
   }
   try {
     const directivoUserId = auth.user?.id || null
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.post(`/api/student/${targetStudent.value.id_estudiante}/graduate`, {
+    await studentService.graduateStudent(targetStudent.value.id_estudiante, {
       fecha_graduacion: graduationDate.value,
       observaciones: graduationObservations.value,
       registrar_por: directivoUserId
-    }, { headers })
+    })
     notify.addNotification(`Estudiante ${targetStudent.value.nombre} graduado exitosamente`, 'success')
     graduationModalOpen.value = false
     fetchStudents()
@@ -206,19 +203,14 @@ const fetchStudents = async () => {
   loading.value = true
   try {
     const idColegio = auth.user?.schoolId || 1
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const response = await axios.get(`/api/student/colegio/${idColegio}`, {
-      headers,
-      params: {
-        estado: filterStatus.value,
-        id_nivel: filterNivel.value,
-        id_tipo_grado: filterGrado.value,
-        id_jornada: filterJornada.value,
-        busqueda: searchQuery.value,
-        yearId: yearStore.selectedYearId || undefined
-      }
+    students.value = await studentService.getStudentsBySchool(idColegio, {
+      estado: filterStatus.value,
+      id_nivel: filterNivel.value,
+      id_tipo_grado: filterGrado.value,
+      id_jornada: filterJornada.value,
+      busqueda: searchQuery.value,
+      yearId: yearStore.selectedYearId || undefined
     })
-    students.value = response.data
   } catch (error) {
     console.error('Error fetching students:', error)
     notify.addNotification('Error al cargar estudiantes', 'error')
@@ -230,12 +222,11 @@ const fetchStudents = async () => {
 const fetchMetadata = async () => {
   try {
     const idColegio = auth.user?.schoolId || 1
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const response = await axios.get(`/api/academic-admin/grades/${idColegio}`, { headers })
-    levels.value = response.data.niveles
-    groups.value = response.data.grupos
-    jornadas.value = response.data.jornadas || []
-    grades.value = response.data.tiposGrado || []
+    const data = await academicService.getGradesAndGroups(idColegio)
+    levels.value = data.niveles || []
+    groups.value = data.grupos || []
+    jornadas.value = data.jornadas || []
+    grades.value = data.tiposGrado || []
   } catch (error) {
     console.warn('Metadata fetch failed:', error)
   }
@@ -266,8 +257,6 @@ const stats = computed(() => ({
 }))
 
 // --- Actions ---
-
-
 const openEditModal = (student: any) => {
   isEditing.value = true
   selectedStudent.value = student
@@ -283,16 +272,12 @@ const saveStudent = async () => {
         notify.addNotification('Por favor ingrese la justificación del cambio para la auditoría.', 'warning')
         return
       }
-      const headers = { Authorization: `Bearer ${auth.token}` }
       const payload = {
         ...studentForm.value,
         motivo_cambio: isSupervision.value ? justification.value : undefined
       }
-      await axios.put(`/api/student/${selectedStudent.value.id_estudiante}`, payload, { headers })
+      await studentService.updateStudent(selectedStudent.value.id_estudiante, payload)
       notify.addNotification('Estudiante actualizado exitosamente', 'success')
-    } else {
-      // Create student is usually done via Enrollment - but we could add a direct one if needed
-      // For now, let's just focus on Update/Status/Grade
     }
     studentModalOpen.value = false
     fetchStudents()
@@ -315,15 +300,13 @@ const deleteStudent = async (student: any) => {
   if (!confirmDelete) return
 
   try {
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.delete(`/api/student/${student.id_estudiante}`, { headers })
+    await studentService.deleteStudent(student.id_estudiante)
     notify.addNotification('Estudiante eliminado exitosamente.', 'success')
     fetchStudents()
   } catch (error: any) {
     notify.addNotification(error.response?.data?.error || 'Error al eliminar el estudiante', 'error')
   }
 }
-
 
 const openStatusModal = async (student: any, status: string) => {
   selectedStudent.value = student
@@ -337,11 +320,10 @@ const openStatusModal = async (student: any, status: string) => {
 
   if (status === 'SANCIONADO') {
     try {
-      const headers = { Authorization: `Bearer ${auth.token}` }
-      const res = await axios.get('/api/student/sanctions/types', { headers })
-      sanctionTypes.value = res.data
-      if (res.data.length > 0) {
-        selectedSanctionType.value = res.data[0].id_tipo_sancion
+      const types = await studentService.getSanctionTypes()
+      sanctionTypes.value = types
+      if (types.length > 0) {
+        selectedSanctionType.value = types[0].id_tipo_sancion
       }
     } catch (error) {
       console.error('Error fetching sanction types:', error)
@@ -375,7 +357,6 @@ const confirmStatusChange = async () => {
   }
 
   try {
-    const headers = { Authorization: `Bearer ${auth.token}` }
     const payload: any = {
       estado: newStatus.value,
       motivo: statusMotivo.value
@@ -388,7 +369,7 @@ const confirmStatusChange = async () => {
       payload.observaciones = sanctionObservaciones.value
     }
 
-    await axios.patch(`/api/student/${selectedStudent.value.id_estudiante}/status`, payload, { headers })
+    await studentService.updateStudentStatus(selectedStudent.value.id_estudiante, payload)
     notify.addNotification(`Estado actualizado a ${newStatus.value}`, 'success')
     statusModalOpen.value = false
     fetchStudents()
@@ -409,12 +390,11 @@ const confirmGradeChange = async () => {
     const group = groups.value.find(g => g.id_grupo === Number(selectedGroup.value))
     if (!group) return
 
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.patch(`/api/student/${selectedStudent.value.id_estudiante}/change-grade`, {
+    await studentService.changeStudentGrade(selectedStudent.value.id_estudiante, {
       id_grupo: group.id_grupo,
       id_nivel: group.id_nivel,
       motivo: motivoTraslado.value
-    }, { headers })
+    })
     notify.addNotification('Grado cambiado exitosamente', 'success')
     changeGradeModalOpen.value = false
     fetchStudents()
@@ -422,6 +402,7 @@ const confirmGradeChange = async () => {
     notify.addNotification('Error al cambiar de grado', 'error')
   }
 }
+
 
 const getStatusClass = (estado: string) => {
   if (estado === 'ACTIVO') return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400'
