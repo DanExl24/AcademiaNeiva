@@ -29,6 +29,9 @@ import {
   RefreshCw,
   TrendingUp
 } from 'lucide-vue-next'
+import DataTable from '../../components/ui/DataTable.vue'
+import SkeletonTable from '../../components/feedback/SkeletonTable.vue'
+import EmptyState from '../../components/feedback/EmptyState.vue'
 
 // Register Chart.js components
 ChartJS.register(
@@ -404,25 +407,31 @@ const distributionChartOptions = {
           <h3 class="text-lg font-black text-slate-800 dark:text-white">Actividad Reciente</h3>
           <p class="text-xs text-slate-400 font-bold uppercase tracking-wider mt-0.5">Bitácora de auditoría y operaciones del sistema</p>
         </div>
-        <div class="flex-1 relative overflow-y-auto">
-          <div v-if="loading" class="absolute inset-0 flex items-center justify-center">
-            <div class="w-8 h-8 border-4 border-indigo-650/20 border-t-indigo-600 rounded-full animate-spin"></div>
-          </div>
+        <div class="flex-1 relative">
+          <SkeletonTable v-if="loading" :rows="4" :cols="2" />
           
-          <table v-else class="w-full text-left border-collapse">
-            <thead>
-              <tr class="border-b border-slate-100 dark:border-slate-800 text-[10px] font-black uppercase text-slate-400 tracking-wider">
-                <th class="pb-3 w-1/4">Tiempo</th>
-                <th class="pb-3 w-3/4">Operación / Suceso</th>
+          <EmptyState
+            v-else-if="!stats?.actividad || stats.actividad.length === 0"
+            title="Sin actividad reciente"
+            description="No se registran eventos de auditoría u operaciones en este momento."
+          >
+            <template #icon>
+              <Activity class="w-8 h-8 text-indigo-500" />
+            </template>
+          </EmptyState>
+
+          <DataTable v-else>
+            <template #header>
+              <tr>
+                <th class="py-3 px-4 w-1/4">Tiempo</th>
+                <th class="py-3 px-4 w-3/4">Operación / Suceso</th>
               </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-50 dark:divide-slate-800/50">
-              <tr v-for="(act, idx) in stats?.actividad" :key="idx" class="text-sm">
-                <td class="py-3.5 font-semibold text-slate-500 dark:text-slate-450 font-mono">{{ act.tiempo }}</td>
-                <td class="py-3.5 text-slate-700 dark:text-slate-300 font-medium leading-relaxed">{{ act.descripcion }}</td>
-              </tr>
-            </tbody>
-          </table>
+            </template>
+            <tr v-for="(act, idx) in stats.actividad" :key="idx" class="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+              <td class="py-3.5 px-4 font-semibold text-slate-500 dark:text-slate-400 font-mono text-xs">{{ act.tiempo }}</td>
+              <td class="py-3.5 px-4 text-slate-700 dark:text-slate-300 font-medium leading-relaxed text-xs">{{ act.descripcion }}</td>
+            </tr>
+          </DataTable>
         </div>
       </div>
 

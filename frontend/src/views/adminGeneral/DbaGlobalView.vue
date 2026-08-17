@@ -9,6 +9,8 @@ import {
 } from 'lucide-vue-next'
 import { useConfirm } from '../../composables/useConfirm'
 import { useToast } from '../../composables/useToast'
+import DataTable from '../../components/ui/DataTable.vue'
+import EmptyState from '../../components/feedback/EmptyState.vue'
 
 const auth = useAuthStore()
 const { confirm } = useConfirm()
@@ -1058,37 +1060,42 @@ const handleImportPDF = async () => {
         </div>
 
         <div class="max-h-[50vh] overflow-y-auto">
-          <div v-if="activeSchoolAssignments.length === 0" class="text-center py-8 text-slate-400 text-sm italic">
-            El colegio no tiene ninguna versión curricular asignada en este momento.
-          </div>
-          <table v-else class="w-full text-left border-collapse">
-            <thead>
-              <tr class="border-b border-slate-100 dark:border-slate-800 text-[10px] uppercase font-black tracking-wider text-slate-400">
-                <th class="pb-3">Área</th>
-                <th class="pb-3">Grado</th>
-                <th class="pb-3 text-center">Versión Curricular</th>
-                <th class="pb-3 text-right">Asignado el</th>
+          <EmptyState
+            v-if="activeSchoolAssignments.length === 0"
+            title="Sin versiones asignadas"
+            description="El colegio no tiene ninguna versión curricular asignada en este momento."
+          >
+            <template #icon>
+              <BookOpen class="w-8 h-8 text-indigo-500" />
+            </template>
+          </EmptyState>
+
+          <DataTable v-else>
+            <template #header>
+              <tr>
+                <th class="py-3 px-4">Área</th>
+                <th class="py-3 px-4">Grado</th>
+                <th class="py-3 px-4 text-center">Versión Curricular</th>
+                <th class="py-3 px-4 text-right">Asignado el</th>
               </tr>
-            </thead>
-            <tbody>
-              <tr 
-                v-for="asig in activeSchoolAssignments" 
-                :key="asig.id"
-                class="border-b border-slate-50 dark:border-slate-800/50 last:border-none text-xs font-semibold text-slate-750 dark:text-slate-300"
-              >
-                <td class="py-3.5">{{ asig.area }}</td>
-                <td class="py-3.5">{{ asig.grado }}</td>
-                <td class="py-3.5 text-center">
-                  <span class="px-2 py-0.5 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-650 dark:text-indigo-400 font-bold rounded-md">
-                    {{ asig.version_curricular }}
-                  </span>
-                </td>
-                <td class="py-3.5 text-right text-slate-450">
-                  {{ new Date(asig.fecha_asignacion).toLocaleDateString() }}
-                </td>
-              </tr>
-            </tbody>
-          </table>
+            </template>
+            <tr 
+              v-for="asig in activeSchoolAssignments" 
+              :key="asig.id"
+              class="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors text-xs font-semibold text-slate-700 dark:text-slate-300"
+            >
+              <td class="py-3.5 px-4">{{ asig.area }}</td>
+              <td class="py-3.5 px-4">{{ asig.grado }}</td>
+              <td class="py-3.5 px-4 text-center">
+                <span class="px-2 py-0.5 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 font-bold rounded-md">
+                  {{ asig.version_curricular }}
+                </span>
+              </td>
+              <td class="py-3.5 px-4 text-right text-slate-400">
+                {{ new Date(asig.fecha_asignacion).toLocaleDateString() }}
+              </td>
+            </tr>
+          </DataTable>
         </div>
 
         <div class="flex justify-end pt-4 border-t border-slate-100 dark:border-slate-800">

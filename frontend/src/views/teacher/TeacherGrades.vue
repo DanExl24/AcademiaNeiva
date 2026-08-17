@@ -23,6 +23,7 @@ import { useAcademicYearStore } from '../../stores/academicYear'
 import { useConfirm } from '../../composables/useConfirm'
 import { useToast } from '../../composables/useToast'
 import axios from 'axios'
+import EmptyState from '../../components/feedback/EmptyState.vue'
 
 const yearStore = useAcademicYearStore()
 const { confirm } = useConfirm()
@@ -1215,21 +1216,25 @@ onMounted(() => {
         </div>
 
         <!-- Empty Activities State -->
-        <div v-if="activities.length === 0 && students.length > 0" class="p-20 text-center">
-          <div class="w-16 h-16 bg-indigo-50 dark:bg-indigo-950/30 rounded-full flex items-center justify-center mx-auto mb-4 text-indigo-600">
-            <ClipboardList :size="32" />
-          </div>
-          <p class="text-base font-bold text-slate-700 dark:text-slate-300">No hay actividades creadas para este periodo</p>
-          <p class="text-sm text-slate-500 dark:text-slate-400 mt-1 mb-6">Crea actividades y asigna evidencias DBA para comenzar a calificar.</p>
-          <button 
-            v-if="!auth.isMonitoring && !isPeriodClosed"
-            @click="openDrawer"
-            class="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 py-3.5 rounded-2xl transition-all shadow-lg shadow-indigo-100 dark:shadow-none active:scale-95"
-          >
-            <Plus :size="16" />
-            Configurar Actividades
-          </button>
-        </div>
+        <EmptyState
+          v-if="activities.length === 0 && students.length > 0"
+          title="No hay actividades creadas para este periodo"
+          description="Crea actividades y asigna evidencias DBA para comenzar a calificar."
+        >
+          <template #icon>
+            <ClipboardList :size="32" class="text-indigo-600" />
+          </template>
+          <template #action>
+            <button 
+              v-if="!auth.isMonitoring && !isPeriodClosed"
+              @click="openDrawer"
+              class="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 py-3.5 rounded-2xl transition-all shadow-lg shadow-indigo-100 dark:shadow-none active:scale-95 cursor-pointer"
+            >
+              <Plus :size="16" />
+              Configurar Actividades
+            </button>
+          </template>
+        </EmptyState>
 
         <!-- Table Container -->
         <div v-else class="overflow-x-auto custom-scrollbar">

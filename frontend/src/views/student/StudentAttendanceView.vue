@@ -16,6 +16,8 @@ import {
 
 import { useAcademicYearStore } from '../../stores/academicYear'
 import NoAcademicRecordsBanner from '../../components/NoAcademicRecordsBanner.vue'
+import DataTable from '../../components/ui/DataTable.vue'
+import SkeletonTable from '../../components/feedback/SkeletonTable.vue'
 
 const auth = useAuthStore()
 const yearStore = useAcademicYearStore()
@@ -279,66 +281,53 @@ const formatDate = (dateString: string) => {
     </div>
 
     <!-- Loading State -->
-    <div v-if="loading" class="flex flex-col items-center justify-center py-24 bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm">
-      <div class="w-12 h-12 border-4 border-indigo-600/20 border-t-indigo-600 rounded-full animate-spin"></div>
-      <p class="mt-4 text-slate-500 dark:text-slate-400 font-medium animate-pulse">Cargando asistencia...</p>
-    </div>
+    <SkeletonTable v-if="loading" :rows="5" :cols="6" />
 
     <!-- Empty State -->
     <NoAcademicRecordsBanner v-else-if="!periods || periods.length === 0 || !attendanceData || attendanceData.records.length === 0" :year-label="selectedYearCalendar" />
 
     <!-- Attendance Table -->
-    <div v-else class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden transition-colors">
-      <div class="overflow-x-auto">
-        <table class="w-full text-left border-collapse">
-          <thead>
-            <tr class="bg-slate-50/50 dark:bg-slate-800/50">
-              <th class="px-8 py-5 text-[11px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Fecha</th>
-              <th class="px-8 py-5 text-[11px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 text-center">Estado</th>
-              <th class="px-8 py-5 text-[11px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 text-center">Hora de Llegada</th>
-              <th class="px-8 py-5 text-[11px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Materia</th>
-              <th class="px-8 py-5 text-[11px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Docente</th>
-              <th class="px-8 py-5 text-[11px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Justificación</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
-            <tr 
-              v-for="(item, idx) in attendanceData.records" 
-              :key="idx"
-              class="group hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors"
-            >
-              <td class="px-8 py-6">
-                <span class="font-bold text-slate-800 dark:text-slate-200 capitalize text-sm">{{ formatDate(item.fecha) }}</span>
-              </td>
-              <td class="px-8 py-6">
-                <div class="flex justify-center">
-                  <span 
-                    class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider"
-                    :class="getStatusColor(item.estado)"
-                  >
-                    {{ item.estado }}
-                  </span>
-                </div>
-              </td>
-              <td class="px-8 py-6">
-                <div class="text-center font-bold text-sm text-slate-700 dark:text-slate-300 font-mono">
-                  {{ item.hora_llegada || '—' }}
-                </div>
-              </td>
-              <td class="px-8 py-6">
-                <span class="text-sm font-bold text-slate-700 dark:text-slate-300">{{ item.materia }}</span>
-              </td>
-              <td class="px-8 py-6">
-                <span class="text-xs font-medium text-slate-500 dark:text-slate-400">{{ item.docente }}</span>
-              </td>
-              <td class="px-8 py-6">
-                <span class="text-xs text-slate-400 dark:text-slate-500 italic">{{ item.justificacion || 'Sin observaciones' }}</span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
+    <DataTable v-else>
+      <template #header>
+        <tr>
+          <th class="py-4 px-6">Fecha</th>
+          <th class="py-4 px-6 text-center">Estado</th>
+          <th class="py-4 px-6 text-center">Hora de Llegada</th>
+          <th class="py-4 px-6">Materia</th>
+          <th class="py-4 px-6">Docente</th>
+          <th class="py-4 px-6">Justificación</th>
+        </tr>
+      </template>
+      <tr 
+        v-for="(item, idx) in attendanceData.records" 
+        :key="idx"
+        class="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors"
+      >
+        <td class="py-4 px-6">
+          <span class="font-bold text-slate-800 dark:text-slate-200 capitalize text-sm">{{ formatDate(item.fecha) }}</span>
+        </td>
+        <td class="py-4 px-6 text-center">
+          <span 
+            class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider inline-block"
+            :class="getStatusColor(item.estado)"
+          >
+            {{ item.estado }}
+          </span>
+        </td>
+        <td class="py-4 px-6 text-center font-bold text-sm text-slate-700 dark:text-slate-300 font-mono">
+          {{ item.hora_llegada || '—' }}
+        </td>
+        <td class="py-4 px-6">
+          <span class="text-sm font-bold text-slate-700 dark:text-slate-300">{{ item.materia }}</span>
+        </td>
+        <td class="py-4 px-6">
+          <span class="text-xs font-medium text-slate-500 dark:text-slate-400">{{ item.docente }}</span>
+        </td>
+        <td class="py-4 px-6">
+          <span class="text-xs text-slate-400 dark:text-slate-500 italic">{{ item.justificacion || 'Sin observaciones' }}</span>
+        </td>
+      </tr>
+    </DataTable>
 
     <!-- Help Alert -->
     <div class="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-900/50 p-6 rounded-3xl flex gap-4">
