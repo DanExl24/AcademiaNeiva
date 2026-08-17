@@ -27,3 +27,6 @@ export const studentService = {
     return res.data?.data || res.data || []
   }
 }
+
+export default studentService
+
