@@ -339,6 +339,9 @@ export const syncSchoolScalesAndGrades = async (
   scaleMode: "AUTOMATICO" | "MANUAL" = "AUTOMATICO",
   manualBreaks?: { basicMax?: number | null; altoMax?: number | null }
 ) => {
+  // Permitir bypass administrativo de triggers para sincronización global de escalas
+  await client.query("SET LOCAL my.app.bypass_triggers = 'true'");
+
   const previousScalesRes = await client.query(
     `SELECT id_escalavaloracion, nivel
      FROM escala_valoracion
