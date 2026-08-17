@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useAuthStore } from '../../stores/auth'
-import axios from 'axios'
+import { teacherService } from '../../services/teacherService'
 import { 
   GraduationCap, 
   ClipboardList, 
@@ -27,7 +27,6 @@ import { Bar } from 'vue-chartjs'
 import EmptyChartState from '../../components/charts/EmptyChartState.vue'
 import { useThemeStore } from '../../stores/theme'
 import { useAcademicYearStore } from '../../stores/academicYear'
-import { watch } from 'vue'
 import PeriodCountdownBanner from '../../components/PeriodCountdownBanner.vue'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
@@ -137,12 +136,12 @@ const fetchDashboard = async () => {
     const schoolId = auth.selectedSchoolId || auth.user?.schoolId || (auth.user as any)?.id_colegio || (auth.isSupervising ? (auth.supervision?.colegio_id || auth.supervision?.id_colegio) : null)
     if (schoolId) params.schoolId = schoolId
 
-    const response = await axios.get(`/api/teacher/dashboard/${userId}`, { params })
-    dashboardData.value = response.data
-    availablePeriods.value = response.data.availablePeriods || []
+    const data = await teacherService.getDashboard(userId, params)
+    dashboardData.value = data
+    availablePeriods.value = data.availablePeriods || []
 
-    if (response.data.activePeriodInfo && !selectedPeriodId.value) {
-      selectedPeriodId.value = response.data.activePeriodInfo.id_periodo
+    if (data.activePeriodInfo && !selectedPeriodId.value) {
+      selectedPeriodId.value = data.activePeriodInfo.id_periodo
     }
   } catch (error: any) {
   } finally {
@@ -158,6 +157,7 @@ watch(() => yearStore.selectedYearId, () => {
   selectedPeriodId.value = null
   fetchDashboard()
 })
+
 
 const onPeriodChange = () => {
   fetchDashboard()

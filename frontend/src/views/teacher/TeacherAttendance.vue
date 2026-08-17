@@ -19,9 +19,9 @@ import {
   Calendar,
   ChevronLeft
 } from 'lucide-vue-next'
+import { teacherService } from '../../services/teacherService'
 import { useAuthStore } from '../../stores/auth'
 import { useAcademicYearStore } from '../../stores/academicYear'
-import axios from 'axios'
 import { getCourseDisplayName } from '../../utils/courseHelper'
 import DataTable from '../../components/ui/DataTable.vue'
 import SkeletonTable from '../../components/feedback/SkeletonTable.vue'
@@ -92,8 +92,8 @@ const fetchMyCourses = async () => {
   if (!teacherId) return
   try {
     const params = yearStore.selectedYearId ? { yearId: yearStore.selectedYearId } : {}
-    const response = await axios.get(`/api/teacher/courses/${teacherId}`, { params })
-    myCourses.value = response.data
+    const data = await teacherService.getCourses(teacherId, params)
+    myCourses.value = data as any
     
     if (route.query.gradoId) {
       const gId = Number(route.query.gradoId)
@@ -128,10 +128,10 @@ const fetchAttendance = async () => {
   try {
     loading.value = true
     currentPage.value = 1
-    const response = await axios.get(`/api/teacher/attendance/${selectedCourse.value.id_detallegrado}/${selectedDate.value}`)
-    students.value = response.data.students
-    isEditable.value = response.data.editable
-    lockReason.value = response.data.error || ''
+    const resData: any = await teacherService.getAttendance(selectedCourse.value.id_detallegrado, selectedDate.value)
+    students.value = resData.students || resData
+    isEditable.value = resData.editable ?? true
+    lockReason.value = resData.error || ''
   } catch (error: any) {
     students.value = []
     isEditable.value = false
@@ -146,9 +146,9 @@ const fetchHistory = async () => {
   if (!selectedCourse.value) return
   try {
     historyLoading.value = true
-    const response = await axios.get(`/api/teacher/attendance-history/${selectedCourse.value.id_detallegrado}`)
-    historyData.value = response.data.studentsHistory || []
-    recordedDates.value = response.data.recordedDates || []
+    const resData: any = await teacherService.getAttendanceHistory(selectedCourse.value.id_detallegrado)
+    historyData.value = resData.studentsHistory || []
+    recordedDates.value = resData.recordedDates || []
   } catch (error: any) {
     historyData.value = []
     recordedDates.value = []
@@ -156,6 +156,7 @@ const fetchHistory = async () => {
     historyLoading.value = false
   }
 }
+
 
 
 // Navigate to specific date
@@ -347,7 +348,7 @@ const saveAllAttendance = async (silent = false) => {
       hora_llegada: s.hora_llegada
     }))
 
-    await axios.post('/api/teacher/attendance', {
+    await teacherService.saveAttendance({
       detailGradeId: selectedCourse.value.id_detallegrado,
       date: selectedDate.value,
       records: recordsToSave
@@ -359,6 +360,7 @@ const saveAllAttendance = async (silent = false) => {
       alert('Asistencia guardada exitosamente')
       await fetchAttendance()
     }
+
   } catch (error: any) {
     const errorMsg = error.response?.data?.error || 'Error al guardar asistencia'
     autosaveStatus.value = 'error'

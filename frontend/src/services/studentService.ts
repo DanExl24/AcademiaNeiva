@@ -57,15 +57,16 @@ export const studentService = {
     return res.data
   },
 
-  async getAttendance(urlOrStudentId: string | number, periodId?: number | string): Promise<any> {
+  async getAttendance(urlOrStudentId: string | number, periodId?: number | string, params?: any): Promise<any> {
     if (typeof urlOrStudentId === 'string' && urlOrStudentId.startsWith('/api/')) {
       const path = urlOrStudentId.replace('/api', '')
-      const res = await api.get(path)
+      const res = await api.get(path, { params })
       return res.data
     }
-    const res = await api.get(`/student/attendance/${urlOrStudentId}/${periodId}`)
+    const res = await api.get(`/student/attendance/${urlOrStudentId}/${periodId}`, { params })
     return res.data
   },
+
 
   async updateStudent(id: number | string, data: any): Promise<any> {
     const res = await api.put(`/student/${id}`, data)
@@ -100,7 +101,19 @@ export const studentService = {
   async getObservations(studentId: number | string): Promise<StudentObservation[]> {
     const res = await api.get(`/observations/student/${studentId}`)
     return res.data?.data || res.data || []
+  },
+
+  async getStudentObservationsByPeriod(studentId: number | string, periodId: number | string, params?: any): Promise<any[]> {
+    const res = await api.get(`/student/observations/${studentId}/${periodId}`, { params })
+    return res.data || []
+  },
+
+  async getStudentDashboardStats(studentId: number | string, periodId: number | string): Promise<any> {
+    const res = await api.get(`/student/dashboard-stats/${studentId}/${periodId}`)
+    return res.data
   }
 }
+
+
 
 export default studentService

@@ -2,15 +2,15 @@
 import { ref, onMounted, watch, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
-import axios from 'axios'
+import { studentService } from '../../services/studentService'
 import { 
   Calendar, 
   TrendingUp, 
   AlertCircle, 
-  ChevronRight,
-  GraduationCap,
-  Award,
-  BookOpenCheck
+  ChevronRight, 
+  GraduationCap, 
+  Award, 
+  BookOpenCheck 
 } from 'lucide-vue-next'
 
 import { useAcademicYearStore } from '../../stores/academicYear'
@@ -58,8 +58,8 @@ const fetchStudentId = async () => {
   try {
     const userId = auth.isMonitoring ? auth.monitoringUser?.id : auth.user?.id
     if (!userId) return
-    const res = await axios.get(`/api/student/user-id/${userId}`)
-    studentId.value = res.data.id_estudiante
+    const res = await studentService.getByUserId(userId)
+    studentId.value = res.id_estudiante
   } catch (err) {
     console.error("Error fetching student ID:", err)
   }
@@ -69,11 +69,11 @@ const fetchInitialData = async () => {
   if (!studentId.value) return
   try {
     const [yearsRes, infoRes] = await Promise.all([
-      axios.get(`/api/student/years/${studentId.value}`),
-      axios.get(`/api/student/info/${studentId.value}`)
+      studentService.getYears(studentId.value),
+      studentService.getInfo(studentId.value)
     ])
-    years.value = yearsRes.data
-    studentInfo.value = infoRes.data
+    years.value = yearsRes
+    studentInfo.value = infoRes
     
     if (!selectedYear.value) {
       if (yearStore.selectedYearId) {
@@ -96,8 +96,8 @@ const fetchInitialData = async () => {
 const fetchPeriods = async () => {
   if (!studentId.value || !selectedYear.value) return
   try {
-    const res = await axios.get(`/api/student/all-periods/${studentId.value}/${selectedYear.value}`)
-    periods.value = (res.data || []).filter((p: any) => p.estado !== 'PENDIENTE')
+    const res = await studentService.getAllPeriods(studentId.value, selectedYear.value)
+    periods.value = (res || []).filter((p: any) => p.estado !== 'PENDIENTE')
     if (periods.value.length > 0) {
       selectedPeriod.value = periods.value[periods.value.length - 1].id_periodo
     } else {
@@ -116,8 +116,8 @@ const fetchGrades = async () => {
   if (!studentId.value || !selectedPeriod.value) return
   loading.value = true
   try {
-    const res = await axios.get(`/api/student/grades/${studentId.value}/${selectedPeriod.value}`)
-    academicData.value = res.data
+    const res = await studentService.getGrades(studentId.value, selectedPeriod.value)
+    academicData.value = res
   } catch (err) {
     console.error("Error fetching grades:", err)
     academicData.value = null
@@ -125,6 +125,7 @@ const fetchGrades = async () => {
     loading.value = false
   }
 }
+
 
 const openDetails = (subject: any) => {
   // Navigate to the subview instead of modal

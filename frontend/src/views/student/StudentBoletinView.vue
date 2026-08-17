@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref, watch, computed } from 'vue'
-import axios from 'axios'
+import { studentService } from '../../services/studentService'
 import { useAuthStore } from '../../stores/auth'
 import {
   FileDown,
@@ -43,8 +43,8 @@ const fetchStudentId = async () => {
   try {
     const id_usuario = auth.isMonitoring ? auth.monitoringUser?.id : auth.user?.id
     if (!id_usuario) return
-    const idRes = await axios.get(`/api/student/user-id/${id_usuario}`)
-    studentId.value = idRes.data.id_estudiante
+    const idRes = await studentService.getByUserId(id_usuario)
+    studentId.value = idRes.id_estudiante
     return studentId.value
   } catch (err) {
     console.error('Error fetching student ID:', err)
@@ -54,8 +54,8 @@ const fetchStudentId = async () => {
 const fetchYears = async () => {
   if (!studentId.value) return
   try {
-    const res = await axios.get(`/api/student/years/${studentId.value}`)
-    years.value = res.data
+    const res = await studentService.getYears(studentId.value)
+    years.value = res
     
     if (!selectedYear.value) {
       if (yearStore.selectedYearId) {
@@ -76,8 +76,8 @@ const fetchYears = async () => {
 const fetchPeriods = async () => {
   if (!studentId.value || !selectedYear.value) return
   try {
-    const res = await axios.get(`/api/student/all-periods/${studentId.value}/${selectedYear.value}`)
-    periods.value = (res.data || []).filter((p: any) => p.estado === 'CERRADO')
+    const res = await studentService.getAllPeriods(studentId.value, selectedYear.value)
+    periods.value = (res || []).filter((p: any) => p.estado === 'CERRADO')
     if (periods.value.length > 0) {
       selectedPeriodId.value = periods.value[periods.value.length - 1].id_periodo
     } else {
@@ -89,6 +89,7 @@ const fetchPeriods = async () => {
     selectedPeriodId.value = null
   }
 }
+
 
 onMounted(async () => {
   await fetchStudentId()

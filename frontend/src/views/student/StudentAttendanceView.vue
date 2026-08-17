@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, computed } from 'vue'
 import { useAuthStore } from '../../stores/auth'
-import axios from 'axios'
+import { studentService } from '../../services/studentService'
 import { 
   Calendar, 
   CalendarCheck,
@@ -62,8 +62,8 @@ const fetchStudentId = async () => {
   try {
     const userId = auth.isMonitoring ? auth.monitoringUser?.id : auth.user?.id
     if (!userId) return
-    const res = await axios.get(`/api/student/user-id/${userId}`)
-    studentId.value = res.data.id_estudiante
+    const res = await studentService.getByUserId(userId)
+    studentId.value = res.id_estudiante
   } catch (err) {
     console.error("Error fetching student ID:", err)
   }
@@ -73,11 +73,11 @@ const fetchInitialData = async () => {
   if (!studentId.value) return
   try {
     const [yearsRes, infoRes] = await Promise.all([
-      axios.get(`/api/student/years/${studentId.value}`),
-      axios.get(`/api/student/info/${studentId.value}`)
+      studentService.getYears(studentId.value),
+      studentService.getInfo(studentId.value)
     ])
-    years.value = yearsRes.data
-    studentInfo.value = infoRes.data
+    years.value = yearsRes
+    studentInfo.value = infoRes
     
     if (!selectedYear.value) {
       if (yearStore.selectedYearId) {
@@ -100,8 +100,8 @@ const fetchInitialData = async () => {
 const fetchPeriods = async () => {
   if (!studentId.value || !selectedYear.value) return
   try {
-    const res = await axios.get(`/api/student/all-periods/${studentId.value}/${selectedYear.value}`)
-    periods.value = (res.data || []).filter((p: any) => p.estado !== 'PENDIENTE')
+    const res = await studentService.getAllPeriods(studentId.value, selectedYear.value)
+    periods.value = (res || []).filter((p: any) => p.estado !== 'PENDIENTE')
     if (periods.value.length > 0) {
       selectedPeriod.value = periods.value[periods.value.length - 1].id_periodo
     } else {
@@ -122,8 +122,8 @@ const fetchSubjects = async () => {
   if (!studentId.value || !selectedPeriod.value) return
   try {
     // We reuse the grades endpoint to get the list of active subjects for this period
-    const res = await axios.get(`/api/student/grades/${studentId.value}/${selectedPeriod.value}`)
-    subjects.value = res.data.grades.map((g: any) => ({
+    const res = await studentService.getGrades(studentId.value, selectedPeriod.value)
+    subjects.value = (res?.grades || []).map((g: any) => ({
       id_materia: g.id_materia,
       nombre: g.materia
     }))
@@ -136,18 +136,14 @@ const fetchAttendance = async () => {
   if (!studentId.value || !selectedPeriod.value) return
   loading.value = true
   try {
-    let url = `/api/student/attendance/${studentId.value}/${selectedPeriod.value}`
-    const queryParams = new URLSearchParams()
+    const queryParams: Record<string, any> = {}
     
-    if (selectedSubject.value !== 'all') queryParams.append('id_materia', selectedSubject.value.toString())
-    if (selectedStatus.value !== 'all') queryParams.append('estado', selectedStatus.value)
-    if (selectedDate.value) queryParams.append('fecha', selectedDate.value)
+    if (selectedSubject.value !== 'all') queryParams.id_materia = selectedSubject.value
+    if (selectedStatus.value !== 'all') queryParams.estado = selectedStatus.value
+    if (selectedDate.value) queryParams.fecha = selectedDate.value
     
-    const queryString = queryParams.toString()
-    if (queryString) url += `?${queryString}`
-    
-    const res = await axios.get(url)
-    attendanceData.value = res.data
+    const res = await studentService.getAttendance(studentId.value, selectedPeriod.value, queryParams)
+    attendanceData.value = res
   } catch (err) {
     console.error("Error fetching attendance:", err)
   } finally {

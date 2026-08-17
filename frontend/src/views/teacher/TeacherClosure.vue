@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { 
   GraduationCap, 
   CheckCircle2, 
@@ -13,10 +13,9 @@ import {
   SlidersHorizontal
 } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
+import { teacherService } from '../../services/teacherService'
 import { useAuthStore } from '../../stores/auth'
 import { useAcademicYearStore } from '../../stores/academicYear'
-import { watch } from 'vue'
-import axios from 'axios'
 import { getCourseDisplayName } from '../../utils/courseHelper'
 import { useConfirm } from '../../composables/useConfirm'
 import { useToast } from '../../composables/useToast'
@@ -89,8 +88,8 @@ const fetchPeriods = async () => {
     const schoolId = auth.selectedSchoolId || auth.user?.schoolId || (auth.user as any)?.id_colegio || (auth.isSupervising ? (auth.supervision?.colegio_id || auth.supervision?.id_colegio) : null)
     if (!schoolId) return
     const params = yearStore.selectedYearId ? { yearId: yearStore.selectedYearId } : {}
-    const response = await axios.get(`/api/teacher/periods/${schoolId}`, { params })
-    periods.value = (response.data || []).filter((p: any) => p.estado !== 'PENDIENTE')
+    const data = await teacherService.getPeriods(schoolId, params)
+    periods.value = ((data as any).periodos || data || []).filter((p: any) => p.estado !== 'PENDIENTE')
     const exists = periods.value.some((p: any) => p.id_periodo === activePeriodId.value)
     if (!exists) {
       const openPeriod = periods.value.find((p: any) => p.estado === 'ABIERTO')
@@ -118,15 +117,14 @@ const fetchCoursesWithStatus = async () => {
 
     loading.value = true
     const params = yearStore.selectedYearId ? { yearId: yearStore.selectedYearId } : {}
-    const response = await axios.get(`/api/teacher/courses/${userId}`, { params })
-    const rawCourses = response.data
+    const rawCourses = await teacherService.getCourses(userId, params)
     
     const coursesWithStatus = await Promise.all(rawCourses.map(async (course: any) => {
       try {
-        const statusRes = await axios.get(`/api/teacher/closure-status/${course.id_detallegrado}/${activePeriodId.value}`)
+        const statusRes = await teacherService.getClosureStatus(course.id_detallegrado, activePeriodId.value!)
         return {
           ...course,
-          ...statusRes.data
+          ...statusRes
         }
       } catch (err: any) {
         return {
@@ -179,14 +177,14 @@ const handleConfirmClosureWithJustification = async () => {
 
   try {
     processingId.value = courseToClose.value.id_detallegrado
-    const response = await axios.post('/api/teacher/close-period', {
+    const response = await teacherService.closePeriod({
       detailGradeId: courseToClose.value.id_detallegrado,
       periodId: activePeriodId.value,
       userId: auth.user?.id,
       justificacion_evidencias_pendientes: justification
     })
     
-    toast.success(response.data.message || 'Periodo cerrado correctamente')
+    toast.success(response.message || 'Periodo cerrado correctamente')
     showJustificationModal.value = false
     await fetchCoursesWithStatus()
   } catch (error: any) {
@@ -207,13 +205,13 @@ const handleClosePeriod = async (course: any) => {
 
   try {
     processingId.value = course.id_detallegrado
-    const response = await axios.post('/api/teacher/close-period', {
+    const response = await teacherService.closePeriod({
       detailGradeId: course.id_detallegrado,
       periodId: activePeriodId.value,
       userId: auth.user?.id
     })
     
-    toast.success(response.data.message || 'Periodo cerrado correctamente')
+    toast.success(response.message || 'Periodo cerrado correctamente')
     await fetchCoursesWithStatus()
   } catch (error: any) {
     if (error.response?.status === 422 && error.response?.data?.requires_justification) {

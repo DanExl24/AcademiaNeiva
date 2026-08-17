@@ -19,7 +19,18 @@ export const parentService = {
   async toggleAccountStatus(parentId: number | string, activo: boolean): Promise<any> {
     const res = await api.patch(`/parents/${parentId}/status`, { activo })
     return res.data
+  },
+
+  async getParentDashboard(userId: number | string, params?: any): Promise<any> {
+    const res = await api.get(`/student/parent-dashboard/${userId}`, { params })
+    return res.data
+  },
+
+  async getParentEnrollment(studentId: number | string, params?: any): Promise<any> {
+    const res = await api.get(`/student/parent/enrollment/${studentId}`, { params })
+    return res.data
   }
 }
 
 export default parentService
+

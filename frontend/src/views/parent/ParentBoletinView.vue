@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
 import { useAuthStore } from '../../stores/auth'
-import axios from 'axios'
+import { studentService } from '../../services/studentService'
 import { 
-  FileDown,
-  GraduationCap,
-  Calendar,
-  Clock,
-  Sparkles,
-  Info
+  FileDown, 
+  GraduationCap, 
+  Calendar, 
+  Clock, 
+  Sparkles, 
+  Info 
 } from 'lucide-vue-next'
 import BoletinExportModule from '../../components/boletines/BoletinExportModule.vue'
 
@@ -37,8 +37,8 @@ const fetchChildren = async () => {
   try {
     const userId = (auth.isMonitoring && auth.monitoringUser) ? (auth.monitoringUser.id || (auth.monitoringUser as any).id_usuario) : (auth.user?.id_usuario || auth.user?.id)
     if (!userId) return
-    const res = await axios.get(`/api/student/parent-children/${userId}`)
-    children.value = res.data
+    const data = await studentService.getParentChildren(userId)
+    children.value = data
     if (children.value.length > 0) {
       selectedChildId.value = children.value[0].id_estudiante
       selectedChildName.value = children.value[0].nombre
@@ -53,8 +53,8 @@ const fetchChildren = async () => {
 const fetchYears = async () => {
   if (!selectedChildId.value) return
   try {
-    const res = await axios.get(`/api/student/years/${selectedChildId.value}`)
-    years.value = res.data
+    const res = await studentService.getYears(selectedChildId.value)
+    years.value = res
     if (years.value.length > 0) {
       if (yearStore.selectedYearId && years.value.some((y: any) => y.id_anio === yearStore.selectedYearId)) {
         selectedYear.value = yearStore.selectedYearId
@@ -73,8 +73,8 @@ const fetchYears = async () => {
 const fetchPeriods = async () => {
   if (!selectedChildId.value || !selectedYear.value) return
   try {
-    const res = await axios.get(`/api/student/all-periods/${selectedChildId.value}/${selectedYear.value}`)
-    periods.value = (res.data || []).filter((p: any) => p.estado === 'CERRADO')
+    const res = await studentService.getAllPeriods(selectedChildId.value, selectedYear.value)
+    periods.value = (res || []).filter((p: any) => p.estado === 'CERRADO')
     if (periods.value.length > 0) {
       selectedPeriodId.value = periods.value[periods.value.length - 1].id_periodo
     } else {
@@ -84,6 +84,7 @@ const fetchPeriods = async () => {
     console.error("Error fetching periods:", err)
   }
 }
+
 
 onMounted(() => {
   fetchChildren()

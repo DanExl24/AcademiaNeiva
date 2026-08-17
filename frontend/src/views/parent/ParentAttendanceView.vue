@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
 import { useAuthStore } from '../../stores/auth'
-import axios from 'axios'
+import { studentService } from '../../services/studentService'
 import { 
   Calendar,
   CalendarCheck,
@@ -52,8 +52,8 @@ const fetchChildren = async () => {
   try {
     const userId = (auth.isMonitoring && auth.monitoringUser) ? (auth.monitoringUser.id || (auth.monitoringUser as any).id_usuario) : (auth.user?.id_usuario || auth.user?.id)
     if (!userId) return
-    const res = await axios.get(`/api/student/parent-children/${userId}`)
-    children.value = res.data
+    const data = await studentService.getParentChildren(userId)
+    children.value = data
     if (children.value.length > 0 && !selectedChildId.value) {
       selectedChildId.value = children.value[0].id_estudiante
     }
@@ -69,11 +69,11 @@ const fetchYearsAndInfo = async () => {
   loading.value = true
   try {
     const [yearsRes, infoRes] = await Promise.all([
-      axios.get(`/api/student/years/${selectedChildId.value}`),
-      axios.get(`/api/student/info/${selectedChildId.value}`)
+      studentService.getYears(selectedChildId.value),
+      studentService.getInfo(selectedChildId.value)
     ])
-    years.value = yearsRes.data
-    studentInfo.value = infoRes.data
+    years.value = yearsRes
+    studentInfo.value = infoRes
     
     if (years.value.length > 0) {
       selectedYear.value = years.value[0].id_anio
@@ -88,8 +88,8 @@ const fetchYearsAndInfo = async () => {
 const fetchPeriods = async () => {
   if (!selectedChildId.value || !selectedYear.value) return
   try {
-    const res = await axios.get(`/api/student/all-periods/${selectedChildId.value}/${selectedYear.value}`)
-    periods.value = (res.data || []).filter((p: any) => p.estado !== 'PENDIENTE')
+    const res = await studentService.getAllPeriods(selectedChildId.value, selectedYear.value)
+    periods.value = (res || []).filter((p: any) => p.estado !== 'PENDIENTE')
     if (periods.value.length > 0) {
       selectedPeriod.value = periods.value[periods.value.length - 1].id_periodo
     } else {
@@ -105,8 +105,8 @@ const fetchPeriods = async () => {
 const fetchSubjects = async () => {
   if (!selectedChildId.value || !selectedPeriod.value) return
   try {
-    const res = await axios.get(`/api/student/grades/${selectedChildId.value}/${selectedPeriod.value}`)
-    subjects.value = res.data.grades.map((g: any) => ({
+    const res = await studentService.getGrades(selectedChildId.value, selectedPeriod.value)
+    subjects.value = (res?.grades || []).map((g: any) => ({
       id_materia: g.id_materia,
       nombre: g.materia
     }))
@@ -129,8 +129,8 @@ const fetchAttendance = async () => {
     const queryString = queryParams.toString()
     if (queryString) url += `?${queryString}`
     
-    const res = await axios.get(url)
-    attendanceData.value = res.data
+    const res = await studentService.getAttendance(url)
+    attendanceData.value = res
   } catch (err) {
     console.error("Error fetching attendance:", err)
   } finally {

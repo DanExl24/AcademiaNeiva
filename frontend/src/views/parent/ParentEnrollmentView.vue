@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
-import axios from 'axios'
 import { API_BASE_URL } from '../../config/api'
+import { studentService } from '../../services/studentService'
+import { parentService } from '../../services/parentService'
 import { useAuthStore } from '../../stores/auth'
 import { 
   FileText, 
@@ -89,8 +90,8 @@ const fetchChildren = async () => {
   if (!userId) return
   try {
     loadingChildren.value = true
-    const response = await axios.get(`/api/student/parent-children/${userId}`)
-    children.value = response.data || []
+    const data = await studentService.getParentChildren(userId)
+    children.value = data || []
     if (children.value.length > 0) {
       selectedStudentId.value = children.value[0].id_estudiante
     }
@@ -109,12 +110,12 @@ const fetchEnrollmentData = async (forcedMatriculaId?: number) => {
     loadingEnrollment.value = true
     selectedDocIndex.value = 0
     const targetMatId = forcedMatriculaId || selectedMatriculaId.value
-    const queryParam = targetMatId ? `?matriculaId=${targetMatId}` : ''
-    const response = await axios.get(`/api/student/parent/enrollment/${selectedStudentId.value}${queryParam}`)
-    enrollmentData.value = response.data.matricula || null
-    allEnrollments.value = response.data.matriculas || (enrollmentData.value ? [enrollmentData.value] : [])
+    const params = targetMatId ? { matriculaId: targetMatId } : undefined
+    const data = await parentService.getParentEnrollment(selectedStudentId.value, params)
+    enrollmentData.value = data.matricula || null
+    allEnrollments.value = data.matriculas || (enrollmentData.value ? [enrollmentData.value] : [])
     selectedMatriculaId.value = enrollmentData.value?.id_matricula || null
-    documents.value = response.data.documentos || []
+    documents.value = data.documentos || []
     if (documents.value.length > 0) {
       selectedVersionDocId.value = documents.value[0].id_documento
     }

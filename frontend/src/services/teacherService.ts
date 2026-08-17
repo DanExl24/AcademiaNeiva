@@ -1,6 +1,7 @@
 import api from './api'
 
 export const teacherService = {
+  // Admin docente management
   async getTeachersData(schoolId: number | string, params?: any): Promise<any> {
     const res = await api.get(`/academic-admin/teachers/${schoolId}`, { params })
     return res.data
@@ -46,15 +47,62 @@ export const teacherService = {
     return res.data
   },
 
+  // Portal Docente
   async getAllTeachers(): Promise<any[]> {
     const res = await api.get('/teacher/all')
     return res.data?.teachers || res.data?.data || res.data || []
   },
 
-  async getCourses(teacherId: number | string, yearId?: number): Promise<any[]> {
-    const params = yearId ? { yearId } : {}
+  async getCourses(teacherId: number | string, paramsOrYearId?: any): Promise<any[]> {
+    const params = typeof paramsOrYearId === 'number' ? { yearId: paramsOrYearId } : paramsOrYearId
     const res = await api.get(`/teacher/courses/${teacherId}`, { params })
     return res.data || []
+  },
+
+  async getPeriods(schoolId: number | string, params?: any): Promise<any[]> {
+    const res = await api.get(`/teacher/periods/${schoolId}`, { params })
+    return res.data?.periodos || res.data?.data || res.data || []
+  },
+
+  async getStudents(gradeId: number | string): Promise<any[]> {
+    const res = await api.get(`/teacher/students/${gradeId}`)
+    return res.data?.estudiantes || res.data?.data || res.data || []
+  },
+
+  async getDashboard(userId: number | string, params?: any): Promise<any> {
+    const res = await api.get(`/teacher/dashboard/${userId}`, { params })
+    return res.data
+  },
+
+  async getObservationTypes(): Promise<any[]> {
+    const res = await api.get('/teacher/observations/types')
+    return res.data?.tipos || res.data?.data || res.data || []
+  },
+
+  async getObservations(params?: any): Promise<any[]> {
+    const res = await api.get('/teacher/observations', { params })
+    return res.data?.observaciones || res.data?.data || res.data || []
+  },
+
+  async getObservationsByCoursePeriod(idDetalleGrado: number | string, periodId: number | string): Promise<any> {
+    const res = await api.get(`/teacher/observations/${idDetalleGrado}/${periodId}`)
+    return res.data
+  },
+
+
+  async saveObservation(payload: any): Promise<any> {
+    const res = await api.post('/teacher/observations', payload)
+    return res.data
+  },
+
+  async updateObservation(id: number | string, payload: any): Promise<any> {
+    const res = await api.put(`/teacher/observations/${id}`, payload)
+    return res.data
+  },
+
+  async deleteObservation(id: number | string): Promise<any> {
+    const res = await api.delete(`/teacher/observations/${id}`)
+    return res.data
   },
 
   async getClosureStatus(idDetalleGrado: number | string, periodId: number | string): Promise<any> {
@@ -62,18 +110,23 @@ export const teacherService = {
     return res.data
   },
 
-  async submitClosure(payload: any): Promise<any> {
-    const res = await api.post('/teacher/closure', payload)
+  async closePeriod(payload: any): Promise<any> {
+    const res = await api.post('/teacher/close-period', payload)
     return res.data
   },
 
-  async getObservations(params?: any): Promise<any[]> {
-    const res = await api.get('/teacher/observations', { params })
-    return res.data?.data || res.data || []
+  async getAttendance(idDetalleGrado: number | string, date: string): Promise<any[]> {
+    const res = await api.get(`/teacher/attendance/${idDetalleGrado}/${date}`)
+    return res.data?.asistencia || res.data?.data || res.data || []
   },
 
-  async saveObservation(payload: any): Promise<any> {
-    const res = await api.post('/teacher/observations', payload)
+  async getAttendanceHistory(idDetalleGrado: number | string): Promise<any[]> {
+    const res = await api.get(`/teacher/attendance-history/${idDetalleGrado}`)
+    return res.data?.historial || res.data?.data || res.data || []
+  },
+
+  async saveAttendance(payload: any): Promise<any> {
+    const res = await api.post('/teacher/attendance', payload)
     return res.data
   }
 }

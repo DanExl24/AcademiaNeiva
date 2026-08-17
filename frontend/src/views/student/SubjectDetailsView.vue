@@ -10,8 +10,8 @@ import {
   CheckCircle2,
   User
 } from 'lucide-vue-next'
+import { studentService } from '../../services/studentService'
 import { useAuthStore } from '../../stores/auth'
-import axios from 'axios'
 
 import NoAcademicRecordsBanner from '../../components/NoAcademicRecordsBanner.vue'
 
@@ -33,12 +33,12 @@ const fetchDetails = async () => {
     if (!finalStudentId) {
       const userId = auth.isMonitoring ? auth.monitoringUser?.id : auth.user?.id
       if (!userId) return
-      const resEst = await axios.get(`/api/student/user-id/${userId}`)
-      finalStudentId = resEst.data.id_estudiante
+      const resEst = await studentService.getByUserId(userId)
+      finalStudentId = resEst.id_estudiante
     }
 
-    const res = await axios.get(`/api/student/grade-details/${finalStudentId}/${id_periodo}/${id_materia}`)
-    subjectDetails.value = res.data
+    const data = await studentService.getGradeDetails(finalStudentId as string, id_periodo as string, id_materia as string)
+    subjectDetails.value = data
     
     if (subjectDetails.value.length > 0) {
       subjectInfo.value = {
@@ -52,6 +52,7 @@ const fetchDetails = async () => {
     loading.value = false
   }
 }
+
 
 onMounted(fetchDetails)
 

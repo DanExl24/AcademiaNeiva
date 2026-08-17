@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import axios from 'axios'
+import { parentService } from '../../services/parentService'
 import { useAuthStore } from '../../stores/auth'
 import { 
   GraduationCap, 
@@ -72,16 +72,16 @@ const fetchDashboardData = async () => {
     if (selectedPeriodId.value) params.id_periodo = selectedPeriodId.value
     if (yearStore.selectedYearId) params.yearId = yearStore.selectedYearId
 
-    // Use full URL to avoid Vite SPA fallback issues
-    const response = await axios.get(`/api/student/parent-dashboard/${id_usuario}`, { params })
-    console.log('[Dashboard] Data Received:', response.data)
+    const data = await parentService.getParentDashboard(id_usuario, params)
+    console.log('[Dashboard] Data Received:', data)
     
     // Validate that we got JSON and not an HTML error page
-    if (typeof response.data !== 'object' || response.data === null || !response.data.children) {
+    if (typeof data !== 'object' || data === null || !data.children) {
       throw new Error('Invalid response format (received HTML instead of JSON)')
     }
 
-    dashboardData.value = response.data
+    dashboardData.value = data
+
 
     // Si el padre tiene sólo 1 hijo, seleccionarlo automáticamente por defecto
     if (dashboardData.value?.children?.length === 1 && !selectedChildId.value) {
