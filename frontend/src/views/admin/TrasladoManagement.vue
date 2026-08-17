@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
-import axios from 'axios'
-import { API_BASE_URL } from '../../config/api'
+import { trasladoService } from '../../services/trasladoService'
+import { studentService } from '../../services/studentService'
+import { enrollmentService } from '../../services/enrollmentService'
+
 import { useAuthStore } from '../../stores/auth'
 import { useAcademicYearStore } from '../../stores/academicYear'
 import { 
@@ -290,11 +292,7 @@ const fetchSolicitudes = async () => {
     if (schoolId) params.id_colegio = schoolId
     if (yearStore.selectedYearId) params.yearId = yearStore.selectedYearId
 
-    const res = await axios.get(`${API_BASE_URL}/api/traslados`, {
-      headers: { Authorization: `Bearer ${auth.token}` },
-      params
-    })
-    solicitudes.value = res.data || []
+    solicitudes.value = await trasladoService.getTraslados(params)
   } catch (err: any) {
     console.error('Error fetching solicitudes de traslado:', err)
     errorMessage.value = err.response?.data?.error || 'Error al cargar las solicitudes de traslado'
@@ -305,10 +303,7 @@ const fetchSolicitudes = async () => {
 
 const fetchVinculaciones = async () => {
   try {
-    const res = await axios.get(`${API_BASE_URL}/api/traslados/mis-vinculaciones`, {
-      headers: { Authorization: `Bearer ${auth.token}` }
-    })
-    vinculaciones.value = res.data || []
+    vinculaciones.value = await trasladoService.getMisVinculaciones()
   } catch (err: any) {
     console.error('Error fetching vinculaciones:', err)
   }
@@ -316,10 +311,7 @@ const fetchVinculaciones = async () => {
 
 const fetchColegios = async () => {
   try {
-    const res = await axios.get(`${API_BASE_URL}/api/matriculas`, {
-      headers: { Authorization: `Bearer ${auth.token}` }
-    })
-    colegios.value = res.data || []
+    colegios.value = await enrollmentService.getAllSchools()
   } catch (err: any) {
     console.error('Error fetching colegios:', err)
   }
@@ -328,10 +320,7 @@ const fetchColegios = async () => {
 const fetchPersonalColegio = async (schoolId?: number) => {
   const sid = schoolId || (auth.user?.schoolId ? Number(auth.user.schoolId) : 1)
   try {
-    const res = await axios.get(`${API_BASE_URL}/api/traslados/personal/${sid}`, {
-      headers: { Authorization: `Bearer ${auth.token}` }
-    })
-    personalColegio.value = res.data || []
+    personalColegio.value = await trasladoService.getPersonalColegio(sid)
   } catch (err: any) {
     console.error('Error fetching personal colegio:', err)
   }
@@ -341,10 +330,7 @@ const fetchDirectivosColegio = async (schoolId?: number) => {
   if (!isAdminGeneral.value) return
   const sid = schoolId || (auth.user?.schoolId ? Number(auth.user.schoolId) : 1)
   try {
-    const res = await axios.get(`${API_BASE_URL}/api/traslados/directivos/${sid}`, {
-      headers: { Authorization: `Bearer ${auth.token}` }
-    })
-    directivosColegio.value = res.data || []
+    directivosColegio.value = await trasladoService.getDirectivosColegio(sid)
   } catch (err: any) {
     console.error('Error fetching directivos colegio:', err)
   }
@@ -358,11 +344,7 @@ const fetchEstudiantesByColegio = async (schoolId: number) => {
     if (yearStore.selectedYearId) {
       params.yearId = yearStore.selectedYearId
     }
-    const res = await axios.get(`${API_BASE_URL}/api/student/colegio/${schoolId}`, {
-      headers: { Authorization: `Bearer ${auth.token}` },
-      params
-    })
-    estudiantesColegio.value = res.data || []
+    estudiantesColegio.value = await studentService.getStudentsBySchool(schoolId, params)
   } catch (err: any) {
     console.error('Error fetching estudiantes by colegio:', err)
   }
@@ -414,23 +396,19 @@ const openDetailModal = async (solicitud: SolicitudTraslado) => {
   showAllGroups.value = false
   approvalForm.value = { accion: 'APROBAR', comentario: '' }
   try {
-    const res = await axios.get(`${API_BASE_URL}/api/traslados/${solicitud.id_solicitud}`, {
-      headers: { Authorization: `Bearer ${auth.token}` }
-    })
-    selectedSolicitud.value = res.data
-    selectedGrupoDestino.value = res.data.id_grupo_destino || res.data.datos_destino?.id_grupo || null
+    const resData = await trasladoService.getTrasladoById(solicitud.id_solicitud)
+    selectedSolicitud.value = resData
+    selectedGrupoDestino.value = resData.id_grupo_destino || resData.datos_destino?.id_grupo || null
     showDetailModal.value = true
 
-    if (solicitud.tipo === 'TRASLADO_MATRICULA' || res.data.tipo === 'TRASLADO_MATRICULA') {
+    if (solicitud.tipo === 'TRASLADO_MATRICULA' || resData.tipo === 'TRASLADO_MATRICULA') {
       try {
-        const destId = res.data.id_colegio_destino || solicitud.id_colegio_destino
-        const cuposRes = await axios.get(`${API_BASE_URL}/api/traslados/${solicitud.id_solicitud}/disponibilidad-cupos?id_colegio=${destId}`, {
-          headers: { Authorization: `Bearer ${auth.token}` }
-        })
-        disponibilidadCupos.value = cuposRes.data
-        if (!selectedGrupoDestino.value && cuposRes.data?.grupos?.length > 0) {
-          if (cuposRes.data.grupos.length === 1 && cuposRes.data.grupos[0].cupos_disponibles > 0) {
-            selectedGrupoDestino.value = cuposRes.data.grupos[0].id_grupo
+        const destId = resData.id_colegio_destino || solicitud.id_colegio_destino
+        const cuposData = await trasladoService.getDisponibilidadCupos(solicitud.id_solicitud, destId)
+        disponibilidadCupos.value = cuposData
+        if (!selectedGrupoDestino.value && cuposData?.grupos?.length > 0) {
+          if (cuposData.grupos.length === 1 && cuposData.grupos[0].cupos_disponibles > 0) {
+            selectedGrupoDestino.value = cuposData.grupos[0].id_grupo
           }
         }
       } catch (cuposErr) {
@@ -490,9 +468,7 @@ const handleCreateTraslado = async () => {
       jornada_sugerida: newTraslado.value.jornada_sugerida || null,
       motivo: motivoTxt
     }
-    await axios.post(`${API_BASE_URL}/api/traslados`, payload, {
-      headers: { Authorization: `Bearer ${auth.token}` }
-    })
+    await trasladoService.createTraslado(payload)
     
     successMessage.value = 'Solicitud de traslado registrada exitosamente.'
     setTimeout(() => successMessage.value = '', 4000)
@@ -548,12 +524,10 @@ const handleProcessApproval = async (accion: 'APROBAR' | 'RECHAZAR' | 'CANCELAR'
 
   submitting.value = true
   try {
-    await axios.post(`${API_BASE_URL}/api/traslados/${selectedSolicitud.value.id_solicitud}/aprobacion`, {
+    await trasladoService.processApproval(selectedSolicitud.value.id_solicitud, {
       accion,
       comentario: approvalForm.value.comentario || null,
       id_grupo_destino: idGrupoDestinoToSend
-    }, {
-      headers: { Authorization: `Bearer ${auth.token}` }
     })
 
     successMessage.value = `Acción ${accion.toLowerCase()} registrada exitosamente.`

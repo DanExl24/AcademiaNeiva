@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import axios from 'axios'
+import { periodClosureService } from '../../services/periodClosureService'
+import { academicService } from '../../services/academicService'
+
 import { 
   ArrowLeft, CheckCircle2, Lock, Unlock, SlidersHorizontal, AlertCircle, Search,
   Filter, X, LayoutGrid, Table, Zap, Check, RotateCcw, User
@@ -286,8 +288,8 @@ const loadInitialData = async () => {
     if (yearStore.selectedYearId) {
       params.yearId = yearStore.selectedYearId
     }
-    const response = await axios.get(`/api/academic-admin/settings/${schoolId.value}`, { params })
-    periods.value = (response.data.periods || []).filter((p: any) => p.estado !== 'PENDIENTE')
+    const response = await academicService.getSettings(schoolId.value, params)
+    periods.value = (response.periods || []).filter((p: any) => p.estado !== 'PENDIENTE')
     const openPeriod = periods.value.find(p => p.estado === 'ABIERTO')
     if (openPeriod) {
       selectedPeriodId.value = openPeriod.id_periodo
@@ -316,11 +318,9 @@ const loadClosureDetails = async () => {
     detailsLoading.value = true
     closePeriodPending.value = []
     forceCloseModal.value = false
-    const response = await axios.get(
-      `/api/academic-admin/settings/closure-details/${schoolId.value}/${selectedPeriodId.value}`
-    )
-    periodDetails.value = response.data.periodo
-    teachers.value = response.data.teachers
+    const response = await periodClosureService.getClosureDetails(schoolId.value, selectedPeriodId.value)
+    periodDetails.value = response.periodo
+    teachers.value = response.teachers
   } catch (error) {
     console.error('Error loading closure details:', error)
     periodDetails.value = null
@@ -362,10 +362,7 @@ const attemptClosePeriod = async (force = false) => {
   if (!selectedPeriodId.value) return
   try {
     closingPeriod.value = true
-    await axios.post(`/api/academic-admin/settings/periods/${selectedPeriodId.value}/close`, {
-      schoolId: schoolId.value,
-      force,
-    })
+    await periodClosureService.closePeriod(selectedPeriodId.value, schoolId.value, force)
     
     forceCloseModal.value = false
     closePeriodPending.value = []
@@ -403,9 +400,7 @@ const attemptReopenPeriod = async () => {
   
   try {
     reopeningPeriod.value = true
-    await axios.post(`/api/academic-admin/settings/periods/${selectedPeriodId.value}/reopen`, {
-      schoolId: schoolId.value
-    })
+    await periodClosureService.reopenPeriod(selectedPeriodId.value, schoolId.value)
     
     if (periodDetails.value) {
       periodDetails.value.estado = 'ABIERTO'
@@ -436,9 +431,7 @@ const attemptReopenSubject = async (curso: any) => {
   
   try {
     reopeningSubject.value = curso.id_detallegrado
-    await axios.post(`/api/academic-admin/settings/periods/${selectedPeriodId.value}/reopen-subject/${curso.id_detallegrado}`, {
-      schoolId: schoolId.value
-    })
+    await periodClosureService.reopenSubject(selectedPeriodId.value, curso.id_detallegrado, schoolId.value)
     
     toast.success('Cierre de materia deshecho exitosamente')
     await loadClosureDetails()
@@ -448,6 +441,7 @@ const attemptReopenSubject = async (curso: any) => {
     reopeningSubject.value = null
   }
 }
+
 
 
 onMounted(() => {

@@ -15,6 +15,11 @@ export interface CancelEnrollmentPayload {
 }
 
 export const enrollmentService = {
+  async getAllSchools(): Promise<any[]> {
+    const res = await api.get('/matriculas')
+    return res.data || []
+  },
+
   async getFiltered(schoolId: number | string, params?: FilterEnrollmentsParams): Promise<Enrollment[]> {
     const res = await api.get(`/matriculas/filtered/${schoolId}`, { params })
     return res.data?.data || res.data || []
@@ -58,17 +63,15 @@ export const enrollmentService = {
     if (tipo === 'REINGRESO') {
       const res = await api.post(`/academic-admin/matriculas/reingreso/${idMatricula}/rechazar`, { motivo: fullReason })
       return res.data
-    } else if (tipo === 'EXTRAORDINARIA' && isPending) {
-      const res = await api.post(`/academic-admin/matriculas/extraordinaria/${idMatricula}/rechazar`, { motivo: fullReason })
-      return res.data
-    } else {
-      const res = await api.post(`/matriculas/cancel/${idMatricula}`, {
-        motivo: payload.motivo,
-        detalles: payload.detalles,
-        estado_estudiante: payload.estado_estudiante || 'RETIRADO'
-      })
-      return res.data
     }
+    const endpoint = isPending
+      ? `/academic-admin/matriculas/solicitud/${idMatricula}/rechazar`
+      : `/academic-admin/matriculas/anular/${idMatricula}`
+    const res = await api.post(endpoint, {
+      motivo: fullReason,
+      estado_estudiante: payload.estado_estudiante
+    })
+    return res.data
   },
 
   async finalize(matriculaId: number | string, payload: any): Promise<any> {
@@ -78,4 +81,3 @@ export const enrollmentService = {
 }
 
 export default enrollmentService
-
