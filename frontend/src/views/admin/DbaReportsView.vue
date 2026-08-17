@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import axios from 'axios'
+import { dbaService } from '../../services/dbaService'
+import api from '../../services/api'
 import { 
   ArrowLeft, 
   BarChart3, 
@@ -171,18 +172,14 @@ const fetchCatalogData = async () => {
   if (!schoolId.value) return
   try {
     catalogLoading.value = true
-    const params: any = {}
-    if (yearStore.selectedYearId) {
-      params.yearId = yearStore.selectedYearId
-    }
-    const res = await axios.get(`/api/academic-admin/settings/dba-catalogo/${schoolId.value}`, { params })
-    catalogData.value = res.data || []
+    catalogData.value = await dbaService.getSchoolCatalogData(schoolId.value, yearStore.selectedYearId || undefined)
   } catch (error) {
-    console.error('Error loading DBA catalog for directivo:', error)
+    console.error('Error loading catalog data:', error)
   } finally {
     catalogLoading.value = false
   }
 }
+
 
 // Catalog computed statistics
 const catalogStats = computed(() => {
@@ -472,8 +469,8 @@ const loadFilterOptions = async () => {
       params.yearId = yearStore.selectedYearId
     }
     const [settingsRes, teachersRes] = await Promise.all([
-      axios.get(`/api/academic-admin/settings/${schoolId.value}`, { params }),
-      axios.get(`/api/academic-admin/teachers/${schoolId.value}`, { params })
+      api.get(`/academic-admin/settings/${schoolId.value}`, { params }),
+      api.get(`/academic-admin/teachers/${schoolId.value}`, { params })
     ])
     
     periods.value = settingsRes.data.periods || []
@@ -545,8 +542,7 @@ const fetchCoherenciaReport = async () => {
     if (filterSubject.value !== 'TODOS') params.id_materia = filterSubject.value
     if (filterTeacher.value !== 'TODOS') params.id_docente = filterTeacher.value
 
-    const res = await axios.get(`/api/academic-admin/settings/dba-reportes/coherencia/${schoolId.value}`, { params })
-    coherenciaData.value = res.data || []
+    coherenciaData.value = await dbaService.getSchoolCoherenciaReport(schoolId.value, params)
   } catch (error) {
     console.error('Error loading coherencia report:', error)
   } finally {
@@ -567,9 +563,9 @@ const fetchCoberturaReport = async () => {
     if (filterCoberturaGroup.value !== 'TODOS') params.grado = filterCoberturaGroup.value
     if (filterCoberturaSubject.value !== 'TODOS') params.id_materia = filterCoberturaSubject.value
 
-    const res = await axios.get(`/api/academic-admin/settings/dba-reportes/cobertura/${schoolId.value}`, { params })
-    coberturaResumen.value = res.data.resumen || []
-    coberturaDetalles.value = res.data.detalles || []
+    const res = await dbaService.getSchoolCoberturaReport(schoolId.value, params)
+    coberturaResumen.value = res.resumen || []
+    coberturaDetalles.value = res.detalles || []
     selectedResumenCard.value = null
     searchResumenTerm.value = ''
   } catch (error) {
@@ -578,6 +574,7 @@ const fetchCoberturaReport = async () => {
     fetchingReports.value = false
   }
 }
+
 
 const loadData = async () => {
   loading.value = true

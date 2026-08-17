@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, computed } from 'vue'
-import axios from 'axios'
-import { useAuthStore } from '../../stores/auth'
+import { dbaService } from '../../services/dbaService'
 import { 
   BookOpen, Plus, Search, Edit3, CheckCircle, XCircle, 
   ChevronDown, ChevronUp, Book, Layers, Award, School, Settings, X,
@@ -12,9 +11,10 @@ import { useToast } from '../../composables/useToast'
 import DataTable from '../../components/ui/DataTable.vue'
 import EmptyState from '../../components/feedback/EmptyState.vue'
 
-const auth = useAuthStore()
 const { confirm } = useConfirm()
 const toast = useToast()
+
+
 
 
 // Interfaces
@@ -151,16 +151,10 @@ const gradeOptions = [
   'SEXTO', 'SEPTIMO', 'OCTAVO', 'NOVENO', 'DECIMO', 'ONCE'
 ]
 
-// Common headers helper
-const getHeaders = () => ({
-  headers: { Authorization: `Bearer ${auth.token}` }
-})
-
 // API Calls
 const fetchStats = async () => {
   try {
-    const res = await axios.get('/api/admin/dba/estadisticas', getHeaders())
-    stats.value = res.data
+    stats.value = await dbaService.getStats()
   } catch (error) {
     console.error('Error fetching dba stats:', error)
   }
@@ -168,17 +162,16 @@ const fetchStats = async () => {
 
 const fetchMeta = async () => {
   try {
-    const [areasRes, versionsRes, collegesRes, existentesRes] = await Promise.all([
-      axios.get('/api/admin/dba/areas', getHeaders()),
-      axios.get('/api/admin/dba/versiones', getHeaders()),
-      axios.get('/api/admin/colegios', getHeaders()),
-      axios.get('/api/admin/dba/existentes', getHeaders())
+    const [areasData, versionsData, collegesData, existentesData] = await Promise.all([
+      dbaService.getAreas(),
+      dbaService.getVersions(),
+      dbaService.getColleges(),
+      dbaService.getExisting()
     ])
-    areas.value = areasRes.data
-    versions.value = versionsRes.data
-    existingCombinations.value = existentesRes.data
-    // Filter active colleges
-    colleges.value = collegesRes.data.filter((c: Colegio) => c.estado === 'ACTIVO')
+    areas.value = areasData
+    versions.value = versionsData
+    existingCombinations.value = existentesData
+    colleges.value = collegesData.filter((c: Colegio) => c.estado === 'ACTIVO')
   } catch (error) {
     console.error('Error fetching dba metadata:', error)
   }
@@ -197,17 +190,11 @@ const fetchDbaList = async () => {
       busqueda: filters.value.busqueda || undefined
     }
 
-    const res = await axios.get('/api/admin/dba', {
-      headers: { Authorization: `Bearer ${auth.token}` },
-      params
-    })
-    
-    // Get total count header
-    const totalHeader = res.headers['x-total-count']
-    totalCount.value = totalHeader ? Number(totalHeader) : res.data.length
+    const { data, totalCount: tCount } = await dbaService.getDbaList(params)
+    totalCount.value = tCount
     totalPages.value = Math.ceil(totalCount.value / limit.value) || 1
 
-    dbaList.value = res.data.map((d: Dba) => ({
+    dbaList.value = data.map((d: Dba) => ({
       ...d,
       isExpanded: false,
       evidencias: []
@@ -224,8 +211,8 @@ const toggleExpandDba = async (dba: Dba) => {
   dba.isExpanded = !dba.isExpanded
   if (dba.isExpanded && (!dba.evidencias || dba.evidencias.length === 0)) {
     try {
-      const res = await axios.get(`/api/admin/dba/${dba.id_dba}`, getHeaders())
-      dba.evidencias = res.data.evidencias
+      const details = await dbaService.getDbaDetails(dba.id_dba)
+      dba.evidencias = details.evidencias
     } catch (error) {
       console.error('Error fetching dba details/evidences:', error)
     }
@@ -238,7 +225,7 @@ watch([filters, page], () => {
 }, { deep: true })
 
 watch(() => filters.value, () => {
-  page.value = 1 // Reset page on filter change
+  page.value = 1
 }, { deep: true })
 
 // Lifecycle Hook
@@ -284,11 +271,9 @@ const handleSaveDba = async () => {
   try {
     saving.value = true
     if (selectedDba.value) {
-      // Edit
-      await axios.put(`/api/admin/dba/${selectedDba.value.id_dba}`, dbaForm.value, getHeaders())
+      await dbaService.updateDba(selectedDba.value.id_dba, dbaForm.value)
     } else {
-      // Create
-      await axios.post('/api/admin/dba', dbaForm.value, getHeaders())
+      await dbaService.createDba(dbaForm.value)
     }
     toast.success('DBA guardado exitosamente')
     showDbaModal.value = false
@@ -312,7 +297,7 @@ const toggleDbaStatus = async (dba: Dba) => {
   if (!ok) return
 
   try {
-    await axios.patch(`/api/admin/dba/${dba.id_dba}/estado`, { estado: newStatus }, getHeaders())
+    await dbaService.updateDba(dba.id_dba, { estado: newStatus })
     dba.estado = newStatus
     toast.success(`DBA #${dba.numero_dba} ${newStatus.toLowerCase()} exitosamente`)
     await fetchStats()
@@ -331,14 +316,13 @@ const handleDeleteDba = async (dba: Dba) => {
   if (!ok) return
 
   try {
-    await axios.delete(`/api/admin/dba/${dba.id_dba}`, getHeaders())
+    await dbaService.deleteDba(dba.id_dba)
     await Promise.all([fetchStats(), fetchMeta(), fetchDbaList()])
     toast.success('DBA eliminado exitosamente.')
   } catch (error: any) {
     toast.error(error.response?.data?.error || 'Error al eliminar el DBA')
   }
 }
-
 
 // Evidence Actions
 const openCreateEvidence = (dba: Dba) => {
@@ -370,18 +354,15 @@ const handleSaveEvidence = async () => {
   try {
     saving.value = true
     if (selectedEvidence.value) {
-      // Edit
-      const res = await axios.put(`/api/admin/dba/evidencias/${selectedEvidence.value.id_evidencia_dba}`, evidenceForm.value, getHeaders())
-      // Update local state
+      const data = await dbaService.updateEvidence(selectedEvidence.value.id_evidencia_dba, evidenceForm.value)
       if (parentDba.value && parentDba.value.evidencias) {
         const idx = parentDba.value.evidencias.findIndex(e => e.id_evidencia_dba === selectedEvidence.value!.id_evidencia_dba)
-        if (idx !== -1) parentDba.value.evidencias[idx] = res.data
+        if (idx !== -1) parentDba.value.evidencias[idx] = data
       }
     } else if (parentDba.value) {
-      // Create
-      const res = await axios.post(`/api/admin/dba/${parentDba.value.id_dba}/evidencias`, evidenceForm.value, getHeaders())
+      const data = await dbaService.createEvidence({ ...evidenceForm.value, id_dba: parentDba.value.id_dba })
       if (!parentDba.value.evidencias) parentDba.value.evidencias = []
-      parentDba.value.evidencias.push(res.data)
+      parentDba.value.evidencias.push(data)
       parentDba.value.total_evidencias = (parentDba.value.total_evidencias || 0) + 1
     }
     toast.success('Evidencia guardada exitosamente')
@@ -397,8 +378,8 @@ const handleSaveEvidence = async () => {
 const toggleEvidenceStatus = async (ev: EvidenciaDba) => {
   const newStatus = ev.estado === 'ACTIVO' ? 'INACTIVO' : 'ACTIVO'
   try {
-    const res = await axios.patch(`/api/admin/dba/evidencias/${ev.id_evidencia_dba}/estado`, { estado: newStatus }, getHeaders())
-    ev.estado = res.data.estado
+    const data = await dbaService.updateEvidence(ev.id_evidencia_dba, { estado: newStatus })
+    ev.estado = data.estado || newStatus
     toast.success(`Estado de evidencia actualizado a ${newStatus}`)
   } catch (error: any) {
     toast.error(error.response?.data?.error || 'Error al cambiar estado de la evidencia')
@@ -406,7 +387,6 @@ const toggleEvidenceStatus = async (ev: EvidenciaDba) => {
 }
 
 // Assignment Actions
-
 const openAssignVersion = () => {
   assignForm.value = {
     id_colegio: colleges.value[0]?.id_colegio?.toString() || '',
@@ -446,28 +426,27 @@ const handleAssignVersion = async () => {
       }
     }
 
-    const response = await axios.post('/api/admin/dba/asignar-version', {
+    const response = await dbaService.assignDbaToSchool({
       id_colegio: isBulkSchool ? 'TODOS' : Number(assignForm.value.id_colegio),
       area: assignForm.value.area,
       grado: assignForm.value.grado,
       version_curricular: assignForm.value.version_curricular
-    }, getHeaders())
+    })
     
-    toast.success(response.data?.message || 'Versión curricular asignada exitosamente.')
+    toast.success(response?.message || 'Versión curricular asignada exitosamente.')
     showAssignModal.value = false
   } catch (error: any) {
     toast.error(error.response?.data?.error || 'Error al asignar versión al colegio')
   } finally {
     saving.value = false
   }
-
 }
 
 const viewAssignments = async (college: Colegio) => {
   selectedSchoolForView.value = college
   try {
-    const res = await axios.get(`/api/admin/dba/asignaciones/${college.id_colegio}`, getHeaders())
-    activeSchoolAssignments.value = res.data
+    const data = await dbaService.getSchoolAssignments(college.id_colegio)
+    activeSchoolAssignments.value = data
     showViewAssignmentsModal.value = true
   } catch (error) {
     console.error('Error fetching assignments:', error)
@@ -515,19 +494,12 @@ const handleImportPDF = async () => {
     formData.append('start_page', String(importForm.value.start_page))
     formData.append('overwrite', String(importOverwrite.value))
 
-    const res = await axios.post('/api/admin/dba/importar', formData, {
-      headers: {
-        Authorization: `Bearer ${auth.token}`,
-        'Content-Type': 'multipart/form-data'
-      }
-    })
-
+    const res = await dbaService.importDba(formData)
     importResult.value = {
-      message: res.data.message,
-      summary: res.data.summary
+      message: res.message,
+      summary: res.summary
     }
 
-    // Refresh data
     await Promise.all([fetchStats(), fetchMeta(), fetchDbaList()])
   } catch (error: any) {
     alert(error.response?.data?.error || 'Error al importar PDF')
@@ -535,6 +507,7 @@ const handleImportPDF = async () => {
     saving.value = false
   }
 }
+
 </script>
 
 <template>
