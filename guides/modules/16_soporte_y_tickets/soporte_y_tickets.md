@@ -39,19 +39,21 @@ Este módulo proporciona un canal de comunicación centralizado, seguro y audita
 
 ## 4. Reglas de Negocio
 
-- **RN-TKT-001 (Ciclo de Vida de Estados):** Los tickets transicionan a través de los estados `'ABIERTO'`, `'EN_PROCESO'` y `'RESUELTO'`.
-  - Todo ticket nace en estado `'ABIERTO'` con `fecha_escalado = NULL`.
-  - Un ticket solo puede permanecer en estado `'ABIERTO'` si **no posee ninguna observación** y **no ha sido escalado**.
-  - Al ingresar la primera nota (del colegio o del remitente) o al escalar, el estado se promueve automáticamente a `'EN_PROCESO'`.
+- **RN-TKT-001 (Ciclo de Vida y Visualización de Estados):** Los tickets transicionan a través de los estados `'ABIERTO'`, `'EN_PROCESO'`, `'ESCALADO'` y `'RESUELTO'`.
+  - Todo ticket ordinario nace en estado `'ABIERTO'` con `fecha_escalado = NULL`.
+  - Si un directivo crea una incidencia directa hacia el Administrador General o escala un ticket existente, este asume el estado `'ESCALADO'`.
+  - **Selector Interactivo de Estados**: En la consola del personal (Directivo y Admin General), el selector de estados despliega explícitamente las opciones coincidentes (`ABIERTO`, `ESCALADO`, `EN_PROCESO`, `RESUELTO`) evitando campos vacíos o inconsistencias de renderizado en la interfaz.
+  - **Filtro de Estados Superior**: La barra de filtrado permite segmentar tickets por `'TODOS'`, `'ABIERTO'`, `'EN_PROCESO'`, `'ESCALADO'` y `'RESUELTO'`.
+  - Al ingresar la primera nota (del colegio o del remitente) o al avanzar el caso, el estado se promueve a `'EN_PROCESO'`.
 - **RN-TKT-002 (Inmutabilidad de Tickets Resueltos):** Una vez que un ticket es marcado en estado `'RESUELTO'`, se convierte en un registro de **solo lectura**. No se permite agregar nuevas observaciones ni revertir su estado por parte de directivos, administradores ni usuarios.
 - **RN-TKT-003 (Regla de Turnos en Conversación - Ping-Pong):** Para evitar el envío repetitivo de mensajes, el remitente (estudiante, padre, docente o visitante) únicamente puede enviar una respuesta si:
   - El ticket tiene al menos una nota registrada.
   - El autor del último mensaje en el historial es de tipo `DIRECTIVO` o `ADMIN_GENERAL`.
   - Si la última nota es del remitente, el botón de envío y la caja de texto se deshabilitan.
-- **RN-TKT-004 (Bloqueo de Control por Escalamiento):** Cuando un directivo escala un ticket, se registra el timestamp en `fecha_escalado`. A partir de ese momento:
-  - El directivo pierde los permisos de edición sobre el ticket y el selector de estado queda deshabilitado en su interfaz.
-  - El Administrador General asume la responsabilidad exclusiva del caso.
-  - La marca de escalado es inalterable, conservando el hecho histórico.
+- **RN-TKT-004 (Bloqueo y Badge Estático por Escalamiento):** Cuando un ticket posee estado `'ESCALADO'` o `fecha_escalado IS NOT NULL`:
+  - Para el **Directivo Escolar**, el control se renderiza como una insignia estática de solo lectura (`Escalado`), impidiendo mutaciones o reasignaciones no autorizadas.
+  - Para el **Administrador General**, el selector permanece editable permitiendo avanzar el ticket a `'EN_PROCESO'` o `'RESUELTO'`.
+  - La marca de escalado es inalterable, conservando el hecho histórico y la fecha de derivación.
 - **RN-TKT-005 (Código Base36 Ofuscado):** Los códigos de ticket públicos (ej. `TKT-1B3X9H7Z`) se generan mediante codificación Base36 sobre un entero de 22 dígitos derivado de: Año (4d) + ID Colegio (3d) + Documento/Teléfono (10d) + ID Ticket (5d). Esto previene ataques de enumeración y scraping.
 - **RN-TKT-006 (Auditoría de Eventos de Sistema):** Todo cambio de estado, escalamiento o alteración crítica genera automáticamente una nota con tipo `'SISTEMA'`. Estas notas son inalterables y no pueden ser borradas.
 - **RN-TKT-007 (Irreversibilidad de Tickets de Incidencia de Reingreso):** Los tickets con categoría de incidencia `REINGRESO` que se pasen al estado `'EN_PROCESO'` advierten al directivo de la acción irreversible, envían un correo automático al acudiente informando el inicio del trámite y bloquean su retorno a `'ABIERTO'`.

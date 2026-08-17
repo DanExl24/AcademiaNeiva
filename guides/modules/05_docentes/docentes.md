@@ -42,6 +42,7 @@ Este módulo permite a los directivos del colegio gestionar todo el personal doc
 - **RN-DOC-003 (Generación de Contraseña Temporal):** Durante el registro, el sistema genera una contraseña temporal de alta seguridad y envía un correo de bienvenida automático al docente con sus credenciales de acceso iniciales.
 - **RN-DOC-004 (Aislamiento de Asignación):** Un docente solo puede registrar actividades, asistencias y calificaciones en las materias y grupos que tenga explícitamente asignados en la tabla `detalle_grados` para el año lectivo en curso.
 - **RN-DOC-005 (Restricción de Eliminación de Asignaciones):** No se puede eliminar una asignación académica de `detalle_grados` si existen registros históricos de calificaciones o inasistencias asociados en el periodo actual. Esto evita la pérdida de datos curriculares.
+- **RN-DOC-006 (Captura y Validación de Teléfono de Contacto):** Durante el registro y actualización del docente, el número de teléfono es capturado y validado obligatoriamente mediante esquema Zod (`/^[0-9+() -]{7,20}$/`). El valor se almacena en `usuario.telefono` permitiendo la comunicación institucional, el contacto en situaciones académicas y la trazabilidad de contacto en el sistema.
 
 ---
 
@@ -78,7 +79,7 @@ Este módulo permite a los directivos del colegio gestionar todo el personal doc
 | `id_tipodocumento` | INT FK | Referencia al catálogo de tipos de documento. |
 | `id_contratodocente` | INT FK | Enlace al estado del contrato. |
 | `id_colegio` | INT FK | Colegio de adscripción. |
-| `id_usuario` | INT FK | Enlace a la cuenta de usuario del sistema. |
+| `id_usuario` | INT FK | Enlace a la cuenta de usuario del sistema (incluye `telefono`). |
 | `estado` | VARCHAR(20) | Estado actual del docente (`ACTIVO`, `INACTIVO`). |
 
 ### Tabla: `detalle_grados` (Asignación Académica)
