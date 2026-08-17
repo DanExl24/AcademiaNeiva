@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, computed } from 'vue'
-import axios from 'axios'
-import { useAuthStore } from '../../stores/auth'
+import { adminGeneralService } from '../../services/adminGeneralService'
 import { socketService } from '../../services/socketService'
 import { Doughnut, Line } from 'vue-chartjs'
 import EmptyChartState from '../../components/charts/EmptyChartState.vue'
@@ -46,8 +45,8 @@ ChartJS.register(
   LineElement
 )
 
-const auth = useAuthStore()
 const loading = ref(true)
+
 const stats = ref<any>(null)
 const error = ref('')
 
@@ -55,9 +54,8 @@ const fetchStats = async () => {
   try {
     loading.value = true
     error.value = ''
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get('/api/admin/dashboard/stats', { headers })
-    stats.value = res.data
+    const data = await adminGeneralService.getDashboardStats()
+    stats.value = data
   } catch (err: any) {
     console.error('Error fetching admin dashboard stats:', err)
     error.value = 'No se pudieron cargar las estadísticas del panel general.'
@@ -65,6 +63,7 @@ const fetchStats = async () => {
     loading.value = false
   }
 }
+
 
 // WebSocket: escuchar actualizaciones de sesiones activas en tiempo real
 let cleanupSocket: (() => void) | null = null

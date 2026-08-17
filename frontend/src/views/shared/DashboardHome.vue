@@ -2,7 +2,8 @@
 import { ref, onMounted, computed, watch } from 'vue'
 import { useAuthStore } from '../../stores/auth'
 import { useAcademicYearStore } from '../../stores/academicYear'
-import axios from 'axios'
+import { academicService } from '../../services/academicService'
+import { enrollmentService } from '../../services/enrollmentService'
 import { getCourseDisplayName } from '../../utils/courseHelper'
 import { 
   Users, 
@@ -22,6 +23,7 @@ import {
   MessageSquare,
   FileWarning
 } from 'lucide-vue-next'
+
 import PeriodCountdownBanner from '../../components/PeriodCountdownBanner.vue'
 import {
   Chart as ChartJS,
@@ -643,13 +645,11 @@ const fetchDashboard = async () => {
   loading.value = true
   fetchError.value = false
   try {
-    const url = `/api/academic-admin/dashboard/${schoolId.value}`
     const params: any = {}
     if (selectedYearId.value) params.yearId = selectedYearId.value
     if (selectedPeriodId.value) params.periodId = selectedPeriodId.value
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const response = await axios.get(url, { params, headers })
-    dashboardData.value = response.data
+    const data = await academicService.getDashboard(schoolId.value, params)
+    dashboardData.value = data
   } catch (error) {
     console.error('Error fetching dashboard data:', error)
     fetchError.value = true
@@ -661,15 +661,14 @@ const fetchDashboard = async () => {
 const loadPeriods = async () => {
   if (!schoolId.value) return
   try {
-    const headers = { Authorization: `Bearer ${auth.token}` }
     const params: any = { keys: 'periods,tiposGrado' }
     if (selectedYearId.value) {
       params.yearId = selectedYearId.value
     }
-    const response = await axios.get(`/api/academic-admin/settings/${schoolId.value}`, { headers, params })
-    allPeriods.value = (response.data.periods || []).filter((p: any) => p.estado !== 'PENDIENTE')
-    if (response.data.tiposGrado) {
-      schoolGradesCatalog.value = (response.data.tiposGrado || []).map((g: any) => g.nombre).filter(Boolean)
+    const data = await academicService.getSettings(schoolId.value, params)
+    allPeriods.value = (data.periods || []).filter((p: any) => p.estado !== 'PENDIENTE')
+    if (data.tiposGrado) {
+      schoolGradesCatalog.value = (data.tiposGrado || []).map((g: any) => g.nombre).filter(Boolean)
     }
 
     // Set active period by default if none selected
@@ -705,9 +704,7 @@ const enrollmentNotice = ref<string | null>(null)
 const checkEnrollmentDates = async () => {
   if (!schoolId.value) return
   try {
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const response = await axios.get(`/api/matriculas/school/${schoolId.value}/enrollment-config`, { headers })
-    const data = response.data
+    const data = await enrollmentService.getSchoolEnrollmentConfig(schoolId.value)
     if (data && data.config && data.config.habilitada && data.config.fecha_inicio && data.config.fecha_cierre) {
       const now = new Date()
       const start = new Date(data.config.fecha_inicio)
@@ -737,6 +734,7 @@ const checkEnrollmentDates = async () => {
 watch(schoolId, () => {
   checkEnrollmentDates()
 })
+
 
 const handleRetry = async () => {
   loading.value = true

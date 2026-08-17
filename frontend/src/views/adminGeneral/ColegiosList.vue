@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import axios from 'axios'
+import { adminGeneralService } from '../../services/adminGeneralService'
 import { API_BASE_URL } from '../../config/api'
-import { useAuthStore } from '../../stores/auth'
 import { 
   School, Plus, Search, Trash2, Edit3, CheckCircle, XCircle, AlertTriangle, 
   Mail, Phone, MapPin, Calendar, Hash, Users, Eye
@@ -13,17 +12,16 @@ import { useToast } from '../../composables/useToast'
 import StatCard from '../../components/ui/StatCard.vue'
 import EmptyState from '../../components/feedback/EmptyState.vue'
 
-
 const getShieldUrl = (url: string) => {
   if (!url || url === 'undefined' || url.includes('undefined')) return ''
   if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) return url
   return `${API_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`
 }
 
-const auth = useAuthStore()
 const route = useRoute()
 const { confirm } = useConfirm()
 const toast = useToast()
+
 
 
 
@@ -92,15 +90,12 @@ const form = ref({
 const fetchColleges = async () => {
   try {
     loading.value = true
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get('/api/admin/colegios', {
-      headers,
-      params: {
-        estado: selectedEstado.value || undefined,
-        search: search.value || undefined
-      }
-    })
-    colleges.value = res.data
+    const params = {
+      estado: selectedEstado.value || undefined,
+      search: search.value || undefined
+    }
+    const data = await adminGeneralService.getColegios(params)
+    colleges.value = data || []
 
     // Refresh KPI counts
     stats.value = {
@@ -150,8 +145,7 @@ const handleCreate = async () => {
   }
   try {
     saving.value = true
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.post('/api/admin/colegios', form.value, { headers })
+    await adminGeneralService.createColegio(form.value)
     showCreateModal.value = false
     await fetchColleges()
   } catch (error: any) {
@@ -194,8 +188,7 @@ const handleEdit = async () => {
   }
   try {
     saving.value = true
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.put(`/api/admin/colegios/${selectedCollege.value.id_colegio}`, form.value, { headers })
+    await adminGeneralService.updateColegio(selectedCollege.value.id_colegio, form.value)
     showEditModal.value = false
     await fetchColleges()
   } catch (error: any) {
@@ -209,9 +202,8 @@ const openDetails = async (college: Colegio) => {
   selectedCollege.value = college
   showDetailsModal.value = true
   try {
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get(`/api/admin/colegios/${college.id_colegio}`, { headers })
-    selectedCollege.value = { ...college, ...res.data }
+    const data = await adminGeneralService.getColegio(college.id_colegio)
+    selectedCollege.value = { ...college, ...data }
   } catch (error) {
     console.error('Error fetching college details:', error)
   }
@@ -225,13 +217,11 @@ const updateStatus = async (college: Colegio, estado: string, motivo?: string) =
     type: estado === 'SUSPENDIDO' || estado === 'RECHAZADO' ? 'danger' : 'primary'
   })
   if (!ok) return
-
   try {
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.patch(`/api/admin/colegios/${college.id_colegio}/estado`, {
+    await adminGeneralService.updateColegioEstado(college.id_colegio, {
       estado,
       motivo
-    }, { headers })
+    })
     toast.success(`Estado de ${college.nombre} actualizado a ${estado}`)
     await fetchColleges()
     if (selectedCollege.value?.id_colegio === college.id_colegio) {
@@ -268,14 +258,14 @@ const handleDelete = async (college: Colegio) => {
   if (!ok) return
 
   try {
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.delete(`/api/admin/colegios/${college.id_colegio}`, { headers })
+    await adminGeneralService.deleteColegio(college.id_colegio)
     toast.success(`Colegio ${college.nombre} eliminado exitosamente`)
     await fetchColleges()
   } catch (error: any) {
     toast.error(error.response?.data?.error || 'Error al eliminar colegio')
   }
 }
+
 
 </script>
 

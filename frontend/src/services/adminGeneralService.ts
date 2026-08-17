@@ -54,10 +54,16 @@ export const adminGeneralService = {
     return res.data
   },
 
+  async validarTicketUsuario(id: number | string, payload: { codigo_ticket: string }): Promise<any> {
+    const res = await api.post(`/admin/usuarios/${id}/validar-ticket`, payload)
+    return res.data
+  },
+
   async updateUsuarioCredencialesConTicket(id: number | string, payload: any): Promise<any> {
     const res = await api.put(`/admin/usuarios/${id}/credenciales-con-ticket`, payload)
     return res.data
   },
+
 
   async updateUsuarioEstado(id: number | string, payload: any): Promise<any> {
     const res = await api.patch(`/admin/usuarios/${id}/estado`, payload)
@@ -78,6 +84,12 @@ export const adminGeneralService = {
     const res = await api.patch(`/admin/usuarios/${id}/roles`, payload)
     return res.data
   },
+
+  async eliminarUsuarioConTicket(id: number | string, payload: { codigo_ticket: string; motivo?: string }): Promise<any> {
+    const res = await api.patch(`/admin/usuarios/${id}/eliminar`, payload)
+    return res.data
+  },
+
 
   // Auditorias
   async getAuditorias(params?: any): Promise<any> {

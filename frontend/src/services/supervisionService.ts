@@ -51,7 +51,13 @@ export const supervisionService = {
   async exportarSupervision(idAuditoria: number | string): Promise<any> {
     const res = await api.post(`/admin/supervision/${idAuditoria}/exportar`, {})
     return res.data
+  },
+
+  async verificarActiva(): Promise<any> {
+    const res = await api.get('/admin/supervision/verificar-activa')
+    return res.data
   }
 }
 
 export default supervisionService
+

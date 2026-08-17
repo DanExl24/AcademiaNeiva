@@ -82,7 +82,48 @@ export const enrollmentService = {
   async finalize(matriculaId: number | string, payload: any): Promise<any> {
     const res = await api.post(`/matriculas/finalize/${matriculaId}`, payload)
     return res.data
+  },
+
+  // Public Enrollment
+  async getAvailableGrades(schoolId: number | string): Promise<any[]> {
+    const res = await api.get(`/grados/available/${schoolId}`)
+    return res.data || []
+  },
+
+  async getByToken(token: string): Promise<any> {
+    const res = await api.get(`/matriculas/public/by-token/${token}`)
+    return res.data
+  },
+
+  async getSchoolEnrollmentConfig(schoolId: number | string): Promise<any> {
+    const res = await api.get(`/matriculas/school/${schoolId}/enrollment-config`)
+    return res.data
+  },
+
+  async sendEmailCode(payload: { email: string; schoolId: number | string }): Promise<any> {
+    const res = await api.post('/matriculas/send-email-code', payload)
+    return res.data
+  },
+
+  async verifyEmailCode(payload: { email: string; code: string; schoolId: number | string }): Promise<any> {
+    const res = await api.post('/matriculas/verify-email-code', payload)
+    return res.data
+  },
+
+  async submitEnrollment(formData: FormData): Promise<any> {
+    const res = await api.post('/matriculas/submit', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+    return res.data
+  },
+
+  async updateDocuments(token: string, formData: FormData): Promise<any> {
+    const res = await api.post(`/matriculas/update-documents/${token}`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+    return res.data
   }
 }
 
 export default enrollmentService
+

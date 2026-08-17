@@ -1,8 +1,22 @@
 import api from './api'
 
 export const academicService = {
+  // Dashboard & Status
+  async getDashboard(schoolId: number | string, params?: any): Promise<any> {
+    const res = await api.get(`/academic-admin/dashboard/${schoolId}`, { params })
+    return res.data
+  },
+
+  async getActivePeriodInfo(params?: { schoolId?: number | string; yearId?: number | string }): Promise<any> {
+    const res = await api.get('/academic-admin/active-period-info', { params })
+    return res.data
+  },
+
   // General Settings
+
+
   async getSettings(schoolId: number | string, params?: any): Promise<any> {
+
     const res = await api.get(`/academic-admin/settings/${schoolId}`, { params })
     return res.data
   },

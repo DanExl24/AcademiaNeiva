@@ -27,6 +27,12 @@ export const studentService = {
     return res.data || []
   },
 
+  async getParentDashboard(parentId: number | string): Promise<any> {
+    const res = await api.get(`/student/parent-dashboard/${parentId}`)
+    return res.data
+  },
+
+
   async getByUserId(userId: number | string): Promise<any> {
     const res = await api.get(`/student/user-id/${userId}`)
     return res.data

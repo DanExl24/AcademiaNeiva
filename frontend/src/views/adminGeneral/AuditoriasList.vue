@@ -1,14 +1,12 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
-import axios from 'axios'
-import { useAuthStore } from '../../stores/auth'
+import { adminGeneralService } from '../../services/adminGeneralService'
 import { 
   FileText, Search, Download, User
 } from 'lucide-vue-next'
 
-const auth = useAuthStore()
-
 const props = defineProps<{
+
   tipo: 'LECTURA' | 'MODIFICACION' | 'EXPORTACION'
 }>()
 
@@ -50,9 +48,8 @@ const activeAction = ref<AccionAuditoria | null>(null)
 
 const fetchSchools = async () => {
   try {
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get('/api/admin/colegios', { headers })
-    schools.value = res.data.map((c: any) => ({ id_colegio: c.id_colegio, nombre: c.nombre }))
+    const data = await adminGeneralService.getColegios()
+    schools.value = (data || []).map((c: any) => ({ id_colegio: c.id_colegio, nombre: c.nombre }))
   } catch (error) {
     console.error('Error fetching schools:', error)
   }
@@ -61,25 +58,22 @@ const fetchSchools = async () => {
 const fetchActions = async () => {
   try {
     loading.value = true
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get('/api/admin/auditorias', {
-      headers,
-      params: {
-        tipo_accion: props.tipo === 'MODIFICACION' ? undefined : props.tipo,
-        id_colegio: selectedSchool.value || undefined,
-        search: search.value || undefined
-      }
-    })
+    const params = {
+      tipo_accion: props.tipo === 'MODIFICACION' ? undefined : props.tipo,
+      id_colegio: selectedSchool.value || undefined,
+      search: search.value || undefined
+    }
+    const data = await adminGeneralService.getAuditorias(params)
     
     // If the prop is MODIFICACION, we fetch any action related to modifications (CREACION, MODIFICACION, ELIMINACION)
     if (props.tipo === 'MODIFICACION') {
-      actions.value = res.data.filter((a: any) => 
+      actions.value = (data || []).filter((a: any) => 
         a.tipo_accion === 'CREACION' || 
         a.tipo_accion === 'MODIFICACION' || 
         a.tipo_accion === 'ELIMINACION'
       )
     } else {
-      actions.value = res.data
+      actions.value = data || []
     }
   } catch (error) {
     console.error('Error fetching audit actions:', error)
@@ -87,6 +81,7 @@ const fetchActions = async () => {
     loading.value = false
   }
 }
+
 
 watch([selectedSchool, search, () => props.tipo], () => {
   fetchActions()

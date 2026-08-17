@@ -1,9 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import axios from 'axios'
+import { trasladoService } from '../../services/trasladoService'
 import html2pdf from 'html2pdf.js'
-import { API_BASE_URL } from '../../config/api'
-import { useAuthStore } from '../../stores/auth'
 import {
   Download,
   FileSpreadsheet,
@@ -21,8 +19,8 @@ const emit = defineEmits<{
   (e: 'close'): void
 }>()
 
-const auth = useAuthStore()
 const loading = ref(false)
+
 const exportingPDF = ref(false)
 const exportingExcel = ref(false)
 const errorMsg = ref('')
@@ -35,10 +33,8 @@ const fetchDatosAcademicos = async () => {
   errorMsg.value = ''
   reportData.value = null
   try {
-    const res = await axios.get(`${API_BASE_URL}/api/traslados/datos-academicos/${props.targetId}`, {
-      headers: { Authorization: `Bearer ${auth.token}` }
-    })
-    reportData.value = res.data
+    const data = await trasladoService.getDatosAcademicos(props.targetId)
+    reportData.value = data
   } catch (err: any) {
     console.error('Error cargando datos académicos de traslado:', err)
     errorMsg.value = err.response?.data?.error || 'No se pudieron cargar los datos académicos del traslado.'
@@ -46,6 +42,7 @@ const fetchDatosAcademicos = async () => {
     loading.value = false
   }
 }
+
 
 watch(() => props.show, (newVal) => {
   if (newVal && props.targetId) {

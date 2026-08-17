@@ -59,7 +59,13 @@ export const trasladoService = {
   async getDirectivosColegio(schoolId: number | string): Promise<any[]> {
     const res = await api.get(`/traslados/directivos/${schoolId}`)
     return res.data || []
+  },
+
+  async getDatosAcademicos(id: number | string): Promise<any> {
+    const res = await api.get(`/traslados/datos-academicos/${id}`)
+    return res.data
   }
 }
+
 
 export default trasladoService

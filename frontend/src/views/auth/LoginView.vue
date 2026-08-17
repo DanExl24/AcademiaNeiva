@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import { GraduationCap, ArrowLeft, Loader2 } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 import { useRouter } from 'vue-router'
-import axios from 'axios'
+import { authService } from '../../services/authService'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -26,13 +26,14 @@ const handleLogin = async () => {
     error.value = ''
     loading.value = true
     
-    const response = await axios.post('/api/auth/login', {
+    const data = await authService.login({
       email: loginData.value.emailOrCode,
       password: loginData.value.password
     })
 
-    const { user, token } = response.data
+    const { user, token } = data
     auth.setUser(user, token)
+
     
     const userRoles: string[] = user.roles || (user.role ? [user.role] : [])
     const isOnlyPadre = userRoles.length === 1 && userRoles[0] === 'padre'

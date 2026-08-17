@@ -19,6 +19,36 @@ export const authService = {
   async resetPassword(payload: any): Promise<any> {
     const res = await api.post('/auth/reset-password', payload)
     return res.data
+  },
+
+  async getProfile(params?: any): Promise<any> {
+    const res = await api.get('/auth/profile', { params })
+    return res.data
+  },
+
+  async requestEmailChange(payload: any): Promise<any> {
+    const res = await api.post('/auth/profile/request-email-change', payload)
+    return res.data
+  },
+
+  async verifyEmailChange(payload: any): Promise<any> {
+    const res = await api.post('/auth/profile/verify-email-change', payload)
+    return res.data
+  },
+
+  async updatePhone(payload: any): Promise<any> {
+    const res = await api.put('/auth/profile/phone', payload)
+    return res.data
+  },
+
+  async updatePassword(payload: any): Promise<any> {
+    const res = await api.put('/auth/profile/password', payload)
+    return res.data
+  },
+
+  async getMisVinculaciones(): Promise<any> {
+    const res = await api.get('/traslados/mis-vinculaciones')
+    return res.data
   }
 }
 

@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import axios from 'axios'
-import { useAuthStore } from '../../stores/auth'
+import { adminGeneralService } from '../../services/adminGeneralService'
 import { 
   Users, Search, UserCheck, ShieldAlert, Key, LogOut, Trash2, Eye, 
   Mail, School, Shield, Calendar, Lock, Clipboard, Check, Ban, Loader2,
   UserPlus, RefreshCw
 } from 'lucide-vue-next'
+
 import { useConfirm } from '../../composables/useConfirm'
 import { useToast } from '../../composables/useToast'
 import StatCard from '../../components/ui/StatCard.vue'
@@ -15,11 +15,10 @@ import DataTable from '../../components/ui/DataTable.vue'
 import SkeletonTable from '../../components/feedback/SkeletonTable.vue'
 import EmptyState from '../../components/feedback/EmptyState.vue'
 
-
-const auth = useAuthStore()
 const route = useRoute()
 const { confirm } = useConfirm()
 const toast = useToast()
+
 
 
 interface Usuario {
@@ -143,22 +142,17 @@ const submitCreateUser = async () => {
 
   try {
     creatingUser.value = true
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.post(
-      '/api/admin/usuarios',
-      {
-        rol: newUser.value.rol,
-        email: newUser.value.email.trim(),
-        password: newUser.value.password,
-        nombre: newUser.value.nombre.trim(),
-        apellido: newUser.value.apellido.trim() || undefined,
-        id_colegio: newUser.value.id_colegio ? Number(newUser.value.id_colegio) : null,
-        tipo_documento: newUser.value.tipo_documento || null,
-        documento: newUser.value.documento.trim() || null,
-        telefono: newUser.value.telefono.trim() || null
-      },
-      { headers }
-    )
+    await adminGeneralService.createUsuario({
+      rol: newUser.value.rol,
+      email: newUser.value.email.trim(),
+      password: newUser.value.password,
+      nombre: newUser.value.nombre.trim(),
+      apellido: newUser.value.apellido.trim() || undefined,
+      id_colegio: newUser.value.id_colegio ? Number(newUser.value.id_colegio) : null,
+      tipo_documento: newUser.value.tipo_documento || null,
+      documento: newUser.value.documento.trim() || null,
+      telefono: newUser.value.telefono.trim() || null
+    })
 
     showCreateUserModal.value = false
     await fetchUsers()
@@ -193,12 +187,10 @@ const verifyTicketAndEnableEdit = async () => {
     verificationError.value = ''
     
     // Consultar el endpoint privado de validación del ticket para esta cuenta específica
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.post(
-      `/api/admin/usuarios/${selectedUser.value.id_usuario}/validar-ticket`,
-      { codigo_ticket: ticketCodeVerification.value.trim() },
-      { headers }
-    )
+    await adminGeneralService.validarTicketUsuario(selectedUser.value.id_usuario, {
+      codigo_ticket: ticketCodeVerification.value.trim()
+    })
+
 
     // Inicializar campos editables si pasa la validación de correspondencia y estado
     editableNombre.value = selectedUser.value.nombre
@@ -253,15 +245,14 @@ const applyCredentialsChange = async () => {
   if (!selectedUser.value || applyingChange.value) return
   try {
     applyingChange.value = true
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.put(`/api/admin/usuarios/${selectedUser.value.id_usuario}/credenciales-con-ticket`, {
+    await adminGeneralService.updateUsuarioCredencialesConTicket(selectedUser.value.id_usuario, {
       codigo_ticket: ticketCodeVerification.value.trim(),
       nombre: editableNombre.value,
       apellido: editableApellido.value,
       tipo_documento: editableTipoDoc.value,
       documento: editableDocumento.value,
       roles: editableRoles.value
-    }, { headers })
+    })
 
     alert('Credenciales y roles actualizados exitosamente.')
     
@@ -285,9 +276,8 @@ const applyCredentialsChange = async () => {
 
 const fetchSchools = async () => {
   try {
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get('/api/admin/colegios', { headers })
-    schools.value = res.data.map((c: any) => ({ id_colegio: c.id_colegio, nombre: c.nombre }))
+    const data = await adminGeneralService.getColegios()
+    schools.value = (data || []).map((c: any) => ({ id_colegio: c.id_colegio, nombre: c.nombre }))
   } catch (error) {
     console.error('Error fetching schools:', error)
   }
@@ -296,18 +286,15 @@ const fetchSchools = async () => {
 const fetchUsers = async () => {
   try {
     loading.value = true
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get('/api/admin/usuarios', {
-      headers,
-      params: {
-        estado: selectedEstado.value || undefined,
-        rol: selectedRole.value || undefined,
-        id_colegio: selectedSchool.value || undefined,
-        search: search.value || undefined
-      }
-    })
+    const params = {
+      estado: selectedEstado.value || undefined,
+      rol: selectedRole.value || undefined,
+      id_colegio: selectedSchool.value || undefined,
+      search: search.value || undefined
+    }
+    const data = await adminGeneralService.getUsuarios(params)
     
-    users.value = (res.data || []).map((u: any) => ({
+    users.value = (data || []).map((u: any) => ({
       ...u,
       rol_nombre: u.roles && u.roles[0] ? u.roles[0] : 'sin_rol'
     }))
@@ -351,9 +338,8 @@ const openDetails = async (user: Usuario) => {
   selectedUser.value = user
   showDetailsModal.value = true
   try {
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get(`/api/admin/usuarios/${user.id_usuario}`, { headers })
-    const data = res.data || {}
+    const res = await adminGeneralService.getUsuario(user.id_usuario)
+    const data = res || {}
     selectedUser.value = { 
       ...user, 
       ...data,
@@ -374,11 +360,10 @@ const updateStatus = async (user: Usuario, estado: string, motivo?: string) => {
   if (!ok) return
 
   try {
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.patch(`/api/admin/usuarios/${user.id_usuario}/estado`, {
+    await adminGeneralService.updateUsuarioEstado(user.id_usuario, {
       estado,
       motivo
-    }, { headers })
+    })
     toast.success(`Estado actualizado a ${estado}`)
     await fetchUsers()
     if (selectedUser.value?.id_usuario === user.id_usuario) {
@@ -419,9 +404,8 @@ const handleResetPassword = async (user: Usuario) => {
     selectedUser.value = user
     tempPassword.value = ''
     showResetModal.value = true
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.post(`/api/admin/usuarios/${user.id_usuario}/restablecer-password`, {}, { headers })
-    tempPassword.value = res.data.password_temporal || res.data.tempPassword || ''
+    const res = await adminGeneralService.restablecerPassword(user.id_usuario)
+    tempPassword.value = res.password_temporal || res.tempPassword || ''
     toast.success('Contraseña temporal generada con éxito')
   } catch (error: any) {
     toast.error(error.response?.data?.error || 'Error al restablecer contraseña')
@@ -448,14 +432,12 @@ const handleForceLogout = async (user: Usuario) => {
   if (!ok) return
 
   try {
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.post(`/api/admin/usuarios/${user.id_usuario}/cerrar-sesion`, {}, { headers })
+    await adminGeneralService.cerrarSesionUsuario(user.id_usuario)
     toast.success('Sesiones cerradas con éxito.')
   } catch (error: any) {
     toast.error(error.response?.data?.error || 'Error al forzar cierre de sesión')
   }
 }
-
 
 const openDeleteModal = (user: Usuario) => {
   userToDelete.value = user
@@ -474,22 +456,21 @@ const handleDelete = async () => {
   try {
     deleting.value = true
     deleteError.value = ''
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.patch(
-      `/api/admin/usuarios/${userToDelete.value.id_usuario}/eliminar`,
-      { codigo_ticket: deleteTicketCode.value.trim(), motivo: deleteMotivo.value.trim() || undefined },
-      { headers }
-    )
+    const res = await adminGeneralService.eliminarUsuarioConTicket(userToDelete.value.id_usuario, {
+      codigo_ticket: deleteTicketCode.value.trim(),
+      motivo: deleteMotivo.value.trim() || undefined
+    })
     showDeleteModal.value = false
     showDetailsModal.value = false
     await fetchUsers()
-    alert(res.data.message || 'Usuario eliminado exitosamente.')
+    alert(res.message || 'Usuario eliminado exitosamente.')
   } catch (error: any) {
     deleteError.value = error.response?.data?.error || 'Error al eliminar usuario. Verifica que tienes sesión de supervisión activa y que el ticket es válido.'
   } finally {
     deleting.value = false
   }
 }
+
 </script>
 
 <template>

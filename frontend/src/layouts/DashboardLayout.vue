@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
-import axios from 'axios'
 import { API_BASE_URL } from '../config/api'
 import { 
   LayoutDashboard, 
@@ -38,6 +37,12 @@ import { useAuthStore } from '../stores/auth'
 import { useThemeStore } from '../stores/theme'
 import { useAcademicYearStore } from '../stores/academicYear'
 import { useRouter, useRoute } from 'vue-router'
+import { academicService } from '../services/academicService'
+import { studentService } from '../services/studentService'
+import { supervisionService } from '../services/supervisionService'
+import { adminGeneralService } from '../services/adminGeneralService'
+import { trasladoService } from '../services/trasladoService'
+
 import { useConfirm } from '../composables/useConfirm'
 
 const { confirm } = useConfirm()
@@ -292,9 +297,8 @@ const fetchSchoolIdentity = async () => {
   }
 
   try {
-    const headers = auth.token ? { Authorization: `Bearer ${auth.token}` } : {}
-    const res = await axios.get(`${API_BASE_URL}/api/academic-admin/my-school/${schoolId}`, { headers })
-    const school = res.data.school || res.data
+    const data = await academicService.getMySchool(schoolId)
+    const school = data?.school || data
     if (school) {
       schoolName.value = school.nombre || 'AcademiaNeiva'
       if (school.escudo_url && typeof school.escudo_url === 'string' && school.escudo_url.trim() && school.escudo_url.trim() !== 'undefined' && !school.escudo_url.includes('undefined')) {
@@ -330,13 +334,12 @@ const checkStudentSanction = async () => {
   }
 
   try {
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const idRes = await axios.get(`/api/student/user-id/${auth.user.id}`, { headers })
-    const studentId = idRes.data.id_estudiante
+    const idRes = await studentService.getByUserId(auth.user.id)
+    const studentId = idRes?.id_estudiante
+
     if (studentId) {
-      const infoRes = await axios.get(`/api/student/info/${studentId}`, { headers })
-      const info = infoRes.data
-      if (info.estado === 'SANCIONADO' && info.sancion_hasta) {
+      const info = await studentService.getInfo(studentId)
+      if (info?.estado === 'SANCIONADO' && info.sancion_hasta) {
         studentSanction.value = {
           hasta: info.sancion_hasta,
           motivo: info.sancion_motivo || '',
@@ -345,6 +348,8 @@ const checkStudentSanction = async () => {
       } else {
         studentSanction.value = null
       }
+    } else {
+      studentSanction.value = null
     }
   } catch (error) {
     console.error('Error checking student sanction:', error)
@@ -353,6 +358,7 @@ const checkStudentSanction = async () => {
 }
 
 watch(() => [auth.activeRole, auth.user], () => {
+
   checkStudentSanction()
 }, { immediate: true })
 
@@ -404,9 +410,7 @@ const handleExitSupervisionAuto = async () => {
   const supId = auth.supervision?.id_auditoria
   if (supId) {
     try {
-      await axios.post(`/api/admin/supervision/${supId}/salir`, {}, {
-        headers: { Authorization: `Bearer ${auth.token}` }
-      })
+      await supervisionService.salirSupervision(supId)
     } catch (e) {
       console.error('Error auto-exiting supervision:', e)
     }
@@ -426,9 +430,7 @@ const handleExitSupervisionManual = async () => {
     })
     if (ok) {
       try {
-        await axios.post(`/api/admin/supervision/${supId}/salir`, {}, {
-          headers: { Authorization: `Bearer ${auth.token}` }
-        })
+        await supervisionService.salirSupervision(supId)
       } catch (e) {
         console.error('Error exiting supervision:', e)
       }
@@ -474,9 +476,8 @@ const showToast = (message: string, type = 'info') => {
 const checkRecentActivity = async () => {
   if (auth.activeRole !== 'admin_general' || !auth.token) return
   try {
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get('/api/admin/dashboard/stats', { headers })
-    const newActions = res.data.actividad || []
+    const data = await adminGeneralService.getDashboardStats()
+    const newActions = data?.actividad || []
     
     if (knownActions.size === 0) {
       newActions.forEach((act: any) => knownActions.add(act.descripcion))
@@ -505,9 +506,8 @@ const checkDirectivoActiveSupervision = async () => {
   const sId = auth.user?.schoolId || auth.selectedSchoolId || null
   if (!sId) return
   try {
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get(`/api/admin/colegio/${sId}/supervisiones`, { headers })
-    const active = res.data.find((s: any) => s.estado_supervision === 'ACTIVA')
+    const data = await supervisionService.getSupervisionesColegio(sId)
+    const active = (data || []).find((s: any) => s.estado_supervision === 'ACTIVA')
     
     if (active && !directivoActiveSupervision.value) {
       showToast(`¡El Administrador General (${active.admin_nombre}) ha entrado al colegio en modo supervisión (${active.tipo_supervision === 'EDITOR' ? 'Editor' : 'Solo Lectura'})!`, 'warning')
@@ -552,16 +552,15 @@ const checkAdminSupervisionStatus = async () => {
     return
   }
   try {
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get('/api/admin/supervision/verificar-activa', { headers })
-    console.log('[Supervision Poll] Backend response:', res.data)
+    const data = await supervisionService.verificarActiva()
+    console.log('[Supervision Poll] Backend response:', data)
     
-    if (res.data.activa === false) {
-      if (res.data.estado === 'REVOCADA') {
+    if (data?.activa === false) {
+      if (data?.estado === 'REVOCADA') {
         console.log('[Supervision Poll] Supervision has been REVOKED by directivo!')
         revocationDetails.value = {
-          revocador: res.data.revocador_nombre || 'Un directivo',
-          motivo: res.data.motivo_revocacion || 'No especificado'
+          revocador: data?.revocador_nombre || 'Un directivo',
+          motivo: data?.motivo_revocacion || 'No especificado'
         }
         showRevocationModal.value = true
         // Limpiar el intervalo de verificación para que no siga consultando
@@ -637,9 +636,8 @@ const hasMultipleSchools = computed(() => {
 const fetchUserSchools = async () => {
   if (!auth.token) return
   try {
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get(`${API_BASE_URL}/api/traslados/mis-vinculaciones`, { headers })
-    const active = (res.data || []).filter((v: any) => v.estado === 'ACTIVO')
+    const data = await trasladoService.getMisVinculaciones()
+    const active = (data || []).filter((v: any) => v.estado === 'ACTIVO')
     
     userSchools.value = active.map((v: any) => ({
       id_colegio: v.id_colegio,
@@ -666,8 +664,8 @@ const fetchUserSchools = async () => {
       const uId = auth.user?.id || (auth.user as any)?.id_usuario
       const role = (auth.activeRole || auth.user?.role || '').toLowerCase()
       if (role === 'padre') {
-        const pRes = await axios.get(`${API_BASE_URL}/api/student/parent-dashboard/${uId}`, { headers })
-        const children = pRes.data?.children || []
+        const pData = await studentService.getParentDashboard(uId)
+        const children = pData?.children || []
         if (children.length > 0 && children[0].id_colegio) {
           const sId = Number(children[0].id_colegio)
           if (!auth.selectedSchoolId) {
@@ -675,12 +673,13 @@ const fetchUserSchools = async () => {
           }
         }
       } else if (role === 'estudiante') {
-        const idRes = await axios.get(`${API_BASE_URL}/api/student/user-id/${uId}`, { headers })
-        const stuId = idRes.data?.id_estudiante
+        const idRes = await studentService.getByUserId(uId)
+        const stuId = idRes?.id_estudiante
+
         if (stuId) {
-          const infoRes = await axios.get(`${API_BASE_URL}/api/student/info/${stuId}`, { headers })
-          if (infoRes.data?.id_colegio && !auth.selectedSchoolId) {
-            auth.setSelectedSchoolId(Number(infoRes.data.id_colegio))
+          const info = await studentService.getInfo(stuId)
+          if (info?.id_colegio && !auth.selectedSchoolId) {
+            auth.setSelectedSchoolId(Number(info.id_colegio))
           }
         }
       }
@@ -689,6 +688,7 @@ const fetchUserSchools = async () => {
     console.error('Error fetching user schools:', e)
   }
 }
+
 
 onMounted(() => {
   updateClock()
