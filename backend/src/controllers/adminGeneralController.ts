@@ -2876,15 +2876,14 @@ export const crearUsuarioByAdminGeneral = async (req: AuthRequest, res: Response
 
     // 5. Insertar usuario base
     const userRes = await client.query(
-      `INSERT INTO usuario (email, password, nombre, apellido, id_colegio, activo, id_tipodocumento, documento, telefono, estado)
-       VALUES ($1, $2, $3, $4, $5, true, $6, $7, $8, 'ACTIVO')
-       RETURNING id_usuario, email, nombre, apellido, id_colegio, activo, fecha_creacion`,
+      `INSERT INTO usuario (email, password, nombre, apellido, activo, id_tipodocumento, documento, telefono, estado)
+       VALUES ($1, $2, $3, $4, true, $5, $6, $7, 'ACTIVO')
+       RETURNING id_usuario, email, nombre, apellido, activo, fecha_creacion`,
       [
         finalEmail,
         hashedPassword,
         nombre.trim(),
         (apellido || '').trim() || null,
-        id_colegio || null,
         idTipoDoc,
         (documento || '').trim() || null,
         (telefono || '').trim() || null

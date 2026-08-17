@@ -65,8 +65,8 @@ async function run() {
     const adminGeneralHash = await bcrypt.hash(adminGeneralPassword, 10);
     const adminGeneralEmail = "admin.general@academianeiva.edu.co";
     const adminGeneralResult = await client.query<{ id_usuario: number }>(
-      `INSERT INTO usuario (email, password, nombre, apellido, id_colegio, activo, estado, id_tipodocumento, documento, telefono)
-       VALUES ($1, $2, $3, $4, NULL, true, 'ACTIVO', 3, '1000000000', '3000000000') RETURNING id_usuario`,
+      `INSERT INTO usuario (email, password, nombre, apellido, activo, estado, id_tipodocumento, documento, telefono)
+       VALUES ($1, $2, $3, $4, true, 'ACTIVO', 3, '1000000000', '3000000000') RETURNING id_usuario`,
       [adminGeneralEmail, adminGeneralHash, "Admin", "General"]
     );
     await client.query(`INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2)`, [
@@ -105,23 +105,25 @@ async function run() {
       // --- Rector ---
       const rectorEmail = `rector@${school.domain}`;
       const rectorRes = await client.query<{ id_usuario: number }>(
-        `INSERT INTO usuario (email, password, nombre, apellido, id_colegio, activo, estado, id_tipodocumento, documento, telefono)
-         VALUES ($1, $2, $3, $4, $5, true, 'ACTIVO', 3, $6, $7) RETURNING id_usuario`,
-        [rectorEmail, directivoHash, "Rector", school.nombre, school.id, `10010000${school.id}`, String(school.contacto)]
+        `INSERT INTO usuario (email, password, nombre, apellido, activo, estado, id_tipodocumento, documento, telefono)
+         VALUES ($1, $2, $3, $4, true, 'ACTIVO', 3, $5, $6) RETURNING id_usuario`,
+        [rectorEmail, directivoHash, "Rector", school.nombre, `10010000${school.id}`, String(school.contacto)]
       );
       const rectorUserId = rectorRes.rows[0].id_usuario;
       await client.query(`INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2)`, [rectorUserId, roleIds.directivo]);
+      await client.query(`INSERT INTO usuario_colegio (id_usuario, id_colegio, id_rol, estado, fecha_inicio) VALUES ($1, $2, $3, 'ACTIVO', NOW()) ON CONFLICT DO NOTHING`, [rectorUserId, school.id, roleIds.directivo]);
       await client.query(`INSERT INTO directivo (id_colegio, id_usuario, cargo) VALUES ($1, $2, $3)`, [school.id, rectorUserId, "RECTOR"]);
 
       // --- Coordinador ---
       const directivoEmail = `directivo@${school.domain}`;
       const directivoResult = await client.query<{ id_usuario: number }>(
-        `INSERT INTO usuario (email, password, nombre, apellido, id_colegio, activo, estado, id_tipodocumento, documento, telefono)
-         VALUES ($1, $2, $3, $4, $5, true, 'ACTIVO', 3, $6, $7) RETURNING id_usuario`,
-        [directivoEmail, directivoHash, "Directivo", school.nombre, school.id, `10020000${school.id}`, String(school.contacto)]
+        `INSERT INTO usuario (email, password, nombre, apellido, activo, estado, id_tipodocumento, documento, telefono)
+         VALUES ($1, $2, $3, $4, true, 'ACTIVO', 3, $5, $6) RETURNING id_usuario`,
+        [directivoEmail, directivoHash, "Directivo", school.nombre, `10020000${school.id}`, String(school.contacto)]
       );
       const directivoUserId = directivoResult.rows[0].id_usuario;
       await client.query(`INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2)`, [directivoUserId, roleIds.directivo]);
+      await client.query(`INSERT INTO usuario_colegio (id_usuario, id_colegio, id_rol, estado, fecha_inicio) VALUES ($1, $2, $3, 'ACTIVO', NOW()) ON CONFLICT DO NOTHING`, [directivoUserId, school.id, roleIds.directivo]);
       await client.query(`INSERT INTO directivo (id_colegio, id_usuario, cargo) VALUES ($1, $2, $3)`, [school.id, directivoUserId, "COORDINADOR"]);
     }
 

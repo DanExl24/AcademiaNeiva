@@ -2927,7 +2927,6 @@ CREATE TABLE public.usuario (
     password character varying(255) NOT NULL,
     nombre character varying(255) NOT NULL,
     apellido character varying(255),
-    id_colegio integer,
     activo boolean DEFAULT true,
     fecha_creacion timestamp with time zone DEFAULT now(),
     estado public.estado_usuario_sistema DEFAULT 'ACTIVO'::public.estado_usuario_sistema NOT NULL,

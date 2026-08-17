@@ -271,10 +271,10 @@ export const createTeacher = async (req: Request, res: Response): Promise<void> 
     // CASO 2: Persona y usuario completamente nuevos
     const passwordHash = await bcrypt.hash(password, 10);
     const userRes = await client.query(
-      `INSERT INTO usuario (email, password, nombre, apellido, id_colegio, id_tipodocumento, documento)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO usuario (email, password, nombre, apellido, id_tipodocumento, documento)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING id_usuario, email, activo`,
-      [email, passwordHash, nombre, apellido, schoolId, documentTypeId, documento]
+      [email, passwordHash, nombre, apellido, documentTypeId, documento]
     );
 
     await client.query(

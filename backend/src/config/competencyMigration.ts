@@ -507,6 +507,13 @@ export const ensureCompetencySchema = async (): Promise<void> => {
       await client.query(addGrupoDestinoSql);
     }
 
+    // Ejecutar migración 050 (eliminar columna obsoleta id_colegio de la tabla usuario)
+    const dropUsuarioIdColegioPath = path.join(__dirname, "../migrations/050_drop_usuario_id_colegio.sql");
+    if (fs.existsSync(dropUsuarioIdColegioPath)) {
+      const dropUsuarioIdColegioSql = fs.readFileSync(dropUsuarioIdColegioPath, "utf8");
+      await client.query(dropUsuarioIdColegioSql);
+    }
+
 
 
     // Backfill sync_uuid for existing competencies

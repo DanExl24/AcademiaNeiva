@@ -36,6 +36,16 @@ function encodeTicketCode(idTicket: number, idColegio: number | null, documento:
   return `TKT-${base36Code}`;
 }
 
+// Helper: Resolver ID de colegio activo del usuario
+async function resolveSchoolIdForUser(userId: number, explicitSchoolId?: number | null): Promise<number | null> {
+  if (explicitSchoolId) return Number(explicitSchoolId);
+  const schoolLinkRes = await pool.query(
+    `SELECT id_colegio FROM usuario_colegio WHERE id_usuario = $1 AND estado = 'ACTIVO' LIMIT 1`,
+    [userId]
+  );
+  return schoolLinkRes.rows.length > 0 ? Number(schoolLinkRes.rows[0].id_colegio) : null;
+}
+
 export const createTicket = async (req: Request, res: Response) => {
   const { nombre_remitente, correo_remitente, telefono, tipo_incidencia, asunto, descripcion, id_colegio, estado, id_estudiante, id_tipo_grado_pretendido } = req.body;
   const user = (req as any).user; // Si está autenticado
@@ -45,7 +55,7 @@ export const createTicket = async (req: Request, res: Response) => {
     let finalSchoolId: number | null = id_colegio ? Number(id_colegio) : null;
     let finalSenderName = nombre_remitente;
     let finalSenderEmail = correo_remitente;
-    let ticketStatus = 'ABIERTO';
+    let ticketStatus = (estado === 'ESCALADO') ? 'ESCALADO' : 'ABIERTO';
     let userDocument: string | null = null;
 
     if (user) {
@@ -60,22 +70,17 @@ export const createTicket = async (req: Request, res: Response) => {
       if (userRes.rows.length > 0) {
         const u = userRes.rows[0];
         if (!finalSchoolId) {
-          const schoolLinkRes = await pool.query(
-            `SELECT id_colegio FROM usuario_colegio WHERE id_usuario = $1 AND estado = 'ACTIVO' LIMIT 1`,
-            [finalUserId]
-          );
-          if (schoolLinkRes.rows.length > 0) {
-            finalSchoolId = Number(schoolLinkRes.rows[0].id_colegio);
-          }
+          finalSchoolId = await resolveSchoolIdForUser(finalUserId, user.schoolId);
         }
-        finalSenderName = `${u.nombre} ${u.apellido}`;
-        finalSenderEmail = u.email;
+        finalSenderName = finalSenderName || `${u.nombre} ${u.apellido}`.trim();
+        finalSenderEmail = finalSenderEmail || u.email;
         userDocument = u.documento || null;
 
-        const userRole = (user.role || u.rol || '').toUpperCase();
+        const userRole = (user.role || (user.roles && user.roles[0]) || '').toUpperCase();
+        const isStaff = userRole === 'DIRECTIVO' || userRole === 'ADMIN_GENERAL' || (user.roles && (user.roles.includes('directivo') || user.roles.includes('admin_general')));
 
-        // Si es Directivo y envía la petición de escalado, el estado inicial será ESCALADO
-        if (estado === 'ESCALADO' && (userRole === 'DIRECTIVO' || userRole === 'ADMIN_GENERAL')) {
+        // Si es Directivo/Admin y envía la petición de escalado, el estado inicial será ESCALADO
+        if (estado === 'ESCALADO' && isStaff) {
           ticketStatus = 'ESCALADO';
         }
       }
@@ -85,22 +90,33 @@ export const createTicket = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Nombre, correo, tipo de incidencia, asunto y descripción son requeridos.' });
     }
 
+    const isEscalated = ticketStatus === 'ESCALADO';
+    const fechaEscalado = isEscalated ? new Date() : null;
+
     // Insertamos el ticket
     const insertRes = await pool.query(
       `INSERT INTO tickets_soporte 
-       (id_usuario, nombre_remitente, correo_remitente, telefono, tipo_incidencia, asunto, descripcion, id_colegio, estado, id_estudiante)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       (id_usuario, nombre_remitente, correo_remitente, telefono, tipo_incidencia, asunto, descripcion, id_colegio, estado, id_estudiante, fecha_escalado)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING id_ticket`,
-      [finalUserId, finalSenderName, finalSenderEmail, telefono || null, tipo_incidencia, asunto, descripcion, finalSchoolId, ticketStatus, id_estudiante ? Number(id_estudiante) : null]
+      [finalUserId, finalSenderName, finalSenderEmail, telefono || null, tipo_incidencia, asunto, descripcion, finalSchoolId, ticketStatus, id_estudiante ? Number(id_estudiante) : null, fechaEscalado]
     );
 
     const idTicket = insertRes.rows[0].id_ticket;
     
     // Generar el código Base36 ofuscado
     const ticketCode = encodeTicketCode(idTicket, finalSchoolId, userDocument || telefono || null);
-    const initialObs = id_tipo_grado_pretendido ? JSON.stringify([{ autor: finalSenderName, fecha: new Date().toISOString(), texto: `Grado pretendido seleccionado por acudiente`, id_tipo_grado_pretendido: Number(id_tipo_grado_pretendido) }]) : '[]';
     
-    // Persistir el código ofuscado
+    let initialObsList: any[] = [];
+    if (id_tipo_grado_pretendido) {
+      initialObsList.push({ autor: finalSenderName, fecha: new Date().toISOString(), texto: `Grado pretendido seleccionado por acudiente`, id_tipo_grado_pretendido: Number(id_tipo_grado_pretendido) });
+    }
+    if (isEscalated) {
+      initialObsList.push({ autor: finalSenderName, fecha: new Date().toISOString(), texto: `Ticket de soporte escalado directamente al Administrador General por directivo de la institución.`, tipo: 'DIRECTIVO' });
+    }
+    const initialObs = JSON.stringify(initialObsList);
+    
+    // Persistir el código ofuscado y observaciones iniciales
     await pool.query(
       'UPDATE tickets_soporte SET codigo_ticket = $1, observaciones = $2 WHERE id_ticket = $3',
       [ticketCode, initialObs, idTicket]
@@ -126,7 +142,7 @@ export const getTickets = async (req: Request, res: Response) => {
   }
 
   try {
-    const userRole = (user.role || '').toUpperCase();
+    const userRole = (user.role || (user.roles && user.roles[0]) || '').toUpperCase();
     let query = `
       SELECT t.*, 
              c.nombre AS colegio_nombre,
@@ -143,8 +159,7 @@ export const getTickets = async (req: Request, res: Response) => {
     const params: any[] = [];
 
     if (userRole === 'DIRECTIVO') {
-      const userRes = await pool.query('SELECT id_colegio FROM usuario WHERE id_usuario = $1', [user.id]);
-      const schoolId = user.schoolId || userRes.rows[0]?.id_colegio;
+      const schoolId = await resolveSchoolIdForUser(user.id, user.schoolId);
       if (!schoolId) {
         return res.status(403).json({ error: 'El directivo no está asociado a ningún colegio.' });
       }
@@ -232,8 +247,7 @@ export const updateTicketStatus = async (req: Request, res: Response) => {
     }
 
     if (userRole === 'DIRECTIVO') {
-      const userRes = await pool.query('SELECT id_colegio FROM usuario WHERE id_usuario = $1', [user.id]);
-      const schoolId = user.schoolId || userRes.rows[0]?.id_colegio;
+      const schoolId = await resolveSchoolIdForUser(user.id, user.schoolId);
       if (Number(schoolId) !== Number(ticket.id_colegio)) {
         return res.status(403).json({ error: 'Acceso denegado a este ticket de soporte.' });
       }
@@ -333,8 +347,7 @@ export const escalateTicket = async (req: Request, res: Response) => {
       }
 
       if (userRole === 'DIRECTIVO') {
-        const userRes = await client.query('SELECT id_colegio FROM usuario WHERE id_usuario = $1', [user.id]);
-        const schoolId = user.schoolId || userRes.rows[0]?.id_colegio;
+        const schoolId = await resolveSchoolIdForUser(user.id, user.schoolId);
         if (Number(schoolId) !== Number(ticket.id_colegio)) {
           await client.query('ROLLBACK');
           client.release();
@@ -487,17 +500,16 @@ export const addTicketObservation = async (req: Request, res: Response) => {
 
     if (isStaff) {
       if (userRole === 'DIRECTIVO') {
-        const userRes = await pool.query('SELECT id_colegio FROM usuario WHERE id_usuario = $1', [user.id]);
-        const schoolId = user.schoolId || userRes.rows[0]?.id_colegio;
+        const schoolId = await resolveSchoolIdForUser(user.id, user.schoolId);
         if (Number(schoolId) !== Number(ticket.id_colegio)) {
           return res.status(403).json({ error: 'Acceso denegado.' });
         }
       }
     } else {
       // Regla para usuarios (Docente / Padre / Estudiante)
-      const userRes = await pool.query('SELECT email, id_colegio FROM usuario WHERE id_usuario = $1', [user.id]);
+      const userRes = await pool.query('SELECT email FROM usuario WHERE id_usuario = $1', [user.id]);
       const userEmail = userRes.rows[0]?.email;
-      const userSchoolId = userRes.rows[0]?.id_colegio;
+      const userSchoolId = await resolveSchoolIdForUser(user.id, user.schoolId);
 
       const isOwner = (ticket.id_usuario && Number(ticket.id_usuario) === Number(user.id)) ||
                       (ticket.correo_remitente && ticket.correo_remitente.toLowerCase() === (userEmail || '').toLowerCase()) ||

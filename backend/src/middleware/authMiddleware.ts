@@ -392,7 +392,7 @@ export const verifyTokenOptional = async (req: AuthRequest, res: Response, next:
     }
 
     const userDbRes = await pool.query(
-      'SELECT estado, logged_out_at, rol FROM usuario WHERE id_usuario = $1',
+      'SELECT estado, logged_out_at FROM usuario WHERE id_usuario = $1',
       [decoded.id]
     );
 
@@ -408,8 +408,8 @@ export const verifyTokenOptional = async (req: AuthRequest, res: Response, next:
       req.user = {
         id: decoded.id,
         email: decoded.email,
-        role: decoded.role || dbUser.rol,
-        roles: decoded.roles || [dbUser.rol],
+        role: decoded.role,
+        roles: decoded.roles || (decoded.role ? [decoded.role] : []),
         schoolId: decoded.schoolId || null
       };
     }

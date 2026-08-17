@@ -74,12 +74,22 @@ const passwordError = ref('')
 const requestSuccess = ref('')
 const requestError = ref('')
 
-// Modal de Directivo "Contactar con Admin General"
+// Modal de Directivo "Contactar con Admin General" (Ticket Escalado)
 const showDirectivoModal = ref(false)
 const directivoForm = ref({
+  tipo_incidencia: 'SOPORTE',
+  telefono: '',
   asunto: '',
   descripcion: ''
 })
+
+const openDirectivoModal = () => {
+  directivoForm.value.tipo_incidencia = 'SOPORTE'
+  directivoForm.value.telefono = profileData.value?.telefono || ''
+  directivoForm.value.asunto = ''
+  directivoForm.value.descripcion = ''
+  showDirectivoModal.value = true
+}
 
 // Panel de Admin General: Cambiar contraseña de otro usuario
 const usersList = ref<any[]>([])
@@ -292,20 +302,28 @@ const handleContactAdminGeneral = async () => {
     requestError.value = ''
 
     const headers = { Authorization: `Bearer ${auth.token}` }
+    const senderFullName = profileData.value ? `${profileData.value.nombre || ''} ${profileData.value.apellido || ''}`.trim() : (auth.user?.name || '')
+    const senderEmail = profileData.value?.email || auth.user?.email || ''
+
     const payload = {
-      tipo_incidencia: 'SOPORTE',
-      asunto: directivoForm.value.asunto,
-      descripcion: directivoForm.value.descripcion,
+      nombre_remitente: senderFullName,
+      correo_remitente: senderEmail,
+      telefono: directivoForm.value.telefono || profileData.value?.telefono || null,
+      tipo_incidencia: directivoForm.value.tipo_incidencia || 'SOPORTE',
+      asunto: directivoForm.value.asunto.trim(),
+      descripcion: directivoForm.value.descripcion.trim(),
+      id_colegio: auth.user?.schoolId || profileData.value?.id_colegio || null,
       estado: 'ESCALADO' // <--- Se inserta con estado ESCALADO para el Admin General
     }
 
     const res = await axios.post('/api/support/tickets', payload, { headers })
-    requestSuccess.value = `Mensaje enviado al Administrador General con éxito. Código de ticket escalado: ${res.data.ticketCode}`
+    requestSuccess.value = `Ticket escalado enviado al Administrador General con éxito. Código de seguimiento: ${res.data.ticketCode}`
     showDirectivoModal.value = false
     directivoForm.value.asunto = ''
     directivoForm.value.descripcion = ''
+    directivoForm.value.telefono = ''
   } catch (error: any) {
-    requestError.value = error.response?.data?.error || 'Error al enviar el mensaje.'
+    requestError.value = error.response?.data?.error || 'Error al enviar el ticket escalado.'
   } finally {
     submittingDirectivoMessage.value = false
   }
@@ -396,8 +414,8 @@ const goBack = () => {
           <div class="flex flex-wrap gap-3">
             <button 
               v-if="isDirectivo && !auth.isMonitoring"
-              @click="showDirectivoModal = true"
-              class="px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-md shadow-indigo-100 dark:shadow-none"
+              @click="openDirectivoModal"
+              class="px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-md shadow-indigo-100 dark:shadow-none cursor-pointer"
             >
               Contactar con Admin General
             </button>
@@ -758,54 +776,124 @@ const goBack = () => {
       </div>
     </div>
 
-    <!-- Directivo contact modal to Admin General -->
+    <!-- Directivo contact modal to Admin General (Ticket Escalado) -->
     <div 
       v-if="showDirectivoModal" 
       class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
       @click.self="showDirectivoModal = false"
     >
-      <div class="w-full max-w-lg bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-150 dark:border-slate-800 p-8 shadow-2xl relative space-y-6 animate-in zoom-in-95 duration-300">
-        <div class="space-y-2 text-center max-w-xs mx-auto">
-          <h3 class="text-lg font-black text-slate-850 dark:text-white tracking-tight">Contactar al Administrador</h3>
-          <p class="text-xs text-slate-450 dark:text-slate-500 font-semibold leading-relaxed">
-            Redacta un mensaje directo. Tu solicitud se enviará con prioridad en el estado de escalamiento.
-          </p>
+      <div class="w-full max-w-xl bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-150 dark:border-slate-800 p-8 shadow-2xl relative space-y-6 animate-in zoom-in-95 duration-300 max-h-[90vh] overflow-y-auto">
+        
+        <!-- Header -->
+        <div class="flex items-start justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-5">
+          <div class="space-y-1">
+            <div class="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 rounded-full text-[10px] font-black uppercase tracking-wider">
+              <ShieldAlert :size="12" />
+              <span>Ticket Escalado de Soporte</span>
+            </div>
+            <h3 class="text-xl font-black text-slate-850 dark:text-white tracking-tight">Contactar al Administrador General</h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400 font-medium">
+              Tu solicitud será registrada con prioridad alta directamente en el panel de soporte del Administrador General.
+            </p>
+          </div>
+          <button 
+            @click="showDirectivoModal = false"
+            class="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+          >
+            ✕
+          </button>
         </div>
 
         <form @submit.prevent="handleContactAdminGeneral" class="space-y-4">
+          
+          <!-- Resumen del Remitente -->
+          <div class="p-4 bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 rounded-2xl grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+            <div>
+              <span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest block">Remitente</span>
+              <p class="font-bold text-slate-800 dark:text-slate-200 mt-0.5">{{ profileData?.nombre }} {{ profileData?.apellido }}</p>
+              <p class="text-[11px] text-slate-500 font-medium truncate">{{ profileData?.email }}</p>
+            </div>
+            <div>
+              <span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest block">Nivel de Escalamiento</span>
+              <p class="font-bold text-indigo-600 dark:text-indigo-400 mt-0.5">DIRECTIVO INSTITUCIONAL</p>
+              <span class="inline-block mt-0.5 px-2 py-0.5 bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 font-black text-[9px] rounded-md">
+                ALTA PRIORIDAD (ESCALADO)
+              </span>
+            </div>
+          </div>
+
+          <!-- Tipo de Incidencia -->
+          <div class="space-y-1.5">
+            <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Tipo de Incidencia / Categoría *</label>
+            <select 
+              v-model="directivoForm.tipo_incidencia"
+              required
+              class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 focus:bg-white focus:border-indigo-500 outline-none transition-all cursor-pointer"
+            >
+              <option value="SOPORTE">SOPORTE — Solicitud / Consulta General de Plataforma</option>
+              <option value="TECNICO">TÉCNICO — Falla Técnica / Error en el Sistema</option>
+              <option value="AUTENTICACION">AUTENTICACIÓN — Cuentas, Permisos o Roles</option>
+              <option value="CALIFICACIONES">CALIFICACIONES — Inconsistencias en Notas o S.I.E.E.</option>
+              <option value="ASISTENCIA">ASISTENCIA — Registro o Justificaciones de Asistencia</option>
+              <option value="MATRICULA_EXTRAORDINARIA">MATRÍCULA EXTRAORDINARIA — Habilitación de Cupo Extraordinario</option>
+              <option value="REINGRESO">REINGRESO — Caso Especial de Reingreso</option>
+            </select>
+          </div>
+
+          <!-- Teléfono (Opcional) -->
+          <div class="space-y-1.5">
+            <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Teléfono de Contacto (Opcional)</label>
+            <input 
+              v-model="directivoForm.telefono"
+              type="text" 
+              placeholder="Ej. +57 300 123 4567"
+              class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 focus:bg-white focus:border-indigo-500 outline-none transition-all"
+            />
+          </div>
+
           <!-- Asunto -->
           <div class="space-y-1.5">
-            <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Asunto *</label>
+            <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Asunto de la Solicitud *</label>
             <input 
               v-model="directivoForm.asunto"
               type="text" 
               required
-              placeholder="Ej. Incidencia general de matrícula"
-              class="w-full pl-4 pr-4 py-3.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 focus:bg-white focus:border-indigo-500 outline-none transition-all"
+              placeholder="Ej. Solicitud de ajuste de roles para usuario docente/directivo"
+              class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 focus:bg-white focus:border-indigo-500 outline-none transition-all"
             />
           </div>
 
           <!-- Descripción -->
           <div class="space-y-1.5">
-            <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Mensaje Detallado *</label>
+            <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Mensaje Detallado / Justificación *</label>
             <textarea 
               v-model="directivoForm.descripcion"
               required
               rows="4"
-              placeholder="Explica la razón de tu contacto..."
+              placeholder="Describe detalladamente la situación, requerimiento o usuarios involucrados para que el Administrador General pueda gestionarlo..."
               class="w-full p-4 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 focus:bg-white focus:border-indigo-500 outline-none resize-none transition-all"
             ></textarea>
           </div>
 
-          <button 
-            type="submit" 
-            :disabled="submittingDirectivoMessage || !directivoForm.asunto.trim() || !directivoForm.descripcion.trim()"
-            class="w-full py-4 bg-indigo-650 hover:bg-indigo-700 text-white rounded-xl font-black text-xs uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center gap-1.5 shadow-md"
-          >
-            <Loader2 v-if="submittingDirectivoMessage" class="w-4 h-4 animate-spin" />
-            <Send v-else :size="14" />
-            Enviar Mensaje
-          </button>
+          <!-- Footer Buttons -->
+          <div class="flex items-center justify-end gap-3 pt-2">
+            <button 
+              type="button"
+              @click="showDirectivoModal = false"
+              class="px-5 py-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer"
+            >
+              Cancelar
+            </button>
+            <button 
+              type="submit" 
+              :disabled="submittingDirectivoMessage || !directivoForm.asunto.trim() || !directivoForm.descripcion.trim()"
+              class="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black text-xs uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-indigo-100 dark:shadow-none cursor-pointer"
+            >
+              <Loader2 v-if="submittingDirectivoMessage" class="w-4 h-4 animate-spin" />
+              <Send v-else :size="14" />
+              <span>Enviar Ticket Escalado</span>
+            </button>
+          </div>
         </form>
       </div>
     </div>
