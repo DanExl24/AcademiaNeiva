@@ -1,134 +1,63 @@
-# Historias de Usuario — Calificaciones y Actividades
+# Historias de Usuario — Calificaciones, Actividades y Evaluación Curricular
 
-Este documento contiene las historias de usuario implementadas para el módulo de Calificaciones y Actividades de AcademiaNeiva.
-
----
-
-# HU-CAL-001: Crear Actividad Evaluativa de Asignatura
-
-## Historia
-**Como** docente del curso  
-**Quiero** registrar una nueva actividad evaluativa asignándole un nombre, porcentaje e id de competencia  
-**Para** definir la estructura de evaluación del periodo en mi asignatura.
-
-## Criterios de Aceptación
-- El docente solo puede crear actividades en materias y grupos que tenga asignados en `detalle_grados`.
-- La actividad debe estar anclada a una competencia válida y activa.
-- La sumatoria de las ponderaciones porcentuales de todas las actividades de la materia no debe superar el 100%.
-- El sistema deniega la creación si el periodo académico correspondiente o el cierre de materia está en estado `CERRADO`.
-
-## Detalles Técnicos
-- **Prioridad:** Alta
-- **Roles involucrados:** Docente
-- **Reglas de negocio relacionadas:** RN-CAL-001, RN-CAL-003
-- **Endpoints relacionados:** 
-  - `POST /api/teacher/activities`
-- **Componentes frontend relacionados:** 
-  - [TeacherGrades.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/teacher/TeacherGrades.vue)
-- **Controllers/Services relacionados:** 
-  - [gradingController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/gradingController.ts) (`createActivity`)
+Este documento detalla las Historias de Usuario del módulo de **Calificaciones y Actividades** de AcademiaNeiva.
 
 ---
 
-# HU-CAL-002: Crear Criterio de Evaluación en Actividad
+## 1. Diseño de Actividades y Criterios Evaluativos
 
-## Historia
-**Como** docente del curso  
-**Quiero** desglosar una actividad evaluativa en múltiples criterios porcentuales  
-**Para** evaluar aspectos específicos (ej. Presentación, Contenido, Exposición) en una misma tarea.
-
-## Criterios de Aceptación
-- El docente selecciona la actividad padre y registra el nombre y porcentaje del criterio.
-- La sumatoria de las ponderaciones de todos los criterios pertenecientes a una misma actividad debe dar exactamente el 100%.
-- Si la actividad pasa a tener criterios, las notas de los alumnos deberán registrarse en la tabla `nota_criterio`.
-
-## Detalles Técnicos
-- **Prioridad:** Alta
-- **Roles involucrados:** Docente
-- **Reglas de negocio relacionadas:** RN-CAL-001, RN-CAL-002
-- **Endpoints relacionados:** 
-  - `POST /api/teacher/activities/criteria`
-- **Componentes frontend relacionados:** 
-  - [TeacherGrades.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/teacher/TeacherGrades.vue)
-- **Controllers/Services relacionados:** 
-  - [gradingController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/gradingController.ts) (`createCriterion`)
+### HU-CAL-001: Creación de Actividades Evaluativas Ponderadas
+- **Como:** Docente Titular de Asignatura.
+- **Quiero:** Registrar una nueva actividad de evaluación asignándole un nombre, ponderación porcentual y una evidencia de aprendizaje.
+- **Para:** Estructurar el plan de evaluación del periodo académico en mi curso.
+- **Criterios de Aceptación:**
+  1. El formulario exige ingresar el título de la actividad, el porcentaje de peso y vincular al menos una evidencia de aprendizaje (formativa o de DBA).
+  2. Si la sumatoria del porcentaje acumulado de actividades supera el 100%, el backend rechaza la creación con error `400 Bad Request`.
+  3. El sistema guarda la autoría del docente creador en `id_docente_creador`.
+  4. La actividad aparece disponible de inmediato en la planilla de calificaciones del curso.
 
 ---
 
-# HU-CAL-003: Registrar y Actualizar Calificaciones Masivas
-
-## Historia
-**Como** docente del curso  
-**Quiero** ingresar las notas de los estudiantes directamente en la planilla interactiva y guardar los cambios  
-**Para** actualizar el rendimiento académico de los alumnos en tiempo real.
-
-## Criterios de Aceptación
-- La nota ingresada para cada estudiante debe ser un valor numérico ubicado dentro del rango válido de la escala del colegio (ej. entre 1.00 y 5.00).
-- Si la actividad tiene criterios, la nota ingresada se almacena en `nota_criterio`. Si no tiene criterios, se guarda en `notas_actividad`.
-- Si el periodo está en estado `CERRADO`, la interfaz deshabilita la edición y el backend rechaza la petición.
-- El sistema recalcula automáticamente los promedios en pantalla tras el guardado exitoso.
-
-## Detalles Técnicos
-- **Prioridad:** Alta
-- **Roles involucrados:** Docente
-- **Reglas de negocio relacionadas:** RN-CAL-002, RN-CAL-003
-- **Endpoints relacionados:** 
-  - `POST /api/teacher/grades`
-  - `GET /api/teacher/grades/:gradeId/:subjectId/:periodId`
-- **Componentes frontend relacionados:** 
-  - [TeacherGrades.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/teacher/TeacherGrades.vue)
-- **Controllers/Services relacionados:** 
-  - [gradingController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/gradingController.ts) (`saveGrades`, `getGrades`)
+### HU-CAL-002: Desglose de Actividades en Criterios Porcentuales
+- **Como:** Docente Titular.
+- **Quiero:** Desglosar una actividad compleja en múltiples criterios de evaluación con pesos porcentuales independientes.
+- **Para:** Evaluar con rúbricas detalladas (ej. presentación, sustentación, contenido).
+- **Criterios de Aceptación:**
+  1. El docente puede agregar múltiples criterios a una actividad existente.
+  2. La sumatoria de los porcentajes de los criterios no puede superar el 100% de la actividad.
+  3. En la planilla de calificaciones, la celda de la actividad se desglosa en sub-columnas para calificar cada criterio.
 
 ---
 
-# HU-CAL-004: Eliminar Actividad Evaluativa o Criterio
-
-## Historia
-**Como** docente del curso  
-**Quiero** eliminar una actividad o un criterio que ya no se va a evaluar  
-**Para** ajustar la estructura de ponderación del periodo en mi materia.
-
-## Criterios de Aceptación
-- El docente presiona eliminar sobre la actividad o criterio.
-- Si el periodo está cerrado, se deniega la eliminación.
-- Al procesarse correctamente, se eliminan en cascada las notas registradas asociadas a dicha actividad o criterio en la base de datos.
-
-## Detalles Técnicos
-- **Prioridad:** Media
-- **Roles involucrados:** Docente
-- **Reglas de negocio relacionadas:** RN-CAL-003
-- **Endpoints relacionados:** 
-  - `DELETE /api/teacher/activities/:id`
-  - `DELETE /api/teacher/activities/criteria/:id`
-- **Componentes frontend relacionados:** 
-  - [TeacherGrades.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/teacher/TeacherGrades.vue)
-- **Controllers/Services relacionados:** 
-  - [gradingController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/gradingController.ts) (`deleteActivity`, `deleteCriterion`)
+### HU-CAL-003: Evaluación de Evidencias Extra/No Planificadas con Justificación
+- **Como:** Docente Titular.
+- **Quiero:** Evaluar una evidencia de DBA que no formaba parte de la planeación curricular regular del periodo actual.
+- **Para:** Realizar actividades de refuerzo, nivelación o adelanto temático según el avance del grupo.
+- **Criterios de Aceptación:**
+  1. El sistema detecta que la evidencia DBA no pertenece a la planeación del periodo en curso.
+  2. El formulario solicita seleccionar obligatoriamente un motivo (`REFUERZO`, `NIVELACION`, `AVANCE_PROGRAMATICO`, `OTRO`).
+  3. Si se selecciona `OTRO`, se exige ingresar una justificación pedagógica detallada.
 
 ---
 
-# HU-CAL-005: Consultar Desglose de Notas por Asignatura (Portal Estudiantil y Padre)
+## 2. Registro y Consolidación de Notas
 
-## Historia
-**Como** estudiante o padre de familia  
-**Quiero** ingresar al detalle de una materia  
-**Para** visualizar la lista completa de actividades evaluadas, sus porcentajes y las notas obtenidas.
+### HU-CAL-004: Registro Masivo de Calificaciones y Sincronización Automática
+- **Como:** Docente Titular.
+- **Quiero:** Digitar y guardar masivamente las calificaciones de todos los estudiantes de mi curso en la planilla interactiva.
+- **Para:** Registrar el rendimiento de los alumnos de manera ágil y sin pérdidas de información.
+- **Criterios de Aceptación:**
+  1. El sistema valida que todas las notas se encuentren dentro del rango institucional (`nota_minima` a `nota_maxima`).
+  2. El backend verifica que todos los alumnos tengan matrícula `ACTIVA` o `APROBADA`; si hay alumnos inactivos o trasladados, bloquea el guardado con `409 Conflict`.
+  3. Para actividades con criterios, el sistema calcula de forma transaccional el promedio ponderado y actualiza automáticamente `notas_actividad` con su escala MEN institucional.
 
-## Criterios de Aceptación
-- Muestra el listado de actividades y criterios evaluados con sus respectivas notas y ponderaciones.
-- Indica el promedio parcial ponderado acumulado en la asignatura.
-- Si la nota obtenida es inferior a la nota de aprobación del colegio, se resalta visualmente en color rojo.
+---
 
-## Detalles Técnicos
-- **Prioridad:** Alta
-- **Roles involucrados:** Estudiante, Padre de Familia
-- **Reglas de negocio relacionadas:** N/A
-- **Endpoints relacionados:** 
-  - `GET /api/student/grades/:id_estudiante/:id_periodo`
-  - `GET /api/student/grade-details/:id_estudiante/:id_periodo/:id_materia`
-- **Componentes frontend relacionados:** 
-  - [StudentGradesView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/student/StudentGradesView.vue)
-  - [SubjectDetailsView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/student/SubjectDetailsView.vue)
-- **Controllers/Services relacionados:** 
-  - [studentPortalController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/studentPortalController.ts) (`getStudentGrades`, `getGradeDetails`)
+### HU-CAL-005: Bloqueo de Calificaciones por Cierre de Periodo o Materia
+- **Como:** Directivo / Sistema de Auditoría.
+- **Quiero:** Que las planillas de calificaciones queden completamente bloqueadas una vez cerrado el periodo institucional o la materia.
+- **Para:** Garantizar la inmutabilidad y transparencia de las notas finales reportadas en los boletines.
+- **Criterios de Aceptación:**
+  1. Si `periodo_academico.estado === 'CERRADO'`, el backend rechaza cualquier creación o guardado de notas con `409 Conflict`.
+  2. Si el docente ya formalizó el cierre de la materia (`cierre_materia`), se bloquea el guardado en backend y los inputs quedan deshabilitados en el frontend.
+  3. Triggers de PostgreSQL abortan cualquier intento de escritura directa a nivel de base de datos.

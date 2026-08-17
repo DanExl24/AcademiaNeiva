@@ -1,122 +1,120 @@
-# Reglas de Negocio — Calificaciones y Actividades
+# Reglas de Negocio — Calificaciones, Actividades y Evaluación Curricular
 
-Este documento detalla las reglas de negocio técnicas y funcionales del módulo de Calificaciones y Actividades de AcademiaNeiva.
+Este documento detalla las reglas de negocio técnicas y funcionales del módulo de **Calificaciones y Actividades** de AcademiaNeiva.
 
 ---
 
-## Estructura Evaluativa
+## 1. Estructura Evaluativa y Ponderaciones
 
-### RN-CAL-001: Ponderación Porcentual Obligatoria (100%)
-- **Descripción:** La estructura evaluativa de una materia en un periodo académico debe cumplir las siguientes reglas de acumulación de porcentajes:
-  - La sumatoria de los porcentajes de todas las actividades asociadas a la materia en el periodo debe ser igual al 100%.
-  - Si una actividad incluye criterios de evaluación, la sumatoria de los porcentajes de sus criterios debe dar exactamente el 100%.
-- **Motivo:** Garantiza que los cálculos de promedios definitivos ponderados sean matemáticamente exactos y consistentes.
-- **Módulos afectados:** Calificaciones, Cierre y Boletines.
-- **Archivos donde se implementa:** 
-  - [gradingController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/gradingController.ts) (`createActivity`, `createCriterion`)
-- **Endpoints relacionados:** 
+### RN-CAL-001: Estructura Evaluativa Ponderada al 100%
+- **Descripción:** 
+  1. La sumatoria de las ponderaciones de todas las actividades registradas para una materia y periodo escolar no puede exceder el 100.00%.
+  2. Si una actividad se desglosa en criterios de evaluación (`criterio_evaluacion`), la sumatoria de las ponderaciones de sus criterios tampoco puede superar el 100.00%.
+  3. Al crear o modificar una actividad o criterio, el backend calcula la suma existente y rechaza la operación con error `400 Bad Request` si la suma supera el límite.
+- **Motivo:** Garantiza la coherencia matemática en el cálculo del promedio definitivo del periodo.
+- **Archivos donde se implementa:**
+  - [gradingController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/gradingController.ts) (`createActivity`, `updateActivity`, `createCriterion`)
+- **Endpoints relacionados:**
   - `POST /api/teacher/activities`
+  - `PUT /api/teacher/activities/:id`
   - `POST /api/teacher/activities/criteria`
 - **Historias de usuario relacionadas:** HU-CAL-001, HU-CAL-002
 
 ---
 
-### RN-CAL-002: Destino de Almacenamiento de Calificaciones (Actividad vs Criterio)
-- **Descripción:** El backend resolverá la tabla de destino de la calificación según la composición de la actividad:
-  - Si la actividad posee criterios en `criterio_evaluacion`, las notas se insertan o actualizan en la tabla `nota_criterio`.
-  - Si la actividad **no** posee criterios de evaluación, la nota se guarda en la tabla `notas_actividad`.
-- **Motivo:** Permite soportar evaluaciones directas o evaluaciones con desglose multifactorial sin duplicar espacio en base de datos.
-- **Módulos afectados:** Calificaciones.
-- **Archivos donde se implementa:** 
+### RN-CAL-002: Sincronización Automática Criterio ➔ Actividad
+- **Descripción:** Cuando una actividad contiene criterios de evaluación:
+  1. Las notas de los estudiantes se guardan individualmente en la tabla `nota_criterio`.
+  2. En la misma transacción de `saveGrades`, el backend calcula automáticamente el promedio ponderado de todos los criterios calificados:
+     $$\text{Nota Actividad} = \frac{\sum (\text{Nota Criterio} \times \text{Porcentaje Criterio})}{\sum \text{Porcentaje Criterio}}$$
+  3. La nota resultante se redondea a un decimal y se inserta o actualiza en la tabla `notas_actividad`, asignándole el `id_escalavaloracion` correspondiente.
+- **Motivo:** Evita inconsistencias entre los criterios evaluados y la nota final de la actividad, facilitando la consulta de promedios.
+- **Archivos donde se implementa:**
   - [gradingController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/gradingController.ts) (`saveGrades`)
-- **Endpoints relacionados:** 
+- **Endpoints relacionados:**
   - `POST /api/teacher/grades`
-- **Historias de usuario relacionadas:** HU-CAL-003
+- **Historias de usuario relacionadas:** HU-CAL-002, HU-CAL-004
 
 ---
 
-## Bloqueos e Integridad
+## 2. Justificación Pedagógica y Coherencia DBA
 
-### RN-CAL-003: Bloqueo de Calificaciones en Periodo o Materia CERRADA
-- **Descripción:** La API de calificaciones rechazará con código de error `409 Conflict` o `403 Forbidden` cualquier intento de crear, editar o eliminar actividades, criterios o calificaciones si el periodo académico o el cierre de la asignatura en `cierre_materia` se encuentra en estado `CERRADO`.
-- **Motivo:** Evita alteraciones no autorizadas en notas ya consolidadas e impresas en boletines oficiales.
-- **Módulos afectados:** Calificaciones, Configuración Académica, Cierre y Boletines.
-- **Archivos donde se implementa:** 
-  - [periodHelpers.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/utils/periodHelpers.ts) (`ensureCurrentPeriodOrRespond`, `ensureSubjectOpen`)
-  - [gradingController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/gradingController.ts) (Validaciones previas en todos los métodos de guardado)
-  - [AcademiaNeivaBD.sql](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/AcademiaNeivaBD.sql) (Trigger `fn_bloquear_periodo_cerrado`)
-- **Endpoints relacionados:** Todos los endpoints del módulo de calificaciones.
-- **Historias de usuario relacionadas:** HU-CAL-001, HU-CAL-003, HU-CAL-004
-
----
-
-### RN-CAL-004: Distribución Estadística de Calificaciones de Prueba
-- **Descripción:** El script de inicialización de datos de prueba (`seed_grades.ts`) utiliza un algoritmo de distribución porcentual para simular un rendimiento estudiantil heterogéneo:
-  - Reprobado (1.0 a 2.9): 15% de los alumnos.
-  - Básico (3.0 a 3.9): 35% de los alumnos.
-  - Alto (4.0 a 4.5): 30% de los alumnos.
-  - Superior (4.6 a 5.0): 20% de los alumnos.
-- **Motivo:** Garantiza que los gráficos analíticos de las consolas de directivos y docentes muestren distribuciones realistas durante las pruebas.
-- **Módulos afectados:** Calificaciones, Dashboard Analítico.
-- **Archivos donde se implementa:** 
-  - `seed_grades.ts`
-- **Endpoints relacionados:** N/A (Script de inicialización)
-- **Historias de usuario relacionadas:** N/A
-
----
-
-### RN-CAL-005: Rango Válido de Nota por Colegio
-- **Descripción:** Toda calificación numérica registrada en el sistema debe validarse estrictamente contra los valores `nota_minima` y `nota_maxima` configurados en la tabla `configuracion_colegio` para el plantel escolar.
-- **Motivo:** Impide registrar notas negativas o superiores a la nota máxima oficial de la institución (ej. notas superiores a 5.0).
-- **Módulos afectados:** Calificaciones, Configuración Académica.
-- **Archivos donde se implementa:** 
-  - [gradingController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/gradingController.ts) (`saveGrades`)
-- **Endpoints relacionados:** 
-  - `POST /api/teacher/grades`
-- **Historias de usuario relacionadas:** HU-CAL-003
-
----
-
-### RN-CAL-006: Inviolabilidad de Materias Cerradas a Nivel de Base de Datos
-- **Descripción:** Se ejecuta un trigger en PostgreSQL (`trg_check_subject_not_closed`) `BEFORE INSERT OR UPDATE OR DELETE` sobre las tablas `actividad_materia`, `notas_actividad`, `criterio_evaluacion`, `nota_criterio`, `registro_asistencia` y `observacion_estudiante`. Si la materia se encuentra en estado `CERRADO` en `cierre_materia` para esa asignación y periodo, PostgreSQL aborta automáticamente la transacción con error `55000`.
-- **Motivo:** Garantiza la integridad absoluta de los datos académicos consolidados independientemente de la interfaz o llamadas directas a la API.
-- **Módulos afectados:** Calificaciones, Asistencia, Observaciones, Cierre y Boletines.
-- **Archivos donde se implementa:** 
-  - `037_prevent_academic_writes_on_closed_subject.sql`
-  - [competencyMigration.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/config/competencyMigration.ts)
-- **Endpoints relacionados:** Todos los endpoints de modificación académica.
-- **Historias de usuario relacionadas:** HU-CAL-003, HU-CIE-001
-
----
-
-### RN-CAL-007: Visualización en Modo Lectura de Actividades en Materias Cerradas
-- **Descripción:** Cuando una materia es cerrada por el docente, la interfaz del módulo de Calificaciones (`TeacherGrades.vue`):
-  - Muestra un banner destacado "Planilla en Modo Solo Lectura".
-  - Deshabilita todas las casillas e inputs de notas (actividades y criterios).
-  - Oculta el botón "+ Crear Actividad".
-  - Permite hacer clic en las actividades existentes para abrir el panel lateral (Drawer) exclusivamente en **Modo Lectura** (permite consultar nombre, peso, evidencias DBA y criterios, pero oculta los controles de edición, guardado o eliminación).
-- **Motivo:** Brinda visibilidad y transparencia al docente y directivo sobre lo evaluado sin permitir alteraciones de calificaciones consolidadas.
-- **Módulos afectados:** Calificaciones.
-- **Archivos donde se implementa:** 
+### RN-CAL-003: Control y Justificación de Evidencias Extra/No Planificadas
+- **Descripción:** Si el docente asocia a una actividad una evidencia del catálogo oficial de DBA que no formaba parte de la planeación curricular aprobada para el periodo actual en ese grado:
+  1. Debe suministrar obligatoriamente un `motivo_extra` (ej. `REFUERZO`, `NIVELACION`, `AVANCE_PROGRAMATICO`, `OTRO`).
+  2. Si selecciona el motivo `OTRO`, debe ingresar obligatoriamente una descripción en `justificacion_extra`.
+  3. De lo contrario, el backend rechaza la creación de la actividad con error `400 Bad Request`.
+- **Motivo:** Permite la flexibilidad pedagógica docente en el aula garantizando la trazabilidad y justificación curricular ante la coordinación académica.
+- **Archivos donde se implementa:**
+  - [gradingController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/gradingController.ts) (`createActivity`, `updateActivity`)
   - [TeacherGrades.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/teacher/TeacherGrades.vue)
-- **Endpoints relacionados:** `GET /api/teacher/closure-status/:detailGradeId/:periodId`
-- **Historias de usuario relacionadas:** HU-CAL-001, HU-CAL-003
+- **Endpoints relacionados:**
+  - `POST /api/teacher/activities`
+  - `PUT /api/teacher/activities/:id`
+- **Historias de usuario relacionadas:** HU-CAL-003
 
 ---
 
-### RN-CAL-008: Trazabilidad de Docente Creador y Docente de Cierre
-- **Descripción:** 
-  - La tabla `actividad_materia` almacena `id_docente_creador` para identificar qué docente creó la actividad (preservando este dato aunque la asignatura sea reasignada a otro docente en `detalle_grados`).
-  - La tabla `cierre_materia` almacena `id_docente_cierre` para registrar el docente exacto que realizó la acción del cierre de periodo.
-- **Motivo:** Asegura la auditoría histórica de las actividades pedagógicas y cierres de periodo cuando ocurren cambios de planta docente.
-- **Módulos afectados:** Calificaciones, Cierre y Boletines, Portal Estudiante.
-- **Archivos donde se implementa:** 
-  - `035_add_id_docente_creador_to_actividad_materia.sql`
-  - `036_add_id_docente_cierre_to_cierre_materia.sql`
-  - [gradingController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/gradingController.ts)
-  - [studentPortalController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/studentPortalController.ts)
-  - [TeacherClosure.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/teacher/TeacherClosure.vue)
-  - [SubjectDetailsView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/student/SubjectDetailsView.vue)
-- **Endpoints relacionados:** `POST /api/teacher/close-period`, `GET /api/student/grade-details/...`
-- **Historias de usuario relacionadas:** HU-CAL-001, HU-CIE-001
+## 3. Matrículas Activas, Rangos y Escala MEN
 
+### RN-CAL-004: Restricción de Calificación por Estado de Matrícula
+- **Descripción:** Al persistir calificaciones (`saveGrades`), el backend verifica que todos los estudiantes recibidos tengan matrícula registrada en estado `ACTIVA` o `APROBADA` en la institución educativa. Si se detectan estudiantes en estado `TRASLADADA`, `RETIRADO`, `EXPULSADO` o inactivo, la operación se cancela en su totalidad con error `409 Conflict` detallando los nombres de los alumnos no elegibles.
+- **Motivo:** Previene el ingreso accidental de notas sobre estudiantes desvinculados o transferidos a otros colegios.
+- **Archivos donde se implementa:**
+  - [gradingController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/gradingController.ts) (`saveGrades`)
+- **Endpoints relacionados:**
+  - `POST /api/teacher/grades`
+- **Historias de usuario relacionadas:** HU-CAL-004
+
+---
+
+### RN-CAL-005: Rango Institucional de Calificación y Escala MEN
+- **Descripción:**
+  1. Toda nota numérica ingresada en `notas_actividad` o `nota_criterio` debe ubicarse estrictamente entre la `nota_minima` y la `nota_maxima` configuradas en `configuracion_colegio` (ej. 1.0 a 5.0).
+  2. El backend ubica automáticamente el `id_escalavaloracion` correspondiente según los rangos `valor_minimo` y `valor_maximo` de la tabla `escala_valoracion` institucional (Bajo, Básico, Alto, Superior).
+- **Motivo:** Cumple con el Decreto 1290 del MEN colombiano y mantiene la estandarización cualitativa/cuantitativa.
+- **Archivos donde se implementa:**
+  - [gradingController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/gradingController.ts) (`saveGrades`)
+- **Endpoints relacionados:**
+  - `POST /api/teacher/grades`
+- **Historias de usuario relacionadas:** HU-CAL-004
+
+---
+
+## 4. Doble Candado por Cierre y Triggers SQL
+
+### RN-CAL-006: Doble Bloqueo de Modificación por Cierre
+- **Descripción:** Se bloquea cualquier creación, edición o eliminación de actividades, criterios y notas si:
+  1. El periodo académico se encuentra formalmente cerrado institucionalmente (`periodo_academico.estado === 'CERRADO'`) (`409 Conflict`).
+  2. El docente titular ya ejecutó el cierre de la materia en ese periodo mediante `cierre_materia` (`ensureSubjectOpen`) (`409 Conflict`).
+- **Motivo:** Protege la inmutabilidad de los registros académicos una vez finalizadas las evaluaciones.
+- **Archivos donde se implementa:**
+  - [periodHelpers.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/utils/periodHelpers.ts) (`ensurePeriodOpen`, `ensureSubjectOpen`)
+  - [gradingController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/gradingController.ts)
+- **Endpoints relacionados:**
+  - `POST /api/teacher/activities`
+  - `PUT /api/teacher/activities/:id`
+  - `DELETE /api/teacher/activities/:id`
+  - `POST /api/teacher/activities/criteria`
+  - `POST /api/teacher/grades`
+- **Historias de usuario relacionadas:** HU-CAL-005
+
+---
+
+### RN-CAL-007: Triggers de Base de Datos de Protección Absoluta
+- **Descripción:** La función trigger de PostgreSQL `prevent_academic_writes_on_closed_subject` intercepta directamente operaciones `INSERT`, `UPDATE` y `DELETE` en las tablas `actividad_materia`, `criterio_evaluacion`, `notas_actividad` y `nota_criterio`. Si existe un registro en `cierre_materia` para la asignación y periodo, aborta la transacción a nivel de motor SQL.
+- **Motivo:** Salvaguarda la integridad de datos ante accesos concurrentes o scripts fuera de la API HTTP.
+- **Archivos donde se implementa:**
+  - Migración 037 (`prevent_academic_writes_on_closed_subject.sql`)
+- **Historias de usuario relacionadas:** HU-CAL-005
+
+---
+
+### RN-CAL-008: Trazabilidad y Autoría de Actividades
+- **Descripción:** Toda actividad evaluativa almacena en `id_docente_creador` la referencia al docente titular que la registró en la base de datos, garantizando la trazabilidad histórica ante relevos o suplencias docentes.
+- **Motivo:** Mantiene el registro de autoría pedagógica en el historial del curso.
+- **Archivos donde se implementa:**
+  - [gradingController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/gradingController.ts) (`createActivity`)
+- **Endpoints relacionados:**
+  - `POST /api/teacher/activities`
+- **Historias de usuario relacionadas:** HU-CAL-001
