@@ -20,6 +20,12 @@ let resolvePromise: ((value: boolean) => void) | null = null
 
 export function useConfirm() {
   const confirm = (opts: ConfirmOptions | string): Promise<boolean> => {
+    // Si había una confirmación previa pendiente, resolverla con false antes de abrir la nueva
+    if (resolvePromise) {
+      resolvePromise(false)
+      resolvePromise = null
+    }
+
     if (typeof opts === 'string') {
       options.value = {
         title: '¿Confirmar acción?',
@@ -47,12 +53,20 @@ export function useConfirm() {
 
   const handleConfirm = () => {
     isVisible.value = false
-    if (resolvePromise) resolvePromise(true)
+    if (resolvePromise) {
+      const resolver = resolvePromise
+      resolvePromise = null
+      resolver(true)
+    }
   }
 
   const handleCancel = () => {
     isVisible.value = false
-    if (resolvePromise) resolvePromise(false)
+    if (resolvePromise) {
+      const resolver = resolvePromise
+      resolvePromise = null
+      resolver(false)
+    }
   }
 
   return {
@@ -63,3 +77,4 @@ export function useConfirm() {
     handleCancel
   }
 }
+

@@ -3,4 +3,6 @@ export * from './student.types'
 export * from './academic.types'
 export * from './grade.types'
 export * from './enrollment.types'
+export * from './reingreso.types'
 export * from './support.types'
+
