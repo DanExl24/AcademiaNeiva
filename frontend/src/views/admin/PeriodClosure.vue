@@ -10,6 +10,9 @@ import { getCourseDisplayName } from '../../utils/courseHelper'
 import { useAcademicYearStore } from '../../stores/academicYear'
 import { useConfirm } from '../../composables/useConfirm'
 import { useToast } from '../../composables/useToast'
+import DataTable from '../../components/ui/DataTable.vue'
+import SkeletonTable from '../../components/feedback/SkeletonTable.vue'
+import EmptyState from '../../components/feedback/EmptyState.vue'
 
 const auth = useAuthStore()
 const yearStore = useAcademicYearStore()
@@ -466,9 +469,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <div v-if="loading" class="rounded-3xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-16 text-center font-bold text-slate-400 shadow-sm">
-      Cargando configuración...
-    </div>
+    <SkeletonTable v-if="loading" :rows="5" :cols="4" />
 
     <template v-else>
       <div class="rounded-3xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
@@ -823,85 +824,87 @@ onMounted(() => {
             </div>
 
             <!-- Empty Results View -->
-            <div v-if="filteredAssignments.length === 0" class="text-center py-16 bg-white dark:bg-slate-800 rounded-[2rem] border border-slate-100 dark:border-slate-700 shadow-sm">
-              <Search class="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
-              <h3 class="text-lg font-bold text-slate-600 dark:text-slate-300">No se encontraron resultados</h3>
-              <p class="text-slate-500 dark:text-slate-400 text-sm mt-1 max-w-md mx-auto">
-                No hay asignaciones que coincidan con la combinación de filtros seleccionados. Pruebe limpiando algunos filtros.
-              </p>
-              <button @click="clearAllFilters" class="mt-4 inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-rose-600 text-white font-bold text-xs hover:bg-rose-500 transition-colors">
-                <RotateCcw class="w-4 h-4" />
-                <span>Limpiar todos los filtros</span>
-              </button>
-            </div>
+            <EmptyState
+              v-if="filteredAssignments.length === 0"
+              title="No se encontraron resultados"
+              description="No hay asignaciones que coincidan con la combinación de filtros seleccionados."
+            >
+              <template #icon>
+                <Search class="w-8 h-8 text-slate-400" />
+              </template>
+              <template #action>
+                <button @click="clearAllFilters" class="mt-4 inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-rose-600 text-white font-bold text-xs hover:bg-rose-500 transition-colors">
+                  <RotateCcw class="w-4 h-4" />
+                  <span>Limpiar todos los filtros</span>
+                </button>
+              </template>
+            </EmptyState>
 
             <!-- MODE 1: FLAT DETAILED TABLE VIEW -->
-            <div v-else-if="viewMode === 'table'" class="overflow-x-auto bg-white dark:bg-slate-800 rounded-3xl border border-slate-100 dark:border-slate-700 shadow-sm transition-all">
-              <div class="p-4 bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center text-xs font-bold text-slate-500">
+            <div v-else-if="viewMode === 'table'" class="space-y-2">
+              <div class="px-2 flex justify-between items-center text-xs font-bold text-slate-500">
                 <span>Mostrando {{ filteredAssignments.length }} asignaciones</span>
               </div>
-              <table class="w-full text-left border-collapse">
-                <thead>
-                  <tr class="border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/50">
-                    <th class="p-5 text-xs font-black uppercase text-slate-400 dark:text-slate-500 tracking-wider">Docente</th>
-                    <th class="p-5 text-xs font-black uppercase text-slate-400 dark:text-slate-500 tracking-wider">Asignatura / Materia</th>
-                    <th class="p-5 text-xs font-black uppercase text-slate-400 dark:text-slate-500 tracking-wider">Curso / Grupo</th>
-                    <th class="p-5 text-xs font-black uppercase text-slate-400 dark:text-slate-500 tracking-wider text-center">Estado</th>
-                    <th class="p-5 text-xs font-black uppercase text-slate-400 dark:text-slate-500 tracking-wider text-right">Acciones</th>
+              <DataTable>
+                <template #header>
+                  <tr>
+                    <th class="py-4 px-6">Docente</th>
+                    <th class="py-4 px-6">Asignatura / Materia</th>
+                    <th class="py-4 px-6">Curso / Grupo</th>
+                    <th class="py-4 px-6 text-center">Estado</th>
+                    <th class="py-4 px-6 text-right">Acciones</th>
                   </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-50 dark:divide-slate-700/50">
-                  <tr 
-                    v-for="asig in filteredAssignments" 
-                    :key="asig.id_detallegrado"
-                    class="hover:bg-slate-50/50 dark:hover:bg-slate-700/30 transition-colors group"
-                  >
-                    <td class="p-5">
-                      <div class="font-extrabold text-slate-900 dark:text-slate-100">
-                        {{ asig.docente_nombre }}
-                      </div>
-                      <div class="text-xs text-slate-400 dark:text-slate-500 font-semibold mt-0.5">
-                        {{ asig.docente_email }}
-                      </div>
-                    </td>
-                    <td class="p-5">
-                      <span class="font-bold text-slate-700 dark:text-slate-300">
-                        {{ asig.materia_nombre }}
-                      </span>
-                    </td>
-                    <td class="p-5">
-                      <span class="font-black text-indigo-600 dark:text-indigo-400 bg-indigo-50/60 dark:bg-indigo-950/30 rounded-xl px-3 py-1.5 text-xs border border-indigo-100/30">
-                        {{ asig.grado }}
-                      </span>
-                    </td>
-                    <td class="p-5 text-center">
-                      <span 
-                        class="text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-full ring-1 ring-inset"
-                        :class="asig.estado === 'CERRADO' ? 'text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 ring-emerald-500/20' : 'text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/30 ring-rose-500/20'"
+                </template>
+                <tr 
+                  v-for="asig in filteredAssignments" 
+                  :key="asig.id_detallegrado"
+                  class="hover:bg-slate-50/50 dark:hover:bg-slate-700/30 transition-colors group"
+                >
+                  <td class="py-4 px-6">
+                    <div class="font-extrabold text-slate-900 dark:text-slate-100">
+                      {{ asig.docente_nombre }}
+                    </div>
+                    <div class="text-xs text-slate-400 dark:text-slate-500 font-semibold mt-0.5">
+                      {{ asig.docente_email }}
+                    </div>
+                  </td>
+                  <td class="py-4 px-6">
+                    <span class="font-bold text-slate-700 dark:text-slate-300">
+                      {{ asig.materia_nombre }}
+                    </span>
+                  </td>
+                  <td class="py-4 px-6">
+                    <span class="font-black text-indigo-600 dark:text-indigo-400 bg-indigo-50/60 dark:bg-indigo-950/30 rounded-xl px-3 py-1.5 text-xs border border-indigo-100/30">
+                      {{ asig.grado }}
+                    </span>
+                  </td>
+                  <td class="py-4 px-6 text-center">
+                    <span 
+                      class="text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-full ring-1 ring-inset"
+                      :class="asig.estado === 'CERRADO' ? 'text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 ring-emerald-500/20' : 'text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/30 ring-rose-500/20'"
+                    >
+                      {{ asig.estado }}
+                    </span>
+                  </td>
+                  <td class="py-4 px-6 text-right">
+                    <div class="flex justify-end items-center gap-2">
+                      <button
+                        v-if="asig.estado === 'CERRADO'"
+                        @click="attemptReopenSubject(asig)"
+                        :disabled="reopeningSubject === asig.id_detallegrado"
+                        class="inline-flex items-center justify-center gap-1.5 rounded-2xl bg-amber-50 px-4 py-2 text-xs font-black text-amber-700 hover:bg-amber-100 transition-all dark:bg-amber-950/20 dark:text-amber-400 dark:hover:bg-amber-950/40 disabled:opacity-50 border border-amber-200/30 cursor-pointer"
+                        title="Habilitar docente para modificar e ingresar calificaciones"
                       >
-                        {{ asig.estado }}
+                        <Unlock class="w-3.5 h-3.5" />
+                        <span>Habilitar</span>
+                      </button>
+                      <span v-else class="text-xs font-bold text-slate-400 dark:text-slate-500 italic pr-3 select-none">
+                        No requiere acción
                       </span>
-                    </td>
-                    <td class="p-5 text-right">
-                      <div class="flex justify-end items-center gap-2">
-                        <button
-                          v-if="asig.estado === 'CERRADO'"
-                          @click="attemptReopenSubject(asig)"
-                          :disabled="reopeningSubject === asig.id_detallegrado"
-                          class="inline-flex items-center justify-center gap-1.5 rounded-2xl bg-amber-50 px-4 py-2 text-xs font-black text-amber-700 hover:bg-amber-100 transition-all dark:bg-amber-950/20 dark:text-amber-400 dark:hover:bg-amber-950/40 disabled:opacity-50 border border-amber-200/30 cursor-pointer"
-                          title="Habilitar docente para modificar e ingresar calificaciones"
-                        >
-                          <Unlock class="w-3.5 h-3.5" />
-                          <span>Habilitar</span>
-                        </button>
-                        <span v-else class="text-xs font-bold text-slate-400 dark:text-slate-500 italic pr-3 select-none">
-                          No requiere acción
-                        </span>
-                      </div>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+                    </div>
+                  </td>
+                </tr>
+              </DataTable>
             </div>
 
             <!-- MODE 2: GROUPED BY TEACHER CARDS -->

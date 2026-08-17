@@ -25,6 +25,7 @@ import {
 } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 import { useAcademicYearStore } from '../../stores/academicYear'
+import DataTable from '../../components/ui/DataTable.vue'
 
 interface PeriodOption {
   id_periodo: number
@@ -1463,64 +1464,60 @@ onMounted(() => {
           </div>
 
           <!-- MODE 3: DETAILED FLAT TABLE -->
-          <div v-else class="overflow-x-auto">
-            <table class="w-full border-collapse">
-              <thead>
-                <tr class="bg-slate-50 border-b border-slate-100 text-left dark:bg-slate-800/40 dark:border-slate-800">
-                  <th class="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Docente</th>
-                  <th class="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Curso & Materia</th>
-                  <th class="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Actividad</th>
-                  <th class="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Enunciado DBA</th>
-                  <th class="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Evidencia del Catálogo</th>
-                  <th class="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400 text-center">Coherencia</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
-                <tr v-for="row in filteredCoherencia" :key="row.id_actividadmateria + '-' + row.id_evidencia_dba" class="hover:bg-slate-50/50 transition dark:hover:bg-slate-800/30">
-                  <td class="px-6 py-4">
-                    <p class="text-sm font-bold text-slate-800 dark:text-slate-200">{{ row.docente_nombre }}</p>
-                    <p class="text-[10px] font-semibold text-slate-400">Docente Asignado</p>
-                  </td>
-                  <td class="px-6 py-4">
-                    <p class="text-sm font-bold text-slate-800 dark:text-slate-200">{{ row.grupo_nombre }}</p>
-                    <p class="text-[10px] font-bold text-indigo-500 uppercase tracking-tighter">{{ row.materia_nombre }}</p>
-                  </td>
-                  <td class="px-6 py-4">
-                    <p class="text-sm font-bold text-slate-800 dark:text-slate-200">{{ row.actividad_nombre }}</p>
-                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Peso: {{ row.actividad_porcentaje }}%</p>
-                  </td>
-                  <td class="px-6 py-4 max-w-xs">
-                    <span class="inline-flex rounded-lg bg-amber-50 px-2 py-0.5 text-[10px] font-black text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 shrink-0 mb-1.5">DBA #{{ row.numero_dba }}</span>
-                    <p class="text-xs font-semibold text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed" :title="row.dba_enunciado">{{ row.dba_enunciado }}</p>
-                  </td>
-                  <td class="px-6 py-4 max-w-sm">
-                    <p class="text-xs font-semibold text-slate-700 dark:text-slate-300 leading-relaxed">{{ row.evidencia_descripcion }}</p>
-                    
-                    <div v-if="row.estado_coherencia === 'EXTRA'" class="mt-2.5 p-3 rounded-2xl bg-amber-50/60 border border-amber-250/30 text-xs dark:bg-amber-950/20 dark:border-amber-900/30">
-                      <div class="flex items-center gap-1.5 text-amber-700 dark:text-amber-400 font-extrabold uppercase text-[9px] tracking-wider mb-1">
-                        <AlertTriangle :size="12" />
-                        <span>Justificación Docente:</span>
-                      </div>
-                      <p class="font-bold text-slate-700 dark:text-slate-350">
-                        <span class="text-slate-500">Motivo:</span> {{ formatMotivoExtra(row.motivo_extra) }}
-                      </p>
-                      <p v-if="row.justificacion_extra" class="mt-1 text-slate-600 dark:text-slate-400 italic">
-                        "{{ row.justificacion_extra }}"
-                      </p>
-                    </div>
-                  </td>
-                  <td class="px-6 py-4 text-center">
-                    <span
-                      :class="row.estado_coherencia === 'PLANEADA' ? 'bg-emerald-50 text-emerald-700 border-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-900/30' : 'bg-amber-50 text-amber-700 border-amber-100 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-900/30'"
-                      class="inline-flex items-center justify-center rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-wider border shadow-sm"
-                    >
-                      {{ row.estado_coherencia }}
-                    </span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          <DataTable v-else>
+            <template #header>
+              <tr>
+                <th class="py-4 px-6">Docente</th>
+                <th class="py-4 px-6">Curso & Materia</th>
+                <th class="py-4 px-6">Actividad</th>
+                <th class="py-4 px-6">Enunciado DBA</th>
+                <th class="py-4 px-6">Evidencia del Catálogo</th>
+                <th class="py-4 px-6 text-center">Coherencia</th>
+              </tr>
+            </template>
+            <tr v-for="row in filteredCoherencia" :key="row.id_actividadmateria + '-' + row.id_evidencia_dba" class="hover:bg-slate-50/50 transition dark:hover:bg-slate-800/30">
+              <td class="py-4 px-6">
+                <p class="text-sm font-bold text-slate-800 dark:text-slate-200">{{ row.docente_nombre }}</p>
+                <p class="text-[10px] font-semibold text-slate-400">Docente Asignado</p>
+              </td>
+              <td class="py-4 px-6">
+                <p class="text-sm font-bold text-slate-800 dark:text-slate-200">{{ row.grupo_nombre }}</p>
+                <p class="text-[10px] font-bold text-indigo-500 uppercase tracking-tighter">{{ row.materia_nombre }}</p>
+              </td>
+              <td class="py-4 px-6">
+                <p class="text-sm font-bold text-slate-800 dark:text-slate-200">{{ row.actividad_nombre }}</p>
+                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Peso: {{ row.actividad_porcentaje }}%</p>
+              </td>
+              <td class="py-4 px-6 max-w-xs">
+                <span class="inline-flex rounded-lg bg-amber-50 px-2 py-0.5 text-[10px] font-black text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 shrink-0 mb-1.5">DBA #{{ row.numero_dba }}</span>
+                <p class="text-xs font-semibold text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed" :title="row.dba_enunciado">{{ row.dba_enunciado }}</p>
+              </td>
+              <td class="py-4 px-6 max-w-sm">
+                <p class="text-xs font-semibold text-slate-700 dark:text-slate-300 leading-relaxed">{{ row.evidencia_descripcion }}</p>
+                
+                <div v-if="row.estado_coherencia === 'EXTRA'" class="mt-2.5 p-3 rounded-2xl bg-amber-50/60 border border-amber-250/30 text-xs dark:bg-amber-950/20 dark:border-amber-900/30">
+                  <div class="flex items-center gap-1.5 text-amber-700 dark:text-amber-400 font-extrabold uppercase text-[9px] tracking-wider mb-1">
+                    <AlertTriangle :size="12" />
+                    <span>Justificación Docente:</span>
+                  </div>
+                  <p class="font-bold text-slate-700 dark:text-slate-350">
+                    <span class="text-slate-500">Motivo:</span> {{ formatMotivoExtra(row.motivo_extra) }}
+                  </p>
+                  <p v-if="row.justificacion_extra" class="mt-1 text-slate-600 dark:text-slate-400 italic">
+                    "{{ row.justificacion_extra }}"
+                  </p>
+                </div>
+              </td>
+              <td class="py-4 px-6 text-center">
+                <span
+                  :class="row.estado_coherencia === 'PLANEADA' ? 'bg-emerald-50 text-emerald-700 border-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-900/30' : 'bg-amber-50 text-amber-700 border-amber-100 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-900/30'"
+                  class="inline-flex items-center justify-center rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-wider border shadow-sm"
+                >
+                  {{ row.estado_coherencia }}
+                </span>
+              </td>
+            </tr>
+          </DataTable>
         </div>
       </div>
 

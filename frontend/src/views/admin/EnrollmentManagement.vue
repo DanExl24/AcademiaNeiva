@@ -46,6 +46,9 @@ import { getCourseDisplayName } from '../../utils/courseHelper'
 
 import { useAcademicYearStore } from '../../stores/academicYear'
 import { useConfirm } from '../../composables/useConfirm'
+import DataTable from '../../components/ui/DataTable.vue'
+import SkeletonTable from '../../components/feedback/SkeletonTable.vue'
+import EmptyState from '../../components/feedback/EmptyState.vue'
 
 const auth = useAuthStore()
 const notify = useNotificationStore()
@@ -1044,153 +1047,147 @@ const approveException = async (id: number) => {
     </div>
 
     <!-- List -->
-    <div v-if="loading" class="h-48 flex items-center justify-center bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800">
-      <div class="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mr-3"></div>
-      <span class="text-slate-400 font-bold text-sm">Cargando matrículas...</span>
-    </div>
+    <SkeletonTable v-if="loading" :rows="6" :cols="6" />
 
-    <div v-else class="bg-white dark:bg-slate-900 rounded-[24px] border border-slate-100 dark:border-slate-800 overflow-hidden shadow-sm">
-      <!-- Empty state -->
-      <div v-if="filteredEnrollments.length === 0" class="py-20 text-center text-slate-400">
-        <Inbox :size="48" class="mx-auto mb-4 opacity-10" />
-        <p class="font-black uppercase text-sm tracking-widest">Sin matrículas en esta categoría</p>
-      </div>
+    <EmptyState
+      v-else-if="filteredEnrollments.length === 0"
+      title="Sin matrículas en esta categoría"
+      description="No se encontraron solicitudes o registros de matrícula para el filtro seleccionado."
+    >
+      <template #icon>
+        <Inbox :size="48" class="text-slate-400" />
+      </template>
+    </EmptyState>
 
-      <!-- Table -->
-      <div v-else class="overflow-x-auto">
-        <table class="w-full text-left">
-          <thead class="bg-slate-50 dark:bg-slate-800/50">
-            <tr class="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400 dark:text-slate-500">
-              <th class="px-6 py-4">Tipo</th>
-              <th class="px-6 py-4">Estudiante / Acudiente</th>
-              <th class="px-6 py-4">Nivel / Grado</th>
-              <th class="px-6 py-4">Fecha Solicitud</th>
-              <th class="px-6 py-4">Estado</th>
-              <th class="px-6 py-4 text-right">Gestionar</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-slate-50 dark:divide-slate-800">
-            <tr
-              v-for="en in filteredEnrollments"
-              :key="en.id_matricula"
-              class="group hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors"
+    <DataTable v-else>
+      <template #header>
+        <tr>
+          <th class="py-4 px-6">Tipo</th>
+          <th class="py-4 px-6">Estudiante / Acudiente</th>
+          <th class="py-4 px-6">Nivel / Grado</th>
+          <th class="py-4 px-6">Fecha Solicitud</th>
+          <th class="py-4 px-6">Estado</th>
+          <th class="py-4 px-6 text-right">Gestionar</th>
+        </tr>
+      </template>
+      <tr
+        v-for="en in filteredEnrollments"
+        :key="en.id_matricula"
+        class="group hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors"
+      >
+        <td class="py-4 px-6">
+          <div class="flex flex-wrap items-center gap-1.5 font-sans">
+            <span :class="[getTipoMeta(en.tipo).bg, 'text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md']">
+              {{ getTipoMeta(en.tipo).label }}
+            </span>
+            <!-- Priority Badge for Oldest Pending Submissions -->
+            <span 
+              v-if="oldestPendingMap.has(en.id_matricula) && (en.estado === 'PENDIENTE' || en.estado === 'CORRECCION')" 
+              class="inline-flex items-center gap-1 bg-amber-500/10 text-amber-700 dark:bg-amber-400/20 dark:text-amber-300 border border-amber-300/80 dark:border-amber-700/80 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full shadow-2xs"
+              :title="`Solicitud enviada de primero (Turno #${oldestPendingMap.get(en.id_matricula)})`"
             >
-              <td class="px-6 py-4">
-                <div class="flex flex-wrap items-center gap-1.5 font-sans">
-                  <span :class="[getTipoMeta(en.tipo).bg, 'text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md']">
-                    {{ getTipoMeta(en.tipo).label }}
-                  </span>
-                  <!-- Priority Badge for Oldest Pending Submissions -->
-                  <span 
-                    v-if="oldestPendingMap.has(en.id_matricula) && (en.estado === 'PENDIENTE' || en.estado === 'CORRECCION')" 
-                    class="inline-flex items-center gap-1 bg-amber-500/10 text-amber-700 dark:bg-amber-400/20 dark:text-amber-300 border border-amber-300/80 dark:border-amber-700/80 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full shadow-2xs"
-                    :title="`Solicitud enviada de primero (Turno #${oldestPendingMap.get(en.id_matricula)})`"
-                  >
-                    <Clock :size="10" class="text-amber-600 dark:text-amber-400" />
-                    <span>Turno #{{ oldestPendingMap.get(en.id_matricula) }} • Prioritaria</span>
-                  </span>
-                </div>
-              </td>
-              <td class="px-6 py-4">
-                <p v-if="en.student_nombre" class="font-bold text-slate-900 dark:text-white text-sm leading-tight">
-                  {{ en.student_nombre }} {{ en.student_apellido || '' }}
-                </p>
-                <p class="text-xs font-semibold text-slate-500 dark:text-slate-400">{{ en.correo_padre }}</p>
-                <p v-if="en.student_documento" class="text-[10px] text-slate-400 font-mono">Doc: {{ en.student_documento }}</p>
-              </td>
-              <td class="px-6 py-4">
-                <div class="space-y-1">
-                  <div v-if="en.nivel_nombre" class="flex items-center gap-1.5">
-                    <span class="inline-block px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/60">
-                      {{ en.nivel_nombre }}
-                    </span>
-                  </div>
-                  <p v-if="en.grado_nombre" class="text-xs font-black text-slate-800 dark:text-slate-100">
-                    {{ en.grado_nombre }}
-                  </p>
-                  <p v-else class="text-xs font-bold text-indigo-500 uppercase">ID {{ en.id_grado }}</p>
-                  <span v-if="(en.es_traslado || en.tipo === 'TRASLADO') && !en.id_grupo" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-amber-50 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300 border border-amber-300/80">
-                    ⚠️ Pendiente Salón
-                  </span>
-                </div>
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap">
-                <div class="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  <Calendar :size="13" class="text-indigo-500 shrink-0" />
-                  <span>{{ formatDateTime(en.fecha_creacion) }}</span>
-                </div>
-              </td>
-              <td class="px-6 py-4">
-                <div class="relative flex flex-col gap-1.5">
-                  <div class="flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      @click.stop="hasTransferInfo(en) ? toggleTransferInfo($event, en.id_matricula) : null"
-                      :class="[
-                        getStatusMeta(en.estado).bg, 
-                        'px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest w-fit inline-flex items-center gap-1.5 transition-all',
-                        hasTransferInfo(en) ? 'cursor-pointer hover:opacity-90 active:scale-95 ring-1 ring-inset ring-black/5 dark:ring-white/10 shadow-sm' : ''
-                      ]"
-                      :title="hasTransferInfo(en) ? 'Clic para ver detalles del traslado' : ''"
-                    >
-                      <span>{{ getStatusMeta(en.estado).label }}</span>
-                      <ArrowDownLeft v-if="en.sentido_traslado === 'ENTRANTE' || (en.es_traslado && en.colegio_origen_nombre && String(en.id_colegio) === String(en.id_colegio_destino))" :size="11" class="text-emerald-700 dark:text-emerald-300 stroke-[2.5]" />
-                      <ArrowUpRight v-else-if="en.sentido_traslado === 'SALIENTE'" :size="11" class="text-purple-700 dark:text-purple-300 stroke-[2.5]" />
-                      <ArrowLeftRight v-else-if="en.es_traslado || en.tipo === 'TRASLADO'" :size="11" class="text-blue-600 dark:text-blue-400 stroke-[2.5]" />
-                    </button>
-                  </div>
+              <Clock :size="10" class="text-amber-600 dark:text-amber-400" />
+              <span>Turno #{{ oldestPendingMap.get(en.id_matricula) }} • Prioritaria</span>
+            </span>
+          </div>
+        </td>
+        <td class="py-4 px-6">
+          <p v-if="en.student_nombre" class="font-bold text-slate-900 dark:text-white text-sm leading-tight">
+            {{ en.student_nombre }} {{ en.student_apellido || '' }}
+          </p>
+          <p class="text-xs font-semibold text-slate-500 dark:text-slate-400">{{ en.correo_padre }}</p>
+          <p v-if="en.student_documento" class="text-[10px] text-slate-400 font-mono">Doc: {{ en.student_documento }}</p>
+        </td>
+        <td class="py-4 px-6">
+          <div class="space-y-1">
+            <div v-if="en.nivel_nombre" class="flex items-center gap-1.5">
+              <span class="inline-block px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/60">
+                {{ en.nivel_nombre }}
+              </span>
+            </div>
+            <p v-if="en.grado_nombre" class="text-xs font-black text-slate-800 dark:text-slate-100">
+              {{ en.grado_nombre }}
+            </p>
+            <p v-else class="text-xs font-bold text-indigo-500 uppercase">ID {{ en.id_grado }}</p>
+            <span v-if="(en.es_traslado || en.tipo === 'TRASLADO') && !en.id_grupo" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-amber-50 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300 border border-amber-300/80">
+              ⚠️ Pendiente Salón
+            </span>
+          </div>
+        </td>
+        <td class="py-4 px-6 whitespace-nowrap">
+          <div class="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">
+            <Calendar :size="13" class="text-indigo-500 shrink-0" />
+            <span>{{ formatDateTime(en.fecha_creacion) }}</span>
+          </div>
+        </td>
+        <td class="py-4 px-6">
+          <div class="relative flex flex-col gap-1.5">
+            <div class="flex items-center gap-1.5">
+              <button
+                type="button"
+                @click.stop="hasTransferInfo(en) ? toggleTransferInfo($event, en.id_matricula) : null"
+                :class="[
+                  getStatusMeta(en.estado).bg, 
+                  'px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest w-fit inline-flex items-center gap-1.5 transition-all',
+                  hasTransferInfo(en) ? 'cursor-pointer hover:opacity-90 active:scale-95 ring-1 ring-inset ring-black/5 dark:ring-white/10 shadow-sm' : ''
+                ]"
+                :title="hasTransferInfo(en) ? 'Clic para ver detalles del traslado' : ''"
+              >
+                <span>{{ getStatusMeta(en.estado).label }}</span>
+                <ArrowDownLeft v-if="en.sentido_traslado === 'ENTRANTE' || (en.es_traslado && en.colegio_origen_nombre && String(en.id_colegio) === String(en.id_colegio_destino))" :size="11" class="text-emerald-700 dark:text-emerald-300 stroke-[2.5]" />
+                <ArrowUpRight v-else-if="en.sentido_traslado === 'SALIENTE'" :size="11" class="text-purple-700 dark:text-purple-300 stroke-[2.5]" />
+                <ArrowLeftRight v-else-if="en.es_traslado || en.tipo === 'TRASLADO'" :size="11" class="text-blue-600 dark:text-blue-400 stroke-[2.5]" />
+              </button>
+            </div>
 
-                  <!-- Popover Flotante de Traslado (No altera el alto de la fila ni rompe la tabla) -->
-                  <div 
-                    v-if="activeTransferPopupId === en.id_matricula && hasTransferInfo(en)"
-                    class="absolute left-0 top-full mt-1.5 z-50 w-72 p-3.5 bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 text-left animate-in fade-in zoom-in-95 duration-150"
-                    @click.stop
-                  >
-                    <div class="flex items-start justify-between gap-2 mb-1.5 border-b border-slate-100 dark:border-slate-700/60 pb-1.5">
-                      <div class="flex items-center gap-1.5 text-xs font-black text-slate-800 dark:text-white">
-                        <ArrowDownLeft v-if="en.sentido_traslado === 'ENTRANTE' || (en.es_traslado && en.colegio_origen_nombre && String(en.id_colegio) === String(en.id_colegio_destino))" :size="14" class="text-emerald-600" />
-                        <ArrowUpRight v-else-if="en.sentido_traslado === 'SALIENTE'" :size="14" class="text-purple-600" />
-                        <ArrowLeftRight v-else :size="14" class="text-blue-600" />
-                        <span>{{ getTransferPopupTitle(en) }}</span>
-                      </div>
-                      <button @click.stop="activeTransferPopupId = null" class="text-slate-400 hover:text-slate-600 dark:hover:text-white text-xs font-bold px-1 rounded">✕</button>
-                    </div>
-                    <p class="text-[11px] font-semibold text-slate-600 dark:text-slate-300 leading-relaxed">
-                      {{ getTransferPopupDesc(en) }}
-                    </p>
-                  </div>
+            <!-- Popover Flotante de Traslado (No altera el alto de la fila ni rompe la tabla) -->
+            <div 
+              v-if="activeTransferPopupId === en.id_matricula && hasTransferInfo(en)"
+              class="absolute left-0 top-full mt-1.5 z-50 w-72 p-3.5 bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 text-left animate-in fade-in zoom-in-95 duration-150"
+              @click.stop
+            >
+              <div class="flex items-start justify-between gap-2 mb-1.5 border-b border-slate-100 dark:border-slate-700/60 pb-1.5">
+                <div class="flex items-center gap-1.5 text-xs font-black text-slate-800 dark:text-white">
+                  <ArrowDownLeft v-if="en.sentido_traslado === 'ENTRANTE' || (en.es_traslado && en.colegio_origen_nombre && String(en.id_colegio) === String(en.id_colegio_destino))" :size="14" class="text-emerald-600" />
+                  <ArrowUpRight v-else-if="en.sentido_traslado === 'SALIENTE'" :size="14" class="text-purple-600" />
+                  <ArrowLeftRight v-else :size="14" class="text-blue-600" />
+                  <span>{{ getTransferPopupTitle(en) }}</span>
+                </div>
+                <button @click.stop="activeTransferPopupId = null" class="text-slate-400 hover:text-slate-600 dark:hover:text-white text-xs font-bold px-1 rounded">✕</button>
+              </div>
+              <p class="text-[11px] font-semibold text-slate-600 dark:text-slate-300 leading-relaxed">
+                {{ getTransferPopupDesc(en) }}
+              </p>
+            </div>
 
-                  <div v-if="en.has_pending_docs && en.estado === 'PENDIENTE'"
-                       class="flex items-center gap-1 text-amber-600 dark:text-amber-400 text-[10px] font-bold bg-amber-50 dark:bg-amber-950/20 px-2 py-0.5 rounded-lg w-fit">
-                    <AlertTriangle :size="10" /> Docs Diferidos
-                  </div>
-                </div>
-              </td>
-              <td class="px-6 py-4 text-right">
-                <div class="flex items-center justify-end gap-2">
-                  <button
-                    v-if="en.estado === 'ACTIVA' || en.estado === 'TRASLADADA'"
-                    @click.stop="fetchAndDownloadPDF(en.id_matricula)"
-                    :disabled="isExportingPDF"
-                    class="inline-flex items-center justify-center p-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-black uppercase tracking-wide transition-all disabled:opacity-50 active:scale-95 shrink-0"
-                    title="Descargar Ficha PDF"
-                  >
-                    <Download :size="14" />
-                  </button>
-                  <button
-                    @click="openDrawer(en.id_matricula)"
-                    class="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-950/60 rounded-xl text-xs font-black uppercase tracking-wide transition-all group-hover:shadow-md"
-                  >
-                    <Eye :size="14" /> Gestionar
-                    <ChevronRight :size="12" />
-                  </button>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
+            <div v-if="en.has_pending_docs && en.estado === 'PENDIENTE'"
+                 class="flex items-center gap-1 text-amber-600 dark:text-amber-400 text-[10px] font-bold bg-amber-50 dark:bg-amber-950/20 px-2 py-0.5 rounded-lg w-fit">
+              <AlertTriangle :size="10" /> Docs Diferidos
+            </div>
+          </div>
+        </td>
+        <td class="py-4 px-6 text-right">
+          <div class="flex items-center justify-end gap-2">
+            <button
+              v-if="en.estado === 'ACTIVA' || en.estado === 'TRASLADADA'"
+              @click.stop="fetchAndDownloadPDF(en.id_matricula)"
+              :disabled="isExportingPDF"
+              class="inline-flex items-center justify-center p-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-black uppercase tracking-wide transition-all disabled:opacity-50 active:scale-95 shrink-0"
+              title="Descargar Ficha PDF"
+            >
+              <Download :size="14" />
+            </button>
+            <button
+              @click="openDrawer(en.id_matricula)"
+              class="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-950/60 rounded-xl text-xs font-black uppercase tracking-wide transition-all group-hover:shadow-md"
+            >
+              <Eye :size="14" /> Gestionar
+              <ChevronRight :size="12" />
+            </button>
+          </div>
+        </td>
+      </tr>
+    </DataTable>
   </div>
 
   <!-- ─── SLIDE-OVER DRAWER ──────────────────────────────────────────────────── -->
