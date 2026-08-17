@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import axios from 'axios'
-import { ArrowLeft, PenSquare, Scale, SlidersHorizontal } from 'lucide-vue-next'
+import { ArrowLeft, HelpCircle, PenSquare, Scale, SlidersHorizontal } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 
 interface SchoolDefaultSettings {
@@ -205,22 +205,25 @@ onMounted(loadData)
             </div>
           </div>
 
-          <div class="grid grid-cols-1 gap-6 p-6 md:grid-cols-2 lg:grid-cols-4">
-            <label class="space-y-2">
-              <span class="block text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Nota mínima</span>
-              <input v-model="defaultsForm.nota_minima" type="number" step="0.1" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-semibold outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-amber-500/20" />
+          <div class="grid grid-cols-1 gap-5 p-6 sm:grid-cols-2">
+            <label class="flex flex-col justify-between space-y-2">
+              <span class="block text-xs font-black uppercase tracking-wider text-slate-600 dark:text-slate-300 ml-1">Nota mínima</span>
+              <input v-model="defaultsForm.nota_minima" type="number" step="0.1" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-3.5 font-semibold outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-amber-500/20" />
             </label>
-            <label class="space-y-2">
-              <span class="block text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Nota máxima</span>
-              <input v-model="defaultsForm.nota_maxima" type="number" step="0.1" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-semibold outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-amber-500/20" />
+            <label class="flex flex-col justify-between space-y-2">
+              <span class="block text-xs font-black uppercase tracking-wider text-slate-600 dark:text-slate-300 ml-1">Nota máxima</span>
+              <input v-model="defaultsForm.nota_maxima" type="number" step="0.1" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-3.5 font-semibold outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-amber-500/20" />
             </label>
-            <label class="space-y-2">
-              <span class="block text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Nota aprobatoria</span>
-              <input v-model="defaultsForm.nota_aprobacion" type="number" step="0.1" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-semibold outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-amber-500/20" />
+            <label class="flex flex-col justify-between space-y-2">
+              <span class="block text-xs font-black uppercase tracking-wider text-slate-600 dark:text-slate-300 ml-1">Nota aprobatoria</span>
+              <input v-model="defaultsForm.nota_aprobacion" type="number" step="0.1" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-3.5 font-semibold outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-amber-500/20" />
             </label>
-            <label class="space-y-2">
-              <span class="block text-sm font-black text-slate-700 dark:text-slate-300 ml-1" title="Mínimo de materias reprobadas para reprobación de año escolar (S.I.E.E.)">Materias para no promoción (S.I.E.E.)</span>
-              <input v-model="defaultsForm.materias_reprobatorias_promocion" type="number" min="1" max="10" step="1" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-semibold outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-amber-500/20" placeholder="3" />
+            <label class="flex flex-col justify-between space-y-2">
+              <div class="flex items-center gap-1.5 ml-1">
+                <span class="block text-xs font-black uppercase tracking-wider text-slate-600 dark:text-slate-300">Materias no promoción</span>
+                <HelpCircle class="h-4 w-4 text-amber-500 hover:text-amber-600 cursor-help" title="Número mínimo de asignaturas reprobadas que ocasionan la no promoción del estudiante según el S.I.E.E. de la institución (Decreto 1290 de 2009)." />
+              </div>
+              <input v-model="defaultsForm.materias_reprobatorias_promocion" type="number" min="1" max="10" step="1" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-3.5 font-semibold outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-amber-500/20" placeholder="3" />
             </label>
           </div>
 
