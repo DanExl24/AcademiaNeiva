@@ -1,14 +1,13 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
-import axios from 'axios'
-import { useAuthStore } from '../../stores/auth'
+import { supervisionService } from '../../services/supervisionService'
+import { adminGeneralService } from '../../services/adminGeneralService'
 import { 
   History, Search, Eye, Download, Calendar, Clock, ShieldCheck, Info
 } from 'lucide-vue-next'
 import EmptyState from '../../components/feedback/EmptyState.vue'
 
 
-const auth = useAuthStore()
 
 interface Supervision {
   id_auditoria: number
@@ -72,9 +71,8 @@ const activeAction = ref<AccionAuditoria | null>(null)
 
 const fetchSchools = async () => {
   try {
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get('/api/admin/colegios', { headers })
-    schools.value = res.data.map((c: any) => ({ id_colegio: c.id_colegio, nombre: c.nombre }))
+    const data = await adminGeneralService.getColegios()
+    schools.value = (data || []).map((c: any) => ({ id_colegio: c.id_colegio, nombre: c.nombre }))
   } catch (error) {
     console.error('Error fetching schools:', error)
   }
@@ -83,16 +81,12 @@ const fetchSchools = async () => {
 const fetchHistory = async () => {
   try {
     loading.value = true
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get('/api/admin/supervision/historial', {
-      headers,
-      params: {
-        id_colegio: selectedSchool.value || undefined,
-        estado: selectedEstado.value || undefined
-      }
+    const data = await supervisionService.getHistorial({
+      id_colegio: selectedSchool.value || undefined,
+      estado: selectedEstado.value || undefined
     })
     // Filter to only show closed states
-    history.value = res.data.filter((r: any) => 
+    history.value = (data || []).filter((r: any) => 
       r.estado_supervision === 'FINALIZADA' || 
       r.estado_supervision === 'REVOCADA' || 
       r.estado_supervision === 'EXPIRADA'
@@ -118,9 +112,8 @@ const viewActions = async (sup: Supervision) => {
   showActionsModal.value = true
   try {
     loadingActions.value = true
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get(`/api/admin/supervision/${sup.id_auditoria}/acciones`, { headers })
-    actions.value = res.data
+    const data = await supervisionService.getAcciones(sup.id_auditoria)
+    actions.value = data
   } catch (error) {
     console.error('Error fetching actions:', error)
   } finally {
@@ -137,17 +130,17 @@ const openJsonInspector = (action: AccionAuditoria) => {
 
 const handleExport = async (sup: Supervision) => {
   try {
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.post(`/api/admin/supervision/${sup.id_auditoria}/exportar`, {}, { headers })
+    const data = await supervisionService.exportarSupervision(sup.id_auditoria)
     
     // Create download
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(res.data, null, 2))
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data, null, 2))
     const downloadAnchor = document.createElement('a')
     downloadAnchor.setAttribute("href", dataStr)
     downloadAnchor.setAttribute("download", `auditoria_supervision_${sup.id_auditoria}_${sup.colegio_nombre.replace(/\s+/g, '_')}.json`)
     document.body.appendChild(downloadAnchor)
     downloadAnchor.click()
     downloadAnchor.remove()
+
     
     alert('Auditoría exportada y descargada exitosamente.')
     if (selectedSupervision.value?.id_auditoria === sup.id_auditoria) {

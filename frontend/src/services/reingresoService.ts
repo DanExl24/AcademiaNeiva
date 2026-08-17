@@ -34,7 +34,13 @@ export const reingresoService = {
   async getReingresosList(params?: any): Promise<any[]> {
     const res = await api.get('/reingreso/list', { params })
     return res.data || []
+  },
+
+  async notifyNonExistent(ticketId: number | string, motivo: string): Promise<any> {
+    const res = await api.post(`/reingreso/notify-nonexistent/${ticketId}`, { motivo })
+    return res.data
   }
 }
 
 export default reingresoService
+

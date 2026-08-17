@@ -2,6 +2,11 @@ import api from './api'
 import type { Student, StudentObservation } from '../types/student.types'
 
 export const studentService = {
+  async getAll(): Promise<any> {
+    const res = await api.get('/students')
+    return res.data
+  },
+
   async getStudentsBySchool(schoolId: number | string, params?: any): Promise<any[]> {
     const res = await api.get(`/student/colegio/${schoolId}`, { params })
     return res.data?.data || res.data || []
@@ -14,6 +19,51 @@ export const studentService = {
 
   async getStudentSummary(studentId: number | string): Promise<any> {
     const res = await api.get(`/student/${studentId}/summary`)
+    return res.data
+  },
+
+  async getParentChildren(parentId: number | string): Promise<any[]> {
+    const res = await api.get(`/student/parent-children/${parentId}`)
+    return res.data || []
+  },
+
+  async getByUserId(userId: number | string): Promise<any> {
+    const res = await api.get(`/student/user-id/${userId}`)
+    return res.data
+  },
+
+  async getYears(studentId: number | string): Promise<any[]> {
+    const res = await api.get(`/student/years/${studentId}`)
+    return res.data || []
+  },
+
+  async getInfo(studentId: number | string): Promise<any> {
+    const res = await api.get(`/student/info/${studentId}`)
+    return res.data
+  },
+
+  async getAllPeriods(studentId: number | string, yearId: number | string): Promise<any[]> {
+    const res = await api.get(`/student/all-periods/${studentId}/${yearId}`)
+    return res.data || []
+  },
+
+  async getGrades(studentId: number | string, periodId: number | string): Promise<any> {
+    const res = await api.get(`/student/grades/${studentId}/${periodId}`)
+    return res.data
+  },
+
+  async getGradeDetails(studentId: number | string, periodId: number | string, subjectId: number | string): Promise<any> {
+    const res = await api.get(`/student/grade-details/${studentId}/${periodId}/${subjectId}`)
+    return res.data
+  },
+
+  async getAttendance(urlOrStudentId: string | number, periodId?: number | string): Promise<any> {
+    if (typeof urlOrStudentId === 'string' && urlOrStudentId.startsWith('/api/')) {
+      const path = urlOrStudentId.replace('/api', '')
+      const res = await api.get(path)
+      return res.data
+    }
+    const res = await api.get(`/student/attendance/${urlOrStudentId}/${periodId}`)
     return res.data
   },
 

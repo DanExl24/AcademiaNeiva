@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
-import axios from 'axios'
+import { supervisionService } from '../../services/supervisionService'
 import { useAuthStore } from '../../stores/auth'
 import { 
   ShieldAlert, StopCircle, Clock
@@ -36,9 +36,8 @@ let timerInterval: any = null
 const fetchActiveSupervisions = async () => {
   try {
     loading.value = true
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get('/api/admin/supervision/historial', { headers })
-    activeSupervisions.value = res.data.filter((r: any) => r.estado_supervision === 'ACTIVA')
+    const data = await supervisionService.getHistorial()
+    activeSupervisions.value = (data || []).filter((r: any) => r.estado_supervision === 'ACTIVA')
     updateTimers()
   } catch (error) {
     console.error('Error fetching active supervisions:', error)
@@ -71,8 +70,7 @@ const updateTimers = () => {
 
 const handleAutoExit = async (id: number) => {
   try {
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.post(`/api/admin/supervision/${id}/salir`, {}, { headers })
+    await supervisionService.salirSupervision(id)
   } catch (e) {
     console.error('Error auto-exiting supervision:', e)
   }
@@ -90,9 +88,8 @@ const handleExit = async (sup: SupervisionActiva) => {
   if (!ok) return
 
   try {
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.post(`/api/admin/supervision/${sup.id_auditoria}/salir`, {}, { headers })
-    toast.success(`Supervisión finalizada. Duración: ${res.data.duracion}. Acciones auditadas: ${res.data.total_acciones}`)
+    const resData = await supervisionService.salirSupervision(sup.id_auditoria)
+    toast.success(`Supervisión finalizada. Duración: ${resData.duracion}. Acciones auditadas: ${resData.total_acciones}`)
     
     // Stop local Pinia supervision context if this is the supervision we were in
     if (auth.supervision?.id_auditoria === sup.id_auditoria) {
@@ -105,6 +102,7 @@ const handleExit = async (sup: SupervisionActiva) => {
     toast.error(error.response?.data?.error || 'Error al salir de la supervisión')
   }
 }
+
 
 
 onMounted(() => {

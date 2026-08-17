@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
-import axios from 'axios'
+import { supervisionService } from '../../services/supervisionService'
 import { useAuthStore } from '../../stores/auth'
 import { useAcademicYearStore } from '../../stores/academicYear'
 import { 
@@ -88,13 +88,12 @@ const fetchSupervisions = async () => {
   }
   try {
     loading.value = true
-    const headers = { Authorization: `Bearer ${auth.token}` }
     const params: any = {}
     if (yearStore.selectedYearId) {
       params.yearId = yearStore.selectedYearId
     }
-    const res = await axios.get(`/api/admin/colegio/${schoolId.value}/supervisiones`, { headers, params })
-    supervisions.value = res.data
+    const data = await supervisionService.getSupervisionesColegio(schoolId.value, params)
+    supervisions.value = data
   } catch (error) {
     console.error('Error fetching supervisions for school:', error)
   } finally {
@@ -158,8 +157,7 @@ const handleApprove = async (sup: Supervision) => {
 
   try {
     processingAction.value = true
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.post(`/api/admin/supervision/${sup.id_auditoria}/aprobar`, {}, { headers })
+    await supervisionService.aprobarSupervision(sup.id_auditoria)
     toast.success('Supervisión aprobada exitosamente. Se ha notificado al Administrador General.')
     await fetchSupervisions()
   } catch (error: any) {
@@ -196,10 +194,9 @@ const handleRejectOrRevoke = async () => {
 
   try {
     processingAction.value = true
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.post(`/api/admin/supervision/${selectedSupervision.value.id_auditoria}/revocar`, {
+    await supervisionService.revocarSupervision(selectedSupervision.value.id_auditoria, {
       motivo: revocationReason.value
-    }, { headers })
+    })
     
     toast.success(`Supervisión ${isReject ? 'rechazada' : 'revocada'} exitosamente.`)
     showRevocationModal.value = false
@@ -218,15 +215,15 @@ const viewActions = async (sup: Supervision) => {
   showActionsModal.value = true
   try {
     loadingActions.value = true
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get(`/api/admin/supervision/${sup.id_auditoria}/acciones-directivo`, { headers })
-    actions.value = res.data
+    const data = await supervisionService.getAccionesDirectivo(sup.id_auditoria)
+    actions.value = data
   } catch (error) {
     console.error('Error fetching actions:', error)
   } finally {
     loadingActions.value = false
   }
 }
+
 
 const openJsonInspector = (action: AccionAuditoria) => {
   activeAction.value = action
