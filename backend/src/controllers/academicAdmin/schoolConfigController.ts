@@ -868,6 +868,20 @@ export const updateSchoolDefaultSettings = async (req: Request, res: Response): 
     return;
   }
 
+  const yearId = req.body.yearId ? Number(req.body.yearId) : null;
+  if (yearId && schoolId) {
+    const yearCheck = await pool.query(
+      `SELECT estado, calendario FROM anio_lectivo WHERE id_anio = $1 AND id_colegio = $2`,
+      [yearId, schoolId]
+    );
+    if (yearCheck.rows[0]?.estado === 'CERRADO') {
+      res.status(400).json({ 
+        error: `El año lectivo ${yearCheck.rows[0]?.calendario || ''} se encuentra CERRADO. No es posible modificar la configuración en un ciclo escolar cerrado.` 
+      });
+      return;
+    }
+  }
+
   if (notaMinima >= notaMaxima) {
     res.status(400).json({ error: "La nota mínima debe ser menor que la nota máxima" });
     return;

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import axios from 'axios'
-import { ArrowLeft, HelpCircle, PenSquare, Scale, SlidersHorizontal } from 'lucide-vue-next'
+import { ArrowLeft, HelpCircle, Lock, PenSquare, Scale, SlidersHorizontal } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 
 interface SchoolDefaultSettings {
@@ -25,6 +25,11 @@ import { useAcademicYearStore } from '../../stores/academicYear'
 const auth = useAuthStore()
 const yearStore = useAcademicYearStore()
 const schoolId = computed(() => Number(auth.user?.schoolId || 0))
+const isYearClosed = computed(() => {
+  if (!yearStore.selectedYear) return false
+  const status = String(yearStore.selectedYear.estado || '').toUpperCase()
+  return status === 'CERRADO' || status === 'INACTIVO'
+})
 
 const loading = ref(true)
 const defaultsSaving = ref(false)
@@ -99,6 +104,10 @@ watch(() => yearStore.selectedYearId, loadData)
 
 const saveDefaultSettings = async (bypassConfirm = false) => {
   if (defaultsSaving.value) return
+  if (isYearClosed.value) {
+    alert(`El año lectivo ${yearStore.selectedYear?.calendario || ''} está CERRADO. No es posible modificar la configuración en un ciclo escolar cerrado.`)
+    return
+  }
   if (defaultsForm.value.nota_minima === '' || defaultsForm.value.nota_maxima === '' || defaultsForm.value.nota_aprobacion === '') {
     alert('Completa la nota mínima, máxima y aprobatoria del colegio.')
     return
@@ -133,6 +142,7 @@ const saveDefaultSettings = async (bypassConfirm = false) => {
     defaultsSaving.value = true
     await axios.put('/api/academic-admin/settings/defaults', {
       schoolId: schoolId.value,
+      yearId: yearStore.selectedYearId,
       nota_minima: nextMin,
       nota_maxima: nextMax,
       nota_aprobacion: nextAprob,
@@ -151,6 +161,10 @@ const saveDefaultSettings = async (bypassConfirm = false) => {
 
 const saveManualScales = async () => {
   if (defaultsSaving.value) return
+  if (isYearClosed.value) {
+    alert(`El año lectivo ${yearStore.selectedYear?.calendario || ''} está CERRADO. No es posible modificar las escalas en un ciclo escolar cerrado.`)
+    return
+  }
   if (manualScaleForm.value.basico_max === '' || manualScaleForm.value.alto_max === '') {
     alert('Define los cortes máximos de BASICO y ALTO para el modo manual.')
     return
@@ -161,6 +175,7 @@ const saveManualScales = async () => {
     defaultsForm.value.escala_modo = 'MANUAL'
     await axios.put('/api/academic-admin/settings/scales/manual', {
       schoolId: schoolId.value,
+      yearId: yearStore.selectedYearId,
       basico_max: Number(manualScaleForm.value.basico_max),
       alto_max: Number(manualScaleForm.value.alto_max),
     })
@@ -187,6 +202,17 @@ onMounted(loadData)
       </div>
     </div>
 
+    <!-- Alerta Informativa: Año Lectivo Cerrado (Modo Solo Lectura) -->
+    <div v-if="isYearClosed" class="p-5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/50 rounded-3xl flex items-start gap-3.5 text-xs text-amber-900 dark:text-amber-300 shadow-sm">
+      <Lock class="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+      <div class="space-y-1">
+        <p class="font-bold text-amber-950 dark:text-amber-200 text-sm">🔒 Año Lectivo {{ yearStore.selectedYear?.calendario || '' }} (Modo Solo Lectura)</p>
+        <p>
+          El año lectivo seleccionado se encuentra <strong>CERRADO</strong>. Los parámetros institucionales y las escalas de valoración de este ciclo escolar permanecen bloqueados y no pueden ser modificados.
+        </p>
+      </div>
+    </div>
+
     <div v-if="loading" class="rounded-3xl border border-slate-100 bg-white p-16 text-center font-bold text-slate-400 shadow-sm dark:bg-slate-900 dark:border-slate-800 dark:text-slate-500">
       Cargando configuración...
     </div>
@@ -208,22 +234,22 @@ onMounted(loadData)
           <div class="grid grid-cols-1 gap-5 p-6 sm:grid-cols-2">
             <label class="flex flex-col justify-between space-y-2">
               <span class="block text-xs font-black uppercase tracking-wider text-slate-600 dark:text-slate-300 ml-1">Nota mínima</span>
-              <input v-model="defaultsForm.nota_minima" type="number" step="0.1" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-3.5 font-semibold outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-amber-500/20" />
+              <input v-model="defaultsForm.nota_minima" :disabled="isYearClosed" type="number" step="0.1" :class="[isYearClosed ? 'opacity-60 cursor-not-allowed bg-slate-100 dark:bg-slate-800/80' : 'bg-slate-50 dark:bg-slate-800']" class="w-full rounded-2xl border border-slate-200 p-3.5 font-semibold outline-none dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-amber-500/20" />
             </label>
             <label class="flex flex-col justify-between space-y-2">
               <span class="block text-xs font-black uppercase tracking-wider text-slate-600 dark:text-slate-300 ml-1">Nota máxima</span>
-              <input v-model="defaultsForm.nota_maxima" type="number" step="0.1" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-3.5 font-semibold outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-amber-500/20" />
+              <input v-model="defaultsForm.nota_maxima" :disabled="isYearClosed" type="number" step="0.1" :class="[isYearClosed ? 'opacity-60 cursor-not-allowed bg-slate-100 dark:bg-slate-800/80' : 'bg-slate-50 dark:bg-slate-800']" class="w-full rounded-2xl border border-slate-200 p-3.5 font-semibold outline-none dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-amber-500/20" />
             </label>
             <label class="flex flex-col justify-between space-y-2">
               <span class="block text-xs font-black uppercase tracking-wider text-slate-600 dark:text-slate-300 ml-1">Nota aprobatoria</span>
-              <input v-model="defaultsForm.nota_aprobacion" type="number" step="0.1" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-3.5 font-semibold outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-amber-500/20" />
+              <input v-model="defaultsForm.nota_aprobacion" :disabled="isYearClosed" type="number" step="0.1" :class="[isYearClosed ? 'opacity-60 cursor-not-allowed bg-slate-100 dark:bg-slate-800/80' : 'bg-slate-50 dark:bg-slate-800']" class="w-full rounded-2xl border border-slate-200 p-3.5 font-semibold outline-none dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-amber-500/20" />
             </label>
             <label class="flex flex-col justify-between space-y-2">
               <div class="flex items-center gap-1.5 ml-1">
                 <span class="block text-xs font-black uppercase tracking-wider text-slate-600 dark:text-slate-300">Materias no promoción</span>
                 <HelpCircle class="h-4 w-4 text-amber-500 hover:text-amber-600 cursor-help" title="Número mínimo de asignaturas reprobadas que ocasionan la no promoción del estudiante según el S.I.E.E. de la institución (Decreto 1290 de 2009)." />
               </div>
-              <input v-model="defaultsForm.materias_reprobatorias_promocion" type="number" min="1" max="10" step="1" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-3.5 font-semibold outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-amber-500/20" placeholder="3" />
+              <input v-model="defaultsForm.materias_reprobatorias_promocion" :disabled="isYearClosed" type="number" min="1" max="10" step="1" :class="[isYearClosed ? 'opacity-60 cursor-not-allowed bg-slate-100 dark:bg-slate-800/80' : 'bg-slate-50 dark:bg-slate-800']" class="w-full rounded-2xl border border-slate-200 p-3.5 font-semibold outline-none dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-amber-500/20" placeholder="3" />
             </label>
           </div>
 
@@ -232,15 +258,17 @@ onMounted(loadData)
             <div class="mt-4 flex flex-col gap-3 md:flex-row">
               <button
                 type="button"
+                :disabled="isYearClosed"
                 @click="defaultsForm.escala_modo = 'AUTOMATICO'"
-                :class="[defaultsForm.escala_modo === 'AUTOMATICO' ? 'border-sky-200 bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-400 dark:border-sky-900/50' : 'border-slate-200 bg-white text-slate-600 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400', 'rounded-2xl border px-5 py-4 text-left text-sm font-black transition']"
+                :class="[defaultsForm.escala_modo === 'AUTOMATICO' ? 'border-sky-200 bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-400 dark:border-sky-900/50' : 'border-slate-200 bg-white text-slate-600 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400', isYearClosed ? 'opacity-60 cursor-not-allowed pointer-events-none' : '', 'rounded-2xl border px-5 py-4 text-left text-sm font-black transition']"
               >
                 Automático por sistema
               </button>
               <button
                 type="button"
+                :disabled="isYearClosed"
                 @click="defaultsForm.escala_modo = 'MANUAL'"
-                :class="[defaultsForm.escala_modo === 'MANUAL' ? 'border-amber-200 bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-900/50' : 'border-slate-200 bg-white text-slate-600 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400', 'rounded-2xl border px-5 py-4 text-left text-sm font-black transition']"
+                :class="[defaultsForm.escala_modo === 'MANUAL' ? 'border-amber-200 bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-900/50' : 'border-slate-200 bg-white text-slate-600 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400', isYearClosed ? 'opacity-60 cursor-not-allowed pointer-events-none' : '', 'rounded-2xl border px-5 py-4 text-left text-sm font-black transition']"
               >
                 Manual por directivo
               </button>
@@ -258,11 +286,13 @@ onMounted(loadData)
               <button 
                 type="button" 
                 @click="() => saveDefaultSettings()" 
-                :disabled="defaultsSaving" 
-                class="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-amber-500 px-6 py-3 text-sm font-black text-white shadow-sm transition hover:bg-amber-400 disabled:opacity-50 dark:bg-amber-600 dark:hover:bg-amber-500 uppercase tracking-widest"
+                :disabled="defaultsSaving || isYearClosed" 
+                :class="[isYearClosed ? 'bg-slate-400 dark:bg-slate-700 cursor-not-allowed opacity-60' : 'bg-amber-500 hover:bg-amber-400 dark:bg-amber-600 dark:hover:bg-amber-500']"
+                class="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl px-6 py-3 text-sm font-black text-white shadow-sm transition disabled:opacity-50 uppercase tracking-widest"
               >
-                <PenSquare class="h-4 w-4" />
-                {{ defaultsSaving ? 'Guardando...' : 'Guardar configuración' }}
+                <Lock v-if="isYearClosed" class="h-4 w-4" />
+                <PenSquare v-else class="h-4 w-4" />
+                {{ isYearClosed ? 'Año Cerrado (Solo Lectura)' : (defaultsSaving ? 'Guardando...' : 'Guardar configuración') }}
               </button>
             </div>
           </div>
@@ -292,20 +322,21 @@ onMounted(loadData)
             <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
               <label class="space-y-2">
                 <span class="block text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Máximo de BASICO</span>
-                <input v-model="manualScaleForm.basico_max" type="number" step="0.1" class="w-full rounded-2xl border border-amber-200 bg-white p-4 font-semibold outline-none dark:bg-slate-800 dark:border-amber-900/30 dark:text-white focus:ring-2 focus:ring-amber-500/20" />
+                <input v-model="manualScaleForm.basico_max" :disabled="isYearClosed" type="number" step="0.1" :class="[isYearClosed ? 'opacity-60 cursor-not-allowed bg-slate-100 dark:bg-slate-800/80' : 'bg-white dark:bg-slate-800']" class="w-full rounded-2xl border border-amber-200 p-4 font-semibold outline-none dark:border-amber-900/30 dark:text-white focus:ring-2 focus:ring-amber-500/20" />
               </label>
               <label class="space-y-2">
                 <span class="block text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Máximo de ALTO</span>
-                <input v-model="manualScaleForm.alto_max" type="number" step="0.1" class="w-full rounded-2xl border border-amber-200 bg-white p-4 font-semibold outline-none dark:bg-slate-800 dark:border-amber-900/30 dark:text-white focus:ring-2 focus:ring-amber-500/20" />
+                <input v-model="manualScaleForm.alto_max" :disabled="isYearClosed" type="number" step="0.1" :class="[isYearClosed ? 'opacity-60 cursor-not-allowed bg-slate-100 dark:bg-slate-800/80' : 'bg-white dark:bg-slate-800']" class="w-full rounded-2xl border border-amber-200 p-4 font-semibold outline-none dark:border-amber-900/30 dark:text-white focus:ring-2 focus:ring-amber-500/20" />
               </label>
             </div>
             <div class="mt-5 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <p class="text-xs font-semibold text-slate-600 dark:text-slate-400 italic max-w-xs">
                 BAJO y SUPERIOR se recalibran para cubrir todo el espectro institucional.
               </p>
-              <button type="button" @click="saveManualScales" :disabled="defaultsSaving" class="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-amber-600 px-6 py-3 text-sm font-black text-white shadow-sm transition hover:bg-amber-500 disabled:opacity-50 uppercase tracking-widest">
-                <PenSquare class="h-4 w-4" />
-                {{ defaultsSaving ? 'Guardando...' : 'Aplicar cortes' }}
+              <button type="button" @click="saveManualScales" :disabled="defaultsSaving || isYearClosed" :class="[isYearClosed ? 'bg-slate-400 dark:bg-slate-700 cursor-not-allowed opacity-60' : 'bg-amber-600 hover:bg-amber-500']" class="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl px-6 py-3 text-sm font-black text-white shadow-sm transition disabled:opacity-50 uppercase tracking-widest">
+                <Lock v-if="isYearClosed" class="h-4 w-4" />
+                <PenSquare v-else class="h-4 w-4" />
+                {{ isYearClosed ? 'Año Cerrado (Solo Lectura)' : (defaultsSaving ? 'Guardando...' : 'Aplicar cortes') }}
               </button>
             </div>
           </div>

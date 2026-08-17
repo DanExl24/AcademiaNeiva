@@ -667,6 +667,20 @@ export const updateManualScaleConfiguration = async (req: Request, res: Response
     return;
   }
 
+  const yearId = req.body.yearId ? Number(req.body.yearId) : null;
+  if (yearId && schoolId) {
+    const yearCheck = await pool.query(
+      `SELECT estado, calendario FROM anio_lectivo WHERE id_anio = $1 AND id_colegio = $2`,
+      [yearId, schoolId]
+    );
+    if (yearCheck.rows[0]?.estado === 'CERRADO') {
+      res.status(400).json({ 
+        error: `El año lectivo ${yearCheck.rows[0]?.calendario || ''} se encuentra CERRADO. No es posible modificar las escalas en un ciclo escolar cerrado.` 
+      });
+      return;
+    }
+  }
+
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
