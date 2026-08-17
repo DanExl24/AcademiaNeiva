@@ -31,7 +31,8 @@ import {
   ArrowLeftRight,
   Building2,
   Award,
-  FolderCheck
+  FolderCheck,
+  Menu
 } from 'lucide-vue-next'
 import { useAuthStore } from '../stores/auth'
 import { useThemeStore } from '../stores/theme'
@@ -44,6 +45,11 @@ const yearStore = useAcademicYearStore()
 const router = useRouter()
 const route = useRoute()
 const isCollapsed = ref(false)
+const isMobileOpen = ref(false)
+
+watch(() => route.fullPath, () => {
+  isMobileOpen.value = false
+})
 
 const isDedicatedEnrollmentView = computed(() => {
   return (
@@ -693,12 +699,20 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="flex h-screen bg-gray-50 dark:bg-slate-950 overflow-hidden transition-colors duration-300">
+  <div class="flex h-screen bg-gray-50 dark:bg-slate-950 overflow-hidden transition-colors duration-300 relative">
+    <!-- Backdrop móvil -->
+    <div 
+      v-if="isMobileOpen" 
+      class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-40 md:hidden transition-opacity" 
+      @click="isMobileOpen = false" 
+    />
+
     <!-- Sidebar -->
     <aside 
       :class="[
         isCollapsed ? 'w-20' : 'w-64',
-        'bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-800 transition-all duration-300 flex flex-col z-40'
+        isMobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
+        'fixed md:static inset-y-0 left-0 bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-800 transition-all duration-300 flex flex-col z-50 md:z-40 shadow-xl md:shadow-none'
       ]"
     >
       <!-- Logo Area -->
@@ -865,10 +879,20 @@ onUnmounted(() => {
       </div>
 
       <!-- Navbar -->
-      <header class="h-16 bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 flex items-center justify-between px-8 z-30 transition-colors duration-300">
-        <h2 class="text-xl font-semibold text-gray-800 dark:text-white">
-          {{ auth.isMonitoring ? `Seguimiento: ${auth.monitoringUser?.nombre} ${auth.monitoringUser?.apellido}` : (auth.isSupervising ? `Supervisando: ${auth.supervision?.colegio_nombre}` : ($route.name || 'Panel de Gestión')) }}
-        </h2>
+      <header class="h-16 bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 flex items-center justify-between px-4 md:px-8 z-30 transition-colors duration-300">
+        <div class="flex items-center gap-3">
+          <button
+            type="button"
+            @click="isMobileOpen = !isMobileOpen"
+            class="md:hidden p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            aria-label="Abrir menú lateral"
+          >
+            <Menu :size="22" />
+          </button>
+          <h2 class="text-base md:text-xl font-semibold text-gray-800 dark:text-white truncate max-w-[200px] sm:max-w-none">
+            {{ auth.isMonitoring ? `Seguimiento: ${auth.monitoringUser?.nombre} ${auth.monitoringUser?.apellido}` : (auth.isSupervising ? `Supervisando: ${auth.supervision?.colegio_nombre}` : ($route.name || 'Panel de Gestión')) }}
+          </h2>
+        </div>
         
         <div class="flex items-center gap-6">
           <!-- Selector Prominente de Año Lectivo, Colegio y Hora -->
