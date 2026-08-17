@@ -52,6 +52,12 @@ const isDedicatedEnrollmentView = computed(() => {
   )
 })
 
+const showYearSelector = computed(() => {
+  if (auth.activeRole === 'admin_general') return false
+  if (isDedicatedEnrollmentView.value) return false
+  return true
+})
+
 const openSubmenus = ref<Record<string, boolean>>({})
 const toggleSubmenu = (name: string) => {
   openSubmenus.value[name] = !openSubmenus.value[name]
@@ -878,9 +884,9 @@ onUnmounted(() => {
               <span class="hidden lg:inline">Cambiar Colegio</span>
             </router-link>
 
-            <!-- Selector Prominente de Año Lectivo (Oculto en vista dedicada de formalización) -->
+            <!-- Selector Prominente de Año Lectivo (Oculto para Admin General y en vista dedicada de formalización) -->
             <div 
-              v-if="!isDedicatedEnrollmentView"
+              v-if="showYearSelector"
               class="flex items-center gap-2 bg-gradient-to-r from-indigo-500/10 via-indigo-600/15 to-indigo-700/10 dark:from-indigo-950/40 dark:to-indigo-900/40 px-3.5 py-1.5 rounded-2xl border-2 border-indigo-200 dark:border-indigo-800/80 shadow-sm transition-all hover:border-indigo-400"
             >
               <Calendar :size="18" class="text-indigo-600 dark:text-indigo-400 shrink-0" />
@@ -902,7 +908,7 @@ onUnmounted(() => {
 
             <!-- Badge Informativo cuando se está en la vista dedicada de matrícula -->
             <div 
-              v-else
+              v-else-if="isDedicatedEnrollmentView"
               class="flex items-center gap-2 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/80 px-3.5 py-1.5 rounded-2xl text-emerald-700 dark:text-emerald-300 text-xs font-extrabold shadow-sm animate-in fade-in"
             >
               <FileText :size="16" class="text-emerald-600 dark:text-emerald-400 shrink-0" />
