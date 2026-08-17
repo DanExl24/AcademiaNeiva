@@ -84,6 +84,10 @@ const toggleYearStatus = async (year: AcademicYear) => {
 
 const deleteYear = async (year: AcademicYear) => {
   if (deletingYearId.value) return
+  if (year.estado === 'CERRADO') {
+    alert(`El año lectivo ${year.calendario} está CERRADO y contiene historial académico. No puede ser eliminado.`)
+    return
+  }
   const confirmStr = prompt(`¿Está seguro de eliminar el año lectivo ${year.calendario}? Esta acción borrará permanentemente el año y todos sus periodos.\n\nEscriba "ELIMINAR" para confirmar:`)
   if (confirmStr !== 'ELIMINAR') {
     return
@@ -235,6 +239,12 @@ const selectedYearObj = computed(() =>
   academicYears.value.find(y => y.id_anio === selectedYearId.value)
 )
 
+const isYearClosed = computed(() => {
+  if (!selectedYearObj.value) return false
+  const status = String(selectedYearObj.value.estado || '').toUpperCase()
+  return status === 'CERRADO' || status === 'INACTIVO'
+})
+
 const filteredPeriods = computed(() => {
   if (!selectedYearId.value) return periods.value
   return periods.value.filter(p => p.id_anio === selectedYearId.value)
@@ -271,6 +281,10 @@ const loadData = async () => {
 
 const createPeriod = async () => {
   if (savingPeriod.value) return
+  if (isYearClosed.value) {
+    alert(`El año lectivo ${selectedYearObj.value?.calendario || ''} está CERRADO. No es posible crear periodos en un ciclo escolar cerrado.`)
+    return
+  }
   const mesInicio = Number(newPeriod.value.mes_inicio)
   const diaInicio = Number(newPeriod.value.dia_inicio)
   const mesFin = Number(newPeriod.value.mes_fin)
@@ -305,6 +319,10 @@ const createPeriod = async () => {
 
 const updatePeriodPercentage = async () => {
   if (!periodEditModal.value || savingPeriod.value) return
+  if (isYearClosed.value) {
+    alert(`El año lectivo ${selectedYearObj.value?.calendario || ''} está CERRADO. No es posible modificar periodos en un ciclo escolar cerrado.`)
+    return
+  }
   const mesInicio = Number(periodEdit.value.mes_inicio)
   const diaInicio = Number(periodEdit.value.dia_inicio)
   const mesFin = Number(periodEdit.value.mes_fin)
@@ -336,6 +354,10 @@ const updatePeriodPercentage = async () => {
 }
 
 const approvePeriod = async (period: AcademicPeriod) => {
+  if (isYearClosed.value) {
+    alert(`El año lectivo ${selectedYearObj.value?.calendario || ''} está CERRADO. No es posible aprobar periodos en un ciclo escolar cerrado.`)
+    return
+  }
   const confirmApprove = confirm(`¿Está seguro de aprobar y activar el periodo "${period.nombre}"?`)
   if (!confirmApprove) return
 
@@ -358,6 +380,10 @@ const reopeningPeriodId = ref<number | null>(null)
 
 const closePeriod = async (period: AcademicPeriod, force = false) => {
   if (closingPeriodId.value) return
+  if (isYearClosed.value) {
+    alert(`El año lectivo ${selectedYearObj.value?.calendario || ''} ya se encuentra CERRADO.`)
+    return
+  }
   
   if (!force) {
     const confirmClose = confirm(`¿Está seguro de cerrar el periodo "${period.nombre}"? Los docentes no podrán registrar calificaciones para este periodo.`)
@@ -389,6 +415,10 @@ const closePeriod = async (period: AcademicPeriod, force = false) => {
 
 const reopenPeriod = async (period: AcademicPeriod) => {
   if (reopeningPeriodId.value) return
+  if (isYearClosed.value) {
+    alert(`El año lectivo ${selectedYearObj.value?.calendario || ''} está CERRADO. Debe reabrir el año lectivo en la lista de años antes de reabrir sus periodos individuales.`)
+    return
+  }
 
   const warningMsg = `⚠️ ADVERTENCIA: Al reabrir el periodo "${period.nombre}", todos los docentes y directivos del colegio podrán ingresar y modificar calificaciones de este periodo de manera global.\n\nEsta acción requiere justificación obligatoria.\n\n¿Desea continuar?`
   if (!confirm(warningMsg)) return
@@ -600,6 +630,17 @@ onMounted(loadData)
     </div>
 
     <template v-else>
+      <!-- Alerta Informativa: Año Lectivo Seleccionado Cerrado (Modo Solo Lectura) -->
+      <div v-if="isYearClosed" class="p-5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/50 rounded-3xl flex items-start gap-3.5 text-xs text-amber-900 dark:text-amber-300 shadow-sm mb-2">
+        <Lock class="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+        <div class="space-y-1">
+          <p class="font-bold text-amber-950 dark:text-amber-200 text-sm">🔒 Año Lectivo {{ selectedYearObj?.calendario || '' }} (Modo Solo Lectura)</p>
+          <p>
+            El año lectivo seleccionado se encuentra <strong>CERRADO</strong>. Los periodos académicos de este ciclo escolar permanecen bloqueados y no pueden ser modificados, creados ni eliminados. Para realizar ajustes, debes reabrir el año lectivo desde el Modo Editor.
+          </p>
+        </div>
+      </div>
+
       <div class="grid grid-cols-1 gap-8 xl:grid-cols-2">
         <section class="overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-sm flex flex-col dark:bg-slate-900 dark:border-slate-800">
           <div class="border-b border-slate-100 p-6 dark:border-slate-800 flex flex-col gap-4 2xl:flex-row 2xl:items-center 2xl:justify-between">
@@ -670,10 +711,10 @@ onMounted(loadData)
                   <select 
                     :value="year.tipo_calendario || 'A'" 
                     @change="changeYearCalendarType(year, ($event.target as HTMLSelectElement).value)"
-                    :disabled="!editorModeActive || changingCalendarYearId === year.id_anio"
-                    :title="!editorModeActive ? 'Debes activar el Modo Editor para cambiar el tipo de calendario' : ''"
+                    :disabled="!editorModeActive || changingCalendarYearId === year.id_anio || year.estado === 'CERRADO'"
+                    :title="year.estado === 'CERRADO' ? 'Año lectivo cerrado (Solo lectura)' : (!editorModeActive ? 'Debes activar el Modo Editor para cambiar el tipo de calendario' : '')"
                     :class="[
-                      !editorModeActive ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer focus:ring-2 focus:ring-sky-500',
+                      !editorModeActive || year.estado === 'CERRADO' ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer focus:ring-2 focus:ring-sky-500',
                       'text-xs font-black bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1 outline-none text-slate-700 dark:text-slate-200 transition-all'
                     ]"
                   >
@@ -701,9 +742,9 @@ onMounted(loadData)
                   <button
                     type="button"
                     @click="deleteYear(year)"
-                    :disabled="deletingYearId === year.id_anio"
-                    title="Eliminar año lectivo permanentemente"
-                    class="p-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 dark:bg-rose-950/20 dark:hover:bg-rose-950/40 dark:text-rose-400 transition"
+                    :disabled="deletingYearId === year.id_anio || year.estado === 'CERRADO'"
+                    :title="year.estado === 'CERRADO' ? 'Un año lectivo CERRADO no se puede eliminar' : 'Eliminar año lectivo permanentemente'"
+                    :class="[year.estado === 'CERRADO' ? 'opacity-40 cursor-not-allowed' : 'hover:bg-rose-100', 'p-2.5 rounded-xl bg-rose-50 text-rose-600 dark:bg-rose-950/20 dark:text-rose-400 transition']"
                   >
                     <Trash2 class="h-4 w-4" />
                   </button>
@@ -733,10 +774,13 @@ onMounted(loadData)
               <button
                 type="button"
                 @click="periodModal = true"
-                class="inline-flex shrink-0 min-h-12 items-center justify-center gap-2 rounded-2xl bg-orange-500 px-5 py-3 text-sm font-black text-white shadow-sm transition-all hover:bg-orange-400 dark:bg-orange-600 dark:hover:bg-orange-500"
+                :disabled="isYearClosed"
+                :class="[isYearClosed ? 'bg-slate-400 dark:bg-slate-700 cursor-not-allowed opacity-60' : 'bg-orange-500 hover:bg-orange-400 dark:bg-orange-600 dark:hover:bg-orange-500']"
+                class="inline-flex shrink-0 min-h-12 items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-black text-white shadow-sm transition-all uppercase tracking-wider"
               >
-                <Plus class="h-4 w-4" />
-                Crear periodo
+                <Lock v-if="isYearClosed" class="h-4 w-4" />
+                <Plus v-else class="h-4 w-4" />
+                {{ isYearClosed ? 'Año Cerrado (Solo Lectura)' : 'Crear periodo' }}
               </button>
             </div>
           </div>
@@ -776,7 +820,9 @@ onMounted(loadData)
                   v-if="period.estado === 'PENDIENTE'"
                   type="button"
                   @click="approvePeriod(period)"
-                  class="inline-flex items-center justify-center gap-1.5 rounded-2xl bg-emerald-50 px-3.5 py-3 text-xs font-black text-emerald-700 hover:bg-emerald-100 transition-all dark:bg-emerald-950/20 dark:text-emerald-400 dark:hover:bg-emerald-950/40"
+                  :disabled="isYearClosed"
+                  :class="[isYearClosed ? 'opacity-40 cursor-not-allowed bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/20 dark:text-emerald-400 dark:hover:bg-emerald-950/40']"
+                  class="inline-flex items-center justify-center gap-1.5 rounded-2xl px-3.5 py-3 text-xs font-black transition-all"
                   title="Aprobar y activar periodo"
                 >
                   <Check class="h-4 w-4" />
@@ -787,8 +833,9 @@ onMounted(loadData)
                   v-if="period.estado === 'ABIERTO'"
                   type="button"
                   @click="closePeriod(period)"
-                  :disabled="closingPeriodId === period.id_periodo"
-                  class="inline-flex items-center justify-center gap-1.5 rounded-2xl bg-rose-50 px-3.5 py-3 text-xs font-black text-rose-700 hover:bg-rose-100 transition-all dark:bg-rose-950/20 dark:text-rose-400 dark:hover:bg-rose-950/40 disabled:opacity-50"
+                  :disabled="closingPeriodId === period.id_periodo || isYearClosed"
+                  :class="[isYearClosed ? 'opacity-40 cursor-not-allowed bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500' : 'bg-rose-50 text-rose-700 hover:bg-rose-100 dark:bg-rose-950/20 dark:text-rose-400 dark:hover:bg-rose-950/40']"
+                  class="inline-flex items-center justify-center gap-1.5 rounded-2xl px-3.5 py-3 text-xs font-black transition-all disabled:opacity-50"
                   title="Cerrar periodo"
                 >
                   <Lock class="h-4 w-4" />
@@ -799,8 +846,9 @@ onMounted(loadData)
                   v-if="period.estado === 'CERRADO'"
                   type="button"
                   @click="reopenPeriod(period)"
-                  :disabled="reopeningPeriodId === period.id_periodo"
-                  class="inline-flex items-center justify-center gap-1.5 rounded-2xl bg-sky-50 px-3.5 py-3 text-xs font-black text-sky-700 hover:bg-sky-100 transition-all dark:bg-sky-950/20 dark:text-sky-400 dark:hover:bg-sky-950/40 disabled:opacity-50"
+                  :disabled="reopeningPeriodId === period.id_periodo || isYearClosed"
+                  :class="[isYearClosed ? 'opacity-40 cursor-not-allowed bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500' : 'bg-sky-50 text-sky-700 hover:bg-sky-100 dark:bg-sky-950/20 dark:text-sky-400 dark:hover:bg-sky-950/40']"
+                  class="inline-flex items-center justify-center gap-1.5 rounded-2xl px-3.5 py-3 text-xs font-black transition-all disabled:opacity-50"
                   title="Reabrir periodo"
                 >
                   <Play class="h-4 w-4" />
@@ -810,7 +858,9 @@ onMounted(loadData)
                 <button
                   type="button"
                   @click="periodEditModal = period; periodEdit.porcentaje = String(period.porcentaje); periodEdit.mes_inicio = String(period.mes_inicio); periodEdit.dia_inicio = String(period.dia_inicio); periodEdit.mes_fin = String(period.mes_fin); periodEdit.dia_fin = String(period.dia_fin)"
-                  class="inline-flex items-center justify-center rounded-2xl bg-slate-100 p-3 text-slate-600 transition-all hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-white"
+                  :disabled="isYearClosed"
+                  :class="[isYearClosed ? 'opacity-40 cursor-not-allowed' : 'hover:bg-slate-200 dark:hover:bg-slate-700 dark:hover:text-white']"
+                  class="inline-flex items-center justify-center rounded-2xl bg-slate-100 p-3 text-slate-600 transition-all dark:bg-slate-800 dark:text-slate-400"
                   title="Editar periodo"
                 >
                   <PenSquare class="h-4 w-4" />
@@ -819,7 +869,9 @@ onMounted(loadData)
                 <button
                   type="button"
                   @click="deletePeriod(period)"
-                  class="inline-flex items-center justify-center rounded-2xl bg-rose-50 p-3 text-rose-600 transition-all hover:bg-rose-100 dark:bg-rose-950/20 dark:text-rose-400 dark:hover:bg-rose-950/40"
+                  :disabled="isYearClosed"
+                  :class="[isYearClosed ? 'opacity-40 cursor-not-allowed' : 'hover:bg-rose-100 dark:hover:bg-rose-950/40']"
+                  class="inline-flex items-center justify-center rounded-2xl bg-rose-50 p-3 text-rose-600 transition-all dark:bg-rose-950/20 dark:text-rose-400"
                   title="Eliminar periodo académico"
                 >
                   <Trash2 class="h-4 w-4" />

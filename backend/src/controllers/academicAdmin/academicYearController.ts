@@ -205,7 +205,19 @@ export const deleteAcademicYear = async (req: Request, res: Response): Promise<v
 
   try {
     const result = await db.transaction().execute(async (trx) => {
-      // 1. Check if this is the ONLY academic year in the school
+      // 1. Check if target year is CERRADO
+      const targetYear = await trx
+        .selectFrom("anio_lectivo")
+        .select(["id_anio", "estado", "calendario"])
+        .where("id_anio", "=", yearId)
+        .where("id_colegio", "=", schoolId)
+        .executeTakeFirst();
+
+      if (targetYear?.estado === "CERRADO") {
+        throw new Error("CLOSED_YEAR: El año lectivo se encuentra CERRADO y contiene historial académico consolidado. No puede ser eliminado.");
+      }
+
+      // 2. Check if this is the ONLY academic year in the school
       const totalYears = await trx
         .selectFrom("anio_lectivo")
         .select((eb) => eb.fn.count("id_anio").as("count"))
@@ -216,7 +228,7 @@ export const deleteAcademicYear = async (req: Request, res: Response): Promise<v
         throw new Error("MIN_YEAR_LIMIT: No es posible eliminar este año lectivo porque la institución debe tener al menos un año lectivo registrado.");
       }
 
-      // 2. Check if there are any active enrollments (matriculas) for this year
+      // 3. Check if there are any active enrollments (matriculas) for this year
       const matriculaCheck = await trx
         .selectFrom("matricula")
         .select("id_matricula")
@@ -282,6 +294,10 @@ export const deleteAcademicYear = async (req: Request, res: Response): Promise<v
         : "Año lectivo y sus periodos eliminados exitosamente.",
     });
   } catch (error: any) {
+    if (error.message?.startsWith("CLOSED_YEAR:")) {
+      res.status(400).json({ error: error.message.replace("CLOSED_YEAR: ", "") });
+      return;
+    }
     if (error.message?.startsWith("MIN_YEAR_LIMIT:")) {
       res.status(400).json({ error: error.message.replace("MIN_YEAR_LIMIT: ", "") });
       return;
@@ -376,7 +392,7 @@ export const updateAcademicYearCalendarType = async (req: Request, res: Response
     await client.query("BEGIN");
 
     const yearRes = await client.query(
-      `SELECT id_anio, calendario, tipo_calendario, fecha_inicio, fecha_fin FROM anio_lectivo WHERE id_anio = $1 AND id_colegio = $2`,
+      `SELECT id_anio, calendario, tipo_calendario, fecha_inicio, fecha_fin, estado FROM anio_lectivo WHERE id_anio = $1 AND id_colegio = $2`,
       [yearId, schoolId]
     );
 
@@ -387,6 +403,12 @@ export const updateAcademicYearCalendarType = async (req: Request, res: Response
     }
 
     const currentYearRow = yearRes.rows[0];
+
+    if (currentYearRow.estado === 'CERRADO') {
+      await client.query("ROLLBACK");
+      res.status(400).json({ error: `El año lectivo ${currentYearRow.calendario || ''} se encuentra CERRADO. No es posible modificar su tipo de calendario.` });
+      return;
+    }
 
     const matriculasRes = await client.query(
       `SELECT COUNT(*)::int as count FROM matricula WHERE id_anio = $1 AND id_colegio = $2`,
@@ -508,10 +530,16 @@ export const createAcademicPeriod = async (req: Request, res: Response): Promise
 
     // Get school year info for calendar type and date boundaries
     const yearRes = await client.query(
-      `SELECT id_anio, calendario, tipo_calendario, fecha_inicio, fecha_fin FROM anio_lectivo WHERE id_anio = $1 AND id_colegio = $2`,
+      `SELECT id_anio, calendario, tipo_calendario, fecha_inicio, fecha_fin, estado FROM anio_lectivo WHERE id_anio = $1 AND id_colegio = $2`,
       [finalYearId, schoolId]
     );
     const yearRow = yearRes.rows[0];
+
+    if (yearRow && yearRow.estado === 'CERRADO') {
+      await client.query("ROLLBACK");
+      res.status(400).json({ error: `El año lectivo ${yearRow.calendario || ''} se encuentra CERRADO. No es posible crear periodos en un ciclo escolar cerrado.` });
+      return;
+    }
     const calendarType = yearRow?.tipo_calendario || 'A';
 
     if (yearRow && yearRow.fecha_inicio && yearRow.fecha_fin) {
@@ -725,6 +753,13 @@ export const approveAcademicPeriod = async (req: Request, res: Response): Promis
     }
 
     const period = periodRes.rows[0];
+
+    const yearCheck = await client.query(`SELECT estado, calendario FROM anio_lectivo WHERE id_anio = $1 AND id_colegio = $2`, [period.id_anio, schoolId]);
+    if (yearCheck.rows[0]?.estado === 'CERRADO') {
+      await client.query("ROLLBACK");
+      res.status(400).json({ error: `El año lectivo ${yearCheck.rows[0]?.calendario || ''} se encuentra CERRADO. No es posible aprobar periodos en un ciclo escolar cerrado.` });
+      return;
+    }
     if (period.estado !== 'PENDIENTE') {
       await client.query("ROLLBACK");
       res.status(409).json({ error: "Solo se pueden activar periodos en estado Pendiente." });
@@ -825,6 +860,12 @@ export const deleteAcademicPeriod = async (req: Request, res: Response): Promise
       return;
     }
 
+    const yearCheck = await pool.query(`SELECT estado, calendario FROM anio_lectivo WHERE id_anio = $1 AND id_colegio = $2`, [periodRes.rows[0].id_anio, schoolId]);
+    if (yearCheck.rows[0]?.estado === 'CERRADO') {
+      res.status(400).json({ error: `El año lectivo ${yearCheck.rows[0]?.calendario || ''} se encuentra CERRADO. No es posible eliminar periodos en un ciclo escolar cerrado.` });
+      return;
+    }
+
     const [raRes, naRes, obsRes, attRes] = await Promise.all([
       pool.query(`SELECT COUNT(*)::int as count FROM resultado_academico WHERE id_periodo = $1`, [periodId]),
       pool.query(`SELECT COUNT(*)::int as count FROM actividad_materia WHERE id_periodo = $1`, [periodId]),
@@ -865,7 +906,7 @@ export const closeAcademicPeriod = async (req: Request, res: Response): Promise<
     await client.query("BEGIN");
 
     const periodRes = await client.query(
-      `SELECT id_periodo, nombre, estado
+      `SELECT id_periodo, nombre, estado, id_anio
        FROM periodo_academico
        WHERE id_periodo = $1
          AND id_colegio = $2`,
@@ -879,6 +920,13 @@ export const closeAcademicPeriod = async (req: Request, res: Response): Promise<
     }
 
     const period = periodRes.rows[0];
+
+    const yearCheck = await client.query(`SELECT estado, calendario FROM anio_lectivo WHERE id_anio = $1 AND id_colegio = $2`, [period.id_anio, schoolId]);
+    if (yearCheck.rows[0]?.estado === 'CERRADO') {
+      await client.query("ROLLBACK");
+      res.status(400).json({ error: `El año lectivo ${yearCheck.rows[0]?.calendario || ''} ya se encuentra CERRADO.` });
+      return;
+    }
     if (period.estado === 'PENDIENTE') {
       await client.query("ROLLBACK");
       res.status(409).json({ error: "Un periodo en estado Pendiente no se puede cerrar directamente. Debe ser aprobado primero." });
@@ -984,7 +1032,7 @@ export const reopenAcademicPeriod = async (req: Request, res: Response): Promise
 
     // 1. Get current period
     const periodRes = await client.query(
-      `SELECT id_periodo, nombre, estado
+      `SELECT id_periodo, nombre, estado, id_anio
        FROM periodo_academico
        WHERE id_periodo = $1 AND id_colegio = $2`,
       [periodId, schoolId]
@@ -997,6 +1045,13 @@ export const reopenAcademicPeriod = async (req: Request, res: Response): Promise
     }
 
     const period = periodRes.rows[0];
+
+    const yearCheck = await client.query(`SELECT estado, calendario FROM anio_lectivo WHERE id_anio = $1 AND id_colegio = $2`, [period.id_anio, schoolId]);
+    if (yearCheck.rows[0]?.estado === 'CERRADO') {
+      await client.query("ROLLBACK");
+      res.status(400).json({ error: `El año lectivo ${yearCheck.rows[0]?.calendario || ''} se encuentra CERRADO. Debe reabrir el año lectivo antes de reabrir sus periodos individuales.` });
+      return;
+    }
     if (period.estado !== 'CERRADO') {
       await client.query("ROLLBACK");
       res.status(409).json({ error: "Solo se pueden reabrir periodos en estado Cerrado." });
