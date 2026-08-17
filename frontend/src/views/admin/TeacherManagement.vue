@@ -18,7 +18,8 @@ import {
   Download,
   Edit2,
   UserCheck,
-  Filter
+  Filter,
+  Phone
 } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 import { useRouter } from 'vue-router'
@@ -39,6 +40,7 @@ interface TeacherItem {
   id_tipodocumento: number
   tipo_documento: string
   email: string
+  telefono?: string | null
   email_padre?: string
   es_padre?: boolean
   activo: boolean
@@ -123,6 +125,7 @@ const newTeacher = ref({
   id_tipodocumento: '',
   email: '',
   password: '',
+  telefono: '',
 })
 
 const assignmentForm = ref({
@@ -477,6 +480,7 @@ const handleAutoLookup = async () => {
       }
       if (u.id_tipodocumento) newTeacher.value.id_tipodocumento = String(u.id_tipodocumento)
       if (u.documento) newTeacher.value.documento = u.documento
+      if (u.telefono) newTeacher.value.telefono = u.telefono
 
       isAutoFilledUser.value = true
       autoFilledUserName.value = `${u.nombre} ${u.apellido}`
@@ -501,6 +505,7 @@ const resetAutoFilledUser = () => {
   newTeacher.value.id_tipodocumento = ''
   newTeacher.value.documento = ''
   newTeacher.value.email = ''
+  newTeacher.value.telefono = ''
 }
 
 const loadData = async () => {
@@ -533,6 +538,7 @@ const createTeacher = async (addRoleIfParent: boolean | any = false) => {
       schoolId: schoolId.value, nombre: p.nombre, apellido: p.apellido,
       documento: p.documento, id_tipodocumento: Number(p.id_tipodocumento),
       email: p.email, password: p.password,
+      telefono: p.telefono?.trim() || null,
       addRoleIfParent: isParentFlag
     })
     if (res.data?.infoMessage) {
@@ -565,6 +571,7 @@ const editTeacherForm = ref({
   documento: '',
   id_tipodocumento: '',
   email: '',
+  telefono: '',
   es_padre: false
 })
 
@@ -578,6 +585,7 @@ const openEditTeacherModal = () => {
     documento: t.documento,
     id_tipodocumento: String(t.id_tipodocumento),
     email: t.email,
+    telefono: t.telefono || '',
     es_padre: Boolean(t.es_padre)
   }
   editTeacherModal.value = true
@@ -602,7 +610,8 @@ const updateTeacher = async () => {
       apellido: f.apellido.trim(),
       documento: f.documento.trim(),
       id_tipodocumento: Number(f.id_tipodocumento),
-      email: f.email.trim()
+      email: f.email.trim(),
+      telefono: f.telefono?.trim() || null
     })
     alert('Docente actualizado con éxito.')
     editTeacherModal.value = false
@@ -947,8 +956,9 @@ watch(() => yearStore.selectedYearId, () => {
                       {{ teacherStatusLabel(selectedTeacher.estado) }}
                     </span>
                   </div>
-                  <div class="flex items-center gap-3 mt-1.5 text-blue-100 dark:text-blue-300 text-xs font-medium">
+                  <div class="flex items-center gap-3 mt-1.5 text-blue-100 dark:text-blue-300 text-xs font-medium flex-wrap">
                     <span class="flex items-center gap-1"><Mail :size="12" /> {{ selectedTeacher.email }}</span>
+                    <span v-if="selectedTeacher.telefono" class="flex items-center gap-1"><Phone :size="12" /> {{ selectedTeacher.telefono }}</span>
                   </div>
                   <div v-if="selectedTeacher.email_padre" class="mt-1.5 inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-white/20 dark:bg-white/15 backdrop-blur-md rounded-full text-white text-[11px] font-bold shadow-sm">
                     <Users :size="12" class="text-blue-100" />
@@ -1327,9 +1337,13 @@ watch(() => yearStore.selectedYearId, () => {
               <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Número</span>
               <input v-model="newTeacher.documento" :disabled="isAutoFilledUser" @blur="handleAutoLookup" type="text" placeholder="Documento de identidad" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-bold outline-none text-slate-900 dark:text-white disabled:opacity-75 disabled:cursor-not-allowed disabled:bg-slate-200/50 dark:disabled:bg-slate-800/80" />
             </label>
-            <label class="col-span-2 space-y-1.5">
+            <label class="space-y-1.5">
               <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Email Institucional</span>
               <input v-model="newTeacher.email" @blur="handleAutoLookup" type="email" placeholder="docente@institucion.edu" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-bold outline-none text-slate-900 dark:text-white" />
+            </label>
+            <label class="space-y-1.5">
+              <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Teléfono / Celular</span>
+              <input v-model="newTeacher.telefono" type="tel" placeholder="Ej. 3001234567" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-bold outline-none text-slate-900 dark:text-white" />
             </label>
             <label class="col-span-2 space-y-1.5">
               <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Contraseña Temporal</span>
@@ -1337,8 +1351,8 @@ watch(() => yearStore.selectedYearId, () => {
             </label>
           </div>
           <div class="flex gap-3 pt-2">
-            <button @click="createTeacherModal = false; resetAutoFilledUser()" class="flex-1 py-4 rounded-xl font-black text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all text-sm uppercase tracking-widest">Cancelar</button>
-            <button @click="createTeacher" :disabled="savingTeacher" class="flex-[2] bg-blue-600 text-white py-4 rounded-xl font-black shadow-xl shadow-blue-100 dark:shadow-none hover:bg-blue-700 transition-all disabled:opacity-50 text-sm uppercase tracking-widest">
+            <button @click="createTeacherModal = false; resetAutoFilledUser()" class="flex-1 py-4 rounded-xl font-black text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all text-sm uppercase tracking-widest cursor-pointer">Cancelar</button>
+            <button @click="createTeacher" :disabled="savingTeacher" class="flex-[2] bg-blue-600 text-white py-4 rounded-xl font-black shadow-xl shadow-blue-100 dark:shadow-none hover:bg-blue-700 transition-all disabled:opacity-50 text-sm uppercase tracking-widest cursor-pointer">
               {{ savingTeacher ? 'Registrando...' : 'Crear Docente' }}
             </button>
           </div>
@@ -1352,7 +1366,7 @@ watch(() => yearStore.selectedYearId, () => {
       <div class="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-[32px] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         <div class="px-8 pt-8 pb-6 border-b border-slate-100 dark:border-slate-800 shrink-0">
           <h2 class="text-xl font-black text-slate-900 dark:text-white flex items-center gap-3"><Edit2 :size="22" class="text-blue-600" />Modificar Datos de Docente</h2>
-          <p class="text-slate-400 dark:text-slate-500 text-sm font-medium mt-1">Actualiza únicamente el correo electrónico institucional del docente para esta institución.</p>
+          <p class="text-slate-400 dark:text-slate-500 text-sm font-medium mt-1">Actualiza el correo electrónico institucional y el teléfono de contacto del docente.</p>
         </div>
         <div class="p-8 space-y-5 overflow-y-auto font-sans">
           <!-- Advertencia de datos personales bloqueados -->
@@ -1361,9 +1375,9 @@ watch(() => yearStore.selectedYearId, () => {
               <Info :size="18" />
             </div>
             <div class="text-xs text-amber-950 dark:text-amber-200 leading-relaxed">
-              <p class="font-black uppercase tracking-wider text-[10px]">🔒 DATOS PERSONALES BLOQUEADOS:</p>
+              <p class="font-black uppercase tracking-wider text-[10px]">🔒 IDENTIDAD PERSONAL GLOBAL:</p>
               <p class="font-medium mt-0.5">
-                Los datos personales (nombres, apellidos y documento de identidad) pertenecen a la cuenta global del usuario. La única forma de modificar los datos personales de identidad es solicitándolo al <strong>Administrador General</strong> mediante un ticket de soporte. En esta ventana únicamente puede modificar el <strong>Email Institucional</strong> asignado a este colegio.
+                Los datos de identidad (nombres, apellidos y documento) pertenecen a la cuenta global del usuario y solo pueden modificarse con el <strong>Administrador General</strong>. En esta ventana puede actualizar el <strong>Email Institucional</strong> y el <strong>Teléfono de Contacto</strong>.
               </p>
             </div>
           </div>
@@ -1388,14 +1402,18 @@ watch(() => yearStore.selectedYearId, () => {
               <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Número</span>
               <input v-model="editTeacherForm.documento" :disabled="true" type="text" placeholder="Documento de identidad" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-bold outline-none text-slate-900 dark:text-white disabled:opacity-75 disabled:cursor-not-allowed disabled:bg-slate-200/50 dark:disabled:bg-slate-800/80" />
             </label>
-            <label class="col-span-2 space-y-1.5">
+            <label class="space-y-1.5">
               <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Email Institucional</span>
               <input v-model="editTeacherForm.email" type="email" placeholder="docente@institucion.edu" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-bold outline-none text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20" />
             </label>
+            <label class="space-y-1.5">
+              <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Teléfono / Celular</span>
+              <input v-model="editTeacherForm.telefono" type="tel" placeholder="Ej. 3001234567" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-bold outline-none text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20" />
+            </label>
           </div>
           <div class="flex gap-3 pt-2">
-            <button @click="editTeacherModal = false" class="flex-1 py-4 rounded-xl font-black text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all text-sm uppercase tracking-widest">Cancelar</button>
-            <button @click="updateTeacher" class="flex-[2] bg-blue-600 text-white py-4 rounded-xl font-black shadow-xl shadow-blue-100 dark:shadow-none hover:bg-blue-700 transition-all text-sm uppercase tracking-widest">
+            <button @click="editTeacherModal = false" class="flex-1 py-4 rounded-xl font-black text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all text-sm uppercase tracking-widest cursor-pointer">Cancelar</button>
+            <button @click="updateTeacher" class="flex-[2] bg-blue-600 text-white py-4 rounded-xl font-black shadow-xl shadow-blue-100 dark:shadow-none hover:bg-blue-700 transition-all text-sm uppercase tracking-widest cursor-pointer">
               Guardar Cambios
             </button>
           </div>

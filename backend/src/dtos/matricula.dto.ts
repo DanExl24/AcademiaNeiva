@@ -62,6 +62,17 @@ export const SubmitEnrollmentSchema = z.object({
   })
 });
 
+export const CreateEnrollmentSchema = z.object({
+  id_colegio: z.coerce.number({ message: 'El ID del colegio es obligatorio' }),
+  parentEmail: z.string().email('Debe ingresar un correo válido'),
+  parentPhone: z.string().min(7, 'El teléfono debe tener al menos 7 dígitos').max(20, 'El teléfono no puede exceder 20 caracteres').regex(/^[0-9+() -]+$/, 'Formato de teléfono inválido'),
+  level: z.string().min(1, 'El nivel escolar es obligatorio'),
+  grade: z.coerce.number({ message: 'El grado o grupo es obligatorio' }),
+  hasDisability: z.coerce.string().optional(),
+  isForeigner: z.coerce.string().optional(),
+  token: z.string().optional()
+});
+
 export const ValidateDocumentSchema = z.object({
   params: z.object({
     idDocumento: z.string().regex(/^\d+$/, 'El ID del documento debe ser numérico')
@@ -87,7 +98,8 @@ export const FinalizeEnrollmentSchema = z.object({
       nombre: z.string().min(2, 'El nombre debe tener al menos 2 caracteres'),
       apellido: z.string().min(2, 'El apellido debe tener al menos 2 caracteres'),
       documento: z.string().min(1, 'El documento del acudiente es obligatorio'),
-      id_tipodocumento: z.number().optional()
+      id_tipodocumento: z.number().optional(),
+      telefono: z.string().optional().nullable()
     }),
     id_grado: z.number().optional().nullable(),
     existing_parent_user_id: z.number().optional().nullable(),

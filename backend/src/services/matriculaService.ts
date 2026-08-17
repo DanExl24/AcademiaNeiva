@@ -80,6 +80,35 @@ export class MatriculaService {
       let tokenSeguimiento: string = '';
       let isExtraordinary = false;
 
+      const parentPhone = data.parentPhone || data.telefono || null;
+      if (parentPhone) {
+        const existingParentUser = await trx
+          .selectFrom('usuario')
+          .select('id_usuario')
+          .where(sql<boolean>`LOWER(email) = LOWER(${cleanEmail})`)
+          .executeTakeFirst();
+
+        if (existingParentUser) {
+          await trx
+            .updateTable('usuario')
+            .set({ telefono: String(parentPhone).trim() })
+            .where('id_usuario', '=', existingParentUser.id_usuario)
+            .execute();
+        } else {
+          const dummyPassword = await bcrypt.hash(`padre_${Date.now()}`, 10);
+          await trx
+            .insertInto('usuario')
+            .values({
+              email: cleanEmail,
+              password: dummyPassword,
+              nombre: 'Padre',
+              apellido: 'Familia',
+              telefono: String(parentPhone).trim()
+            })
+            .execute();
+        }
+      }
+
       if (data.token) {
         const extraRes = await trx
           .selectFrom("matricula")
@@ -394,6 +423,7 @@ export class MatriculaService {
         'pf.apellido as parent_lastname',
         'u_par.documento as parent_document',
         'u_par.id_tipodocumento as parent_id_tipodocumento',
+        sql<string | null>`COALESCE(u_par.telefono, (SELECT u_by_email.telefono FROM usuario u_by_email WHERE LOWER(u_by_email.email) = LOWER(m.correo_padre) LIMIT 1))`.as('parent_telefono'),
         'col.escudo_url',
         'col.nombre as school_name',
         sql<number>`CASE WHEN g.id_grupo IS NOT NULL THEN (g.cupos_totales - (SELECT COUNT(*) FROM matricula WHERE id_grupo = g.id_grupo AND estado IN ('ACTIVA', 'TRASLADADA')))::int ELSE 0 END`.as('cupos_restantes')

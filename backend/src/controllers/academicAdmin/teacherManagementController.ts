@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { PoolClient } from "pg";
+import { z } from "zod";
 import { pool } from "../../config/db";
 import { db } from "../../config/kysely";
 import { sql } from "kysely";
@@ -36,14 +37,38 @@ import {
   getUserEligibleAcademicYears
 } from "./helpers";
 
+export const CreateTeacherSchema = z.object({
+  schoolId: z.coerce.number({ message: "ID de colegio inválido" }),
+  nombre: z.string().min(2, "El nombre debe tener al menos 2 caracteres"),
+  apellido: z.string().min(2, "El apellido debe tener al menos 2 caracteres"),
+  documento: z.string().min(4, "El documento es obligatorio"),
+  email: z.string().email("Correo electrónico inválido"),
+  password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres"),
+  id_tipodocumento: z.coerce.number({ message: "Tipo de documento obligatorio" }),
+  telefono: z.string().regex(/^[0-9+() -]*$/, "Formato de teléfono inválido").optional().nullable(),
+  addRoleIfParent: z.boolean().optional()
+});
+
+export const UpdateTeacherSchema = z.object({
+  nombre: z.string().min(2, "El nombre debe tener al menos 2 caracteres"),
+  apellido: z.string().min(2, "El apellido debe tener al menos 2 caracteres"),
+  documento: z.string().min(4, "El documento es obligatorio"),
+  email: z.string().email("Correo electrónico inválido"),
+  id_tipodocumento: z.coerce.number({ message: "Tipo de documento obligatorio" }),
+  schoolId: z.coerce.number({ message: "ID de colegio inválido" }),
+  telefono: z.string().regex(/^[0-9+() -]*$/, "Formato de teléfono inválido").optional().nullable()
+});
+
 export const createTeacher = async (req: Request, res: Response): Promise<void> => {
-  const schoolId = parseSchoolId(req.body.schoolId);
-  const nombre = String(req.body.nombre || "").trim();
-  const apellido = String(req.body.apellido || "").trim();
-  const documento = normalizeDocument(req.body.documento);
-  const email = String(req.body.email || "").trim().toLowerCase();
-  const password = String(req.body.password || "");
-  const documentTypeId = Number(req.body.id_tipodocumento);
+  const parseResult = CreateTeacherSchema.safeParse(req.body);
+  if (!parseResult.success) {
+    const firstError = parseResult.error.issues[0]?.message || "Datos del docente inválidos";
+    res.status(400).json({ error: firstError, details: parseResult.error.issues });
+    return;
+  }
+
+  const { schoolId, nombre, apellido, documento: rawDoc, email, password, id_tipodocumento: documentTypeId, telefono } = parseResult.data;
+  const documento = normalizeDocument(rawDoc);
   let schoolName = "la institución";
 
   if (!schoolId || !nombre || !apellido || !documento || !email || !password || !documentTypeId) {
@@ -131,6 +156,7 @@ export const createTeacher = async (req: Request, res: Response): Promise<void> 
         "u.apellido",
         "u.documento",
         "u.id_tipodocumento",
+        "u.telefono"
       ])
       .where(sql<string>`UPPER(TRIM(u.documento))`, "=", documento.toUpperCase().trim())
       .executeTakeFirst();
@@ -145,6 +171,7 @@ export const createTeacher = async (req: Request, res: Response): Promise<void> 
         "u.apellido",
         "u.documento",
         "u.id_tipodocumento",
+        "u.telefono"
       ])
       .where(sql<string>`LOWER(TRIM(u.email))`, "=", email)
       .executeTakeFirst();
@@ -238,6 +265,12 @@ export const createTeacher = async (req: Request, res: Response): Promise<void> 
          RETURNING id_docente, nombre, apellido, estado`,
         [existingUser.nombre, existingUser.apellido, schoolId, existingUser.id_usuario]
       );
+      if (telefono) {
+        await client.query(
+          `UPDATE usuario SET telefono = COALESCE(telefono, $1) WHERE id_usuario = $2`,
+          [telefono.trim(), existingUser.id_usuario]
+        );
+      }
 
       // Persistir correo institucional en usuario_colegio_email si difiere del personal
       await upsertInstitutionalEmail(existingUser.id_usuario, schoolId, email, existingUser.email, client);
@@ -259,6 +292,7 @@ export const createTeacher = async (req: Request, res: Response): Promise<void> 
         id_tipodocumento: existingUser.id_tipodocumento || documentTypeId,
         tipo_documento: documentTypeRes.tipo,
         email,
+        telefono: existingUser.telefono || telefono || null,
         activo: existingUser.activo,
         estado: teacherRes.rows[0].estado,
         asignaciones_count: 0,
@@ -271,10 +305,10 @@ export const createTeacher = async (req: Request, res: Response): Promise<void> 
     // CASO 2: Persona y usuario completamente nuevos
     const passwordHash = await bcrypt.hash(password, 10);
     const userRes = await client.query(
-      `INSERT INTO usuario (email, password, nombre, apellido, id_tipodocumento, documento)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING id_usuario, email, activo`,
-      [email, passwordHash, nombre, apellido, documentTypeId, documento]
+      `INSERT INTO usuario (email, password, nombre, apellido, id_tipodocumento, documento, telefono)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING id_usuario, email, activo, telefono`,
+      [email, passwordHash, nombre, apellido, documentTypeId, documento, telefono?.trim() || null]
     );
 
     await client.query(
@@ -318,6 +352,7 @@ export const createTeacher = async (req: Request, res: Response): Promise<void> 
       id_tipodocumento: documentTypeId,
       tipo_documento: documentTypeRes.tipo,
       email: userRes.rows[0].email,
+      telefono: userRes.rows[0].telefono || null,
       activo: userRes.rows[0].activo,
       estado: teacherRes.rows[0].estado,
       asignaciones_count: 0,
@@ -325,7 +360,7 @@ export const createTeacher = async (req: Request, res: Response): Promise<void> 
   } catch (error: any) {
     await client.query("ROLLBACK");
     console.error("Error en createTeacher:", error);
-    res.status(500).json({ error: formatFriendlyErrorMessage(error, "Error al registrar el docente") });
+    res.status(500).json({ error: formatFriendlyErrorMessage(error, "Error al crear docente") });
   } finally {
     client.release();
   }
@@ -333,12 +368,15 @@ export const createTeacher = async (req: Request, res: Response): Promise<void> 
 
 export const updateTeacher = async (req: Request, res: Response): Promise<void> => {
   const teacherId = Number(req.params.id);
-  const schoolId = parseSchoolId(req.body.schoolId);
-  const nombre = String(req.body.nombre || "").trim();
-  const apellido = String(req.body.apellido || "").trim();
-  const documento = normalizeDocument(req.body.documento);
-  const email = String(req.body.email || "").trim().toLowerCase();
-  const documentTypeId = Number(req.body.id_tipodocumento);
+  const parseResult = UpdateTeacherSchema.safeParse(req.body);
+  if (!parseResult.success) {
+    const firstError = parseResult.error.issues[0]?.message || "Datos del docente inválidos";
+    res.status(400).json({ error: firstError, details: parseResult.error.issues });
+    return;
+  }
+
+  const { schoolId, nombre, apellido, documento: rawDoc, email, id_tipodocumento: documentTypeId, telefono } = parseResult.data;
+  const documento = normalizeDocument(rawDoc);
 
   if (!teacherId || !schoolId || !nombre || !apellido || !documento || !email || !documentTypeId) {
     res.status(400).json({ error: "Todos los campos son obligatorios" });
@@ -429,14 +467,23 @@ export const updateTeacher = async (req: Request, res: Response): Promise<void> 
       return;
     }
 
-    // Actualizar datos del usuario si no es padre de familia
-    if (id_usuario && !isParent) {
-      await client.query(
-        `UPDATE usuario 
-         SET nombre = $1, apellido = $2, id_tipodocumento = $3, documento = $4
-         WHERE id_usuario = $5`,
-        [nombre, apellido, documentTypeId, documento, id_usuario]
-      );
+    // Actualizar datos del usuario
+    if (id_usuario) {
+      if (!isParent) {
+        await client.query(
+          `UPDATE usuario 
+           SET nombre = $1, apellido = $2, id_tipodocumento = $3, documento = $4, telefono = $5
+           WHERE id_usuario = $6`,
+          [nombre, apellido, documentTypeId, documento, telefono?.trim() || null, id_usuario]
+        );
+      } else {
+        await client.query(
+          `UPDATE usuario 
+           SET telefono = $1
+           WHERE id_usuario = $2`,
+          [telefono?.trim() || null, id_usuario]
+        );
+      }
     }
 
     // Actualizar datos del docente (solo nombre/apellido — email ya no va en docente)
@@ -751,6 +798,7 @@ export const getTeacherManagementData = async (req: Request, res: Response): Pro
           "td.tipo as tipo_documento",
           "d.estado",
           "u.id_usuario",
+          "u.telefono",
           // email_institucional toma precedencia sobre el email personal
           sql<string>`COALESCE(uce.email_institucional, u.email)`.as("email"),
           "uce.email_institucional",
@@ -781,6 +829,7 @@ export const getTeacherManagementData = async (req: Request, res: Response): Pro
           "td.tipo",
           "d.estado",
           "u.id_usuario",
+          "u.telefono",
           "u.email",
           "u.activo",
           "uce.email_institucional"

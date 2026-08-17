@@ -60,6 +60,7 @@ const parentData = ref({
   apellido: '',
   documento: '',
   id_tipodocumento: 3, // Cédula de Ciudadanía por defecto (ID 3)
+  telefono: '',
 })
 
 const currentDocIndex = ref(0)
@@ -95,6 +96,9 @@ const fetchDetails = async () => {
       parentData.value.documento = response.data.parent_document
       parentData.value.id_tipodocumento = Number(response.data.parent_id_tipodocumento) || 3
     }
+    if (response.data.parent_telefono) {
+      parentData.value.telefono = response.data.parent_telefono
+    }
 
     // Si el padre ya tiene cuenta de personal (docente/directivo), pre-poblar formulario
     if (response.data.existing_parent_user) {
@@ -103,6 +107,9 @@ const fetchDetails = async () => {
       parentData.value.apellido = eu.apellido
       if (eu.id_tipodocumento) {
         parentData.value.id_tipodocumento = Number(eu.id_tipodocumento)
+      }
+      if (eu.telefono) {
+        parentData.value.telefono = eu.telefono
       }
     }
 
@@ -716,6 +723,14 @@ const getStatusColor = (estado: string) => {
               </div>
               <p v-if="docMatchInfo" class="text-xs text-indigo-600 font-bold">
                 Usuario detectado: {{ docMatchInfo.user.nombre }} {{ docMatchInfo.user.apellido }} ({{ docMatchInfo.role }})
+              </p>
+            </div>
+            <div class="space-y-2 col-span-2">
+              <label class="text-sm font-bold text-gray-700">Teléfono / Celular de Contacto del Acudiente</label>
+              <input v-model="parentData.telefono" type="text" placeholder="Ej: 3001234567"
+                class="w-full rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-4 transition-all">
+              <p class="text-[11px] text-gray-500 font-medium">
+                Precargado automáticamente desde la radicación de la matrícula realizada por el acudiente.
               </p>
             </div>
           </div>

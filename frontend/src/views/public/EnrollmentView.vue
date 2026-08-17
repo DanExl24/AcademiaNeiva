@@ -15,7 +15,8 @@ import {
   CalendarDays,
   ShieldCheck,
   Timer,
-  RefreshCw
+  RefreshCw,
+  Phone
 } from 'lucide-vue-next'
 
 const step = ref(1)
@@ -26,6 +27,7 @@ const grade = ref('') // Este guardará el id_grado final
 
 const formData = ref({
   parentEmail: '',
+  parentPhone: '',
   hasDisability: false,
   isForeigner: false
 })
@@ -371,12 +373,15 @@ const sendVerificationCode = async () => {
   }
 }
 
+const isPhoneStep = ref(false)
+
 const proceedToVerification = async () => {
   if (!formData.value.parentEmail || !isValidEmail(formData.value.parentEmail)) {
     notify.addNotification('Por favor ingresa un correo electrónico válido.', 'warning')
     return
   }
   isVerifyingScreen.value = true
+  isPhoneStep.value = false
   await sendVerificationCode()
 }
 
@@ -394,12 +399,13 @@ const verifyAndSubmit = async () => {
     if (res.data.verified) {
       isEmailVerified.value = true
       if (timerInterval) clearInterval(timerInterval)
-      // Procesar y enviar la matrícula inmediatamente
-      await submitEnrollment()
+      isPhoneStep.value = true
+      notify.addNotification('¡Correo verificado con éxito! Por favor ingresa tu número telefónico para completar la solicitud.', 'success')
     }
   } catch (error: any) {
     const msg = error.response?.data?.error || 'Código incorrecto o expirado.'
     notify.addNotification(msg, 'error')
+  } finally {
     verifyingCode.value = false
   }
 }
@@ -439,12 +445,18 @@ const nextStep = () => {
 
 const prevStep = () => {
   isVerifyingScreen.value = false
+  isPhoneStep.value = false
   step.value--
 }
 
 const submitting = ref(false)
 
 const submitEnrollment = async () => {
+  const cleanPhone = (formData.value.parentPhone || '').trim()
+  if (!cleanPhone || cleanPhone.length < 7) {
+    notify.addNotification('Por favor ingresa un número de teléfono de contacto válido (mínimo 7 dígitos).', 'warning')
+    return
+  }
   if (submitting.value) return
   submitting.value = true
   try {
@@ -453,6 +465,8 @@ const submitEnrollment = async () => {
     // Datos básicos
     formDataPayload.append('id_colegio', schoolId.value)
     formDataPayload.append('parentEmail', formData.value.parentEmail)
+    formDataPayload.append('parentPhone', cleanPhone)
+    formDataPayload.append('telefono', cleanPhone)
     formDataPayload.append('level', level.value)
     formDataPayload.append('grade', grade.value)
     formDataPayload.append('hasDisability', String(formData.value.hasDisability))
@@ -475,15 +489,15 @@ const submitEnrollment = async () => {
       }
     })
 
-    notify.addNotification('¡Matrícula enviada exitosamente! Los datos personales se solicitarán una vez validados estos documentos.', 'success')
+    notify.addNotification('¡Matrícula radicada exitosamente! Los datos personales se solicitarán una vez validados estos documentos.', 'success')
     setTimeout(() => {
       window.location.href = '/'
     }, 1500)
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error al enviar:', error)
-    notify.addNotification('Hubo un error al enviar el formulario. Por favor intenta de nuevo.', 'error')
+    const errMessage = error.response?.data?.error || 'Hubo un error al enviar el formulario. Por favor intenta de nuevo.'
+    notify.addNotification(errMessage, 'error')
     submitting.value = false
-    verifyingCode.value = false
   }
 }
 </script>
@@ -767,77 +781,144 @@ const submitEnrollment = async () => {
             </div>
           </div>
 
-          <!-- 3.2 Vista Exclusiva y Dedicada de Verificación de Correo OTP -->
+          <!-- 3.2 Vista Exclusiva y Dedicada de Verificación de Correo OTP y Teléfono -->
           <div v-if="step === 3 && isVerifyingScreen" class="py-8 max-w-md mx-auto text-center animate-in zoom-in duration-500">
-            <div class="relative mx-auto w-20 h-20 mb-6">
-              <div class="absolute inset-0 bg-indigo-100 rounded-3xl animate-ping opacity-30"></div>
-              <div class="relative h-20 w-20 bg-gradient-to-tr from-indigo-600 to-blue-600 text-white rounded-3xl flex items-center justify-center shadow-xl shadow-indigo-200">
-                <ShieldCheck :size="40" />
+            
+            <!-- SUB-PASO A: Verificación de OTP (Código de 6 dígitos) -->
+            <div v-if="!isPhoneStep" class="space-y-6">
+              <div class="relative mx-auto w-20 h-20 mb-6">
+                <div class="absolute inset-0 bg-indigo-100 rounded-3xl animate-ping opacity-30"></div>
+                <div class="relative h-20 w-20 bg-gradient-to-tr from-indigo-600 to-blue-600 text-white rounded-3xl flex items-center justify-center shadow-xl shadow-indigo-200">
+                  <ShieldCheck :size="40" />
+                </div>
               </div>
-            </div>
 
-            <h3 class="text-2xl font-black text-gray-900 tracking-tight">Verificación de Correo</h3>
-            <p class="text-gray-500 mt-2 text-sm">
-              Ingresa el código de 6 dígitos que enviamos a:
-            </p>
-            <div class="inline-block mt-2 px-4 py-1 bg-indigo-50 border border-indigo-100 text-indigo-700 font-extrabold rounded-full text-xs font-mono">
-              {{ formData.parentEmail }}
-            </div>
+              <h3 class="text-2xl font-black text-gray-900 tracking-tight">Verificación de Correo</h3>
+              <p class="text-gray-500 text-sm">
+                Ingresa el código de 6 dígitos que enviamos a:
+              </p>
+              <div class="inline-block px-4 py-1 bg-indigo-50 border border-indigo-100 text-indigo-700 font-extrabold rounded-full text-xs font-mono">
+                {{ formData.parentEmail }}
+              </div>
 
-            <div class="mt-8 space-y-6">
-              <div class="space-y-2">
-                <div class="flex items-center justify-between text-xs font-bold text-gray-500 px-1">
-                  <span>Código de 6 dígitos</span>
-                  <span v-if="countdownSeconds > 0" class="text-indigo-600 font-mono flex items-center gap-1">
-                    <Timer :size="13" /> Expira en {{ formattedCountdown }}
-                  </span>
+              <div class="space-y-6 pt-2">
+                <div class="space-y-2 text-left">
+                  <div class="flex items-center justify-between text-xs font-bold text-gray-500 px-1">
+                    <span>Código de 6 dígitos</span>
+                    <span v-if="countdownSeconds > 0" class="text-indigo-600 font-mono flex items-center gap-1">
+                      <Timer :size="13" /> Expira en {{ formattedCountdown }}
+                    </span>
+                  </div>
+
+                  <input 
+                    v-model="otpCodeInput" 
+                    type="text" 
+                    maxlength="6"
+                    placeholder="000000" 
+                    class="w-full text-center font-mono text-3xl font-black tracking-[0.35em] rounded-2xl border-2 border-indigo-200 bg-gray-50 focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-100 p-4 transition-all shadow-inner outline-none"
+                    @keyup.enter="verifyAndSubmit"
+                  >
                 </div>
 
-                <input 
-                  v-model="otpCodeInput" 
-                  type="text" 
-                  maxlength="6"
-                  placeholder="000000" 
-                  class="w-full text-center font-mono text-3xl font-black tracking-[0.35em] rounded-2xl border-2 border-indigo-200 bg-gray-50 focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-100 p-4 transition-all shadow-inner"
-                  @keyup.enter="verifyAndSubmit"
-                >
-              </div>
-
-              <div class="flex items-center justify-center gap-2 text-xs">
-                <span class="text-gray-400">¿No recibiste el correo?</span>
-                <button 
-                  type="button" 
-                  @click="sendVerificationCode"
-                  :disabled="sendingCode || countdownSeconds > 840"
-                  class="font-bold text-indigo-600 hover:text-indigo-800 disabled:opacity-50 flex items-center gap-1 transition-colors"
-                >
-                  <RefreshCw v-if="sendingCode" class="animate-spin" :size="12" />
-                  <span>{{ sendingCode ? 'Reenviando...' : 'Reenviar código' }}</span>
-                </button>
-              </div>
-
-              <div class="pt-2 space-y-3">
-                <button
-                  @click="verifyAndSubmit"
-                  :disabled="verifyingCode || submitting || otpCodeInput.trim().length !== 6"
-                  class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 px-8 rounded-2xl font-bold text-base shadow-xl shadow-indigo-100 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                >
-                  <span v-if="verifyingCode || submitting" class="inline-block w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                  <span>{{ (verifyingCode || submitting) ? 'Procesando Matrícula...' : 'Confirmar y Radicar Matrícula' }}</span>
-                </button>
-
-                <div>
+                <div class="flex items-center justify-center gap-2 text-xs">
+                  <span class="text-gray-400">¿No recibiste el correo?</span>
                   <button 
                     type="button" 
-                    @click="isVerifyingScreen = false" 
-                    :disabled="verifyingCode || submitting"
-                    class="text-xs font-bold text-gray-400 hover:text-gray-600 transition-colors"
+                    @click="sendVerificationCode"
+                    :disabled="sendingCode || countdownSeconds > 840"
+                    class="font-bold text-indigo-600 hover:text-indigo-800 disabled:opacity-50 flex items-center gap-1 transition-colors cursor-pointer"
                   >
-                    ← Modificar correo o datos
+                    <RefreshCw v-if="sendingCode" class="animate-spin" :size="12" />
+                    <span>{{ sendingCode ? 'Reenviando...' : 'Reenviar código' }}</span>
+                  </button>
+                </div>
+
+                <div class="pt-2 space-y-3">
+                  <button
+                    type="button"
+                    @click="verifyAndSubmit"
+                    :disabled="verifyingCode || otpCodeInput.trim().length !== 6"
+                    class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 px-8 rounded-2xl font-bold text-base shadow-xl shadow-indigo-100 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <span v-if="verifyingCode" class="inline-block w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                    <span>{{ verifyingCode ? 'Verificando Código...' : 'Validar Código' }}</span>
+                  </button>
+
+                  <div>
+                    <button 
+                      type="button" 
+                      @click="isVerifyingScreen = false" 
+                      :disabled="verifyingCode"
+                      class="text-xs font-bold text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
+                    >
+                      ← Modificar correo o datos
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- SUB-PASO B: Ingreso de Teléfono y Confirmación Final -->
+            <div v-else class="space-y-6 text-left animate-in fade-in slide-in-from-right-4 duration-300">
+              <div class="text-center space-y-2">
+                <div class="inline-flex p-3 bg-emerald-50 text-emerald-600 rounded-2xl border border-emerald-100 mb-2">
+                  <CheckCircle2 :size="32" />
+                </div>
+                <h3 class="text-2xl font-black text-gray-900 tracking-tight">¡Correo Verificado!</h3>
+                <p class="text-gray-500 text-xs font-medium">
+                  Último paso: ingresa tu número telefónico para registrar la solicitud de matrícula.
+                </p>
+                <div class="inline-block px-3 py-1 bg-emerald-50 text-emerald-800 font-bold rounded-full text-xs">
+                  ✓ {{ formData.parentEmail }}
+                </div>
+              </div>
+
+              <div class="bg-gray-50 p-6 rounded-3xl border border-gray-150 space-y-4">
+                <div class="space-y-2">
+                  <label class="text-xs font-black uppercase tracking-wider text-gray-700 flex items-center gap-1.5">
+                    <Phone :size="14" class="text-indigo-600" />
+                    <span>Teléfono / Celular de Contacto *</span>
+                  </label>
+                  <div class="relative">
+                    <input 
+                      v-model="formData.parentPhone"
+                      type="tel"
+                      required
+                      placeholder="Ej. +57 300 123 4567"
+                      class="w-full bg-white border border-gray-200 rounded-2xl p-4 text-base font-bold text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all shadow-sm"
+                      @keyup.enter="submitEnrollment"
+                    />
+                  </div>
+                  <p class="text-[11px] text-gray-500 font-medium">
+                    El colegio se comunicará a este número para coordinar la verificación documental y la formalización.
+                  </p>
+                </div>
+              </div>
+
+              <div class="space-y-3 pt-2">
+                <button
+                  type="button"
+                  @click="submitEnrollment"
+                  :disabled="submitting || !formData.parentPhone || formData.parentPhone.trim().length < 7"
+                  class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 px-8 rounded-2xl font-bold text-base shadow-xl shadow-indigo-100 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <span v-if="submitting" class="inline-block w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                  <span>{{ submitting ? 'Radicando Matrícula...' : 'Confirmar y Radicar Matrícula' }}</span>
+                </button>
+
+                <div class="text-center">
+                  <button 
+                    type="button" 
+                    @click="isPhoneStep = false" 
+                    :disabled="submitting"
+                    class="text-xs font-bold text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
+                  >
+                    ← Volver a verificación de código
                   </button>
                 </div>
               </div>
             </div>
+
           </div>
 
         </div>

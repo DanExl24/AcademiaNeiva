@@ -4,8 +4,17 @@ import { pool } from "../config/db";
 import path from "path";
 import fs from "fs";
 
+import { CreateEnrollmentSchema } from "../dtos/matricula.dto";
+
 export const submitEnrollment = async (req: Request, res: Response) => {
   try {
+    const parseResult = CreateEnrollmentSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      const firstError = parseResult.error.issues[0]?.message || "Datos de matrícula inválidos";
+      res.status(400).json({ error: firstError, details: parseResult.error.issues });
+      return;
+    }
+
     const data = req.body;
     const files = req.files;
 
