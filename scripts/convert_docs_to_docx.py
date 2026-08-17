@@ -15,8 +15,12 @@ if sys.platform == "win32":
     sys.stdout.reconfigure(encoding="utf-8")
     sys.stderr.reconfigure(encoding="utf-8")
 
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+DOCX_OUTPUT_DIR = os.path.join(BASE_DIR, "docx")
 CACHE_DIR = os.path.join(os.path.dirname(__file__), ".mermaid_cache")
+
 os.makedirs(CACHE_DIR, exist_ok=True)
+os.makedirs(DOCX_OUTPUT_DIR, exist_ok=True)
 
 TARGET_PATHS = [
     r"guides\dic",
@@ -76,10 +80,9 @@ def render_mermaid(code: str) -> str | None:
 
 def find_all_markdown_files(targets: list[str]) -> list[str]:
     md_files = []
-    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     for t in targets:
         # Check current working directory, base directory, or absolute path
-        full_p = os.path.abspath(t) if os.path.exists(t) else os.path.normpath(os.path.join(base_dir, t))
+        full_p = os.path.abspath(t) if os.path.exists(t) else os.path.normpath(os.path.join(BASE_DIR, t))
         if os.path.isfile(full_p) and full_p.endswith(".md"):
             md_files.append(full_p)
         elif os.path.isdir(full_p):
@@ -90,7 +93,12 @@ def find_all_markdown_files(targets: list[str]) -> list[str]:
     return sorted(list(set(md_files)))
 
 def convert_single_file(md_path: str) -> tuple[str, bool, str]:
-    docx_path = os.path.splitext(md_path)[0] + ".docx"
+    rel_path = os.path.relpath(md_path, BASE_DIR)
+    docx_rel = os.path.splitext(rel_path)[0] + ".docx"
+    docx_path = os.path.join(DOCX_OUTPUT_DIR, docx_rel)
+    
+    os.makedirs(os.path.dirname(docx_path), exist_ok=True)
+
     try:
         with open(md_path, "r", encoding="utf-8") as f:
             content = f.read()
@@ -126,7 +134,7 @@ def convert_single_file(md_path: str) -> tuple[str, bool, str]:
                 pass
 
         if res.returncode == 0 and os.path.exists(docx_path):
-            return md_path, True, f"OK ({os.path.getsize(docx_path)} bytes)"
+            return md_path, True, f"OK -> docx/{docx_rel} ({os.path.getsize(docx_path)} bytes)"
         else:
             return md_path, False, f"Pandoc error: {res.stderr}"
 
@@ -134,8 +142,6 @@ def convert_single_file(md_path: str) -> tuple[str, bool, str]:
         return md_path, False, str(e)
 
 def main():
-    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    
     # Check if arguments were passed from terminal
     args = sys.argv[1:]
     targets = args if args else TARGET_PATHS
@@ -147,8 +153,9 @@ def main():
         return
 
     print(f"Total de archivos .md a convertir: {len(files)}")
+    print(f"Carpeta de destino: {DOCX_OUTPUT_DIR}\n")
 
-    print("\nIniciando conversión a .docx...")
+    print("Iniciando conversión a .docx...")
     success_count = 0
     fail_count = 0
 
@@ -157,7 +164,7 @@ def main():
         futures = {executor.submit(convert_single_file, f): f for f in files}
         for future in concurrent.futures.as_completed(futures):
             fpath = futures[future]
-            rel_path = os.path.relpath(fpath, base_dir)
+            rel_path = os.path.relpath(fpath, BASE_DIR)
             try:
                 path, success, msg = future.result()
                 if success:
@@ -172,6 +179,7 @@ def main():
 
     print("\n" + "=" * 50)
     print(f"Conversión completada. Éxito: {success_count}, Fallos: {fail_count}")
+    print(f"Todos los archivos .docx organizados en la carpeta: /docx")
     print("=" * 50)
 
 if __name__ == "__main__":
