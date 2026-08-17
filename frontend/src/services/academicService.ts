@@ -16,7 +16,6 @@ export const academicService = {
 
 
   async getSettings(schoolId: number | string, params?: any): Promise<any> {
-
     const res = await api.get(`/academic-admin/settings/${schoolId}`, { params })
     return res.data
   },
@@ -132,6 +131,11 @@ export const academicService = {
 
   async updateDefaultScales(payload: any): Promise<any> {
     const res = await api.put('/academic-admin/settings/defaults', payload)
+    return res.data
+  },
+
+  async updatePromotionPolicy(payload: any): Promise<any> {
+    const res = await api.put('/academic-admin/settings/promotion-policy', payload)
     return res.data
   },
 
