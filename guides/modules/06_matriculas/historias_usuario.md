@@ -1,239 +1,131 @@
 # Historias de Usuario — Matrículas e Inscripciones
 
-Este documento contiene las historias de usuario implementadas para el módulo de Matrículas e Inscripciones de AcademiaNeiva.
+Este documento describe las Historias de Usuario del módulo de **Matrículas e Inscripciones** de AcademiaNeiva, detallando actores, narrativas y criterios de aceptación técnicos.
 
 ---
 
-# HU-MAT-001: Enviar Solicitud de Inscripción Pública Regular
+## 1. Inscripción Pública y Verificación
 
-## Historia
-**Como** aspirante o padre de familia  
-**Quiero** completar el formulario de inscripción pública y adjuntar los documentos de soporte  
-**Para** solicitar una plaza de estudio regular para el año lectivo activo.
-
-## Criterios de Aceptación
-- El formulario debe presentarse solo si la fecha actual está dentro del rango permitido (`fecha_inicio` a `fecha_cierre`) de la configuración de inscripción del colegio.
-- Permite subir archivos independientes para cada documento obligatorio (Registro Civil, Foto, Vacunas, Salud, etc.) respetando el límite de tamaño de 5MB por archivo.
-- Al procesar con éxito, el sistema guarda la solicitud en estado `PENDIENTE` y genera un token UUID de seguimiento.
-
-## Detalles Técnicos
-- **Prioridad:** Alta
-- **Roles involucrados:** Público
-- **Reglas de negocio relacionadas:** RN-MAT-001, RN-MAT-003
-- **Endpoints relacionados:** 
-  - `POST /api/matriculas/submit`
-- **Componentes frontend relacionados:** 
-  - [EnrollmentView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/public/EnrollmentView.vue)
-- **Controllers/Services relacionados:** 
-  - [matriculaController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/matriculaController.ts) (`submitEnrollment`)
-  - [matriculaService.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/services/matriculaService.ts)
+### HU-MAT-001: Radicación de Solicitud de Matrícula Regular con Verificación OTP
+- **Como:** Padre de Familia o Acudiente Legal.
+- **Quiero:** Diligenciar el formulario público de inscripción adjuntando los documentos de mi acudido y validando previamente mi correo electrónico.
+- **Para:** Postular a mi hijo al cupo escolar correspondiente de forma segura y recibir notificaciones oficiales.
+- **Criterios de Aceptación:**
+  1. El formulario exige ingresar el correo del acudiente y validar un código OTP de 6 dígitos con cuenta regresiva de 15 minutos antes de permitir avanzar.
+  2. Si el colegio tiene inscripciones cerradas o no tiene un año lectivo en estado `ABIERTO`, el sistema bloquea el envío e informa las fechas de inicio/cierre.
+  3. Los archivos adjuntos no pueden superar 5MB por archivo y deben cumplir con las extensiones autorizadas (PDF, PNG, JPG, JPEG, SVG).
+  4. Al enviar con éxito, el sistema persiste los archivos binarios en `documento_matriculas` (`BYTEA`), genera la matrícula en estado `PENDIENTE` y emite un `token_seguimiento` de tipo UUID.
+  5. El sistema envía automáticamente un correo de confirmación de radicación con el token al buzón verificado.
 
 ---
 
-# HU-MAT-002: Consultar Seguimiento de Solicitud de Matrícula
-
-## Historia
-**Como** aspirante o padre de familia  
-**Quiero** ingresar el token de mi matrícula en la barra de búsqueda  
-**Para** monitorear el estado actual de mi trámite escolar y leer observaciones del directivo.
-
-## Criterios de Aceptación
-- El usuario ingresa el token UUID de seguimiento.
-- El sistema muestra el estado actual de la matrícula (`PENDIENTE`, `CORRECCION`, `APROBADA`, `ACTIVA`, `CANCELADA`) y la lista de documentos cargados con sus estados individuales.
-- El visitante anónimo no requiere credenciales para ver este panel específico ligado a su token.
-
-## Detalles Técnicos
-- **Prioridad:** Alta
-- **Roles involucrados:** Público
-- **Reglas de negocio relacionadas:** RN-MAT-003
-- **Endpoints relacionados:** 
-  - `GET /api/matriculas/:id` (con UUID de seguimiento)
-- **Componentes frontend relacionados:** 
-  - [MatriculaTrackingView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/public/MatriculaTrackingView.vue)
-- **Controllers/Services relacionados:** 
-  - [matriculaController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/matriculaController.ts) (`getMatriculaDetails` / `getByToken`)
+### HU-MAT-002: Consulta Pública de Estado mediante Token de Seguimiento
+- **Como:** Padre de Familia o Aspirante.
+- **Quiero:** Ingresar mi Token de Seguimiento UUID en la página web pública de la institución.
+- **Para:** Conocer si mi solicitud se encuentra en revisión, aprobada o si presenta documentos rechazados sin necesidad de tener una cuenta de usuario.
+- **Criterios de Aceptación:**
+  1. La consulta pública por UUID no exige credenciales ni sesión activa.
+  2. Muestra el estado actual (`PENDIENTE`, `CORRECCION`, `CORREGIDA`, `APROBADA`, `ACTIVA`, `RECHAZADA`, `CANCELADA`).
+  3. Si la matrícula se encuentra en estado `CORRECCION`, resalta visualmente los documentos rechazados y expone el motivo especificado por el directivo.
 
 ---
 
-# HU-MAT-003: Subsanar Documentos Rechazados (Corrección)
-
-## Historia
-**Como** aspirante o padre de familia  
-**Quiero** volver a cargar los archivos de los documentos que fueron marcados como rechazados por el colegio  
-**Para** corregir las inconsistencias y que mi trámite de matrícula pueda continuar.
-
-## Criterios de Aceptación
-- La opción de volver a cargar archivos solo se habilita si el estado de la matrícula es `CORRECCION` y los documentos específicos están en estado `RECHAZADO`.
-- El usuario sube los archivos de reemplazo.
-- Al guardar, el estado de la matrícula regresa de forma automática a `PENDIENTE` para una nueva revisión del directivo y los documentos pasan a revisión.
-
-## Detalles Técnicos
-- **Prioridad:** Alta
-- **Roles involucrados:** Público
-- **Reglas de negocio relacionadas:** RN-MAT-004
-- **Endpoints relacionados:** 
-  - `POST /api/matriculas/update-documents/:token`
-- **Componentes frontend relacionados:** 
-  - [EnrollmentCorrection.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/public/EnrollmentCorrection.vue)
-- **Controllers/Services relacionados:** 
-  - [matriculaController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/matriculaController.ts) (`updateDocumentsByToken`)
+### HU-MAT-003: Subsanación y Carga de Documentos Corregidos por Token
+- **Como:** Padre de Familia o Acudiente con solicitud en estado de corrección.
+- **Quiero:** Cargar las nuevas versiones de los archivos que fueron rechazados por inconsistencias.
+- **Para:** Que el directivo escolar reevalúe mi postulación y continúe el trámite de matrícula.
+- **Criterios de Aceptación:**
+  1. El formulario de corrección solo permite cargar los archivos marcados como `RECHAZADO`.
+  2. Al enviar la corrección (`POST /api/matriculas/update-documents/:token`), el backend inserta los nuevos archivos con `version = max_version + 1` en `documento_matriculas`.
+  3. La matrícula cambia automáticamente al estado **`CORREGIDA`** (no `PENDIENTE`), preservando intacto el salón previamente pre-seleccionado.
+  4. Los documentos anteriores se conservan en el historial de versiones para fines de auditoría.
 
 ---
 
-# HU-MAT-004: Validar Documentación de Aspirante
+## 2. Gestión Directiva y Validación Documental
 
-## Historia
-**Como** directivo del colegio  
-**Quiero** inspeccionar los archivos adjuntos de una solicitud y marcarlos como validados o rechazados  
-**Para** verificar que cumplan con los requisitos legales exigidos por la institución.
-
-## Criterios de Aceptación
-- El directivo visualiza el archivo de cada documento en línea.
-- Puede hacer clic en "Validar" (estado pasa a `VALIDADO`) o "Rechazar" (estado pasa a `RECHAZADO`).
-- Al rechazar, debe ingresar de forma obligatoria el motivo del rechazo del documento.
-- Si rechaza al menos un documento, el sistema cambia automáticamente el estado de la matrícula a `CORRECCION`.
-
-## Detalles Técnicos
-- **Prioridad:** Alta
-- **Roles involucrados:** Directivo
-- **Reglas de negocio relacionadas:** RN-MAT-004
-- **Endpoints relacionados:** 
-  - `PATCH /api/matriculas/document/:idDocumento`
-- **Componentes frontend relacionados:** 
-  - [EnrollmentDetails.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/EnrollmentDetails.vue)
-- **Controllers/Services relacionados:** 
-  - [matriculaController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/matriculaController.ts) (`validateDocument`)
+### HU-MAT-004: Evaluación Documental en Línea con Visor Protegido
+- **Como:** Directivo Escolar (Rector o Coordinador de Admisiones).
+- **Quiero:** Inspeccionar los documentos cargados por el aspirante en un visor integrado y validar o rechazar individualmente cada archivo.
+- **Para:** Garantizar el cumplimiento de los requisitos legales antes de autorizar el ingreso del estudiante.
+- **Criterios de Aceptación:**
+  1. La visualización de documentos se realiza mediante tokens JWT efímeros firmados (`verifyDocumentToken`), impidiendo el acceso anónimo no autorizado.
+  2. El directivo puede marcar cada archivo como `VALIDADO` o `RECHAZADO` indicando el motivo de rechazo.
+  3. El sistema expone el historial de versiones anteriores (`versiones_anteriores`) de cada archivo si ha sido corregido previamente.
+  4. Al presionar "Notificar Inconsistencias", la matrícula pasa a `CORRECCION` y se envía un correo al acudiente con las observaciones.
 
 ---
 
-# HU-MAT-005: Asignar Grado y Grupo Escolar
-
-## Historia
-**Como** directivo del colegio  
-**Quiero** asignar el grado escolar y el grupo de clase al aspirante que tiene documentos correctos  
-**Para** pre-ubicarlo en el salón correspondiente antes de oficializar su matrícula.
-
-## Criterios de Aceptación
-- El directivo selecciona el tipo de grado y grupo de la lista de cursos disponibles.
-- El sistema verifica que el grupo tenga cupos disponibles. Si no hay cupos, bloquea la asignación.
-- Al procesarse correctamente, la matrícula pasa a estado `APROBADA` y se asocia el `id_grupo` en la tabla `matricula`.
-
-## Detalles Técnicos
-- **Prioridad:** Alta
-- **Roles involucrados:** Directivo
-- **Reglas de negocio relacionadas:** RN-MAT-005
-- **Endpoints relacionados:** 
-  - `POST /api/matriculas/assign-grade/:id`
-- **Componentes frontend relacionados:** 
-  - [FinalRegistration.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/FinalRegistration.vue)
-- **Controllers/Services relacionados:** 
-  - [matriculaController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/matriculaController.ts) (`assignGrade`)
+### HU-MAT-005: Asignación de Aula y Control de Aforo en Tiempo Real
+- **Como:** Directivo Escolar.
+- **Quiero:** Seleccionar la sección y salón físico (`id_grupo`) para el aspirante dentro de su grado escolar.
+- **Para:** Distribuir equitativamente la carga estudiantil respetando los límites de cupo por aula.
+- **Criterios de Aceptación:**
+  1. El selector de salones muestra las secciones paralelas con sus cupos disponibles calculados en tiempo real (`cupos_totales - (activas + trasladadas)`).
+  2. La selección se persiste de inmediato en `matricula.id_grupo` mediante `POST /api/matriculas/assign-grade/:id`.
+  3. Si la solicitud entra en corrección documental, la asignación de salón se conserva para evitar parametrizaciones repetitivas.
+  4. Los salones sin cupo disponible se muestran inhabilitados en la interfaz.
 
 ---
 
-# HU-MAT-006: Finalizar y Oficializar Matrícula
+## 3. Formalización y Casos Complejos
 
-## Historia
-**Como** directivo del colegio  
-**Quiero** presionar finalizar en una matrícula aprobada  
-**Para** asentar oficialmente al estudiante en el plantel escolar y generarle sus credenciales de acceso.
-
-## Criterios de Aceptación
-- Solo se habilita si el estado es `APROBADA` y tiene asignado un grupo de clase.
-- El sistema inserta un nuevo registro en la tabla `estudiante` con estado `ACTIVO` y genera su código único estudiantil.
-- Crea automáticamente una cuenta vinculada en `usuario` con rol `estudiante` e inyecta la credencial inicial.
-- El estado de la matrícula transiciona a `ACTIVA`.
-
-## Detalles Técnicos
-- **Prioridad:** Alta
-- **Roles involucrados:** Directivo
-- **Reglas de negocio relacionadas:** RN-MAT-005
-- **Endpoints relacionados:** 
-  - `POST /api/matriculas/finalize/:id`
-- **Componentes frontend relacionados:** 
-  - [FinalRegistration.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/FinalRegistration.vue)
-- **Controllers/Services relacionados:** 
-  - [matriculaController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/matriculaController.ts) (`finalizeEnrollment`)
+### HU-MAT-006: Formalización Atómica y Creación de Identidades en Cascada
+- **Como:** Directivo Escolar.
+- **Quiero:** Formalizar la matrícula completando los datos de identidad del alumno y su acudiente.
+- **Para:** Dar de alta oficialmente al estudiante, crear sus credenciales de acceso institucional y activar su matrícula.
+- **Criterios de Aceptación:**
+  1. El backend ejecuta una transacción atómica protegida con bloqueo `SELECT ... FOR UPDATE` sobre la tabla `grupos` para impedir sobrecupos concurrentes.
+  2. Se valida que el documento del estudiante sea diferente al del acudiente (`RN-MAT-017`).
+  3. Si el estudiante es nuevo, genera su código único (`MAT-${Date.now()}`), crea su cuenta de usuario con contraseña cifrada y la ficha en `estudiante`.
+  4. Si el acudiente es nuevo, crea su cuenta de usuario con rol `padre` y ficha en `padre_familia`. Si ya es personal del colegio (docente/directivo), no sobrescribe sus datos y activa la relación en `usuario_colegio`.
+  5. Inserta o actualiza la relación parentesco en `detalle_padrefamilia`.
+  6. Cancela automáticamente matrículas previas activas/pendientes del estudiante en el mismo año lectivo.
+  7. Cambia el estado de la matrícula a `ACTIVA` (o `TRASLADADA` si `es_traslado = true`) y despacha el correo con credenciales de acceso al acudiente.
 
 ---
 
-# HU-MAT-007: Procesar Matrícula Extraordinaria
-
-## Historia
-**Como** directivo del colegio  
-**Quiero** matricular a un estudiante fuera de las fechas de inscripción ordinaria  
-**Para** atender casos especiales de alumnos que ingresan de manera extemporánea.
-
-## Criterios de Aceptación
-- El directivo inicia la solicitud seleccionando el tipo de matrícula `EXTRAORDINARIA`.
-- Completa el formulario de datos personales y sube los documentos.
-- La solicitud requiere la aprobación explícita y re-autenticación de rectoría para consolidarse.
-- Se omite el bloqueo de fechas regulares para este flujo.
-
-## Detalles Técnicos
-- **Prioridad:** Media
-- **Roles involucrados:** Directivo
-- **Reglas de negocio relacionadas:** RN-MAT-002
-- **Endpoints relacionados:** 
-  - `POST /api/academic-admin/matriculas/extraordinaria`
-  - `POST /api/academic-admin/matriculas/extraordinaria/:id/aprobar`
-- **Componentes frontend relacionados:** 
-  - [EnrollmentManagement.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/EnrollmentManagement.vue)
-- **Controllers/Services relacionados:** 
-  - [academicAdminController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdminController.ts) (`createExtraordinaryEnrollment`, `approveExtraordinaryEnrollment`)
+### HU-MAT-007: Trámite de Matrícula Extraordinaria por Mesa de Soporte
+- **Como:** Directivo Escolar.
+- **Quiero:** Autorizar una matrícula extraordinaria desde un ticket de soporte técnico.
+- **Para:** Permitir el ingreso extemporáneo de un estudiante fuera del calendario ordinario.
+- **Criterios de Aceptación:**
+  1. La opción se habilita exclusivamente para tickets con incidencia `MATRICULA_EXTRAORDINARIA`.
+  2. El directivo selecciona si es un estudiante nuevo o existente y el sistema pre-crea la matrícula en estado `PENDIENTE` vinculando el `id_ticket` y generando un token UUID.
+  3. El acudiente radica su formulario usando el token sin restricción de fechas cerradas.
+  4. Al oficializar la matrícula, el ticket de soporte cambia automáticamente a estado `RESUELTO`.
 
 ---
 
-# HU-MAT-008: Gestión y Configuración de Reingreso de Estudiante Retirado
-
-## Historia
-**Como** directivo del colegio  
-**Quiero** consultar el expediente de un estudiante previamente retirado y configurar su destino de reingreso  
-**Para** aperturar su matrícula en estado PENDIENTE_RENOVACION y enviarle la matriz documental al acudiente.
-
-## Criterios de Aceptación
-- Solo se permite tramitar reingreso para estudiantes en estado `RETIRADO`. Alumnos expulsados o graduados están inhabilitados.
-- El directivo visualiza el historial escolar previo del alumno y el acudiente asociado.
-- Configura el Año Lectivo, Nivel Escolar, Grado y Grupo/Salón de destino verificando en tiempo real la disponibilidad de cupos.
-- Ajusta la matriz documental indicando cuáles archivos siguen `VIGENTES` y cuáles requieren `RENOVAR`.
-- Al enviar, el sistema crea la matrícula `PENDIENTE_RENOVACION` (tipo `REINGRESO`) y notifica al acudiente por correo electrónico con su token de seguimiento.
-
-## Detalles Técnicos
-- **Prioridad:** Alta
-- **Roles involucrados:** Directivo
-- **Reglas de negocio relacionadas:** RN-MAT-008, RN-MAT-010, RN-MAT-011, RN-MAT-012
-- **Endpoints relacionados:** 
-  - `GET /api/reingreso/student-history/:id_estudiante`
-  - `GET /api/reingreso/groups`
-  - `POST /api/reingreso/send-parent-link`
-- **Componentes frontend relacionados:** 
-  - [ReingresoManagement.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/ReingresoManagement.vue)
-- **Controllers/Services relacionados:** 
-  - [reingresoController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/reingresoController.ts) (`sendParentReingresoLink`, `getStudentHistoryForReingreso`)
+### HU-MAT-008: Gestión de Reingresos con Matriz Documental Inteligente
+- **Como:** Directivo Escolar.
+- **Quiero:** Tramitar el reingreso de un estudiante en estado `RETIRADO` evaluando su historial y conservando sus documentos vigentes.
+- **Para:** Reincorporar al alumno a la institución sin exigirle duplicar documentación que no ha vencido.
+- **Criterios de Aceptación:**
+  1. Solo estudiantes en estado `RETIRADO` son elegibles (expulsados y graduados quedan bloqueados).
+  2. El sistema presenta la matriz documental marcando archivos vigentes (`VIGENTE`) y permitiendo seleccionar los que requieren renovación (`RENOVAR`).
+  3. Al enviar el enlace, crea la matrícula en estado `PENDIENTE_RENOVACION` (`tipo = 'REINGRESO'`), actualiza el ticket de reingreso a `EN_PROCESO` (irreversible) y envía el token por email.
+  4. Al formalizar en `FinalRegistration.vue`, reactiva al estudiante a estado `ACTIVO` y limpia el `motivo_estado`.
 
 ---
 
-# HU-MAT-009: Atención de Ticket de Reingreso y Transición Irreversible
+### HU-MAT-009: Cancelación Motivada de Matrícula y Estado Disciplinario Final
+- **Como:** Directivo Escolar.
+- **Quiero:** Cancelar una solicitud de matrícula o retirar formalmente a un alumno asignando la causa del retiro.
+- **Para:** Mantener la veracidad estadística del colegio y definir si el estudiante queda en estado `RETIRADO` o `EXPULSADO`.
+- **Criterios de Aceptación:**
+  1. Exige registrar un motivo y detalle descriptivo de la cancelación.
+  2. El directivo debe seleccionar si el alumno pasa a `RETIRADO` (elegible a reingreso futuro) o `EXPULSADO` (inhabilitación permanente).
+  3. Actualiza `matricula.estado = 'CANCELADA'`, resuelve el ticket si existía y envía un correo de notificación formal al acudiente.
 
-## Historia
-**Como** directivo del colegio  
-**Quiero** procesar una solicitud de reingreso recibida desde la bandeja de soporte/tickets  
-**Para** notificar al acudiente que el trámite se está ejecutando y vincularlo a la consola de reingreso.
+---
 
-## Criterios de Aceptación
-- Al cambiar un ticket de incidencia de `REINGRESO` al estado `EN_PROCESO`, el sistema despliega una advertencia notificando que la acción no se puede revertir.
-- Al confirmar, el ticket pasa a `EN_PROCESO`, envía un correo electrónico al acudiente informando que el proceso ya inició y bloquea la opción de retornar el ticket a `ABIERTO`.
-- El directivo puede ser redirigido directamente a la vista de Gestión de Reingresos con el contexto del estudiante.
-
-## Detalles Técnicos
-- **Prioridad:** Alta
-- **Roles involucrados:** Directivo
-- **Reglas de negocio relacionadas:** RN-MAT-009, RN-SOP-005
-- **Endpoints relacionados:** 
-  - `PUT /api/support/tickets/:id/status`
-- **Componentes frontend relacionados:** 
-  - [SupportView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/shared/SupportView.vue)
-  - [ReingresoManagement.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/ReingresoManagement.vue)
-- **Controllers/Services relacionados:** 
-  - [supportController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/supportController.ts) (`updateTicketStatus`)
-
+### HU-MAT-010: Selección de Candidato de Renovación en Familias con Múltiples Hijos
+- **Como:** Directivo Escolar en la consola de formalización.
+- **Quiero:** Distinguir si una solicitud radicada por un acudiente con hijos previos corresponde a la renovación de un hijo existente o a la inscripción de un nuevo hermano.
+- **Para:** Vincular correctamente el expediente académico y no sobreescribir la identidad de otros miembros de la familia.
+- **Criterios de Aceptación:**
+  1. `FinalRegistration.vue` detecta y lista todos los hijos elegibles del acudiente (`renovacion.candidates`).
+  2. Si existen candidatos, el directivo debe seleccionar explícitamente a un hijo de la lista (`selectedCandidate`) o marcar la opción "Registrar Nuevo Hermano" (`isNewStudent`).
+  3. Si es renovación, actualiza el `id_estudiante` seleccionado; si es nuevo hermano, crea una nueva ficha de estudiante asociándola al mismo `id_padrefamilia`.
+  4. Los hijos en estado `EXPULSADO`, `GRADUADO` o ya matriculados en ese año lectivo se muestran inhabilitados con su motivo de exclusión.

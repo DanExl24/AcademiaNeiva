@@ -292,21 +292,85 @@ Los directivos pueden alternar el estado de las cuentas entre `Activo` e `Inacti
 
 # 7. Módulo de Matrícula e Inscripción Escolar
 
-> [!CAUTION]
-> ### ⚠️ AVISO IMPORTANTE: SECCIÓN EN AUDITORÍA ESPECIAL
-> Este capítulo del manual se encuentra marcado como **`[PENDIENTE DE REVISIÓN Y AUDITORÍA PROFUNDA]`**. Sus procedimientos operativos se mantienen a continuación como referencia provisional y serán refactorizados en una fase posterior una vez concluidas las validaciones del ecosistema.
+El módulo de **Matrículas e Inscripciones** coordina el ingreso, evaluación, asignación de aula y formalización oficial de estudiantes en las instituciones de AcademiaNeiva, garantizando la persistencia binaria de soportes documentales y la creación atómica de cuentas institucionales.
 
-## 7.1 [PENDIENTE DE REVISIÓN] Formulario de admisión pública
-Los acudientes solicitan cupo desde la página pública verificando previamente su correo con código OTP de 6 dígitos, diligenciando la información del aspirante y adjuntando los documentos de soporte requeridos (PDF o imagen, máx 5MB).
+```
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                        FLUJO INTEGRAL DE MATRÍCULA ESCOLAR                             │
+├────────────────────────────────────────────────────────────────────────────────────────┤
+│ 1. Inscripción Pública (Acudiente):                                                    │
+│    Verificación OTP (15 min) ──> Formulario Web ──> Carga Documentos (BYTEA)           │
+│                                                                                        │
+│ 2. Evaluación Directiva (EnrollmentDetails.vue):                                       │
+│    Visor JWT Efímero ──> Validar / Rechazar Docs ──> Asignar Aula (Cupos en vivo)      │
+│    (Si hay rechazos ──> Estado CORRECCION ──> Subsanación por Token ──> Estado CORREGIDA)│
+│                                                                                        │
+│ 3. Formalización Final (FinalRegistration.vue):                                        │
+│    Paso 1: Estudiante (Candidato Renovación vs. Nuevo Alumno + Alerta Académica)       │
+│    Paso 2: Acudiente (Detección Usuario Existente / Personal Docente Multi-Rol)        │
+│    ──> Transacción Kysely: Bloqueo FOR UPDATE ──> Alta Estudiante + Matrícula ACTIVA  │
+└────────────────────────────────────────────────────────────────────────────────────────┘
+```
 
-## 7.2 [PENDIENTE DE REVISIÓN] Consola de evaluación y oficialización directiva
-El directivo examina las solicitudes en estado `PENDIENTE`, revisa y valida individualmente cada documento adjunto (`VALIDADO` o `RECHAZADO` con motivo), asigna el grado y salón de destino con verificación de cupos, y finaliza el proceso para expedir las credenciales del estudiante.
+## 7.1 Formulario de admisión pública y verificación previa OTP
+1. **Verificación de Correo:** El acudiente accede a la página pública de admisiones, digita su dirección de correo electrónico y presiona **"Enviar Código OTP"**. El sistema remite un código numérico de 6 dígitos con caducidad estricta de **15 minutos**.
+2. **Desbloqueo del Formulario:** Tras validar el código OTP, el sistema habilita el selector de colegios, niveles escolares (Preescolar, Primaria, Secundaria, Media) y grados disponibles.
+3. **Control de Rango de Fechas Ordinarias:** El sistema valida que el colegio cuente con un año lectivo activo en estado `ABIERTO` y que la fecha actual se encuentre dentro del rango `[fecha_inicio, fecha_cierre]` establecido en `configuracion_inscripcion` (`RN-MAT-001`).
+4. **Carga de Documentos:** El acudiente adjunta los archivos PDF o imágenes (máximo 5MB por archivo) requeridos según el nivel escolar del alumno (Registro Civil, Carnet de Vacunas, Certificado EPS, Foto, etc.).
+5. **Persistencia Binaria Segura (`BYTEA`):** Los archivos se guardan directamente como buffers binarios en la tabla `documento_matriculas` en PostgreSQL (`RN-MAT-006`).
+6. **Emisión de Token UUID:** Al radicar con éxito, la matrícula se crea en estado `PENDIENTE` y el sistema emite un **Token de Seguimiento UUID**, enviándolo también al correo verificado.
 
-## 7.3 [PENDIENTE DE REVISIÓN] Renovación y matriz documental de reingresos
-Para estudiantes retirados que solicitan reingreso, el directivo examina el historial previo. El sistema presenta la matriz documental conservando los archivos vigentes y solicitando al acudiente renovar únicamente los documentos vencidos.
+## 7.2 Modalidad de matrícula extraordinaria por Mesa de Soporte
+- **Origen Exclusivo:** Se habilita cuando un acudiente radica un Ticket de Soporte con la incidencia `MATRICULA_EXTRAORDINARIA` (`RN-MAT-002`).
+- **Autorización Directiva:** El directivo autoriza el trámite en `SupportView.vue`, pre-creando la matrícula en estado `PENDIENTE` vinculada al `id_ticket`.
+- **Bypass de Fechas:** El acudiente diligencia el formulario mediante el token extraordinario incluso si las inscripciones ordinarias se encuentran cerradas o deshabilitadas.
+- **Resolución Automática:** Al culminar la formalización o cancelación de la matrícula, el sistema actualiza automáticamente el ticket de soporte a estado **`RESUELTO`**.
 
-## 7.4 [PENDIENTE DE REVISIÓN] Consulta pública mediante Token UUID
-El aspirante puede consultar el avance de su solicitud o subsanar documentos rechazados ingresando su **Token de Seguimiento** (código UUID) en el portal web sin necesidad de credenciales de acceso.
+## 7.3 Consola de evaluación y revisión documental directiva
+En la vista **Gestión de Matrículas** (`EnrollmentManagement.vue` y `EnrollmentDetails.vue`), el directivo escolar:
+1. **Filtros por Estado y Año Lectivo:** Lista solicitudes filtradas por `PENDIENTE`, `CORREGIDA`, `ACTIVA`, `TRASLADADA` o `CANCELADA`.
+2. **Visor Protegido con Tokens JWT Efímeros:** Inspecciona cada archivo adjunto a través del endpoint `/documentos/:idDocumento/archivo`, protegido mediante tokens JWT firmados de corta duración (`RN-MAT-003`).
+3. **Validación Individual de Archivos:** Marca cada soporte como `VALIDADO` o `RECHAZADO` con sus observaciones.
+4. **Notificación de Inconsistencias y Subsanación:** Si existen rechazos, presiona **"Notificar Inconsistencias"**. La matrícula pasa al estado **`CORRECCION`** y el acudiente recibe un correo para subsanar los archivos rechazados mediante su token público en `EnrollmentCorrection.vue`.
+5. **Transición a `CORREGIDA` y Control de Versiones:** Al subir las correcciones, el backend inserta los nuevos archivos con `version = max_version + 1` y promueve la matrícula al estado **`CORREGIDA`** (`RN-MAT-007`), alertando visualmente al directivo para su reevaluación.
+6. **Asignación de Aula Físca:** El directivo selecciona el salón y jornada de destino visualizando los cupos disponibles en tiempo real (`cupos_totales - (activas + trasladadas)`). La asignación se persiste de inmediato en `matricula.id_grupo` mediante `POST /api/matriculas/assign-grade/:id`.
+
+## 7.4 Formalización final, detección de múltiples hijos y doble rol
+Al presionar **"Continuar a Formalización"** (`FinalRegistration.vue`), el sistema guía al directivo a través de dos pasos asistidos:
+
+### Paso 1: Datos del Estudiante y Selección de Candidato
+- **Detección Automática de Hijos de la Familia (`renovacion.candidates`):** Si el correo del acudiente ya tiene hijos registrados en años anteriores, el directivo visualiza la lista de candidatos elegibles (`RN-MAT-018`):
+  - **Opción A (Renovar Hijo Existente):** Selecciona al estudiante candidato, reutilizando su expediente (`id_estudiante`) y reactivando su cuenta.
+  - **Opción B (Registrar Nuevo Hermano):** Marca *"Registrar Nuevo Hermano"* para crear una nueva ficha de alumno independiente sin sobreescribir la del hermano.
+- **Advertencia Académica Informativa:** El sistema consulta el historial del año anterior (`checkAcademicWarning`) para advertir al directivo si el alumno reprobó el grado previo.
+
+### Paso 2: Datos del Acudiente y Detección de Rol Docente / Personal
+- **Detección de Usuario Existente:** Al digitar el documento del acudiente, `checkDocument` consulta si ya existe en la base de datos (`RN-MAT-015`).
+- **Personal Institucional (Docente/Directivo):** Si el acudiente trabaja en el colegio, el sistema muestra la advertencia informativa, bloquea los campos de nombres para no alterar su identidad laboral, le vincula el rol `padre` en `usuario_rol` y activa la relación en `usuario_colegio` sin crear cuentas duplicadas.
+- **Validación Cruzada:** El sistema comprueba que el número de documento del estudiante y del acudiente sean diferentes (`RN-MAT-017`).
+
+### Ejecución Transaccional Atómica (6 Fases)
+Al presionar **"Finalizar Registro"**, el backend ejecuta `finalizeEnrollment` bajo una transacción Kysely indivisible (`RN-MAT-005`):
+1. **Bloqueo Pessimistic `FOR UPDATE`:** Reserva la fila del aula en `grupos` y verifica que los cupos no se hayan agotado concurrentemente (`RN-MAT-012`).
+2. **Alta de Alumno:** Crea o reactiva al estudiante en `estudiante` (estado `ACTIVO`) y su cuenta en `usuario` con contraseña inicial institucional.
+3. **Alta / Vinculación del Acudiente:** Asocia al padre de familia en `padre_familia`, `usuario_rol` y `usuario_colegio`.
+4. **Vínculo de Parentesco:** Inserta la relación en `detalle_padrefamilia`.
+5. **Cancelación Preventiva:** Cancela matrículas duplicadas previas del mismo alumno en el año escolar activo.
+6. **Activación y Despacho:** Promueve la matrícula a **`ACTIVA`** (o `TRASLADADA`), resuelve tickets de soporte asociados y envía por correo electrónico las credenciales oficiales de acceso.
+
+## 7.5 Reingreso de estudiantes retirados y matriz documental
+1. **Consola de Reingresos (`ReingresoManagement.vue`):** Permite buscar expedientes de alumnos en estado `RETIRADO` (`RN-MAT-009`).
+2. **Matriz Documental Inteligente:** El directivo revisa los documentos cargados en años anteriores; los archivos válidos se marcan como `VIGENTE` y solo se solicita al acudiente renovar los vencidos (`RENOVAR`) (`RN-MAT-011`).
+3. **Apertura de Reingreso:** Al presionar "Enviar Enlace", el sistema crea la matrícula en estado `PENDIENTE_RENOVACION` (`tipo = 'REINGRESO'`), actualiza el ticket de reingreso a `EN_PROCESO` de forma irreversible (`RN-MAT-010`) y despacha el token de renovación al acudiente.
+4. **Formalización de Reingreso:** Tras la subsanación de los documentos marcados como renovar, el directivo formaliza en `FinalRegistration.vue`, pasando la matrícula a `ACTIVA` y reactivando la ficha del alumno a `ACTIVO`.
+
+## 7.6 Cancelación formal de matrícula y definición del estado disciplinario
+Cuando un directivo requiere cancelar una matrícula (`cancelEnrollment`):
+1. Especifica obligatoriamente la causa formal y los detalles descriptivos (`RN-MAT-013`).
+2. **Selección del Estado Final del Alumno (`RN-MAT-014`):**
+   - **`RETIRADO`:** Desvinculación por traslado, viaje o retiro voluntario. Mantiene al alumno elegible para futuros trámites de reingreso.
+   - **`EXPULSADO`:** Expulsión disciplinaria definitiva. Inhabilita automáticamente cualquier postulación de reingreso en el sistema.
+3. El sistema actualiza `matricula.estado = 'CANCELADA'`, resuelve el ticket si existía y despacha un correo explicativo al acudiente.
 
 ---
 
