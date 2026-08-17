@@ -6,8 +6,8 @@
 
 **Sistema de Gestión Académica Institucional Multitenant — AcademiaNeiva**  
 **Manual de Arquitectura de Software, Patrones de Diseño e Ingeniería (Volumen 2: Técnico)**  
-**Versión:** 2.0.0  
-**Fecha:** 21 de Julio de 2026  
+**Versión:** 2.5.0  
+**Fecha:** 16 de Agosto de 2026  
 **Autor:** Arquitecto de Software Senior & Lead Technical Writer  
 **Estado:** Aprobado — Documento Maestro Técnico  
 
@@ -20,6 +20,7 @@
 | 1.0.0 | 2026-01-15 | Equipo de Desarrollo | Diseño inicial de la API Express, modelos relacionales y tokens JWT. |
 | 1.5.0 | 2026-04-10 | Equipo de Desarrollo | Implementación de Triggers de inmutabilidad PL/pgSQL y captura de deltas JSONB en auditorías. |
 | 2.0.0 | 2026-07-21 | Arquitecto Senior | Redacción del Manual de Ingeniería con 9 ADRs completos, guía de onboarding para nuevos desarrolladores y especificaciones de despliegue. |
+| 2.5.0 | 2026-08-16 | Senior Software Architect & Lead Engineer | Actualización técnica integral: incorporación de Kysely Query Builder con tipado estático TypeScript (`db.types.ts`), capa de validación de esquemas Zod (ADR-010 y ADR-011), arquitectura de 21 módulos, flujo de verificación OTP transaccional y patrón de seguimiento directivo espejo en Pinia. |
 
 ---
 
@@ -43,10 +44,10 @@
 ## 1. Introducción Técnica
 
 ### Propósito
-Este manual es la **referencia técnica definitiva para ingenieros de software, arquitectos y desarrolladores** que ingresen al proyecto **AcademiaNeiva**. Su meta es explicar la arquitectura del sistema, los patrones de código elegidos, los mecanismos de persistencia en PostgreSQL y los **9 Registros de Decisiones Arquitectónicas (ADRs)** para transmitir no solo *cómo funciona* la plataforma, sino *por qué fue diseñada de esta manera*.
+Este manual es la **referencia técnica definitiva para ingenieros de software, arquitectos y desarrolladores** que ingresen al proyecto **AcademiaNeiva**. Su meta es explicar la arquitectura del sistema, los patrones de código elegidos, los mecanismos de persistencia en PostgreSQL y los **11 Registros de Decisiones Arquitectónicas (ADRs)** para transmitir no solo *cómo funciona* la plataforma, sino *por qué fue diseñada de esta manera*.
 
 ### Perfil del Desarrollador Objetivo
-Desarrollador Fullstack o Backend/Frontend con conocimientos en TypeScript, Vue 3 (Composition API), Node.js, Express y SQL relacional. Este documento elimina la necesidad de consultar al autor original del código.
+Desarrollador Fullstack o Backend/Frontend con conocimientos en TypeScript, Vue 3 (Composition API), Node.js, Express, Kysely y PostgreSQL relacional. Este documento elimina la necesidad de consultar al autor original del código.
 
 ---
 
@@ -60,36 +61,53 @@ El sistema utiliza una **Arquitectura en Capas Desacoplada** (Client-Server REST
 graph TD
     subgraph ClientLayer ["1. Capa de Presentación (Frontend Vue 3 SPA)"]
         Views["Vistas (.vue)"]
-        Pinia["Stores de Estado (auth, theme)"]
+        Pinia["Stores de Estado (auth, academicYear)"]
         Router["Vue Router (Route Guards & Role Check)"]
+        MonitoreoUI["Modo Seguimiento Pedagógico (Espejo)"]
     end
 
     subgraph SecurityLayer ["2. Capa de Control & Seguridad (Express Middleware)"]
         Limiter["Express Rate Limiter"]
-        AuthMid["authMiddleware.ts (JWT & Status Verification)"]
+        AuthMid["authMiddleware.ts (JWT, jti & Status Verification)"]
         AuditMid["Middleware Interceptor (Auditoría JSONB)"]
     end
 
-    subgraph ApplicationLayer ["3. Capa de Lógica de Negocio (Backend Express API)"]
-        Controllers["16 Módulos de Controladores Express (.ts)"]
-        Services["Servicios (Scheduler, SMTP, PDF Generator)"]
+    subgraph ValidationLayer ["3. Capa de Validación de Esquemas (Zod DTOs)"]
+        ZodSchemas["Zod Schemas (Validación de Payloads & Tipos)"]
     end
 
-    subgraph DatabaseLayer ["4. Capa de Persistencia e Inmutabilidad (PostgreSQL)"]
+    subgraph ApplicationLayer ["4. Capa de Lógica de Negocio (Backend Express API)"]
+        Controllers["21 Módulos de Controladores Express (.ts)"]
+        Services["Servicios (Scheduler, OTP, SMTP, PDF Generator)"]
+    end
+
+    subgraph DataAccessLayer ["5. Capa de Acceso a Datos (Kysely Query Builder)"]
+        Kysely["Kysely Query Builder (db.types.ts)"]
+        Pool["PostgreSQL Connection Pool"]
+    end
+
+    subgraph DatabaseLayer ["6. Capa de Persistencia e Inmutabilidad (PostgreSQL)"]
         Tables[(Base de Datos Relacional)]
-        Triggers["Triggers SQL (fn_bloquear_periodo_cerrado & fn_sync_estudiante_sancion)"]
+        Triggers["Triggers SQL (fn_bloquear_periodo_cerrado & proteger_auditoria)"]
         Blacklist["Tabla token_blacklist (jti)"]
+        OTPStore["Tabla codigo_verificacion_email"]
     end
 
     Views --> Router
+    Router --> Pinia
+    Pinia --> MonitoreoUI
     Router -->|Peticiones HTTP REST| Limiter
     Limiter --> AuthMid
     AuthMid --> AuditMid
-    AuditMid --> Controllers
+    AuditMid --> ZodSchemas
+    ZodSchemas --> Controllers
     Controllers --> Services
-    Services --> Tables
+    Controllers --> Kysely
+    Kysely --> Pool
+    Pool --> Tables
     Tables --> Triggers
     AuthMid --> Blacklist
+    Services --> OTPStore
 ```
 
 ---
@@ -103,7 +121,7 @@ graph TD
 - **Alternativas Consideradas:** 
   1. *React.js*: Requería mayor boilerplate y librerías externas de gestión de estado.
   2. *Blade / SSR Monolítico*: Degradaba la experiencia del usuario al recargar la página completa en cada cambio de celda de nota.
-- **Decisión Tomada:** Adoptar **Vue 3 con Composition API + TypeScript** y **Pinia** para la gestión de estado centralizada.
+- **Decisión Tomada:** Adoptar **Vue 3 con Composition API + TypeScript** y **Pinia** para la gestión de estado centralizada (`auth`, `academicYear`).
 - **Ventajas:** Excelente reactividad con `ref()` y `computed()`, tipado estático estricto y menor huella de memoria en cliente.
 - **Consecuencias:** Se debe asegurar que las operaciones pesadas de cálculo de promedios se mantengan sincronizadas entre la vista de Vue y el backend.
 
@@ -126,7 +144,7 @@ graph TD
   1. *MySQL / MariaDB*: Soporte de triggers y funciones almacenadas con sintaxis menos potente que PL/pgSQL.
   2. *MongoDB*: Ausencia de restricciones de integridad referencial nativas y soporte de transacciones complejas más costoso.
 - **Decisión Tomada:** Adoptar **PostgreSQL** como motor de base de datos primario utilizando funciones PL/pgSQL y columnas JSONB.
-- **Ventajas:** Permite ejecutar triggers de inmutabilidad (`fn_bloquear_periodo_cerrado`) directamente en la capa de persistencia. Si el backend falla, la base de datos aborta la sentencia.
+- **Ventajas:** Permite ejecutar triggers de inmutabilidad (`fn_bloquear_periodo_cerrado`, `proteger_acciones_auditoria`) directamente en la capa de persistencia. Si el backend falla, la base de datos aborta la sentencia.
 - **Consecuencias:** Se debe mantener la sincronización entre las migraciones SQL y los modelos TypeScript del backend.
 
 ---
@@ -143,12 +161,12 @@ graph TD
 ---
 
 ### ADR-005: Almacenamiento JSONB de Deltas (`valor_antiguo`, `valor_nuevo`)
-- **Problema:** Registrar auditorías detalladas de los cambios realizados por el Administrador General durante una supervisión sin crear tablas de auditoría dedicadas para cada una de las 45 tablas del sistema.
+- **Problema:** Registrar auditorías detalladas de los cambios realizados por el Administrador General durante una supervisión sin crear tablas de auditoría dedicadas para cada una de las 48 tablas del sistema.
 - **Alternativas Consideradas:** 
-  1. *Tablas de histórico clonadas (ej. `notas_history`)*: Duplica el número de tablas en la base de datos y requiere mantenimiento de triggers por tabla.
+  1. *Tablas de histórico clonadas*: Duplica el número de tablas en la base de datos y requiere mantenimiento de triggers por tabla.
   2. *Archivos de log de texto plano (`.log`)*: Difíciles de consultar, filtrar o exportar desde la interfaz de usuario.
 - **Decisión Tomada:** Utilizar una **columna tipo `JSONB` (`valor_antiguo`, `valor_nuevo`)** en la tabla `auditoria_acciones_realizadas`.
-- **Ventajas:** Estructura flexible capaz de almacenar cualquier registro modificado (notas, usuarios, colegios) manteniendo la capacidad de indexación y consulta JSON de PostgreSQL.
+- **Ventajas:** Estructura flexible capaz de almacenar cualquier registro modificado manteniendo la capacidad de indexación y consulta JSON de PostgreSQL.
 - **Consecuencias:** El middleware de auditoría debe capturar el estado del objeto antes de ejecutar la actualización.
 
 ---
@@ -198,6 +216,28 @@ graph TD
 
 ---
 
+### ADR-010: Adopción de Kysely como Query Builder SQL Fuertemente Tipado
+- **Problema:** Las consultas SQL manuales con strings crudos (`pool.query(...)`) carecían de comprobación de tipos en tiempo de compilación, lo que facilitaba errores silenciosos por nombres de columnas desactualizadas, tipos incompatibles o fallos en relaciones.
+- **Alternativas Consideradas:** 
+  1. *Prisma / TypeORM*: ORMs pesados con sobrecarga en tiempo de ejecución y limitaciones para subconsultas complejas de analítica.
+  2. *Strings SQL crudos con `pg`*: Vulnerables a erratas y sin autocompletado en el IDE.
+- **Decisión Tomada:** Adoptar **Kysely** como constructor de consultas SQL tipadas contra PostgreSQL, respaldado por la definición de esquemas en `backend/src/types/db.types.ts`.
+- **Ventajas:** Validación total en compilación (`tsc`), autocompletado inteligente de tablas y columnas, prevención de inyecciones SQL y cero sobrecarga de rendimiento en runtime.
+- **Consecuencias:** Todas las nuevas tablas y columnas de base de datos deben reflejarse en `db.types.ts`.
+
+---
+
+### ADR-011: Validación y Sanitización de DTOs con Zod
+- **Problema:** Se requería un mecanismo declarativo, estricto y unificado para validar los datos que ingresan a los controladores (`req.body`, `req.query`, `req.params`) antes de ejecutar lógica de negocio o interactuar con la base de datos.
+- **Alternativas Consideradas:** 
+  1. *Joi / express-validator*: Requieren sintaxis verbosa y no ofrecen inferencia estricta y nativa de tipos TypeScript.
+  2. *Validación manual con bloques `if`*: Propensa a olvidos y genera código repetitivo.
+- **Decisión Tomada:** Estandarizar la validación de DTOs utilizando **Zod** (`z.object({...})`) en la capa de entrada de la API.
+- **Ventajas:** Tipos inferidos automáticamente (`z.infer<typeof Schema>`), validación de patrones (teléfonos 7-20 dígitos, emails, enums), mensajes de error semánticos y protección contra payloads maliciosos.
+- **Consecuencias:** Los controladores deben validar la carga útil con `.safeParse()` o middlewares dedicados antes de continuar.
+
+---
+
 ## 4. Modelo de Datos Relacional y Triggers SQL
 
 ### Triggers SQL Relevantes en PostgreSQL
@@ -236,30 +276,15 @@ END;
 $$;
 ```
 
-#### Trigger 2: Sincronización de Sanciones Disciplinarias (`fn_sync_estudiante_sancion`)
+#### Trigger 2: Inmutabilidad de Acciones de Auditoría (`proteger_acciones_auditoria`)
 ```sql
-CREATE OR REPLACE FUNCTION public.fn_sync_estudiante_sancion() 
+CREATE OR REPLACE FUNCTION public.proteger_acciones_auditoria()
 RETURNS trigger LANGUAGE plpgsql AS $$
-DECLARE
-    v_tipo character varying(100);
 BEGIN
-    SELECT nombre INTO v_tipo FROM public.tipo_sancion WHERE id_tipo_sancion = NEW.id_tipo_sancion;
-
-    IF NEW.estado = 'ACTIVA' AND CURRENT_DATE BETWEEN NEW.fecha_inicio AND NEW.fecha_fin THEN
-        IF v_tipo = 'EXPULSION' THEN
-            UPDATE public.estudiante SET estado = 'EXPULSADO' WHERE id_estudiante = NEW.id_estudiante;
-        ELSE
-            UPDATE public.estudiante SET estado = 'SANCIONADO' WHERE id_estudiante = NEW.id_estudiante;
-        END IF;
-    ELSE
-        IF NOT EXISTS (
-            SELECT 1 FROM public.sancion
-            WHERE id_estudiante = NEW.id_estudiante AND estado = 'ACTIVA' AND CURRENT_DATE BETWEEN fecha_inicio AND fecha_fin
-        ) THEN
-            UPDATE public.estudiante SET estado = 'ACTIVO' WHERE id_estudiante = NEW.id_estudiante AND estado IN ('SANCIONADO', 'EXPULSADO');
-        END IF;
+    IF current_setting('my.app.bypass_triggers', true) = 'true' THEN
+        RETURN OLD;
     END IF;
-    RETURN NEW;
+    RAISE EXCEPTION 'Operación ilegal: Los registros de bitácora de auditoría son legalmente inmutables.';
 END;
 $$;
 ```
@@ -277,7 +302,8 @@ sequenceDiagram
     participant Middleware as authMiddleware.ts
     participant Blacklist as DB token_blacklist
     participant UserDB as DB usuario
-    participant Controller as Controller Express
+    participant Zod as Zod DTO Validation
+    participant Controller as Controller Express (Kysely)
 
     Cliente->>Middleware: Petición HTTP + Header Authorization: Bearer <JWT>
     Middleware->>Middleware: Verifica firma de JWT con JWT_SECRET
@@ -296,50 +322,74 @@ sequenceDiagram
         Middleware-->>Cliente: Responde 401 Unauthorized (Cuenta Inactiva/Cierre Forzado)
     End
 
-    Middleware->>Controller: Inyecta req.user (id, rol, schoolId) y ejecuta controller
+    Middleware->>Zod: Pasa control y valida req.body contra esquema Zod
+    Alt Fallo en Validación Zod
+        Zod-->>Cliente: Responde 400 Bad Request (Detalle de Errores de Validación)
+    End
+
+    Zod->>Controller: Inyecta datos validados y ejecuta controlador mediante Kysely
 ```
 
 ---
 
 ## 6. Integración entre Módulos y Servicios
 
-### Matriz de Dependencias entre Servicios
+### Matriz de Dependencias entre Servicios (21 Módulos)
 
 ```
-[Módulo 01: Autenticación] ◄──── [Módulo 15: Supervisión] (Hereda rol y schoolId temporal)
-         ▲
-         │
-[Módulo 06: Matrículas] ───────► [Módulo 07: Estudiantes] ───► [Módulo 05: Docentes]
-         │                                                            │
-         ▼                                                            ▼
-[Módulo 04: Estructura] ────────────────────────────────────► [Módulo 11: Calificaciones]
-         │                                                            │
-         ▼                                                            ▼
-[Módulo 10: Catálogo DBA] ───► [Módulo 09: Competencias] ────► [Módulo 14: Boletines PDF]
-         │                                                            │
-         └────────────────────────────────────────────────────────────┴──► [Módulo 19: Seguimiento y Promoción]
+[01: Autenticación & Blacklist] ◄──── [15: Supervisión & Auditoría] ◄──── [20: Seguimiento Directivo]
+          ▲                                      │                                  │
+          │                                      ▼                                  ▼
+[21: Flujo Correos & OTP] ──────────► [06: Matrículas] ────────────────► [18: Traslados]
+          │                                      │                                  │
+          ▼                                      ▼                                  ▼
+[02: Colegios] ─────────────────────► [07: Estudiantes] ───────────────► [17: Padres de Familia]
+          │                                      │                                  │
+          ▼                                      ▼                                  ▼
+[04: Estructura Escolar] ───────────► [05: Docentes] ──────────────────► [13: Asistencia]
+          │                                      │                                  │
+          ▼                                      ▼                                  ▼
+[10: Catálogo DBA] ─────────────────► [09: Competencias] ──────────────► [11: Calificaciones]
+          │                                                                         │
+          ▼                                                                         ▼
+[08: Configuración Académica] ─────────────────────────────────────────► [12: Observaciones]
+          │                                                                         │
+          ▼                                                                         ▼
+[19: Seguimiento & Promoción] ◄──────────────────────────────────────── [14: Cierre & Boletines PDF]
+                                                                                    │
+                                                                                    ▼
+                                                                         [16: Soporte & Tickets]
 ```
 
 ---
 
 ## 7. Convenciones, Nomenclatura y UUIDs
 
-1. **Uso de UUIDv4 (`sync_uuid`)**: Utilizado exclusivamente para la agrupación de competencias en cursos paralelos y tokens de seguimiento de inscripciones públicas.
+1. **Uso de UUIDv4**:
+   - `sync_uuid`: Agrupación de competencias en cursos paralelos.
+   - `token_seguimiento`: Acceso seguro a inscripciones y traslados públicos sin credenciales.
 2. **Nomenclatura de Archivos en Frontend**:
-   - Vistas: PascalCase (ej. `TeacherGrades.vue`, `StudentDashboard.vue`).
-   - Stores: camelCase (ej. `auth.ts`, `theme.ts`).
+   - Vistas: PascalCase (ej. `TeacherGrades.vue`, `SupervisionManagement.vue`).
+   - Stores: camelCase (ej. `auth.ts`, `academicYear.ts`).
 3. **Nomenclatura en Backend**:
    - Controladores: camelCase terminados en Controller (ej. `authController.ts`, `gradingController.ts`).
+   - Esquemas DTO: camelCase terminados en Schema (ej. `teacherSchema.ts`, `matriculaSchema.ts`).
    - Rutas: minúsculas separadas por puntos (ej. `auth.routes.ts`, `academicAdmin.routes.ts`).
+4. **Patrón de Query Builder (Kysely)**:
+   - Utilizar siempre `db.selectFrom(...)`, `db.insertInto(...)`, `db.updateTable(...)` evitando sentencias SQL sin tipar.
 
 ---
 
 ## 8. Stack Tecnológico y Justificaciones
 
-- **Vue 3 + TypeScript**: Reactividad nativa con Composition API y verificación de tipos en tiempo de compilación.
+- **Vue 3 + TypeScript (Vite)**: Reactividad nativa con Composition API y verificación de tipos en tiempo de compilación.
+- **Pinia**: Gestión de estado centralizada para autenticación, roles, año lectivo seleccionado y modo seguimiento.
 - **Express.js**: Framework minimalista sin sobrecarga para construir APIs REST orientadas a micro-respuestas JSON.
+- **Kysely**: Query Builder SQL fuertemente tipado que enlaza directamente con los tipos de PostgreSQL (`db.types.ts`).
+- **Zod**: Validación declarativa y sanitización estricta de esquemas en todas las peticiones mutativas.
 - **PostgreSQL 14+**: Motor de base de datos relacional robusto con soporte JSONB nativo y triggers en PL/pgSQL.
-- **PDFKit / Puppeteer**: Generación de boletines PDF oficializados en backend con soporte de gráficos y escudos.
+- **Nodemailer**: Motor de mensajería SMTP para correos transaccionales y códigos OTP de 6 dígitos.
+- **HTML2PDF / PDFKit**: Generación de boletines oficiales PDF con fidelidad tipográfica.
 
 ---
 
@@ -347,7 +397,7 @@ sequenceDiagram
 
 ### 1. Clonar e Instalar Dependencias
 ```bash
-git clone <repository_url>
+git clone https://github.com/DanExl24/AcademiaNeiva.git
 cd segundoProyecto
 
 # Instalar backend
@@ -399,35 +449,40 @@ SMTP_PASS=app_password_segura
 
 ### Pasos Recomendados para Entender el Código (Día 1 a Día 3)
 
-1. **Día 1 — Dominio y Esquema:** Lee el [Documento Funcional Maestro](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/AcademiaNeiva_Documento_Funcional.md) para comprender los 16 conceptos escolares (DBA, Periodos, Cursos Paralelos). Revisa las tablas en `guides/AcademiaNeivaBD.sql`.
-2. **Día 2 — Autenticación y Middleware:** Examina `backend/src/middleware/authMiddleware.ts` y entiende cómo se extrae `req.user.schoolId` y el `jti`.
-3. **Día 3 — Flujo de Calificaciones y Periodos:** Estudia `backend/src/controllers/gradingController.ts` y `backend/src/utils/periodHelpers.ts` para entender la protección contra periodos cerrados.
+1. **Día 1 — Dominio y Esquema:** Lee el [Documento Funcional Maestro](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/AcademiaNeiva_Documento_Funcional.md) para comprender los 18 conceptos escolares (DBA, Periodos, Cursos Paralelos, OTP). Revisa el modelo relacional en `guides/AcademiaNeivaBD.sql` y `backend/src/types/db.types.ts`.
+2. **Día 2 — Autenticación, Zod y Kysely:** Examina `backend/src/middleware/authMiddleware.ts` y comprende la inyección de `req.user.schoolId`, la validación de esquemas con Zod y la construcción de consultas con Kysely (`backend/src/config/kysely.ts`).
+3. **Día 3 — Flujo de Calificaciones y Periodos:** Estudia `backend/src/controllers/gradingController.ts` y `backend/src/utils/periodHelpers.ts` para entender la protección de doble capa contra periodos cerrados.
 
 ### ¿Cómo agregar un nuevo módulo o funcionalidad siguiendo las convenciones?
 
-1. **Base de Datos**: Define la tabla en PostgreSQL asegurando incluir la columna `id_colegio INT NOT NULL REFERENCES colegio(id_colegio)`.
+1. **Base de Datos**: Define la tabla en PostgreSQL asegurando incluir la columna `id_colegio INT NOT NULL REFERENCES colegio(id_colegio)` y actualiza `db.types.ts`.
 2. **Backend**:
+   - Define el esquema Zod en `backend/src/dtos/nuevoModuloSchema.ts`.
    - Crea las rutas en `backend/src/routes/nuevoModulo.routes.ts`.
-   - Implementa los métodos en `backend/src/controllers/nuevoModuloController.ts`.
+   - Implementa los métodos en `backend/src/controllers/nuevoModuloController.ts` usando Kysely (`db.selectFrom(...)`).
    - Inyecta `verifyToken` en todas las rutas protegidas.
 3. **Frontend**:
    - Crea la vista Vue en `frontend/src/views/rol/NuevaVista.vue`.
    - Agrega la ruta en `frontend/src/router/index.ts` especificando `meta: { requiresAuth: true, roles: ['directivo'] }`.
 4. **Documentación**:
-   - Crea la carpeta `guides/modules/17_nuevo_modulo/` con sus respectivos `historias_usuario.md` y `reglas_negocio.md`.
+   - Crea la carpeta `guides/modules/XX_nuevo_modulo/` con sus respectivos `historias_usuario.md`, `reglas_negocio.md`, `casos_uso.md` y `nuevo_modulo.md`.
+   - Registra el nuevo módulo en `guides/modules/mapa_documentacion.md` y en los documentos maestros.
 
 ---
 
 ## 12. Glosario Técnico y Referencias
 
 - **ADR**: Architecture Decision Record (Registro de Decisiones Arquitectónicas).
-- **JTI**: JWT ID (Identificador único de token).
+- **Kysely**: Constructor de consultas SQL fuertemente tipado con autocompletado y validación estática en TypeScript.
+- **Zod**: Librería de validación de esquemas y tipos en runtime con inferencia estática para TypeScript.
+- **JTI**: JWT ID (Identificador único de token usado para revocación en blacklist).
 - **SPA**: Single Page Application (Aplicación de Página Única).
-- **UPSERT**: Operación SQL que realiza un INSERT o un UPDATE si el registro ya existe.
+- **OTP**: One-Time Password de 6 dígitos numéricos para validación transaccional por correo electrónico.
 
 ---
 
 ### Matriz de Enlaces a la Documentación Modular Completa
-- 📄 [Índice de Módulos (guides/modules/README.md)](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/modules/README.md)
-- 📄 [Manual Funcional Maestro (guides/AcademiaNeiva_Documento_Funcional.md)](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/AcademiaNeiva_Documento_Funcional.md)
-- 📄 [Índice General de Guías (guides/README.md)](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/README.md)
+- 🗺️ **[Mapa General de Módulos (guides/modules/mapa_documentacion.md)](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/modules/mapa_documentacion.md)**
+- 📄 **[Documentación Técnica Integral (guides/AcademiaNeiva_Documentacion_Tecnica_Integral.md)](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/AcademiaNeiva_Documentacion_Tecnica_Integral.md)**
+- 📘 **[Manual Funcional Maestro (guides/AcademiaNeiva_Documento_Funcional.md)](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/AcademiaNeiva_Documento_Funcional.md)**
+- 🌐 **[Reglas Generales y Transversales (guides/reglas_negocio_generales.md)](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/reglas_negocio_generales.md)**
