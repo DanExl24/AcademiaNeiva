@@ -374,29 +374,56 @@ Cuando un directivo requiere cancelar una matrícula (`cancelEnrollment`):
 
 ---
 
-# 8. Estructura Escolar, Grados y Jornadas Institucionales
+# 8. Estructura Escolar, Grados, Jornadas y Catálogo Curricular
 
-## 8.1 Jerarquía escolar: Niveles, Tipos de Grado y Salones
-La estructura organizacional sigue el esquema jerárquico del Ministerio de Educación:
+La arquitectura de **Estructura Escolar** organiza la jerarquía académica institucional, regula los aforos de las aulas físicas, administra los turnos de operación y gestiona el catálogo de asignaturas con respaldo snapshot.
+
 ```
-Nivel Escolar (Preescolar, Primaria, Secundaria, Media)
-   └── Tipo de Grado (Transición, Primero, Segundo, ..., Once)
-          └── Grupos / Salones Físicos (Primero A, Primero B, 10-1, 10-2)
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                     JERARQUÍA Y GESTIÓN DE ESTRUCTURA ESCOLAR                          │
+├────────────────────────────────────────────────────────────────────────────────────────┤
+│ 1. Jerarquía Organizacional:                                                           │
+│    Nivel Escolar ──> Tipo de Grado (Normalizado) ──> Sección ──> Curso Físico (Cupos)  │
+│                                                                                        │
+│ 2. Nomenclatura y Renombramiento Inteligente:                                          │
+│    Renombramiento Individual (Desvinculación si shared > 1)                            │
+│    Renombramiento en Bloque (Series Ordinales "10-A, 10-B" / "10-1, 10-2" máx 10 chars)│
+│                                                                                        │
+│ 3. Catálogo Curricular y Papelera Snapshot:                                            │
+│    Eliminación Forzada (force=true) ──> Snapshot JSON en papelera_materias             │
+│    Restauración con trashId ──> Recreación de Asignaciones y Competencias en caliente │
+└────────────────────────────────────────────────────────────────────────────────────────┘
 ```
-- **Cupos Máximos:** Cada aula física tiene configurado su límite de aforo para regular las admisiones y traslados.
-- **Cursos Paralelos (*Peer Groups*):** Salones pertenecientes al mismo tipo de grado son reconocidos automáticamente para la sincronización curricular.
 
-## 8.2 Gestión de Jornadas Escolares, aforos y reasignación de cursos
-Cada colegio configura sus jornadas de operación (`MAÑANA`, `TARDE`, `UNICA`, `NOCTURNA`):
-- **Control de Aforos por Turno:** La consola de grados totaliza los estudiantes matriculados por jornada para evitar la superpoblación de las instalaciones.
-- **Reasignación de Grupo entre Jornadas:** Los directivos pueden transferir un curso completo de jornada (ej. pasar "Sexto B" de la tarde a la mañana) sin desvincular a los alumnos ni alterar sus notas y matrículas históricas.
+## 8.1 Jerarquía escolar y normalización inteligente de grados
+- **Estructura de Cuatro Niveles:** La organización académica se compone de `Nivel Escolar` (Preescolar, Primaria, Secundaria, Media), `Tipo de Grado` (Transición, Primero, Segundo, etc.), `Sección` (A, B, 10-1) y `Curso Físico` (`grupos`) (`RN-EST-001`).
+- **Normalización Inteligente de Grados:** Al registrar un grado, el sistema aplica detección de similitud semántica (`isDuplicateOrSimilarGrade`). Impide crear grados equivalentes o con variaciones ortográficas (ej. si ya existe *"PRIMERO"*, se bloquea *"1°"*, *"Primero"* o *"PRIMERO DE PRIMARIA"*) (`RN-EST-002`).
+- **Eliminación Protegida de Grados:** No se permite eliminar un tipo de grado si tiene cursos creados, matrículas vinculadas o docentes asignados, entregando un reporte de impacto (`RN-EST-004`).
 
-## 8.3 Catálogo de materias institucionales y papelera protegida
-- **Registro Curricular:** Creación y mantenimiento de asignaturas (Matemáticas, Lenguaje, Ciencias Naturales, etc.).
-- **Papelera Protegida (*Soft Delete*):** Una materia con calificaciones históricas o competencias asignadas no se elimina físicamente; se traslada a la papelera inactiva para preservar la integridad de los boletines emitidos.
+## 8.2 Parametrización de cursos físicos, cupos y consulta de integrantes
+En **"Gestión de Grados"** (`GradeManagement.vue`), los directivos configuran los salones del colegio:
+1. **Creación de Cursos:** Vincula nivel, grado, jornada habilitada, sección y cupos totales.
+2. **Protección de Reducción de Cupos:** El sistema prohíbe reducir la capacidad de un curso por debajo de los estudiantes con matrícula activa inscritos (`RN-EST-003`).
+3. **Consulta de Integrantes del Curso:** La consola directiva expone la opción de inspeccionar los integrantes (`getGroupMembers`), listando en un modal interactivo todos los estudiantes matriculados (código, documento, estado de matrícula) y los docentes asignados con sus materias para el año lectivo.
 
-## 8.4 Asignación Académica (`detalle_grados`): Docente-Grupo-Materia
-En el módulo de asignación académica, el directivo vincula qué docente es el titular responsable de impartir cada materia en cada grupo específico para el año lectivo en curso. Esta asignación es la llave que habilita al docente para calificar y tomar asistencia en dicho salón.
+## 8.3 Nomenclatura y renombramiento inteligente de cursos
+- **Renombramiento Individual:** Si un curso comparte su sección con otros salones (ej. "10-A" y "11-A"), al renombrarlo el sistema crea una nueva sección independiente en la base de datos para no alterar a los demás cursos paralelos (`RN-EST-006`).
+- **Renombramiento en Bloque por Grado:** Permite estandarizar masivamente todos los cursos de un grado mediante un prefijo, un separador y un tipo de serie (`LETRA` para A, B, C... o `NUMERO` para 1, 2, 3...), verificando que ningún nombre resultante exceda 10 caracteres (`RN-EST-007`).
+
+## 8.4 Gestión de Jornadas Escolares y aforos por turno
+Cada colegio administra sus jornadas operativas (`MAÑANA`, `TARDE`, `UNICA`, `NOCTURNA`):
+- **Control de Aforos por Turno:** La consola directiva consolida los cupos y la matrícula total por jornada para evitar la superpoblación de las instalaciones físicas.
+- **Eliminación Restringida:** Una jornada no puede eliminarse si tiene cursos asociados (`RN-JOR-003`).
+- **Guarda de Reasignación:** La reasignación de cursos entre jornadas está protegida por política institucional (`IS_JORNADA_REASSIGNMENT_ENABLED = false`) para salvaguardar la jornada elegida por los padres en matrícula (`RN-JOR-004`).
+
+## 8.5 Catálogo curricular y Papelera de Materias con Snapshot JSON
+En **"Gestión de Materias"** (`SubjectManagement.vue`):
+1. **Registro Curricular:** Creación y actualización de materias institucionales (Matemáticas, Lenguaje, etc.).
+2. **Eliminación Forzada con Respaldo Snapshot:** Si una materia tiene asignaciones docentes o competencias pedagógicas, su eliminación con `force=true` genera automáticamente un snapshot transaccional JSON de todas sus dependencias en `papelera_materias.data_respaldo` antes de su eliminación (`RN-EST-008`).
+3. **Restauración Profunda en Caliente:** En la pestaña **"Papelera de Materias"**, el directivo puede restaurar cualquier asignatura previamente eliminada. Al restaurarla, el sistema recrea la materia y re-inserta masivamente todas las asignaciones docentes en `detalle_grados` y las competencias pedagógicas asociadas a partir del snapshot JSON.
+
+## 8.6 Asignación Académica (`detalle_grados`): Docente-Grupo-Materia
+En **"Asignación Académica"** (`AcademicLoad.vue`), el directivo vincula qué docente es el titular responsable de impartir cada materia en cada grupo específico para el año lectivo en curso. Esta asignación es la llave que habilita al docente para calificar y tomar asistencia en dicho salón.
 
 ---
 
