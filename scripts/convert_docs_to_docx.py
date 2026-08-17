@@ -78,7 +78,8 @@ def find_all_markdown_files(targets: list[str]) -> list[str]:
     md_files = []
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     for t in targets:
-        full_p = os.path.normpath(os.path.join(base_dir, t))
+        # Check current working directory, base directory, or absolute path
+        full_p = os.path.abspath(t) if os.path.exists(t) else os.path.normpath(os.path.join(base_dir, t))
         if os.path.isfile(full_p) and full_p.endswith(".md"):
             md_files.append(full_p)
         elif os.path.isdir(full_p):
@@ -134,8 +135,17 @@ def convert_single_file(md_path: str) -> tuple[str, bool, str]:
 
 def main():
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    
+    # Check if arguments were passed from terminal
+    args = sys.argv[1:]
+    targets = args if args else TARGET_PATHS
+
     print("Buscando archivos markdown...")
-    files = find_all_markdown_files(TARGET_PATHS)
+    files = find_all_markdown_files(targets)
+    if not files:
+        print(f"No se encontraron archivos .md en las rutas especificadas: {targets}")
+        return
+
     print(f"Total de archivos .md a convertir: {len(files)}")
 
     print("\nIniciando conversión a .docx...")
