@@ -6,8 +6,11 @@ defineProps<{
   showExtraModal: boolean
   extraDbaItems: any[]
   selectedEvidenciasDba: number[]
-  getLinkedActivityForEvidence: (id: number) => string | undefined
+  getLinkedActivityForEvidence: (id: any) => any
 }>()
+
+
+
 
 const emit = defineEmits<{
   (e: 'closeWarning'): void

@@ -3,9 +3,10 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { academicService } from '../../services/academicService'
 import { 
   Layers3, Plus, Search, School2, Trash2, Info, Pencil, Tag, RefreshCw, Lock, 
-  Calendar, Eye, Users, GraduationCap, Mail, X, Sun, Sunset, Moon, Globe, 
-  ArrowRightLeft, SlidersHorizontal, Layers
+  Calendar, Eye, Users, GraduationCap, X, Sun, Sunset, Moon, Globe, 
+  SlidersHorizontal, Layers
 } from 'lucide-vue-next'
+
 import { useAuthStore } from '../../stores/auth'
 import { useNotificationStore } from '../../stores/notifications'
 import { useAcademicYearStore } from '../../stores/academicYear'
@@ -102,13 +103,6 @@ const bulkSeparador = ref('-')
 const bulkOrdinalType = ref<'NUMERO' | 'LETRA'>('NUMERO')
 const bulkRenaming = ref(false)
 
-const sepOptions = [
-  { label: 'Guión  ( - )', value: '-' },
-  { label: 'Punto  ( . )', value: '.' },
-  { label: 'Espacio (   )', value: ' ' },
-  { label: 'Ninguno  (sin separador)', value: '' },
-]
-
 type DeleteModalState =
   | { kind: 'grade'; item: TipoGrado }
   | { kind: 'course'; item: Grupo }
@@ -122,11 +116,6 @@ const secciones = ref<Seccion[]>([])
 const tiposGrado = ref<TipoGrado[]>([])
 const grupos = ref<Grupo[]>([])
 
-const newGradeType = ref({
-  id_nivel: '',
-  nombre: '',
-})
-
 const newGroup = ref({
   id_nivel: '',
   id_tipo_grado: '',
@@ -135,13 +124,9 @@ const newGroup = ref({
   cupos_totales: 30,
 })
 
-const filteredGradeTypes = computed(() =>
-  tiposGrado.value.filter((item) =>
-    !newGroup.value.id_nivel || item.id_nivel === Number(newGroup.value.id_nivel)
-  )
-)
 
 // Grados & Cursos Filters State
+
 const selectedNivelFilter = ref<number | null>(null)
 const selectedJornadaFilter = ref<number | null>(null)
 const gradeStatusFilter = ref<'TODOS' | 'CON_CURSOS' | 'SIN_CURSOS'>('TODOS')
@@ -300,92 +285,9 @@ const computedNextSectionName = computed(() => {
   return getNextSectionName(existingNames)
 })
 
-const indexToLetter = (index: number): string => {
-  let temp = index
-  let letter = ''
-  while (temp >= 0) {
-    letter = String.fromCharCode((temp % 26) + 65) + letter
-    temp = Math.floor(temp / 26) - 1
-  }
-  return letter
-}
-
-
-const previewNames = computed(() => {
-  const base = bulkPrefijo.value.trim().toUpperCase()
-  const sep = bulkSeparador.value
-  if (!base || !bulkCourseCount.value) return []
-  const isLetter = (bulkOrdinalType.value === 'LETRA')
-  return Array.from({ length: bulkCourseCount.value }, (_, i) => {
-    const ordinal = isLetter ? indexToLetter(i) : String(i + 1)
-    return `${base}${sep}${ordinal}`
-  })
-})
-
-const bulkPrefijoError = computed(() => {
-  const base = bulkPrefijo.value.trim()
-  if (!base) return 'El prefijo no puede estar vacío'
-  if (base.length > 10) return 'El prefijo no puede superar los 10 caracteres'
-  
-  const isLetter = (bulkOrdinalType.value === 'LETRA')
-  const lastNum = bulkCourseCount.value
-  const lastOrdinal = isLetter ? indexToLetter(lastNum - 1) : String(lastNum)
-  const longestName = `${base.toUpperCase()}${bulkSeparador.value}${lastOrdinal}`
-  if (longestName.length > 10) {
-    return `La estructura superaría los 10 caracteres (ej: ${longestName})`
-  }
-  return ''
-})
-
-const normalizeClientGrade = (str: string): string => {
-  if (!str) return ''
-  let text = str.toUpperCase().trim()
-  text = text.normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-  text = text.replace(/\b(GRADO|GRADOS|NIVEL|NIVELES|CURSO|CURSOS|ANO|ANIO|SISTEMA)\b/g, '').trim()
-  text = text.replace(/[\°\º\.\-\_\#\,\:]/g, '').trim()
-  const ordinalMap: Record<string, string> = {
-    '1': 'PRIMERO', '1RO': 'PRIMERO', '1ER': 'PRIMERO',
-    '2': 'SEGUNDO', '2DO': 'SEGUNDO',
-    '3': 'TERCERO', '3RO': 'TERCERO', '3ER': 'TERCERO',
-    '4': 'CUARTO', '4TO': 'CUARTO',
-    '5': 'QUINTO', '5TO': 'QUINTO',
-    '6': 'SEXTO', '6TO': 'SEXTO',
-    '7': 'SEPTIMO', '7MO': 'SEPTIMO',
-    '8': 'OCTAVO', '8VO': 'OCTAVO',
-    '9': 'NOVENO', '9NO': 'NOVENO',
-    '10': 'DECIMO', '10MO': 'DECIMO',
-    '11': 'ONCE', '11VO': 'ONCE', 'UNDECIMO': 'ONCE',
-    '12': 'DOCE', '12VO': 'DOCE', 'DUODECIMO': 'DOCE',
-    'PARVULO': 'PARVULOS', 'PARVULOS': 'PARVULOS',
-    'PREJARDIN': 'PREJARDIN', 'PREKINDER': 'PREJARDIN',
-    'JARDIN': 'JARDIN', 'KINDER': 'JARDIN',
-    'TRANSICION': 'TRANSICION'
-  }
-  const words = text.split(/\s+/).filter(Boolean)
-  text = words.map(w => ordinalMap[w] || w).join('')
-  return text.replace(/([A-Z])\1+/g, '$1')
-}
-
-const gradeNameValidationError = computed(() => {
-  const input = newGradeType.value.nombre.trim()
-  if (!input) return ''
-
-  const normInput = normalizeClientGrade(input)
-  if (!normInput) return ''
-
-  const existingMatch = tiposGrado.value.find(g => {
-    return normalizeClientGrade(g.nombre) === normInput
-  })
-
-  if (existingMatch) {
-    return `⚠️ El nombre '${input}' es equivalente o muy similar al grado '${existingMatch.nombre}' ya registrado.`
-  }
-
-  return ''
-})
-
 
 const toggleGradeSelection = (id: number) => {
+
   if (selectedGradeId.value === id) {
     selectedGradeId.value = null
   } else {
@@ -717,28 +619,6 @@ const openCourseMembersModal = async (group: Grupo) => {
   }
 }
 
-
-const filteredStudents = computed(() => {
-  if (!membersData.value) return []
-  const term = membersSearchTerm.value.trim().toLowerCase()
-  if (!term) return membersData.value.students
-  return membersData.value.students.filter(s =>
-    `${s.nombre} ${s.apellido}`.toLowerCase().includes(term) ||
-    (s.codigo_estudiantil && s.codigo_estudiantil.toLowerCase().includes(term)) ||
-    (s.documento && s.documento.toLowerCase().includes(term))
-  )
-})
-
-const filteredTeachers = computed(() => {
-  if (!membersData.value) return []
-  const term = membersSearchTerm.value.trim().toLowerCase()
-  if (!term) return membersData.value.teachers
-  return membersData.value.teachers.filter(t =>
-    t.materia_nombre.toLowerCase().includes(term) ||
-    `${t.docente_nombre} ${t.docente_apellido}`.toLowerCase().includes(term) ||
-    (t.docente_email && t.docente_email.toLowerCase().includes(term))
-  )
-}   )
 
 
 interface JornadaStat {
@@ -1701,9 +1581,10 @@ watch(() => yearStore.selectedYearId, () => {
       <CreateGradeOrGroupModal
         :show="createModal"
         :niveles="niveles"
-        :tipos-grados="tiposGrados"
+        :tipos-grados="tiposGrado"
         :jornadas="jornadas"
         :saving-grade="savingGrade"
+
         :saving-group="savingGroup"
         :computed-next-section-name="computedNextSectionName"
         @close="closeCreateModal"

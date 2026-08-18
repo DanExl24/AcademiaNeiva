@@ -4,7 +4,6 @@ import { useRoute } from 'vue-router'
 import { 
   Save, 
   Plus, 
-  Trash2, 
   AlertCircle, 
   Settings,
   CheckCircle,
@@ -14,10 +13,9 @@ import {
   ClipboardList,
   Download,
   BookOpen,
-  Users,
-  Eye,
-  AlertTriangle
+  Users
 } from 'lucide-vue-next'
+
 import { useAuthStore } from '../../stores/auth'
 import { useAcademicYearStore } from '../../stores/academicYear'
 import { useConfirm } from '../../composables/useConfirm'

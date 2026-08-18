@@ -18,12 +18,14 @@ defineProps<{
   newActivity: any
   newCriterion: Record<number, { descripcion: string; porcentaje: number }>
   selectedExtraEvidencesCount: number
+
   selectedExtraEvidencesList: any[]
-  getDbaNumberForCompetency: (comp: any) => string | number | undefined
-  getLinkedCompetencyIndex: (id: number | null | undefined) => number | null
+  getDbaNumberForCompetency: (comp: any) => any
+  getLinkedCompetencyIndex: (id: any) => any
   getDbaEvidenceDetails: (act: any) => any[]
-  getLinkedActivityForEvidence: (id: number) => string | undefined
+  getLinkedActivityForEvidence: (id: any) => any
 }>()
+
 
 const emit = defineEmits<{
   (e: 'close'): void
