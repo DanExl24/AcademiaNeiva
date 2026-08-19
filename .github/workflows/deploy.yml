@@ -1,4 +1,4 @@
-name: Build & Deploy to VPS (CD)
+name: Deploy to Production VPS (CD)
 
 on:
   push:
@@ -6,78 +6,11 @@ on:
       - main
       - feature/new-frontend-structure
 
-permissions:
-  contents: read
-  packages: write
-
 jobs:
-  # ==========================================
-  # JOB 1: Compilar y publicar Frontend en GHCR
-  # ==========================================
-  build-frontend:
-    name: Build & Push Frontend Image
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and Push Frontend
-        uses: docker/build-push-action@v5
-        with:
-          context: ./frontend
-          push: true
-          tags: ghcr.io/danexl24/academia-frontend:latest
-          build-args: |
-            VITE_API_URL=https://api-academianeiva.adsoproject.dev
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-  # ==========================================
-  # JOB 2: Compilar y publicar Backend en GHCR
-  # ==========================================
-  build-backend:
-    name: Build & Push Backend Image
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and Push Backend
-        uses: docker/build-push-action@v5
-        with:
-          context: ./backend
-          push: true
-          tags: ghcr.io/danexl24/academia-backend:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-  # ==========================================
-  # JOB 3: Despliegue Instantáneo en el VPS
-  # ==========================================
   deploy:
-    name: Deploy to Production VPS
-    needs: [build-frontend, build-backend]
+    name: Continuous Deployment to Production VPS
     runs-on: ubuntu-latest
+
     steps:
       - name: Deploy to VPS via SSH
         uses: appleboy/ssh-action@v1.0.3
@@ -88,23 +21,25 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           port: 22
           script: |
-            echo "🚀 Iniciando despliegue optimizado en el VPS..."
+            echo "🚀 Iniciando despliegue en el VPS..."
             cd ~/AcademiaNeiva
             
-            # Sincronizar rama actual
+            # Sincronizar cambios de la rama activa
             TARGET_BRANCH="${{ github.ref_name }}"
-            echo "🌿 Rama a desplegar: $TARGET_BRANCH"
+            echo "🌿 Rama: $TARGET_BRANCH"
             git fetch origin "$TARGET_BRANCH"
             git checkout "$TARGET_BRANCH"
             git pull origin "$TARGET_BRANCH"
             
-            # Descargar imágenes ya construidas desde GHCR y levantar contenedores
-            echo "📥 Descargando imágenes compiladas desde GitHub Container Registry..."
-            docker compose pull
+            # Habilitar BuildKit para construcción rápida con caché
+            export DOCKER_BUILDKIT=1
+            export COMPOSE_DOCKER_CLI_BUILD=1
             
-            echo "🔄 Levantando servicios actualizados..."
-            docker compose up -d --remove-orphans
+            # Reconstruir y levantar contenedores
+            echo "🔨 Construyendo y levantando contenedores..."
+            docker compose up -d --build --remove-orphans
             
-            # Limpiar imágenes huérfanas/antiguas
+            # Limpiar imágenes antiguas
             docker image prune -f
-            echo "✅ ¡Despliegue completado exitosamente en segundos!"
+            
+            echo "✅ ¡Despliegue completado exitosamente!"
