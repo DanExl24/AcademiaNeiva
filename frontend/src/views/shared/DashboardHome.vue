@@ -168,7 +168,7 @@ const selectedPeriodId = ref<number | null>(null)
 const periods = computed(() => {
   let list = allPeriods.value
   if (selectedYearId.value) {
-    list = list.filter((p: any) => p['id_anio'] === selectedYearId.value)
+    list = list.filter((p: any) => (p.id_anio ?? p.id_año) === selectedYearId.value)
   }
   return list.filter((p: any) => p.estado !== 'PENDIENTE')
 })
