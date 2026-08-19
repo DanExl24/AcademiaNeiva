@@ -27,7 +27,7 @@ export const useAcademicYearStore = defineStore('academicYear', () => {
     if (!schoolId) return
     loading.value = true
     try {
-      const res = await academicService.getSettings(schoolId, 'years')
+      const res = await academicService.getSettings(schoolId, { keys: 'years' })
       const years: AcademicYear[] = (res.academicYears || []).map((y: any) => ({
         ...y,
         id_anio: y.id_anio ?? y.id_año

@@ -16,7 +16,8 @@ export const academicService = {
 
 
   async getSettings(schoolId: number | string, params?: any): Promise<any> {
-    const res = await api.get(`/academic-admin/settings/${schoolId}`, { params })
+    const queryParams = typeof params === 'string' ? { keys: params } : params
+    const res = await api.get(`/academic-admin/settings/${schoolId}`, { params: queryParams })
     return res.data
   },
 
