@@ -743,7 +743,7 @@ const handleImportPDF = async () => {
               <button 
                 v-if="dba.estado === 'ACTIVO'"
                 @click.stop="openCreateEvidence(dba)" 
-                class="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950/30 hover:bg-indigo-100 dark:hover:bg-indigo-950/60 text-indigo-650 dark:text-indigo-400 rounded-lg text-xs font-bold transition-all"
+                class="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950/30 hover:bg-indigo-100 dark:hover:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 rounded-lg text-xs font-bold transition-all"
               >
                 <Plus :size="14" />
                 Agregar Evidencia
@@ -820,7 +820,7 @@ const handleImportPDF = async () => {
               </button>
               <button 
                 @click.stop="openEditDba(dba)" 
-                class="flex items-center gap-1 px-4 py-2 bg-indigo-50 dark:bg-indigo-950/30 hover:bg-indigo-100 dark:hover:bg-indigo-950/60 text-indigo-650 dark:text-indigo-400 rounded-xl font-bold text-xs transition-all"
+                class="flex items-center gap-1 px-4 py-2 bg-indigo-50 dark:bg-indigo-950/30 hover:bg-indigo-100 dark:hover:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 rounded-xl font-bold text-xs transition-all"
               >
                 <Edit3 :size="14" />
                 Editar

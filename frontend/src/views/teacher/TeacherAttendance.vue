@@ -597,7 +597,7 @@ onMounted(() => {
         <button 
           v-if="selectedCourse && activeTab === 'history' && historyData.length > 0"
           @click="exportHistoryToCSV"
-          class="bg-indigo-650 dark:bg-indigo-600 text-white px-6 py-3 rounded-2xl font-bold hover:bg-indigo-750 transition-all flex items-center gap-2 shadow-md"
+          class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-2xl font-bold transition-all flex items-center gap-2 shadow-md"
         >
           <Download :size="20" />
           Exportar Historial (CSV)

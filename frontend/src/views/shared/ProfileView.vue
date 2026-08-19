@@ -315,8 +315,8 @@ const goBack = () => {
 
       <!-- Loader -->
       <div v-if="loadingProfile" class="flex flex-col items-center justify-center p-20">
-        <Loader2 class="w-10 h-10 text-indigo-650 animate-spin mb-4" />
-        <p class="text-slate-550 font-bold text-sm">Cargando perfil de usuario...</p>
+        <Loader2 class="w-10 h-10 text-indigo-600 animate-spin mb-4" />
+        <p class="text-slate-500 font-bold text-sm">Cargando perfil de usuario...</p>
       </div>
 
       <!-- Main Profile panel -->

@@ -718,7 +718,7 @@ const getObservationText = (obs: any) => {
                   'text-rose-600 dark:text-rose-455': t.estado === 'ABIERTO',
                   'text-amber-605 dark:text-amber-500': t.estado === 'EN_PROCESO',
                   'text-emerald-600 dark:text-emerald-400': t.estado === 'RESUELTO',
-                  'text-indigo-650 dark:text-indigo-400': t.estado === 'ESCALADO'
+                  'text-indigo-600 dark:text-indigo-400': t.estado === 'ESCALADO'
                 }"
               >
                 {{ t.estado === 'ABIERTO' ? 'Abierto' : t.estado === 'EN_PROCESO' ? 'En Proceso' : t.estado === 'RESUELTO' ? 'Resuelto' : 'Escalado' }}
@@ -734,7 +734,7 @@ const getObservationText = (obs: any) => {
                   'text-rose-600 dark:text-rose-455': t.estado === 'ABIERTO',
                   'text-amber-605 dark:text-amber-500': t.estado === 'EN_PROCESO',
                   'text-emerald-600 dark:text-emerald-400': t.estado === 'RESUELTO',
-                  'text-indigo-650 dark:text-indigo-400': t.estado === 'ESCALADO'
+                  'text-indigo-600 dark:text-indigo-400': t.estado === 'ESCALADO'
                 }"
               >
                 <option v-if="t.estado === 'ABIERTO'" value="ABIERTO">Abierto</option>
@@ -869,7 +869,7 @@ const getObservationText = (obs: any) => {
               <button 
                 @click="saveObservation(t.id_ticket)"
                 :disabled="submittingObs[t.id_ticket] || !observationsInputs[t.id_ticket]?.trim()"
-                class="px-4 py-2 bg-indigo-650 hover:bg-indigo-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center shrink-0"
+                class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center shrink-0"
               >
                 <Loader2 v-if="submittingObs[t.id_ticket]" class="w-3 h-3 animate-spin mr-1" />
                 Guardar
@@ -961,7 +961,7 @@ const getObservationText = (obs: any) => {
                       {{ t.codigo_ticket || getTicketCode(t) }}
                     </span>
                     <div class="flex items-center gap-1.5">
-                      <span v-if="t.fecha_escalado" class="px-1.5 py-0.5 bg-indigo-50 dark:bg-indigo-950/40 text-[9px] font-black text-indigo-650 dark:text-indigo-400 rounded-md">Escalado</span>
+                      <span v-if="t.fecha_escalado" class="px-1.5 py-0.5 bg-indigo-50 dark:bg-indigo-950/40 text-[9px] font-black text-indigo-600 dark:text-indigo-400 rounded-md">Escalado</span>
                       <span 
                         class="px-1.5 py-0.5 text-[9px] font-black uppercase rounded-md"
                         :class="{
@@ -1140,13 +1140,13 @@ const getObservationText = (obs: any) => {
                 v-model="trackingCodeInput"
                 type="text"
                 placeholder="Ej: TKT-1B3X9H7Z"
-                class="w-full px-4 py-4 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-semibold text-slate-750 dark:text-slate-250 placeholder-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all outline-none"
+                class="w-full px-4 py-4 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-semibold text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all outline-none"
                 @keyup.enter="fetchTrackingTicket"
               />
               <button 
                 @click="fetchTrackingTicket"
                 :disabled="searchingTracking || !trackingCodeInput.trim()"
-                class="px-6 py-4 bg-indigo-650 hover:bg-indigo-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all disabled:opacity-50 flex items-center gap-1.5 shrink-0 shadow-md"
+                class="px-6 py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all disabled:opacity-50 flex items-center gap-1.5 shrink-0 shadow-md"
               >
                 <Loader2 v-if="searchingTracking" class="w-4 h-4 animate-spin" />
                 Buscar
@@ -1238,9 +1238,9 @@ const getObservationText = (obs: any) => {
                     class="w-full p-3 bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 rounded-2xl focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 outline-none resize-none transition-all"
                   ></textarea>
                   <button 
-                    @click="submitVisitorResponse"
+                    @click="submitVisitorResponse" 
                     :disabled="submittingVisitorObs || !visitorResponseInput.trim()"
-                    class="px-5 py-2.5 bg-indigo-650 hover:bg-indigo-700 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center shrink-0"
+                    class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center shrink-0"
                   >
                     <Loader2 v-if="submittingVisitorObs" class="w-3.5 h-3.5 animate-spin mr-1.5" />
                     Enviar

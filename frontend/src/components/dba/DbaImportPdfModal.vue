@@ -134,7 +134,7 @@ const emit = defineEmits<{
 
             <!-- Spinner showing progress -->
             <div v-if="saving" class="flex flex-col items-center justify-center p-4 bg-indigo-50/30 dark:bg-indigo-950/10 rounded-2xl border border-indigo-50/50 dark:border-indigo-950/20">
-              <div class="animate-spin rounded-full h-8 w-8 border-3 border-indigo-650 border-t-transparent"></div>
+              <div class="animate-spin rounded-full h-8 w-8 border-3 border-indigo-600 border-t-transparent"></div>
               <p class="mt-2.5 text-xs text-indigo-600 dark:text-indigo-400 font-bold text-center">
                 Parseando PDF e importando evidencias... Esto puede tomar unos segundos.
               </p>

@@ -360,7 +360,7 @@ const distributionChartOptions = {
         </div>
         <div class="flex-1 relative min-h-[220px] flex items-center justify-center">
           <div v-if="loading" class="absolute inset-0 flex items-center justify-center">
-            <div class="w-8 h-8 border-4 border-indigo-650/20 border-t-indigo-600 rounded-full animate-spin"></div>
+            <div class="w-8 h-8 border-4 border-indigo-600/20 border-t-indigo-600 rounded-full animate-spin"></div>
           </div>
           <Line v-else-if="hasGrowthData" :data="growthChartData" :options="growthChartOptions" />
           <EmptyChartState 
@@ -380,7 +380,7 @@ const distributionChartOptions = {
         </div>
         <div class="flex-1 relative flex items-center justify-center min-h-[220px]">
           <div v-if="loading" class="absolute inset-0 flex items-center justify-center">
-            <div class="w-8 h-8 border-4 border-indigo-650/20 border-t-indigo-600 rounded-full animate-spin"></div>
+            <div class="w-8 h-8 border-4 border-indigo-600/20 border-t-indigo-600 rounded-full animate-spin"></div>
           </div>
           <div v-else-if="hasDistributionData" class="w-full h-full relative min-h-[200px]">
             <Doughnut :data="distributionChartData" :options="distributionChartOptions" />
@@ -444,7 +444,7 @@ const distributionChartOptions = {
             <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Control de acceso institucional del mes</p>
           </div>
           <div v-if="loading" class="h-16 flex items-center justify-center">
-            <div class="w-6 h-6 border-3 border-indigo-650/20 border-t-indigo-600 rounded-full animate-spin"></div>
+            <div class="w-6 h-6 border-3 border-indigo-600/20 border-t-indigo-600 rounded-full animate-spin"></div>
           </div>
           <div v-else class="grid grid-cols-4 gap-4 text-center mt-2">
             <div class="bg-slate-50 dark:bg-slate-950 p-3 rounded-2xl border border-slate-100/50 dark:border-slate-900">
@@ -473,7 +473,7 @@ const distributionChartOptions = {
             <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Resumen de operaciones registradas este mes</p>
           </div>
           <div v-if="loading" class="h-16 flex items-center justify-center">
-            <div class="w-6 h-6 border-3 border-indigo-650/20 border-t-indigo-600 rounded-full animate-spin"></div>
+            <div class="w-6 h-6 border-3 border-indigo-600/20 border-t-indigo-600 rounded-full animate-spin"></div>
           </div>
           <div v-else class="space-y-3 mt-2">
             <div class="flex items-center justify-between text-sm">
@@ -502,7 +502,7 @@ const distributionChartOptions = {
             <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Estado y disponibilidad de infraestructura global</p>
           </div>
           <div v-if="loading" class="h-16 flex items-center justify-center">
-            <div class="w-6 h-6 border-3 border-indigo-650/20 border-t-indigo-600 rounded-full animate-spin"></div>
+            <div class="w-6 h-6 border-3 border-indigo-600/20 border-t-indigo-600 rounded-full animate-spin"></div>
           </div>
           <div v-else class="grid grid-cols-2 md:grid-cols-3 gap-3.5 mt-2">
             

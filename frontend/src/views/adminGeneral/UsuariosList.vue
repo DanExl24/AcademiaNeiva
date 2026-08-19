@@ -784,7 +784,7 @@ const handleDelete = async () => {
                 <button 
                   @click="verifyTicketAndEnableEdit"
                   :disabled="verifyingTicket || !ticketCodeVerification.trim()"
-                  class="px-4 py-2 bg-indigo-650 hover:bg-indigo-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-50 flex items-center justify-center gap-1.5 transition-all shrink-0"
+                  class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-50 flex items-center justify-center gap-1.5 transition-all shrink-0"
                 >
                   <Loader2 v-if="verifyingTicket" class="w-3 h-3 animate-spin" />
                   Habilitar Edición
@@ -807,14 +807,14 @@ const handleDelete = async () => {
               <template v-if="editingCredentials">
                 <button 
                   @click="cancelEdit" 
-                  class="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-600 dark:text-slate-300 rounded-xl font-bold text-xs transition-all"
+                  class="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl font-bold text-xs transition-all"
                 >
                   Cancelar
                 </button>
                 <button 
                   @click="applyCredentialsChange" 
                   :disabled="applyingChange || !editableNombre.trim() || !editableApellido.trim() || !editableDocumento.trim() || editableRoles.length === 0"
-                  class="px-5 py-2.5 bg-indigo-650 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs shadow-md transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
+                  class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs shadow-md transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
                 >
                   <Loader2 v-if="applyingChange" class="w-3.5 h-3.5 animate-spin" />
                   Aplicar Cambios

@@ -245,6 +245,14 @@ const stopMonitoring = () => {
 const currentTime = ref<string>('')
 const schoolName = ref('AcademiaNeiva')
 const schoolEscudo = ref<string | null>(null)
+const schoolPrimaryColor = ref<string>('#4f46e5')
+const schoolSecondaryColor = ref<string>('#0f172a')
+
+const route = useRoute()
+const isRouteActive = (path: string) => {
+  if (path === '/dashboard') return route.path === '/dashboard'
+  return route.path === path || route.path.startsWith(path + '/')
+}
 
 const hexToRgb = (hex: string): { r: number; g: number; b: number } | null => {
   const shorthandRegex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i;
@@ -273,6 +281,8 @@ const applyThemeColors = (primary: string, secondary: string) => {
 }
 
 const clearThemeColors = () => {
+  schoolPrimaryColor.value = '#4f46e5'
+  schoolSecondaryColor.value = '#0f172a'
   document.documentElement.style.removeProperty('--color-primary')
   document.documentElement.style.removeProperty('--color-secondary')
   document.documentElement.style.removeProperty('--color-primary-rgb')
@@ -280,6 +290,8 @@ const clearThemeColors = () => {
 }
 
 const updateTheme = (color1?: string, color2?: string) => {
+  if (color1) schoolPrimaryColor.value = color1
+  if (color2) schoolSecondaryColor.value = color2
   if (color1 && color2) {
     applyThemeColors(color1, color2)
   } else {
@@ -743,10 +755,13 @@ onUnmounted(() => {
           <div v-if="item.children">
             <button 
               @click="toggleSubmenu(item.name)"
+              class="w-full flex items-center justify-between p-3 rounded-xl transition-all group"
               :class="[
-                'w-full flex items-center justify-between p-3 rounded-xl text-gray-600 dark:text-slate-400 hover:bg-indigo-50 dark:hover:bg-slate-800 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all group',
-                openSubmenus[item.name] ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-slate-800/50' : ''
+                openSubmenus[item.name] 
+                  ? 'font-bold' 
+                  : 'text-gray-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
               ]"
+              :style="openSubmenus[item.name] ? { color: schoolPrimaryColor, backgroundColor: `${schoolPrimaryColor}18` } : {}"
             >
               <div class="flex items-center gap-3">
                 <component :is="item.icon" :size="22" />
@@ -768,8 +783,13 @@ onUnmounted(() => {
                 v-for="sub in item.children" 
                 :key="sub.name"
                 :to="sub.path"
-                class="flex items-center py-2 px-3 rounded-lg text-sm text-gray-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
-                active-class="text-indigo-600 dark:text-indigo-400 font-semibold"
+                class="flex items-center py-2 px-3 rounded-lg text-sm transition-colors"
+                :class="[
+                  route.path === sub.path 
+                    ? 'font-bold' 
+                    : 'text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200'
+                ]"
+                :style="route.path === sub.path ? { color: schoolPrimaryColor } : {}"
               >
                 <span>{{ sub.name }}</span>
               </router-link>
@@ -780,8 +800,15 @@ onUnmounted(() => {
           <router-link 
             v-else
             :to="item.path"
-            class="flex items-center gap-3 p-3 rounded-xl text-gray-600 dark:text-slate-400 hover:bg-indigo-50 dark:hover:bg-slate-800 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all group"
-            active-class="bg-indigo-600 text-white hover:bg-indigo-600 hover:text-white shadow-lg shadow-indigo-100 dark:shadow-none"
+            class="flex items-center gap-3 p-3 rounded-xl transition-all group"
+            :class="[
+              isRouteActive(item.path)
+                ? 'text-white shadow-lg' 
+                : 'text-gray-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+            ]"
+            :style="isRouteActive(item.path)
+              ? { backgroundColor: schoolPrimaryColor, boxShadow: `0 10px 15px -3px ${schoolPrimaryColor}40` }
+              : {}"
           >
             <component :is="item.icon" :size="22" />
             <span v-if="!isCollapsed" class="font-medium">{{ item.name }}</span>
@@ -1019,12 +1046,12 @@ onUnmounted(() => {
           :key="toast.id"
           class="pointer-events-auto bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-100 dark:border-slate-800 p-4 rounded-2xl shadow-2xl flex items-start gap-3 w-full"
         >
-          <div class="p-2 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-650 dark:text-indigo-400 rounded-xl shrink-0">
+          <div class="p-2 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 rounded-xl shrink-0">
             <Bell :size="18" class="animate-bounce" />
           </div>
           <div class="flex-1 min-w-0">
             <h4 class="text-xs font-black text-slate-800 dark:text-white uppercase tracking-wider">Aviso del Sistema</h4>
-            <p class="text-xs font-semibold text-slate-650 dark:text-slate-350 mt-1 leading-relaxed">{{ toast.message }}</p>
+            <p class="text-xs font-semibold text-slate-600 dark:text-slate-300 mt-1 leading-relaxed">{{ toast.message }}</p>
           </div>
           <button 
             @click="toasts = toasts.filter(t => t.id !== toast.id)"

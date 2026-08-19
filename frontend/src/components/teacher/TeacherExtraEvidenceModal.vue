@@ -77,7 +77,7 @@ const emit = defineEmits<{
                     :checked="selectedEvidenciasDba.includes(ev.id_evidencia_dba)" 
                     :disabled="!!getLinkedActivityForEvidence(ev.id_evidencia_dba)" 
                     @change="emit('toggleEvidence', ev.id_evidencia_dba)"
-                    class="mt-0.5 rounded border-slate-350 text-indigo-650 focus:ring-indigo-500 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed" 
+                    class="mt-0.5 rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed" 
                   />
                   <div class="flex flex-wrap items-center gap-1.5">
                     <span>{{ ev.descripcion }}</span>

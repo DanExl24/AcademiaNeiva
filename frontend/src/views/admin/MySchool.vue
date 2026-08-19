@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { academicService } from '../../services/academicService'
 import { useAuthStore } from '../../stores/auth'
 import { API_BASE_URL } from '../../services/api'
@@ -420,6 +420,47 @@ const handleRemoveWhiteBg = async () => {
   }
 }
 
+const hexToRgb = (hex: string): { r: number; g: number; b: number } | null => {
+  const shorthandRegex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i;
+  const fullHex = hex.replace(shorthandRegex, (_m, r, g, b) => r + r + g + g + b + b);
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(fullHex);
+  return result ? {
+    r: parseInt(result[1], 16),
+    g: parseInt(result[2], 16),
+    b: parseInt(result[3], 16)
+  } : null;
+}
+
+const applyLiveTheme = (primary?: string, secondary?: string) => {
+  if (primary) {
+    document.documentElement.style.setProperty('--color-primary', primary)
+    const rgbPrimary = hexToRgb(primary)
+    if (rgbPrimary) {
+      document.documentElement.style.setProperty('--color-primary-rgb', `${rgbPrimary.r}, ${rgbPrimary.g}, ${rgbPrimary.b}`)
+    }
+  }
+  if (secondary) {
+    document.documentElement.style.setProperty('--color-secondary', secondary)
+    const rgbSecondary = hexToRgb(secondary)
+    if (rgbSecondary) {
+      document.documentElement.style.setProperty('--color-secondary-rgb', `${rgbSecondary.r}, ${rgbSecondary.g}, ${rgbSecondary.b}`)
+    }
+  }
+}
+
+watch(
+  [() => form.value.color_primario, () => form.value.color_secundario],
+  ([prim, sec]) => {
+    applyLiveTheme(prim, sec)
+  }
+)
+
+onUnmounted(() => {
+  if (originalForm.value.color_primario && originalForm.value.color_secundario) {
+    applyLiveTheme(originalForm.value.color_primario, originalForm.value.color_secundario)
+  }
+})
+
 const applyColorSuggestion = (type: 'primary' | 'secondary', color: string) => {
   if (type === 'primary') {
     form.value.color_primario = color
@@ -433,6 +474,7 @@ const undoChanges = () => {
   justification.value = ''
   validationError.value = ''
   extractedColors.value = []
+  applyLiveTheme(originalForm.value.color_primario, originalForm.value.color_secundario)
 }
 
 const resetToDefaults = async () => {
@@ -502,7 +544,7 @@ const saveChanges = async () => {
     <div class="rounded-3xl border border-slate-100 bg-white p-8 shadow-sm md:p-10 dark:bg-slate-900 dark:border-slate-800">
       <div class="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
         <div class="flex items-center gap-4">
-          <div class="p-4 bg-indigo-50 dark:bg-indigo-950/30 rounded-2xl text-indigo-650 dark:text-indigo-400">
+          <div class="p-4 bg-indigo-50 dark:bg-indigo-950/30 rounded-2xl text-indigo-600 dark:text-indigo-400">
             <School :size="32" />
           </div>
           <div>
@@ -521,7 +563,7 @@ const saveChanges = async () => {
 
     <!-- Loading state -->
     <div v-if="loading" class="rounded-3xl border border-slate-100 bg-white p-20 text-center shadow-sm dark:bg-slate-900 dark:border-slate-800">
-      <RefreshCw class="animate-spin h-8 w-8 mx-auto text-indigo-650 mb-3" />
+      <RefreshCw class="animate-spin h-8 w-8 mx-auto text-indigo-600 mb-3" />
       <span class="font-bold text-slate-400">Cargando información del colegio...</span>
     </div>
 
@@ -531,7 +573,7 @@ const saveChanges = async () => {
         <button 
           @click="activeTab = 'general'"
           :class="[
-            activeTab === 'general' ? 'bg-white dark:bg-slate-900 text-indigo-650 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200',
+            activeTab === 'general' ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200',
             'px-5 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2'
           ]"
         >
@@ -541,7 +583,7 @@ const saveChanges = async () => {
         <button 
           @click="activeTab = 'identity'"
           :class="[
-            activeTab === 'identity' ? 'bg-white dark:bg-slate-900 text-indigo-650 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200',
+            activeTab === 'identity' ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200',
             'px-5 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2'
           ]"
         >
@@ -653,7 +695,7 @@ const saveChanges = async () => {
             </div>
 
             <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 shadow-sm flex items-center gap-4 hover:shadow-md transition-shadow">
-              <div class="p-3 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-650 dark:text-indigo-400 rounded-2xl">
+              <div class="p-3 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 rounded-2xl">
                 <Users :size="24" />
               </div>
               <div>
@@ -674,8 +716,14 @@ const saveChanges = async () => {
               <School v-else class="text-slate-300 dark:text-slate-700" :size="72" />
             </div>
             
-            <h3 class="font-extrabold text-slate-900 dark:text-white text-lg">{{ schoolData.nombre }}</h3>
-            <p class="text-xs text-slate-500 max-w-[200px]">Usa la pestaña de Identidad Visual para cambiar el escudo y personalizar la paleta de colores de la plataforma.</p>
+            <div v-if="getShieldUrl(form.escudo_url)" class="space-y-1">
+              <p class="text-xs font-bold text-slate-700 dark:text-slate-200">Escudo Oficial</p>
+              <p class="text-[10px] text-slate-400">Personalizado para la institución</p>
+            </div>
+            <div v-else class="space-y-1">
+              <p class="text-xs font-bold text-slate-500">Sin Escudo Personalizado</p>
+              <p class="text-[10px] text-slate-400">Carga el escudo oficial en la pestaña "Identidad Visual"</p>
+            </div>
           </div>
         </div>
       </div>
@@ -690,7 +738,7 @@ const saveChanges = async () => {
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
               <!-- Upload Escudo -->
               <div class="md:col-span-1 space-y-2">
-                <label class="text-xs font-black text-slate-550 dark:text-slate-400 uppercase tracking-wider block">Cargar Escudo</label>
+                <label class="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Cargar Escudo</label>
                 <input ref="fileInput" type="file" accept="image/*" class="hidden" @change="handleFileChange" />
                 
                 <div 
@@ -740,13 +788,13 @@ const saveChanges = async () => {
 
               <!-- Color Selectors -->
               <div class="md:col-span-2 space-y-4">
-                <label class="text-xs font-black text-slate-550 dark:text-slate-400 uppercase tracking-wider block">Colores del Colegio</label>
+                <label class="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Colores del Colegio</label>
 
                 <!-- Color Pickers -->
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <!-- Primary Color -->
                   <div class="p-4 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-800/50 space-y-2">
-                    <span class="text-[10px] font-black text-slate-450 uppercase tracking-wider block">Color Primario</span>
+                    <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Color Primario</span>
                     <div class="flex items-center gap-2">
                       <div class="w-10 h-10 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm relative overflow-hidden shrink-0" :style="{ backgroundColor: form.color_primario }">
                         <input type="color" v-model="form.color_primario" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
@@ -757,7 +805,7 @@ const saveChanges = async () => {
 
                   <!-- Secondary Color -->
                   <div class="p-4 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-800/50 space-y-2">
-                    <span class="text-[10px] font-black text-slate-450 uppercase tracking-wider block">Color Secundario</span>
+                    <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Color Secundario</span>
                     <div class="flex items-center gap-2">
                       <div class="w-10 h-10 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm relative overflow-hidden shrink-0" :style="{ backgroundColor: form.color_secundario }">
                         <input type="color" v-model="form.color_secundario" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
@@ -786,7 +834,7 @@ const saveChanges = async () => {
                         class="absolute bottom-full mb-2 bg-slate-900 text-white rounded p-1.5 text-[8px] flex flex-col gap-1 w-24 z-20 shadow-xl border border-slate-800"
                       >
                         <button @click="applyColorSuggestion('primary', color); closeColorMenu()" class="hover:bg-slate-800 px-2 py-1 rounded text-left font-bold transition-colors">Usar Primario</button>
-                        <button @click="applyColorSuggestion('secondary', color); closeColorMenu()" class="hover:bg-slate-850 px-2 py-1 rounded text-left font-bold transition-colors">Usar Secundario</button>
+                        <button @click="applyColorSuggestion('secondary', color); closeColorMenu()" class="hover:bg-slate-800 px-2 py-1 rounded text-left font-bold transition-colors">Usar Secundario</button>
                       </div>
                     </div>
                   </div>
@@ -795,13 +843,13 @@ const saveChanges = async () => {
             </div>
 
             <!-- Supervision Audit Justification -->
-            <div v-if="isSupervision" class="space-y-2 bg-amber-50/50 dark:bg-amber-950/15 border border-amber-250/30 p-5 rounded-2xl">
+            <div v-if="isSupervision" class="space-y-2 bg-amber-50/50 dark:bg-amber-950/15 border border-amber-200/50 p-5 rounded-2xl">
               <span class="text-xs font-black text-amber-800 dark:text-amber-400 uppercase tracking-wider flex items-center gap-1"><ShieldAlert :size="14" /> Justificación del Cambio (Auditoría) *</span>
               <textarea 
                 v-model="justification" 
                 placeholder="Por favor detalla el motivo formal de esta modificación como administrador supervisor..." 
                 rows="2"
-                class="w-full bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 rounded-xl p-3 text-xs font-bold outline-none text-slate-950 dark:text-white resize-none"
+                class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-xs font-bold outline-none text-slate-900 dark:text-white resize-none"
               ></textarea>
             </div>
 
@@ -814,12 +862,17 @@ const saveChanges = async () => {
               
               <div class="flex-1"></div>
               
-              <button @click="undoChanges" :disabled="saving" class="flex items-center justify-center gap-1.5 px-4 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-800 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-350 rounded-xl text-xs font-bold transition-all">
+              <button @click="undoChanges" :disabled="saving" class="flex items-center justify-center gap-1.5 px-4 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-800 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-xl text-xs font-bold transition-all">
                 <Undo :size="14" />
                 Deshacer cambios
               </button>
               
-              <button @click="saveChanges" :disabled="saving" class="flex items-center justify-center gap-1.5 px-6 py-2.5 bg-indigo-650 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md">
+              <button 
+                @click="saveChanges" 
+                :disabled="saving" 
+                class="flex items-center justify-center gap-1.5 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-200 dark:shadow-none"
+                :style="form.color_primario ? { backgroundColor: form.color_primario } : {}"
+              >
                 <Check :size="14" />
                 {{ saving ? 'Guardando...' : 'Guardar Cambios' }}
               </button>
