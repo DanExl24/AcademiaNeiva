@@ -248,7 +248,6 @@ const schoolEscudo = ref<string | null>(null)
 const schoolPrimaryColor = ref<string>('#4f46e5')
 const schoolSecondaryColor = ref<string>('#0f172a')
 
-const route = useRoute()
 const isRouteActive = (path: string) => {
   if (path === '/dashboard') return route.path === '/dashboard'
   return route.path === path || route.path.startsWith(path + '/')
