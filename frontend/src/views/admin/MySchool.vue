@@ -63,6 +63,7 @@ const uploading = ref(false)
 const validationError = ref('')
 const extractedColors = ref<string[]>([])
 const justification = ref('')
+const themeMode = ref<'default' | 'custom'>('default')
 
 const fetchSchoolData = async () => {
   if (!schoolId.value) return
@@ -80,6 +81,9 @@ const fetchSchoolData = async () => {
       form.value = { escudo_url: shield, color_primario: prim, color_secundario: sec }
       originalForm.value = { escudo_url: shield, color_primario: prim, color_secundario: sec }
 
+      const isCustom = Boolean(data.school.color_primario && data.school.color_primario.toLowerCase() !== '#4f46e5')
+      themeMode.value = isCustom ? 'custom' : 'default'
+
       // Extract colors from the existing shield on load if it exists
       if (shield) {
         extractColorsFromUrl(getShieldUrl(shield))
@@ -89,6 +93,21 @@ const fetchSchoolData = async () => {
     console.error('Error fetching school details:', error)
   } finally {
     loading.value = false
+  }
+}
+
+const selectThemeMode = (mode: 'default' | 'custom') => {
+  themeMode.value = mode
+  if (mode === 'default') {
+    form.value.color_primario = '#4f46e5'
+    form.value.color_secundario = '#0f172a'
+  } else {
+    if (extractedColors.value.length > 0 && (form.value.color_primario === '#4f46e5' || !form.value.color_primario)) {
+      form.value.color_primario = extractedColors.value[0]
+      if (extractedColors.value.length > 1) {
+        form.value.color_secundario = extractedColors.value[1]
+      }
+    }
   }
 }
 
@@ -474,6 +493,8 @@ const undoChanges = () => {
   justification.value = ''
   validationError.value = ''
   extractedColors.value = []
+  const isCustom = Boolean(originalForm.value.color_primario && originalForm.value.color_primario.toLowerCase() !== '#4f46e5')
+  themeMode.value = isCustom ? 'custom' : 'default'
   applyLiveTheme(originalForm.value.color_primario, originalForm.value.color_secundario)
 }
 
@@ -498,6 +519,7 @@ const resetToDefaults = async () => {
     
     form.value = { escudo_url: '', color_primario: '#4f46e5', color_secundario: '#0f172a' }
     originalForm.value = { escudo_url: '', color_primario: '#4f46e5', color_secundario: '#0f172a' }
+    themeMode.value = 'default'
     justification.value = ''
     toast.success('Identidad restablecida a los valores por defecto del sistema.')
     window.location.reload() // Reload page to immediately apply global stylesheet reset
@@ -786,55 +808,124 @@ const saveChanges = async () => {
                 <p class="text-[9px] text-slate-400 leading-normal mt-1 font-semibold">JPG, JPEG, PNG, SVG (Máx. 2MB)</p>
               </div>
 
-              <!-- Color Selectors -->
-              <div class="md:col-span-2 space-y-4">
-                <label class="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Colores del Colegio</label>
-
-                <!-- Color Pickers -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <!-- Primary Color -->
-                  <div class="p-4 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-800/50 space-y-2">
-                    <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Color Primario</span>
-                    <div class="flex items-center gap-2">
-                      <div class="w-10 h-10 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm relative overflow-hidden shrink-0" :style="{ backgroundColor: form.color_primario }">
-                        <input type="color" v-model="form.color_primario" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+              <!-- Color Configuration Section -->
+              <div class="md:col-span-2 space-y-5">
+                <!-- Theme Mode Selection: Default Platform vs Custom Shield -->
+                <div class="space-y-2.5">
+                  <label class="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider block">
+                    Tema y Paleta de Colores de la Plataforma
+                  </label>
+                  
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <!-- Option 1: Default Indigo -->
+                    <div 
+                      @click="selectThemeMode('default')"
+                      class="p-4 rounded-2xl border-2 cursor-pointer transition-all flex items-start gap-3 relative select-none"
+                      :class="[
+                        themeMode === 'default'
+                          ? 'border-indigo-600 bg-indigo-50/50 dark:bg-indigo-950/20 shadow-sm'
+                          : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-900/50'
+                      ]"
+                    >
+                      <div 
+                        class="w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all"
+                        :class="themeMode === 'default' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300 dark:border-slate-600'"
+                      >
+                        <div v-if="themeMode === 'default'" class="w-1.5 h-1.5 rounded-full bg-white"></div>
                       </div>
-                      <input type="text" v-model="form.color_primario" class="w-full bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-mono font-bold outline-none text-slate-800 dark:text-white" />
+                      <div class="space-y-1 min-w-0">
+                        <div class="flex items-center gap-2">
+                          <span class="text-xs font-black text-slate-800 dark:text-white">Tema por Defecto</span>
+                          <div class="flex gap-1 items-center">
+                            <span class="w-2.5 h-2.5 rounded-full bg-[#4f46e5] inline-block shadow-xs"></span>
+                            <span class="w-2.5 h-2.5 rounded-full bg-[#0f172a] inline-block shadow-xs"></span>
+                          </div>
+                        </div>
+                        <p class="text-[10px] text-slate-500 dark:text-slate-400 leading-tight">
+                          Conserva los colores originales e identidad de AcademiaNeiva.
+                        </p>
+                      </div>
                     </div>
-                  </div>
 
-                  <!-- Secondary Color -->
-                  <div class="p-4 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-800/50 space-y-2">
-                    <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Color Secundario</span>
-                    <div class="flex items-center gap-2">
-                      <div class="w-10 h-10 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm relative overflow-hidden shrink-0" :style="{ backgroundColor: form.color_secundario }">
-                        <input type="color" v-model="form.color_secundario" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                    <!-- Option 2: Custom Shield Colors -->
+                    <div 
+                      @click="selectThemeMode('custom')"
+                      class="p-4 rounded-2xl border-2 cursor-pointer transition-all flex items-start gap-3 relative select-none"
+                      :class="[
+                        themeMode === 'custom'
+                          ? 'border-indigo-600 bg-indigo-50/50 dark:bg-indigo-950/20 shadow-sm'
+                          : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-900/50'
+                      ]"
+                    >
+                      <div 
+                        class="w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all"
+                        :class="themeMode === 'custom' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300 dark:border-slate-600'"
+                      >
+                        <div v-if="themeMode === 'custom'" class="w-1.5 h-1.5 rounded-full bg-white"></div>
                       </div>
-                      <input type="text" v-model="form.color_secundario" class="w-full bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-mono font-bold outline-none text-slate-800 dark:text-white" />
+                      <div class="space-y-1 min-w-0">
+                        <div class="flex items-center gap-2">
+                          <span class="text-xs font-black text-slate-800 dark:text-white">Colores Institucionales</span>
+                          <div class="flex gap-1 items-center">
+                            <span class="w-2.5 h-2.5 rounded-full inline-block shadow-xs border border-slate-200 dark:border-slate-700" :style="{ backgroundColor: form.color_primario }"></span>
+                            <span class="w-2.5 h-2.5 rounded-full inline-block shadow-xs border border-slate-200 dark:border-slate-700" :style="{ backgroundColor: form.color_secundario }"></span>
+                          </div>
+                        </div>
+                        <p class="text-[10px] text-slate-500 dark:text-slate-400 leading-tight">
+                          Recolorea el menú y botones con los colores de tu escudo.
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                <!-- Extracted Color Suggestions -->
-                <div v-if="extractedColors.length > 0" class="space-y-2 bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-100 dark:border-slate-800/50">
-                  <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Colores Sugeridos del Escudo</span>
-                  <div class="flex flex-wrap gap-2">
-                    <div 
-                      v-for="(color, idx) in extractedColors" 
-                      :key="idx"
-                      @click.stop="toggleColorMenu(idx)"
-                      class="relative w-7 h-7 rounded-full border border-slate-200 dark:border-slate-700 cursor-pointer hover:scale-110 transition-all flex items-center justify-center"
-                      :style="{ backgroundColor: color }"
-                      :title="color"
-                    >
-                      <!-- Apply color drop-down/helper inside tooltip -->
+                <!-- Custom Color Pickers & Suggestions (Expanded when custom or accessible) -->
+                <div v-if="themeMode === 'custom'" class="space-y-4 pt-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <!-- Primary Color -->
+                    <div class="p-4 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-800/50 space-y-2">
+                      <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Color Primario</span>
+                      <div class="flex items-center gap-2">
+                        <div class="w-10 h-10 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm relative overflow-hidden shrink-0" :style="{ backgroundColor: form.color_primario }">
+                          <input type="color" v-model="form.color_primario" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                        </div>
+                        <input type="text" v-model="form.color_primario" class="w-full bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-mono font-bold outline-none text-slate-800 dark:text-white" />
+                      </div>
+                    </div>
+
+                    <!-- Secondary Color -->
+                    <div class="p-4 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-800/50 space-y-2">
+                      <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Color Secundario</span>
+                      <div class="flex items-center gap-2">
+                        <div class="w-10 h-10 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm relative overflow-hidden shrink-0" :style="{ backgroundColor: form.color_secundario }">
+                          <input type="color" v-model="form.color_secundario" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                        </div>
+                        <input type="text" v-model="form.color_secundario" class="w-full bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-mono font-bold outline-none text-slate-800 dark:text-white" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Extracted Color Suggestions -->
+                  <div v-if="extractedColors.length > 0" class="space-y-2 bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-100 dark:border-slate-800/50">
+                    <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Colores Sugeridos del Escudo</span>
+                    <div class="flex flex-wrap gap-2">
                       <div 
-                        v-if="activeColorMenu === idx"
-                        @click.stop
-                        class="absolute bottom-full mb-2 bg-slate-900 text-white rounded p-1.5 text-[8px] flex flex-col gap-1 w-24 z-20 shadow-xl border border-slate-800"
+                        v-for="(color, idx) in extractedColors" 
+                        :key="idx"
+                        @click.stop="toggleColorMenu(idx)"
+                        class="relative w-7 h-7 rounded-full border border-slate-200 dark:border-slate-700 cursor-pointer hover:scale-110 transition-all flex items-center justify-center"
+                        :style="{ backgroundColor: color }"
+                        :title="color"
                       >
-                        <button @click="applyColorSuggestion('primary', color); closeColorMenu()" class="hover:bg-slate-800 px-2 py-1 rounded text-left font-bold transition-colors">Usar Primario</button>
-                        <button @click="applyColorSuggestion('secondary', color); closeColorMenu()" class="hover:bg-slate-800 px-2 py-1 rounded text-left font-bold transition-colors">Usar Secundario</button>
+                        <!-- Apply color drop-down/helper inside tooltip -->
+                        <div 
+                          v-if="activeColorMenu === idx"
+                          @click.stop
+                          class="absolute bottom-full mb-2 bg-slate-900 text-white rounded p-1.5 text-[8px] flex flex-col gap-1 w-24 z-20 shadow-xl border border-slate-800"
+                        >
+                          <button @click="applyColorSuggestion('primary', color); closeColorMenu()" class="hover:bg-slate-800 px-2 py-1 rounded text-left font-bold transition-colors">Usar Primario</button>
+                          <button @click="applyColorSuggestion('secondary', color); closeColorMenu()" class="hover:bg-slate-800 px-2 py-1 rounded text-left font-bold transition-colors">Usar Secundario</button>
+                        </div>
                       </div>
                     </div>
                   </div>
