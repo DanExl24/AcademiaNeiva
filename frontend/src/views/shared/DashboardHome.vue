@@ -774,11 +774,11 @@ onMounted(() => {
     <PeriodCountdownBanner :period-info="dashboardData?.activePeriodInfo" />
 
     <!-- Welcome & Period Selector -->
-    <div class="flex flex-col lg:flex-row gap-6 items-start lg:items-center justify-between">
-      <div class="bg-indigo-600 rounded-[2rem] p-8 text-white shadow-xl shadow-indigo-100 dark:shadow-none flex-1 relative overflow-hidden w-full">
+    <div class="flex flex-col 2xl:flex-row gap-6 items-stretch 2xl:items-center justify-between">
+      <div class="bg-indigo-600 rounded-[2rem] p-6 sm:p-8 text-white shadow-xl shadow-indigo-100 dark:shadow-none flex-1 relative overflow-hidden w-full min-w-0">
         <div class="relative z-10">
-          <h1 class="text-3xl font-black">¡Bienvenido, {{ auth.user?.name || 'Director' }}! 👋</h1>
-          <p class="mt-2 text-indigo-100 max-w-md font-medium">
+          <h1 class="text-2xl sm:text-3xl font-black">¡Bienvenido, {{ auth.user?.name || 'Director' }}! 👋</h1>
+          <p class="mt-2 text-indigo-100 max-w-xl text-sm sm:text-base font-medium">
             Módulo <span class="font-bold underline text-white">Directivo</span>. Analiza el rendimiento institucional en tiempo real.
           </p>
         </div>
@@ -786,15 +786,15 @@ onMounted(() => {
       </div>
       
       <!-- Filters -->
-      <div class="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-gray-100 dark:border-slate-800 shadow-sm w-full lg:w-auto flex flex-col sm:flex-row gap-6">
-        <div class="flex flex-col gap-3 min-w-[180px]">
-          <label class="text-xs font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2">
-            <CalendarDays :size="14" />
+      <div class="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-gray-100 dark:border-slate-800 shadow-sm w-full 2xl:w-auto grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="flex flex-col gap-2 min-w-0">
+          <label class="text-xs font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2 truncate">
+            <CalendarDays :size="14" class="shrink-0" />
             Año Lectivo
           </label>
           <select 
             v-model="selectedYearId" 
-            class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-indigo-500 transition-all cursor-pointer"
+            class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-3 sm:p-3.5 font-bold text-xs sm:text-sm text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-indigo-500 transition-all cursor-pointer truncate"
           >
             <option v-for="y in academicYears" :key="y['id_anio']" :value="y['id_anio']">
               {{ y.calendario }}{{ y.estado === 'CERRADO' ? ' (Cerrado)' : '' }}
@@ -802,14 +802,14 @@ onMounted(() => {
           </select>
         </div>
 
-        <div class="flex flex-col gap-3 min-w-[200px]">
-          <label class="text-xs font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2">
-            <Filter :size="14" />
+        <div class="flex flex-col gap-2 min-w-0">
+          <label class="text-xs font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2 truncate">
+            <Filter :size="14" class="shrink-0" />
             Periodo Académico
           </label>
           <select 
             v-model="selectedPeriodId" 
-            class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-indigo-500 transition-all cursor-pointer"
+            class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-3 sm:p-3.5 font-bold text-xs sm:text-sm text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-indigo-500 transition-all cursor-pointer truncate"
           >
             <option :value="null">Periodo Activo (Auto)</option>
             <option v-for="p in periods" :key="p.id_periodo" :value="p.id_periodo">
@@ -818,14 +818,14 @@ onMounted(() => {
           </select>
         </div>
         
-        <div class="flex flex-col gap-3 min-w-[200px]">
-          <label class="text-xs font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2">
-            <Filter :size="14" />
+        <div class="flex flex-col gap-2 min-w-0">
+          <label class="text-xs font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2 truncate">
+            <Filter :size="14" class="shrink-0" />
             Grado
           </label>
           <select 
             v-model="globalSelectedGrade" 
-            class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-indigo-500 transition-all cursor-pointer"
+            class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-3 sm:p-3.5 font-bold text-xs sm:text-sm text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-indigo-500 transition-all cursor-pointer truncate"
           >
             <option value="ALL">Todos los Grados</option>
             <option v-for="grade in globalGradeOptions" :key="grade" :value="grade">
@@ -872,18 +872,18 @@ onMounted(() => {
       </div>
 
       <!-- Principal KPIs -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4 sm:gap-6">
         <div 
           v-for="stat in dashboardStats" 
           :key="stat.name" 
-          class="bg-white dark:bg-slate-900 p-6 rounded-[2rem] border border-gray-100 dark:border-slate-800 shadow-sm hover:shadow-xl dark:hover:shadow-indigo-500/10 hover:-translate-y-1 transition-all duration-300 flex items-center gap-5 group"
+          class="bg-white dark:bg-slate-900 p-5 rounded-[2rem] border border-gray-100 dark:border-slate-800 shadow-sm hover:shadow-xl dark:hover:shadow-indigo-500/10 hover:-translate-y-1 transition-all duration-300 flex items-center gap-4 group min-w-0"
         >
-          <div :class="[stat.bg, stat.color, 'p-5 rounded-2xl transition-transform group-hover:scale-110']">
-            <component :is="stat.icon" :size="32" stroke-width="2.5" />
+          <div :class="[stat.bg, stat.color, 'p-3.5 sm:p-4 rounded-2xl shrink-0 transition-transform group-hover:scale-110']">
+            <component :is="stat.icon" class="w-7 h-7" stroke-width="2.5" />
           </div>
-          <div>
-            <p class="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest">{{ stat.name }}</p>
-            <p class="text-3xl font-black text-gray-900 dark:text-white mt-0.5 tracking-tight">
+          <div class="min-w-0 flex-1">
+            <p class="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-wider truncate" :title="stat.name">{{ stat.name }}</p>
+            <p class="text-2xl sm:text-3xl font-black text-gray-900 dark:text-white mt-0.5 tracking-tight truncate">
               {{ stat.value }}
             </p>
           </div>
