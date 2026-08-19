@@ -406,10 +406,29 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
           [schoolId, targetPeriodId]
         )
       ]);
-      charts.performanceByGrade = gradePerfRes.rows;
-      charts.performanceBySubject = subjectPerfRes.rows;
-      charts.performanceByCourse = coursePerfRes.rows;
-      charts.performanceBySubjectCourse = subjectCoursePerfRes.rows;
+      charts.performanceByGrade = gradePerfRes.rows.map(r => ({
+        nombre: r.nombre,
+        average: Number(r.average || 0)
+      }));
+      charts.performanceBySubject = subjectPerfRes.rows.map(r => ({
+        nombre: r.nombre,
+        average: Number(r.average || 0)
+      }));
+      charts.performanceByCourse = coursePerfRes.rows.map(r => ({
+        id_grupo: Number(r.id_grupo),
+        grado_nombre: r.grado_nombre,
+        seccion_nombre: r.seccion_nombre,
+        jornada_nombre: r.jornada_nombre,
+        average: Number(r.average || 0)
+      }));
+      charts.performanceBySubjectCourse = subjectCoursePerfRes.rows.map(r => ({
+        id_grupo: Number(r.id_grupo),
+        subject_nombre: r.subject_nombre,
+        grado_nombre: r.grado_nombre,
+        seccion_nombre: r.seccion_nombre,
+        jornada_nombre: r.jornada_nombre,
+        average: Number(r.average || 0)
+      }));
     }
 
     // Evolution (all periods of the current year) - Historical promedios
@@ -424,7 +443,10 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
        ORDER BY p.id_periodo`,
       [schoolId, targetYearId]
     );
-    charts.evolution = evolutionRes.rows;
+    charts.evolution = evolutionRes.rows.map(r => ({
+      nombre: r.nombre,
+      average: Number(r.average || 0)
+    }));
 
     const evolutionByCourseRes = await pool.query(
       `SELECT 
@@ -446,7 +468,14 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
         ORDER BY p.id_periodo, tg.nombre, LENGTH(s.nombre), s.nombre`,
       [schoolId, targetYearId]
     );
-    charts.evolutionByCourse = evolutionByCourseRes.rows;
+    charts.evolutionByCourse = evolutionByCourseRes.rows.map(r => ({
+      periodo_nombre: r.periodo_nombre,
+      id_grupo: Number(r.id_grupo),
+      grado_nombre: r.grado_nombre,
+      seccion_nombre: r.seccion_nombre,
+      jornada_nombre: r.jornada_nombre,
+      average: Number(r.average || 0)
+    }));
 
     // 7. Low Performance Analysis Block
     let lowPerformance: {

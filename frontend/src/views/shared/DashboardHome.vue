@@ -552,20 +552,20 @@ const evolutionChartData = computed(() => {
 })
 
 const hasGradeChartData = computed(() => {
-  return (gradeChartData.value?.datasets?.[0]?.data || []).some((v: any) => typeof v === 'number' && v > 0)
+  return (gradeChartData.value?.datasets?.[0]?.data || []).some((v: any) => Number(v) > 0)
 })
 
 const hasSubjectChartData = computed(() => {
-  return (subjectChartData.value?.datasets?.[0]?.data || []).some((v: any) => typeof v === 'number' && v > 0)
+  return (subjectChartData.value?.datasets?.[0]?.data || []).some((v: any) => Number(v) > 0)
 })
 
 const hasEvolutionChartData = computed(() => {
-  return (evolutionChartData.value?.datasets?.[0]?.data || []).some((v: any) => typeof v === 'number' && v > 0)
+  return (evolutionChartData.value?.datasets?.[0]?.data || []).some((v: any) => Number(v) > 0)
 })
 
 const hasRiskChartData = computed(() => {
   const datasets = riskChartData.value?.datasets || []
-  return datasets.some((d: any) => (d.data || []).some((v: any) => typeof v === 'number' && v > 0))
+  return datasets.some((d: any) => (d.data || []).some((v: any) => Number(v) > 0))
 })
 
 const filteredAlertsData = computed(() => {
