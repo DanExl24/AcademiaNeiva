@@ -1,6 +1,7 @@
 services:
   frontend:
     container_name: academia-frontend
+    image: ghcr.io/danexl24/academia-frontend:latest
     build:
       context: ./frontend
       args:
@@ -11,8 +12,10 @@ services:
 
   backend:
     container_name: academia-backend
+    image: ghcr.io/danexl24/academia-backend:latest
     build:
       context: ./backend
+
     environment:
       - TZ=America/Bogota
       - DB_HOST=postgres
