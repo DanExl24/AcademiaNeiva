@@ -83,128 +83,169 @@ const switchRole = (newRole: string) => {
   router.push('/dashboard')
 }
 
-const menuItems = computed(() => {
+interface MenuItem {
+  name: string
+  icon: any
+  path: string
+  children?: { name: string; path: string }[]
+}
+
+interface MenuSection {
+  title?: string
+  items: MenuItem[]
+}
+
+const menuSections = computed<MenuSection[]>(() => {
   const role = auth.activeRole?.toLowerCase()
-  let items: any[] = []
+  const sections: MenuSection[] = []
 
   if (role === 'admin_general') {
-    items = [
-      { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
-      {
-        name: 'Colegios',
-        icon: School,
-        path: '/dashboard/colegios',
-        children: [
-          { name: 'Lista', path: '/dashboard/colegios' },
-          { name: 'Pendientes', path: '/dashboard/colegios?estado=PENDIENTE' },
-          { name: 'Suspendidos', path: '/dashboard/colegios?estado=SUSPENDIDO' }
-        ]
-      },
-      {
-        name: 'Usuarios',
-        icon: Users,
-        path: '/dashboard/usuarios',
-        children: [
-          { name: 'Todos', path: '/dashboard/usuarios' },
-          { name: 'Directivos', path: '/dashboard/usuarios?rol=directivo' },
-          { name: 'Docentes', path: '/dashboard/usuarios?rol=docente' },
-          { name: 'Padres', path: '/dashboard/usuarios?rol=padre' },
-          { name: 'Estudiantes', path: '/dashboard/usuarios?rol=estudiante' }
-        ]
-      },
-      {
-        name: 'Supervisión',
-        icon: ShieldAlert,
-        path: '/dashboard/supervision/solicitudes',
-        children: [
-          { name: 'Solicitudes', path: '/dashboard/supervision/solicitudes' },
-          { name: 'Activas', path: '/dashboard/supervision/activas' },
-          { name: 'Historial', path: '/dashboard/supervision/historial' }
-        ]
-      },
-      {
-        name: 'Auditorías',
-        icon: FileText,
-        path: '/dashboard/auditorias/lecturas',
-        children: [
-          { name: 'Lecturas', path: '/dashboard/auditorias/lecturas' },
-          { name: 'Modificaciones', path: '/dashboard/auditorias/modificaciones' },
-          { name: 'Exportaciones', path: '/dashboard/auditorias/exportaciones' }
-        ]
-      },
-      { name: 'Notificaciones', icon: Bell, path: '/dashboard/notificaciones' },
-      { name: 'Configuración', icon: Settings, path: '/dashboard/configuracion' },
-      { name: 'Catálogo DBA', icon: BookOpen, path: '/dashboard/catalogo-dba' },
-      { name: 'Gestión Traslados', icon: ArrowLeftRight, path: '/dashboard/gestion-traslados' }
-    ]
+    sections.push({
+      title: 'Plataforma',
+      items: [
+        { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
+        {
+          name: 'Colegios',
+          icon: School,
+          path: '/dashboard/colegios',
+          children: [
+            { name: 'Lista', path: '/dashboard/colegios' },
+            { name: 'Pendientes', path: '/dashboard/colegios?estado=PENDIENTE' },
+            { name: 'Suspendidos', path: '/dashboard/colegios?estado=SUSPENDIDO' }
+          ]
+        },
+        {
+          name: 'Usuarios',
+          icon: Users,
+          path: '/dashboard/usuarios',
+          children: [
+            { name: 'Todos', path: '/dashboard/usuarios' },
+            { name: 'Directivos', path: '/dashboard/usuarios?rol=directivo' },
+            { name: 'Docentes', path: '/dashboard/usuarios?rol=docente' },
+            { name: 'Padres', path: '/dashboard/usuarios?rol=padre' },
+            { name: 'Estudiantes', path: '/dashboard/usuarios?rol=estudiante' }
+          ]
+        },
+        {
+          name: 'Supervisión',
+          icon: ShieldAlert,
+          path: '/dashboard/supervision/solicitudes',
+          children: [
+            { name: 'Solicitudes', path: '/dashboard/supervision/solicitudes' },
+            { name: 'Activas', path: '/dashboard/supervision/activas' },
+            { name: 'Historial', path: '/dashboard/supervision/historial' }
+          ]
+        },
+        {
+          name: 'Auditorías',
+          icon: FileText,
+          path: '/dashboard/auditorias/lecturas',
+          children: [
+            { name: 'Lecturas', path: '/dashboard/auditorias/lecturas' },
+            { name: 'Modificaciones', path: '/dashboard/auditorias/modificaciones' },
+            { name: 'Exportaciones', path: '/dashboard/auditorias/exportaciones' }
+          ]
+        }
+      ]
+    })
+    sections.push({
+      title: 'Gestión & Catálogos',
+      items: [
+        { name: 'Notificaciones', icon: Bell, path: '/dashboard/notificaciones' },
+        { name: 'Configuración', icon: Settings, path: '/dashboard/configuracion' },
+        { name: 'Catálogo DBA', icon: BookOpen, path: '/dashboard/catalogo-dba' },
+        { name: 'Gestión Traslados', icon: ArrowLeftRight, path: '/dashboard/gestion-traslados' }
+      ]
+    })
   } else if (role === 'docente') {
-    items = [
-      { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
-      { name: 'Mis Cursos', icon: GraduationCap, path: '/dashboard/mis-cursos' },
-      { name: 'Calificaciones', icon: ClipboardList, path: '/dashboard/calificaciones' },
-      { name: 'Asistencia', icon: CalendarCheck, path: '/dashboard/asistencia' },
-      { name: 'Observador', icon: Eye, path: '/dashboard/observador' },
-      { name: 'Cierre de Periodo', icon: Lock, path: '/dashboard/cierre-periodo' }
-    ]
+    sections.push({
+      title: 'Mi Aula',
+      items: [
+        { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
+        { name: 'Mis Cursos', icon: GraduationCap, path: '/dashboard/mis-cursos' },
+        { name: 'Calificaciones', icon: ClipboardList, path: '/dashboard/calificaciones' },
+        { name: 'Asistencia', icon: CalendarCheck, path: '/dashboard/asistencia' },
+        { name: 'Observador', icon: Eye, path: '/dashboard/observador' },
+        { name: 'Cierre de Periodo', icon: Lock, path: '/dashboard/cierre-periodo' }
+      ]
+    })
   } else if (role === 'padre') {
-    items = [
-      { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
-      { name: 'Calificaciones', icon: ClipboardList, path: '/dashboard/notas-hijos' },
-      { name: 'Asistencia', icon: CalendarCheck, path: '/dashboard/asistencia-hijos' },
-      { name: 'Observaciones', icon: MessageSquare, path: '/dashboard/observaciones-hijos' },
-      { name: 'Boletines', icon: FileText, path: '/dashboard/boletines-hijos' },
-      { name: 'Matrícula y Documentos', icon: FolderCheck, path: '/dashboard/matricula-hijos' },
-      { name: 'Gestión Traslados', icon: ArrowLeftRight, path: '/dashboard/gestion-traslados' }
-    ]
+    sections.push({
+      title: 'Seguimiento Familiar',
+      items: [
+        { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
+        { name: 'Calificaciones', icon: ClipboardList, path: '/dashboard/notas-hijos' },
+        { name: 'Asistencia', icon: CalendarCheck, path: '/dashboard/asistencia-hijos' },
+        { name: 'Observaciones', icon: MessageSquare, path: '/dashboard/observaciones-hijos' },
+        { name: 'Boletines', icon: FileText, path: '/dashboard/boletines-hijos' },
+        { name: 'Matrícula y Documentos', icon: FolderCheck, path: '/dashboard/matricula-hijos' },
+        { name: 'Gestión Traslados', icon: ArrowLeftRight, path: '/dashboard/gestion-traslados' }
+      ]
+    })
   } else if (role === 'estudiante') {
-    items = [
-      { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
-      { name: 'Mis Notas', icon: BookOpen, path: '/dashboard/mis-notas' },
-      { name: 'Mi Asistencia', icon: CalendarCheck, path: '/dashboard/mi-asistencia' },
-      { name: 'Observaciones', icon: MessageSquare, path: '/dashboard/mi-observacion' },
-      { name: 'Mi Boletín', icon: FileText, path: '/dashboard/mi-boletin' }
-    ]
+    sections.push({
+      title: 'Mi Portal',
+      items: [
+        { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
+        { name: 'Mis Notas', icon: BookOpen, path: '/dashboard/mis-notas' },
+        { name: 'Mi Asistencia', icon: CalendarCheck, path: '/dashboard/mi-asistencia' },
+        { name: 'Observaciones', icon: MessageSquare, path: '/dashboard/mi-observacion' },
+        { name: 'Mi Boletín', icon: FileText, path: '/dashboard/mi-boletin' }
+      ]
+    })
   } else {
     // Default (Admin/Directivo)
-    items = [
-      { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
-      { name: 'Mi Colegio', icon: School, path: '/dashboard/mi-colegio' },
-      { name: 'Gestión Matrículas', icon: ClipboardList, path: '/dashboard/gestion-matriculas' },
-      { name: 'Gestión Estudiantes', icon: GraduationCap, path: '/dashboard/gestion-estudiantes' },
-      { name: 'Gestión Aprobados', icon: Award, path: '/dashboard/gestion-aprobados' },
-      { name: 'Padres de Familia', icon: Users, path: '/dashboard/padres-familia' },
-      { name: 'Gestión de Grados', icon: Layers3, path: '/dashboard/gestion-grados' },
-      { name: 'Gestión de Materias', icon: LibraryBig, path: '/dashboard/gestion-materias' },
-      { name: 'Docentes', icon: GraduationCap, path: '/dashboard/docentes' },
-      { name: 'Configuración Académica', icon: SlidersHorizontal, path: '/dashboard/configuracion-academica' },
-      { name: 'Boletines', icon: FileText, path: '/dashboard/boletines' },
-      { name: 'Supervisiones', icon: ShieldAlert, path: '/dashboard/supervisiones' },
-      { name: 'Gestión Traslados', icon: ArrowLeftRight, path: '/dashboard/gestion-traslados' }
-    ]
+    sections.push({
+      title: 'Académico & Aula',
+      items: [
+        { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
+        { name: 'Mi Colegio', icon: School, path: '/dashboard/mi-colegio' },
+        { name: 'Gestión de Grados', icon: Layers3, path: '/dashboard/gestion-grados' },
+        { name: 'Gestión de Materias', icon: LibraryBig, path: '/dashboard/gestion-materias' },
+        { name: 'Docentes', icon: GraduationCap, path: '/dashboard/docentes' },
+        { name: 'Configuración Académica', icon: SlidersHorizontal, path: '/dashboard/configuracion-academica' },
+        { name: 'Boletines', icon: FileText, path: '/dashboard/boletines' }
+      ]
+    })
+
+    sections.push({
+      title: 'Matrículas & Estudiantes',
+      items: [
+        { name: 'Gestión Matrículas', icon: ClipboardList, path: '/dashboard/gestion-matriculas' },
+        { name: 'Gestión Estudiantes', icon: GraduationCap, path: '/dashboard/gestion-estudiantes' },
+        { name: 'Gestión Aprobados', icon: Award, path: '/dashboard/gestion-aprobados' },
+        { name: 'Padres de Familia', icon: Users, path: '/dashboard/padres-familia' },
+        ...(auth.isMonitoring ? [] : [{ name: 'Gestión Traslados', icon: ArrowLeftRight, path: '/dashboard/gestion-traslados' }])
+      ]
+    })
+
+    sections.push({
+      title: 'Institucional',
+      items: [
+        { name: 'Supervisiones', icon: ShieldAlert, path: '/dashboard/supervisiones' }
+      ]
+    })
   }
 
-  // Opciones comunes para todos los roles al final del sidebar
-  items.push(
+  // Opciones comunes generales
+  const generalItems: MenuItem[] = [
     { name: 'Directorio', icon: BookOpen, path: '/dashboard/directorio' }
-  )
-
-  if (auth.isMonitoring) {
-    items = items.filter(i => i.path !== '/dashboard/gestion-traslados')
-  }
+  ]
 
   if (!auth.isMonitoring) {
-    items.push(
-      { name: 'Soporte Técnico', icon: LifeBuoy, path: '/dashboard/soporte' }
-    )
+    generalItems.push({ name: 'Soporte Técnico', icon: LifeBuoy, path: '/dashboard/soporte' })
   }
 
   if (role !== 'estudiante') {
-    items.push(
-      { name: 'Mi Cuenta', icon: Settings, path: '/dashboard/mi-cuenta' }
-    )
+    generalItems.push({ name: 'Mi Cuenta', icon: Settings, path: '/dashboard/mi-cuenta' })
   }
 
-  return items
+  sections.push({
+    title: 'General',
+    items: generalItems
+  })
+
+  return sections
 })
 
 const currentSchoolRoles = computed(() => {
@@ -748,93 +789,104 @@ onUnmounted(() => {
 
 
       <!-- Navigation -->
-      <nav class="flex-1 py-6 px-4 space-y-2 overflow-y-auto">
-        <div v-for="item in menuItems" :key="item.name" class="space-y-1">
-          <!-- Item with children (dropdown) -->
-          <div v-if="item.children">
-            <button 
-              @click="toggleSubmenu(item.name)"
-              class="w-full flex items-center justify-between p-3 rounded-xl transition-all group"
-              :class="[
-                openSubmenus[item.name] 
-                  ? 'font-bold' 
-                  : 'text-gray-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-              ]"
-              :style="openSubmenus[item.name] ? { color: schoolPrimaryColor, backgroundColor: `${schoolPrimaryColor}18` } : {}"
-            >
-              <div class="flex items-center gap-3">
-                <component :is="item.icon" :size="22" />
-                <span v-if="!isCollapsed" class="font-medium">{{ item.name }}</span>
-              </div>
-              <ChevronRight 
-                v-if="!isCollapsed" 
-                :class="['transition-transform duration-200', openSubmenus[item.name] ? 'transform rotate-90' : '']" 
-                :size="16" 
-              />
-            </button>
-            
-            <!-- Children List -->
-            <div 
-              v-if="openSubmenus[item.name] && !isCollapsed" 
-              class="pl-9 space-y-1 mt-1 animate-in slide-in-from-top-2 duration-200"
-            >
-              <router-link 
-                v-for="sub in item.children" 
-                :key="sub.name"
-                :to="sub.path"
-                class="flex items-center py-2 px-3 rounded-lg text-sm transition-colors"
-                :class="[
-                  route.path === sub.path 
-                    ? 'font-bold' 
-                    : 'text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200'
-                ]"
-                :style="route.path === sub.path ? { color: schoolPrimaryColor } : {}"
-              >
-                <span>{{ sub.name }}</span>
-              </router-link>
-            </div>
-          </div>
-
-          <!-- Standard Item -->
-          <router-link 
-            v-else
-            :to="item.path"
-            class="flex items-center gap-3 p-3 rounded-xl transition-all group"
-            :class="[
-              isRouteActive(item.path)
-                ? 'text-white shadow-lg' 
-                : 'text-gray-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-            ]"
-            :style="isRouteActive(item.path)
-              ? { backgroundColor: schoolPrimaryColor, boxShadow: `0 10px 15px -3px ${schoolPrimaryColor}40` }
-              : {}"
+      <nav class="flex-1 py-4 px-3 space-y-4 overflow-y-auto custom-scrollbar">
+        <div v-for="(section, sIdx) in menuSections" :key="sIdx" class="space-y-1">
+          <!-- Section Title (only if not collapsed and title exists) -->
+          <div 
+            v-if="section.title && !isCollapsed" 
+            class="px-3 pt-2 pb-1 text-xs font-black uppercase tracking-wider text-slate-400 dark:text-slate-500"
           >
-            <component :is="item.icon" :size="22" />
-            <span v-if="!isCollapsed" class="font-medium">{{ item.name }}</span>
-          </router-link>
+            {{ section.title }}
+          </div>
+          
+          <div v-for="item in section.items" :key="item.name" class="space-y-1">
+            <!-- Item with children (dropdown) -->
+            <div v-if="item.children">
+              <button 
+                @click="toggleSubmenu(item.name)"
+                class="w-full flex items-center justify-between p-2.5 sm:p-3 rounded-xl transition-all group cursor-pointer"
+                :class="[
+                  openSubmenus[item.name] 
+                    ? 'font-bold' 
+                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                ]"
+                :style="openSubmenus[item.name] ? { color: schoolPrimaryColor, backgroundColor: `${schoolPrimaryColor}18` } : {}"
+              >
+                <div class="flex items-center gap-3">
+                  <component :is="item.icon" :size="20" class="shrink-0" />
+                  <span v-if="!isCollapsed" class="font-medium text-sm">{{ item.name }}</span>
+                </div>
+                <ChevronRight 
+                  v-if="!isCollapsed" 
+                  :class="['transition-transform duration-200 shrink-0', openSubmenus[item.name] ? 'transform rotate-90' : '']" 
+                  :size="16" 
+                />
+              </button>
+              
+              <!-- Children List -->
+              <div 
+                v-if="openSubmenus[item.name] && !isCollapsed" 
+                class="pl-8 space-y-1 mt-1 animate-in slide-in-from-top-2 duration-200"
+              >
+                <router-link 
+                  v-for="sub in item.children" 
+                  :key="sub.name"
+                  :to="sub.path"
+                  class="flex items-center py-2 px-3 rounded-lg text-xs font-semibold transition-colors"
+                  :class="[
+                    route.path === sub.path 
+                      ? 'font-bold' 
+                      : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                  ]"
+                  :style="route.path === sub.path ? { color: schoolPrimaryColor } : {}"
+                >
+                  <span>{{ sub.name }}</span>
+                </router-link>
+              </div>
+            </div>
+
+            <!-- Standard Item -->
+            <router-link 
+              v-else
+              :to="item.path"
+              class="flex items-center gap-3 p-2.5 sm:p-3 rounded-xl transition-all group cursor-pointer"
+              :class="[
+                isRouteActive(item.path)
+                  ? 'text-white shadow-md' 
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+              ]"
+              :style="isRouteActive(item.path)
+                ? { backgroundColor: schoolPrimaryColor, boxShadow: `0 8px 16px -4px ${schoolPrimaryColor}40` }
+                : {}"
+            >
+              <component :is="item.icon" :size="20" class="shrink-0" />
+              <span v-if="!isCollapsed" class="font-medium text-sm">{{ item.name }}</span>
+            </router-link>
+          </div>
         </div>
       </nav>
 
       <!-- Bottom Actions -->
-      <div class="p-4 border-t border-gray-100 dark:border-slate-800 space-y-1">
+      <div class="p-3 sm:p-4 border-t border-gray-100 dark:border-slate-800 space-y-1 pb-safe">
         <button 
           @click="theme.toggleTheme"
-          class="w-full flex items-center gap-3 p-3 rounded-xl text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
+          class="w-full flex items-center gap-3 p-2.5 sm:p-3 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors cursor-pointer text-sm"
         >
-          <component :is="theme.isDark ? Sun : Moon" :size="22" />
-          <span v-if="!isCollapsed" class="font-medium">{{ theme.isDark ? 'Modo Claro' : 'Modo Oscuro' }}</span>
+          <component :is="theme.isDark ? Sun : Moon" :size="20" class="shrink-0" />
+          <span v-if="!isCollapsed" class="font-medium text-sm">{{ theme.isDark ? 'Modo Claro' : 'Modo Oscuro' }}</span>
         </button>
 
         <button 
           @click="handleLogout"
-          class="w-full flex items-center gap-3 p-3 rounded-xl text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+          class="w-full flex items-center gap-3 p-2.5 sm:p-3 rounded-xl text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors cursor-pointer text-sm"
         >
-          <LogOut :size="22" />
-          <span v-if="!isCollapsed" class="font-medium">Cerrar Sesión</span>
+          <LogOut :size="20" class="shrink-0" />
+          <span v-if="!isCollapsed" class="font-medium text-sm">Cerrar Sesión</span>
         </button>
         <button 
           @click="isCollapsed = !isCollapsed"
-          class="mt-4 w-full flex justify-center text-gray-400 hover:text-gray-600 dark:hover:text-slate-300 transition-colors"
+          class="mt-2 w-full hidden md:flex justify-center p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors cursor-pointer"
+          :aria-label="isCollapsed ? 'Expandir menú' : 'Colapsar menú'"
         >
           <ChevronLeft v-if="!isCollapsed" :size="20" />
           <ChevronRight v-else :size="20" />
@@ -847,12 +899,12 @@ onUnmounted(() => {
       <!-- Supervision Banner -->
       <div
         v-if="auth.isSupervising"
-        class="bg-gradient-to-r from-indigo-700 via-indigo-600 to-indigo-800 text-white px-6 py-3.5 flex items-center justify-between gap-4 shrink-0 z-40 shadow-lg border-b border-indigo-500/20"
+        class="bg-gradient-to-r from-indigo-700 via-indigo-600 to-indigo-800 text-white px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3 shrink-0 z-40 shadow-lg border-b border-indigo-500/20 text-xs sm:text-sm"
       >
-        <div class="flex items-center gap-3">
-          <ShieldAlert :size="20" class="shrink-0 text-indigo-200 animate-pulse" />
-          <span class="text-sm font-black tracking-wide">
-            MODO SUPERVISIÓN ACTIVO — 
+        <div class="flex items-center gap-2.5 min-w-0">
+          <ShieldAlert :size="18" class="shrink-0 text-indigo-200 animate-pulse" />
+          <span class="font-black tracking-wide truncate">
+            MODO SUPERVISIÓN — 
             <span class="underline underline-offset-2 decoration-2 decoration-indigo-300">
               {{ auth.supervision?.colegio_nombre }}
             </span> 
@@ -862,17 +914,17 @@ onUnmounted(() => {
             </span>
           </span>
         </div>
-        <div class="flex items-center gap-4">
-          <div class="flex items-center gap-2 text-xs bg-black/20 px-3 py-1.5 rounded-lg border border-white/10 font-mono">
-            <span class="text-indigo-200 font-bold">Tiempo Restante:</span>
+        <div class="flex items-center gap-3">
+          <div class="flex items-center gap-1.5 text-xs bg-black/20 px-2.5 py-1 rounded-lg border border-white/10 font-mono">
+            <span class="text-indigo-200 font-bold hidden sm:inline">Restante:</span>
             <span class="font-extrabold text-white">{{ supervisionTimeLeft || 'Calculando...' }}</span>
           </div>
           <button
             @click="handleExitSupervisionManual"
-            class="flex items-center gap-1.5 bg-white text-indigo-700 hover:bg-indigo-50 px-4 py-1.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-sm active:translate-y-[1px]"
+            class="flex items-center gap-1.5 bg-white text-indigo-700 hover:bg-indigo-50 px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-sm active:translate-y-[1px] cursor-pointer"
           >
-            <XCircle :size="15" />
-            Salir de Supervisión
+            <XCircle :size="14" />
+            Salir
           </button>
         </div>
       </div>
@@ -880,13 +932,13 @@ onUnmounted(() => {
       <!-- Directivo Active Supervision Banner -->
       <div
         v-if="auth.activeRole === 'directivo' && directivoActiveSupervision"
-        class="bg-gradient-to-r from-red-700 via-red-650 to-red-800 text-white px-6 py-3.5 flex items-center gap-3 shrink-0 z-40 shadow-lg border-b border-red-500/20 animate-pulse"
+        class="bg-gradient-to-r from-red-700 via-red-650 to-red-800 text-white px-4 sm:px-6 py-3 flex items-center gap-2.5 shrink-0 z-40 shadow-lg border-b border-red-500/20 animate-pulse text-xs sm:text-sm"
       >
-        <ShieldAlert :size="20" class="shrink-0 text-red-200 animate-bounce" />
-        <span class="text-sm font-black tracking-wide">
-          ATENCIÓN: El Administrador General ({{ directivoActiveSupervision.admin_nombre }}) está supervisando actualmente este colegio en MODO:
+        <ShieldAlert :size="18" class="shrink-0 text-red-200 animate-bounce" />
+        <span class="font-black tracking-wide">
+          ATENCIÓN: El Administrador General ({{ directivoActiveSupervision.admin_nombre }}) supervisa en modo:
           <span class="bg-red-950 px-2 py-0.5 rounded text-xs font-mono font-extrabold border border-red-500/30">
-            {{ directivoActiveSupervision.tipo_supervision === 'EDITOR' ? 'EDITOR (CON ESCRITURA)' : 'SOLO LECTURA' }}
+            {{ directivoActiveSupervision.tipo_supervision === 'EDITOR' ? 'EDITOR' : 'SOLO LECTURA' }}
           </span>
         </span>
       </div>
@@ -894,12 +946,12 @@ onUnmounted(() => {
       <!-- Monitoring Banner -->
       <div
         v-if="auth.isMonitoring"
-        class="bg-amber-500 text-white px-6 py-3 flex items-center justify-between gap-4 shrink-0 z-40 shadow-lg"
+        class="bg-amber-500 text-white px-4 sm:px-6 py-2.5 flex items-center justify-between gap-3 shrink-0 z-40 shadow-lg text-xs sm:text-sm"
       >
-        <div class="flex items-center gap-3">
-          <ShieldAlert :size="20" class="shrink-0" />
-          <span class="text-sm font-black">
-            Modo Monitoreo — Supervisando a
+        <div class="flex items-center gap-2.5 min-w-0 truncate">
+          <ShieldAlert :size="18" class="shrink-0" />
+          <span class="font-black truncate">
+            Monitoreo — Supervisando a
             <span class="underline underline-offset-2">
               {{ auth.monitoringUser?.nombre }} {{ auth.monitoringUser?.apellido }}
             </span>
@@ -908,96 +960,96 @@ onUnmounted(() => {
         </div>
         <button
           @click="stopMonitoring"
-          class="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 px-4 py-1.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all"
+          class="flex items-center gap-1 bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer shrink-0"
         >
-          <XCircle :size="15" />
-          Salir del Seguimiento
+          <XCircle :size="14" />
+          Salir
         </button>
       </div>
 
       <!-- Navbar -->
-      <header class="h-16 bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 flex items-center justify-between px-4 md:px-8 z-30 transition-colors duration-300">
-        <div class="flex items-center gap-3">
+      <header class="h-16 bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 flex items-center justify-between px-4 sm:px-6 md:px-8 z-30 transition-colors duration-300">
+        <div class="flex items-center gap-2.5 sm:gap-3 min-w-0">
           <button
             type="button"
             @click="isMobileOpen = !isMobileOpen"
-            class="md:hidden p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            class="md:hidden p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
             aria-label="Abrir menú lateral"
           >
-            <Menu :size="22" />
+            <Menu :size="20" />
           </button>
-          <h2 class="text-base md:text-xl font-semibold text-gray-800 dark:text-white truncate max-w-[200px] sm:max-w-none">
+          <h2 class="text-sm sm:text-base md:text-xl font-bold text-gray-800 dark:text-white truncate max-w-[180px] sm:max-w-xs md:max-w-md lg:max-w-none">
             {{ auth.isMonitoring ? `Seguimiento: ${auth.monitoringUser?.nombre} ${auth.monitoringUser?.apellido}` : (auth.isSupervising ? `Supervisando: ${auth.supervision?.colegio_nombre}` : ($route.name || 'Panel de Gestión')) }}
           </h2>
         </div>
         
-        <div class="flex items-center gap-6">
+        <div class="flex items-center gap-3 sm:gap-6">
           <!-- Selector Prominente de Año Lectivo, Colegio y Hora -->
-          <div class="hidden md:flex items-center gap-3">
+          <div class="hidden md:flex items-center gap-2.5">
             <!-- Botón Cambiar Colegio para usuarios multi-colegio -->
             <router-link 
               v-if="hasMultipleSchools" 
               to="/select-school" 
-              class="flex items-center gap-1.5 text-xs font-bold bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900 text-indigo-600 dark:text-indigo-300 px-3 py-1.5 rounded-xl border border-indigo-200 dark:border-indigo-800 transition-all shadow-sm"
+              class="flex items-center gap-1.5 text-xs font-bold bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900 text-indigo-600 dark:text-indigo-300 px-3 py-1.5 rounded-xl border border-indigo-200 dark:border-indigo-800 transition-all shadow-xs"
               title="Cambiar de colegio de sesión"
             >
               <Building2 :size="15" />
               <span class="hidden lg:inline">Cambiar Colegio</span>
             </router-link>
 
-            <!-- Selector Prominente de Año Lectivo (Oculto para Admin General y en vista dedicada de formalización) -->
+            <!-- Selector Prominente de Año Lectivo -->
             <div 
               v-if="showYearSelector"
-              class="flex items-center gap-2 bg-gradient-to-r from-indigo-500/10 via-indigo-600/15 to-indigo-700/10 dark:from-indigo-950/40 dark:to-indigo-900/40 px-3.5 py-1.5 rounded-2xl border-2 border-indigo-200 dark:border-indigo-800/80 shadow-sm transition-all hover:border-indigo-400"
+              class="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/60 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700/80 shadow-xs transition-all hover:border-indigo-400"
             >
-              <Calendar :size="18" class="text-indigo-600 dark:text-indigo-400 shrink-0" />
-              <span class="text-xs font-black text-indigo-950 dark:text-indigo-200 uppercase tracking-wider hidden lg:inline">Año Lectivo:</span>
+              <Calendar :size="16" class="text-indigo-600 dark:text-indigo-400 shrink-0" />
+              <span class="text-xs font-black text-slate-600 dark:text-slate-300 uppercase tracking-wider hidden lg:inline">Año:</span>
               <select 
                 v-if="yearStore.availableYears.length > 0"
                 :value="yearStore.selectedYearId"
                 @change="onHeaderYearChange"
-                class="font-black text-sm text-white bg-indigo-600 dark:bg-indigo-700 hover:bg-indigo-700 dark:hover:bg-indigo-600 px-3 py-1 rounded-xl border border-indigo-500 shadow-sm outline-none cursor-pointer focus:ring-4 focus:ring-indigo-300 dark:focus:ring-indigo-900 transition-all"
+                class="font-black text-xs text-white bg-indigo-600 dark:bg-indigo-700 hover:bg-indigo-700 dark:hover:bg-indigo-600 px-2.5 py-1 rounded-lg border border-indigo-500 shadow-xs outline-none cursor-pointer focus:ring-2 focus:ring-indigo-400 transition-all"
               >
                 <option v-for="y in yearStore.availableYears" :key="y.id_anio" :value="y.id_anio" class="bg-slate-900 text-white font-bold">
-                  Año {{ y.calendario }}{{ y.estado === 'CERRADO' ? ' 🔒 (Cerrado)' : ' ✨ (Activo)' }}
+                  {{ y.calendario }}{{ y.estado === 'CERRADO' ? ' 🔒' : ' ✨' }}
                 </option>
               </select>
-              <span v-else class="font-black text-xs text-indigo-600 dark:text-indigo-300 animate-pulse px-2">
-                Cargando años...
+              <span v-else class="font-black text-xs text-indigo-600 dark:text-indigo-300 animate-pulse px-1">
+                Cargando...
               </span>
             </div>
 
-            <!-- Badge Informativo cuando se está en la vista dedicada de matrícula -->
+            <!-- Badge Informativo formalización de matrícula -->
             <div 
               v-else-if="isDedicatedEnrollmentView"
-              class="flex items-center gap-2 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/80 px-3.5 py-1.5 rounded-2xl text-emerald-700 dark:text-emerald-300 text-xs font-extrabold shadow-sm animate-in fade-in"
+              class="flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/80 px-3 py-1.5 rounded-xl text-emerald-700 dark:text-emerald-300 text-xs font-extrabold shadow-xs"
             >
-              <FileText :size="16" class="text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <FileText :size="15" class="text-emerald-600 dark:text-emerald-400 shrink-0" />
               <span class="hidden sm:inline">Formalización de Matrícula</span>
             </div>
 
-            <div class="flex items-center gap-1.5 font-mono text-xs bg-slate-50 dark:bg-slate-800/40 px-3 py-2 rounded-2xl border border-slate-100 dark:border-slate-800/50">
-              <span class="text-emerald-500 dark:text-emerald-400 font-black uppercase tracking-widest text-[9px]">Hora:</span>
+            <div class="flex items-center gap-1 font-mono text-xs bg-slate-50 dark:bg-slate-800/40 px-2.5 py-1.5 rounded-xl border border-slate-100 dark:border-slate-800/50">
+              <span class="text-emerald-500 dark:text-emerald-400 font-black uppercase tracking-wider text-xs">Hora:</span>
               <span class="font-bold text-slate-700 dark:text-slate-200">
                 {{ currentTime }}
               </span>
             </div>
           </div>
 
-          <div class="flex items-center gap-4">
+          <div class="flex items-center gap-3">
             <div class="text-right hidden sm:block">
-              <p class="text-sm font-bold text-gray-900 dark:text-white">
+              <p class="text-sm font-bold text-gray-900 dark:text-white truncate max-w-[160px]">
                 {{ auth.isMonitoring && auth.monitoringUser ? `${auth.monitoringUser.nombre} ${auth.monitoringUser.apellido || ''}`.trim() : (auth.user?.name || 'Usuario') }}
               </p>
               <p class="text-xs text-gray-500 dark:text-slate-400 capitalize flex items-center justify-end gap-1">
                 {{ auth.activeRole || 'Rol' }}
                 <button v-if="hasMultipleRoles && !auth.isMonitoring" @click="switchRole(otherRole!)" 
-                  class="ml-2 text-[10px] bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded-full font-bold hover:bg-indigo-600 hover:text-white transition-all">
+                  class="ml-1 text-xs bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded-full font-bold hover:bg-indigo-600 hover:text-white transition-all cursor-pointer">
                   Cambiar a {{ otherRole }}
                 </button>
               </p>
             </div>
-            <div class="h-10 w-10 rounded-full bg-indigo-100 dark:bg-indigo-900 border-2 border-white dark:border-slate-800 shadow-sm flex items-center justify-center text-indigo-600 dark:text-indigo-300 font-bold">
+            <div class="h-9 w-9 sm:h-10 sm:w-10 rounded-full bg-indigo-100 dark:bg-indigo-900 border-2 border-white dark:border-slate-800 shadow-xs flex items-center justify-center text-indigo-600 dark:text-indigo-300 font-black text-sm shrink-0">
               {{ (auth.isMonitoring && auth.monitoringUser ? auth.monitoringUser.nombre : (auth.user?.name || 'U')).charAt(0) }}
             </div>
           </div>

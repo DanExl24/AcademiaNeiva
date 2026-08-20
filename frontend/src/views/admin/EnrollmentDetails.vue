@@ -337,7 +337,7 @@ const formatRenewalStateLabel = (state?: string) => {
               <CheckCircle v-if="currentStep > s.n" :size="18" />
               <span v-else>{{ s.n }}</span>
             </div>
-            <span :class="[currentStep >= s.n ? 'text-indigo-600 font-black' : 'text-slate-400 font-bold', 'text-[10px] uppercase tracking-widest transition-colors']">{{ s.label }}</span>
+            <span :class="[currentStep >= s.n ? 'text-indigo-600 font-black' : 'text-slate-400 font-bold', 'text-xs uppercase tracking-wider transition-colors']">{{ s.label }}</span>
           </div>
           <div v-if="s.n < 3" :class="[currentStep > s.n ? 'bg-indigo-600' : 'bg-slate-200 dark:bg-slate-700', 'h-0.5 flex-1 mb-5 transition-colors duration-500']"></div>
         </div>

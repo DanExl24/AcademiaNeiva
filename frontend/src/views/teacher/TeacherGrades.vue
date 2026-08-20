@@ -1014,12 +1014,30 @@ const exportGradesToCSV = () => {
   const link = document.createElement('a')
   link.setAttribute('href', url)
   
-  const label = `${selectedGradeName.value || ''}_${selectedSection.value || ''}_${selectedSubjectId.value || ''}`.replace(/\s+/g, '_')
-  link.setAttribute('download', `consolidado_notas_${label}_${new Date().toLocaleDateString()}.csv`)
   link.style.visibility = 'hidden'
   document.body.appendChild(link)
   link.click()
   document.body.removeChild(link)
+}
+
+const viewMode = ref<'table' | 'cards'>('table')
+
+const handleGradeKeydown = (stIndex: number, colIndex: number, e: KeyboardEvent) => {
+  if (e.key === 'Enter' || e.key === 'ArrowDown') {
+    e.preventDefault()
+    const nextInput = document.querySelector<HTMLInputElement>(`input[data-grade-cell="${stIndex + 1}-${colIndex}"]`)
+    if (nextInput) {
+      nextInput.focus()
+      nextInput.select()
+    }
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault()
+    const prevInput = document.querySelector<HTMLInputElement>(`input[data-grade-cell="${stIndex - 1}-${colIndex}"]`)
+    if (prevInput) {
+      prevInput.focus()
+      prevInput.select()
+    }
+  }
 }
 
 onMounted(() => {
@@ -1030,105 +1048,133 @@ onMounted(() => {
 <template>
   <div class="space-y-8 animate-in fade-in duration-700">
     <!-- Header Card -->
-    <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-8 flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-sm transition-colors">
-      <div class="flex items-center gap-6">
-        <div class="p-4 bg-indigo-600 dark:bg-indigo-500 rounded-2xl text-white shadow-lg shadow-indigo-200 dark:shadow-none">
-          <ClipboardList :size="32" />
+    <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 sm:p-8 flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-sm transition-colors">
+      <div class="flex items-center gap-4 sm:gap-6">
+        <div class="p-3.5 sm:p-4 bg-indigo-600 dark:bg-indigo-500 rounded-2xl text-white shadow-lg shadow-indigo-200 dark:shadow-none shrink-0">
+          <ClipboardList :size="28" />
         </div>
         <div>
-          <h1 class="text-3xl font-black text-slate-900 dark:text-white tracking-tight">Registro de Calificaciones</h1>
-          <p class="text-slate-500 dark:text-slate-400 font-medium text-lg">Gestiona actividades y notas del periodo actual.</p>
+          <h1 class="text-xl sm:text-2xl lg:text-3xl font-black text-slate-900 dark:text-white tracking-tight">Registro de Calificaciones</h1>
+          <p class="text-slate-500 dark:text-slate-400 font-medium text-xs sm:text-base">Gestiona actividades, criterios y notas del periodo actual.</p>
         </div>
       </div>
       
       <!-- Actions buttons -->
-      <div v-if="selectedSubjectId && selectedPeriodId" class="flex flex-wrap items-center gap-3">
+      <div v-if="selectedSubjectId && selectedPeriodId" class="flex flex-wrap items-center gap-2.5 sm:gap-3">
         <!-- Autosave Indicator -->
-        <div v-if="!auth.isMonitoring && !isPeriodClosed" class="flex items-center gap-2 px-4 py-2 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-100 dark:border-slate-850 h-[46px]">
-          <div v-if="autosaveStatus === 'saving'" class="flex items-center gap-1.5 text-[9px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest">
+        <div v-if="!auth.isMonitoring && !isPeriodClosed" class="flex items-center gap-2 px-3.5 py-2 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-100 dark:border-slate-800 h-[44px]">
+          <div v-if="autosaveStatus === 'saving'" class="flex items-center gap-1.5 text-xs font-black text-amber-600 dark:text-amber-400 uppercase tracking-wider">
             <Loader2 class="w-3.5 h-3.5 animate-spin" />
             <span>Guardando...</span>
           </div>
-          <div v-else-if="autosaveStatus === 'saved'" class="flex items-center gap-1.5 text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">
+          <div v-else-if="autosaveStatus === 'saved'" class="flex items-center gap-1.5 text-xs font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
             <CheckCircle class="w-3.5 h-3.5" />
             <span>Guardado</span>
           </div>
-          <div v-else-if="autosaveStatus === 'error'" class="flex items-center gap-1.5 text-[9px] font-black text-red-600 dark:text-red-400 uppercase tracking-widest" :title="autosaveErrorMsg">
+          <div v-else-if="autosaveStatus === 'error'" class="flex items-center gap-1.5 text-xs font-black text-red-600 dark:text-red-400 uppercase tracking-wider" :title="autosaveErrorMsg">
             <AlertCircle class="w-3.5 h-3.5" />
             <span>Error</span>
           </div>
+        </div>
+
+        <!-- View Mode Switcher -->
+        <div class="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl border border-slate-200 dark:border-slate-700">
+          <button 
+            type="button"
+            @click="viewMode = 'table'"
+            :class="[
+              'px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5',
+              viewMode === 'table' ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs' : 'text-slate-600 dark:text-slate-400'
+            ]"
+            title="Vista Planilla Completa"
+          >
+            <Users :size="14" />
+            <span class="hidden sm:inline">Planilla</span>
+          </button>
+          <button 
+            type="button"
+            @click="viewMode = 'cards'"
+            :class="[
+              'px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5',
+              viewMode === 'cards' ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs' : 'text-slate-600 dark:text-slate-400'
+            ]"
+            title="Modo Ficha Móvil"
+          >
+            <BookOpen :size="14" />
+            <span class="hidden sm:inline">Tarjetas</span>
+          </button>
         </div>
 
         <button 
           v-if="!auth.isMonitoring"
           @click="saveAllGrades(false)"
           :disabled="saving || activitiesLoading || isPeriodClosed"
-          class="bg-emerald-600 dark:bg-emerald-500 text-white px-8 py-3 rounded-2xl font-bold shadow-lg shadow-emerald-100 dark:shadow-none hover:bg-emerald-700 transition-all flex items-center gap-2 active:scale-95 disabled:opacity-50"
+          class="bg-emerald-600 dark:bg-emerald-500 text-white px-5 sm:px-6 py-2.5 rounded-2xl font-bold shadow-md shadow-emerald-100 dark:shadow-none hover:bg-emerald-700 transition-all flex items-center gap-2 active:scale-95 disabled:opacity-50 text-xs sm:text-sm cursor-pointer"
         >
-          <Loader2 v-if="saving" class="w-5 h-5 animate-spin" />
-          <Save v-else :size="20" />
+          <Loader2 v-if="saving" class="w-4 h-4 animate-spin" />
+          <Save v-else :size="18" />
           {{ saving ? 'Guardando...' : 'Guardar Todo' }}
         </button>
         <button 
           @click="exportGradesToCSV"
           :disabled="saving || activitiesLoading || students.length === 0"
-          class="bg-indigo-600 dark:bg-indigo-500 text-white px-6 py-3 rounded-2xl font-bold shadow-lg shadow-indigo-100 dark:shadow-none hover:bg-indigo-700 transition-all flex items-center gap-2 active:scale-95"
+          class="bg-indigo-600 dark:bg-indigo-500 text-white px-4 sm:px-5 py-2.5 rounded-2xl font-bold shadow-md shadow-indigo-100 dark:shadow-none hover:bg-indigo-700 transition-all flex items-center gap-2 active:scale-95 text-xs sm:text-sm cursor-pointer"
         >
-          <Download :size="20" />
-          Exportar CSV
+          <Download :size="18" />
+          <span class="hidden sm:inline">CSV</span>
         </button>
         <button
           @click="openDrawer"
-          class="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-6 py-3 rounded-2xl font-bold transition-all flex items-center gap-2 active:scale-95 border border-slate-200 dark:border-slate-700 shadow-sm"
+          class="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-4 sm:px-5 py-2.5 rounded-2xl font-bold transition-all flex items-center gap-2 active:scale-95 border border-slate-200 dark:border-slate-700 shadow-xs text-xs sm:text-sm cursor-pointer"
         >
-          <BookOpen :size="20" class="text-indigo-500" />
-          {{ isPeriodClosed ? 'Ver Actividades' : 'Configurar Actividades' }}
+          <BookOpen :size="18" class="text-indigo-500" />
+          <span class="hidden sm:inline">{{ isPeriodClosed ? 'Ver Actividades' : 'Configurar Actividades' }}</span>
         </button>
-        <div v-if="auth.isMonitoring || isPeriodClosed" class="text-amber-600 font-bold text-sm bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 px-5 py-3 rounded-2xl">
+        <div v-if="auth.isMonitoring || isPeriodClosed" class="text-amber-600 font-bold text-xs sm:text-sm bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 px-4 py-2.5 rounded-2xl">
           Solo Lectura
         </div>
       </div>
     </div>
 
     <!-- Filtros en cascada -->
-    <div class="bg-white dark:bg-slate-900 p-8 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col md:flex-row md:items-end gap-6 transition-colors">
-      <div class="flex-1 grid grid-cols-1 sm:grid-cols-4 gap-4">
-        <div class="space-y-2">
-          <label class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-2">Grado</label>
-          <select v-model="selectedGradeName" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 text-sm font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 transition-all outline-none">
+    <div class="bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col md:flex-row md:items-end gap-5 transition-colors">
+      <div class="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="space-y-1.5">
+          <label class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider ml-1">Grado</label>
+          <select v-model="selectedGradeName" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-3.5 text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 transition-all outline-none cursor-pointer">
             <option :value="null">Selecciona</option>
             <option v-for="g in gradeOptions" :key="g" :value="g">{{ g }}</option>
           </select>
         </div>
 
-        <div class="space-y-2">
-          <label class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-2">Sección</label>
-          <select v-model="selectedSection" :disabled="!selectedGradeName" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 text-sm font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 transition-all outline-none disabled:opacity-50">
+        <div class="space-y-1.5">
+          <label class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider ml-1">Sección</label>
+          <select v-model="selectedSection" :disabled="!selectedGradeName" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-3.5 text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 transition-all outline-none disabled:opacity-50 cursor-pointer">
             <option :value="null">Selecciona</option>
             <option v-for="s in sectionOptions" :key="s" :value="s">{{ s }}</option>
           </select>
         </div>
 
-        <div class="space-y-2">
-          <label class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-2">Jornada</label>
-          <select v-model="selectedJornada" :disabled="!selectedSection" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 text-sm font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 transition-all outline-none disabled:opacity-50">
+        <div class="space-y-1.5">
+          <label class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider ml-1">Jornada</label>
+          <select v-model="selectedJornada" :disabled="!selectedSection" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-3.5 text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 transition-all outline-none disabled:opacity-50 cursor-pointer">
             <option :value="null">Selecciona</option>
             <option v-for="j in jornadaOptions" :key="j" :value="j">{{ j }}</option>
           </select>
         </div>
 
-        <div class="space-y-2">
-          <label class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-2">Materia</label>
-          <select v-model="selectedSubjectId" :disabled="!selectedJornada" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 text-sm font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 transition-all outline-none disabled:opacity-50">
+        <div class="space-y-1.5">
+          <label class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider ml-1">Materia</label>
+          <select v-model="selectedSubjectId" :disabled="!selectedJornada" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-3.5 text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 transition-all outline-none disabled:opacity-50 cursor-pointer">
             <option :value="null">Selecciona</option>
             <option v-for="s in subjectsOptions" :key="s.id" :value="s.id">{{ s.label }}</option>
           </select>
         </div>
       </div>
 
-      <div class="w-full md:w-64 space-y-2">
-        <label class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-2">Periodo Académico</label>
-        <select v-model="selectedPeriodId" :disabled="periods.length === 0" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 text-sm font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 transition-all outline-none disabled:opacity-50">
+      <div class="w-full md:w-64 space-y-1.5">
+        <label class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider ml-1">Periodo</label>
+        <select v-model="selectedPeriodId" :disabled="periods.length === 0" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-3.5 text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 transition-all outline-none disabled:opacity-50 cursor-pointer">
           <option v-for="p in periods" :key="p.id_periodo" :value="p.id_periodo">
             {{ p.nombre }} {{ p.estado === 'CERRADO' ? '(Cerrado)' : '' }}
           </option>
@@ -1137,52 +1183,53 @@ onMounted(() => {
     </div>
 
     <!-- Empty Selection State -->
-    <div v-if="!selectedSubjectId" class="bg-slate-50 dark:bg-slate-800/50 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-3xl p-20 text-center transition-colors">
-      <div class="w-20 h-20 bg-white dark:bg-slate-800 rounded-full shadow-sm flex items-center justify-center mx-auto mb-6">
-        <AlertCircle class="w-10 h-10 text-slate-300 dark:text-slate-600" />
+    <div v-if="!selectedSubjectId" class="bg-slate-50 dark:bg-slate-800/50 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-3xl p-16 sm:p-20 text-center transition-colors">
+      <div class="w-16 h-16 sm:w-20 sm:h-20 bg-white dark:bg-slate-800 rounded-full shadow-xs flex items-center justify-center mx-auto mb-5">
+        <AlertCircle class="w-8 h-8 sm:w-10 sm:h-10 text-slate-300 dark:text-slate-600" />
       </div>
-      <h3 class="text-xl font-bold text-slate-400 dark:text-slate-500">Selecciona grado, sección, jornada y materia para comenzar</h3>
+      <h3 class="text-lg sm:text-xl font-bold text-slate-500 dark:text-slate-400">Selecciona grado, sección, jornada y materia para calificar</h3>
     </div>
 
     <div v-else class="space-y-6 animate-in fade-in duration-500">
       <!-- Read Only Period Warning -->
-      <div v-if="isPeriodClosed" class="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-3xl p-6 flex items-start gap-4 animate-in slide-in-from-top duration-300 transition-colors">
+      <div v-if="isPeriodClosed" class="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-3xl p-5 sm:p-6 flex items-start gap-4 animate-in slide-in-from-top duration-300 transition-colors">
         <AlertCircle class="w-6 h-6 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
         <div>
-          <h4 class="font-black text-amber-900 dark:text-amber-200">Planilla en Modo Solo Lectura</h4>
-          <p class="text-xs text-amber-700 dark:text-amber-450 mt-1">
-            El periodo académico <strong>"{{ selectedPeriod?.nombre }}"</strong> está cerrado institucionalmente y no admite modificaciones en las calificaciones, criterios o actividades.
+          <h4 class="font-black text-amber-900 dark:text-amber-200 text-sm sm:text-base">Planilla en Modo Solo Lectura</h4>
+          <p class="text-xs text-amber-700 dark:text-amber-300 mt-1">
+            El periodo académico <strong>"{{ selectedPeriod?.nombre }}"</strong> está cerrado institucionalmente y no admite modificaciones en las notas.
           </p>
         </div>
       </div>
+
       <!-- Competency top banner -->
-      <div v-if="competency" class="bg-violet-50/60 dark:bg-violet-950/20 border border-violet-100/80 dark:border-violet-900 rounded-3xl p-6 flex flex-col md:flex-row md:items-center justify-between gap-5 transition-all shadow-sm">
-        <div class="flex items-start gap-4">
-          <div class="p-3 bg-violet-600 dark:bg-violet-500 rounded-2xl text-white shadow-lg shadow-violet-100 dark:shadow-none shrink-0">
-            <BookOpen :size="24" />
+      <div v-if="competency" class="bg-violet-50/60 dark:bg-violet-950/20 border border-violet-100/80 dark:border-violet-900 rounded-3xl p-5 sm:p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 transition-all shadow-xs">
+        <div class="flex items-start gap-3.5">
+          <div class="p-3 bg-violet-600 dark:bg-violet-500 rounded-2xl text-white shadow-md shadow-violet-100 dark:shadow-none shrink-0">
+            <BookOpen :size="22" />
           </div>
           <div>
-            <span class="text-[10px] font-black text-violet-600 dark:text-violet-400 uppercase tracking-widest block">Competencia del Periodo</span>
-            <p class="text-sm font-semibold text-slate-700 dark:text-slate-200 mt-1 leading-relaxed max-w-4xl whitespace-pre-line">{{ competency.descripcion }}</p>
+            <span class="text-xs font-black text-violet-600 dark:text-violet-400 uppercase tracking-wider block">Competencia del Periodo</span>
+            <p class="text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 mt-1 leading-relaxed max-w-4xl whitespace-pre-line">{{ competency.descripcion }}</p>
           </div>
         </div>
         <button 
           @click="openDrawer"
-          class="shrink-0 bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-violet-700 dark:text-violet-300 font-bold px-6 py-3 rounded-2xl transition-all flex items-center gap-2 active:scale-95 border border-violet-100 dark:border-violet-850 text-xs shadow-sm self-start md:self-auto"
+          class="shrink-0 bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-violet-700 dark:text-violet-300 font-bold px-4 py-2.5 rounded-2xl transition-all flex items-center gap-2 active:scale-95 border border-violet-100 dark:border-violet-850 text-xs shadow-xs self-start md:self-auto cursor-pointer"
         >
-          <Settings :size="16" />
-          {{ isPeriodClosed ? 'Ver Actividades / Evidencias' : 'Configurar Actividades' }}
+          <Settings :size="15" />
+          {{ isPeriodClosed ? 'Ver Actividades' : 'Configurar Actividades' }}
         </button>
       </div>
 
       <!-- Grade Matrix Container -->
       <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden transition-colors">
-        <div class="p-6 border-b border-slate-100 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div class="p-5 sm:p-6 border-b border-slate-100 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
            <div class="flex items-center gap-3">
              <div class="p-2.5 bg-indigo-50 dark:bg-indigo-950/30 rounded-xl text-indigo-600 dark:text-indigo-400">
                <Users :size="20" />
              </div>
-             <h3 class="text-xl font-black text-slate-900 dark:text-white">Planilla de Notas</h3>
+             <h3 class="text-lg sm:text-xl font-black text-slate-900 dark:text-white">Planilla de Notas</h3>
            </div>
 
            <!-- In-Table Search -->
@@ -1191,10 +1238,10 @@ onMounted(() => {
                v-model="studentSearch"
                type="text"
                placeholder="Buscar estudiante..."
-               class="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-semibold text-slate-700 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all duration-300"
+               class="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all duration-300"
              />
              <Search class="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
-             <button v-if="studentSearch" @click="studentSearch = ''" class="absolute right-3.5 top-3.5 text-slate-400">
+             <button v-if="studentSearch" @click="studentSearch = ''" class="absolute right-3.5 top-3.5 text-slate-400 cursor-pointer">
                <X :size="14" />
              </button>
            </div>
@@ -1213,7 +1260,7 @@ onMounted(() => {
             <button 
               v-if="!auth.isMonitoring && !isPeriodClosed"
               @click="openDrawer"
-              class="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 py-3.5 rounded-2xl transition-all shadow-lg shadow-indigo-100 dark:shadow-none active:scale-95 cursor-pointer"
+              class="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 py-3.5 rounded-2xl transition-all shadow-md shadow-indigo-100 dark:shadow-none active:scale-95 cursor-pointer text-sm"
             >
               <Plus :size="16" />
               Configurar Actividades
@@ -1221,58 +1268,137 @@ onMounted(() => {
           </template>
         </EmptyState>
 
-        <!-- Table Container -->
+        <!-- CARDS VIEW (Modo Evaluación Móvil) -->
+        <div v-else-if="viewMode === 'cards'" class="p-4 sm:p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div 
+            v-for="(st, stIdx) in filteredStudents" 
+            :key="st.id_estudiante"
+            class="bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 p-5 rounded-2xl space-y-4 shadow-xs hover:border-indigo-300 dark:hover:border-indigo-800 transition-all"
+          >
+            <!-- Card Header -->
+            <div class="flex items-center justify-between gap-3 border-b border-slate-200/60 dark:border-slate-700/60 pb-3">
+              <div class="flex items-center gap-3 min-w-0">
+                <div class="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 flex items-center justify-center text-xs font-black shrink-0">
+                  {{ st.nombre.charAt(0) }}{{ st.apellido.charAt(0) }}
+                </div>
+                <div class="min-w-0">
+                  <p class="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">{{ st.nombre }} {{ st.apellido }}</p>
+                  <p class="text-xs text-slate-400 font-mono">{{ st.codigo }}</p>
+                </div>
+              </div>
+              <div class="text-right shrink-0">
+                <div 
+                  :class="[
+                    parseFloat(calculateFinal(st.id_estudiante)) >= gradeRange.approval ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800' : 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-800',
+                    'px-3 py-1 rounded-xl font-black text-base border inline-flex items-center gap-1.5'
+                  ]"
+                >
+                  <span class="text-xs font-medium uppercase text-slate-400">Def:</span>
+                  {{ calculateFinal(st.id_estudiante) }}
+                </div>
+              </div>
+            </div>
+
+            <!-- Grade Inputs in Card -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div 
+                v-for="(col, colIdx) in tableColumns" 
+                :key="col.id" 
+                class="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2"
+              >
+                <div class="min-w-0 flex-1">
+                  <p class="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">
+                    {{ col.type === 'criterion' ? col.criterion?.descripcion : col.activity.nombre }}
+                  </p>
+                  <p class="text-xs text-indigo-500 font-semibold">
+                    {{ col.type === 'criterion' ? col.criterion?.porcentaje : col.activity.porcentaje }}%
+                  </p>
+                </div>
+                
+                <input 
+                  v-if="col.type === 'activity' && gradesMatrix[st.id_estudiante]"
+                  type="number"
+                  step="0.1"
+                  :data-grade-cell="`${stIdx}-${colIdx}`"
+                  @keydown="handleGradeKeydown(stIdx, colIdx, $event)"
+                  v-model="gradesMatrix[st.id_estudiante][col.activity.id_actividadmateria]"
+                  @blur="validateGradeInput(st.id_estudiante, col.activity.id_actividadmateria, 'activity', $event)"
+                  :disabled="auth.isMonitoring || isPeriodClosed"
+                  class="w-16 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-center font-bold text-sm text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+                <input 
+                  v-else-if="col.type === 'criterion' && criteriaGradesMatrix[st.id_estudiante]"
+                  type="number"
+                  step="0.1"
+                  :data-grade-cell="`${stIdx}-${colIdx}`"
+                  @keydown="handleGradeKeydown(stIdx, colIdx, $event)"
+                  v-model="criteriaGradesMatrix[st.id_estudiante][col.criterion!.id_criterio]"
+                  @blur="validateGradeInput(st.id_estudiante, col.criterion!.id_criterio, 'criterion', $event)"
+                  :disabled="auth.isMonitoring || isPeriodClosed"
+                  class="w-16 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-center font-bold text-sm text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+                <div v-else-if="col.type === 'activity_total'" class="text-xs font-black text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/30 px-3 py-2 rounded-lg border border-indigo-100 dark:border-indigo-900">
+                  {{ calculateActivityGrade(st.id_estudiante, col.activity).toFixed(1) }}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TABLE VIEW (Planilla Completa) -->
         <div v-else class="overflow-x-auto custom-scrollbar">
           <table class="w-full border-collapse">
             <thead>
               <tr class="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
-                <th class="p-6 text-left text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest sticky left-0 bg-slate-50 dark:bg-slate-800 z-10">Estudiante</th>
+                <th class="p-4 sm:p-5 text-left text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider sticky left-0 bg-slate-50 dark:bg-slate-800 z-10">Estudiante</th>
                 
                 <!-- Dynamic Columns for Activities/Criteria -->
                 <th v-for="col in tableColumns" :key="col.id" 
-                    :class="['p-4 text-center border-l border-slate-100 dark:border-slate-800 min-w-[120px]', col.type === 'activity_total' ? 'bg-indigo-50/20 dark:bg-indigo-950/20' : '']">
+                    :class="['p-3.5 text-center border-l border-slate-100 dark:border-slate-800 min-w-[120px]', col.type === 'activity_total' ? 'bg-indigo-50/20 dark:bg-indigo-950/20' : '']">
                   <div class="space-y-1">
-                    <div v-if="col.type === 'activity'" class="text-[9px] font-black text-indigo-500 uppercase tracking-tighter">{{ col.activity.nombre }}</div>
-                    <div v-else-if="col.type === 'criterion'" class="text-[9px] font-black text-indigo-500 uppercase tracking-tighter truncate" :title="col.activity.nombre">{{ col.activity.nombre }}</div>
-                    <div v-else-if="col.type === 'activity_total'" class="text-[9px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-tighter">Total {{ col.activity.nombre }}</div>
+                    <div v-if="col.type === 'activity'" class="text-xs font-black text-indigo-500 uppercase tracking-wider">{{ col.activity.nombre }}</div>
+                    <div v-else-if="col.type === 'criterion'" class="text-xs font-black text-indigo-500 uppercase tracking-wider truncate" :title="col.activity.nombre">{{ col.activity.nombre }}</div>
+                    <div v-else-if="col.type === 'activity_total'" class="text-xs font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">Total {{ col.activity.nombre }}</div>
                     
                     <div class="text-xs font-black text-slate-700 dark:text-slate-200 truncate max-w-[100px] mx-auto">
                       {{ col.type === 'criterion' ? col.criterion?.descripcion : (col.type === 'activity_total' ? 'Σ' : col.activity.nombre) }}
                     </div>
-                    <div class="text-[10px] font-bold text-slate-400">
+                    <div class="text-xs font-bold text-slate-400">
                       {{ col.type === 'criterion' ? col.criterion?.porcentaje : col.activity.porcentaje }}%
                     </div>
                   </div>
                 </th>
 
-                <th class="p-6 text-center text-[10px] font-black text-slate-900 dark:text-white uppercase tracking-widest bg-slate-100 dark:bg-slate-800/80 border-l border-slate-200 dark:border-slate-700 shadow-[-4px_0_10px_rgba(0,0,0,0.02)]">Nota Definitiva</th>
-                <th class="p-6 text-center text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Nivel</th>
+                <th class="p-4 sm:p-5 text-center text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider bg-slate-100 dark:bg-slate-800/80 border-l border-slate-200 dark:border-slate-700">Nota Definitiva</th>
+                <th class="p-4 sm:p-5 text-center text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider">Nivel</th>
               </tr>
             </thead>
             <tbody>
               <tr 
-                v-for="st in filteredStudents" 
+                v-for="(st, stIdx) in filteredStudents" 
                 :key="st.id_estudiante"
                 class="border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors group"
               >
-                <td class="p-6 sticky left-0 bg-white dark:bg-slate-900 z-10 shadow-[4px_0_10px_rgba(0,0,0,0.01)]">
+                <td class="p-4 sm:p-5 sticky left-0 bg-white dark:bg-slate-900 z-10 shadow-[4px_0_10px_rgba(0,0,0,0.01)]">
                   <div class="flex items-center gap-3">
-                    <div class="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-[10px] font-black">
+                    <div class="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-xs font-black shrink-0">
                       {{ st.nombre.charAt(0) }}{{ st.apellido.charAt(0) }}
                     </div>
-                    <div>
-                      <p class="text-xs font-bold text-slate-700 dark:text-slate-200">{{ st.nombre }} {{ st.apellido }}</p>
-                      <p class="text-[9px] font-medium text-slate-400">{{ st.codigo }}</p>
+                    <div class="min-w-0">
+                      <p class="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">{{ st.nombre }} {{ st.apellido }}</p>
+                      <p class="text-xs font-medium text-slate-400">{{ st.codigo }}</p>
                     </div>
                   </div>
                 </td>
 
                 <!-- Grades Inputs -->
-                <td v-for="col in tableColumns" :key="col.id" class="p-2 border-l border-slate-50 dark:border-slate-800/50 text-center">
+                <td v-for="(col, colIdx) in tableColumns" :key="col.id" class="p-2 border-l border-slate-50 dark:border-slate-800/50 text-center">
                   <input 
                     v-if="col.type === 'activity' && gradesMatrix[st.id_estudiante]"
                     type="number"
                     step="0.1"
+                    :data-grade-cell="`${stIdx}-${colIdx}`"
+                    @keydown="handleGradeKeydown(stIdx, colIdx, $event)"
                     v-model="gradesMatrix[st.id_estudiante][col.activity.id_actividadmateria]"
                     @blur="validateGradeInput(st.id_estudiante, col.activity.id_actividadmateria, 'activity', $event)"
                     :disabled="auth.isMonitoring || isPeriodClosed"
@@ -1282,6 +1408,8 @@ onMounted(() => {
                     v-else-if="col.type === 'criterion' && criteriaGradesMatrix[st.id_estudiante]"
                     type="number"
                     step="0.1"
+                    :data-grade-cell="`${stIdx}-${colIdx}`"
+                    @keydown="handleGradeKeydown(stIdx, colIdx, $event)"
                     v-model="criteriaGradesMatrix[st.id_estudiante][col.criterion!.id_criterio]"
                     @blur="validateGradeInput(st.id_estudiante, col.criterion!.id_criterio, 'criterion', $event)"
                     :disabled="auth.isMonitoring || isPeriodClosed"
@@ -1293,11 +1421,11 @@ onMounted(() => {
                 </td>
 
                 <!-- Final Grade -->
-                <td class="p-6 text-center bg-slate-50/50 dark:bg-slate-800/30 border-l border-slate-100 dark:border-slate-800">
+                <td class="p-4 sm:p-5 text-center bg-slate-50/50 dark:bg-slate-800/30 border-l border-slate-100 dark:border-slate-800">
                   <div 
                     :class="[
                       parseFloat(calculateFinal(st.id_estudiante)) >= gradeRange.approval ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 border-emerald-100 dark:border-emerald-900' : 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 border-red-100 dark:border-red-900',
-                      'inline-flex items-center justify-center w-14 h-10 rounded-xl font-black text-lg border shadow-sm'
+                      'inline-flex items-center justify-center w-14 h-9 rounded-xl font-black text-base border shadow-xs'
                     ]"
                   >
                     {{ calculateFinal(st.id_estudiante) }}
@@ -1305,11 +1433,11 @@ onMounted(() => {
                 </td>
 
                 <!-- Academic Scale -->
-                <td class="p-6 text-center">
+                <td class="p-4 sm:p-5 text-center">
                   <span 
                     :class="[
                       getScaleClass(getScaleLevel(calculateFinal(st.id_estudiante))),
-                      'px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border'
+                      'px-2.5 py-1 rounded-full text-xs font-black uppercase tracking-wider border'
                     ]"
                   >
                     {{ getScaleLevel(calculateFinal(st.id_estudiante)) }}
@@ -1320,11 +1448,10 @@ onMounted(() => {
           </table>
         </div>
         
-        <div v-if="filteredStudents.length === 0 && students.length > 0" class="p-20 text-center">
-          <div class="w-16 h-16 bg-slate-50 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Search class="w-8 h-8 text-slate-300" />
+        <div v-if="filteredStudents.length === 0 && students.length > 0" class="p-16 text-center">
+          <div class="w-14 h-14 bg-slate-50 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-3">
+            <Search class="w-6 h-6 text-slate-300" />
           </div>
-          <p class="text-sm font-bold text-slate-400">No se encontraron estudiantes con ese nombre o código</p>
         </div>
       </div>
     </div>
