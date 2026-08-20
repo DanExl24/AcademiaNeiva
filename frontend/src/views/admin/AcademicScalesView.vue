@@ -232,7 +232,7 @@ const saveManualScales = async () => {
     <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
       <div>
         <div class="flex items-center gap-2 mb-2">
-          <RouterLink to="/admin/configuracion" class="inline-flex items-center gap-1.5 text-xs font-black text-slate-500 hover:text-indigo-600 transition-colors uppercase tracking-widest">
+          <RouterLink to="/dashboard/configuracion-academica" class="inline-flex items-center gap-1.5 text-xs font-black text-slate-500 hover:text-indigo-600 transition-colors uppercase tracking-widest">
             <ArrowLeft class="w-3.5 h-3.5" />
             Volver a Configuración
           </RouterLink>

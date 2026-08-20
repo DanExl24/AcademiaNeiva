@@ -28,6 +28,7 @@ import { getCourseDisplayName } from '../../utils/courseHelper'
 import { useAcademicYearStore } from '../../stores/academicYear'
 import { useConfirm } from '../../composables/useConfirm'
 import { useToast } from '../../composables/useToast'
+import HierarchicalAssignmentList from '../../components/academico/HierarchicalAssignmentList.vue'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -1178,85 +1179,85 @@ watch(() => yearStore.selectedYearId, () => {
 
                 <!-- Assignment Filters Divididos (Materia, Nivel, Grado, Sección, Jornada, Curso) -->
                 <div class="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 space-y-3 mb-6">
-                  <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                    <Filter :size="12" class="text-indigo-500" />
+                  <p class="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                    <Filter :size="13" class="text-indigo-500" />
                     Filtrar Asignaciones Registradas:
                   </p>
 
                   <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                     <!-- 1. Materia -->
                     <div class="space-y-1">
-                      <label class="text-[9px] font-black text-slate-400 uppercase tracking-wider ml-1">Materia</label>
+                      <label class="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Materia</label>
                       <select 
                         v-model="workloadFilterSubjectId" 
-                        class="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-bold outline-none text-slate-900 dark:text-white transition-all focus:ring-2 focus:ring-indigo-500/10"
+                        class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-bold outline-none text-slate-900 dark:text-white transition-all focus:ring-2 focus:ring-indigo-500/10 cursor-pointer"
                       >
-                        <option :value="null">Todas</option>
-                        <option v-for="s in workloadAvailableSubjects" :key="s.id_materia" :value="s.id_materia">{{ s.nombre }}</option>
+                        <option :value="null" class="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Todas</option>
+                        <option v-for="s in workloadAvailableSubjects" :key="s.id_materia" :value="s.id_materia" class="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">{{ s.nombre }}</option>
                       </select>
                     </div>
 
                     <!-- 2. Nivel -->
                     <div class="space-y-1">
-                      <label class="text-[9px] font-black text-slate-400 uppercase tracking-wider ml-1">Nivel</label>
+                      <label class="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Nivel</label>
                       <select 
                         v-model="workloadFilterNivel" 
                         @change="onWorkloadCourseFilterChange"
-                        class="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-bold outline-none text-slate-900 dark:text-white transition-all focus:ring-2 focus:ring-indigo-500/10"
+                        class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-bold outline-none text-slate-900 dark:text-white transition-all focus:ring-2 focus:ring-indigo-500/10 cursor-pointer"
                       >
-                        <option value="">Todos</option>
-                        <option v-for="n in workloadAvailableNiveles" :key="n" :value="n">{{ n }}</option>
+                        <option value="" class="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Todos</option>
+                        <option v-for="n in workloadAvailableNiveles" :key="n" :value="n" class="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">{{ n }}</option>
                       </select>
                     </div>
 
                     <!-- 3. Grado -->
                     <div class="space-y-1">
-                      <label class="text-[9px] font-black text-slate-400 uppercase tracking-wider ml-1">Grado</label>
+                      <label class="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Grado</label>
                       <select 
                         v-model="workloadFilterGrado" 
                         @change="onWorkloadCourseFilterChange"
-                        class="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-bold outline-none text-slate-900 dark:text-white transition-all focus:ring-2 focus:ring-indigo-500/10"
+                        class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-bold outline-none text-slate-900 dark:text-white transition-all focus:ring-2 focus:ring-indigo-500/10 cursor-pointer"
                       >
-                        <option value="">Todos</option>
-                        <option v-for="g in workloadAvailableGrados" :key="g" :value="g">{{ g }}</option>
+                        <option value="" class="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Todos</option>
+                        <option v-for="g in workloadAvailableGrados" :key="g" :value="g" class="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">{{ g }}</option>
                       </select>
                     </div>
 
                     <!-- 4. Sección -->
                     <div class="space-y-1">
-                      <label class="text-[9px] font-black text-slate-400 uppercase tracking-wider ml-1">Sección</label>
+                      <label class="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Sección</label>
                       <select 
                         v-model="workloadFilterSeccion" 
                         @change="onWorkloadCourseFilterChange"
-                        class="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-bold outline-none text-slate-900 dark:text-white transition-all focus:ring-2 focus:ring-indigo-500/10"
+                        class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-bold outline-none text-slate-900 dark:text-white transition-all focus:ring-2 focus:ring-indigo-500/10 cursor-pointer"
                       >
-                        <option value="">Todas</option>
-                        <option v-for="sec in workloadAvailableSecciones" :key="sec" :value="sec">{{ sec }}</option>
+                        <option value="" class="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Todas</option>
+                        <option v-for="sec in workloadAvailableSecciones" :key="sec" :value="sec" class="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">{{ sec }}</option>
                       </select>
                     </div>
 
                     <!-- 5. Jornada -->
                     <div class="space-y-1">
-                      <label class="text-[9px] font-black text-slate-400 uppercase tracking-wider ml-1">Jornada</label>
+                      <label class="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Jornada</label>
                       <select 
                         v-model="workloadFilterJornada" 
                         @change="onWorkloadCourseFilterChange"
-                        class="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-bold outline-none text-slate-900 dark:text-white transition-all focus:ring-2 focus:ring-indigo-500/10"
+                        class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-bold outline-none text-slate-900 dark:text-white transition-all focus:ring-2 focus:ring-indigo-500/10 cursor-pointer"
                       >
-                        <option value="">Todas</option>
-                        <option v-for="j in workloadAvailableJornadas" :key="j" :value="j">{{ j }}</option>
+                        <option value="" class="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Todas</option>
+                        <option v-for="j in workloadAvailableJornadas" :key="j" :value="j" class="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">{{ j }}</option>
                       </select>
                     </div>
 
                     <!-- 6. Curso Específico -->
                     <div class="space-y-1">
-                      <label class="text-[9px] font-black text-slate-400 uppercase tracking-wider ml-1">Curso Específico</label>
+                      <label class="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Curso Específico</label>
                       <select 
                         v-model="workloadFilterGroupId" 
-                        class="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-bold outline-none text-slate-900 dark:text-white transition-all focus:ring-2 focus:ring-indigo-500/10"
+                        class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-bold outline-none text-slate-900 dark:text-white transition-all focus:ring-2 focus:ring-indigo-500/10 cursor-pointer"
                       >
-                        <option :value="null">Todos los cursos</option>
-                        <option v-for="g in workloadFilteredGroups" :key="g.id_grupo" :value="g.id_grupo">
+                        <option :value="null" class="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Todos los cursos</option>
+                        <option v-for="g in workloadFilteredGroups" :key="g.id_grupo" :value="g.id_grupo" class="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
                           {{ getCourseDisplayName({ tipo_grado_nombre: g.tipo_grado_nombre, seccion_nombre: g.seccion_nombre }) }} ({{ g.jornada_nombre }})
                         </option>
                       </select>
@@ -1264,30 +1265,15 @@ watch(() => yearStore.selectedYearId, () => {
                   </div>
                 </div>
 
-                <div v-if="selectedTeacherAssignments.length === 0" class="text-center py-12 text-slate-400">
-                  <GraduationCap :size="48" class="mb-3 mx-auto opacity-10" />
-                  <p class="text-xs font-black uppercase tracking-widest">Sin asignaciones activas</p>
-                </div>
-
-                <div class="space-y-3">
-                  <div
-                    v-for="assignment in selectedTeacherAssignments"
-                    :key="assignment.id_detallegrado"
-                    class="group bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 flex items-center justify-between hover:border-slate-200 dark:hover:border-slate-700 hover:shadow-md transition-all"
-                  >
-                    <div>
-                      <p class="font-black text-slate-900 dark:text-white text-sm">{{ assignment.materia_nombre }}</p>
-                      <p class="text-[10px] font-bold text-indigo-500 uppercase tracking-widest mt-0.5">{{ getCourseDisplayName({ tipo_grado_nombre: assignment.tipo_grado_nombre, seccion_nombre: assignment.seccion_nombre }) }} · {{ assignment.jornada_nombre }}</p>
-                    </div>
-                    <button
-                      v-if="!yearStore.isReadonlyYear"
-                      @click="deleteAssignmentModal = assignment"
-                      class="p-2 text-slate-300 dark:text-slate-700 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-xl transition-all opacity-0 group-hover:opacity-100"
-                    >
-                      <UserMinus :size="18" />
-                    </button>
-                  </div>
-                </div>
+                <!-- Hierarchical Assignment List Component -->
+                <HierarchicalAssignmentList
+                  :items="selectedTeacherAssignments"
+                  mode="teacher"
+                  :read-only="Boolean(yearStore.isReadonlyYear)"
+                  empty-title="Sin asignaciones activas"
+                  empty-message="Este docente no tiene cursos asignados con los filtros seleccionados."
+                  @delete="deleteAssignmentModal = $event as any"
+                />
               </div>
             </div>
           </div>

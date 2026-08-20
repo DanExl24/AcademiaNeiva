@@ -7,6 +7,7 @@ import { useAcademicYearStore } from '../../stores/academicYear'
 import { getCourseDisplayName } from '../../utils/courseHelper'
 import { useConfirm } from '../../composables/useConfirm'
 import { useToast } from '../../composables/useToast'
+import HierarchicalAssignmentList from '../../components/academico/HierarchicalAssignmentList.vue'
 
 
 
@@ -1226,31 +1227,14 @@ const deleteEvidence = async (id: number) => {
                         </div>
                       </div>
 
-                      <div v-if="!filteredAssignments.length" class="text-center py-16 bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800">
-                        <GraduationCap :size="36" class="mx-auto text-slate-400 dark:text-slate-600 mb-2" />
-                        <p class="text-sm font-bold text-slate-400">No se encontraron asignaciones con los filtros seleccionados.</p>
-                      </div>
-
-                      <div 
-                        v-for="asg in filteredAssignments" 
-                        :key="asg.id_detallegrado"
-                        class="p-4 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-800/80 rounded-2xl flex items-center justify-between gap-4"
-                      >
-                        <div class="flex items-center gap-3">
-                          <div class="h-10 w-10 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center rounded-xl font-black text-sm">
-                            {{ asg.docente_nombre.charAt(0).toUpperCase() }}
-                          </div>
-                          <div class="text-left">
-                            <h4 class="font-black text-slate-800 dark:text-white text-sm">{{ asg.docente_nombre }}</h4>
-                            <p class="text-xs font-bold text-indigo-500 uppercase mt-0.5 tracking-wider">
-                              {{ asg.grado_nombre }} ({{ asg.seccion_nombre }}) · {{ asg.jornada_nombre }}
-                            </p>
-                          </div>
-                        </div>
-                        <span class="px-2.5 py-1 bg-slate-50 dark:bg-slate-700/50 text-slate-500 dark:text-slate-400 rounded-lg text-[10px] font-black uppercase tracking-wider border border-slate-100 dark:border-slate-700">
-                          Asignado
-                        </span>
-                      </div>
+                      <!-- Hierarchical Assignment List Component -->
+                      <HierarchicalAssignmentList 
+                        :items="filteredAssignments" 
+                        mode="subject" 
+                        :read-only="true"
+                        empty-title="Sin docentes asignados"
+                        empty-message="No se encontraron asignaciones de docentes para esta materia con los filtros seleccionados."
+                      />
                     </div>
 
                   </div>
