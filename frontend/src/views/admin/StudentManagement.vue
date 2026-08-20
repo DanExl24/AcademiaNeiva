@@ -859,9 +859,9 @@ const exportToSIMAT = () => {
                 <label class="block text-slate-500 text-xs font-black uppercase tracking-wider mb-1">Tipo de Sanción <span class="text-red-500">*</span></label>
                 <select 
                   v-model="selectedSanctionType" 
-                  class="w-full bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-sm font-bold outline-none text-slate-900 dark:text-white focus:border-indigo-500 transition-all"
+                  class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-sm font-bold outline-none text-slate-900 dark:text-white focus:border-indigo-500 transition-all cursor-pointer"
                 >
-                  <option v-for="t in sanctionTypes" :key="t.id_tipo_sancion" :value="t.id_tipo_sancion">
+                  <option v-for="t in sanctionTypes" :key="t.id_tipo_sancion" :value="t.id_tipo_sancion" class="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
                     {{ t.nombre.replace(/_/g, ' ') }}
                   </option>
                 </select>
@@ -873,7 +873,7 @@ const exportToSIMAT = () => {
                   <input 
                     type="date" 
                     v-model="sanctionStartDate"
-                    class="w-full bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-sm font-bold outline-none text-slate-900 dark:text-white focus:border-indigo-500 transition-all"
+                    class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-sm font-bold outline-none text-slate-900 dark:text-white focus:border-indigo-500 transition-all"
                   />
                 </div>
                 <div>
@@ -881,7 +881,7 @@ const exportToSIMAT = () => {
                   <input 
                     type="date" 
                     v-model="sanctionEndDate"
-                    class="w-full bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-sm font-bold outline-none text-slate-900 dark:text-white focus:border-indigo-500 transition-all"
+                    class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-sm font-bold outline-none text-slate-900 dark:text-white focus:border-indigo-500 transition-all"
                   />
                 </div>
               </div>
@@ -893,7 +893,7 @@ const exportToSIMAT = () => {
                 v-model="statusMotivo" 
                 rows="2" 
                 placeholder="Describa el motivo detalladamente (mínimo 10 caracteres)..."
-                class="w-full bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-sm font-bold outline-none text-slate-900 dark:text-white focus:border-indigo-500 transition-all resize-none"
+                class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-sm font-bold outline-none text-slate-900 dark:text-white focus:border-indigo-500 transition-all resize-none"
               ></textarea>
               <div class="flex justify-between items-center mt-0.5">
                 <span class="text-[10px] text-slate-400 font-bold">Mínimo 10 caracteres</span>
@@ -907,7 +907,7 @@ const exportToSIMAT = () => {
                 v-model="sanctionObservaciones" 
                 rows="2" 
                 placeholder="Observaciones de descargo (opcional)..."
-                class="w-full bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-sm font-bold outline-none text-slate-900 dark:text-white focus:border-indigo-500 transition-all resize-none"
+                class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-sm font-bold outline-none text-slate-900 dark:text-white focus:border-indigo-500 transition-all resize-none"
               ></textarea>
             </div>
           </div>
