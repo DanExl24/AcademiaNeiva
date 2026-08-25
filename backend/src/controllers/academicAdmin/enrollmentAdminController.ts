@@ -118,8 +118,12 @@ export const createExtraordinaryEnrollment = async (req: Request, res: Response)
   const actualMotivo = motivo || motivo_extraordinaria;
   const actualObservaciones = observaciones || observaciones_extraordinaria;
 
-  if (!id_ticket) {
-    res.status(400).json({ error: "Una matrícula extraordinaria SOLO puede crearse si existe un ticket con tipo de incidencia MATRICULA_EXTRAORDINARIA." });
+  let finalTicketId = id_ticket ? Number(id_ticket) : null;
+  let finalSenderName = (req.body.nombre_acudiente || 'Acudiente').trim();
+  const finalCorreoPadre = (correo_padre || '').trim();
+
+  if (!finalTicketId && !finalCorreoPadre) {
+    res.status(400).json({ error: "Debe especificar un ticket de soporte o el correo electrónico del acudiente." });
     return;
   }
 
@@ -127,33 +131,49 @@ export const createExtraordinaryEnrollment = async (req: Request, res: Response)
   try {
     await client.query("BEGIN");
 
-    // 1. Validar ticket de soporte
-    const ticketRes = await client.query(
-      "SELECT * FROM tickets_soporte WHERE id_ticket = $1 AND id_colegio = $2",
-      [id_ticket, schoolId]
-    );
+    // 1. Validar o registrar ticket de soporte
+    if (finalTicketId) {
+      const ticketRes = await client.query(
+        "SELECT * FROM tickets_soporte WHERE id_ticket = $1 AND id_colegio = $2",
+        [finalTicketId, schoolId]
+      );
 
-    if (ticketRes.rows.length === 0) {
-      await client.query("ROLLBACK");
-      res.status(404).json({ error: "Ticket de soporte no encontrado en esta institución." });
-      return;
+      if (ticketRes.rows.length === 0) {
+        await client.query("ROLLBACK");
+        res.status(404).json({ error: "Ticket de soporte no encontrado en esta institución." });
+        return;
+      }
+
+      const ticket = ticketRes.rows[0];
+      if (ticket.tipo_incidencia !== 'MATRICULA_EXTRAORDINARIA') {
+        await client.query("ROLLBACK");
+        res.status(400).json({ error: "El ticket seleccionado debe ser de tipo MATRICULA_EXTRAORDINARIA." });
+        return;
+      }
+
+      finalSenderName = ticket.nombre_remitente || finalSenderName;
+    } else {
+      // Registrar ticket de trazabilidad originado directamente en secretaría
+      const ticketInsertRes = await client.query(
+        `INSERT INTO tickets_soporte 
+         (id_usuario, nombre_remitente, correo_remitente, telefono, tipo_incidencia, asunto, descripcion, id_colegio, estado, id_estudiante)
+         VALUES ($1, $2, $3, $4, 'MATRICULA_EXTRAORDINARIA', $5, $6, $7, 'EN_PROCESO', $8)
+         RETURNING id_ticket`,
+        [
+          authReq.user!.id,
+          finalSenderName,
+          finalCorreoPadre,
+          req.body.telefono || null,
+          'Autorización de Matrícula Extraordinaria por Secretaría',
+          actualMotivo || 'Autorización directa por directivo en gestión de matrículas',
+          schoolId,
+          id_estudiante ? Number(id_estudiante) : null
+        ]
+      );
+      finalTicketId = ticketInsertRes.rows[0].id_ticket;
     }
 
-    const ticket = ticketRes.rows[0];
-    if (ticket.tipo_incidencia !== 'MATRICULA_EXTRAORDINARIA') {
-      await client.query("ROLLBACK");
-      res.status(400).json({ error: "El ticket seleccionado debe ser de tipo MATRICULA_EXTRAORDINARIA." });
-      return;
-    }
-
-    const finalCorreoPadre = (correo_padre || ticket.correo_remitente || '').trim();
-    if (!finalCorreoPadre) {
-      await client.query("ROLLBACK");
-      res.status(400).json({ error: "No se pudo determinar el correo del acudiente desde el ticket de soporte." });
-      return;
-    }
-
-    // 2. Obtener el año lectivo activo de la institución (sin exigir selección manual de grado ni año al directivo)
+    // 2. Obtener el año lectivo activo de la institución
     const activeYearRes = await client.query(
       "SELECT id_anio FROM anio_lectivo WHERE id_colegio = $1 AND estado = 'ACTIVO' LIMIT 1",
       [schoolId]
@@ -225,10 +245,10 @@ export const createExtraordinaryEnrollment = async (req: Request, res: Response)
         finalCorreoPadre,
         tiene_discapacidad === true || tiene_discapacidad === 'true',
         es_extranjero === true || es_extranjero === 'true',
-        actualMotivo || 'Autorización de Matrícula Extraordinaria por Ticket de Soporte',
+        actualMotivo || 'Autorización de Matrícula Extraordinaria por Secretaría',
         actualObservaciones || null,
         authReq.user!.id,
-        id_ticket,
+        finalTicketId,
         tokenSeguimiento
       ]
     );
@@ -238,9 +258,9 @@ export const createExtraordinaryEnrollment = async (req: Request, res: Response)
     // 5. Actualizar el estado del ticket a EN_PROCESO
     await client.query(
       `UPDATE tickets_soporte 
-       SET estado = 'EN_PROCESO', respuesta = 'Matrícula Extraordinaria en curso' 
+       SET estado = 'EN_PROCESO', respuesta = 'Matrícula Extraordinaria autorizada y en curso' 
        WHERE id_ticket = $1`,
-      [id_ticket]
+      [finalTicketId]
     );
 
     await client.query("COMMIT");
@@ -248,7 +268,7 @@ export const createExtraordinaryEnrollment = async (req: Request, res: Response)
     // 6. Notificar al padre con el token de seguimiento
     await NotificationService.sendExtraordinaryApprovalEmail(
       finalCorreoPadre,
-      ticket.nombre_remitente || 'Acudiente',
+      finalSenderName,
       tokenSeguimiento
     );
 

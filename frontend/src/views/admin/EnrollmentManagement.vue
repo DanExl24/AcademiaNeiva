@@ -13,7 +13,8 @@ import {
   FileSpreadsheet,
   RefreshCw,
   Clock,
-  Calendar
+  Calendar,
+  Sparkles
 } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 import { useNotificationStore } from '../../stores/notifications'
@@ -27,6 +28,7 @@ import EmptyState from '../../components/feedback/EmptyState.vue'
 import EnrollmentReviewDrawer from '../../components/matriculas/EnrollmentReviewDrawer.vue'
 import EnrollmentCorrectionModal from '../../components/matriculas/EnrollmentCorrectionModal.vue'
 import EnrollmentCancelModal from '../../components/matriculas/EnrollmentCancelModal.vue'
+import ExtraordinaryEnrollmentModal from '../../components/matriculas/ExtraordinaryEnrollmentModal.vue'
 
 const auth = useAuthStore()
 const notify = useNotificationStore()
@@ -43,6 +45,29 @@ const filterTipo = ref<string>('TODOS')
 const filterNivel = ref<number | 'TODOS'>('TODOS')
 const filterSortOrder = ref<'OLDEST' | 'NEWEST'>('OLDEST')
 const onlyPendingDocs = ref<boolean>(false)
+const showExtraordinaryModal = ref(false)
+const enrollmentConfig = ref<any>(null)
+
+const isOrdinaryEnrollmentOpen = computed(() => {
+  if (!enrollmentConfig.value) return false
+  const { habilitada, fecha_inicio, fecha_cierre } = enrollmentConfig.value
+  if (!habilitada || !fecha_inicio || !fecha_cierre) return false
+  const now = new Date()
+  const start = new Date(fecha_inicio)
+  const end = new Date(fecha_cierre)
+  end.setHours(23, 59, 59, 999)
+  return now >= start && now <= end
+})
+
+const loadEnrollmentConfig = async () => {
+  try {
+    const idColegio = auth.user?.schoolId || auth.selectedSchoolId || 1
+    const data = await enrollmentService.getSchoolEnrollmentConfig(idColegio)
+    enrollmentConfig.value = data
+  } catch (err) {
+    console.error('Error cargando configuración de inscripciones:', err)
+  }
+}
 
 const fetchEnrollments = async () => {
   loading.value = true
@@ -61,8 +86,14 @@ const fetchEnrollments = async () => {
   }
 }
 
-onMounted(fetchEnrollments)
-watch(() => yearStore.selectedYearId, () => fetchEnrollments())
+onMounted(() => {
+  fetchEnrollments()
+  loadEnrollmentConfig()
+})
+watch(() => yearStore.selectedYearId, () => {
+  fetchEnrollments()
+  loadEnrollmentConfig()
+})
 
 const tabs = [
   { status: 'PENDIENTE',  label: 'Nuevas (Por Revisar)', color: 'amber'   },
@@ -433,7 +464,26 @@ const handleDownloadPDF = (fullMatricula: any) => {
         </p>
       </div>
 
-      <div class="flex items-center gap-2.5">
+      <div class="flex flex-wrap items-center gap-2.5">
+        <!-- Botón Matrícula Extraordinaria sincronizado con fechas de inscripción ordinaria -->
+        <button
+          v-if="!auth.isMonitoring"
+          @click="isOrdinaryEnrollmentOpen ? null : (showExtraordinaryModal = true)"
+          :disabled="isOrdinaryEnrollmentOpen"
+          :class="[
+            'flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black transition-all shadow-xs select-none',
+            isOrdinaryEnrollmentOpen
+              ? 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border border-slate-200 dark:border-slate-700 cursor-not-allowed opacity-75'
+              : 'bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white shadow-lg shadow-amber-500/20 active:scale-95 cursor-pointer'
+          ]"
+          :title="isOrdinaryEnrollmentOpen 
+            ? 'Las matrículas extraordinarias solo se habilitan cuando el período de inscripción ordinario ha finalizado o está cerrado.' 
+            : 'Crear autorización de matrícula extraordinaria fuera del período ordinario'"
+        >
+          <Sparkles :size="15" :class="isOrdinaryEnrollmentOpen ? 'text-slate-400' : 'text-white animate-pulse'" />
+          <span>{{ isOrdinaryEnrollmentOpen ? 'Inscripción Ordinaria Abierta' : 'Matrícula Extraordinaria' }}</span>
+        </button>
+
         <button
           @click="exportToCSV"
           class="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-700/50 shadow-xs transition-colors"
@@ -692,6 +742,13 @@ const handleDownloadPDF = (fullMatricula: any) => {
       :tipo-matricula="matricula?.tipo"
       @close="showCancelModal = false"
       @confirm="handleConfirmCancel"
+    />
+
+    <!-- Modal de Matrícula Extraordinaria -->
+    <ExtraordinaryEnrollmentModal
+      :is-open="showExtraordinaryModal"
+      @close="showExtraordinaryModal = false"
+      @success="fetchEnrollments"
     />
   </div>
 </template>

@@ -31,7 +31,8 @@ import {
   Building2,
   Award,
   FolderCheck,
-  Menu
+  Menu,
+  RotateCcw
 } from 'lucide-vue-next'
 import { useAuthStore } from '../stores/auth'
 import { useThemeStore } from '../stores/theme'
@@ -212,6 +213,7 @@ const menuSections = computed<MenuSection[]>(() => {
       title: 'Matrículas & Estudiantes',
       items: [
         { name: 'Gestión Matrículas', icon: ClipboardList, path: '/dashboard/gestion-matriculas' },
+        { name: 'Gestión Reingresos', icon: RotateCcw, path: '/dashboard/gestion-reingresos' },
         { name: 'Gestión Estudiantes', icon: GraduationCap, path: '/dashboard/gestion-estudiantes' },
         { name: 'Gestión Aprobados', icon: Award, path: '/dashboard/gestion-aprobados' },
         { name: 'Padres de Familia', icon: Users, path: '/dashboard/padres-familia' },
