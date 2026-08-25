@@ -14,13 +14,15 @@ import {
   RefreshCw,
   Clock,
   Calendar,
-  Sparkles
+  Sparkles,
+  Lock
 } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 import { useNotificationStore } from '../../stores/notifications'
 import { useAcademicYearStore } from '../../stores/academicYear'
 import { useConfirm } from '../../composables/useConfirm'
 import { enrollmentService } from '../../services/enrollmentService'
+import { academicService } from '../../services/academicService'
 import { formatDateTime } from '../../utils/dateHelper'
 import DataTable from '../../components/ui/DataTable.vue'
 import SkeletonTable from '../../components/feedback/SkeletonTable.vue'
@@ -50,20 +52,33 @@ const enrollmentConfig = ref<any>(null)
 
 const isOrdinaryEnrollmentOpen = computed(() => {
   if (!enrollmentConfig.value) return false
-  const { habilitada, fecha_inicio, fecha_cierre } = enrollmentConfig.value
-  if (!habilitada || !fecha_inicio || !fecha_cierre) return false
+  const cfg = enrollmentConfig.value.config || enrollmentConfig.value
+  const { habilitada, fecha_inicio, fecha_cierre } = cfg
+  
+  if (habilitada === false) return false
+  if (!fecha_inicio || !fecha_cierre) return false
+  
   const now = new Date()
   const start = new Date(fecha_inicio)
   const end = new Date(fecha_cierre)
   end.setHours(23, 59, 59, 999)
+  
   return now >= start && now <= end
 })
 
 const loadEnrollmentConfig = async () => {
   try {
-    const idColegio = auth.user?.schoolId || auth.selectedSchoolId || 1
-    const data = await enrollmentService.getSchoolEnrollmentConfig(idColegio)
-    enrollmentConfig.value = data
+    const idColegio = Number(auth.user?.schoolId || auth.selectedSchoolId || 1)
+    const yearId = yearStore.selectedYearId
+    let cfgData: any = null
+    if (yearId) {
+      cfgData = await academicService.getEnrollmentConfig(idColegio, yearId)
+    }
+    if (!cfgData || cfgData.fecha_inicio === undefined) {
+      const pubConfig = await enrollmentService.getSchoolEnrollmentConfig(idColegio)
+      cfgData = pubConfig?.config || pubConfig
+    }
+    enrollmentConfig.value = cfgData
   } catch (err) {
     console.error('Error cargando configuración de inscripciones:', err)
   }
@@ -477,11 +492,12 @@ const handleDownloadPDF = (fullMatricula: any) => {
               : 'bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white shadow-lg shadow-amber-500/20 active:scale-95 cursor-pointer'
           ]"
           :title="isOrdinaryEnrollmentOpen 
-            ? 'Las matrículas extraordinarias solo se habilitan cuando el período de inscripción ordinario ha finalizado o está cerrado.' 
+            ? 'El período ordinario de inscripciones se encuentra vigente. Las matrículas extraordinarias solo se habilitan cuando las inscripciones ordinarias han finalizado o están cerradas.' 
             : 'Crear autorización de matrícula extraordinaria fuera del período ordinario'"
         >
-          <Sparkles :size="15" :class="isOrdinaryEnrollmentOpen ? 'text-slate-400' : 'text-white animate-pulse'" />
-          <span>{{ isOrdinaryEnrollmentOpen ? 'Inscripción Ordinaria Abierta' : 'Matrícula Extraordinaria' }}</span>
+          <Lock v-if="isOrdinaryEnrollmentOpen" :size="14" class="text-slate-400" />
+          <Sparkles v-else :size="15" class="text-white animate-pulse" />
+          <span>{{ isOrdinaryEnrollmentOpen ? 'Matrícula Extraordinaria (Bloqueada)' : 'Matrícula Extraordinaria' }}</span>
         </button>
 
         <button
