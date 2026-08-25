@@ -66,3 +66,7 @@ postgres-data/
 # ---- Playwright Reports & Test Results ----
 playwright/reports/
 playwright/test-results/
+
+# ---- Script Caches ----
+.mermaid_cache/
+scripts/.mermaid_cache/

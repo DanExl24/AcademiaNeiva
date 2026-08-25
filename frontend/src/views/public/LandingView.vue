@@ -1,18 +1,27 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { 
   School, 
   Users, 
   BookOpen, 
   BarChart3, 
   ClipboardCheck, 
-  ArrowRight,
-  ShieldCheck,
-  Zap,
-  LifeBuoy,
-  HelpCircle
+  ArrowRight, 
+  ShieldCheck, 
+  Zap, 
+  LifeBuoy, 
+  HelpCircle,
+  Menu,
+  X,
+  LogIn,
+  Search
 } from 'lucide-vue-next'
 
+const isMobileMenuOpen = ref(false)
 
+const closeMobileMenu = () => {
+  isMobileMenuOpen.value = false
+}
 
 const benefits = [
   {
@@ -56,22 +65,109 @@ const roles = [
 <template>
   <div class="min-h-screen bg-white font-sans text-gray-900">
     <!-- Navbar -->
-    <nav class="fixed top-0 z-50 w-full border-b border-gray-100 bg-white/80 backdrop-blur-md">
-      <div class="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
-        <div class="flex items-center gap-2">
-          <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-lg shadow-indigo-200">
-            <School :size="24" />
+    <nav class="fixed top-0 z-50 w-full border-b border-gray-100 bg-white/90 backdrop-blur-md transition-all">
+      <div class="mx-auto flex max-w-7xl items-center justify-between px-4 py-3.5 sm:px-6 lg:px-8">
+        <!-- Brand Logo -->
+        <router-link to="/" class="flex items-center gap-2 group">
+          <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-lg shadow-indigo-200 group-hover:scale-105 transition-transform">
+            <School :size="22" />
           </div>
           <span class="text-xl font-bold tracking-tight text-gray-900">Academia <span class="text-indigo-600">Neiva</span></span>
-        </div>
+        </router-link>
         
+        <!-- Desktop Nav Links -->
         <div class="hidden md:flex md:items-center md:gap-8">
           <a href="#beneficios" class="text-sm font-medium text-gray-600 hover:text-indigo-600 transition-colors">Beneficios</a>
           <a href="#roles" class="text-sm font-medium text-gray-600 hover:text-indigo-600 transition-colors">Roles</a>
+          <router-link to="/matricula" class="text-sm font-medium text-gray-600 hover:text-indigo-600 transition-colors">Matrículas</router-link>
           <router-link to="/soporte" class="text-sm font-medium text-gray-600 hover:text-indigo-600 transition-colors">Soporte</router-link>
           <router-link to="/login" class="rounded-full bg-indigo-600 px-6 py-2 text-sm font-semibold text-white shadow-md hover:bg-indigo-700 transition-all hover:shadow-indigo-200">
             Ingresar
           </router-link>
+        </div>
+
+        <!-- Mobile Action Buttons & Hamburger Toggle -->
+        <div class="flex items-center gap-2 md:hidden">
+          <router-link 
+            to="/login" 
+            class="flex items-center gap-1.5 rounded-full bg-indigo-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-indigo-700 active:scale-95 transition-all"
+          >
+            <LogIn :size="14" />
+            <span>Ingresar</span>
+          </router-link>
+
+          <button 
+            @click="isMobileMenuOpen = !isMobileMenuOpen" 
+            class="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100 active:scale-95 transition-all"
+            aria-label="Abrir menú de navegación"
+          >
+            <Menu v-if="!isMobileMenuOpen" :size="22" />
+            <X v-else :size="22" class="text-indigo-600" />
+          </button>
+        </div>
+      </div>
+
+      <!-- Mobile Dropdown Menu -->
+      <div 
+        v-if="isMobileMenuOpen" 
+        class="border-b border-gray-100 bg-white/95 backdrop-blur-xl px-4 pt-2 pb-6 md:hidden animate-in slide-in-from-top-4 duration-200 shadow-xl"
+      >
+        <div class="flex flex-col gap-2 pt-2">
+          <a 
+            href="#beneficios" 
+            @click="closeMobileMenu"
+            class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 transition-colors"
+          >
+            <Zap :size="18" class="text-indigo-500" />
+            <span>Beneficios de la plataforma</span>
+          </a>
+
+          <a 
+            href="#roles" 
+            @click="closeMobileMenu"
+            class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 transition-colors"
+          >
+            <Users :size="18" class="text-indigo-500" />
+            <span>Roles y Perfiles</span>
+          </a>
+
+          <router-link 
+            to="/matricula" 
+            @click="closeMobileMenu"
+            class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 transition-colors"
+          >
+            <ClipboardCheck :size="18" class="text-indigo-500" />
+            <span>Iniciar Matrícula Digital</span>
+          </router-link>
+
+          <router-link 
+            to="/matricula/seguimiento" 
+            @click="closeMobileMenu"
+            class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 transition-colors"
+          >
+            <Search :size="18" class="text-indigo-500" />
+            <span>Consultar Estado de Matrícula</span>
+          </router-link>
+
+          <router-link 
+            to="/soporte" 
+            @click="closeMobileMenu"
+            class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 transition-colors"
+          >
+            <HelpCircle :size="18" class="text-emerald-500" />
+            <span>Mesa de Ayuda y Soporte</span>
+          </router-link>
+
+          <div class="mt-3 pt-3 border-t border-gray-100">
+            <router-link 
+              to="/login" 
+              @click="closeMobileMenu"
+              class="flex w-full items-center justify-center gap-2 rounded-xl bg-gray-900 px-5 py-3.5 text-center text-sm font-bold text-white shadow-lg hover:bg-gray-800 active:scale-98 transition-all"
+            >
+              <LogIn :size="18" />
+              <span>Entrar al Sistema</span>
+            </router-link>
+          </div>
         </div>
       </div>
     </nav>

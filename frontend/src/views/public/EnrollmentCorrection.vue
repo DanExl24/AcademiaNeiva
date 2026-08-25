@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import axios from 'axios'
+import { enrollmentService } from '../../services/enrollmentService'
 import { useNotificationStore } from '../../stores/notifications'
 import { 
   ArrowLeft,
@@ -17,7 +17,7 @@ const route = useRoute()
 const router = useRouter()
 const notify = useNotificationStore()
 
-const token = route.params.id
+const token = route.params.id as string
 const matricula = ref<any>(null)
 const loading = ref(true)
 const submittng = ref(false)
@@ -38,8 +38,8 @@ const docLabels: Record<string, string> = {
 
 const fetchDetails = async () => {
   try {
-    const response = await axios.get(`/api/matriculas/${token}`)
-    matricula.value = response.data
+    const data = await enrollmentService.getDetails(token)
+    matricula.value = data
     // Inicializar objeto de nuevos archivos
     matricula.value.documentos.forEach((doc: any) => {
       newFiles.value[doc.tipo_documento] = null
@@ -87,9 +87,7 @@ const submitCorrections = async () => {
       formData.append(key, file as File)
     })
 
-    await axios.post(`/api/matriculas/update-documents/${token}`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    })
+    await enrollmentService.updateDocuments(token, formData)
 
     notify.addNotification('Documentos actualizados exitosamente. Tu solicitud ha pasado a revisión con el estado "Docs Corregidos".', 'success')
     setTimeout(() => {
@@ -101,6 +99,7 @@ const submitCorrections = async () => {
     submittng.value = false
   }
 }
+
 
 const getStatusClass = (estado: string) => {
   if (estado === 'VALIDADO') return 'bg-emerald-100 text-emerald-700 border-emerald-200'

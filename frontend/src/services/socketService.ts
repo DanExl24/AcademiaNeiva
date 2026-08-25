@@ -84,3 +84,6 @@ export const socketService = {
     return socket?.connected ?? false
   }
 }
+
+export default socketService
+

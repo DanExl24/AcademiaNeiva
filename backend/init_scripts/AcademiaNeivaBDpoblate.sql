@@ -2,15 +2,12 @@
 -- PostgreSQL database dump
 --
 
-\restrict oyTigWM9kVUMJeHDwQo5CLnRsA3E5EgG2hcPlZRkLPSJeH4OzTl18tlecWJdZQA
+\restrict Tpcfdi6ncLNrynqHnUfvIEDQxYoqpaqf1sqTJeSdlTX7MKdUSxKUXbEn3IOJAfa
 
 -- Dumped from database version 18.4
 -- Dumped by pg_dump version 18.4
 
-SET statement_timeout = 0;
 SET lock_timeout = 0;
-SET idle_in_transaction_session_timeout = 0;
-SET transaction_timeout = 0;
 SET client_encoding = 'UTF8';
 SET standard_conforming_strings = on;
 SELECT pg_catalog.set_config('search_path', '', false);
@@ -2927,6 +2924,7 @@ CREATE TABLE public.usuario (
     password character varying(255) NOT NULL,
     nombre character varying(255) NOT NULL,
     apellido character varying(255),
+    id_colegio integer,
     activo boolean DEFAULT true,
     fecha_creacion timestamp with time zone DEFAULT now(),
     estado public.estado_usuario_sistema DEFAULT 'ACTIVO'::public.estado_usuario_sistema NOT NULL,
@@ -214181,5 +214179,5 @@ REVOKE USAGE ON SCHEMA public FROM PUBLIC;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict oyTigWM9kVUMJeHDwQo5CLnRsA3E5EgG2hcPlZRkLPSJeH4OzTl18tlecWJdZQA
+\unrestrict Tpcfdi6ncLNrynqHnUfvIEDQxYoqpaqf1sqTJeSdlTX7MKdUSxKUXbEn3IOJAfa
 

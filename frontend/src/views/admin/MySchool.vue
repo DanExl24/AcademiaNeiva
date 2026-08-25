@@ -1,13 +1,16 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue'
-import axios from 'axios'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
+import { academicService } from '../../services/academicService'
 import { useAuthStore } from '../../stores/auth'
-import { API_BASE_URL } from '../../config/api'
+import { API_BASE_URL } from '../../services/api'
+
 import { 
   School, Hash, MapPin, Mail, Phone, Calendar, Users, Upload,
   Palette, RefreshCw, Check, Undo, HelpCircle, ShieldAlert, FileText, Sliders, AlertCircle, Sparkles, Eraser
 } from 'lucide-vue-next'
 import { removeBackground } from '@imgly/background-removal'
+import { useConfirm } from '../../composables/useConfirm'
+import { useToast } from '../../composables/useToast'
 
 const getShieldUrl = (url: string | null | undefined): string => {
   if (!url || typeof url !== 'string') return ''
@@ -22,8 +25,12 @@ const getShieldUrl = (url: string | null | undefined): string => {
 }
 
 const auth = useAuthStore()
+const { confirm } = useConfirm()
+const toast = useToast()
 const schoolId = computed(() => Number(auth.user?.schoolId || auth.supervision?.id_colegio || 0))
 const isSupervision = computed(() => auth.activeRole === 'admin_general')
+
+
 
 // Component State
 const activeTab = ref<'general' | 'identity'>('general')
@@ -56,23 +63,26 @@ const uploading = ref(false)
 const validationError = ref('')
 const extractedColors = ref<string[]>([])
 const justification = ref('')
+const themeMode = ref<'default' | 'custom'>('default')
 
 const fetchSchoolData = async () => {
   if (!schoolId.value) return
   try {
     loading.value = true
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const response = await axios.get(`${API_BASE_URL}/api/academic-admin/my-school/${schoolId.value}`, { headers })
-    if (response.data) {
-      schoolData.value = response.data.school
-      kpis.value = response.data.kpis
+    const data = await academicService.getMySchool(schoolId.value)
+    if (data) {
+      schoolData.value = data.school
+      kpis.value = data.kpis
       
-      const shield = response.data.school.escudo_url || ''
-      const prim = response.data.school.color_primario || '#4f46e5'
-      const sec = response.data.school.color_secundario || '#0f172a'
+      const shield = data.school.escudo_url || ''
+      const prim = data.school.color_primario || '#4f46e5'
+      const sec = data.school.color_secundario || '#0f172a'
       
       form.value = { escudo_url: shield, color_primario: prim, color_secundario: sec }
       originalForm.value = { escudo_url: shield, color_primario: prim, color_secundario: sec }
+
+      const isCustom = Boolean(data.school.color_primario && data.school.color_primario.toLowerCase() !== '#4f46e5')
+      themeMode.value = isCustom ? 'custom' : 'default'
 
       // Extract colors from the existing shield on load if it exists
       if (shield) {
@@ -85,6 +95,22 @@ const fetchSchoolData = async () => {
     loading.value = false
   }
 }
+
+const selectThemeMode = (mode: 'default' | 'custom') => {
+  themeMode.value = mode
+  if (mode === 'default') {
+    form.value.color_primario = '#4f46e5'
+    form.value.color_secundario = '#0f172a'
+  } else {
+    if (extractedColors.value.length > 0 && (form.value.color_primario === '#4f46e5' || !form.value.color_primario)) {
+      form.value.color_primario = extractedColors.value[0]
+      if (extractedColors.value.length > 1) {
+        form.value.color_secundario = extractedColors.value[1]
+      }
+    }
+  }
+}
+
 
 const activeColorMenu = ref<number | null>(null)
 
@@ -228,18 +254,15 @@ const uploadShieldFile = async (file: File) => {
     const formData = new FormData()
     formData.append('escudo', file)
     
-    const headers = { 
-      Authorization: `Bearer ${auth.token}`,
-      'Content-Type': 'multipart/form-data'
-    }
-    const res = await axios.post(`${API_BASE_URL}/api/academic-admin/my-school/${schoolId.value}/identidad/upload-escudo`, formData, { headers })
-    form.value.escudo_url = res.data.url
+    const res = await academicService.uploadSchoolEscudo(schoolId.value, formData)
+    form.value.escudo_url = res.url
   } catch (error: any) {
     validationError.value = error.response?.data?.error || 'Error al cargar escudo.'
   } finally {
     uploading.value = false
   }
 }
+
 
 const handleFileChange = async (event: Event) => {
   const target = event.target as HTMLInputElement
@@ -416,6 +439,47 @@ const handleRemoveWhiteBg = async () => {
   }
 }
 
+const hexToRgb = (hex: string): { r: number; g: number; b: number } | null => {
+  const shorthandRegex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i;
+  const fullHex = hex.replace(shorthandRegex, (_m, r, g, b) => r + r + g + g + b + b);
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(fullHex);
+  return result ? {
+    r: parseInt(result[1], 16),
+    g: parseInt(result[2], 16),
+    b: parseInt(result[3], 16)
+  } : null;
+}
+
+const applyLiveTheme = (primary?: string, secondary?: string) => {
+  if (primary) {
+    document.documentElement.style.setProperty('--color-primary', primary)
+    const rgbPrimary = hexToRgb(primary)
+    if (rgbPrimary) {
+      document.documentElement.style.setProperty('--color-primary-rgb', `${rgbPrimary.r}, ${rgbPrimary.g}, ${rgbPrimary.b}`)
+    }
+  }
+  if (secondary) {
+    document.documentElement.style.setProperty('--color-secondary', secondary)
+    const rgbSecondary = hexToRgb(secondary)
+    if (rgbSecondary) {
+      document.documentElement.style.setProperty('--color-secondary-rgb', `${rgbSecondary.r}, ${rgbSecondary.g}, ${rgbSecondary.b}`)
+    }
+  }
+}
+
+watch(
+  [() => form.value.color_primario, () => form.value.color_secundario],
+  ([prim, sec]) => {
+    applyLiveTheme(prim, sec)
+  }
+)
+
+onUnmounted(() => {
+  if (originalForm.value.color_primario && originalForm.value.color_secundario) {
+    applyLiveTheme(originalForm.value.color_primario, originalForm.value.color_secundario)
+  }
+})
+
 const applyColorSuggestion = (type: 'primary' | 'secondary', color: string) => {
   if (type === 'primary') {
     form.value.color_primario = color
@@ -429,33 +493,43 @@ const undoChanges = () => {
   justification.value = ''
   validationError.value = ''
   extractedColors.value = []
+  const isCustom = Boolean(originalForm.value.color_primario && originalForm.value.color_primario.toLowerCase() !== '#4f46e5')
+  themeMode.value = isCustom ? 'custom' : 'default'
+  applyLiveTheme(originalForm.value.color_primario, originalForm.value.color_secundario)
 }
 
 const resetToDefaults = async () => {
-  if (confirm('¿Estás seguro de que deseas restablecer los colores y escudo por defecto del colegio?')) {
-    if (isSupervision.value && !justification.value.trim()) {
-      alert('Por favor escribe la justificación para registrar esta modificación en la auditoría.')
-      return
-    }
-    try {
-      saving.value = true
-      const headers = { Authorization: `Bearer ${auth.token}` }
-      const payload = { motivo_cambio: isSupervision.value ? justification.value : undefined }
-      
-      await axios.post(`/api/academic-admin/my-school/${schoolId.value}/identidad/reset`, payload, { headers })
-      
-      form.value = { escudo_url: '', color_primario: '#4f46e5', color_secundario: '#0f172a' }
-      originalForm.value = { escudo_url: '', color_primario: '#4f46e5', color_secundario: '#0f172a' }
-      justification.value = ''
-      alert('Identidad restablecida a los valores por defecto del sistema.')
-      window.location.reload() // Reload page to immediately apply global stylesheet reset
-    } catch (error: any) {
-      alert(error.response?.data?.error || 'Error al restablecer valores por defecto.')
-    } finally {
-      saving.value = false
-    }
+  const ok = await confirm({
+    title: 'Restablecer Identidad Institucional',
+    message: '¿Estás seguro de que deseas restablecer los colores y escudo por defecto del colegio?',
+    confirmText: 'Restablecer Valores',
+    type: 'warning'
+  })
+  if (!ok) return
+
+  if (isSupervision.value && !justification.value.trim()) {
+    toast.warning('Por favor escribe la justificación para registrar esta modificación en la auditoría.')
+    return
+  }
+  try {
+    saving.value = true
+    const payload = { motivo_cambio: isSupervision.value ? justification.value : undefined }
+    
+    await academicService.resetSchoolEscudo(schoolId.value, payload)
+    
+    form.value = { escudo_url: '', color_primario: '#4f46e5', color_secundario: '#0f172a' }
+    originalForm.value = { escudo_url: '', color_primario: '#4f46e5', color_secundario: '#0f172a' }
+    themeMode.value = 'default'
+    justification.value = ''
+    toast.success('Identidad restablecida a los valores por defecto del sistema.')
+    window.location.reload() // Reload page to immediately apply global stylesheet reset
+  } catch (error: any) {
+    toast.error(error.response?.data?.error || 'Error al restablecer valores por defecto.')
+  } finally {
+    saving.value = false
   }
 }
+
 
 const saveChanges = async () => {
   if (isSupervision.value && !justification.value.trim()) {
@@ -465,7 +539,6 @@ const saveChanges = async () => {
 
   try {
     saving.value = true
-    const headers = { Authorization: `Bearer ${auth.token}` }
     const payload = {
       escudo_url: form.value.escudo_url,
       color_primario: form.value.color_primario,
@@ -473,7 +546,7 @@ const saveChanges = async () => {
       motivo_cambio: isSupervision.value ? justification.value : undefined
     }
     
-    await axios.put(`/api/academic-admin/my-school/${schoolId.value}/identidad`, payload, { headers })
+    await academicService.updateSchoolIdentity(schoolId.value, payload)
     originalForm.value = { ...form.value }
     justification.value = ''
     alert('Identidad visual actualizada exitosamente.')
@@ -484,6 +557,7 @@ const saveChanges = async () => {
     saving.value = false
   }
 }
+
 </script>
 
 <template>
@@ -492,7 +566,7 @@ const saveChanges = async () => {
     <div class="rounded-3xl border border-slate-100 bg-white p-8 shadow-sm md:p-10 dark:bg-slate-900 dark:border-slate-800">
       <div class="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
         <div class="flex items-center gap-4">
-          <div class="p-4 bg-indigo-50 dark:bg-indigo-950/30 rounded-2xl text-indigo-650 dark:text-indigo-400">
+          <div class="p-4 bg-indigo-50 dark:bg-indigo-950/30 rounded-2xl text-indigo-600 dark:text-indigo-400">
             <School :size="32" />
           </div>
           <div>
@@ -511,7 +585,7 @@ const saveChanges = async () => {
 
     <!-- Loading state -->
     <div v-if="loading" class="rounded-3xl border border-slate-100 bg-white p-20 text-center shadow-sm dark:bg-slate-900 dark:border-slate-800">
-      <RefreshCw class="animate-spin h-8 w-8 mx-auto text-indigo-650 mb-3" />
+      <RefreshCw class="animate-spin h-8 w-8 mx-auto text-indigo-600 mb-3" />
       <span class="font-bold text-slate-400">Cargando información del colegio...</span>
     </div>
 
@@ -521,7 +595,7 @@ const saveChanges = async () => {
         <button 
           @click="activeTab = 'general'"
           :class="[
-            activeTab === 'general' ? 'bg-white dark:bg-slate-900 text-indigo-650 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200',
+            activeTab === 'general' ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200',
             'px-5 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2'
           ]"
         >
@@ -531,7 +605,7 @@ const saveChanges = async () => {
         <button 
           @click="activeTab = 'identity'"
           :class="[
-            activeTab === 'identity' ? 'bg-white dark:bg-slate-900 text-indigo-650 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200',
+            activeTab === 'identity' ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200',
             'px-5 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2'
           ]"
         >
@@ -643,7 +717,7 @@ const saveChanges = async () => {
             </div>
 
             <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 shadow-sm flex items-center gap-4 hover:shadow-md transition-shadow">
-              <div class="p-3 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-650 dark:text-indigo-400 rounded-2xl">
+              <div class="p-3 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 rounded-2xl">
                 <Users :size="24" />
               </div>
               <div>
@@ -664,8 +738,14 @@ const saveChanges = async () => {
               <School v-else class="text-slate-300 dark:text-slate-700" :size="72" />
             </div>
             
-            <h3 class="font-extrabold text-slate-900 dark:text-white text-lg">{{ schoolData.nombre }}</h3>
-            <p class="text-xs text-slate-500 max-w-[200px]">Usa la pestaña de Identidad Visual para cambiar el escudo y personalizar la paleta de colores de la plataforma.</p>
+            <div v-if="getShieldUrl(form.escudo_url)" class="space-y-1">
+              <p class="text-xs font-bold text-slate-700 dark:text-slate-200">Escudo Oficial</p>
+              <p class="text-[10px] text-slate-400">Personalizado para la institución</p>
+            </div>
+            <div v-else class="space-y-1">
+              <p class="text-xs font-bold text-slate-500">Sin Escudo Personalizado</p>
+              <p class="text-[10px] text-slate-400">Carga el escudo oficial en la pestaña "Identidad Visual"</p>
+            </div>
           </div>
         </div>
       </div>
@@ -680,7 +760,7 @@ const saveChanges = async () => {
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
               <!-- Upload Escudo -->
               <div class="md:col-span-1 space-y-2">
-                <label class="text-xs font-black text-slate-550 dark:text-slate-400 uppercase tracking-wider block">Cargar Escudo</label>
+                <label class="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Cargar Escudo</label>
                 <input ref="fileInput" type="file" accept="image/*" class="hidden" @change="handleFileChange" />
                 
                 <div 
@@ -728,55 +808,124 @@ const saveChanges = async () => {
                 <p class="text-[9px] text-slate-400 leading-normal mt-1 font-semibold">JPG, JPEG, PNG, SVG (Máx. 2MB)</p>
               </div>
 
-              <!-- Color Selectors -->
-              <div class="md:col-span-2 space-y-4">
-                <label class="text-xs font-black text-slate-550 dark:text-slate-400 uppercase tracking-wider block">Colores del Colegio</label>
-
-                <!-- Color Pickers -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <!-- Primary Color -->
-                  <div class="p-4 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-800/50 space-y-2">
-                    <span class="text-[10px] font-black text-slate-450 uppercase tracking-wider block">Color Primario</span>
-                    <div class="flex items-center gap-2">
-                      <div class="w-10 h-10 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm relative overflow-hidden shrink-0" :style="{ backgroundColor: form.color_primario }">
-                        <input type="color" v-model="form.color_primario" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+              <!-- Color Configuration Section -->
+              <div class="md:col-span-2 space-y-5">
+                <!-- Theme Mode Selection: Default Platform vs Custom Shield -->
+                <div class="space-y-2.5">
+                  <label class="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider block">
+                    Tema y Paleta de Colores de la Plataforma
+                  </label>
+                  
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <!-- Option 1: Default Indigo -->
+                    <div 
+                      @click="selectThemeMode('default')"
+                      class="p-4 rounded-2xl border-2 cursor-pointer transition-all flex items-start gap-3 relative select-none"
+                      :class="[
+                        themeMode === 'default'
+                          ? 'border-indigo-600 bg-indigo-50/50 dark:bg-indigo-950/20 shadow-sm'
+                          : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-900/50'
+                      ]"
+                    >
+                      <div 
+                        class="w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all"
+                        :class="themeMode === 'default' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300 dark:border-slate-600'"
+                      >
+                        <div v-if="themeMode === 'default'" class="w-1.5 h-1.5 rounded-full bg-white"></div>
                       </div>
-                      <input type="text" v-model="form.color_primario" class="w-full bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-mono font-bold outline-none text-slate-800 dark:text-white" />
+                      <div class="space-y-1 min-w-0">
+                        <div class="flex items-center gap-2">
+                          <span class="text-xs font-black text-slate-800 dark:text-white">Tema por Defecto</span>
+                          <div class="flex gap-1 items-center">
+                            <span class="w-2.5 h-2.5 rounded-full bg-[#4f46e5] inline-block shadow-xs"></span>
+                            <span class="w-2.5 h-2.5 rounded-full bg-[#0f172a] inline-block shadow-xs"></span>
+                          </div>
+                        </div>
+                        <p class="text-[10px] text-slate-500 dark:text-slate-400 leading-tight">
+                          Conserva los colores originales e identidad de AcademiaNeiva.
+                        </p>
+                      </div>
                     </div>
-                  </div>
 
-                  <!-- Secondary Color -->
-                  <div class="p-4 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-800/50 space-y-2">
-                    <span class="text-[10px] font-black text-slate-450 uppercase tracking-wider block">Color Secundario</span>
-                    <div class="flex items-center gap-2">
-                      <div class="w-10 h-10 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm relative overflow-hidden shrink-0" :style="{ backgroundColor: form.color_secundario }">
-                        <input type="color" v-model="form.color_secundario" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                    <!-- Option 2: Custom Shield Colors -->
+                    <div 
+                      @click="selectThemeMode('custom')"
+                      class="p-4 rounded-2xl border-2 cursor-pointer transition-all flex items-start gap-3 relative select-none"
+                      :class="[
+                        themeMode === 'custom'
+                          ? 'border-indigo-600 bg-indigo-50/50 dark:bg-indigo-950/20 shadow-sm'
+                          : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-900/50'
+                      ]"
+                    >
+                      <div 
+                        class="w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all"
+                        :class="themeMode === 'custom' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300 dark:border-slate-600'"
+                      >
+                        <div v-if="themeMode === 'custom'" class="w-1.5 h-1.5 rounded-full bg-white"></div>
                       </div>
-                      <input type="text" v-model="form.color_secundario" class="w-full bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-mono font-bold outline-none text-slate-800 dark:text-white" />
+                      <div class="space-y-1 min-w-0">
+                        <div class="flex items-center gap-2">
+                          <span class="text-xs font-black text-slate-800 dark:text-white">Colores Institucionales</span>
+                          <div class="flex gap-1 items-center">
+                            <span class="w-2.5 h-2.5 rounded-full inline-block shadow-xs border border-slate-200 dark:border-slate-700" :style="{ backgroundColor: form.color_primario }"></span>
+                            <span class="w-2.5 h-2.5 rounded-full inline-block shadow-xs border border-slate-200 dark:border-slate-700" :style="{ backgroundColor: form.color_secundario }"></span>
+                          </div>
+                        </div>
+                        <p class="text-[10px] text-slate-500 dark:text-slate-400 leading-tight">
+                          Recolorea el menú y botones con los colores de tu escudo.
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                <!-- Extracted Color Suggestions -->
-                <div v-if="extractedColors.length > 0" class="space-y-2 bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-100 dark:border-slate-800/50">
-                  <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Colores Sugeridos del Escudo</span>
-                  <div class="flex flex-wrap gap-2">
-                    <div 
-                      v-for="(color, idx) in extractedColors" 
-                      :key="idx"
-                      @click.stop="toggleColorMenu(idx)"
-                      class="relative w-7 h-7 rounded-full border border-slate-200 dark:border-slate-700 cursor-pointer hover:scale-110 transition-all flex items-center justify-center"
-                      :style="{ backgroundColor: color }"
-                      :title="color"
-                    >
-                      <!-- Apply color drop-down/helper inside tooltip -->
+                <!-- Custom Color Pickers & Suggestions (Expanded when custom or accessible) -->
+                <div v-if="themeMode === 'custom'" class="space-y-4 pt-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <!-- Primary Color -->
+                    <div class="p-4 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-800/50 space-y-2">
+                      <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Color Primario</span>
+                      <div class="flex items-center gap-2">
+                        <div class="w-10 h-10 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm relative overflow-hidden shrink-0" :style="{ backgroundColor: form.color_primario }">
+                          <input type="color" v-model="form.color_primario" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                        </div>
+                        <input type="text" v-model="form.color_primario" class="w-full bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-mono font-bold outline-none text-slate-800 dark:text-white" />
+                      </div>
+                    </div>
+
+                    <!-- Secondary Color -->
+                    <div class="p-4 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-800/50 space-y-2">
+                      <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Color Secundario</span>
+                      <div class="flex items-center gap-2">
+                        <div class="w-10 h-10 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm relative overflow-hidden shrink-0" :style="{ backgroundColor: form.color_secundario }">
+                          <input type="color" v-model="form.color_secundario" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                        </div>
+                        <input type="text" v-model="form.color_secundario" class="w-full bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-mono font-bold outline-none text-slate-800 dark:text-white" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Extracted Color Suggestions -->
+                  <div v-if="extractedColors.length > 0" class="space-y-2 bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-100 dark:border-slate-800/50">
+                    <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Colores Sugeridos del Escudo</span>
+                    <div class="flex flex-wrap gap-2">
                       <div 
-                        v-if="activeColorMenu === idx"
-                        @click.stop
-                        class="absolute bottom-full mb-2 bg-slate-900 text-white rounded p-1.5 text-[8px] flex flex-col gap-1 w-24 z-20 shadow-xl border border-slate-800"
+                        v-for="(color, idx) in extractedColors" 
+                        :key="idx"
+                        @click.stop="toggleColorMenu(idx)"
+                        class="relative w-7 h-7 rounded-full border border-slate-200 dark:border-slate-700 cursor-pointer hover:scale-110 transition-all flex items-center justify-center"
+                        :style="{ backgroundColor: color }"
+                        :title="color"
                       >
-                        <button @click="applyColorSuggestion('primary', color); closeColorMenu()" class="hover:bg-slate-800 px-2 py-1 rounded text-left font-bold transition-colors">Usar Primario</button>
-                        <button @click="applyColorSuggestion('secondary', color); closeColorMenu()" class="hover:bg-slate-850 px-2 py-1 rounded text-left font-bold transition-colors">Usar Secundario</button>
+                        <!-- Apply color drop-down/helper inside tooltip -->
+                        <div 
+                          v-if="activeColorMenu === idx"
+                          @click.stop
+                          class="absolute bottom-full mb-2 bg-slate-900 text-white rounded p-1.5 text-[8px] flex flex-col gap-1 w-24 z-20 shadow-xl border border-slate-800"
+                        >
+                          <button @click="applyColorSuggestion('primary', color); closeColorMenu()" class="hover:bg-slate-800 px-2 py-1 rounded text-left font-bold transition-colors">Usar Primario</button>
+                          <button @click="applyColorSuggestion('secondary', color); closeColorMenu()" class="hover:bg-slate-800 px-2 py-1 rounded text-left font-bold transition-colors">Usar Secundario</button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -785,13 +934,13 @@ const saveChanges = async () => {
             </div>
 
             <!-- Supervision Audit Justification -->
-            <div v-if="isSupervision" class="space-y-2 bg-amber-50/50 dark:bg-amber-950/15 border border-amber-250/30 p-5 rounded-2xl">
+            <div v-if="isSupervision" class="space-y-2 bg-amber-50/50 dark:bg-amber-950/15 border border-amber-200/50 p-5 rounded-2xl">
               <span class="text-xs font-black text-amber-800 dark:text-amber-400 uppercase tracking-wider flex items-center gap-1"><ShieldAlert :size="14" /> Justificación del Cambio (Auditoría) *</span>
               <textarea 
                 v-model="justification" 
                 placeholder="Por favor detalla el motivo formal de esta modificación como administrador supervisor..." 
                 rows="2"
-                class="w-full bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 rounded-xl p-3 text-xs font-bold outline-none text-slate-950 dark:text-white resize-none"
+                class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-xs font-bold outline-none text-slate-900 dark:text-white resize-none"
               ></textarea>
             </div>
 
@@ -804,12 +953,17 @@ const saveChanges = async () => {
               
               <div class="flex-1"></div>
               
-              <button @click="undoChanges" :disabled="saving" class="flex items-center justify-center gap-1.5 px-4 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-800 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-350 rounded-xl text-xs font-bold transition-all">
+              <button @click="undoChanges" :disabled="saving" class="flex items-center justify-center gap-1.5 px-4 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-800 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-xl text-xs font-bold transition-all">
                 <Undo :size="14" />
                 Deshacer cambios
               </button>
               
-              <button @click="saveChanges" :disabled="saving" class="flex items-center justify-center gap-1.5 px-6 py-2.5 bg-indigo-650 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md">
+              <button 
+                @click="saveChanges" 
+                :disabled="saving" 
+                class="flex items-center justify-center gap-1.5 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-200 dark:shadow-none"
+                :style="form.color_primario ? { backgroundColor: form.color_primario } : {}"
+              >
                 <Check :size="14" />
                 {{ saving ? 'Guardando...' : 'Guardar Cambios' }}
               </button>

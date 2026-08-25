@@ -1,10 +1,16 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import axios from 'axios'
-import { ArrowLeft, BookOpenCheck, PenSquare, Plus, Search, Sparkles, Check, Trash2, X, AlertTriangle, RefreshCw } from 'lucide-vue-next'
+import { academicService } from '../../services/academicService'
 import { useAuthStore } from '../../stores/auth'
+
 import { useNotificationStore } from '../../stores/notifications'
 import { getCourseDisplayName } from '../../utils/courseHelper'
+import { useConfirm } from '../../composables/useConfirm'
+import { useToast } from '../../composables/useToast'
+
+const { confirm } = useConfirm()
+const toast = useToast()
+
 
 interface AcademicPeriod {
   id_periodo: number
@@ -129,20 +135,18 @@ const fetchDiagnostic = async () => {
 
   try {
     loadingDiagnostic.value = true
-    const res = await axios.get(`/api/academic-admin/settings/dba-planeacion/disponibles/${schoolId.value}`, {
-      params: {
-        id_grupo: sampleAssignment.id_grupo,
-        id_materia: sampleAssignment.id_materia
-      }
+    const dbaList = await academicService.getDbaPlaneacionDisponibles(schoolId.value, {
+      id_grupo: sampleAssignment.id_grupo,
+      id_materia: sampleAssignment.id_materia
     })
 
-    const dbaList: any[] = res.data.dba || []
+    const list: any[] = (dbaList as any).dba || dbaList || []
     let totalEvidences = 0
     let freeEvidencesCount = 0
     let unusedDbaCount = 0
     const unusedDbas: string[] = []
 
-    for (const dba of dbaList) {
+    for (const dba of list) {
       let dbaHasPlannedEvidence = false
       if (Array.isArray(dba.evidencias)) {
         for (const ev of dba.evidencias) {
@@ -161,7 +165,7 @@ const fetchDiagnostic = async () => {
     }
 
     diagnosticData.value = {
-      totalDba: dbaList.length,
+      totalDba: list.length,
       unusedDbaCount,
       unusedDbas,
       totalEvidences,
@@ -200,10 +204,8 @@ const promptDeleteCompetencia = async (item: CompetencyItem) => {
   deleteUsageInfo.value = null
 
   try {
-    const res = await axios.get(`/api/academic-admin/settings/competencies/${item.id_competencia}/usage-check`, {
-      params: { schoolId: schoolId.value }
-    })
-    deleteUsageInfo.value = res.data
+    const data = await academicService.checkCompetencyUsage(item.id_competencia, schoolId.value)
+    deleteUsageInfo.value = data
   } catch (error) {
     console.error('Error checking competency usage:', error)
     notify.addNotification('No se pudo verificar el uso de la competencia', 'error')
@@ -217,9 +219,7 @@ const confirmDeleteCompetencia = async () => {
 
   try {
     saving.value = true
-    await axios.delete(`/api/academic-admin/settings/competencies/${competenciaToDelete.value.id_competencia}`, {
-      params: { schoolId: schoolId.value }
-    })
+    await academicService.deleteCompetency(competenciaToDelete.value.id_competencia, schoolId.value)
     notify.addNotification('Competencia eliminada exitosamente', 'success')
     showDeleteModal.value = false
     competenciaToDelete.value = null
@@ -233,6 +233,7 @@ const confirmDeleteCompetencia = async () => {
   } finally {
     saving.value = false
   }
+
 }
 
 const competencyForm = ref({
@@ -368,11 +369,11 @@ const loadData = async () => {
     if (yearStore.selectedYearId) {
       params.yearId = yearStore.selectedYearId
     }
-    const response = await axios.get(`/api/academic-admin/settings/${schoolId.value}`, { params })
-    periods.value = response.data.periods || []
-    assignments.value = response.data.assignments
-    competencies.value = response.data.competencies
-    dimensions.value = response.data.dimensions || []
+    const response = await academicService.getSettings(schoolId.value, params)
+    periods.value = response.periods || []
+    assignments.value = response.assignments
+    competencies.value = response.competencies
+    dimensions.value = response.dimensions || []
   } catch (error) {
     console.error('Error loading academic competencies:', error)
   } finally {
@@ -419,16 +420,14 @@ const onFormContextChange = async (arg?: number | Event) => {
   try {
     loadingFormDba.value = true
     showFormDba.value = true
-    const res = await axios.get(`/api/academic-admin/settings/dba-planeacion/disponibles/${schoolId.value}`, {
-      params: {
-        id_grupo: target.id_grupo,
-        id_materia: target.id_materia,
-        id_periodo: competencyForm.value.id_periodo || undefined,
-        id_competencia: competencyId || undefined
-      }
+    const resData: any = await academicService.getDbaPlaneacionDisponibles(schoolId.value, {
+      id_grupo: target.id_grupo,
+      id_materia: target.id_materia,
+      id_periodo: competencyForm.value.id_periodo || undefined,
+      id_competencia: competencyId || undefined
     })
-    availableFormDba.value = res.data.dba || []
-    formDbaVersion.value = res.data.versionCurricular
+    availableFormDba.value = resData.dba || []
+    formDbaVersion.value = resData.versionCurricular
   } catch (error) {
     console.error('Error fetching available DBA for form:', error)
     availableFormDba.value = []
@@ -467,10 +466,8 @@ const openEditModal = async (item: CompetencyItem) => {
   competencyModal.value = true
   
   try {
-    const res = await axios.get(`/api/academic-admin/settings/competencies/${item.id_competencia}/usage-check`, {
-      params: { schoolId: schoolId.value }
-    })
-    editingCompetencyIsUsed.value = res.data.isUsed
+    const data = await academicService.checkCompetencyUsage(item.id_competencia, schoolId.value)
+    editingCompetencyIsUsed.value = data.isUsed
   } catch (error) {
     console.error('Error checking competency usage:', error)
   }
@@ -509,7 +506,7 @@ const saveCompetency = async () => {
   try {
     saving.value = true
     const assignment = targets[0]
-    await axios.post('/api/academic-admin/settings/competencies', {
+    await academicService.saveCompetency({
       schoolId: schoolId.value,
       id_grupo: assignment.id_grupo,
       id_materia: assignment.id_materia,
@@ -552,12 +549,12 @@ const addEvidencia = async (competencia: CompetencyItem) => {
 
   try {
     saving.value = true
-    const response = await axios.post(`/api/academic-admin/settings/competencies/${competencia.id_competencia}/evidencias`, {
+    const data = await academicService.createCurriculumEvidence(competencia.id_competencia, {
       schoolId: schoolId.value,
       descripcion: desc
     })
     if (!competencia.evidencias) competencia.evidencias = []
-    competencia.evidencias.push(response.data)
+    competencia.evidencias.push(data)
     newEvidencia.value[competencia.id_competencia] = ''
     notify.addNotification('Evidencia agregada correctamente', 'success')
   } catch (error: any) {
@@ -581,7 +578,7 @@ const saveEditEvidencia = async (evidencia: any) => {
 
   try {
     saving.value = true
-    await axios.put(`/api/academic-admin/settings/evidencias/${evidencia.id_evidencia}`, {
+    await academicService.updateCurriculumEvidence(evidencia.id_evidencia, {
       schoolId: schoolId.value,
       descripcion: desc
     })
@@ -596,21 +593,26 @@ const saveEditEvidencia = async (evidencia: any) => {
 }
 
 const removeEvidencia = async (competencia: CompetencyItem, evidenciaId: number) => {
-  if (!confirm('¿Eliminar esta evidencia?')) return
+  const ok = await confirm({
+    title: 'Eliminar Evidencia Curricular',
+    message: '¿Está seguro de que desea eliminar esta evidencia?',
+    confirmText: 'Eliminar Evidencia',
+    type: 'danger'
+  })
+  if (!ok) return
 
   try {
     saving.value = true
-    await axios.delete(`/api/academic-admin/settings/evidencias/${evidenciaId}`, {
-      params: { schoolId: schoolId.value }
-    })
+    await academicService.deleteCurriculumEvidence(evidenciaId, schoolId.value)
     competencia.evidencias = competencia.evidencias.filter((e: any) => e.id_evidencia !== evidenciaId)
-    notify.addNotification('Evidencia eliminada correctamente', 'success')
+    toast.success('Evidencia eliminada correctamente')
   } catch (error: any) {
-    notify.addNotification(error.response?.data?.error || 'Error al eliminar evidencia', 'error')
+    toast.error(error.response?.data?.error || 'Error al eliminar evidencia')
   } finally {
     saving.value = false
   }
 }
+
 
 const openDbaModal = async (competencia: CompetencyItem) => {
   selectedCompetenciaForDba.value = competencia
@@ -626,16 +628,14 @@ const openDbaModal = async (competencia: CompetencyItem) => {
     .map(e => e.id_evidencia_dba as number)
 
   try {
-    const res = await axios.get(`/api/academic-admin/settings/dba-planeacion/disponibles/${schoolId.value}`, {
-      params: {
-        id_grupo: competencia.id_grupo,
-        id_materia: competencia.id_materia,
-        id_periodo: competencia.id_periodo,
-        id_competencia: competencia.id_competencia
-      }
+    const resData: any = await academicService.getDbaPlaneacionDisponibles(schoolId.value, {
+      id_grupo: competencia.id_grupo,
+      id_materia: competencia.id_materia,
+      id_periodo: competencia.id_periodo,
+      id_competencia: competencia.id_competencia
     })
-    availableDba.value = res.data.dba || []
-    dbaVersion.value = res.data.versionCurricular
+    availableDba.value = resData.dba || []
+    dbaVersion.value = resData.versionCurricular
   } catch (error) {
     console.error('Error fetching available DBA:', error)
     notify.addNotification('No fue posible cargar el catálogo de DBA', 'error')
@@ -649,7 +649,7 @@ const saveDbaEvidencias = async () => {
 
   try {
     saving.value = true
-    await axios.post(`/api/academic-admin/settings/competencias/${selectedCompetenciaForDba.value.id_competencia}/vincular-evidencias-dba`, {
+    await academicService.linkDbaEvidences(selectedCompetenciaForDba.value.id_competencia, {
       schoolId: schoolId.value,
       id_evidencias_dba: checkedDbaEvidences.value
     })
@@ -663,6 +663,7 @@ const saveDbaEvidencias = async () => {
     saving.value = false
   }
 }
+
 
 const filteredAvailableDba = computed(() => {
   const q = dbaSearch.value.toLowerCase().trim()

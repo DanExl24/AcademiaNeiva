@@ -1,14 +1,25 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, computed } from 'vue'
-import axios from 'axios'
-import { useAuthStore } from '../../stores/auth'
+import { dbaService } from '../../services/dbaService'
 import { 
   BookOpen, Plus, Search, Edit3, CheckCircle, XCircle, 
-  ChevronDown, ChevronUp, Book, Layers, Award, School, Settings, X,
-  Upload, Trash2, AlertTriangle
+  ChevronDown, ChevronUp, Book, Layers, Award, School, Settings,
+  Upload, Trash2
 } from 'lucide-vue-next'
+import { useConfirm } from '../../composables/useConfirm'
+import { useToast } from '../../composables/useToast'
+import DbaCreateEditModal from '../../components/dba/DbaCreateEditModal.vue'
+import DbaEvidenceModal from '../../components/dba/DbaEvidenceModal.vue'
+import DbaAssignSchoolModal from '../../components/dba/DbaAssignSchoolModal.vue'
+import DbaImportPdfModal from '../../components/dba/DbaImportPdfModal.vue'
 
-const auth = useAuthStore()
+
+
+const { confirm } = useConfirm()
+const toast = useToast()
+
+
+
 
 // Interfaces
 interface EvidenciaDba {
@@ -144,16 +155,10 @@ const gradeOptions = [
   'SEXTO', 'SEPTIMO', 'OCTAVO', 'NOVENO', 'DECIMO', 'ONCE'
 ]
 
-// Common headers helper
-const getHeaders = () => ({
-  headers: { Authorization: `Bearer ${auth.token}` }
-})
-
 // API Calls
 const fetchStats = async () => {
   try {
-    const res = await axios.get('/api/admin/dba/estadisticas', getHeaders())
-    stats.value = res.data
+    stats.value = await dbaService.getStats()
   } catch (error) {
     console.error('Error fetching dba stats:', error)
   }
@@ -161,17 +166,16 @@ const fetchStats = async () => {
 
 const fetchMeta = async () => {
   try {
-    const [areasRes, versionsRes, collegesRes, existentesRes] = await Promise.all([
-      axios.get('/api/admin/dba/areas', getHeaders()),
-      axios.get('/api/admin/dba/versiones', getHeaders()),
-      axios.get('/api/admin/colegios', getHeaders()),
-      axios.get('/api/admin/dba/existentes', getHeaders())
+    const [areasData, versionsData, collegesData, existentesData] = await Promise.all([
+      dbaService.getAreas(),
+      dbaService.getVersions(),
+      dbaService.getColleges(),
+      dbaService.getExisting()
     ])
-    areas.value = areasRes.data
-    versions.value = versionsRes.data
-    existingCombinations.value = existentesRes.data
-    // Filter active colleges
-    colleges.value = collegesRes.data.filter((c: Colegio) => c.estado === 'ACTIVO')
+    areas.value = areasData
+    versions.value = versionsData
+    existingCombinations.value = existentesData
+    colleges.value = collegesData.filter((c: Colegio) => c.estado === 'ACTIVO')
   } catch (error) {
     console.error('Error fetching dba metadata:', error)
   }
@@ -190,17 +194,11 @@ const fetchDbaList = async () => {
       busqueda: filters.value.busqueda || undefined
     }
 
-    const res = await axios.get('/api/admin/dba', {
-      headers: { Authorization: `Bearer ${auth.token}` },
-      params
-    })
-    
-    // Get total count header
-    const totalHeader = res.headers['x-total-count']
-    totalCount.value = totalHeader ? Number(totalHeader) : res.data.length
+    const { data, totalCount: tCount } = await dbaService.getDbaList(params)
+    totalCount.value = tCount
     totalPages.value = Math.ceil(totalCount.value / limit.value) || 1
 
-    dbaList.value = res.data.map((d: Dba) => ({
+    dbaList.value = data.map((d: Dba) => ({
       ...d,
       isExpanded: false,
       evidencias: []
@@ -217,8 +215,8 @@ const toggleExpandDba = async (dba: Dba) => {
   dba.isExpanded = !dba.isExpanded
   if (dba.isExpanded && (!dba.evidencias || dba.evidencias.length === 0)) {
     try {
-      const res = await axios.get(`/api/admin/dba/${dba.id_dba}`, getHeaders())
-      dba.evidencias = res.data.evidencias
+      const details = await dbaService.getDbaDetails(dba.id_dba)
+      dba.evidencias = details.evidencias
     } catch (error) {
       console.error('Error fetching dba details/evidences:', error)
     }
@@ -231,7 +229,7 @@ watch([filters, page], () => {
 }, { deep: true })
 
 watch(() => filters.value, () => {
-  page.value = 1 // Reset page on filter change
+  page.value = 1
 }, { deep: true })
 
 // Lifecycle Hook
@@ -270,23 +268,22 @@ const openEditDba = (dba: Dba) => {
 
 const handleSaveDba = async () => {
   if (!dbaForm.value.area || !dbaForm.value.enunciado || !dbaForm.value.version_curricular) {
-    alert('Por favor complete los campos obligatorios.')
+    toast.warning('Por favor complete los campos obligatorios.')
     return
   }
   
   try {
     saving.value = true
     if (selectedDba.value) {
-      // Edit
-      await axios.put(`/api/admin/dba/${selectedDba.value.id_dba}`, dbaForm.value, getHeaders())
+      await dbaService.updateDba(selectedDba.value.id_dba, dbaForm.value)
     } else {
-      // Create
-      await axios.post('/api/admin/dba', dbaForm.value, getHeaders())
+      await dbaService.createDba(dbaForm.value)
     }
+    toast.success('DBA guardado exitosamente')
     showDbaModal.value = false
     await Promise.all([fetchStats(), fetchMeta(), fetchDbaList()])
   } catch (error: any) {
-    alert(error.response?.data?.error || 'Error al guardar DBA')
+    toast.error(error.response?.data?.error || 'Error al guardar DBA')
   } finally {
     saving.value = false
   }
@@ -295,26 +292,39 @@ const handleSaveDba = async () => {
 const toggleDbaStatus = async (dba: Dba) => {
   const newStatus = dba.estado === 'ACTIVO' ? 'INACTIVO' : 'ACTIVO'
   const action = newStatus === 'ACTIVO' ? 'activar' : 'desactivar'
-  if (confirm(`¿Estás seguro de que deseas ${action} el DBA #${dba.numero_dba}?`)) {
-    try {
-      await axios.patch(`/api/admin/dba/${dba.id_dba}/estado`, { estado: newStatus }, getHeaders())
-      dba.estado = newStatus
-      await fetchStats()
-    } catch (error: any) {
-      alert(error.response?.data?.error || 'Error al cambiar estado del DBA')
-    }
+  const ok = await confirm({
+    title: `${newStatus === 'ACTIVO' ? 'Activar' : 'Desactivar'} DBA`,
+    message: `¿Estás seguro de que deseas ${action} el DBA #${dba.numero_dba}?`,
+    confirmText: newStatus === 'ACTIVO' ? 'Activar' : 'Desactivar',
+    type: newStatus === 'ACTIVO' ? 'primary' : 'warning'
+  })
+  if (!ok) return
+
+  try {
+    await dbaService.updateDba(dba.id_dba, { estado: newStatus })
+    dba.estado = newStatus
+    toast.success(`DBA #${dba.numero_dba} ${newStatus.toLowerCase()} exitosamente`)
+    await fetchStats()
+  } catch (error: any) {
+    toast.error(error.response?.data?.error || 'Error al cambiar estado del DBA')
   }
 }
 
 const handleDeleteDba = async (dba: Dba) => {
-  if (confirm(`¿Estás seguro de que deseas eliminar permanentemente el DBA #${dba.numero_dba}? Esta acción borrará todas sus evidencias y no se puede deshacer.`)) {
-    try {
-      await axios.delete(`/api/admin/dba/${dba.id_dba}`, getHeaders())
-      await Promise.all([fetchStats(), fetchMeta(), fetchDbaList()])
-      alert('DBA eliminado exitosamente.')
-    } catch (error: any) {
-      alert(error.response?.data?.error || 'Error al eliminar el DBA')
-    }
+  const ok = await confirm({
+    title: 'Eliminar DBA',
+    message: `¿Estás seguro de que deseas eliminar permanentemente el DBA #${dba.numero_dba}? Esta acción borrará todas sus evidencias y no se puede deshacer.`,
+    confirmText: 'Eliminar DBA',
+    type: 'danger'
+  })
+  if (!ok) return
+
+  try {
+    await dbaService.deleteDba(dba.id_dba)
+    await Promise.all([fetchStats(), fetchMeta(), fetchDbaList()])
+    toast.success('DBA eliminado exitosamente.')
+  } catch (error: any) {
+    toast.error(error.response?.data?.error || 'Error al eliminar el DBA')
   }
 }
 
@@ -341,31 +351,29 @@ const openEditEvidence = (dba: Dba, ev: EvidenciaDba) => {
 
 const handleSaveEvidence = async () => {
   if (!evidenceForm.value.descripcion) {
-    alert('La descripción es obligatoria.')
+    toast.warning('La descripción es obligatoria.')
     return
   }
 
   try {
     saving.value = true
     if (selectedEvidence.value) {
-      // Edit
-      const res = await axios.put(`/api/admin/dba/evidencias/${selectedEvidence.value.id_evidencia_dba}`, evidenceForm.value, getHeaders())
-      // Update local state
+      const data = await dbaService.updateEvidence(selectedEvidence.value.id_evidencia_dba, evidenceForm.value)
       if (parentDba.value && parentDba.value.evidencias) {
         const idx = parentDba.value.evidencias.findIndex(e => e.id_evidencia_dba === selectedEvidence.value!.id_evidencia_dba)
-        if (idx !== -1) parentDba.value.evidencias[idx] = res.data
+        if (idx !== -1) parentDba.value.evidencias[idx] = data
       }
     } else if (parentDba.value) {
-      // Create
-      const res = await axios.post(`/api/admin/dba/${parentDba.value.id_dba}/evidencias`, evidenceForm.value, getHeaders())
+      const data = await dbaService.createEvidence({ ...evidenceForm.value, id_dba: parentDba.value.id_dba })
       if (!parentDba.value.evidencias) parentDba.value.evidencias = []
-      parentDba.value.evidencias.push(res.data)
+      parentDba.value.evidencias.push(data)
       parentDba.value.total_evidencias = (parentDba.value.total_evidencias || 0) + 1
     }
+    toast.success('Evidencia guardada exitosamente')
     showEvidenceModal.value = false
     await fetchStats()
   } catch (error: any) {
-    alert(error.response?.data?.error || 'Error al guardar evidencia')
+    toast.error(error.response?.data?.error || 'Error al guardar evidencia')
   } finally {
     saving.value = false
   }
@@ -374,10 +382,11 @@ const handleSaveEvidence = async () => {
 const toggleEvidenceStatus = async (ev: EvidenciaDba) => {
   const newStatus = ev.estado === 'ACTIVO' ? 'INACTIVO' : 'ACTIVO'
   try {
-    const res = await axios.patch(`/api/admin/dba/evidencias/${ev.id_evidencia_dba}/estado`, { estado: newStatus }, getHeaders())
-    ev.estado = res.data.estado
+    const data = await dbaService.updateEvidence(ev.id_evidencia_dba, { estado: newStatus })
+    ev.estado = data.estado || newStatus
+    toast.success(`Estado de evidencia actualizado a ${newStatus}`)
   } catch (error: any) {
-    alert(error.response?.data?.error || 'Error al cambiar estado de la evidencia')
+    toast.error(error.response?.data?.error || 'Error al cambiar estado de la evidencia')
   }
 }
 
@@ -409,24 +418,29 @@ const handleAssignVersion = async () => {
       if (isBulkArea) parts.push('TODAS las materias')
       else parts.push(`"${assignForm.value.area}"`)
       if (isBulkSchool) parts.push('TODOS los colegios activos')
-      const confirmed = confirm(`¿Está seguro de asignar ${parts.join(' a ')} (${assignForm.value.version_curricular})?\n\nEsta acción asignará la versión curricular masivamente.`)
+      const confirmed = await confirm({
+        title: 'Asignación Masiva de Versión Curricular',
+        message: `¿Está seguro de asignar ${parts.join(' a ')} (${assignForm.value.version_curricular})? Esta acción asignará la versión curricular masivamente.`,
+        confirmText: 'Asignar Versión',
+        type: 'warning'
+      })
       if (!confirmed) {
         saving.value = false
         return
       }
     }
 
-    const response = await axios.post('/api/admin/dba/asignar-version', {
+    const response = await dbaService.assignDbaToSchool({
       id_colegio: isBulkSchool ? 'TODOS' : Number(assignForm.value.id_colegio),
       area: assignForm.value.area,
       grado: assignForm.value.grado,
       version_curricular: assignForm.value.version_curricular
-    }, getHeaders())
+    })
     
-    alert(response.data?.message || 'Versión curricular asignada exitosamente.')
+    toast.success(response?.message || 'Versión curricular asignada exitosamente.')
     showAssignModal.value = false
   } catch (error: any) {
-    alert(error.response?.data?.error || 'Error al asignar versión al colegio')
+    toast.error(error.response?.data?.error || 'Error al asignar versión al colegio')
   } finally {
     saving.value = false
   }
@@ -435,8 +449,8 @@ const handleAssignVersion = async () => {
 const viewAssignments = async (college: Colegio) => {
   selectedSchoolForView.value = college
   try {
-    const res = await axios.get(`/api/admin/dba/asignaciones/${college.id_colegio}`, getHeaders())
-    activeSchoolAssignments.value = res.data
+    const data = await dbaService.getSchoolAssignments(college.id_colegio)
+    activeSchoolAssignments.value = data
     showViewAssignmentsModal.value = true
   } catch (error) {
     console.error('Error fetching assignments:', error)
@@ -484,19 +498,12 @@ const handleImportPDF = async () => {
     formData.append('start_page', String(importForm.value.start_page))
     formData.append('overwrite', String(importOverwrite.value))
 
-    const res = await axios.post('/api/admin/dba/importar', formData, {
-      headers: {
-        Authorization: `Bearer ${auth.token}`,
-        'Content-Type': 'multipart/form-data'
-      }
-    })
-
+    const res = await dbaService.importDba(formData)
     importResult.value = {
-      message: res.data.message,
-      summary: res.data.summary
+      message: res.message,
+      summary: res.summary
     }
 
-    // Refresh data
     await Promise.all([fetchStats(), fetchMeta(), fetchDbaList()])
   } catch (error: any) {
     alert(error.response?.data?.error || 'Error al importar PDF')
@@ -504,6 +511,7 @@ const handleImportPDF = async () => {
     saving.value = false
   }
 }
+
 </script>
 
 <template>
@@ -735,7 +743,7 @@ const handleImportPDF = async () => {
               <button 
                 v-if="dba.estado === 'ACTIVO'"
                 @click.stop="openCreateEvidence(dba)" 
-                class="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950/30 hover:bg-indigo-100 dark:hover:bg-indigo-950/60 text-indigo-650 dark:text-indigo-400 rounded-lg text-xs font-bold transition-all"
+                class="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950/30 hover:bg-indigo-100 dark:hover:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 rounded-lg text-xs font-bold transition-all"
               >
                 <Plus :size="14" />
                 Agregar Evidencia
@@ -812,7 +820,7 @@ const handleImportPDF = async () => {
               </button>
               <button 
                 @click.stop="openEditDba(dba)" 
-                class="flex items-center gap-1 px-4 py-2 bg-indigo-50 dark:bg-indigo-950/30 hover:bg-indigo-100 dark:hover:bg-indigo-950/60 text-indigo-650 dark:text-indigo-400 rounded-xl font-bold text-xs transition-all"
+                class="flex items-center gap-1 px-4 py-2 bg-indigo-50 dark:bg-indigo-950/30 hover:bg-indigo-100 dark:hover:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 rounded-xl font-bold text-xs transition-all"
               >
                 <Edit3 :size="14" />
                 Editar
@@ -847,368 +855,68 @@ const handleImportPDF = async () => {
     </div>
 
     <!-- MODAL 1: Crear/Editar DBA -->
-    <div v-if="showDbaModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-[999]">
-      <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-8 space-y-6">
-        <div class="flex justify-between items-center">
-          <h3 class="text-lg font-black text-slate-900 dark:text-white">
-            {{ selectedDba ? 'Editar Derecho Básico' : 'Registrar Derecho Básico (DBA)' }}
-          </h3>
-          <button @click="showDbaModal = false" class="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400">
-            <X :size="20" />
-          </button>
-        </div>
-
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <!-- Área -->
-          <div>
-            <label class="text-xs font-bold text-slate-400 uppercase block mb-1">Área Académica *</label>
-            <input v-model="dbaForm.area" type="text" placeholder="Ej. Ciencias Naturales" class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-          </div>
-
-          <!-- Versión Curricular -->
-          <div>
-            <label class="text-xs font-bold text-slate-400 uppercase block mb-1">Versión Curricular *</label>
-            <input v-model="dbaForm.version_curricular" type="text" placeholder="Ej. 2016" class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-          </div>
-
-          <!-- Grado -->
-          <div>
-            <label class="text-xs font-bold text-slate-400 uppercase block mb-1">Grado *</label>
-            <select v-model="dbaForm.grado" class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-              <option v-for="grade in gradeOptions" :key="grade" :value="grade">{{ grade }}</option>
-            </select>
-          </div>
-
-          <!-- Número -->
-          <div>
-            <label class="text-xs font-bold text-slate-400 uppercase block mb-1">Número de DBA *</label>
-            <input v-model.number="dbaForm.numero_dba" type="number" min="1" class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-          </div>
-
-          <!-- Enunciado -->
-          <div class="sm:col-span-2">
-            <label class="text-xs font-bold text-slate-400 uppercase block mb-1">Enunciado (Aprendizaje Estructurante) *</label>
-            <textarea v-model="dbaForm.enunciado" rows="4" placeholder="Escribe el enunciado de aprendizaje..." class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
-          </div>
-        </div>
-
-        <div class="flex justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
-          <button @click="showDbaModal = false" class="px-5 py-2.5 border border-slate-200 dark:border-slate-700 text-slate-650 dark:text-slate-350 rounded-xl font-bold text-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-all">
-            Cancelar
-          </button>
-          <button :disabled="saving" @click="handleSaveDba" class="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700 disabled:opacity-50 transition-all">
-            <span v-if="saving" class="animate-spin border-2 border-white border-t-transparent rounded-full h-4 w-4"></span>
-            Guardar
-          </button>
-        </div>
-      </div>
-    </div>
+    <DbaCreateEditModal
+      :show="showDbaModal"
+      :selected-dba="selectedDba"
+      :dba-form="dbaForm"
+      :grade-options="gradeOptions"
+      :saving="saving"
+      @close="showDbaModal = false"
+      @save="handleSaveDba"
+    />
 
     <!-- MODAL 2: Crear/Editar Evidencia -->
-    <div v-if="showEvidenceModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-[999]">
-      <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-2xl w-full max-w-xl p-8 space-y-6">
-        <div class="flex justify-between items-center">
-          <h3 class="text-lg font-black text-slate-900 dark:text-white">
-            {{ selectedEvidence ? 'Editar Evidencia de Aprendizaje' : 'Agregar Evidencia' }}
-          </h3>
-          <button @click="showEvidenceModal = false" class="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400">
-            <X :size="20" />
-          </button>
-        </div>
+    <DbaEvidenceModal
+      :show="showEvidenceModal"
+      :selected-evidence="selectedEvidence"
+      :parent-dba="parentDba"
+      :evidence-form="evidenceForm"
+      :saving="saving"
+      @close="showEvidenceModal = false"
+      @save="handleSaveEvidence"
+    />
 
-        <div class="space-y-4">
-          <div class="p-4 bg-indigo-50/40 dark:bg-indigo-950/20 rounded-2xl">
-            <span class="text-[10px] font-black uppercase text-indigo-500">DBA Asociado</span>
-            <p class="text-xs font-semibold text-slate-700 dark:text-slate-300 mt-1 line-clamp-2">
-              #{{ parentDba?.numero_dba }} - {{ parentDba?.enunciado }}
-            </p>
-          </div>
-
-          <!-- Orden -->
-          <div>
-            <label class="text-xs font-bold text-slate-400 uppercase block mb-1">Orden de Visualización *</label>
-            <input v-model.number="evidenceForm.orden" type="number" min="1" class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-          </div>
-
-          <!-- Descripción -->
-          <div>
-            <label class="text-xs font-bold text-slate-400 uppercase block mb-1">Descripción de la Evidencia *</label>
-            <textarea v-model="evidenceForm.descripcion" rows="4" placeholder="Ej. Compara cambios físicos en..." class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
-          </div>
-        </div>
-
-        <div class="flex justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
-          <button @click="showEvidenceModal = false" class="px-5 py-2.5 border border-slate-200 dark:border-slate-700 text-slate-650 dark:text-slate-350 rounded-xl font-bold text-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-all">
-            Cancelar
-          </button>
-          <button :disabled="saving" @click="handleSaveEvidence" class="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700 disabled:opacity-50 transition-all">
-            <span v-if="saving" class="animate-spin border-2 border-white border-t-transparent rounded-full h-4 w-4"></span>
-            Guardar
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- MODAL 3: Asignar versión a Colegio -->
-    <div v-if="showAssignModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-[999]">
-      <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-2xl w-full max-w-lg p-8 space-y-6">
-        <div class="flex justify-between items-center">
-          <h3 class="text-lg font-black text-slate-900 dark:text-white">
-            Asignar Versión Curricular a Colegio
-          </h3>
-          <button @click="showAssignModal = false" class="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400">
-            <X :size="20" />
-          </button>
-        </div>
-
-        <div class="space-y-4">
-          <!-- Colegio -->
-          <div>
-            <label class="text-xs font-bold text-slate-400 uppercase block mb-1">Colegio *</label>
-            <select v-model="assignForm.id_colegio" class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-              <option value="" disabled>Seleccione un colegio</option>
-              <option value="TODOS" class="font-black text-indigo-600">📋 Todos los colegios (asignación masiva)</option>
-              <option v-for="col in colleges" :key="col.id_colegio" :value="col.id_colegio.toString()">
-                {{ col.nombre }}
-              </option>
-            </select>
-          </div>
-
-          <!-- Área -->
-          <div>
-            <label class="text-xs font-bold text-slate-400 uppercase block mb-1">Área Académica *</label>
-            <select v-model="assignForm.area" class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-              <option value="TODAS" class="font-black text-indigo-600">📚 Todas las materias (asignación masiva)</option>
-              <option v-for="a in areas" :key="a" :value="a">{{ a }}</option>
-            </select>
-          </div>
-
-          <!-- Grado -->
-          <div>
-            <label class="text-xs font-bold text-slate-400 uppercase block mb-1">Grado *</label>
-            <select v-model="assignForm.grado" class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-              <option value="TODOS">Todos los grados</option>
-              <option v-for="grade in gradeOptions" :key="grade" :value="grade">{{ grade }}</option>
-            </select>
-          </div>
-
-          <!-- Versión Curricular -->
-          <div>
-            <label class="text-xs font-bold text-slate-400 uppercase block mb-1">Versión Curricular *</label>
-            <select v-model="assignForm.version_curricular" class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-              <option v-for="ver in versions" :key="ver" :value="ver">{{ ver }}</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="flex justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
-          <button @click="showAssignModal = false" class="px-5 py-2.5 border border-slate-200 dark:border-slate-700 text-slate-650 dark:text-slate-350 rounded-xl font-bold text-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-all">
-            Cancelar
-          </button>
-          <button :disabled="saving" @click="handleAssignVersion" class="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700 disabled:opacity-50 transition-all">
-            <span v-if="saving" class="animate-spin border-2 border-white border-t-transparent rounded-full h-4 w-4"></span>
-            Asignar
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- MODAL 4: Ver Asignaciones de un Colegio -->
-    <div v-if="showViewAssignmentsModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-[999]">
-      <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-2xl w-full max-w-2xl p-8 space-y-6">
-        <div class="flex justify-between items-center">
-          <div>
-            <h3 class="text-lg font-black text-slate-900 dark:text-white">
-              Configuración Curricular Asignada
-            </h3>
-            <p class="text-xs text-slate-500 mt-0.5">{{ selectedSchoolForView?.nombre }}</p>
-          </div>
-          <button @click="showViewAssignmentsModal = false" class="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400">
-            <X :size="20" />
-          </button>
-        </div>
-
-        <div class="max-h-[50vh] overflow-y-auto">
-          <div v-if="activeSchoolAssignments.length === 0" class="text-center py-8 text-slate-400 text-sm italic">
-            El colegio no tiene ninguna versión curricular asignada en este momento.
-          </div>
-          <table v-else class="w-full text-left border-collapse">
-            <thead>
-              <tr class="border-b border-slate-100 dark:border-slate-800 text-[10px] uppercase font-black tracking-wider text-slate-400">
-                <th class="pb-3">Área</th>
-                <th class="pb-3">Grado</th>
-                <th class="pb-3 text-center">Versión Curricular</th>
-                <th class="pb-3 text-right">Asignado el</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr 
-                v-for="asig in activeSchoolAssignments" 
-                :key="asig.id"
-                class="border-b border-slate-50 dark:border-slate-800/50 last:border-none text-xs font-semibold text-slate-750 dark:text-slate-300"
-              >
-                <td class="py-3.5">{{ asig.area }}</td>
-                <td class="py-3.5">{{ asig.grado }}</td>
-                <td class="py-3.5 text-center">
-                  <span class="px-2 py-0.5 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-650 dark:text-indigo-400 font-bold rounded-md">
-                    {{ asig.version_curricular }}
-                  </span>
-                </td>
-                <td class="py-3.5 text-right text-slate-450">
-                  {{ new Date(asig.fecha_asignacion).toLocaleDateString() }}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div class="flex justify-end pt-4 border-t border-slate-100 dark:border-slate-800">
-          <button @click="showViewAssignmentsModal = false" class="px-5 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl font-bold text-sm hover:bg-slate-200 dark:hover:bg-slate-700 transition-all">
-            Cerrar
-          </button>
-        </div>
-      </div>
-    </div>
+    <!-- MODAL 3 & 4: Asignar versión a Colegio / Ver Asignaciones -->
+    <DbaAssignSchoolModal
+      :show-assign-modal="showAssignModal"
+      :assign-form="assignForm"
+      :colleges="colleges"
+      :areas="areas"
+      :grade-options="gradeOptions"
+      :versions="versions"
+      :saving="saving"
+      :show-view-assignments-modal="showViewAssignmentsModal"
+      :selected-school-for-view="selectedSchoolForView"
+      :active-school-assignments="activeSchoolAssignments"
+      @close-assign="showAssignModal = false"
+      @save-assign="handleAssignVersion"
+      @close-view-assignments="showViewAssignmentsModal = false"
+    />
 
     <!-- MODAL 5: Importar DBA desde PDF -->
-    <div v-if="showImportModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-[999]">
-      <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-2xl w-full max-w-xl p-8 flex flex-col max-h-[85vh]">
-        <!-- FIXED HEADER -->
-        <div class="flex justify-between items-center pb-4 border-b border-slate-100 dark:border-slate-800">
-          <h3 class="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
-            <Upload :size="20" class="text-indigo-500" />
-            Importar DBA desde PDF Curricular
-          </h3>
-          <button @click="showImportModal = false" class="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400">
-            <X :size="20" />
-          </button>
-        </div>
-
-        <!-- SCROLLABLE BODY -->
-        <div class="overflow-y-auto py-6 pr-2 flex-1 min-h-0 space-y-5">
-          <!-- If result exists, show success summary -->
-          <div v-if="importResult" class="space-y-4">
-            <div class="p-4 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 rounded-2xl flex items-center gap-3">
-              <CheckCircle :size="24" />
-              <div>
-                <p class="text-sm font-bold">{{ importResult.message }}</p>
-              </div>
-            </div>
-
-            <div class="p-5 bg-slate-50 dark:bg-slate-800/55 rounded-2xl border border-slate-100 dark:border-slate-850">
-              <span class="text-[10px] font-black uppercase text-slate-400 block mb-2">Resumen del Procesamiento</span>
-              <pre class="text-xs font-semibold text-slate-750 dark:text-slate-300 font-mono whitespace-pre-wrap leading-relaxed">{{ importResult.summary }}</pre>
-            </div>
-          </div>
-
-          <!-- Form layout -->
-          <div v-else class="space-y-4">
-            <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed font-medium">
-              Sube el archivo PDF oficial emitido por el MEN para el área académica correspondiente. El sistema detectará las páginas del catálogo, estructurará las columnas visuales y poblará las evidencias de forma automática.
-            </p>
-
-            <!-- Existing combinations -->
-            <div v-if="existingCombinations.length > 0" class="p-4 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-800/80">
-              <span class="text-[10px] font-black uppercase text-slate-400 block mb-2">Materias con DBA ya existentes (Haz clic para autocompletar):</span>
-              <div class="flex flex-wrap gap-1.5 max-h-[80px] overflow-y-auto pr-1">
-                <span 
-                  v-for="c in existingCombinations" 
-                  :key="c.area + c.version_curricular" 
-                  class="px-2.5 py-1 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-350 text-[10px] font-bold rounded-lg border border-slate-200/50 dark:border-slate-700 cursor-pointer hover:border-indigo-500 dark:hover:border-indigo-400 transition-all"
-                  @click="importForm.area = c.area; importForm.version_curricular = c.version_curricular"
-                >
-                  {{ c.area }} ({{ c.version_curricular }})
-                </span>
-              </div>
-            </div>
-
-            <!-- File selector -->
-            <div class="border-2 border-dashed border-slate-205 dark:border-slate-700 rounded-2xl p-6 text-center hover:border-indigo-500 transition-all relative">
-              <input type="file" ref="fileInput" @change="onFileChange" accept=".pdf" class="absolute inset-0 opacity-0 cursor-pointer" />
-              <div class="space-y-2">
-                <Upload class="mx-auto text-slate-400" :size="32" />
-                <div class="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                  {{ importFile ? importFile.name : 'Selecciona o arrastra el archivo PDF' }}
-                </div>
-                <p class="text-xs text-slate-400">Tamaño máximo recomendado: 15MB</p>
-              </div>
-            </div>
-
-            <!-- Area & Version -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label class="text-xs font-bold text-slate-400 uppercase block mb-1">Área Académica *</label>
-                <input v-model="importForm.area" type="text" placeholder="Ej. Ciencias Naturales" class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-              </div>
-
-              <div>
-                <label class="text-xs font-bold text-slate-400 uppercase block mb-1">Versión Curricular *</label>
-                <input v-model="importForm.version_curricular" type="text" placeholder="Ej. 2016" class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-              </div>
-
-              <div class="sm:col-span-2">
-                <label class="text-xs font-bold text-slate-400 uppercase block mb-1">Página de Inicio en el PDF *</label>
-                <input v-model.number="importForm.start_page" type="number" min="1" class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                <span class="text-[10px] font-bold text-slate-400 mt-1 block">Número de página física (1-indexed) donde inician los DBA, descartando introducciones.</span>
-              </div>
-
-              <!-- Overwrite warning and options -->
-              <div v-if="isExistingDba" class="sm:col-span-2 p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-250/30 dark:border-amber-900/30 rounded-2xl space-y-3">
-                <div class="flex items-center gap-2 text-amber-600 dark:text-amber-400 text-xs font-black">
-                  <AlertTriangle :size="16" />
-                  Esta combinación de Materia y Versión ya tiene DBAs cargados
-                </div>
-                <p class="text-[10px] font-bold text-slate-500 dark:text-slate-400 leading-normal">
-                  Selecciona si deseas sobreescribir los datos existentes (eliminará los registros anteriores de esta materia/versión antes de la importación) o mantenerlos para combinarlos.
-                </p>
-                <div class="flex gap-4">
-                  <label class="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer">
-                    <input type="radio" v-model="importOverwrite" :value="true" class="text-indigo-600 focus:ring-indigo-500" />
-                    Sobreescribir y limpiar anterior
-                  </label>
-                  <label class="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer">
-                    <input type="radio" v-model="importOverwrite" :value="false" class="text-indigo-600 focus:ring-indigo-500" />
-                    Mantener y combinar
-                  </label>
-                </div>
-              </div>
-            </div>
-
-            <!-- Spinner showing progress -->
-            <div v-if="saving" class="flex flex-col items-center justify-center p-4 bg-indigo-50/30 dark:bg-indigo-950/10 rounded-2xl border border-indigo-50/50 dark:border-indigo-950/20">
-              <div class="animate-spin rounded-full h-8 w-8 border-3 border-indigo-650 border-t-transparent"></div>
-              <p class="mt-2.5 text-xs text-indigo-600 dark:text-indigo-400 font-bold text-center">
-                Parseando PDF e importando evidencias... Esto puede tomar unos segundos.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <!-- FIXED FOOTER -->
-        <div class="flex justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
-          <button @click="showImportModal = false" class="px-5 py-2.5 border border-slate-200 dark:border-slate-700 text-slate-650 dark:text-slate-350 rounded-xl font-bold text-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-all">
-            Cancelar
-          </button>
-          <template v-if="importResult">
-            <button @click="showImportModal = false" class="px-5 py-2.5 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700 transition-all">
-              Aceptar
-            </button>
-          </template>
-          <template v-else>
-            <button :disabled="saving || !importFile" @click="handleImportPDF" class="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700 disabled:opacity-50 transition-all">
-              Importar
-            </button>
-          </template>
-        </div>
-      </div>
-    </div>
+    <DbaImportPdfModal
+      :show="showImportModal"
+      :import-form="importForm"
+      :import-file="importFile"
+      :import-result="importResult"
+      :existing-combinations="existingCombinations"
+      :is-existing-dba="isExistingDba"
+      v-model:import-overwrite="importOverwrite"
+      :saving="saving"
+      @close="showImportModal = false"
+      @file-change="onFileChange"
+      @select-combination="importForm.area = $event.area; importForm.version_curricular = $event.version_curricular"
+      @import="handleImportPDF"
+    />
   </div>
 </template>
+
 
 <style scoped>
 .line-clamp-2 {
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;  
   overflow: hidden;
 }

@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import axios from 'axios'
+import { studentService } from '../../services/studentService'
+import { academicService } from '../../services/academicService'
+
 import {
   Users,
   Search,
@@ -20,24 +22,50 @@ import {
   Activity,
   Award,
   Lock,
-  Trash2
+  Trash2,
+  MoreVertical
 } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 import { useNotificationStore } from '../../stores/notifications'
 import { useAcademicYearStore } from '../../stores/academicYear'
 import { getCourseDisplayName } from '../../utils/courseHelper'
+import { useConfirm } from '../../composables/useConfirm'
+import { useToast } from '../../composables/useToast'
+import DataTable from '../../components/ui/DataTable.vue'
+import SkeletonTable from '../../components/feedback/SkeletonTable.vue'
+import EmptyState from '../../components/feedback/EmptyState.vue'
 
 const router = useRouter()
 
 const auth = useAuthStore()
 const notify = useNotificationStore()
 const yearStore = useAcademicYearStore()
+const { confirm } = useConfirm()
+const toast = useToast()
 
 // --- State ---
 const students = ref<any[]>([])
 const loading = ref(true)
 const searchQuery = ref('')
 const filterStatus = ref('TODOS')
+const activeMenuStudentId = ref<number | null>(null)
+
+const toggleMenu = (id: number, e: MouseEvent) => {
+  e.stopPropagation()
+  activeMenuStudentId.value = activeMenuStudentId.value === id ? null : id
+}
+
+const handleGlobalClick = () => {
+  activeMenuStudentId.value = null
+}
+
+onMounted(() => {
+  window.addEventListener('click', handleGlobalClick)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('click', handleGlobalClick)
+})
 const filterNivel = ref('')
 const filterGrado = ref('')
 const filterJornada = ref('')
@@ -84,9 +112,7 @@ const openDrawer = async (studentId: number) => {
   loadingSummary.value = true
   studentSummary.value = null
   try {
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get(`/api/student/${studentId}/summary`, { headers })
-    studentSummary.value = res.data
+    studentSummary.value = await studentService.getStudentSummary(studentId)
   } catch (error) {
     console.error('Error fetching student summary:', error)
     notify.addNotification('Error al cargar el resumen del estudiante', 'error')
@@ -139,9 +165,7 @@ const openGraduationModal = async (student: any) => {
   loadingEligibility.value = true
   eligibilityInfo.value = null
   try {
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get(`/api/student/${student.id_estudiante}/summary`, { headers })
-    const summary = res.data
+    const summary = await studentService.getStudentSummary(student.id_estudiante)
     const gpa = summary.gpa || 0.0
     const failedCount = summary.failed_subjects_count || 0
     const failedSubjects = summary.failed_subjects || []
@@ -171,12 +195,11 @@ const confirmGraduation = async () => {
   }
   try {
     const directivoUserId = auth.user?.id || null
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.post(`/api/student/${targetStudent.value.id_estudiante}/graduate`, {
+    await studentService.graduateStudent(targetStudent.value.id_estudiante, {
       fecha_graduacion: graduationDate.value,
       observaciones: graduationObservations.value,
       registrar_por: directivoUserId
-    }, { headers })
+    })
     notify.addNotification(`Estudiante ${targetStudent.value.nombre} graduado exitosamente`, 'success')
     graduationModalOpen.value = false
     fetchStudents()
@@ -198,19 +221,14 @@ const fetchStudents = async () => {
   loading.value = true
   try {
     const idColegio = auth.user?.schoolId || 1
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const response = await axios.get(`/api/student/colegio/${idColegio}`, {
-      headers,
-      params: {
-        estado: filterStatus.value,
-        id_nivel: filterNivel.value,
-        id_tipo_grado: filterGrado.value,
-        id_jornada: filterJornada.value,
-        busqueda: searchQuery.value,
-        yearId: yearStore.selectedYearId || undefined
-      }
+    students.value = await studentService.getStudentsBySchool(idColegio, {
+      estado: filterStatus.value,
+      id_nivel: filterNivel.value,
+      id_tipo_grado: filterGrado.value,
+      id_jornada: filterJornada.value,
+      busqueda: searchQuery.value,
+      yearId: yearStore.selectedYearId || undefined
     })
-    students.value = response.data
   } catch (error) {
     console.error('Error fetching students:', error)
     notify.addNotification('Error al cargar estudiantes', 'error')
@@ -222,12 +240,11 @@ const fetchStudents = async () => {
 const fetchMetadata = async () => {
   try {
     const idColegio = auth.user?.schoolId || 1
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const response = await axios.get(`/api/academic-admin/grades/${idColegio}`, { headers })
-    levels.value = response.data.niveles
-    groups.value = response.data.grupos
-    jornadas.value = response.data.jornadas || []
-    grades.value = response.data.tiposGrado || []
+    const data = await academicService.getGradesAndGroups(idColegio)
+    levels.value = data.niveles || []
+    groups.value = data.grupos || []
+    jornadas.value = data.jornadas || []
+    grades.value = data.tiposGrado || []
   } catch (error) {
     console.warn('Metadata fetch failed:', error)
   }
@@ -258,8 +275,6 @@ const stats = computed(() => ({
 }))
 
 // --- Actions ---
-
-
 const openEditModal = (student: any) => {
   isEditing.value = true
   selectedStudent.value = student
@@ -275,16 +290,12 @@ const saveStudent = async () => {
         notify.addNotification('Por favor ingrese la justificación del cambio para la auditoría.', 'warning')
         return
       }
-      const headers = { Authorization: `Bearer ${auth.token}` }
       const payload = {
         ...studentForm.value,
         motivo_cambio: isSupervision.value ? justification.value : undefined
       }
-      await axios.put(`/api/student/${selectedStudent.value.id_estudiante}`, payload, { headers })
+      await studentService.updateStudent(selectedStudent.value.id_estudiante, payload)
       notify.addNotification('Estudiante actualizado exitosamente', 'success')
-    } else {
-      // Create student is usually done via Enrollment - but we could add a direct one if needed
-      // For now, let's just focus on Update/Status/Grade
     }
     studentModalOpen.value = false
     fetchStudents()
@@ -295,15 +306,19 @@ const saveStudent = async () => {
 
 const deleteStudent = async (student: any) => {
   if (yearStore.isReadonlyYear) {
-    alert('Acción no permitida: El año académico seleccionado se encuentra CERRADO.')
+    toast.error('Acción no permitida: El año académico seleccionado se encuentra CERRADO.')
     return
   }
-  const confirmDelete = confirm(`¿Estás seguro de que deseas ELIMINAR permanentemente al estudiante "${student.nombre} ${student.apellido}"? Esta acción borrará su matrícula, calificaciones y usuario asociado de forma irreversible.`)
+  const confirmDelete = await confirm({
+    title: 'Eliminar Estudiante',
+    message: `¿Estás seguro de que deseas ELIMINAR permanentemente al estudiante "${student.nombre} ${student.apellido}"? Esta acción borrará su matrícula, calificaciones y usuario asociado de forma irreversible.`,
+    confirmText: 'Eliminar Permanentemente',
+    type: 'danger'
+  })
   if (!confirmDelete) return
 
   try {
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.delete(`/api/student/${student.id_estudiante}`, { headers })
+    await studentService.deleteStudent(student.id_estudiante)
     notify.addNotification('Estudiante eliminado exitosamente.', 'success')
     fetchStudents()
   } catch (error: any) {
@@ -323,11 +338,10 @@ const openStatusModal = async (student: any, status: string) => {
 
   if (status === 'SANCIONADO') {
     try {
-      const headers = { Authorization: `Bearer ${auth.token}` }
-      const res = await axios.get('/api/student/sanctions/types', { headers })
-      sanctionTypes.value = res.data
-      if (res.data.length > 0) {
-        selectedSanctionType.value = res.data[0].id_tipo_sancion
+      const types = await studentService.getSanctionTypes()
+      sanctionTypes.value = types
+      if (types.length > 0) {
+        selectedSanctionType.value = types[0].id_tipo_sancion
       }
     } catch (error) {
       console.error('Error fetching sanction types:', error)
@@ -361,7 +375,6 @@ const confirmStatusChange = async () => {
   }
 
   try {
-    const headers = { Authorization: `Bearer ${auth.token}` }
     const payload: any = {
       estado: newStatus.value,
       motivo: statusMotivo.value
@@ -374,7 +387,7 @@ const confirmStatusChange = async () => {
       payload.observaciones = sanctionObservaciones.value
     }
 
-    await axios.patch(`/api/student/${selectedStudent.value.id_estudiante}/status`, payload, { headers })
+    await studentService.updateStudentStatus(selectedStudent.value.id_estudiante, payload)
     notify.addNotification(`Estado actualizado a ${newStatus.value}`, 'success')
     statusModalOpen.value = false
     fetchStudents()
@@ -395,12 +408,11 @@ const confirmGradeChange = async () => {
     const group = groups.value.find(g => g.id_grupo === Number(selectedGroup.value))
     if (!group) return
 
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.patch(`/api/student/${selectedStudent.value.id_estudiante}/change-grade`, {
+    await studentService.changeStudentGrade(selectedStudent.value.id_estudiante, {
       id_grupo: group.id_grupo,
       id_nivel: group.id_nivel,
       motivo: motivoTraslado.value
-    }, { headers })
+    })
     notify.addNotification('Grado cambiado exitosamente', 'success')
     changeGradeModalOpen.value = false
     fetchStudents()
@@ -408,6 +420,7 @@ const confirmGradeChange = async () => {
     notify.addNotification('Error al cambiar de grado', 'error')
   }
 }
+
 
 const getStatusClass = (estado: string) => {
   if (estado === 'ACTIVO') return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400'
@@ -495,7 +508,7 @@ const exportToSIMAT = () => {
       <button 
         v-if="students.length > 0"
         @click="exportToSIMAT"
-        class="bg-indigo-650 dark:bg-indigo-600 hover:bg-indigo-750 text-white px-6 py-3 rounded-2xl font-bold flex items-center gap-2 shadow-md transition-all active:scale-95 text-sm shrink-0"
+        class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-2xl font-bold flex items-center gap-2 shadow-md transition-all active:scale-95 text-sm shrink-0"
       >
         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -518,53 +531,53 @@ const exportToSIMAT = () => {
     </div>
 
     <!-- Stats -->
-    <div class="grid grid-cols-2 md:grid-cols-6 gap-4">
-      <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-5 flex items-center gap-4">
-        <div class="p-2.5 bg-indigo-50 dark:bg-indigo-950/30 rounded-xl text-indigo-600 dark:text-indigo-400"><Users :size="20" /></div>
-        <div>
-          <p class="text-2xl font-black text-slate-900 dark:text-white">{{ stats.total }}</p>
-          <p class="text-[10px] font-black uppercase text-slate-400 tracking-widest">Total Alumnos</p>
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
+      <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-4 sm:p-5 flex items-center gap-3 sm:gap-4">
+        <div class="p-2.5 bg-indigo-50 dark:bg-indigo-950/30 rounded-xl text-indigo-600 dark:text-indigo-400 shrink-0"><Users :size="20" /></div>
+        <div class="min-w-0">
+          <p class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white truncate">{{ stats.total }}</p>
+          <p class="text-xs font-bold uppercase text-slate-400 dark:text-slate-500 tracking-wider truncate">Total Alumnos</p>
         </div>
       </div>
-      <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-5 flex items-center gap-4">
-        <div class="p-2.5 bg-emerald-50 dark:bg-emerald-950/30 rounded-xl text-emerald-600 dark:text-emerald-400"><UserCheck :size="20" /></div>
-        <div>
-          <p class="text-2xl font-black text-slate-900 dark:text-white">{{ stats.active }}</p>
-          <p class="text-[10px] font-black uppercase text-slate-400 tracking-widest">Activos</p>
+      <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-4 sm:p-5 flex items-center gap-3 sm:gap-4">
+        <div class="p-2.5 bg-emerald-50 dark:bg-emerald-950/30 rounded-xl text-emerald-600 dark:text-emerald-400 shrink-0"><UserCheck :size="20" /></div>
+        <div class="min-w-0">
+          <p class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white truncate">{{ stats.active }}</p>
+          <p class="text-xs font-bold uppercase text-slate-400 dark:text-slate-500 tracking-wider truncate">Activos</p>
         </div>
       </div>
-      <div v-if="yearStore.selectedYearId" class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-5 flex items-center gap-4">
-        <div class="p-2.5 bg-slate-100 dark:bg-slate-800 rounded-xl text-slate-500 dark:text-slate-400"><UserX :size="20" /></div>
-        <div>
-          <p class="text-2xl font-black text-slate-900 dark:text-white">{{ stats.inactive }}</p>
-          <p class="text-[10px] font-black uppercase text-slate-400 tracking-widest">Sin Matrícula</p>
+      <div v-if="yearStore.selectedYearId" class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-4 sm:p-5 flex items-center gap-3 sm:gap-4">
+        <div class="p-2.5 bg-slate-100 dark:bg-slate-800 rounded-xl text-slate-500 dark:text-slate-400 shrink-0"><UserX :size="20" /></div>
+        <div class="min-w-0">
+          <p class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white truncate">{{ stats.inactive }}</p>
+          <p class="text-xs font-bold uppercase text-slate-400 dark:text-slate-500 tracking-wider truncate">Sin Matrícula</p>
         </div>
       </div>
-      <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-5 flex items-center gap-4">
-        <div class="p-2.5 bg-amber-50 dark:bg-amber-950/30 rounded-xl text-amber-600 dark:text-amber-400"><ShieldAlert :size="20" /></div>
-        <div>
-          <p class="text-2xl font-black text-slate-900 dark:text-white">{{ stats.sanctioned }}</p>
-          <p class="text-[10px] font-black uppercase text-slate-400 tracking-widest">Sancionados</p>
+      <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-4 sm:p-5 flex items-center gap-3 sm:gap-4">
+        <div class="p-2.5 bg-amber-50 dark:bg-amber-950/30 rounded-xl text-amber-600 dark:text-amber-400 shrink-0"><ShieldAlert :size="20" /></div>
+        <div class="min-w-0">
+          <p class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white truncate">{{ stats.sanctioned }}</p>
+          <p class="text-xs font-bold uppercase text-slate-400 dark:text-slate-500 tracking-wider truncate">Sancionados</p>
         </div>
       </div>
-      <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-5 flex items-center gap-4">
-        <div class="p-2.5 bg-red-50 dark:bg-red-950/30 rounded-xl text-red-600 dark:text-red-400"><UserX :size="20" /></div>
-        <div>
-          <p class="text-2xl font-black text-slate-900 dark:text-white">{{ stats.expelled }}</p>
-          <p class="text-[10px] font-black uppercase text-slate-400 tracking-widest">Expulsados</p>
+      <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-4 sm:p-5 flex items-center gap-3 sm:gap-4">
+        <div class="p-2.5 bg-red-50 dark:bg-red-950/30 rounded-xl text-red-600 dark:text-red-400 shrink-0"><UserX :size="20" /></div>
+        <div class="min-w-0">
+          <p class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white truncate">{{ stats.expelled }}</p>
+          <p class="text-xs font-bold uppercase text-slate-400 dark:text-slate-500 tracking-wider truncate">Expulsados</p>
         </div>
       </div>
-      <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-5 flex items-center gap-4">
-        <div class="p-2.5 bg-indigo-50 dark:bg-indigo-950/30 rounded-xl text-indigo-650 dark:text-indigo-400"><Award :size="20" /></div>
-        <div>
-          <p class="text-2xl font-black text-slate-900 dark:text-white">{{ stats.graduated }}</p>
-          <p class="text-[10px] font-black uppercase text-slate-400 tracking-widest">Graduados</p>
+      <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-4 sm:p-5 flex items-center gap-3 sm:gap-4">
+        <div class="p-2.5 bg-indigo-50 dark:bg-indigo-950/30 rounded-xl text-indigo-650 dark:text-indigo-400 shrink-0"><Award :size="20" /></div>
+        <div class="min-w-0">
+          <p class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white truncate">{{ stats.graduated }}</p>
+          <p class="text-xs font-bold uppercase text-slate-400 dark:text-slate-500 tracking-wider truncate">Graduados</p>
         </div>
       </div>
     </div>
 
     <!-- Filters & Search -->
-    <div class="flex flex-col lg:flex-row gap-4">
+    <div class="flex flex-col lg:flex-row gap-3 sm:gap-4">
       <div class="relative flex-1">
         <Search class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" :size="18" />
         <input
@@ -572,11 +585,11 @@ const exportToSIMAT = () => {
           @input="fetchStudents"
           type="text"
           placeholder="Buscar por nombre, documento, código o grado (ej. 6-A)..."
-          class="w-full bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl py-4 pl-12 pr-4 text-sm font-semibold outline-none text-slate-900 dark:text-white shadow-sm focus:ring-2 focus:ring-indigo-500/10 transition-all"
+          class="w-full bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl py-3.5 pl-12 pr-4 text-xs sm:text-sm font-semibold outline-none text-slate-900 dark:text-white shadow-xs focus:ring-2 focus:ring-indigo-500/20 transition-all"
         />
       </div>
-      <div class="flex flex-wrap gap-3">
-        <select v-model="filterStatus" @change="fetchStudents" class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl px-5 py-2 text-sm font-bold outline-none text-slate-900 dark:text-white">
+      <div class="flex flex-wrap gap-2.5 sm:gap-3">
+        <select v-model="filterStatus" @change="fetchStudents" class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl px-4 py-2.5 text-xs sm:text-sm font-bold outline-none text-slate-900 dark:text-white cursor-pointer">
           <option value="TODOS">Todos los Estados</option>
           <option value="ACTIVO">Activos</option>
           <option value="INACTIVO">Sin Matrícula / Inactivos</option>
@@ -585,15 +598,15 @@ const exportToSIMAT = () => {
           <option value="RETIRADO">Retirados</option>
           <option value="GRADUADO">Graduados</option>
         </select>
-        <select v-model="filterNivel" @change="onNivelChange" class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl px-5 py-2 text-sm font-bold outline-none text-slate-900 dark:text-white">
+        <select v-model="filterNivel" @change="onNivelChange" class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl px-4 py-2.5 text-xs sm:text-sm font-bold outline-none text-slate-900 dark:text-white cursor-pointer">
           <option value="">Todos los Niveles</option>
           <option v-for="level in levels" :key="level.id_nivel" :value="level.id_nivel">{{ level.nombre }}</option>
         </select>
-        <select v-model="filterGrado" @change="fetchStudents" class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl px-5 py-2 text-sm font-bold outline-none text-slate-900 dark:text-white">
+        <select v-model="filterGrado" @change="fetchStudents" class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl px-4 py-2.5 text-xs sm:text-sm font-bold outline-none text-slate-900 dark:text-white cursor-pointer">
           <option value="">Todos los Grados</option>
           <option v-for="g in filteredGrades" :key="g.id_tipo_grado" :value="g.id_tipo_grado">{{ g.nombre }}</option>
         </select>
-        <select v-model="filterJornada" @change="fetchStudents" class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl px-5 py-2 text-sm font-bold outline-none text-slate-900 dark:text-white">
+        <select v-model="filterJornada" @change="fetchStudents" class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl px-4 py-2.5 text-xs sm:text-sm font-bold outline-none text-slate-900 dark:text-white cursor-pointer">
           <option value="">Todas las Jornadas</option>
           <option v-for="j in jornadas" :key="j.id_jornada" :value="j.id_jornada">{{ j.nombre }}</option>
         </select>
@@ -601,107 +614,166 @@ const exportToSIMAT = () => {
     </div>
 
     <!-- List -->
-    <div v-if="loading" class="h-64 flex items-center justify-center bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800">
-      <div class="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-    </div>
+    <SkeletonTable v-if="loading" :rows="6" :cols="5" />
 
-    <div v-else class="bg-white dark:bg-slate-900 rounded-[28px] border border-slate-100 dark:border-slate-800 overflow-hidden shadow-sm">
-      <table class="w-full text-left">
-        <thead class="bg-slate-50 dark:bg-slate-800/50">
-          <tr class="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400 dark:text-slate-500">
-            <th class="px-8 py-4">Estudiante</th>
-            <th class="px-8 py-4">Identificación</th>
-            <th class="px-8 py-4">Curso / Grupo</th>
-            <th class="px-8 py-4">Estado</th>
-            <th class="px-8 py-4 text-right">Acciones</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-50 dark:divide-slate-800">
-          <tr v-for="s in students" :key="s.id_estudiante" class="group hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-all">
-            <td class="px-8 py-5 cursor-pointer hover:bg-indigo-50/40 dark:hover:bg-slate-800/40 rounded-l-2xl transition-all" @click="openDrawer(s.id_estudiante)">
-              <div class="flex items-center gap-4">
-                <div class="h-10 w-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-black text-sm">
-                  {{ s.nombre.charAt(0) }}{{ s.apellido.charAt(0) }}
-                </div>
-                <div>
-                  <p class="font-black text-slate-900 dark:text-white text-sm uppercase group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">{{ s.nombre }} {{ s.apellido }}</p>
-                  <p class="text-[10px] font-bold text-slate-400 uppercase leading-none mt-0.5">CÓD: {{ s.codigo }}</p>
-                </div>
-              </div>
-            </td>
-            <td class="px-8 py-5">
-              <p class="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase leading-none">{{ s.tipo_documento_nombre || 'DOC' }}</p>
-              <p class="text-sm font-black text-slate-900 dark:text-white mt-1">{{ s.documento }}</p>
-            </td>
-            <td class="px-8 py-5">
-              <div v-if="s.grado_nombre" class="flex flex-col">
-                <p class="text-sm font-black text-slate-900 dark:text-white">
-                  {{ getCourseDisplayName({ grado_nombre: s.grado_nombre, seccion_nombre: s.seccion_nombre || '' }) }}
-                </p>
-                <p class="text-[10px] font-bold text-indigo-500 uppercase">{{ s.nivel_nombre }}</p>
-              </div>
-              <span v-else class="text-[10px] font-bold text-red-400 uppercase tracking-widest italic">Sin grupo asignado</span>
-            </td>
-            <td class="px-8 py-5">
-              <span :class="[getStatusClass(s.estado_vigente || s.estado), 'px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest block w-fit']">
-                {{ s.estado_vigente || s.estado }}
-              </span>
-              <p v-if="s.motivo_estado" class="text-[10px] text-red-500 dark:text-red-400 font-semibold italic mt-1 max-w-[200px] leading-tight" :title="s.motivo_estado">
-                {{ s.motivo_estado }}
-              </p>
-            </td>
-            <td class="px-8 py-5 text-right">
-              <div v-if="yearStore.isClosedYear" class="flex items-center justify-end gap-2">
-                <button v-if="s.estado === 'SANCIONADO' || s.estado === 'EXPULSADO'" @click="openDrawer(s.id_estudiante)" 
-                  :class="s.estado === 'EXPULSADO' ? 'text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30' : 'text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30'"
-                  class="p-2 rounded-xl transition-all" 
-                  :title="s.estado === 'EXPULSADO' ? 'Revisar Expulsión' : 'Revisar Sanción'"
+    <EmptyState
+      v-else-if="students.length === 0"
+      title="No se encontraron estudiantes"
+      description="No hay estudiantes que coincidan con los filtros seleccionados."
+    >
+      <template #icon>
+        <Users class="w-8 h-8 text-indigo-500" />
+      </template>
+    </EmptyState>
+
+    <DataTable v-else>
+      <template #header>
+        <tr>
+          <th class="py-4 px-6 sm:px-8 text-xs font-black uppercase text-slate-400">Estudiante</th>
+          <th class="py-4 px-6 sm:px-8 text-xs font-black uppercase text-slate-400">Identificación</th>
+          <th class="py-4 px-6 sm:px-8 text-xs font-black uppercase text-slate-400">Curso / Grupo</th>
+          <th class="py-4 px-6 sm:px-8 text-xs font-black uppercase text-slate-400">Estado</th>
+          <th class="py-4 px-6 sm:px-8 text-right text-xs font-black uppercase text-slate-400">Acciones</th>
+        </tr>
+      </template>
+      <tr v-for="s in students" :key="s.id_estudiante" class="group hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-all relative">
+        <td class="py-4 px-6 sm:px-8 cursor-pointer" @click="openDrawer(s.id_estudiante)">
+          <div class="flex items-center gap-3 sm:gap-4">
+            <div class="h-10 w-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-black text-sm shrink-0">
+              {{ s.nombre.charAt(0) }}{{ s.apellido.charAt(0) }}
+            </div>
+            <div class="min-w-0">
+              <p class="font-black text-slate-900 dark:text-white text-xs sm:text-sm uppercase group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors truncate">{{ s.nombre }} {{ s.apellido }}</p>
+              <p class="text-xs font-bold text-slate-400 uppercase leading-none mt-1">CÓD: {{ s.codigo }}</p>
+            </div>
+          </div>
+        </td>
+        <td class="py-4 px-6 sm:px-8">
+          <p class="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase leading-none">{{ s.tipo_documento_nombre || 'DOC' }}</p>
+          <p class="text-xs sm:text-sm font-black text-slate-900 dark:text-white mt-1">{{ s.documento }}</p>
+        </td>
+        <td class="py-4 px-6 sm:px-8">
+          <div v-if="s.grado_nombre" class="flex flex-col">
+            <p class="text-xs sm:text-sm font-black text-slate-900 dark:text-white">
+              {{ getCourseDisplayName({ grado_nombre: s.grado_nombre, seccion_nombre: s.seccion_nombre || '' }) }}
+            </p>
+            <p class="text-xs font-bold text-indigo-500 uppercase mt-0.5">{{ s.nivel_nombre }}</p>
+          </div>
+          <span v-else class="text-xs font-bold text-red-400 uppercase tracking-wide italic">Sin grupo</span>
+        </td>
+        <td class="py-4 px-6 sm:px-8">
+          <span :class="[getStatusClass(s.estado_vigente || s.estado), 'px-2.5 py-1 rounded-lg text-xs font-black uppercase tracking-wider block w-fit']">
+            {{ s.estado_vigente || s.estado }}
+          </span>
+          <p v-if="s.motivo_estado" class="text-xs text-red-500 dark:text-red-400 font-semibold italic mt-1 max-w-[200px] leading-tight" :title="s.motivo_estado">
+            {{ s.motivo_estado }}
+          </p>
+        </td>
+        <td class="py-4 px-6 sm:px-8 text-right">
+          <!-- Action Buttons Bar -->
+          <div class="flex items-center justify-end gap-1.5 sm:gap-2 relative">
+            <!-- Sancionado / Expulsado Alert button -->
+            <button 
+              v-if="s.estado === 'SANCIONADO' || s.estado === 'EXPULSADO'" 
+              @click.stop="openDrawer(s.id_estudiante)"
+              :class="s.estado === 'EXPULSADO' ? 'text-red-500 hover:text-red-600 bg-red-50 dark:bg-red-950/30' : 'text-amber-500 hover:text-amber-600 bg-amber-50 dark:bg-amber-950/30'"
+              class="p-2 rounded-xl transition-all cursor-pointer"
+              :title="s.estado === 'EXPULSADO' ? 'Revisar Expulsión' : 'Revisar Sanción'"
+            >
+              <ShieldAlert :size="16" />
+            </button>
+
+            <!-- Primary Action: Ver Ficha -->
+            <button 
+              @click.stop="openDrawer(s.id_estudiante)" 
+              class="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950/50 hover:bg-indigo-100 text-indigo-600 dark:text-indigo-300 rounded-xl text-xs font-bold transition-all cursor-pointer"
+              title="Ver Ficha Completa"
+            >
+              <Eye :size="15" />
+              <span class="hidden md:inline">Ficha</span>
+            </button>
+
+            <!-- Menu Dropdown Toggle for Row Actions -->
+            <div v-if="!yearStore.isClosedYear" class="relative">
+              <button 
+                @click.stop="toggleMenu(s.id_estudiante, $event)"
+                class="p-2 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all cursor-pointer"
+                title="Más opciones"
+              >
+                <MoreVertical :size="17" />
+              </button>
+
+              <!-- Floating Dropdown Menu -->
+              <div 
+                v-if="activeMenuStudentId === s.id_estudiante"
+                class="absolute right-0 top-full mt-1 w-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-xl z-50 p-1.5 space-y-1 text-left animate-in fade-in zoom-in-95 duration-150"
+              >
+                <button 
+                  @click="openEditModal(s); activeMenuStudentId = null"
+                  class="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 hover:text-indigo-600 rounded-xl transition-colors cursor-pointer"
                 >
-                  <ShieldAlert :size="16" />
+                  <Edit2 :size="14" /> Editar Datos
                 </button>
-                <span class="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 text-slate-400 rounded-lg text-[10px] font-black uppercase tracking-widest inline-flex items-center gap-1">
-                  <Lock :size="12" /> Solo Lectura
-                </span>
-              </div>
-              <div v-else class="flex items-center justify-end gap-2">
-                <!-- Revisar Sanción / Expulsión -->
-                <button v-if="s.estado === 'SANCIONADO' || s.estado === 'EXPULSADO'" @click="openDrawer(s.id_estudiante)" 
-                  :class="s.estado === 'EXPULSADO' ? 'text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30' : 'text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30'"
-                  class="p-2 rounded-xl transition-all" 
-                  :title="s.estado === 'EXPULSADO' ? 'Revisar Expulsión' : 'Revisar Sanción'"
+                <button 
+                  v-if="s.estado !== 'GRADUADO'"
+                  @click="openChangeGradeModal(s); activeMenuStudentId = null"
+                  class="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 hover:text-emerald-600 rounded-xl transition-colors cursor-pointer"
                 >
-                  <ShieldAlert :size="16" />
+                  <ArrowRight :size="14" /> Cambiar Grado
                 </button>
-                <button @click="openEditModal(s)" class="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 rounded-xl transition-all" title="Editar datos">
-                  <Edit2 :size="16" />
+                <button 
+                  v-if="s.estado === 'ACTIVO' && s.grado_nombre === 'ONCE'"
+                  @click="openGraduationModal(s); activeMenuStudentId = null"
+                  class="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 rounded-xl transition-colors cursor-pointer"
+                >
+                  <Award :size="14" /> Graduar Alumno
                 </button>
-                <button v-if="s.estado !== 'GRADUADO'" @click="openChangeGradeModal(s)" class="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 rounded-xl transition-all" title="Cambiar Grado">
-                  <ArrowRight :size="16" />
+                <button 
+                  v-if="s.estado === 'ACTIVO'"
+                  @click="openStatusModal(s, 'RETIRADO'); activeMenuStudentId = null"
+                  class="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/50 rounded-xl transition-colors cursor-pointer"
+                >
+                  <UserMinus :size="14" /> Retirar Alumno
                 </button>
-                <button v-if="s.estado === 'ACTIVO' && s.grado_nombre === 'ONCE'" @click="openGraduationModal(s)" class="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 rounded-xl transition-all" title="Graduar Estudiante">
-                  <Award :size="16" />
+                <button 
+                  v-if="s.estado === 'ACTIVO'"
+                  @click="openStatusModal(s, 'SANCIONADO'); activeMenuStudentId = null"
+                  class="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/50 rounded-xl transition-colors cursor-pointer"
+                >
+                  <ShieldAlert :size="14" /> Sancionar
                 </button>
-                <button v-if="s.estado === 'ACTIVO'" @click="openStatusModal(s, 'RETIRADO')" class="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded-xl transition-all" title="Retirar Estudiante">
-                  <UserMinus :size="16" />
+                <button 
+                  v-if="s.estado !== 'EXPULSADO' && s.estado !== 'GRADUADO'"
+                  @click="openStatusModal(s, 'EXPULSADO'); activeMenuStudentId = null"
+                  class="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50 dark:hover:bg-red-950/50 rounded-xl transition-colors cursor-pointer"
+                >
+                  <UserX :size="14" /> Expulsar
                 </button>
-                <button v-if="s.estado === 'ACTIVO'" @click="openStatusModal(s, 'SANCIONADO')" class="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded-xl transition-all" title="Sancionar">
-                  <ShieldAlert :size="16" />
+                <button 
+                  v-if="s.estado !== 'ACTIVO' && s.estado !== 'RETIRADO' && s.estado !== 'GRADUADO'"
+                  @click="openStatusModal(s, 'ACTIVO'); activeMenuStudentId = null"
+                  class="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 rounded-xl transition-colors cursor-pointer"
+                >
+                  <UserCheck :size="14" /> Reactivar
                 </button>
-                <button v-if="s.estado !== 'EXPULSADO' && s.estado !== 'GRADUADO'" @click="openStatusModal(s, 'EXPULSADO')" class="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-xl transition-all" title="Expulsar">
-                  <UserX :size="16" />
-                </button>
-                <button v-if="s.estado !== 'ACTIVO' && s.estado !== 'RETIRADO' && s.estado !== 'GRADUADO'" @click="openStatusModal(s, 'ACTIVO')" class="p-2 text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 rounded-xl transition-all" title="Reactivar">
-                  <UserCheck :size="16" />
-                </button>
-                <button @click="deleteStudent(s)" class="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-xl transition-all" title="Eliminar Estudiante">
-                  <Trash2 :size="16" />
+                <div class="border-t border-slate-100 dark:border-slate-800 my-1"></div>
+                <button 
+                  @click="deleteStudent(s); activeMenuStudentId = null"
+                  class="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-xl transition-colors cursor-pointer"
+                >
+                  <Trash2 :size="14" /> Eliminar
                 </button>
               </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+            </div>
+
+            <!-- Read-only badge for closed year -->
+            <span v-else class="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 text-slate-400 rounded-lg text-xs font-black uppercase tracking-wider inline-flex items-center gap-1">
+              <Lock :size="12" /> Solo Lectura
+            </span>
+          </div>
+        </td>
+      </tr>
+    </DataTable>
 
     <!-- Modals -->
     
@@ -787,9 +859,9 @@ const exportToSIMAT = () => {
                 <label class="block text-slate-500 text-xs font-black uppercase tracking-wider mb-1">Tipo de Sanción <span class="text-red-500">*</span></label>
                 <select 
                   v-model="selectedSanctionType" 
-                  class="w-full bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-sm font-bold outline-none text-slate-900 dark:text-white focus:border-indigo-500 transition-all"
+                  class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-sm font-bold outline-none text-slate-900 dark:text-white focus:border-indigo-500 transition-all cursor-pointer"
                 >
-                  <option v-for="t in sanctionTypes" :key="t.id_tipo_sancion" :value="t.id_tipo_sancion">
+                  <option v-for="t in sanctionTypes" :key="t.id_tipo_sancion" :value="t.id_tipo_sancion" class="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
                     {{ t.nombre.replace(/_/g, ' ') }}
                   </option>
                 </select>
@@ -801,7 +873,7 @@ const exportToSIMAT = () => {
                   <input 
                     type="date" 
                     v-model="sanctionStartDate"
-                    class="w-full bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-sm font-bold outline-none text-slate-900 dark:text-white focus:border-indigo-500 transition-all"
+                    class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-sm font-bold outline-none text-slate-900 dark:text-white focus:border-indigo-500 transition-all"
                   />
                 </div>
                 <div>
@@ -809,7 +881,7 @@ const exportToSIMAT = () => {
                   <input 
                     type="date" 
                     v-model="sanctionEndDate"
-                    class="w-full bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-sm font-bold outline-none text-slate-900 dark:text-white focus:border-indigo-500 transition-all"
+                    class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-sm font-bold outline-none text-slate-900 dark:text-white focus:border-indigo-500 transition-all"
                   />
                 </div>
               </div>
@@ -821,7 +893,7 @@ const exportToSIMAT = () => {
                 v-model="statusMotivo" 
                 rows="2" 
                 placeholder="Describa el motivo detalladamente (mínimo 10 caracteres)..."
-                class="w-full bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-sm font-bold outline-none text-slate-900 dark:text-white focus:border-indigo-500 transition-all resize-none"
+                class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-sm font-bold outline-none text-slate-900 dark:text-white focus:border-indigo-500 transition-all resize-none"
               ></textarea>
               <div class="flex justify-between items-center mt-0.5">
                 <span class="text-[10px] text-slate-400 font-bold">Mínimo 10 caracteres</span>
@@ -835,7 +907,7 @@ const exportToSIMAT = () => {
                 v-model="sanctionObservaciones" 
                 rows="2" 
                 placeholder="Observaciones de descargo (opcional)..."
-                class="w-full bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-sm font-bold outline-none text-slate-900 dark:text-white focus:border-indigo-500 transition-all resize-none"
+                class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-sm font-bold outline-none text-slate-900 dark:text-white focus:border-indigo-500 transition-all resize-none"
               ></textarea>
             </div>
           </div>

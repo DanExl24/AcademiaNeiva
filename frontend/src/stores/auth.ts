@@ -1,13 +1,12 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import axios from 'axios'
 
 export interface User {
   id: string
   id_usuario?: number
   name: string
   email: string
-  role: 'admin' | 'directivo' | 'docente' | 'padre' | 'estudiante'
+  role: 'admin' | 'admin_general' | 'directivo' | 'docente' | 'padre' | 'estudiante'
   roles: string[]
   schoolId?: string
   schoolIds?: number[]
@@ -224,53 +223,5 @@ export const useAuthStore = defineStore('auth', () => {
     logout
   }
 })
-
-// Interceptor global para adjuntar el token de autorización y bloquear modificaciones en modo SOLO LECTURA
-axios.interceptors.request.use(
-  (config) => {
-    try {
-      const store = useAuthStore()
-      if (store.token) {
-        config.headers.Authorization = `Bearer ${store.token}`
-      }
-      
-      if (store.isMonitoring) {
-        config.headers['X-Monitoring-Mode'] = 'true'
-      }
-
-      const isReadOnlyMode = store.isMonitoring || (store.isSupervising && store.supervision?.tipo_supervision === 'SOLO_LECTURA')
-      
-      if (isReadOnlyMode) {
-        const method = config.method?.toUpperCase()
-        const isExitRoute = config.url?.includes('/salir') || config.url?.includes('/stop-monitoring') || false
-        if (method && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) && !isExitRoute) {
-          return Promise.reject(new Error('Acceso denegado. El Modo Monitoreo es estrictamente de SOLO LECTURA.'))
-        }
-      }
-    } catch (e) {
-      // Ignorar errores si Pinia no está listo
-    }
-    return config
-  },
-  (error) => {
-    return Promise.reject(error)
-  }
-)
-
-// Interceptor global de respuesta para exponer todos los errores de fetch en la consola del navegador
-axios.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    console.error(
-      `[Axios Error] Falla en petición ${error.config?.method?.toUpperCase()} a ${error.config?.url}:`,
-      error.response ? {
-        status: error.response.status,
-        statusText: error.response.statusText,
-        data: error.response.data
-      } : error.message
-    )
-    return Promise.reject(error)
-  }
-)
 
 

@@ -4,7 +4,6 @@ import { useRoute } from 'vue-router'
 import { 
   Save, 
   Plus, 
-  Trash2, 
   AlertCircle, 
   Settings,
   CheckCircle,
@@ -14,15 +13,23 @@ import {
   ClipboardList,
   Download,
   BookOpen,
-  Users,
-  Eye,
-  AlertTriangle
+  Users
 } from 'lucide-vue-next'
+
 import { useAuthStore } from '../../stores/auth'
 import { useAcademicYearStore } from '../../stores/academicYear'
-import axios from 'axios'
+import { useConfirm } from '../../composables/useConfirm'
+import { useToast } from '../../composables/useToast'
+import { gradesService } from '../../services/gradesService'
+import TeacherActivityDrawer from '../../components/teacher/TeacherActivityDrawer.vue'
+import TeacherExtraEvidenceModal from '../../components/teacher/TeacherExtraEvidenceModal.vue'
+
+import EmptyState from '../../components/feedback/EmptyState.vue'
 
 const yearStore = useAcademicYearStore()
+const { confirm } = useConfirm()
+const toast = useToast()
+
 
 interface Course {
   id_grado: number
@@ -131,8 +138,7 @@ const checkSubjectClosure = async () => {
     return
   }
   try {
-    const res = await axios.get(`/api/teacher/closure-status/${idDetalleGrado}/${selectedPeriodId.value}`)
-    isSubjectClosed.value = res.data?.isClosed || false
+    isSubjectClosed.value = await gradesService.checkClosure(idDetalleGrado, selectedPeriodId.value)
   } catch (err) {
     isSubjectClosed.value = false
   }
@@ -240,9 +246,8 @@ const fetchMyCourses = async () => {
   // In monitoring mode, load the observed teacher's courses
   const teacherId = auth.isMonitoring ? auth.monitoringUser?.id : auth.user?.id
   try {
-    const params = yearStore.selectedYearId ? { yearId: yearStore.selectedYearId } : {}
-    const response = await axios.get(`/api/teacher/courses/${teacherId}`, { params })
-    myCourses.value = response.data
+    const data = await gradesService.getTeacherCourses(teacherId!, yearStore.selectedYearId || undefined)
+    myCourses.value = data
     
     if (route.query.gradoId) {
       const gId = Number(route.query.gradoId)
@@ -264,9 +269,8 @@ const fetchMyCourses = async () => {
 const fetchPeriods = async () => {
   if (!schoolId.value) return
   try {
-    const params = yearStore.selectedYearId ? { yearId: yearStore.selectedYearId } : {}
-    const response = await axios.get(`/api/teacher/periods/${schoolId.value}`, { params })
-    periods.value = (response.data || []).filter((p: any) => p.estado !== 'PENDIENTE')
+    const data = await gradesService.getPeriods(schoolId.value, yearStore.selectedYearId || undefined)
+    periods.value = (data || []).filter((p: any) => p.estado !== 'PENDIENTE')
     
     const exists = periods.value.some(p => p.id_periodo === selectedPeriodId.value)
     if (!exists) {
@@ -297,19 +301,18 @@ watch(() => yearStore.selectedYearId, async () => {
 const fetchGradeRange = async () => {
   if (!schoolId.value) return
   try {
-    const response = await axios.get(`/api/academic-admin/settings/${schoolId.value}`)
-    if (response.data?.defaultSettings) {
+    const data = await gradesService.getAcademicSettings(schoolId.value)
+    if (data?.defaultSettings) {
       gradeRange.value = {
-        min: Number(response.data.defaultSettings.nota_minima),
-        max: Number(response.data.defaultSettings.nota_maxima),
-        approval: Number(response.data.defaultSettings.nota_aprobacion),
+        min: Number(data.defaultSettings.nota_minima),
+        max: Number(data.defaultSettings.nota_maxima),
+        approval: Number(data.defaultSettings.nota_aprobacion),
       }
-      scales.value = response.data.scales || []
+      scales.value = data.scales || []
     }
   } catch (error) {
   }
 }
-
 
 const initializeMatrixForStudents = () => {
   students.value.forEach(s => {
@@ -339,14 +342,14 @@ const fetchGrades = async () => {
   try {
     gradesMatrix.value = {}
     criteriaGradesMatrix.value = {}
-    const response = await axios.get(`/api/teacher/grades/${selectedGradeId.value}/${selectedSubjectId.value}/${selectedPeriodId.value}`)
+    const data = await gradesService.getGrades(selectedGradeId.value, selectedSubjectId.value, selectedPeriodId.value)
     
-    response.data.activityGrades.forEach((n: any) => {
+    data.activityGrades.forEach((n: any) => {
       if (!gradesMatrix.value[n.id_estudiante]) gradesMatrix.value[n.id_estudiante] = {}
       gradesMatrix.value[n.id_estudiante][n.id_actividadmateria] = n.nota
     })
 
-    response.data.criteriaGrades.forEach((n: any) => {
+    data.criteriaGrades.forEach((n: any) => {
       if (!criteriaGradesMatrix.value[n.id_estudiante]) criteriaGradesMatrix.value[n.id_estudiante] = {}
       criteriaGradesMatrix.value[n.id_estudiante][n.id_criterio] = n.nota
     })
@@ -358,18 +361,13 @@ const fetchGrades = async () => {
 }
 
 const fetchDbaEvidences = async () => {
-  if (!selectedGradeId.value || !selectedSubjectId.value) {
+  if (!selectedGradeId.value || !selectedSubjectId.value || !selectedPeriodId.value) {
     dbaEvidencesInfo.value = null
     return
   }
   try {
-    const res = await axios.get(`/api/teacher/courses/${selectedGradeId.value}/${selectedSubjectId.value}/evidencias-dba`, {
-      params: { 
-        schoolId: schoolId.value,
-        periodId: selectedPeriodId.value
-      }
-    })
-    dbaEvidencesInfo.value = res.data
+    const data = await gradesService.getDbaEvidences(selectedGradeId.value, selectedSubjectId.value, schoolId.value, String(selectedPeriodId.value))
+    dbaEvidencesInfo.value = data
   } catch (error) {
     console.error('Error fetching competency DBA evidences:', error)
     dbaEvidencesInfo.value = null
@@ -382,14 +380,12 @@ const fetchActivities = async () => {
   try {
     activitiesLoading.value = true
     await checkSubjectClosure()
-    const response = await axios.get(`/api/teacher/activities/${selectedGradeId.value}/${selectedSubjectId.value}/${selectedPeriodId.value}`, {
-      params: { userId: auth.user?.id }
-    })
-    competency.value = response.data.competencia
-    competencyDraft.value = response.data.competencia?.descripcion || ''
-    evidencias.value = response.data.evidencias || []
-    competenciasList.value = response.data.competenciasList || []
-    activities.value = response.data.activities || []
+    const data = await gradesService.getActivities(selectedGradeId.value, selectedSubjectId.value, selectedPeriodId.value, auth.user?.id)
+    competency.value = data.competencia
+    competencyDraft.value = data.competencia?.descripcion || ''
+    evidencias.value = data.evidencias || []
+    competenciasList.value = data.competenciasList || []
+    activities.value = data.activities || []
     await fetchDbaEvidences()
     await fetchGrades()
   } catch (error) {
@@ -408,8 +404,8 @@ const fetchActivities = async () => {
 const fetchStudents = async () => {
   if (!selectedGradeId.value) return
   try {
-    const response = await axios.get(`/api/teacher/students/${selectedGradeId.value}`)
-    students.value = response.data
+    const data = await gradesService.getStudentsByGrade(selectedGradeId.value)
+    students.value = data
     initializeMatrixForStudents()
   } catch (error: any) {
   }
@@ -423,7 +419,7 @@ const autosaveGrade = async (studentId: number, id: number, type: 'activity' | '
     autosaveStatus.value = 'saving'
     autosaveErrorMsg.value = ''
     
-    await axios.post('/api/teacher/grades', {
+    await gradesService.saveGrades({
       activityGrades: type === 'activity' ? [{ id_estudiante: studentId, id_actividadmateria: id, nota: val }] : [],
       criteriaGrades: type === 'criterion' ? [{ id_estudiante: studentId, id_criterio: id, nota: val }] : [],
       schoolId: schoolId.value
@@ -436,6 +432,7 @@ const autosaveGrade = async (studentId: number, id: number, type: 'activity' | '
     console.error('Error in autosave:', error)
   }
 }
+
 
 const validateGradeInput = (studentId: number, id: number, type: 'activity' | 'criterion', event: Event) => {
   const input = event.target as HTMLInputElement
@@ -533,7 +530,7 @@ const saveAllGrades = async (silent = false) => {
 
   try {
     saving.value = true
-    await axios.post('/api/teacher/grades', {
+    await gradesService.saveGrades({
       activityGrades: activityGradesToSave,
       criteriaGrades: criteriaGradesToSave,
       schoolId: schoolId.value
@@ -612,7 +609,7 @@ const addActivity = async () => {
       payload.id_evidencia = newActivity.value.id_evidencia
     }
 
-    await axios.post('/api/teacher/activities', payload)
+    await gradesService.createActivity(payload)
     newActivity.value = {
       nombre: '',
       porcentaje: 0,
@@ -624,7 +621,6 @@ const addActivity = async () => {
     showAddActivity.value = false
     await fetchActivities()
   } catch (error: any) {
-    // Si fue un error de validación interna de notas, no creamos la actividad y dejamos los cambios en pantalla
     if (error.message !== 'Calificaciones inválidas') {
       alert(error.response?.data?.error || error.message || 'Error al crear actividad')
     }
@@ -690,31 +686,22 @@ const getDbaEvidenceDetails = (act: Activity) => {
   return result
 }
 
-// const saveCompetency = async () => {
-//   if (!competency.value || !competencyDraft.value.trim() || competencySaving.value) return
-// 
-//   try {
-//     competencySaving.value = true
-//     const response = await axios.put(`/api/teacher/competencies/${competency.value.id_competencia}`, {
-//       descripcion: competencyDraft.value
-//     })
-//     competency.value = response.data
-//     competencyDraft.value = response.data.descripcion
-//   } catch (error: any) {
-//     alert(error.response?.data?.error || 'Error al guardar la competencia')
-//   } finally {
-//     competencySaving.value = false
-//   }
-// }
-
 // Eliminar actividad
 const removeActivity = async (id: number) => {
-  if (!confirm('¿Estás seguro de eliminar esta actividad?')) return
+  const ok = await confirm({
+    title: 'Eliminar Actividad',
+    message: '¿Estás seguro de eliminar esta actividad evaluativa? Se eliminarán todas las calificaciones y criterios asociados.',
+    confirmText: 'Eliminar Actividad',
+    type: 'danger'
+  })
+  if (!ok) return
+
   try {
-    await axios.delete(`/api/teacher/activities/${id}`)
+    await gradesService.deleteActivity(id)
     activities.value = activities.value.filter(a => a.id_actividadmateria !== id)
-  } catch (error) {
-    console.error('Error deleting activity:', error)
+    toast.success('Actividad eliminada correctamente')
+  } catch (error: any) {
+    toast.error(error.response?.data?.error || 'Error al eliminar actividad')
   }
 }
 
@@ -722,7 +709,7 @@ const removeActivity = async (id: number) => {
 const updateActivityWeight = async (act: Activity) => {
   const percentage = parseFloat(act.porcentaje.toString())
   if (isNaN(percentage) || percentage <= 0) {
-    alert('El peso debe ser un número mayor a 0.')
+    toast.warning('El peso debe ser un número mayor a 0.')
     await fetchActivities()
     return
   }
@@ -733,13 +720,16 @@ const updateActivityWeight = async (act: Activity) => {
       porcentaje: percentage,
       evidencias_dba: act.evidencias_dba || []
     }
-    await axios.put(`/api/teacher/activities/${act.id_actividadmateria}`, payload)
-    await fetchActivities() // Recargar para actualizar los totales y consolidar matrices
+    await gradesService.updateActivity(act.id_actividadmateria, payload)
+    toast.success('Peso de actividad actualizado')
+    await fetchActivities()
   } catch (error: any) {
-    alert(error.response?.data?.error || 'Error al actualizar el porcentaje de la actividad')
+    toast.error(error.response?.data?.error || 'Error al actualizar el porcentaje de la actividad')
     await fetchActivities()
   }
 }
+
+
 
 // Calcular la nota computada de una actividad si tiene criterios
 const calculateActivityGrade = (studentId: number, act: Activity) => {
@@ -837,7 +827,7 @@ const addCriterion = async (act: Activity) => {
   }
 
   try {
-    const response = await axios.post('/api/teacher/activities/criteria', {
+    const data = await gradesService.createCriterion({
       id_actividadmateria: act.id_actividadmateria,
       id_evidencia: form.id_evidencia,
       descripcion: form.descripcion,
@@ -846,25 +836,46 @@ const addCriterion = async (act: Activity) => {
     })
     
     if (!act.criterios) act.criterios = []
-    act.criterios.push(response.data)
+    act.criterios.push(data)
     
     delete newCriterion.value[act.id_actividadmateria]
+    toast.success('Criterio creado exitosamente')
   } catch (error: any) {
-    alert(error.response?.data?.error || 'Error al crear el criterio')
+    toast.error(error.response?.data?.error || 'Error al crear el criterio')
   }
 }
 
 const removeCriterion = async (act: Activity, criterionId: number) => {
-  if (!confirm('¿Estás seguro de eliminar este criterio?')) return
+  const ok = await confirm({
+    title: 'Eliminar Criterio',
+    message: '¿Estás seguro de eliminar este criterio de evaluación?',
+    confirmText: 'Eliminar Criterio',
+    type: 'danger'
+  })
+  if (!ok) return
+
   try {
-    await axios.delete(`/api/teacher/activities/criteria/${criterionId}`)
+    await gradesService.deleteCriterion(criterionId)
     if (act.criterios) {
       act.criterios = act.criterios.filter(c => c.id_criterio !== criterionId)
     }
+    toast.success('Criterio eliminado exitosamente')
   } catch (error: any) {
-    alert(error.response?.data?.error || 'Error al eliminar el criterio')
+    toast.error(error.response?.data?.error || 'Error al eliminar el criterio')
   }
 }
+
+const toggleEvidenceExtra = (id: number) => {
+  const index = newActivity.value.evidencias_dba.indexOf(id)
+  if (index > -1) {
+    newActivity.value.evidencias_dba.splice(index, 1)
+  } else {
+    newActivity.value.evidencias_dba.push(id)
+  }
+}
+
+
+
 
 // Computados
 interface TableColumn {
@@ -1003,12 +1014,30 @@ const exportGradesToCSV = () => {
   const link = document.createElement('a')
   link.setAttribute('href', url)
   
-  const label = `${selectedGradeName.value || ''}_${selectedSection.value || ''}_${selectedSubjectId.value || ''}`.replace(/\s+/g, '_')
-  link.setAttribute('download', `consolidado_notas_${label}_${new Date().toLocaleDateString()}.csv`)
   link.style.visibility = 'hidden'
   document.body.appendChild(link)
   link.click()
   document.body.removeChild(link)
+}
+
+const viewMode = ref<'table' | 'cards'>('table')
+
+const handleGradeKeydown = (stIndex: number, colIndex: number, e: KeyboardEvent) => {
+  if (e.key === 'Enter' || e.key === 'ArrowDown') {
+    e.preventDefault()
+    const nextInput = document.querySelector<HTMLInputElement>(`input[data-grade-cell="${stIndex + 1}-${colIndex}"]`)
+    if (nextInput) {
+      nextInput.focus()
+      nextInput.select()
+    }
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault()
+    const prevInput = document.querySelector<HTMLInputElement>(`input[data-grade-cell="${stIndex - 1}-${colIndex}"]`)
+    if (prevInput) {
+      prevInput.focus()
+      prevInput.select()
+    }
+  }
 }
 
 onMounted(() => {
@@ -1019,105 +1048,133 @@ onMounted(() => {
 <template>
   <div class="space-y-8 animate-in fade-in duration-700">
     <!-- Header Card -->
-    <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-8 flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-sm transition-colors">
-      <div class="flex items-center gap-6">
-        <div class="p-4 bg-indigo-600 dark:bg-indigo-500 rounded-2xl text-white shadow-lg shadow-indigo-200 dark:shadow-none">
-          <ClipboardList :size="32" />
+    <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 sm:p-8 flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-sm transition-colors">
+      <div class="flex items-center gap-4 sm:gap-6">
+        <div class="p-3.5 sm:p-4 bg-indigo-600 dark:bg-indigo-500 rounded-2xl text-white shadow-lg shadow-indigo-200 dark:shadow-none shrink-0">
+          <ClipboardList :size="28" />
         </div>
         <div>
-          <h1 class="text-3xl font-black text-slate-900 dark:text-white tracking-tight">Registro de Calificaciones</h1>
-          <p class="text-slate-500 dark:text-slate-400 font-medium text-lg">Gestiona actividades y notas del periodo actual.</p>
+          <h1 class="text-xl sm:text-2xl lg:text-3xl font-black text-slate-900 dark:text-white tracking-tight">Registro de Calificaciones</h1>
+          <p class="text-slate-500 dark:text-slate-400 font-medium text-xs sm:text-base">Gestiona actividades, criterios y notas del periodo actual.</p>
         </div>
       </div>
       
       <!-- Actions buttons -->
-      <div v-if="selectedSubjectId && selectedPeriodId" class="flex flex-wrap items-center gap-3">
+      <div v-if="selectedSubjectId && selectedPeriodId" class="flex flex-wrap items-center gap-2.5 sm:gap-3">
         <!-- Autosave Indicator -->
-        <div v-if="!auth.isMonitoring && !isPeriodClosed" class="flex items-center gap-2 px-4 py-2 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-100 dark:border-slate-850 h-[46px]">
-          <div v-if="autosaveStatus === 'saving'" class="flex items-center gap-1.5 text-[9px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest">
+        <div v-if="!auth.isMonitoring && !isPeriodClosed" class="flex items-center gap-2 px-3.5 py-2 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-100 dark:border-slate-800 h-[44px]">
+          <div v-if="autosaveStatus === 'saving'" class="flex items-center gap-1.5 text-xs font-black text-amber-600 dark:text-amber-400 uppercase tracking-wider">
             <Loader2 class="w-3.5 h-3.5 animate-spin" />
             <span>Guardando...</span>
           </div>
-          <div v-else-if="autosaveStatus === 'saved'" class="flex items-center gap-1.5 text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">
+          <div v-else-if="autosaveStatus === 'saved'" class="flex items-center gap-1.5 text-xs font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
             <CheckCircle class="w-3.5 h-3.5" />
             <span>Guardado</span>
           </div>
-          <div v-else-if="autosaveStatus === 'error'" class="flex items-center gap-1.5 text-[9px] font-black text-red-600 dark:text-red-400 uppercase tracking-widest" :title="autosaveErrorMsg">
+          <div v-else-if="autosaveStatus === 'error'" class="flex items-center gap-1.5 text-xs font-black text-red-600 dark:text-red-400 uppercase tracking-wider" :title="autosaveErrorMsg">
             <AlertCircle class="w-3.5 h-3.5" />
             <span>Error</span>
           </div>
+        </div>
+
+        <!-- View Mode Switcher -->
+        <div class="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl border border-slate-200 dark:border-slate-700">
+          <button 
+            type="button"
+            @click="viewMode = 'table'"
+            :class="[
+              'px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5',
+              viewMode === 'table' ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs' : 'text-slate-600 dark:text-slate-400'
+            ]"
+            title="Vista Planilla Completa"
+          >
+            <Users :size="14" />
+            <span class="hidden sm:inline">Planilla</span>
+          </button>
+          <button 
+            type="button"
+            @click="viewMode = 'cards'"
+            :class="[
+              'px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5',
+              viewMode === 'cards' ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs' : 'text-slate-600 dark:text-slate-400'
+            ]"
+            title="Modo Ficha Móvil"
+          >
+            <BookOpen :size="14" />
+            <span class="hidden sm:inline">Tarjetas</span>
+          </button>
         </div>
 
         <button 
           v-if="!auth.isMonitoring"
           @click="saveAllGrades(false)"
           :disabled="saving || activitiesLoading || isPeriodClosed"
-          class="bg-emerald-600 dark:bg-emerald-500 text-white px-8 py-3 rounded-2xl font-bold shadow-lg shadow-emerald-100 dark:shadow-none hover:bg-emerald-700 transition-all flex items-center gap-2 active:scale-95 disabled:opacity-50"
+          class="bg-emerald-600 dark:bg-emerald-500 text-white px-5 sm:px-6 py-2.5 rounded-2xl font-bold shadow-md shadow-emerald-100 dark:shadow-none hover:bg-emerald-700 transition-all flex items-center gap-2 active:scale-95 disabled:opacity-50 text-xs sm:text-sm cursor-pointer"
         >
-          <Loader2 v-if="saving" class="w-5 h-5 animate-spin" />
-          <Save v-else :size="20" />
+          <Loader2 v-if="saving" class="w-4 h-4 animate-spin" />
+          <Save v-else :size="18" />
           {{ saving ? 'Guardando...' : 'Guardar Todo' }}
         </button>
         <button 
           @click="exportGradesToCSV"
           :disabled="saving || activitiesLoading || students.length === 0"
-          class="bg-indigo-600 dark:bg-indigo-500 text-white px-6 py-3 rounded-2xl font-bold shadow-lg shadow-indigo-100 dark:shadow-none hover:bg-indigo-700 transition-all flex items-center gap-2 active:scale-95"
+          class="bg-indigo-600 dark:bg-indigo-500 text-white px-4 sm:px-5 py-2.5 rounded-2xl font-bold shadow-md shadow-indigo-100 dark:shadow-none hover:bg-indigo-700 transition-all flex items-center gap-2 active:scale-95 text-xs sm:text-sm cursor-pointer"
         >
-          <Download :size="20" />
-          Exportar CSV
+          <Download :size="18" />
+          <span class="hidden sm:inline">CSV</span>
         </button>
         <button
           @click="openDrawer"
-          class="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-6 py-3 rounded-2xl font-bold transition-all flex items-center gap-2 active:scale-95 border border-slate-200 dark:border-slate-700 shadow-sm"
+          class="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-4 sm:px-5 py-2.5 rounded-2xl font-bold transition-all flex items-center gap-2 active:scale-95 border border-slate-200 dark:border-slate-700 shadow-xs text-xs sm:text-sm cursor-pointer"
         >
-          <BookOpen :size="20" class="text-indigo-500" />
-          {{ isPeriodClosed ? 'Ver Actividades' : 'Configurar Actividades' }}
+          <BookOpen :size="18" class="text-indigo-500" />
+          <span class="hidden sm:inline">{{ isPeriodClosed ? 'Ver Actividades' : 'Configurar Actividades' }}</span>
         </button>
-        <div v-if="auth.isMonitoring || isPeriodClosed" class="text-amber-600 font-bold text-sm bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 px-5 py-3 rounded-2xl">
+        <div v-if="auth.isMonitoring || isPeriodClosed" class="text-amber-600 font-bold text-xs sm:text-sm bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 px-4 py-2.5 rounded-2xl">
           Solo Lectura
         </div>
       </div>
     </div>
 
     <!-- Filtros en cascada -->
-    <div class="bg-white dark:bg-slate-900 p-8 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col md:flex-row md:items-end gap-6 transition-colors">
-      <div class="flex-1 grid grid-cols-1 sm:grid-cols-4 gap-4">
-        <div class="space-y-2">
-          <label class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-2">Grado</label>
-          <select v-model="selectedGradeName" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 text-sm font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 transition-all outline-none">
+    <div class="bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col md:flex-row md:items-end gap-5 transition-colors">
+      <div class="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="space-y-1.5">
+          <label class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider ml-1">Grado</label>
+          <select v-model="selectedGradeName" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-3.5 text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 transition-all outline-none cursor-pointer">
             <option :value="null">Selecciona</option>
             <option v-for="g in gradeOptions" :key="g" :value="g">{{ g }}</option>
           </select>
         </div>
 
-        <div class="space-y-2">
-          <label class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-2">Sección</label>
-          <select v-model="selectedSection" :disabled="!selectedGradeName" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 text-sm font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 transition-all outline-none disabled:opacity-50">
+        <div class="space-y-1.5">
+          <label class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider ml-1">Sección</label>
+          <select v-model="selectedSection" :disabled="!selectedGradeName" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-3.5 text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 transition-all outline-none disabled:opacity-50 cursor-pointer">
             <option :value="null">Selecciona</option>
             <option v-for="s in sectionOptions" :key="s" :value="s">{{ s }}</option>
           </select>
         </div>
 
-        <div class="space-y-2">
-          <label class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-2">Jornada</label>
-          <select v-model="selectedJornada" :disabled="!selectedSection" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 text-sm font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 transition-all outline-none disabled:opacity-50">
+        <div class="space-y-1.5">
+          <label class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider ml-1">Jornada</label>
+          <select v-model="selectedJornada" :disabled="!selectedSection" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-3.5 text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 transition-all outline-none disabled:opacity-50 cursor-pointer">
             <option :value="null">Selecciona</option>
             <option v-for="j in jornadaOptions" :key="j" :value="j">{{ j }}</option>
           </select>
         </div>
 
-        <div class="space-y-2">
-          <label class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-2">Materia</label>
-          <select v-model="selectedSubjectId" :disabled="!selectedJornada" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 text-sm font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 transition-all outline-none disabled:opacity-50">
+        <div class="space-y-1.5">
+          <label class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider ml-1">Materia</label>
+          <select v-model="selectedSubjectId" :disabled="!selectedJornada" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-3.5 text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 transition-all outline-none disabled:opacity-50 cursor-pointer">
             <option :value="null">Selecciona</option>
             <option v-for="s in subjectsOptions" :key="s.id" :value="s.id">{{ s.label }}</option>
           </select>
         </div>
       </div>
 
-      <div class="w-full md:w-64 space-y-2">
-        <label class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-2">Periodo Académico</label>
-        <select v-model="selectedPeriodId" :disabled="periods.length === 0" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 text-sm font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 transition-all outline-none disabled:opacity-50">
+      <div class="w-full md:w-64 space-y-1.5">
+        <label class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider ml-1">Periodo</label>
+        <select v-model="selectedPeriodId" :disabled="periods.length === 0" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-3.5 text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 transition-all outline-none disabled:opacity-50 cursor-pointer">
           <option v-for="p in periods" :key="p.id_periodo" :value="p.id_periodo">
             {{ p.nombre }} {{ p.estado === 'CERRADO' ? '(Cerrado)' : '' }}
           </option>
@@ -1126,52 +1183,53 @@ onMounted(() => {
     </div>
 
     <!-- Empty Selection State -->
-    <div v-if="!selectedSubjectId" class="bg-slate-50 dark:bg-slate-800/50 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-3xl p-20 text-center transition-colors">
-      <div class="w-20 h-20 bg-white dark:bg-slate-800 rounded-full shadow-sm flex items-center justify-center mx-auto mb-6">
-        <AlertCircle class="w-10 h-10 text-slate-300 dark:text-slate-600" />
+    <div v-if="!selectedSubjectId" class="bg-slate-50 dark:bg-slate-800/50 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-3xl p-16 sm:p-20 text-center transition-colors">
+      <div class="w-16 h-16 sm:w-20 sm:h-20 bg-white dark:bg-slate-800 rounded-full shadow-xs flex items-center justify-center mx-auto mb-5">
+        <AlertCircle class="w-8 h-8 sm:w-10 sm:h-10 text-slate-300 dark:text-slate-600" />
       </div>
-      <h3 class="text-xl font-bold text-slate-400 dark:text-slate-500">Selecciona grado, sección, jornada y materia para comenzar</h3>
+      <h3 class="text-lg sm:text-xl font-bold text-slate-500 dark:text-slate-400">Selecciona grado, sección, jornada y materia para calificar</h3>
     </div>
 
     <div v-else class="space-y-6 animate-in fade-in duration-500">
       <!-- Read Only Period Warning -->
-      <div v-if="isPeriodClosed" class="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-3xl p-6 flex items-start gap-4 animate-in slide-in-from-top duration-300 transition-colors">
+      <div v-if="isPeriodClosed" class="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-3xl p-5 sm:p-6 flex items-start gap-4 animate-in slide-in-from-top duration-300 transition-colors">
         <AlertCircle class="w-6 h-6 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
         <div>
-          <h4 class="font-black text-amber-900 dark:text-amber-200">Planilla en Modo Solo Lectura</h4>
-          <p class="text-xs text-amber-700 dark:text-amber-450 mt-1">
-            El periodo académico <strong>"{{ selectedPeriod?.nombre }}"</strong> está cerrado institucionalmente y no admite modificaciones en las calificaciones, criterios o actividades.
+          <h4 class="font-black text-amber-900 dark:text-amber-200 text-sm sm:text-base">Planilla en Modo Solo Lectura</h4>
+          <p class="text-xs text-amber-700 dark:text-amber-300 mt-1">
+            El periodo académico <strong>"{{ selectedPeriod?.nombre }}"</strong> está cerrado institucionalmente y no admite modificaciones en las notas.
           </p>
         </div>
       </div>
+
       <!-- Competency top banner -->
-      <div v-if="competency" class="bg-violet-50/60 dark:bg-violet-950/20 border border-violet-100/80 dark:border-violet-900 rounded-3xl p-6 flex flex-col md:flex-row md:items-center justify-between gap-5 transition-all shadow-sm">
-        <div class="flex items-start gap-4">
-          <div class="p-3 bg-violet-600 dark:bg-violet-500 rounded-2xl text-white shadow-lg shadow-violet-100 dark:shadow-none shrink-0">
-            <BookOpen :size="24" />
+      <div v-if="competency" class="bg-violet-50/60 dark:bg-violet-950/20 border border-violet-100/80 dark:border-violet-900 rounded-3xl p-5 sm:p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 transition-all shadow-xs">
+        <div class="flex items-start gap-3.5">
+          <div class="p-3 bg-violet-600 dark:bg-violet-500 rounded-2xl text-white shadow-md shadow-violet-100 dark:shadow-none shrink-0">
+            <BookOpen :size="22" />
           </div>
           <div>
-            <span class="text-[10px] font-black text-violet-600 dark:text-violet-400 uppercase tracking-widest block">Competencia del Periodo</span>
-            <p class="text-sm font-semibold text-slate-700 dark:text-slate-200 mt-1 leading-relaxed max-w-4xl whitespace-pre-line">{{ competency.descripcion }}</p>
+            <span class="text-xs font-black text-violet-600 dark:text-violet-400 uppercase tracking-wider block">Competencia del Periodo</span>
+            <p class="text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 mt-1 leading-relaxed max-w-4xl whitespace-pre-line">{{ competency.descripcion }}</p>
           </div>
         </div>
         <button 
           @click="openDrawer"
-          class="shrink-0 bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-violet-700 dark:text-violet-300 font-bold px-6 py-3 rounded-2xl transition-all flex items-center gap-2 active:scale-95 border border-violet-100 dark:border-violet-850 text-xs shadow-sm self-start md:self-auto"
+          class="shrink-0 bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-violet-700 dark:text-violet-300 font-bold px-4 py-2.5 rounded-2xl transition-all flex items-center gap-2 active:scale-95 border border-violet-100 dark:border-violet-850 text-xs shadow-xs self-start md:self-auto cursor-pointer"
         >
-          <Settings :size="16" />
-          {{ isPeriodClosed ? 'Ver Actividades / Evidencias' : 'Configurar Actividades' }}
+          <Settings :size="15" />
+          {{ isPeriodClosed ? 'Ver Actividades' : 'Configurar Actividades' }}
         </button>
       </div>
 
       <!-- Grade Matrix Container -->
       <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden transition-colors">
-        <div class="p-6 border-b border-slate-100 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div class="p-5 sm:p-6 border-b border-slate-100 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
            <div class="flex items-center gap-3">
              <div class="p-2.5 bg-indigo-50 dark:bg-indigo-950/30 rounded-xl text-indigo-600 dark:text-indigo-400">
                <Users :size="20" />
              </div>
-             <h3 class="text-xl font-black text-slate-900 dark:text-white">Planilla de Notas</h3>
+             <h3 class="text-lg sm:text-xl font-black text-slate-900 dark:text-white">Planilla de Notas</h3>
            </div>
 
            <!-- In-Table Search -->
@@ -1180,84 +1238,167 @@ onMounted(() => {
                v-model="studentSearch"
                type="text"
                placeholder="Buscar estudiante..."
-               class="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-semibold text-slate-700 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all duration-300"
+               class="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all duration-300"
              />
              <Search class="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
-             <button v-if="studentSearch" @click="studentSearch = ''" class="absolute right-3.5 top-3.5 text-slate-400">
+             <button v-if="studentSearch" @click="studentSearch = ''" class="absolute right-3.5 top-3.5 text-slate-400 cursor-pointer">
                <X :size="14" />
              </button>
            </div>
         </div>
 
         <!-- Empty Activities State -->
-        <div v-if="activities.length === 0 && students.length > 0" class="p-20 text-center">
-          <div class="w-16 h-16 bg-indigo-50 dark:bg-indigo-950/30 rounded-full flex items-center justify-center mx-auto mb-4 text-indigo-600">
-            <ClipboardList :size="32" />
-          </div>
-          <p class="text-base font-bold text-slate-700 dark:text-slate-300">No hay actividades creadas para este periodo</p>
-          <p class="text-sm text-slate-500 dark:text-slate-400 mt-1 mb-6">Crea actividades y asigna evidencias DBA para comenzar a calificar.</p>
-          <button 
-            v-if="!auth.isMonitoring && !isPeriodClosed"
-            @click="openDrawer"
-            class="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 py-3.5 rounded-2xl transition-all shadow-lg shadow-indigo-100 dark:shadow-none active:scale-95"
+        <EmptyState
+          v-if="activities.length === 0 && students.length > 0"
+          title="No hay actividades creadas para este periodo"
+          description="Crea actividades y asigna evidencias DBA para comenzar a calificar."
+        >
+          <template #icon>
+            <ClipboardList :size="32" class="text-indigo-600" />
+          </template>
+          <template #action>
+            <button 
+              v-if="!auth.isMonitoring && !isPeriodClosed"
+              @click="openDrawer"
+              class="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 py-3.5 rounded-2xl transition-all shadow-md shadow-indigo-100 dark:shadow-none active:scale-95 cursor-pointer text-sm"
+            >
+              <Plus :size="16" />
+              Configurar Actividades
+            </button>
+          </template>
+        </EmptyState>
+
+        <!-- CARDS VIEW (Modo Evaluación Móvil) -->
+        <div v-else-if="viewMode === 'cards'" class="p-4 sm:p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div 
+            v-for="(st, stIdx) in filteredStudents" 
+            :key="st.id_estudiante"
+            class="bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 p-5 rounded-2xl space-y-4 shadow-xs hover:border-indigo-300 dark:hover:border-indigo-800 transition-all"
           >
-            <Plus :size="16" />
-            Configurar Actividades
-          </button>
+            <!-- Card Header -->
+            <div class="flex items-center justify-between gap-3 border-b border-slate-200/60 dark:border-slate-700/60 pb-3">
+              <div class="flex items-center gap-3 min-w-0">
+                <div class="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 flex items-center justify-center text-xs font-black shrink-0">
+                  {{ st.nombre.charAt(0) }}{{ st.apellido.charAt(0) }}
+                </div>
+                <div class="min-w-0">
+                  <p class="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">{{ st.nombre }} {{ st.apellido }}</p>
+                  <p class="text-xs text-slate-400 font-mono">{{ st.codigo }}</p>
+                </div>
+              </div>
+              <div class="text-right shrink-0">
+                <div 
+                  :class="[
+                    parseFloat(calculateFinal(st.id_estudiante)) >= gradeRange.approval ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800' : 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-800',
+                    'px-3 py-1 rounded-xl font-black text-base border inline-flex items-center gap-1.5'
+                  ]"
+                >
+                  <span class="text-xs font-medium uppercase text-slate-400">Def:</span>
+                  {{ calculateFinal(st.id_estudiante) }}
+                </div>
+              </div>
+            </div>
+
+            <!-- Grade Inputs in Card -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div 
+                v-for="(col, colIdx) in tableColumns" 
+                :key="col.id" 
+                class="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2"
+              >
+                <div class="min-w-0 flex-1">
+                  <p class="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">
+                    {{ col.type === 'criterion' ? col.criterion?.descripcion : col.activity.nombre }}
+                  </p>
+                  <p class="text-xs text-indigo-500 font-semibold">
+                    {{ col.type === 'criterion' ? col.criterion?.porcentaje : col.activity.porcentaje }}%
+                  </p>
+                </div>
+                
+                <input 
+                  v-if="col.type === 'activity' && gradesMatrix[st.id_estudiante]"
+                  type="number"
+                  step="0.1"
+                  :data-grade-cell="`${stIdx}-${colIdx}`"
+                  @keydown="handleGradeKeydown(stIdx, colIdx, $event)"
+                  v-model="gradesMatrix[st.id_estudiante][col.activity.id_actividadmateria]"
+                  @blur="validateGradeInput(st.id_estudiante, col.activity.id_actividadmateria, 'activity', $event)"
+                  :disabled="auth.isMonitoring || isPeriodClosed"
+                  class="w-16 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-center font-bold text-sm text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+                <input 
+                  v-else-if="col.type === 'criterion' && criteriaGradesMatrix[st.id_estudiante]"
+                  type="number"
+                  step="0.1"
+                  :data-grade-cell="`${stIdx}-${colIdx}`"
+                  @keydown="handleGradeKeydown(stIdx, colIdx, $event)"
+                  v-model="criteriaGradesMatrix[st.id_estudiante][col.criterion!.id_criterio]"
+                  @blur="validateGradeInput(st.id_estudiante, col.criterion!.id_criterio, 'criterion', $event)"
+                  :disabled="auth.isMonitoring || isPeriodClosed"
+                  class="w-16 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-center font-bold text-sm text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+                <div v-else-if="col.type === 'activity_total'" class="text-xs font-black text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/30 px-3 py-2 rounded-lg border border-indigo-100 dark:border-indigo-900">
+                  {{ calculateActivityGrade(st.id_estudiante, col.activity).toFixed(1) }}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <!-- Table Container -->
+        <!-- TABLE VIEW (Planilla Completa) -->
         <div v-else class="overflow-x-auto custom-scrollbar">
           <table class="w-full border-collapse">
             <thead>
               <tr class="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
-                <th class="p-6 text-left text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest sticky left-0 bg-slate-50 dark:bg-slate-800 z-10">Estudiante</th>
+                <th class="p-4 sm:p-5 text-left text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider sticky left-0 bg-slate-50 dark:bg-slate-800 z-10">Estudiante</th>
                 
                 <!-- Dynamic Columns for Activities/Criteria -->
                 <th v-for="col in tableColumns" :key="col.id" 
-                    :class="['p-4 text-center border-l border-slate-100 dark:border-slate-800 min-w-[120px]', col.type === 'activity_total' ? 'bg-indigo-50/20 dark:bg-indigo-950/20' : '']">
+                    :class="['p-3.5 text-center border-l border-slate-100 dark:border-slate-800 min-w-[120px]', col.type === 'activity_total' ? 'bg-indigo-50/20 dark:bg-indigo-950/20' : '']">
                   <div class="space-y-1">
-                    <div v-if="col.type === 'activity'" class="text-[9px] font-black text-indigo-500 uppercase tracking-tighter">{{ col.activity.nombre }}</div>
-                    <div v-else-if="col.type === 'criterion'" class="text-[9px] font-black text-indigo-500 uppercase tracking-tighter truncate" :title="col.activity.nombre">{{ col.activity.nombre }}</div>
-                    <div v-else-if="col.type === 'activity_total'" class="text-[9px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-tighter">Total {{ col.activity.nombre }}</div>
+                    <div v-if="col.type === 'activity'" class="text-xs font-black text-indigo-500 uppercase tracking-wider">{{ col.activity.nombre }}</div>
+                    <div v-else-if="col.type === 'criterion'" class="text-xs font-black text-indigo-500 uppercase tracking-wider truncate" :title="col.activity.nombre">{{ col.activity.nombre }}</div>
+                    <div v-else-if="col.type === 'activity_total'" class="text-xs font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">Total {{ col.activity.nombre }}</div>
                     
                     <div class="text-xs font-black text-slate-700 dark:text-slate-200 truncate max-w-[100px] mx-auto">
                       {{ col.type === 'criterion' ? col.criterion?.descripcion : (col.type === 'activity_total' ? 'Σ' : col.activity.nombre) }}
                     </div>
-                    <div class="text-[10px] font-bold text-slate-400">
+                    <div class="text-xs font-bold text-slate-400">
                       {{ col.type === 'criterion' ? col.criterion?.porcentaje : col.activity.porcentaje }}%
                     </div>
                   </div>
                 </th>
 
-                <th class="p-6 text-center text-[10px] font-black text-slate-900 dark:text-white uppercase tracking-widest bg-slate-100 dark:bg-slate-800/80 border-l border-slate-200 dark:border-slate-700 shadow-[-4px_0_10px_rgba(0,0,0,0.02)]">Nota Definitiva</th>
-                <th class="p-6 text-center text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Nivel</th>
+                <th class="p-4 sm:p-5 text-center text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider bg-slate-100 dark:bg-slate-800/80 border-l border-slate-200 dark:border-slate-700">Nota Definitiva</th>
+                <th class="p-4 sm:p-5 text-center text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider">Nivel</th>
               </tr>
             </thead>
             <tbody>
               <tr 
-                v-for="st in filteredStudents" 
+                v-for="(st, stIdx) in filteredStudents" 
                 :key="st.id_estudiante"
                 class="border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors group"
               >
-                <td class="p-6 sticky left-0 bg-white dark:bg-slate-900 z-10 shadow-[4px_0_10px_rgba(0,0,0,0.01)]">
+                <td class="p-4 sm:p-5 sticky left-0 bg-white dark:bg-slate-900 z-10 shadow-[4px_0_10px_rgba(0,0,0,0.01)]">
                   <div class="flex items-center gap-3">
-                    <div class="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-[10px] font-black">
+                    <div class="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-xs font-black shrink-0">
                       {{ st.nombre.charAt(0) }}{{ st.apellido.charAt(0) }}
                     </div>
-                    <div>
-                      <p class="text-xs font-bold text-slate-700 dark:text-slate-200">{{ st.nombre }} {{ st.apellido }}</p>
-                      <p class="text-[9px] font-medium text-slate-400">{{ st.codigo }}</p>
+                    <div class="min-w-0">
+                      <p class="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">{{ st.nombre }} {{ st.apellido }}</p>
+                      <p class="text-xs font-medium text-slate-400">{{ st.codigo }}</p>
                     </div>
                   </div>
                 </td>
 
                 <!-- Grades Inputs -->
-                <td v-for="col in tableColumns" :key="col.id" class="p-2 border-l border-slate-50 dark:border-slate-800/50 text-center">
+                <td v-for="(col, colIdx) in tableColumns" :key="col.id" class="p-2 border-l border-slate-50 dark:border-slate-800/50 text-center">
                   <input 
                     v-if="col.type === 'activity' && gradesMatrix[st.id_estudiante]"
                     type="number"
                     step="0.1"
+                    :data-grade-cell="`${stIdx}-${colIdx}`"
+                    @keydown="handleGradeKeydown(stIdx, colIdx, $event)"
                     v-model="gradesMatrix[st.id_estudiante][col.activity.id_actividadmateria]"
                     @blur="validateGradeInput(st.id_estudiante, col.activity.id_actividadmateria, 'activity', $event)"
                     :disabled="auth.isMonitoring || isPeriodClosed"
@@ -1267,6 +1408,8 @@ onMounted(() => {
                     v-else-if="col.type === 'criterion' && criteriaGradesMatrix[st.id_estudiante]"
                     type="number"
                     step="0.1"
+                    :data-grade-cell="`${stIdx}-${colIdx}`"
+                    @keydown="handleGradeKeydown(stIdx, colIdx, $event)"
                     v-model="criteriaGradesMatrix[st.id_estudiante][col.criterion!.id_criterio]"
                     @blur="validateGradeInput(st.id_estudiante, col.criterion!.id_criterio, 'criterion', $event)"
                     :disabled="auth.isMonitoring || isPeriodClosed"
@@ -1278,11 +1421,11 @@ onMounted(() => {
                 </td>
 
                 <!-- Final Grade -->
-                <td class="p-6 text-center bg-slate-50/50 dark:bg-slate-800/30 border-l border-slate-100 dark:border-slate-800">
+                <td class="p-4 sm:p-5 text-center bg-slate-50/50 dark:bg-slate-800/30 border-l border-slate-100 dark:border-slate-800">
                   <div 
                     :class="[
                       parseFloat(calculateFinal(st.id_estudiante)) >= gradeRange.approval ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 border-emerald-100 dark:border-emerald-900' : 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 border-red-100 dark:border-red-900',
-                      'inline-flex items-center justify-center w-14 h-10 rounded-xl font-black text-lg border shadow-sm'
+                      'inline-flex items-center justify-center w-14 h-9 rounded-xl font-black text-base border shadow-xs'
                     ]"
                   >
                     {{ calculateFinal(st.id_estudiante) }}
@@ -1290,11 +1433,11 @@ onMounted(() => {
                 </td>
 
                 <!-- Academic Scale -->
-                <td class="p-6 text-center">
+                <td class="p-4 sm:p-5 text-center">
                   <span 
                     :class="[
                       getScaleClass(getScaleLevel(calculateFinal(st.id_estudiante))),
-                      'px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border'
+                      'px-2.5 py-1 rounded-full text-xs font-black uppercase tracking-wider border'
                     ]"
                   >
                     {{ getScaleLevel(calculateFinal(st.id_estudiante)) }}
@@ -1305,425 +1448,72 @@ onMounted(() => {
           </table>
         </div>
         
-        <div v-if="filteredStudents.length === 0 && students.length > 0" class="p-20 text-center">
-          <div class="w-16 h-16 bg-slate-50 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Search class="w-8 h-8 text-slate-300" />
+        <div v-if="filteredStudents.length === 0 && students.length > 0" class="p-16 text-center">
+          <div class="w-14 h-14 bg-slate-50 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-3">
+            <Search class="w-6 h-6 text-slate-300" />
           </div>
-          <p class="text-sm font-bold text-slate-400">No se encontraron estudiantes con ese nombre o código</p>
         </div>
       </div>
     </div>
 
     <!-- Slide-Over Drawer -->
-    <div v-if="isDrawerOpen" class="fixed inset-0 z-50 overflow-hidden" aria-labelledby="slide-over-title" role="dialog" aria-modal="true">
-      <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" @click="closeDrawer"></div>
-      
-      <div class="absolute inset-y-0 right-0 pl-10 max-w-full flex">
-        <div class="w-screen max-w-lg bg-white dark:bg-slate-900 shadow-2xl flex flex-col transition-all transform duration-300 ease-in-out border-l border-slate-100 dark:border-slate-800">
-          <!-- Drawer Header -->
-          <div class="px-6 py-5 bg-slate-50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-            <div class="flex items-center gap-3">
-              <div class="p-2.5 bg-indigo-50 dark:bg-indigo-950/30 rounded-xl text-indigo-600 dark:text-indigo-400">
-                <Settings :size="20" />
-              </div>
-              <div>
-                <h2 class="text-lg font-black text-slate-900 dark:text-white leading-none">
-                  {{ isPeriodClosed ? 'Detalle de Actividades (Solo Lectura)' : 'Gestión Pedagógica' }}
-                </h2>
-                <p class="text-xs text-slate-500 dark:text-slate-400 font-semibold mt-1">
-                  {{ isPeriodClosed ? 'Materia cerrada para este periodo' : 'Configura actividades y evidencias DBA' }}
-                </p>
-              </div>
-            </div>
-            <button @click="closeDrawer" class="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-all">
-              <X :size="20" />
-            </button>
-          </div>
-          
-          <!-- Drawer Body (scrollable) -->
-          <div class="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
-            <!-- Section 1: Active Competency -->
-            <div class="space-y-4">
-              <div class="flex items-center gap-2">
-                <div class="w-7 h-7 bg-violet-50 dark:bg-violet-950/30 rounded-lg flex items-center justify-center shrink-0">
-                  <BookOpen class="w-4 h-4 text-violet-500 dark:text-violet-400" />
-                </div>
-                <h3 class="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider">Competencia del Periodo</h3>
-              </div>
+    <TeacherActivityDrawer
+      :is-open="isDrawerOpen"
+      :is-period-closed="isPeriodClosed"
+      :is-monitoring="auth.isMonitoring"
+      :competency="competency"
+      :competencias-list="competenciasList"
+      :evidencias="evidencias"
+      :activities="activities"
+      :total-percentage="totalPercentage"
+      :show-add-activity="showAddActivity"
+      :dba-evidences-info="dbaEvidencesInfo"
+      :planned-dba-items="plannedDbaItems"
+      :new-activity="newActivity"
+      :new-criterion="newCriterion"
+      :selected-extra-evidences-count="selectedExtraEvidencesCount"
+      :selected-extra-evidences-list="selectedExtraEvidencesList"
+      :get-dba-number-for-competency="getDbaNumberForCompetency"
+      :get-linked-competency-index="getLinkedCompetencyIndex"
+      :get-dba-evidence-details="getDbaEvidenceDetails"
+      :get-linked-activity-for-evidence="getLinkedActivityForEvidence"
+      @close="closeDrawer"
+      @update-activity-weight="updateActivityWeight"
+      @remove-activity="removeActivity"
+      @toggle-add-criterion="toggleAddCriterion"
+      @add-criterion="addCriterion"
+      @remove-criterion="removeCriterion($event.act, $event.critId)"
+      @toggle-show-add-activity="showAddActivity = $event"
+      @add-activity="addActivity"
+      @open-extra-warning="showWarningModal = true"
+    />
 
-              <div v-if="!competency" class="flex flex-col items-center justify-center py-8 text-center bg-slate-50 dark:bg-slate-800/30 rounded-2xl border border-dashed border-slate-200 dark:border-slate-850">
-                <AlertCircle class="w-8 h-8 text-slate-300 dark:text-slate-600 mb-2" />
-                <p class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase">Sin competencia definida</p>
-              </div>
-              <div v-else class="space-y-4">
-                <!-- Si hay competencias estructuradas (agrupadas por DBA) -->
-                <div v-if="competenciasList.length" class="space-y-4">
-                  <div v-for="(comp, cIdx) in competenciasList" :key="comp.id_competencia" class="bg-violet-50 dark:bg-violet-950/20 border border-violet-100 dark:border-violet-900 rounded-2xl p-4 shadow-sm transition-all hover:shadow-md">
-                    <span class="text-[9px] font-black text-violet-600 dark:text-violet-400 uppercase tracking-widest block mb-1">
-                      Competencia #{{ cIdx + 1 }}{{ getDbaNumberForCompetency(comp) ? ` / DBA #${getDbaNumberForCompetency(comp)}` : '' }}
-                    </span>
-                    <p class="text-xs font-bold text-slate-800 dark:text-slate-200 leading-relaxed">{{ comp.descripcion }}</p>
-                    
-                    <div v-if="comp.evidencias && comp.evidencias.length" class="mt-3 pt-3 border-t border-violet-200/40 dark:border-violet-800/60">
-                      <h4 class="text-[9px] font-black text-violet-700 dark:text-violet-400 uppercase tracking-wider mb-2">Evidencias</h4>
-                      <ul class="space-y-1.5">
-                        <li v-for="ev in comp.evidencias" :key="ev.id_evidencia" class="flex items-start gap-2">
-                          <div class="w-1.5 h-1.5 rounded-full bg-violet-400 mt-1.5 shrink-0"></div>
-                          <span class="text-[10px] font-semibold text-violet-900/80 dark:text-violet-300/80 leading-relaxed">{{ ev.descripcion }}</span>
-                        </li>
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Fallback tradicional si no se cargaron estructuradas -->
-                <div v-else class="bg-violet-50 dark:bg-violet-950/20 border border-violet-100 dark:border-violet-900 rounded-2xl p-4">
-                  <p class="text-sm font-semibold text-violet-900 dark:text-violet-300 leading-relaxed whitespace-pre-line">{{ competency.descripcion }}</p>
-                  
-                  <div v-if="evidencias.length" class="mt-4 pt-4 border-t border-violet-200/60 dark:border-violet-800/60">
-                    <h4 class="text-[10px] font-black text-violet-900 dark:text-violet-400 uppercase tracking-wider mb-2">Evidencias Vinculadas</h4>
-                    <ul class="space-y-1.5">
-                      <li v-for="ev in evidencias" :key="ev.id_evidencia" class="flex items-start gap-2">
-                        <div class="w-1.5 h-1.5 rounded-full bg-violet-400 mt-1.5 shrink-0"></div>
-                        <span class="text-[11px] font-medium text-violet-800 dark:text-violet-300/80 leading-relaxed">{{ ev.descripcion }}</span>
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-                <div class="flex items-center gap-2 px-1">
-                  <div class="w-3.5 h-3.5 text-slate-400 shrink-0">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                      <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                    </svg>
-                  </div>
-                  <p class="text-[11px] text-slate-400 dark:text-slate-500 font-semibold">
-                    Definida por la dirección académica
-                  </p>
-                </div>
-              </div>
-            
-
-            <hr class="border-slate-100 dark:border-slate-800" />
-
-            <!-- Section 2: Activities List & Creation -->
-            <div class="space-y-6">
-              <div class="flex items-center justify-between">
-                <div class="flex items-center gap-2">
-                  <div class="w-7 h-7 bg-indigo-50 dark:bg-indigo-950/30 rounded-lg flex items-center justify-center shrink-0">
-                    <ClipboardList class="w-4 h-4 text-indigo-500 dark:text-indigo-400" />
-                  </div>
-                  <h3 class="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider">Actividades</h3>
-                </div>
-                <span :class="[totalPercentage === 100 ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400' : 'bg-amber-50 text-amber-600 dark:bg-amber-950/30 dark:text-amber-400', 'px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter']">
-                  {{ totalPercentage }}% / 100%
-                </span>
-              </div>
-
-              <!-- List of activities -->
-              <div class="space-y-4">
-                <div v-for="act in activities" :key="act.id_actividadmateria" class="space-y-3">
-                  <div class="group relative p-4 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-850 hover:border-indigo-200 dark:hover:border-indigo-900 transition-all">
-                    <div class="flex justify-between items-start">
-                      <div>
-                        <h4 class="text-sm font-bold text-slate-900 dark:text-white">{{ act.nombre }}</h4>
-                        <div class="flex items-center gap-1.5 mt-1">
-                          <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Peso:</span>
-                          <input 
-                            v-if="!auth.isMonitoring && !isPeriodClosed"
-                            type="number" 
-                            v-model.number="act.porcentaje" 
-                            @blur="updateActivityWeight(act)"
-                            @keyup.enter="($event.target as HTMLInputElement).blur()"
-                            class="w-12 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-1.5 py-0.5 text-[10px] font-black text-center text-slate-700 dark:text-slate-200 focus:ring-1 focus:ring-indigo-500 outline-none"
-                          />
-                          <span v-else class="text-[10px] font-black text-slate-600 dark:text-slate-400">{{ act.porcentaje }}%</span>
-                        </div>
-                        
-                        <!-- DBA Evidences of Activity -->
-                        <div v-if="dbaEvidencesInfo?.usaDba && getDbaEvidenceDetails(act).length > 0" class="mt-2 space-y-1.5">
-                          <div v-for="ev in getDbaEvidenceDetails(act)" :key="ev.id_evidencia_dba" class="text-[10px] font-semibold text-slate-600 dark:text-slate-400 flex flex-col gap-0.5">
-                            <div class="flex items-start gap-1.5 flex-wrap">
-                              <span class="shrink-0 font-bold text-emerald-600 dark:text-emerald-400">DBA {{ ev.numero_dba }}:</span>
-                              <span>{{ ev.descripcion }}</span>
-                              <span :class="ev.tipo === 'PLANEADA' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400' : 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400'" class="rounded px-1.5 py-0.2 text-[8px] font-black uppercase">
-                                {{ ev.tipo }}
-                              </span>
-                            </div>
-                            <div v-if="ev.tipo === 'PLANEADA' && getLinkedCompetencyIndex(ev.id_competencia)" class="flex flex-wrap gap-1 mt-1 pl-2">
-                              <span class="px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-950/40 text-[8px] font-black text-violet-700 dark:text-violet-400 border border-violet-200/40 dark:border-violet-900 uppercase tracking-wider">
-                                Competencia {{ getLinkedCompetencyIndex(ev.id_competencia) }}{{ getDbaNumberForCompetency(competenciasList[(getLinkedCompetencyIndex(ev.id_competencia) || 1) - 1]) ? ` / DBA ${getDbaNumberForCompetency(competenciasList[(getLinkedCompetencyIndex(ev.id_competencia) || 1) - 1])}` : '' }}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <!-- Delete & Add Criterion buttons -->
-                      <div v-if="!auth.isMonitoring && !isPeriodClosed" class="flex gap-1">
-                        <button @click="toggleAddCriterion(act.id_actividadmateria)" class="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-white dark:hover:bg-slate-700 rounded-lg transition-all" title="Añadir criterio">
-                          <Plus :size="14" />
-                        </button>
-                        <button @click="removeActivity(act.id_actividadmateria)" class="p-1.5 text-slate-400 hover:text-red-500 hover:bg-white dark:hover:bg-slate-700 rounded-lg transition-all" title="Eliminar">
-                          <Trash2 :size="14" />
-                        </button>
-                      </div>
-                    </div>
-
-                    <!-- Criteria List -->
-                    <div v-if="act.criterios && act.criterios.length > 0" class="mt-4 space-y-2 border-t border-slate-200/60 dark:border-slate-750/60 pt-3">
-                      <div v-for="crit in act.criterios" :key="crit.id_criterio" class="flex items-center justify-between bg-white dark:bg-slate-900/50 p-2 rounded-xl text-[11px] group/crit shadow-sm border border-transparent hover:border-indigo-100 dark:hover:border-indigo-900">
-                        <span class="font-medium text-slate-600 dark:text-slate-300 truncate pr-2">{{ crit.descripcion }}</span>
-                        <div class="flex items-center gap-2 shrink-0">
-                          <span class="font-black text-indigo-500">{{ crit.porcentaje }}%</span>
-                          <button v-if="!auth.isMonitoring && !isPeriodClosed" @click="removeCriterion(act, crit.id_criterio)" class="text-slate-300 hover:text-red-500 opacity-0 group-hover/crit:opacity-100 p-0.5">
-                            <X :size="12" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-
-                    <!-- Add Criterion Form -->
-                    <div v-if="newCriterion[act.id_actividadmateria]" class="mt-3 p-3 bg-white dark:bg-slate-900 rounded-xl border border-indigo-100 dark:border-indigo-900 space-y-3 animate-in slide-in-from-top-1 duration-200 shadow-sm">
-                      <input v-model="newCriterion[act.id_actividadmateria].descripcion" type="text" placeholder="Descripción del criterio..." class="w-full bg-slate-50 dark:bg-slate-800 border-0 rounded-lg px-3 py-2 text-xs font-medium outline-none focus:ring-1 focus:ring-indigo-500 dark:text-white" />
-                      <div class="flex gap-2">
-                        <input v-model.number="newCriterion[act.id_actividadmateria].porcentaje" type="number" placeholder="Peso %" class="w-20 bg-slate-50 dark:bg-slate-800 border-0 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:ring-1 focus:ring-indigo-500 dark:text-white" />
-                        <button @click="addCriterion(act)" class="flex-1 bg-indigo-600 text-white py-2 rounded-lg text-[10px] font-black uppercase">Añadir</button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- New Activity Button & Form -->
-              <div v-if="!auth.isMonitoring && !isPeriodClosed && totalPercentage < 100" class="border-t border-slate-100 dark:border-slate-800 pt-6">
-                <button 
-                  v-if="!showAddActivity"
-                  @click="showAddActivity = true"
-                  class="w-full flex items-center justify-center gap-2 py-4 border-2 border-dashed border-slate-200 dark:border-slate-800 hover:border-indigo-300 dark:hover:border-indigo-900 rounded-2xl text-slate-400 hover:text-indigo-600 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-all font-bold text-sm"
-                >
-                  <Plus :size="16" />
-                  Nueva Actividad
-                </button>
-
-                <div v-else class="p-5 bg-indigo-50/30 dark:bg-indigo-950/20 rounded-2xl border border-indigo-100 dark:border-indigo-900 space-y-4 animate-in zoom-in-95">
-                  <div v-if="dbaEvidencesInfo?.usaDba" class="space-y-4">
-                    <div class="flex flex-col gap-2">
-                      <div class="flex items-center justify-between">
-                        <label class="text-[10px] font-black text-indigo-500 dark:text-indigo-400 uppercase tracking-widest ml-1">Evidencias DBA Planeadas *</label>
-                      </div>
-                      
-                      <!-- DBA Scrollable Selector (Only planned) -->
-                      <div class="space-y-4 max-h-60 overflow-y-auto border border-slate-200 dark:border-slate-750 rounded-xl p-3 bg-white dark:bg-slate-900">
-                        <div v-if="plannedDbaItems.length === 0" class="text-xs text-slate-400 dark:text-slate-500 italic py-4 text-center">
-                          No hay evidencias planeadas para este periodo por el directivo.
-                        </div>
-                        
-                        <div v-for="dbaItem in plannedDbaItems" :key="dbaItem.id_dba" class="space-y-2 pb-3 border-b border-slate-100 dark:border-slate-800 last:border-0 last:pb-0">
-                          <div class="flex items-start gap-2">
-                            <span class="rounded bg-indigo-50 text-indigo-700 px-1.5 py-0.5 text-[9px] font-black dark:bg-indigo-950/40 dark:text-indigo-400 shrink-0">
-                              DBA #{{ dbaItem.numero_dba }}
-                            </span>
-                            <p class="text-xs font-bold text-slate-700 dark:text-slate-300 leading-normal">
-                              {{ dbaItem.enunciado }}
-                            </p>
-                          </div>
-                          
-                          <div class="pl-4 space-y-1.5">
-                            <label v-for="ev in dbaItem.evidencias" :key="ev.id_evidencia_dba" :class="getLinkedActivityForEvidence(ev.id_evidencia_dba) ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'" class="flex flex-col gap-1 p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 border border-transparent hover:border-slate-100 dark:hover:border-slate-700">
-                              <div class="flex items-start gap-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400">
-                                <input type="checkbox" v-model="newActivity.evidencias_dba" :value="ev.id_evidencia_dba" :disabled="!!getLinkedActivityForEvidence(ev.id_evidencia_dba)" class="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed" />
-                                <div class="flex flex-wrap items-center gap-1.5">
-                                  <span>{{ ev.descripcion }}</span>
-                                  <span class="rounded px-1.5 py-0.2 text-[8px] font-black uppercase bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400">
-                                    PLANEADA
-                                  </span>
-                                  <span v-if="getLinkedActivityForEvidence(ev.id_evidencia_dba)" class="bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-400 rounded px-1.5 py-0.5 text-[8px] font-bold border border-red-200/40 uppercase tracking-wide">
-                                    Asignada a: {{ getLinkedActivityForEvidence(ev.id_evidencia_dba) }}
-                                  </span>
-                                </div>
-                              </div>
-                              <div v-if="getLinkedCompetencyIndex(ev.id_competencia)" class="flex flex-wrap gap-1 mt-1 pl-6">
-                                <span class="px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-950/40 text-[8px] font-black text-violet-700 dark:text-violet-400 border border-violet-200/40 dark:border-violet-900 uppercase tracking-wider">
-                                  Competencia {{ getLinkedCompetencyIndex(ev.id_competencia) }}{{ getDbaNumberForCompetency(competenciasList[(getLinkedCompetencyIndex(ev.id_competencia) || 1) - 1]) ? ` / DBA ${getDbaNumberForCompetency(competenciasList[(getLinkedCompetencyIndex(ev.id_competencia) || 1) - 1])}` : '' }}
-                                </span>
-                              </div>
-                            </label>
-                          </div>
-                        </div>
-                      </div>
-
-                      <!-- Botón para ver todas/extra evidencias -->
-                      <div class="mt-1">
-                        <button 
-                          type="button" 
-                          @click="showWarningModal = true"
-                          class="w-full flex items-center justify-center gap-1.5 py-3 bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-xl border border-slate-200 dark:border-slate-700 text-[10px] font-black uppercase tracking-wider transition-all"
-                        >
-                          <Eye :size="13" />
-                          Ver todas las evidencias para este curso
-                        </button>
-                      </div>
-
-                      <!-- Resumen de evidencias extra seleccionadas -->
-                      <div v-if="selectedExtraEvidencesCount > 0" class="mt-2 p-4 bg-blue-50/30 dark:bg-blue-950/10 rounded-2xl border border-blue-100 dark:border-blue-900/50 space-y-3">
-                        <p class="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest leading-none">
-                          Evidencias Extra Seleccionadas ({{ selectedExtraEvidencesCount }})
-                        </p>
-                        <ul class="space-y-1.5">
-                          <li v-for="ev in selectedExtraEvidencesList" :key="ev.id_evidencia_dba" class="text-xs font-semibold text-slate-600 dark:text-slate-350 leading-relaxed flex items-start gap-2">
-                            <span class="rounded bg-blue-50 text-blue-700 px-1 py-0.5 text-[8px] font-black dark:bg-blue-950/40 dark:text-blue-400 mt-0.5 shrink-0">DBA #{{ ev.numero_dba }}</span>
-                            <div class="flex-1 min-w-0">
-                              <span>{{ ev.descripcion }}</span>
-                              <span v-if="ev.planeada_otro_periodo_nombre" class="ml-1.5 rounded px-1.5 py-0.2 text-[8px] font-black uppercase bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 border border-amber-200/30">
-                                Planeada en: {{ ev.planeada_otro_periodo_nombre }}
-                              </span>
-                            </div>
-                          </li>
-                        </ul>
-
-                        <!-- Motivo y Justificación -->
-                        <div class="pt-3 border-t border-slate-200/40 dark:border-slate-800 space-y-3">
-                          <div class="space-y-1">
-                            <label class="text-[9px] font-black text-indigo-500 dark:text-indigo-400 uppercase tracking-widest ml-1">
-                              Motivo del uso EXTRA *
-                            </label>
-                            <select v-model="newActivity.motivo_extra" class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2.5 text-xs font-bold outline-none text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500">
-                              <option value="">Selecciona un motivo</option>
-                              <option value="RECUPERACION_REFUERZO">Recuperación o refuerzo</option>
-                              <option value="ADELANTO_CURRICULAR">Adelanto curricular</option>
-                              <option value="INTEGRACION_ASIGNATURA">Integración con otra asignatura</option>
-                              <option value="CALENDARIO_INSTITUCIONAL">Ajuste por calendario institucional</option>
-                              <option value="NECESIDAD_PEDAGOGICA">Necesidad pedagógica detectada</option>
-                              <option value="OTRO">Otro (requiere descripción)</option>
-                            </select>
-                          </div>
-                          <div v-if="newActivity.motivo_extra === 'OTRO'" class="space-y-1">
-                            <label class="text-[9px] font-black text-indigo-500 dark:text-indigo-400 uppercase tracking-widest ml-1">Descripción de la justificación *</label>
-                            <textarea v-model="newActivity.justificacion_extra" rows="3" placeholder="Describe brevemente el por qué deseas evaluar esta evidencia..." class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-bold outline-none text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500"></textarea>
-                          </div>
-                        </div>
-                      </div>
-
-                    </div>
-                  </div>
-                  
-                  <div v-else class="space-y-1">
-                    <label class="text-[9px] font-black text-indigo-400 uppercase tracking-widest ml-1">Evidencia *</label>
-                    <select v-model="newActivity.id_evidencia" class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded-xl px-3 py-2.5 text-xs font-semibold text-slate-600 dark:text-slate-300 outline-none">
-                      <option :value="null">Selecciona</option>
-                      <option v-for="ev in evidencias" :key="ev.id_evidencia" :value="ev.id_evidencia">
-                        E{{ ev.orden }}: {{ ev.descripcion }}
-                      </option>
-                    </select>
-                  </div>
-
-                  <div class="space-y-1">
-                    <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Nombre de la actividad</label>
-                    <input v-model="newActivity.nombre" type="text" placeholder="Ej: Taller 1, Evaluación..." class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2.5 text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white" />
-                  </div>
-
-                  <div class="space-y-1">
-                    <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Peso porcentual</label>
-                    <div class="flex items-center gap-3">
-                      <input v-model.number="newActivity.porcentaje" type="number" placeholder="Ej: 20" class="w-24 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2.5 text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white" />
-                      <span class="text-[10px] font-black text-slate-400 uppercase tracking-tighter">% del total</span>
-                    </div>
-                  </div>
-
-                  <div class="flex gap-2 pt-2">
-                    <button @click="showAddActivity = false" class="flex-1 py-2 text-[10px] font-black uppercase text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">Cancelar</button>
-                    <button @click="addActivity" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-xl text-[10px] font-black uppercase shadow-lg shadow-indigo-100 dark:shadow-none active:scale-95 transition-all">Crear Actividad</button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Modal 1: Advertencia de Evidencias Extra -->
-    <div v-if="showWarningModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 max-w-md w-full shadow-2xl space-y-4 animate-in zoom-in-95 duration-200">
-        <div class="flex items-center gap-3 text-amber-500 dark:text-amber-400">
-          <div class="p-2.5 bg-amber-50 dark:bg-amber-950/40 rounded-2xl">
-            <AlertTriangle :size="24" />
-          </div>
-          <h3 class="text-base font-black uppercase tracking-wide text-slate-850 dark:text-white">Advertencia de Evidencias</h3>
-        </div>
-        <p class="text-xs font-semibold text-slate-600 dark:text-slate-400 leading-relaxed">
-          Las evidencias que se mostrarán ya fueron planeadas en periodos anteriores/futuros, o no tienen alguna planeación. Si elige vincular una de estas evidencias con el registro de notas, el estado de la evidencia pasará a <span class="text-blue-600 font-extrabold uppercase">EXTRA</span> para este periodo académico.
-        </p>
-        <div class="flex gap-2 pt-2">
-          <button @click="showWarningModal = false" class="flex-1 py-3 text-xs font-black uppercase text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors border border-slate-200 dark:border-slate-800 rounded-2xl">Cancelar</button>
-          <button @click="showWarningModal = false; showExtraModal = true" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-2xl text-xs font-black uppercase active:scale-95 transition-all shadow-lg shadow-indigo-100 dark:shadow-none">Entendido, continuar</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Modal 2: Catálogo de Evidencias Extras/Sin Planear -->
-    <div v-if="showExtraModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 max-w-lg w-full shadow-2xl flex flex-col max-h-[85vh] space-y-4 animate-in zoom-in-95 duration-200">
-        <div class="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
-          <h3 class="text-sm font-black uppercase tracking-wider text-slate-850 dark:text-white">Evidencias Extras disponibles</h3>
-          <button @click="showExtraModal = false" class="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors rounded-xl hover:bg-slate-100 dark:hover:bg-slate-855"><X :size="16" /></button>
-        </div>
-
-        <div class="flex-1 overflow-y-auto pr-1 space-y-4 custom-scrollbar">
-          <div v-if="extraDbaItems.length === 0" class="text-xs text-slate-400 dark:text-slate-500 italic py-8 text-center">
-            No hay más evidencias disponibles en el catálogo de DBA para este curso.
-          </div>
-
-          <div v-for="dbaItem in extraDbaItems" :key="dbaItem.id_dba" class="space-y-2 pb-3 border-b border-slate-100 dark:border-slate-800 last:border-0 last:pb-0">
-            <div class="flex items-start gap-2">
-              <span class="rounded bg-blue-50 text-blue-700 px-1.5 py-0.5 text-[9px] font-black dark:bg-blue-950/40 dark:text-blue-400 shrink-0">
-                DBA #{{ dbaItem.numero_dba }}
-              </span>
-              <p class="text-xs font-bold text-slate-700 dark:text-slate-350 leading-normal">
-                {{ dbaItem.enunciado }}
-              </p>
-            </div>
-            
-            <div class="pl-4 space-y-1.5">
-              <label v-for="ev in dbaItem.evidencias" :key="ev.id_evidencia_dba" :class="getLinkedActivityForEvidence(ev.id_evidencia_dba) ? 'opacity-60 cursor-not-allowed bg-slate-50/50 dark:bg-slate-900/10' : 'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50'" class="flex flex-col gap-1 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800 transition-all">
-                <div class="flex items-start gap-2 text-xs font-bold text-slate-650 dark:text-slate-300">
-                  <input type="checkbox" v-model="newActivity.evidencias_dba" :value="ev.id_evidencia_dba" :disabled="!!getLinkedActivityForEvidence(ev.id_evidencia_dba)" class="mt-0.5 rounded border-slate-350 text-indigo-650 focus:ring-indigo-500 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed" />
-                  <div class="flex flex-wrap items-center gap-1.5">
-                    <span>{{ ev.descripcion }}</span>
-                    <span class="rounded px-1.5 py-0.2 text-[8px] font-black uppercase bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400">
-                      EXTRA
-                    </span>
-                    <span v-if="ev.planeada_otro_periodo_nombre" class="rounded px-1.5 py-0.2 text-[8px] font-black uppercase bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 border border-amber-200/30">
-                      Planeada en: {{ ev.planeada_otro_periodo_nombre }}
-                    </span>
-                    <span v-if="getLinkedActivityForEvidence(ev.id_evidencia_dba)" class="bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-400 rounded px-1.5 py-0.5 text-[8px] font-bold border border-red-200/40 uppercase tracking-wide">
-                      Asignada a: {{ getLinkedActivityForEvidence(ev.id_evidencia_dba) }}
-                    </span>
-                  </div>
-                </div>
-              </label>
-            </div>
-          </div>
-        </div>
-
-        <div class="pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-end">
-          <button @click="showExtraModal = false" class="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-2xl text-xs font-black uppercase active:scale-95 transition-all shadow-lg shadow-indigo-100 dark:shadow-none">Confirmar Selección</button>
-        </div>
-      </div>
-    </div>
+    <!-- DBA Extra Evidence Modals -->
+    <TeacherExtraEvidenceModal
+      :show-warning-modal="showWarningModal"
+      :show-extra-modal="showExtraModal"
+      :extra-dba-items="extraDbaItems"
+      :selected-evidencias-dba="newActivity.evidencias_dba"
+      :get-linked-activity-for-evidence="getLinkedActivityForEvidence"
+      @close-warning="showWarningModal = false"
+      @proceed-to-extra="showWarningModal = false; showExtraModal = true"
+      @close-extra="showExtraModal = false"
+      @toggle-evidence="toggleEvidenceExtra"
+    />
   </div>
+
 </template>
 
 <style scoped>
 input::-webkit-outer-spin-button,
 input::-webkit-inner-spin-button {
   -webkit-appearance: none;
+  appearance: none;
   margin: 0;
 }
 input[type=number] {
   -moz-appearance: textfield;
+  appearance: textfield;
 }
 
 .custom-scrollbar::-webkit-scrollbar {

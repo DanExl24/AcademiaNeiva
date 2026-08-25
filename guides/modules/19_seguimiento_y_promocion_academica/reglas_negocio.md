@@ -1,69 +1,89 @@
-# 📜 Reglas de Negocio — Módulo 19: Seguimiento Académico, Promoción y Reprobación
+# Reglas de Negocio — Seguimiento Académico, Promoción y Reprobación Anual
 
-## RN-19.1: Carácter Informativo y No Bloqueante
-- El cálculo del resultado académico anual generado por el sistema tiene carácter **informativo y de apoyo a la toma de decisiones**.
-- El sistema **nunca impedirá automáticamente** que un directivo promueva o matricule a un estudiante no promovido. La decisión final corresponde a la institución y al personal directivo autorizado.
+Este documento detalla las reglas de negocio técnicas y funcionales del módulo de **Seguimiento Académico y Promoción Anual** de AcademiaNeiva.
 
-## RN-19.2: Cálculo de Asignaturas Reprobadas Acumuladas
-- Una asignatura se considera **REPROBADA** si el promedio ponderado de los períodos analizados (P1..PN) es inferior a la calificación mínima aprobatoria (definida en `escala_valoracion` del colegio, por defecto `< 3.0` o nivel 'Bajo').
-- En el seguimiento por período acumulativo (P1 hasta PN), la calificación de la materia corresponde al promedio simple/ponderado de las notas registradas en los períodos P1 hasta PN.
+---
 
-## RN-19.3: Clasificación Anual Automática
-- **Promovido (`APROBADO`)**: Estudiante que aprueba el 100% de sus asignaturas.
-- **Pendiente de Recuperación (`PENDIENTE_RECUPERACION`)**: Estudiante con 1 o 2 asignaturas reprobadas.
-- **No Promovido (`NO_PROMOVIDO`)**: Estudiante con 3 o más asignaturas reprobadas.
+## 1. Consolidación Anual y Matriz de Promoción
 
-## RN-19.4: Trazabilidad y Unicidad de Decisiones Institucionales
-- Toda excepción o decisión de promoción sobre un estudiante debe registrarse en la tabla `decision_promocion_directivo` especificando:
-  - Estudiante (`id_estudiante`)
-  - Colegio (`id_colegio`) y Año lectivo evaluado (`id_anio_anterior`)
-  - Resultado académico calculado (`APROBADO`, `NO_PROMOVIDO`, `PENDIENTE_RECUPERACION`)
-  - Decisión adoptada (`PROMOVER_SIGUIENTE_GRADO`, `MANTENER_GRADO`, `MATRICULA_CONDICIONADA`, `OTRA_DECISION`)
-  - Usuario directivo que autorizó (`id_usuario_decision`)
-  - Fecha y hora exacta (`fecha_decision`)
-  - Observaciones o justificación institucional
-- **Restricción UNIQUE en Base de Datos**: Existe una restricción `UNIQUE (id_estudiante, id_colegio, id_anio_anterior)` que impide duplicar la decisión institucional de un estudiante para el mismo ciclo escolar.
-- **Edición vía UPSERT**: El backend procesa las solicitudes mediante Kysely querybuilder verificando la existencia previa del registro: si existe, actualiza la decisión y las observaciones; si no existe, inserta un nuevo registro.
+### RN-PRO-001: Consolidación Ponderada Anual por Asignatura
+- **Descripción:** 
+  1. La calificación final anual de una materia se calcula promediando las notas obtenidas en los periodos del año lectivo:
+     $$\text{Promedio Anual} = \frac{\sum \text{Nota Periodo}}{\max(\text{Total Periodos del Año}, 1)}$$
+  2. Si una asignatura no registra notas en algún periodo, dicho periodo computa con nota 0 en el divisor institucional.
+- **Motivo:** Asegura un cálculo equitativo y estandarizado del rendimiento anual del estudiante.
+- **Archivos donde se implementa:**
+  - [academicTrackingController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdmin/academicTrackingController.ts) (`getAnnualConsolidation`, `checkStudentAcademicWarning`)
+- **Endpoints relacionados:**
+  - `GET /api/academic-admin/academic-tracking/annual-consolidation`
+- **Historias de usuario relacionadas:** HU-PRO-001
 
-## RN-19.5: Cierre Mínimo de Períodos para Registro de Promoción Anual
-- La decisión de promoción anual únicamente se puede evaluar y registrar cuando el año lectivo correspondiente se encuentra en su **4° período (período final)** o cuando se hayan completado/cerrado al menos `N-1` de sus períodos lectivos totales (donde `N` es el número total de períodos del año).
-- El sistema rechaza con HTTP 400 cualquier intento de registrar promoción anual si apenas han transcurrido 1 o 2 períodos del año lectivo evaluado.
+---
 
-## RN-19.6: Gestión del Estado de Decisión en Interfaz Directiva
-- **Estudiantes Promovidos**: Para estudiantes en estado `APROBADO` (100% asignaturas aprobadas) sin decisión manual previa, la interfaz muestra la etiqueta de estado `"Promovido automáticamente"` sin exigir la creación de un registro de excepción.
-- **Edición de Decisiones**: Cuando un estudiante ya posee una decisión registrada en la base de datos, la interfaz despliega la decisión formateada amigablemente y habilita el botón en estado **"Editar Decisión"** (con ícono y estilo de edición), permitiendo al directivo ajustar la decisión u observaciones sin crear registros duplicados.
+### RN-PRO-002: Matriz Institucional de Clasificación de Promoción
+- **Descripción:** El sistema clasifica el resultado anual calculado del estudiante según los umbrales configurados:
+  - **`APROBADO`:** 0 materias reprobadas (todas $\ge \text{nota\_aprobacion}$, defecto 3.0).
+  - **`PENDIENTE_RECUPERACION`:** Entre 1 y el umbral de reprobación menos 1 (por defecto 1 a 2 materias reprobadas).
+  - **`NO_PROMOVIDO`:** Cantidad de materias reprobadas $\ge \text{materias\_reprobatorias\_promocion}$ (por defecto 3 materias).
+- **Motivo:** Cumple con los criterios de evaluación y promoción del Decreto 1290 del MEN colombiano.
+- **Archivos donde se implementa:**
+  - [academicTrackingController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdmin/academicTrackingController.ts) (`getAnnualConsolidation`, `getMinFailingSubjectsCount`)
+- **Endpoints relacionados:**
+  - `GET /api/academic-admin/academic-tracking/annual-consolidation`
+- **Historias de usuario relacionadas:** HU-PRO-001
 
-## RN-19.7: Exclusión de Estudiantes Trasladados e Inactivos
-- Las consultas de seguimiento por período (`/api/academic-admin/academic-tracking/period-tracking`) y consolidación anual (`/api/academic-admin/academic-tracking/annual-consolidation`) filtran y procesan únicamente matrículas en estado `ACTIVA`, `APROBADA` o `CULMINADA` en la institución.
-- Los estudiantes cuya matrícula pasó a estado `TRASLADADA` (trasladados a otro plantel) o que no tienen matrícula vigente en el año escolar se excluyen de los cálculos estadísticos, listados de rendimiento y decisiones de promoción del colegio de origen.
+---
 
-## RN-19.8: Detección Dinámica del Último Grado (Graduandos)
-- La determinación de cuál es el "último grado" de la institución se calcula de forma **totalmente dinámica** consultando la jerarquía de niveles y tipos de grado configurados para el colegio (`getMaxGradeIdForSchool`), en lugar de asumir rígida o estáticamente el Grado 11 (ONCE).
-- Esto garantiza que el sistema sea adaptable a futuros cambios o adiciones de grados superiores en cualquier estructura educativa.
+## 2. Graduación Dinámica y Toma de Decisiones
 
-## RN-19.9: Promoción y Graduación Automática de Último Grado
-- Cuando el directivo autoriza la decisión de promoción (`PROMOVER_SIGUIENTE_GRADO`) para un estudiante matriculado en el último grado de la institución:
-  - El sistema **cambia automáticamente el estado del estudiante** en la tabla `estudiante` a **`GRADUADO`**.
-  - Crea o actualiza la inscripción correspondiente en la tabla **`registro_graduados`** con la fecha y observaciones del evento.
-  - Al no existir un grado posterior en la estructura curricular del plantel, asigna `id_grado_asignado = NULL` en la trazabilidad de la decisión institucional.
-  - Si el directivo revoca o modifica posteriormente la decisión a `MANTENER_GRADO` o `MATRICULA_CONDICIONADA`, el estado del estudiante se revierte a **`ACTIVO`**.
+### RN-PRO-003: Detección Dinámica de Graduandos y Graduación Automática
+- **Descripción:**
+  1. `getMaxGradeIdForSchool` consulta dinámicamente el `id_tipo_grado` con mayor nivel y orden en el colegio (ej. Grado 11, o Grado 5° en instituciones solo de primaria).
+  2. Al registrar una decisión directiva (`recordDirectiveDecision`), si el alumno pertenece a este último grado y la decisión es `PROMOVER_SIGUIENTE_GRADO`:
+     - Actualiza automáticamente `estudiante.estado = 'GRADUADO'`.
+     - Inserta o actualiza la ficha oficial en `registro_graduados` con fecha, directivo y observaciones.
+     - Asigna `id_grado_asignado = null` en la tabla `decision_promocion_directivo`.
+  3. Si la decisión es modificada posteriormente a un valor diferente de promover, el estado del alumno revierte a `ACTIVO`.
+- **Motivo:** Automatiza la expedición de graduaciones para alumnos que culminan su ciclo formativo en cualquier tipo de plantel.
+- **Archivos donde se implementa:**
+  - [academicTrackingController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdmin/academicTrackingController.ts) (`getMaxGradeIdForSchool`, `recordDirectiveDecision`)
+- **Endpoints relacionados:**
+  - `POST /api/academic-admin/academic-tracking/record-decision`
+- **Historias de usuario relacionadas:** HU-PRO-002
 
-## RN-19.10: Resaltado Visual y Filtro de Graduandos
-- Los estudiantes pertenecientes al último grado de la institución se identifican visualmente en las tablas de seguimiento y consolidación anual mediante un borde dorado/índigo destacado (`border-l-4 border-l-amber-500 bg-amber-50/20`) y el distintivo **🎓 Último Año**.
-- La interfaz directiva provee el botón de filtro rápido **"Solo Graduandos"** para aislar instantáneamente la cohorte saliente del plantel.
+---
 
-## RN-19.11: Bloqueo de Edición y Modo Solo Lectura en Años Lectivos Cerrados
-- Cuando el año lectivo seleccionado se encuentra en estado **`CERRADO`** (`isYearClosed = true`):
-  - El botón de acción en la tabla de consolidado anual cambia su etiqueta a **"Visualizar Decisión"** (con ícono de consulta `<Eye />`).
-  - Al abrir el modal emergente, se despliega la alerta informativa **"🔒 Año Lectivo Cerrado (Modo Solo Lectura)"** y todos los controles de entrada (decisión adoptada, grado asignado y observaciones) permanecen deshabilitados en modo de solo lectura.
-  - El botón de acción "Guardar Decisión" se oculta del pie del modal, ofreciendo únicamente la opción "Cerrar".
-  - El backend valida y rechaza con HTTP 400 cualquier intento de registrar o alterar decisiones de promoción si el ciclo lectivo evaluado está en estado `CERRADO`.
+### RN-PRO-004: Condición de Cierre Mínimo de Periodos (RN-19.5)
+- **Descripción:** No se permite registrar ni modificar decisiones de promoción anual en `decision_promocion_directivo` si el año lectivo no ha llegado a su periodo final (`closedPeriodsCount < totalPeriodsCount - 1`). El backend rechaza la solicitud con error `400 Bad Request`.
+- **Motivo:** Impide tomar decisiones de promoción prematuras antes de que los estudiantes concluyan el ciclo lectivo.
+- **Archivos donde se implementa:**
+  - [academicTrackingController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdmin/academicTrackingController.ts) (`recordDirectiveDecision`)
+- **Endpoints relacionados:**
+  - `POST /api/academic-admin/academic-tracking/record-decision`
+- **Historias de usuario relacionadas:** HU-PRO-003
 
-## RN-19.12: Umbral Dinámico Institucional de Materias Reprobatorias (S.I.E.E. / Decreto 1290)
-- De conformidad con el Decreto 1290 de 2009 y el Sistema Institucional de Evaluación de los Estudiantes (S.I.E.E.), cada colegio puede definir el número mínimo de materias reprobadas que provocan la no promoción del estudiante (`materias_reprobatorias_promocion` en `configuracion_colegio`, por defecto **3**).
-- **Clasificación Automática Ajustada**:
-  - `0` materias reprobadas $\rightarrow$ `APROBADO` (Promovido).
-  - `1` a `(N_reprobatorias - 1)` materias reprobadas $\rightarrow$ `PENDIENTE` (En proceso de recuperación).
-  - `≥ N_reprobatorias` materias reprobadas $\rightarrow$ `NO_PROMOVIDO` (Reprobado).
-- Los directivos pueden ajustar este parámetro en cualquier momento desde el menú **Configuración** $\rightarrow$ **Escalas y Parámetros Académicos** (`/dashboard/configuracion`), y las vistas de seguimiento y consolidado anual actualizarán instantáneamente sus estadísticas, etiquetas de cabecera (`Mínimo: X`) y clasificaciones automáticas.
+---
 
+### RN-PRO-005: Advertencias Académicas Informativas en Matrícula
+- **Descripción:** Al consultar un estudiante por su documento en la formalización de matrícula (`FinalRegistration.vue`), el endpoint `/check-warning`:
+  1. Evalúa las calificaciones del año lectivo inmediatamente anterior.
+  2. Si el estudiante reprueba materias o cuenta con decisión de `MANTENER_GRADO`, retorna `warning: true` con el detalle de las asignaturas reprobadas.
+  3. La interfaz despliega la advertencia al directivo de manera informativa, permitiendo continuar con la matrícula sin bloqueos arbitrarios.
+- **Motivo:** Informa al directivo sobre la condición pedagógica del estudiante garantizando su autonomía en la admisión.
+- **Archivos donde se implementa:**
+  - [academicTrackingController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdmin/academicTrackingController.ts) (`checkStudentAcademicWarning`)
+  - [FinalRegistration.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/FinalRegistration.vue)
+- **Endpoints relacionados:**
+  - `GET /api/academic-admin/academic-tracking/check-warning`
+- **Historias de usuario relacionadas:** HU-PRO-004
+
+---
+
+### RN-PRO-006: Inmutabilidad de Decisiones en Ciclos Cerrados
+- **Descripción:** Se prohíbe el registro o modificación de decisiones de promoción si el año lectivo evaluado ya se encuentra formalmente en estado `CERRADO` (`anio_lectivo.estado === 'CERRADO'`) (`400 Bad Request`).
+- **Motivo:** Preserva la inmutabilidad histórica de los expedientes escolares concluidos.
+- **Archivos donde se implementa:**
+  - [academicTrackingController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdmin/academicTrackingController.ts) (`recordDirectiveDecision`)
+- **Endpoints relacionados:**
+  - `POST /api/academic-admin/academic-tracking/record-decision`
+- **Historias de usuario relacionadas:** HU-PRO-003

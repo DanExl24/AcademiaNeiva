@@ -1,59 +1,144 @@
-# Casos de Uso — Cierre y Boletines
+# Casos de Uso — Cierre de Periodo y Generación de Boletines
 
-Este documento describe los flujos principales de interacción del módulo de Cierre y Boletines de AcademiaNeiva.
+Este documento describe los flujos de interacción y diagramas de secuencia paso a paso del módulo de **Cierre de Periodo y Boletines** de AcademiaNeiva.
 
 ---
 
-## Caso de Uso 1: Consolidación Curricular y Emisión Oficial de Boletines PDF
+## Caso de Uso 1: Cierre de Asignatura por el Docente con Justificación de Evidencias
 
 ### Actores
-- **Docente**
-- **Directivo Escolar** (Rector)
-- **Estudiante / Padre de Familia**
+- **Docente Titular de Asignatura**
 
 ### Precondiciones
-- Los docentes han finalizado el registro de actividades y calificaciones en sus materias asignadas.
-- El periodo escolar se encuentra en estado `ABIERTO`.
+- Todas las actividades evaluativas y criterios de la asignatura han sido calificados para todos los estudiantes con matrícula activa.
 
-### Flujo Principal (Paso a Paso)
+### Diagrama de Secuencia
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Docente
-    actor Directivo
-    actor Usuario as Estudiante / Padre
-    participant Sistema
+    actor Docente as Docente Titular
+    participant Frontend as TeacherClosure.vue
+    participant Backend as Express API
+    participant DB as PostgreSQL
+
+    Docente->>Frontend: Clic en "Cerrar Materia" (ej. Matemáticas 10-A, Periodo 1)
+    Frontend->>Backend: POST /api/teacher/close-period { detailGradeId: 15, periodId: 2 }
     
-    Docente->>Sistema: Presiona "Cerrar Periodo de Materia"
-    Sistema->>Sistema: Calcula promedios ponderados y asigna escalas
-    Sistema->>Sistema: Suma fallas y concatena observación académica
-    Sistema->>Sistema: Guarda en 'resultado_academico' e inserta 'cierre_materia' CERRADO
+    Backend->>DB: Valida que no existan notas pendientes para alumnos activos
+    Backend->>DB: Evalúa si hay evidencias DBA planeadas no evaluadas (unevaluatedEvidences)
     
-    Directivo->>Sistema: Ingresa a vista de Cierres Institucionales
-    Sistema-->>Directivo: Despliega barra de progreso 100% materias cerradas
-    
-    Directivo->>Sistema: Presiona "Aprobar y Cerrar Periodo Institucional"
-    Sistema->>Sistema: Verifica 100% de cierres de materia
-    Sistema->>Sistema: Transiciona periodo a 'CERRADO' en 'periodo_academico'
-    
-    Usuario->>Sistema: Ingresa a la pestaña de Boletines en su portal
-    Sistema->>Sistema: Valida que el periodo esté 'CERRADO'
-    Usuario->>Sistema: Hace clic en "Descargar Boletín PDF"
-    Sistema->>Sistema: Genera PDF con branding del colegio y notas definitivas
-    Sistema-->>Usuario: Descarga archivo PDF de boletín oficial
+    alt Hay evidencias DBA pendientes sin justificación
+        Backend-->>Frontend: 422 Unprocessable Entity { requires_justification: true, unevaluated_evidences: [DBA 3, Ev 2] }
+        Frontend-->>Docente: Despliega modal exigiendo ingresar la justificación pedagógica
+        Docente->>Frontend: Digita justificación: "Tema aplazado por semanas culturales" y reenvía
+        Frontend->>Backend: POST /api/teacher/close-period { detailGradeId: 15, periodId: 2, justificacion_evidencias_pendientes: "..." }
+    end
+
+    Backend->>DB: Inicia Transacción
+    Backend->>DB: INSERT / UPDATE en cierre_materia (estado = 'CERRADO', fecha_cierre = NOW(), id_docente_cierre)
+    Backend->>DB: COMMIT
+    Backend-->>Frontend: 200 OK: "Periodo cerrado exitosamente para esta materia"
+    Frontend-->>Docente: Muestra insignia "Materia Cerrada" y bloquea la edición de notas
 ```
 
-1. **Cierre por Materia del Docente:** El docente revisa su planilla de notas completa, presiona "Cerrar Periodo de Materia" y confirma.
-2. **Consolidación de Resultados:** El backend calcula el promedio final en base a las ponderaciones de las actividades, consulta el rango descriptivo de la escala del colegio (`BAJO`, `BASICO`, `ALTO`, `SUPERIOR`), extrae la sumatoria de fallas `AUSENTE` y la observación `ACADEMICA`, guarda los datos en `resultado_academico`, e inserta una fila con estado `CERRADO` en `cierre_materia`.
-3. **Control Directivo:** El directivo escolar abre la pantalla de cierres. El sistema calcula la cobertura y despliega una barra de progreso que indica que el 100% de las asignaturas han sido consolidadas.
-4. **Cierre Institucional:** El directivo hace clic en "Aprobar Periodo". El sistema valida la cobertura completa y cambia el estado del periodo en `periodo_academico` a `CERRADO`.
-5. **Habilitación y Descarga de Boletines:** Estudiantes, padres y directivos pueden acceder a la pestaña de boletines. Al hacer clic en "Descargar PDF", el servidor valida que el periodo esté cerrado, renderiza la plantilla PDF con el escudo y los colores de la institución, e inicia la descarga del informe académico oficial.
+---
 
-### Flujos Alternativos / Excepciones
-- **Excepción 4a (Materias Incompletas):** Si el directivo intenta cerrar el periodo institucional cuando aún existen docentes sin cerrar materias (ej. 90% de avance), el backend bloquea la aprobación y despliega la lista con el nombre de las asignaturas y docentes pendientes por consolidar.
-- **Excepción 5a (Descarga en Periodo Abierto):** Si un estudiante intenta ingresar la URL directa de descarga de boletín mientras el periodo está `ABIERTO`, la API retorna error `403 Forbidden` informando que el boletín estará disponible únicamente al finalizar y aprobar el trimestre.
+## Caso de Uso 2: Aprobación y Cierre Institucional del Periodo
 
-### Postcondiciones
-- El periodo académico queda bloqueado de forma inmutable frente a cambios futuros.
-- Los boletines PDF quedan disponibles para descarga oficial por parte de la comunidad educativa.
+### Actores
+- **Directivo Escolar** (Coordinador Académico / Rector)
+
+### Precondiciones
+- El 100% de las asignaturas en `detalle_grados` para el colegio y año están en estado `CERRADO`.
+
+### Diagrama de Secuencia
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Directivo as Directivo Escolar
+    participant Frontend as PeriodClosure.vue
+    participant Backend as Express API
+    participant DB as PostgreSQL
+
+    Directivo->>Frontend: Abre consola de Cierres de Periodo
+    Frontend->>Backend: GET /api/academic-admin/settings/closure-details/:schoolId/:periodId
+    Backend->>DB: Cuenta total asignaturas activas vs. total cerradas en cierre_materia
+    Backend-->>Frontend: Retorna { total_materias: 40, cerradas: 40, progreso: 100% }
+    Frontend-->>Directivo: Habilita botón "Aprobar y Cerrar Periodo Institucional"
+
+    Directivo->>Frontend: Confirma la aprobación del periodo
+    Frontend->>Backend: POST /api/academic-admin/academic-periods/:periodId/approve { schoolId: 1 }
+    
+    Backend->>DB: Inicia Transacción
+    Backend->>DB: UPDATE periodo_academico SET estado = 'CERRADO' WHERE id_periodo = :periodId
+    Backend->>DB: COMMIT
+    
+    Backend-->>Frontend: 200 OK: "Periodo institucional cerrado con éxito"
+    Frontend-->>Directivo: Notifica cierre definitivo y habilita la generación de boletines
+```
+
+---
+
+## Caso de Uso 3: Reapertura Quirúrgica de Materia por Directivo
+
+### Actores
+- **Directivo Escolar**
+
+### Precondiciones
+- La materia se encuentra en estado `CERRADO` y un docente requiere corregir una nota de forma justificada.
+
+### Diagrama de Secuencia
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Directivo as Directivo Escolar
+    participant Frontend as PeriodClosure.vue
+    participant Backend as Express API
+    participant DB as PostgreSQL
+
+    Directivo->>Frontend: Localiza la materia "Ciencias Naturales 8-B" y hace clic en "Reabrir Materia"
+    Frontend->>Backend: POST /api/academic-admin/settings/reopen-subject-closure { schoolId: 1, detailGradeId: 28, periodId: 2 }
+    
+    Backend->>DB: DELETE FROM cierre_materia WHERE id_detallegrado = 28 AND id_periodo = 2
+    Backend-->>Frontend: 200 OK: "Materia reabierta exitosamente"
+    
+    Frontend-->>Directivo: Actualiza la barra de progreso institucional y notifica éxito
+    Note over Frontend,Backend: La planilla docente queda habilitada de nuevo para guardar notas
+```
+
+---
+
+## Caso de Uso 4: Generación de Boletín Estudiantil con Cálculo de Puesto y Firmas
+
+### Actores
+- **Directivo, Estudiante o Acudiente**
+
+### Precondiciones
+- El periodo académico se encuentra en estado `CERRADO` institucionalmente.
+
+### Diagrama de Secuencia
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Usuario as Estudiante / Acudiente / Directivo
+    participant Frontend as StudentBoletinView.vue / BoletinGenerator.vue
+    participant Backend as Express API
+    participant DB as PostgreSQL
+
+    Usuario->>Frontend: Clic en "Ver / Descargar Boletín"
+    Frontend->>Backend: GET /api/boletines/student/:id_estudiante/:id_periodo
+    
+    Backend->>DB: Valida periodo_academico.estado === 'CERRADO'
+    Backend->>DB: Consulta datos de colegio (escudo, DANE, calendario) y estudiante
+    Backend->>DB: Consulta histórico de notas de trimestres anteriores y actual por materia
+    Backend->>DB: Ejecuta RANK() OVER (ORDER BY student_avg DESC) para calcular puesto y total_grupo
+    Backend->>DB: Extrae ausencias acumuladas, desempeños y observaciones pedagógicas
+    Backend->>DB: Resuelve nombres de Titular de grupo y Rector
+    
+    Backend-->>Frontend: Retorna JSON estructurado del Boletín
+    Frontend-->>Usuario: Renderiza el Boletín Oficial en PDF con firmas, puesto y gráficas de desempeño
+```

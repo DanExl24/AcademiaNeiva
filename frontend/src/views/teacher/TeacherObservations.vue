@@ -19,9 +19,9 @@ import {
   History,
   FileText
 } from 'lucide-vue-next'
+import { teacherService } from '../../services/teacherService'
 import { useAuthStore } from '../../stores/auth'
 import { useAcademicYearStore } from '../../stores/academicYear'
-import axios from 'axios'
 
 interface Course {
   id_grado: number
@@ -36,33 +36,37 @@ interface Course {
 interface Period {
   id_periodo: number
   nombre: string
-  estado: 'ABIERTO' | 'CERRADO'
-  porcentaje: number
-  id_anio: number
+  estado: 'ABIERTO' | 'CERRADO' | 'PENDIENTE'
+  porcentaje?: number
+  id_anio?: number
   mes_inicio?: number | null
   dia_inicio?: number | null
   mes_fin?: number | null
   dia_fin?: number | null
 }
 
-interface Student {
-  id_estudiante: number
-  nombre: string
-  apellido: string
-  codigo: string
-}
-
 interface Observation {
   id_observacion: number
   id_estudiante: number
-  nombre: string
-  documento: string
-  codigo: string
+  id_detallegrado?: number
+  id_periodo?: number
   fortalezas: string | null
   debilidades: string | null
   recomendaciones: string | null
   fecha: string
   tipo: string
+  nombre?: string
+  documento?: string
+  codigo?: string
+}
+
+interface Student {
+  id_estudiante: number
+  nombre: string
+  apellido?: string
+  documento?: string
+  codigo: string
+  tipo_documento?: string
 }
 
 const route = useRoute()
@@ -79,20 +83,20 @@ const selectedPeriodId = ref<number | null>(null)
 // Data
 const myCourses = ref<Course[]>([])
 const periods = ref<Period[]>([])
-const observations = ref<Observation[]>([])
 const students = ref<Student[]>([])
+const observations = ref<Observation[]>([])
+const activeStudentId = ref<number | null>(null)
+const editingObservation = ref<Observation | null>(null)
 const isEditable = ref(true)
 const lockReason = ref('')
 const loading = ref(false)
 const saving = ref(false)
 
-// Active Student Focus
-const activeStudentId = ref<number | null>(null)
-const editingObservation = ref<Observation | null>(null)
-
-// Search and Roster Filter
+// UI Filter
 const studentSearchQuery = ref('')
 const rosterFilter = ref<'all' | 'pending' | 'completed'>('all')
+
+
 
 // Database Observation Types
 const dbObservationTypes = ref<string[]>([])
@@ -100,8 +104,8 @@ const selectedObservationTypeFilter = ref<string>('all')
 
 const fetchObservationTypes = async () => {
   try {
-    const response = await axios.get('/api/teacher/observations/types')
-    dbObservationTypes.value = response.data.types || []
+    const data = await teacherService.getObservationTypes()
+    dbObservationTypes.value = (data as any).types || data || []
   } catch (error) {
     console.error('Error fetching observation types:', error)
   }
@@ -140,8 +144,8 @@ const fetchMyCourses = async () => {
   if (!teacherId) return
   try {
     const params = yearStore.selectedYearId ? { yearId: yearStore.selectedYearId } : {}
-    const response = await axios.get(`/api/teacher/courses/${teacherId}`, { params })
-    myCourses.value = response.data
+    const data = await teacherService.getCourses(teacherId, params)
+    myCourses.value = data as any
     
     if (route.query.gradoId) {
       const gId = Number(route.query.gradoId)
@@ -165,8 +169,8 @@ const fetchPeriods = async () => {
   if (!schoolId) return
   try {
     const params = yearStore.selectedYearId ? { yearId: yearStore.selectedYearId } : {}
-    const response = await axios.get(`/api/teacher/periods/${schoolId}`, { params })
-    periods.value = (response.data || []).filter((p: any) => p.estado !== 'PENDIENTE')
+    const data = await teacherService.getPeriods(schoolId, params)
+    periods.value = ((data as any).periodos || data || []).filter((p: any) => p.estado !== 'PENDIENTE')
     const openPeriod = periods.value.find(p => p.estado === 'ABIERTO')
     if (openPeriod) {
       selectedPeriodId.value = openPeriod.id_periodo
@@ -202,8 +206,8 @@ const selectedGradeId = computed(() => {
 const fetchStudents = async () => {
   if (!selectedGradeId.value) return
   try {
-    const response = await axios.get(`/api/teacher/students/${selectedGradeId.value}`)
-    students.value = response.data || []
+    const data = await teacherService.getStudents(selectedGradeId.value)
+    students.value = (data as any).estudiantes || data || []
     if (students.value.length > 0 && !activeStudentId.value) {
       selectStudent(students.value[0].id_estudiante)
     }
@@ -217,12 +221,13 @@ const fetchObservations = async () => {
   if (!selectedCourse.value || !selectedPeriodId.value) return
   try {
     loading.value = true
-    const response = await axios.get(
-      `/api/teacher/observations/${selectedCourse.value.id_detallegrado}/${selectedPeriodId.value}`
+    const resData: any = await teacherService.getObservationsByCoursePeriod(
+      selectedCourse.value.id_detallegrado,
+      selectedPeriodId.value
     )
-    observations.value = response.data.observations || []
-    isEditable.value = response.data.editable
-    lockReason.value = response.data.error || ''
+    observations.value = resData.observations || []
+    isEditable.value = resData.editable ?? true
+    lockReason.value = resData.error || ''
   } catch (error: any) {
     observations.value = []
     isEditable.value = false
@@ -451,9 +456,9 @@ const saveObservationAndAdvance = async () => {
         }
 
     if (editingObservation.value) {
-      await axios.put(`/api/teacher/observations/${editingObservation.value.id_observacion}`, payload)
+      await teacherService.updateObservation(editingObservation.value.id_observacion, payload)
     } else {
-      await axios.post('/api/teacher/observations', payload)
+      await teacherService.saveObservation(payload)
     }
 
     const savedStudentId = activeStudentId.value
@@ -484,13 +489,14 @@ const saveObservationAndAdvance = async () => {
 // Delete observation
 const deleteObservation = async (id: number) => {
   try {
-    await axios.delete(`/api/teacher/observations/${id}`)
+    await teacherService.deleteObservation(id)
     confirmDeleteId.value = null
     await fetchObservations()
   } catch (error: any) {
     alert(error.response?.data?.error || 'Error al eliminar la observación')
   }
 }
+
 
 // Watchers
 watch([selectedGradeName, selectedSection, selectedJornada, selectedSubjectId], () => {

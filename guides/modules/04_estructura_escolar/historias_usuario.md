@@ -1,153 +1,76 @@
-# Historias de Usuario — Estructura Escolar
+# Historias de Usuario — Estructura Escolar (Grados, Cursos, Jornadas y Materias)
 
-Este documento contiene las historias de usuario implementadas para el módulo de Estructura Escolar de AcademiaNeiva.
-
----
-
-# HU-EST-001: Crear Tipo de Grado
-
-## Historia
-**Como** directivo del colegio  
-**Quiero** registrar un nuevo tipo de grado (ej. PRIMERO, SEGUNDO) asignándole su nivel escolar  
-**Para** ampliar la oferta escolar de grados de mi institución.
-
-## Criterios de Aceptación
-- El directivo debe seleccionar el nivel escolar (PREESCOLAR, PRIMARIA, SECUNDARIA, MEDIA) y el nombre del grado.
-- El nombre del grado no debe existir previamente en el mismo colegio para evitar duplicidades.
-- Al registrar el tipo de grado, este queda habilitado para la posterior creación de grupos y cursos específicos.
-
-## Detalles Técnicos
-- **Prioridad:** Alta
-- **Roles involucrados:** Directivo
-- **Reglas de negocio relacionadas:** RN-EST-001
-- **Endpoints relacionados:** 
-  - `POST /api/academic-admin/grade-types`
-- **Componentes frontend relacionados:** 
-  - [GradeManagement.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/GradeManagement.vue)
-- **Controllers/Services relacionados:** 
-  - [academicAdminController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdminController.ts) (`createGradeType`)
+Este documento detalla las Historias de Usuario del módulo de **Estructura Escolar** de AcademiaNeiva, vinculando actores, narrativas y criterios de aceptación técnicos.
 
 ---
 
-# HU-EST-002: Crear Grupo Escolar (Curso)
+## 1. Configuración de Grados y Cursos
 
-## Historia
-**Como** directivo del colegio  
-**Quiero** crear un nuevo grupo (ej. Primero A, Primero B) asociándolo a un tipo de grado y un año lectivo  
-**Para** definir la lista física de salones y cupos donde se matricularán los alumnos.
-
-## Criterios de Aceptación
-- El directivo debe especificar el nombre, tipo de grado y los cupos máximos del grupo.
-- El grupo se asocia de forma mandatoria al año lectivo en curso y al colegio del directivo.
-- Los cupos asignados deben ser un número entero mayor que cero.
-
-## Detalles Técnicos
-- **Prioridad:** Alta
-- **Roles involucrados:** Directivo
-- **Reglas de negocio relacionadas:** RN-EST-001, RN-EST-003
-- **Endpoints relacionados:** 
-  - `POST /api/academic-admin/groups`
-- **Componentes frontend relacionados:** 
-  - [GradeManagement.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/GradeManagement.vue)
-- **Controllers/Services relacionados:** 
-  - [academicAdminController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdminController.ts) (`createGroup`)
+### HU-EST-001: Creación y Parametrización de Cursos Físicos con Aforo
+- **Como:** Directivo Escolar (Coordinador Académico o Rector).
+- **Quiero:** Crear un nuevo curso físico asignando su nivel, tipo de grado, jornada, sección y límite de cupos.
+- **Para:** Habilitar salones disponibles para la inscripción y matrícula de estudiantes en el año escolar.
+- **Criterios de Aceptación:**
+  1. El formulario exige seleccionar nivel escolar, jornada habilitada, tipo de grado y digitar la sección (máx 10 chars) y los cupos totales.
+  2. Si la sección ingresada no existe, el sistema la inserta automáticamente en la tabla `secciones`.
+  3. No se permite duplicar cursos con la misma combinación de jornada, grado y sección dentro de la misma institución (`409 Conflict`).
+  4. Al crearse, el curso queda disponible de inmediato para asignaciones académicas y matrículas.
 
 ---
 
-# HU-EST-003: Modificar Cupos de un Grupo
-
-## Historia
-**Como** directivo del colegio  
-**Quiero** ampliar o reducir la cantidad de cupos totales de un grupo  
-**Para** controlar el ingreso y límite de estudiantes en un aula en base a la capacidad del salón.
-
-## Criterios de Aceptación
-- El directivo ingresa el nuevo número de cupos.
-- El sistema no debe permitir reducir los cupos por debajo del número de estudiantes matriculados activos en dicho grupo.
-- Al guardar, el cambio se actualiza inmediatamente en el grupo.
-
-## Detalles Técnicos
-- **Prioridad:** Media
-- **Roles involucrados:** Directivo
-- **Reglas de negocio relacionadas:** RN-EST-003
-- **Endpoints relacionados:** 
-  - `PATCH /api/academic-admin/groups/:id/cupos`
-- **Componentes frontend relacionados:** 
-  - [GradeManagement.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/GradeManagement.vue)
-- **Controllers/Services relacionados:** 
-  - [academicAdminController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdminController.ts) (`updateGroupCupos`)
+### HU-EST-002: Creación de Tipos de Grado con Detección de Similitud Semántica
+- **Como:** Directivo Escolar.
+- **Quiero:** Registrar un nuevo tipo de grado en un nivel escolar de mi institución.
+- **Para:** Expandir la oferta académica del plantel sin generar duplicidades o grados con nombres confusos.
+- **Criterios de Aceptación:**
+  1. El sistema normaliza el nombre a mayúsculas y aplica el algoritmo `isDuplicateOrSimilarGrade`.
+  2. Si el directivo intenta registrar un grado similar o equivalente a uno existente (ej. *"1RO"* o *"1°"* cuando ya existe *"PRIMERO"*), el backend rechaza la solicitud con error `409 Conflict`.
+  3. La eliminación de un tipo de grado verifica que no tenga cursos, matrículas o asignaciones docentes asociadas, bloqueando la operación con un reporte de impacto si existen dependencias.
 
 ---
 
-# HU-EST-004: Renombrar Grupos en Bloque
-
-## Historia
-**Como** directivo del colegio  
-**Quiero** modificar la nomenclatura de todos los grupos pertenecientes a un tipo de grado en un solo paso  
-**Para** unificar la nomenclatura del colegio de forma ágil ante reformas organizacionales.
-
-## Criterios de Aceptación
-- El directivo selecciona el tipo de grado y digita el nuevo prefijo de nombre.
-- El sistema despliega un listado previo de cómo quedarán estructurados los nuevos nombres de grupos (ej. "1-A", "1-B") antes de confirmar la acción.
-- Al confirmar, se realiza un renombrado masivo en la base de datos de todos los grupos bajo el mismo tipo de grado.
-
-## Detalles Técnicos
-- **Prioridad:** Baja
-- **Roles involucrados:** Directivo
-- **Reglas de negocio relacionadas:** RN-EST-006
-- **Endpoints relacionados:** 
-  - `PATCH /api/academic-admin/grade-types/:id/bulk-rename`
-- **Componentes frontend relacionados:** 
-  - [GradeManagement.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/GradeManagement.vue)
-- **Controllers/Services relacionados:** 
-  - [academicAdminController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdminController.ts) (`bulkRenameCourses`)
+### HU-EST-003: Modificación Segura de Capacidad de Cupos por Salón
+- **Como:** Directivo Escolar.
+- **Quiero:** Actualizar el límite máximo de cupos de un curso físico.
+- **Para:** Ajustar el aforo del salón según la capacidad física del aula o las directrices institucionales.
+- **Criterios de Aceptación:**
+  1. El backend verifica la cantidad de estudiantes actualmente inscritos en el curso.
+  2. Si el nuevo valor de cupos es inferior al número de alumnos matriculados activos, la solicitud se rechaza con error `400 Bad Request`.
+  3. Al confirmarse un valor válido, la capacidad se actualiza en `grupos.cupos_totales` y se refleja en tiempo real en los selectores de matrículas.
 
 ---
 
-# HU-EST-005: Registrar Materia en Catálogo Escolar
+## 2. Nomenclatura y Renombramiento Inteligente
 
-## Historia
-**Como** directivo del colegio  
-**Quiero** ingresar una materia (nombre) en la base de datos  
-**Para** incorporarla al catálogo de asignaturas disponibles de mi colegio.
-
-## Criterios de Aceptación
-- El directivo debe ingresar un nombre descriptivo de la materia.
-- La materia no debe estar registrada con el mismo nombre y en estado activo en el colegio.
-- Se crea en la tabla `materias` asociada al colegio.
-
-## Detalles Técnicos
-- **Prioridad:** Alta
-- **Roles involucrados:** Directivo
-- **Reglas de negocio relacionadas:** N/A
-- **Endpoints relacionados:** 
-  - `POST /api/academic-admin/subjects`
-- **Componentes frontend relacionados:** 
-  - [SubjectManagement.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/SubjectManagement.vue)
-- **Controllers/Services relacionados:** 
-  - [academicAdminController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdminController.ts) (`createSubject`)
+### HU-EST-004: Renombramiento Individual y en Bloque de Cursos
+- **Como:** Directivo Escolar.
+- **Quiero:** Renombrar un curso individual o estandarizar masivamente todos los cursos de un grado escolar.
+- **Para:** Mantener una nomenclatura uniforme y clara en los boletines y listados oficiales.
+- **Criterios de Aceptación:**
+  1. **Renombramiento Individual:** Si el curso comparte su sección con otros salones (`shared > 1`), el sistema crea una nueva sección en `secciones` y actualiza el curso sin alterar a los demás cursos paralelos.
+  2. **Renombramiento en Bloque:** Permite ingresar prefijo, separador y tipo de serie (`LETRA` o `NUMERO`), generando secuencias como "10-A, 10-B" o "10-1, 10-2".
+  3. El sistema valida que ningún nombre generado supere el límite de 10 caracteres.
 
 ---
 
-# HU-EST-006: Eliminar Materia (Soft Delete)
+## 3. Catálogo Curricular y Papelera de Materias
 
-## Historia
-**Como** directivo del colegio  
-**Quiero** dar de baja una materia de la oferta escolar  
-**Para** retirarla del catálogo sin perder el historial y las notas registradas en los años anteriores.
+### HU-EST-005: Eliminación Forzada y Restauración Profunda de Materias
+- **Como:** Directivo Escolar.
+- **Quiero:** Eliminar una materia en desuso con respaldo de su historial o restaurarla desde la papelera institucional.
+- **Para:** Mantener limpio el catálogo de asignaturas sin perder de forma irreversible las asignaciones docentes y competencias configuradas.
+- **Criterios de Aceptación:**
+  1. Si una materia tiene asignaciones en `detalle_grados` o competencias pedagógicas, el sistema exige confirmación forzada (`force=true`).
+  2. Al eliminar forzadamente, genera un snapshot transaccional JSON en `papelera_materias.data_respaldo` con todas las asignaciones y competencias antes de eliminarlas de la base de datos.
+  3. En la papelera de materias (`SubjectManagement.vue`), el directivo puede visualizar las materias eliminadas y presionar "Restaurar", lo cual recrea la materia y re-inserta automáticamente todas las asignaciones y competencias respaldadas.
 
-## Criterios de Aceptación
-- Al presionar eliminar, la materia no se borra físicamente de la base de datos (se aplica una marca de borrado lógico `eliminada = true`).
-- La materia se oculta de las vistas de asignación de cursos del año escolar activo.
-- La materia puede ser consultada o restaurada desde la vista de la papelera institucional de materias.
+---
 
-## Detalles Técnicos
-- **Prioridad:** Media
-- **Roles involucrados:** Directivo
-- **Reglas de negocio relacionadas:** RN-EST-005
-- **Endpoints relacionados:** 
-  - `DELETE /api/academic-admin/subjects/:id`
-- **Componentes frontend relacionados:** 
-  - [SubjectManagement.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/SubjectManagement.vue)
-- **Controllers/Services relacionados:** 
-  - [academicAdminController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdminController.ts) (`deleteSubject`)
+### HU-EST-006: Habilitación y Gestión de Jornadas Institucionales
+- **Como:** Directivo Escolar.
+- **Quiero:** Habilitar o retirar jornadas de operación en mi colegio.
+- **Para:** Organizar los turnos en que operan los diferentes cursos escolares.
+- **Criterios de Aceptación:**
+  1. Solo se admiten los nombres oficiales: `MAÑANA`, `TARDE`, `UNICA`, `NOCTURNA`.
+  2. No se permite habilitar jornadas duplicadas en la misma institución.
+  3. Una jornada con cursos vinculados en `grupos` no puede eliminarse (`409 Conflict`).

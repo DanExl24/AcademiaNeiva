@@ -2,7 +2,7 @@
 import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft, KeyRound } from 'lucide-vue-next'
-import axios from 'axios'
+import { authService } from '../../services/authService'
 
 const route = useRoute()
 const router = useRouter()
@@ -32,18 +32,19 @@ const handleResetPassword = async () => {
     error.value = ''
     message.value = ''
 
-    const response = await axios.post('/api/auth/reset-password', {
+    const data = await authService.resetPassword({
       token,
       password: password.value
     })
 
-    message.value = response.data.message || 'Contraseña restablecida exitosamente.'
+    message.value = data.message || 'Contraseña restablecida exitosamente.'
     
     // Redirigir al login en 2 segundos
     setTimeout(() => {
       router.push('/login')
     }, 2000)
   } catch (err: any) {
+
     console.error('Error resetting password:', err)
     error.value = err.response?.data?.error || 'Hubo un problema al restablecer la contraseña. El enlace puede haber expirado.'
   } finally {

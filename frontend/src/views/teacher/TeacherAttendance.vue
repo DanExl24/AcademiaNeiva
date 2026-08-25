@@ -19,10 +19,13 @@ import {
   Calendar,
   ChevronLeft
 } from 'lucide-vue-next'
+import { teacherService } from '../../services/teacherService'
 import { useAuthStore } from '../../stores/auth'
 import { useAcademicYearStore } from '../../stores/academicYear'
-import axios from 'axios'
 import { getCourseDisplayName } from '../../utils/courseHelper'
+import DataTable from '../../components/ui/DataTable.vue'
+import SkeletonTable from '../../components/feedback/SkeletonTable.vue'
+import EmptyState from '../../components/feedback/EmptyState.vue'
 
 interface Course {
   id_grado: number
@@ -89,8 +92,8 @@ const fetchMyCourses = async () => {
   if (!teacherId) return
   try {
     const params = yearStore.selectedYearId ? { yearId: yearStore.selectedYearId } : {}
-    const response = await axios.get(`/api/teacher/courses/${teacherId}`, { params })
-    myCourses.value = response.data
+    const data = await teacherService.getCourses(teacherId, params)
+    myCourses.value = data as any
     
     if (route.query.gradoId) {
       const gId = Number(route.query.gradoId)
@@ -125,10 +128,10 @@ const fetchAttendance = async () => {
   try {
     loading.value = true
     currentPage.value = 1
-    const response = await axios.get(`/api/teacher/attendance/${selectedCourse.value.id_detallegrado}/${selectedDate.value}`)
-    students.value = response.data.students
-    isEditable.value = response.data.editable
-    lockReason.value = response.data.error || ''
+    const resData: any = await teacherService.getAttendance(selectedCourse.value.id_detallegrado, selectedDate.value)
+    students.value = resData.students || resData
+    isEditable.value = resData.editable ?? true
+    lockReason.value = resData.error || ''
   } catch (error: any) {
     students.value = []
     isEditable.value = false
@@ -143,9 +146,9 @@ const fetchHistory = async () => {
   if (!selectedCourse.value) return
   try {
     historyLoading.value = true
-    const response = await axios.get(`/api/teacher/attendance-history/${selectedCourse.value.id_detallegrado}`)
-    historyData.value = response.data.studentsHistory || []
-    recordedDates.value = response.data.recordedDates || []
+    const resData: any = await teacherService.getAttendanceHistory(selectedCourse.value.id_detallegrado)
+    historyData.value = resData.studentsHistory || []
+    recordedDates.value = resData.recordedDates || []
   } catch (error: any) {
     historyData.value = []
     recordedDates.value = []
@@ -153,6 +156,7 @@ const fetchHistory = async () => {
     historyLoading.value = false
   }
 }
+
 
 
 // Navigate to specific date
@@ -344,7 +348,7 @@ const saveAllAttendance = async (silent = false) => {
       hora_llegada: s.hora_llegada
     }))
 
-    await axios.post('/api/teacher/attendance', {
+    await teacherService.saveAttendance({
       detailGradeId: selectedCourse.value.id_detallegrado,
       date: selectedDate.value,
       records: recordsToSave
@@ -356,6 +360,7 @@ const saveAllAttendance = async (silent = false) => {
       alert('Asistencia guardada exitosamente')
       await fetchAttendance()
     }
+
   } catch (error: any) {
     const errorMsg = error.response?.data?.error || 'Error al guardar asistencia'
     autosaveStatus.value = 'error'
@@ -592,7 +597,7 @@ onMounted(() => {
         <button 
           v-if="selectedCourse && activeTab === 'history' && historyData.length > 0"
           @click="exportHistoryToCSV"
-          class="bg-indigo-650 dark:bg-indigo-600 text-white px-6 py-3 rounded-2xl font-bold hover:bg-indigo-750 transition-all flex items-center gap-2 shadow-md"
+          class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-2xl font-bold transition-all flex items-center gap-2 shadow-md"
         >
           <Download :size="20" />
           Exportar Historial (CSV)
@@ -988,65 +993,64 @@ onMounted(() => {
         <div v-else class="grid grid-cols-1 lg:grid-cols-4 gap-8">
           
           <!-- Student Stats Table -->
-          <div class="lg:col-span-3 bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden transition-colors">
-            <div v-if="historyLoading" class="flex flex-col items-center justify-center p-20">
-              <Loader2 class="w-10 h-10 text-emerald-600 dark:text-emerald-500 animate-spin mb-4" />
-              <p class="text-slate-500 dark:text-slate-400 font-bold text-sm">Cargando reporte histórico...</p>
-            </div>
+          <div class="lg:col-span-3 space-y-4">
+            <SkeletonTable v-if="historyLoading" :rows="6" :cols="6" />
 
-            <div v-else-if="filteredHistory.length === 0" class="p-20 text-center">
-              <p class="text-slate-400 dark:text-slate-500 font-bold">No se encontraron estudiantes para mostrar historial.</p>
-            </div>
+            <EmptyState
+              v-else-if="filteredHistory.length === 0"
+              title="Sin estudiantes"
+              description="No se encontraron estudiantes para mostrar en el reporte histórico."
+            >
+              <template #icon>
+                <CalendarCheck class="w-8 h-8 text-emerald-500" />
+              </template>
+            </EmptyState>
 
-            <div v-else class="overflow-x-auto">
-              <table class="w-full text-left">
-                <thead>
-                  <tr class="bg-slate-50/50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
-                    <th class="px-8 py-5 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest min-w-[200px]">Estudiante</th>
-                    <th class="px-4 py-5 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center border-l border-slate-100 dark:border-slate-800">Presentes</th>
-                    <th class="px-4 py-5 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center border-l border-slate-100 dark:border-slate-800">Ausentes</th>
-                    <th class="px-4 py-5 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center border-l border-slate-100 dark:border-slate-800">Tardes</th>
-                    <th class="px-4 py-5 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center border-l border-slate-100 dark:border-slate-800">Justificadas</th>
-                    <th class="px-8 py-5 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center border-l border-slate-100 dark:border-slate-800">% Asistencia</th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-50 dark:divide-slate-800">
-                  <tr v-for="student in filteredHistory" :key="student.id_estudiante" class="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
-                    <td class="px-8 py-5">
-                      <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center text-slate-500 dark:text-slate-400 font-bold text-xs uppercase transition-colors">
-                          {{ student.nombre.charAt(0) }}
-                        </div>
-                        <div>
-                          <p class="text-sm font-bold text-slate-700 dark:text-slate-200 leading-none mb-1 transition-colors">{{ student.nombre }}</p>
-                          <p class="text-[10px] text-slate-400 dark:text-slate-500 font-bold font-mono">{{ student.codigo }}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td class="px-4 py-5 text-center font-bold text-emerald-600 dark:text-emerald-400 border-l border-slate-50 dark:border-slate-800 transition-colors">{{ student.presentes }}</td>
-                    <td class="px-4 py-5 text-center font-bold text-rose-500 dark:text-rose-400 border-l border-slate-50 dark:border-slate-800 transition-colors">{{ student.ausentes }}</td>
-                    <td class="px-4 py-5 text-center font-bold text-amber-500 dark:text-amber-400 border-l border-slate-50 dark:border-slate-800 transition-colors">{{ student.tardes }}</td>
-                    <td class="px-4 py-5 text-center font-bold text-blue-500 dark:text-blue-400 border-l border-slate-50 dark:border-slate-800 transition-colors">{{ student.justificadas }}</td>
-                    <td class="px-8 py-5 text-center border-l border-slate-50 dark:border-slate-800 transition-colors">
-                      <span 
-                        :class="[
-                          (student.presentes + student.tardes + student.justificadas) / (student.presentes + student.ausentes + student.tardes + student.justificadas || 1) >= 0.8
-                            ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-900'
-                            : 'bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 border-rose-100 dark:border-rose-900',
-                          'px-4 py-2 rounded-2xl text-xs font-black border transition-colors'
-                        ]"
-                      >
-                        {{ 
-                          student.presentes + student.ausentes + student.tardes + student.justificadas > 0
-                            ? Math.round(((student.presentes + student.tardes + student.justificadas) / (student.presentes + student.ausentes + student.tardes + student.justificadas)) * 100)
-                            : 100 
-                        }}%
-                      </span>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+            <DataTable v-else>
+              <template #header>
+                <tr>
+                  <th class="py-4 px-6 min-w-[200px]">Estudiante</th>
+                  <th class="py-4 px-4 text-center">Presentes</th>
+                  <th class="py-4 px-4 text-center">Ausentes</th>
+                  <th class="py-4 px-4 text-center">Tardes</th>
+                  <th class="py-4 px-4 text-center">Justificadas</th>
+                  <th class="py-4 px-6 text-center">% Asistencia</th>
+                </tr>
+              </template>
+              <tr v-for="student in filteredHistory" :key="student.id_estudiante" class="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
+                <td class="py-4 px-6">
+                  <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center text-slate-500 dark:text-slate-400 font-bold text-xs uppercase transition-colors">
+                      {{ student.nombre.charAt(0) }}
+                    </div>
+                    <div>
+                      <p class="text-sm font-bold text-slate-700 dark:text-slate-200 leading-none mb-1 transition-colors">{{ student.nombre }}</p>
+                      <p class="text-[10px] text-slate-400 dark:text-slate-500 font-bold font-mono">{{ student.codigo }}</p>
+                    </div>
+                  </div>
+                </td>
+                <td class="py-4 px-4 text-center font-bold text-emerald-600 dark:text-emerald-400 transition-colors">{{ student.presentes }}</td>
+                <td class="py-4 px-4 text-center font-bold text-rose-500 dark:text-rose-400 transition-colors">{{ student.ausentes }}</td>
+                <td class="py-4 px-4 text-center font-bold text-amber-500 dark:text-amber-400 transition-colors">{{ student.tardes }}</td>
+                <td class="py-4 px-4 text-center font-bold text-blue-500 dark:text-blue-400 transition-colors">{{ student.justificadas }}</td>
+                <td class="py-4 px-6 text-center transition-colors">
+                  <span 
+                    :class="[
+                      (student.presentes + student.tardes + student.justificadas) / (student.presentes + student.ausentes + student.tardes + student.justificadas || 1) >= 0.8
+                        ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-900'
+                        : 'bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 border-rose-100 dark:border-rose-900',
+                      'px-3.5 py-1.5 rounded-2xl text-xs font-black border transition-colors inline-block'
+                    ]"
+                  >
+                    {{ 
+                      student.presentes + student.ausentes + student.tardes + student.justificadas > 0
+                        ? Math.round(((student.presentes + student.tardes + student.justificadas) / (student.presentes + student.ausentes + student.tardes + student.justificadas)) * 100)
+                        : 100 
+                    }}%
+                  </span>
+                </td>
+              </tr>
+            </DataTable>
           </div>
 
           <!-- History Traversal side column -->

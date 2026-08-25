@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { 
   BookOpen, 
   Users, 
@@ -12,10 +12,9 @@ import {
   Hash,
   FileText
 } from 'lucide-vue-next'
+import { teacherService } from '../../services/teacherService'
 import { useAuthStore } from '../../stores/auth'
 import { useAcademicYearStore } from '../../stores/academicYear'
-import { watch } from 'vue'
-import axios from 'axios'
 import { useRouter } from 'vue-router'
 import { getCourseDisplayName } from '../../utils/courseHelper'
 
@@ -53,8 +52,8 @@ const fetchCourses = async () => {
     }
     
     const params = yearStore.selectedYearId ? { yearId: yearStore.selectedYearId } : {}
-    const response = await axios.get(`/api/teacher/courses/${userId}`, { params })
-    rawData.value = response.data
+    const data = await teacherService.getCourses(userId, params)
+    rawData.value = data as any
   } catch (error: any) {
   } finally {
     loading.value = false
@@ -173,8 +172,8 @@ const openStudentsModal = async (group: any) => {
   studentsLoading.value = true
   studentsList.value = []
   try {
-    const response = await axios.get(`/api/teacher/students/${group.id_grado}`)
-    studentsList.value = response.data
+    const data = await teacherService.getStudents(group.id_grado)
+    studentsList.value = data
     console.log('[TeacherCourses] openStudentsModal OK:', studentsList.value.length, 'for gradeId', group.id_grado)
   } catch (error: any) {
     console.error('[TeacherCourses] openStudentsModal error:', error?.response?.data || error?.message || error)
@@ -187,6 +186,7 @@ const closeStudentsModal = () => {
   showStudentsModal.value = false
   studentsList.value = []
 }
+
 </script>
 
 <template>

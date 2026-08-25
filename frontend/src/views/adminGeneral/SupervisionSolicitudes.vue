@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import axios from 'axios'
+import { supervisionService } from '../../services/supervisionService'
+import { adminGeneralService } from '../../services/adminGeneralService'
 import { useAuthStore } from '../../stores/auth'
 import { 
   ShieldAlert, Plus, ShieldCheck, Clock, Lock, Play, AlertCircle
 } from 'lucide-vue-next'
+import EmptyState from '../../components/feedback/EmptyState.vue'
+
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -57,9 +60,7 @@ const form = ref({
 
 const fetchConfigLimits = async () => {
   try {
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get('/api/admin/configuracion', { headers })
-    const data = res.data
+    const data = await adminGeneralService.getConfiguracion()
     if (data.supervision_duracion_minima_minutos) {
       configLimits.value.minDuration = Number(data.supervision_duracion_minima_minutos.valor)
     }
@@ -73,9 +74,8 @@ const fetchConfigLimits = async () => {
 
 const fetchSchools = async () => {
   try {
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get('/api/admin/colegios', { headers })
-    activeSchools.value = res.data
+    const data = await adminGeneralService.getColegios()
+    activeSchools.value = (data || [])
       .filter((c: any) => c.estado === 'ACTIVO')
       .map((c: any) => ({ id_colegio: c.id_colegio, nombre: c.nombre }))
   } catch (error) {
@@ -86,11 +86,9 @@ const fetchSchools = async () => {
 const fetchRequests = async () => {
   try {
     loading.value = true
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    // Fetch all states representing requested or approved supervisions
-    const res = await axios.get('/api/admin/supervision/historial', { headers })
+    const data = await supervisionService.getHistorial()
     // Solicitudes are pending (SOLICITADA) or approved (APROBADA)
-    requests.value = res.data.filter((r: any) => r.estado_supervision === 'SOLICITADA' || r.estado_supervision === 'APROBADA')
+    requests.value = (data || []).filter((r: any) => r.estado_supervision === 'SOLICITADA' || r.estado_supervision === 'APROBADA')
   } catch (error) {
     console.error('Error fetching supervision requests:', error)
   } finally {
@@ -121,13 +119,12 @@ const handleRequest = async () => {
   }
   try {
     saving.value = true
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.post('/api/admin/supervision/solicitar', {
+    await supervisionService.solicitarSupervision({
       id_colegio: Number(form.value.id_colegio),
       tipo_supervision: form.value.tipo_supervision,
       duracion_maxima_minutos: Number(form.value.duracion_maxima_minutos),
       motivo: form.value.motivo
-    }, { headers })
+    })
     showRequestModal.value = false
     await fetchRequests()
   } catch (error: any) {
@@ -148,11 +145,10 @@ const handleEnter = async () => {
   if (!selectedRequest.value || !adminPassword.value) return
   try {
     authenticating.value = true
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.post(`/api/admin/supervision/${selectedRequest.value.id_auditoria}/entrar`, {
+    await supervisionService.entrarSupervision(selectedRequest.value.id_auditoria, {
       password: adminPassword.value,
       motivo_entrada: entryReason.value
-    }, { headers })
+    })
 
     showAuthModal.value = false
     
@@ -174,6 +170,7 @@ const handleEnter = async () => {
     authenticating.value = false
   }
 }
+
 </script>
 
 <template>
@@ -228,11 +225,21 @@ const handleEnter = async () => {
         <span class="animate-pulse font-bold">Cargando solicitudes...</span>
       </div>
 
-      <div v-else-if="requests.length === 0" class="bg-white dark:bg-slate-900 rounded-3xl p-12 text-center border border-slate-100 dark:border-slate-800">
-        <ShieldAlert class="mx-auto mb-4 text-slate-300 dark:text-slate-700" :size="48" />
-        <p class="font-bold text-slate-500">No hay solicitudes activas pendientes ni aprobadas</p>
-        <button v-if="!auth.isSupervising" @click="openRequest" class="mt-4 text-indigo-600 font-bold text-sm hover:underline">Crear primera solicitud</button>
-      </div>
+      <EmptyState 
+        v-else-if="requests.length === 0"
+        title="No hay solicitudes activas pendientes ni aprobadas"
+        description="Puedes crear una nueva solicitud de acceso temporal a cualquier institución educativa."
+      >
+        <template #icon>
+          <ShieldAlert class="w-8 h-8 text-indigo-500" />
+        </template>
+        <template v-if="!auth.isSupervising" #action>
+          <button @click="openRequest" class="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-all shadow-sm">
+            Crear primera solicitud
+          </button>
+        </template>
+      </EmptyState>
+
 
       <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div 

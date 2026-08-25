@@ -1,12 +1,19 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
-import axios from 'axios'
+import { supervisionService } from '../../services/supervisionService'
 import { useAuthStore } from '../../stores/auth'
 import { 
   ShieldAlert, StopCircle, Clock
 } from 'lucide-vue-next'
+import { useConfirm } from '../../composables/useConfirm'
+import { useToast } from '../../composables/useToast'
+import EmptyState from '../../components/feedback/EmptyState.vue'
 
 const auth = useAuthStore()
+const { confirm } = useConfirm()
+const toast = useToast()
+
+
 
 interface SupervisionActiva {
   id_auditoria: number
@@ -29,9 +36,8 @@ let timerInterval: any = null
 const fetchActiveSupervisions = async () => {
   try {
     loading.value = true
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get('/api/admin/supervision/historial', { headers })
-    activeSupervisions.value = res.data.filter((r: any) => r.estado_supervision === 'ACTIVA')
+    const data = await supervisionService.getHistorial()
+    activeSupervisions.value = (data || []).filter((r: any) => r.estado_supervision === 'ACTIVA')
     updateTimers()
   } catch (error) {
     console.error('Error fetching active supervisions:', error)
@@ -64,8 +70,7 @@ const updateTimers = () => {
 
 const handleAutoExit = async (id: number) => {
   try {
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.post(`/api/admin/supervision/${id}/salir`, {}, { headers })
+    await supervisionService.salirSupervision(id)
   } catch (e) {
     console.error('Error auto-exiting supervision:', e)
   }
@@ -74,11 +79,17 @@ const handleAutoExit = async (id: number) => {
 }
 
 const handleExit = async (sup: SupervisionActiva) => {
-  if (!confirm(`¿Estás seguro de que deseas finalizar la supervisión de ${sup.colegio_nombre}?`)) return
+  const ok = await confirm({
+    title: 'Finalizar Supervisión',
+    message: `¿Estás seguro de que deseas finalizar la sesión de supervisión en ${sup.colegio_nombre}?`,
+    confirmText: 'Finalizar Supervisión',
+    type: 'danger'
+  })
+  if (!ok) return
+
   try {
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.post(`/api/admin/supervision/${sup.id_auditoria}/salir`, {}, { headers })
-    alert(`Supervisión finalizada. Duración: ${res.data.duracion}. Acciones auditadas: ${res.data.total_acciones}`)
+    const resData = await supervisionService.salirSupervision(sup.id_auditoria)
+    toast.success(`Supervisión finalizada. Duración: ${resData.duracion}. Acciones auditadas: ${resData.total_acciones}`)
     
     // Stop local Pinia supervision context if this is the supervision we were in
     if (auth.supervision?.id_auditoria === sup.id_auditoria) {
@@ -88,9 +99,11 @@ const handleExit = async (sup: SupervisionActiva) => {
       await fetchActiveSupervisions()
     }
   } catch (error: any) {
-    alert(error.response?.data?.error || 'Error al salir de la supervisión')
+    toast.error(error.response?.data?.error || 'Error al salir de la supervisión')
   }
 }
+
+
 
 onMounted(() => {
   fetchActiveSupervisions()
@@ -125,10 +138,16 @@ onUnmounted(() => {
         <span class="animate-pulse font-bold">Cargando supervisiones activas...</span>
       </div>
 
-      <div v-else-if="activeSupervisions.length === 0" class="bg-white dark:bg-slate-900 rounded-3xl p-12 text-center border border-slate-100 dark:border-slate-800">
-        <ShieldAlert class="mx-auto mb-4 text-slate-300 dark:text-slate-700" :size="48" />
-        <p class="font-bold text-slate-500">No hay ninguna supervisión en ejecución en este momento</p>
-      </div>
+      <EmptyState 
+        v-else-if="activeSupervisions.length === 0"
+        title="No hay supervisiones en ejecución"
+        description="Actualmente ningún auditor o administrador general tiene una sesión activa abierta en los colegios."
+      >
+        <template #icon>
+          <ShieldAlert class="w-8 h-8 text-indigo-500" />
+        </template>
+      </EmptyState>
+
 
       <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div 

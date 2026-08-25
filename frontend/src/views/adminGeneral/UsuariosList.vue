@@ -1,16 +1,25 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import axios from 'axios'
-import { useAuthStore } from '../../stores/auth'
+import { adminGeneralService } from '../../services/adminGeneralService'
 import { 
   Users, Search, UserCheck, ShieldAlert, Key, LogOut, Trash2, Eye, 
   Mail, School, Shield, Calendar, Lock, Clipboard, Check, Ban, Loader2,
   UserPlus, RefreshCw
 } from 'lucide-vue-next'
 
-const auth = useAuthStore()
+import { useConfirm } from '../../composables/useConfirm'
+import { useToast } from '../../composables/useToast'
+import StatCard from '../../components/ui/StatCard.vue'
+import DataTable from '../../components/ui/DataTable.vue'
+import SkeletonTable from '../../components/feedback/SkeletonTable.vue'
+import EmptyState from '../../components/feedback/EmptyState.vue'
+
 const route = useRoute()
+const { confirm } = useConfirm()
+const toast = useToast()
+
+
 
 interface Usuario {
   id_usuario: number
@@ -133,22 +142,17 @@ const submitCreateUser = async () => {
 
   try {
     creatingUser.value = true
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.post(
-      '/api/admin/usuarios',
-      {
-        rol: newUser.value.rol,
-        email: newUser.value.email.trim(),
-        password: newUser.value.password,
-        nombre: newUser.value.nombre.trim(),
-        apellido: newUser.value.apellido.trim() || undefined,
-        id_colegio: newUser.value.id_colegio ? Number(newUser.value.id_colegio) : null,
-        tipo_documento: newUser.value.tipo_documento || null,
-        documento: newUser.value.documento.trim() || null,
-        telefono: newUser.value.telefono.trim() || null
-      },
-      { headers }
-    )
+    await adminGeneralService.createUsuario({
+      rol: newUser.value.rol,
+      email: newUser.value.email.trim(),
+      password: newUser.value.password,
+      nombre: newUser.value.nombre.trim(),
+      apellido: newUser.value.apellido.trim() || undefined,
+      id_colegio: newUser.value.id_colegio ? Number(newUser.value.id_colegio) : null,
+      tipo_documento: newUser.value.tipo_documento || null,
+      documento: newUser.value.documento.trim() || null,
+      telefono: newUser.value.telefono.trim() || null
+    })
 
     showCreateUserModal.value = false
     await fetchUsers()
@@ -183,12 +187,10 @@ const verifyTicketAndEnableEdit = async () => {
     verificationError.value = ''
     
     // Consultar el endpoint privado de validación del ticket para esta cuenta específica
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.post(
-      `/api/admin/usuarios/${selectedUser.value.id_usuario}/validar-ticket`,
-      { codigo_ticket: ticketCodeVerification.value.trim() },
-      { headers }
-    )
+    await adminGeneralService.validarTicketUsuario(selectedUser.value.id_usuario, {
+      codigo_ticket: ticketCodeVerification.value.trim()
+    })
+
 
     // Inicializar campos editables si pasa la validación de correspondencia y estado
     editableNombre.value = selectedUser.value.nombre
@@ -243,15 +245,14 @@ const applyCredentialsChange = async () => {
   if (!selectedUser.value || applyingChange.value) return
   try {
     applyingChange.value = true
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.put(`/api/admin/usuarios/${selectedUser.value.id_usuario}/credenciales-con-ticket`, {
+    await adminGeneralService.updateUsuarioCredencialesConTicket(selectedUser.value.id_usuario, {
       codigo_ticket: ticketCodeVerification.value.trim(),
       nombre: editableNombre.value,
       apellido: editableApellido.value,
       tipo_documento: editableTipoDoc.value,
       documento: editableDocumento.value,
       roles: editableRoles.value
-    }, { headers })
+    })
 
     alert('Credenciales y roles actualizados exitosamente.')
     
@@ -275,9 +276,8 @@ const applyCredentialsChange = async () => {
 
 const fetchSchools = async () => {
   try {
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get('/api/admin/colegios', { headers })
-    schools.value = res.data.map((c: any) => ({ id_colegio: c.id_colegio, nombre: c.nombre }))
+    const data = await adminGeneralService.getColegios()
+    schools.value = (data || []).map((c: any) => ({ id_colegio: c.id_colegio, nombre: c.nombre }))
   } catch (error) {
     console.error('Error fetching schools:', error)
   }
@@ -286,18 +286,15 @@ const fetchSchools = async () => {
 const fetchUsers = async () => {
   try {
     loading.value = true
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get('/api/admin/usuarios', {
-      headers,
-      params: {
-        estado: selectedEstado.value || undefined,
-        rol: selectedRole.value || undefined,
-        id_colegio: selectedSchool.value || undefined,
-        search: search.value || undefined
-      }
-    })
+    const params = {
+      estado: selectedEstado.value || undefined,
+      rol: selectedRole.value || undefined,
+      id_colegio: selectedSchool.value || undefined,
+      search: search.value || undefined
+    }
+    const data = await adminGeneralService.getUsuarios(params)
     
-    users.value = (res.data || []).map((u: any) => ({
+    users.value = (data || []).map((u: any) => ({
       ...u,
       rol_nombre: u.roles && u.roles[0] ? u.roles[0] : 'sin_rol'
     }))
@@ -341,9 +338,8 @@ const openDetails = async (user: Usuario) => {
   selectedUser.value = user
   showDetailsModal.value = true
   try {
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get(`/api/admin/usuarios/${user.id_usuario}`, { headers })
-    const data = res.data || {}
+    const res = await adminGeneralService.getUsuario(user.id_usuario)
+    const data = res || {}
     selectedUser.value = { 
       ...user, 
       ...data,
@@ -355,21 +351,26 @@ const openDetails = async (user: Usuario) => {
 }
 
 const updateStatus = async (user: Usuario, estado: string, motivo?: string) => {
-  const confirmMsg = `¿Confirmas el cambio de estado de ${user.nombre} a ${estado}?`
-  if (!confirm(confirmMsg)) return
+  const ok = await confirm({
+    title: 'Cambiar Estado de Usuario',
+    message: `¿Confirmas el cambio de estado de ${user.nombre} a ${estado}?`,
+    confirmText: 'Confirmar Cambio',
+    type: estado === 'BANEADO' || estado === 'SUSPENDIDO' ? 'danger' : 'primary'
+  })
+  if (!ok) return
 
   try {
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.patch(`/api/admin/usuarios/${user.id_usuario}/estado`, {
+    await adminGeneralService.updateUsuarioEstado(user.id_usuario, {
       estado,
       motivo
-    }, { headers })
+    })
+    toast.success(`Estado actualizado a ${estado}`)
     await fetchUsers()
     if (selectedUser.value?.id_usuario === user.id_usuario) {
       selectedUser.value.estado = estado as any
     }
   } catch (error: any) {
-    alert(error.response?.data?.error || 'Error al cambiar estado')
+    toast.error(error.response?.data?.error || 'Error al cambiar estado')
   }
 }
 
@@ -382,7 +383,7 @@ const openBan = (user: Usuario) => {
 const handleBan = async () => {
   if (!selectedUser.value) return
   if (!banReason.value.trim()) {
-    alert('Por favor indica un motivo para el baneo.')
+    toast.warning('Por favor indica un motivo para el baneo.')
     return
   }
   await updateStatus(selectedUser.value, 'BANEADO', banReason.value)
@@ -390,18 +391,24 @@ const handleBan = async () => {
 }
 
 const handleResetPassword = async (user: Usuario) => {
-  if (!confirm(`¿Estás seguro de que deseas restablecer la contraseña de ${user.nombre} ${user.apellido || ''}? Se generará una contraseña temporal.`)) return
+  const ok = await confirm({
+    title: 'Restablecer Contraseña',
+    message: `¿Estás seguro de que deseas restablecer la contraseña de ${user.nombre} ${user.apellido || ''}? Se generará una contraseña temporal.`,
+    confirmText: 'Restablecer Contraseña',
+    type: 'warning'
+  })
+  if (!ok) return
 
   try {
     resetting.value = true
     selectedUser.value = user
     tempPassword.value = ''
     showResetModal.value = true
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.post(`/api/admin/usuarios/${user.id_usuario}/restablecer-password`, {}, { headers })
-    tempPassword.value = res.data.password_temporal || res.data.tempPassword || ''
+    const res = await adminGeneralService.restablecerPassword(user.id_usuario)
+    tempPassword.value = res.password_temporal || res.tempPassword || ''
+    toast.success('Contraseña temporal generada con éxito')
   } catch (error: any) {
-    alert(error.response?.data?.error || 'Error al restablecer contraseña')
+    toast.error(error.response?.data?.error || 'Error al restablecer contraseña')
     showResetModal.value = false
   } finally {
     resetting.value = false
@@ -411,17 +418,24 @@ const handleResetPassword = async (user: Usuario) => {
 const copyPassword = () => {
   navigator.clipboard.writeText(tempPassword.value)
   copied.value = true
+  toast.info('Contraseña copiada al portapapeles')
   setTimeout(() => copied.value = false, 2000)
 }
 
 const handleForceLogout = async (user: Usuario) => {
-  if (!confirm(`¿Deseas forzar el cierre de todas las sesiones activas de ${user.nombre}?`)) return
+  const ok = await confirm({
+    title: 'Forzar Cierre de Sesión',
+    message: `¿Deseas forzar el cierre de todas las sesiones activas de ${user.nombre}?`,
+    confirmText: 'Cerrar Sesiones',
+    type: 'danger'
+  })
+  if (!ok) return
+
   try {
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.post(`/api/admin/usuarios/${user.id_usuario}/cerrar-sesion`, {}, { headers })
-    alert('Sesiones cerradas con éxito.')
+    await adminGeneralService.cerrarSesionUsuario(user.id_usuario)
+    toast.success('Sesiones cerradas con éxito.')
   } catch (error: any) {
-    alert(error.response?.data?.error || 'Error al forzar cierre de sesión')
+    toast.error(error.response?.data?.error || 'Error al forzar cierre de sesión')
   }
 }
 
@@ -442,22 +456,21 @@ const handleDelete = async () => {
   try {
     deleting.value = true
     deleteError.value = ''
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.patch(
-      `/api/admin/usuarios/${userToDelete.value.id_usuario}/eliminar`,
-      { codigo_ticket: deleteTicketCode.value.trim(), motivo: deleteMotivo.value.trim() || undefined },
-      { headers }
-    )
+    const res = await adminGeneralService.eliminarUsuarioConTicket(userToDelete.value.id_usuario, {
+      codigo_ticket: deleteTicketCode.value.trim(),
+      motivo: deleteMotivo.value.trim() || undefined
+    })
     showDeleteModal.value = false
     showDetailsModal.value = false
     await fetchUsers()
-    alert(res.data.message || 'Usuario eliminado exitosamente.')
+    alert(res.message || 'Usuario eliminado exitosamente.')
   } catch (error: any) {
     deleteError.value = error.response?.data?.error || 'Error al eliminar usuario. Verifica que tienes sesión de supervisión activa y que el ticket es válido.'
   } finally {
     deleting.value = false
   }
 }
+
 </script>
 
 <template>
@@ -487,46 +500,31 @@ const handleDelete = async () => {
 
     <!-- KPIs Row -->
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-      <div class="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center gap-4">
-        <div class="p-3 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 rounded-2xl">
-          <Users :size="22" />
-        </div>
-        <div>
-          <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Filtrados</p>
-          <h3 class="text-xl font-black text-slate-900 dark:text-white font-mono mt-0.5">{{ stats.total }}</h3>
-        </div>
-      </div>
+      <StatCard title="Total Filtrados" :value="stats.total">
+        <template #icon>
+          <Users :size="20" class="text-indigo-600 dark:text-indigo-400" />
+        </template>
+      </StatCard>
 
-      <div class="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center gap-4">
-        <div class="p-3 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 rounded-2xl">
-          <UserCheck :size="22" />
-        </div>
-        <div>
-          <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Activos</p>
-          <h3 class="text-xl font-black text-slate-900 dark:text-white font-mono mt-0.5">{{ stats.activos }}</h3>
-        </div>
-      </div>
+      <StatCard title="Activos" :value="stats.activos">
+        <template #icon>
+          <UserCheck :size="20" class="text-emerald-600 dark:text-emerald-400" />
+        </template>
+      </StatCard>
 
-      <div class="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center gap-4">
-        <div class="p-3 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 rounded-2xl">
-          <Ban :size="22" />
-        </div>
-        <div>
-          <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Baneados</p>
-          <h3 class="text-xl font-black text-slate-900 dark:text-white font-mono mt-0.5">{{ stats.baneados }}</h3>
-        </div>
-      </div>
+      <StatCard title="Baneados" :value="stats.baneados">
+        <template #icon>
+          <Ban :size="20" class="text-red-600 dark:text-red-400" />
+        </template>
+      </StatCard>
 
-      <div class="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center gap-4">
-        <div class="p-3 bg-orange-50 dark:bg-orange-950/30 text-orange-600 dark:text-orange-400 rounded-2xl">
-          <ShieldAlert :size="22" />
-        </div>
-        <div>
-          <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Suspendidos</p>
-          <h3 class="text-xl font-black text-slate-900 dark:text-white font-mono mt-0.5">{{ stats.suspendidos }}</h3>
-        </div>
-      </div>
+      <StatCard title="Suspendidos" :value="stats.suspendidos">
+        <template #icon>
+          <ShieldAlert :size="20" class="text-orange-600 dark:text-orange-400" />
+        </template>
+      </StatCard>
     </div>
+
 
     <!-- Filters and Table -->
     <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden transition-all duration-300">
@@ -571,28 +569,31 @@ const handleDelete = async () => {
       </div>
 
       <!-- User Table -->
-      <div class="overflow-x-auto">
-        <div v-if="loading" class="h-64 flex items-center justify-center text-slate-400">
-          <span class="animate-pulse font-bold">Cargando cuentas...</span>
-        </div>
+      <div class="p-4">
+        <SkeletonTable v-if="loading" :rows="6" :cols="5" />
 
-        <div v-else-if="users.length === 0" class="p-12 text-center text-slate-400">
-          <Users class="mx-auto mb-4 opacity-20" :size="48" />
-          <p class="font-bold">No se encontraron usuarios con los filtros seleccionados</p>
-        </div>
+        <EmptyState 
+          v-else-if="users.length === 0"
+          title="No se encontraron usuarios"
+          description="No hay cuentas de usuario que coincidan con los filtros seleccionados."
+        >
+          <template #icon>
+            <Users class="w-8 h-8 text-indigo-500" />
+          </template>
+        </EmptyState>
 
-        <table v-else class="w-full text-left border-collapse">
-          <thead>
-            <tr class="text-xs font-black uppercase text-slate-400 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+        <DataTable v-else>
+          <template #header>
+            <tr>
               <th class="p-4">Usuario</th>
               <th class="p-4">Rol</th>
               <th class="p-4">Institución</th>
               <th class="p-4">Estado</th>
               <th class="p-4 text-center">Acciones</th>
             </tr>
-          </thead>
-          <tbody class="text-sm font-medium text-slate-700 dark:text-slate-300 divide-y divide-slate-100 dark:divide-slate-800/50">
-            <tr v-for="user in users" :key="user.id_usuario" class="hover:bg-slate-50/30 dark:hover:bg-slate-800/10 transition-colors">
+          </template>
+          <tr v-for="user in users" :key="user.id_usuario" class="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
+
               <td class="p-4">
                 <div>
                   <h4 class="font-bold text-slate-900 dark:text-white">{{ user.nombre }} {{ user.apellido || '' }}</h4>
@@ -679,10 +680,10 @@ const handleDelete = async () => {
                 </div>
               </td>
             </tr>
-          </tbody>
-        </table>
+        </DataTable>
       </div>
     </div>
+
 
     <!-- Modals -->
     <Teleport to="body">
@@ -783,7 +784,7 @@ const handleDelete = async () => {
                 <button 
                   @click="verifyTicketAndEnableEdit"
                   :disabled="verifyingTicket || !ticketCodeVerification.trim()"
-                  class="px-4 py-2 bg-indigo-650 hover:bg-indigo-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-50 flex items-center justify-center gap-1.5 transition-all shrink-0"
+                  class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-50 flex items-center justify-center gap-1.5 transition-all shrink-0"
                 >
                   <Loader2 v-if="verifyingTicket" class="w-3 h-3 animate-spin" />
                   Habilitar Edición
@@ -806,14 +807,14 @@ const handleDelete = async () => {
               <template v-if="editingCredentials">
                 <button 
                   @click="cancelEdit" 
-                  class="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-600 dark:text-slate-300 rounded-xl font-bold text-xs transition-all"
+                  class="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl font-bold text-xs transition-all"
                 >
                   Cancelar
                 </button>
                 <button 
                   @click="applyCredentialsChange" 
                   :disabled="applyingChange || !editableNombre.trim() || !editableApellido.trim() || !editableDocumento.trim() || editableRoles.length === 0"
-                  class="px-5 py-2.5 bg-indigo-650 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs shadow-md transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
+                  class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs shadow-md transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
                 >
                   <Loader2 v-if="applyingChange" class="w-3.5 h-3.5 animate-spin" />
                   Aplicar Cambios

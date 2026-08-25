@@ -50,7 +50,7 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
       targetYearId = await ensureAcademicYearForSchool(schoolId);
     }
 
-    // 1. Get active period within the target year if not provided or if invalid for targetYearId
+    // 1. Get active or latest period within the target year if not provided or if invalid for targetYearId
     let targetPeriodId = periodId ? Number(periodId) : null;
     if (targetPeriodId) {
       const validCheck = await pool.query(
@@ -61,6 +61,22 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
         targetPeriodId = null;
       }
     }
+
+    if (!targetPeriodId) {
+      const defaultPeriodRes = await pool.query(
+        `SELECT id_periodo FROM periodo_academico 
+         WHERE id_anio = $1 AND id_colegio = $2 
+         ORDER BY 
+           CASE WHEN estado = 'ABIERTO' THEN 1 WHEN estado = 'CERRADO' THEN 2 ELSE 3 END, 
+           id_periodo DESC 
+         LIMIT 1`,
+        [targetYearId, schoolId]
+      );
+      if (defaultPeriodRes.rows.length > 0) {
+        targetPeriodId = defaultPeriodRes.rows[0].id_periodo;
+      }
+    }
+
     let activePeriodInfo = null;
     if (targetPeriodId) {
       const activePeriodFullRes = await pool.query(
@@ -78,7 +94,7 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
       studentsCountRes, teachersCountRes, disciplinaryRes, desertionRes,
       studentsByGradeRes, teachersByGradeRes, disciplinaryByGradeRes, desertionByGradeRes
     ] = await Promise.all([
-      pool.query(`SELECT COUNT(*) as total FROM matricula WHERE id_colegio = $1 AND id_anio = $2 AND estado = 'ACTIVA'`, [schoolId, targetYearId]),
+      pool.query(`SELECT COUNT(*) as total FROM matricula WHERE id_colegio = $1 AND id_anio = $2 AND estado NOT IN ('CANCELADA', 'RECHAZADA', 'TRASLADADA')`, [schoolId, targetYearId]),
       pool.query("SELECT COUNT(*) as total FROM docente WHERE id_colegio = $1 AND estado = 'ACTIVO'", [schoolId]),
       pool.query(
         `SELECT COUNT(*) as total FROM observacion_estudiante 
@@ -94,7 +110,7 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
          FROM matricula m
          JOIN grupos g ON m.id_grupo = g.id_grupo
          JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
-         WHERE m.id_colegio = $1 AND m.id_anio = $2 AND m.estado = 'ACTIVA'
+         WHERE m.id_colegio = $1 AND m.id_anio = $2 AND m.estado NOT IN ('CANCELADA', 'RECHAZADA', 'TRASLADADA')
          GROUP BY tg.nombre`,
         [schoolId, targetYearId]
       ),
@@ -114,7 +130,7 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
          JOIN matricula m ON e.id_estudiante = m.id_estudiante AND m.id_anio = $2
          JOIN grupos g ON m.id_grupo = g.id_grupo
          JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
-         WHERE o.id_colegio = $1 AND o.tipo = 'DISCIPLINARIA' AND m.estado = 'ACTIVA' ${targetPeriodId ? "AND o.id_periodo = $3" : ""}
+         WHERE o.id_colegio = $1 AND o.tipo = 'DISCIPLINARIA' AND m.estado NOT IN ('CANCELADA', 'RECHAZADA', 'TRASLADADA') ${targetPeriodId ? "AND o.id_periodo = $3" : ""}
          GROUP BY tg.nombre`,
         targetPeriodId ? [schoolId, targetYearId, targetPeriodId] : [schoolId, targetYearId]
       ),
@@ -147,7 +163,7 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
        JOIN matricula m ON ra.id_estudiante = m.id_estudiante AND m.id_anio = $3
        JOIN grupos g ON m.id_grupo = g.id_grupo
        JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
-       WHERE ra.id_colegio = $1 AND ra.fecha::date = $2::date AND m.estado = 'ACTIVA'
+       WHERE ra.id_colegio = $1 AND ra.fecha::date = $2::date AND m.estado NOT IN ('CANCELADA', 'RECHAZADA', 'TRASLADADA')
        GROUP BY tg.nombre`,
       [schoolId, todayStr, targetYearId]
     );
@@ -198,7 +214,7 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
         SELECT ra.id_estudiante, ra.id_detallegrado, ra.id_periodo, ra.promedio
         FROM resultado_academico ra
         JOIN detalle_grados dg_ra ON ra.id_detallegrado = dg_ra.id_detallegrado
-        JOIN matricula m ON ra.id_estudiante = m.id_estudiante AND m.id_anio = ${targetYearId} AND m.estado = 'ACTIVA'
+        JOIN matricula m ON ra.id_estudiante = m.id_estudiante AND m.id_anio = ${targetYearId} AND m.estado NOT IN ('CANCELADA', 'RECHAZADA', 'TRASLADADA')
         WHERE dg_ra.id_colegio = $1 AND ra.id_periodo = $2
 
         UNION ALL
@@ -207,7 +223,7 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
                ROUND(SUM(na.nota * am.porcentaje / 100.0)::numeric, 2) as promedio
         FROM notas_actividad na
         JOIN actividad_materia am ON na.id_actividadmateria = am.id_actividadmateria
-        JOIN matricula m ON na.id_estudiante = m.id_estudiante AND m.id_anio = ${targetYearId} AND m.estado = 'ACTIVA'
+        JOIN matricula m ON na.id_estudiante = m.id_estudiante AND m.id_anio = ${targetYearId} AND m.estado NOT IN ('CANCELADA', 'RECHAZADA', 'TRASLADADA')
         WHERE am.id_periodo = $2 AND am.id_colegio = $1
         AND NOT EXISTS (
           SELECT 1 FROM resultado_academico ra3
@@ -224,14 +240,14 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
         `${buildLiveCTE()}
          SELECT 
            AVG(promedio) as avg_general,
-           COUNT(*) FILTER (WHERE promedio < 3.0) as at_risk
+           COUNT(DISTINCT id_estudiante) FILTER (WHERE promedio < 3.0) as at_risk
          FROM current_results cr
          JOIN detalle_grados dg ON cr.id_detallegrado = dg.id_detallegrado
          WHERE dg.id_colegio = $1`,
         [schoolId, targetPeriodId]
       );
-      performanceMetrics.average = Number(Number(perfRes.rows[0].avg_general || 0).toFixed(2));
-      performanceMetrics.atRisk = Number(perfRes.rows[0].at_risk || 0);
+      performanceMetrics.average = Number(Number(perfRes.rows[0]?.avg_general || 0).toFixed(2));
+      performanceMetrics.atRisk = Number(perfRes.rows[0]?.at_risk || 0);
 
       const perfByGradeRes = await pool.query(
         `${buildLiveCTE()}
@@ -247,6 +263,7 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
          GROUP BY tg.nombre`,
         [schoolId, targetPeriodId]
       );
+
 
       perfByGradeRes.rows.forEach(r => {
         if (!summaryByGrade[r.grade]) {
@@ -281,7 +298,7 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
       `SELECT COUNT(DISTINCT s.id_sancion)::int as total
        FROM sancion s
        JOIN estudiante e ON s.id_estudiante = e.id_estudiante
-       JOIN matricula m ON e.id_estudiante = m.id_estudiante AND m.id_anio = $2 AND m.estado = 'ACTIVA'
+       JOIN matricula m ON e.id_estudiante = m.id_estudiante AND m.id_anio = $2 AND m.estado NOT IN ('CANCELADA', 'RECHAZADA', 'TRASLADADA')
        JOIN detalle_grados dg ON m.id_grupo = dg.id_grupo
        WHERE dg.id_colegio = $1 AND s.estado = 'ACTIVA'`,
       [schoolId, targetYearId]
@@ -388,11 +405,29 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
            ORDER BY tg.nombre, LENGTH(s.nombre), s.nombre, average DESC`,
           [schoolId, targetPeriodId]
         )
-      ]);
-      charts.performanceByGrade = gradePerfRes.rows.map(r => ({ nombre: r.nombre, average: Number(r.average || 0) }));
-      charts.performanceBySubject = subjectPerfRes.rows.map(r => ({ nombre: r.nombre, average: Number(r.average || 0) }));
-      charts.performanceByCourse = coursePerfRes.rows.map(r => ({ ...r, average: Number(r.average || 0) }));
-      charts.performanceBySubjectCourse = subjectCoursePerfRes.rows.map(r => ({ ...r, average: Number(r.average || 0) }));
+      charts.performanceByGrade = gradePerfRes.rows.map(r => ({
+        nombre: r.nombre,
+        average: Number(r.average || 0)
+      }));
+      charts.performanceBySubject = subjectPerfRes.rows.map(r => ({
+        nombre: r.nombre,
+        average: Number(r.average || 0)
+      }));
+      charts.performanceByCourse = coursePerfRes.rows.map(r => ({
+        id_grupo: Number(r.id_grupo),
+        grado_nombre: r.grado_nombre,
+        seccion_nombre: r.seccion_nombre,
+        jornada_nombre: r.jornada_nombre,
+        average: Number(r.average || 0)
+      }));
+      charts.performanceBySubjectCourse = subjectCoursePerfRes.rows.map(r => ({
+        id_grupo: Number(r.id_grupo),
+        subject_nombre: r.subject_nombre,
+        grado_nombre: r.grado_nombre,
+        seccion_nombre: r.seccion_nombre,
+        jornada_nombre: r.jornada_nombre,
+        average: Number(r.average || 0)
+      }));
     }
 
     // Evolution (all periods of the current year) - Historical promedios
@@ -407,7 +442,10 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
        ORDER BY p.id_periodo`,
       [schoolId, targetYearId]
     );
-    charts.evolution = evolutionRes.rows.map(r => ({ nombre: r.nombre, average: Number(r.average || 0) }));
+    charts.evolution = evolutionRes.rows.map(r => ({
+      nombre: r.nombre,
+      average: Number(r.average || 0)
+    }));
 
     const evolutionByCourseRes = await pool.query(
       `SELECT 
@@ -429,7 +467,14 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
         ORDER BY p.id_periodo, tg.nombre, LENGTH(s.nombre), s.nombre`,
       [schoolId, targetYearId]
     );
-    charts.evolutionByCourse = evolutionByCourseRes.rows.map(r => ({ ...r, average: Number(r.average || 0) }));
+    charts.evolutionByCourse = evolutionByCourseRes.rows.map(r => ({
+      periodo_nombre: r.periodo_nombre,
+      id_grupo: Number(r.id_grupo),
+      grado_nombre: r.grado_nombre,
+      seccion_nombre: r.seccion_nombre,
+      jornada_nombre: r.jornada_nombre,
+      average: Number(r.average || 0)
+    }));
 
     // 7. Low Performance Analysis Block
     let lowPerformance: {

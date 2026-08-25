@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import axios from 'axios'
+import { academicService } from '../services/academicService'
 import { Clock, AlertTriangle, Sparkles } from 'lucide-vue-next'
 import { useAuthStore } from '../stores/auth'
 import { useAcademicYearStore } from '../stores/academicYear'
@@ -26,45 +26,40 @@ const auth = useAuthStore()
 const yearStore = useAcademicYearStore()
 
 const fetchedPeriod = ref<PeriodInfo | null>(null)
-const timer = ref<any>(null)
 const loading = ref(false)
+const timer = ref<any>(null)
 
-const activePeriod = computed(() => {
+// El período efectivo es el que se pasa por prop, o el que se obtiene vía API
+const period = computed<PeriodInfo | null>(() => {
   return props.periodInfo || fetchedPeriod.value
 })
 
 const schoolId = computed(() => {
-  return Number(auth.user?.schoolId || auth.selectedSchoolId || (auth.user as any)?.id_colegio || 0)
+  return auth.user?.schoolId || null
 })
 
-// Regla de Negocio 1: Admin General NO debe ver el contador
+// No mostrar banner si el usuario es Admin General (Superadmin global)
 const isNotAdminGeneral = computed(() => {
-  const role = (auth.activeRole || (auth.user as any)?.role || '') as string
-  return role !== 'admin_general'
+  const role = auth.activeRole?.toLowerCase()
+  return role !== 'admin_general' && auth.user?.role !== 'admin_general'
 })
 
-// Regla de Negocio 2: El año lectivo NO debe estar CERRADO o INACTIVO
 const isYearOpen = computed(() => {
-  if (yearStore.isClosedYear) return false
-  if (yearStore.selectedYear) {
-    const st = (yearStore.selectedYear.estado || '').toUpperCase()
-    if (st === 'CERRADO' || st === 'INACTIVO') return false
+  // Si el año seleccionado en la store está CERRADO o INACTIVO, no mostrar
+  if (yearStore.selectedYear && (yearStore.selectedYear.estado === 'CERRADO' || yearStore.selectedYear.estado === 'INACTIVO')) {
+    return false
   }
-  if (activePeriod.value?.anio_estado) {
-    const st = (activePeriod.value.anio_estado || '').toUpperCase()
-    if (st === 'CERRADO' || st === 'INACTIVO') return false
+  // Si la info del período incluye estado del año
+  if (period.value?.anio_estado && (period.value.anio_estado === 'CERRADO' || period.value.anio_estado === 'INACTIVO')) {
+    return false
   }
   return true
 })
 
-// Regla de Negocio 3: El periodo debe estar ESTRICTAMENTE en estado ABIERTO (no PENDIENTE, no CERRADO)
 const isPeriodStrictlyOpen = computed(() => {
-  if (!activePeriod.value) return false
-  const st = (activePeriod.value.estado || '').toUpperCase()
-  return st === 'ABIERTO'
+  return period.value?.estado === 'ABIERTO'
 })
 
-// Cálculo del tiempo restante hasta la hora fin
 const timeLeft = ref({
   days: 0,
   hours: 0,
@@ -75,33 +70,29 @@ const timeLeft = ref({
 })
 
 const calculateTimeLeft = () => {
-  if (!activePeriod.value || !activePeriod.value.mes_fin || !activePeriod.value.dia_fin) {
-    timeLeft.value.isValidDate = false
+  if (!period.value || !period.value.mes_fin || !period.value.dia_fin) {
+    timeLeft.value = { days: 0, hours: 0, minutes: 0, seconds: 0, isExpired: false, isValidDate: false }
     return
   }
 
   const now = new Date()
+  const currentYear = now.getFullYear()
   
-  // Determinar año correspondiente para la fecha de fin
-  let yearNum = now.getFullYear()
-  const calStr = activePeriod.value.calendario || yearStore.selectedYear?.calendario
-  if (calStr) {
-    const parts = String(calStr).split('-').map(p => parseInt(p.trim())).filter(n => !isNaN(n))
-    if (parts.length === 1) {
-      yearNum = parts[0]
-    } else if (parts.length > 1) {
-      const mesInicio = activePeriod.value.mes_inicio || 1
-      if (activePeriod.value.mes_fin < mesInicio) {
-        yearNum = parts[1]
-      } else {
-        yearNum = parts[0]
-      }
+  // Mes en JavaScript es 0-indexado (0 = Enero, 11 = Diciembre)
+  const targetMonth = period.value.mes_fin - 1
+  const targetDay = period.value.dia_fin
+
+  // Si mes_fin es menor que mes_inicio o estamos a fin de año (para calendarios que cruzan año)
+  let targetYear = currentYear
+  if (period.value.mes_inicio && period.value.mes_fin < period.value.mes_inicio) {
+    if (now.getMonth() + 1 >= period.value.mes_inicio) {
+      targetYear = currentYear + 1
     }
   }
 
-  // Fecha fin del período (hasta las 23:59:59 del día de cierre)
-  const endDate = new Date(yearNum, activePeriod.value.mes_fin - 1, activePeriod.value.dia_fin, 23, 59, 59)
-  const diffMs = endDate.getTime() - now.getTime()
+  // Establecer fecha límite a las 23:59:59 del día de fin
+  const deadline = new Date(targetYear, targetMonth, targetDay, 23, 59, 59, 999)
+  const diffMs = deadline.getTime() - now.getTime()
 
   if (diffMs <= 0) {
     timeLeft.value = { days: 0, hours: 0, minutes: 0, seconds: 0, isExpired: true, isValidDate: true }
@@ -123,9 +114,8 @@ const fetchActivePeriodInfo = async () => {
     if (schoolId.value) params.schoolId = schoolId.value
     if (yearStore.selectedYearId) params.yearId = yearStore.selectedYearId
 
-    const headers = auth.token ? { Authorization: `Bearer ${auth.token}` } : {}
-    const res = await axios.get('/api/academic-admin/active-period-info', { params, headers })
-    fetchedPeriod.value = res.data?.activePeriod || null
+    const res = await academicService.getActivePeriodInfo(params)
+    fetchedPeriod.value = res?.activePeriod || null
     calculateTimeLeft()
   } catch (err) {
     fetchedPeriod.value = null
@@ -138,10 +128,10 @@ const shouldShow = computed(() => {
   return isNotAdminGeneral.value && isYearOpen.value && isPeriodStrictlyOpen.value && timeLeft.value.isValidDate
 })
 
-// Observar cualquier cambio en el período activo (prop o fetched)
-watch(activePeriod, () => {
+watch(period, () => {
   calculateTimeLeft()
 }, { immediate: true, deep: true })
+
 
 watch(() => yearStore.selectedYearId, () => {
   if (!props.periodInfo) {
@@ -173,7 +163,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div v-if="shouldShow && activePeriod" class="mb-6 animate-in fade-in slide-in-from-top-3 duration-500">
+  <div v-if="shouldShow && period" class="mb-6 animate-in fade-in slide-in-from-top-3 duration-500">
     <div :class="[
       'rounded-2xl p-5 md:p-6 text-white shadow-lg relative overflow-hidden transition-all border',
       timeLeft.days <= 5 
@@ -199,7 +189,7 @@ onUnmounted(() => {
           <div>
             <div class="flex items-center gap-2">
               <span class="text-xs font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-white/20 text-white backdrop-blur-xs">
-                Período {{ activePeriod.nombre }}
+                Período {{ period.nombre }}
               </span>
               <span v-if="timeLeft.days <= 5 && !timeLeft.isExpired" class="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-300 text-amber-950 flex items-center gap-1 animate-bounce">
                 <AlertTriangle :size="10" /> Cierre Próximo
@@ -209,6 +199,7 @@ onUnmounted(() => {
               Cierre del Período Académico
               <Sparkles :size="16" class="text-amber-300" />
             </h4>
+
             <p class="text-xs text-white/80 font-medium">
               <span v-if="timeLeft.isExpired">El período ha alcanzado su fecha límite de registro y calificaciones.</span>
               <span v-else>Tiempo restante para el cierre oficial del registro de actividades y notas.</span>

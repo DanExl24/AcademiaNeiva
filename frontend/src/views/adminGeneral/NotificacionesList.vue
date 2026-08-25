@@ -1,14 +1,12 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
-import axios from 'axios'
-import { useAuthStore } from '../../stores/auth'
+import { adminGeneralService } from '../../services/adminGeneralService'
 import { 
   Bell, Clock, School, ShieldCheck, Search
 } from 'lucide-vue-next'
 
-const auth = useAuthStore()
-
 interface Notificacion {
+
   id_notificacion: number
   tipo: string
   mensaje: string
@@ -26,15 +24,15 @@ const search = ref('')
 const fetchNotifications = async () => {
   try {
     loading.value = true
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get('/api/admin/notificaciones', { headers })
-    notifications.value = res.data
+    const data = await adminGeneralService.getNotificaciones()
+    notifications.value = data || []
   } catch (error) {
     console.error('Error fetching system notifications:', error)
   } finally {
     loading.value = false
   }
 }
+
 
 onMounted(() => {
   fetchNotifications()

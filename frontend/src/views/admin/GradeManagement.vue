@@ -1,15 +1,24 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import axios from 'axios'
+import { academicService } from '../../services/academicService'
 import { 
   Layers3, Plus, Search, School2, Trash2, Info, Pencil, Tag, RefreshCw, Lock, 
-  Calendar, Eye, Users, GraduationCap, Mail, X, Sun, Sunset, Moon, Globe, 
-  ArrowRightLeft, SlidersHorizontal, Layers
+  Calendar, Eye, Users, GraduationCap, X, Sun, Sunset, Moon, Globe, 
+  SlidersHorizontal, Layers
 } from 'lucide-vue-next'
+
 import { useAuthStore } from '../../stores/auth'
 import { useNotificationStore } from '../../stores/notifications'
 import { useAcademicYearStore } from '../../stores/academicYear'
 import { getCourseDisplayName, getNextSectionName } from '../../utils/courseHelper'
+import CreateGradeOrGroupModal from '../../components/academico/CreateGradeOrGroupModal.vue'
+import EditCuposModal from '../../components/academico/EditCuposModal.vue'
+import RenameCourseModal from '../../components/academico/RenameCourseModal.vue'
+import BulkRenameModal from '../../components/academico/BulkRenameModal.vue'
+import CourseMembersModal from '../../components/academico/CourseMembersModal.vue'
+import JornadaManagementModals from '../../components/academico/JornadaManagementModals.vue'
+
+
 
 const yearStore = useAcademicYearStore()
 
@@ -94,13 +103,6 @@ const bulkSeparador = ref('-')
 const bulkOrdinalType = ref<'NUMERO' | 'LETRA'>('NUMERO')
 const bulkRenaming = ref(false)
 
-const sepOptions = [
-  { label: 'Guión  ( - )', value: '-' },
-  { label: 'Punto  ( . )', value: '.' },
-  { label: 'Espacio (   )', value: ' ' },
-  { label: 'Ninguno  (sin separador)', value: '' },
-]
-
 type DeleteModalState =
   | { kind: 'grade'; item: TipoGrado }
   | { kind: 'course'; item: Grupo }
@@ -114,11 +116,6 @@ const secciones = ref<Seccion[]>([])
 const tiposGrado = ref<TipoGrado[]>([])
 const grupos = ref<Grupo[]>([])
 
-const newGradeType = ref({
-  id_nivel: '',
-  nombre: '',
-})
-
 const newGroup = ref({
   id_nivel: '',
   id_tipo_grado: '',
@@ -127,13 +124,9 @@ const newGroup = ref({
   cupos_totales: 30,
 })
 
-const filteredGradeTypes = computed(() =>
-  tiposGrado.value.filter((item) =>
-    !newGroup.value.id_nivel || item.id_nivel === Number(newGroup.value.id_nivel)
-  )
-)
 
 // Grados & Cursos Filters State
+
 const selectedNivelFilter = ref<number | null>(null)
 const selectedJornadaFilter = ref<number | null>(null)
 const gradeStatusFilter = ref<'TODOS' | 'CON_CURSOS' | 'SIN_CURSOS'>('TODOS')
@@ -292,92 +285,9 @@ const computedNextSectionName = computed(() => {
   return getNextSectionName(existingNames)
 })
 
-const indexToLetter = (index: number): string => {
-  let temp = index
-  let letter = ''
-  while (temp >= 0) {
-    letter = String.fromCharCode((temp % 26) + 65) + letter
-    temp = Math.floor(temp / 26) - 1
-  }
-  return letter
-}
-
-
-const previewNames = computed(() => {
-  const base = bulkPrefijo.value.trim().toUpperCase()
-  const sep = bulkSeparador.value
-  if (!base || !bulkCourseCount.value) return []
-  const isLetter = (bulkOrdinalType.value === 'LETRA')
-  return Array.from({ length: bulkCourseCount.value }, (_, i) => {
-    const ordinal = isLetter ? indexToLetter(i) : String(i + 1)
-    return `${base}${sep}${ordinal}`
-  })
-})
-
-const bulkPrefijoError = computed(() => {
-  const base = bulkPrefijo.value.trim()
-  if (!base) return 'El prefijo no puede estar vacío'
-  if (base.length > 10) return 'El prefijo no puede superar los 10 caracteres'
-  
-  const isLetter = (bulkOrdinalType.value === 'LETRA')
-  const lastNum = bulkCourseCount.value
-  const lastOrdinal = isLetter ? indexToLetter(lastNum - 1) : String(lastNum)
-  const longestName = `${base.toUpperCase()}${bulkSeparador.value}${lastOrdinal}`
-  if (longestName.length > 10) {
-    return `La estructura superaría los 10 caracteres (ej: ${longestName})`
-  }
-  return ''
-})
-
-const normalizeClientGrade = (str: string): string => {
-  if (!str) return ''
-  let text = str.toUpperCase().trim()
-  text = text.normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-  text = text.replace(/\b(GRADO|GRADOS|NIVEL|NIVELES|CURSO|CURSOS|ANO|ANIO|SISTEMA)\b/g, '').trim()
-  text = text.replace(/[\°\º\.\-\_\#\,\:]/g, '').trim()
-  const ordinalMap: Record<string, string> = {
-    '1': 'PRIMERO', '1RO': 'PRIMERO', '1ER': 'PRIMERO',
-    '2': 'SEGUNDO', '2DO': 'SEGUNDO',
-    '3': 'TERCERO', '3RO': 'TERCERO', '3ER': 'TERCERO',
-    '4': 'CUARTO', '4TO': 'CUARTO',
-    '5': 'QUINTO', '5TO': 'QUINTO',
-    '6': 'SEXTO', '6TO': 'SEXTO',
-    '7': 'SEPTIMO', '7MO': 'SEPTIMO',
-    '8': 'OCTAVO', '8VO': 'OCTAVO',
-    '9': 'NOVENO', '9NO': 'NOVENO',
-    '10': 'DECIMO', '10MO': 'DECIMO',
-    '11': 'ONCE', '11VO': 'ONCE', 'UNDECIMO': 'ONCE',
-    '12': 'DOCE', '12VO': 'DOCE', 'DUODECIMO': 'DOCE',
-    'PARVULO': 'PARVULOS', 'PARVULOS': 'PARVULOS',
-    'PREJARDIN': 'PREJARDIN', 'PREKINDER': 'PREJARDIN',
-    'JARDIN': 'JARDIN', 'KINDER': 'JARDIN',
-    'TRANSICION': 'TRANSICION'
-  }
-  const words = text.split(/\s+/).filter(Boolean)
-  text = words.map(w => ordinalMap[w] || w).join('')
-  return text.replace(/([A-Z])\1+/g, '$1')
-}
-
-const gradeNameValidationError = computed(() => {
-  const input = newGradeType.value.nombre.trim()
-  if (!input) return ''
-
-  const normInput = normalizeClientGrade(input)
-  if (!normInput) return ''
-
-  const existingMatch = tiposGrado.value.find(g => {
-    return normalizeClientGrade(g.nombre) === normInput
-  })
-
-  if (existingMatch) {
-    return `⚠️ El nombre '${input}' es equivalente o muy similar al grado '${existingMatch.nombre}' ya registrado.`
-  }
-
-  return ''
-})
-
 
 const toggleGradeSelection = (id: number) => {
+
   if (selectedGradeId.value === id) {
     selectedGradeId.value = null
   } else {
@@ -464,16 +374,16 @@ const closeEditCuposModal = () => {
 
 const fetchCatalogs = async () => {
   const params = yearStore.selectedYearId ? { yearId: yearStore.selectedYearId } : {}
-  const [catalogsRes, gradesRes] = await Promise.all([
-    axios.get('/api/academic-admin/catalogs'),
-    axios.get(`/api/academic-admin/grades/${schoolId.value}`, { params }),
+  const [catalogsData, gradesData] = await Promise.all([
+    academicService.getCatalogs(),
+    academicService.getGradesAndGroups(schoolId.value, params),
   ])
 
-  secciones.value = catalogsRes.data.secciones
-  niveles.value = gradesRes.data.niveles
-  jornadas.value = gradesRes.data.jornadas
-  tiposGrado.value = gradesRes.data.tiposGrado
-  grupos.value = gradesRes.data.grupos
+  secciones.value = catalogsData.secciones
+  niveles.value = gradesData.niveles
+  jornadas.value = gradesData.jornadas
+  tiposGrado.value = gradesData.tiposGrado
+  grupos.value = gradesData.grupos
 }
 
 const loadData = async () => {
@@ -488,21 +398,15 @@ const loadData = async () => {
   }
 }
 
-const createGradeType = async () => {
-  if (savingGrade.value) return
-  if (!newGradeType.value.id_nivel || !newGradeType.value.nombre.trim()) {
-    notify.addNotification('Completa nivel académico y nombre del grado antes de crearlo.', 'warning')
-    return
-  }
-
+const handleCreateGrade = async (payload: { id_nivel: number; nombre: string }) => {
   try {
+
     savingGrade.value = true
-    await axios.post('/api/academic-admin/grade-types', {
+    await academicService.createGradeType({
       schoolId: schoolId.value,
-      id_nivel: Number(newGradeType.value.id_nivel),
-      nombre: newGradeType.value.nombre,
+      id_nivel: payload.id_nivel,
+      nombre: payload.nombre,
     })
-    newGradeType.value = { id_nivel: '', nombre: '' }
     await loadData()
     closeCreateModal()
     notify.addNotification('Grado creado exitosamente.', 'success')
@@ -513,35 +417,27 @@ const createGradeType = async () => {
   }
 }
 
-const createGroup = async () => {
-  const payload = newGroup.value
+const handleCreateGroup = async (payload: { id_nivel: number; id_tipo_grado: number; id_jornada: number; cupos_totales: number }) => {
   if (savingGroup.value) return
-  if (!payload.id_nivel || !payload.id_tipo_grado || !payload.id_jornada || !computedNextSectionName.value) {
+  if (!computedNextSectionName.value) {
     notify.addNotification('Completa nivel, grado, jornada y sección antes de crear el curso.', 'warning')
     return
   }
-  if (Number(payload.cupos_totales) < 0) {
+  if (payload.cupos_totales < 0) {
     notify.addNotification('Los cupos del curso no pueden ser negativos.', 'warning')
     return
   }
 
   try {
     savingGroup.value = true
-    await axios.post('/api/academic-admin/groups', {
+    await academicService.createGroup({
       schoolId: schoolId.value,
-      id_nivel: Number(payload.id_nivel),
-      id_tipo_grado: Number(payload.id_tipo_grado),
-      id_jornada: Number(payload.id_jornada),
+      id_nivel: payload.id_nivel,
+      id_tipo_grado: payload.id_tipo_grado,
+      id_jornada: payload.id_jornada,
       seccion_nombre: computedNextSectionName.value,
-      cupos_totales: Number(payload.cupos_totales),
+      cupos_totales: payload.cupos_totales,
     })
-    newGroup.value = {
-      id_nivel: '',
-      id_tipo_grado: '',
-      id_jornada: '',
-      id_seccion: '',
-      cupos_totales: 30,
-    }
     await loadData()
     closeCreateModal()
     notify.addNotification('Curso creado exitosamente.', 'success')
@@ -555,9 +451,7 @@ const createGroup = async () => {
 const deleteGradeType = async (item: TipoGrado) => {
   try {
     deleting.value = true
-    await axios.delete(`/api/academic-admin/grade-types/${item.id_tipo_grado}`, {
-      params: { schoolId: schoolId.value },
-    })
+    await academicService.deleteGradeType(item.id_tipo_grado, schoolId.value)
     closeDeleteModal()
     await loadData()
     notify.addNotification('Grado eliminado exitosamente.', 'success')
@@ -570,9 +464,7 @@ const deleteGradeType = async (item: TipoGrado) => {
 const deleteGroup = async (item: Grupo) => {
   try {
     deleting.value = true
-    await axios.delete(`/api/academic-admin/groups/${item.id_grupo}`, {
-      params: { schoolId: schoolId.value },
-    })
+    await academicService.deleteGroup(item.id_grupo, schoolId.value)
     closeDeleteModal()
     await loadData()
     notify.addNotification('Curso eliminado exitosamente.', 'success')
@@ -583,19 +475,19 @@ const deleteGroup = async (item: Grupo) => {
   }
 }
 
-const updateGroupCupos = async () => {
+const handleUpdateGroupCupos = async (newCupos: number) => {
   if (!selectedGroup.value || savingCupos.value) return
   
-  if (selectedGroup.value.cupos_totales < selectedGroup.value.matriculas_count) {
+  if (newCupos < selectedGroup.value.matriculas_count) {
     notify.addNotification(`No puedes reducir el cupo por debajo de la cantidad de estudiantes matriculados (${selectedGroup.value.matriculas_count}).`, 'warning')
     return
   }
 
   try {
     savingCupos.value = true
-    await axios.patch(`/api/academic-admin/groups/${selectedGroup.value.id_grupo}/cupos`, {
+    await academicService.updateGroupCupos(selectedGroup.value.id_grupo, {
       schoolId: schoolId.value,
-      cupos_totales: selectedGroup.value.cupos_totales
+      cupos_totales: newCupos
     })
     await loadData()
     closeEditCuposModal()
@@ -607,8 +499,6 @@ const updateGroupCupos = async () => {
   }
 }
 
-
-
 const closeRenameModal = () => {
   if (renaming.value) return
   renameModal.value = false
@@ -616,10 +506,8 @@ const closeRenameModal = () => {
   renameName.value = ''
 }
 
-const confirmRename = async () => {
+const handleConfirmRename = async (nombre: string) => {
   if (!renameTarget.value || renaming.value) return
-  const nombre = renameName.value.trim().toUpperCase()
-  if (!nombre) return
   if (nombre.length > 10) {
     notify.addNotification('El nombre del curso no puede superar los 10 caracteres', 'warning')
     return
@@ -627,11 +515,10 @@ const confirmRename = async () => {
 
   renaming.value = true
   try {
-    await axios.patch(
-      `/api/academic-admin/groups/${renameTarget.value.id_grupo}/rename`,
-      { schoolId: schoolId.value, nuevo_nombre: nombre },
-      { headers: { Authorization: `Bearer ${auth.token}` } }
-    )
+    await academicService.renameGroup(renameTarget.value.id_grupo, {
+      schoolId: schoolId.value,
+      nuevo_nombre: nombre
+    })
     await loadData()
     closeRenameModal()
     notify.addNotification('Curso renombrado exitosamente.', 'success')
@@ -642,8 +529,6 @@ const confirmRename = async () => {
   }
 }
 
-
-
 const closeBulkModal = () => {
   if (bulkRenaming.value) return
   bulkModal.value = false
@@ -652,20 +537,16 @@ const closeBulkModal = () => {
   bulkOrdinalType.value = 'NUMERO'
 }
 
-const confirmBulkRename = async () => {
-  if (!bulkTarget.value || bulkRenaming.value || bulkPrefijoError.value) return
+const handleConfirmBulkRename = async (payload: { prefijo: string; separador: string; tipo_ordinal: 'NUMERO' | 'LETRA' }) => {
+  if (!bulkTarget.value || bulkRenaming.value) return
   bulkRenaming.value = true
   try {
-    await axios.patch(
-      `/api/academic-admin/grade-types/${bulkTarget.value.id_tipo_grado}/bulk-rename`,
-      {
-        schoolId: schoolId.value,
-        prefijo: bulkPrefijo.value.trim().toUpperCase(),
-        separador: bulkSeparador.value,
-        tipo_ordinal: bulkOrdinalType.value
-      },
-      { headers: { Authorization: `Bearer ${auth.token}` } }
-    )
+    await academicService.bulkRenameGroups(bulkTarget.value.id_tipo_grado, {
+      schoolId: schoolId.value,
+      prefijo: payload.prefijo,
+      separador: payload.separador,
+      tipo_ordinal: payload.tipo_ordinal
+    })
     await loadData()
     closeBulkModal()
     notify.addNotification('Cursos renombrados masivamente con éxito.', 'success')
@@ -675,6 +556,7 @@ const confirmBulkRename = async () => {
     bulkRenaming.value = false
   }
 }
+
 
 // Group Members Modal (Estudiantes y Docentes)
 interface MemberStudent {
@@ -727,15 +609,8 @@ const openCourseMembersModal = async (group: Grupo) => {
     activeMembersTab.value = 'students'
     membersSearchTerm.value = ''
 
-    const res = await axios.get(`/api/academic-admin/groups/${group.id_grupo}/members`, {
-      params: {
-        schoolId: schoolId.value,
-        yearId: yearStore.selectedYearId
-      },
-      headers: { Authorization: `Bearer ${auth.token}` }
-    })
-
-    membersData.value = res.data
+    const res = await academicService.getCourseMembers(group.id_grupo, schoolId.value, yearStore.selectedYearId || undefined)
+    membersData.value = res
   } catch (error: any) {
     console.error('Error fetching course members:', error)
     notify.addNotification('No se pudieron cargar los integrantes del curso', 'error')
@@ -744,27 +619,6 @@ const openCourseMembersModal = async (group: Grupo) => {
   }
 }
 
-const filteredStudents = computed(() => {
-  if (!membersData.value) return []
-  const term = membersSearchTerm.value.trim().toLowerCase()
-  if (!term) return membersData.value.students
-  return membersData.value.students.filter(s =>
-    `${s.nombre} ${s.apellido}`.toLowerCase().includes(term) ||
-    (s.codigo_estudiantil && s.codigo_estudiantil.toLowerCase().includes(term)) ||
-    (s.documento && s.documento.toLowerCase().includes(term))
-  )
-})
-
-const filteredTeachers = computed(() => {
-  if (!membersData.value) return []
-  const term = membersSearchTerm.value.trim().toLowerCase()
-  if (!term) return membersData.value.teachers
-  return membersData.value.teachers.filter(t =>
-    t.materia_nombre.toLowerCase().includes(term) ||
-    `${t.docente_nombre} ${t.docente_apellido}`.toLowerCase().includes(term) ||
-    (t.docente_email && t.docente_email.toLowerCase().includes(term))
-  )
-}   )
 
 
 interface JornadaStat {
@@ -890,11 +744,9 @@ const handleCreateJornada = async () => {
   if (!newJornadaName.value || savingJornada.value) return
   savingJornada.value = true
   try {
-    await axios.post('/api/academic-admin/jornadas', {
+    await academicService.createJornada({
       schoolId: schoolId.value,
       nombre: newJornadaName.value
-    }, {
-      headers: { Authorization: `Bearer ${auth.token}` }
     })
     notify.addNotification(`Jornada ${newJornadaName.value} habilitada exitosamente.`, 'success')
     showCreateJornadaModal.value = false
@@ -915,10 +767,7 @@ const confirmDeleteJornada = async () => {
   if (!targetJornadaToDelete.value || deletingJornada.value) return
   deletingJornada.value = true
   try {
-    await axios.delete(`/api/academic-admin/jornadas/${targetJornadaToDelete.value.id_jornada}`, {
-      params: { schoolId: schoolId.value },
-      headers: { Authorization: `Bearer ${auth.token}` }
-    })
+    await academicService.deleteJornada(targetJornadaToDelete.value.id_jornada, schoolId.value)
     notify.addNotification(`Jornada eliminada con éxito.`, 'success')
     deleteJornadaModal.value = false
     if (selectedJornadaId.value === targetJornadaToDelete.value.id_jornada) {
@@ -944,11 +793,9 @@ const confirmReassignJornada = async () => {
   if (!targetGroupToReassign.value || !newTargetJornadaId.value || reassigningJornada.value) return
   reassigningJornada.value = true
   try {
-    await axios.patch(`/api/academic-admin/groups/${targetGroupToReassign.value.id_grupo}/jornada`, {
+    await academicService.reassignGroupJornada(targetGroupToReassign.value.id_grupo, {
       schoolId: schoolId.value,
       id_jornada: newTargetJornadaId.value
-    }, {
-      headers: { Authorization: `Bearer ${auth.token}` }
     })
     notify.addNotification('Curso reasignado de jornada exitosamente.', 'success')
     reassignJornadaModal.value = false
@@ -960,6 +807,7 @@ const confirmReassignJornada = async () => {
     reassigningJornada.value = false
   }
 }
+
 
 onMounted(async () => {
   await yearStore.loadYearsForSchool(schoolId.value, auth.token || undefined)
@@ -1729,90 +1577,23 @@ watch(() => yearStore.selectedYearId, () => {
 
     <!-- Modals (Remained roughly same but with better styling) -->
     <Teleport to="body">
-      <div v-if="createModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4">
-        <div class="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" @click="closeCreateModal"></div>
-        <div class="relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-[32px] shadow-2xl shadow-indigo-500/10 overflow-hidden border border-white/20">
-          <div class="px-8 pt-8 pb-6 bg-slate-50/50 dark:bg-slate-800/30 border-b border-slate-100 dark:border-slate-800">
-            <h2 class="text-2xl font-black text-slate-900 dark:text-white flex items-center gap-3">
-              <Plus :size="24" class="text-indigo-600" />
-              {{ createModal === 'grade' ? 'Configurar Nuevo Grado' : 'Configurar Nuevo Curso' }}
-            </h2>
-            <p class="text-slate-500 dark:text-slate-400 text-sm font-medium mt-1">Completa la información necesaria para el registro.</p>
-          </div>
+      <!-- Create Grade or Group Modal -->
+      <CreateGradeOrGroupModal
+        :show="createModal"
+        :niveles="niveles"
+        :tipos-grados="tiposGrado"
+        :jornadas="jornadas"
+        :saving-grade="savingGrade"
 
-          <div v-if="createModal === 'grade'" class="p-8 space-y-6">
-            <div class="space-y-4">
-              <div class="space-y-2">
-                <label class="text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Nivel Académico</label>
-                <select v-model="newGradeType.id_nivel" class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 rounded-2xl p-4 font-bold outline-none text-slate-900 dark:text-white transition-all appearance-none cursor-pointer">
-                  <option value="">Selecciona un nivel</option>
-                  <option v-for="nivel in niveles" :key="nivel.id_nivel" :value="nivel.id_nivel">{{ nivel.nombre }}</option>
-                </select>
-              </div>
-              <div class="space-y-2">
-                <label class="text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Nombre Descriptivo</label>
-                <input v-model="newGradeType.nombre" type="text" placeholder="Ej. Grado Sexto" class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 rounded-2xl p-4 font-bold outline-none text-slate-900 dark:text-white placeholder:text-slate-400" />
-                <div v-if="gradeNameValidationError" class="text-xs font-bold text-amber-600 dark:text-amber-400 ml-1 mt-1">
-                  {{ gradeNameValidationError }}
-                </div>
-              </div>
-            </div>
-
-            <div class="flex gap-3 pt-2">
-              <button @click="closeCreateModal" class="flex-1 px-6 py-4 rounded-2xl font-black text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all">Cancelar</button>
-              <button @click="createGradeType" :disabled="savingGrade || !!gradeNameValidationError" class="flex-[2] bg-slate-900 dark:bg-white dark:text-slate-900 text-white px-6 py-4 rounded-2xl font-black shadow-xl shadow-slate-200 dark:shadow-none hover:translate-y-[-2px] active:translate-y-0 transition-all disabled:opacity-50">
-                {{ savingGrade ? 'Registrando...' : 'Confirmar Registro' }}
-              </button>
-            </div>
-          </div>
-
-          <div v-else class="p-8 space-y-5">
-            <div class="grid grid-cols-2 gap-4">
-              <div class="col-span-2 space-y-2">
-                <label class="text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Nivel Académico</label>
-                <select v-model="newGroup.id_nivel" class="w-full bg-slate-50 dark:bg-slate-800 rounded-2xl p-3.5 font-bold outline-none text-sm text-slate-900 dark:text-white border-2 border-transparent focus:border-indigo-500/20">
-                  <option value="">Seleccionar Nivel</option>
-                  <option v-for="nivel in niveles" :key="nivel.id_nivel" :value="nivel.id_nivel">{{ nivel.nombre }}</option>
-                </select>
-              </div>
-              <div class="space-y-2">
-                <label class="text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Grado Relacionado</label>
-                <select v-model="newGroup.id_tipo_grado" class="w-full bg-slate-50 dark:bg-slate-800 rounded-2xl p-3.5 font-bold outline-none text-sm text-slate-900 dark:text-white border-2 border-transparent focus:border-indigo-500/20">
-                  <option value="">Seleccionar Grado</option>
-                  <option v-for="tipo in filteredGradeTypes" :key="tipo.id_tipo_grado" :value="tipo.id_tipo_grado">{{ tipo.nombre }}</option>
-                </select>
-              </div>
-              <div class="space-y-2">
-                <label class="text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Jornada</label>
-                <select v-model="newGroup.id_jornada" class="w-full bg-slate-50 dark:bg-slate-800 rounded-2xl p-3.5 font-bold outline-none text-sm text-slate-900 dark:text-white border-2 border-transparent focus:border-indigo-500/20">
-                  <option value="">Seleccionar Jornada</option>
-                  <option v-for="jornada in jornadas" :key="jornada.id_jornada" :value="jornada.id_jornada">{{ jornada.nombre }}</option>
-                </select>
-              </div>
-              <div class="space-y-2">
-                <label class="text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Sección Auto-Generada</label>
-                <input 
-                  :value="computedNextSectionName || 'Selecciona un Grado primero'" 
-                  type="text" 
-                  disabled
-                  class="w-full bg-slate-100 dark:bg-slate-800 border-2 border-transparent rounded-2xl p-3.5 font-bold outline-none text-sm text-slate-500 dark:text-slate-400 cursor-not-allowed" 
-                />
-              </div>
-              <div class="space-y-2">
-                <label class="text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Capacidad (Cupos)</label>
-                <input v-model.number="newGroup.cupos_totales" type="number" min="0" class="w-full bg-slate-50 dark:bg-slate-800 rounded-2xl p-3.5 font-bold outline-none text-sm text-slate-900 dark:text-white border-2 border-transparent focus:border-indigo-500/20" />
-              </div>
-            </div>
-
-            <div class="flex gap-3 pt-5 border-t border-slate-100 dark:border-slate-800">
-              <button @click="closeCreateModal" class="flex-1 px-4 py-4 rounded-2xl font-black text-slate-500 dark:text-slate-400 hover:bg-slate-50 transition-all">Cancelar</button>
-              <button @click="createGroup" :disabled="savingGroup" class="flex-[2] bg-indigo-600 text-white px-6 py-4 rounded-2xl font-black shadow-xl shadow-indigo-100 dark:shadow-none hover:translate-y-[-2px] transition-all disabled:opacity-50">
-                {{ savingGroup ? 'Creando...' : 'Registrar Curso' }}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+        :saving-group="savingGroup"
+        :computed-next-section-name="computedNextSectionName"
+        @close="closeCreateModal"
+        @create-grade="handleCreateGrade"
+        @create-group="handleCreateGroup"
+        @update-group-nivel="newGroup.id_nivel = $event as any"
+        @update-group-grade="newGroup.id_tipo_grado = $event as any"
+        @update-group-jornada="newGroup.id_jornada = $event as any"
+      />
 
       <!-- Delete Confirmation Modal -->
       <div v-if="deleteModal" class="fixed inset-0 z-[110] flex items-center justify-center p-4">
@@ -1846,463 +1627,62 @@ watch(() => yearStore.selectedYearId, () => {
       </div>
 
       <!-- Edit Cupos Modal -->
-      <div v-if="editCuposModal && selectedGroup" class="fixed inset-0 z-[110] flex items-center justify-center p-4">
-        <div class="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" @click="closeEditCuposModal"></div>
-        <div class="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-[32px] shadow-2xl overflow-hidden border border-white/20">
-          <div class="p-8">
-            <div class="flex items-center gap-4 mb-6">
-              <div class="p-3 bg-indigo-50 dark:bg-indigo-950/30 rounded-2xl text-indigo-600 dark:text-indigo-400">
-                <Pencil :size="24" />
-              </div>
-              <div>
-                <h3 class="text-xl font-black text-slate-900 dark:text-white">Modificar Capacidad</h3>
-                <p class="text-sm font-medium text-slate-500">{{ getCourseDisplayName(selectedGroup) }}</p>
-              </div>
-            </div>
+      <EditCuposModal
+        :show="editCuposModal"
+        :selected-group="selectedGroup"
+        :saving-cupos="savingCupos"
+        @close="closeEditCuposModal"
+        @save="handleUpdateGroupCupos"
+      />
 
-            <div class="space-y-4">
-              <div class="bg-indigo-50/50 dark:bg-indigo-950/20 p-4 rounded-2xl border border-indigo-100/50">
-                <div class="flex justify-between items-center text-sm font-bold">
-                  <span class="text-slate-500 uppercase tracking-wider">Matriculados Actuales</span>
-                  <span class="text-indigo-600 dark:text-indigo-400">{{ selectedGroup.matriculas_count }} Estudiantes</span>
-                </div>
-              </div>
-
-              <div class="space-y-2">
-                <label class="text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Nuevo Total de Cupos</label>
-                <input 
-                  v-model.number="selectedGroup.cupos_totales" 
-                  type="number" 
-                  :min="selectedGroup.matriculas_count"
-                  class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 rounded-2xl p-4 font-bold outline-none text-slate-900 dark:text-white transition-all"
-                />
-                <p class="text-[10px] font-bold text-slate-400 ml-1 uppercase">El cupo no puede ser menor a {{ selectedGroup.matriculas_count }}</p>
-              </div>
-            </div>
-
-            <div class="flex gap-3 mt-8">
-              <button @click="closeEditCuposModal" class="flex-1 px-6 py-4 rounded-2xl font-black text-slate-500 dark:text-slate-400 hover:bg-slate-50 transition-all">Cancelar</button>
-              <button 
-                @click="updateGroupCupos"
-                :disabled="savingCupos || selectedGroup.cupos_totales < selectedGroup.matriculas_count"
-                class="flex-[2] bg-slate-900 dark:bg-white dark:text-slate-900 text-white px-6 py-4 rounded-2xl font-black shadow-xl shadow-slate-200 dark:shadow-none hover:translate-y-[-1px] transition-all disabled:opacity-50"
-              >
-                {{ savingCupos ? 'Actualizando...' : 'Guardar Cambios' }}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Rename Single Modal -->
-      <div v-if="renameModal && renameTarget" class="fixed inset-0 z-[110] flex items-center justify-center p-4">
-        <div class="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" @click="closeRenameModal"></div>
-        <div class="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-[32px] shadow-2xl overflow-hidden border border-white/20">
-          <div class="p-8">
-            <div class="flex items-center gap-4 mb-6">
-              <div class="p-3 bg-indigo-50 dark:bg-indigo-950/30 rounded-2xl text-indigo-600 dark:text-indigo-400">
-                <Tag :size="24" />
-              </div>
-              <div>
-                <h3 class="text-xl font-black text-slate-900 dark:text-white">Renombrar Curso</h3>
-                <p class="text-sm font-medium text-slate-500">{{ getCourseDisplayName(renameTarget) }}</p>
-              </div>
-            </div>
-
-            <div class="space-y-4">
-              <div class="space-y-2">
-                <label class="text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Nuevo Nombre del Curso</label>
-                <input 
-                  v-model="renameName" 
-                  type="text"
-                  maxlength="10"
-                  placeholder="Ej. A o 601"
-                  class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 rounded-2xl p-4 font-bold outline-none text-slate-900 dark:text-white uppercase transition-all"
-                />
-                <p class="text-[10px] font-bold text-slate-400 ml-1 uppercase">Máximo 10 caracteres. Se guardará en mayúsculas.</p>
-              </div>
-            </div>
-
-            <div class="flex gap-3 mt-8">
-              <button @click="closeRenameModal" class="flex-1 px-6 py-4 rounded-2xl font-black text-slate-500 dark:text-slate-400 hover:bg-slate-50 transition-all">Cancelar</button>
-              <button 
-                @click="confirmRename"
-                :disabled="renaming || !renameName.trim()"
-                class="flex-[2] bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-4 rounded-2xl font-black shadow-xl shadow-indigo-100 dark:shadow-none hover:translate-y-[-1px] transition-all disabled:opacity-50"
-              >
-                {{ renaming ? 'Renombrando...' : 'Confirmar' }}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <!-- Rename Single Course Modal -->
+      <RenameCourseModal
+        :show="renameModal"
+        :target-group="renameTarget"
+        :renaming="renaming"
+        @close="closeRenameModal"
+        @save="handleConfirmRename"
+      />
 
       <!-- Bulk Rename Modal -->
-      <div v-if="bulkModal && bulkTarget" class="fixed inset-0 z-[110] flex items-center justify-center p-4">
-        <div class="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" @click="closeBulkModal"></div>
-        <div class="relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-[32px] shadow-2xl overflow-hidden border border-white/20">
-          <div class="p-8">
-            <div class="flex items-center gap-4 mb-6">
-              <div class="p-3 bg-indigo-50 dark:bg-indigo-950/30 rounded-2xl text-indigo-600 dark:text-indigo-400">
-                <RefreshCw :size="24" />
-              </div>
-              <div>
-                <h3 class="text-xl font-black text-slate-900 dark:text-white">Renombre Masivo</h3>
-                <p class="text-sm font-medium text-slate-500">Grado: {{ bulkTarget.nombre }} | {{ bulkCourseCount }} Cursos</p>
-              </div>
-            </div>
+      <BulkRenameModal
+        :show="bulkModal"
+        :bulk-target="bulkTarget"
+        :bulk-renaming="bulkRenaming"
+        :bulk-course-count="bulkCourseCount"
+        @close="closeBulkModal"
+        @save="handleConfirmBulkRename"
+      />
 
-            <div class="space-y-4">
-              <!-- Prefix input -->
-              <div class="space-y-2">
-                <label class="text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Estructura Base (Prefijo)</label>
-                <input 
-                  v-model="bulkPrefijo" 
-                  type="text"
-                  maxlength="10"
-                  placeholder="Ej: 10, DECIMO, 6"
-                  class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 rounded-2xl p-4 font-bold outline-none text-slate-900 dark:text-white uppercase transition-all"
-                />
-                <p class="text-[10px] font-bold text-slate-400 ml-1 uppercase">Se convertirá automáticamente a mayúsculas.</p>
-              </div>
+      <!-- Course Members Modal -->
+      <CourseMembersModal
+        :show="membersModalOpen"
+        :loading="loadingMembers"
+        :members-data="membersData"
+        @close="membersModalOpen = false"
+      />
 
-              <!-- Ordinal Type selection -->
-              <div class="space-y-2">
-                <label class="text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Tipo de Sufijo (Ordinal)</label>
-                <div class="flex gap-4">
-                  <label class="flex-1 flex items-center justify-between p-3.5 bg-slate-50 dark:bg-slate-800 rounded-2xl cursor-pointer border-2 border-transparent hover:border-indigo-500/20 transition-all">
-                    <span class="text-sm font-bold text-slate-850 dark:text-slate-200">Números (1, 2, 3...)</span>
-                    <input type="radio" value="NUMERO" v-model="bulkOrdinalType" class="accent-indigo-600 w-4 h-4" />
-                  </label>
-                  <label class="flex-1 flex items-center justify-between p-3.5 bg-slate-50 dark:bg-slate-800 rounded-2xl cursor-pointer border-2 border-transparent hover:border-indigo-500/20 transition-all">
-                    <span class="text-sm font-bold text-slate-850 dark:text-slate-200">Letras (A, B, C...)</span>
-                    <input type="radio" value="LETRA" v-model="bulkOrdinalType" class="accent-indigo-600 w-4 h-4" />
-                  </label>
-                </div>
-              </div>
-
-              <!-- Separator option -->
-              <div class="space-y-2">
-                <label class="text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Separador con el Ordinal</label>
-                <select 
-                  v-model="bulkSeparador" 
-                  class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 rounded-2xl p-4 font-bold outline-none text-slate-900 dark:text-white appearance-none cursor-pointer transition-all"
-                >
-                  <option v-for="opt in sepOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-                </select>
-              </div>
-
-              <!-- Real-time Preview -->
-              <div v-if="previewNames.length > 0" class="bg-indigo-50/50 dark:bg-indigo-950/20 p-4 rounded-2xl border border-indigo-100/50 dark:border-indigo-900/50">
-                <h4 class="text-xs font-black uppercase text-slate-400 dark:text-slate-500 mb-2">Vista Previa de los Cursos:</h4>
-                <div class="flex flex-wrap gap-2 max-h-24 overflow-y-auto custom-scrollbar">
-                  <span 
-                    v-for="(pName, idx) in previewNames" 
-                    :key="idx"
-                    class="bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 px-3 py-1 rounded-full text-xs font-black border border-indigo-200/50 dark:border-indigo-900/50"
-                  >
-                    {{ pName }}
-                  </span>
-                </div>
-              </div>
-
-              <p v-if="bulkPrefijoError" class="text-xs font-bold text-red-500 bg-red-50 dark:bg-red-950/30 p-3 rounded-xl border border-red-100 dark:border-red-950">
-                {{ bulkPrefijoError }}
-              </p>
-            </div>
-
-            <div class="flex gap-3 mt-8">
-              <button @click="closeBulkModal" class="flex-1 px-6 py-4 rounded-2xl font-black text-slate-500 dark:text-slate-400 hover:bg-slate-50 transition-all">Cancelar</button>
-              <button 
-                @click="confirmBulkRename"
-                :disabled="bulkRenaming || !!bulkPrefijoError"
-                class="flex-[2] bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-4 rounded-2xl font-black shadow-xl shadow-indigo-100 dark:shadow-none hover:translate-y-[-1px] transition-all disabled:opacity-50"
-              >
-                {{ bulkRenaming ? 'Aplicando...' : 'Aplicar Renombre' }}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <!-- Jornada Management Modals (Create, Delete, Reassign) -->
+      <JornadaManagementModals
+        :show-create="showCreateJornadaModal"
+        :available-jornadas-to-add="availableJornadasToAdd"
+        :saving-jornada="savingJornada"
+        :show-delete="deleteJornadaModal"
+        :target-jornada-to-delete="targetJornadaToDelete"
+        :deleting-jornada="deletingJornada"
+        :show-reassign="reassignJornadaModal"
+        :target-group-to-reassign="targetGroupToReassign"
+        :reassigning-jornada="reassigningJornada"
+        :jornadas="jornadas"
+        @close-create="showCreateJornadaModal = false"
+        @confirm-create="handleCreateJornada"
+        @close-delete="deleteJornadaModal = false"
+        @confirm-delete="confirmDeleteJornada"
+        @close-reassign="reassignJornadaModal = false"
+        @confirm-reassign="confirmReassignJornada"
+      />
     </Teleport>
 
-    <!-- Course Members Modal -->
-    <Teleport to="body">
-      <div v-if="membersModalOpen" class="fixed inset-0 z-[300] flex items-center justify-center p-4">
-        <div class="absolute inset-0 bg-slate-950/50 backdrop-blur-sm" @click="membersModalOpen = false"></div>
-        <div class="relative w-full max-w-3xl bg-white dark:bg-slate-900 rounded-[32px] shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
-          
-          <!-- Modal Header -->
-          <div class="px-8 py-6 border-b border-slate-100 dark:border-slate-800 bg-gradient-to-r from-indigo-600 to-blue-700 dark:from-indigo-950 dark:to-slate-900 flex items-center justify-between text-white">
-            <div>
-              <div class="flex items-center gap-2 flex-wrap">
-                <h2 class="text-xl font-black uppercase tracking-tight">
-                  {{ membersData ? getCourseDisplayName(membersData.group) : 'Cargando...' }}
-                </h2>
-                <span v-if="membersData" class="px-3 py-0.5 bg-white/20 dark:bg-white/10 rounded-full text-[10px] font-black uppercase tracking-wider">
-                  {{ membersData.group.jornada_nombre }} | {{ membersData.group.nivel_nombre }}
-                </span>
-              </div>
-              <p class="text-xs text-indigo-100 dark:text-slate-400 font-medium mt-1">
-                Integrantes registrados en el curso para el Año Lectivo {{ yearStore.selectedYear?.calendario }}
-              </p>
-            </div>
-            <button @click="membersModalOpen = false" class="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all">
-              <X :size="20" />
-            </button>
-          </div>
-
-          <!-- Modal Body -->
-          <div class="p-6 flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-5">
-            
-            <!-- Loading State -->
-            <div v-if="loadingMembers" class="py-16 flex flex-col items-center justify-center text-slate-400 font-bold">
-              <div class="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-              Cargando estudiantes y docentes del curso...
-            </div>
-
-            <template v-else-if="membersData">
-              <!-- Tab Controls & Search -->
-              <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
-                <div class="flex items-center gap-2 bg-slate-100 dark:bg-slate-800/80 p-1.5 rounded-2xl w-full sm:w-auto">
-                  <button
-                    @click="activeMembersTab = 'students'"
-                    :class="[
-                      activeMembersTab === 'students' ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-md' : 'text-slate-500 hover:text-slate-900 dark:hover:text-white',
-                      'flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black transition-all uppercase tracking-wide'
-                    ]"
-                  >
-                    <GraduationCap :size="16" />
-                    Estudiantes ({{ membersData.students.length }})
-                  </button>
-                  <button
-                    @click="activeMembersTab = 'teachers'"
-                    :class="[
-                      activeMembersTab === 'teachers' ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-md' : 'text-slate-500 hover:text-slate-900 dark:hover:text-white',
-                      'flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black transition-all uppercase tracking-wide'
-                    ]"
-                  >
-                    <Users :size="16" />
-                    Docentes & Materias ({{ membersData.teachers.length }})
-                  </button>
-                </div>
-
-                <div class="relative w-full sm:w-64">
-                  <Search class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" :size="16" />
-                  <input
-                    v-model="membersSearchTerm"
-                    type="text"
-                    :placeholder="activeMembersTab === 'students' ? 'Buscar estudiante...' : 'Buscar materia o docente...'"
-                    class="w-full bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl py-2.5 pl-10 pr-4 text-xs font-semibold outline-none text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 transition-all"
-                  />
-                </div>
-              </div>
-
-              <!-- TAB 1: STUDENTS -->
-              <div v-if="activeMembersTab === 'students'" class="space-y-3">
-                <div v-if="filteredStudents.length === 0" class="py-12 text-center text-slate-400">
-                  <GraduationCap :size="48" class="mx-auto mb-3 opacity-20" />
-                  <p class="font-bold text-sm">No hay estudiantes matriculados en este curso.</p>
-                </div>
-
-                <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div
-                    v-for="st in filteredStudents"
-                    :key="st.id_estudiante"
-                    class="bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 flex items-center gap-3 hover:border-indigo-200 dark:hover:border-indigo-800 transition-all"
-                  >
-                    <div class="h-11 w-11 bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 rounded-xl flex items-center justify-center font-black text-sm shrink-0">
-                      {{ st.nombre.charAt(0) }}{{ st.apellido.charAt(0) }}
-                    </div>
-                    <div class="flex-1 min-w-0">
-                      <h4 class="font-black text-slate-900 dark:text-white text-sm truncate">{{ st.nombre }} {{ st.apellido }}</h4>
-                      <p class="text-[10px] font-bold text-slate-400 truncate">
-                        <span v-if="st.codigo_estudiantil" class="text-indigo-600 dark:text-indigo-400 font-black">{{ st.codigo_estudiantil }}</span>
-                        <span v-if="st.codigo_estudiantil && st.documento"> • </span>
-                        <span v-if="st.documento">{{ st.tipo_documento || 'DOC' }}: {{ st.documento }}</span>
-                      </p>
-                      <div class="flex items-center gap-2 mt-1">
-                        <span class="px-2 py-0.5 bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 rounded-md text-[9px] font-black uppercase">
-                          {{ st.estado_matricula || 'APROBADA' }}
-                        </span>
-                        <span v-if="st.tipo_matricula" class="px-2 py-0.5 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 rounded-md text-[9px] font-black uppercase">
-                          {{ st.tipo_matricula }}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- TAB 2: TEACHERS -->
-              <div v-if="activeMembersTab === 'teachers'" class="space-y-3">
-                <div v-if="filteredTeachers.length === 0" class="py-12 text-center text-slate-400">
-                  <Users :size="48" class="mx-auto mb-3 opacity-20" />
-                  <p class="font-bold text-sm">No hay docentes asignados a materias en este curso.</p>
-                </div>
-
-                <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div
-                    v-for="tc in filteredTeachers"
-                    :key="tc.id_detallegrado"
-                    class="bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 space-y-3 hover:border-indigo-200 dark:hover:border-indigo-800 transition-all"
-                  >
-                    <div class="flex items-center justify-between">
-                      <span class="px-3 py-1 bg-indigo-600 text-white rounded-lg text-xs font-black uppercase tracking-wide">
-                        {{ tc.materia_nombre }}
-                      </span>
-                    </div>
-                    <div class="flex items-center gap-3">
-                      <div class="h-10 w-10 bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 rounded-xl flex items-center justify-center font-black text-xs shrink-0">
-                        {{ tc.docente_nombre.charAt(0) }}{{ tc.docente_apellido.charAt(0) }}
-                      </div>
-                      <div class="flex-1 min-w-0">
-                        <h5 class="font-black text-slate-900 dark:text-white text-xs truncate">{{ tc.docente_nombre }} {{ tc.docente_apellido }}</h5>
-                        <p v-if="tc.docente_email" class="text-[10px] font-medium text-slate-400 truncate flex items-center gap-1 mt-0.5">
-                          <Mail :size="10" /> {{ tc.docente_email }}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </template>
-          </div>
-        </div>
-      </div>
-
-      <!-- Create Jornada Modal -->
-      <div v-if="showCreateJornadaModal" class="fixed inset-0 z-[110] flex items-center justify-center p-4">
-        <div class="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" @click="showCreateJornadaModal = false"></div>
-        <div class="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-[32px] shadow-2xl overflow-hidden border border-white/20">
-          <div class="p-8 space-y-6">
-            <div class="flex items-center gap-3 border-b border-slate-100 dark:border-slate-800 pb-4">
-              <div class="p-3 bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 rounded-2xl">
-                <Sun :size="24" />
-              </div>
-              <div>
-                <h3 class="text-lg font-black text-slate-900 dark:text-white">Habilitar Nueva Jornada</h3>
-                <p class="text-xs text-slate-400 font-medium">Activa una jornada institucional para asociar cursos</p>
-              </div>
-            </div>
-
-            <div class="space-y-3">
-              <label class="text-xs font-bold text-slate-600 dark:text-slate-300">Seleccionar Tipo de Jornada:</label>
-              <div class="grid grid-cols-2 gap-2.5">
-                <button
-                  v-for="name in availableJornadasToAdd"
-                  :key="name"
-                  type="button"
-                  @click="newJornadaName = name"
-                  :class="[
-                    'p-3.5 rounded-2xl border text-center font-black text-xs transition-all',
-                    newJornadaName === name
-                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-500/20 ring-2 ring-indigo-500/30'
-                      : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-indigo-300'
-                  ]"
-                >
-                  {{ name }}
-                </button>
-              </div>
-            </div>
-
-            <div class="flex items-center gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
-              <button 
-                @click="showCreateJornadaModal = false"
-                class="flex-1 py-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs rounded-xl hover:bg-slate-200 transition-all"
-              >
-                Cancelar
-              </button>
-              <button 
-                @click="handleCreateJornada"
-                :disabled="savingJornada || !newJornadaName"
-                class="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-md shadow-indigo-500/20 disabled:opacity-50"
-              >
-                {{ savingJornada ? 'Habilitando...' : 'Habilitar Jornada' }}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Delete Jornada Modal -->
-      <div v-if="deleteJornadaModal && targetJornadaToDelete" class="fixed inset-0 z-[110] flex items-center justify-center p-4">
-        <div class="absolute inset-0 bg-red-950/30 backdrop-blur-md" @click="deleteJornadaModal = false"></div>
-        <div class="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-[32px] overflow-hidden shadow-2xl">
-          <div class="p-8 text-center">
-            <div class="w-16 h-16 bg-red-50 dark:bg-red-950/30 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
-              <Trash2 :size="32" />
-            </div>
-            <h2 class="text-xl font-black text-slate-900 dark:text-white">¿Eliminar Jornada {{ targetJornadaToDelete.nombre }}?</h2>
-            <p class="text-slate-500 dark:text-slate-400 font-medium mt-3 text-xs leading-relaxed">
-              Esta jornada no posee cursos asignados y será retirada de la institución. Esta acción no afecta cursos existentes.
-            </p>
-          </div>
-          
-          <div class="bg-slate-50 dark:bg-slate-800/50 p-6 flex gap-3">
-            <button @click="deleteJornadaModal = false" class="flex-1 px-6 py-3 rounded-xl font-black text-xs text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800 transition-all">Cancelar</button>
-            <button 
-              @click="confirmDeleteJornada"
-              :disabled="deletingJornada"
-              class="flex-1 bg-red-500 text-white px-6 py-3 rounded-xl font-black text-xs uppercase tracking-wider shadow-lg shadow-red-100 dark:shadow-none hover:bg-red-600 transition-all disabled:opacity-50"
-            >
-              {{ deletingJornada ? 'Eliminando...' : 'Sí, Retirar' }}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Reassign Group Jornada Modal -->
-      <div v-if="reassignJornadaModal && targetGroupToReassign" class="fixed inset-0 z-[110] flex items-center justify-center p-4">
-        <div class="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" @click="reassignJornadaModal = false"></div>
-        <div class="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-[32px] shadow-2xl overflow-hidden border border-white/20">
-          <div class="p-8 space-y-6">
-            <div class="flex items-center gap-3 border-b border-slate-100 dark:border-slate-800 pb-4">
-              <div class="p-3 bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 rounded-2xl">
-                <ArrowRightLeft :size="24" />
-              </div>
-              <div>
-                <h3 class="text-lg font-black text-slate-900 dark:text-white">Reasignar Jornada</h3>
-                <p class="text-xs text-slate-400 font-medium">{{ getCourseDisplayName(targetGroupToReassign) }}</p>
-              </div>
-            </div>
-
-            <div class="space-y-3">
-              <div class="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-2xl text-xs space-y-1">
-                <p class="text-slate-400 font-medium">Jornada Actual: <span class="font-bold text-slate-900 dark:text-white">{{ targetGroupToReassign.jornada_nombre }}</span></p>
-                <p class="text-slate-400 font-medium">Estudiantes Vinculados: <span class="font-bold text-indigo-600 dark:text-indigo-400">{{ targetGroupToReassign.matriculas_count }}</span></p>
-              </div>
-
-              <label class="text-xs font-bold text-slate-600 dark:text-slate-300 block">Nueva Jornada de Destino:</label>
-              <select 
-                v-model="newTargetJornadaId"
-                class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-3.5 font-bold outline-none text-xs text-slate-900 dark:text-white"
-              >
-                <option v-for="j in jornadas" :key="j.id_jornada" :value="j.id_jornada">
-                  {{ j.nombre }} {{ j.id_jornada === targetGroupToReassign.id_jornada ? '(Actual)' : '' }}
-                </option>
-              </select>
-            </div>
-
-            <div class="flex items-center gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
-              <button 
-                @click="reassignJornadaModal = false"
-                class="flex-1 py-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs rounded-xl hover:bg-slate-200 transition-all"
-              >
-                Cancelar
-              </button>
-              <button 
-                @click="confirmReassignJornada"
-                :disabled="reassigningJornada || !newTargetJornadaId || newTargetJornadaId === targetGroupToReassign.id_jornada"
-                class="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-md shadow-indigo-500/20 disabled:opacity-50"
-              >
-                {{ reassigningJornada ? 'Reasignando...' : 'Confirmar Cambio' }}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </Teleport>
 
     <!-- Info Tip -->
     <div class="bg-indigo-50/50 dark:bg-indigo-950/20 p-5 rounded-3xl flex items-start gap-4 border border-indigo-100/50 dark:border-indigo-900/50 transition-colors">

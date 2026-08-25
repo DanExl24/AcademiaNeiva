@@ -272,39 +272,77 @@ const extraordinaryMigrationSql = `
 export const ensureCompetencySchema = async (): Promise<void> => {
   const client = await pool.connect();
   try {
-    // 1. Check/create enum values (must be outside transaction)
-    const checkEnum = await client.query(`
-      SELECT 1 FROM pg_type t 
-      JOIN pg_enum e ON t.oid = e.enumtypid 
-      WHERE t.typname = 'estado_matricula' AND e.enumlabel = 'APROBADA'
-    `);
-    if (checkEnum.rows.length === 0) {
-      console.log("Adding 'APROBADA' to estado_matricula enum...");
-      await client.query("ALTER TYPE estado_matricula ADD VALUE 'APROBADA'");
-    }
+    // 1. Check/create enum values safely (must be outside transaction)
+    try {
+      const hasEstadoMatricula = await client.query(`
+        SELECT 1 FROM pg_type WHERE typname = 'estado_matricula'
+      `);
+      if (hasEstadoMatricula.rows.length === 0) {
+        await client.query(`
+          CREATE TYPE public.estado_matricula AS ENUM (
+            'PENDIENTE',
+            'APROBADA',
+            'RECHAZADA',
+            'CANCELADA',
+            'PENDIENTE_RENOVACION',
+            'CORREGIDA'
+          );
+        `);
+      } else {
+        const checkEnum = await client.query(`
+          SELECT 1 FROM pg_type t 
+          JOIN pg_enum e ON t.oid = e.enumtypid 
+          WHERE t.typname = 'estado_matricula' AND e.enumlabel = 'APROBADA'
+        `);
+        if (checkEnum.rows.length === 0) {
+          console.log("Adding 'APROBADA' to estado_matricula enum...");
+          await client.query("ALTER TYPE estado_matricula ADD VALUE IF NOT EXISTS 'APROBADA'");
+        }
 
-    const checkCorregidaEnum = await client.query(`
-      SELECT 1 FROM pg_type t 
-      JOIN pg_enum e ON t.oid = e.enumtypid 
-      WHERE t.typname = 'estado_matricula' AND e.enumlabel = 'CORREGIDA'
-    `);
-    if (checkCorregidaEnum.rows.length === 0) {
-      console.log("Adding 'CORREGIDA' to estado_matricula enum...");
-      await client.query("ALTER TYPE estado_matricula ADD VALUE 'CORREGIDA'");
+        const checkCorregidaEnum = await client.query(`
+          SELECT 1 FROM pg_type t 
+          JOIN pg_enum e ON t.oid = e.enumtypid 
+          WHERE t.typname = 'estado_matricula' AND e.enumlabel = 'CORREGIDA'
+        `);
+        if (checkCorregidaEnum.rows.length === 0) {
+          console.log("Adding 'CORREGIDA' to estado_matricula enum...");
+          await client.query("ALTER TYPE estado_matricula ADD VALUE IF NOT EXISTS 'CORREGIDA'");
+        }
+      }
+    } catch (e: any) {
+      console.warn("Notice checking estado_matricula enum:", e.message);
     }
 
     // Cleanup redundant table if it was created
     await client.query(`DROP TABLE IF EXISTS public.historial_documento_matricula CASCADE;`);
 
-    const checkPeriodEnum = await client.query(`
-      SELECT 1 FROM pg_type t 
-      JOIN pg_enum e ON t.oid = e.enumtypid 
-      WHERE t.typname = 'estado_periodo' AND e.enumlabel = 'PENDIENTE'
-    `);
-    if (checkPeriodEnum.rows.length === 0) {
-      console.log("Adding 'PENDIENTE' to estado_periodo enum...");
-      await client.query("ALTER TYPE estado_periodo ADD VALUE 'PENDIENTE'");
+    try {
+      const hasEstadoPeriodo = await client.query(`
+        SELECT 1 FROM pg_type WHERE typname = 'estado_periodo'
+      `);
+      if (hasEstadoPeriodo.rows.length === 0) {
+        await client.query(`
+          CREATE TYPE public.estado_periodo AS ENUM (
+            'PENDIENTE',
+            'EN_CURSO',
+            'CERRADO'
+          );
+        `);
+      } else {
+        const checkPeriodEnum = await client.query(`
+          SELECT 1 FROM pg_type t 
+          JOIN pg_enum e ON t.oid = e.enumtypid 
+          WHERE t.typname = 'estado_periodo' AND e.enumlabel = 'PENDIENTE'
+        `);
+        if (checkPeriodEnum.rows.length === 0) {
+          console.log("Adding 'PENDIENTE' to estado_periodo enum...");
+          await client.query("ALTER TYPE estado_periodo ADD VALUE IF NOT EXISTS 'PENDIENTE'");
+        }
+      }
+    } catch (e: any) {
+      console.warn("Notice checking estado_periodo enum:", e.message);
     }
+
 
     // 2. Perform table definitions and modifications within a transaction
     await client.query("BEGIN");

@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useAuthStore } from '../../stores/auth'
-import axios from 'axios'
+import { teacherService } from '../../services/teacherService'
 import { 
   GraduationCap, 
   ClipboardList, 
@@ -27,7 +27,6 @@ import { Bar } from 'vue-chartjs'
 import EmptyChartState from '../../components/charts/EmptyChartState.vue'
 import { useThemeStore } from '../../stores/theme'
 import { useAcademicYearStore } from '../../stores/academicYear'
-import { watch } from 'vue'
 import PeriodCountdownBanner from '../../components/PeriodCountdownBanner.vue'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
@@ -41,7 +40,7 @@ const selectedPeriodId = ref<number | null>(null)
 const availablePeriods = ref<any[]>([])
 
 const hasCourseGrades = computed(() => {
-  return (dashboardData.value.courseAverages || []).some((c: any) => typeof c.promedio === 'number' && c.promedio > 0)
+  return (dashboardData.value.courseAverages || []).some((c: any) => Number(c.average ?? c.promedio ?? 0) > 0)
 })
 
 const dashboardData = ref({
@@ -69,8 +68,8 @@ const chartData = computed(() => {
     datasets: [
       {
         label: 'Promedio Grupal Actual',
-        backgroundColor: dashboardData.value.courseAverages.map(c => c.average < 3.0 ? '#ef4444' : '#6366f1'),
-        data: dashboardData.value.courseAverages.map(c => c.average),
+        backgroundColor: dashboardData.value.courseAverages.map(c => Number(c.average || 0) < 3.0 ? '#ef4444' : '#6366f1'),
+        data: dashboardData.value.courseAverages.map(c => Number(c.average || 0)),
         borderRadius: 8,
         borderWidth: 0,
       }
@@ -137,12 +136,12 @@ const fetchDashboard = async () => {
     const schoolId = auth.selectedSchoolId || auth.user?.schoolId || (auth.user as any)?.id_colegio || (auth.isSupervising ? (auth.supervision?.colegio_id || auth.supervision?.id_colegio) : null)
     if (schoolId) params.schoolId = schoolId
 
-    const response = await axios.get(`/api/teacher/dashboard/${userId}`, { params })
-    dashboardData.value = response.data
-    availablePeriods.value = response.data.availablePeriods || []
+    const data = await teacherService.getDashboard(userId, params)
+    dashboardData.value = data
+    availablePeriods.value = data.availablePeriods || []
 
-    if (response.data.activePeriodInfo && !selectedPeriodId.value) {
-      selectedPeriodId.value = response.data.activePeriodInfo.id_periodo
+    if (data.activePeriodInfo && !selectedPeriodId.value) {
+      selectedPeriodId.value = data.activePeriodInfo.id_periodo
     }
   } catch (error: any) {
   } finally {
@@ -158,6 +157,7 @@ watch(() => yearStore.selectedYearId, () => {
   selectedPeriodId.value = null
   fetchDashboard()
 })
+
 
 const onPeriodChange = () => {
   fetchDashboard()
@@ -307,7 +307,7 @@ const getAlertColors = (type: string) => {
               Promedios Actuales por Curso
             </h3>
             <span class="text-xs font-bold bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-3 py-1.5 rounded-full uppercase tracking-wider">
-              Periodo Vigente
+              {{ dashboardData.activePeriodInfo?.nombre || 'Periodo Vigente' }}
             </span>
           </div>
           
@@ -320,8 +320,9 @@ const getAlertColors = (type: string) => {
             <EmptyChartState 
               v-else 
               :icon="TrendingUp"
+              :badge-text="dashboardData.activePeriodInfo?.estado === 'CERRADO' ? 'Periodo Cerrado' : 'Periodo en curso'"
               title="Sin promedios calculados aún"
-              description="La gráfica de rendimiento por curso se generará automáticamente a medida que califiques las actividades del periodo."
+              description="La gráfica de rendimiento por curso se generará automáticamente a medida que existan notas registradas en las actividades del periodo."
             />
           </div>
         </div>

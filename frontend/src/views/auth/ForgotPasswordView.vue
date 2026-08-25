@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { ArrowLeft, Mail } from 'lucide-vue-next'
-import axios from 'axios'
+import { authService } from '../../services/authService'
 
 const email = ref('')
 const loading = ref(false)
@@ -16,11 +16,8 @@ const handleForgotPassword = async () => {
     error.value = ''
     message.value = ''
 
-    const response = await axios.post('/api/auth/forgot-password', {
-      email: email.value
-    })
-
-    message.value = response.data.message || 'Si el correo está registrado, recibirás un enlace de recuperación en breve.'
+    const data = await authService.forgotPassword(email.value)
+    message.value = data.message || 'Si el correo está registrado, recibirás un enlace de recuperación en breve.'
   } catch (err: any) {
     console.error('Error requesting password reset:', err)
     error.value = err.response?.data?.error || 'Hubo un problema al procesar la solicitud. Intenta nuevamente.'
@@ -28,6 +25,7 @@ const handleForgotPassword = async () => {
     loading.value = false
   }
 }
+
 </script>
 
 <template>

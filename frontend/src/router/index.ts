@@ -2,21 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import LandingView from '../views/public/LandingView.vue'
 import LoginView from '../views/auth/LoginView.vue'
-import EnrollmentView from '../views/public/EnrollmentView.vue'
-import DashboardHomeDispatcher from '../views/shared/DashboardHomeDispatcher.vue'
-import EnrollmentManagement from '../views/admin/EnrollmentManagement.vue'
-import EnrollmentDetails from '../views/admin/EnrollmentDetails.vue'
-import FinalRegistration from '../views/admin/FinalRegistration.vue'
-import ReingresoManagement from '../views/admin/ReingresoManagement.vue'
-import EnrollmentCorrection from '../views/public/EnrollmentCorrection.vue'
 import DashboardLayout from '../layouts/DashboardLayout.vue'
-import GradeManagement from '../views/admin/GradeManagement.vue'
-import SubjectManagement from '../views/admin/SubjectManagement.vue'
-import TeacherManagement from '../views/admin/TeacherManagement.vue'
-import AcademicSettings from '../views/admin/AcademicSettings.vue'
-import AcademicCompetenciesView from '../views/admin/AcademicCompetenciesView.vue'
-import BoletinGenerator from '../views/admin/BoletinGenerator.vue'
-import MySchool from '../views/admin/MySchool.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -40,7 +26,7 @@ const router = createRouter({
     {
       path: '/matricula',
       name: 'matricula',
-      component: EnrollmentView
+      component: () => import('../views/public/EnrollmentView.vue')
     },
     {
       path: '/forgot-password',
@@ -60,7 +46,7 @@ const router = createRouter({
     {
       path: '/matricula/corregir/:id',
       name: 'matricula-corregir',
-      component: EnrollmentCorrection
+      component: () => import('../views/public/EnrollmentCorrection.vue')
     },
     {
       path: '/soporte',
@@ -75,30 +61,30 @@ const router = createRouter({
         {
           path: '',
           name: 'Dashboard',
-          component: DashboardHomeDispatcher
+          component: () => import('../views/shared/DashboardHomeDispatcher.vue')
         },
         {
           path: 'gestion-matriculas',
           name: 'Gestión de Matrículas',
-          component: EnrollmentManagement,
+          component: () => import('../views/admin/EnrollmentManagement.vue'),
           meta: { roles: ['directivo'] }
         },
         {
           path: 'gestion-matriculas/:id',
           name: 'Detalle de Matrícula',
-          component: EnrollmentDetails,
+          component: () => import('../views/admin/EnrollmentDetails.vue'),
           meta: { roles: ['directivo'] }
         },
         {
           path: 'gestion-matriculas/:id/registro',
           name: 'Finalizar Registro',
-          component: FinalRegistration,
+          component: () => import('../views/admin/FinalRegistration.vue'),
           meta: { roles: ['directivo'] }
         },
         {
           path: 'gestion-reingresos',
           name: 'Gestión de Reingresos',
-          component: ReingresoManagement,
+          component: () => import('../views/admin/ReingresoManagement.vue'),
           meta: { roles: ['directivo'] }
         },
         {
@@ -116,19 +102,19 @@ const router = createRouter({
         {
           path: 'gestion-grados',
           name: 'Gestión de Grados',
-          component: GradeManagement,
+          component: () => import('../views/admin/GradeManagement.vue'),
           meta: { roles: ['directivo'] }
         },
         {
           path: 'gestion-materias',
           name: 'Gestión de Materias',
-          component: SubjectManagement,
+          component: () => import('../views/admin/SubjectManagement.vue'),
           meta: { roles: ['directivo'] }
         },
         {
           path: 'docentes',
           name: 'Gestión de Docentes',
-          component: TeacherManagement,
+          component: () => import('../views/admin/TeacherManagement.vue'),
           meta: { roles: ['directivo'] }
         },
         {
@@ -146,7 +132,7 @@ const router = createRouter({
         {
           path: 'configuracion-academica',
           name: 'Configuración Académica',
-          component: AcademicSettings,
+          component: () => import('../views/admin/AcademicSettings.vue'),
           meta: { roles: ['directivo'] }
         },
         {
@@ -164,13 +150,13 @@ const router = createRouter({
         {
           path: 'mi-colegio',
           name: 'Mi Colegio',
-          component: MySchool,
+          component: () => import('../views/admin/MySchool.vue'),
           meta: { roles: ['directivo'] }
         },
         {
           path: 'configuracion-academica/competencias',
           name: 'Competencias Académicas',
-          component: AcademicCompetenciesView,
+          component: () => import('../views/admin/AcademicCompetenciesView.vue'),
           meta: { roles: ['directivo'] }
         },
         {
@@ -200,7 +186,7 @@ const router = createRouter({
         {
           path: 'boletines',
           name: 'Generación de Boletines',
-          component: BoletinGenerator,
+          component: () => import('../views/admin/BoletinGenerator.vue'),
           meta: { roles: ['directivo'] }
         },
         {

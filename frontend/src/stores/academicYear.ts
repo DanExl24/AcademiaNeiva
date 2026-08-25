@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import axios from 'axios'
+import { academicService } from '../services/academicService'
 
 export interface AcademicYear {
   id_anio: number
@@ -23,13 +23,12 @@ export const useAcademicYearStore = defineStore('academicYear', () => {
   const isClosedYear = computed(() => selectedYear.value ? (selectedYear.value.estado === 'CERRADO' || selectedYear.value.estado === 'INACTIVO') : false)
   const isReadonlyYear = computed(() => isClosedYear.value)
 
-  const loadYearsForSchool = async (schoolId: number, token?: string) => {
+  const loadYearsForSchool = async (schoolId: number, _token?: string) => {
     if (!schoolId) return
     loading.value = true
     try {
-      const headers = token ? { Authorization: `Bearer ${token}` } : {}
-      const res = await axios.get(`/api/academic-admin/settings/${schoolId}?keys=years`, { headers })
-      const years: AcademicYear[] = (res.data.academicYears || []).map((y: any) => ({
+      const res = await academicService.getSettings(schoolId, { keys: 'years' })
+      const years: AcademicYear[] = (res.academicYears || []).map((y: any) => ({
         ...y,
         id_anio: y.id_anio ?? y.id_año
       }))
@@ -42,7 +41,7 @@ export const useAcademicYearStore = defineStore('academicYear', () => {
       if (currentSaved && exists) {
         // Keep user selection
       } else {
-        const activeYearId = res.data.activeYear ? (res.data.activeYear.id_anio ?? res.data.activeYear.id_año) : null
+        const activeYearId = res.activeYear ? (res.activeYear.id_anio ?? res.activeYear.id_año) : null
         const activeExists = activeYearId ? years.some(y => y.id_anio === activeYearId) : false
 
         if (activeYearId && activeExists) {
@@ -57,6 +56,7 @@ export const useAcademicYearStore = defineStore('academicYear', () => {
       loading.value = false
     }
   }
+
 
   const setSelectedYearId = (id: number) => {
     selectedYearId.value = id

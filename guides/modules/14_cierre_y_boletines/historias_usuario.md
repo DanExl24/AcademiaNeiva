@@ -1,110 +1,55 @@
-# Historias de Usuario — Cierre y Boletines
+# Historias de Usuario — Cierre de Periodo y Generación de Boletines
 
-Este documento contiene las historias de usuario implementadas para el módulo de Cierre y Boletines de AcademiaNeiva.
-
----
-
-# HU-BOL-001: Ejecutar Cierre de Periodo por Materia (Docente)
-
-## Historia
-**Como** docente del curso  
-**Quiero** hacer clic en "Cerrar Periodo" en mi asignatura asignada  
-**Para** calcular los promedios definitivos de los estudiantes y bloquear mi planilla frente a cambios futuros.
-
-## Criterios de Aceptación
-- El backend calcula el promedio ponderado de las actividades evaluativas registradas para cada estudiante.
-- Asocia cada nota promedio final a la escala valorativa institucional (`BAJO`, `BASICO`, `ALTO`, `SUPERIOR`).
-- Contabiliza las inasistencias no justificadas (`AUSENTE`) y concatena la observación de tipo `ACADEMICA` obligatoria.
-- Guarda el resultado en `resultado_academico` e inserta un registro con estado `CERRADO` en `cierre_materia`.
-
-## Detalles Técnicos
-- **Prioridad:** Alta
-- **Roles involucrados:** Docente
-- **Reglas de negocio relacionadas:** RN-CIE-001, RN-CIE-002
-- **Endpoints relacionados:** 
-  - `POST /api/teacher/close-period`
-  - `GET /api/teacher/closure-status/:detailGradeId/:periodId`
-- **Componentes frontend relacionados:** 
-  - [TeacherClosure.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/teacher/TeacherClosure.vue)
-- **Controllers/Services relacionados:** 
-  - [gradingController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/gradingController.ts) (`closePeriodForTeacher`, `getClosureStatus`)
+Este documento detalla las Historias de Usuario del módulo de **Cierre de Periodo y Boletines** de AcademiaNeiva.
 
 ---
 
-# HU-BOL-002: Ejecutar Cierre Institucional del Periodo (Directivo)
+## 1. Cierre de Asignatura y Validación de Evidencias
 
-## Historia
-**Como** directivo del colegio  
-**Quiero** realizar el cierre e institucionalizar el periodo escolar  
-**Para** congelar las calificaciones de todo el colegio y autorizar la impresión de boletines.
-
-## Criterios de Aceptación
-- El directivo abre la vista de cierres institucionales.
-- El sistema verifica que el 100% de las asignaturas en `detalle_grados` para el periodo evaluado tengan su estado en `CERRADO`.
-- Si el 100% de las materias están cerradas, permite presionar "Aprobar Periodo", cambiando el estado del periodo en `periodo_academico` a `CERRADO`.
-- Si existen materias pendientes, bloquea la acción y lista los docentes/cursos que faltan por consolidar.
-
-## Detalles Técnicos
-- **Prioridad:** Alta
-- **Roles involucrados:** Directivo
-- **Reglas de negocio relacionadas:** RN-CIE-002
-- **Endpoints relacionados:** 
-  - `POST /api/academic-admin/settings/periods/:id/close`
-  - `POST /api/academic-admin/settings/periods/:id/approve`
-- **Componentes frontend relacionados:** 
-  - [PeriodClosure.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/PeriodClosure.vue)
-- **Controllers/Services relacionados:** 
-  - [academicAdminController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdminController.ts) (`closeAcademicPeriod`, `approveAcademicPeriod`)
+### HU-CIE-001: Cierre de Materia por el Docente con Justificación de Evidencias
+- **Como:** Docente Titular de Asignatura.
+- **Quiero:** Formalizar el cierre de calificaciones de mi materia para el periodo escolar.
+- **Para:** Consolidar los promedios definitivos y entregar los resultados a la coordinación académica.
+- **Criterios de Aceptación:**
+  1. El sistema valida que no existan estudiantes activos con actividades evaluativas o criterios pendientes de calificar.
+  2. Si existen evidencias de DBA planificadas que no fueron evaluadas, el sistema despliega una alerta exigiendo ingresar la justificación pedagógica (`justificacion_evidencias_pendientes`).
+  3. Al confirmar el cierre, la materia queda en estado `CERRADO` en `cierre_materia` con el ID del docente y la marca de tiempo.
+  4. Los campos de calificación de la materia quedan deshabilitados en la planilla del docente.
 
 ---
 
-# HU-BOL-003: Generar Boletín Individual en PDF
+## 2. Cierre Institucional y Gestión Directiva
 
-## Historia
-**Como** estudiante, padre de familia o directivo  
-**Quiero** descargar el boletín de calificaciones de un periodo cerrado en formato PDF  
-**Para** obtener el informe oficial impreso del rendimiento escolar.
-
-## Criterios de Aceptación
-- El botón de descarga solo se habilita si el periodo académico se encuentra en estado `CERRADO` institucionalmente.
-- El PDF incluye el escudo del colegio, los colores de branding, el promedio general, la lista de asignaturas con sus notas numéricas y descriptivas, el conteo de inasistencias y las observaciones académicas de los docentes.
-- Alumnos con matrícula `CANCELADA` no pueden generar boletines.
-
-## Detalles Técnicos
-- **Prioridad:** Alta
-- **Roles involucrados:** Estudiante, Padre de Familia, Directivo
-- **Reglas de negocio relacionadas:** RN-CIE-003, RN-CIE-004
-- **Endpoints relacionados:** 
-  - `GET /api/boletines/student/:id_estudiante/:id_periodo`
-- **Componentes frontend relacionados:** 
-  - [StudentBoletinView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/student/StudentBoletinView.vue)
-  - [ParentBoletinView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/parent/ParentBoletinView.vue)
-- **Controllers/Services relacionados:** 
-  - [boletinController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/boletinController.ts) (`getStudentBoletin`)
+### HU-CIE-002: Aprobación y Cierre Institucional del Periodo
+- **Como:** Directivo Escolar (Coordinador Académico / Rector).
+- **Quiero:** Auditar el avance de cierres de todas las materias y realizar el cierre institucional del periodo.
+- **Para:** Finalizar oficialmente el periodo lectivo y habilitar la expedición de boletines.
+- **Criterios de Aceptación:**
+  1. La consola directiva (`PeriodClosure.vue`) expone una barra de progreso que totaliza las asignaturas abiertas y cerradas.
+  2. El botón de aprobación institucional se habilita únicamente cuando el 100% de las asignaturas activas en `detalle_grados` están cerradas.
+  3. Al confirmarse, el sistema actualiza `periodo_academico.estado = 'CERRADO'`.
 
 ---
 
-# HU-BOL-004: Generar Boletines en Bloque por Grupo
+### HU-CIE-003: Reapertura Quirúrgica de Asignatura Cerrada
+- **Como:** Directivo Escolar.
+- **Quiero:** Reabrir una asignatura específica cerrada por un docente ante una solicitud de corrección de notas.
+- **Para:** Permitir que el docente corrija calificaciones sin necesidad de reabrir el periodo a nivel institucional.
+- **Criterios de Aceptación:**
+  1. El directivo selecciona la asignatura en la consola de cierres y presiona "Reabrir Materia".
+  2. El sistema elimina el registro de `cierre_materia` correspondiente.
+  3. La planilla del docente queda nuevamente habilitada para editar y guardar calificaciones.
 
-## Historia
-**Como** directivo del colegio  
-**Quiero** procesar la impresión masiva de boletines de todo un grupo de clase  
-**Para** descargar un solo documento PDF comprimido o unificado con los boletines de todos los alumnos activos del salón.
+---
 
-## Criterios de Aceptación
-- El directivo selecciona el grupo y el periodo.
-- El backend valida que el periodo esté cerrado y compila los boletines de los alumnos en estado de matrícula `ACTIVA`.
-- Omite de la generación a los estudiantes retirados o expulsados.
-- Retorna la descarga del archivo de boletines del grupo.
+## 3. Emisión y Consulta de Boletines
 
-## Detalles Técnicos
-- **Prioridad:** Alta
-- **Roles involucrados:** Directivo
-- **Reglas de negocio relacionadas:** RN-CIE-003, RN-CIE-004
-- **Endpoints relacionados:** 
-  - `GET /api/boletines/grade/:id_grupo/:id_periodo`
-  - `GET /api/boletines/validate/:id_colegio/:id_periodo`
-- **Componentes frontend relacionados:** 
-  - [BoletinGenerator.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/BoletinGenerator.vue)
-- **Controllers/Services relacionados:** 
-  - [boletinController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/boletinController.ts) (`getGradeBoletines`, `validatePeriodClosed`)
+### HU-CIE-004: Generación de Boletín Oficial con Ranking y Firmas Digitales
+- **Como:** Directivo, Estudiante o Acudiente.
+- **Quiero:** Generar y descargar el boletín de calificaciones en formato PDF del periodo.
+- **Para:** Obtener el informe oficial de rendimiento escolar y puesto de mérito académico.
+- **Criterios de Aceptación:**
+  1. El sistema valida que el periodo esté en estado `CERRADO`.
+  2. El boletín estructura las notas históricas de los trimestres cursados, inasistencias injustificadas, desempeños y observaciones formativas.
+  3. Calcula el promedio general y el puesto del alumno en su grupo (`puesto` y `total_grupo`) considerando únicamente alumnos con matrícula activa.
+  4. Incorpora el escudo institucional, datos DANE, calendario escolar y las firmas del Titular de grupo y Rector.

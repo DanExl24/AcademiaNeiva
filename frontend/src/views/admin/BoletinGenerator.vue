@@ -127,7 +127,9 @@
 import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { useAuthStore } from '../../stores/auth'
 import { useAcademicYearStore } from '../../stores/academicYear'
-import { API_BASE_URL } from '../../config/api'
+import { boletinService } from '../../services/boletinService'
+import { academicService } from '../../services/academicService'
+import { studentService } from '../../services/studentService'
 import BoletinPreview from '../../components/boletines/BoletinPreview.vue'
 import html2pdf from 'html2pdf.js'
 import { getCourseDisplayName } from '../../utils/courseHelper'
@@ -163,46 +165,37 @@ const allStudents = ref<any[]>([])
 
 const fetchInitialData = async () => {
   try {
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    
     const schoolId = auth.user?.schoolId || 1
-    const yearIdParam = yearStore.selectedYearId ? `?id_anio=${yearStore.selectedYearId}&keys=periods,scales` : '?keys=periods,scales'
-    const studentYearParam = yearStore.selectedYearId ? `?estado=ACTIVO&yearId=${yearStore.selectedYearId}` : '?estado=ACTIVO'
-    const [settingsRes, gradesRes, studentsRes] = await Promise.all([
-      fetch(`${API_BASE_URL}/api/academic-admin/settings/${schoolId}${yearIdParam}`, { headers }),
-      fetch(`${API_BASE_URL}/api/academic-admin/grades/${schoolId}${yearIdParam}`, { headers }),
-      fetch(`${API_BASE_URL}/api/student/colegio/${schoolId}${studentYearParam}`, { headers })
+    const yearParams = yearStore.selectedYearId ? { id_anio: yearStore.selectedYearId, yearId: yearStore.selectedYearId } : {}
+    
+    const [settingsData, gradesData, studentsData] = await Promise.all([
+      academicService.getSettings(schoolId, { ...yearParams, keys: 'periods,scales' }),
+      academicService.getGradesAndGroups(schoolId, yearParams),
+      studentService.getStudentsBySchool(schoolId, { estado: 'ACTIVO', ...yearParams })
     ])
     
-    if (settingsRes.ok && gradesRes.ok) {
-      const settingsData = await settingsRes.json()
-      const gradesData = await gradesRes.json()
-      
-      // Use closed periods strictly for selected year
-      let allP = settingsData.periods.filter((p: any) => p.estado === 'CERRADO')
-      if (yearStore.selectedYearId) {
-        allP = allP.filter((p: any) => p.id_anio === yearStore.selectedYearId)
-      }
-      periodos.value = allP
-      levels.value = gradesData.niveles
-      groups.value = gradesData.grupos
+    // Use closed periods strictly for selected year
+    let allP = (settingsData.periods || []).filter((p: any) => p.estado === 'CERRADO')
+    if (yearStore.selectedYearId) {
+      allP = allP.filter((p: any) => p.id_anio === yearStore.selectedYearId)
     }
+    periodos.value = allP
+    levels.value = gradesData.niveles || []
+    groups.value = gradesData.grupos || []
 
     // Build set of groups that have enrolled active students
-    if (studentsRes.ok) {
-      allStudents.value = await studentsRes.json()
-      const gSet = new Set<number>()
-      for (const s of allStudents.value) {
-        if (
-          s.id_grupo &&
-          s.matricula_estado !== 'TRASLADADA' &&
-          (s.matricula_estado === 'ACTIVA' || s.estado_vigente === 'ACTIVO' || s.estado === 'ACTIVO')
-        ) {
-          gSet.add(s.id_grupo)
-        }
+    allStudents.value = studentsData || []
+    const gSet = new Set<number>()
+    for (const s of allStudents.value) {
+      if (
+        s.id_grupo &&
+        s.matricula_estado !== 'TRASLADADA' &&
+        (s.matricula_estado === 'ACTIVA' || s.estado_vigente === 'ACTIVO' || s.estado === 'ACTIVO')
+      ) {
+        gSet.add(s.id_grupo)
       }
-      groupsWithStudents.value = gSet
     }
+    groupsWithStudents.value = gSet
   } catch (err) {
     console.error("Error al cargar datos iniciales:", err)
     error.value = "Hubo un problema de conexión para obtener listas."
@@ -242,76 +235,32 @@ const collectPreviewRefs = (el: any, index: number) => {
 }
 
 const fetchBoletinData = async () => {
-  console.log('[fetchBoletinData] Start fetching boletines:', {
-    selectedPeriodo: selectedPeriodo.value,
-    selectedLevel: selectedLevel.value,
-    selectedGroup: selectedGroup.value,
-    selectedStudent: selectedStudent.value
-  })
   error.value = ''
   isLoading.value = true
   boletinesData.value = []
   previewRefs.value = []
 
   try {
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    
     // Si hay un estudiante específico, trae solo ese.
     if (selectedStudent.value) {
-      const url = `${API_BASE_URL}/api/boletines/student/${selectedStudent.value}/${selectedPeriodo.value}`
-      console.log('[fetchBoletinData] Fetching student bulletin:', url)
-      const res = await fetch(url, { headers })
-      const contentType = res.headers.get('content-type') || ''
-      if (!res.ok) {
-        let errStr = `Error HTTP ${res.status}`
-        if (contentType.includes('application/json')) {
-          const d = await res.json()
-          errStr = d.error || errStr
-        } else {
-          console.error('[fetchBoletinData] Non-JSON error:', await res.text())
-          errStr = `El servidor backend devolvió un error (HTTP ${res.status}).`
-        }
-        throw new Error(errStr)
-      }
-      const data = await res.json()
-      console.log('[fetchBoletinData] Student bulletin loaded successfully:', data)
+      const data = await boletinService.getStudentBoletin(selectedStudent.value, selectedPeriodo.value)
       boletinesData.value.push(data)
     } else {
-      const url = `${API_BASE_URL}/api/boletines/grade/${selectedGroup.value}/${selectedPeriodo.value}`
-      console.log('[fetchBoletinData] Fetching mass group bulletins:', url)
-      const groupRes = await fetch(url, { headers })
-      const contentType = groupRes.headers.get('content-type') || ''
-      if (!groupRes.ok) {
-         let errStr = `Error HTTP ${groupRes.status}`
-         if (contentType.includes('application/json')) {
-           const d = await groupRes.json()
-           errStr = d.error || errStr
-         } else {
-           console.error('[fetchBoletinData] Non-JSON group error:', await groupRes.text())
-           errStr = `El servidor backend devolvió un error (HTTP ${groupRes.status}).`
-         }
-         throw new Error(errStr)
-      }
-      const groupData = await groupRes.json()
+      const groupData = await boletinService.getGroupBoletin(selectedGroup.value, selectedPeriodo.value)
       const ids = groupData.students || []
-      console.log('[fetchBoletinData] Student IDs to generate:', ids)
       
       for (const id of ids) {
-        const sUrl = `${API_BASE_URL}/api/boletines/student/${id}/${selectedPeriodo.value}`
-        console.log('[fetchBoletinData] Fetching individual student in loop:', sUrl)
-        const sRes = await fetch(sUrl, { headers })
-        if (sRes.ok) {
-          const sData = await sRes.json()
-          console.log(`[fetchBoletinData] Loaded student ${id} success:`, sData)
+        try {
+          const sData = await boletinService.getStudentBoletin(id, selectedPeriodo.value)
           boletinesData.value.push(sData)
-        } else {
-          console.error(`[fetchBoletinData] Failed to load student ${id}:`, sRes.status)
+        } catch (errId) {
+          console.error(`[fetchBoletinData] Failed to load student ${id}:`, errId)
         }
       }
     }
   } catch (err: any) {
     console.error('[fetchBoletinData] Caught error:', err)
-    error.value = err.message || 'Error al conectar con el servidor'
+    error.value = err.response?.data?.error || err.message || 'Error al conectar con el servidor'
   } finally {
     isLoading.value = false
   }

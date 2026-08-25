@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import axios from 'axios'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
+import { enrollmentService } from '../../services/enrollmentService'
 import { useNotificationStore } from '../../stores/notifications'
 import { isValidEmail } from '../../utils/validationHelper'
 import { 
@@ -8,17 +9,18 @@ import {
   ArrowLeft, 
   Send, 
   CheckCircle2, 
-  FileText,
-  Camera,
-  AlertCircle,
-  Calendar,
-  CalendarDays,
-  ShieldCheck,
-  Timer,
-  RefreshCw,
-  Phone
+  FileText, 
+  Camera, 
+  AlertCircle, 
+  Calendar, 
+  CalendarDays, 
+  ShieldCheck, 
+  Timer, 
+  RefreshCw, 
+  Phone 
 } from 'lucide-vue-next'
 
+const route = useRoute()
 const step = ref(1)
 const schoolId = ref('')
 const level = ref('')
@@ -51,8 +53,8 @@ const loadingGrados = ref(false)
 
 const fetchInitialData = async () => {
   try {
-    const resSchools = await axios.get('/api/matriculas')
-    schools.value = resSchools.data
+    const data = await enrollmentService.getAllSchools()
+    schools.value = data
   } catch (error) {
     console.error('Error fetching schools:', error)
   }
@@ -62,8 +64,8 @@ const fetchGrados = async () => {
   if (!schoolId.value) return
   loadingGrados.value = true
   try {
-    const response = await axios.get(`/api/grados/available/${schoolId.value}`)
-    allGrados.value = response.data
+    const data = await enrollmentService.getAvailableGrades(schoolId.value)
+    allGrados.value = data
   } catch (error) {
     console.error('Error fetching grades:', error)
   } finally {
@@ -71,10 +73,6 @@ const fetchGrados = async () => {
   }
 }
 
-import { onMounted, watch } from 'vue'
-import { useRoute } from 'vue-router'
-
-const route = useRoute()
 const isExtraordinaryToken = ref(false)
 const extraordinaryTokenValue = ref<string | null>(null)
 
@@ -83,15 +81,15 @@ onMounted(async () => {
   const token = (route.query.token || route.params.token) as string
   if (token) {
     try {
-      const res = await axios.get(`/api/matriculas/public/by-token/${token}`)
-      if (res.data && res.data.tipo === 'EXTRAORDINARIA') {
+      const res = await enrollmentService.getByToken(token)
+      if (res && res.tipo === 'EXTRAORDINARIA') {
         isExtraordinaryToken.value = true
         extraordinaryTokenValue.value = token
-        if (res.data.correo_padre) {
-          formData.value.parentEmail = res.data.correo_padre
+        if (res.correo_padre) {
+          formData.value.parentEmail = res.correo_padre
         }
-        if (res.data.id_colegio) {
-          schoolId.value = String(res.data.id_colegio)
+        if (res.id_colegio) {
+          schoolId.value = String(res.id_colegio)
         }
       }
     } catch (e) {
@@ -112,9 +110,9 @@ const fetchEnrollmentConfig = async () => {
   }
   loadingConfig.value = true
   try {
-    const res = await axios.get(`/api/matriculas/school/${schoolId.value}/enrollment-config`)
-    enrollmentConfig.value = res.data.config
-    yearLabel.value = res.data.yearLabel
+    const res = await enrollmentService.getSchoolEnrollmentConfig(schoolId.value)
+    enrollmentConfig.value = res.config
+    yearLabel.value = res.yearLabel
   } catch (error) {
     console.error('Error fetching public enrollment config:', error)
     enrollmentConfig.value = null
@@ -123,6 +121,7 @@ const fetchEnrollmentConfig = async () => {
     loadingConfig.value = false
   }
 }
+
 
 const formattedFechaInicio = computed(() => {
   if (!enrollmentConfig.value?.fecha_inicio) return 'No configurada'
@@ -359,12 +358,13 @@ const sendVerificationCode = async () => {
   }
   sendingCode.value = true
   try {
-    const res = await axios.post('/api/matriculas/send-email-code', {
-      email: formData.value.parentEmail
+    const res = await enrollmentService.sendEmailCode({
+      email: formData.value.parentEmail,
+      schoolId: schoolId.value
     })
     codeSent.value = true
     startTimer()
-    notify.addNotification(res.data.message || 'Código de 6 dígitos enviado a tu correo.', 'success')
+    notify.addNotification(res.message || 'Código de 6 dígitos enviado a tu correo.', 'success')
   } catch (error: any) {
     const msg = error.response?.data?.error || 'Error al enviar el código de verificación.'
     notify.addNotification(msg, 'error')
@@ -392,11 +392,12 @@ const verifyAndSubmit = async () => {
   }
   verifyingCode.value = true
   try {
-    const res = await axios.post('/api/matriculas/verify-email-code', {
+    const res = await enrollmentService.verifyEmailCode({
       email: formData.value.parentEmail,
-      code: otpCodeInput.value.trim()
+      code: otpCodeInput.value.trim(),
+      schoolId: schoolId.value
     })
-    if (res.data.verified) {
+    if (res.verified) {
       isEmailVerified.value = true
       if (timerInterval) clearInterval(timerInterval)
       isPhoneStep.value = true
@@ -483,17 +484,14 @@ const submitEnrollment = async () => {
       }
     }
 
-    await axios.post('/api/matriculas/submit', formDataPayload, {
-      headers: {
-        'Content-Type': 'multipart/form-data'
-      }
-    })
+    await enrollmentService.submitEnrollment(formDataPayload)
 
     notify.addNotification('¡Matrícula radicada exitosamente! Los datos personales se solicitarán una vez validados estos documentos.', 'success')
     setTimeout(() => {
       window.location.href = '/'
     }, 1500)
   } catch (error: any) {
+
     console.error('Error al enviar:', error)
     const errMessage = error.response?.data?.error || 'Hubo un error al enviar el formulario. Por favor intenta de nuevo.'
     notify.addNotification(errMessage, 'error')

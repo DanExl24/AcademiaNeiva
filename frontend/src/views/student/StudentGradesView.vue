@@ -2,19 +2,21 @@
 import { ref, onMounted, watch, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
-import axios from 'axios'
+import { studentService } from '../../services/studentService'
 import { 
   Calendar, 
   TrendingUp, 
   AlertCircle, 
-  ChevronRight,
-  GraduationCap,
-  Award,
-  BookOpenCheck
+  ChevronRight, 
+  GraduationCap, 
+  Award, 
+  BookOpenCheck 
 } from 'lucide-vue-next'
 
 import { useAcademicYearStore } from '../../stores/academicYear'
 import NoAcademicRecordsBanner from '../../components/NoAcademicRecordsBanner.vue'
+import DataTable from '../../components/ui/DataTable.vue'
+import SkeletonTable from '../../components/feedback/SkeletonTable.vue'
 
 const auth = useAuthStore()
 const yearStore = useAcademicYearStore()
@@ -56,8 +58,8 @@ const fetchStudentId = async () => {
   try {
     const userId = auth.isMonitoring ? auth.monitoringUser?.id : auth.user?.id
     if (!userId) return
-    const res = await axios.get(`/api/student/user-id/${userId}`)
-    studentId.value = res.data.id_estudiante
+    const res = await studentService.getByUserId(userId)
+    studentId.value = res.id_estudiante
   } catch (err) {
     console.error("Error fetching student ID:", err)
   }
@@ -67,11 +69,11 @@ const fetchInitialData = async () => {
   if (!studentId.value) return
   try {
     const [yearsRes, infoRes] = await Promise.all([
-      axios.get(`/api/student/years/${studentId.value}`),
-      axios.get(`/api/student/info/${studentId.value}`)
+      studentService.getYears(studentId.value),
+      studentService.getInfo(studentId.value)
     ])
-    years.value = yearsRes.data
-    studentInfo.value = infoRes.data
+    years.value = yearsRes
+    studentInfo.value = infoRes
     
     if (!selectedYear.value) {
       if (yearStore.selectedYearId) {
@@ -94,8 +96,8 @@ const fetchInitialData = async () => {
 const fetchPeriods = async () => {
   if (!studentId.value || !selectedYear.value) return
   try {
-    const res = await axios.get(`/api/student/all-periods/${studentId.value}/${selectedYear.value}`)
-    periods.value = (res.data || []).filter((p: any) => p.estado !== 'PENDIENTE')
+    const res = await studentService.getAllPeriods(studentId.value, selectedYear.value)
+    periods.value = (res || []).filter((p: any) => p.estado !== 'PENDIENTE')
     if (periods.value.length > 0) {
       selectedPeriod.value = periods.value[periods.value.length - 1].id_periodo
     } else {
@@ -114,8 +116,8 @@ const fetchGrades = async () => {
   if (!studentId.value || !selectedPeriod.value) return
   loading.value = true
   try {
-    const res = await axios.get(`/api/student/grades/${studentId.value}/${selectedPeriod.value}`)
-    academicData.value = res.data
+    const res = await studentService.getGrades(studentId.value, selectedPeriod.value)
+    academicData.value = res
   } catch (err) {
     console.error("Error fetching grades:", err)
     academicData.value = null
@@ -123,6 +125,7 @@ const fetchGrades = async () => {
     loading.value = false
   }
 }
+
 
 const openDetails = (subject: any) => {
   // Navigate to the subview instead of modal
@@ -217,75 +220,66 @@ const getPerformanceColor = (level: string | null | undefined) => {
     </div>
 
     <!-- Loading State -->
-    <div v-if="loading" class="flex flex-col items-center justify-center py-24 bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm">
-      <div class="w-12 h-12 border-4 border-indigo-600/20 border-t-indigo-600 rounded-full animate-spin"></div>
-      <p class="mt-4 text-slate-500 dark:text-slate-400 font-medium animate-pulse">Cargando tus notas...</p>
-    </div>
+    <SkeletonTable v-if="loading" :rows="5" :cols="4" />
 
     <!-- Empty State -->
     <NoAcademicRecordsBanner v-else-if="!periods || periods.length === 0 || !academicData" :year-label="selectedYearCalendar" />
 
     <!-- Grades Table -->
-    <div v-else class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden transition-colors">
-      <div class="overflow-x-auto">
-        <table class="w-full text-left border-collapse">
-          <thead>
-            <tr class="bg-slate-50/50 dark:bg-slate-800/50">
-              <th class="px-8 py-5 text-[11px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Materia</th>
-              <th class="px-8 py-5 text-[11px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Docente</th>
-              <th class="px-8 py-5 text-[11px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 text-center">Calificación</th>
-              <th class="px-8 py-5 text-[11px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Desempeño</th>
-              <th class="px-6 py-5"></th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
-            <tr 
-              v-for="(item, idx) in academicData.grades" 
-              :key="idx"
-              @click="openDetails(item)"
-              class="group hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors cursor-pointer"
+    <DataTable v-else>
+      <template #header>
+        <tr>
+          <th class="py-4 px-6">Materia</th>
+          <th class="py-4 px-6">Docente</th>
+          <th class="py-4 px-6 text-center">Calificación</th>
+          <th class="py-4 px-6">Desempeño</th>
+          <th class="py-4 px-6"></th>
+        </tr>
+      </template>
+      <tr 
+        v-for="(item, idx) in academicData.grades" 
+        :key="idx"
+        @click="openDetails(item)"
+        class="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors cursor-pointer group"
+      >
+        <td class="py-5 px-6">
+          <div class="flex items-center gap-3">
+            <div class="h-10 w-10 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-black group-hover:scale-110 transition-transform">
+              {{ item.materia.charAt(0) }}
+            </div>
+            <span class="font-bold text-slate-800 dark:text-slate-200">{{ item.materia }}</span>
+          </div>
+        </td>
+        <td class="py-5 px-6">
+          <span class="text-sm font-medium text-slate-500 dark:text-slate-400">{{ item.docente }}</span>
+        </td>
+        <td class="py-5 px-6">
+          <div class="flex justify-center">
+            <div 
+              class="h-10 w-10 rounded-xl flex items-center justify-center text-xs font-black shadow-sm"
+              :class="item.calificacion === null || item.calificacion === undefined
+                ? 'bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500'
+                : (item.calificacion < 3.0 ? 'bg-rose-50 text-rose-600 dark:bg-rose-950/30 dark:text-rose-400' : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400')"
             >
-              <td class="px-8 py-6">
-                <div class="flex items-center gap-3">
-                  <div class="h-10 w-10 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-black group-hover:scale-110 transition-transform">
-                    {{ item.materia.charAt(0) }}
-                  </div>
-                  <span class="font-bold text-slate-800 dark:text-slate-200">{{ item.materia }}</span>
-                </div>
-              </td>
-              <td class="px-8 py-6">
-                <span class="text-sm font-medium text-slate-500 dark:text-slate-400">{{ item.docente }}</span>
-              </td>
-              <td class="px-8 py-6">
-                <div class="flex justify-center">
-                  <div 
-                    class="h-12 w-12 rounded-2xl flex items-center justify-center text-xs font-black shadow-sm"
-                    :class="item.calificacion === null || item.calificacion === undefined
-                      ? 'bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500'
-                      : (item.calificacion < 3.0 ? 'bg-rose-50 text-rose-600 dark:bg-rose-950/30 dark:text-rose-400' : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400')"
-                  >
-                    {{ item.calificacion !== null && item.calificacion !== undefined ? item.calificacion : 'N/A' }}
-                  </div>
-                </div>
-              </td>
-              <td class="px-8 py-6">
-                <span 
-                  class="inline-flex items-center px-3 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider border"
-                  :class="getPerformanceColor(item.desempeno)"
-                >
-                  {{ item.desempeno || 'SIN NOTAS AÚN' }}
-                </span>
-              </td>
-              <td class="px-6 py-6 text-right">
-                <div class="p-2 text-slate-300 group-hover:text-indigo-500 transition-colors">
-                  <ChevronRight :size="20" />
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
+              {{ item.calificacion !== null && item.calificacion !== undefined ? item.calificacion : 'N/A' }}
+            </div>
+          </div>
+        </td>
+        <td class="py-5 px-6">
+          <span 
+            class="inline-flex items-center px-3 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider border"
+            :class="getPerformanceColor(item.desempeno)"
+          >
+            {{ item.desempeno || 'SIN NOTAS AÚN' }}
+          </span>
+        </td>
+        <td class="py-5 px-6 text-right">
+          <div class="p-2 text-slate-300 group-hover:text-indigo-500 transition-colors inline-block">
+            <ChevronRight :size="18" />
+          </div>
+        </td>
+      </tr>
+    </DataTable>
 
     <!-- Help Alert -->
     <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-900/50 p-6 rounded-3xl flex gap-4">

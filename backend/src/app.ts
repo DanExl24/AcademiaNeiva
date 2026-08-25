@@ -63,6 +63,8 @@ app.use(helmet({
 const defaultAllowedOrigins = [
   "http://localhost:5173",
   "http://localhost:3000",
+  "http://localhost:3001",
+  "http://localhost:3002",
   "https://academianeiva.adsoproject.dev",
   "https://api-academianeiva.adsoproject.dev"
 ];
@@ -71,32 +73,54 @@ if (process.env.FRONTEND_URL) {
 }
 
 const envOrigins = process.env.ALLOWED_ORIGINS 
-  ? process.env.ALLOWED_ORIGINS.split(",").map(o => o.trim()) 
+  ? process.env.ALLOWED_ORIGINS.split(",").map(o => o.trim().replace(/\/$/, '')) 
   : [];
 const allowedOrigins = Array.from(new Set([...defaultAllowedOrigins, ...envOrigins]));
 
-app.use(cors({
+const corsOptions: cors.CorsOptions = {
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error("Not allowed by CORS"));
+    if (!origin) return callback(null, true);
+    const cleanOrigin = origin.replace(/\/$/, '');
+    if (
+      allowedOrigins.includes(cleanOrigin) ||
+      cleanOrigin.endsWith('.adsoproject.dev') ||
+      cleanOrigin.includes('localhost') ||
+      cleanOrigin.includes('127.0.0.1')
+    ) {
+      return callback(null, true);
     }
+    return callback(null, false);
   },
-  credentials: true
-}));
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'x-school-id',
+    'x-academic-year-id',
+    'X-Monitoring-Mode',
+    'X-Requested-With',
+    'Accept',
+    'Origin'
+  ],
+  exposedHeaders: ['x-total-count'],
+  optionsSuccessStatus: 200
+};
+
+app.use(cors(corsOptions));
+
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // Apply rate limiting
 app.use(globalLimiter);
-app.use("/api/auth/login", loginLimiter);
-app.use("/api/auth/student-login", loginLimiter);
-app.use("/api/matriculas/submit", enrollmentLimiter);
+app.use(["/api/auth/login", "/auth/login"], loginLimiter);
+app.use(["/api/auth/student-login", "/auth/student-login"], loginLimiter);
+app.use(["/api/matriculas/submit", "/matriculas/submit"], enrollmentLimiter);
 
 // Serve uploaded files (public access allowed for logos/images, authentication required for documents)
-app.use("/uploads", (req, res, next) => {
+app.use(["/api/uploads", "/uploads"], (req, res, next) => {
   const fileExt = path.extname(req.path).toLowerCase();
   const isPublicImage = [".png", ".jpg", ".jpeg", ".webp", ".svg"].includes(fileExt) || req.path.includes("escudo");
 
@@ -112,22 +136,23 @@ app.use("/uploads", (req, res, next) => {
   });
 }, express.static(path.join(__dirname, "../uploads")));
 
-app.use("/api/matriculas", matriculaRoutes);
-app.use("/api/grados", gradoRoutes);
-app.use("/api/auth", authRoutes);
-app.use("/api/teacher", teacherRoutes);
-app.use("/api/academic-admin", academicAdminRoutes);
-app.use("/api/boletines", boletinRoutes);
-app.use("/api/student", studentRoutes);
-app.use("/api/admin", adminGeneralRoutes);
-app.use("/api/admin", dbaRoutes);
-app.use("/api/support", supportRoutes);
-app.use("/api/reingreso", reingresoRoutes);
-app.use("/api/parents", parentRoutes);
-app.use("/api/traslados", trasladoRoutes);
+app.use(["/api/matriculas", "/matriculas"], matriculaRoutes);
+app.use(["/api/grados", "/grados"], gradoRoutes);
+app.use(["/api/auth", "/auth"], authRoutes);
+app.use(["/api/teacher", "/teacher"], teacherRoutes);
+app.use(["/api/academic-admin", "/academic-admin"], academicAdminRoutes);
+app.use(["/api/boletines", "/boletines"], boletinRoutes);
+app.use(["/api/student", "/student"], studentRoutes);
+app.use(["/api/admin", "/admin"], adminGeneralRoutes);
+app.use(["/api/admin", "/admin"], dbaRoutes);
+app.use(["/api/support", "/support"], supportRoutes);
+app.use(["/api/reingreso", "/reingreso"], reingresoRoutes);
+app.use(["/api/parents", "/parents"], parentRoutes);
+app.use(["/api/traslados", "/traslados"], trasladoRoutes);
 
-app.get("/", (req, res) => {
+app.get(["/", "/api"], (req, res) => {
   res.json({ message: "API TS funcionando segura" });
 });
+
 
 export default app;

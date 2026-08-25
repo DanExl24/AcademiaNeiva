@@ -2,8 +2,8 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
+import { authService } from '../../services/authService'
 import { GraduationCap, Building2, ArrowRight, CheckCircle2, ShieldCheck, LogOut } from 'lucide-vue-next'
-import axios from 'axios'
 
 interface UserSchool {
   id_colegio: number
@@ -23,8 +23,9 @@ const selectingSchoolId = ref<number | null>(null)
 const fetchSchools = async () => {
   loading.value = true
   try {
-    const res = await axios.get('/api/traslados/mis-vinculaciones')
-    const activeVinculaciones = (res.data || []).filter((v: any) => v.estado === 'ACTIVO')
+    const data = await authService.getMisVinculaciones()
+    const activeVinculaciones = (data || []).filter((v: any) => v.estado === 'ACTIVO')
+
     
     const uniqueMap = new Map<number, UserSchool>()
     activeVinculaciones.forEach((v: any) => {

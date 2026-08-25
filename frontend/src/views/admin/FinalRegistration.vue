@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import axios from 'axios'
-import { API_BASE_URL } from '../../config/api'
+import { enrollmentService } from '../../services/enrollmentService'
+import { academicService } from '../../services/academicService'
+import { authService } from '../../services/authService'
+import { API_BASE_URL } from '../../services/api'
 import { useNotificationStore } from '../../stores/notifications'
+
 import { sanitizeLettersOnly, sanitizeDocumentNumber } from '../../utils/validationHelper'
 import { 
   ArrowLeft,
@@ -71,17 +74,17 @@ const currentDoc = computed(() => {
 
 const fetchDetails = async () => {
   try {
-    const response = await axios.get(`/api/matriculas/${idMatricula}`)
-    matricula.value = response.data
+    const data = await enrollmentService.getDetails(idMatricula)
+    matricula.value = data
 
     // If explicit student is bound to enrollment (e.g. Reingreso / Ticket)
-    if (response.data.id_estudiante || response.data.tipo === 'REINGRESO') {
-      studentData.value.nombre = response.data.student_firstname || ''
-      studentData.value.apellido = response.data.student_lastname || ''
-      studentData.value.documento = response.data.student_document || ''
-      studentData.value.id_tipodocumento = Number(response.data.student_id_tipodocumento) || 2
-    } else if (response.data.renovacion?.student) {
-      const st = response.data.renovacion.student
+    if (data.id_estudiante || data.tipo === 'REINGRESO') {
+      studentData.value.nombre = data.student_firstname || ''
+      studentData.value.apellido = data.student_lastname || ''
+      studentData.value.documento = data.student_document || ''
+      studentData.value.id_tipodocumento = Number(data.student_id_tipodocumento) || 2
+    } else if (data.renovacion?.student) {
+      const st = data.renovacion.student
       selectedCandidate.value = st
       studentData.value.nombre = st.nombre
       studentData.value.apellido = st.apellido
@@ -90,19 +93,19 @@ const fetchDetails = async () => {
     }
 
     // Pre-populate parent data
-    if (response.data.parent_firstname) {
-      parentData.value.nombre = response.data.parent_firstname
-      parentData.value.apellido = response.data.parent_lastname
-      parentData.value.documento = response.data.parent_document
-      parentData.value.id_tipodocumento = Number(response.data.parent_id_tipodocumento) || 3
+    if (data.parent_firstname) {
+      parentData.value.nombre = data.parent_firstname
+      parentData.value.apellido = data.parent_lastname
+      parentData.value.documento = data.parent_document
+      parentData.value.id_tipodocumento = Number(data.parent_id_tipodocumento) || 3
     }
-    if (response.data.parent_telefono) {
-      parentData.value.telefono = response.data.parent_telefono
+    if (data.parent_telefono) {
+      parentData.value.telefono = data.parent_telefono
     }
 
     // Si el padre ya tiene cuenta de personal (docente/directivo), pre-poblar formulario
-    if (response.data.existing_parent_user) {
-      const eu = response.data.existing_parent_user
+    if (data.existing_parent_user) {
+      const eu = data.existing_parent_user
       parentData.value.nombre = eu.nombre
       parentData.value.apellido = eu.apellido
       if (eu.id_tipodocumento) {
@@ -132,11 +135,9 @@ const academicWarning = ref<any>(null)
 const checkAcademicWarningForStudent = async (doc: string) => {
   if (!doc || doc.trim().length < 4) return
   try {
-    const res = await axios.get(`${API_BASE_URL}/api/academic-admin/academic-tracking/check-warning`, {
-      params: { documento: doc.trim() }
-    })
-    if (res.data.exists && res.data.warning) {
-      academicWarning.value = res.data
+    const resData = await academicService.checkAcademicWarning({ documento: doc.trim() })
+    if (resData.exists && resData.warning) {
+      academicWarning.value = resData
     } else {
       academicWarning.value = null
     }
@@ -242,7 +243,7 @@ const handleFinalize = async () => {
       existing_parent_user_id: matricula.value?.existing_parent_user?.id_usuario || null,
       id_estudiante: resolvedIdEstudiante
     }
-    await axios.post(`/api/matriculas/finalize/${idMatricula}`, payload)
+    await enrollmentService.finalize(idMatricula, payload)
     notify.addNotification('Registro finalizado y matrícula activada exitosamente', 'success')
     setTimeout(() => {
       router.push('/dashboard/gestion-matriculas')
@@ -281,21 +282,21 @@ const verifyDocument = async () => {
   
   checkingDocument.value = true
   try {
-    const response = await axios.get(`/api/auth/check-document/${doc}`)
-    if (response.data.exists && response.data.user) {
-      docMatchInfo.value = response.data
+    const data = await authService.checkDocument(doc)
+    if (data.exists && data.user) {
+      docMatchInfo.value = data
       lastMatchedDoc = doc
-      parentData.value.nombre = response.data.user.nombre || ''
-      parentData.value.apellido = response.data.user.apellido || ''
-      if (response.data.user.id_tipodocumento) {
-        parentData.value.id_tipodocumento = Number(response.data.user.id_tipodocumento)
+      parentData.value.nombre = data.user.nombre || ''
+      parentData.value.apellido = data.user.apellido || ''
+      if (data.user.id_tipodocumento) {
+        parentData.value.id_tipodocumento = Number(data.user.id_tipodocumento)
       }
-      const roles: string[] = response.data.roles || []
+      const roles: string[] = data.roles || []
       const isStaff = roles.includes('docente') || roles.includes('directivo') || roles.includes('admin')
       if (isStaff) {
-        notify.addNotification(`Atención: Este documento pertenece a personal institucional (${response.data.role}: ${response.data.user.nombre} ${response.data.user.apellido}). Se le vinculará también el rol de acudiente.`, 'info')
+        notify.addNotification(`Atención: Este documento pertenece a personal institucional (${data.role}: ${data.user.nombre} ${data.user.apellido}). Se le vinculará también el rol de acudiente.`, 'info')
       } else {
-        notify.addNotification(`Usuario acudiente existente detectado: ${response.data.user.nombre} ${response.data.user.apellido}. Se asociará a esta nueva matrícula.`, 'info')
+        notify.addNotification(`Usuario acudiente existente detectado: ${data.user.nombre} ${data.user.apellido}. Se asociará a esta nueva matrícula.`, 'info')
       }
     } else {
       if (docMatchInfo.value) {
@@ -305,6 +306,7 @@ const verifyDocument = async () => {
       docMatchInfo.value = null
       lastMatchedDoc = ''
     }
+
   } catch (err) {
     if (docMatchInfo.value) {
       parentData.value.nombre = ''

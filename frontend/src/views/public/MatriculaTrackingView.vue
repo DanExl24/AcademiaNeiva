@@ -2,8 +2,9 @@
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ArrowLeft, Search, School, CheckCircle2, XCircle, AlertTriangle, FileText, RefreshCw } from 'lucide-vue-next'
-import axios from 'axios'
+import { enrollmentService } from '../../services/enrollmentService'
 import { useNotificationStore } from '../../stores/notifications'
+
 
 const route = useRoute()
 const notify = useNotificationStore()
@@ -73,8 +74,8 @@ const fetchTracking = async (tokenVal: string) => {
   try {
     loading.value = true
     searched.value = true
-    const response = await axios.get(`/api/matriculas/${tokenVal.trim()}`)
-    matricula.value = response.data
+    const data = await enrollmentService.getDetails(tokenVal.trim())
+    matricula.value = data
   } catch (error: any) {
     console.error('Error fetching tracking:', error)
     matricula.value = null
@@ -83,6 +84,7 @@ const fetchTracking = async (tokenVal: string) => {
     loading.value = false
   }
 }
+
 
 const getRenewalStatusLabel = (state?: string) => {
   switch (state) {

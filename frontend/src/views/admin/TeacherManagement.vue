@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import axios from 'axios'
+import { teacherService } from '../../services/teacherService'
+
 import {
   Briefcase,
   GraduationCap,
@@ -25,6 +26,16 @@ import { useAuthStore } from '../../stores/auth'
 import { useRouter } from 'vue-router'
 import { getCourseDisplayName } from '../../utils/courseHelper'
 import { useAcademicYearStore } from '../../stores/academicYear'
+import { useConfirm } from '../../composables/useConfirm'
+import { useToast } from '../../composables/useToast'
+import HierarchicalAssignmentList from '../../components/academico/HierarchicalAssignmentList.vue'
+
+const router = useRouter()
+const auth = useAuthStore()
+const yearStore = useAcademicYearStore()
+const { confirm } = useConfirm()
+const toast = useToast()
+
 
 interface DocumentType {
   id_tipodocumento: number
@@ -81,10 +92,8 @@ interface ConflictTeacher {
   apellido: string
 }
 
-const auth = useAuthStore()
-const router = useRouter()
-const yearStore = useAcademicYearStore()
 const schoolId = computed(() => Number(auth.user?.schoolId || 0))
+
 
 const loading = ref(true)
 const savingTeacher = ref(false)
@@ -426,15 +435,15 @@ const handleKeydown = (e: KeyboardEvent) => {
 const fetchData = async () => {
   const params: Record<string, any> = {}
   if (yearStore.selectedYearId) params.yearId = yearStore.selectedYearId
-  const response = await axios.get(`/api/academic-admin/teachers/${schoolId.value}`, { params })
-  const fetchedDocTypes = response.data.documentTypes || response.data.tipos_documento
+  const data = await teacherService.getTeachersData(schoolId.value, params)
+  const fetchedDocTypes = data.documentTypes || data.tipos_documento
   if (Array.isArray(fetchedDocTypes) && fetchedDocTypes.length > 0) {
     documentTypes.value = fetchedDocTypes
   }
-  teachers.value = response.data.teachers || []
-  subjects.value = response.data.subjects || []
-  groups.value = response.data.groups || []
-  assignments.value = response.data.assignments || []
+  teachers.value = data.teachers || []
+  subjects.value = data.subjects || []
+  groups.value = data.groups || []
+  assignments.value = data.assignments || []
 }
 
 const isAutoFilledUser = ref(false)
@@ -464,13 +473,10 @@ const handleAutoLookup = async () => {
     if (doc) params.documento = doc
     else if (email) params.email = email
 
-    const res = await axios.get('/api/academic-admin/users/lookup', {
-      params,
-      headers: { Authorization: `Bearer ${auth.token}` }
-    })
+    const data = await teacherService.lookupUser(params)
 
-    if (res.data && res.data.found && res.data.user) {
-      const u = res.data.user
+    if (data && data.found && data.user) {
+      const u = data.user
       existingUserEmail.value = u.email || ''
 
       if (u.nombre) newTeacher.value.nombre = u.nombre
@@ -534,15 +540,17 @@ const createTeacher = async (addRoleIfParent: boolean | any = false) => {
   }
   try {
     savingTeacher.value = true
-    const res = await axios.post('/api/academic-admin/teachers', {
+    const resData = await teacherService.createTeacher({
       schoolId: schoolId.value, nombre: p.nombre, apellido: p.apellido,
       documento: p.documento, id_tipodocumento: Number(p.id_tipodocumento),
       email: p.email, password: p.password,
       telefono: p.telefono?.trim() || null,
       addRoleIfParent: isParentFlag
     })
-    if (res.data?.infoMessage) {
-      alert(res.data.infoMessage)
+    if (resData?.infoMessage) {
+      toast.info(resData.infoMessage)
+    } else {
+      toast.success('Docente registrado exitosamente')
     }
     resetAutoFilledUser()
     p.password = ''
@@ -550,18 +558,24 @@ const createTeacher = async (addRoleIfParent: boolean | any = false) => {
     await loadData()
   } catch (error: any) {
     if (error.response?.status === 409 && error.response?.data?.isParent) {
-      const confirmAdd = confirm(`${error.response.data.message}`)
+      const confirmAdd = await confirm({
+        title: 'Asignar Rol Docente',
+        message: `${error.response.data.message}`,
+        confirmText: 'Asignar Rol',
+        type: 'primary'
+      })
       if (confirmAdd) {
         await createTeacher(true)
         return
       }
     } else {
-      alert(error.response?.data?.error || 'No fue posible crear el docente')
+      toast.error(error.response?.data?.error || 'No fue posible crear el docente')
     }
   } finally {
     savingTeacher.value = false
   }
 }
+
 
 const editTeacherModal = ref(false)
 const editTeacherForm = ref({
@@ -604,7 +618,7 @@ const updateTeacher = async () => {
 
   try {
     loading.value = true
-    await axios.put(`/api/academic-admin/teachers/${f.id_docente}`, {
+    await teacherService.updateTeacher(f.id_docente, {
       schoolId: schoolId.value,
       nombre: f.nombre.trim(),
       apellido: f.apellido.trim(),
@@ -618,7 +632,7 @@ const updateTeacher = async () => {
     drawerOpen.value = false
     await loadData()
   } catch (error: any) {
-    alert(error.response?.data?.error || 'No fue posible actualizar el docente')
+    toast.error(error.response?.data?.error || 'No fue posible actualizar el docente')
   } finally {
     loading.value = false
   }
@@ -626,22 +640,25 @@ const updateTeacher = async () => {
 
 const deleteTeacher = async (teacher: TeacherItem) => {
   if (yearStore.isReadonlyYear) {
-    alert('Acción no permitida: El año académico seleccionado se encuentra CERRADO.')
+    toast.error('Acción no permitida: El año académico seleccionado se encuentra CERRADO.')
     return
   }
-  const confirmDelete = confirm(`¿Estás seguro de que deseas ELIMINAR permanentemente al docente "${teacher.nombre} ${teacher.apellido}"? Esta acción borrará todas sus asignaciones académicas y su usuario asociado de forma irreversible.`)
+  const confirmDelete = await confirm({
+    title: 'Eliminar Docente',
+    message: `¿Estás seguro de que deseas ELIMINAR permanentemente al docente "${teacher.nombre} ${teacher.apellido}"? Esta acción borrará todas sus asignaciones académicas y su usuario asociado de forma irreversible.`,
+    confirmText: 'Eliminar Permanentemente',
+    type: 'danger'
+  })
   if (!confirmDelete) return
 
   try {
     loading.value = true
-    await axios.delete(`/api/academic-admin/teachers/${teacher.id_docente}`, {
-      params: { schoolId: schoolId.value }
-    })
-    alert('Docente eliminado con éxito.')
+    await teacherService.deleteTeacher(teacher.id_docente, schoolId.value)
+    toast.success('Docente eliminado con éxito.')
     drawerOpen.value = false
     await loadData()
   } catch (error: any) {
-    alert(error.response?.data?.error || 'No fue posible eliminar el docente')
+    toast.error(error.response?.data?.error || 'No fue posible eliminar el docente')
   } finally {
     loading.value = false
   }
@@ -649,13 +666,15 @@ const deleteTeacher = async (teacher: TeacherItem) => {
 
 const assignCourseSubject = async (replaceExisting = false) => {
   if (yearStore.isReadonlyYear) {
-    alert('Acción no permitida: El año académico seleccionado se encuentra CERRADO.')
+    toast.error('Acción no permitida: El año académico seleccionado se encuentra CERRADO.')
     return
   }
   if (!selectedTeacher.value || savingAssignment.value) return
+
   if (!assignmentForm.value.id_grupo || !assignmentForm.value.id_materia) {
-    alert('Selecciona curso y materia.'); return
+    toast.warning('Selecciona curso y materia.'); return
   }
+
   const selectedGroup = groups.value.find((g: any) => g.id_grupo === Number(assignmentForm.value.id_grupo))
   const selectedSubject = subjects.value.find((s: any) => s.id_materia === Number(assignmentForm.value.id_materia))
   if (selectedGroup && selectedGroup.tipo_grado_nombre === 'TRANSICION') {
@@ -666,7 +685,7 @@ const assignCourseSubject = async (replaceExisting = false) => {
   }
   try {
     savingAssignment.value = true
-    await axios.post('/api/academic-admin/teacher-assignments', {
+    await teacherService.assignCourseSubject({
       schoolId: schoolId.value,
       id_docente: selectedTeacher.value.id_docente,
       id_grupo: Number(assignmentForm.value.id_grupo),
@@ -702,9 +721,7 @@ const removeAssignment = async () => {
   if (!deleteAssignmentModal.value || deletingAssignment.value) return
   try {
     deletingAssignment.value = true
-    await axios.delete(`/api/academic-admin/teacher-assignments/${deleteAssignmentModal.value.id_detallegrado}`, {
-      params: { schoolId: schoolId.value },
-    })
+    await teacherService.removeAssignment(deleteAssignmentModal.value.id_detallegrado, schoolId.value)
     deleteAssignmentModal.value = null
     await loadData()
   } catch (error: any) {
@@ -722,7 +739,7 @@ const submitTeacherStatus = async () => {
   if (!selectedTeacher.value || !statusModal.value || updatingStatus.value) return
   try {
     updatingStatus.value = true
-    await axios.patch(`/api/academic-admin/teachers/${selectedTeacher.value.id_docente}/status`, {
+    await teacherService.updateTeacherStatus(selectedTeacher.value.id_docente, {
       schoolId: schoolId.value, estado: statusModal.value.estado, reason: statusReason.value,
     })
     statusModal.value = null; statusReason.value = ''
@@ -733,6 +750,7 @@ const submitTeacherStatus = async () => {
     updatingStatus.value = false
   }
 }
+
 
 const exportTeachersToCSV = () => {
   if (teachers.value.length === 0) return
@@ -1161,85 +1179,85 @@ watch(() => yearStore.selectedYearId, () => {
 
                 <!-- Assignment Filters Divididos (Materia, Nivel, Grado, Sección, Jornada, Curso) -->
                 <div class="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 space-y-3 mb-6">
-                  <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                    <Filter :size="12" class="text-indigo-500" />
+                  <p class="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                    <Filter :size="13" class="text-indigo-500" />
                     Filtrar Asignaciones Registradas:
                   </p>
 
                   <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                     <!-- 1. Materia -->
                     <div class="space-y-1">
-                      <label class="text-[9px] font-black text-slate-400 uppercase tracking-wider ml-1">Materia</label>
+                      <label class="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Materia</label>
                       <select 
                         v-model="workloadFilterSubjectId" 
-                        class="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-bold outline-none text-slate-900 dark:text-white transition-all focus:ring-2 focus:ring-indigo-500/10"
+                        class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-bold outline-none text-slate-900 dark:text-white transition-all focus:ring-2 focus:ring-indigo-500/10 cursor-pointer"
                       >
-                        <option :value="null">Todas</option>
-                        <option v-for="s in workloadAvailableSubjects" :key="s.id_materia" :value="s.id_materia">{{ s.nombre }}</option>
+                        <option :value="null" class="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Todas</option>
+                        <option v-for="s in workloadAvailableSubjects" :key="s.id_materia" :value="s.id_materia" class="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">{{ s.nombre }}</option>
                       </select>
                     </div>
 
                     <!-- 2. Nivel -->
                     <div class="space-y-1">
-                      <label class="text-[9px] font-black text-slate-400 uppercase tracking-wider ml-1">Nivel</label>
+                      <label class="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Nivel</label>
                       <select 
                         v-model="workloadFilterNivel" 
                         @change="onWorkloadCourseFilterChange"
-                        class="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-bold outline-none text-slate-900 dark:text-white transition-all focus:ring-2 focus:ring-indigo-500/10"
+                        class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-bold outline-none text-slate-900 dark:text-white transition-all focus:ring-2 focus:ring-indigo-500/10 cursor-pointer"
                       >
-                        <option value="">Todos</option>
-                        <option v-for="n in workloadAvailableNiveles" :key="n" :value="n">{{ n }}</option>
+                        <option value="" class="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Todos</option>
+                        <option v-for="n in workloadAvailableNiveles" :key="n" :value="n" class="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">{{ n }}</option>
                       </select>
                     </div>
 
                     <!-- 3. Grado -->
                     <div class="space-y-1">
-                      <label class="text-[9px] font-black text-slate-400 uppercase tracking-wider ml-1">Grado</label>
+                      <label class="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Grado</label>
                       <select 
                         v-model="workloadFilterGrado" 
                         @change="onWorkloadCourseFilterChange"
-                        class="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-bold outline-none text-slate-900 dark:text-white transition-all focus:ring-2 focus:ring-indigo-500/10"
+                        class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-bold outline-none text-slate-900 dark:text-white transition-all focus:ring-2 focus:ring-indigo-500/10 cursor-pointer"
                       >
-                        <option value="">Todos</option>
-                        <option v-for="g in workloadAvailableGrados" :key="g" :value="g">{{ g }}</option>
+                        <option value="" class="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Todos</option>
+                        <option v-for="g in workloadAvailableGrados" :key="g" :value="g" class="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">{{ g }}</option>
                       </select>
                     </div>
 
                     <!-- 4. Sección -->
                     <div class="space-y-1">
-                      <label class="text-[9px] font-black text-slate-400 uppercase tracking-wider ml-1">Sección</label>
+                      <label class="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Sección</label>
                       <select 
                         v-model="workloadFilterSeccion" 
                         @change="onWorkloadCourseFilterChange"
-                        class="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-bold outline-none text-slate-900 dark:text-white transition-all focus:ring-2 focus:ring-indigo-500/10"
+                        class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-bold outline-none text-slate-900 dark:text-white transition-all focus:ring-2 focus:ring-indigo-500/10 cursor-pointer"
                       >
-                        <option value="">Todas</option>
-                        <option v-for="sec in workloadAvailableSecciones" :key="sec" :value="sec">{{ sec }}</option>
+                        <option value="" class="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Todas</option>
+                        <option v-for="sec in workloadAvailableSecciones" :key="sec" :value="sec" class="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">{{ sec }}</option>
                       </select>
                     </div>
 
                     <!-- 5. Jornada -->
                     <div class="space-y-1">
-                      <label class="text-[9px] font-black text-slate-400 uppercase tracking-wider ml-1">Jornada</label>
+                      <label class="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Jornada</label>
                       <select 
                         v-model="workloadFilterJornada" 
                         @change="onWorkloadCourseFilterChange"
-                        class="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-bold outline-none text-slate-900 dark:text-white transition-all focus:ring-2 focus:ring-indigo-500/10"
+                        class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-bold outline-none text-slate-900 dark:text-white transition-all focus:ring-2 focus:ring-indigo-500/10 cursor-pointer"
                       >
-                        <option value="">Todas</option>
-                        <option v-for="j in workloadAvailableJornadas" :key="j" :value="j">{{ j }}</option>
+                        <option value="" class="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Todas</option>
+                        <option v-for="j in workloadAvailableJornadas" :key="j" :value="j" class="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">{{ j }}</option>
                       </select>
                     </div>
 
                     <!-- 6. Curso Específico -->
                     <div class="space-y-1">
-                      <label class="text-[9px] font-black text-slate-400 uppercase tracking-wider ml-1">Curso Específico</label>
+                      <label class="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Curso Específico</label>
                       <select 
                         v-model="workloadFilterGroupId" 
-                        class="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-bold outline-none text-slate-900 dark:text-white transition-all focus:ring-2 focus:ring-indigo-500/10"
+                        class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-bold outline-none text-slate-900 dark:text-white transition-all focus:ring-2 focus:ring-indigo-500/10 cursor-pointer"
                       >
-                        <option :value="null">Todos los cursos</option>
-                        <option v-for="g in workloadFilteredGroups" :key="g.id_grupo" :value="g.id_grupo">
+                        <option :value="null" class="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Todos los cursos</option>
+                        <option v-for="g in workloadFilteredGroups" :key="g.id_grupo" :value="g.id_grupo" class="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
                           {{ getCourseDisplayName({ tipo_grado_nombre: g.tipo_grado_nombre, seccion_nombre: g.seccion_nombre }) }} ({{ g.jornada_nombre }})
                         </option>
                       </select>
@@ -1247,30 +1265,15 @@ watch(() => yearStore.selectedYearId, () => {
                   </div>
                 </div>
 
-                <div v-if="selectedTeacherAssignments.length === 0" class="text-center py-12 text-slate-400">
-                  <GraduationCap :size="48" class="mb-3 mx-auto opacity-10" />
-                  <p class="text-xs font-black uppercase tracking-widest">Sin asignaciones activas</p>
-                </div>
-
-                <div class="space-y-3">
-                  <div
-                    v-for="assignment in selectedTeacherAssignments"
-                    :key="assignment.id_detallegrado"
-                    class="group bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 flex items-center justify-between hover:border-slate-200 dark:hover:border-slate-700 hover:shadow-md transition-all"
-                  >
-                    <div>
-                      <p class="font-black text-slate-900 dark:text-white text-sm">{{ assignment.materia_nombre }}</p>
-                      <p class="text-[10px] font-bold text-indigo-500 uppercase tracking-widest mt-0.5">{{ getCourseDisplayName({ tipo_grado_nombre: assignment.tipo_grado_nombre, seccion_nombre: assignment.seccion_nombre }) }} · {{ assignment.jornada_nombre }}</p>
-                    </div>
-                    <button
-                      v-if="!yearStore.isReadonlyYear"
-                      @click="deleteAssignmentModal = assignment"
-                      class="p-2 text-slate-300 dark:text-slate-700 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-xl transition-all opacity-0 group-hover:opacity-100"
-                    >
-                      <UserMinus :size="18" />
-                    </button>
-                  </div>
-                </div>
+                <!-- Hierarchical Assignment List Component -->
+                <HierarchicalAssignmentList
+                  :items="selectedTeacherAssignments"
+                  mode="teacher"
+                  :read-only="Boolean(yearStore.isReadonlyYear)"
+                  empty-title="Sin asignaciones activas"
+                  empty-message="Este docente no tiene cursos asignados con los filtros seleccionados."
+                  @delete="deleteAssignmentModal = $event as any"
+                />
               </div>
             </div>
           </div>

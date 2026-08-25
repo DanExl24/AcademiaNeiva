@@ -402,10 +402,12 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import axios from 'axios'
-import { API_BASE_URL } from '../../config/api'
+import { reingresoService } from '../../services/reingresoService'
+import { studentService } from '../../services/studentService'
+import { API_BASE_URL } from '../../services/api'
 import { useAuthStore } from '../../stores/auth'
 import type { SendReingresoPayload } from '../../types/reingreso.types'
+
 
 const route = useRoute()
 const router = useRouter()
@@ -442,10 +444,6 @@ const targetForm = reactive({
   observaciones: ''
 })
 
-const getAuthHeaders = () => {
-  const token = auth.token || localStorage.getItem('token')
-  return token ? { headers: { Authorization: `Bearer ${token}` } } : {}
-}
 
 const availableGrados = computed(() => {
   const map = new Map()
@@ -506,9 +504,8 @@ onMounted(async () => {
 
 const fetchAllStudents = async () => {
   try {
-    const res = await axios.get('/api/student/colegio/' + getSchoolId(), getAuthHeaders())
-    const all = res.data || []
-    allStudents.value = all.filter((s: any) => s.estado === 'RETIRADO')
+    const all = await studentService.getStudentsBySchool(getSchoolId())
+    allStudents.value = (all || []).filter((s: any) => s.estado === 'RETIRADO')
   } catch (err) {
     console.error('Error cargando estudiantes:', err)
   }
@@ -517,10 +514,10 @@ const fetchAllStudents = async () => {
 const loadTicketContext = async () => {
   if (!ticketId.value) return
   try {
-    const res = await axios.get(`/api/reingreso/ticket-context/${ticketId.value}`, getAuthHeaders())
-    ticketContext.value = res.data.ticket
-    suggestedStudents.value = res.data.suggestedStudents || []
-    parentPreferredGrade.value = res.data.gradoPretendido || null
+    const data = await reingresoService.getTicketContext(ticketId.value as string)
+    ticketContext.value = data.ticket
+    suggestedStudents.value = data.suggestedStudents || []
+    parentPreferredGrade.value = data.gradoPretendido || null
     if (ticketContext.value && ticketContext.value.correo_remitente) {
       targetForm.correo_padre = ticketContext.value.correo_remitente
     }
@@ -541,9 +538,9 @@ const selectSuggestedStudent = async (studentId: any) => {
 const fetchCatalogs = async () => {
   try {
     const schoolId = getSchoolId()
-    const res = await axios.get(`/api/reingreso/catalogs?schoolId=${schoolId}`, getAuthHeaders())
-    academicYears.value = res.data.anios || res.data.years || []
-    levels.value = res.data.niveles || []
+    const data = await reingresoService.getCatalogs(schoolId)
+    academicYears.value = data.anios || data.years || []
+    levels.value = data.niveles || []
     if (academicYears.value.length > 0) {
       const active = academicYears.value.find((a: any) => a.estado === 'ABIERTO') || academicYears.value[0]
       targetForm.id_anio = active.id_anio
@@ -561,8 +558,7 @@ const loadGroups = async () => {
   if (!targetForm.id_nivel) return
   try {
     const schoolId = getSchoolId()
-    const res = await axios.get(`/api/reingreso/groups?nivelId=${targetForm.id_nivel}&schoolId=${schoolId}`, getAuthHeaders())
-    groups.value = res.data || []
+    groups.value = await reingresoService.getGroups(targetForm.id_nivel, schoolId)
     if (availableGrados.value.length > 0) {
       if (!targetForm.id_tipo_grado) {
         targetForm.id_tipo_grado = availableGrados.value[0].id_tipo_grado
@@ -582,12 +578,12 @@ const loadStudentHistory = async () => {
   targetForm.observaciones = ''
 
   try {
-    const res = await axios.get(`/api/reingreso/student-history/${selectedStudentId.value}`, getAuthHeaders())
-    student.value = res.data.student
-    lastEnrollment.value = res.data.lastEnrollment
-    parent.value = res.data.parent
-    suggestedGradeInfo.value = res.data.suggestedGrade || null
-    documents.value = (res.data.documents || []).map((d: any) => {
+    const data = await reingresoService.getStudentHistory(selectedStudentId.value)
+    student.value = data.student
+    lastEnrollment.value = data.lastEnrollment
+    parent.value = data.parent
+    suggestedGradeInfo.value = data.suggestedGrade || null
+    documents.value = (data.documents || []).map((d: any) => {
       const sugerido = d.estado_sugerido || d.estado_renovacion_sugerido || 'VIGENTE'
       const isObligatory = sugerido === 'OBLIGATORIO_ACTUALIZAR' || sugerido === 'DESACTUALIZADO_POR_FECHA'
       return {
@@ -665,8 +661,8 @@ const submitReingresoLink = async () => {
       }))
     }
 
-    const res = await axios.post('/api/reingreso/send-parent-link', payload, getAuthHeaders())
-    alert(res.data.message || 'Enlace de reingreso enviado con éxito.')
+    const res = await reingresoService.sendParentLink(payload)
+    alert(res.message || 'Enlace de reingreso enviado con éxito.')
     router.push('/dashboard/gestion-matriculas')
   } catch (err: any) {
     alert(err.response?.data?.error || 'Error al enviar enlace de reingreso')
@@ -674,6 +670,7 @@ const submitReingresoLink = async () => {
     submitting.value = false
   }
 }
+
 
 const getSchoolId = () => {
   const user = auth.user || JSON.parse(localStorage.getItem('user') || '{}')

@@ -1,13 +1,16 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import axios from 'axios'
+import { adminGeneralService } from '../../services/adminGeneralService'
 import { API_BASE_URL } from '../../config/api'
-import { useAuthStore } from '../../stores/auth'
 import { 
   School, Plus, Search, Trash2, Edit3, CheckCircle, XCircle, AlertTriangle, 
   Mail, Phone, MapPin, Calendar, Hash, Users, Eye
 } from 'lucide-vue-next'
+import { useConfirm } from '../../composables/useConfirm'
+import { useToast } from '../../composables/useToast'
+import StatCard from '../../components/ui/StatCard.vue'
+import EmptyState from '../../components/feedback/EmptyState.vue'
 
 const getShieldUrl = (url: string) => {
   if (!url || url === 'undefined' || url.includes('undefined')) return ''
@@ -15,8 +18,12 @@ const getShieldUrl = (url: string) => {
   return `${API_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`
 }
 
-const auth = useAuthStore()
 const route = useRoute()
+const { confirm } = useConfirm()
+const toast = useToast()
+
+
+
 
 interface Colegio {
   id_colegio: number
@@ -83,15 +90,12 @@ const form = ref({
 const fetchColleges = async () => {
   try {
     loading.value = true
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get('/api/admin/colegios', {
-      headers,
-      params: {
-        estado: selectedEstado.value || undefined,
-        search: search.value || undefined
-      }
-    })
-    colleges.value = res.data
+    const params = {
+      estado: selectedEstado.value || undefined,
+      search: search.value || undefined
+    }
+    const data = await adminGeneralService.getColegios(params)
+    colleges.value = data || []
 
     // Refresh KPI counts
     stats.value = {
@@ -141,8 +145,7 @@ const handleCreate = async () => {
   }
   try {
     saving.value = true
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.post('/api/admin/colegios', form.value, { headers })
+    await adminGeneralService.createColegio(form.value)
     showCreateModal.value = false
     await fetchColleges()
   } catch (error: any) {
@@ -185,8 +188,7 @@ const handleEdit = async () => {
   }
   try {
     saving.value = true
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.put(`/api/admin/colegios/${selectedCollege.value.id_colegio}`, form.value, { headers })
+    await adminGeneralService.updateColegio(selectedCollege.value.id_colegio, form.value)
     showEditModal.value = false
     await fetchColleges()
   } catch (error: any) {
@@ -200,30 +202,33 @@ const openDetails = async (college: Colegio) => {
   selectedCollege.value = college
   showDetailsModal.value = true
   try {
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get(`/api/admin/colegios/${college.id_colegio}`, { headers })
-    selectedCollege.value = { ...college, ...res.data }
+    const data = await adminGeneralService.getColegio(college.id_colegio)
+    selectedCollege.value = { ...college, ...data }
   } catch (error) {
     console.error('Error fetching college details:', error)
   }
 }
 
 const updateStatus = async (college: Colegio, estado: string, motivo?: string) => {
-  const confirmMsg = `¿Confirmas el cambio de estado de ${college.nombre} a ${estado}?`
-  if (!confirm(confirmMsg)) return
-
+  const ok = await confirm({
+    title: 'Cambiar Estado de Colegio',
+    message: `¿Confirmas el cambio de estado de ${college.nombre} a ${estado}?`,
+    confirmText: 'Confirmar Cambio',
+    type: estado === 'SUSPENDIDO' || estado === 'RECHAZADO' ? 'danger' : 'primary'
+  })
+  if (!ok) return
   try {
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.patch(`/api/admin/colegios/${college.id_colegio}/estado`, {
+    await adminGeneralService.updateColegioEstado(college.id_colegio, {
       estado,
       motivo
-    }, { headers })
+    })
+    toast.success(`Estado de ${college.nombre} actualizado a ${estado}`)
     await fetchColleges()
     if (selectedCollege.value?.id_colegio === college.id_colegio) {
       selectedCollege.value.estado = estado as any
     }
   } catch (error: any) {
-    alert(error.response?.data?.error || 'Error al cambiar estado')
+    toast.error(error.response?.data?.error || 'Error al cambiar estado')
   }
 }
 
@@ -236,7 +241,7 @@ const openReject = (college: Colegio) => {
 const handleReject = async () => {
   if (!selectedCollege.value) return
   if (!rejectReason.value.trim()) {
-    alert('Por favor indica un motivo para el rechazo.')
+    toast.warning('Por favor indica un motivo para el rechazo.')
     return
   }
   await updateStatus(selectedCollege.value, 'RECHAZADO', rejectReason.value)
@@ -244,16 +249,24 @@ const handleReject = async () => {
 }
 
 const handleDelete = async (college: Colegio) => {
-  if (confirm(`¿Estás seguro de que deseas eliminar permanentemente a ${college.nombre}? Todos los directivos y usuarios serán desvinculados.`)) {
-    try {
-      const headers = { Authorization: `Bearer ${auth.token}` }
-      await axios.delete(`/api/admin/colegios/${college.id_colegio}`, { headers })
-      await fetchColleges()
-    } catch (error: any) {
-      alert(error.response?.data?.error || 'Error al eliminar colegio')
-    }
+  const ok = await confirm({
+    title: 'Eliminar Colegio',
+    message: `¿Estás seguro de que deseas eliminar permanentemente a ${college.nombre}? Todos los directivos y usuarios serán desvinculados.`,
+    confirmText: 'Eliminar Permanentemente',
+    type: 'danger'
+  })
+  if (!ok) return
+
+  try {
+    await adminGeneralService.deleteColegio(college.id_colegio)
+    toast.success(`Colegio ${college.nombre} eliminado exitosamente`)
+    await fetchColleges()
+  } catch (error: any) {
+    toast.error(error.response?.data?.error || 'Error al eliminar colegio')
   }
 }
+
+
 </script>
 
 <template>
@@ -280,46 +293,31 @@ const handleDelete = async (college: Colegio) => {
 
     <!-- KPIs Row -->
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-      <div class="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center gap-4">
-        <div class="p-3 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 rounded-2xl">
-          <School :size="22" />
-        </div>
-        <div>
-          <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Total</p>
-          <h3 class="text-xl font-black text-slate-900 dark:text-white font-mono mt-0.5">{{ stats.total }}</h3>
-        </div>
-      </div>
+      <StatCard title="Total Instituciones" :value="stats.total">
+        <template #icon>
+          <School :size="20" class="text-indigo-600 dark:text-indigo-400" />
+        </template>
+      </StatCard>
 
-      <div class="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center gap-4">
-        <div class="p-3 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 rounded-2xl">
-          <CheckCircle :size="22" />
-        </div>
-        <div>
-          <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Activos</p>
-          <h3 class="text-xl font-black text-slate-900 dark:text-white font-mono mt-0.5">{{ stats.activos }}</h3>
-        </div>
-      </div>
+      <StatCard title="Activas" :value="stats.activos">
+        <template #icon>
+          <CheckCircle :size="20" class="text-emerald-600 dark:text-emerald-400" />
+        </template>
+      </StatCard>
 
-      <div class="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center gap-4">
-        <div class="p-3 bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 rounded-2xl">
-          <AlertTriangle :size="22" />
-        </div>
-        <div>
-          <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Pendientes</p>
-          <h3 class="text-xl font-black text-slate-900 dark:text-white font-mono mt-0.5">{{ stats.pendientes }}</h3>
-        </div>
-      </div>
+      <StatCard title="Pendientes" :value="stats.pendientes">
+        <template #icon>
+          <AlertTriangle :size="20" class="text-amber-600 dark:text-amber-400" />
+        </template>
+      </StatCard>
 
-      <div class="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center gap-4">
-        <div class="p-3 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 rounded-2xl">
-          <XCircle :size="22" />
-        </div>
-        <div>
-          <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Suspendidos</p>
-          <h3 class="text-xl font-black text-slate-900 dark:text-white font-mono mt-0.5">{{ stats.suspendidos }}</h3>
-        </div>
-      </div>
+      <StatCard title="Suspendidas" :value="stats.suspendidos">
+        <template #icon>
+          <XCircle :size="20" class="text-red-600 dark:text-red-400" />
+        </template>
+      </StatCard>
     </div>
+
 
     <!-- Filters and Grid -->
     <div class="space-y-4">
@@ -348,10 +346,16 @@ const handleDelete = async (college: Colegio) => {
         <span class="animate-pulse font-bold">Cargando instituciones...</span>
       </div>
 
-      <div v-else-if="colleges.length === 0" class="bg-white dark:bg-slate-900 rounded-3xl p-12 text-center border border-slate-100 dark:border-slate-800">
-        <School class="mx-auto mb-4 text-slate-300 dark:text-slate-700" :size="48" />
-        <p class="font-bold text-slate-500">No se encontraron colegios registrados</p>
-      </div>
+      <EmptyState 
+        v-else-if="colleges.length === 0"
+        title="No se encontraron colegios registrados"
+        description="No hay instituciones educativas que coincidan con la búsqueda o el estado seleccionado."
+      >
+        <template #icon>
+          <School class="w-8 h-8 text-indigo-500" />
+        </template>
+      </EmptyState>
+
 
       <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <div 

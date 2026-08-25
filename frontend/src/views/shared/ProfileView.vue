@@ -17,7 +17,8 @@ import {
   EyeOff,
   Phone
 } from 'lucide-vue-next'
-import axios from 'axios'
+import { authService } from '../../services/authService'
+import { supportService } from '../../services/supportService'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -92,17 +93,15 @@ const openDirectivoModal = () => {
 const fetchProfile = async () => {
   try {
     loadingProfile.value = true
-    const headers: Record<string, string> = { Authorization: `Bearer ${auth.token}` }
     const targetUserId = auth.isMonitoring && auth.monitoringUser ? (auth.monitoringUser.id || (auth.monitoringUser as any).id_usuario) : null
     const params: Record<string, any> = {}
     if (targetUserId) {
       params.userId = targetUserId
-      headers['X-Monitoring-Mode'] = 'true'
     }
-    const res = await axios.get('/api/auth/profile', { headers, params })
-    profileData.value = res.data.user
-    emailForm.value.email = res.data.user.email || ''
-    phoneForm.value.telefono = res.data.user.telefono || ''
+    const res = await authService.getProfile(params)
+    profileData.value = res.user
+    emailForm.value.email = res.user.email || ''
+    phoneForm.value.telefono = res.user.telefono || ''
   } catch (error) {
     console.error('Error fetching profile:', error)
   } finally {
@@ -129,15 +128,14 @@ const handleRequestEmailCode = async () => {
     emailSuccess.value = ''
     emailError.value = ''
     
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.post('/api/auth/profile/request-email-change', {
+    const res = await authService.requestEmailChange({
       nuevo_email: emailForm.value.email
-    }, { headers })
+    })
 
     pendingNewEmail.value = emailForm.value.email
     emailStep.value = 2
     verificationCode.value = ''
-    emailSuccess.value = res.data.message || 'Código de 6 dígitos enviado al nuevo correo.'
+    emailSuccess.value = res.message || 'Código de 6 dígitos enviado al nuevo correo.'
   } catch (error: any) {
     emailError.value = error.response?.data?.error || 'Error al solicitar el código de verificación.'
   } finally {
@@ -156,13 +154,12 @@ const handleVerifyEmailCode = async () => {
     emailSuccess.value = ''
     emailError.value = ''
 
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.post('/api/auth/profile/verify-email-change', {
+    const res = await authService.verifyEmailChange({
       nuevo_email: pendingNewEmail.value,
       codigo: verificationCode.value.trim()
-    }, { headers })
+    })
 
-    emailSuccess.value = res.data.message || 'Correo actualizado exitosamente.'
+    emailSuccess.value = res.message || 'Correo actualizado exitosamente.'
     if (profileData.value) {
       profileData.value.email = pendingNewEmail.value
     }
@@ -194,10 +191,9 @@ const handleUpdatePhone = async () => {
     phoneSuccess.value = ''
     phoneError.value = ''
 
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.put('/api/auth/profile/phone', {
+    await authService.updatePhone({
       telefono: phoneForm.value.telefono
-    }, { headers })
+    })
 
     phoneSuccess.value = 'Teléfono de contacto actualizado con éxito.'
     if (profileData.value) {
@@ -221,11 +217,10 @@ const handleUpdatePassword = async () => {
     passwordSuccess.value = ''
     passwordError.value = ''
 
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.put('/api/auth/profile/password', {
+    await authService.updatePassword({
       password_actual: passwordForm.value.password_actual,
       nueva_password: passwordForm.value.nueva_password
-    }, { headers })
+    })
 
     passwordSuccess.value = 'Contraseña actualizada con éxito.'
     
@@ -272,7 +267,6 @@ const handleContactAdminGeneral = async () => {
     requestSuccess.value = ''
     requestError.value = ''
 
-    const headers = { Authorization: `Bearer ${auth.token}` }
     const senderFullName = profileData.value ? `${profileData.value.nombre || ''} ${profileData.value.apellido || ''}`.trim() : (auth.user?.name || '')
     const senderEmail = profileData.value?.email || auth.user?.email || ''
 
@@ -287,8 +281,8 @@ const handleContactAdminGeneral = async () => {
       estado: 'ESCALADO' // <--- Se inserta con estado ESCALADO para el Admin General
     }
 
-    const res = await axios.post('/api/support/tickets', payload, { headers })
-    requestSuccess.value = `Ticket escalado enviado al Administrador General con éxito. Código de seguimiento: ${res.data.ticketCode}`
+    const res = await supportService.createTicket(payload)
+    requestSuccess.value = `Ticket escalado enviado al Administrador General con éxito. Código de seguimiento: ${res.ticketCode}`
     showDirectivoModal.value = false
     directivoForm.value.asunto = ''
     directivoForm.value.descripcion = ''
@@ -299,6 +293,7 @@ const handleContactAdminGeneral = async () => {
     submittingDirectivoMessage.value = false
   }
 }
+
 
 const goBack = () => {
   router.push('/dashboard')
@@ -320,8 +315,8 @@ const goBack = () => {
 
       <!-- Loader -->
       <div v-if="loadingProfile" class="flex flex-col items-center justify-center p-20">
-        <Loader2 class="w-10 h-10 text-indigo-650 animate-spin mb-4" />
-        <p class="text-slate-550 font-bold text-sm">Cargando perfil de usuario...</p>
+        <Loader2 class="w-10 h-10 text-indigo-600 animate-spin mb-4" />
+        <p class="text-slate-500 font-bold text-sm">Cargando perfil de usuario...</p>
       </div>
 
       <!-- Main Profile panel -->

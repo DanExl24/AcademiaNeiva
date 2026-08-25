@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
-import axios from 'axios'
-import { API_BASE_URL } from '../../config/api'
+import { academicService } from '../../services/academicService'
 import { useAuthStore } from '../../stores/auth'
 import { useAcademicYearStore } from '../../stores/academicYear'
+import PromotionDecisionModal from '../../components/academico/PromotionDecisionModal.vue'
+import StudentTrackingHistoryTab from '../../components/academico/StudentTrackingHistoryTab.vue'
+
+
 import {
   Award,
   TrendingUp,
@@ -20,15 +23,14 @@ import {
   Layers3,
   Calendar,
   AlertOctagon,
-  Save,
   Edit,
   Users,
   BookOpen,
   RefreshCw,
   ShieldAlert,
-  Lock,
   Eye
 } from 'lucide-vue-next'
+
 
 const auth = useAuthStore()
 const yearStore = useAcademicYearStore()
@@ -154,20 +156,18 @@ const loadCatalogs = async () => {
   if (!schoolId.value) return
   loading.value = true
   try {
-    const yearIdParam = yearStore.selectedYearId ? `?yearId=${yearStore.selectedYearId}&keys=years,periods` : '?keys=years,periods'
+    const params: any = { keys: 'years,periods' }
+    if (yearStore.selectedYearId) params.yearId = yearStore.selectedYearId
+
     const [settingsRes, gradesRes] = await Promise.all([
-      axios.get(`${API_BASE_URL}/api/academic-admin/settings/${schoolId.value}${yearIdParam}`, {
-        headers: { Authorization: `Bearer ${auth.token}` }
-      }),
-      axios.get(`${API_BASE_URL}/api/academic-admin/grades/${schoolId.value}${yearIdParam}`, {
-        headers: { Authorization: `Bearer ${auth.token}` }
-      })
+      academicService.getSettings(schoolId.value, params),
+      academicService.getGradesAndGroups(schoolId.value, yearStore.selectedYearId ? { yearId: yearStore.selectedYearId } : undefined)
     ])
 
-    years.value = settingsRes.data.academicYears || settingsRes.data.years || []
-    periods.value = settingsRes.data.periods || []
-    grades.value = gradesRes.data.tiposGrado || gradesRes.data.grados || gradesRes.data.grades || []
-    groups.value = gradesRes.data.grupos || gradesRes.data.groups || []
+    years.value = settingsRes.academicYears || settingsRes.years || []
+    periods.value = settingsRes.periods || []
+    grades.value = gradesRes.tiposGrado || gradesRes.grados || gradesRes.grades || []
+    groups.value = gradesRes.grupos || gradesRes.groups || []
 
     if (yearStore.selectedYearId && years.value.some((y: any) => Number(y.id_anio) === Number(yearStore.selectedYearId))) {
       selectedYearId.value = Number(yearStore.selectedYearId)
@@ -252,12 +252,8 @@ const fetchPeriodTracking = async () => {
     if (selectedGradeId.value) params.gradeId = selectedGradeId.value
     if (selectedGroupId.value) params.groupId = selectedGroupId.value
 
-    const response = await axios.get(`${API_BASE_URL}/api/academic-admin/academic-tracking/period-tracking`, {
-      params,
-      headers: { Authorization: `Bearer ${auth.token}` }
-    })
-
-    trackingData.value = response.data
+    const data = await academicService.getPeriodTracking(params)
+    trackingData.value = data
   } catch (err: any) {
     console.error("Error al cargar seguimiento por período:", err)
     errorMessage.value = err.response?.data?.error || "Error al consultar el seguimiento académico."
@@ -279,12 +275,8 @@ const fetchAnnualConsolidation = async () => {
     if (selectedGradeId.value) params.gradeId = selectedGradeId.value
     if (selectedGroupId.value) params.groupId = selectedGroupId.value
 
-    const response = await axios.get(`${API_BASE_URL}/api/academic-admin/academic-tracking/annual-consolidation`, {
-      params,
-      headers: { Authorization: `Bearer ${auth.token}` }
-    })
-
-    annualData.value = response.data
+    const data = await academicService.getAnnualConsolidation(params)
+    annualData.value = data
   } catch (err: any) {
     console.error("Error al cargar consolidación anual:", err)
     errorMessage.value = err.response?.data?.error || "Error al consultar la consolidación anual."
@@ -302,12 +294,9 @@ const searchStudentHistory = async (studentId?: number) => {
     let targetId = studentId
     if (!targetId && historySearchQuery.value) {
       // Buscar primero por documento
-      const warningRes = await axios.get(`${API_BASE_URL}/api/academic-admin/academic-tracking/check-warning`, {
-        params: { documento: historySearchQuery.value.trim() },
-        headers: { Authorization: `Bearer ${auth.token}` }
-      })
-      if (warningRes.data.exists && warningRes.data.estudiante?.id_estudiante) {
-        targetId = warningRes.data.estudiante.id_estudiante
+      const warningRes = await academicService.checkAcademicWarning({ documento: historySearchQuery.value.trim() })
+      if (warningRes.exists && warningRes.estudiante?.id_estudiante) {
+        targetId = warningRes.estudiante.id_estudiante
       } else {
         errorMessage.value = "Estudiante no encontrado con ese número de documento."
         historyLoading.value = false
@@ -316,10 +305,8 @@ const searchStudentHistory = async (studentId?: number) => {
     }
 
     if (targetId) {
-      const historyRes = await axios.get(`${API_BASE_URL}/api/academic-admin/academic-tracking/student-history/${targetId}`, {
-        headers: { Authorization: `Bearer ${auth.token}` }
-      })
-      studentHistory.value = historyRes.data
+      const data = await academicService.getStudentTrackingHistory(targetId)
+      studentHistory.value = data
     }
   } catch (err: any) {
     console.error("Error al buscar historial del estudiante:", err)
@@ -347,7 +334,7 @@ const saveDirectiveDecision = async () => {
   errorMessage.value = ''
   successMessage.value = ''
   try {
-    await axios.post(`${API_BASE_URL}/api/academic-admin/academic-tracking/record-decision`, {
+    await academicService.recordPromotionDecision({
       schoolId: schoolId.value,
       studentId: targetStudentForDecision.value.id_estudiante,
       previousYearId: selectedYearId.value,
@@ -356,8 +343,6 @@ const saveDirectiveDecision = async () => {
       previousGradeId: targetStudentForDecision.value.id_grado || null,
       assignedGradeId: decisionForm.value.assignedGradeId ? Number(decisionForm.value.assignedGradeId) : null,
       observation: decisionForm.value.observation
-    }, {
-      headers: { Authorization: `Bearer ${auth.token}` }
     })
 
     successMessage.value = "Decisión institucional registrada exitosamente."
@@ -373,6 +358,7 @@ const saveDirectiveDecision = async () => {
     loading.value = false
   }
 }
+
 
 // Helper para refrescar datos según la pestaña activa
 const fetchDataForActiveTab = () => {
@@ -972,228 +958,29 @@ onMounted(async () => {
     </div>
 
     <!-- CONTENIDO DE PESTAÑA 3: HISTORIAL DEL ESTUDIANTE -->
-    <div v-if="activeTab === 'history'" class="tab-content">
-      <div class="search-box-card">
-        <label class="block text-sm font-bold text-slate-700 mb-2">Buscar estudiante por número de documento:</label>
-        <div class="search-input-group">
-          <input 
-            v-model="historySearchQuery" 
-            type="text" 
-            placeholder="Ingrese documento de identidad (ej: 1075283921)..."
-            class="form-input"
-            @keyup.enter="searchStudentHistory()"
-          />
-          <button class="btn-primary" :disabled="historyLoading" @click="searchStudentHistory()">
-            <Search class="w-4 h-4 mr-1.5" /> 
-            {{ historyLoading ? 'Buscando...' : 'Buscar Historial' }}
-          </button>
-        </div>
-      </div>
-
-      <div v-if="historyLoading" class="loading-spinner p-8 text-center text-slate-500">
-        <RefreshCw class="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-600" />
-        <span>Consultando historial del estudiante...</span>
-      </div>
-
-      <div v-if="studentHistory" class="history-results mt-6 space-y-6">
-        <!-- Tarjeta de Perfil -->
-        <div class="student-profile-card">
-          <div class="flex items-center gap-4">
-            <div class="w-14 h-14 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-black text-xl shadow-md">
-              {{ studentHistory.estudiante.nombre?.charAt(0) }}{{ studentHistory.estudiante.apellido?.charAt(0) }}
-            </div>
-            <div>
-              <h3 class="text-xl font-black text-slate-800">{{ studentHistory.estudiante.apellido }} {{ studentHistory.estudiante.nombre }}</h3>
-              <p class="text-xs text-slate-500 mt-0.5">
-                Documento: <strong class="text-slate-700">{{ studentHistory.estudiante.documento }}</strong> • 
-                Colegio: <span class="text-indigo-600 font-semibold">{{ studentHistory.estudiante.colegio_nombre }}</span>
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <!-- Línea de Tiempo de Matrículas y Promociones -->
-        <div class="timeline-container bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-          <h4 class="text-sm font-bold uppercase tracking-wider text-slate-700 mb-6 flex items-center gap-2">
-            <GraduationCap class="w-4 h-4 text-indigo-600" />
-            Trayectoria Académica y Matrículas Registradas
-          </h4>
-
-          <div v-if="studentHistory.historial_matriculas && studentHistory.historial_matriculas.length > 0" class="timeline">
-            <div 
-              v-for="mat in studentHistory.historial_matriculas" 
-              :key="mat.id_matricula" 
-              class="timeline-item"
-            >
-              <div class="timeline-badge">
-                <Calendar class="w-4 h-4" />
-              </div>
-              <div class="timeline-card">
-                <div class="timeline-header flex items-center justify-between flex-wrap gap-2 mb-2 pb-2 border-b border-slate-100">
-                  <h5 class="font-bold text-slate-800 text-sm">
-                    Año Lectivo {{ mat.calendario || mat.id_anio }} — Grado: {{ mat.grado_nombre }} {{ mat.grupo_nombre }}
-                    <span v-if="mat.jornada_nombre" class="text-xs text-indigo-600 font-normal ml-1">(Jornada {{ mat.jornada_nombre }})</span>
-                  </h5>
-                  <span class="badge" :class="mat.estado_matricula === 'CULMINADA' ? 'badge-success' : 'badge-info'">
-                    Estado: {{ mat.estado_matricula }}
-                  </span>
-                </div>
-                <div class="timeline-body space-y-1.5 text-xs text-slate-600">
-                  <p v-if="mat.resultado_calculado">
-                    Resultado Anual: 
-                    <span 
-                      class="font-bold ml-1"
-                      :class="{
-                        'text-emerald-700': mat.resultado_calculado === 'APROBADO',
-                        'text-rose-700': mat.resultado_calculado === 'NO_PROMOVIDO',
-                        'text-amber-700': mat.resultado_calculado === 'PENDIENTE_RECUPERACION'
-                      }"
-                    >
-                      {{ mat.resultado_calculado }}
-                    </span>
-                  </p>
-                  <p v-if="mat.decision_tomada">
-                    Decisión Institucional: 
-                    <span class="text-indigo-600 font-bold ml-1">{{ formatDecisionLabel(mat.decision_tomada) }}</span>
-                  </p>
-                  <p v-if="mat.observacion" class="p-2 bg-slate-50 rounded-lg text-slate-600 italic mt-1 border border-slate-100">
-                    "{{ mat.observacion }}"
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div v-else class="text-center py-6 text-slate-400 text-xs italic">
-            El estudiante no posee historial de matrículas registrado en el sistema.
-          </div>
-        </div>
-      </div>
-    </div>
+    <StudentTrackingHistoryTab
+      v-if="activeTab === 'history'"
+      v-model:history-search-query="historySearchQuery"
+      :history-loading="historyLoading"
+      :student-history="studentHistory"
+      :format-decision-label="formatDecisionLabel"
+      @search="searchStudentHistory()"
+    />
 
     <!-- MODAL DE DECISIÓN DEL DIRECTIVO -->
-    <div v-if="showDecisionModal" class="modal-backdrop">
-      <div class="modal-card">
-        <div class="modal-header">
-          <div class="flex items-center gap-2">
-            <Lock v-if="isYearClosed" class="w-5 h-5 text-slate-500" />
-            <Award v-else class="w-5 h-5 text-indigo-600" />
-            <h3 class="font-black text-slate-800 text-base">
-              {{ isYearClosed ? 'Visualizar Decisión Institucional (Solo Lectura)' : (targetStudentForDecision?.decision_directivo ? 'Editar Decisión Institucional' : 'Registro de Decisión Institucional') }}
-            </h3>
-          </div>
-          <button class="btn-close" @click="showDecisionModal = false">×</button>
-        </div>
-
-        <div class="modal-body space-y-4">
-          <!-- Alerta de Año Cerrado -->
-          <div v-if="isYearClosed" class="p-3.5 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-300 text-xs flex items-center gap-2.5 shadow-sm">
-            <Lock class="w-5 h-5 text-slate-500 shrink-0" />
-            <div>
-              <strong>Año Lectivo Cerrado (Modo Solo Lectura):</strong> Las decisiones institucionales de este ciclo escolar son de carácter histórico e inmodificables.
-            </div>
-          </div>
-
-          <!-- Resumen del Estudiante -->
-          <div class="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5 text-xs">
-            <div class="flex justify-between items-center">
-              <span class="font-bold text-slate-800 text-sm">
-                {{ targetStudentForDecision?.apellido }} {{ targetStudentForDecision?.nombre }}
-              </span>
-              <span 
-                class="badge" 
-                :class="{
-                  'badge-success': (targetStudentForDecision?.resultado_anual || targetStudentForDecision?.estado_academico) === 'APROBADO',
-                  'badge-danger': (targetStudentForDecision?.resultado_anual || targetStudentForDecision?.estado_academico) === 'NO_PROMOVIDO',
-                  'badge-warning': (targetStudentForDecision?.resultado_anual || targetStudentForDecision?.estado_academico) === 'PENDIENTE_RECUPERACION'
-                }"
-              >
-                {{ targetStudentForDecision?.resultado_anual || targetStudentForDecision?.estado_academico }}
-              </span>
-            </div>
-            <p class="text-slate-500">
-              Documento: <strong>{{ targetStudentForDecision?.documento }}</strong> • 
-              Curso: <strong>{{ targetStudentForDecision?.grado_nombre }} {{ targetStudentForDecision?.grupo_nombre }}</strong>
-            </p>
-
-            <!-- Resumen de materias reprobadas -->
-            <div v-if="targetStudentForDecision?.asignaturas_reprobadas && targetStudentForDecision?.asignaturas_reprobadas.length > 0" class="pt-1">
-              <p class="font-bold text-rose-800 mb-1">Materias reprobadas por el estudiante:</p>
-              <div class="flex flex-wrap gap-1">
-                <span 
-                  v-for="sub in targetStudentForDecision.asignaturas_reprobadas" 
-                  :key="sub.id_materia"
-                  class="tag-failed text-[11px]"
-                >
-                  {{ sub.materia_nombre }} ({{ sub.promedio_anual || sub.calificacion }})
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Alerta Informativa para Último Año -->
-          <div v-if="!isYearClosed && (targetStudentForDecision?.is_final_grade || targetStudentForDecision?.es_ultimo_grado)" class="p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs flex items-center gap-2.5 shadow-sm">
-            <GraduationCap class="w-5 h-5 text-amber-600 shrink-0" />
-            <div>
-              <strong>Estudiante en Año de Graduación:</strong> Al aprobar la promoción, su estado cambiará automáticamente a <span class="font-black text-indigo-700 uppercase">GRADUADO</span> y se inscribirá en el libro oficial de graduados.
-            </div>
-          </div>
-
-          <!-- Selector de Decisión -->
-          <div class="form-group">
-            <label class="block text-xs font-bold text-slate-700 mb-1.5">
-              Decisión adoptada por la institución / directivo:
-            </label>
-            <select v-model="decisionForm.decisionTaken" :disabled="isYearClosed" class="form-select disabled:opacity-65 disabled:bg-slate-100 dark:disabled:bg-slate-800">
-              <option value="PROMOVER_SIGUIENTE_GRADO">
-                {{ (targetStudentForDecision?.is_final_grade || targetStudentForDecision?.es_ultimo_grado) ? 'Promover y Graduar Estudiante 🎓' : 'Promover al siguiente grado (Excepción / Aprobación)' }}
-              </option>
-              <option value="MANTENER_GRADO">Mantener en el mismo grado (No promovido)</option>
-              <option value="MATRICULA_CONDICIONADA">Matrícula condicionada con compromisos</option>
-              <option value="OTRA_DECISION">Otra decisión institucional personalizada</option>
-            </select>
-          </div>
-
-          <!-- Grado asignado opcional -->
-          <div class="form-group">
-            <label class="block text-xs font-bold text-slate-700 mb-1.5">
-              Grado institucional sugerido / asignado (Opcional):
-            </label>
-            <select v-model="decisionForm.assignedGradeId" :disabled="isYearClosed" class="form-select disabled:opacity-65 disabled:bg-slate-100 dark:disabled:bg-slate-800">
-              <option value="">Mantener grado por defecto</option>
-              <option v-for="g in grades" :key="g.id_tipo_grado || g.id_grado" :value="g.id_tipo_grado || g.id_grado">
-                {{ g.nombre }}
-              </option>
-            </select>
-          </div>
-
-          <!-- Justificación u observaciones -->
-          <div class="form-group">
-            <label class="block text-xs font-bold text-slate-700 mb-1.5">
-              Justificación u observaciones institucionales:
-            </label>
-            <textarea 
-              v-model="decisionForm.observation" 
-              rows="3" 
-              :disabled="isYearClosed"
-              class="form-textarea disabled:opacity-65 disabled:bg-slate-100 dark:disabled:bg-slate-800"
-              placeholder="Indique los motivos, actas o acuerdos de la comisión de evaluación y promoción..."
-            ></textarea>
-          </div>
-        </div>
-
-        <div class="modal-footer flex items-center justify-between">
-          <button class="btn-secondary" @click="showDecisionModal = false">
-            {{ isYearClosed ? 'Cerrar' : 'Cancelar' }}
-          </button>
-          <button v-if="!isYearClosed" class="btn-primary" :disabled="loading" @click="saveDirectiveDecision()">
-            <Save class="w-4 h-4 inline mr-1.5" /> 
-            {{ loading ? 'Guardando...' : 'Guardar Decisión' }}
-          </button>
-        </div>
-      </div>
-    </div>
+    <PromotionDecisionModal
+      :show="showDecisionModal"
+      :is-year-closed="isYearClosed"
+      :target-student-for-decision="targetStudentForDecision"
+      :decision-form="decisionForm"
+      :grades="grades"
+      :loading="loading"
+      @close="showDecisionModal = false"
+      @save="saveDirectiveDecision()"
+    />
   </div>
 </template>
+
 
 <style scoped>
 .tracking-container {

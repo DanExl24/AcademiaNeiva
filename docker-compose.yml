@@ -14,6 +14,7 @@ services:
     build:
       context: ./backend
     environment:
+
       - TZ=America/Bogota
       - DB_HOST=postgres
       - DB_PORT=5432

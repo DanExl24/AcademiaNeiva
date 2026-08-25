@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, computed } from 'vue'
-import axios from 'axios'
-import { useAuthStore } from '../../stores/auth'
+import { adminGeneralService } from '../../services/adminGeneralService'
 import { socketService } from '../../services/socketService'
 import { Doughnut, Line } from 'vue-chartjs'
 import EmptyChartState from '../../components/charts/EmptyChartState.vue'
@@ -29,6 +28,9 @@ import {
   RefreshCw,
   TrendingUp
 } from 'lucide-vue-next'
+import DataTable from '../../components/ui/DataTable.vue'
+import SkeletonTable from '../../components/feedback/SkeletonTable.vue'
+import EmptyState from '../../components/feedback/EmptyState.vue'
 
 // Register Chart.js components
 ChartJS.register(
@@ -43,8 +45,8 @@ ChartJS.register(
   LineElement
 )
 
-const auth = useAuthStore()
 const loading = ref(true)
+
 const stats = ref<any>(null)
 const error = ref('')
 
@@ -52,9 +54,8 @@ const fetchStats = async () => {
   try {
     loading.value = true
     error.value = ''
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get('/api/admin/dashboard/stats', { headers })
-    stats.value = res.data
+    const data = await adminGeneralService.getDashboardStats()
+    stats.value = data
   } catch (err: any) {
     console.error('Error fetching admin dashboard stats:', err)
     error.value = 'No se pudieron cargar las estadísticas del panel general.'
@@ -62,6 +63,7 @@ const fetchStats = async () => {
     loading.value = false
   }
 }
+
 
 // WebSocket: escuchar actualizaciones de sesiones activas en tiempo real
 let cleanupSocket: (() => void) | null = null
@@ -151,12 +153,12 @@ const distributionChartData = computed(() => {
 
 const hasGrowthData = computed(() => {
   const data = growthChartData.value?.datasets?.[0]?.data || []
-  return data.length > 0 && data.some((v: any) => typeof v === 'number' && v > 0)
+  return data.length > 0 && data.some((v: any) => Number(v) > 0)
 })
 
 const hasDistributionData = computed(() => {
   const data = distributionChartData.value?.datasets?.[0]?.data || []
-  return data.length > 0 && data.some((v: any) => typeof v === 'number' && v > 0)
+  return data.length > 0 && data.some((v: any) => Number(v) > 0)
 })
 
 const distributionChartOptions = {
@@ -358,7 +360,7 @@ const distributionChartOptions = {
         </div>
         <div class="flex-1 relative min-h-[220px] flex items-center justify-center">
           <div v-if="loading" class="absolute inset-0 flex items-center justify-center">
-            <div class="w-8 h-8 border-4 border-indigo-650/20 border-t-indigo-600 rounded-full animate-spin"></div>
+            <div class="w-8 h-8 border-4 border-indigo-600/20 border-t-indigo-600 rounded-full animate-spin"></div>
           </div>
           <Line v-else-if="hasGrowthData" :data="growthChartData" :options="growthChartOptions" />
           <EmptyChartState 
@@ -378,7 +380,7 @@ const distributionChartOptions = {
         </div>
         <div class="flex-1 relative flex items-center justify-center min-h-[220px]">
           <div v-if="loading" class="absolute inset-0 flex items-center justify-center">
-            <div class="w-8 h-8 border-4 border-indigo-650/20 border-t-indigo-600 rounded-full animate-spin"></div>
+            <div class="w-8 h-8 border-4 border-indigo-600/20 border-t-indigo-600 rounded-full animate-spin"></div>
           </div>
           <div v-else-if="hasDistributionData" class="w-full h-full relative min-h-[200px]">
             <Doughnut :data="distributionChartData" :options="distributionChartOptions" />
@@ -404,25 +406,31 @@ const distributionChartOptions = {
           <h3 class="text-lg font-black text-slate-800 dark:text-white">Actividad Reciente</h3>
           <p class="text-xs text-slate-400 font-bold uppercase tracking-wider mt-0.5">Bitácora de auditoría y operaciones del sistema</p>
         </div>
-        <div class="flex-1 relative overflow-y-auto">
-          <div v-if="loading" class="absolute inset-0 flex items-center justify-center">
-            <div class="w-8 h-8 border-4 border-indigo-650/20 border-t-indigo-600 rounded-full animate-spin"></div>
-          </div>
+        <div class="flex-1 relative">
+          <SkeletonTable v-if="loading" :rows="4" :cols="2" />
           
-          <table v-else class="w-full text-left border-collapse">
-            <thead>
-              <tr class="border-b border-slate-100 dark:border-slate-800 text-[10px] font-black uppercase text-slate-400 tracking-wider">
-                <th class="pb-3 w-1/4">Tiempo</th>
-                <th class="pb-3 w-3/4">Operación / Suceso</th>
+          <EmptyState
+            v-else-if="!stats?.actividad || stats.actividad.length === 0"
+            title="Sin actividad reciente"
+            description="No se registran eventos de auditoría u operaciones en este momento."
+          >
+            <template #icon>
+              <Activity class="w-8 h-8 text-indigo-500" />
+            </template>
+          </EmptyState>
+
+          <DataTable v-else>
+            <template #header>
+              <tr>
+                <th class="py-3 px-4 w-1/4">Tiempo</th>
+                <th class="py-3 px-4 w-3/4">Operación / Suceso</th>
               </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-50 dark:divide-slate-800/50">
-              <tr v-for="(act, idx) in stats?.actividad" :key="idx" class="text-sm">
-                <td class="py-3.5 font-semibold text-slate-500 dark:text-slate-450 font-mono">{{ act.tiempo }}</td>
-                <td class="py-3.5 text-slate-700 dark:text-slate-300 font-medium leading-relaxed">{{ act.descripcion }}</td>
-              </tr>
-            </tbody>
-          </table>
+            </template>
+            <tr v-for="(act, idx) in stats.actividad" :key="idx" class="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+              <td class="py-3.5 px-4 font-semibold text-slate-500 dark:text-slate-400 font-mono text-xs">{{ act.tiempo }}</td>
+              <td class="py-3.5 px-4 text-slate-700 dark:text-slate-300 font-medium leading-relaxed text-xs">{{ act.descripcion }}</td>
+            </tr>
+          </DataTable>
         </div>
       </div>
 
@@ -436,7 +444,7 @@ const distributionChartOptions = {
             <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Control de acceso institucional del mes</p>
           </div>
           <div v-if="loading" class="h-16 flex items-center justify-center">
-            <div class="w-6 h-6 border-3 border-indigo-650/20 border-t-indigo-600 rounded-full animate-spin"></div>
+            <div class="w-6 h-6 border-3 border-indigo-600/20 border-t-indigo-600 rounded-full animate-spin"></div>
           </div>
           <div v-else class="grid grid-cols-4 gap-4 text-center mt-2">
             <div class="bg-slate-50 dark:bg-slate-950 p-3 rounded-2xl border border-slate-100/50 dark:border-slate-900">
@@ -465,7 +473,7 @@ const distributionChartOptions = {
             <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Resumen de operaciones registradas este mes</p>
           </div>
           <div v-if="loading" class="h-16 flex items-center justify-center">
-            <div class="w-6 h-6 border-3 border-indigo-650/20 border-t-indigo-600 rounded-full animate-spin"></div>
+            <div class="w-6 h-6 border-3 border-indigo-600/20 border-t-indigo-600 rounded-full animate-spin"></div>
           </div>
           <div v-else class="space-y-3 mt-2">
             <div class="flex items-center justify-between text-sm">
@@ -494,7 +502,7 @@ const distributionChartOptions = {
             <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Estado y disponibilidad de infraestructura global</p>
           </div>
           <div v-if="loading" class="h-16 flex items-center justify-center">
-            <div class="w-6 h-6 border-3 border-indigo-650/20 border-t-indigo-600 rounded-full animate-spin"></div>
+            <div class="w-6 h-6 border-3 border-indigo-600/20 border-t-indigo-600 rounded-full animate-spin"></div>
           </div>
           <div v-else class="grid grid-cols-2 md:grid-cols-3 gap-3.5 mt-2">
             

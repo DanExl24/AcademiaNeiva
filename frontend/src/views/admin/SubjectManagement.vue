@@ -1,10 +1,15 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import axios from 'axios'
+import { academicService } from '../../services/academicService'
 import { BookOpen, Plus, Trash2, Search, Info, Layers, GraduationCap, X, Edit, Calendar, PlusCircle, Lock } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 import { useAcademicYearStore } from '../../stores/academicYear'
 import { getCourseDisplayName } from '../../utils/courseHelper'
+import { useConfirm } from '../../composables/useConfirm'
+import { useToast } from '../../composables/useToast'
+import HierarchicalAssignmentList from '../../components/academico/HierarchicalAssignmentList.vue'
+
+
 
 interface SubjectItem {
   id_materia: number
@@ -22,6 +27,8 @@ interface TrashItem {
 
 const auth = useAuthStore()
 const yearStore = useAcademicYearStore()
+const { confirm } = useConfirm()
+const toast = useToast()
 const schoolId = computed(() => Number(auth.user?.schoolId || 0))
 const isReadOnly = computed(() => Boolean(yearStore.isClosedYear))
 
@@ -53,13 +60,12 @@ const loadSubjects = async () => {
   try {
     loading.value = true
     const params = yearStore.selectedYearId ? { yearId: yearStore.selectedYearId } : {}
-    const headers = auth.token ? { Authorization: `Bearer ${auth.token}` } : {}
     const [subRes, trashRes] = await Promise.all([
-      axios.get(`/api/academic-admin/subjects/${schoolId.value}`, { params, headers }),
-      axios.get(`/api/academic-admin/subjects/trash/${schoolId.value}`, { headers })
+      academicService.getSubjects(schoolId.value, params),
+      academicService.getTrashSubjects(schoolId.value)
     ])
-    subjects.value = Array.isArray(subRes.data) ? subRes.data : []
-    trashSubjects.value = Array.isArray(trashRes.data) ? trashRes.data : []
+    subjects.value = subRes
+    trashSubjects.value = trashRes
   } catch (error) {
     console.error('Error loading subjects:', error)
     subjects.value = []
@@ -95,12 +101,10 @@ const createSubject = async () => {
 
   try {
     saving.value = true
-    await axios.post('/api/academic-admin/subjects', {
+    await academicService.createSubject({
       schoolId: schoolId.value,
       nombre: newSubject.value.nombre,
       trashId: reuseFromTrash.value?.id_papelera || null
-    }, {
-      headers: auth.token ? { Authorization: `Bearer ${auth.token}` } : {}
     })
     newSubject.value.nombre = ''
     reuseFromTrash.value = null
@@ -112,6 +116,7 @@ const createSubject = async () => {
     saving.value = false
   }
 }
+
 const handleTrashSelection = () => {
   if (reuseFromTrash.value) {
     newSubject.value.nombre = reuseFromTrash.value.nombre_materia
@@ -168,16 +173,10 @@ const confirmDelete = async (item: SubjectItem, force = false) => {
   }
   try {
     deleting.value = true
-    const response = await axios.delete(`/api/academic-admin/subjects/${item.id_materia}`, {
-      params: { 
-        schoolId: schoolId.value,
-        force: force ? 'true' : 'false'
-      },
-      headers: auth.token ? { Authorization: `Bearer ${auth.token}` } : {}
-    })
+    const response = await academicService.deleteSubject(item.id_materia, schoolId.value, force)
     
-    if (force && response.data.report) {
-      generateAndDownloadReport(response.data.report)
+    if (force && response?.report) {
+      generateAndDownloadReport(response.report)
     }
 
     deleteModal.value = null
@@ -195,6 +194,7 @@ const confirmDelete = async (item: SubjectItem, force = false) => {
     deleting.value = false
   }
 }
+
 
 // ─── Curriculum Detail State & Methods ───────────────────────────────────────
 const detailDrawerOpen = ref(false)
@@ -430,21 +430,17 @@ const fetchSubjectDetails = async () => {
   if (!selectedSubjectId.value || !schoolId.value) return
   try {
     detailLoading.value = true
-    const params: Record<string, any> = { schoolId: schoolId.value }
-    if (yearStore.selectedYearId) {
-      params.yearId = yearStore.selectedYearId
-    }
-    const headers = auth.token ? { Authorization: `Bearer ${auth.token}` } : {}
-    const response = await axios.get(`/api/academic-admin/subjects/${selectedSubjectId.value}/curriculum-details`, {
-      params,
-      headers
-    })
-    subjectDetails.value = response.data
+    const response = await academicService.getSubjectCurriculumDetails(
+      selectedSubjectId.value,
+      schoolId.value,
+      yearStore.selectedYearId || undefined
+    )
+    subjectDetails.value = response
     
     // Set default filter period if not set
-    if (response.data.periods?.length > 0 && !selectedPeriodId.value) {
-      const openPeriod = response.data.periods.find((p: any) => p.estado === 'ABIERTO')
-      selectedPeriodId.value = openPeriod ? openPeriod.id_periodo : response.data.periods[0].id_periodo
+    if (response.periods?.length > 0 && !selectedPeriodId.value) {
+      const openPeriod = response.periods.find((p: any) => p.estado === 'ABIERTO')
+      selectedPeriodId.value = openPeriod ? openPeriod.id_periodo : response.periods[0].id_periodo
     }
 
     // Set default grade filter to first assigned grade to keep list clean
@@ -494,14 +490,12 @@ const saveCompetency = async () => {
   }
   try {
     savingCompetency.value = true
-    await axios.post('/api/academic-admin/settings/competencies', {
+    await academicService.saveCompetency({
       schoolId: schoolId.value,
       groupId: competencyForm.value.id_grupo,
       subjectId: selectedSubjectId.value,
       periodId: competencyForm.value.id_periodo,
       descripcion: competencyForm.value.descripcion.trim()
-    }, {
-      headers: auth.token ? { Authorization: `Bearer ${auth.token}` } : {}
     })
     showCompetencyModal.value = false
     await fetchSubjectDetails()
@@ -514,18 +508,23 @@ const saveCompetency = async () => {
 
 const deleteCompetency = async (id: number) => {
   if (isReadOnly.value) {
-    alert('El año académico se encuentra cerrado. No es posible eliminar competencias.')
+    toast.error('El año académico se encuentra cerrado. No es posible eliminar competencias.')
     return
   }
-  if (!confirm('¿Estás seguro de que deseas eliminar esta competencia? Se eliminarán todas sus evidencias y notas asociadas.')) return
+  const ok = await confirm({
+    title: 'Eliminar Competencia',
+    message: '¿Estás seguro de que deseas eliminar esta competencia? Se eliminarán todas sus evidencias y notas asociadas.',
+    confirmText: 'Eliminar Competencia',
+    type: 'danger'
+  })
+  if (!ok) return
+
   try {
-    await axios.delete(`/api/academic-admin/settings/competencies/${id}`, {
-      params: { schoolId: schoolId.value },
-      headers: auth.token ? { Authorization: `Bearer ${auth.token}` } : {}
-    })
+    await academicService.deleteCompetency(id, schoolId.value)
+    toast.success('Competencia eliminada exitosamente')
     await fetchSubjectDetails()
   } catch (error: any) {
-    alert(error.response?.data?.error || 'Error al eliminar la competencia')
+    toast.error(error.response?.data?.error || 'Error al eliminar la competencia')
   }
 }
 
@@ -552,31 +551,31 @@ const openEditEvidence = (ev: any) => {
 
 const saveEvidence = async () => {
   if (isReadOnly.value) {
-    alert('El año académico se encuentra cerrado. No es posible guardar evidencias.')
+    toast.error('El año académico se encuentra cerrado. No es posible guardar evidencias.')
     return
   }
   if (!evidenceForm.value.descripcion.trim()) {
-    alert('Escribe la descripción de la evidencia.')
+    toast.warning('Escribe la descripción de la evidencia.')
     return
   }
   try {
     savingEvidence.value = true
-    const headers = auth.token ? { Authorization: `Bearer ${auth.token}` } : {}
     if (evidenceForm.value.id_evidencia) {
-      await axios.put(`/api/academic-admin/settings/evidencias/${evidenceForm.value.id_evidencia}`, {
+      await academicService.updateCurriculumEvidence(evidenceForm.value.id_evidencia, {
         schoolId: schoolId.value,
         descripcion: evidenceForm.value.descripcion.trim()
-      }, { headers })
+      })
     } else {
-      await axios.post(`/api/academic-admin/settings/competencies/${evidenceForm.value.id_competencia}/evidencias`, {
+      await academicService.createCurriculumEvidence(evidenceForm.value.id_competencia!, {
         schoolId: schoolId.value,
         descripcion: evidenceForm.value.descripcion.trim()
-      }, { headers })
+      })
     }
+    toast.success('Evidencia guardada exitosamente')
     showEvidenceModal.value = false
     await fetchSubjectDetails()
   } catch (error: any) {
-    alert(error.response?.data?.error || 'Error al guardar la evidencia')
+    toast.error(error.response?.data?.error || 'Error al guardar la evidencia')
   } finally {
     savingEvidence.value = false
   }
@@ -584,21 +583,27 @@ const saveEvidence = async () => {
 
 const deleteEvidence = async (id: number) => {
   if (isReadOnly.value) {
-    alert('El año académico se encuentra cerrado. No es posible eliminar evidencias.')
+    toast.error('El año académico se encuentra cerrado. No es posible eliminar evidencias.')
     return
   }
-  if (!confirm('¿Estás seguro de que deseas eliminar esta evidencia?')) return
+  const ok = await confirm({
+    title: 'Eliminar Evidencia',
+    message: '¿Estás seguro de que deseas eliminar esta evidencia?',
+    confirmText: 'Eliminar Evidencia',
+    type: 'danger'
+  })
+  if (!ok) return
+
   try {
-    await axios.delete(`/api/academic-admin/settings/evidencias/${id}`, {
-      params: { schoolId: schoolId.value },
-      headers: auth.token ? { Authorization: `Bearer ${auth.token}` } : {}
-    })
+    await academicService.deleteCurriculumEvidence(id, schoolId.value)
+    toast.success('Evidencia eliminada exitosamente')
     await fetchSubjectDetails()
   } catch (error: any) {
-    alert(error.response?.data?.error || 'Error al eliminar la evidencia')
+    toast.error(error.response?.data?.error || 'Error al eliminar la evidencia')
   }
 }
 </script>
+
 
 <template>
   <div class="max-w-[1200px] mx-auto space-y-6">
@@ -1011,12 +1016,12 @@ const deleteEvidence = async (id: number) => {
                       <!-- Period filter / Quick Actions -->
                       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                         <div class="flex items-center gap-2">
-                          <Calendar :size="16" class="text-slate-400" />
+                          <Calendar :size="16" class="text-slate-400 shrink-0" />
                           <select 
                             v-model="selectedPeriodId" 
-                            class="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-800 rounded-xl p-2.5 text-xs font-black uppercase tracking-wider text-slate-700 dark:text-white outline-none"
+                            class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
                           >
-                            <option v-for="p in subjectDetails?.periods" :key="p.id_periodo" :value="p.id_periodo">
+                            <option v-for="p in subjectDetails?.periods" :key="p.id_periodo" :value="p.id_periodo" class="bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100">
                               {{ p.nombre }} ({{ p.porcentaje }}%)
                             </option>
                           </select>
@@ -1025,66 +1030,66 @@ const deleteEvidence = async (id: number) => {
                         <button 
                           v-if="!isSelectedPeriodClosed && !isReadOnly" 
                           @click="openAddCompetency" 
-                          class="px-4 py-2.5 bg-emerald-600 text-white rounded-xl font-bold text-xs uppercase tracking-wide flex items-center gap-1.5 hover:bg-emerald-700 transition-all shadow-md"
+                          class="px-4 py-2.5 bg-emerald-600 text-white rounded-xl font-bold text-xs uppercase tracking-wide flex items-center gap-1.5 hover:bg-emerald-700 transition-all shadow-md cursor-pointer"
                         >
                           <PlusCircle :size="14" />
                           Agregar Competencia
                         </button>
-                        <div v-else-if="isReadOnly" class="px-4 py-2 bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-900 rounded-xl text-[10px] font-black uppercase tracking-widest leading-none flex items-center gap-1">
+                        <div v-else-if="isReadOnly" class="px-4 py-2 bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-900 rounded-xl text-xs font-black uppercase tracking-wider leading-none flex items-center gap-1">
                           <Lock :size="14" /> Año Cerrado (Solo Lectura)
                         </div>
-                        <div v-else class="px-4 py-2 bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-900 rounded-xl text-[10px] font-black uppercase tracking-widest leading-none flex items-center gap-1">
+                        <div v-else class="px-4 py-2 bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-900 rounded-xl text-xs font-black uppercase tracking-wider leading-none flex items-center gap-1">
                           <Info :size="14" /> Periodo Cerrado (Solo Lectura)
                         </div>
                       </div>
 
                       <!-- Curriculum Search & Group Filters -->
-                      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
-                        <div class="space-y-1 text-left">
-                          <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Filtrar por Grado</label>
+                      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 bg-slate-50 dark:bg-slate-800/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-700">
+                        <div class="space-y-1.5 text-left">
+                          <label class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Filtrar por Grado</label>
                           <select 
                             v-model="selectedCurriculumGradeId" 
                             @change="selectedCurriculumGroupId = null"
-                            class="w-full bg-white dark:bg-slate-850 border border-slate-100 dark:border-slate-800 rounded-xl p-2 text-xs font-bold outline-none text-slate-900 dark:text-white"
+                            class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-bold outline-none text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-emerald-500 transition-all cursor-pointer"
                           >
-                            <option :value="null">Todos los grados</option>
-                            <option v-for="gr in uniqueCurriculumGrades" :key="gr.id" :value="gr.id">
+                            <option :value="null" class="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">Todos los grados</option>
+                            <option v-for="gr in uniqueCurriculumGrades" :key="gr.id" :value="gr.id" class="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">
                               {{ gr.name }}
                             </option>
                           </select>
                         </div>
-                        <div class="space-y-1 text-left">
-                          <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Filtrar por Jornada</label>
+                        <div class="space-y-1.5 text-left">
+                          <label class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Filtrar por Jornada</label>
                           <select 
                             v-model="selectedCurriculumJornadaId" 
                             @change="selectedCurriculumGroupId = null"
-                            class="w-full bg-white dark:bg-slate-850 border border-slate-100 dark:border-slate-800 rounded-xl p-2 text-xs font-bold outline-none text-slate-900 dark:text-white"
+                            class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-bold outline-none text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-emerald-500 transition-all cursor-pointer"
                           >
-                            <option :value="null">Todas las jornadas</option>
-                            <option v-for="j in uniqueCurriculumJornadas" :key="j.id" :value="j.id">
+                            <option :value="null" class="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">Todas las jornadas</option>
+                            <option v-for="j in uniqueCurriculumJornadas" :key="j.id" :value="j.id" class="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">
                               {{ j.name }}
                             </option>
                           </select>
                         </div>
-                        <div class="space-y-1 text-left">
-                          <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Filtrar por Curso</label>
+                        <div class="space-y-1.5 text-left">
+                          <label class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Filtrar por Curso</label>
                           <select 
                             v-model="selectedCurriculumGroupId" 
-                            class="w-full bg-white dark:bg-slate-850 border border-slate-100 dark:border-slate-800 rounded-xl p-2 text-xs font-bold outline-none text-slate-900 dark:text-white"
+                            class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-bold outline-none text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-emerald-500 transition-all cursor-pointer"
                           >
-                            <option :value="null">Todos los cursos</option>
-                            <option v-for="g in uniqueCurriculumGroups" :key="g.id" :value="g.id">
+                            <option :value="null" class="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">Todos los cursos</option>
+                            <option v-for="g in uniqueCurriculumGroups" :key="g.id" :value="g.id" class="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">
                               {{ g.name }}
                             </option>
                           </select>
                         </div>
-                        <div class="space-y-1 text-left">
-                          <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Buscar Competencia / Evidencia</label>
+                        <div class="space-y-1.5 text-left">
+                          <label class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Buscar Competencia / Evidencia</label>
                           <input 
                             v-model="curriculumSearchQuery" 
                             type="text" 
                             placeholder="Buscar por texto..."
-                            class="w-full bg-white dark:bg-slate-850 border border-slate-100 dark:border-slate-800 rounded-xl p-2 text-xs font-bold outline-none text-slate-900 dark:text-white placeholder:text-slate-400"
+                            class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-bold outline-none text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-2 focus:ring-emerald-500 transition-all"
                           />
                         </div>
                       </div>
@@ -1092,7 +1097,7 @@ const deleteEvidence = async (id: number) => {
                       <!-- Competencies list -->
                       <div class="space-y-4">
                         <div v-if="!filteredCompetencies.length" class="text-center py-16 bg-white dark:bg-slate-800/40 border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl">
-                          <BookOpen :size="32" class="mx-auto text-slate-350 dark:text-slate-600 mb-2" />
+                          <BookOpen :size="32" class="mx-auto text-slate-400 dark:text-slate-600 mb-2" />
                           <p class="text-sm font-bold text-slate-400">No hay competencias definidas para este periodo.</p>
                         </div>
 
@@ -1104,7 +1109,7 @@ const deleteEvidence = async (id: number) => {
                           <!-- Competency Header -->
                           <div class="p-4 bg-slate-50/50 dark:bg-slate-800/20 border-b border-slate-100 dark:border-slate-800/60 flex items-start justify-between gap-4">
                             <div class="flex-1 space-y-1.5 text-left">
-                              <span class="inline-block px-2.5 py-0.5 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 rounded-md text-[9px] font-black uppercase tracking-wider">
+                              <span class="inline-block px-2.5 py-0.5 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 rounded-md text-xs font-bold uppercase tracking-wider">
                                 Curso: {{ comp.grado_nombre }} ({{ comp.seccion_nombre }}){{ comp.jornada_nombre ? ' · ' + comp.jornada_nombre : '' }}
                               </span>
                               <p class="text-sm font-bold text-slate-800 dark:text-slate-200">
@@ -1113,10 +1118,10 @@ const deleteEvidence = async (id: number) => {
                             </div>
                             <!-- Actions -->
                             <div v-if="!isSelectedPeriodClosed && !isReadOnly" class="flex items-center gap-1.5 shrink-0">
-                              <button @click="openEditCompetency(comp)" class="p-1.5 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-350 hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-emerald-950/40 rounded-lg transition-colors">
+                              <button @click="openEditCompetency(comp)" class="p-1.5 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300 hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-emerald-950/40 rounded-lg transition-colors cursor-pointer">
                                 <Edit :size="14" />
                               </button>
-                              <button @click="deleteCompetency(comp.id_competencia)" class="p-1.5 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-350 hover:bg-red-55 hover:text-red-600 dark:hover:bg-red-950/40 rounded-lg transition-colors">
+                              <button @click="deleteCompetency(comp.id_competencia)" class="p-1.5 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40 rounded-lg transition-colors cursor-pointer">
                                 <Trash2 :size="14" />
                               </button>
                             </div>
@@ -1125,8 +1130,8 @@ const deleteEvidence = async (id: number) => {
                           <!-- Evidences List -->
                           <div class="p-4 bg-white dark:bg-slate-800/25 space-y-3">
                             <div class="flex items-center justify-between px-1">
-                              <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Evidencias de Aprendizaje</span>
-                              <button v-if="!isSelectedPeriodClosed && !isReadOnly" @click="openAddEvidence(comp.id_competencia)" class="text-xs font-black text-emerald-600 dark:text-emerald-450 hover:underline flex items-center gap-1">
+                              <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Evidencias de Aprendizaje</span>
+                              <button v-if="!isSelectedPeriodClosed && !isReadOnly" @click="openAddEvidence(comp.id_competencia)" class="text-xs font-black text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 cursor-pointer">
                                 <Plus :size="12" /> Añadir
                               </button>
                             </div>
@@ -1142,24 +1147,24 @@ const deleteEvidence = async (id: number) => {
                                 class="py-3 flex items-start justify-between gap-3 text-left group/ev"
                               >
                                 <div class="flex items-start gap-2.5">
-                                  <span class="mt-0.5 w-5 h-5 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-[10px] font-black text-slate-500">
+                                  <span class="mt-0.5 w-5 h-5 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-xs font-black text-slate-500 dark:text-slate-300">
                                     {{ Number(idx) + 1 }}
                                   </span>
                                   <div>
-                                    <p class="text-xs font-bold text-slate-650 dark:text-slate-300">
+                                    <p class="text-xs font-bold text-slate-700 dark:text-slate-300">
                                       {{ ev.descripcion }}
                                     </p>
-                                    <span v-if="ev.dba_codigo" class="inline-block mt-1 text-[8px] font-black bg-purple-50 dark:bg-purple-950/30 text-purple-600 dark:text-purple-400 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                                    <span v-if="ev.dba_codigo" class="inline-block mt-1 text-xs font-bold bg-purple-50 dark:bg-purple-950/30 text-purple-600 dark:text-purple-400 px-1.5 py-0.5 rounded uppercase tracking-wider">
                                       DBA: {{ ev.dba_codigo }}
                                     </span>
                                   </div>
                                 </div>
                                 <!-- Actions -->
                                 <div v-if="!isSelectedPeriodClosed && !isReadOnly" class="flex items-center gap-1 shrink-0 opacity-0 group-hover/ev:opacity-100 transition-opacity">
-                                  <button @click="openEditEvidence(ev)" class="p-1 text-slate-400 hover:text-emerald-600 rounded">
+                                  <button @click="openEditEvidence(ev)" class="p-1 text-slate-400 hover:text-emerald-600 rounded cursor-pointer">
                                     <Edit :size="12" />
                                   </button>
-                                  <button @click="deleteEvidence(ev.id_evidencia)" class="p-1 text-slate-400 hover:text-red-600 rounded">
+                                  <button @click="deleteEvidence(ev.id_evidencia)" class="p-1 text-slate-400 hover:text-red-600 rounded cursor-pointer">
                                     <Trash2 :size="12" />
                                   </button>
                                 </div>
@@ -1173,80 +1178,63 @@ const deleteEvidence = async (id: number) => {
                     <!-- TAB 2: Docentes y Cursos (Asignaciones) -->
                     <div v-if="activeTab === 'teachers'" class="space-y-4">
                       <!-- Filters & Search for Assignments -->
-                      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
-                        <div class="space-y-1 text-left">
-                          <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Filtrar por Docente</label>
+                      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 bg-slate-50 dark:bg-slate-800/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-700">
+                        <div class="space-y-1.5 text-left">
+                          <label class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Filtrar por Docente</label>
                           <select 
                             v-model="selectedTeacherId" 
-                            class="w-full bg-white dark:bg-slate-850 border border-slate-100 dark:border-slate-800 rounded-xl p-2 text-xs font-bold outline-none text-slate-900 dark:text-white"
+                            class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-bold outline-none text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-emerald-500 transition-all cursor-pointer"
                           >
-                            <option :value="null">Todos los docentes</option>
-                            <option v-for="t in uniqueTeachers" :key="t.id" :value="t.id">
+                            <option :value="null" class="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">Todos los docentes</option>
+                            <option v-for="t in uniqueTeachers" :key="t.id" :value="t.id" class="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">
                               {{ t.name }}
                             </option>
                           </select>
                         </div>
-                        <div class="space-y-1 text-left">
-                          <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Filtrar por Grado</label>
+                        <div class="space-y-1.5 text-left">
+                          <label class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Filtrar por Grado</label>
                           <select 
                             v-model="selectedAssignmentGradeId"
                             @change="selectedAssignmentGroupId = null"
-                            class="w-full bg-white dark:bg-slate-850 border border-slate-100 dark:border-slate-800 rounded-xl p-2 text-xs font-bold outline-none text-slate-900 dark:text-white"
+                            class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-bold outline-none text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-emerald-500 transition-all cursor-pointer"
                           >
-                            <option :value="null">Todos los grados</option>
-                            <option v-for="gr in uniqueAssignmentGrades" :key="gr.id" :value="gr.id">
+                            <option :value="null" class="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">Todos los grados</option>
+                            <option v-for="gr in uniqueAssignmentGrades" :key="gr.id" :value="gr.id" class="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">
                               {{ gr.name }}
                             </option>
                           </select>
                         </div>
-                        <div class="space-y-1 text-left">
-                          <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Filtrar por Curso</label>
+                        <div class="space-y-1.5 text-left">
+                          <label class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Filtrar por Curso</label>
                           <select 
                             v-model="selectedAssignmentGroupId" 
-                            class="w-full bg-white dark:bg-slate-850 border border-slate-100 dark:border-slate-800 rounded-xl p-2 text-xs font-bold outline-none text-slate-900 dark:text-white"
+                            class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-bold outline-none text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-emerald-500 transition-all cursor-pointer"
                           >
-                            <option :value="null">Todos los cursos</option>
-                            <option v-for="g in uniqueAssignmentGroups" :key="g.id" :value="g.id">
+                            <option :value="null" class="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">Todos los cursos</option>
+                            <option v-for="g in uniqueAssignmentGroups" :key="g.id" :value="g.id" class="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">
                               {{ g.name }}
                             </option>
                           </select>
                         </div>
-                        <div class="space-y-1 text-left">
-                          <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Buscador Rápido</label>
+                        <div class="space-y-1.5 text-left">
+                          <label class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Buscador Rápido</label>
                           <input 
                             v-model="assignmentSearchQuery" 
                             type="text" 
                             placeholder="Buscar docente o curso..."
-                            class="w-full bg-white dark:bg-slate-850 border border-slate-100 dark:border-slate-800 rounded-xl p-2 text-xs font-bold outline-none text-slate-900 dark:text-white placeholder:text-slate-400"
+                            class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-bold outline-none text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-2 focus:ring-emerald-500 transition-all"
                           />
                         </div>
                       </div>
 
-                      <div v-if="!filteredAssignments.length" class="text-center py-16 bg-white dark:bg-slate-850 rounded-2xl border border-slate-100 dark:border-slate-800">
-                        <GraduationCap :size="36" class="mx-auto text-slate-350 dark:text-slate-600 mb-2" />
-                        <p class="text-sm font-bold text-slate-400">No se encontraron asignaciones con los filtros seleccionados.</p>
-                      </div>
-
-                      <div 
-                        v-for="asg in filteredAssignments" 
-                        :key="asg.id_detallegrado"
-                        class="p-4 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-800/80 rounded-2xl flex items-center justify-between gap-4"
-                      >
-                        <div class="flex items-center gap-3">
-                          <div class="h-10 w-10 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center rounded-xl font-black text-sm">
-                            {{ asg.docente_nombre.charAt(0).toUpperCase() }}
-                          </div>
-                          <div class="text-left">
-                            <h4 class="font-black text-slate-800 dark:text-white text-sm">{{ asg.docente_nombre }}</h4>
-                            <p class="text-xs font-bold text-indigo-500 uppercase mt-0.5 tracking-wider">
-                              {{ asg.grado_nombre }} ({{ asg.seccion_nombre }}) · {{ asg.jornada_nombre }}
-                            </p>
-                          </div>
-                        </div>
-                        <span class="px-2.5 py-1 bg-slate-50 dark:bg-slate-700/50 text-slate-500 dark:text-slate-400 rounded-lg text-[10px] font-black uppercase tracking-wider border border-slate-100 dark:border-slate-700">
-                          Asignado
-                        </span>
-                      </div>
+                      <!-- Hierarchical Assignment List Component -->
+                      <HierarchicalAssignmentList 
+                        :items="filteredAssignments" 
+                        mode="subject" 
+                        :read-only="true"
+                        empty-title="Sin docentes asignados"
+                        empty-message="No se encontraron asignaciones de docentes para esta materia con los filtros seleccionados."
+                      />
                     </div>
 
                   </div>
@@ -1283,9 +1271,9 @@ const deleteEvidence = async (id: number) => {
               <select 
                 v-model="competencyForm.id_grupo" 
                 :disabled="!!competencyForm.id_competencia"
-                class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-emerald-500/20 rounded-xl p-3 font-bold outline-none text-slate-900 dark:text-white"
+                class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 font-bold outline-none text-slate-900 dark:text-white"
               >
-                <option v-for="g in subjectDetails?.groups" :key="g.id_grupo" :value="g.id_grupo">
+                <option v-for="g in subjectDetails?.groups" :key="g.id_grupo" :value="g.id_grupo" class="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">
                   {{ g.grado_nombre }}{{ g.tipo_grado_nombre ? ' - ' + g.tipo_grado_nombre : '' }} ({{ g.seccion_nombre }}) · {{ g.jornada_nombre }}
                 </option>
               </select>

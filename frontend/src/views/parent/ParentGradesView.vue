@@ -2,7 +2,7 @@
 import { ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
-import axios from 'axios'
+import { studentService } from '../../services/studentService'
 import { 
   Users,
   TrendingUp, 
@@ -17,6 +17,8 @@ import {
 import BoletinExportModule from '../../components/boletines/BoletinExportModule.vue'
 
 import { useAcademicYearStore } from '../../stores/academicYear'
+import DataTable from '../../components/ui/DataTable.vue'
+import SkeletonTable from '../../components/feedback/SkeletonTable.vue'
 
 const auth = useAuthStore()
 const yearStore = useAcademicYearStore()
@@ -46,8 +48,8 @@ const fetchChildren = async () => {
   try {
     const userId = (auth.isMonitoring && auth.monitoringUser) ? (auth.monitoringUser.id || (auth.monitoringUser as any).id_usuario) : (auth.user?.id_usuario || auth.user?.id)
     if (!userId) return
-    const res = await axios.get(`/api/student/parent-children/${userId}`)
-    children.value = res.data
+    const data = await studentService.getParentChildren(userId)
+    children.value = data
     if (children.value.length > 0 && !selectedChildId.value) {
       selectedChildId.value = children.value[0].id_estudiante
     }
@@ -63,11 +65,11 @@ const fetchYearsAndInfo = async () => {
   loading.value = true
   try {
     const [yearsRes, infoRes] = await Promise.all([
-      axios.get(`/api/student/years/${selectedChildId.value}`),
-      axios.get(`/api/student/info/${selectedChildId.value}`)
+      studentService.getYears(selectedChildId.value),
+      studentService.getInfo(selectedChildId.value)
     ])
-    years.value = yearsRes.data
-    studentInfo.value = infoRes.data
+    years.value = yearsRes
+    studentInfo.value = infoRes
     
     if (years.value.length > 0) {
       selectedYear.value = years.value[0].id_anio
@@ -82,8 +84,8 @@ const fetchYearsAndInfo = async () => {
 const fetchPeriods = async () => {
   if (!selectedChildId.value || !selectedYear.value) return
   try {
-    const res = await axios.get(`/api/student/all-periods/${selectedChildId.value}/${selectedYear.value}`)
-    periods.value = (res.data || []).filter((p: any) => p.estado !== 'PENDIENTE')
+    const res = await studentService.getAllPeriods(selectedChildId.value, selectedYear.value)
+    periods.value = (res || []).filter((p: any) => p.estado !== 'PENDIENTE')
     if (periods.value.length > 0) {
       selectedPeriod.value = periods.value[periods.value.length - 1].id_periodo
     } else {
@@ -99,8 +101,8 @@ const fetchGrades = async () => {
   if (!selectedChildId.value || !selectedPeriod.value) return
   fetchingGrades.value = true
   try {
-    const res = await axios.get(`/api/student/grades/${selectedChildId.value}/${selectedPeriod.value}`)
-    academicData.value = res.data
+    const res = await studentService.getGrades(selectedChildId.value, selectedPeriod.value)
+    academicData.value = res
   } catch (err) {
     console.error("Error fetching grades:", err)
   } finally {
@@ -261,10 +263,7 @@ const getPerformanceColor = (level: string | null | undefined) => {
     </div>
 
     <!-- Loading State -->
-    <div v-if="loading || fetchingGrades" class="flex flex-col items-center justify-center py-24 bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm">
-      <div class="w-12 h-12 border-4 border-indigo-600/20 border-t-indigo-600 rounded-full animate-spin"></div>
-      <p class="mt-4 text-slate-500 dark:text-slate-400 font-medium">Obteniendo información académica...</p>
-    </div>
+    <SkeletonTable v-if="loading || fetchingGrades" :rows="5" :cols="4" />
 
     <!-- Empty State -->
     <div v-else-if="!academicData" class="flex flex-col items-center justify-center py-24 bg-white dark:bg-slate-900 rounded-3xl border border-dashed border-slate-200 dark:border-slate-800 transition-all">
@@ -278,64 +277,58 @@ const getPerformanceColor = (level: string | null | undefined) => {
     </div>
 
     <!-- Grades Table -->
-    <div v-else class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden transition-all duration-500 scale-in-center">
-      <div class="overflow-x-auto">
-        <table class="w-full text-left border-collapse">
-          <thead>
-            <tr class="bg-slate-50/50 dark:bg-slate-800/50">
-              <th class="px-8 py-5 text-[11px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Asignatura</th>
-              <th class="px-8 py-5 text-[11px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Docente Responsable</th>
-              <th class="px-8 py-5 text-[11px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 text-center">Nota</th>
-              <th class="px-8 py-5 text-[11px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Evaluación</th>
-              <th class="px-6 py-5"></th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
-            <tr 
-              v-for="(item, idx) in academicData.grades" 
-              :key="idx"
-              @click="openDetails(item)"
-              class="group hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors cursor-pointer"
+    <DataTable v-else>
+      <template #header>
+        <tr>
+          <th class="py-4 px-6">Asignatura</th>
+          <th class="py-4 px-6">Docente Responsable</th>
+          <th class="py-4 px-6 text-center">Nota</th>
+          <th class="py-4 px-6">Evaluación</th>
+          <th class="py-4 px-6"></th>
+        </tr>
+      </template>
+      <tr 
+        v-for="(item, idx) in academicData.grades" 
+        :key="idx"
+        @click="openDetails(item)"
+        class="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors cursor-pointer group"
+      >
+        <td class="py-5 px-6">
+          <div class="flex items-center gap-3">
+            <div class="h-10 w-10 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-400 flex items-center justify-center font-black group-hover:bg-indigo-600 group-hover:text-white transition-all duration-300">
+              {{ item.materia.charAt(0) }}
+            </div>
+            <span class="font-bold text-slate-800 dark:text-slate-200">{{ item.materia }}</span>
+          </div>
+        </td>
+        <td class="py-5 px-6">
+          <span class="text-sm font-medium text-slate-500 dark:text-slate-400 italic">Profe {{ item.docente }}</span>
+        </td>
+        <td class="py-5 px-6">
+          <div class="flex justify-center">
+            <div 
+              class="h-10 w-10 rounded-xl flex items-center justify-center text-xs font-black shadow-sm"
+              :class="item.calificacion === null || item.calificacion === undefined
+                ? 'bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500'
+                : (item.calificacion < 3.0 ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400' : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400')"
             >
-              <td class="px-8 py-6">
-                <div class="flex items-center gap-3">
-                  <div class="h-10 w-10 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-400 flex items-center justify-center font-black group-hover:bg-indigo-600 group-hover:text-white transition-all duration-300">
-                    {{ item.materia.charAt(0) }}
-                  </div>
-                  <span class="font-bold text-slate-800 dark:text-slate-200">{{ item.materia }}</span>
-                </div>
-              </td>
-              <td class="px-8 py-6">
-                <span class="text-sm font-medium text-slate-500 dark:text-slate-400 italic">Profe {{ item.docente }}</span>
-              </td>
-              <td class="px-8 py-6">
-                <div class="flex justify-center">
-                  <div 
-                    class="h-12 w-12 rounded-2xl flex items-center justify-center text-xs font-black shadow-sm"
-                    :class="item.calificacion === null || item.calificacion === undefined
-                      ? 'bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500'
-                      : (item.calificacion < 3.0 ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400' : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400')"
-                  >
-                    {{ item.calificacion !== null && item.calificacion !== undefined ? item.calificacion : 'N/A' }}
-                  </div>
-                </div>
-              </td>
-              <td class="px-8 py-6">
-                <span 
-                  class="inline-flex items-center px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider border shadow-sm"
-                  :class="getPerformanceColor(item.desempeno)"
-                >
-                  {{ item.desempeno || 'SIN NOTAS AÚN' }}
-                </span>
-              </td>
-              <td class="px-6 py-6 text-right">
-                <ChevronRight :size="20" class="inline-block text-slate-300 group-hover:text-indigo-500 group-hover:translate-x-1 transition-all" />
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
+              {{ item.calificacion !== null && item.calificacion !== undefined ? item.calificacion : 'N/A' }}
+            </div>
+          </div>
+        </td>
+        <td class="py-5 px-6">
+          <span 
+            class="inline-flex items-center px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider border shadow-sm"
+            :class="getPerformanceColor(item.desempeno)"
+          >
+            {{ item.desempeno || 'SIN NOTAS AÚN' }}
+          </span>
+        </td>
+        <td class="py-5 px-6 text-right">
+          <ChevronRight :size="18" class="inline-block text-slate-300 group-hover:text-indigo-500 group-hover:translate-x-1 transition-all" />
+        </td>
+      </tr>
+    </DataTable>
 
     <!-- Help Info -->
     <div class="p-6 bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 flex gap-4">

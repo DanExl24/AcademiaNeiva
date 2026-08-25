@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useAuthStore } from '../../stores/auth'
-import axios from 'axios'
+import { adminGeneralService } from '../../services/adminGeneralService'
 import { 
   Settings, User, Shield, Server, Info, Save, Loader2, CheckCircle, AlertTriangle
 } from 'lucide-vue-next'
@@ -57,10 +57,8 @@ const validationError = computed(() => {
 const fetchConfig = async () => {
   try {
     loading.value = true
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get('/api/admin/configuracion', { headers })
+    const data = await adminGeneralService.getConfiguracion()
 
-    const data = res.data
     if (data.supervision_duracion_minima_minutos) {
       supervisionSettings.value.minDuration = Number(data.supervision_duracion_minima_minutos.valor)
       originalSettings.value.minDuration = Number(data.supervision_duracion_minima_minutos.valor)
@@ -84,11 +82,10 @@ const saveConfig = async () => {
 
   try {
     saving.value = true
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.put('/api/admin/configuracion', {
+    await adminGeneralService.updateConfiguracion({
       supervision_duracion_minima_minutos: supervisionSettings.value.minDuration,
       supervision_duracion_maxima_minutos: supervisionSettings.value.maxDuration
-    }, { headers })
+    })
 
     originalSettings.value.minDuration = supervisionSettings.value.minDuration
     originalSettings.value.maxDuration = supervisionSettings.value.maxDuration
@@ -100,6 +97,7 @@ const saveConfig = async () => {
     saving.value = false
   }
 }
+
 
 const resetConfig = () => {
   supervisionSettings.value.minDuration = originalSettings.value.minDuration

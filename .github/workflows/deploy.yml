@@ -1,9 +1,10 @@
-name: Deploy to VPS (CD)
+name: Deploy to Production VPS (CD)
 
 on:
   push:
     branches:
       - main
+      - feature/new-frontend-structure
 
 jobs:
   deploy:
@@ -20,9 +21,25 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           port: 22
           script: |
-            echo "🚀 Iniciando despliegue automático en el VPS..."
+            echo "🚀 Iniciando despliegue en el VPS..."
             cd ~/AcademiaNeiva
-            git pull origin main
-            docker compose up -d --build
+            
+            # Sincronizar cambios de la rama activa
+            TARGET_BRANCH="${{ github.ref_name }}"
+            echo "🌿 Rama: $TARGET_BRANCH"
+            git fetch origin "$TARGET_BRANCH"
+            git checkout "$TARGET_BRANCH"
+            git pull origin "$TARGET_BRANCH"
+            
+            # Habilitar BuildKit para construcción rápida con caché
+            export DOCKER_BUILDKIT=1
+            export COMPOSE_DOCKER_CLI_BUILD=1
+            
+            # Reconstruir y levantar contenedores
+            echo "🔨 Construyendo y levantando contenedores..."
+            docker compose up -d --build --remove-orphans
+            
+            # Limpiar imágenes antiguas
             docker image prune -f
+            
             echo "✅ ¡Despliegue completado exitosamente!"

@@ -1,51 +1,136 @@
-# 🎯 Casos de Uso — Módulo 19: Seguimiento Académico, Promoción y Reprobación
+# Casos de Uso — Seguimiento Académico, Promoción y Reprobación Anual
 
-## CU-19.1: Consultar Rendimiento por Período Acumulativo
-**Actor Principal**: Directivo Institucional  
-**Precondiciones**: Usuario autenticado con rol `directivo`.
-
-### Flujo Principal:
-1. El directivo ingresa a la vista `/dashboard/gestion-aprobados` y selecciona la pestaña "Seguimiento por Período / Acumulado".
-2. Selecciona el año lectivo y activa el modo "Acumulado", especificando el período límite (ej. Hasta Período 3).
-3. El sistema calcula las notas acumuladas ponderadas de P1, P2 y P3 para cada materia de cada estudiante.
-4. El sistema despliega las tarjetas de resumen (Total, Aprobados, Reprobados) y la lista de estudiantes.
-5. El directivo presiona "Detalle" en un estudiante reprobado para ver las asignaturas con nota < 3.0 y los docentes a cargo.
+Este documento describe los flujos de interacción y diagramas de secuencia paso a paso del módulo de **Seguimiento Académico y Promoción Anual** de AcademiaNeiva.
 
 ---
 
-## CU-19.2: Registrar Decisión Institucional de Promoción
-**Actor Principal**: Directivo Institucional  
-**Precondiciones**: Estudiante clasificado como `NO_PROMOVIDO` o `PENDIENTE_RECUPERACION`.
+## Caso de Uso 1: Consolidación Anual y Clasificación de Promoción
 
-### Flujo Principal:
-1. En la pestaña "Consolidado Anual de Promoción", el directivo ubica al estudiante.
-2. Presiona el botón "Registrar Decisión".
-3. Se despliega el modal emergente con los datos del estudiante y el resultado calculado por el sistema.
-4. El directivo selecciona la acción (`PROMOVER_SIGUIENTE_GRADO`, `MANTENER_GRADO`, `MATRICULA_CONDICIONADA`, etc.) y escribe la justificación.
-5. Presiona "Guardar Decisión".
-6. El sistema almacena la decisión en la tabla `decision_promocion_directivo` y actualiza la vista.
+### Actores
+- **Directivo Escolar** (Coordinador Académico / Rector)
+
+### Precondiciones
+- El año lectivo cuenta con periodos académicos y notas registradas.
+
+### Diagrama de Secuencia
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Directivo as Directivo Escolar
+    participant Frontend as AcademicTrackingView.vue
+    participant Backend as Express API
+    participant DB as PostgreSQL
+
+    Directivo->>Frontend: Ingresa a "Consolidado Anual de Promoción" para el Grado 10
+    Frontend->>Backend: GET /api/academic-admin/academic-tracking/annual-consolidation?schoolId=1&yearId=5&gradeId=10
+    
+    Backend->>DB: Consulta promedios por materia para todos los periodos del año
+    Backend->>DB: Calcula promedio anual por asignatura dividiendo entre total periodos del año
+    Backend->>DB: getMaxGradeIdForSchool -> Determina si es último grado (is_final_grade)
+    Backend->>DB: Clasifica cada estudiante (0 reprobadas: APROBADO, 1-2: PENDIENTE, >=3: NO_PROMOVIDO)
+    
+    Backend-->>Frontend: Retorna lista de estudiantes clasificados con materias reprobadas y banderas de graduando
+    Frontend-->>Directivo: Muestra la tabla de consolidado con insignias de estado y botones de decisión
+```
 
 ---
 
-## CU-19.3: Advertencia y Matrícula con Historial Previo
-**Actor Principal**: Directivo o Encargado de Matrícula  
+## Caso de Uso 2: Promoción y Graduación Automática de Graduandos
 
-### Flujo Principal:
-1. Durante la finalización de matrícula en `/dashboard/gestion-matriculas/:id/registro`, el sistema busca al estudiante por su documento.
-2. El sistema detecta que el estudiante reprueba el año lectivo anterior (3 materias reprobadas).
-3. Muestra el bloque prominente **⚠️ Advertencia académica** con año, grado anterior y asignaturas reprobadas.
-4. El directivo revisa la advertencia y procede a matricular al estudiante en el grado correspondiente según la decisión institucional acordada.
+### Actores
+- **Directivo Escolar**
+
+### Precondiciones
+- El estudiante pertenece al grado superior de la institución (`is_final_grade: true`) y ha culminado el año escolar.
+
+### Diagrama de Secuencia
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Directivo as Directivo Escolar
+    participant Frontend as AcademicTrackingView.vue
+    participant Backend as Express API
+    participant DB as PostgreSQL
+
+    Directivo->>Frontend: Abre modal de decisión sobre el estudiante graduando Juan (Grado 11)
+    Frontend->>Frontend: Detecta is_final_grade=true y despliega botón "Promover y Graduar Estudiante 🎓"
+    Directivo->>Frontend: Selecciona "PROMOVER_SIGUIENTE_GRADO" e ingresa observación del acta de grado
+    Frontend->>Backend: POST /api/academic-admin/academic-tracking/record-decision { studentId: 45, decisionTaken: 'PROMOVER_SIGUIENTE_GRADO', ... }
+    
+    Backend->>DB: Inicia Transacción
+    Backend->>DB: Valida que el año lectivo no esté CERRADO y esté en periodo final (RN-19.5)
+    Backend->>DB: UPDATE estudiante SET estado = 'GRADUADO' WHERE id_estudiante = 45
+    Backend->>DB: INSERT INTO registro_graduados (id_estudiante, fecha_graduacion, id_usuario_registro, id_anio)
+    Backend->>DB: INSERT / UPDATE en decision_promocion_directivo (decision_tomada: 'PROMOVER_SIGUIENTE_GRADO', id_grado_asignado: null)
+    Backend->>DB: COMMIT
+    
+    Backend-->>Frontend: 200 OK { autoGraduated: true, message: "Estudiante graduado y promovido exitosamente" }
+    Frontend-->>Directivo: Muestra notificación de graduación exitosa con ícono de birrete 🎓
+```
 
 ---
 
-## CU-19.4: Promoción y Graduación Automática para Estudiantes del Último Año
-**Actor Principal**: Directivo Institucional  
-**Precondiciones**: Estudiante matriculado en el último grado de la institución (`is_final_grade = true`).
+## Caso de Uso 3: Registro de Decisión Directiva con Condición de Periodo Final
 
-### Flujo Principal:
-1. En la pestaña "Consolidado Anual de Promoción", el directivo ubica a un estudiante del último grado (resaltado con el distintivo **🎓 Último Año** o utilizando el filtro **"Solo Graduandos"**).
-2. Presiona "Registrar Decisión" o "Editar Decisión".
-3. El modal muestra la alerta informativa de graduación y el selector ajustado a **"Promover y Graduar Estudiante 🎓"**.
-4. El directivo confirma la decisión y escribe observaciones adicionales.
-5. El backend actualiza `estudiante.estado = 'GRADUADO'`, registra la entrada en `registro_graduados`, establece `id_grado_asignado = null` y almacena la trazabilidad en `decision_promocion_directivo`.
-6. La interfaz confirma el mensaje exitoso y actualiza el estado del alumno a graduado.
+### Actores
+- **Directivo Escolar**
+
+### Precondiciones
+- El estudiante presenta 3 asignaturas reprobadas (`NO_PROMOVIDO`) y el comité directivo decide mantener el grado.
+
+### Diagrama de Secuencia
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Directivo as Directivo Escolar
+    participant Frontend as AcademicTrackingView.vue
+    participant Backend as Express API
+    participant DB as PostgreSQL
+
+    Directivo->>Frontend: Selecciona Decisión "MANTENER_GRADO", asigna grado repetido e ingresa justificación
+    Frontend->>Backend: POST /api/academic-admin/academic-tracking/record-decision { studentId: 12, decisionTaken: 'MANTENER_GRADO', assignedGradeId: 8, ... }
+    
+    Backend->>DB: Verifica closedPeriodsCount >= totalPeriodsCount - 1
+    alt Si el año lectivo no ha llegado a su periodo final
+        Backend-->>Frontend: 400 Bad Request ("No es posible registrar decisión: año lectivo en curso inicial")
+        Frontend-->>Directivo: Muestra alerta de bloqueo
+    else Si está en periodo final o concluido
+        Backend->>DB: INSERT / UPDATE decision_promocion_directivo
+        Backend-->>Frontend: 200 OK: "Decisión directiva registrada exitosamente"
+        Frontend-->>Directivo: Actualiza la tarjeta del estudiante mostrando la decisión adoptada
+    end
+```
+
+---
+
+## Caso de Uso 4: Verificación Informativa de Advertencia en Matrícula
+
+### Actores
+- **Directivo Escolar**
+
+### Precondiciones
+- El directivo está formalizando la matrícula de un estudiante en `FinalRegistration.vue`.
+
+### Diagrama de Secuencia
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Directivo as Directivo Escolar
+    participant Frontend as FinalRegistration.vue
+    participant Backend as Express API
+    participant DB as PostgreSQL
+
+    Directivo->>Frontend: Digita documento de identidad del estudiante
+    Frontend->>Backend: GET /api/academic-admin/academic-tracking/check-warning?documento=1075283921
+    
+    Backend->>DB: Consulta última matrícula del alumno y calificaciones de dicho año lectivo
+    Backend->>DB: Detecta 2 materias reprobadas en el año anterior (Matemáticas: 2.5, Física: 2.8)
+    Backend-->>Frontend: Retorna { warning: true, cantidad_materias_reprobadas: 2, materias_reprobadas: [...] }
+    
+    Frontend-->>Directivo: Despliega tarjeta amarilla: "⚠️ Advertencia académica: Reprobó 2 asignaturas en el ciclo lectivo anterior"
+    Note over Directivo,Frontend: El directivo evalúa el antecedente y formaliza la matrícula según criterio institucional
+```

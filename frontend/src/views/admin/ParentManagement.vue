@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import axios from 'axios'
+import { parentService } from '../../services/parentService'
+
 import {
   Users,
   Search,
@@ -11,13 +12,24 @@ import {
   Edit2,
   ShieldAlert,
   Eye,
-  Filter,
   RotateCcw,
   SlidersHorizontal
 } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 import { useAcademicYearStore } from '../../stores/academicYear'
 import { useRouter } from 'vue-router'
+import { useConfirm } from '../../composables/useConfirm'
+import { useToast } from '../../composables/useToast'
+import DataTable from '../../components/ui/DataTable.vue'
+import SkeletonTable from '../../components/feedback/SkeletonTable.vue'
+import EmptyState from '../../components/feedback/EmptyState.vue'
+
+const auth = useAuthStore()
+const yearStore = useAcademicYearStore()
+const router = useRouter()
+const { confirm } = useConfirm()
+const toast = useToast()
+
 
 interface ParentItem {
   id_padrefamilia: number
@@ -68,10 +80,8 @@ interface CatalogOption {
   nombre: string
 }
 
-const auth = useAuthStore()
-const yearStore = useAcademicYearStore()
-const router = useRouter()
 const schoolId = computed(() => Number(auth.user?.schoolId || 0))
+
 
 const loading = ref(true)
 const parents = ref<ParentItem[]>([])
@@ -154,8 +164,6 @@ const totalChildrenLinked = computed(() =>
 )
 const parentsWithAccount = computed(() => parents.value.filter(p => p.email).length)
 
-const apiBase = import.meta.env.VITE_API_URL || ''
-
 const loadParents = async () => {
   if (!schoolId.value) return
   try {
@@ -172,15 +180,12 @@ const loadParents = async () => {
     if (filterEstadoMatricula.value !== 'TODOS') params.estadoMatricula = filterEstadoMatricula.value
     if (filterSoloDocentes.value) params.soloDocentes = 'true'
 
-    const res = await axios.get(`/api/parents/school/${schoolId.value}`, {
-      params,
-      headers: { Authorization: `Bearer ${auth.token}` }
-    })
+    const res = await parentService.getParentsBySchool(schoolId.value, params)
 
-    parents.value = res.data.parents || []
-    if (res.data.catalogs) {
-      nivelesCatalog.value = (res.data.catalogs.niveles || []).map((n: any) => ({ id: n.id_nivel, nombre: n.nombre }))
-      gradosCatalog.value = (res.data.catalogs.grados || []).map((g: any) => ({ id: g.id_tipo_grado, nombre: g.nombre }))
+    parents.value = res.parents || []
+    if (res.catalogs) {
+      nivelesCatalog.value = (res.catalogs.niveles || []).map((n: any) => ({ id: n.id_nivel, nombre: n.nombre }))
+      gradosCatalog.value = (res.catalogs.grados || []).map((g: any) => ({ id: g.id_tipo_grado, nombre: g.nombre }))
     }
   } catch (error) {
     console.error('Error al cargar lista de padres:', error)
@@ -208,13 +213,10 @@ const openDrawer = async (parentId: number) => {
   selectedParentDetail.value = null
 
   try {
-    const res = await axios.get(`${apiBase}/api/parents/${parentId}/detail`, {
-      params: { yearId: yearStore.selectedYearId },
-      headers: { Authorization: `Bearer ${auth.token}` }
-    })
-    selectedParentDetail.value = res.data
-    if (res.data.tipos_documento) {
-      documentTypes.value = res.data.tipos_documento
+    const res = await parentService.getParentDetail(parentId, { yearId: yearStore.selectedYearId })
+    selectedParentDetail.value = res
+    if (res.tipos_documento) {
+      documentTypes.value = res.tipos_documento
     }
   } catch (error) {
     console.error('Error al cargar detalle del padre:', error)
@@ -251,11 +253,7 @@ const saveParentEdit = async () => {
 
   try {
     savingEdit.value = true
-    await axios.put(
-      `/api/parents/${selectedParentId.value}`,
-      editForm.value,
-      { headers: { Authorization: `Bearer ${auth.token}` } }
-    )
+    await parentService.updateParent(selectedParentId.value, editForm.value)
     editModalOpen.value = false
     await loadParents()
     if (selectedParentId.value) {
@@ -294,36 +292,38 @@ const toggleParentAccountStatus = async () => {
   const p = selectedParentDetail.value.parent
 
   if (!p.id_usuario) {
-    alert('Este acudiente no posee una cuenta de usuario registrada en el sistema.')
+    toast.warning('Este acudiente no posee una cuenta de usuario registrada en el sistema.')
     return
   }
 
   const newStatus = !p.usuario_activo
   const actionText = newStatus ? 'ACTIVAR' : 'INACTIVAR'
   
-  if (!confirm(`¿Está seguro de que desea ${actionText} la cuenta de acceso de ${p.nombre} ${p.apellido}?`)) {
-    return
-  }
+  const ok = await confirm({
+    title: `${actionText} Cuenta de Acudiente`,
+    message: `¿Está seguro de que desea ${actionText.toLowerCase()} la cuenta de acceso de ${p.nombre} ${p.apellido}?`,
+    confirmText: actionText,
+    type: newStatus ? 'primary' : 'danger'
+  })
+  if (!ok) return
 
   try {
     togglingStatus.value = true
-    const res = await axios.patch(
-      `/api/parents/${selectedParentId.value}/status`,
-      { activo: newStatus },
-      { headers: { Authorization: `Bearer ${auth.token}` } }
-    )
+    const res = await parentService.toggleAccountStatus(selectedParentId.value, newStatus)
 
-    alert(res.data.message || `Cuenta ${newStatus ? 'activada' : 'inactivada'} correctamente.`)
+    toast.success(res.message || `Cuenta ${newStatus ? 'activada' : 'inactivada'} correctamente.`)
     await loadParents()
     if (selectedParentId.value) {
       await openDrawer(selectedParentId.value)
     }
   } catch (error: any) {
-    alert(error.response?.data?.error || 'Error al actualizar el estado de la cuenta.')
+    toast.error(error.response?.data?.error || 'Error al actualizar el estado de la cuenta.')
   } finally {
     togglingStatus.value = false
   }
 }
+
+
 
 const getChildStatusBadge = (estado: string) => {
   switch (estado) {
@@ -537,119 +537,93 @@ watch(schoolId, () => {
     </div>
 
     <!-- Table -->
-    <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
-      <div v-if="loading" class="p-8 text-center text-slate-500">
-        Cargando padres de familia...
-      </div>
+    <div>
+      <SkeletonTable v-if="loading" :rows="6" :cols="6" />
 
-      <div v-else-if="parents.length === 0" class="p-8 text-center text-slate-500 space-y-2">
-        <Filter class="w-8 h-8 text-slate-400 mx-auto" />
-        <p class="font-semibold">No se encontraron padres de familia con los filtros seleccionados.</p>
+      <EmptyState
+        v-else-if="parents.length === 0"
+        title="No se encontraron acudientes"
+        description="No hay padres de familia que coincidan con los filtros seleccionados."
+      >
+        <template #icon>
+          <Users class="w-8 h-8 text-indigo-500" />
+        </template>
+        <template #action>
+          <button
+            v-if="hasActiveFilters"
+            @click="resetFilters"
+            class="mt-4 text-xs font-semibold text-indigo-600 dark:text-indigo-400 underline"
+          >
+            Limpiar filtros de búsqueda
+          </button>
+        </template>
+      </EmptyState>
 
-        <button
-          v-if="hasActiveFilters"
-          @click="resetFilters"
-          class="text-xs font-semibold text-indigo-600 dark:text-indigo-400 underline"
+      <DataTable v-else>
+        <template #header>
+          <tr>
+            <th class="py-4 px-6">Acudiente</th>
+            <th class="py-4 px-6">Documento</th>
+            <th class="py-4 px-6">Correo / Usuario</th>
+            <th class="py-4 px-6 text-center">Alertas Hijos</th>
+            <th class="py-4 px-6 text-center">Hijos A Cargo</th>
+            <th class="py-4 px-6 text-right">Acciones</th>
+          </tr>
+        </template>
+        <tr
+          v-for="parent in parents"
+          :key="parent.id_padrefamilia"
+          class="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer"
+          @click="openDrawer(parent.id_padrefamilia)"
         >
-          Limpiar filtros de búsqueda
-        </button>
-      </div>
-
-      <div v-else class="overflow-x-auto">
-        <table class="w-full text-left text-sm">
-          <thead class="bg-slate-50 dark:bg-slate-900/50 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700">
-            <tr>
-              <th class="px-6 py-3">Acudiente</th>
-              <th class="px-6 py-3">Documento</th>
-              <th class="px-6 py-3">Correo / Usuario</th>
-              <th class="px-6 py-3 text-center">Alertas Hijos</th>
-              <th class="px-6 py-3 text-center">Hijos A Cargo</th>
-              <th class="px-6 py-3 text-right">Acciones</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
-            <tr
-              v-for="parent in parents"
-              :key="parent.id_padrefamilia"
-              class="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors cursor-pointer"
-              @click="openDrawer(parent.id_padrefamilia)"
+          <td class="py-4 px-6 font-medium text-slate-900 dark:text-white">
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <span>{{ parent.nombre }} {{ parent.apellido }}</span>
+              <span
+                v-if="parent.es_docente"
+                class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300"
+                title="Este acudiente también figura registrado como docente de la institución"
+              >
+                👨‍🏫 También es Docente
+              </span>
+            </div>
+          </td>
+          <td class="py-4 px-6 text-slate-600 dark:text-slate-300">
+            <span class="text-xs text-slate-400 font-mono mr-1">{{ parent.tipo_documento || 'CC' }}</span>
+            {{ parent.documento }}
+          </td>
+          <td class="py-4 px-6 text-slate-600 dark:text-slate-300">
+            <span v-if="parent.email" class="flex items-center gap-1">
+              <Mail class="w-3.5 h-3.5 text-slate-400" />
+              {{ parent.email }}
+            </span>
+            <span v-else class="text-xs text-slate-400 italic">Sin usuario asignado</span>
+          </td>
+          <td class="py-4 px-6 text-center">
+            <div class="flex items-center justify-center gap-1.5">
+              <span v-if="parent.tiene_hijo_riesgo" title="Hijo en riesgo académico (promedio < 3.0)" class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">⚠️ Riesgo</span>
+              <span v-if="parent.tiene_hijo_inasistencias" title="Hijo con inasistencias elevadas (3+ ausencias)" class="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300">📅 Fallas</span>
+              <span v-if="parent.tiene_hijo_sancionado" title="Hijo con sanción activa" class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300">🛑 Sanción</span>
+              <span v-if="!parent.tiene_hijo_riesgo && !parent.tiene_hijo_inasistencias && !parent.tiene_hijo_sancionado" class="text-xs text-slate-400">—</span>
+            </div>
+          </td>
+          <td class="py-4 px-6 text-center">
+            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300">
+              <GraduationCap class="w-3.5 h-3.5" />
+              {{ parent.hijos_count }} {{ parent.hijos_count === 1 ? 'hijo' : 'hijos' }}
+            </span>
+          </td>
+          <td class="py-4 px-6 text-right">
+            <button
+              class="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+              title="Ver Expediente"
+              @click.stop="openDrawer(parent.id_padrefamilia)"
             >
-              <td class="px-6 py-4 font-medium text-slate-900 dark:text-white">
-                <div class="flex items-center gap-1.5 flex-wrap">
-                  <span>{{ parent.nombre }} {{ parent.apellido }}</span>
-                  <span
-                    v-if="parent.es_docente"
-                    class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300"
-                    title="Este acudiente también figura registrado como docente de la institución"
-                  >
-                    👨‍🏫 También es Docente
-                  </span>
-                </div>
-              </td>
-              <td class="px-6 py-4 text-slate-600 dark:text-slate-300">
-                <span class="text-xs text-slate-400 font-mono mr-1">{{ parent.tipo_documento || 'CC' }}</span>
-                {{ parent.documento }}
-              </td>
-              <td class="px-6 py-4 text-slate-600 dark:text-slate-300">
-                <span v-if="parent.email" class="flex items-center gap-1">
-                  <Mail class="w-3.5 h-3.5 text-slate-400" />
-                  {{ parent.email }}
-                </span>
-                <span v-else class="text-xs text-slate-400 italic">Sin usuario asignado</span>
-              </td>
-              <td class="px-6 py-4 text-center">
-                <div class="flex items-center justify-center gap-1.5">
-                  <span
-                    v-if="parent.tiene_hijo_riesgo"
-                    title="Hijo en riesgo académico (promedio < 3.0)"
-                    class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300"
-                  >
-                    ⚠️ Riesgo
-                  </span>
-
-                  <span
-                    v-if="parent.tiene_hijo_inasistencias"
-                    title="Hijo con inasistencias elevadas (3+ ausencias)"
-                    class="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300"
-                  >
-                    📅 Fallas
-                  </span>
-
-                  <span
-                    v-if="parent.tiene_hijo_sancionado"
-                    title="Hijo con sanción activa"
-                    class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300"
-                  >
-                    🛑 Sanción
-                  </span>
-
-                  <span
-                    v-if="!parent.tiene_hijo_riesgo && !parent.tiene_hijo_inasistencias && !parent.tiene_hijo_sancionado"
-                    class="text-xs text-slate-400"
-                  >
-                    —
-                  </span>
-                </div>
-              </td>
-              <td class="px-6 py-4 text-center">
-                <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300">
-                  <GraduationCap class="w-3.5 h-3.5" />
-                  {{ parent.hijos_count }} {{ parent.hijos_count === 1 ? 'hijo' : 'hijos' }}
-                </span>
-              </td>
-              <td class="px-6 py-4 text-right">
-                <button
-                  class="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-                  title="Ver Expediente"
-                  @click.stop="openDrawer(parent.id_padrefamilia)"
-                >
-                  <Eye class="w-4 h-4" />
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+              <Eye class="w-4 h-4" />
+            </button>
+          </td>
+        </tr>
+      </DataTable>
     </div>
 
     <!-- Drawer Panel -->

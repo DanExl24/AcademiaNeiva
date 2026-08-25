@@ -174,20 +174,20 @@ Es común observar que en un mismo año lectivo la **Coherencia Curricular arroj
 
 ```mermaid
 graph TD
-    subgraph Catálogo Oficial MEN [Universo Catálogo: 1012 Evidencias]
+    subgraph Catalogo_MEN ["Universo Catálogo: 1012 Evidencias"]
         E_Pendientes["475 Evidencias Pendientes (Sin evaluar)"]
         E_Cubiertas["537 Evidencias Evaluadas al menos 1 vez"]
     end
 
-    subgraph Evaluaciones Docentes en Aula [Universo Evaluaciones: 3080 Evaluaciones]
+    subgraph Evaluaciones_Aula ["Universo Evaluaciones: 3080 Evaluaciones"]
         E_Planeadas["3080 Evaluadas dentro de Planeación (100%)"]
         E_Extras["0 Evaluadas fuera de Planeación (0%)"]
     end
 
     E_Cubiertas -.->|"Generan"| E_Planeadas
 
-    Catálogo Oficial MEN -->|"COBERTURA DEL CATÁLOGO (53%)<br>¿Cuánto del temario nacional se avanzó?"| KPI_Cobertura["Cobertura = 537 / 1012 = 53%"]
-    Evaluaciones Docentes en Aula -->|"COHERENCIA CURRICULAR (100%)<br>¿Qué tan disciplinados fueron con el plan?"| KPI_Coherencia["Coherencia = 3080 / 3080 = 100%"]
+    Catalogo_MEN -->|"COBERTURA DEL CATÁLOGO (53%)<br>¿Cuánto del temario nacional se avanzó?"| KPI_Cobertura["Cobertura = 537 / 1012 = 53%"]
+    Evaluaciones_Aula -->|"COHERENCIA CURRICULAR (100%)<br>¿Qué tan disciplinados fueron con el plan?"| KPI_Coherencia["Coherencia = 3080 / 3080 = 100%"]
 ```
 
 | Dimensión | 🎯 Sub-vista 1: Coherencia Curricular | 📊 Sub-vista 2: Cobertura del Catálogo |

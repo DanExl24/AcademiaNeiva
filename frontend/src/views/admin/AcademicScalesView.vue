@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import axios from 'axios'
 import { ArrowLeft, HelpCircle, Lock, PenSquare, Scale, SlidersHorizontal, GraduationCap, CheckCircle2 } from 'lucide-vue-next'
+import { academicService } from '../../services/academicService'
 import { useAuthStore } from '../../stores/auth'
+import { useToast } from '../../composables/useToast'
 import { useAcademicYearStore } from '../../stores/academicYear'
 
 interface SchoolDefaultSettings {
@@ -23,6 +24,7 @@ interface ValuationScale {
 
 const auth = useAuthStore()
 const yearStore = useAcademicYearStore()
+const toast = useToast()
 
 const schoolId = computed(() => Number(auth.user?.schoolId || 0))
 const isYearClosed = computed(() => {
@@ -71,24 +73,24 @@ const loadData = async () => {
     if (yearStore.selectedYearId) {
       params.yearId = yearStore.selectedYearId
     }
-    const response = await axios.get(`/api/academic-admin/settings/${schoolId.value}`, { params })
-    scales.value = response.data.scales || []
-    defaultSettings.value = response.data.defaultSettings || null
+    const response = await academicService.getSettings(schoolId.value, params)
+    scales.value = response.scales || []
+    defaultSettings.value = response.defaultSettings || null
     
-    if (response.data.defaultSettings) {
+    if (response.defaultSettings) {
       defaultsForm.value = {
-        nota_minima: String(response.data.defaultSettings.nota_minima),
-        nota_maxima: String(response.data.defaultSettings.nota_maxima),
-        nota_aprobacion: String(response.data.defaultSettings.nota_aprobacion),
-        escala_modo: response.data.defaultSettings.escala_modo || 'AUTOMATICO'
+        nota_minima: String(response.defaultSettings.nota_minima),
+        nota_maxima: String(response.defaultSettings.nota_maxima),
+        nota_aprobacion: String(response.defaultSettings.nota_aprobacion),
+        escala_modo: response.defaultSettings.escala_modo || 'AUTOMATICO'
       }
       promotionForm.value = {
-        materias_reprobatorias_promocion: String(response.data.defaultSettings.materias_reprobatorias_promocion || 3)
+        materias_reprobatorias_promocion: String(response.defaultSettings.materias_reprobatorias_promocion || 3)
       }
     }
-    if (response.data.scales) {
-      const basico = response.data.scales.find((item: ValuationScale) => item.nivel === 'BASICO')
-      const alto = response.data.scales.find((item: ValuationScale) => item.nivel === 'ALTO')
+    if (response.scales) {
+      const basico = response.scales.find((item: ValuationScale) => item.nivel === 'BASICO')
+      const alto = response.scales.find((item: ValuationScale) => item.nivel === 'ALTO')
       manualScaleForm.value = {
         basico_max: basico ? String(basico.valor_maximo) : '',
         alto_max: alto ? String(alto.valor_maximo) : '',
@@ -96,6 +98,7 @@ const loadData = async () => {
     }
   } catch (error) {
     console.error('Error al cargar ajustes académicos:', error)
+    toast.error('No se pudo cargar la configuración institucional')
   } finally {
     loading.value = false
   }
@@ -111,11 +114,11 @@ watch(() => yearStore.selectedYearId, loadData)
 const saveDefaultSettings = async (bypassConfirm = false) => {
   if (defaultsSaving.value) return
   if (isYearClosed.value) {
-    alert(`El año lectivo ${yearStore.selectedYear?.calendario || ''} está CERRADO. No es posible modificar la configuración en un ciclo escolar cerrado.`)
+    toast.error(`El año lectivo ${yearStore.selectedYear?.calendario || ''} está CERRADO. No es posible modificar la configuración en un ciclo escolar cerrado.`)
     return
   }
   if (defaultsForm.value.nota_minima === '' || defaultsForm.value.nota_maxima === '' || defaultsForm.value.nota_aprobacion === '') {
-    alert('Completa la nota mínima, máxima y aprobatoria del colegio.')
+    toast.warning('Completa la nota mínima, máxima y aprobatoria del colegio.')
     return
   }
 
@@ -145,7 +148,7 @@ const saveDefaultSettings = async (bypassConfirm = false) => {
 
   try {
     defaultsSaving.value = true
-    await axios.put('/api/academic-admin/settings/defaults', {
+    await academicService.updateDefaultScales({
       schoolId: schoolId.value,
       yearId: yearStore.selectedYearId,
       nota_minima: nextMin,
@@ -154,11 +157,12 @@ const saveDefaultSettings = async (bypassConfirm = false) => {
       escala_modo: nextMode,
       materias_reprobatorias_promocion: Number(promotionForm.value.materias_reprobatorias_promocion || 3)
     })
+    toast.success('Rango de notas y escalas actualizado correctamente')
     showConfirmModal.value = false
     pendingSettings.value = null
     await loadData()
   } catch (error: any) {
-    alert(error.response?.data?.error || 'No fue posible guardar la configuración predeterminada')
+    toast.error(error.response?.data?.error || 'No fue posible guardar la configuración de escalas')
   } finally {
     defaultsSaving.value = false
   }
@@ -167,26 +171,27 @@ const saveDefaultSettings = async (bypassConfirm = false) => {
 const savePromotionPolicy = async () => {
   if (promotionSaving.value) return
   if (isYearClosed.value) {
-    alert(`El año lectivo ${yearStore.selectedYear?.calendario || ''} está CERRADO. No es posible modificar la política de promoción.`)
+    toast.error(`El año lectivo ${yearStore.selectedYear?.calendario || ''} está CERRADO. No es posible modificar la política de promoción.`)
     return
   }
 
   const rawVal = Number(promotionForm.value.materias_reprobatorias_promocion)
   if (Number.isNaN(rawVal) || rawVal < 1 || rawVal > 10) {
-    alert('Ingresa un número válido de materias reprobatorias entre 1 y 10.')
+    toast.warning('Ingresa un número válido de materias reprobatorias entre 1 y 10.')
     return
   }
 
   try {
     promotionSaving.value = true
-    await axios.put('/api/academic-admin/settings/promotion-policy', {
+    await academicService.updatePromotionPolicy({
       schoolId: schoolId.value,
       yearId: yearStore.selectedYearId,
       materias_reprobatorias_promocion: Math.round(rawVal)
     })
+    toast.success('Criterio de promoción institucional (S.I.E.E.) actualizado correctamente')
     await loadData()
   } catch (error: any) {
-    alert(error.response?.data?.error || 'No fue posible actualizar el criterio de promoción')
+    toast.error(error.response?.data?.error || 'No fue posible actualizar el criterio de promoción')
   } finally {
     promotionSaving.value = false
   }
@@ -195,25 +200,26 @@ const savePromotionPolicy = async () => {
 const saveManualScales = async () => {
   if (defaultsSaving.value) return
   if (isYearClosed.value) {
-    alert(`El año lectivo ${yearStore.selectedYear?.calendario || ''} está CERRADO. No es posible modificar las escalas en un ciclo escolar cerrado.`)
+    toast.error(`El año lectivo ${yearStore.selectedYear?.calendario || ''} está CERRADO. No es posible modificar las escalas en un ciclo escolar cerrado.`)
     return
   }
   if (manualScaleForm.value.basico_max === '' || manualScaleForm.value.alto_max === '') {
-    alert('Define los cortes máximos de BASICO y ALTO para el modo manual.')
+    toast.warning('Define los cortes máximos de BASICO y ALTO para el modo manual.')
     return
   }
 
   try {
     defaultsSaving.value = true
-    await axios.put('/api/academic-admin/settings/scales/manual', {
+    await academicService.updateManualScales({
       schoolId: schoolId.value,
       yearId: yearStore.selectedYearId,
       basico_max: Number(manualScaleForm.value.basico_max),
       alto_max: Number(manualScaleForm.value.alto_max),
     })
+    toast.success('Cortes manuales de escalas actualizados correctamente')
     await loadData()
   } catch (error: any) {
-    alert(error.response?.data?.error || 'No fue posible guardar las escalas manuales')
+    toast.error(error.response?.data?.error || 'No fue posible guardar las escalas manuales')
   } finally {
     defaultsSaving.value = false
   }
@@ -226,7 +232,7 @@ const saveManualScales = async () => {
     <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
       <div>
         <div class="flex items-center gap-2 mb-2">
-          <RouterLink to="/admin/configuracion" class="inline-flex items-center gap-1.5 text-xs font-black text-slate-500 hover:text-indigo-600 transition-colors uppercase tracking-widest">
+          <RouterLink to="/dashboard/configuracion-academica" class="inline-flex items-center gap-1.5 text-xs font-black text-slate-500 hover:text-indigo-600 transition-colors uppercase tracking-widest">
             <ArrowLeft class="w-3.5 h-3.5" />
             Volver a Configuración
           </RouterLink>
@@ -427,10 +433,10 @@ const saveManualScales = async () => {
             <p class="text-xs font-semibold text-slate-600 dark:text-slate-400 italic max-w-xs">
               BAJO y SUPERIOR se recalibran para cubrir todo el espectro institucional.
             </p>
-            <button type="button" @click="saveManualScales" :disabled="defaultsSaving || isYearClosed" :class="[isYearClosed ? 'bg-slate-400 dark:bg-slate-700 cursor-not-allowed opacity-60' : 'bg-amber-600 hover:bg-amber-500']" class="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl px-6 py-3 text-sm font-black text-white shadow-sm transition disabled:opacity-50 uppercase tracking-widest">
+            <button type="button" @click="saveManualScales" :disabled="defaultsSaving || isYearClosed" :class="[isYearClosed ? 'bg-slate-400 dark:bg-slate-700 cursor-not-allowed opacity-60' : 'bg-amber-600 hover:bg-amber-500 cursor-pointer']" class="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl px-6 py-3 text-sm font-black text-white shadow-sm transition disabled:opacity-50 uppercase tracking-widest">
               <Lock v-if="isYearClosed" class="h-4 w-4" />
               <PenSquare v-else class="h-4 w-4" />
-              {{ isYearClosed ? 'Año Cerrado (Solo Lectura)' : (defaultsSaving ? 'Guardando...' : 'Aplicar cortes') }}
+              {{ isYearClosed ? 'Año Cerrado' : (defaultsSaving ? 'Guardando...' : 'Aplicar cortes') }}
             </button>
           </div>
         </div>

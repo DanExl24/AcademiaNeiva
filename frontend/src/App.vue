@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, watch, onUnmounted } from 'vue'
 import NotificationToast from './components/NotificationToast.vue'
+import ConfirmModal from './components/feedback/ConfirmModal.vue'
 import { useThemeStore } from './stores/theme'
 import { useAuthStore } from './stores/auth'
 import { socketService } from './services/socketService'
@@ -33,5 +34,7 @@ onUnmounted(() => {
 
 <template>
   <NotificationToast />
+  <ConfirmModal />
   <router-view />
 </template>
+

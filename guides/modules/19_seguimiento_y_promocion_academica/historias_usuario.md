@@ -1,76 +1,53 @@
-# 📖 Historias de Usuario — Módulo 19: Seguimiento Académico, Promoción y Reprobación
+# Historias de Usuario — Seguimiento Académico, Promoción y Reprobación Anual
 
-## HU-19.1: Seguimiento Académico por Período Acumulativo
-
-**Como** Directivo Institucional,  
-**Quiero** consultar los resultados académicos de los estudiantes período a período de forma individual o acumulativa hasta el período actual,  
-**Para** identificar oportunamente a los estudiantes que presenten dificultades académicas y materias reprobadas antes del cierre de año.
-
-### Criterios de Aceptación:
-- El directivo puede seleccionar el año lectivo, grado, grupo y la modalidad de consulta (Período único vs Acumulado P1..PN).
-- El sistema muestra el total de estudiantes evaluados, cantidad de aprobados y reprobados.
-- En la tabla de estudiantes, se resaltan los estudiantes reprobados y se permite expandir el desglose de asignaturas con sus calificaciones y docente responsable.
+Este documento detalla las Historias de Usuario del módulo de **Seguimiento Académico y Promoción Anual** de AcademiaNeiva.
 
 ---
 
-## HU-19.2: Consolidación del Resultado Académico Anual
+## 1. Consolidación Anual y Matriz de Promoción
 
-**Como** Directivo Institucional,  
-**Quiero** visualizar un consolidado general del rendimiento académico anual de todos los estudiantes,  
-**Para** clasificar automáticamente a los estudiantes en Promovidos, No Promovidos o Pendientes según las reglas de la institución.
-
-### Criterios de Aceptación:
-- El sistema calcula los promedios anuales ponderados por asignatura.
-- Clasifica automáticamente como `NO_PROMOVIDO` a estudiantes con 3 o más asignaturas reprobadas.
-- Presenta métricas cuantitativas y permite filtrar por grado y grupo.
-
----
-
-## HU-19.3: Advertencia Académica Informativa en Matrícula
-
-**Como** Directivo o Encargado de Matrículas,  
-**Quiero** ver una advertencia clara cuando intente registrar o matricular a un estudiante que repruebe el año anterior,  
-**Para** tomar una decisión de promoción fundamentada con toda la información necesaria.
-
-### Criterios de Aceptación:
-- Durante la matrícula (ej. en `FinalRegistration.vue`), el sistema consulta si la persona existe y si reprueba el año lectivo anterior.
-- Si reprobó, muestra el banner de **⚠️ Advertencia académica** con año, curso, resultado y materias reprobadas.
-- La advertencia **no bloquea** el formulario de matrícula, respetando la autoridad del directivo.
+### HU-PRO-001: Consolidación Anual y Clasificación de Promoción
+- **Como:** Directivo Escolar (Coordinador Académico / Rector).
+- **Quiero:** Visualizar la consolidación anual de calificaciones de todos los estudiantes de mi institución.
+- **Para:** Identificar a los estudiantes promovidos, no promovidos y pendientes de recuperación según los criterios del MEN y del PEI institucional.
+- **Criterios de Aceptación:**
+  1. La vista consolida los promedios de todas las materias a lo largo de los periodos del año lectivo.
+  2. Clasifica automáticamente a cada estudiante en: `APROBADO` (0 materias reprobadas), `PENDIENTE_RECUPERACION` (1 a 2 materias) o `NO_PROMOVIDO` ($\ge 3$ materias).
+  3. Desglosa las asignaturas reprobadas indicando la nota definitiva obtenida y el docente responsable.
 
 ---
 
-## HU-19.4: Registro e Historial de Decisiones del Directivo
+## 2. Graduación y Registro de Decisiones Directivas
 
-**Como** Directivo Institucional,  
-**Quiero** registrar la decisión tomada respecto a la promoción de un estudiante (ej. Promover excepcionalmente, Mantener en el grado, Matrícula condicionada),  
-**Para** mantener trazabilidad histórica sobre las decisiones administrativas y académicas en la institución.
-
-### Criterios de Aceptación:
-- El directivo puede seleccionar la decisión (`PROMOVER_SIGUIENTE_GRADO`, `MANTENER_GRADO`, `MATRICULA_CONDICIONADA`, `OTRA_DECISION`) y agregar una observación explicativa.
-- La decisión se guarda en la tabla `decision_promocion_directivo` y queda asociada al historial académico continuo del estudiante.
-
----
-
-## HU-19.5: Resaltado Visual y Filtro para Estudiantes del Último Año (Graduandos)
-
-**Como** Directivo Institucional,  
-**Quiero** identificar rápidamente a los estudiantes que cursan el último grado de la institución mediante un resaltado distintivo y un botón de filtro exclusivo,  
-**Para** realizar un seguimiento prioritario y especializado a la cohorte de graduandos.
-
-### Criterios de Aceptación:
-- El sistema detecta dinámicamente el último grado de la institución sin dejarlo estático a Grado 11 (ONCE).
-- En las tablas de seguimiento y consolidado anual, las filas de los graduandos muestran el distintivo **🎓 Último Año** y un borde destacado.
-- Se dispone del botón de filtro toggle **"Solo Graduandos"** para aislar a los estudiantes en su año final.
+### HU-PRO-002: Promoción y Graduación Automática de Graduandos
+- **Como:** Directivo Escolar.
+- **Quiero:** Promover a un estudiante del último grado escolar de mi colegio.
+- **Para:** Formalizar su graduación y registrarlo en el libro oficial de graduados.
+- **Criterios de Aceptación:**
+  1. El sistema detecta dinámicamente si el estudiante pertenece al grado superior de la institución (`is_final_grade: true`).
+  2. En el modal de decisión, el botón adopta la etiqueta dinámica *"Promover y Graduar Estudiante 🎓"*.
+  3. Al confirmar la decisión `PROMOVER_SIGUIENTE_GRADO`, el sistema actualiza su estado a `GRADUADO` e inserta la entrada en la tabla `registro_graduados`.
 
 ---
 
-## HU-19.6: Graduación Automática al Promover Estudiantes del Último Grado
+### HU-PRO-003: Registro de Decisión Directiva con Condición de Periodo Final
+- **Como:** Directivo Escolar.
+- **Quiero:** Registrar la decisión oficial sobre la situación de un estudiante (Promover, Mantener Grado, Matrícula Condicionada).
+- **Para:** Dejar constancia formal en el acta de comisiones de evaluación y promoción.
+- **Criterios de Aceptación:**
+  1. El formulario exige seleccionar la decisión tomada, el grado asignado y permite ingresar observaciones.
+  2. Si el año lectivo no ha llegado a su periodo final (`closedPeriodsCount < totalPeriodsCount - 1`), el sistema bloquea el guardado con error `400 Bad Request`.
+  3. La decisión queda almacenada en `decision_promocion_directivo` con la referencia al directivo autorizante.
 
-**Como** Directivo Institucional,  
-**Quiero** que al aprobar la promoción de un estudiante perteneciente al último año escolar, el sistema procese automáticamente su graduación,  
-**Para** cambiar su estado a `GRADUADO` e inscribirlo en el libro de graduados sin requerir pasos manuales adicionales.
+---
 
-### Criterios de Aceptación:
-- En el modal de decisión de promoción, la opción cambia dinámicamente a **"Promover y Graduar Estudiante 🎓"** para alumnos del último año.
-- Al confirmar la decisión, el sistema actualiza `estudiante.estado = 'GRADUADO'`, registra la entrada en `registro_graduados` y guarda la trazabilidad en `decision_promocion_directivo` con `id_grado_asignado = null`.
-- Si se modifica la decisión a no promovido, el estado del alumno se revierte automáticamente a `ACTIVO`.
+## 3. Apoyo al Proceso de Matrícula
+
+### HU-PRO-004: Verificación Informativa de Advertencia en Matrícula
+- **Como:** Directivo Escolar.
+- **Quiero:** Que el sistema me alerte si un aspirante a matrícula reprobó asignaturas en el año anterior.
+- **Para:** Tomar decisiones pedagógicas informadas (ej. asignar matrícula condicionada) sin que el sistema bloquee el trámite administrativo.
+- **Criterios de Aceptación:**
+  1. Al digitar el documento del estudiante en `FinalRegistration.vue`, el sistema consulta `/check-warning`.
+  2. Si el estudiante tiene materias reprobadas o decisión de `MANTENER_GRADO`, despliega una tarjeta de advertencia informativa con el detalle de las asignaturas.
+  3. El directivo puede continuar y formalizar la matrícula normalmente según su criterio institucional.

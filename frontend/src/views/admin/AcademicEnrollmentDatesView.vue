@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import axios from 'axios'
+import { academicService } from '../../services/academicService'
 import { useAuthStore } from '../../stores/auth'
+
 import { useAcademicYearStore } from '../../stores/academicYear'
 import { 
   ArrowLeft, 
@@ -102,17 +103,13 @@ const loadConfig = async () => {
   try {
     loadingConfig.value = true
     message.value = null
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const response = await axios.get(
-      `/api/academic-admin/settings/enrollment-config/${schoolId.value}/${selectedYearId.value}`,
-      { headers }
-    )
+    const data = await academicService.getEnrollmentConfig(schoolId.value, selectedYearId.value)
     
-    if (response.data) {
-      config.value = response.data
-      localFechaInicio.value = formatForInput(response.data.fecha_inicio)
-      localFechaCierre.value = formatForInput(response.data.fecha_cierre)
-      localHabilitada.value = response.data.habilitada
+    if (data) {
+      config.value = data
+      localFechaInicio.value = formatForInput(data.fecha_inicio)
+      localFechaCierre.value = formatForInput(data.fecha_cierre)
+      localHabilitada.value = data.habilitada
     } else {
       config.value = {
         id_configuracion: null,
@@ -188,7 +185,6 @@ const handleSave = async () => {
   try {
     saving.value = true
     message.value = null
-    const headers = { Authorization: `Bearer ${auth.token}` }
     const payload = {
       id_colegio: schoolId.value,
       id_anio: selectedYearId.value,
@@ -198,13 +194,9 @@ const handleSave = async () => {
       motivo_cambio: isSupervision.value ? justification.value : undefined
     }
 
-    const response = await axios.post(
-      '/api/academic-admin/settings/enrollment-config',
-      payload,
-      { headers }
-    )
+    const response = await academicService.saveEnrollmentConfig(payload)
 
-    showMessage(response.data.message || 'Configuración guardada exitosamente.', 'success')
+    showMessage(response.message || 'Configuración guardada exitosamente.', 'success')
     justification.value = ''
     loadConfig()
   } catch (error: any) {
@@ -214,6 +206,7 @@ const handleSave = async () => {
     saving.value = false
   }
 }
+
 
 onMounted(() => {
   loadYears()

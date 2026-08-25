@@ -20,11 +20,21 @@ import {
   Clock,
   ShieldAlert
 } from 'lucide-vue-next'
-import axios from 'axios'
+import { supportService } from '../../services/supportService'
+import { reingresoService } from '../../services/reingresoService'
+import { studentService } from '../../services/studentService'
+import { enrollmentService } from '../../services/enrollmentService'
+import { useConfirm } from '../../composables/useConfirm'
+import { useToast } from '../../composables/useToast'
+import ExtraordinaryEnrollmentModal from '../../components/support/ExtraordinaryEnrollmentModal.vue'
+
 
 const auth = useAuthStore()
 const router = useRouter()
 const route = useRoute()
+const { confirm } = useConfirm()
+const toast = useToast()
+
 
 // Comprobar si es directivo o admin general
 const isStaff = computed(() => {
@@ -66,8 +76,8 @@ const fetchSchools = async () => {
   if (auth.isAuthenticated) return
   try {
     loadingSchools.value = true
-    const res = await axios.get('/api/matriculas')
-    schools.value = res.data || []
+    const data = await enrollmentService.getAllSchools()
+    schools.value = data || []
   } catch (error) {
     console.error('Error fetching schools:', error)
   } finally {
@@ -75,19 +85,19 @@ const fetchSchools = async () => {
   }
 }
 
+
 const fetchTickets = async () => {
   if (!isStaff.value) return
   try {
     loading.value = true
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    let url = '/api/support/tickets'
+    const params: any = {}
     if (showEscalatedOnly.value) {
-      url += '?escalados=true'
+      params.escalados = 'true'
     }
-    const res = await axios.get(url, { headers })
+    const resData = await supportService.getTickets(params)
     
     // Al cargar tickets, inicializamos su array de observaciones si vienen serializadas
-    tickets.value = (res.data.tickets || []).map((t: any) => {
+    tickets.value = (resData.tickets || []).map((t: any) => {
       let obs = []
       if (typeof t.observaciones === 'string') {
         try {
@@ -119,7 +129,12 @@ const updateTicketStatus = async (ticketId: number, newStatus: string) => {
   if (!t) return
 
   if (newStatus === 'EN_PROCESO' && (t.tipo_incidencia === 'REINGRESO' || t.estado === 'ABIERTO')) {
-    const okProcess = confirm('⚠️ ADVERTENCIA: Esta acción NO se puede revertir.\n\nAl cambiar el estado del ticket a EN PROCESO, se enviará automáticamente un correo electrónico al acudiente notificándole que el trámite de reingreso ha comenzado. Este ticket ya NO podrá volver al estado ABIERTO.\n\n¿Deseas continuar?')
+    const okProcess = await confirm({
+      title: 'Iniciar Trámite de Reingreso',
+      message: 'Al cambiar el estado del ticket a EN PROCESO, se enviará automáticamente un correo electrónico al acudiente notificándole que el trámite ha comenzado. Este ticket ya no podrá volver al estado ABIERTO.',
+      confirmText: 'Pasar a En Proceso',
+      type: 'warning'
+    })
     if (!okProcess) {
       fetchTickets()
       return
@@ -127,7 +142,12 @@ const updateTicketStatus = async (ticketId: number, newStatus: string) => {
   }
 
   if (newStatus === 'RESUELTO') {
-    const ok = confirm('¿Estás seguro de pasar el estado de este ticket a RESUELTO? Una vez resuelto, el ticket pasará a ser de solo lectura y no se podrán agregar más comentarios ni modificar su estado.');
+    const ok = await confirm({
+      title: 'Resolver Incidencia',
+      message: '¿Estás seguro de pasar el estado de este ticket a RESUELTO? Una vez resuelto, el ticket pasará a ser de solo lectura y no se podrán agregar más comentarios ni modificar su estado.',
+      confirmText: 'Marcar como Resuelto',
+      type: 'primary'
+    })
     if (!ok) {
       fetchTickets()
       return
@@ -135,34 +155,41 @@ const updateTicketStatus = async (ticketId: number, newStatus: string) => {
   }
 
   try {
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.put(`/api/support/tickets/${ticketId}/status`, { estado: newStatus }, { headers })
+    await supportService.updateTicketStatus(ticketId, newStatus)
     
     // Actualizar localmente el estado del ticket
     t.estado = newStatus
+    toast.success(`Estado del ticket actualizado a ${newStatus}`)
     // Si el directivo lo marca como ESCALADO (si correspondiese), lo removemos de la lista local
     if (newStatus === 'ESCALADO' && !showEscalatedOnly.value && auth.activeRole?.toUpperCase() === 'DIRECTIVO') {
       tickets.value = tickets.value.filter(ticket => ticket.id_ticket !== ticketId)
     }
   } catch (error: any) {
-    alert(error.response?.data?.error || 'Error al actualizar el estado del ticket.')
+    toast.error(error.response?.data?.error || 'Error al actualizar el estado del ticket.')
     fetchTickets()
   }
 }
 
 const escalateTicketFrontend = async (ticketId: number) => {
-  if (!confirm('¿Estás seguro de que deseas escalar esta incidencia al Administrador General?')) return
+  const ok = await confirm({
+    title: 'Escalar Incidencia',
+    message: '¿Estás seguro de que deseas escalar esta incidencia al Administrador General?',
+    confirmText: 'Escalar al Admin',
+    type: 'warning'
+  })
+  if (!ok) return
+
   try {
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.post(`/api/support/tickets/${ticketId}/escalar`, {}, { headers })
-    alert('Incidencia escalada exitosamente al Administrador General.')
+    await supportService.escalateTicket(ticketId)
+    toast.success('Incidencia escalada exitosamente al Administrador General.')
     
     // Remover localmente de la lista, ya que ahora es exclusiva del Admin General (o de ver escalados)
     tickets.value = tickets.value.filter(t => t.id_ticket !== ticketId)
   } catch (error: any) {
-    alert(error.response?.data?.error || 'Error al escalar la incidencia.')
+    toast.error(error.response?.data?.error || 'Error al escalar la incidencia.')
   }
 }
+
 
 const fetchTrackingTicket = async () => {
   if (!trackingCodeInput.value.trim()) return
@@ -171,8 +198,8 @@ const fetchTrackingTicket = async () => {
     trackingError.value = ''
     trackingTicketData.value = null
 
-    const res = await axios.get(`/api/support/tickets/track/${trackingCodeInput.value.trim()}`)
-    trackingTicketData.value = res.data.ticket
+    const data = await supportService.trackTicket(trackingCodeInput.value.trim())
+    trackingTicketData.value = data.ticket
   } catch (error: any) {
     trackingError.value = error.response?.data?.error || 'Error al consultar el seguimiento. Valida que el código sea correcto.'
   } finally {
@@ -186,15 +213,14 @@ const saveObservation = async (ticketId: number) => {
 
   try {
     submittingObs.value[ticketId] = true
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.post(`/api/support/tickets/${ticketId}/observaciones`, {
+    const resData = await supportService.addObservation(ticketId, {
       observacion: note
-    }, { headers })
+    })
 
     // Actualizar localmente el array de observaciones del ticket
     const t = tickets.value.find(ticket => ticket.id_ticket === ticketId)
     if (t) {
-      t.observaciones = res.data.observaciones || []
+      t.observaciones = resData.observaciones || []
     }
     observationsInputs.value[ticketId] = ''
     alert('Observación guardada y registrada exitosamente.')
@@ -209,8 +235,7 @@ const handleNotifyNonExistent = async (ticketId: number) => {
   const motivo = prompt('Ingresa la observación para notificar que el estudiante no fue encontrado en los registros:')
   if (motivo === null) return
   try {
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    await axios.post(`/api/reingreso/notify-nonexistent/${ticketId}`, { motivo }, { headers })
+    await reingresoService.notifyNonExistent(ticketId, motivo)
     alert('Notificación enviada exitosamente al usuario y ticket resuelto.')
     fetchTickets()
   } catch (err: any) {
@@ -227,10 +252,8 @@ const myTicketsFilter = ref('TODOS')
 
 const fetchGradosCatalog = async () => {
   try {
-    const headers = auth.token ? { Authorization: `Bearer ${auth.token}` } : {}
-    const schoolParam = selectedSchoolId.value ? `?schoolId=${selectedSchoolId.value}` : ''
-    const res = await axios.get(`/api/reingreso/catalogs${schoolParam}`, { headers })
-    catalogGrados.value = res.data.grados || []
+    const resData = await reingresoService.getCatalogs(selectedSchoolId.value || '')
+    catalogGrados.value = resData.grados || []
   } catch (err) {
     console.error('Error cargando catálogos de grados:', err)
   }
@@ -262,9 +285,8 @@ const openExtraordinaryModal = async (ticket: any) => {
 
   if (auth.token && institutionStudents.value.length === 0) {
     try {
-      const headers = { Authorization: `Bearer ${auth.token}` }
-      const res = await axios.get('/api/students', { headers })
-      institutionStudents.value = res.data.estudiantes || res.data || []
+      const data = await studentService.getAll()
+      institutionStudents.value = (data as any).estudiantes || data || []
     } catch (err) {
       console.error('Error cargando estudiantes para selector:', err)
     }
@@ -275,14 +297,13 @@ const submitExtraordinaryEnrollment = async () => {
   if (!selectedTicketForExtraordinary.value) return
   try {
     submittingExtraordinary.value = true
-    const headers = { Authorization: `Bearer ${auth.token}` }
     const payload = {
       id_ticket: selectedTicketForExtraordinary.value.id_ticket,
       correo_padre: extraordinaryParentEmail.value,
       id_estudiante: extraordinaryStudentMode.value === 'EXISTENTE' ? selectedStudentIdForExtraordinary.value : null,
       motivo: extraordinaryReason.value
     }
-    await axios.post('/api/academic-admin/matriculas/extraordinaria', payload, { headers })
+    await supportService.authorizeExtraordinaryEnrollment(payload)
     alert('Matrícula extraordinaria autorizada exitosamente. Se ha enviado el correo con el token de seguimiento al acudiente.')
     showExtraordinaryModal.value = false
     fetchTickets()
@@ -296,8 +317,8 @@ const submitExtraordinaryEnrollment = async () => {
 const fetchMyChildren = async () => {
   if (!auth.isAuthenticated || !auth.user?.id) return
   try {
-    const res = await axios.get(`/api/student/parent-children/${auth.user.id}`)
-    myChildren.value = res.data || []
+    const data = await studentService.getParentChildren(auth.user.id)
+    myChildren.value = data || []
     if (myChildren.value.length > 0) {
       selectedChildIdForTicket.value = myChildren.value[0].id_estudiante
     }
@@ -310,9 +331,8 @@ const fetchMyTickets = async () => {
   if (!auth.token) return
   try {
     loading.value = true
-    const headers = { Authorization: `Bearer ${auth.token}` }
-    const res = await axios.get('/api/support/tickets', { headers })
-    myTickets.value = (res.data.tickets || []).map((t: any) => {
+    const resData = await supportService.getTickets()
+    myTickets.value = (resData.tickets || []).map((t: any) => {
       let obs = []
       if (typeof t.observaciones === 'string') {
         try {
@@ -375,12 +395,11 @@ const submitVisitorResponse = async () => {
   try {
     submittingVisitorObs.value = true
     const ticketId = trackingTicketData.value.id_ticket
-    const headers = auth.token ? { Authorization: `Bearer ${auth.token}` } : {}
-    const res = await axios.post(`/api/support/tickets/${ticketId}/observaciones`, {
+    const resData = await supportService.addObservation(ticketId, {
       observacion: visitorResponseInput.value.trim()
-    }, { headers })
+    })
 
-    trackingTicketData.value.observaciones = res.data.observaciones || []
+    trackingTicketData.value.observaciones = resData.observaciones || []
     visitorResponseInput.value = ''
     alert('Respuesta enviada exitosamente.')
   } catch (err: any) {
@@ -432,11 +451,6 @@ const handleSubmit = async () => {
     submitting.value = true
     errorMsg.value = ''
 
-    const headers: any = {}
-    if (auth.token) {
-      headers.Authorization = `Bearer ${auth.token}`
-    }
-
     const payload = {
       nombre_remitente: name.value,
       correo_remitente: email.value,
@@ -449,13 +463,13 @@ const handleSubmit = async () => {
       id_tipo_grado_pretendido: category.value === 'REINGRESO' && selectedPreferredGradeIdForTicket.value ? Number(selectedPreferredGradeIdForTicket.value) : null
     }
 
-    const response = await axios.post('/api/support/tickets', payload, { headers })
-    generatedTicketCode.value = response.data.ticketCode
+    const data = await supportService.createTicket(payload)
+    generatedTicketCode.value = data.ticketCode
     
     subject.value = ''
     description.value = ''
     phone.value = ''
-    alert(`Ticket de soporte creado exitosamente con el código: ${response.data.ticketCode}`)
+    alert(`Ticket de soporte creado exitosamente con el código: ${data.ticketCode}`)
     showTrackingMode.value = true
     fetchMyTickets()
   } catch (error: any) {
@@ -464,6 +478,7 @@ const handleSubmit = async () => {
     submitting.value = false
   }
 }
+
 
 const goBack = () => {
   if (auth.isAuthenticated) {
@@ -703,7 +718,7 @@ const getObservationText = (obs: any) => {
                   'text-rose-600 dark:text-rose-455': t.estado === 'ABIERTO',
                   'text-amber-605 dark:text-amber-500': t.estado === 'EN_PROCESO',
                   'text-emerald-600 dark:text-emerald-400': t.estado === 'RESUELTO',
-                  'text-indigo-650 dark:text-indigo-400': t.estado === 'ESCALADO'
+                  'text-indigo-600 dark:text-indigo-400': t.estado === 'ESCALADO'
                 }"
               >
                 {{ t.estado === 'ABIERTO' ? 'Abierto' : t.estado === 'EN_PROCESO' ? 'En Proceso' : t.estado === 'RESUELTO' ? 'Resuelto' : 'Escalado' }}
@@ -719,7 +734,7 @@ const getObservationText = (obs: any) => {
                   'text-rose-600 dark:text-rose-455': t.estado === 'ABIERTO',
                   'text-amber-605 dark:text-amber-500': t.estado === 'EN_PROCESO',
                   'text-emerald-600 dark:text-emerald-400': t.estado === 'RESUELTO',
-                  'text-indigo-650 dark:text-indigo-400': t.estado === 'ESCALADO'
+                  'text-indigo-600 dark:text-indigo-400': t.estado === 'ESCALADO'
                 }"
               >
                 <option v-if="t.estado === 'ABIERTO'" value="ABIERTO">Abierto</option>
@@ -854,7 +869,7 @@ const getObservationText = (obs: any) => {
               <button 
                 @click="saveObservation(t.id_ticket)"
                 :disabled="submittingObs[t.id_ticket] || !observationsInputs[t.id_ticket]?.trim()"
-                class="px-4 py-2 bg-indigo-650 hover:bg-indigo-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center shrink-0"
+                class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center shrink-0"
               >
                 <Loader2 v-if="submittingObs[t.id_ticket]" class="w-3 h-3 animate-spin mr-1" />
                 Guardar
@@ -946,7 +961,7 @@ const getObservationText = (obs: any) => {
                       {{ t.codigo_ticket || getTicketCode(t) }}
                     </span>
                     <div class="flex items-center gap-1.5">
-                      <span v-if="t.fecha_escalado" class="px-1.5 py-0.5 bg-indigo-50 dark:bg-indigo-950/40 text-[9px] font-black text-indigo-650 dark:text-indigo-400 rounded-md">Escalado</span>
+                      <span v-if="t.fecha_escalado" class="px-1.5 py-0.5 bg-indigo-50 dark:bg-indigo-950/40 text-[9px] font-black text-indigo-600 dark:text-indigo-400 rounded-md">Escalado</span>
                       <span 
                         class="px-1.5 py-0.5 text-[9px] font-black uppercase rounded-md"
                         :class="{
@@ -1125,13 +1140,13 @@ const getObservationText = (obs: any) => {
                 v-model="trackingCodeInput"
                 type="text"
                 placeholder="Ej: TKT-1B3X9H7Z"
-                class="w-full px-4 py-4 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-semibold text-slate-750 dark:text-slate-250 placeholder-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all outline-none"
+                class="w-full px-4 py-4 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-semibold text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all outline-none"
                 @keyup.enter="fetchTrackingTicket"
               />
               <button 
                 @click="fetchTrackingTicket"
                 :disabled="searchingTracking || !trackingCodeInput.trim()"
-                class="px-6 py-4 bg-indigo-650 hover:bg-indigo-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all disabled:opacity-50 flex items-center gap-1.5 shrink-0 shadow-md"
+                class="px-6 py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all disabled:opacity-50 flex items-center gap-1.5 shrink-0 shadow-md"
               >
                 <Loader2 v-if="searchingTracking" class="w-4 h-4 animate-spin" />
                 Buscar
@@ -1223,9 +1238,9 @@ const getObservationText = (obs: any) => {
                     class="w-full p-3 bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 rounded-2xl focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 outline-none resize-none transition-all"
                   ></textarea>
                   <button 
-                    @click="submitVisitorResponse"
+                    @click="submitVisitorResponse" 
                     :disabled="submittingVisitorObs || !visitorResponseInput.trim()"
-                    class="px-5 py-2.5 bg-indigo-650 hover:bg-indigo-700 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center shrink-0"
+                    class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center shrink-0"
                   >
                     <Loader2 v-if="submittingVisitorObs" class="w-3.5 h-3.5 animate-spin mr-1.5" />
                     Enviar
@@ -1459,112 +1474,21 @@ const getObservationText = (obs: any) => {
     </div>
 
     <!-- Modal Autorizar Matrícula Extraordinaria por Ticket -->
-    <div v-if="showExtraordinaryModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-      <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-5 animate-in zoom-in-95 duration-200">
-        <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
-          <div class="flex items-center gap-2">
-            <div class="p-2 bg-purple-100 dark:bg-purple-950/40 text-purple-600 rounded-xl">
-              <Zap :size="20" />
-            </div>
-            <div>
-              <h3 class="font-black text-slate-900 dark:text-white text-base">Autorizar Matrícula Extraordinaria</h3>
-              <p class="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Ticket: {{ selectedTicketForExtraordinary?.codigo_ticket }}</p>
-            </div>
-          </div>
-          <button @click="showExtraordinaryModal = false" class="text-slate-400 hover:text-slate-600 font-bold text-lg">✕</button>
-        </div>
-
-        <!-- Opciones de Modalidad de Estudiante -->
-        <div class="space-y-2">
-          <label class="text-xs font-black text-slate-500 uppercase tracking-wider block">Modalidad del Estudiante</label>
-          <div class="grid grid-cols-2 gap-3">
-            <button 
-              type="button" 
-              @click="extraordinaryStudentMode = 'NUEVO'"
-              class="p-3.5 border rounded-2xl text-left transition-all flex items-center gap-3"
-              :class="extraordinaryStudentMode === 'NUEVO' ? 'border-purple-600 bg-purple-50/50 dark:bg-purple-950/30 text-purple-900 dark:text-purple-300 font-black' : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 font-semibold'"
-            >
-              <span class="text-lg">🆕</span>
-              <div>
-                <p class="text-xs font-bold">Estudiante Nuevo</p>
-                <p class="text-[10px] opacity-75">Aspirante por primera vez</p>
-              </div>
-            </button>
-
-            <button 
-              type="button" 
-              @click="extraordinaryStudentMode = 'EXISTENTE'"
-              class="p-3.5 border rounded-2xl text-left transition-all flex items-center gap-3"
-              :class="extraordinaryStudentMode === 'EXISTENTE' ? 'border-purple-600 bg-purple-50/50 dark:bg-purple-950/30 text-purple-900 dark:text-purple-300 font-black' : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 font-semibold'"
-            >
-              <span class="text-lg">👤</span>
-              <div>
-                <p class="text-xs font-bold">Estudiante Existente</p>
-                <p class="text-[10px] opacity-75">Alumno ya registrado</p>
-              </div>
-            </button>
-          </div>
-        </div>
-
-        <!-- Selector de Estudiante Existente -->
-        <div v-if="extraordinaryStudentMode === 'EXISTENTE'" class="space-y-1.5">
-          <label class="text-xs font-black text-slate-500 uppercase tracking-wider block">Seleccionar Estudiante *</label>
-          <select 
-            v-model="selectedStudentIdForExtraordinary"
-            class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-xs font-bold text-slate-800 dark:text-slate-200 outline-none"
-          >
-            <option :value="null">-- Seleccionar Estudiante --</option>
-            <option v-for="st in institutionStudents" :key="st.id_estudiante" :value="st.id_estudiante">
-              {{ st.nombre }} {{ st.apellido }} (Doc: {{ st.documento }})
-            </option>
-          </select>
-        </div>
-
-        <!-- Correo del Acudiente (Precargado desde el Ticket) -->
-        <div class="space-y-1.5">
-          <label class="text-xs font-black text-slate-500 uppercase tracking-wider block">Correo del Acudiente (Precargado desde Ticket) *</label>
-          <input 
-            v-model="extraordinaryParentEmail"
-            type="email"
-            class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-xs font-bold text-slate-800 dark:text-slate-200 outline-none"
-            placeholder="ejemplo@correo.com"
-          />
-        </div>
-
-        <!-- Motivo de Autorización -->
-        <div class="space-y-1.5">
-          <label class="text-xs font-black text-slate-500 uppercase tracking-wider block">Motivo u Observación de Autorización *</label>
-          <textarea 
-            v-model="extraordinaryReason"
-            rows="3"
-            class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-xs font-semibold text-slate-800 dark:text-slate-200 outline-none resize-none"
-            placeholder="Indica el motivo de la autorización..."
-          ></textarea>
-        </div>
-
-        <!-- Botones de Acción -->
-        <div class="flex items-center justify-end gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
-          <button 
-            type="button"
-            @click="showExtraordinaryModal = false"
-            class="px-4 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl font-bold text-xs uppercase"
-          >
-            Cancelar
-          </button>
-          <button 
-            type="button"
-            @click="submitExtraordinaryEnrollment"
-            :disabled="submittingExtraordinary || !extraordinaryParentEmail || (extraordinaryStudentMode === 'EXISTENTE' && !selectedStudentIdForExtraordinary)"
-            class="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-black text-xs uppercase tracking-wider disabled:opacity-50 flex items-center gap-2"
-          >
-            <Loader2 v-if="submittingExtraordinary" class="w-4 h-4 animate-spin" />
-            <span>Enviar Enlace al Acudiente</span>
-          </button>
-        </div>
-      </div>
-    </div>
+    <ExtraordinaryEnrollmentModal
+      :show="showExtraordinaryModal"
+      :selected-ticket-for-extraordinary="selectedTicketForExtraordinary"
+      v-model:extraordinary-student-mode="extraordinaryStudentMode"
+      v-model:selected-student-id-for-extraordinary="selectedStudentIdForExtraordinary"
+      :institution-students="institutionStudents"
+      v-model:extraordinary-parent-email="extraordinaryParentEmail"
+      v-model:extraordinary-reason="extraordinaryReason"
+      :submitting-extraordinary="submittingExtraordinary"
+      @close="showExtraordinaryModal = false"
+      @submit="submitExtraordinaryEnrollment"
+    />
   </div>
 </template>
+
 
 <style scoped>
 .animate-spin-slow {

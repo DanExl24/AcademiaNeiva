@@ -1,126 +1,174 @@
 # Casos de Uso — Matrículas e Inscripciones
 
-Este documento describe los flujos principales de interacción del módulo de Matrículas e Inscripciones de AcademiaNeiva.
+Este documento describe los flujos de interacción y diagramas de secuencia paso a paso del módulo de **Matrículas e Inscripciones** de AcademiaNeiva.
 
 ---
 
-## Caso de Uso 1: Proceso de Matrícula Regular (Flujo Ordinario)
+## Caso de Uso 1: Proceso de Matrícula Regular (Flujo Ordinario con OTP)
 
 ### Actores
-- **Padre de Familia / Aspirante** (Público)
+- **Padre de Familia / Acudiente** (Público)
 - **Directivo Escolar** (Coordinador de Admisiones / Rector)
 
 ### Precondiciones
-- El colegio se encuentra en el rango de fechas de inscripciones habilitado.
-- El grupo de destino cuenta con cupos disponibles.
+- El colegio cuenta con un Año Lectivo activo en estado `ABIERTO`.
+- La fecha actual se encuentra dentro del rango `[fecha_inicio, fecha_cierre]` configurado en `configuracion_inscripcion` con `habilitada = true`.
+- Existen grupos y cupos configurados.
 
-### Flujo Principal (Paso a Paso)
+### Diagrama de Secuencia
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Padre as Padre de Familia
-    actor Directivo
-    participant Sistema
+    actor Padre as Padre de Familia / Acudiente
+    actor Directivo as Directivo Escolar
+    participant Frontend as Vue 3 App
+    participant Backend as Express + Kysely
+    participant DB as PostgreSQL
+    participant SMTP as NotificationService
+
+    %% Paso 1: Verificación OTP
+    Padre->>Frontend: Digita correo del acudiente y clic en "Enviar Código OTP"
+    Frontend->>Backend: POST /api/matriculas/send-email-code { email }
+    Backend->>DB: Inserta en codigo_verificacion_email (15 min)
+    Backend->>SMTP: Envía código de 6 dígitos al correo
+    Padre->>Frontend: Ingresa código OTP de 6 dígitos
+    Frontend->>Backend: POST /api/matriculas/verify-email-code { email, code }
+    Backend->>DB: Marca verified = true
+    Frontend-->>Padre: Habilita el formulario de inscripción
+
+    %% Paso 2: Radicación
+    Padre->>Frontend: Selecciona nivel/grado, adjunta archivos (PDF/img) y envía
+    Frontend->>Backend: POST /api/matriculas/submit (Multipart FormData)
+    Backend->>Backend: Valida isVerified(email, 2 horas) y fechas en configuracion_inscripcion
+    Backend->>DB: Inserta matricula (PENDIENTE, token UUID) + documento_matriculas (BYTEA)
+    Backend->>SMTP: Envía correo de confirmación con Token de Seguimiento
+    Frontend-->>Padre: Muestra pantalla de éxito con Token UUID
+
+    %% Paso 3: Evaluación y Subsanación
+    Directivo->>Frontend: Ingresa a Gestión de Matrículas (EnrollmentManagement.vue)
+    Frontend->>Backend: GET /api/matriculas/filtered/:idColegio?estado=PENDIENTE
+    Directivo->>Frontend: Abre expediente (EnrollmentDetails.vue)
+    Frontend->>Backend: GET /api/matriculas/:id (Retorna docs con tokens efímeros y cupos)
+    Directivo->>Frontend: Inspecciona PDFs y valida/rechaza cada documento
+    Frontend->>Backend: PATCH /api/matriculas/document/:idDoc { estado: 'VALIDADO'/'RECHAZADO' }
     
-    Padre->>Sistema: Diligencia formulario de inscripción y sube archivos
-    Sistema->>Sistema: Valida tamaño de archivos y fechas ordinarias
-    Sistema->>Sistema: Crea matrícula 'PENDIENTE' y asocia token UUID
-    Sistema-->>Padre: Muestra código de seguimiento y envía email
-    
-    Directivo->>Sistema: Ingresa a panel de control de matrículas
-    Sistema-->>Directivo: Muestra solicitudes en estado 'PENDIENTE'
-    
-    Directivo->>Sistema: Evalúa y valida documentos uno a uno
-    Sistema->>Sistema: Cambia estados a 'VALIDADO'
-    
-    Directivo->>Sistema: Asigna grado escolar y grupo al aspirante
-    Sistema->>Sistema: Verifica cupos y cambia estado de matrícula a 'APROBADA'
-    
-    Directivo->>Sistema: Presiona "Finalizar Matrícula"
-    Sistema->>Sistema: Transiciona matrícula a 'ACTIVA'
-    Sistema->>Sistema: Crea registro en 'estudiante' con código único
-    Sistema->>Sistema: Crea cuenta de 'usuario' (rol estudiante, activo)
-    Sistema-->>Directivo: Muestra confirmación de oficialización
+    alt Si hay documentos rechazados
+        Directivo->>Frontend: Clic en "Notificar Inconsistencias"
+        Frontend->>Backend: POST /api/matriculas/notify-inconsistencies/:id
+        Backend->>DB: Actualiza matricula.estado = 'CORRECCION'
+        Backend->>SMTP: Envía email al padre con observaciones
+        Padre->>Frontend: Accede por token a EnrollmentCorrection.vue y sube archivos corregidos
+        Frontend->>Backend: POST /api/matriculas/update-documents/:token (Files)
+        Backend->>DB: Inserta en documento_matriculas con version = version + 1 y matricula.estado = 'CORREGIDA'
+    end
+
+    %% Paso 4: Asignación y Formalización
+    Directivo->>Frontend: Selecciona aula física y clic en "Asignar Salón"
+    Frontend->>Backend: POST /api/matriculas/assign-grade/:id { idGrado }
+    Backend->>DB: Actualiza matricula.id_grupo
+    Directivo->>Frontend: Clic en "Continuar a Formalización" (FinalRegistration.vue)
+    Frontend->>Backend: GET /api/auth/check-document/:doc (Verifica acudiente)
+    Directivo->>Frontend: Confirma datos de estudiante y acudiente y clic en "Finalizar Registro"
+    Frontend->>Backend: POST /api/matriculas/finalize/:id { student, parent, id_grado }
+    Backend->>DB: Transacción: FOR UPDATE en grupos, crea estudiante, usuario, padre, vinculo parentesco, matricula -> ACTIVA
+    Backend->>SMTP: Envía email con credenciales institucionales
+    Frontend-->>Directivo: Muestra confirmación de oficialización exitosa
 ```
 
-1. **Inscripción Pública:** El padre de familia accede al formulario de inscripción pública del colegio, ingresa los datos personales del aspirante y los suyos, adjunta los archivos PDF/imágenes obligatorios, y hace clic en "Enviar".
-2. **Inicialización de Solicitud:** El sistema verifica que las inscripciones estén abiertas, valida que los archivos no superen el límite de 5MB, almacena los archivos en el servidor local, inserta el registro en la tabla `matricula` en estado `'PENDIENTE'` con un token UUID de seguimiento, y muestra en pantalla el código UUID.
-3. **Revisión del Directivo:** El directivo escolar ingresa a su panel de gestión de matrículas, filtra las solicitudes por estado `'PENDIENTE'` y selecciona la ficha del aspirante.
-4. **Validación de Documentación:** El directivo abre en línea cada documento (ej. Registro Civil). Tras comprobar que es legible y válido, presiona "Validar". El sistema cambia el estado del archivo a `'VALIDADO'`.
-5. **Asignación de Salón:** Al estar todos los documentos validados, el directivo selecciona el Grado y el Grupo de clase (ej. Primero A) en la consola lateral y presiona "Asignar Grupo". El sistema comprueba que queden cupos en "Primero A", asocia el grupo a la matrícula, y promueve el estado de la solicitud a `'APROBADA'`.
-6. **Oficialización:** El directivo presiona el botón "Finalizar Matrícula" en el panel. El sistema cambia el estado a `'ACTIVA'`, inserta automáticamente la ficha de `estudiante` activa con su código institucional único, y le crea una cuenta de ingreso en `usuario` con rol `estudiante` y estado `ACTIVO`.
-
-### Flujos Alternativos / Excepciones
-- **Excepción 4a (Documento con Inconsistencia):** Si un documento es borroso o incorrecto, el directivo presiona "Rechazar" y digita el motivo. El sistema cambia el estado del documento a `'RECHAZADO'` y el de la matrícula completa a `'CORRECCION'`. El padre de familia, al consultar su token, visualiza los campos rechazados, sube los archivos corregidos y presiona "Enviar Corrección", devolviendo la matrícula a estado `'PENDIENTE'` para una nueva validación directiva.
-- **Excepción 5a (Grupo Sin Cupos):** Si el grupo de clase seleccionado ya completó su límite máximo de cupos en base a los alumnos activos matriculados, la acción de asignación del directivo se bloquea y el sistema muestra un mensaje de error indicando que debe liberar cupos o seleccionar un grupo paralelo alternativo.
-
-### Postcondiciones
-- El estudiante es dado de alta de manera oficial en la institución y cuenta con credenciales activas para el ingreso a su portal personal.
-- La matrícula queda registrada como `'ACTIVA'` y vinculada permanentemente para el año lectivo en curso.
+### Paso a Paso Detallado
+1. **Verificación Previa OTP:** El acudiente ingresa a `EnrollmentView.vue`, digita su correo y solicita el código OTP de 6 dígitos. Una vez validado el código, se desbloquean los campos de selección escolar.
+2. **Envío de Solicitud:** El acudiente selecciona el colegio, nivel, tipo de grado y grupo de preferencia, adjunta los archivos solicitados (máx 5MB) y envía la solicitud. El backend valida la verificación previa del correo (`isVerified`), almacena los archivos binarios en `documento_matriculas` (`BYTEA`) e inserta la matrícula en estado `PENDIENTE`.
+3. **Revisión Directiva:** El directivo ingresa a `EnrollmentManagement.vue` y abre el expediente en `EnrollmentDetails.vue`. El visor carga los archivos protegidos mediante tokens efímeros firmados (`verifyDocumentToken`). El directivo valida o rechaza individualmente cada documento.
+4. **Subsanación por el Acudiente:** Si hay documentos rechazados, el directivo presiona "Notificar Inconsistencias", pasando la matrícula a `CORRECCION`. El acudiente ingresa por su token a `EnrollmentCorrection.vue`, sube los archivos corregidos y el sistema los inserta con `version = max_version + 1`, pasando la matrícula al estado `CORREGIDA`.
+5. **Asignación de Aula:** El directivo selecciona el salón definitivo con base en los cupos en tiempo real y presiona "Asignar Salón".
+6. **Formalización Final:** En `FinalRegistration.vue`, el directivo valida la información personal del estudiante y acudiente (con autocompletado y detección de rol docente si aplica) y presiona "Finalizar Registro". El backend ejecuta la transacción atómica con bloqueo `FOR UPDATE`, crea al estudiante con código institucional, crea la cuenta del padre en `usuario_colegio`, activa la matrícula (`ACTIVA`) y despacha las credenciales por correo electrónico.
 
 ---
 
-## Caso de Uso 2: Proceso de Reingreso de Estudiante Retirado y Renovación Documental
+## Caso de Uso 2: Proceso de Reingreso de Estudiante Retirado
 
 ### Actores
 - **Directivo Escolar** (Coordinador / Rector)
 - **Padre de Familia / Acudiente**
 
 ### Precondiciones
-- El estudiante se encuentra en estado `RETIRADO` en el sistema.
+- El estudiante se encuentra en estado `RETIRADO` en el sistema (alumnos `EXPULSADO` o `GRADUADO` están bloqueados).
 - Existe un Año Lectivo activo habilitado con grupos y cupos creados.
 
-### Flujo Principal (Paso a Paso)
+### Diagrama de Secuencia
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor Directivo
     actor Padre as Padre de Familia / Acudiente
-    participant Sistema
+    participant Sistema as AcademiaNeiva API & Frontend
+
+    Directivo->>Sistema: Ingresa a Gestión de Reingresos (ReingresoManagement.vue)
+    Directivo->>Sistema: Selecciona al alumno retirado desde la lista o ticket de soporte
+    Sistema-->>Directivo: Despliega ficha del alumno, acudiente y motivo histórico de retiro
     
-    Directivo->>Sistema: Ingresa a la consola de Gestión de Reingresos
-    Directivo->>Sistema: Selecciona el expediente del estudiante retirado
-    Sistema-->>Directivo: Muestra datos del alumno, acudiente e historial de retiro
-    
-    Directivo->>Sistema: Configura Destino (Año Lectivo, Nivel, Grado, Salón con cupos)
-    Sistema->>Sistema: Valida disponibilidad de cupos en el grupo seleccionado
-    
+    Directivo->>Sistema: Configura Destino (Año Lectivo, Nivel, Grado, Salón con cupos en vivo)
     Directivo->>Sistema: Define matriz documental (VIGENTE vs RENOVAR)
     Directivo->>Sistema: Presiona "Enviar Enlace de Reingreso"
     
     Sistema->>Sistema: Crea matrícula 'PENDIENTE_RENOVACION' (tipo REINGRESO)
     Sistema->>Sistema: Pasa ticket de incidencia a 'EN_PROCESO' (Irreversible)
-    Sistema->>Sistema: Genera token UUID y envía email al acudiente
+    Sistema->>Sistema: Genera token UUID y despacha email con enlace al acudiente
     Sistema-->>Directivo: Muestra confirmación de envío exitoso
     
-    Padre->>Sistema: Accede al enlace con token desde el correo
-    Padre->>Sistema: Sube los documentos requeridos marcados como 'RENOVAR'
-    Sistema->>Sistema: Conserva estado 'PENDIENTE_RENOVACION' y actualiza archivos
+    Padre->>Sistema: Accede mediante el enlace del correo con token
+    Padre->>Sistema: Carga únicamente los documentos marcados como 'RENOVAR'
+    Sistema->>Sistema: Actualiza archivos y conserva estado 'PENDIENTE_RENOVACION'
     
-    Directivo->>Sistema: Ingresa a Gestión de Matrículas y revisa documentos
-    Directivo->>Sistema: Valida documentos y presiona "Siguiente"
+    Directivo->>Sistema: Abre la solicitud en Gestión de Matrículas
+    Directivo->>Sistema: Valida documentos renovados y pasa a FinalRegistration.vue
     Directivo->>Sistema: Presiona "Procesar Registro / Renovación"
     
-    Sistema->>Sistema: Transiciona matrícula a 'ACTIVA'
-    Sistema->>Sistema: Cambia estado de estudiante a 'ACTIVO'
+    Sistema->>Sistema: Transición atómica: matricula -> ACTIVA, estudiante -> ACTIVO, resuelve ticket de soporte
     Sistema-->>Directivo: Confirma reingreso oficializado del estudiante
 ```
 
-1. **Selección del Expediente:** El directivo ingresa a la vista de **Gestión de Reingresos** (`ReingresoManagement.vue`) y selecciona al estudiante retirado de la lista o desde un ticket de soporte de reingreso.
-2. **Carga de Historial:** El sistema presenta el perfil del alumno, los datos de su acudiente registrado y su motivo de retiro.
-3. **Configuración de Destino:** El directivo especifica el Año Lectivo Activo, Nivel Escolar, Grado y Grupo/Salón de destino. El selector de salones calcula en tiempo real los cupos disponibles e impide la asignación a cursos sin espacio.
-4. **Matriz Documental:** El directivo marca los documentos que se encuentran vigentes (`VIGENTE`) y aquellos que requieren renovación por parte del acudiente (`RENOVAR`).
-5. **Apertura de Reingreso y Notificación:** El directivo presiona "Enviar Enlace de Reingreso". El sistema crea la matrícula en estado `PENDIENTE_RENOVACION` con tipo `REINGRESO`, actualiza el ticket asociado a `EN_PROCESO` de forma irreversible, y envía un correo electrónico al acudiente con las instrucciones y el token de seguimiento.
-6. **Subsanación por el Acudiente:** El acudiente accede mediante el token recibido por email, sube los archivos requeridos y confirma el envío. La matrícula conserva su estado `PENDIENTE_RENOVACION`.
-7. **Revisión y Oficialización:** El directivo abre la matrícula desde la consola de matrículas, valida los documentos renovados, avanza al paso 3 ("Siguiente") y presiona "Procesar Registro / Renovación". El sistema pasa la matrícula a `ACTIVA` y reactiva la ficha del estudiante a `ACTIVO`.
+---
 
-### Flujos Alternativos / Excepciones
-- **Excepción 3a (Estudiante Inexistente o Sin Antecedentes):** Si el acudiente abrió un ticket de reingreso pero el alumno no figura en los registros de retirados, el directivo presiona "Notificar Antecedente No Encontrado". El sistema envía un correo al acudiente y cierra la incidencia.
-- **Excepción 5a (Ticket de Reingreso Irreversible):** Si el directivo intenta cambiar el estado de un ticket de reingreso a `EN_PROCESO`, la interfaz muestra una alerta informando que la acción notificará al padre y no se podrá revertir a `ABIERTO`.
+## Caso de Uso 3: Matrícula Extraordinaria por Mesa de Soporte
 
-### Postcondiciones
-- El alumno es reintegrado oficialmente en el nuevo grupo escolar con matrícula `ACTIVA` y expediente reactivado.
-- Se conserva la trazabilidad histórica de su retiro y su reingreso.
+### Actores
+- **Padre de Familia / Solicitante**
+- **Directivo Escolar**
 
+### Precondiciones
+- El solicitante radica un Ticket de Soporte con tipo de incidencia `MATRICULA_EXTRAORDINARIA` solicitando cupo extemporáneo.
+
+### Flujo Operativo Paso a Paso
+1. **Autorización Directiva en Soporte:** El directivo ingresa a `SupportView.vue`, abre el ticket de matrícula extraordinaria y presiona "Autorizar Matrícula Extraordinaria".
+2. **Pre-creación de Matrícula:** El directivo selecciona si es un estudiante nuevo o existente. El backend ejecuta `POST /api/academic-admin/matriculas/extraordinaria`, pre-creando la fila en `matricula` en estado `PENDIENTE` con `tipo = 'EXTRAORDINARIA'`, asociando el `id_ticket` y generando un `token_seguimiento`.
+3. **Radicación sin Restricción de Fechas:** El acudiente recibe el enlace con el token (`EnrollmentView.vue?token=...`). Al detectar `isExtraordinaryToken = true`, el formulario omite la validación de fechas regulares de `configuracion_inscripcion` y permite adjuntar los documentos.
+4. **Evaluación y Resolución Automática:** El directivo revisa los documentos en `EnrollmentDetails.vue` y formaliza en `FinalRegistration.vue`. Al finalizar (`finalizeEnrollment`), el backend activa la matrícula y **actualiza automáticamente el ticket de soporte asociado a estado `'RESUELTO'`**.
+
+---
+
+## Caso de Uso 4: Formalización con Detección de Múltiples Hijos / Doble Rol Docente
+
+### Actores
+- **Directivo Escolar**
+
+### Precondiciones
+- El acudiente que radicó la solicitud ya posee una cuenta en el sistema (bien sea porque tiene otros hijos matriculados previamente, o porque labora como docente/directivo en el colegio).
+
+### Flujo Operativo Paso a Paso
+1. **Detección de Candidatos a Renovación en Paso 1 (Estudiante):**
+   - Al cargar `FinalRegistration.vue`, el backend retorna el objeto `renovacion.candidates` con todos los hijos registrados bajo el correo del acudiente.
+   - El directivo visualiza un panel interactivo con la lista de hijos elegibles y la opción **"Registrar Nuevo Hermano"**.
+   - **Bifurcación Obligatoria:**
+     - Si el directivo selecciona a uno de los hijos (`selectedCandidate`), el sistema precarga sus datos y reutiliza su `id_estudiante`, preparándolo para renovación.
+     - Si el directivo marca "Registrar Nuevo Hermano" (`isNewStudent`), el sistema limpia los campos del alumno para crear un nuevo estudiante independiente.
+2. **Detección y Doble Rol en Paso 2 (Acudiente):**
+   - Al ingresar o validar el documento del acudiente, `checkDocument` detecta que el usuario ya existe.
+   - Si el acudiente labora como **Docente o Directivo** (`es_docente = true`):
+     - El sistema despliega la alerta visual informativa: *"Atención: Este documento pertenece a personal institucional (Docente: Nombre Apellido). Se le vinculará también el rol de acudiente."*
+     - Bloquea los campos de nombres para evitar alterar su identidad oficial.
+3. **Ejecución Transaccional Segura:**
+   - Al presionar "Finalizar Registro", `finalizeEnrollment` no crea un nuevo usuario para el padre: vincula el rol `padre` en `usuario_rol`, crea la relación institucional en `usuario_colegio` (`estado = 'ACTIVO'`), y conserva intactas sus asignaciones y permisos docentes.
+   - Inserta la relación en `detalle_padrefamilia` vinculando al nuevo hijo con el padre existente.

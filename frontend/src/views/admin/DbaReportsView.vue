@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import axios from 'axios'
+import { dbaService } from '../../services/dbaService'
+import api from '../../services/api'
 import { 
   ArrowLeft, 
   BarChart3, 
@@ -25,6 +26,9 @@ import {
 } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 import { useAcademicYearStore } from '../../stores/academicYear'
+import DataTable from '../../components/ui/DataTable.vue'
+import DbaCatalogModal from '../../components/dba/DbaCatalogModal.vue'
+
 
 interface PeriodOption {
   id_periodo: number
@@ -170,18 +174,14 @@ const fetchCatalogData = async () => {
   if (!schoolId.value) return
   try {
     catalogLoading.value = true
-    const params: any = {}
-    if (yearStore.selectedYearId) {
-      params.yearId = yearStore.selectedYearId
-    }
-    const res = await axios.get(`/api/academic-admin/settings/dba-catalogo/${schoolId.value}`, { params })
-    catalogData.value = res.data || []
+    catalogData.value = await dbaService.getSchoolCatalogData(schoolId.value, yearStore.selectedYearId || undefined)
   } catch (error) {
-    console.error('Error loading DBA catalog for directivo:', error)
+    console.error('Error loading catalog data:', error)
   } finally {
     catalogLoading.value = false
   }
 }
+
 
 // Catalog computed statistics
 const catalogStats = computed(() => {
@@ -471,8 +471,8 @@ const loadFilterOptions = async () => {
       params.yearId = yearStore.selectedYearId
     }
     const [settingsRes, teachersRes] = await Promise.all([
-      axios.get(`/api/academic-admin/settings/${schoolId.value}`, { params }),
-      axios.get(`/api/academic-admin/teachers/${schoolId.value}`, { params })
+      api.get(`/academic-admin/settings/${schoolId.value}`, { params }),
+      api.get(`/academic-admin/teachers/${schoolId.value}`, { params })
     ])
     
     periods.value = settingsRes.data.periods || []
@@ -544,8 +544,7 @@ const fetchCoherenciaReport = async () => {
     if (filterSubject.value !== 'TODOS') params.id_materia = filterSubject.value
     if (filterTeacher.value !== 'TODOS') params.id_docente = filterTeacher.value
 
-    const res = await axios.get(`/api/academic-admin/settings/dba-reportes/coherencia/${schoolId.value}`, { params })
-    coherenciaData.value = res.data || []
+    coherenciaData.value = await dbaService.getSchoolCoherenciaReport(schoolId.value, params)
   } catch (error) {
     console.error('Error loading coherencia report:', error)
   } finally {
@@ -566,9 +565,9 @@ const fetchCoberturaReport = async () => {
     if (filterCoberturaGroup.value !== 'TODOS') params.grado = filterCoberturaGroup.value
     if (filterCoberturaSubject.value !== 'TODOS') params.id_materia = filterCoberturaSubject.value
 
-    const res = await axios.get(`/api/academic-admin/settings/dba-reportes/cobertura/${schoolId.value}`, { params })
-    coberturaResumen.value = res.data.resumen || []
-    coberturaDetalles.value = res.data.detalles || []
+    const res = await dbaService.getSchoolCoberturaReport(schoolId.value, params)
+    coberturaResumen.value = res.resumen || []
+    coberturaDetalles.value = res.detalles || []
     selectedResumenCard.value = null
     searchResumenTerm.value = ''
   } catch (error) {
@@ -577,6 +576,7 @@ const fetchCoberturaReport = async () => {
     fetchingReports.value = false
   }
 }
+
 
 const loadData = async () => {
   loading.value = true
@@ -1463,64 +1463,60 @@ onMounted(() => {
           </div>
 
           <!-- MODE 3: DETAILED FLAT TABLE -->
-          <div v-else class="overflow-x-auto">
-            <table class="w-full border-collapse">
-              <thead>
-                <tr class="bg-slate-50 border-b border-slate-100 text-left dark:bg-slate-800/40 dark:border-slate-800">
-                  <th class="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Docente</th>
-                  <th class="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Curso & Materia</th>
-                  <th class="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Actividad</th>
-                  <th class="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Enunciado DBA</th>
-                  <th class="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Evidencia del Catálogo</th>
-                  <th class="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400 text-center">Coherencia</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
-                <tr v-for="row in filteredCoherencia" :key="row.id_actividadmateria + '-' + row.id_evidencia_dba" class="hover:bg-slate-50/50 transition dark:hover:bg-slate-800/30">
-                  <td class="px-6 py-4">
-                    <p class="text-sm font-bold text-slate-800 dark:text-slate-200">{{ row.docente_nombre }}</p>
-                    <p class="text-[10px] font-semibold text-slate-400">Docente Asignado</p>
-                  </td>
-                  <td class="px-6 py-4">
-                    <p class="text-sm font-bold text-slate-800 dark:text-slate-200">{{ row.grupo_nombre }}</p>
-                    <p class="text-[10px] font-bold text-indigo-500 uppercase tracking-tighter">{{ row.materia_nombre }}</p>
-                  </td>
-                  <td class="px-6 py-4">
-                    <p class="text-sm font-bold text-slate-800 dark:text-slate-200">{{ row.actividad_nombre }}</p>
-                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Peso: {{ row.actividad_porcentaje }}%</p>
-                  </td>
-                  <td class="px-6 py-4 max-w-xs">
-                    <span class="inline-flex rounded-lg bg-amber-50 px-2 py-0.5 text-[10px] font-black text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 shrink-0 mb-1.5">DBA #{{ row.numero_dba }}</span>
-                    <p class="text-xs font-semibold text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed" :title="row.dba_enunciado">{{ row.dba_enunciado }}</p>
-                  </td>
-                  <td class="px-6 py-4 max-w-sm">
-                    <p class="text-xs font-semibold text-slate-700 dark:text-slate-300 leading-relaxed">{{ row.evidencia_descripcion }}</p>
-                    
-                    <div v-if="row.estado_coherencia === 'EXTRA'" class="mt-2.5 p-3 rounded-2xl bg-amber-50/60 border border-amber-250/30 text-xs dark:bg-amber-950/20 dark:border-amber-900/30">
-                      <div class="flex items-center gap-1.5 text-amber-700 dark:text-amber-400 font-extrabold uppercase text-[9px] tracking-wider mb-1">
-                        <AlertTriangle :size="12" />
-                        <span>Justificación Docente:</span>
-                      </div>
-                      <p class="font-bold text-slate-700 dark:text-slate-350">
-                        <span class="text-slate-500">Motivo:</span> {{ formatMotivoExtra(row.motivo_extra) }}
-                      </p>
-                      <p v-if="row.justificacion_extra" class="mt-1 text-slate-600 dark:text-slate-400 italic">
-                        "{{ row.justificacion_extra }}"
-                      </p>
-                    </div>
-                  </td>
-                  <td class="px-6 py-4 text-center">
-                    <span
-                      :class="row.estado_coherencia === 'PLANEADA' ? 'bg-emerald-50 text-emerald-700 border-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-900/30' : 'bg-amber-50 text-amber-700 border-amber-100 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-900/30'"
-                      class="inline-flex items-center justify-center rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-wider border shadow-sm"
-                    >
-                      {{ row.estado_coherencia }}
-                    </span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          <DataTable v-else>
+            <template #header>
+              <tr>
+                <th class="py-4 px-6">Docente</th>
+                <th class="py-4 px-6">Curso & Materia</th>
+                <th class="py-4 px-6">Actividad</th>
+                <th class="py-4 px-6">Enunciado DBA</th>
+                <th class="py-4 px-6">Evidencia del Catálogo</th>
+                <th class="py-4 px-6 text-center">Coherencia</th>
+              </tr>
+            </template>
+            <tr v-for="row in filteredCoherencia" :key="row.id_actividadmateria + '-' + row.id_evidencia_dba" class="hover:bg-slate-50/50 transition dark:hover:bg-slate-800/30">
+              <td class="py-4 px-6">
+                <p class="text-sm font-bold text-slate-800 dark:text-slate-200">{{ row.docente_nombre }}</p>
+                <p class="text-[10px] font-semibold text-slate-400">Docente Asignado</p>
+              </td>
+              <td class="py-4 px-6">
+                <p class="text-sm font-bold text-slate-800 dark:text-slate-200">{{ row.grupo_nombre }}</p>
+                <p class="text-[10px] font-bold text-indigo-500 uppercase tracking-tighter">{{ row.materia_nombre }}</p>
+              </td>
+              <td class="py-4 px-6">
+                <p class="text-sm font-bold text-slate-800 dark:text-slate-200">{{ row.actividad_nombre }}</p>
+                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Peso: {{ row.actividad_porcentaje }}%</p>
+              </td>
+              <td class="py-4 px-6 max-w-xs">
+                <span class="inline-flex rounded-lg bg-amber-50 px-2 py-0.5 text-[10px] font-black text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 shrink-0 mb-1.5">DBA #{{ row.numero_dba }}</span>
+                <p class="text-xs font-semibold text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed" :title="row.dba_enunciado">{{ row.dba_enunciado }}</p>
+              </td>
+              <td class="py-4 px-6 max-w-sm">
+                <p class="text-xs font-semibold text-slate-700 dark:text-slate-300 leading-relaxed">{{ row.evidencia_descripcion }}</p>
+                
+                <div v-if="row.estado_coherencia === 'EXTRA'" class="mt-2.5 p-3 rounded-2xl bg-amber-50/60 border border-amber-250/30 text-xs dark:bg-amber-950/20 dark:border-amber-900/30">
+                  <div class="flex items-center gap-1.5 text-amber-700 dark:text-amber-400 font-extrabold uppercase text-[9px] tracking-wider mb-1">
+                    <AlertTriangle :size="12" />
+                    <span>Justificación Docente:</span>
+                  </div>
+                  <p class="font-bold text-slate-700 dark:text-slate-350">
+                    <span class="text-slate-500">Motivo:</span> {{ formatMotivoExtra(row.motivo_extra) }}
+                  </p>
+                  <p v-if="row.justificacion_extra" class="mt-1 text-slate-600 dark:text-slate-400 italic">
+                    "{{ row.justificacion_extra }}"
+                  </p>
+                </div>
+              </td>
+              <td class="py-4 px-6 text-center">
+                <span
+                  :class="row.estado_coherencia === 'PLANEADA' ? 'bg-emerald-50 text-emerald-700 border-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-900/30' : 'bg-amber-50 text-amber-700 border-amber-100 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-900/30'"
+                  class="inline-flex items-center justify-center rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-wider border shadow-sm"
+                >
+                  {{ row.estado_coherencia }}
+                </span>
+              </td>
+            </tr>
+          </DataTable>
         </div>
       </div>
 
@@ -1773,174 +1769,23 @@ onMounted(() => {
     </template>
 
     <!-- Modal Catálogo Global Directivo -->
-    <div v-if="showCatalogModal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-md">
-      <div class="w-full max-w-5xl max-h-[90vh] flex flex-col rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-        
-        <!-- Header Modal -->
-        <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 p-6">
-          <div class="flex items-center gap-3">
-            <div class="rounded-2xl bg-amber-50 dark:bg-amber-950/40 p-3 text-amber-600 dark:text-amber-400">
-              <BookOpen class="h-6 w-6" />
-            </div>
-            <div>
-              <h3 class="text-xl font-black text-slate-900 dark:text-white">Catálogo Global de Derechos Básicos de Aprendizaje</h3>
-              <p class="text-xs font-semibold text-slate-500 dark:text-slate-400">Consulta las evidencias oficializadas y su estado de planeación en las competencias del colegio.</p>
-            </div>
-          </div>
-          <button @click="showCatalogModal = false" class="rounded-2xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 transition cursor-pointer">
-            <X class="h-5 w-5" />
-          </button>
-        </div>
+    <DbaCatalogModal
+      :show="showCatalogModal"
+      :catalog-loading="catalogLoading"
+      :catalog-stats="catalogStats"
+      v-model:catalog-search-term="catalogSearchTerm"
+      v-model:catalog-grade-filter="catalogGradeFilter"
+      v-model:catalog-subject-filter="catalogSubjectFilter"
+      v-model:catalog-status-filter="catalogStatusFilter"
+      :grades="grades"
+      :subjects="subjects"
+      :filtered-catalog="filteredCatalog"
+      :is-catalog-dba-card-collapsed="isCatalogDbaCardCollapsed"
+      :get-grouped-planeaciones="getGroupedPlaneaciones"
+      @close="showCatalogModal = false"
+      @toggle-catalog-dba-card="toggleCatalogDbaCard"
+    />
 
-        <!-- Filter Controls Modal -->
-        <div class="border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 p-6 space-y-4">
-          <!-- Stats Bar -->
-          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div class="rounded-2xl bg-white dark:bg-slate-800 p-3 border border-slate-100 dark:border-slate-700 shadow-sm">
-              <p class="text-[10px] font-black uppercase tracking-wider text-slate-400">Evidencias Totales</p>
-              <p class="text-xl font-black text-slate-900 dark:text-white mt-0.5">{{ catalogStats.totalEvidences }}</p>
-            </div>
-            <div class="rounded-2xl bg-white dark:bg-slate-800 p-3 border border-slate-100 dark:border-slate-700 shadow-sm">
-              <p class="text-[10px] font-black uppercase tracking-wider text-emerald-500">Evidencias Planificadas</p>
-              <p class="text-xl font-black text-emerald-600 dark:text-emerald-400 mt-0.5">{{ catalogStats.plannedEvidences }}</p>
-            </div>
-            <div class="rounded-2xl bg-white dark:bg-slate-800 p-3 border border-slate-100 dark:border-slate-700 shadow-sm">
-              <p class="text-[10px] font-black uppercase tracking-wider text-amber-500">Evidencias Libres</p>
-              <p class="text-xl font-black text-amber-600 dark:text-amber-400 mt-0.5">{{ catalogStats.freeEvidences }}</p>
-            </div>
-            <div class="rounded-2xl bg-white dark:bg-slate-800 p-3 border border-slate-100 dark:border-slate-700 shadow-sm">
-              <p class="text-[10px] font-black uppercase tracking-wider text-indigo-500">% Integración Escolar</p>
-              <p class="text-xl font-black text-indigo-600 dark:text-indigo-400 mt-0.5">{{ catalogStats.pct }}%</p>
-            </div>
-          </div>
-
-          <!-- Selects & Search -->
-          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
-            <div class="sm:col-span-2 flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 dark:bg-slate-800 dark:border-slate-700">
-              <Search class="h-4 w-4 text-slate-400 shrink-0" />
-              <input v-model="catalogSearchTerm" type="text" placeholder="Buscar evidencia, DBA o competencia..." class="w-full bg-transparent text-xs font-semibold text-slate-700 outline-none dark:text-white" />
-            </div>
-
-            <select v-model="catalogGradeFilter" class="w-full rounded-2xl border border-slate-200 bg-white p-2.5 text-xs font-bold text-slate-700 outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white">
-              <option value="TODOS">Todos los grados</option>
-              <option v-for="gName in grades" :key="gName" :value="gName">Grado {{ gName }}</option>
-            </select>
-
-            <select v-model="catalogSubjectFilter" class="w-full rounded-2xl border border-slate-200 bg-white p-2.5 text-xs font-bold text-slate-700 outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white">
-              <option value="TODOS">Todas las áreas</option>
-              <option v-for="s in subjects" :key="s.id_materia" :value="String(s.id_materia)">{{ s.nombre }}</option>
-            </select>
-
-            <select v-model="catalogStatusFilter" class="w-full rounded-2xl border border-slate-200 bg-white p-2.5 text-xs font-bold text-slate-700 outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white">
-              <option value="TODOS">Todos los estados</option>
-              <option value="PLANEADAS">Planeadas</option>
-              <option value="LIBRES">Libres</option>
-            </select>
-          </div>
-        </div>
-
-        <!-- Content Body Modal -->
-        <div class="flex-1 overflow-y-auto p-6 space-y-6">
-          <div v-if="catalogLoading" class="py-16 text-center text-slate-400 font-bold">
-            <RefreshCw class="mx-auto h-8 w-8 animate-spin text-amber-500 mb-2" />
-            Cargando catálogo oficial...
-          </div>
-
-          <div v-else-if="filteredCatalog.length === 0" class="py-16 text-center text-slate-400 font-bold">
-            <AlertTriangle class="mx-auto h-10 w-10 text-slate-300 dark:text-slate-600 mb-2" />
-            No se encontraron Derechos Básicos de Aprendizaje con los filtros seleccionados.
-          </div>
-
-          <div v-else class="space-y-6">
-            <div 
-              v-for="dba in filteredCatalog" 
-              :key="dba.id_dba"
-              class="rounded-3xl border border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 p-6 space-y-4 shadow-sm"
-            >
-              <!-- Clickable Accordion Header -->
-              <div 
-                @click="toggleCatalogDbaCard(dba.id_dba)"
-                class="flex flex-col sm:flex-row sm:items-start justify-between gap-3 cursor-pointer select-none group"
-                :class="!isCatalogDbaCardCollapsed(dba.id_dba) ? 'border-b border-slate-200/60 dark:border-slate-800 pb-3' : ''"
-              >
-                <div>
-                  <div class="flex items-center gap-2 mb-1">
-                    <span class="rounded-lg bg-amber-50 px-2.5 py-0.5 text-xs font-black text-amber-700 dark:bg-amber-950/50 dark:text-amber-400 border border-amber-200/40">
-                      DBA #{{ dba.numero_dba }}
-                    </span>
-                    <span class="text-xs font-extrabold text-slate-700 dark:text-slate-300">{{ dba.area }} — Grado {{ dba.grado }}</span>
-                    <span class="text-[10px] font-bold text-slate-400">({{ dba.version_curricular }})</span>
-                  </div>
-                  <h4 class="text-sm font-black text-slate-900 dark:text-white leading-relaxed group-hover:text-amber-600 transition-colors">{{ dba.dba_enunciado }}</h4>
-                </div>
-
-                <div class="flex items-center gap-2 shrink-0">
-                  <span class="px-3 py-1 rounded-full text-xs font-black bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
-                    {{ dba.evidencias.length }} evidencias
-                  </span>
-                  <div class="p-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 group-hover:border-amber-400 group-hover:text-amber-600 transition-colors">
-                    <ChevronUp v-if="!isCatalogDbaCardCollapsed(dba.id_dba)" class="w-4 h-4" />
-                    <ChevronDown v-else class="w-4 h-4" />
-                  </div>
-                </div>
-              </div>
-
-              <!-- Collapsible Evidencias Body -->
-              <div v-if="!isCatalogDbaCardCollapsed(dba.id_dba)" class="space-y-3 pt-1 animate-in fade-in duration-200">
-                <div 
-                  v-for="ev in dba.evidencias" 
-                  :key="ev.id_evidencia_dba"
-                  class="rounded-2xl bg-white dark:bg-slate-800 p-4 border border-slate-100 dark:border-slate-700/60 space-y-2 shadow-sm"
-                >
-                  <div class="flex items-start justify-between gap-3">
-                    <p class="text-xs font-bold text-slate-800 dark:text-slate-200 leading-relaxed">
-                      <span class="text-slate-400 font-extrabold mr-1">#{{ ev.orden }}</span>
-                      {{ ev.descripcion }}
-                    </p>
-                    <span 
-                      :class="ev.planeaciones && ev.planeaciones.length > 0 ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border-emerald-100' : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400 border-slate-200'"
-                      class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border shrink-0"
-                    >
-                      {{ ev.planeaciones && ev.planeaciones.length > 0 ? 'PLANEADA' : 'LIBRE' }}
-                    </span>
-                  </div>
-
-                  <!-- Planeaciones Vinculadas agrupadas -->
-                  <div v-if="ev.planeaciones && ev.planeaciones.length > 0" class="pt-2 border-t border-slate-100 dark:border-slate-700/50 space-y-1.5">
-                    <p class="text-[10px] font-black uppercase tracking-widest text-slate-400">Vinculada en la planeación curricular de:</p>
-                    <div 
-                      v-for="(grpPlan, pIdx) in getGroupedPlaneaciones(ev.planeaciones)" 
-                      :key="pIdx"
-                      class="flex flex-wrap items-center justify-between text-xs bg-slate-50 dark:bg-slate-900/60 px-3 py-2 rounded-xl text-slate-700 dark:text-slate-300 border border-slate-100/80 dark:border-slate-800"
-                    >
-                      <div>
-                        <span class="font-extrabold text-amber-700 dark:text-amber-400 mr-2">{{ grpPlan.materia_nombre }}</span>
-                        <span class="font-semibold text-slate-500">({{ grpPlan.periodo_nombre }})</span>
-                        <p v-if="grpPlan.competencia_descripcion" class="text-[11px] text-slate-600 dark:text-slate-400 italic line-clamp-1 mt-0.5">
-                          "{{ grpPlan.competencia_descripcion }}"
-                        </p>
-                      </div>
-                      <div class="flex flex-wrap gap-1 mt-1 sm:mt-0">
-                        <span v-for="gName in grpPlan.grupos" :key="gName" class="px-2 py-0.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 font-extrabold text-[10px] border border-indigo-100/30">
-                          {{ gName }}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Modal Footer -->
-        <div class="border-t border-slate-100 dark:border-slate-800 p-4 bg-slate-50 dark:bg-slate-900/80 flex justify-end">
-          <button @click="showCatalogModal = false" class="rounded-2xl bg-slate-900 px-6 py-2.5 text-xs font-black text-white hover:bg-slate-800 transition dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white cursor-pointer">
-            Cerrar Ventana
-          </button>
-        </div>
-      </div>
-    </div>
 
   </div>
 </template>

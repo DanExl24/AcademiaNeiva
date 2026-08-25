@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import axios from 'axios'
+import { academicService } from '../../services/academicService'
+
 import { ArrowLeft, BookMarked, PenSquare, Plus, Info, Trash2, Play, Lock, ShieldAlert, Check } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
+import { useConfirm } from '../../composables/useConfirm'
+import { useToast } from '../../composables/useToast'
 
 interface AcademicYear {
   id_anio: number
@@ -27,7 +30,10 @@ interface AcademicPeriod {
 }
 
 const auth = useAuthStore()
+const { confirm } = useConfirm()
+const toast = useToast()
 const schoolId = computed(() => Number(auth.user?.schoolId || 0))
+
 
 const loading = ref(true)
 const savingPeriod = ref(false)
@@ -57,13 +63,12 @@ const toggleYearStatus = async (year: AcademicYear) => {
   const targetStatus = currentStatus === 'ABIERTO' ? 'CERRADO' : 'ABIERTO'
   try {
     togglingYearId.value = year.id_anio
-    const response = await axios.patch(`/api/academic-admin/settings/years/${year.id_anio}/status`, {
+    const updated = await academicService.updateYearStatus(year.id_anio, {
       schoolId: schoolId.value,
       estado: targetStatus,
     })
     
     // Update local state
-    const updated = response.data
     const found = academicYears.value.find(y => y.id_anio === year.id_anio)
     if (found) {
       found.estado = updated.estado
@@ -95,11 +100,9 @@ const deleteYear = async (year: AcademicYear) => {
 
   try {
     deletingYearId.value = year.id_anio
-    const response = await axios.delete(`/api/academic-admin/settings/years/${year.id_anio}`, {
-      data: { schoolId: schoolId.value }
-    })
+    const response = await academicService.deleteYear(year.id_anio, schoolId.value)
     
-    alert(response.data?.message || `Año lectivo ${year.calendario} eliminado correctamente.`)
+    alert(response?.message || `Año lectivo ${year.calendario} eliminado correctamente.`)
     
     if (selectedYearId.value === year.id_anio) {
       selectedYearId.value = null
@@ -107,6 +110,7 @@ const deleteYear = async (year: AcademicYear) => {
     if (schoolId.value) {
       await yearStore.loadYearsForSchool(schoolId.value, auth.token || undefined)
     }
+
     await loadData()
   } catch (error: any) {
     alert(error.response?.data?.error || 'No fue posible eliminar el año lectivo')
@@ -269,10 +273,10 @@ const loadData = async () => {
     if (activeYearId) {
       params.yearId = activeYearId
     }
-    const response = await axios.get(`/api/academic-admin/settings/${schoolId.value}`, { params })
-    currentYear.value = response.data.currentYear
-    academicYears.value = response.data.academicYears || []
-    periods.value = response.data.periods
+    const response = await academicService.getSettings(schoolId.value, params)
+    currentYear.value = response.currentYear
+    academicYears.value = response.academicYears || []
+    periods.value = response.periods
     
     // Set selected year to current active year on first load if not already set
     if (!selectedYearId.value && currentYear.value) {
@@ -303,7 +307,7 @@ const createPeriod = async () => {
 
   try {
     savingPeriod.value = true
-    await axios.post('/api/academic-admin/settings/periods', {
+    await academicService.createSettingPeriod({
       schoolId: schoolId.value,
       nombre: newPeriod.value.nombre,
       porcentaje: Number(newPeriod.value.porcentaje),
@@ -341,7 +345,7 @@ const updatePeriodPercentage = async () => {
 
   try {
     savingPeriod.value = true
-    await axios.patch(`/api/academic-admin/settings/periods/${periodEditModal.value.id_periodo}/percentage`, {
+    await academicService.updatePeriodPercentage(periodEditModal.value.id_periodo, {
       schoolId: schoolId.value,
       porcentaje: Number(periodEdit.value.porcentaje),
       mes_inicio: mesInicio,
@@ -361,21 +365,24 @@ const updatePeriodPercentage = async () => {
 
 const approvePeriod = async (period: AcademicPeriod) => {
   if (isYearClosed.value) {
-    alert(`El año lectivo ${selectedYearObj.value?.calendario || ''} está CERRADO. No es posible aprobar periodos en un ciclo escolar cerrado.`)
+    toast.error(`El año lectivo ${selectedYearObj.value?.calendario || ''} está CERRADO. No es posible aprobar periodos en un ciclo escolar cerrado.`)
     return
   }
-  const confirmApprove = confirm(`¿Está seguro de aprobar y activar el periodo "${period.nombre}"?`)
+  const confirmApprove = await confirm({
+    title: 'Aprobar y Activar Periodo',
+    message: `¿Está seguro de aprobar y activar el periodo "${period.nombre}"?`,
+    confirmText: 'Aprobar Periodo',
+    type: 'primary'
+  })
   if (!confirmApprove) return
 
   try {
     loading.value = true
-    await axios.post(`/api/academic-admin/settings/periods/${period.id_periodo}/approve`, {
-      schoolId: schoolId.value,
-    })
-    alert('Periodo académico aprobado y activado correctamente.')
+    await academicService.approvePeriod(period.id_periodo, schoolId.value)
+    toast.success('Periodo académico aprobado y activado correctamente.')
     await loadData()
   } catch (error: any) {
-    alert(error.response?.data?.error || 'No fue posible aprobar el periodo')
+    toast.error(error.response?.data?.error || 'No fue posible aprobar el periodo')
   } finally {
     loading.value = false
   }
@@ -387,33 +394,40 @@ const reopeningPeriodId = ref<number | null>(null)
 const closePeriod = async (period: AcademicPeriod, force = false) => {
   if (closingPeriodId.value) return
   if (isYearClosed.value) {
-    alert(`El año lectivo ${selectedYearObj.value?.calendario || ''} ya se encuentra CERRADO.`)
+    toast.error(`El año lectivo ${selectedYearObj.value?.calendario || ''} ya se encuentra CERRADO.`)
     return
   }
   
   if (!force) {
-    const confirmClose = confirm(`¿Está seguro de cerrar el periodo "${period.nombre}"? Los docentes no podrán registrar calificaciones para este periodo.`)
+    const confirmClose = await confirm({
+      title: 'Cerrar Periodo Académico',
+      message: `¿Está seguro de cerrar el periodo "${period.nombre}"? Los docentes no podrán registrar calificaciones para este periodo.`,
+      confirmText: 'Cerrar Periodo',
+      type: 'warning'
+    })
     if (!confirmClose) return
   }
 
   try {
     closingPeriodId.value = period.id_periodo
-    await axios.post(`/api/academic-admin/settings/periods/${period.id_periodo}/close`, {
-      schoolId: schoolId.value,
-      force
-    })
-    alert(`Periodo "${period.nombre}" cerrado correctamente.`)
+    await academicService.closePeriod(period.id_periodo, schoolId.value, force)
+    toast.success(`Periodo "${period.nombre}" cerrado correctamente.`)
     await loadData()
   } catch (error: any) {
     if (error.response?.status === 409 && error.response?.data?.pending) {
       const pendingCount = error.response.data.pending.length
-      const forceConfirm = confirm(`No se puede cerrar el periodo porque hay ${pendingCount} asignación(es) académica(s) pendiente(s) de cerrar por los docentes.\n\n¿Desea forzar el cierre de todas formas?`)
+      const forceConfirm = await confirm({
+        title: 'Forzar Cierre de Periodo',
+        message: `No se puede cerrar el periodo porque hay ${pendingCount} asignación(es) académica(s) pendiente(s) de cerrar por los docentes.\n\n¿Desea forzar el cierre de todas formas?`,
+        confirmText: 'Forzar Cierre',
+        type: 'danger'
+      })
       if (forceConfirm) {
         await closePeriod(period, true)
       }
       return
     }
-    alert(error.response?.data?.error || 'No fue posible cerrar el periodo')
+    toast.error(error.response?.data?.error || 'No fue posible cerrar el periodo')
   } finally {
     closingPeriodId.value = null
   }
@@ -422,25 +436,27 @@ const closePeriod = async (period: AcademicPeriod, force = false) => {
 const reopenPeriod = async (period: AcademicPeriod) => {
   if (reopeningPeriodId.value) return
   if (isYearClosed.value) {
-    alert(`El año lectivo ${selectedYearObj.value?.calendario || ''} está CERRADO. Debe reabrir el año lectivo en la lista de años antes de reabrir sus periodos individuales.`)
+    toast.error(`El año lectivo ${selectedYearObj.value?.calendario || ''} está CERRADO. Debe reabrir el año lectivo en la lista de años antes de reabrir sus periodos individuales.`)
     return
   }
 
-  const warningMsg = `⚠️ ADVERTENCIA: Al reabrir el periodo "${period.nombre}", todos los docentes y directivos del colegio podrán ingresar y modificar calificaciones de este periodo de manera global.\n\nEsta acción requiere justificación obligatoria.\n\n¿Desea continuar?`
-  if (!confirm(warningMsg)) return
+  const ok = await confirm({
+    title: 'Reabrir Periodo Académico',
+    message: `Al reabrir el periodo "${period.nombre}", todos los docentes y directivos del colegio podrán ingresar y modificar calificaciones de este periodo de manera global.`,
+    confirmText: 'Reabrir Periodo',
+    type: 'warning'
+  })
+  if (!ok) return
 
   const motivo = prompt(`Escriba el motivo de la reapertura del periodo (Obligatorio):`)
   if (!motivo || !motivo.trim()) {
-    alert('Acción cancelada. Se requiere ingresar un motivo válido para reabrir el periodo.')
+    toast.warning('Acción cancelada. Se requiere ingresar un motivo válido para reabrir el periodo.')
     return
   }
 
   try {
     reopeningPeriodId.value = period.id_periodo
-    await axios.post(`/api/academic-admin/settings/periods/${period.id_periodo}/reopen`, {
-      schoolId: schoolId.value,
-      motivo: motivo.trim()
-    })
+    await academicService.reopenPeriod(period.id_periodo, schoolId.value)
     alert(`Periodo "${period.nombre}" reabierto correctamente.`)
     await loadData()
   } catch (error: any) {
@@ -465,7 +481,7 @@ const createAcademicYear = async () => {
 
   try {
     yearSaving.value = true
-    const response = await axios.post('/api/academic-admin/settings/years', {
+    const response = await academicService.createYear({
       schoolId: schoolId.value,
       calendario: finalLabel,
       tipo_calendario: academicYearForm.value.tipo_calendario,
@@ -473,15 +489,15 @@ const createAcademicYear = async () => {
       fecha_fin: academicYearForm.value.fecha_fin,
     })
     
-    alert(response.data.message || 'Año lectivo creado correctamente.')
+    alert(response.message || 'Año lectivo creado correctamente.')
     
     if (schoolId.value) {
       await yearStore.loadYearsForSchool(schoolId.value, auth.token || undefined)
     }
 
-    if (response.data.id_anio) {
-      selectedYearId.value = response.data.id_anio
-      yearStore.setSelectedYearId(response.data.id_anio)
+    if (response.id_anio) {
+      selectedYearId.value = response.id_anio
+      yearStore.setSelectedYearId(response.id_anio)
     }
 
     yearModal.value = false
@@ -493,6 +509,7 @@ const createAcademicYear = async () => {
     yearSaving.value = false
   }
 }
+
 
 const formatYearDates = (year: AcademicYear) => {
   if (year.fecha_inicio && year.fecha_fin) {
@@ -521,22 +538,28 @@ const changeYearCalendarType = async (year: AcademicYear, newType: string) => {
   if (year.tipo_calendario === newType) return
 
   const confirmMsg = `¿Desea cambiar el calendario del año lectivo a Calendario ${newType}? Esto actualizará las fechas oficiales de sus periodos.`
-  if (!confirm(confirmMsg)) return
+  const ok = await confirm({
+    title: 'Cambiar Calendario',
+    message: confirmMsg,
+    confirmText: 'Cambiar Calendario',
+    type: 'warning'
+  })
+  if (!ok) return
 
   try {
     changingCalendarYearId.value = year.id_anio
-    const response = await axios.patch(`/api/academic-admin/settings/years/${year.id_anio}/calendar-type`, {
+    const response = await academicService.updateYearCalendarType(year.id_anio, {
       schoolId: schoolId.value,
       tipo_calendario: newType
     })
 
-    alert(response.data.message || 'Tipo de calendario actualizado correctamente.')
+    toast.success(response.message || 'Tipo de calendario actualizado correctamente.')
     if (schoolId.value) {
       await yearStore.loadYearsForSchool(schoolId.value, auth.token || undefined)
     }
     await loadData()
   } catch (error: any) {
-    alert(error.response?.data?.error || 'No fue posible cambiar el tipo de calendario')
+    toast.error(error.response?.data?.error || 'No fue posible cambiar el tipo de calendario')
     await loadData()
   } finally {
     changingCalendarYearId.value = null
@@ -596,22 +619,29 @@ const onPresetSelected = (presetNombre: string) => {
 }
 
 const deletePeriod = async (period: AcademicPeriod) => {
-  if (!confirm(`¿Está seguro de eliminar el periodo "${period.nombre}"?`)) return
+  const ok = await confirm({
+    title: 'Eliminar Periodo',
+    message: `¿Está seguro de eliminar el periodo "${period.nombre}"?`,
+    confirmText: 'Eliminar Periodo',
+    type: 'danger'
+  })
+  if (!ok) return
+
   try {
     loading.value = true
-    await axios.delete(`/api/academic-admin/settings/periods/${period.id_periodo}`, {
-      data: { schoolId: schoolId.value }
-    })
-    alert(`Periodo ${period.nombre} eliminado correctamente.`)
+    await academicService.deleteSettingPeriod(period.id_periodo, schoolId.value)
+    toast.success(`Periodo ${period.nombre} eliminado correctamente.`)
     await loadData()
   } catch (error: any) {
-    alert(error.response?.data?.error || 'No fue posible eliminar el periodo académico')
+    toast.error(error.response?.data?.error || 'No fue posible eliminar el periodo académico')
   } finally {
     loading.value = false
   }
 }
 
+
 onMounted(loadData)
+
 </script>
 
 <template>

@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import axios from 'axios'
-import { API_BASE_URL } from '../../config/api'
+import { enrollmentService } from '../../services/enrollmentService'
+import { API_BASE_URL } from '../../services/api'
 import html2pdf from 'html2pdf.js'
 import { useNotificationStore } from '../../stores/notifications'
+
 import {
   ArrowLeft,
   FileText,
@@ -90,9 +91,9 @@ const renderAllPdfDocuments = async () => {
 
 const fetchDetails = async () => {
   try {
-    const response = await axios.get(`/api/matriculas/${route.params.id}`)
-    matricula.value = response.data
-    selectedGradeId.value = response.data.id_grupo || response.data.id_grado || (response.data.availableSections?.[0]?.id_grado ?? null)
+    const data = await enrollmentService.getDetails(route.params.id as string)
+    matricula.value = data
+    selectedGradeId.value = data.id_grupo || data.id_grado || (data.availableSections?.[0]?.id_grado ?? null)
     renderAllPdfDocuments()
   } catch {
     notify.addNotification('Error al cargar la solicitud', 'error')
@@ -123,7 +124,7 @@ const cancelEnrollment = async () => {
   if (!cancelMotivo.value) return
   cancelling.value = true
   try {
-    await axios.post(`/api/matriculas/cancel/${route.params.id}`, {
+    await enrollmentService.cancelEnrollment(route.params.id as string, {
       motivo: cancelMotivo.value, detalles: cancelDetalles.value
     })
     notify.addNotification('Matrícula cancelada exitosamente', 'success')
@@ -142,9 +143,7 @@ const assignRoom = async () => {
   if (selected) {
     savingGrade.value = true
     try {
-      await axios.post(`/api/matriculas/assign-grade/${route.params.id}`, {
-        idGrado: selected.id_grado
-      })
+      await enrollmentService.assignGrade(route.params.id as string, selected.id_grado)
       matricula.value.seccion = selected.seccion
       matricula.value.id_grado = selected.id_grado
       matricula.value.id_grupo = selected.id_grado
@@ -166,7 +165,7 @@ const showPendingModal = ref(false)
 
 const updateDocumentStatus = async (idDocumento: number, estado: string) => {
   try {
-    await axios.patch(`/api/matriculas/document/${idDocumento}`, { estado })
+    await enrollmentService.updateDocumentStatus(idDocumento, estado)
     const doc = matricula.value.documentos.find((d: any) => d.id_documento === idDocumento)
     if (doc) doc.estado = estado
   } catch {
@@ -192,7 +191,7 @@ const confirmSaveLater = () => {
 
 const notifyInconsistencies = async () => {
   try {
-    await axios.post(`/api/matriculas/notify-inconsistencies/${route.params.id}`)
+    await enrollmentService.notifyInconsistencies(route.params.id as string)
     notify.addNotification('Notificación enviada al padre', 'success')
     showNotifyModal.value = false
     router.push('/dashboard/gestion-matriculas')
@@ -200,6 +199,7 @@ const notifyInconsistencies = async () => {
     notify.addNotification('Error al enviar notificación', 'error')
   }
 }
+
 
 const getDocStatusClass = (estado: string) => {
   if (estado === 'PENDIENTE') return 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400'
@@ -337,7 +337,7 @@ const formatRenewalStateLabel = (state?: string) => {
               <CheckCircle v-if="currentStep > s.n" :size="18" />
               <span v-else>{{ s.n }}</span>
             </div>
-            <span :class="[currentStep >= s.n ? 'text-indigo-600 font-black' : 'text-slate-400 font-bold', 'text-[10px] uppercase tracking-widest transition-colors']">{{ s.label }}</span>
+            <span :class="[currentStep >= s.n ? 'text-indigo-600 font-black' : 'text-slate-400 font-bold', 'text-xs uppercase tracking-wider transition-colors']">{{ s.label }}</span>
           </div>
           <div v-if="s.n < 3" :class="[currentStep > s.n ? 'bg-indigo-600' : 'bg-slate-200 dark:bg-slate-700', 'h-0.5 flex-1 mb-5 transition-colors duration-500']"></div>
         </div>
