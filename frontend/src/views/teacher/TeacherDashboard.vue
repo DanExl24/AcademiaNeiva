@@ -377,6 +377,7 @@ const getAlertColors = (type: string) => {
   background: transparent;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  @apply bg-slate-200 dark:bg-slate-700 rounded-full;
+  background-color: #cbd5e1;
+  border-radius: 9999px;
 }
 </style>

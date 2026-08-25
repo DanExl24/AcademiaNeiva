@@ -405,6 +405,7 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
            ORDER BY tg.nombre, LENGTH(s.nombre), s.nombre, average DESC`,
           [schoolId, targetPeriodId]
         )
+      ]);
       charts.performanceByGrade = gradePerfRes.rows.map(r => ({
         nombre: r.nombre,
         average: Number(r.average || 0)
