@@ -40,11 +40,12 @@ export interface SendReingresoPayload {
   id_grupo: number;
   id_anio: number;
   id_ticket?: number | null;
+  declaracion_presencial?: boolean;
   correo_padre: string;
   observaciones?: string;
   document_config?: Array<{
     tipo_documento: string;
-    estado_renovacion: 'VIGENTE' | 'RENOVAR';
+    estado_renovacion: 'VIGENTE' | 'RENOVAR' | 'RENOVACION_REQUERIDA' | string;
     url?: string | null;
   }>;
 }

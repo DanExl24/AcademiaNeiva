@@ -7,17 +7,12 @@ export const SendParentReingresoLinkSchema = z.object({
     id_grupo: z.number({ message: 'El grupo de destino es obligatorio' }),
     id_anio: z.number({ message: 'El año lectivo es obligatorio' }),
     id_ticket: z.number().optional().nullable(),
+    declaracion_presencial: z.boolean().optional().nullable(),
     correo_padre: z.string().email('Debe ser un correo electrónico válido'),
     observaciones: z.string().optional().nullable(),
     document_config: z.array(z.object({
       tipo_documento: z.string(),
-      estado_renovacion: z.enum([
-        'VIGENTE',
-        'RENOVAR',
-        'RECOMENDADO_ACTUALIZAR',
-        'OBLIGATORIO_ACTUALIZAR',
-        'DESACTUALIZADO_POR_FECHA'
-      ]),
+      estado_renovacion: z.string(),
       url: z.string().optional().nullable()
     })).optional()
   })
