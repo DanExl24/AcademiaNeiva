@@ -203,19 +203,19 @@ const activeStats = computed(() => {
 
 const hasFamilyGrades = computed(() => {
   const stats = dashboardData.value?.studentStats || []
-  return stats.length > 0 && stats.some((s: any) => typeof s.average === 'number' && s.average > 0)
+  return stats.length > 0 && stats.some((s: any) => Number(s.average) > 0)
 })
 
 const hasEvolutionData = computed(() => {
   const datasets = lineChartData.value?.datasets || []
-  return datasets.length > 0 && datasets.some((d: any) => d.data?.some((v: any) => typeof v === 'number' && v > 0))
+  return datasets.length > 0 && datasets.some((d: any) => d.data?.some((v: any) => v !== null && Number(v) > 0))
 })
 
 const hasSubjectGrades = computed(() => {
   const list = activeChartTab.value === 'best' 
     ? (activeStats.value?.top_materias_mejores || [])
     : (activeStats.value?.top_materias_peores || [])
-  return list.length > 0 && list.some((m: any) => typeof m.calificacion === 'number' && m.calificacion > 0)
+  return list.length > 0 && list.some((m: any) => Number(m.calificacion) > 0)
 })
 
 const hasAttendanceData = computed(() => {
@@ -243,7 +243,7 @@ const familyChartData = computed(() => {
       borderRadius: 12,
       data: children.map((c: any) => {
         const stats = studentStats.find((s: any) => s.id_estudiante === c.id_estudiante)
-        return stats ? stats.average : 0
+        return stats ? Number(stats.average || 0) : 0
       })
     }]
   }
@@ -292,7 +292,7 @@ const lineChartData = computed(() => {
 
       const data = periodNames.map((pName: string) => {
         const ev = s.evolution?.find((e: any) => e.periodo === pName)
-        return ev ? ev.promedio : null
+        return ev && ev.promedio !== null ? Number(ev.promedio) : null
       })
 
       return {
@@ -323,7 +323,7 @@ const lineChartData = computed(() => {
     
     const data = periodNames.map((pName: string) => {
       const ev = s.evolution?.find((e: any) => e.periodo === pName)
-      return ev ? ev.promedio : null
+      return ev && ev.promedio !== null ? Number(ev.promedio) : null
     })
 
     return {
@@ -416,7 +416,7 @@ const barChartData = computed(() => {
     labels: items.map((i: any) => i.materia.length > 15 ? i.materia.substring(0, 15) + '...' : i.materia),
     datasets: [{
       label: isBest ? 'Mejores Promedios' : 'Peores Promedios',
-      data: items.map((i: any) => i.calificacion),
+      data: items.map((i: any) => Number(i.calificacion || 0)),
       backgroundColor: isBest ? 'rgba(99, 102, 241, 0.85)' : 'rgba(244, 63, 94, 0.85)',
       borderColor: isBest ? '#6366f1' : '#f43f5e',
       borderWidth: 1.5,

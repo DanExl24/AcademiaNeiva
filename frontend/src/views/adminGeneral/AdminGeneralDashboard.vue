@@ -153,12 +153,12 @@ const distributionChartData = computed(() => {
 
 const hasGrowthData = computed(() => {
   const data = growthChartData.value?.datasets?.[0]?.data || []
-  return data.length > 0 && data.some((v: any) => typeof v === 'number' && v > 0)
+  return data.length > 0 && data.some((v: any) => Number(v) > 0)
 })
 
 const hasDistributionData = computed(() => {
   const data = distributionChartData.value?.datasets?.[0]?.data || []
-  return data.length > 0 && data.some((v: any) => typeof v === 'number' && v > 0)
+  return data.length > 0 && data.some((v: any) => Number(v) > 0)
 })
 
 const distributionChartOptions = {

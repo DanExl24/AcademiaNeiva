@@ -40,7 +40,7 @@ const selectedPeriodId = ref<number | null>(null)
 const availablePeriods = ref<any[]>([])
 
 const hasCourseGrades = computed(() => {
-  return (dashboardData.value.courseAverages || []).some((c: any) => typeof c.promedio === 'number' && c.promedio > 0)
+  return (dashboardData.value.courseAverages || []).some((c: any) => Number(c.average ?? c.promedio ?? 0) > 0)
 })
 
 const dashboardData = ref({
@@ -68,8 +68,8 @@ const chartData = computed(() => {
     datasets: [
       {
         label: 'Promedio Grupal Actual',
-        backgroundColor: dashboardData.value.courseAverages.map(c => c.average < 3.0 ? '#ef4444' : '#6366f1'),
-        data: dashboardData.value.courseAverages.map(c => c.average),
+        backgroundColor: dashboardData.value.courseAverages.map(c => Number(c.average || 0) < 3.0 ? '#ef4444' : '#6366f1'),
+        data: dashboardData.value.courseAverages.map(c => Number(c.average || 0)),
         borderRadius: 8,
         borderWidth: 0,
       }
@@ -307,7 +307,7 @@ const getAlertColors = (type: string) => {
               Promedios Actuales por Curso
             </h3>
             <span class="text-xs font-bold bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-3 py-1.5 rounded-full uppercase tracking-wider">
-              Periodo Vigente
+              {{ dashboardData.activePeriodInfo?.nombre || 'Periodo Vigente' }}
             </span>
           </div>
           
@@ -320,8 +320,9 @@ const getAlertColors = (type: string) => {
             <EmptyChartState 
               v-else 
               :icon="TrendingUp"
+              :badge-text="dashboardData.activePeriodInfo?.estado === 'CERRADO' ? 'Periodo Cerrado' : 'Periodo en curso'"
               title="Sin promedios calculados aún"
-              description="La gráfica de rendimiento por curso se generará automáticamente a medida que califiques las actividades del periodo."
+              description="La gráfica de rendimiento por curso se generará automáticamente a medida que existan notas registradas en las actividades del periodo."
             />
           </div>
         </div>

@@ -275,7 +275,23 @@ export const getTeacherDashboard = async (req: Request, res: Response): Promise<
         .execute();
 
       if (courseStudents.length === 0 || activityCount === 0) {
-        courseAverages.push({ name: courseName, shortName: `${course.grado_nombre} ${course.seccion} - ${course.materia_nombre}`, average: 0 });
+        let fallbackAvg = 0;
+        if (activePeriodId && activePeriodId !== 'all') {
+          const raRes = await db
+            .selectFrom("resultado_academico")
+            .select(sql<number>`AVG(promedio)::numeric`.as("avg_promedio"))
+            .where("id_detallegrado", "=", dgId)
+            .where("id_periodo", "=", Number(activePeriodId))
+            .executeTakeFirst();
+          if (raRes && raRes.avg_promedio !== null) {
+            fallbackAvg = Number(Number(raRes.avg_promedio).toFixed(1));
+          }
+        }
+        courseAverages.push({
+          name: courseName,
+          shortName: `${course.grado_nombre} ${course.seccion} - ${course.materia_nombre}`,
+          average: fallbackAvg
+        });
         continue;
       }
 

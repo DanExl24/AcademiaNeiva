@@ -173,9 +173,12 @@ onMounted(async () => {
   await fetchStudentData()
 })
 
-// Watch for year change to reload periods
 watch(selectedYearId, () => {
   loadPeriodsForYear()
+})
+
+const selectedPeriod = computed(() => {
+  return periods.value.find((p: any) => p.id_periodo === selectedPeriodId.value) || null
 })
 
 // Watch for period change to reload statistics
@@ -198,7 +201,7 @@ const barChartData = computed(() => {
     labels: items.map((i: any) => i.materia.length > 15 ? i.materia.substring(0, 15) + '...' : i.materia),
     datasets: [{
       label: isBest ? 'Mejores Promedios' : 'Peores Promedios',
-      data: items.map((i: any) => i.calificacion),
+      data: items.map((i: any) => Number(i.calificacion || 0)),
       backgroundColor: isBest ? 'rgba(99, 102, 241, 0.85)' : 'rgba(244, 63, 94, 0.85)',
       borderColor: isBest ? '#6366f1' : '#f43f5e',
       borderWidth: 1.5,
@@ -480,10 +483,11 @@ const hasObservations = computed(() => {
             <div class="w-8 h-8 border-4 border-indigo-600/20 border-t-indigo-600 rounded-full animate-spin"></div>
           </div>
           <EmptyChartState 
-            v-else-if="!dashboardStats || !dashboardStats?.has_calificaciones || dashboardStats?.top_materias_mejores?.length === 0"
+            v-else-if="!dashboardStats || !dashboardStats?.has_calificaciones || (dashboardStats?.top_materias_mejores || []).length === 0"
             :icon="BarChart3"
+            :badge-text="selectedPeriod?.estado === 'CERRADO' ? 'Periodo Cerrado' : 'Periodo en curso'"
             title="En espera de calificaciones"
-            description="Tus materias evaluadas y promedios se graficarán automáticamente conforme tus docentes asienten notas."
+            description="Tus materias evaluadas y promedios se graficarán automáticamente conforme existan notas asentadas."
           />
           <Bar v-else :data="barChartData" :options="barChartOptions" />
         </div>
