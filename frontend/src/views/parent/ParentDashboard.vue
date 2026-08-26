@@ -164,10 +164,19 @@ const cumulativeStats = computed(() => {
     const childName = child ? `${child.nombre}` : `Estudiante #${s.id_estudiante}`
 
     s.grades?.forEach((g: any) => {
+      if (g.calificacion === null || g.calificacion === undefined || isNaN(Number(g.calificacion))) return
+      const calif = Number(g.calificacion)
       const current = materiasMap.get(g.materia) || { totalCalificacion: 0, count: 0, detalles: [] }
-      current.totalCalificacion += g.calificacion
-      current.count += 1
-      current.detalles.push({ estudiante: childName, calificacion: g.calificacion })
+      const existingIdx = current.detalles.findIndex((d: any) => d.estudiante === childName)
+      if (existingIdx >= 0) {
+        current.totalCalificacion -= current.detalles[existingIdx].calificacion
+        current.detalles[existingIdx].calificacion = calif
+        current.totalCalificacion += calif
+      } else {
+        current.totalCalificacion += calif
+        current.count += 1
+        current.detalles.push({ estudiante: childName, calificacion: calif })
+      }
       materiasMap.set(g.materia, current)
     })
   })
@@ -229,6 +238,16 @@ const formatDate = (dateString: string | null) => {
   })
 }
 
+const maxGrade = computed(() => {
+  const val = Number(dashboardData.value?.defaultSettings?.nota_maxima)
+  return val > 0 ? val : 5
+})
+
+const approvalGrade = computed(() => {
+  const val = Number(dashboardData.value?.defaultSettings?.nota_aprobacion)
+  return val > 0 ? val : 3.0
+})
+
 // Global Chart: Family Comparison
 const familyChartData = computed(() => {
   const children = dashboardData.value?.children || []
@@ -249,7 +268,7 @@ const familyChartData = computed(() => {
   }
 })
 
-const familyChartOptions = {
+const familyChartOptions = computed(() => ({
   responsive: true,
   maintainAspectRatio: false,
   plugins: {
@@ -262,10 +281,10 @@ const familyChartOptions = {
     }
   },
   scales: {
-    y: { min: 0, max: 5, grid: { color: 'rgba(0,0,0,0.05)' } },
+    y: { min: 0, max: maxGrade.value, grid: { color: 'rgba(0,0,0,0.05)' } },
     x: { grid: { display: false } }
   }
-}
+}))
 
 // Evolution Chart: Active (Single or Family Avg)
 const lineChartData = computed(() => {
@@ -346,7 +365,7 @@ const lineChartData = computed(() => {
   }
 })
 
-const lineChartOptions = {
+const lineChartOptions = computed(() => ({
   responsive: true,
   maintainAspectRatio: false,
   plugins: {
@@ -369,10 +388,10 @@ const lineChartOptions = {
     }
   },
   scales: {
-    y: { min: 0, max: 5, grid: { display: false } },
+    y: { min: 0, max: maxGrade.value, grid: { display: false } },
     x: { grid: { display: false } }
   }
-}
+}))
 
 const doughnutChartData = computed(() => {
   if (!activeStats.value) return { labels: [], datasets: [] }
@@ -426,7 +445,7 @@ const barChartData = computed(() => {
   }
 })
 
-const barChartOptions = {
+const barChartOptions = computed(() => ({
   responsive: true,
   maintainAspectRatio: false,
   plugins: {
@@ -450,11 +469,14 @@ const barChartOptions = {
           const item = items[index]
           // If we are looking at aggregated stats (All Children) and child details exist
           if (item.detalles && item.detalles.length > 0) {
-            const lines = [`Promedio General: ${item.calificacion}`]
-            item.detalles.forEach((d: any) => {
-              lines.push(`${d.estudiante}: ${d.calificacion}`)
-            })
-            return lines
+            const validDetalles = item.detalles.filter((d: any) => d.calificacion !== null && d.calificacion !== undefined && !isNaN(Number(d.calificacion)))
+            if (validDetalles.length > 0) {
+              const lines = [`Promedio General: ${item.calificacion}`]
+              validDetalles.forEach((d: any) => {
+                lines.push(`${d.estudiante}: ${d.calificacion}`)
+              })
+              return lines
+            }
           }
           return `Promedio: ${item.calificacion}`
         }
@@ -468,7 +490,7 @@ const barChartOptions = {
     },
     y: {
       min: 0,
-      max: 5,
+      max: maxGrade.value,
       grid: { color: 'rgba(148, 163, 184, 0.08)' },
       ticks: { 
         color: '#94a3b8', 
@@ -484,7 +506,7 @@ const barChartOptions = {
       }
     }
   }
-}
+}))
 </script>
 
 <template>
@@ -621,7 +643,7 @@ const barChartOptions = {
               </div>
             </div>
             <p v-if="activeStats.atRisk > 0" class="text-xs text-rose-500 font-medium leading-tight">
-               ¡Atención! Materias críticas detectadas: {{ activeStats.atRiskSubjects.join(', ') }}
+               ¡Atención! Materias críticas detectadas (&lt; {{ approvalGrade }}): {{ activeStats.atRiskSubjects.join(', ') }}
             </p>
             <p v-else class="text-xs text-emerald-500 font-medium">Todo bajo control académico.</p>
           </div>

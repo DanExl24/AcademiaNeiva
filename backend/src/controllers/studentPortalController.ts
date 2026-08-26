@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { db } from '../config/kysely';
 import { sql } from 'kysely';
+import { ensureSchoolDefaultSettings } from './academicAdmin/helpers';
 
 /**
  * Gets closed academic years for a specific student's school
@@ -771,6 +772,8 @@ export const getParentDashboardData = async (req: Request, res: Response) => {
 
     const activeSchoolId = schoolId || children[0].id_colegio;
     const filteredChildren = children;
+    const schoolSettings = await ensureSchoolDefaultSettings(activeSchoolId);
+    const notaAprobacion = Number(schoolSettings?.nota_aprobacion ?? 3.0);
 
     // 2. Get available periods for the selected year and school
     let periodsQuery = db
@@ -850,15 +853,18 @@ export const getParentDashboardData = async (req: Request, res: Response) => {
           .leftJoin(calcSubquery, "calc.id_detallegrado", "dg.id_detallegrado")
           .select([
             "m.nombre as materia",
-            sql<number | null>`COALESCE(ra.promedio, calc.promedio_calculado)`.as("calificacion")
+            sql<number | null>`MAX(COALESCE(ra.promedio, calc.promedio_calculado))`.as("calificacion")
           ])
           .where("dg.id_grupo", "=", child.id_grupo)
+          .groupBy("m.nombre")
           .execute();
 
-        grades = rows.map(r => ({
-          ...r,
-          calificacion: r.calificacion !== null && r.calificacion !== undefined ? parseFloat(String(r.calificacion)) : null
-        }));
+        grades = rows
+          .filter(r => r.calificacion !== null && r.calificacion !== undefined && !isNaN(Number(r.calificacion)))
+          .map(r => ({
+            materia: r.materia,
+            calificacion: parseFloat(String(r.calificacion))
+          }));
       } else if (child.id_grupo && child.id_anio) {
         const calcSubquery = db
           .selectFrom("notas_actividad as na")
@@ -881,20 +887,23 @@ export const getParentDashboardData = async (req: Request, res: Response) => {
           .leftJoin(calcSubquery, "calc.id_detallegrado", "dg.id_detallegrado")
           .select([
             "m.nombre as materia",
-            sql<number | null>`calc.promedio_calculado`.as("calificacion")
+            sql<number | null>`MAX(calc.promedio_calculado)`.as("calificacion")
           ])
           .where("dg.id_grupo", "=", child.id_grupo)
+          .groupBy("m.nombre")
           .execute();
 
-        grades = rows.map(r => ({
-          ...r,
-          calificacion: r.calificacion !== null && r.calificacion !== undefined ? parseFloat(String(r.calificacion)) : null
-        }));
+        grades = rows
+          .filter(r => r.calificacion !== null && r.calificacion !== undefined && !isNaN(Number(r.calificacion)))
+          .map(r => ({
+            materia: r.materia,
+            calificacion: parseFloat(String(r.calificacion))
+          }));
       }
 
       const gradedList = grades.filter(g => g.calificacion !== null);
       const avg = gradedList.length > 0 ? (gradedList.reduce((a, b) => a + b.calificacion!, 0) / gradedList.length) : null;
-      const atRisk = gradedList.filter(g => g.calificacion! < 3.0);
+      const atRisk = gradedList.filter(g => g.calificacion! < notaAprobacion);
 
       // Attendance Filtered by Period Dates or overall academic year
       let attStatsRow: any;
@@ -997,7 +1006,7 @@ export const getParentDashboardData = async (req: Request, res: Response) => {
         attendanceRate: Math.round(attRate),
         pendingActivities: Number(pendingCount),
         evolution,
-        grades,
+        grades: gradedList,
         top_materias_mejores,
         top_materias_peores,
         attendanceDetails: {
@@ -1091,7 +1100,8 @@ export const getParentDashboardData = async (req: Request, res: Response) => {
       studentStats,
       recentActivity,
       activePeriod,
-      periods
+      periods,
+      defaultSettings: schoolSettings
     });
   } catch (error) {
     console.error('Error fetching parent dashboard data:', error);
