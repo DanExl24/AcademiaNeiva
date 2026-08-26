@@ -699,7 +699,13 @@ watch(selectedYearId, async () => {
   await loadPeriods()
   const yearPeriods = periods.value
   const active = yearPeriods.find(p => p.estado === 'ABIERTO')
-  selectedPeriodId.value = active ? active.id_periodo : (yearPeriods.length > 0 ? yearPeriods[yearPeriods.length - 1].id_periodo : null)
+  let defaultPeriodId: number | null = null
+  if (active) {
+    defaultPeriodId = active.id_periodo
+  } else if (yearPeriods.length > 0) {
+    defaultPeriodId = yearPeriods.at(-1)?.id_periodo ?? null
+  }
+  selectedPeriodId.value = defaultPeriodId
   fetchDashboard()
 })
 
@@ -794,11 +800,12 @@ onMounted(() => {
       <!-- Filters -->
       <div class="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-gray-100 dark:border-slate-800 shadow-sm w-full 2xl:w-auto grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div class="flex flex-col gap-2 min-w-0">
-          <label class="text-xs font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2 truncate">
+          <label for="dash-selected-year" class="text-xs font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2 truncate">
             <CalendarDays :size="14" class="shrink-0" />
             Año Lectivo
           </label>
           <select 
+            id="dash-selected-year"
             v-model="selectedYearId" 
             class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-3 sm:p-3.5 font-bold text-xs sm:text-sm text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-indigo-500 transition-all cursor-pointer truncate"
           >
@@ -809,11 +816,12 @@ onMounted(() => {
         </div>
 
         <div class="flex flex-col gap-2 min-w-0">
-          <label class="text-xs font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2 truncate">
+          <label for="dash-selected-period" class="text-xs font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2 truncate">
             <Filter :size="14" class="shrink-0" />
             Periodo Académico
           </label>
           <select 
+            id="dash-selected-period"
             v-model="selectedPeriodId" 
             class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-3 sm:p-3.5 font-bold text-xs sm:text-sm text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-indigo-500 transition-all cursor-pointer truncate"
           >
@@ -825,11 +833,12 @@ onMounted(() => {
         </div>
         
         <div class="flex flex-col gap-2 min-w-0">
-          <label class="text-xs font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2 truncate">
+          <label for="dash-selected-grade" class="text-xs font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2 truncate">
             <Filter :size="14" class="shrink-0" />
             Grado
           </label>
           <select 
+            id="dash-selected-grade"
             v-model="globalSelectedGrade" 
             class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-3 sm:p-3.5 font-bold text-xs sm:text-sm text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-indigo-500 transition-all cursor-pointer truncate"
           >
@@ -857,8 +866,9 @@ onMounted(() => {
         No se pudo obtener la información del colegio. Por favor verifica tu sesión o vuelve a intentarlo.
       </p>
       <button 
+        type="button"
         @click="handleRetry"
-        class="mt-6 px-8 py-3 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white rounded-2xl font-black transition-all text-sm shadow-md hover:shadow-lg focus:outline-none"
+        class="mt-6 px-8 py-3 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white rounded-2xl font-black transition-all text-sm shadow-md hover:shadow-lg focus:outline-none cursor-pointer"
       >
         Reintentar
       </button>
@@ -987,6 +997,7 @@ onMounted(() => {
               <!-- Course Selector Blocks (Only visible when a grade is selected) -->
               <div v-if="globalSelectedGrade !== 'ALL' && availableCoursesForSelectedGrade.length > 0" class="mt-4 flex flex-wrap gap-2 sm:gap-3">
                 <button
+                  type="button"
                   v-for="course in availableCoursesForSelectedGrade"
                   :key="course.id_grupo"
                   @click="selectedCourseForSubjects = course.id_grupo"
@@ -1031,6 +1042,7 @@ onMounted(() => {
               <!-- Course Selector Blocks for Evolution -->
               <div v-if="globalSelectedGrade !== 'ALL' && availableCoursesForSelectedGrade.length > 0" class="mt-4 flex flex-wrap gap-2 sm:gap-3">
                 <button
+                  type="button"
                   v-for="course in availableCoursesForSelectedGrade"
                   :key="course.id_grupo"
                   @click="selectedCourseForEvolution = course.id_grupo"
@@ -1295,8 +1307,9 @@ onMounted(() => {
               </p>
             </div>
             <button 
+              type="button"
               @click="selectedAlertCourse = null" 
-              class="bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 p-3 rounded-2xl transition-all text-slate-400 hover:text-white"
+              class="bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 p-3 rounded-2xl transition-all text-slate-400 hover:text-white cursor-pointer"
             >
               <X :size="18" />
             </button>
@@ -1304,10 +1317,12 @@ onMounted(() => {
           
           <!-- Search Bar -->
           <div class="relative mb-6">
+            <label for="modal-search-risk-input" class="sr-only">Buscar estudiante por nombre</label>
             <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500">
               <Search :size="16" />
             </div>
             <input
+              id="modal-search-risk-input"
               v-model="modalSearchQuery"
               type="text"
               placeholder="Buscar estudiante por nombre..."
@@ -1372,8 +1387,9 @@ onMounted(() => {
               </p>
             </div>
             <button 
+              type="button"
               @click="selectedCriticalSubject = null" 
-              class="bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 p-3 rounded-2xl transition-all text-slate-400 hover:text-white"
+              class="bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 p-3 rounded-2xl transition-all text-slate-400 hover:text-white cursor-pointer"
             >
               <X :size="18" />
             </button>
@@ -1382,10 +1398,12 @@ onMounted(() => {
           <!-- Search Bar and Group Filter -->
           <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             <div class="relative md:col-span-2">
+              <label for="modal-search-critical-input" class="sr-only">Buscar estudiante por nombre</label>
               <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500">
                 <Search :size="16" />
               </div>
               <input
+                id="modal-search-critical-input"
                 v-model="modalSearchQuery"
                 type="text"
                 placeholder="Buscar estudiante por nombre..."
@@ -1393,7 +1411,9 @@ onMounted(() => {
               />
             </div>
             <div class="relative">
+              <label for="modal-group-select" class="sr-only">Filtrar por grupo o curso</label>
               <select
+                id="modal-group-select"
                 v-model="selectedModalGroup"
                 class="w-full bg-white/5 border border-white/10 rounded-2xl py-3.5 pl-4 pr-10 text-sm font-bold text-white outline-none focus:ring-2 focus:ring-rose-500/50 focus:border-rose-500 transition-all cursor-pointer"
               >

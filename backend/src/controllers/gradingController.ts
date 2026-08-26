@@ -74,10 +74,15 @@ const resolveTeachingContext = async (
 export const getPeriods = async (req: Request, res: Response): Promise<void> => {
   const { schoolId } = req.params;
   const authReq = req as any;
-  const targetYearId = req.query.yearId
-    ? Number(req.query.yearId)
-    : (req.headers["x-academic-year-id"] ? Number(req.headers["x-academic-year-id"]) : (authReq.academicYearId ? Number(authReq.academicYearId) : undefined));
-  const isSupervision = authReq.user && authReq.user.roles?.includes("admin_general");
+  let targetYearId: number | undefined;
+  if (req.query.yearId) {
+    targetYearId = Number(req.query.yearId);
+  } else if (req.headers["x-academic-year-id"]) {
+    targetYearId = Number(req.headers["x-academic-year-id"]);
+  } else if (authReq.academicYearId) {
+    targetYearId = Number(authReq.academicYearId);
+  }
+  const isSupervision = authReq.user?.roles?.includes("admin_general");
   const userSchoolIds = (authReq.user?.schoolIds || []).map(Number);
   const targetId = Number(schoolId);
   const isAllowed =
@@ -164,7 +169,7 @@ export const getActivities = async (req: Request, res: Response): Promise<void> 
         .execute();
 
       // Filtrar competencias que tengan descripciones válidas (no vacías)
-      const validComps = allComps.filter((c) => c.descripcion && c.descripcion.trim());
+      const validComps = allComps.filter((c) => c.descripcion?.trim());
 
       // Unificar descripciones de las competencias
       let competencia = competenciaBase;
@@ -270,7 +275,7 @@ export const updateCompetency = async (req: Request, res: Response): Promise<voi
       .select("estado")
       .executeTakeFirst();
 
-    if (periodStatusRes && periodStatusRes.estado === "CERRADO") {
+    if (periodStatusRes?.estado === "CERRADO") {
       res.status(409).json({ error: "No se puede modificar la competencia porque el periodo está cerrado institucionalmente" });
       return;
     }
@@ -435,8 +440,8 @@ export const createActivity = async (req: Request, res: Response): Promise<void>
       .select((eb) => eb.fn.coalesce(eb.fn.sum<string>("porcentaje"), sql<string>`'0'`).as("total"))
       .executeTakeFirst();
 
-    const currentTotal = parseFloat(sumRes?.total || "0");
-    if (currentTotal + parseFloat(porcentaje) > 100) {
+    const currentTotal = Number.parseFloat(sumRes?.total || "0");
+    if (currentTotal + Number.parseFloat(porcentaje) > 100) {
       res.status(400).json({
         error: `La suma de porcentajes no puede exceder el 100%. Actual: ${currentTotal}%`,
       });
@@ -593,7 +598,7 @@ export const updateActivity = async (req: Request, res: Response): Promise<void>
       .select("estado")
       .executeTakeFirst();
 
-    if (periodOpen && periodOpen.estado === "CERRADO") {
+    if (periodOpen?.estado === "CERRADO") {
       res.status(409).json({ error: "No se puede modificar la actividad porque el periodo está cerrado institucionalmente" });
       return;
     }
@@ -611,8 +616,8 @@ export const updateActivity = async (req: Request, res: Response): Promise<void>
       .select((eb) => eb.fn.coalesce(eb.fn.sum<string>("porcentaje"), sql<string>`'0'`).as("total"))
       .executeTakeFirst();
 
-    const otherTotal = parseFloat(sumRes?.total || "0");
-    if (otherTotal + parseFloat(porcentaje) > 100) {
+    const otherTotal = Number.parseFloat(sumRes?.total || "0");
+    if (otherTotal + Number.parseFloat(porcentaje) > 100) {
       res.status(400).json({
         error: `La suma de porcentajes no puede exceder el 100%. Otros: ${otherTotal}%`,
       });
@@ -840,8 +845,8 @@ export const createCriterion = async (req: Request, res: Response): Promise<void
       .select((eb) => eb.fn.coalesce(eb.fn.sum<string>("porcentaje"), sql<string>`'0'`).as("total"))
       .executeTakeFirst();
 
-    const currentTotal = parseFloat(sumRes?.total || "0");
-    if (currentTotal + parseFloat(porcentaje) > 100) {
+    const currentTotal = Number.parseFloat(sumRes?.total || "0");
+    if (currentTotal + Number.parseFloat(porcentaje) > 100) {
       res.status(400).json({
         error: `La suma de porcentajes de los criterios no puede exceder el 100%. Actual: ${currentTotal}%`,
       });
@@ -926,7 +931,7 @@ export const getGrades = async (req: Request, res: Response): Promise<void> => {
     }
 
     const authReq = req as any;
-    const isSupervision = authReq.user && authReq.user.roles?.includes("admin_general");
+    const isSupervision = authReq.user?.roles?.includes("admin_general");
     const userSchoolIds = (authReq.user?.schoolIds || []).map(Number);
     const targetId = Number(context.idColegio);
     const isAllowed =
@@ -1096,7 +1101,7 @@ export const saveGrades = async (req: Request, res: Response): Promise<void> => 
         ...activityGrades.map((a: any) => Number(a.id_estudiante)),
         ...criteriaGrades.map((c: any) => Number(c.id_estudiante)),
       ])
-    ).filter((id) => !isNaN(id) && id > 0);
+    ).filter((id) => !Number.isNaN(id) && id > 0);
 
     if (studentIds.length > 0) {
       const activeEnrollments = await db
@@ -1127,15 +1132,15 @@ export const saveGrades = async (req: Request, res: Response): Promise<void> => 
     await db.transaction().execute(async (trx) => {
       // Guardar activityGrades
       for (const item of activityGrades) {
-        const notaNum = Number(parseFloat(item.nota).toFixed(1));
+        const notaNum = Number(Number.parseFloat(item.nota).toFixed(1));
         if (Number.isNaN(notaNum) || notaNum < notaMinima || notaNum > notaMaxima) {
           throw new Error(`Todas las notas deben estar dentro del rango institucional ${notaMinima.toFixed(1)} - ${notaMaxima.toFixed(1)}`);
         }
 
         const escala = escalas.find(
           (entry) =>
-            notaNum >= parseFloat(entry.valor_minimo) &&
-            notaNum <= parseFloat(entry.valor_maximo)
+            notaNum >= Number.parseFloat(entry.valor_minimo) &&
+            notaNum <= Number.parseFloat(entry.valor_maximo)
         );
         const idEscala =
           escala?.id_escalavaloracion ??
@@ -1163,7 +1168,7 @@ export const saveGrades = async (req: Request, res: Response): Promise<void> => 
       // Guardar criteriaGrades
       const touchedActivities = new Set<number>();
       for (const item of criteriaGrades) {
-        const notaNum = Number(parseFloat(item.nota).toFixed(1));
+        const notaNum = Number(Number.parseFloat(item.nota).toFixed(1));
         if (Number.isNaN(notaNum) || notaNum < notaMinima || notaNum > notaMaxima) {
           throw new Error(`Todas las notas deben estar dentro del rango institucional ${notaMinima.toFixed(1)} - ${notaMaxima.toFixed(1)}`);
         }
@@ -1226,8 +1231,8 @@ export const saveGrades = async (req: Request, res: Response): Promise<void> => 
 
               const escala = escalas.find(
                 (entry) =>
-                  notaPonderada >= parseFloat(entry.valor_minimo) &&
-                  notaPonderada <= parseFloat(entry.valor_maximo)
+                  notaPonderada >= Number.parseFloat(entry.valor_minimo) &&
+                  notaPonderada <= Number.parseFloat(entry.valor_maximo)
               );
               const idEscala =
                 escala?.id_escalavaloracion ??
@@ -1708,7 +1713,7 @@ export const getCompetenciaEvidenciasDba = async (req: Request, res: Response): 
       .orderBy("ea.id_evidencia", "asc")
       .execute();
 
-    const planeadasIds = planeadasRes.map((r) => r.id_evidencia_dba!);
+    const planeadasIds = new Set(planeadasRes.map((r) => r.id_evidencia_dba!));
 
     // 4. Obtener todas las evidencias activas del DBA de este grado/área
     const dbaEvsRes = await db
@@ -1734,7 +1739,7 @@ export const getCompetenciaEvidenciasDba = async (req: Request, res: Response): 
 
     // Separar en planeadas y extras
     const planeadas = planeadasRes;
-    const extras = dbaEvsRes.filter((r) => !planeadasIds.includes(r.id_evidencia_dba));
+    const extras = dbaEvsRes.filter((r) => !planeadasIds.has(r.id_evidencia_dba));
 
     res.json({
       usaDba: true,
@@ -1822,10 +1827,10 @@ export const getCourseEvidenciasDba = async (req: Request, res: Response): Promi
     }
 
     const planeadasRes = await planeadasQuery.execute();
-    const planeadasIds = planeadasRes.map((r) => r.id_evidencia_dba!);
+    const planeadasIds = new Set(planeadasRes.map((r) => r.id_evidencia_dba!));
 
     // 3. Obtener evidencias ya evaluadas en periodos CERRADOS (para excluirlas de extras)
-    let evaluadasEnCerradosIds: number[] = [];
+    let evaluadasEnCerradosSet = new Set<number>();
     if (periodId) {
       const evaluadasRes = await db
         .selectFrom("actividad_evidencia_dba as aedba")
@@ -1846,7 +1851,7 @@ export const getCourseEvidenciasDba = async (req: Request, res: Response): Promi
         .distinct()
         .execute();
 
-      evaluadasEnCerradosIds = evaluadasRes.map((r) => r.id_evidencia_dba);
+      evaluadasEnCerradosSet = new Set(evaluadasRes.map((r) => Number(r.id_evidencia_dba)));
     }
 
     // 4. Obtener todos los DBA con evidencias del catálogo para este grado/materia
@@ -1948,8 +1953,8 @@ export const getCourseEvidenciasDba = async (req: Request, res: Response): Promi
         });
       }
 
-      const esPlaneada = planeadasIds.includes(row.id_evidencia_dba);
-      const evaluadaEnCerrado = evaluadasEnCerradosIds.includes(row.id_evidencia_dba);
+      const esPlaneada = planeadasIds.has(row.id_evidencia_dba);
+      const evaluadaEnCerrado = evaluadasEnCerradosSet.has(row.id_evidencia_dba);
 
       // Si fue evaluada en un periodo cerrado Y no fue re-planeada, la ocultamos de extras
       if (evaluadaEnCerrado && !esPlaneada) {
@@ -1989,7 +1994,7 @@ export const getCourseEvidenciasDba = async (req: Request, res: Response): Promi
           descripcion: pl.descripcion,
           orden: pl.orden,
           tipo: "PLANEADA",
-          evaluada_en_cerrado: evaluadasEnCerradosIds.includes(pl.id_evidencia_dba!),
+          evaluada_en_cerrado: evaluadasEnCerradosSet.has(pl.id_evidencia_dba!),
           id_competencia: pl.id_competencia,
         });
       }
@@ -2001,7 +2006,7 @@ export const getCourseEvidenciasDba = async (req: Request, res: Response): Promi
     // Mantener compatibilidad: también enviar planeadas y extras planas
     const planeadasFlat = planeadasRes;
     const extrasFlat = dbaEvsRes
-      .filter((r) => !planeadasIds.includes(r.id_evidencia_dba) && !evaluadasEnCerradosIds.includes(r.id_evidencia_dba))
+      .filter((r) => !planeadasIds.has(r.id_evidencia_dba) && !evaluadasEnCerradosSet.has(r.id_evidencia_dba))
       .map((row) => {
         const otroPeriodo = planeadasOtrosPeriodos.find((p) => p.id_evidencia_dba === row.id_evidencia_dba);
         return {
