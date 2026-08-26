@@ -372,7 +372,8 @@ const router = createRouter({
         {
           path: 'soporte',
           name: 'support',
-          component: () => import('../views/shared/SupportView.vue')
+          component: () => import('../views/shared/SupportView.vue'),
+          meta: { roles: ['admin_general', 'directivo', 'profesor', 'padre'] }
         },
         {
           path: 'directorio',
@@ -382,7 +383,8 @@ const router = createRouter({
         {
           path: 'mi-cuenta',
           name: 'my-account',
-          component: () => import('../views/shared/ProfileView.vue')
+          component: () => import('../views/shared/ProfileView.vue'),
+          meta: { roles: ['admin_general', 'directivo', 'profesor', 'padre'] }
         }
       ]
     }

@@ -62,6 +62,16 @@ export const createTicket = async (req: Request, res: Response) => {
       // Usuario autenticado: resolvemos información desde la BD
       finalUserId = Number(user.id);
       
+      const userRole = (user.role || (user.roles && user.roles[0]) || '').toUpperCase();
+      const userRoles = (user.roles || []).map((r: string) => String(r).toUpperCase());
+
+      // RN-SOP-013: Los estudiantes NO tienen permisos para crear tickets de soporte
+      if (userRole === 'ESTUDIANTE' || userRoles.includes('ESTUDIANTE')) {
+        return res.status(403).json({
+          error: 'Los estudiantes no tienen permisos para crear tickets de soporte técnico. Las solicitudes deben ser gestionadas a través de su acudiente o secretaría de la institución.'
+        });
+      }
+      
       const userRes = await pool.query(
         'SELECT nombre, apellido, email, documento FROM usuario WHERE id_usuario = $1',
         [finalUserId]
@@ -76,7 +86,6 @@ export const createTicket = async (req: Request, res: Response) => {
         finalSenderEmail = finalSenderEmail || u.email;
         userDocument = u.documento || null;
 
-        const userRole = (user.role || (user.roles && user.roles[0]) || '').toUpperCase();
         const isStaff = userRole === 'DIRECTIVO' || userRole === 'ADMIN_GENERAL' || (user.roles && (user.roles.includes('directivo') || user.roles.includes('admin_general')));
 
         // Si es Directivo/Admin y envía la petición de escalado, el estado inicial será ESCALADO
@@ -175,10 +184,12 @@ export const getTickets = async (req: Request, res: Response) => {
     } else if (userRole === 'ADMIN_GENERAL') {
       // Admin General SOLO ve los tickets que están escalados
       query += " WHERE t.fecha_escalado IS NOT NULL";
-    } else if (userRole === 'DOCENTE' || userRole === 'PADRE') {
+    } else if (userRole === 'DOCENTE' || userRole === 'PROFESOR' || userRole === 'PADRE') {
       // Docente o Padre ve únicamente los tickets creados por él (por ID o por correo)
       query += " WHERE (t.id_usuario = $1 OR (t.correo_remitente IS NOT NULL AND LOWER(t.correo_remitente) = LOWER($2)))";
       params.push(user.id, user.email || '');
+    } else if (userRole === 'ESTUDIANTE') {
+      return res.status(403).json({ error: 'Los estudiantes no tienen acceso a la bandeja de tickets de soporte.' });
     } else {
       return res.status(403).json({ error: 'Acceso denegado.' });
     }
@@ -474,7 +485,16 @@ export const addTicketObservation = async (req: Request, res: Response) => {
   }
 
   try {
-    const userRole = (user.role || '').toUpperCase();
+    const userRole = (user.role || (user.roles && user.roles[0]) || '').toUpperCase();
+    const userRoles = (user.roles || []).map((r: string) => String(r).toUpperCase());
+
+    // RN-SOP-013: Los estudiantes NO pueden interactuar o responder en tickets de soporte
+    if (userRole === 'ESTUDIANTE' || userRoles.includes('ESTUDIANTE')) {
+      return res.status(403).json({
+        error: 'Los estudiantes no tienen permisos para interactuar o registrar observaciones en tickets de soporte.'
+      });
+    }
+
     const isStaff = userRole === 'DIRECTIVO' || userRole === 'ADMIN_GENERAL';
 
     const ticketRes = await pool.query('SELECT * FROM tickets_soporte WHERE id_ticket = $1', [id]);

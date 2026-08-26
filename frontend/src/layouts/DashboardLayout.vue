@@ -234,7 +234,7 @@ const menuSections = computed<MenuSection[]>(() => {
     { name: 'Directorio', icon: BookOpen, path: '/dashboard/directorio' }
   ]
 
-  if (!auth.isMonitoring) {
+  if (!auth.isMonitoring && role !== 'estudiante') {
     generalItems.push({ name: 'Soporte Técnico', icon: LifeBuoy, path: '/dashboard/soporte' })
   }
 

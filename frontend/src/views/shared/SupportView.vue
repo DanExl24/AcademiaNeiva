@@ -42,6 +42,12 @@ const isStaff = computed(() => {
   return role === 'DIRECTIVO' || role === 'ADMIN_GENERAL'
 })
 
+// Comprobar si el usuario autenticado es estudiante (RN-SOP-013)
+const isStudent = computed(() => {
+  const role = auth.activeRole?.toLowerCase()
+  return auth.isAuthenticated && role === 'estudiante'
+})
+
 // Visitante/Docente/Padre/Estudiante Form states
 const name = ref('')
 const email = ref('')
@@ -410,6 +416,8 @@ const submitVisitorResponse = async () => {
 }
 
 onMounted(() => {
+  if (isStudent.value) return
+
   fetchGradosCatalog()
   if (isStaff.value) {
     fetchTickets()
@@ -445,7 +453,7 @@ const isFormValid = computed(() => {
 })
 
 const handleSubmit = async () => {
-  if (!isFormValid.value || submitting.value) return
+  if (isStudent.value || !isFormValid.value || submitting.value) return
 
   try {
     submitting.value = true
@@ -583,6 +591,28 @@ const getObservationText = (obs: any) => {
         <button
           @click="router.push('/dashboard')"
           class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold text-xs transition-colors shadow-md"
+        >
+          Volver al Dashboard
+        </button>
+      </div>
+    </div>
+
+    <!-- 0.1 BLOCKED VIEW: When authenticated as Student -->
+    <div v-else-if="isStudent" class="max-w-lg w-full bg-white dark:bg-slate-900 rounded-2xl p-8 border border-slate-200 dark:border-slate-800 shadow-xl text-center space-y-5">
+      <div class="w-16 h-16 bg-amber-50 dark:bg-amber-950/50 rounded-2xl flex items-center justify-center mx-auto text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-900/50">
+        <ShieldAlert class="w-8 h-8" />
+      </div>
+      <div>
+        <h2 class="text-xl font-bold text-slate-900 dark:text-white">Módulo No Disponible para Estudiantes</h2>
+        <p class="text-xs font-semibold text-amber-600 dark:text-amber-400 mt-1">Canal de Soporte Restringido</p>
+      </div>
+      <p class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed font-medium">
+        Los estudiantes no tienen permisos para crear ni gestionar tickets de soporte técnico. Si presentas algún inconveniente con tus calificaciones, asistencias o acceso a la plataforma, por favor solicítale a tu acudiente que radique el ticket desde su cuenta o comunícate con la secretaría de tu institución educativa.
+      </p>
+      <div class="pt-2">
+        <button
+          @click="router.push('/dashboard')"
+          class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold text-xs transition-colors shadow-md cursor-pointer"
         >
           Volver al Dashboard
         </button>
