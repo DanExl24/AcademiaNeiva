@@ -1,0 +1,1213 @@
+Enum "accion_aprobacion_traslado" {
+  "APROBAR"
+  "RECHAZAR"
+  "CANCELAR"
+}
+
+Enum "decision_promocion_tipo" {
+  "PROMOVER_SIGUIENTE_GRADO"
+  "MANTENER_GRADO"
+  "MATRICULA_CONDICIONADA"
+  "OTRA_DECISION"
+}
+
+Enum "estado_asistencia" {
+  "PRESENTE"
+  "AUSENTE"
+  "TARDE"
+  "JUSTIFICADA"
+}
+
+Enum "estado_cierre_materia" {
+  "ABIERTO"
+  "CERRADO"
+}
+
+Enum "estado_colegio" {
+  "PENDIENTE"
+  "ACTIVO"
+  "SUSPENDIDO"
+  "RECHAZADO"
+  "ELIMINADO"
+}
+
+Enum "estado_dba" {
+  "ACTIVO"
+  "INACTIVO"
+}
+
+Enum "estado_documento" {
+  "PENDIENTE"
+  "VALIDADO"
+  "RECHAZADO"
+}
+
+Enum "estado_estudiante" {
+  "ACTIVO"
+  "SANCIONADO"
+  "EXPULSADO"
+  "RETIRADO"
+  "GRADUADO"
+}
+
+Enum "estado_matricula" {
+  "PENDIENTE"
+  "ACTIVA"
+  "CANCELADA"
+  "TRASLADADA"
+  "RECHAZADA"
+  "CORRECCION"
+  "APROBADA"
+  "CULMINADA"
+  "PENDIENTE_RENOVACION"
+  "CORREGIDA"
+}
+
+Enum "estado_periodo" {
+  "ABIERTO"
+  "CERRADO"
+  "PENDIENTE"
+}
+
+Enum "estado_renovacion_documento" {
+  "VIGENTE"
+  "RECOMENDADO_ACTUALIZAR"
+  "OBLIGATORIO_ACTUALIZAR"
+  "DESACTUALIZADO_POR_FECHA"
+}
+
+Enum "estado_resultado" {
+  "APROBADO"
+  "REPROBADO"
+  "EN_PROCESO"
+}
+
+Enum "estado_sancion" {
+  "ACTIVA"
+  "REVOCADA"
+  "VENCIDA"
+}
+
+Enum "estado_solicitud_traslado" {
+  "SOLICITADA"
+  "EN_APROBACION"
+  "APROBADA"
+  "RECHAZADA"
+  "CANCELADA"
+  "EJECUTADA"
+}
+
+Enum "estado_supervision" {
+  "SOLICITADA"
+  "APROBADA"
+  "ACTIVA"
+  "FINALIZADA"
+  "REVOCADA"
+  "EXPIRADA"
+}
+
+Enum "estado_ticket_soporte" {
+  "ABIERTO"
+  "EN_PROCESO"
+  "RESUELTO"
+  "ESCALADO"
+}
+
+Enum "estado_usuario_sistema" {
+  "ACTIVO"
+  "SUSPENDIDO"
+  "BANEADO"
+  "ELIMINADO"
+}
+
+Enum "resultado_consolidado_anual" {
+  "APROBADO"
+  "NO_PROMOVIDO"
+  "PENDIENTE_RECUPERACION"
+  "PENDIENTE_DECISION"
+}
+
+Enum "tipo_accion_auditoria" {
+  "LECTURA"
+  "CREACION"
+  "MODIFICACION"
+  "ELIMINACION"
+  "EXPORTACION"
+}
+
+Enum "tipo_documento_identidad" {
+  "TI"
+  "CC"
+  "CE"
+  "RC"
+  "PAS"
+}
+
+Enum "tipo_incidencia_soporte" {
+  "TECNICO"
+  "CALIFICACIONES"
+  "ASISTENCIA"
+  "AUTENTICACION"
+  "SOPORTE"
+  "REINGRESO"
+  "MATRICULA_EXTRAORDINARIA"
+}
+
+Enum "tipo_jornada" {
+  "MAÑANA"
+  "TARDE"
+  "NOCTURNA"
+  "UNICA"
+}
+
+Enum "tipo_matricula" {
+  "REGULAR"
+  "RENOVACION"
+  "REINGRESO"
+  "EXTRAORDINARIA"
+  "TRASLADO"
+}
+
+Enum "tipo_observacion" {
+  "ACADEMICA"
+  "CONVIVENCIA"
+  "OTRO"
+  "DISCIPLINARIA"
+}
+
+Enum "tipo_supervision" {
+  "SOLO_LECTURA"
+  "EDITOR"
+}
+
+Enum "tipo_traslado" {
+  "TRASLADO_USUARIO"
+  "TRASLADO_MATRICULA"
+}
+
+Table "actividad_evidencia_dba" {
+  "id_actividadmateria" integer [not null]
+  "id_evidencia_dba" integer [not null]
+
+  Indexes {
+    (id_actividadmateria, id_evidencia_dba) [pk, name: "actividad_evidencia_dba_pkey"]
+    id_actividadmateria [type: btree, name: "idx_actividad_evidencia_dba_act"]
+    id_evidencia_dba [type: btree, name: "idx_actividad_evidencia_dba_ev"]
+  }
+}
+
+Table "actividad_materia" {
+  "id_actividadmateria" integer [pk, not null]
+  "id_detallegrado" integer
+  "id_periodo" integer
+  "nombre" "character varying(255)" [not null]
+  "porcentaje" numeric(5,2) [not null]
+  "id_colegio" integer [not null]
+  "id_competencia" integer
+  "id_evidencia" integer
+  "fecha_creacion" timestamp [default: `now()`]
+  "motivo_extra" "character varying(100)" [default: `NULL::charactervarying`]
+  "justificacion_extra" text
+  "id_docente_creador" integer
+}
+
+Table "anio_lectivo" {
+  "id_anio" integer [pk, not null]
+  "calendario" "character varying(10)"
+  "id_colegio" integer [not null]
+  "tipo_calendario" character(1) [default: `'A'::bpchar`]
+  "estado" estado_periodo [default: `'ABIERTO'::public.estado_periodo`]
+  "fecha_inicio" date
+  "fecha_fin" date
+}
+
+Table "auditoria_acciones_realizadas" {
+  "id_accion" integer [pk, not null]
+  "id_auditoria" integer [not null]
+  "fecha_accion" timestamp [not null, default: `now()`]
+  "modulo" "character varying(255)" [not null]
+  "tipo_accion" tipo_accion_auditoria [not null]
+  "accion" "character varying(255)" [not null]
+  "recurso_afectado" text [not null]
+  "id_usuario_afectado" integer
+  "valor_antiguo" jsonb
+  "valor_nuevo" jsonb
+  "motivo_cambio" text
+
+  Indexes {
+    id_auditoria [type: btree, name: "idx_audit_acc_auditoria"]
+    fecha_accion [type: btree, name: "idx_audit_acc_fecha"]
+    tipo_accion [type: btree, name: "idx_audit_acc_tipo"]
+    id_usuario_afectado [type: btree, name: "idx_audit_acc_usuario"]
+  }
+}
+
+Table "auditoria_supervision" {
+  "id_auditoria" integer [pk, not null]
+  "id_admin_general" integer [not null]
+  "id_colegio" integer [not null]
+  "id_directivo_aprobador" integer
+  "motivo_solicitud" text [not null]
+  "fecha_solicitud" timestamp [not null, default: `now()`]
+  "tipo_supervision" tipo_supervision [not null]
+  "estado_supervision" estado_supervision [not null, default: `'SOLICITADA'::public.estado_supervision`]
+  "fecha_aprobacion" timestamp
+  "motivo_entrada" text
+  "fecha_entrada" timestamp
+  "fecha_salida" timestamp
+  "duracion_maxima_minutos" integer [not null, default: 60]
+  "revocado_por" integer
+  "fecha_revocacion" timestamp
+  "ip_admin" "character varying(45)"
+  "eliminado" boolean [not null, default: false]
+  "fecha_retencion_hasta" timestamp [not null, default: `now()+'5 years'::interval`]
+  "motivo_revocacion" text
+
+  Indexes {
+    id_admin_general [type: btree, name: "idx_audit_sup_admin"]
+    id_colegio [type: btree, name: "idx_audit_sup_colegio"]
+    eliminado [type: btree, name: "idx_audit_sup_eliminado"]
+    estado_supervision [type: btree, name: "idx_audit_sup_estado"]
+    fecha_solicitud [type: btree, name: "idx_audit_sup_fecha"]
+  }
+}
+
+Table "cierre_materia" {
+  "id_cierremateria" integer [pk, not null]
+  "id_detallegrado" integer [not null]
+  "id_periodo" integer [not null]
+  "estado" estado_cierre_materia [not null]
+  "fecha_cierre" timestamp [not null]
+  "justificacion_evidencias_pendientes" text
+  "id_docente_cierre" integer
+}
+
+Table "colegio" {
+  "id_colegio" integer [pk, not null]
+  "nombre" text [not null]
+  "tipo_colegio" "character varying(20)" [not null]
+  "sede" "character varying(255)" [not null]
+  "contacto" numeric [not null]
+  "correo" "character varying(100)" [not null]
+  "dane" "character varying(100)" [not null]
+  "tipo_calendario" character(1) [default: `'A'::bpchar`]
+  "estado" estado_colegio [not null, default: `'ACTIVO'::public.estado_colegio`]
+  "fecha_registro" timestamp [not null, default: `now()`]
+  "motivo_rechazo" text
+  "fecha_cambio_estado" timestamp
+  "escudo_url" text
+  "colores" "character varying(255)"
+  "color_primario" "character varying(50)" [default: `NULL::charactervarying`]
+  "color_secundario" "character varying(50)" [default: `NULL::charactervarying`]
+
+  Indexes {
+    estado [type: btree, name: "idx_colegio_estado"]
+  }
+}
+
+Table "colegio_version_curricular" {
+  "id" integer [pk, not null]
+  "id_colegio" integer [not null]
+  "area" "character varying(100)" [not null]
+  "grado" "character varying(50)" [not null]
+  "version_curricular" "character varying(20)" [not null]
+  "fecha_asignacion" timestamp [not null, default: `now()`]
+
+  Indexes {
+    (id_colegio, area, grado) [unique, name: "uq_colegio_area_grado"]
+    id_colegio [type: btree, name: "idx_colegio_version_colegio"]
+  }
+}
+
+Table "competencias" {
+  "id_competencia" integer [pk, not null]
+  "id_anio" integer [not null]
+  "id_grupo" integer [not null]
+  "id_materia" integer [not null]
+  "id_periodo" integer [not null]
+  "descripcion" text [not null, default: `'Competencia pendiente por definir.'::text`]
+  "id_colegio" integer [not null]
+  "nombre" "character varying(200)"
+  "sync_uuid" uuid
+  "id_dimension" integer
+
+  Indexes {
+    sync_uuid [type: btree, name: "idx_competencias_sync_uuid"]
+  }
+}
+
+Table "configuracion_base" {
+  "id_config_base" integer [pk, not null]
+  "clave" "character varying(100)" [unique, not null]
+  "descripcion" text
+  "valor_default" "character varying(255)" [not null]
+  "tipo" "character varying(20)" [not null]
+}
+
+Table "configuracion_colegio" {
+  "id_colegio" integer [pk, not null]
+  "nota_minima" numeric(5,2) [not null, default: 0]
+  "nota_maxima" numeric(5,2) [not null, default: 5]
+  "nota_aprobacion" numeric(5,2) [not null, default: 3]
+  "escala_modo" "character varying(20)" [not null, default: `'AUTOMATICO'::charactervarying`]
+}
+
+Table "configuracion_inscripcion" {
+  "id_configuracion" integer [pk, not null]
+  "id_colegio" integer [not null]
+  "id_anio" integer [not null]
+  "fecha_inicio" timestamp [not null]
+  "fecha_cierre" timestamp [not null]
+  "habilitada" boolean [not null, default: true]
+
+  Indexes {
+    (id_colegio, id_anio) [unique, name: "uq_colegio_anio"]
+    id_colegio [type: btree, name: "idx_config_inscripcion_colegio"]
+  }
+}
+
+Table "configuracion_plataforma" {
+  "clave" "character varying(100)" [pk, not null]
+  "valor" "character varying(255)" [not null]
+  "descripcion" text
+  "actualizado_por" integer
+  "fecha_actualizacion" timestamp [not null, default: `now()`]
+}
+
+Table "configuracion_sistema" {
+  "id_configuracion" integer [pk, not null]
+  "id_colegio" integer [not null]
+  "clave" "character varying(100)" [not null]
+  "valor" "character varying(255)" [not null]
+  "id_config_base" integer
+
+  Indexes {
+    (id_colegio, clave) [unique, name: "unique_configuracion"]
+  }
+}
+
+Table "contrato_docente" {
+  "id_contratodocente" integer [pk, not null]
+  "estado" "character varying(50)" [not null]
+  "id_colegio" integer [not null]
+}
+
+Table "criterio_evaluacion" {
+  "id_criterio" integer [pk, not null]
+  "id_actividadmateria" integer [not null]
+  "id_evidencia" integer
+  "descripcion" text [not null]
+  "porcentaje" numeric(5,2) [not null]
+  "id_colegio" integer [not null]
+}
+
+Table "dba" {
+  "id_dba" integer [pk, not null]
+  "area" "character varying(100)" [not null]
+  "grado" "character varying(50)" [not null]
+  "numero_dba" integer [not null]
+  "enunciado" text [not null]
+  "version_curricular" "character varying(20)" [not null]
+  "estado" estado_dba [not null, default: `'ACTIVO'::public.estado_dba`]
+  "created_at" timestamp [not null, default: `now()`]
+  "updated_at" timestamp [not null, default: `now()`]
+
+  Indexes {
+    (area, grado, numero_dba, version_curricular) [unique, name: "uq_dba_area_grado_num_version"]
+    (area, grado) [type: btree, name: "idx_dba_area_grado"]
+    estado [type: btree, name: "idx_dba_estado"]
+    version_curricular [type: btree, name: "idx_dba_version"]
+  }
+}
+
+Table "dba_dimensiones_preescolar" {
+  "id_dba" integer [not null]
+  "id_dimension" integer [not null]
+
+  Indexes {
+    (id_dba, id_dimension) [pk, name: "dba_dimensiones_preescolar_pkey"]
+  }
+}
+
+Table "decision_promocion_directivo" {
+  "id_decision" integer [pk, not null]
+  "id_estudiante" integer [not null]
+  "id_colegio" integer [not null]
+  "id_anio_anterior" integer [not null]
+  "resultado_calculado" resultado_consolidado_anual [not null]
+  "decision_tomada" decision_promocion_tipo [not null]
+  "id_grado_anterior" integer
+  "id_grado_asignado" integer
+  "id_usuario_decision" integer [not null]
+  "fecha_decision" timestamp [default: `CURRENT_TIMESTAMP`]
+  "observacion" text
+
+  Indexes {
+    id_anio_anterior [type: btree, name: "idx_decision_promocion_anio"]
+    (id_estudiante, id_colegio) [type: btree, name: "idx_decision_promocion_estudiante"]
+  }
+}
+
+Table "desempeno" {
+  "id_desempeno" integer [pk, not null]
+  "descripcion" text [not null]
+  "id_actividadmateria" integer [not null]
+  "id_colegio" integer [not null]
+}
+
+Table "detalle_grados" {
+  "id_detallegrado" integer [pk, not null]
+  "id_materia" integer [not null]
+  "id_docente" integer [not null]
+  "id_colegio" integer [not null]
+  "id_grupo" integer
+  "id_anio" integer [not null]
+}
+
+Table "detalle_padrefamilia" {
+  "id_detallepadrefamilia" integer [pk, not null]
+  "id_padrefamilia" integer [not null]
+  "id_estudiante" integer [not null]
+  "id_colegio" integer [not null]
+
+  Indexes {
+    id_padrefamilia [type: btree, name: "idx_detalle_padrefamilia_padrefamilia"]
+  }
+}
+
+Table "dimensiones_preescolar" {
+  "id_dimension" integer [pk, not null]
+  "nombre" "character varying(100)" [unique, not null]
+}
+
+Table "directivo" {
+  "id" integer [pk, not null]
+  "id_colegio" integer [not null]
+  "id_usuario" integer [unique]
+  "cargo" "character varying(100)"
+  "estado" estado_usuario_sistema [not null, default: `'ACTIVO'::public.estado_usuario_sistema`]
+  "fecha_vinculacion" timestamp [not null, default: `now()`]
+  "fecha_desvinculacion" timestamp
+}
+
+Table "docente" {
+  "id_docente" integer [pk, not null]
+  "nombre" "character varying(255)" [not null]
+  "apellido" "character varying(255)" [not null]
+  "id_contratodocente" integer
+  "id_colegio" integer [not null]
+  "id_usuario" integer
+  "estado" "character varying(20)" [not null, default: `'ACTIVO'::charactervarying`]
+
+  Indexes {
+    (id_usuario, id_colegio) [unique, name: "docente_id_usuario_id_colegio_key"]
+  }
+}
+
+Table "documento_matriculas" {
+  "id_documento" integer [pk, not null]
+  "id_matricula" integer [not null]
+  "tipo_documento" "character varying(100)" [not null]
+  "url" text [not null]
+  "estado" estado_documento [not null, default: `'PENDIENTE'::public.estado_documento`]
+  "fecha" timestamp [not null]
+  "id_colegio" integer [not null]
+  "version" integer [not null, default: 1]
+  "fecha_expedicion" date
+  "estado_renovacion" estado_renovacion_documento [default: `'VIGENTE'::public.estado_renovacion_documento`]
+  "contenido" bytea
+  "mime_type" "character varying(100)"
+  "nombre_original" "character varying(255)"
+  "tamano_bytes" integer
+}
+
+Table "email_change_tokens" {
+  "id" integer [pk, not null]
+  "id_usuario" integer
+  "nuevo_email" "character varying(255)" [not null]
+  "codigo" "character varying(6)" [not null]
+  "expires_at" timestamp [not null]
+  "used" boolean [default: false]
+  "created_at" timestamp [default: `now()`]
+
+  Indexes {
+    codigo [type: btree, name: "idx_email_change_codigo"]
+    id_usuario [type: btree, name: "idx_email_change_usuario"]
+  }
+}
+
+Table "escala_valoracion" {
+  "id_escalavaloracion" integer [pk, not null]
+  "nivel" "character varying(20)" [not null]
+  "valor_minimo" numeric(5,2) [not null]
+  "valor_maximo" numeric(5,2) [not null]
+  "id_colegio" integer [not null]
+}
+
+Table "estudiante" {
+  "id_estudiante" integer [pk, not null]
+  "nombre" "character varying(100)" [not null]
+  "apellido" "character varying(100)" [not null]
+  "codigo" "character varying(20)" [not null]
+  "id_nivel" integer
+  "id_colegio" integer [not null]
+  "id_usuario" integer [unique]
+  "estado" estado_estudiante [default: `'ACTIVO'::public.estado_estudiante`]
+  "motivo_estado" text
+}
+
+Table "evidencia_aprendizaje" {
+  "id_evidencia" integer [pk, not null]
+  "id_competencia" integer [not null]
+  "descripcion" text [not null]
+  "orden" integer [not null, default: 0]
+  "id_colegio" integer [not null]
+  "id_evidencia_dba" integer
+
+  Indexes {
+    id_evidencia_dba [type: btree, name: "idx_evidencia_aprendizaje_dba"]
+    id_competencia [type: btree, name: "idx_evidencia_competencia"]
+  }
+}
+
+Table "evidencias_dba" {
+  "id_evidencia_dba" integer [pk, not null]
+  "id_dba" integer [not null]
+  "descripcion" text [not null]
+  "orden" integer [not null, default: 1]
+  "estado" estado_dba [not null, default: `'ACTIVO'::public.estado_dba`]
+  "created_at" timestamp [not null, default: `now()`]
+
+  Indexes {
+    id_dba [type: btree, name: "idx_evidencias_dba_dba"]
+  }
+}
+
+Table "grados" {
+  "id_grado" integer [pk, not null]
+  "nivel" "character varying(50)" [not null]
+  "tipo_grado" "character varying(50)" [not null]
+  "id_jornada" integer [not null]
+  "id_colegio" integer [not null]
+  "cupos_totales" integer [not null, default: 30]
+  "seccion" "character varying(10)" [default: `'A'::charactervarying`]
+}
+
+Table "grupos" {
+  "id_grupo" integer [pk, not null]
+  "id_nivel" integer [not null]
+  "id_jornada" integer [not null]
+  "id_colegio" integer [not null]
+  "id_seccion" integer [not null]
+  "cupos_totales" integer [not null, default: 0]
+  "id_tipo_grado" integer [not null]
+  "id_docente" integer
+
+  Indexes {
+    id_tipo_grado [type: btree, name: "idx_grupos_tipo_grado"]
+  }
+}
+
+Table "jornada" {
+  "id_jornada" integer [pk, not null]
+  "nombre" tipo_jornada [not null]
+  "id_colegio" integer [not null]
+}
+
+Table "materias" {
+  "id_materia" integer [pk, not null]
+  "nombre" "character varying(100)" [not null]
+  "id_colegio" integer [not null]
+}
+
+Table "matricula" {
+  "id_matricula" integer [pk, not null]
+  "id_estudiante" integer
+  "id_nivel" integer
+  "id_colegio" integer [not null]
+  "id_anio" integer [not null]
+  "estado" estado_matricula [not null]
+  "correo_padre" "character varying(100)"
+  "tiene_discapacidad" boolean [default: false]
+  "es_extranjero" boolean [default: false]
+  "token_seguimiento" uuid [unique, not null, default: `public.uuid_generate_v4()`]
+  "id_grupo" integer
+  "motivo_cancelacion" "character varying(100)"
+  "detalles_cancelacion" text
+  "es_traslado" boolean [default: false]
+  "fecha_aprobacion" timestamp
+  "tipo" tipo_matricula [not null, default: `'REGULAR'::public.tipo_matricula`]
+  "motivo" text
+  "observaciones" text
+  "id_usuario_responsable" integer
+  "fecha_creacion" timestamp [default: `now()`]
+  "id_ticket" integer
+
+  Indexes {
+    id_estudiante [type: btree, name: "idx_matricula_estudiante"]
+    (id_estudiante, id_anio, id_colegio) [type: btree, unique, name: "idx_matricula_estudiante_anio_colegio_activo"]
+  }
+}
+
+Table "nivel_escolar" {
+  "id_nivel" integer [pk, not null]
+  "nombre" "character varying(100)" [not null]
+  "id_colegio" integer [not null]
+}
+
+Table "nota_criterio" {
+  "id_nota_criterio" integer [pk, not null]
+  "id_criterio" integer [not null]
+  "id_estudiante" integer [not null]
+  "nota" numeric(5,2) [not null]
+  "id_colegio" integer [not null]
+
+  Indexes {
+    (id_criterio, id_estudiante) [unique, name: "nota_criterio_id_criterio_id_estudiante_key"]
+  }
+}
+
+Table "notas_actividad" {
+  "id_notaactividad" integer [pk, not null]
+  "id_actividadmateria" integer [not null]
+  "id_estudiante" integer [not null]
+  "id_escalavaloracion" integer [not null]
+  "nota" numeric(5,2) [not null]
+  "id_colegio" integer [not null]
+
+  Indexes {
+    (id_actividadmateria, id_estudiante) [unique, name: "unique_actividad_estudiante"]
+    id_actividadmateria [type: btree, name: "idx_notas_actividad"]
+    id_estudiante [type: btree, name: "idx_notas_estudiante"]
+  }
+}
+
+Table "notificacion_colegio" {
+  "id_notificacion" integer [pk, not null]
+  "id_colegio" integer [not null]
+  "id_directivo" integer [not null]
+  "tipo" "character varying(50)" [not null]
+  "mensaje" text [not null]
+  "estado_anterior" "character varying(20)"
+  "estado_nuevo" "character varying(20)"
+  "leida" boolean [not null, default: false]
+  "fecha_notificacion" timestamp [not null, default: `now()`]
+
+  Indexes {
+    id_colegio [type: btree, name: "idx_notif_col_colegio"]
+    id_directivo [type: btree, name: "idx_notif_col_directivo"]
+    leida [type: btree, name: "idx_notif_col_leida"]
+  }
+}
+
+Table "notificacion_supervision" {
+  "id_notificacion" integer [pk, not null]
+  "id_auditoria" integer [not null]
+  "id_directivo" integer [not null]
+  "tipo_notificacion" "character varying(50)" [not null]
+  "mensaje" text [not null]
+  "leida" boolean [not null, default: false]
+  "fecha_notificacion" timestamp [not null, default: `now()`]
+
+  Indexes {
+    id_auditoria [type: btree, name: "idx_notif_sup_auditoria"]
+    id_directivo [type: btree, name: "idx_notif_sup_directivo"]
+    leida [type: btree, name: "idx_notif_sup_leida"]
+  }
+}
+
+Table "observacion_estudiante" {
+  "id_observacion" integer [pk, not null]
+  "id_estudiante" integer [not null]
+  "id_detallegrado" integer [not null]
+  "id_periodo" integer [not null]
+  "fortalezas" text
+  "debilidades" text
+  "recomendaciones" text
+  "fecha" timestamp [not null]
+  "id_colegio" integer [not null]
+  "tipo" tipo_observacion [default: `'ACADEMICA'::public.tipo_observacion`]
+
+  Indexes {
+    id_estudiante [type: btree, name: "idx_observacion_estudiante"]
+  }
+}
+
+Table "padre_familia" {
+  "id_padrefamilia" integer [pk, not null]
+  "nombre" "character varying(50)" [not null]
+  "apellido" "character varying(50)" [not null]
+  "id_colegio" integer
+  "id_usuario" integer [unique]
+}
+
+Table "papelera_materias" {
+  "id_papelera" integer [pk, not null]
+  "id_colegio" integer
+  "nombre_materia" "character varying(255)"
+  "data_respaldo" jsonb
+  "fecha_borrado" timestamp [default: `CURRENT_TIMESTAMP`]
+  "fecha_expiracion" timestamp [default: `CURRENT_TIMESTAMP+'30 days'::interval`]
+}
+
+Table "password_reset_tokens" {
+  "id" integer [pk, not null]
+  "id_usuario" integer [not null]
+  "token" "character varying(255)" [unique, not null]
+  "expires_at" timestamp [not null]
+  "used" boolean [not null, default: false]
+  "created_at" timestamp [not null, default: `now()`]
+
+  Indexes {
+    token [type: btree, name: "idx_password_reset_token"]
+  }
+}
+
+Table "periodo_academico" {
+  "id_periodo" integer [pk, not null]
+  "nombre" "character varying(100)" [not null]
+  "estado" estado_periodo [not null]
+  "porcentaje" numeric(5,2) [not null]
+  "id_anio" integer
+  "id_colegio" integer [not null]
+  "trimestre" integer
+  "dia_inicio" integer
+  "dia_fin" integer
+  "mes_inicio" integer
+  "mes_fin" integer
+}
+
+Table "registro_asistencia" {
+  "id_registroasistencia" integer [pk, not null]
+  "id_estudiante" integer [not null]
+  "id_detallegrado" integer [not null]
+  "fecha" timestamp [not null]
+  "estado" estado_asistencia [not null, default: `'PRESENTE'::public.estado_asistencia`]
+  "id_colegio" integer [not null]
+  "justificacion" text
+  "hora_llegada" time
+
+  Indexes {
+    id_estudiante [type: btree, name: "idx_asistencia_estudiante"]
+  }
+}
+
+Table "registro_graduados" {
+  "id_graduado" integer [pk, not null]
+  "id_estudiante" integer [unique, not null]
+  "fecha_graduacion" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  "observaciones" text
+  "id_usuario_registro" integer
+  "creado_en" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  "id_anio" integer
+}
+
+Table "resultado_academico" {
+  "id_resultado" integer [pk, not null]
+  "id_estudiante" integer [not null]
+  "id_detallegrado" integer [not null]
+  "id_periodo" integer [not null]
+  "promedio" numeric(5,2) [not null]
+  "estado" estado_resultado [not null]
+  "fecha_cierre" timestamp [not null]
+  "id_docente" integer [not null]
+  "observacion" text
+}
+
+Table "rol" {
+  "id_rol" integer [pk, not null]
+  "nombre" "character varying(50)" [unique, not null]
+}
+
+Table "sancion" {
+  "id_sancion" integer [pk, not null]
+  "id_estudiante" integer [not null]
+  "id_tipo_sancion" integer [not null]
+  "motivo" text [not null]
+  "fecha_inicio" date [not null, default: `CURRENT_DATE`]
+  "fecha_fin" date [not null]
+  "estado" estado_sancion [default: `'ACTIVA'::public.estado_sancion`]
+  "observaciones" text
+  "id_directivo" integer [not null]
+  "creado_en" timestamp [default: `CURRENT_TIMESTAMP`]
+}
+
+Table "secciones" {
+  "id_seccion" integer [pk, not null]
+  "nombre" "character varying(10)" [unique, not null]
+}
+
+Table "solicitud_traslado" {
+  "id_solicitud" integer [pk, not null]
+  "tipo" tipo_traslado [not null, default: `'TRASLADO_USUARIO'::public.tipo_traslado`]
+  "id_usuario" integer [not null]
+  "id_colegio_origen" integer [not null]
+  "id_colegio_destino" integer [not null]
+  "id_matricula" integer
+  "estado" estado_solicitud_traslado [not null, default: `'SOLICITADA'::public.estado_solicitud_traslado`]
+  "motivo" text [not null]
+  "creado_por" integer [not null]
+  "fecha_creacion" timestamp [default: `CURRENT_TIMESTAMP`]
+  "fecha_finalizacion" timestamp
+
+  Indexes {
+    id_colegio_destino [type: btree, name: "idx_solicitud_traslado_destino"]
+    id_colegio_origen [type: btree, name: "idx_solicitud_traslado_origen"]
+    id_usuario [type: btree, name: "idx_solicitud_traslado_usr"]
+  }
+}
+
+Table "tickets_soporte" {
+  "id_ticket" integer [pk, not null]
+  "id_usuario" integer
+  "nombre_remitente" "character varying(155)" [not null]
+  "correo_remitente" "character varying(155)" [not null]
+  "telefono" "character varying(50)"
+  "tipo_incidencia" tipo_incidencia_soporte [not null]
+  "asunto" "character varying(255)" [not null]
+  "descripcion" text [not null]
+  "estado" estado_ticket_soporte [default: `'ABIERTO'::public.estado_ticket_soporte`]
+  "fecha_creacion" timestamp [default: `CURRENT_TIMESTAMP`]
+  "id_colegio" integer
+  "observaciones" jsonb [default: `'[]'::jsonb`]
+  "codigo_ticket" "character varying(50)" [unique]
+  "fecha_escalado" timestamp
+  "id_estudiante" integer
+
+  Indexes {
+    codigo_ticket [type: btree, name: "idx_tickets_codigo"]
+    id_colegio [type: btree, name: "idx_tickets_colegio"]
+    estado [type: btree, name: "idx_tickets_estado"]
+    id_usuario [type: btree, name: "idx_tickets_usuario"]
+  }
+}
+
+Table "tipo_documento" {
+  "id_tipodocumento" integer [pk, not null]
+  "tipo" "character varying(255)" [not null]
+}
+
+Table "tipo_grado" {
+  "id_tipo_grado" integer [pk, not null]
+  "nombre" "character varying(50)" [not null]
+  "id_nivel" integer [not null]
+
+  Indexes {
+    (nombre, id_nivel) [unique, name: "uq_tipo_grado"]
+  }
+}
+
+Table "tipo_sancion" {
+  "id_tipo_sancion" integer [pk, not null]
+  "nombre" "character varying(100)" [unique, not null]
+  "descripcion" text
+}
+
+Table "token_blacklist" {
+  "id" integer [pk, not null]
+  "jti" "character varying(255)" [unique, not null]
+  "expires_at" timestamp [not null]
+  "created_at" timestamp [default: `now()`]
+
+  Indexes {
+    expires_at [type: btree, name: "idx_token_blacklist_expires_at"]
+  }
+}
+
+Table "traslado_aprobacion" {
+  "id_aprobacion" integer [pk, not null]
+  "id_solicitud" integer [not null]
+  "id_usuario" integer [not null]
+  "rol" "character varying(50)" [not null]
+  "accion" accion_aprobacion_traslado [not null]
+  "comentario" text
+  "fecha" timestamp [default: `CURRENT_TIMESTAMP`]
+
+  Indexes {
+    id_solicitud [type: btree, name: "idx_traslado_aprobacion_sol"]
+  }
+}
+
+Table "usuario" {
+  "id_usuario" integer [pk, not null]
+  "email" "character varying(255)" [unique]
+  "password" "character varying(255)" [not null]
+  "nombre" "character varying(255)" [not null]
+  "apellido" "character varying(255)"
+  "id_colegio" integer
+  "activo" boolean [default: true]
+  "fecha_creacion" timestamp [default: `now()`]
+  "estado" estado_usuario_sistema [not null, default: `'ACTIVO'::public.estado_usuario_sistema`]
+  "motivo_baneo" text
+  "fecha_baneo" timestamp
+  "baneado_por" integer
+  "logged_out_at" timestamp
+  "id_tipodocumento" integer
+  "documento" "character varying(50)"
+  "telefono" "character varying(50)"
+
+  Indexes {
+    id_colegio [type: btree, name: "idx_usuario_colegio"]
+    documento [type: btree, name: "idx_usuario_documento"]
+    email [type: btree, name: "idx_usuario_email"]
+    estado [type: btree, name: "idx_usuario_estado"]
+  }
+}
+
+Table "usuario_colegio" {
+  "id_usuario_colegio" integer [pk, not null]
+  "id_usuario" integer [not null]
+  "id_colegio" integer [not null]
+  "id_rol" integer [not null]
+  "estado" "character varying(20)" [not null, default: `'ACTIVO'::charactervarying`]
+  "fecha_inicio" timestamp [default: `CURRENT_TIMESTAMP`]
+  "fecha_fin" timestamp
+
+  Indexes {
+    (id_usuario, id_colegio, id_rol) [unique, name: "uq_usuario_colegio_rol"]
+    (id_usuario, id_colegio) [type: btree, name: "idx_usuario_colegio_activo"]
+    id_colegio [type: btree, name: "idx_usuario_colegio_col"]
+    id_usuario [type: btree, name: "idx_usuario_colegio_usr"]
+  }
+}
+
+Table "usuario_rol" {
+  "id_usuario" integer [not null]
+  "id_rol" integer [not null]
+
+  Indexes {
+    (id_usuario, id_rol) [pk, name: "usuario_rol_pkey"]
+  }
+}
+
+Ref "actividad_evidencia_dba_id_actividadmateria_fkey":"actividad_materia"."id_actividadmateria" < "actividad_evidencia_dba"."id_actividadmateria" [delete: cascade]
+
+Ref "actividad_evidencia_dba_id_evidencia_dba_fkey":"evidencias_dba"."id_evidencia_dba" < "actividad_evidencia_dba"."id_evidencia_dba" [delete: cascade]
+
+Ref "actividad_materia_id_colegio_fkey":"colegio"."id_colegio" < "actividad_materia"."id_colegio"
+
+Ref "actividad_materia_id_competencia_fkey":"competencias"."id_competencia" < "actividad_materia"."id_competencia" [delete: cascade]
+
+Ref "actividad_materia_id_detallegrado_fkey":"detalle_grados"."id_detallegrado" < "actividad_materia"."id_detallegrado" [delete: cascade]
+
+Ref "actividad_materia_id_docente_creador_fkey":"docente"."id_docente" < "actividad_materia"."id_docente_creador"
+
+Ref "actividad_materia_id_evidencia_fkey":"evidencia_aprendizaje"."id_evidencia" < "actividad_materia"."id_evidencia" [delete: set null]
+
+Ref "actividad_materia_id_periodo_fkey":"periodo_academico"."id_periodo" < "actividad_materia"."id_periodo"
+
+Ref "auditoria_acciones_realizadas_id_auditoria_fkey":"auditoria_supervision"."id_auditoria" < "auditoria_acciones_realizadas"."id_auditoria"
+
+Ref "auditoria_supervision_id_colegio_fkey":"colegio"."id_colegio" < "auditoria_supervision"."id_colegio"
+
+Ref "auditoria_supervision_id_directivo_aprobador_fkey":"directivo"."id" < "auditoria_supervision"."id_directivo_aprobador"
+
+Ref "auditoria_supervision_revocado_por_fkey":"directivo"."id" < "auditoria_supervision"."revocado_por"
+
+Ref "año_lectivo_id_colegio_fkey":"colegio"."id_colegio" < "anio_lectivo"."id_colegio" [delete: cascade]
+
+Ref "cierre_materia_id_detallegrado_fkey":"detalle_grados"."id_detallegrado" < "cierre_materia"."id_detallegrado"
+
+Ref "cierre_materia_id_docente_cierre_fkey":"docente"."id_docente" < "cierre_materia"."id_docente_cierre" [delete: set null]
+
+Ref "cierre_materia_id_periodo_fkey":"periodo_academico"."id_periodo" < "cierre_materia"."id_periodo"
+
+Ref "colegio_version_curricular_id_colegio_fkey":"colegio"."id_colegio" < "colegio_version_curricular"."id_colegio" [delete: cascade]
+
+Ref "competencias_id_año_fkey":"anio_lectivo"."id_anio" < "competencias"."id_anio" [delete: cascade]
+
+Ref "competencias_id_colegio_fkey":"colegio"."id_colegio" < "competencias"."id_colegio" [delete: cascade]
+
+Ref "competencias_id_dimension_fkey":"dimensiones_preescolar"."id_dimension" < "competencias"."id_dimension" [delete: set null]
+
+Ref "competencias_id_grupo_fkey":"grupos"."id_grupo" < "competencias"."id_grupo" [delete: cascade]
+
+Ref "competencias_id_materia_fkey":"materias"."id_materia" < "competencias"."id_materia" [delete: cascade]
+
+Ref "competencias_id_periodo_fkey":"periodo_academico"."id_periodo" < "competencias"."id_periodo" [delete: cascade]
+
+Ref "configuracion_colegio_id_colegio_fkey":"colegio"."id_colegio" < "configuracion_colegio"."id_colegio" [delete: cascade]
+
+Ref "configuracion_inscripcion_id_año_fkey":"anio_lectivo"."id_anio" < "configuracion_inscripcion"."id_anio" [delete: cascade]
+
+Ref "configuracion_inscripcion_id_colegio_fkey":"colegio"."id_colegio" < "configuracion_inscripcion"."id_colegio" [delete: cascade]
+
+Ref "contrato_docente_id_colegio_fkey":"colegio"."id_colegio" < "contrato_docente"."id_colegio" [delete: cascade]
+
+Ref "criterio_evaluacion_id_actividadmateria_fkey":"actividad_materia"."id_actividadmateria" < "criterio_evaluacion"."id_actividadmateria" [delete: cascade]
+
+Ref "criterio_evaluacion_id_colegio_fkey":"colegio"."id_colegio" < "criterio_evaluacion"."id_colegio" [delete: cascade]
+
+Ref "criterio_evaluacion_id_evidencia_fkey":"evidencia_aprendizaje"."id_evidencia" < "criterio_evaluacion"."id_evidencia" [delete: set null]
+
+Ref "dba_dimensiones_preescolar_id_dba_fkey":"dba"."id_dba" < "dba_dimensiones_preescolar"."id_dba" [delete: cascade]
+
+Ref "dba_dimensiones_preescolar_id_dimension_fkey":"dimensiones_preescolar"."id_dimension" < "dba_dimensiones_preescolar"."id_dimension" [delete: cascade]
+
+Ref "decision_promocion_directivo_id_anio_anterior_fkey":"anio_lectivo"."id_anio" < "decision_promocion_directivo"."id_anio_anterior" [delete: cascade]
+
+Ref "decision_promocion_directivo_id_colegio_fkey":"colegio"."id_colegio" < "decision_promocion_directivo"."id_colegio" [delete: cascade]
+
+Ref "decision_promocion_directivo_id_estudiante_fkey":"estudiante"."id_estudiante" < "decision_promocion_directivo"."id_estudiante" [delete: cascade]
+
+Ref "decision_promocion_directivo_id_grado_anterior_fkey":"grados"."id_grado" < "decision_promocion_directivo"."id_grado_anterior" [delete: set null]
+
+Ref "decision_promocion_directivo_id_grado_asignado_fkey":"grados"."id_grado" < "decision_promocion_directivo"."id_grado_asignado" [delete: set null]
+
+Ref "desempeno_id_actividadmateria_fkey":"actividad_materia"."id_actividadmateria" < "desempeno"."id_actividadmateria"
+
+Ref "desempeno_id_colegio_fkey":"colegio"."id_colegio" < "desempeno"."id_colegio"
+
+Ref "detalle_grados_id_anio_fkey":"anio_lectivo"."id_anio" < "detalle_grados"."id_anio" [delete: cascade]
+
+Ref "detalle_grados_id_colegio_fkey":"colegio"."id_colegio" < "detalle_grados"."id_colegio"
+
+Ref "detalle_grados_id_docente_fkey":"docente"."id_docente" < "detalle_grados"."id_docente"
+
+Ref "detalle_grados_id_materia_fkey":"materias"."id_materia" < "detalle_grados"."id_materia"
+
+Ref "detalle_padrefamilia_id_colegio_fkey":"colegio"."id_colegio" < "detalle_padrefamilia"."id_colegio"
+
+Ref "detalle_padrefamilia_id_estudiante_fkey":"estudiante"."id_estudiante" < "detalle_padrefamilia"."id_estudiante"
+
+Ref "detalle_padrefamilia_id_padrefamilia_fkey":"padre_familia"."id_padrefamilia" < "detalle_padrefamilia"."id_padrefamilia"
+
+Ref "directivo_id_colegio_fkey":"colegio"."id_colegio" < "directivo"."id_colegio"
+
+Ref "docente_id_colegio_fkey":"colegio"."id_colegio" < "docente"."id_colegio" [delete: cascade]
+
+Ref "docente_id_contratodocente_fkey":"contrato_docente"."id_contratodocente" < "docente"."id_contratodocente"
+
+Ref "documento_matriculas_id_colegio_fkey":"colegio"."id_colegio" < "documento_matriculas"."id_colegio"
+
+Ref "documento_matriculas_id_matricula_fkey":"matricula"."id_matricula" < "documento_matriculas"."id_matricula"
+
+Ref "estudiante_id_colegio_fkey":"colegio"."id_colegio" < "estudiante"."id_colegio" [delete: cascade]
+
+Ref "evidencia_aprendizaje_id_colegio_fkey":"colegio"."id_colegio" < "evidencia_aprendizaje"."id_colegio" [delete: cascade]
+
+Ref "evidencia_aprendizaje_id_competencia_fkey":"competencias"."id_competencia" < "evidencia_aprendizaje"."id_competencia" [delete: cascade]
+
+Ref "evidencia_aprendizaje_id_evidencia_dba_fkey":"evidencias_dba"."id_evidencia_dba" < "evidencia_aprendizaje"."id_evidencia_dba" [delete: set null]
+
+Ref "evidencias_dba_id_dba_fkey":"dba"."id_dba" < "evidencias_dba"."id_dba" [delete: cascade]
+
+Ref "fk_config_base":"configuracion_base"."id_config_base" < "configuracion_sistema"."id_config_base"
+
+Ref "fk_configuracion_colegio":"colegio"."id_colegio" < "configuracion_sistema"."id_colegio" [update: cascade, delete: cascade]
+
+Ref "fk_detalle_grupo":"grupos"."id_grupo" < "detalle_grados"."id_grupo"
+
+Ref "fk_grupo_colegio":"colegio"."id_colegio" < "grupos"."id_colegio"
+
+Ref "fk_grupo_jornada":"jornada"."id_jornada" < "grupos"."id_jornada"
+
+Ref "fk_grupo_nivel":"nivel_escolar"."id_nivel" < "grupos"."id_nivel"
+
+Ref "fk_grupo_seccion":"secciones"."id_seccion" < "grupos"."id_seccion"
+
+Ref "fk_grupos_tipo_grado":"tipo_grado"."id_tipo_grado" < "grupos"."id_tipo_grado"
+
+Ref "fk_matricula_anio":"anio_lectivo"."id_anio" < "matricula"."id_anio" [update: cascade, delete: restrict]
+
+Ref "fk_matricula_estudiante":"estudiante"."id_estudiante" < "matricula"."id_estudiante" [update: cascade, delete: restrict]
+
+Ref "fk_matricula_grupo":"grupos"."id_grupo" < "matricula"."id_grupo"
+
+Ref "fk_tipo_grado_nivel":"nivel_escolar"."id_nivel" < "tipo_grado"."id_nivel"
+
+Ref "grupos_id_docente_fkey":"docente"."id_docente" < "grupos"."id_docente"
+
+Ref "jornada_id_colegio_fkey":"colegio"."id_colegio" < "jornada"."id_colegio" [delete: cascade]
+
+Ref "materias_id_colegio_fkey":"colegio"."id_colegio" < "materias"."id_colegio" [delete: cascade]
+
+Ref "matricula_id_colegio_fkey":"colegio"."id_colegio" < "matricula"."id_colegio"
+
+Ref "matricula_id_nivel_fkey":"nivel_escolar"."id_nivel" < "matricula"."id_nivel"
+
+Ref "matricula_id_ticket_fkey":"tickets_soporte"."id_ticket" < "matricula"."id_ticket" [delete: set null]
+
+Ref "nivel_escolar_id_colegio_fkey":"colegio"."id_colegio" < "nivel_escolar"."id_colegio" [delete: cascade]
+
+Ref "nota_criterio_id_colegio_fkey":"colegio"."id_colegio" < "nota_criterio"."id_colegio" [delete: cascade]
+
+Ref "nota_criterio_id_criterio_fkey":"criterio_evaluacion"."id_criterio" < "nota_criterio"."id_criterio" [delete: cascade]
+
+Ref "nota_criterio_id_estudiante_fkey":"estudiante"."id_estudiante" < "nota_criterio"."id_estudiante" [delete: cascade]
+
+Ref "notas_actividad_id_actividadmateria_fkey":"actividad_materia"."id_actividadmateria" < "notas_actividad"."id_actividadmateria" [delete: cascade]
+
+Ref "notas_actividad_id_escalavaloracion_fkey":"escala_valoracion"."id_escalavaloracion" < "notas_actividad"."id_escalavaloracion"
+
+Ref "notas_actividad_id_estudiante_fkey":"estudiante"."id_estudiante" < "notas_actividad"."id_estudiante" [delete: cascade]
+
+Ref "notificacion_colegio_id_colegio_fkey":"colegio"."id_colegio" < "notificacion_colegio"."id_colegio"
+
+Ref "notificacion_colegio_id_directivo_fkey":"directivo"."id" < "notificacion_colegio"."id_directivo"
+
+Ref "notificacion_supervision_id_auditoria_fkey":"auditoria_supervision"."id_auditoria" < "notificacion_supervision"."id_auditoria"
+
+Ref "notificacion_supervision_id_directivo_fkey":"directivo"."id" < "notificacion_supervision"."id_directivo"
+
+Ref "observacion_estudiante_id_colegio_fkey":"colegio"."id_colegio" < "observacion_estudiante"."id_colegio"
+
+Ref "observacion_estudiante_id_detallegrado_fkey":"detalle_grados"."id_detallegrado" < "observacion_estudiante"."id_detallegrado"
+
+Ref "observacion_estudiante_id_estudiante_fkey":"estudiante"."id_estudiante" < "observacion_estudiante"."id_estudiante"
+
+Ref "observacion_estudiante_id_periodo_fkey":"periodo_academico"."id_periodo" < "observacion_estudiante"."id_periodo"
+
+Ref "padre_familia_id_colegio_fkey":"colegio"."id_colegio" < "padre_familia"."id_colegio" [delete: cascade]
+
+Ref "periodo_academico_id_año_fkey":"anio_lectivo"."id_anio" < "periodo_academico"."id_anio"
+
+Ref "periodo_academico_id_colegio_fkey":"colegio"."id_colegio" < "periodo_academico"."id_colegio"
+
+Ref "registro_asistencia_id_colegio_fkey":"colegio"."id_colegio" < "registro_asistencia"."id_colegio"
+
+Ref "registro_asistencia_id_detallegrado_fkey":"detalle_grados"."id_detallegrado" < "registro_asistencia"."id_detallegrado"
+
+Ref "registro_asistencia_id_estudiante_fkey":"estudiante"."id_estudiante" < "registro_asistencia"."id_estudiante"
+
+Ref "registro_graduados_id_año_fkey":"anio_lectivo"."id_anio" < "registro_graduados"."id_anio"
+
+Ref "registro_graduados_id_estudiante_fkey":"estudiante"."id_estudiante" < "registro_graduados"."id_estudiante" [delete: cascade]
+
+Ref "resultado_academico_id_detallegrado_fkey":"detalle_grados"."id_detallegrado" < "resultado_academico"."id_detallegrado"
+
+Ref "resultado_academico_id_docente_fkey":"docente"."id_docente" < "resultado_academico"."id_docente"
+
+Ref "resultado_academico_id_estudiante_fkey":"estudiante"."id_estudiante" < "resultado_academico"."id_estudiante"
+
+Ref "resultado_academico_id_periodo_fkey":"periodo_academico"."id_periodo" < "resultado_academico"."id_periodo"
+
+Ref "sancion_id_directivo_fkey":"directivo"."id" < "sancion"."id_directivo" [delete: cascade]
+
+Ref "sancion_id_estudiante_fkey":"estudiante"."id_estudiante" < "sancion"."id_estudiante" [delete: cascade]
+
+Ref "sancion_id_tipo_sancion_fkey":"tipo_sancion"."id_tipo_sancion" < "sancion"."id_tipo_sancion"
+
+Ref "solicitud_traslado_id_colegio_destino_fkey":"colegio"."id_colegio" < "solicitud_traslado"."id_colegio_destino"
+
+Ref "solicitud_traslado_id_colegio_origen_fkey":"colegio"."id_colegio" < "solicitud_traslado"."id_colegio_origen"
+
+Ref "solicitud_traslado_id_matricula_fkey":"matricula"."id_matricula" < "solicitud_traslado"."id_matricula" [delete: set null]
+
+Ref "tickets_soporte_id_colegio_fkey":"colegio"."id_colegio" < "tickets_soporte"."id_colegio" [delete: cascade]
+
+Ref "tickets_soporte_id_estudiante_fkey":"estudiante"."id_estudiante" < "tickets_soporte"."id_estudiante" [delete: set null]
+
+Ref "traslado_aprobacion_id_solicitud_fkey":"solicitud_traslado"."id_solicitud" < "traslado_aprobacion"."id_solicitud" [delete: cascade]
+
+Ref "usuario_baneado_por_fkey":"usuario"."id_usuario" < "usuario"."baneado_por"
+
+Ref "usuario_colegio_id_colegio_fkey":"colegio"."id_colegio" < "usuario_colegio"."id_colegio" [delete: cascade]
+
+Ref "usuario_id_colegio_fkey":"colegio"."id_colegio" < "usuario"."id_colegio"
+
+Ref "usuario_id_tipodocumento_fkey":"tipo_documento"."id_tipodocumento" < "usuario"."id_tipodocumento"
+
+Ref "usuario_rol_id_rol_fkey":"rol"."id_rol" < "usuario_rol"."id_rol" [delete: cascade]
+
+Ref "usuario_rol_id_usuario_fkey":"usuario"."id_usuario" < "usuario_rol"."id_usuario" [delete: cascade]

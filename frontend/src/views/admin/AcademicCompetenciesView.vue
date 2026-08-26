@@ -1,5 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { 
+  ArrowLeft, Plus, Search, BookOpenCheck, Sparkles, RefreshCw, 
+  PenSquare, Trash2, Check, X, AlertTriangle 
+} from 'lucide-vue-next'
 import { academicService } from '../../services/academicService'
 import { useAuthStore } from '../../stores/auth'
 

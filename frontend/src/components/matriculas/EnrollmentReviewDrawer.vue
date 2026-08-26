@@ -47,7 +47,7 @@ const emit = defineEmits<{
 }>()
 
 const isReadonly = computed(() =>
-  props.matricula && (props.matricula.estado === 'ACTIVA' || props.matricula.estado === 'TRASLADADA' || props.matricula.estado === 'CANCELADA')
+  props.matricula && ['ACTIVA', 'TRASLADADA', 'CANCELADA', 'RECHAZADA'].includes(props.matricula.estado)
 )
 
 const allValidated = computed(() => {
@@ -98,24 +98,18 @@ const getStatusMeta = (status: string) => {
 const getRenewalBadgeClass = (state?: string) => {
   switch (state) {
     case 'VIGENTE': return 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300'
-    case 'RECOMENDADO_ACTUALIZAR': return 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300'
-    case 'OBLIGATORIO_ACTUALIZAR':
-    case 'RENOVAR':
-      return 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300'
-    case 'DESACTUALIZADO_POR_FECHA': return 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300'
-    default: return 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
+    case 'PENDIENTE': return 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300'
+    case 'EXONERADO': return 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300'
+    default: return 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400'
   }
 }
 
 const formatRenewalStateLabel = (state?: string) => {
   switch (state) {
-    case 'VIGENTE': return 'VIGENTE (Conservar)'
-    case 'RECOMENDADO_ACTUALIZAR': return 'RECOMENDADO ACTUALIZAR'
-    case 'OBLIGATORIO_ACTUALIZAR':
-    case 'RENOVAR':
-      return 'OBLIGATORIO ACTUALIZAR'
-    case 'DESACTUALIZADO_POR_FECHA': return 'DESACTUALIZADO POR FECHA'
-    default: return state || ''
+    case 'VIGENTE': return 'Vigente'
+    case 'PENDIENTE': return 'Pendiente'
+    case 'EXONERADO': return 'Exonerado'
+    default: return state || 'Desconocido'
   }
 }
 
@@ -174,10 +168,10 @@ const formatDateTime = (date: string | null | undefined) => {
                     Matrícula #{{ matricula?.id_matricula }}
                   </p>
                   <h2 class="text-xl font-black text-white">
-                    {{ matricula && ['ACTIVA', 'TRASLADADA'].includes(matricula.estado) ? 'Detalle de Matrícula' : 'Validación de Documentos' }}
+                    {{ matricula && ['ACTIVA', 'TRASLADADA', 'CANCELADA', 'RECHAZADA'].includes(matricula.estado) ? 'Detalle de Matrícula' : 'Validación de Documentos' }}
                   </h2>
                   <p v-if="matricula" class="text-indigo-200 text-sm mt-1">
-                    {{ ['ACTIVA', 'TRASLADADA'].includes(matricula.estado) ? matricula.student_firstname + ' ' + matricula.student_lastname : matricula.correo_padre }}
+                    {{ ['ACTIVA', 'TRASLADADA', 'CANCELADA', 'RECHAZADA'].includes(matricula.estado) ? (matricula.student_firstname ? (matricula.student_firstname + ' ' + matricula.student_lastname) : matricula.correo_padre) : matricula.correo_padre }}
                   </p>
                 </div>
                 <button @click="emit('close')" class="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all shrink-0 mt-1">
@@ -185,8 +179,8 @@ const formatDateTime = (date: string | null | undefined) => {
                 </button>
               </div>
 
-              <!-- Stepper inside header (Only for non-approved) -->
-              <div v-if="matricula && !['ACTIVA', 'TRASLADADA', 'CANCELADA'].includes(matricula.estado)" class="mt-6 flex items-center gap-0">
+              <!-- Stepper inside header (Only for non-approved/non-finished) -->
+              <div v-if="matricula && !['ACTIVA', 'TRASLADADA', 'CANCELADA', 'RECHAZADA'].includes(matricula.estado)" class="mt-6 flex items-center gap-0">
                 <div
                   v-for="s in [{ n: 1, label: 'Salón' }, { n: 2, label: 'Documentos' }, { n: 3, label: 'Registro' }]"
                   :key="s.n"
@@ -214,10 +208,51 @@ const formatDateTime = (date: string | null | undefined) => {
 
             <!-- Drawer Body -->
             <div v-else-if="matricula" class="flex-1 overflow-y-auto custom-scrollbar text-left">
-              <!-- ── APPROVED SUMMARY VIEW ── -->
-              <div v-if="matricula.estado === 'ACTIVA' || matricula.estado === 'TRASLADADA'" class="p-8 space-y-8">
+              <!-- ── READONLY / SUMMARY VIEW ── -->
+              <div v-if="['ACTIVA', 'TRASLADADA', 'CANCELADA', 'RECHAZADA'].includes(matricula.estado)" class="p-8 space-y-8">
+                <!-- Status Header Card (Especial para Cancelada) -->
+                <div v-if="matricula.estado === 'CANCELADA'"
+                     class="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 rounded-[2rem] p-8 text-center space-y-4">
+                  <div class="w-20 h-20 bg-red-600 text-white rounded-3xl flex items-center justify-center mx-auto shadow-lg shadow-red-200 dark:shadow-none">
+                    <XCircle :size="40" />
+                  </div>
+                  <div>
+                    <h3 class="text-2xl font-black text-red-900 dark:text-red-300">Matrícula Cancelada</h3>
+                    <p class="text-red-700 dark:text-red-400 text-sm font-medium mt-1">
+                      Esta matrícula fue cancelada y no se encuentra activa en la institución.
+                    </p>
+                  </div>
+                  <div v-if="matricula.detalles_cancelacion || matricula.motivo_cancelacion" class="mt-4 p-5 bg-white/80 dark:bg-slate-900/80 rounded-2xl border border-red-200/60 dark:border-red-900/60 text-left space-y-2">
+                    <div class="flex items-center justify-between text-xs font-black text-red-800 dark:text-red-400 uppercase tracking-wider">
+                      <span>Motivo de Cancelación</span>
+                      <span v-if="matricula.categoria_motivo" class="px-2.5 py-0.5 rounded-full bg-red-100 dark:bg-red-950/60 text-[10px] font-black">{{ matricula.categoria_motivo }}</span>
+                    </div>
+                    <p class="text-xs font-semibold text-slate-700 dark:text-slate-300 leading-relaxed">
+                      {{ matricula.detalles_cancelacion || matricula.motivo_cancelacion }}
+                    </p>
+                    <div class="flex items-center justify-between text-[10px] text-slate-400 font-semibold pt-2 border-t border-slate-100 dark:border-slate-800">
+                      <span v-if="matricula.fecha_cancelacion">Fecha: {{ formatDateTime(matricula.fecha_cancelacion) }}</span>
+                      <span v-if="matricula.usuario_cancelacion_nombre || matricula.cancelado_por">Por: {{ matricula.usuario_cancelacion_nombre || matricula.cancelado_por }}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Status Header Card (Especial para Rechazada) -->
+                <div v-else-if="matricula.estado === 'RECHAZADA'"
+                     class="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-[2rem] p-8 text-center space-y-4">
+                  <div class="w-20 h-20 bg-amber-600 text-white rounded-3xl flex items-center justify-center mx-auto shadow-lg shadow-amber-200 dark:shadow-none">
+                    <XCircle :size="40" />
+                  </div>
+                  <div>
+                    <h3 class="text-2xl font-black text-amber-900 dark:text-amber-300">Solicitud Rechazada</h3>
+                    <p class="text-amber-700 dark:text-amber-400 text-sm font-medium mt-1">
+                      Esta solicitud de matrícula fue rechazada durante la fase de revisión.
+                    </p>
+                  </div>
+                </div>
+
                 <!-- Status Header Card (Especial para Matrícula de Traslado) -->
-                <div v-if="matricula.estado === 'TRASLADADA' || matricula.tipo === 'TRASLADO' || matricula.es_traslado || matricula.traslado_info"
+                <div v-else-if="matricula.estado === 'TRASLADADA' || matricula.tipo === 'TRASLADO' || matricula.es_traslado || matricula.traslado_info"
                      class="bg-gradient-to-br from-indigo-900 via-slate-900 to-purple-950 text-white rounded-[2rem] p-8 space-y-6 shadow-xl border border-indigo-500/30">
                   <div class="flex items-center justify-between border-b border-white/10 pb-4">
                     <div class="flex items-center gap-3">
@@ -325,19 +360,23 @@ const formatDateTime = (date: string | null | undefined) => {
 
                 <!-- Actions -->
                 <div class="flex flex-col sm:flex-row gap-3 pt-4">
-                  <button @click="emit('openCancel')" class="flex-1 py-4 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-red-100 transition-all border border-red-100 dark:border-red-900">
+                  <button 
+                    v-if="matricula.estado === 'ACTIVA'"
+                    @click="emit('openCancel')" 
+                    class="flex-1 py-4 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-red-100 transition-all border border-red-100 dark:border-red-900 cursor-pointer"
+                  >
                     Cancelar Matrícula
                   </button>
                   <button 
                     @click="emit('downloadPDF', matricula)" 
                     :disabled="isExportingPDF"
-                    class="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-wide hover:bg-indigo-700 transition-all shadow-xl flex items-center justify-center gap-2 disabled:opacity-50"
+                    class="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-wide hover:bg-indigo-700 transition-all shadow-xl flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
                   >
                     <span v-if="isExportingPDF" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
                     <Download v-else :size="16" />
                     Descargar Ficha (PDF)
                   </button>
-                  <button @click="emit('close')" class="flex-1 py-4 bg-slate-900 dark:bg-slate-800 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl">
+                  <button @click="emit('close')" class="flex-1 py-4 bg-slate-900 dark:bg-slate-800 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl cursor-pointer">
                     Cerrar Detalle
                   </button>
                 </div>

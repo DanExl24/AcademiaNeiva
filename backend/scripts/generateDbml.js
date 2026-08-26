@@ -36,8 +36,19 @@ try {
   dbml = dbml.replace(/\n{3,}/g, '\n\n');
 
   fs.writeFileSync(dbmlPath, dbml, 'utf8');
+  
+  // 3. Replicar también en guides/arquitectura_y_datos/
+  const archDbmlPath = path.join(rootDir, 'guides', 'arquitectura_y_datos', 'AcademiaNeivaBD.dbml');
+  const archSqlPath = path.join(rootDir, 'guides', 'arquitectura_y_datos', 'AcademiaNeivaBD.sql');
+  
+  fs.writeFileSync(archDbmlPath, dbml, 'utf8');
+  if (fs.existsSync(sqlPath)) {
+    fs.copyFileSync(sqlPath, archSqlPath);
+  }
+
   console.log(`✅ Archivo DBML generado exitosamente y 100% compatible con DrawDB:`);
   console.log(`   -> ${dbmlPath}`);
+  console.log(`   -> ${archDbmlPath}`);
 } catch (error) {
   console.error('❌ Error generando DBML:', error.message);
   if (error.stdout) console.log(error.stdout.toString());

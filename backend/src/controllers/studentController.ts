@@ -178,6 +178,18 @@ const checkClosedYearForStudent = async (client: any, studentId: number) => {
 };
 
 export const updateStudent = async (req: Request, res: Response) => {
+  const authReq = req as any;
+  const userRoles = authReq.user?.roles || [];
+  const userRole = authReq.user?.role;
+  const isDirectivo = userRoles.includes("directivo") || userRole === "directivo";
+  const isAdminGeneral = userRoles.includes("admin_general") || userRole === "admin_general";
+
+  if (isDirectivo && !isAdminGeneral) {
+    return res.status(403).json({ 
+      error: "Los directivos no tienen autorización para modificar los datos personales básicos de los estudiantes por integridad del sistema." 
+    });
+  }
+
   const client = await pool.connect();
   try {
     const { id } = req.params;

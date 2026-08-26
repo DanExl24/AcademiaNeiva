@@ -190,11 +190,13 @@ const activeSummary = computed(() => {
   }
 })
 
+const maxGrade = ref<string>('5.0')
+
 // Computed Stats for 5 Cards
 const dashboardStats = computed(() => [
   { name: 'Estudiantes', value: activeSummary.value.totalStudents.toString(), icon: GraduationCap, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950/40' },
   { name: 'Docentes', value: activeSummary.value.totalTeachers.toString(), icon: Users, color: 'text-indigo-600 dark:text-indigo-400', bg: 'bg-indigo-50 dark:bg-indigo-950/40' },
-  { name: 'Promedio Institucional', value: `${activeSummary.value.generalAverage || '0.0'} / 5.0`, icon: TrendingUp, color: 'text-sky-600 dark:text-sky-400', bg: 'bg-sky-50 dark:bg-sky-950/40' },
+  { name: 'Promedio Institucional', value: `${activeSummary.value.generalAverage || '0.0'}`, subValue: `/ ${maxGrade.value || '5.0'}`, icon: TrendingUp, color: 'text-sky-600 dark:text-sky-400', bg: 'bg-sky-50 dark:bg-sky-950/40' },
   { name: 'Tasa de Aprobación', value: `${activeSummary.value.approvalRate ?? 100}%`, icon: Award, color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-950/40' },
   { name: 'Riesgo Académico', value: activeSummary.value.studentsAtRisk.toString(), icon: AlertTriangle, color: 'text-rose-600 dark:text-rose-400', bg: 'bg-rose-50 dark:bg-rose-950/40' },
 ])
@@ -662,7 +664,7 @@ const fetchDashboard = async () => {
 const loadPeriods = async () => {
   if (!schoolId.value) return
   try {
-    const params: any = { keys: 'periods,tiposGrado' }
+    const params: any = { keys: 'periods,tiposGrado,defaultSettings' }
     if (selectedYearId.value) {
       params.yearId = selectedYearId.value
     }
@@ -670,6 +672,9 @@ const loadPeriods = async () => {
     allPeriods.value = (data.periods || []).filter((p: any) => p.estado !== 'PENDIENTE')
     if (data.tiposGrado) {
       schoolGradesCatalog.value = (data.tiposGrado || []).map((g: any) => g.nombre).filter(Boolean)
+    }
+    if (data.defaultSettings?.nota_maxima) {
+      maxGrade.value = Number(data.defaultSettings.nota_maxima).toFixed(1)
     }
 
     // Set active period by default if none selected
@@ -937,9 +942,14 @@ onMounted(() => {
             </div>
             <div class="min-w-0 flex-1">
               <p class="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider truncate" :title="stat.name">{{ stat.name }}</p>
-              <p class="text-xl sm:text-2xl lg:text-3xl font-black text-gray-900 dark:text-white mt-0.5 tracking-tight truncate">
-                {{ stat.value }}
-              </p>
+              <div class="flex items-baseline gap-1 mt-0.5 min-w-0">
+                <span class="text-xl sm:text-2xl lg:text-3xl font-black text-gray-900 dark:text-white tracking-tight truncate">
+                  {{ stat.value }}
+                </span>
+                <span v-if="(stat as any).subValue" class="text-xs sm:text-sm font-bold text-slate-400 dark:text-slate-500 shrink-0">
+                  {{ (stat as any).subValue }}
+                </span>
+              </div>
             </div>
           </div>
         </div>

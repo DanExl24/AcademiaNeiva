@@ -20,9 +20,10 @@ const resolveTeachingContext = async (
   gradeId: number,
   subjectId: number,
   periodId: number,
-  userId?: number
+  userId?: number,
+  allowAnyTeacher: boolean = false
 ): Promise<TeachingContext | null> => {
-  let query = db
+  let baseQuery = db
     .selectFrom("detalle_grados as dg")
     .innerJoin("periodo_academico as p", (join) =>
       join
@@ -43,11 +44,20 @@ const resolveTeachingContext = async (
     .orderBy("dg.id_detallegrado", "desc")
     .limit(1);
 
-  if (typeof userId === "number" && !Number.isNaN(userId)) {
-    query = query.where("d.id_usuario", "=", userId);
+  if (!allowAnyTeacher && typeof userId === "number" && !Number.isNaN(userId)) {
+    const specificResult = await baseQuery.where("d.id_usuario", "=", userId).executeTakeFirst();
+    if (specificResult && specificResult.idGrupo !== null && specificResult.idAnio !== null) {
+      return {
+        idDetalleGrado: specificResult.idDetalleGrado,
+        idGrupo: specificResult.idGrupo,
+        idMateria: specificResult.idMateria,
+        idColegio: specificResult.idColegio,
+        idAnio: specificResult.idAnio,
+      };
+    }
   }
 
-  const result = await query.executeTakeFirst();
+  const result = await baseQuery.executeTakeFirst();
   if (!result || result.idGrupo === null || result.idAnio === null) {
     return null;
   }
@@ -94,6 +104,9 @@ export const getActivities = async (req: Request, res: Response): Promise<void> 
   const gradeId = Number(req.params.gradeId);
   const subjectId = Number(req.params.subjectId);
   const periodId = Number(req.params.periodId);
+  const authReq = req as any;
+  const isSupervision = authReq.user && (authReq.user.roles?.includes("admin_general") || authReq.user.roles?.includes("directivo"));
+  const isMonitoring = req.headers['x-monitoring-mode'] === 'true' || req.headers['x-monitoring-mode'] === '1';
   const userId = req.query.userId ? Number(req.query.userId) : undefined;
   console.log(`[DEV] getActivities called - gradeId=${gradeId}, subjectId=${subjectId}, periodId=${periodId}, userId=${userId}`);
 
@@ -103,7 +116,7 @@ export const getActivities = async (req: Request, res: Response): Promise<void> 
   }
 
   try {
-    const contextPreview = await resolveTeachingContext(gradeId, subjectId, periodId, userId);
+    const contextPreview = await resolveTeachingContext(gradeId, subjectId, periodId, userId, isSupervision || isMonitoring);
     console.log(`[DEV] getActivities - resolveTeachingContext result: ${contextPreview ? JSON.stringify(contextPreview) : "null (not found)"}`);
     if (!contextPreview) {
       res.status(404).json({ error: "No se encontró la asignación académica" });
@@ -308,8 +321,23 @@ export const updateCompetency = async (req: Request, res: Response): Promise<voi
   }
 };
 
+const isTeacherMutationBlocked = (req: Request): boolean => {
+  const authReq = req as any;
+  const isMonitoring = req.headers["x-monitoring-mode"] === "true" || req.headers["x-monitoring-mode"] === "1";
+  const userRoles = authReq.user?.roles || [];
+  const userRole = authReq.user?.role;
+  const isDirectivoOnly = (userRoles.includes("directivo") || userRole === "directivo" || userRoles.includes("rector") || userRoles.includes("coordinador")) && !userRoles.includes("docente");
+  const isAdminGeneral = userRoles.includes("admin_general") || userRole === "admin_general";
+  return isMonitoring || isDirectivoOnly || isAdminGeneral;
+};
+
 // Crear nueva actividad
 export const createActivity = async (req: Request, res: Response): Promise<void> => {
+  if (isTeacherMutationBlocked(req)) {
+    res.status(403).json({ error: "Los directivos o usuarios en modo monitoreo no pueden crear actividades" });
+    return;
+  }
+
   const { id_competencia, id_detallegrado, id_periodo, nombre, porcentaje, id_colegio, id_evidencia, evidencias_dba, motivo_extra, justificacion_extra } = req.body;
 
   if (!id_evidencia && (!Array.isArray(evidencias_dba) || evidencias_dba.length === 0)) {
@@ -525,7 +553,6 @@ export const createActivity = async (req: Request, res: Response): Promise<void>
 
       return inserted;
     });
-
     (newActivity as any).evidencias_dba = evidencias_dba || [];
     res.status(201).json(newActivity);
   } catch (error: any) {
@@ -536,6 +563,11 @@ export const createActivity = async (req: Request, res: Response): Promise<void>
 
 // Actualizar actividad
 export const updateActivity = async (req: Request, res: Response): Promise<void> => {
+  if (isTeacherMutationBlocked(req)) {
+    res.status(403).json({ error: "Los directivos o usuarios en modo monitoreo no pueden modificar actividades" });
+    return;
+  }
+
   const { id } = req.params;
   const { nombre, porcentaje, id_evidencia, evidencias_dba, motivo_extra, justificacion_extra } = req.body;
 
@@ -717,6 +749,11 @@ export const updateActivity = async (req: Request, res: Response): Promise<void>
 
 // Eliminar actividad
 export const deleteActivity = async (req: Request, res: Response): Promise<void> => {
+  if (isTeacherMutationBlocked(req)) {
+    res.status(403).json({ error: "Los directivos o usuarios en modo monitoreo no pueden eliminar actividades" });
+    return;
+  }
+
   const { id } = req.params;
 
   try {
@@ -756,6 +793,11 @@ export const deleteActivity = async (req: Request, res: Response): Promise<void>
 
 // Crear nuevo criterio
 export const createCriterion = async (req: Request, res: Response): Promise<void> => {
+  if (isTeacherMutationBlocked(req)) {
+    res.status(403).json({ error: "Los directivos o usuarios en modo monitoreo no pueden crear criterios" });
+    return;
+  }
+
   const { id_actividadmateria, id_evidencia, descripcion, porcentaje, id_colegio } = req.body;
 
   if (!id_actividadmateria || !descripcion || !porcentaje || !id_colegio) {
@@ -766,10 +808,10 @@ export const createCriterion = async (req: Request, res: Response): Promise<void
   try {
     const actRes = await db
       .selectFrom("actividad_materia as a")
-      .innerJoin("competencias as c", "c.id_competencia", "a.id_competencia")
+      .leftJoin("competencias as c", "c.id_competencia", "a.id_competencia")
       .where("a.id_actividadmateria", "=", Number(id_actividadmateria))
       .where("a.id_colegio", "=", Number(id_colegio))
-      .select(["a.id_competencia", "c.id_periodo"])
+      .select(["a.id_competencia", "a.id_periodo", "a.id_detallegrado"])
       .executeTakeFirst();
 
     if (!actRes) {
@@ -787,13 +829,7 @@ export const createCriterion = async (req: Request, res: Response): Promise<void
       return;
     }
 
-    const dgRes = await db
-      .selectFrom("actividad_materia")
-      .where("id_actividadmateria", "=", Number(id_actividadmateria))
-      .select("id_detallegrado")
-      .executeTakeFirst();
-
-    if (dgRes && dgRes.id_detallegrado && !(await ensureSubjectOpen(dgRes.id_detallegrado, Number(actRes.id_periodo)))) {
+    if (actRes.id_detallegrado && !(await ensureSubjectOpen(actRes.id_detallegrado, Number(actRes.id_periodo)))) {
       res.status(409).json({ error: "No se puede agregar criterios porque ya has cerrado esta materia para este periodo" });
       return;
     }
@@ -833,15 +869,19 @@ export const createCriterion = async (req: Request, res: Response): Promise<void
 
 // Eliminar criterio
 export const deleteCriterion = async (req: Request, res: Response): Promise<void> => {
+  if (isTeacherMutationBlocked(req)) {
+    res.status(403).json({ error: "Los directivos o usuarios en modo monitoreo no pueden eliminar criterios" });
+    return;
+  }
+
   const { id } = req.params;
 
   try {
     const critRes = await db
       .selectFrom("criterio_evaluacion as ce")
       .innerJoin("actividad_materia as a", "a.id_actividadmateria", "ce.id_actividadmateria")
-      .innerJoin("competencias as c", "c.id_competencia", "a.id_competencia")
       .where("ce.id_criterio", "=", Number(id))
-      .select(["c.id_periodo", "ce.id_colegio", "a.id_detallegrado"])
+      .select(["a.id_periodo", "ce.id_colegio", "a.id_detallegrado"])
       .executeTakeFirst();
 
     if (!critRes) {
@@ -887,29 +927,33 @@ export const getGrades = async (req: Request, res: Response): Promise<void> => {
 
     const authReq = req as any;
     const isSupervision = authReq.user && authReq.user.roles?.includes("admin_general");
-    if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== context.idColegio) {
-      res.status(403).json({ error: "No tiene permiso para acceder a las calificaciones de este colegio." });
+    const userSchoolIds = (authReq.user?.schoolIds || []).map(Number);
+    const targetId = Number(context.idColegio);
+    const isAllowed =
+      isSupervision ||
+      (authReq.user?.schoolId && Number(authReq.user.schoolId) === targetId) ||
+      userSchoolIds.includes(targetId);
+    if (authReq.user && !isAllowed) {
+      res.status(403).json({ error: "No tiene permiso para ver las calificaciones de este colegio." });
       return;
     }
 
+    // Traer notas de actividades directas
     const grades = await db
-      .selectFrom("notas_actividad as n")
-      .innerJoin("actividad_materia as a", "a.id_actividadmateria", "n.id_actividadmateria")
-      .innerJoin("competencias as c", "c.id_competencia", "a.id_competencia")
-      .where("c.id_grupo", "=", gradeId)
-      .where("c.id_materia", "=", subjectId)
-      .where("c.id_periodo", "=", periodId)
-      .selectAll("n")
+      .selectFrom("notas_actividad as na")
+      .innerJoin("actividad_materia as a", "a.id_actividadmateria", "na.id_actividadmateria")
+      .where("a.id_detallegrado", "=", context.idDetalleGrado)
+      .where("a.id_periodo", "=", periodId)
+      .selectAll("na")
       .execute();
 
+    // Traer notas de criterios
     const criteriaGrades = await db
       .selectFrom("nota_criterio as nc")
       .innerJoin("criterio_evaluacion as ce", "ce.id_criterio", "nc.id_criterio")
       .innerJoin("actividad_materia as a", "a.id_actividadmateria", "ce.id_actividadmateria")
-      .innerJoin("competencias as c", "c.id_competencia", "a.id_competencia")
-      .where("c.id_grupo", "=", gradeId)
-      .where("c.id_materia", "=", subjectId)
-      .where("c.id_periodo", "=", periodId)
+      .where("a.id_detallegrado", "=", context.idDetalleGrado)
+      .where("a.id_periodo", "=", periodId)
       .selectAll("nc")
       .select("ce.id_actividadmateria")
       .execute();
@@ -925,6 +969,11 @@ export const getGrades = async (req: Request, res: Response): Promise<void> => {
 };
 
 export const saveGrades = async (req: Request, res: Response): Promise<void> => {
+  if (isTeacherMutationBlocked(req)) {
+    res.status(403).json({ error: "Los directivos o usuarios en modo monitoreo no pueden registrar calificaciones" });
+    return;
+  }
+
   const { activityGrades = [], criteriaGrades = [], schoolId } = req.body;
 
   try {
@@ -955,9 +1004,8 @@ export const saveGrades = async (req: Request, res: Response): Promise<void> => 
     if (activityIds.length > 0) {
       const periodsRes = await db
         .selectFrom("actividad_materia as a")
-        .innerJoin("competencias as c", "c.id_competencia", "a.id_competencia")
         .where("a.id_actividadmateria", "in", activityIds)
-        .select(["c.id_periodo", "c.id_colegio"])
+        .select(["a.id_periodo", "a.id_colegio"])
         .distinct()
         .execute();
       periodsRes.forEach((r) => {
@@ -970,9 +1018,8 @@ export const saveGrades = async (req: Request, res: Response): Promise<void> => 
       const periodsRes = await db
         .selectFrom("criterio_evaluacion as ce")
         .innerJoin("actividad_materia as a", "a.id_actividadmateria", "ce.id_actividadmateria")
-        .innerJoin("competencias as c", "c.id_competencia", "a.id_competencia")
         .where("ce.id_criterio", "in", criteriaIds)
-        .select(["c.id_periodo", "c.id_colegio"])
+        .select(["a.id_periodo", "a.id_colegio"])
         .distinct()
         .execute();
       periodsRes.forEach((r) => {

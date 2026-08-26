@@ -7,8 +7,9 @@ export const getTeacherCourses = async (req: Request, res: Response): Promise<vo
   const { userId } = req.params;
 
   const authUser = (req as any).user;
+  const isDirectivoOrAdmin = authUser && (authUser.roles.includes("admin_general") || authUser.roles.includes("directivo"));
   const isMonitoring = req.headers['x-monitoring-mode'] === 'true' || req.headers['x-monitoring-mode'] === '1';
-  if (authUser && !authUser.roles.includes("admin_general") && !isMonitoring && Number(authUser.id) !== Number(userId)) {
+  if (authUser && !isDirectivoOrAdmin && !isMonitoring && Number(authUser.id) !== Number(userId)) {
     res.status(403).json({ error: "No tiene permiso para consultar los cursos de otro docente." });
     return;
   }
@@ -27,13 +28,6 @@ export const getTeacherCourses = async (req: Request, res: Response): Promise<vo
 
     const docente = await docenteQuery.executeTakeFirst();
 
-    if (!docente) {
-      console.warn(`[DEV] getTeacherCourses - No docente found for id_usuario=${userId} in schoolId=${schoolId}`);
-      res.json([]);
-      return;
-    }
-
-    const idDocente = docente.id_docente;
     const yearId = req.query.yearId
       ? Number(req.query.yearId)
       : (req.headers['x-academic-year-id'] ? Number(req.headers['x-academic-year-id']) : (req as any).academicYearId || null);
@@ -55,8 +49,15 @@ export const getTeacherCourses = async (req: Request, res: Response): Promise<vo
         "j.nombre as jornada_nombre",
         "m.id_materia",
         "m.nombre as materia_nombre"
-      ])
-      .where("dg.id_docente", "=", idDocente);
+      ]);
+
+    if (docente) {
+      baseQuery = baseQuery.where("dg.id_docente", "=", docente.id_docente);
+    } else if (!isDirectivoOrAdmin) {
+      console.warn(`[DEV] getTeacherCourses - No docente found for id_usuario=${userId} in schoolId=${schoolId}`);
+      res.json([]);
+      return;
+    }
 
     if (schoolId) {
       baseQuery = baseQuery.where("dg.id_colegio", "=", schoolId);

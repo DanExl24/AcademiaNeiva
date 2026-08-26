@@ -276,6 +276,10 @@ const stats = computed(() => ({
 
 // --- Actions ---
 const openEditModal = (student: any) => {
+  if (!isSupervision.value) {
+    notify.addNotification('Los directivos no tienen permitido modificar datos personales de estudiantes.', 'warning')
+    return
+  }
   isEditing.value = true
   selectedStudent.value = student
   studentForm.value = { ...student }
@@ -284,15 +288,19 @@ const openEditModal = (student: any) => {
 }
 
 const saveStudent = async () => {
+  if (!isSupervision.value) {
+    notify.addNotification('Acción no autorizada.', 'error')
+    return
+  }
   try {
     if (isEditing.value) {
-      if (isSupervision.value && !justification.value.trim()) {
+      if (!justification.value.trim()) {
         notify.addNotification('Por favor ingrese la justificación del cambio para la auditoría.', 'warning')
         return
       }
       const payload = {
         ...studentForm.value,
-        motivo_cambio: isSupervision.value ? justification.value : undefined
+        motivo_cambio: justification.value
       }
       await studentService.updateStudent(selectedStudent.value.id_estudiante, payload)
       notify.addNotification('Estudiante actualizado exitosamente', 'success')
