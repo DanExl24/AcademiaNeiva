@@ -350,17 +350,6 @@ const initializeMatrixForStudents = () => {
   })
 }
 
-// ID de Grado (Grupo) seleccionado basado en los filtros
-const selectedGradeId = computed(() => {
-  const course = myCourses.value.find(c => 
-    c.grado_nombre === selectedGradeName.value && 
-    c.seccion === selectedSection.value && 
-    c.jornada_nombre === selectedJornada.value
-  )
-  const gId = course ? course.id_grado : null
-  return gId
-})
-
 // Cargar notas actuales
 const fetchGrades = async () => {
   if (!selectedGradeId.value || !selectedSubjectId.value || !selectedPeriodId.value) return

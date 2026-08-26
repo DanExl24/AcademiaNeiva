@@ -717,6 +717,7 @@ const exportToSIMAT = () => {
                 class="absolute right-0 top-full mt-1 w-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-xl z-50 p-1.5 space-y-1 text-left animate-in fade-in zoom-in-95 duration-150"
               >
                 <button 
+                  v-if="isSupervision"
                   @click="openEditModal(s); activeMenuStudentId = null"
                   class="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 hover:text-indigo-600 rounded-xl transition-colors cursor-pointer"
                 >
