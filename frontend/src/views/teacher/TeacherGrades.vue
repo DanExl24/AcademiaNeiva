@@ -113,6 +113,7 @@ const gradeRange = ref({ min: 0, max: 5, approval: 3 })
 const scales = ref<any[]>([])
 const saving = ref(false)
 const activitiesLoading = ref(false)
+const studentsLoading = ref(false)
 
 // Búsqueda de estudiantes
 const studentSearch = ref('')
@@ -419,10 +420,14 @@ const fetchActivities = async () => {
 const fetchStudents = async () => {
   if (!selectedGradeId.value) return
   try {
+    studentsLoading.value = true
     const data = await gradesService.getStudentsByGrade(selectedGradeId.value)
-    students.value = data
+    students.value = data || []
     initializeMatrixForStudents()
   } catch (error: any) {
+    students.value = []
+  } finally {
+    studentsLoading.value = false
   }
 }
 
@@ -1124,7 +1129,7 @@ onMounted(() => {
         <button 
           v-if="!isMonitoringOrSupervisor"
           @click="saveAllGrades(false)"
-          :disabled="saving || activitiesLoading || isPeriodClosed"
+          :disabled="saving || activitiesLoading || studentsLoading || isPeriodClosed || students.length === 0"
           class="bg-emerald-600 dark:bg-emerald-500 text-white px-5 sm:px-6 py-2.5 rounded-2xl font-bold shadow-md shadow-emerald-100 dark:shadow-none hover:bg-emerald-700 transition-all flex items-center gap-2 active:scale-95 disabled:opacity-50 text-xs sm:text-sm cursor-pointer"
         >
           <Loader2 v-if="saving" class="w-4 h-4 animate-spin" />
@@ -1133,8 +1138,8 @@ onMounted(() => {
         </button>
         <button 
           @click="exportGradesToCSV"
-          :disabled="saving || activitiesLoading || students.length === 0"
-          class="bg-indigo-600 dark:bg-indigo-500 text-white px-4 sm:px-5 py-2.5 rounded-2xl font-bold shadow-md shadow-indigo-100 dark:shadow-none hover:bg-indigo-700 transition-all flex items-center gap-2 active:scale-95 text-xs sm:text-sm cursor-pointer"
+          :disabled="saving || activitiesLoading || studentsLoading || students.length === 0"
+          class="bg-indigo-600 dark:bg-indigo-500 text-white px-4 sm:px-5 py-2.5 rounded-2xl font-bold shadow-md shadow-indigo-100 dark:shadow-none hover:bg-indigo-700 transition-all flex items-center gap-2 active:scale-95 disabled:opacity-50 text-xs sm:text-sm cursor-pointer"
         >
           <Download :size="18" />
           <span class="hidden sm:inline">CSV</span>
@@ -1263,11 +1268,58 @@ onMounted(() => {
            </div>
         </div>
 
-        <!-- Empty Activities State -->
+        <!-- 1. Loading State -->
+        <div v-if="activitiesLoading || studentsLoading" class="p-16 flex flex-col items-center justify-center gap-3 text-slate-400">
+          <Loader2 class="w-8 h-8 animate-spin text-indigo-600 dark:text-indigo-400" />
+          <p class="text-sm font-bold text-slate-600 dark:text-slate-300">Cargando información del curso...</p>
+        </div>
+
+        <!-- 2. Empty Students State (Friendly Reassuring Message) -->
+        <div v-else-if="students.length === 0" class="p-8 sm:p-14 text-center animate-in fade-in duration-300">
+          <div class="max-w-xl mx-auto space-y-6">
+            <div class="w-16 h-16 sm:w-20 sm:h-20 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 rounded-3xl flex items-center justify-center mx-auto shadow-inner">
+              <Users class="w-8 h-8 sm:w-10 sm:h-10" />
+            </div>
+            
+            <div class="space-y-2">
+              <h4 class="text-base sm:text-xl font-black text-slate-900 dark:text-white">
+                Sin estudiantes matriculados en este curso
+              </h4>
+              <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 leading-relaxed font-medium">
+                Actualmente no hay estudiantes con matrícula activa en este grado y grupo. Mientras secretaría académica realiza la asignación, <strong>puedes avanzar en la planeación creando y configurando las actividades pedagógicas y evidencias DBA</strong>.
+              </p>
+            </div>
+
+            <!-- Resumen de actividades si ya fueron creadas -->
+            <div v-if="activities.length > 0" class="p-4 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/50 rounded-2xl text-left flex items-start gap-3.5 shadow-xs">
+              <CheckCircle class="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+              <div class="text-xs">
+                <p class="font-bold text-emerald-900 dark:text-emerald-300">
+                  {{ activities.length }} {{ activities.length === 1 ? 'actividad configurada' : 'actividades configuradas' }} ({{ totalPercentage }}% ponderado)
+                </p>
+                <p class="text-emerald-700 dark:text-emerald-400/90 mt-0.5 leading-relaxed">
+                  Tus actividades están listas y se vincularán automáticamente a los estudiantes tan pronto sean matriculados en la planilla.
+                </p>
+              </div>
+            </div>
+
+            <div class="pt-2 flex flex-wrap items-center justify-center gap-3">
+              <button 
+                @click="openDrawer"
+                class="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 py-3.5 rounded-2xl transition-all shadow-md shadow-indigo-100 dark:shadow-none hover:shadow-lg active:scale-95 cursor-pointer text-xs sm:text-sm"
+              >
+                <BookOpen :size="16" />
+                {{ isReadOnly ? 'Ver Actividades' : (activities.length > 0 ? 'Gestionar Actividades' : 'Configurar Actividades') }}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. Empty Activities State (When students exist, but no activities yet) -->
         <EmptyState
-          v-if="activities.length === 0 && students.length > 0"
+          v-else-if="activities.length === 0"
           title="No hay actividades creadas para este periodo"
-          description="Crea actividades y asigna evidencias DBA para comenzar a calificar."
+          description="Crea actividades y asigna evidencias DBA para comenzar a calificar a los estudiantes."
         >
           <template #icon>
             <ClipboardList :size="32" class="text-indigo-600" />
@@ -1283,6 +1335,14 @@ onMounted(() => {
             </button>
           </template>
         </EmptyState>
+
+        <!-- 4. Empty Search Results State -->
+        <div v-else-if="filteredStudents.length === 0" class="p-12 text-center animate-in fade-in duration-300">
+          <Search class="w-8 h-8 text-slate-400 mx-auto mb-2" />
+          <p class="text-sm font-bold text-slate-700 dark:text-slate-300">No se encontraron estudiantes</p>
+          <p class="text-xs text-slate-400 mt-1">Ningún estudiante coincide con "{{ studentSearch }}".</p>
+          <button @click="studentSearch = ''" class="mt-3 text-xs font-bold text-indigo-600 hover:underline cursor-pointer">Limpiar búsqueda</button>
+        </div>
 
         <!-- CARDS VIEW (Modo Evaluación Móvil) -->
         <div v-else-if="viewMode === 'cards'" class="p-4 sm:p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
