@@ -191,6 +191,7 @@ const activeSummary = computed(() => {
 })
 
 const maxGrade = ref<string>('5.0')
+const approvalGrade = ref<string>('3.0')
 
 // Computed Stats for 5 Cards
 const dashboardStats = computed(() => [
@@ -204,6 +205,7 @@ const dashboardStats = computed(() => [
 // Chart Configs
 const chartOptionsBase = computed(() => {
   const isDark = theme.isDark
+  const maxScaleVal = Number(maxGrade.value) > 0 ? Number(maxGrade.value) : 5
   return {
     responsive: true,
     maintainAspectRatio: false,
@@ -222,7 +224,7 @@ const chartOptionsBase = computed(() => {
     scales: {
       y: {
         beginAtZero: true,
-        max: 5,
+        max: maxScaleVal,
         grid: { color: isDark ? '#334155' : '#f1f5f9' },
         ticks: { color: isDark ? '#94a3b8' : '#64748b' }
       },
@@ -236,6 +238,7 @@ const chartOptionsBase = computed(() => {
 
 const horizontalOptions = computed(() => {
   const isDark = theme.isDark
+  const maxScaleVal = Number(maxGrade.value) > 0 ? Number(maxGrade.value) : 5
   return {
     responsive: true,
     maintainAspectRatio: false,
@@ -244,6 +247,7 @@ const horizontalOptions = computed(() => {
     scales: {
       x: {
         beginAtZero: true,
+        max: maxScaleVal,
         grid: { color: isDark ? '#334155' : '#f1f5f9' },
         ticks: { color: isDark ? '#94a3b8' : '#64748b' }
       },
@@ -653,6 +657,12 @@ const fetchDashboard = async () => {
     if (selectedPeriodId.value) params.periodId = selectedPeriodId.value
     const data = await academicService.getDashboard(schoolId.value, params)
     dashboardData.value = data
+    if (data.defaultSettings?.nota_maxima !== undefined && data.defaultSettings?.nota_maxima !== null) {
+      maxGrade.value = Number(data.defaultSettings.nota_maxima).toFixed(1)
+    }
+    if (data.defaultSettings?.nota_aprobacion !== undefined && data.defaultSettings?.nota_aprobacion !== null) {
+      approvalGrade.value = Number(data.defaultSettings.nota_aprobacion).toFixed(1)
+    }
   } catch (error) {
     console.error('Error fetching dashboard data:', error)
     fetchError.value = true
@@ -664,7 +674,7 @@ const fetchDashboard = async () => {
 const loadPeriods = async () => {
   if (!schoolId.value) return
   try {
-    const params: any = { keys: 'periods,tiposGrado,defaultSettings' }
+    const params: any = { keys: 'periods,tiposGrado,defaults,defaultSettings' }
     if (selectedYearId.value) {
       params.yearId = selectedYearId.value
     }
@@ -673,8 +683,11 @@ const loadPeriods = async () => {
     if (data.tiposGrado) {
       schoolGradesCatalog.value = (data.tiposGrado || []).map((g: any) => g.nombre).filter(Boolean)
     }
-    if (data.defaultSettings?.nota_maxima) {
+    if (data.defaultSettings?.nota_maxima !== undefined && data.defaultSettings?.nota_maxima !== null) {
       maxGrade.value = Number(data.defaultSettings.nota_maxima).toFixed(1)
+    }
+    if (data.defaultSettings?.nota_aprobacion !== undefined && data.defaultSettings?.nota_aprobacion !== null) {
+      approvalGrade.value = Number(data.defaultSettings.nota_aprobacion).toFixed(1)
     }
 
     // Set active period by default if none selected
@@ -1383,7 +1396,7 @@ onMounted(() => {
                 Estudiantes Reprobando - {{ selectedCriticalSubject.nombre }}
               </h3>
               <p class="text-xs text-slate-400 mt-1 font-medium">
-                Listado de estudiantes con promedio inferior a 3.0 en esta materia.
+                Listado de estudiantes con promedio inferior a la nota aprobatoria ({{ approvalGrade }}) en esta materia.
               </p>
             </div>
             <button 

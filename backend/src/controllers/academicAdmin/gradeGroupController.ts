@@ -778,7 +778,7 @@ export const getAcademicSettingsData = async (req: Request, res: Response): Prom
     const includeCompetencies = !requestedKeys || requestedKeys.includes('competencies');
     const includeClosures = !requestedKeys || requestedKeys.includes('closures');
     const includeDimensions = !requestedKeys || requestedKeys.includes('dimensions');
-    const includeDefaults = !requestedKeys || requestedKeys.includes('defaults');
+    const includeDefaults = !requestedKeys || requestedKeys.includes('defaults') || requestedKeys.includes('defaultSettings');
 
     // Auto-switch periods based on current date if periods are requested
     const runPeriodSchedules = !requestedKeys || requestedKeys.includes('periods');

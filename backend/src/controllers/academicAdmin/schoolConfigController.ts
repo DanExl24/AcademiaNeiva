@@ -50,6 +50,9 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
       targetYearId = await ensureAcademicYearForSchool(schoolId);
     }
 
+    const schoolSettings = await ensureSchoolDefaultSettings(schoolId);
+    const notaAprobacion = Number(schoolSettings?.nota_aprobacion ?? 3.0);
+
     // 1. Get active or latest period within the target year if not provided or if invalid for targetYearId
     let targetPeriodId = periodId ? Number(periodId) : null;
     if (targetPeriodId) {
@@ -240,11 +243,11 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
         `${buildLiveCTE()}
          SELECT 
            AVG(promedio) as avg_general,
-           COUNT(DISTINCT id_estudiante) FILTER (WHERE promedio < 3.0) as at_risk
+           COUNT(DISTINCT id_estudiante) FILTER (WHERE promedio < $3) as at_risk
          FROM current_results cr
          JOIN detalle_grados dg ON cr.id_detallegrado = dg.id_detallegrado
          WHERE dg.id_colegio = $1`,
-        [schoolId, targetPeriodId]
+        [schoolId, targetPeriodId, notaAprobacion]
       );
       performanceMetrics.average = Number(Number(perfRes.rows[0]?.avg_general || 0).toFixed(2));
       performanceMetrics.atRisk = Number(perfRes.rows[0]?.at_risk || 0);
@@ -254,14 +257,14 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
          SELECT 
            tg.nombre as grade,
            AVG(cr.promedio) as avg_general,
-           COUNT(DISTINCT cr.id_estudiante) FILTER (WHERE cr.promedio < 3.0) as at_risk
+           COUNT(DISTINCT cr.id_estudiante) FILTER (WHERE cr.promedio < $3) as at_risk
          FROM current_results cr
          JOIN detalle_grados dg ON cr.id_detallegrado = dg.id_detallegrado
          JOIN grupos g ON dg.id_grupo = g.id_grupo
          JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
          WHERE dg.id_colegio = $1
          GROUP BY tg.nombre`,
-        [schoolId, targetPeriodId]
+        [schoolId, targetPeriodId, notaAprobacion]
       );
 
 
@@ -537,11 +540,11 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
            JOIN grupos g ON dg.id_grupo = g.id_grupo
            JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
            JOIN secciones s ON g.id_seccion = s.id_seccion
-           WHERE dg.id_colegio = $1 AND cr.promedio < 3.0
+           WHERE dg.id_colegio = $1 AND cr.promedio < $3
            GROUP BY m.id_materia, m.nombre
            ORDER BY failures DESC
            LIMIT 5`,
-          [schoolId, targetPeriodId]
+          [schoolId, targetPeriodId, notaAprobacion]
         ),
         // Concentration of unique students at risk by grade level
         pool.query(
@@ -551,10 +554,10 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
            JOIN detalle_grados dg ON cr.id_detallegrado = dg.id_detallegrado
            JOIN grupos g ON dg.id_grupo = g.id_grupo
            JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
-           WHERE dg.id_colegio = $1 AND cr.promedio < 3.0
+           WHERE dg.id_colegio = $1 AND cr.promedio < $3
            GROUP BY tg.id_tipo_grado, tg.nombre
            ORDER BY alerts DESC`,
-          [schoolId, targetPeriodId]
+          [schoolId, targetPeriodId, notaAprobacion]
         ),
         // Per-group risk: students failing at least one subject vs students passing everything
         pool.query(
@@ -563,7 +566,7 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
              SELECT 
                cr.id_estudiante,
                dg.id_grupo,
-               bool_or(cr.promedio < 3.0) as is_at_risk
+               bool_or(cr.promedio < $3) as is_at_risk
              FROM current_results cr
              JOIN detalle_grados dg ON cr.id_detallegrado = dg.id_detallegrado
              WHERE dg.id_colegio = $1
@@ -584,7 +587,7 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
             JOIN jornada j ON g.id_jornada = j.id_jornada
             GROUP BY g.id_grupo, tg.nombre, s.nombre, j.nombre
             ORDER BY at_risk DESC`,
-          [schoolId, targetPeriodId]
+          [schoolId, targetPeriodId, notaAprobacion]
         ),
         pool.query(
           `${buildLiveCTE()}
@@ -594,11 +597,11 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
              dg.id_grupo,
              tg.nombre as grado_nombre,
              (tg.nombre || ' ' || s.nombre) as curso,
-             COUNT(*) FILTER (WHERE cr.promedio < 3.0)::int as materias_reprobadas,
+             COUNT(*) FILTER (WHERE cr.promedio < $3)::int as materias_reprobadas,
              ROUND(AVG(cr.promedio), 2)::numeric as promedio_general,
              JSON_AGG(
                JSON_BUILD_OBJECT('materia_nombre', m.nombre, 'promedio', cr.promedio)
-             ) FILTER (WHERE cr.promedio < 3.0) as detalles_materias
+             ) FILTER (WHERE cr.promedio < $3) as detalles_materias
            FROM current_results cr
            JOIN detalle_grados dg ON cr.id_detallegrado = dg.id_detallegrado
            JOIN materias m ON dg.id_materia = m.id_materia
@@ -608,9 +611,9 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
            JOIN secciones s ON g.id_seccion = s.id_seccion
            WHERE dg.id_colegio = $1
            GROUP BY cr.id_estudiante, e.nombre, e.apellido, dg.id_grupo, tg.nombre, s.nombre
-           HAVING bool_or(cr.promedio < 3.0)
+           HAVING bool_or(cr.promedio < $3)
            ORDER BY materias_reprobadas DESC, promedio_general ASC`,
-          [schoolId, targetPeriodId]
+          [schoolId, targetPeriodId, notaAprobacion]
         )
       ]);
 
@@ -663,7 +666,8 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
       observationsSummary,
       charts,
       lowPerformance,
-      activePeriodInfo
+      activePeriodInfo,
+      defaultSettings: schoolSettings
     });
   } catch (error: any) {
     console.error("Error fetching directivo dashboard:", error);
