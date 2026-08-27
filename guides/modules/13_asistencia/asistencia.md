@@ -77,11 +77,13 @@ Este módulo gestiona el registro diario y el ausentismo escolar de los estudian
 
 | Columna | Tipo | Descripción |
 |---|---|---|
-| `id_asistencia` | SERIAL PK | Identificador único del registro. |
+| `id_registroasistencia` | SERIAL PK | Identificador único del registro. |
 | `id_estudiante` | INT FK | Estudiante calificado. |
 | `id_detallegrado` | INT FK | Asignación de curso y materia. |
 | `fecha` | TIMESTAMPTZ | Fecha de la toma de asistencia (de control para periodos). |
 | `estado` | `estado_asistencia` | `PRESENTE`, `AUSENTE`, `TARDE`, `JUSTIFICADA`. |
+| `hora_llegada` | TIME | Hora de ingreso al aula. Solo aplica cuando `estado = 'TARDE'`. |
+| `justificacion` | TEXT \| NULL | Texto explicativo de la inasistencia justificada. Nulo si no aplica. |
 | `id_colegio` | INT FK | Colegio propietario. |
 
 ### Types relevantes
