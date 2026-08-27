@@ -85,9 +85,21 @@ const fetchPeriods = async () => {
   if (!selectedChildId.value || !selectedYear.value) return
   try {
     const res = await studentService.getAllPeriods(selectedChildId.value, selectedYear.value)
-    periods.value = (res || []).filter((p: any) => p.estado !== 'PENDIENTE')
-    if (periods.value.length > 0) {
-      selectedPeriod.value = periods.value[periods.value.length - 1].id_periodo
+    const filtered = (res || []).filter((p: any) => p.estado !== 'PENDIENTE')
+    periods.value = filtered
+
+    if (filtered.length > 0) {
+      const newPeriodId = filtered[filtered.length - 1].id_periodo
+      if (newPeriodId === selectedPeriod.value) {
+        // El watcher no se dispararía porque el valor no cambia; llamamos manualmente
+        await fetchObservations()
+      } else {
+        selectedPeriod.value = newPeriodId
+        // El watcher de selectedPeriod se encargará de llamar fetchObservations
+      }
+    } else {
+      selectedPeriod.value = null
+      observations.value = []
     }
   } catch (err) {
     console.error("Error fetching periods:", err)
@@ -125,7 +137,15 @@ watch(selectedChildId, async (newVal) => {
   }
 })
 
-watch(selectedYear, fetchPeriods)
+watch(selectedYear, async (newVal) => {
+  if (newVal) {
+    // Limpiar estado del año anterior antes de cargar los periodos del nuevo año
+    selectedPeriod.value = null
+    periods.value = []
+    observations.value = []
+    await fetchPeriods()
+  }
+})
 watch(selectedPeriod, fetchObservations)
 watch(selectedType, fetchObservations)
 
