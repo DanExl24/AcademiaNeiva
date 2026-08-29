@@ -36,8 +36,6 @@ const parentEmail = ref('')
 const parentPhone = ref('')
 const reason = ref('')
 const observations = ref('')
-const hasDisability = ref(false)
-const isForeign = ref(false)
 
 // Existing students search
 const schoolStudents = ref<any[]>([])
@@ -54,7 +52,8 @@ const filteredStudents = computed(() => {
     .filter(s => 
       (s.nombre && s.nombre.toLowerCase().includes(q)) ||
       (s.apellido && s.apellido.toLowerCase().includes(q)) ||
-      (s.numero_documento && s.numero_documento.includes(q))
+      (s.documento && s.documento.toLowerCase().includes(q)) ||
+      (s.numero_documento && s.numero_documento.toLowerCase().includes(q))
     )
     .slice(0, 15)
 })
@@ -81,6 +80,7 @@ watch(() => studentMode.value, (newMode) => {
     fetchStudents()
   } else {
     selectedStudentId.value = null
+    studentSearchQuery.value = ''
   }
 })
 
@@ -92,8 +92,6 @@ watch(() => props.isOpen, (open) => {
     parentPhone.value = ''
     reason.value = ''
     observations.value = ''
-    hasDisability.value = false
-    isForeign.value = false
     selectedStudentId.value = null
     studentSearchQuery.value = ''
   }
@@ -101,13 +99,31 @@ watch(() => props.isOpen, (open) => {
 
 const selectStudent = (student: any) => {
   selectedStudentId.value = student.id_estudiante
-  studentSearchQuery.value = `${student.nombre} ${student.apellido} (${student.numero_documento})`
-  if (student.correo_acudiente && !parentEmail.value) {
-    parentEmail.value = student.correo_acudiente
+  const doc = student.documento || student.numero_documento || ''
+  studentSearchQuery.value = doc 
+    ? `${student.nombre} ${student.apellido} (${doc})` 
+    : `${student.nombre} ${student.apellido}`
+
+  // Rellenar automáticamente los campos del acudiente / padre de familia
+  const acudienteNombre = [student.acudiente_nombre, student.acudiente_apellido].filter(Boolean).join(' ') || student.nombre_acudiente || ''
+  if (acudienteNombre) {
+    parentName.value = acudienteNombre
   }
-  if (student.nombre_acudiente && !parentName.value) {
-    parentName.value = student.nombre_acudiente
+
+  const acudienteCorreo = student.acudiente_email || student.correo_acudiente || student.email || ''
+  if (acudienteCorreo) {
+    parentEmail.value = acudienteCorreo
   }
+
+  const acudienteTel = student.acudiente_telefono || student.telefono_acudiente || student.telefono || ''
+  if (acudienteTel) {
+    parentPhone.value = acudienteTel
+  }
+}
+
+const clearSelectedStudent = () => {
+  selectedStudentId.value = null
+  studentSearchQuery.value = ''
 }
 
 const handleSubmit = async () => {
@@ -134,9 +150,7 @@ const handleSubmit = async () => {
       telefono: parentPhone.value.trim() || undefined,
       id_estudiante: studentMode.value === 'EXISTENTE' ? selectedStudentId.value : null,
       motivo: reason.value.trim(),
-      observaciones: observations.value.trim() || undefined,
-      tiene_discapacidad: hasDisability.value,
-      es_extranjero: isForeign.value
+      observaciones: observations.value.trim() || undefined
     }
 
     const res = await supportService.authorizeExtraordinaryEnrollment(payload)
@@ -266,7 +280,7 @@ const handleSubmit = async () => {
               class="p-2.5 hover:bg-indigo-50 dark:hover:bg-slate-700/60 cursor-pointer flex items-center justify-between text-xs"
             >
               <span class="font-bold text-slate-800 dark:text-slate-200">{{ s.nombre }} {{ s.apellido }}</span>
-              <span class="text-[10px] text-slate-400 font-mono">Doc: {{ s.numero_documento }}</span>
+              <span class="text-[10px] text-slate-400 font-mono">Doc: {{ s.documento || s.numero_documento || 'S/D' }}</span>
             </div>
           </div>
 
@@ -275,7 +289,7 @@ const handleSubmit = async () => {
               <CheckCircle2 :size="15" />
               Estudiante seleccionado: {{ selectedStudent.nombre }} {{ selectedStudent.apellido }}
             </span>
-            <button type="button" @click="selectedStudentId = null" class="text-[10px] underline hover:text-emerald-950">Cambiar</button>
+            <button type="button" @click="clearSelectedStudent" class="text-[10px] underline hover:text-emerald-950 dark:hover:text-white cursor-pointer">Cambiar</button>
           </div>
         </div>
 
@@ -313,45 +327,19 @@ const handleSubmit = async () => {
           </div>
         </div>
 
-        <!-- Phone & Checks -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
-          <div>
-            <label class="block text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
-              Teléfono (Opcional)
-            </label>
-            <div class="relative">
-              <Phone :size="16" class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input 
-                v-model="parentPhone"
-                type="tel"
-                placeholder="3001234567"
-                class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-medium focus:ring-2 focus:ring-indigo-500 outline-none"
-              />
-            </div>
-          </div>
-
-          <div class="flex items-center gap-2 pt-4">
+        <!-- Phone Field -->
+        <div>
+          <label class="block text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
+            Teléfono (Opcional)
+          </label>
+          <div class="relative">
+            <Phone :size="16" class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
             <input 
-              v-model="hasDisability"
-              id="extra_discapacidad"
-              type="checkbox"
-              class="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+              v-model="parentPhone"
+              type="tel"
+              placeholder="3001234567"
+              class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-medium focus:ring-2 focus:ring-indigo-500 outline-none"
             />
-            <label for="extra_discapacidad" class="text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer">
-              Discapacidad diagnosticada
-            </label>
-          </div>
-
-          <div class="flex items-center gap-2 pt-4">
-            <input 
-              v-model="isForeign"
-              id="extra_extranjero"
-              type="checkbox"
-              class="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-            />
-            <label for="extra_extranjero" class="text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer">
-              Nacionalidad extranjera
-            </label>
           </div>
         </div>
 
@@ -387,7 +375,7 @@ const handleSubmit = async () => {
           <button 
             type="button" 
             @click="emit('close')"
-            class="px-5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            class="px-5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
           >
             Cancelar
           </button>
@@ -395,7 +383,7 @@ const handleSubmit = async () => {
           <button 
             type="submit"
             :disabled="loading"
-            class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-black text-xs shadow-lg shadow-amber-500/25 transition-all flex items-center gap-2 disabled:opacity-50"
+            class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-black text-xs shadow-lg shadow-amber-500/25 transition-all flex items-center gap-2 disabled:opacity-50 cursor-pointer"
           >
             <Send v-if="!loading" :size="15" />
             <div v-else class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>

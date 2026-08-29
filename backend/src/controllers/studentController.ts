@@ -48,6 +48,7 @@ export const getAllStudents = async (req: Request, res: Response) => {
       SELECT e.*, 
              u.email, 
              u.documento as documento,
+             u.documento as numero_documento,
              u.id_tipodocumento as id_tipodocumento,
              td.tipo as tipo_documento_nombre,
              n.nombre as nivel_nombre,
@@ -64,7 +65,12 @@ export const getAllStudents = async (req: Request, res: Response) => {
              END as grado_seccion,
              pf.nombre as acudiente_nombre,
              pf.apellido as acudiente_apellido,
+             TRIM(CONCAT(COALESCE(pf.nombre, ''), ' ', COALESCE(pf.apellido, ''))) as nombre_acudiente,
              u_pf.documento as acudiente_documento,
+             COALESCE(u_pf.email, m.correo_padre) as acudiente_email,
+             COALESCE(u_pf.email, m.correo_padre) as correo_acudiente,
+             u_pf.telefono as acudiente_telefono,
+             u_pf.telefono as telefono_acudiente,
              (${estadoVigenteExpr}) AS estado_vigente
       FROM estudiante e
       LEFT JOIN usuario u ON e.id_usuario = u.id_usuario
