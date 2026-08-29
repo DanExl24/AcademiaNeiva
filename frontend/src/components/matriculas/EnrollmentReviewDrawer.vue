@@ -64,7 +64,7 @@ const hasUploadedDocs = computed(() => {
 const copiedLink = ref(false)
 const copyTrackingLink = async () => {
   if (!props.matricula?.token_seguimiento) return
-  const url = `${window.location.origin}/matricula/corregir/${props.matricula.token_seguimiento}`
+  const url = `${window.location.origin}/matricula?token=${props.matricula.token_seguimiento}`
   try {
     await navigator.clipboard.writeText(url)
     copiedLink.value = true

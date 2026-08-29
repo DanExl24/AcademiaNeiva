@@ -48,15 +48,35 @@ export class MatriculaService {
 
     const cleanEmail = String(parentEmail).trim().toLowerCase();
 
-    // Validar que el correo electrónico fue verificado previamente mediante OTP de 6 dígitos
-    const isEmailVerified = await EmailVerificationService.isVerified({
-      email: cleanEmail,
-      tipo: 'MATRICULA_NUEVA',
-      maxAgeHours: 2
-    });
+    // 1. Detectar si viene con token de matrícula extraordinaria
+    let isExtraordinary = false;
+    let existingExtraordinaryMatricula: any = null;
 
-    if (!isEmailVerified) {
-      throw new Error("Debes verificar la existencia de tu correo electrónico con el código de 6 dígitos antes de enviar el formulario de matrícula.");
+    if (data.token) {
+      const extraRes = await db
+        .selectFrom("matricula")
+        .select(["id_matricula", "token_seguimiento", "id_colegio", "id_anio", "tipo", "correo_padre"])
+        .where("token_seguimiento", "=", String(data.token).trim())
+        .where("tipo", "=", "EXTRAORDINARIA")
+        .executeTakeFirst();
+
+      if (extraRes) {
+        isExtraordinary = true;
+        existingExtraordinaryMatricula = extraRes;
+      }
+    }
+
+    // 2. Si no es matrícula extraordinaria autorizada, validar OTP obligatorio
+    if (!isExtraordinary) {
+      const isEmailVerified = await EmailVerificationService.isVerified({
+        email: cleanEmail,
+        tipo: 'MATRICULA_NUEVA',
+        maxAgeHours: 2
+      });
+
+      if (!isEmailVerified) {
+        throw new Error("Debes verificar la existencia de tu correo electrónico con el código de 6 dígitos antes de enviar el formulario de matrícula.");
+      }
     }
 
     // --- Validación de documentos ---
@@ -66,8 +86,8 @@ export class MatriculaService {
     const required: string[] = [...ALWAYS_REQUIRED];
     if (!isHigher) required.push(...REQUIRED_FOR_LOWER_LEVELS);
     if (!isPre)    required.push(...REQUIRED_NOT_INFANT);
-    if (isForeigner  === 'true') required.push('visa');
-    if (hasDisability === 'true') required.push('certificadoDiscapacidad');
+    if (isForeigner  === 'true' || isForeigner === true) required.push('visa');
+    if (hasDisability === 'true' || hasDisability === true) required.push('certificadoDiscapacidad');
 
     for (const doc of required) {
       if (!files[doc] || (files[doc] as any[]).length === 0) {
@@ -78,7 +98,7 @@ export class MatriculaService {
     const result = await db.transaction().execute(async (trx) => {
       let idMatricula: number = 0;
       let tokenSeguimiento: string = '';
-      let isExtraordinary = false;
+      const resolvedColegioId = Number(id_colegio || existingExtraordinaryMatricula?.id_colegio);
 
       const parentPhone = data.parentPhone || data.telefono || null;
       if (parentPhone) {
@@ -109,27 +129,41 @@ export class MatriculaService {
         }
       }
 
-      if (data.token) {
-        const extraRes = await trx
-          .selectFrom("matricula")
-          .select(["id_matricula", "token_seguimiento", "id_colegio", "id_anio", "tipo"])
-          .where("token_seguimiento", "=", data.token)
-          .where("tipo", "=", "EXTRAORDINARIA")
-          .executeTakeFirst();
+      if (isExtraordinary && existingExtraordinaryMatricula) {
+        // Trámite Extraordinario: reutilizar y actualizar la matrícula existente
+        idMatricula = existingExtraordinaryMatricula.id_matricula;
+        tokenSeguimiento = existingExtraordinaryMatricula.token_seguimiento || "";
 
-        if (extraRes) {
-          isExtraordinary = true;
-          idMatricula = extraRes.id_matricula;
-          tokenSeguimiento = extraRes.token_seguimiento || "";
+        let resolvedNivelId: number | null = null;
+        if (data.grade) {
+          const grupoInfo = await trx
+            .selectFrom('grupos as g')
+            .innerJoin('tipo_grado as tg', 'g.id_tipo_grado', 'tg.id_tipo_grado')
+            .select(['g.id_nivel as g_nivel', 'tg.id_nivel as tg_nivel'])
+            .where('g.id_grupo', '=', Number(data.grade))
+            .executeTakeFirst();
+
+          resolvedNivelId = grupoInfo?.g_nivel || grupoInfo?.tg_nivel || null;
         }
-      }
 
-      if (!isExtraordinary) {
-        // Fetch active year for the school
+        await trx
+          .updateTable("matricula")
+          .set({
+            id_nivel: resolvedNivelId,
+            id_grupo: data.grade ? Number(data.grade) : null,
+            tiene_discapacidad: hasDisability === 'true' || hasDisability === true,
+            es_extranjero: isForeigner === 'true' || isForeigner === true,
+            correo_padre: cleanEmail,
+            estado: 'PENDIENTE'
+          })
+          .where("id_matricula", "=", idMatricula)
+          .execute();
+      } else {
+        // Trámite Regular: Validar fechas de configuración y año lectivo abierto
         const yearRes = await trx
           .selectFrom("anio_lectivo")
           .select("id_anio")
-          .where("id_colegio", "=", Number(id_colegio))
+          .where("id_colegio", "=", resolvedColegioId)
           .where("estado", "=", "ABIERTO")
           .orderBy("id_anio", "desc")
           .executeTakeFirst();
@@ -139,11 +173,10 @@ export class MatriculaService {
         }
         const activeYearId = yearRes.id_anio;
 
-        // Validate enrollment configuration dates and state
         const configRes = await trx
           .selectFrom("configuracion_inscripcion")
           .select(["fecha_inicio", "fecha_cierre", "habilitada"])
-          .where("id_colegio", "=", Number(id_colegio))
+          .where("id_colegio", "=", resolvedColegioId)
           .where("id_anio", "=", activeYearId)
           .executeTakeFirst();
 
@@ -166,7 +199,6 @@ export class MatriculaService {
           throw new Error(`Las inscripciones ya cerraron. Finalizaron el ${end.toLocaleDateString('es-CO')}.`);
         }
 
-        // Obtener el id_nivel a partir del grupo seleccionado
         const grupoInfo = await trx
           .selectFrom('grupos as g')
           .innerJoin('tipo_grado as tg', 'g.id_tipo_grado', 'tg.id_tipo_grado')
@@ -176,51 +208,27 @@ export class MatriculaService {
 
         const resolvedNivelId = grupoInfo?.g_nivel || grupoInfo?.tg_nivel || null;
 
-        // Insertar nueva matrícula regular
         const matRes = await trx
           .insertInto("matricula")
           .values({
             id_estudiante: null,
             id_nivel: resolvedNivelId,
             id_grupo: Number(data.grade),
-            id_colegio: Number(id_colegio),
+            id_colegio: resolvedColegioId,
             id_anio: activeYearId,
             estado: 'PENDIENTE',
-            correo_padre: parentEmail,
-            tiene_discapacidad: hasDisability === 'true',
-            es_extranjero: isForeigner === 'true'
+            correo_padre: cleanEmail,
+            tiene_discapacidad: hasDisability === 'true' || hasDisability === true,
+            es_extranjero: isForeigner === 'true' || isForeigner === true
           })
           .returning(["id_matricula", "token_seguimiento"])
           .executeTakeFirstOrThrow();
 
         idMatricula = matRes.id_matricula;
         tokenSeguimiento = matRes.token_seguimiento || "";
-      } else {
-        // Obtener el id_nivel para la matrícula extraordinaria
-        const grupoInfo = await trx
-          .selectFrom('grupos as g')
-          .innerJoin('tipo_grado as tg', 'g.id_tipo_grado', 'tg.id_tipo_grado')
-          .select(['g.id_nivel as g_nivel', 'tg.id_nivel as tg_nivel'])
-          .where('g.id_grupo', '=', Number(data.grade))
-          .executeTakeFirst();
-
-        const resolvedNivelId = grupoInfo?.g_nivel || grupoInfo?.tg_nivel || null;
-
-        // Actualizar la matrícula extraordinaria pre-creada con el grupo y datos del formulario
-        await trx
-          .updateTable("matricula")
-          .set({
-            id_nivel: resolvedNivelId,
-            id_grupo: Number(data.grade),
-            tiene_discapacidad: hasDisability === 'true' || hasDisability === true,
-            es_extranjero: isForeigner === 'true' || isForeigner === true,
-            estado: 'PENDIENTE'
-          })
-          .where("id_matricula", "=", idMatricula)
-          .execute();
       }
 
-      // 2. Guardar documentos en tabla documento_matriculas
+      // Guardar documentos en tabla documento_matriculas
       for (const [key, fileArray] of Object.entries(files)) {
         const file = (fileArray as any[])[0];
         if (file) {
@@ -233,7 +241,7 @@ export class MatriculaService {
               url: filename,
               estado: 'PENDIENTE',
               fecha: new Date(),
-              id_colegio: Number(id_colegio),
+              id_colegio: resolvedColegioId,
               contenido: file.buffer || null,
               mime_type: file.mimetype || null,
               nombre_original: file.originalname || filename,
@@ -244,7 +252,9 @@ export class MatriculaService {
       }
 
       return {
-        message: "Solicitud de matrícula radicada exitosamente",
+        message: isExtraordinary
+          ? "Documentación de matrícula extraordinaria radicada exitosamente"
+          : "Solicitud de matrícula radicada exitosamente",
         id_matricula: idMatricula,
         token_seguimiento: tokenSeguimiento
       };

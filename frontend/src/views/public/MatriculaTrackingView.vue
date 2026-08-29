@@ -202,8 +202,29 @@ onMounted(() => {
               </p>
             </div>
 
+            <!-- Call to action si es Matrícula Extraordinaria pendiente de cargue inicial -->
+            <div v-if="matricula.tipo === 'EXTRAORDINARIA' && (!matricula.documentos || matricula.documentos.length === 0)" class="mt-6 p-6 bg-amber-50 border border-amber-200 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4">
+              <div class="flex items-start gap-3">
+                <div class="p-2 bg-amber-100 text-amber-700 rounded-xl shrink-0 mt-0.5">
+                  <AlertTriangle :size="20" />
+                </div>
+                <div>
+                  <h4 class="text-sm font-black text-amber-900">Autorización Extraordinaria Habilitada</h4>
+                  <p class="text-xs text-amber-800 mt-1">
+                    Cuentas con autorización institucional para radicar tu matrícula. Completa el formulario de inscripción y sube los documentos requeridos.
+                  </p>
+                </div>
+              </div>
+              <router-link 
+                :to="`/matricula?token=${matricula.token_seguimiento}`" 
+                class="bg-amber-600 text-white text-xs font-black px-5 py-3 rounded-xl hover:bg-amber-700 transition-all shadow-md active:scale-95 whitespace-nowrap cursor-pointer"
+              >
+                Completar Matrícula
+              </router-link>
+            </div>
+
             <!-- Call to action if action required (CORRECCION / RECHAZADA) -->
-            <div v-if="matricula.estado === 'CORRECCION' || matricula.estado === 'RECHAZADA'" class="mt-6 p-6 bg-red-50 border border-red-100 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4">
+            <div v-else-if="matricula.estado === 'CORRECCION' || matricula.estado === 'RECHAZADA'" class="mt-6 p-6 bg-red-50 border border-red-100 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4">
               <div class="flex items-start gap-3">
                 <div class="p-2 bg-red-100 text-red-600 rounded-lg shrink-0 mt-0.5">
                   <AlertTriangle :size="20" />
@@ -217,7 +238,7 @@ onMounted(() => {
               </div>
               <router-link 
                 :to="`/matricula/corregir/${matricula.token_seguimiento}`" 
-                class="bg-red-600 text-white text-xs font-bold px-4 py-2.5 rounded-xl hover:bg-red-700 transition-colors shadow-sm active:scale-95 whitespace-nowrap"
+                class="bg-red-600 text-white text-xs font-bold px-4 py-2.5 rounded-xl hover:bg-red-700 transition-colors shadow-sm active:scale-95 whitespace-nowrap cursor-pointer"
               >
                 Corregir Documentación
               </router-link>

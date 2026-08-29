@@ -314,8 +314,8 @@ export class NotificationService {
         <p style="line-height: 1.6;">Para continuar con el proceso, debes ingresar al siguiente enlace para cargar la documentación requerida y reservar tu cupo:</p>
 
         <div style="text-align: center; margin-top: 30px;">
-          <a href="${FRONTEND_URL}/matricula/corregir/${token}" style="background-color: #10b981; color: white; padding: 16px 32px; border-radius: 12px; text-decoration: none; font-weight: 700; display: inline-block; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
-            Cargar Documentación
+          <a href="${FRONTEND_URL}/matricula?token=${token}" style="background-color: #10b981; color: white; padding: 16px 32px; border-radius: 12px; text-decoration: none; font-weight: 700; display: inline-block; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+            Completar Matrícula y Cargar Documentos
           </a>
         </div>
 

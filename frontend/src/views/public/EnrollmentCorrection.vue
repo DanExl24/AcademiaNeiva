@@ -40,10 +40,19 @@ const fetchDetails = async () => {
   try {
     const data = await enrollmentService.getDetails(token)
     matricula.value = data
+
+    // Si es extraordinaria y aún no tiene documentos radicados, redirigir al formulario completo de matrícula
+    if (data && data.tipo === 'EXTRAORDINARIA' && (!data.documentos || data.documentos.length === 0)) {
+      router.replace(`/matricula?token=${token}`)
+      return
+    }
+
     // Inicializar objeto de nuevos archivos
-    matricula.value.documentos.forEach((doc: any) => {
-      newFiles.value[doc.tipo_documento] = null
-    })
+    if (matricula.value.documentos && Array.isArray(matricula.value.documentos)) {
+      matricula.value.documentos.forEach((doc: any) => {
+        newFiles.value[doc.tipo_documento] = null
+      })
+    }
   } catch (error) {
     notify.addNotification('El enlace es inválido o ha expirado', 'error')
     router.push('/')

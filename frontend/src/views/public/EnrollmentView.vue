@@ -9,15 +9,15 @@ import {
   ArrowLeft, 
   Send, 
   CheckCircle2, 
-  FileText, 
-  Camera, 
   AlertCircle, 
   Calendar, 
   CalendarDays, 
   ShieldCheck, 
   Timer, 
   RefreshCw, 
-  Phone 
+  Phone,
+  Sparkles,
+  Check
 } from 'lucide-vue-next'
 
 const route = useRoute()
@@ -75,6 +75,7 @@ const fetchGrados = async () => {
 
 const isExtraordinaryToken = ref(false)
 const extraordinaryTokenValue = ref<string | null>(null)
+const extraordinaryInfo = ref<any>(null)
 
 onMounted(async () => {
   await fetchInitialData()
@@ -85,15 +86,25 @@ onMounted(async () => {
       if (res && res.tipo === 'EXTRAORDINARIA') {
         isExtraordinaryToken.value = true
         extraordinaryTokenValue.value = token
+        extraordinaryInfo.value = res
+        isEmailVerified.value = true // Token directivo valida el correo
         if (res.correo_padre) {
           formData.value.parentEmail = res.correo_padre
         }
         if (res.id_colegio) {
           schoolId.value = String(res.id_colegio)
         }
+        if (res.tiene_discapacidad) {
+          formData.value.hasDisability = Boolean(res.tiene_discapacidad)
+        }
+        if (res.es_extranjero) {
+          formData.value.isForeigner = Boolean(res.es_extranjero)
+        }
+        await fetchGrados()
+        await fetchEnrollmentConfig()
       }
     } catch (e) {
-      console.log('No es un token de inscripción extraordinaria válido')
+      console.log('No es un token de inscripción extraordinaria válido', e)
     }
   }
 })
@@ -121,7 +132,6 @@ const fetchEnrollmentConfig = async () => {
     loadingConfig.value = false
   }
 }
-
 
 const formattedFechaInicio = computed(() => {
   if (!enrollmentConfig.value?.fecha_inicio) return 'No configurada'
@@ -165,13 +175,6 @@ const isEnrollmentOpen = computed(() => {
   return now >= start && now <= end
 })
 
-const submitButtonText = computed(() => {
-  if (!isExtraordinaryToken.value && schoolId.value && enrollmentConfig.value && !enrollmentConfig.value.habilitada) {
-    return 'DESHABILITADO'
-  }
-  return 'Cargar Documentos'
-})
-
 const isFutureYear = computed(() => {
   if (!yearLabel.value) return false
   const match = yearLabel.value.match(/\d{4}/)
@@ -201,7 +204,7 @@ const enrollmentContextSubtitle = computed(() => {
 
 const enrollmentStatusMessage = computed(() => {
   if (isExtraordinaryToken.value) {
-    return '⚡ Acceso Habilitado por Autorización de Matrícula Extraordinaria.'
+    return '⚡ Acceso preferencial habilitado por autorización directiva institucional.'
   }
   if (!schoolId.value) return ''
   if (!enrollmentConfig.value) {
@@ -233,9 +236,11 @@ const enrollmentStatusMessage = computed(() => {
 })
 
 watch(schoolId, () => {
-  level.value = ''
-  selectedTipoGrado.value = ''
-  grade.value = ''
+  if (!isExtraordinaryToken.value) {
+    level.value = ''
+    selectedTipoGrado.value = ''
+    grade.value = ''
+  }
   fetchGrados()
   fetchEnrollmentConfig()
 })
@@ -265,13 +270,12 @@ const availableJornadas = computed(() => {
   if (!selectedTipoGrado.value) return []
   const filtered = allGrados.value.filter(g => g.nivel === level.value && g.tipo_grado === selectedTipoGrado.value)
   
-  // Agrupar por nombre de jornada
   const grouped: Record<string, any> = {}
   filtered.forEach(g => {
     const name = g.jornada || 'ÚNICA'
     if (!grouped[name]) {
       grouped[name] = {
-        id: g.id_grado, // Tomamos el primero como referencia
+        id: g.id_grado,
         name: name,
         cupos: 0
       }
@@ -300,8 +304,8 @@ const handleFileUpload = (event: Event, key: string) => {
   const target = event.target as HTMLInputElement
   if (target.files && target.files.length > 0) {
     const file = target.files[0]
-    if (file.size > 2 * 1024 * 1024) {
-      alert('El archivo no puede superar los 2MB')
+    if (file.size > 5 * 1024 * 1024) {
+      notify.addNotification('El archivo no puede superar los 5MB', 'warning')
       target.value = ''
       return
     }
@@ -341,7 +345,7 @@ const formattedCountdown = computed(() => {
 
 const startTimer = () => {
   if (timerInterval) clearInterval(timerInterval)
-  countdownSeconds.value = 900 // 15 minutos
+  countdownSeconds.value = 900
   timerInterval = setInterval(() => {
     if (countdownSeconds.value > 0) {
       countdownSeconds.value--
@@ -381,8 +385,12 @@ const proceedToVerification = async () => {
     return
   }
   isVerifyingScreen.value = true
-  isPhoneStep.value = false
-  await sendVerificationCode()
+  if (isExtraordinaryToken.value || isEmailVerified.value) {
+    isPhoneStep.value = true
+  } else {
+    isPhoneStep.value = false
+    await sendVerificationCode()
+  }
 }
 
 const verifyAndSubmit = async () => {
@@ -428,7 +436,6 @@ const nextStep = () => {
   }
 
   if (step.value === 2) {
-    // Verificar que todos los docs visibles estén cargados
     const missingDocs: string[] = []
     for (const key of Object.keys(files.value)) {
       if (showDoc(key) && !files.value[key]) {
@@ -438,6 +445,11 @@ const nextStep = () => {
     if (missingDocs.length > 0) {
       notify.addNotification(`Documentos faltantes: ${missingDocs.join(', ')}`, 'warning')
       return
+    }
+
+    if (isExtraordinaryToken.value || isEmailVerified.value) {
+      isVerifyingScreen.value = true
+      isPhoneStep.value = true
     }
   }
 
@@ -463,7 +475,6 @@ const submitEnrollment = async () => {
   try {
     const formDataPayload = new FormData()
     
-    // Datos básicos
     formDataPayload.append('id_colegio', schoolId.value)
     formDataPayload.append('parentEmail', formData.value.parentEmail)
     formDataPayload.append('parentPhone', cleanPhone)
@@ -477,7 +488,6 @@ const submitEnrollment = async () => {
       formDataPayload.append('token', extraordinaryTokenValue.value)
     }
 
-    // Archivos
     for (const [key, file] of Object.entries(files.value)) {
       if (file) {
         formDataPayload.append(key, file)
@@ -486,12 +496,19 @@ const submitEnrollment = async () => {
 
     await enrollmentService.submitEnrollment(formDataPayload)
 
-    notify.addNotification('¡Matrícula radicada exitosamente! Los datos personales se solicitarán una vez validados estos documentos.', 'success')
+    notify.addNotification(
+      isExtraordinaryToken.value
+        ? '¡Documentación de matrícula extraordinaria radicada exitosamente! Tu expediente se encuentra en revisión institucional.'
+        : '¡Matrícula radicada exitosamente! Los datos personales se solicitarán una vez validados estos documentos.',
+      'success'
+    )
+    
     setTimeout(() => {
-      window.location.href = '/'
-    }, 1500)
+      window.location.href = isExtraordinaryToken.value 
+        ? `/matricula/seguimiento?token=${extraordinaryTokenValue.value}`
+        : '/'
+    }, 1800)
   } catch (error: any) {
-
     console.error('Error al enviar:', error)
     const errMessage = error.response?.data?.error || 'Hubo un error al enviar el formulario. Por favor intenta de nuevo.'
     notify.addNotification(errMessage, 'error')
@@ -501,52 +518,89 @@ const submitEnrollment = async () => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-white py-12 px-4 sm:px-6 lg:px-8 font-sans">
+  <div class="min-h-screen bg-slate-50/50 py-12 px-4 sm:px-6 lg:px-8 font-sans">
     <div class="max-w-5xl mx-auto">
       <!-- Navbar -->
       <div class="mb-12 flex items-center justify-between">
-        <router-link to="/" class="flex items-center gap-2 text-gray-500 hover:text-indigo-600 transition-all font-medium">
+        <router-link to="/" class="flex items-center gap-2 text-slate-500 hover:text-indigo-600 transition-all font-medium">
           <ArrowLeft :size="20" />
-          <span>Volver</span>
+          <span>Volver al Inicio</span>
         </router-link>
         <div class="flex items-center gap-3">
-          <div class="p-2 bg-indigo-600 rounded-lg text-white">
+          <div class="p-2 bg-indigo-600 rounded-xl text-white shadow-md shadow-indigo-100">
             <School :size="24" />
           </div>
-          <span class="text-xl font-bold tracking-tight">Academia<span class="text-indigo-600">Neiva</span></span>
+          <span class="text-xl font-black tracking-tight text-slate-900">Academia<span class="text-indigo-600">Neiva</span></span>
         </div>
       </div>
 
       <!-- Stepper -->
       <div class="mb-12">
         <div class="flex items-center justify-between max-w-2xl mx-auto relative">
-          <div class="absolute top-1/2 left-0 w-full h-0.5 bg-gray-100 -z-10"></div>
+          <div class="absolute top-1/2 left-0 w-full h-0.5 bg-slate-200 -z-10"></div>
           <div v-for="i in 3" :key="i" 
             :class="[
-              step >= i ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'bg-white text-gray-400 border border-gray-200',
-              'h-10 w-10 rounded-full flex items-center justify-center font-bold transition-all duration-500 relative z-10'
+              step >= i ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 ring-4 ring-indigo-50' : 'bg-white text-slate-400 border border-slate-200',
+              'h-11 w-11 rounded-2xl flex items-center justify-center font-black transition-all duration-500 relative z-10'
             ]"
           >
             {{ i }}
-            <span :class="[step >= i ? 'text-indigo-600 font-bold' : 'text-gray-400 font-medium', 'absolute -bottom-8 left-1/2 -translate-x-1/2 text-xs whitespace-nowrap']">
-              {{ i === 1 ? 'Institución' : i === 2 ? 'Documentos' : 'Finalizar' }}
+            <span :class="[step >= i ? 'text-indigo-600 font-black' : 'text-slate-400 font-bold', 'absolute -bottom-8 left-1/2 -translate-x-1/2 text-xs whitespace-nowrap']">
+              {{ i === 1 ? 'Institución y Grado' : i === 2 ? 'Documentos' : 'Finalizar' }}
             </span>
           </div>
         </div>
       </div>
 
-      <div class="bg-white rounded-[2rem] border border-gray-100 shadow-2xl shadow-indigo-50/50 overflow-hidden mt-16">
+      <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-2xl shadow-slate-200/50 overflow-hidden mt-16 text-left">
         <div class="p-8 sm:p-12">
           
           <!-- PASO 1: Selección de Cupo -->
           <div v-if="step === 1" class="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div class="border-b border-gray-100 pb-6">
-              <h3 class="text-3xl font-bold text-gray-900">Solicitud de Matrícula</h3>
-              <p class="text-gray-500 mt-2">Este formulario es para la carga inicial de documentos y reserva de cupo.</p>
+            <div class="border-b border-slate-100 pb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h3 class="text-3xl font-black text-slate-900 tracking-tight">Solicitud de Matrícula</h3>
+                <p class="text-slate-500 text-sm mt-1">Carga inicial de documentos y reserva de cupo escolar.</p>
+              </div>
+              <span v-if="isExtraordinaryToken" class="inline-flex items-center gap-1.5 px-4 py-2 bg-amber-50 text-amber-800 border border-amber-300 rounded-2xl text-xs font-black uppercase tracking-wider self-start">
+                <Sparkles :size="15" class="text-amber-600" />
+                <span>Matrícula Extraordinaria</span>
+              </span>
             </div>
 
-            <!-- Banner y Tarjeta Informativa de Fechas de Inscripción -->
-            <div v-if="schoolId && !loadingConfig && enrollmentConfig" 
+            <!-- BANNER ESPECIAL DE MATRÍCULA EXTRAORDINARIA -->
+            <div v-if="isExtraordinaryToken" class="rounded-3xl border border-amber-300/80 bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-orange-500/10 p-6 sm:p-8 space-y-4 shadow-sm">
+              <div class="flex items-start gap-4">
+                <div class="p-3 bg-amber-500/20 text-amber-700 rounded-2xl border border-amber-500/30 shrink-0 mt-0.5">
+                  <Sparkles :size="24" />
+                </div>
+                <div class="space-y-1.5 flex-1">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="text-[10px] font-black uppercase tracking-widest text-amber-700">Autorización Especial Vigente</span>
+                    <span class="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 text-[10px] font-black border border-amber-300">
+                      Bypass de Calendario Habilitado
+                    </span>
+                  </div>
+                  <h4 class="text-lg font-black text-slate-900">
+                    ¡Bienvenido(a)! Cuentas con autorización para matrícula extraordinaria
+                  </h4>
+                  <p class="text-xs font-medium text-slate-700 leading-relaxed">
+                    Las inscripciones ordinarias de la institución pueden encontrarse cerradas, pero la dirección académica ha emitido una <strong>excepción formal</strong> a tu nombre. Puedes seleccionar el nivel, grado y jornada que deseas postular y adjuntar los documentos solicitados para completar tu solicitud.
+                  </p>
+                </div>
+              </div>
+
+              <div class="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-amber-500/20 text-xs font-bold text-amber-900">
+                <div class="flex items-center gap-2">
+                  <CheckCircle2 :size="16" class="text-emerald-600" />
+                  <span>Correo verificado y vinculado: <strong>{{ formData.parentEmail }}</strong></span>
+                </div>
+                <span class="text-[11px] text-amber-700 font-medium">No se generará duplicado: se actualizará tu registro autorizado.</span>
+              </div>
+            </div>
+
+            <!-- Banner Estándar de Fechas de Inscripción (Solo para flujo regular) -->
+            <div v-else-if="schoolId && !loadingConfig && enrollmentConfig" 
               class="rounded-3xl border p-6 space-y-4 shadow-sm transition-all"
               :class="[
                 isEnrollmentOpen 
@@ -582,8 +636,8 @@ const submitEnrollment = async () => {
                     <Calendar :size="18" />
                   </div>
                   <div>
-                    <span class="block text-[11px] font-black uppercase tracking-wider text-gray-400">Apertura de Inscripciones</span>
-                    <span class="text-sm font-bold text-gray-800">
+                    <span class="block text-[11px] font-black uppercase tracking-wider text-slate-400">Apertura de Inscripciones</span>
+                    <span class="text-sm font-bold text-slate-800">
                       {{ formattedFechaInicio }}
                     </span>
                   </div>
@@ -594,8 +648,8 @@ const submitEnrollment = async () => {
                     <CalendarDays :size="18" />
                   </div>
                   <div>
-                    <span class="block text-[11px] font-black uppercase tracking-wider text-gray-400">Cierre de Inscripciones</span>
-                    <span class="text-sm font-bold text-gray-800">
+                    <span class="block text-[11px] font-black uppercase tracking-wider text-slate-400">Cierre de Inscripciones</span>
+                    <span class="text-sm font-bold text-slate-800">
                       {{ formattedFechaCierre }}
                     </span>
                   </div>
@@ -603,318 +657,303 @@ const submitEnrollment = async () => {
               </div>
             </div>
 
+            <!-- Form Fields Grid -->
             <div class="grid grid-cols-1 gap-8 md:grid-cols-2">
               <div class="space-y-2">
-                <label class="text-sm font-bold text-gray-700">Selecciona tu Colegio</label>
-                <select v-model="schoolId" class="w-full rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 focus:border-transparent p-4 transition-all">
+                <label class="text-sm font-bold text-slate-700">Institución Educativa</label>
+                <select 
+                  v-model="schoolId" 
+                  :disabled="isExtraordinaryToken"
+                  class="w-full rounded-2xl border-slate-200 bg-slate-50 focus:ring-2 focus:ring-indigo-500 focus:border-transparent p-4 transition-all disabled:opacity-75 disabled:cursor-not-allowed font-medium text-slate-900"
+                >
                   <option value="" disabled>Selecciona el colegio</option>
                   <option v-for="s in schools" :key="s.id_colegio" :value="s.id_colegio">{{ s.nombre }}</option>
                 </select>
+                <p v-if="isExtraordinaryToken" class="text-[11px] font-bold text-indigo-600">
+                  Institución fijada por la autorización de matrícula extraordinaria.
+                </p>
               </div>
 
               <div class="space-y-2">
-                <label class="text-sm font-bold text-gray-700">Correo del Padre de Familia</label>
+                <div class="flex items-center justify-between">
+                  <label class="text-sm font-bold text-slate-700">Correo Electrónico del Acudiente</label>
+                  <span v-if="isExtraordinaryToken" class="inline-flex items-center gap-1 text-[10px] font-black text-emerald-600 uppercase">
+                    <Check :size="12" /> Autorizado
+                  </span>
+                </div>
                 <input 
                   v-model="formData.parentEmail" 
                   type="email" 
-                  class="w-full rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 focus:border-transparent p-4 transition-all" 
+                  :disabled="isExtraordinaryToken"
+                  class="w-full rounded-2xl border-slate-200 bg-slate-50 focus:ring-2 focus:ring-indigo-500 focus:border-transparent p-4 transition-all disabled:opacity-75 disabled:cursor-not-allowed font-medium text-slate-900" 
                   placeholder="ejemplo@correo.com"
                 >
               </div>
 
               <div class="space-y-2">
-                <label class="text-sm font-bold text-gray-700">Nivel Escolar</label>
-                <select v-model="level" class="w-full rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 focus:border-transparent p-4 transition-all">
+                <label class="text-sm font-bold text-slate-700">Nivel Escolar</label>
+                <select v-model="level" class="w-full rounded-2xl border-slate-200 bg-slate-50 focus:ring-2 focus:ring-indigo-500 focus:border-transparent p-4 transition-all font-medium text-slate-900">
                   <option value="" disabled>Selecciona nivel</option>
                   <option v-for="l in levels" :key="l.id" :value="l.id">{{ l.name }}</option>
                 </select>
               </div>
 
               <div class="space-y-2">
-                <label class="text-sm font-bold text-gray-700">Grado Solicitado</label>
-                <select v-model="selectedTipoGrado" :disabled="!level || loadingGrados" class="w-full rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 focus:border-transparent p-4 transition-all disabled:opacity-50">
+                <label class="text-sm font-bold text-slate-700">Grado Solicitado</label>
+                <select v-model="selectedTipoGrado" :disabled="!level || loadingGrados" class="w-full rounded-2xl border-slate-200 bg-slate-50 focus:ring-2 focus:ring-indigo-500 focus:border-transparent p-4 transition-all disabled:opacity-50 font-medium text-slate-900">
                   <option value="" disabled>{{ level ? 'Selecciona grado' : 'Primero elige un nivel' }}</option>
                   <option v-for="gt in availableTipoGrados" :key="gt" :value="gt">{{ gt }}</option>
                 </select>
               </div>
 
-              <div class="space-y-2">
-                <label class="text-sm font-bold text-gray-700">Jornada</label>
-                <select v-model="grade" :disabled="!selectedTipoGrado" class="w-full rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 focus:border-transparent p-4 transition-all disabled:opacity-50">
+              <div class="space-y-2 md:col-span-2">
+                <label class="text-sm font-bold text-slate-700">Jornada y Modalidad</label>
+                <select v-model="grade" :disabled="!selectedTipoGrado" class="w-full rounded-2xl border-slate-200 bg-slate-50 focus:ring-2 focus:ring-indigo-500 focus:border-transparent p-4 transition-all disabled:opacity-50 font-medium text-slate-900">
                   <option value="" disabled>{{ selectedTipoGrado ? 'Selecciona jornada' : 'Elige un grado primero' }}</option>
-                  <option v-for="j in availableJornadas" :key="j.id" :value="j.id" :disabled="j.cupos <= 0">
-                    {{ j.name }} ({{ j.cupos }} cupos disponibles)
+                  <option v-for="j in availableJornadas" :key="j.id" :value="j.id" :disabled="!isExtraordinaryToken && j.cupos <= 0">
+                    {{ j.name }} {{ isExtraordinaryToken ? '(Cupo autorizado por secretaría)' : `(${j.cupos} cupos disponibles)` }}
                   </option>
                 </select>
-                <p v-if="selectedTipoGrado && availableJornadas.every(j => j.cupos <= 0)" class="text-xs text-amber-600 flex items-center gap-1 mt-1">
-                  <AlertCircle :size="12" /> No hay cupos disponibles en ninguna jornada para este grado.
+                <p v-if="selectedTipoGrado && availableJornadas.every(j => j.cupos <= 0) && !isExtraordinaryToken" class="text-xs text-amber-600 flex items-center gap-1 mt-1 font-bold">
+                  <AlertCircle :size="12" /> No hay cupos disponibles en el calendario regular.
                 </p>
               </div>
+            </div>
 
-              <div class="md:col-span-2 flex flex-wrap gap-6 bg-indigo-50/50 p-6 rounded-2xl border border-indigo-100/50">
-                <label class="flex items-center gap-3 cursor-pointer">
-                  <input v-model="formData.hasDisability" type="checkbox" class="h-5 w-5 rounded text-indigo-600 focus:ring-indigo-500">
-                  <span class="text-sm font-medium text-gray-700">¿Posee alguna discapacidad o trastorno?</span>
+            <!-- Checkboxes de condiciones especiales -->
+            <div class="p-6 bg-slate-50 rounded-2xl border border-slate-100 space-y-4">
+              <p class="text-xs font-black uppercase tracking-wider text-slate-500">Condiciones Especiales del Aspirante</p>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <label class="flex items-center gap-3 cursor-pointer select-none">
+                  <input type="checkbox" v-model="formData.hasDisability" class="w-5 h-5 rounded-lg text-indigo-600 border-slate-300 focus:ring-indigo-500">
+                  <span class="text-sm font-bold text-slate-700">Presenta diagnóstico médico o discapacidad</span>
                 </label>
-                <label class="flex items-center gap-3 cursor-pointer">
-                  <input v-model="formData.isForeigner" type="checkbox" class="h-5 w-5 rounded text-indigo-600 focus:ring-indigo-500">
-                  <span class="text-sm font-medium text-gray-700">¿Es estudiante extranjero?</span>
+                <label class="flex items-center gap-3 cursor-pointer select-none">
+                  <input type="checkbox" v-model="formData.isForeigner" class="w-5 h-5 rounded-lg text-indigo-600 border-slate-300 focus:ring-indigo-500">
+                  <span class="text-sm font-bold text-slate-700">Es estudiante de nacionalidad extranjera</span>
                 </label>
               </div>
             </div>
 
-            <div class="pt-8 flex justify-end">
+            <div class="flex justify-end pt-4">
               <button 
-                @click="nextStep" 
-                :disabled="submitButtonText === 'DESHABILITADO'"
-                :class="[
-                  submitButtonText === 'DESHABILITADO' 
-                    ? 'bg-gray-300 dark:bg-gray-800 text-gray-500 cursor-not-allowed opacity-50' 
-                    : 'bg-gray-900 hover:bg-indigo-600 text-white active:scale-95 shadow-xl',
-                  'px-10 py-4 rounded-2xl font-bold transition-all flex items-center gap-2'
-                ]"
+                type="button" 
+                @click="nextStep"
+                :disabled="!isEnrollmentOpen"
+                class="bg-indigo-600 hover:bg-indigo-700 text-white font-black py-4 px-8 rounded-2xl shadow-xl shadow-indigo-100 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               >
-                {{ submitButtonText }}
-                <ArrowLeft v-if="submitButtonText !== 'DESHABILITADO'" :size="20" class="rotate-180" />
+                <span>Siguiente: Cargar Documentos</span>
+                <ArrowLeft :size="18" class="rotate-180" />
               </button>
             </div>
           </div>
 
-          <!-- PASO 2: Carga de Documentos -->
-          <div v-if="step === 2" class="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div class="border-b border-gray-100 pb-6">
-              <h3 class="text-3xl font-bold text-gray-900">Documentación</h3>
-              <p class="text-gray-500 mt-2">Sube los archivos requeridos para el nivel {{ levels.find(l => l.id === level)?.name }}.</p>
-            </div>
-
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              
-              <template v-for="(label, key) in {
-                registroCivil: 'Registro Civil (Si aplica)',
-                documentoIdentidad: 'Doc. Identidad Estudiante',
-                documentoPadre: 'Doc. Identidad Acudiente',
-                vacunas: 'Carné de Vacunas / PAI',
-                salud: 'Certificado Salud (SGSSS)',
-                foto: 'Foto 3x4 (Fondo blanco)',
-                reciboPublico: 'Recibo Servicio Público',
-                visa: 'Visa / PPT / Extranjería',
-                certificadoDiscapacidad: 'Diagnóstico Médico',
-                certificadosEscolaridad: 'Certificados Grados Anteriores'
-              }" :key="key">
-                
-                <div v-if="showDoc(key as string)" class="relative">
-                  <label class="block p-6 rounded-3xl border-2 border-dashed transition-all cursor-pointer group h-full"
-                    :class="[files[key] ? 'border-emerald-500 bg-emerald-50/30' : 'border-gray-200 hover:border-indigo-400 bg-gray-50/50 hover:bg-white shadow-sm']"
-                  >
-                    <input type="file" class="hidden" @change="e => handleFileUpload(e, key as string)" accept=".pdf,image/*">
-                    
-                    <div class="flex flex-col items-center text-center">
-                      <div :class="[files[key] ? 'text-emerald-600 bg-emerald-100' : 'text-gray-400 bg-gray-100 group-hover:text-indigo-600 transition-colors', 'p-3 rounded-2xl mb-4']">
-                        <component :is="key === 'foto' ? Camera : (files[key] ? CheckCircle2 : FileText)" :size="28" />
-                      </div>
-                      <span class="text-sm font-bold text-gray-800 leading-tight">{{ label }}</span>
-                      
-                      <!-- Regla específica de certificados escolaridad -->
-                      <span v-if="key === 'certificadosEscolaridad'" class="mt-2 text-[10px] text-gray-400 leading-none">
-                        Grado 5° (Primaria) o 9° (Secundaria) o año anterior.
-                      </span>
-
-                      <span class="mt-auto pt-4 text-xs truncate w-full px-2" :class="files[key] ? 'text-emerald-600 font-bold' : 'text-gray-400'">
-                        {{ files[key] ? files[key]?.name : 'Subir archivo (PDF/IMG)' }}
-                      </span>
-                    </div>
-                  </label>
-                </div>
-              </template>
-
-            </div>
-
-            <div class="pt-8 flex justify-between">
-              <button @click="prevStep" class="text-gray-500 font-bold px-4 py-2">Volver</button>
-              <button @click="nextStep" class="bg-gray-900 text-white px-10 py-4 rounded-2xl font-bold hover:bg-indigo-600 transition-all shadow-xl active:scale-95">
-                Continuar
-              </button>
-            </div>
-          </div>
-
-          <!-- PASO 3: Finalizar y Verificación de Correo -->
-          <!-- 3.1 Vista Inicial de Confirmación -->
-          <div v-if="step === 3 && !isVerifyingScreen" class="text-center py-10 animate-in zoom-in duration-500">
-            <div class="h-20 w-20 bg-indigo-600 text-white rounded-[2rem] flex items-center justify-center mx-auto shadow-2xl shadow-indigo-200 mb-6">
-              <Send :size="36" />
-            </div>
-            <h3 class="text-3xl font-extrabold text-gray-900">Confirmación de Envío</h3>
-            <p class="text-gray-500 mt-4 max-w-lg mx-auto text-sm leading-relaxed">
-              Para garantizar la autenticidad y seguridad del trámite, al presionar el botón enviaremos un <strong>código de verificación de 6 dígitos</strong> a tu correo electrónico.
-            </p>
-
-            <!-- Resumen de datos -->
-            <div class="mt-8 max-w-md mx-auto bg-gray-50/80 rounded-2xl p-6 border border-gray-100 text-left space-y-3 shadow-inner">
-              <div class="flex justify-between items-center text-sm border-b border-gray-200/60 pb-2">
-                <span class="text-gray-500">Institución:</span>
-                <span class="font-bold text-gray-900">{{ schools.find(s => s.id_colegio == schoolId)?.nombre }}</span>
-              </div>
-              <div class="flex justify-between items-center text-sm border-b border-gray-200/60 pb-2">
-                <span class="text-gray-500">Grado:</span>
-                <span class="font-bold text-gray-900">{{ selectedTipoGrado }}</span>
-              </div>
-              <div class="flex justify-between items-center text-sm">
-                <span class="text-gray-500">Correo del Acudiente:</span>
-                <span class="font-bold text-indigo-600 font-mono">{{ formData.parentEmail }}</span>
+          <!-- PASO 2: Documentación Requerida -->
+          <div v-else-if="step === 2" class="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div class="border-b border-slate-100 pb-6 flex items-center justify-between">
+              <div>
+                <h3 class="text-3xl font-black text-slate-900 tracking-tight">Documentación Requerida</h3>
+                <p class="text-slate-500 text-sm mt-1">Adjunta archivos claros en formato PDF o imagen (máximo 5MB por archivo).</p>
               </div>
             </div>
-            
-            <div class="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-              <button @click="prevStep" class="w-full sm:w-auto text-gray-500 font-bold px-10 py-4 hover:text-gray-700 transition-colors">
-                ← Volver y Revisar
-              </button>
-              <button
-                @click="proceedToVerification"
-                :disabled="sendingCode"
-                class="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white px-14 py-4 rounded-2xl font-bold transition-all shadow-xl shadow-indigo-100 active:scale-95 text-base flex items-center justify-center gap-3 disabled:opacity-60"
-              >
-                <span v-if="sendingCode" class="inline-block w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                <span>{{ sendingCode ? 'Enviando Código...' : 'Enviar y Validar Correo' }}</span>
-              </button>
-            </div>
-          </div>
 
-          <!-- 3.2 Vista Exclusiva y Dedicada de Verificación de Correo OTP y Teléfono -->
-          <div v-if="step === 3 && isVerifyingScreen" class="py-8 max-w-md mx-auto text-center animate-in zoom-in duration-500">
-            
-            <!-- SUB-PASO A: Verificación de OTP (Código de 6 dígitos) -->
-            <div v-if="!isPhoneStep" class="space-y-6">
-              <div class="relative mx-auto w-20 h-20 mb-6">
-                <div class="absolute inset-0 bg-indigo-100 rounded-3xl animate-ping opacity-30"></div>
-                <div class="relative h-20 w-20 bg-gradient-to-tr from-indigo-600 to-blue-600 text-white rounded-3xl flex items-center justify-center shadow-xl shadow-indigo-200">
-                  <ShieldCheck :size="40" />
-                </div>
-              </div>
-
-              <h3 class="text-2xl font-black text-gray-900 tracking-tight">Verificación de Correo</h3>
-              <p class="text-gray-500 text-sm">
-                Ingresa el código de 6 dígitos que enviamos a:
-              </p>
-              <div class="inline-block px-4 py-1 bg-indigo-50 border border-indigo-100 text-indigo-700 font-extrabold rounded-full text-xs font-mono">
-                {{ formData.parentEmail }}
-              </div>
-
-              <div class="space-y-6 pt-2">
-                <div class="space-y-2 text-left">
-                  <div class="flex items-center justify-between text-xs font-bold text-gray-500 px-1">
-                    <span>Código de 6 dígitos</span>
-                    <span v-if="countdownSeconds > 0" class="text-indigo-600 font-mono flex items-center gap-1">
-                      <Timer :size="13" /> Expira en {{ formattedCountdown }}
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              <template v-for="(label, key) in docLabels" :key="key">
+                <div v-if="showDoc(key as string)" class="p-6 rounded-3xl border border-slate-200 bg-slate-50/50 space-y-3 hover:border-indigo-200 transition-all">
+                  <div class="flex items-center justify-between">
+                    <span class="text-xs font-black uppercase tracking-wider text-slate-700">{{ label }}</span>
+                    <span v-if="files[key]" class="text-emerald-600 text-xs font-bold flex items-center gap-1">
+                      <CheckCircle2 :size="14" /> Listo
                     </span>
                   </div>
 
-                  <input 
-                    v-model="otpCodeInput" 
-                    type="text" 
-                    maxlength="6"
-                    placeholder="000000" 
-                    class="w-full text-center font-mono text-3xl font-black tracking-[0.35em] rounded-2xl border-2 border-indigo-200 bg-gray-50 focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-100 p-4 transition-all shadow-inner outline-none"
-                    @keyup.enter="verifyAndSubmit"
-                  >
+                  <div class="relative">
+                    <input 
+                      type="file" 
+                      @change="(e) => handleFileUpload(e, key as string)"
+                      accept=".pdf,.png,.jpg,.jpeg"
+                      class="block w-full text-xs text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"
+                    >
+                  </div>
+                </div>
+              </template>
+            </div>
+
+            <div class="flex items-center justify-between pt-6 border-t border-slate-100">
+              <button 
+                type="button" 
+                @click="prevStep"
+                class="px-6 py-3.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-sm hover:bg-slate-50 transition-all cursor-pointer"
+              >
+                ← Volver al Paso 1
+              </button>
+              <button 
+                type="button" 
+                @click="nextStep"
+                class="bg-indigo-600 hover:bg-indigo-700 text-white font-black py-4 px-8 rounded-2xl shadow-xl shadow-indigo-100 transition-all flex items-center gap-2 cursor-pointer"
+              >
+                <span>Siguiente: Finalizar Solicitud</span>
+                <ArrowLeft :size="18" class="rotate-180" />
+              </button>
+            </div>
+          </div>
+
+          <!-- PASO 3: Finalización y Confirmación -->
+          <div v-else-if="step === 3" class="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            
+            <!-- SUB-PASO: Formulario de Verificación OTP o Teléfono Directo -->
+            <div v-if="isVerifyingScreen" class="py-4 max-w-md mx-auto text-center space-y-6">
+              
+              <!-- Si NO es extraordinaria y aún no ha validado OTP -->
+              <div v-if="!isPhoneStep" class="space-y-6">
+                <div class="relative mx-auto w-20 h-20 mb-6">
+                  <div class="absolute inset-0 bg-indigo-100 rounded-3xl animate-ping opacity-30"></div>
+                  <div class="relative h-20 w-20 bg-gradient-to-tr from-indigo-600 to-blue-600 text-white rounded-3xl flex items-center justify-center shadow-xl shadow-indigo-200">
+                    <ShieldCheck :size="40" />
+                  </div>
                 </div>
 
-                <div class="flex items-center justify-center gap-2 text-xs">
-                  <span class="text-gray-400">¿No recibiste el correo?</span>
-                  <button 
-                    type="button" 
-                    @click="sendVerificationCode"
-                    :disabled="sendingCode || countdownSeconds > 840"
-                    class="font-bold text-indigo-600 hover:text-indigo-800 disabled:opacity-50 flex items-center gap-1 transition-colors cursor-pointer"
-                  >
-                    <RefreshCw v-if="sendingCode" class="animate-spin" :size="12" />
-                    <span>{{ sendingCode ? 'Reenviando...' : 'Reenviar código' }}</span>
-                  </button>
+                <h3 class="text-2xl font-black text-slate-900 tracking-tight">Verificación de Correo</h3>
+                <p class="text-slate-500 text-sm">
+                  Ingresa el código de 6 dígitos enviado a:
+                </p>
+                <div class="inline-block px-4 py-1.5 bg-indigo-50 border border-indigo-100 text-indigo-700 font-mono font-black rounded-full text-xs">
+                  {{ formData.parentEmail }}
                 </div>
 
-                <div class="pt-2 space-y-3">
-                  <button
-                    type="button"
-                    @click="verifyAndSubmit"
-                    :disabled="verifyingCode || otpCodeInput.trim().length !== 6"
-                    class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 px-8 rounded-2xl font-bold text-base shadow-xl shadow-indigo-100 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    <span v-if="verifyingCode" class="inline-block w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                    <span>{{ verifyingCode ? 'Verificando Código...' : 'Validar Código' }}</span>
-                  </button>
+                <div class="space-y-6 pt-2 text-left">
+                  <div class="space-y-2">
+                    <div class="flex items-center justify-between text-xs font-bold text-slate-500 px-1">
+                      <span>Código de 6 dígitos</span>
+                      <span v-if="countdownSeconds > 0" class="text-indigo-600 font-mono flex items-center gap-1">
+                        <Timer :size="13" /> Expira en {{ formattedCountdown }}
+                      </span>
+                    </div>
 
-                  <div>
+                    <input 
+                      v-model="otpCodeInput" 
+                      type="text" 
+                      maxlength="6"
+                      placeholder="000000" 
+                      class="w-full text-center font-mono text-3xl font-black tracking-[0.35em] rounded-2xl border-2 border-indigo-200 bg-slate-50 focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-100 p-4 transition-all shadow-inner outline-none text-slate-900"
+                      @keyup.enter="verifyAndSubmit"
+                    >
+                  </div>
+
+                  <div class="flex items-center justify-center gap-2 text-xs">
+                    <span class="text-slate-400">¿No recibiste el código?</span>
                     <button 
                       type="button" 
-                      @click="isVerifyingScreen = false" 
-                      :disabled="verifyingCode"
-                      class="text-xs font-bold text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
+                      @click="sendVerificationCode"
+                      :disabled="sendingCode || countdownSeconds > 840"
+                      class="font-bold text-indigo-600 hover:text-indigo-800 disabled:opacity-50 flex items-center gap-1 transition-colors cursor-pointer"
                     >
-                      ← Modificar correo o datos
+                      <RefreshCw v-if="sendingCode" class="animate-spin" :size="12" />
+                      <span>{{ sendingCode ? 'Reenviando...' : 'Reenviar código' }}</span>
                     </button>
+                  </div>
+
+                  <div class="pt-2 space-y-3">
+                    <button
+                      type="button"
+                      @click="verifyAndSubmit"
+                      :disabled="verifyingCode || otpCodeInput.trim().length !== 6"
+                      class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 px-8 rounded-2xl font-black text-base shadow-xl shadow-indigo-100 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                    >
+                      <span v-if="verifyingCode" class="inline-block w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                      <span>{{ verifyingCode ? 'Verificando Código...' : 'Validar Código' }}</span>
+                    </button>
+                    <div>
+                      <button 
+                        type="button" 
+                        @click="prevStep" 
+                        class="text-xs font-bold text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                      >
+                        ← Volver a Documentos
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            <!-- SUB-PASO B: Ingreso de Teléfono y Confirmación Final -->
-            <div v-else class="space-y-6 text-left animate-in fade-in slide-in-from-right-4 duration-300">
-              <div class="text-center space-y-2">
-                <div class="inline-flex p-3 bg-emerald-50 text-emerald-600 rounded-2xl border border-emerald-100 mb-2">
-                  <CheckCircle2 :size="32" />
+              <!-- Ingreso de Teléfono y Confirmación Final (Directo para Matrículas Extraordinarias) -->
+              <div v-else class="space-y-6 text-left animate-in fade-in slide-in-from-right-4 duration-300">
+                <div class="text-center space-y-2">
+                  <div class="inline-flex p-3 bg-emerald-50 text-emerald-600 rounded-2xl border border-emerald-100 mb-2">
+                    <CheckCircle2 :size="32" />
+                  </div>
+                  <h3 class="text-2xl font-black text-slate-900 tracking-tight">
+                    {{ isExtraordinaryToken ? 'Confirmación de Matrícula Extraordinaria' : '¡Correo Verificado con Éxito!' }}
+                  </h3>
+                  <p class="text-slate-500 text-xs font-medium">
+                    Ingresa tu número telefónico para registrar la solicitud y coordinar la validación.
+                  </p>
+                  <div class="inline-block px-3 py-1 bg-emerald-50 text-emerald-800 font-bold rounded-full text-xs">
+                    ✓ {{ formData.parentEmail }}
+                  </div>
                 </div>
-                <h3 class="text-2xl font-black text-gray-900 tracking-tight">¡Correo Verificado!</h3>
-                <p class="text-gray-500 text-xs font-medium">
-                  Último paso: ingresa tu número telefónico para registrar la solicitud de matrícula.
-                </p>
-                <div class="inline-block px-3 py-1 bg-emerald-50 text-emerald-800 font-bold rounded-full text-xs">
-                  ✓ {{ formData.parentEmail }}
-                </div>
-              </div>
 
-              <div class="bg-gray-50 p-6 rounded-3xl border border-gray-150 space-y-4">
-                <div class="space-y-2">
-                  <label class="text-xs font-black uppercase tracking-wider text-gray-700 flex items-center gap-1.5">
-                    <Phone :size="14" class="text-indigo-600" />
-                    <span>Teléfono / Celular de Contacto *</span>
-                  </label>
-                  <div class="relative">
+                <div class="bg-slate-50 p-6 rounded-3xl border border-slate-200 space-y-4">
+                  <div class="space-y-2">
+                    <label class="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                      <Phone :size="14" class="text-indigo-600" />
+                      <span>Teléfono / Celular de Contacto *</span>
+                    </label>
                     <input 
                       v-model="formData.parentPhone"
                       type="tel"
                       required
-                      placeholder="Ej. +57 300 123 4567"
-                      class="w-full bg-white border border-gray-200 rounded-2xl p-4 text-base font-bold text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all shadow-sm"
+                      placeholder="Ej. 300 123 4567"
+                      class="w-full bg-white border border-slate-200 rounded-2xl p-4 text-base font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all shadow-xs"
                       @keyup.enter="submitEnrollment"
                     />
+                    <p class="text-[11px] text-slate-500 font-medium">
+                      El colegio se comunicará a este número para notificar la aprobación final de la matrícula.
+                    </p>
                   </div>
-                  <p class="text-[11px] text-gray-500 font-medium">
-                    El colegio se comunicará a este número para coordinar la verificación documental y la formalización.
-                  </p>
                 </div>
-              </div>
 
-              <div class="space-y-3 pt-2">
-                <button
-                  type="button"
-                  @click="submitEnrollment"
-                  :disabled="submitting || !formData.parentPhone || formData.parentPhone.trim().length < 7"
-                  class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 px-8 rounded-2xl font-bold text-base shadow-xl shadow-indigo-100 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <span v-if="submitting" class="inline-block w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                  <span>{{ submitting ? 'Radicando Matrícula...' : 'Confirmar y Radicar Matrícula' }}</span>
-                </button>
-
-                <div class="text-center">
-                  <button 
-                    type="button" 
-                    @click="isPhoneStep = false" 
-                    :disabled="submitting"
-                    class="text-xs font-bold text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
+                <div class="space-y-3 pt-2">
+                  <button
+                    type="button"
+                    @click="submitEnrollment"
+                    :disabled="submitting || !formData.parentPhone || formData.parentPhone.trim().length < 7"
+                    class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 px-8 rounded-2xl font-black text-base shadow-xl shadow-indigo-100 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                   >
-                    ← Volver a verificación de código
+                    <span v-if="submitting" class="inline-block w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                    <span>{{ submitting ? 'Radicando Matrícula...' : 'Confirmar y Radicar Matrícula' }}</span>
                   </button>
+
+                  <div class="text-center">
+                    <button 
+                      type="button" 
+                      @click="prevStep" 
+                      :disabled="submitting"
+                      class="text-xs font-bold text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                    >
+                      ← Volver a Documentos
+                    </button>
+                  </div>
                 </div>
               </div>
+
+            </div>
+
+            <div v-else class="py-12 max-w-md mx-auto text-center space-y-6">
+              <div class="w-20 h-20 bg-indigo-50 text-indigo-600 rounded-3xl flex items-center justify-center mx-auto">
+                <Send :size="36" />
+              </div>
+              <h3 class="text-2xl font-black text-slate-900">Listo para Enviar</h3>
+              <p class="text-slate-500 text-sm">
+                Presiona a continuación para confirmar tus datos y radicar tu solicitud de matrícula.
+              </p>
+              <button 
+                type="button" 
+                @click="proceedToVerification"
+                class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-4 px-8 rounded-2xl shadow-xl shadow-indigo-100 transition-all cursor-pointer"
+              >
+                Continuar a Verificación y Envío
+              </button>
             </div>
 
           </div>
