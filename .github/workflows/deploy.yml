@@ -35,11 +35,15 @@ jobs:
             export DOCKER_BUILDKIT=1
             export COMPOSE_DOCKER_CLI_BUILD=1
             
-            # Reconstruir y levantar contenedores
-            echo "🔨 Construyendo y levantando contenedores..."
-            docker compose up -d --build --remove-orphans
+            # Construir imágenes en paralelo aprovechando caché
+            echo "🔨 Construyendo imágenes en paralelo..."
+            docker compose build --parallel
             
-            # Limpiar imágenes antiguas
+            # Levantar contenedores actualizados
+            echo "🚀 Levantando contenedores..."
+            docker compose up -d --remove-orphans
+            
+            # Limpiar imágenes intermedias huérfanas
             docker image prune -f
             
             echo "✅ ¡Despliegue completado exitosamente!"

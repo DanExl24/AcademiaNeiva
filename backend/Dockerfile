@@ -5,7 +5,8 @@ WORKDIR /app
 
 COPY package*.json ./
 
-RUN npm ci --include=dev
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --prefer-offline --no-audit
 
 COPY . .
 
@@ -20,13 +21,14 @@ WORKDIR /app
 
 COPY package*.json ./
 
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --omit=dev --prefer-offline --no-audit && mkdir -p /app/uploads
+
 COPY --from=builder /app/dist ./dist
 
 # Copiar archivos SQL a dist/ donde el código compilado los busca (usando __dirname)
 COPY src/config/auth.migration.sql ./dist/config/auth.migration.sql
 COPY src/migrations ./dist/migrations
-
-RUN npm ci --omit=dev && mkdir -p /app/uploads
 
 EXPOSE 3000
 

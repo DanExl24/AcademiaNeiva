@@ -265,7 +265,7 @@ export const createExtraordinaryEnrollment = async (req: Request, res: Response)
     // 5. Actualizar el estado del ticket a EN_PROCESO
     await client.query(
       `UPDATE tickets_soporte 
-       SET estado = 'EN_PROCESO', respuesta = 'Matrícula Extraordinaria autorizada y en curso' 
+       SET estado = 'EN_PROCESO', observaciones = 'Matrícula Extraordinaria autorizada y en curso' 
        WHERE id_ticket = $1`,
       [finalTicketId]
     );
