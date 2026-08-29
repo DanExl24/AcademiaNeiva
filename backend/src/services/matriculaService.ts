@@ -389,6 +389,8 @@ export class MatriculaService {
       )
       .leftJoin('padre_familia as pf', 'pf.id_padrefamilia', 'dp.id_padrefamilia')
       .leftJoin('usuario as u_par', 'pf.id_usuario', 'u_par.id_usuario')
+      .leftJoin('tickets_soporte as ts', 'ts.id_ticket', 'm.id_ticket')
+      .leftJoin('usuario as u_resp', 'u_resp.id_usuario', 'm.id_usuario_responsable')
       .select([
         'm.id_matricula',
         'm.id_estudiante',
@@ -398,6 +400,8 @@ export class MatriculaService {
         'm.id_anio',
         'm.estado',
         'm.tipo',
+        'm.motivo',
+        'm.observaciones',
         'm.correo_padre',
         'm.token_seguimiento',
         'm.tiene_discapacidad',
@@ -408,6 +412,11 @@ export class MatriculaService {
         'm.fecha_aprobacion',
         'm.es_traslado',
         'm.id_ticket',
+        'm.id_usuario_responsable',
+        sql<string | null>`TRIM(CONCAT(COALESCE(u_resp.nombre, ''), ' ', COALESCE(u_resp.apellido, '')))`.as('responsable_nombre'),
+        'ts.codigo_ticket',
+        'ts.asunto as ticket_asunto',
+        'ts.descripcion as ticket_descripcion',
         'ne.nombre as grado_nivel',
         'tg.nombre as tipo_grado',
         's.nombre as seccion',
