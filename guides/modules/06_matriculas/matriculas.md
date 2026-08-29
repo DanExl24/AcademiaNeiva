@@ -67,64 +67,77 @@ Asimismo, implementa almacenamiento binario seguro (`BYTEA`) en PostgreSQL para 
 
 ```mermaid
 flowchart TD
-    A[Directivo o Secretaría] -->|Opción 1: Desde Mesa de Ayuda SupportView.vue| B[Ticket Soporte MATRICULA_EXTRAORDINARIA]
-    A -->|Opción 2: Desde Bandeja de Matrículas EnrollmentManagement.vue| C[Modal de Matrícula Extraordinaria]
+    A[Directivo o Secretaría] -->|Opción 1: Mesa de Ayuda SupportView.vue| B[Ticket Soporte MATRICULA_EXTRAORDINARIA]
+    A -->|Opción 2: Bandeja Directiva EnrollmentManagement.vue| C[Modal de Matrícula Extraordinaria]
     
     B --> D[Autorización en Backend POST /api/academic-admin/matriculas/extraordinaria]
     C --> D
     
     D --> E[Transacción Atómica Kysely]
-    E --> F[1. Valida año lectivo ABIERTO y período ordinario cerrado]
-    E --> G[2. Registra o actualiza Ticket en tickets_soporte con estado EN_PROCESO y observaciones JSON]
-    E --> H[3. Inserta registro en matricula tipo EXTRAORDINARIA, estado PENDIENTE, con token UUID, motivo y notas]
+    E --> F[1. Valida año lectivo ABIERTO]
+    E --> G[2. Registra o actualiza Ticket en tickets_soporte EN_PROCESO con obs JSON]
+    E --> H[3. Pre-crea fila en matricula tipo EXTRAORDINARIA, estado PENDIENTE, con token UUID y notas]
     
     H --> I[Despacho de Correo NotificationService.sendExtraordinaryApprovalEmail]
-    I --> J[Acudiente recibe email con Token Único y Enlace Directo /matricula/corregir/:token]
+    I --> J[Acudiente recibe email con Token Único y Enlace Directo /matricula?token=:token]
     
-    H --> K[Matrícula aparece de inmediato en Bandeja Directiva EnrollmentManagement.vue]
+    H --> K[Matrícula visible de inmediato en Bandeja Directiva EnrollmentManagement.vue]
     K --> L[Directivo abre Expediente en EnrollmentReviewDrawer.vue]
     
-    L --> M{¿El padre ya cargó los documentos?}
-    M -->|NO| N[Muestra Badge 'Pendiente por cargue de documentos' + Motivo + Observaciones + Botón Copiar Enlace]
-    M -->|SÍ| O[Muestra Badge 'Documentos cargados' + Visor de archivos + Asignación de Salón]
+    L --> M{¿El padre ya radicó los documentos?}
+    M -->|NO| N[Badge 'Pendiente por cargue de documentos' + Motivo + Observaciones + Botón Copiar Enlace /matricula?token=:token]
+    M -->|SÍ| O[Badge 'Documentos cargados' + Visor de archivos + Pre-asignación de Salón]
     
-    J --> P[Acudiente diligencia datos y sube documentos vía token]
-    P --> O
+    J --> P[Acudiente abre /matricula?token=:token]
+    P --> Q[EnrollmentView.vue: Colegio bloqueado, Correo verificado, Banner amable con Bypass de fechas]
+    Q --> R[Acudiente selecciona Nivel, Grado, Jornada y adjunta los documentos requeridos]
+    R --> S[Envío del formulario a POST /api/matriculas/submit con el token]
     
-    O --> Q[Directivo valida soportes y asigna salón]
-    Q --> R[Formalización en FinalRegistration.vue]
-    R --> S[Matrícula pasa a ACTIVA, crea estudiante/padre y resuelve Ticket a RESUELTO]
+    S --> T[Backend: Actualiza IN-PLACE la fila de matricula existente y guarda archivos en documento_matriculas]
+    T --> O
+    
+    O --> U[Directivo valida soportes y confirma salón]
+    U --> V[Formalización en FinalRegistration.vue]
+    V --> W[Matrícula pasa a ACTIVA, crea estudiante/padre y resuelve Ticket a RESUELTO]
 ```
 
-### Fases Operativas:
+### Fases Operativas Paso a Paso:
 
-1. **Creación / Autorización:**
-   - La institución puede autorizar una matrícula extraordinaria para un **estudiante nuevo** o un **estudiante existente** (en cuyo caso se autocompletan los datos y correo del acudiente).
-   - Se captura el **motivo de la excepción** y las **observaciones institucionales**.
-   - Si no existía un ticket previo de soporte, el backend genera automáticamente un ticket de trazabilidad con `tipo_incidencia = 'MATRICULA_EXTRAORDINARIA'` y `estado = 'EN_PROCESO'`.
+1. **Creación / Autorización Institucional:**
+   - La institución educativa autoriza un cupo extraordinario para un **estudiante nuevo** o un **estudiante existente** (autocompletando automáticamente los datos y correo del acudiente).
+   - Se registra obligatoriamente el **motivo de la excepción** y las **observaciones internas** de secretaría.
+   - El backend genera/actualiza el ticket en `tickets_soporte` (`tipo_incidencia = 'MATRICULA_EXTRAORDINARIA'` y `estado = 'EN_PROCESO'`).
 
-2. **Persistencia y Emisión del Token:**
-   - Se inserta la fila en `matricula` en estado `PENDIENTE`, `tipo = 'EXTRAORDINARIA'`, asociando el `id_ticket`, el `id_usuario_responsable`, el motivo y las observaciones.
-   - Se genera un token criptográfico único (`token_seguimiento` de tipo UUID).
+2. **Persistencia Inicial y Emisión del Token:**
+   - Se inserta la fila base en `matricula` en estado `PENDIENTE` (`tipo = 'EXTRAORDINARIA'`), asociando el `id_ticket`, el `id_usuario_responsable`, el motivo y las observaciones.
+   - Se genera el `token_seguimiento` UUID criptográfico de acceso exclusivo.
 
-3. **Notificación y Acceso para el Acudiente:**
-   - El servicio de notificaciones envía un correo electrónico al acudiente con su token y el enlace directo (`/matricula/corregir/:token`).
-   - El acudiente puede ingresar en cualquier momento para seleccionar el grado, diligenciar los datos del aspirante y adjuntar los documentos de soporte requeridos sin restricciones de fechas de calendario regular.
+3. **Notificación por Correo al Acudiente:**
+   - El sistema despacha el correo electrónico con el token único y el botón de acción configurado con la URL directa:  
+     `${FRONTEND_URL}/matricula?token=${token}`.
 
-4. **Visibilidad en la Bandeja Directiva (`EnrollmentManagement.vue`):**
-   - La matrícula extraordinaria aparece de inmediato en la pestaña de **Nuevas (Por Revisar)** con su badge identificador `EXTRAORDINARIA`.
-   - Al pulsar "Revisar", se abre el drawer especializado [`EnrollmentReviewDrawer.vue`](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/components/matriculas/EnrollmentReviewDrawer.vue).
+4. **Experiencia del Padre en el Formulario de Matrícula ([`EnrollmentView.vue`](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/public/EnrollmentView.vue)):**
+   - Al ingresar con el token, el padre encuentra el formulario estándar de matrícula pero optimizado:
+     - **Colegio preseleccionado y bloqueado:** Se asegura que el aspirante radique en la institución que otorgó la autorización.
+     - **Correo verificado automáticamente:** Se precarga su email y se marca como verificado, eliminando la necesidad de solicitar un código OTP de 6 dígitos redundante.
+     - **Bypass de calendario:** Aunque las fechas ordinarias de inscripción del colegio estén cerradas o deshabilitadas, el token permite avanzar sin bloqueos.
+     - **Banner informativo amable:** Muestra una tarjeta destacada con icono `Sparkles` explicando la excepción y guiando al acudiente paso a paso.
+     - **Selección académica y cargue:** El padre elige el Nivel, Grado y Jornada, adjunta los documentos requeridos (Paso 2) e ingresa su teléfono de contacto (Paso 3).
 
-5. **Expediente Enriquecido en el Drawer (`EnrollmentReviewDrawer.vue`):**
-   - **Tarjeta de Autorización:** Expone el motivo de la excepción, las observaciones registradas, el nombre del directivo responsable y el código del ticket de soporte asociado.
-   - **Indicador Dinámico de Documentación:**
-     - *Si el padre no ha cargado los archivos:* Despliega el badge `⏳ Pendiente por cargue de documentos`, un mensaje informativo y el botón para **copiar el enlace de radicación** para facilitárselo al padre.
-     - *Si el padre ya completó el cargue:* Despliega el badge `✅ Documentos cargados` y habilita la inspección de archivos en el visor protegido.
-   - **Asignación de Salón:** Permite pre-asignar el salón definitivo con cálculo de cupos en tiempo real.
+5. **Radicación y Actualización *In-Place* (Sin Duplicados):**
+   - Al pulsar "Confirmar y Radicar Matrícula", el backend detecta el token de matrícula extraordinaria.
+   - **NO se inserta una nueva fila en `matricula`:** Se actualiza directamente el registro pre-creado (asignando `id_nivel`, `id_grupo`, `tiene_discapacidad`, `es_extranjero` y `correo_padre`).
+   - Se persisten los archivos binarios (`BYTEA`) en `documento_matriculas` vinculados a dicho `id_matricula`.
+   - Se despacha el correo de confirmación de radicación con el token al acudiente.
 
-6. **Formalización Definitiva:**
-   - Una vez validados los documentos, el directivo pasa a [`FinalRegistration.vue`](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/FinalRegistration.vue).
-   - La transacción atómica Kysely da de alta al estudiante, crea los usuarios institucionales, activa la matrícula (`ACTIVA`) y transiciona el ticket de soporte a estado **`RESUELTO`**.
+6. **Recepción en la Bandeja Directiva y Drawer ([`EnrollmentReviewDrawer.vue`](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/components/matriculas/EnrollmentReviewDrawer.vue)):**
+   - En `EnrollmentManagement.vue`, la matrícula aparece en la pestaña *"Nuevas (Por Revisar)"* con su badge distintivo `EXTRAORDINARIA`.
+   - Si el acudiente no ha cargado los soportes: el Drawer expone el badge `⏳ Pendiente por cargue de documentos`, la tarjeta con motivo/observaciones y el botón para **copiar el enlace directo `/matricula?token=:token`** para compartirlo vía WhatsApp/Email.
+   - Una vez el acudiente radica los documentos: el Drawer cambia reactivamente a `✅ Documentos cargados`, permitiendo validar los archivos en el visor integrado y pre-asignar el salón definitivo.
+
+7. **Oficialización y Auto-Resolución:**
+   - El directivo valida los documentos y formaliza en `FinalRegistration.vue`.
+   - La transacción atómica Kysely da de alta al estudiante, crea los usuarios, pasa la matrícula a `ACTIVA` y **resuelve automáticamente el ticket de soporte asociado a estado `'RESUELTO'`**.
 
 ---
 

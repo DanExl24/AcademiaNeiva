@@ -24,25 +24,31 @@ Este documento detalla las reglas de negocio técnicas y funcionales del módulo
 
 ---
 
-### RN-MAT-002: Habilitación de Matrícula Extraordinaria, Trazabilidad de Soporte y Expediente en Drawer
+### RN-MAT-002: Habilitación de Matrícula Extraordinaria, Bypass de Calendario, Actualización In-Place y Expediente en Drawer
 - **Descripción:** Una solicitud de tipo `EXTRAORDINARIA` se origina mediante autorización directiva expresa, bien sea respondiendo a un **Ticket de Soporte** (`tipo_incidencia = 'MATRICULA_EXTRAORDINARIA'`) o directamente desde la consola de **Gestión de Matrículas** (`EnrollmentManagement.vue` a través del modal `ExtraordinaryEnrollmentModal.vue`).
   1. **Validaciones Previas:** Exige que el colegio cuente con un año lectivo en estado `ABIERTO` en `anio_lectivo`. Si el período de inscripciones ordinarias en `configuracion_inscripcion` se encuentra abierto y vigente, el sistema orienta a tramitar la inscripción por el canal regular.
   2. **Persistencia y Trazabilidad:** El controlador [`enrollmentAdminController.ts`](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdmin/enrollmentAdminController.ts) (`createExtraordinaryEnrollment`) ejecuta una transacción Kysely donde crea o actualiza el ticket en `tickets_soporte` (estado `'EN_PROCESO'` serializando las notas en la columna `observaciones` como un arreglo JSON) y pre-crea la fila en `matricula` en estado `PENDIENTE` (`tipo = 'EXTRAORDINARIA'`), almacenando el `motivo`, `observaciones`, `id_usuario_responsable`, `id_ticket` y generando un `token_seguimiento` de tipo UUID.
-  3. **Notificación al Acudiente:** Se despacha un correo (`NotificationService.sendExtraordinaryApprovalEmail`) con el enlace directo de radicación (`/matricula/corregir/:token`). El acudiente puede radicar datos y documentos extemporáneamente sin restricciones de fechas.
-  4. **Expediente en Drawer Directivo:** Al consultar el expediente (`MatriculaService.getDetails`), el sistema retorna el motivo, observaciones, responsable y ticket asociado. En [`EnrollmentReviewDrawer.vue`](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/components/matriculas/EnrollmentReviewDrawer.vue), se despliega una tarjeta dedicada y un indicador reactivo de estado de cargue (`⏳ Pendiente por cargue de documentos` con botón de copia de enlace vs `✅ Documentos cargados` con visor de archivos).
-  5. **Auto-Resolución:** Al culminar la formalización (`finalizeEnrollment`) o cancelar la matrícula (`cancelEnrollment`), el sistema transiciona automáticamente el ticket de soporte asociado a estado `'RESUELTO'`.
-- **Motivo:** Garantiza un control estricto de excepciones institucionales bajo trazabilidad inmutable de soporte, previene la reapertura pública masiva de fechas y otorga visibilidad completa al directivo sobre el avance del cargue documental del acudiente.
+  3. **Notificación y Experiencia del Acudiente:** Se despacha un correo (`NotificationService.sendExtraordinaryApprovalEmail`) con el enlace directo al formulario completo de matrícula: `${FRONTEND_URL}/matricula?token=${token}`. Al abrir [`EnrollmentView.vue`](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/public/EnrollmentView.vue):
+     - El colegio se preselecciona y bloquea.
+     - El correo del acudiente se precarga y marca como verificado (omitiendo solicitud de código OTP de 6 dígitos).
+     - El token aplica bypass al calendario cerrado y despliega un banner de excepción autorizada con icono `Sparkles`.
+  4. **Actualización In-Place (Sin Duplicados):** Al enviar el formulario de matrícula (`POST /api/matriculas/submit`), el backend detecta el token de matrícula extraordinaria y **no inserta un nuevo registro en la tabla `matricula`**, sino que actualiza *in-place* la fila previamente pre-creada (`id_nivel`, `id_grupo`, `tiene_discapacidad`, `es_extranjero`, `correo_padre`), guardando los archivos binarios en `documento_matriculas`.
+  5. **Expediente en Drawer Directivo:** Al consultar el expediente (`MatriculaService.getDetails`), el sistema retorna el motivo, observaciones, responsable y ticket asociado. En [`EnrollmentReviewDrawer.vue`](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/components/matriculas/EnrollmentReviewDrawer.vue), se despliega una tarjeta dedicada y un indicador reactivo de estado de cargue (`⏳ Pendiente por cargue de documentos` con botón de copia de enlace `/matricula?token=:token` vs `✅ Documentos cargados` con visor de archivos).
+  6. **Auto-Resolución:** Al culminar la formalización (`finalizeEnrollment`) o cancelar la matrícula (`cancelEnrollment`), el sistema transiciona automáticamente el ticket de soporte asociado a estado `'RESUELTO'`.
+- **Motivo:** Garantiza un control estricto de excepciones institucionales bajo trazabilidad inmutable de soporte, evita la creación de registros duplicados en la base de datos, otorga una experiencia fluida al padre de familia y provee visibilidad completa al directivo sobre el avance documental.
 - **Archivos donde se implementa:**
   - [enrollmentAdminController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdmin/enrollmentAdminController.ts) (`createExtraordinaryEnrollment`)
-  - [matriculaService.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/services/matriculaService.ts) (`getDetails`, `finalizeEnrollment`, `cancelEnrollment`)
+  - [matriculaService.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/services/matriculaService.ts) (`createEnrollment`, `getDetails`, `finalizeEnrollment`, `cancelEnrollment`)
+  - [EnrollmentView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/public/EnrollmentView.vue)
   - [EnrollmentManagement.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/EnrollmentManagement.vue)
   - [EnrollmentReviewDrawer.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/components/matriculas/EnrollmentReviewDrawer.vue)
   - [ExtraordinaryEnrollmentModal.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/components/matriculas/ExtraordinaryEnrollmentModal.vue)
   - [SupportView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/shared/SupportView.vue)
 - **Endpoints relacionados:**
   - `POST /api/academic-admin/matriculas/extraordinaria`
+  - `GET /api/matriculas/token/:token`
+  - `POST /api/matriculas/submit`
   - `GET /api/matriculas/:id`
-  - `POST /api/matriculas/update-documents/:token`
   - `POST /api/matriculas/finalize/:id`
 - **Historias de usuario relacionadas:** HU-MAT-007
 

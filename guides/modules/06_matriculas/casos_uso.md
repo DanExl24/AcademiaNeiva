@@ -170,7 +170,7 @@ sequenceDiagram
     Backend->>DB: Transacción Kysely: Valida año ABIERTO, crea/actualiza ticket en tickets_soporte (EN_PROCESO con obs JSON)
     Backend->>DB: Inserta en matricula (tipo EXTRAORDINARIA, estado PENDIENTE, token UUID, motivo, observaciones, responsable)
     Backend->>SMTP: sendExtraordinaryApprovalEmail(correoPadre, nombrePadre, tokenUUID)
-    SMTP-->>Padre: Recibe email con Token de Seguimiento y enlace directo /matricula/corregir/:token
+    SMTP-->>Padre: Recibe email con Token de Seguimiento y botón "Completar Matrícula" -> /matricula?token=:token
     Backend-->>Frontend: Retorna éxito con datos de matrícula y token
     Frontend-->>Directivo: Muestra alerta de éxito y recarga bandeja de matrículas
 
@@ -180,22 +180,24 @@ sequenceDiagram
     Frontend->>Backend: GET /api/matriculas/:id (Retorna motivo, observaciones, responsable, ticket y docs)
     Frontend-->>Directivo: Despliega EnrollmentReviewDrawer.vue
 
-    alt Si el padre aún no ha subido los documentos
-        Frontend-->>Directivo: Muestra badge "Pendiente por cargue de documentos", resumen de autorización y botón "Copiar Enlace para Acudiente"
+    alt Si el padre aún no ha radicado los documentos
+        Frontend-->>Directivo: Muestra badge "⏳ Pendiente por cargue de documentos", resumen de autorización y botón "Copiar Enlace para Acudiente" (/matricula?token=:token)
         Directivo->>Frontend: (Opcional) Clic en "Copiar Enlace para Acudiente" para compartirlo vía WhatsApp/Email
     end
 
     %% Paso 3: Radicación Extemporánea por el Acudiente
-    Padre->>Frontend: Accede al enlace público (/matricula/corregir/:token)
-    Frontend->>Backend: GET /api/matriculas/:token (Bypass de fechas regulares)
-    Padre->>Frontend: Diligencia datos del aspirante, selecciona grado y adjunta archivos requeridos
-    Frontend->>Backend: POST /api/matriculas/update-documents/:token (Multipart Files)
-    Backend->>DB: Inserta archivos binarios en documento_matriculas (BYTEA)
-    Backend-->>Frontend: Confirma cargue de documentos exitoso
+    Padre->>Frontend: Accede al enlace público (/matricula?token=:token)
+    Frontend->>Backend: GET /api/matriculas/token/:token (Bypass de fechas regulares y correo verificado)
+    Frontend-->>Padre: Despliega EnrollmentView.vue con colegio bloqueado, correo verificado y banner de excepción
+    Padre->>Frontend: Selecciona Nivel, Grado, Jornada, adjunta archivos requeridos y digita teléfono
+    Padre->>Frontend: Presiona "Confirmar y Radicar Matrícula"
+    Frontend->>Backend: POST /api/matriculas/submit (Multipart FormData con token de matrícula extraordinaria)
+    Backend->>DB: Actualiza IN-PLACE el registro existente en matricula e inserta archivos en documento_matriculas (BYTEA)
+    Backend-->>Frontend: Confirma radicación exitosa con mensaje de confirmación
 
     %% Paso 4: Revisión Directiva con Documentos Cargados
     Directivo->>Frontend: Vuelve a abrir el Drawer en EnrollmentManagement.vue
-    Frontend-->>Directivo: Muestra badge "Documentos cargados", lista de archivos en visor protegido y selector de salón
+    Frontend-->>Directivo: Muestra badge "✅ Documentos cargados", lista de archivos en visor protegido y selector de salón
     Directivo->>Frontend: Valida documentos y pre-asigna salón con cupos en vivo
     Directivo->>Frontend: Clic en "Finalizar Registro Completo" -> Pasa a FinalRegistration.vue
     Directivo->>Frontend: Confirma datos y presiona "Finalizar Registro"
@@ -209,14 +211,15 @@ sequenceDiagram
 ```
 
 ### Paso a Paso Detallado:
-1. **Autorización Institucional:** El directivo autoriza el cupo extraordinario desde `SupportView.vue` (respondiendo a un ticket) o desde `EnrollmentManagement.vue` (mediante el modal `ExtraordinaryEnrollmentModal.vue`). Registra el motivo y las observaciones.
-2. **Generación del Expediente y Token:** El backend ejecuta una transacción Kysely que pre-crea la fila en `matricula` en estado `PENDIENTE` (`tipo = 'EXTRAORDINARIA'`), emite el `token_seguimiento` UUID, vincula el ticket de soporte y despacha el correo de aprobación al acudiente.
+1. **Autorización Institucional:** El directivo autoriza el cupo extraordinario desde `SupportView.vue` (respondiendo a un ticket de soporte) o desde `EnrollmentManagement.vue` (mediante el modal `ExtraordinaryEnrollmentModal.vue`). Registra el motivo y las observaciones.
+2. **Generación del Expediente y Token:** El backend ejecuta una transacción Kysely que pre-crea la fila en `matricula` en estado `PENDIENTE` (`tipo = 'EXTRAORDINARIA'`), emite el `token_seguimiento` UUID, vincula el ticket de soporte y despacha el correo de aprobación con el enlace `${FRONTEND_URL}/matricula?token=${token}`.
 3. **Visibilidad Inmediata en Bandeja Directiva:** La matrícula aparece de inmediato en la pestaña *"Nuevas (Por Revisar)"* de `EnrollmentManagement.vue` con el badge `EXTRAORDINARIA`.
 4. **Inspección en Drawer Enriquecido (`EnrollmentReviewDrawer.vue`):**
    - El directivo abre el expediente y visualiza la tarjeta con el motivo de autorización, observaciones, responsable y ticket asociado.
-   - Si el acudiente aún no ha cargado los soportes, el sistema expone el indicador de espera y permite copiar el enlace público de radicación con un solo clic.
-5. **Radicación Pública Extemporánea:** El acudiente ingresa por el enlace con token, diligencia el formulario y sube los documentos sin bloqueo por calendario ordinario.
-6. **Validación y Formalización:** El directivo valida los documentos cargados, asigna el salón con control de aforo en tiempo real y culmina la formalización en `FinalRegistration.vue`. El sistema activa la matrícula (`ACTIVA`) y resuelve automáticamente el ticket de soporte (`RESUELTO`).
+   - Si el acudiente aún no ha cargado los soportes, el sistema expone el indicador de espera `⏳ Pendiente por cargue de documentos` y permite copiar el enlace público de radicación (`/matricula?token=:token`) con un solo clic.
+5. **Radicación Pública en Formulario Completo (`EnrollmentView.vue`):** El acudiente ingresa por el enlace con token. El formulario bloquea el colegio autorizado, marca el correo como verificado (omitiendo OTP de 6 dígitos) y aplica bypass al calendario cerrado. El acudiente selecciona el grado y jornada, sube los documentos requeridos (Paso 2) e ingresa su teléfono de contacto (Paso 3).
+6. **Actualización In-Place:** El backend actualiza la fila de `matricula` existente (sin crear duplicados) e inserta los archivos en `documento_matriculas`.
+7. **Validación y Formalización:** El directivo valida los documentos cargados, asigna el salón con control de aforo en tiempo real y culmina la formalización en `FinalRegistration.vue`. El sistema activa la matrícula (`ACTIVA`) y resuelve automáticamente el ticket de soporte (`RESUELTO`).
 
 ---
 
