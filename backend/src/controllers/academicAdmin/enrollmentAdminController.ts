@@ -96,7 +96,7 @@ export const lookupUserIdentity = async (req: Request, res: Response): Promise<v
 
 export const createExtraordinaryEnrollment = async (req: Request, res: Response) => {
   const authReq = req as any;
-  const schoolId = authReq.user?.id_colegio;
+  const schoolId = parseSchoolId(authReq.user?.schoolId || authReq.user?.id_colegio || req.body.schoolId || req.body.id_colegio);
 
   if (!schoolId) {
     res.status(400).json({ error: "No se encontró el colegio del usuario autenticado." });
