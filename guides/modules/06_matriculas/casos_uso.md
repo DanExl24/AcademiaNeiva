@@ -132,20 +132,91 @@ sequenceDiagram
 
 ---
 
-## Caso de Uso 3: Matrícula Extraordinaria por Mesa de Soporte
+## Caso de Uso 3: Proceso de Matrícula Extraordinaria (Desde Autorización hasta Bandeja Directiva y Formalización)
 
 ### Actores
-- **Padre de Familia / Solicitante**
-- **Directivo Escolar**
+- **Directivo Escolar / Secretaría**
+- **Padre de Familia / Acudiente**
 
 ### Precondiciones
-- El solicitante radica un Ticket de Soporte con tipo de incidencia `MATRICULA_EXTRAORDINARIA` solicitando cupo extemporáneo.
+- El colegio cuenta con un Año Lectivo activo en estado `ABIERTO`.
+- El período ordinario de inscripción regular se encuentra cerrado o se requiere una excepción institucional formal.
+- La solicitud puede ser iniciada a petición de un ticket en la Mesa de Ayuda (`SupportView.vue`) o directamente por secretaría en la bandeja de matrículas (`EnrollmentManagement.vue` mediante `ExtraordinaryEnrollmentModal.vue`).
 
-### Flujo Operativo Paso a Paso
-1. **Autorización Directiva en Soporte:** El directivo ingresa a `SupportView.vue`, abre el ticket de matrícula extraordinaria y presiona "Autorizar Matrícula Extraordinaria".
-2. **Pre-creación de Matrícula:** El directivo selecciona si es un estudiante nuevo o existente. El backend ejecuta `POST /api/academic-admin/matriculas/extraordinaria`, pre-creando la fila en `matricula` en estado `PENDIENTE` con `tipo = 'EXTRAORDINARIA'`, asociando el `id_ticket` y generando un `token_seguimiento`.
-3. **Radicación sin Restricción de Fechas:** El acudiente recibe el enlace con el token (`EnrollmentView.vue?token=...`). Al detectar `isExtraordinaryToken = true`, el formulario omite la validación de fechas regulares de `configuracion_inscripcion` y permite adjuntar los documentos.
-4. **Evaluación y Resolución Automática:** El directivo revisa los documentos en `EnrollmentDetails.vue` y formaliza en `FinalRegistration.vue`. Al finalizar (`finalizeEnrollment`), el backend activa la matrícula y **actualiza automáticamente el ticket de soporte asociado a estado `'RESUELTO'`**.
+### Diagrama de Secuencia
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Directivo as Directivo / Secretaría
+    actor Padre as Padre de Familia
+    participant Frontend as AcademiaNeiva WebApp
+    participant Backend as Express + Kysely
+    participant DB as PostgreSQL
+    participant SMTP as NotificationService
+
+    %% Paso 1: Autorización
+    alt Vía 1: Desde Mesa de Soporte (SupportView.vue)
+        Directivo->>Frontend: Abre ticket de soporte con incidencia MATRICULA_EXTRAORDINARIA
+        Directivo->>Frontend: Presiona "Autorizar Matrícula Extraordinaria"
+    else Vía 2: Desde Bandeja de Matrículas (EnrollmentManagement.vue)
+        Directivo->>Frontend: Clic en botón "Matrícula Extraordinaria" (Abre ExtraordinaryEnrollmentModal.vue)
+        Directivo->>Frontend: Selecciona estudiante existente (autocompleta acudiente) o nuevo
+        Directivo->>Frontend: Registra motivo de la excepción y observaciones internas
+    end
+
+    Directivo->>Frontend: Confirma y envía formulario de autorización
+    Frontend->>Backend: POST /api/academic-admin/matriculas/extraordinaria
+    Backend->>DB: Transacción Kysely: Valida año ABIERTO, crea/actualiza ticket en tickets_soporte (EN_PROCESO con obs JSON)
+    Backend->>DB: Inserta en matricula (tipo EXTRAORDINARIA, estado PENDIENTE, token UUID, motivo, observaciones, responsable)
+    Backend->>SMTP: sendExtraordinaryApprovalEmail(correoPadre, nombrePadre, tokenUUID)
+    SMTP-->>Padre: Recibe email con Token de Seguimiento y enlace directo /matricula/corregir/:token
+    Backend-->>Frontend: Retorna éxito con datos de matrícula y token
+    Frontend-->>Directivo: Muestra alerta de éxito y recarga bandeja de matrículas
+
+    %% Paso 2: Llegada a la Bandeja y Consulta en Drawer
+    Note over Directivo,Frontend: La matrícula aparece de inmediato en la bandeja de entrada (EnrollmentManagement.vue)
+    Directivo->>Frontend: Clic en "Revisar" sobre la matrícula extraordinaria
+    Frontend->>Backend: GET /api/matriculas/:id (Retorna motivo, observaciones, responsable, ticket y docs)
+    Frontend-->>Directivo: Despliega EnrollmentReviewDrawer.vue
+
+    alt Si el padre aún no ha subido los documentos
+        Frontend-->>Directivo: Muestra badge "Pendiente por cargue de documentos", resumen de autorización y botón "Copiar Enlace para Acudiente"
+        Directivo->>Frontend: (Opcional) Clic en "Copiar Enlace para Acudiente" para compartirlo vía WhatsApp/Email
+    end
+
+    %% Paso 3: Radicación Extemporánea por el Acudiente
+    Padre->>Frontend: Accede al enlace público (/matricula/corregir/:token)
+    Frontend->>Backend: GET /api/matriculas/:token (Bypass de fechas regulares)
+    Padre->>Frontend: Diligencia datos del aspirante, selecciona grado y adjunta archivos requeridos
+    Frontend->>Backend: POST /api/matriculas/update-documents/:token (Multipart Files)
+    Backend->>DB: Inserta archivos binarios en documento_matriculas (BYTEA)
+    Backend-->>Frontend: Confirma cargue de documentos exitoso
+
+    %% Paso 4: Revisión Directiva con Documentos Cargados
+    Directivo->>Frontend: Vuelve a abrir el Drawer en EnrollmentManagement.vue
+    Frontend-->>Directivo: Muestra badge "Documentos cargados", lista de archivos en visor protegido y selector de salón
+    Directivo->>Frontend: Valida documentos y pre-asigna salón con cupos en vivo
+    Directivo->>Frontend: Clic en "Finalizar Registro Completo" -> Pasa a FinalRegistration.vue
+    Directivo->>Frontend: Confirma datos y presiona "Finalizar Registro"
+
+    %% Paso 5: Oficialización y Auto-Resolución
+    Frontend->>Backend: POST /api/matriculas/finalize/:id
+    Backend->>DB: Transacción Kysely: FOR UPDATE cupos, crea estudiante/usuario/padre, matricula -> ACTIVA
+    Backend->>DB: Actualiza ticket_soporte asociado a estado 'RESUELTO'
+    Backend->>SMTP: Envía email con credenciales de acceso institucional al acudiente
+    Frontend-->>Directivo: Notificación de matrícula extraordinaria oficializada exitosamente
+```
+
+### Paso a Paso Detallado:
+1. **Autorización Institucional:** El directivo autoriza el cupo extraordinario desde `SupportView.vue` (respondiendo a un ticket) o desde `EnrollmentManagement.vue` (mediante el modal `ExtraordinaryEnrollmentModal.vue`). Registra el motivo y las observaciones.
+2. **Generación del Expediente y Token:** El backend ejecuta una transacción Kysely que pre-crea la fila en `matricula` en estado `PENDIENTE` (`tipo = 'EXTRAORDINARIA'`), emite el `token_seguimiento` UUID, vincula el ticket de soporte y despacha el correo de aprobación al acudiente.
+3. **Visibilidad Inmediata en Bandeja Directiva:** La matrícula aparece de inmediato en la pestaña *"Nuevas (Por Revisar)"* de `EnrollmentManagement.vue` con el badge `EXTRAORDINARIA`.
+4. **Inspección en Drawer Enriquecido (`EnrollmentReviewDrawer.vue`):**
+   - El directivo abre el expediente y visualiza la tarjeta con el motivo de autorización, observaciones, responsable y ticket asociado.
+   - Si el acudiente aún no ha cargado los soportes, el sistema expone el indicador de espera y permite copiar el enlace público de radicación con un solo clic.
+5. **Radicación Pública Extemporánea:** El acudiente ingresa por el enlace con token, diligencia el formulario y sube los documentos sin bloqueo por calendario ordinario.
+6. **Validación y Formalización:** El directivo valida los documentos cargados, asigna el salón con control de aforo en tiempo real y culmina la formalización en `FinalRegistration.vue`. El sistema activa la matrícula (`ACTIVA`) y resuelve automáticamente el ticket de soporte (`RESUELTO`).
 
 ---
 

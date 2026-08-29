@@ -85,15 +85,19 @@ Este documento describe las Historias de Usuario del módulo de **Matrículas e 
 
 ---
 
-### HU-MAT-007: Trámite de Matrícula Extraordinaria por Mesa de Soporte
-- **Como:** Directivo Escolar.
-- **Quiero:** Autorizar una matrícula extraordinaria desde un ticket de soporte técnico.
-- **Para:** Permitir el ingreso extemporáneo de un estudiante fuera del calendario ordinario.
+### HU-MAT-007: Trámite Integral de Matrícula Extraordinaria y Expediente Enriquecido
+- **Como:** Directivo Escolar o Personal de Secretaría.
+- **Quiero:** Autorizar matrículas extraordinarias (vía Mesa de Ayuda o desde la Bandeja de Matrículas), autocompletar acudientes existentes, registrar el motivo y observaciones, consultar su trazabilidad en el Drawer de revisión y compartir el enlace de radicación con el padre.
+- **Para:** Permitir el ingreso extemporáneo controlado de aspirantes con pleno conocimiento del estado documental y resolución automática de tickets.
 - **Criterios de Aceptación:**
-  1. La opción se habilita exclusivamente para tickets con incidencia `MATRICULA_EXTRAORDINARIA`.
-  2. El directivo selecciona si es un estudiante nuevo o existente y el sistema pre-crea la matrícula en estado `PENDIENTE` vinculando el `id_ticket` y generando un token UUID.
-  3. El acudiente radica su formulario usando el token sin restricción de fechas cerradas.
-  4. Al oficializar la matrícula, el ticket de soporte cambia automáticamente a estado `RESUELTO`.
+  1. La autorización puede ejecutarse desde un ticket de soporte con incidencia `MATRICULA_EXTRAORDINARIA` o desde el modal directo `ExtraordinaryEnrollmentModal.vue` en `EnrollmentManagement.vue`.
+  2. Si se selecciona un estudiante existente, el sistema autocompleta los datos del acudiente y su correo electrónico de contacto.
+  3. El directivo registra obligatoriamente el **motivo de la excepción** y las **observaciones internas**. El backend crea la fila en `matricula` en estado `PENDIENTE` (`tipo = 'EXTRAORDINARIA'`), emite el `token_seguimiento` UUID y asocia/crea el ticket en `tickets_soporte` (`EN_PROCESO`).
+  4. El acudiente recibe el correo de aprobación con su enlace directo (`/matricula/corregir/:token`) permitiéndole radicar sin restricción de fechas cerradas.
+  5. En la bandeja directiva (`EnrollmentReviewDrawer.vue`), la matrícula extraordinaria expone una tarjeta destacada con el motivo, observaciones, responsable y ticket asociado.
+  6. Si el acudiente aún no ha cargado los documentos, el drawer muestra el badge reactivo `⏳ Pendiente por cargue de documentos`, un mensaje explicativo y un botón interactivo para **copiar el enlace de radicación**.
+  7. Al cargar el acudiente los archivos, el drawer transiciona a `✅ Documentos cargados`, permitiendo validar soportes y asignar aula física.
+  8. Al formalizar en `FinalRegistration.vue`, la matrícula pasa a `ACTIVA` y el ticket de soporte cambia automáticamente a estado `RESUELTO`.
 
 ---
 
