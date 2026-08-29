@@ -262,13 +262,44 @@ export const createExtraordinaryEnrollment = async (req: Request, res: Response)
 
     const newMat = matRes.rows[0];
 
-    // 5. Actualizar el estado del ticket a EN_PROCESO
-    await client.query(
-      `UPDATE tickets_soporte 
-       SET estado = 'EN_PROCESO', observaciones = 'Matrícula Extraordinaria autorizada y en curso' 
-       WHERE id_ticket = $1`,
-      [finalTicketId]
-    );
+    // 5. Actualizar el estado del ticket a EN_PROCESO con observación en JSON
+    try {
+      const ticketObsRes = await client.query(
+        "SELECT observaciones FROM tickets_soporte WHERE id_ticket = $1",
+        [finalTicketId]
+      );
+      let currentObs: any[] = [];
+      if (ticketObsRes.rows.length > 0 && ticketObsRes.rows[0].observaciones) {
+        try {
+          currentObs = typeof ticketObsRes.rows[0].observaciones === 'string'
+            ? JSON.parse(ticketObsRes.rows[0].observaciones)
+            : ticketObsRes.rows[0].observaciones;
+          if (!Array.isArray(currentObs)) currentObs = [currentObs];
+        } catch {
+          currentObs = [];
+        }
+      }
+      currentObs.push({
+        id_usuario: authReq.user!.id,
+        nombre_usuario: 'Secretaría / Directivo',
+        tipo: 'DIRECTIVO',
+        mensaje: 'Matrícula Extraordinaria autorizada y en curso',
+        fecha_creacion: new Date().toISOString()
+      });
+
+      await client.query(
+        `UPDATE tickets_soporte 
+         SET estado = 'EN_PROCESO', observaciones = $1 
+         WHERE id_ticket = $2`,
+        [JSON.stringify(currentObs), finalTicketId]
+      );
+    } catch (ticketErr) {
+      console.warn("Notice updating ticket status:", ticketErr);
+      await client.query(
+        `UPDATE tickets_soporte SET estado = 'EN_PROCESO' WHERE id_ticket = $1`,
+        [finalTicketId]
+      );
+    }
 
     await client.query("COMMIT");
 
@@ -746,10 +777,40 @@ export const rejectReingresoEnrollment = async (req: Request, res: Response): Pr
 
     // If linked to a support ticket, mark ticket as RESUELTO
     if (mat.id_ticket) {
-      await client.query(
-        "UPDATE tickets_soporte SET estado = 'RESUELTO', observaciones = $1 WHERE id_ticket = $2",
-        [`Solicitud de reingreso cancelada por directivo: ${finalMotivo}`, mat.id_ticket]
-      );
+      try {
+        const ticketObsRes = await client.query(
+          "SELECT observaciones FROM tickets_soporte WHERE id_ticket = $1",
+          [mat.id_ticket]
+        );
+        let currentObs: any[] = [];
+        if (ticketObsRes.rows.length > 0 && ticketObsRes.rows[0].observaciones) {
+          try {
+            currentObs = typeof ticketObsRes.rows[0].observaciones === 'string'
+              ? JSON.parse(ticketObsRes.rows[0].observaciones)
+              : ticketObsRes.rows[0].observaciones;
+            if (!Array.isArray(currentObs)) currentObs = [currentObs];
+          } catch {
+            currentObs = [];
+          }
+        }
+        currentObs.push({
+          id_usuario: authReq.user!.id,
+          nombre_usuario: 'Secretaría / Directivo',
+          tipo: 'DIRECTIVO',
+          mensaje: `Solicitud de matrícula cancelada por directivo: ${finalMotivo}`,
+          fecha_creacion: new Date().toISOString()
+        });
+
+        await client.query(
+          "UPDATE tickets_soporte SET estado = 'RESUELTO', observaciones = $1 WHERE id_ticket = $2",
+          [JSON.stringify(currentObs), mat.id_ticket]
+        );
+      } catch (ticketErr) {
+        await client.query(
+          "UPDATE tickets_soporte SET estado = 'RESUELTO' WHERE id_ticket = $1",
+          [mat.id_ticket]
+        );
+      }
     }
 
     // Notification: Send cancellation email to parent
