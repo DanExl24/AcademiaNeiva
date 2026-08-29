@@ -41,7 +41,7 @@ El propósito de este documento es especificar los requisitos funcionales y no f
 3. Gobierno de directivos, asignación de sedes y trazabilidad de credenciales por ticket.
 4. Parametrización de estructura escolar (niveles, grados, salones con cupos y asignaturas).
 5. Gestión de docentes, captura de datos telefónicos y asignación académica (`detalle_grados`).
-6. Matrícula e inscripción pública con verificación previa de correo por OTP y validación documental.
+6. Matrícula e inscripción pública con verificación previa de correo por OTP, autorización de matrículas extraordinarias (con bypass de calendario, trazabilidad de tickets de soporte y drawer enriquecido), reingresos con matriz documental y validación documental.
 7. Ciclo de vida del estudiante (`ACTIVO`, `RETIRADO`, `EXPULSADO`) y suspensiones automáticas.
 8. Configuración del calendario escolar, escalas de notas y congelamiento de periodos cerrados.
 9. Planeación curricular por competencias con sincronización en caliente (`sync_uuid`) para cursos paralelos.
@@ -113,7 +113,7 @@ Este documento está estructurado en tres secciones principales: la Sección 1 d
 3. **Usuarios y Directivos (DIR)**: Administración de personal directivo y trazabilidad de credenciales.
 4. **Estructura Escolar (EST)**: Gestión de niveles, grados, grupos (control de cupos) y materias.
 5. **Docentes (DOC)**: Carga académica, validación de teléfono y asignaciones docentes en `detalle_grados`.
-6. **Matrículas (MAT)**: Formulario público, verificación previa OTP de email, tokens UUID y validación documental.
+6. **Matrículas (MAT)**: Formulario público, verificación previa OTP de email, tokens UUID, autorización y gestión de matrículas extraordinarias con motivo/observaciones, reingresos y validación documental con visor protegido.
 7. **Estudiantes y Estados (STU)**: Control de estados (`ACTIVO`, `RETIRADO`, `EXPULSADO`) y suspensiones automáticas.
 8. **Configuración Académica (CONF)**: Periodos académicos, escalas de notas y bloqueos por cierre.
 9. **Competencias (COMP)**: Planeación curricular y propagación a cursos paralelos vía `sync_uuid`.
@@ -203,10 +203,13 @@ Este documento está estructurado en tres secciones principales: la Sección 1 d
 - **RF-DOC-002 (HU-DOC-002)**: El sistema debe enviar un correo de bienvenida automático al docente con sus credenciales iniciales.
 
 ### 3.2.6 Módulo 06: Matrículas e Inscripciones
-- **RF-MAT-001 (HU-MAT-001)**: El sistema debe requerir la verificación previa del correo del acudiente mediante código OTP de 6 dígitos antes de procesar el formulario público de inscripción.
+- **RF-MAT-001 (HU-MAT-001)**: El sistema debe requerir la verificación previa del correo del acudiente mediante código OTP de 6 dígitos antes de procesar el formulario público de inscripción ordinaria.
 - **RF-MAT-002 (HU-MAT-002)**: La inscripción captura y valida obligatoriamente los teléfonos de contacto del estudiante y acudiente.
-- **RF-MAT-003 (HU-MAT-003)**: El aspirante debe consultar su trámite sin iniciar sesión mediante un token UUID de seguimiento.
-- **RF-MAT-004 (HU-MAT-004)**: Al oficializar la matrícula, el sistema creará en una sola transacción la ficha de `estudiante` activa, el registro de acudiente y la cuenta de `usuario`.
+- **RF-MAT-003 (HU-MAT-003)**: El aspirante debe consultar su trámite y subsanar archivos sin iniciar sesión mediante un token UUID de seguimiento.
+- **RF-MAT-004 (HU-MAT-006)**: Al oficializar la matrícula, el sistema creará en una sola transacción atómica Kysely con bloqueo `FOR UPDATE` la ficha de `estudiante` activa, el registro de acudiente, la cuenta de `usuario` y el vínculo de parentesco.
+- **RF-MAT-005 (HU-MAT-007)**: El Directivo puede autorizar matrículas extraordinarias (vía Mesa de Soporte o Bandeja de Matrículas), autocompletando acudientes existentes, registrando motivo y observaciones institucionales, asociando un ticket en `tickets_soporte` (`EN_PROCESO` con notas JSON), emitiendo un `token_seguimiento` UUID para radicación extemporánea y resolviendo automáticamente el ticket a `RESUELTO` al oficializar.
+- **RF-MAT-006 (HU-MAT-007)**: El Drawer directivo de revisión de matrícula debe exponer la tarjeta con motivo, observaciones, responsable y ticket asociado, además de un badge dinámico con el estado de cargue de documentos (`⏳ Pendiente por cargue` con copiado de enlace vs `✅ Documentos cargados`).
+- **RF-MAT-007 (HU-MAT-008)**: El sistema debe gestionar el reingreso de estudiantes en estado `RETIRADO` mediante matriz documental inteligente (`VIGENTE` vs `RENOVAR`), reservando cupos en tiempo real.
 
 ### 3.2.7 Módulo 07: Estudiantes y Estados
 - **RF-STU-001 (HU-ESTU-001)**: El Directivo debe consultar la ficha consolidada de rendimiento y asistencias del estudiante.
@@ -327,7 +330,7 @@ Este documento está estructurado en tres secciones principales: la Sección 1 d
 | **DIR** | Directivos | `usuario`, `directivo` | `usuarioController.ts` |
 | **EST** | Estructura Escolar | `nivel`, `tipo_grado`, `grupo`, `materia` | `academicAdminController.ts` |
 | **DOC** | Docentes | `docente`, `detalle_grados` | `academicAdminController.ts` |
-| **MAT** | Matrículas | `matricula`, `documento_matricula` | `matriculaController.ts` |
+| **MAT** | Matrículas | `matricula`, `documento_matriculas`, `tickets_soporte`, `configuracion_inscripcion` | `enrollmentAdminController.ts`, `matriculaController.ts`, `reingresoController.ts` |
 | **STU** | Estudiantes | `estudiante`, `sancion` | `studentController.ts` |
 | **CONF** | Configuración Académica | `periodo_academico`, `escala_valoracion` | `academicAdminController.ts` |
 | **COMP** | Competencias | `competencia`, `competencia_sincronizada` | `academicAdminController.ts` |
