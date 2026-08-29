@@ -196,7 +196,7 @@ export const createExtraordinaryEnrollment = async (req: Request, res: Response)
     // 2.1. Validar que el período de inscripción ordinario NO esté vigente
     const configRes = await client.query(
       `SELECT habilitada, fecha_inicio, fecha_cierre 
-       FROM configuracion_matricula 
+       FROM configuracion_inscripcion 
        WHERE id_colegio = $1 AND id_anio = $2`,
       [schoolId, finalAnioId]
     );
