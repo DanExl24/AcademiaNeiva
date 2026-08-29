@@ -1,37 +1,9 @@
 import { Request, Response } from "express";
-import { PoolClient } from "pg";
-import { pool } from "../../config/db";
-import bcrypt from "bcrypt";
+import { db } from "../../config/kysely";
+import { sql } from "kysely";
 import { randomUUID } from "crypto";
 import { NotificationService } from "../../services/notificationService";
-import { validateDocumentUniqueness, normalizeDocument, validateDocumentFormatByTipo } from "../../utils/documentValidation";
-import { formatFriendlyErrorMessage } from "../../utils/errorHelper";
-import { normalizeGradeName, isDuplicateOrSimilarGrade } from "../../utils/gradeNormalization";
-import { getDefaultMonthsLabelForPeriodOrder, getAcademicYearLabel } from "../../config/academicCalendarDefaults";
-import {
-  DEFAULT_COMPETENCY_TEXT,
-  ensureCompetencySchema,
-  harmonizeCompetenciesForSchoolYear,
-  syncCompetencyAcrossGrade,
-  TeachingContext,
-} from "../../config/competencyMigration";
-import {
-  AuthRequest,
-  path,
-  parseSchoolId,
-  ensureTeacherStatusColumn,
-  autoSwitchPeriodsForYear,
-  ensureAcademicYearForSchool,
-  ensureSchoolSettingsTable,
-  ensureAcademicPeriodTrimesterColumn,
-  ensureAcademicPeriodDayColumns,
-  ensureAcademicPeriodMonthColumns,
-  ensureAcademicPeriodPendingStatus,
-  ensureSchoolDefaultSettings,
-  roundToOne,
-  syncSchoolScalesAndGrades,
-  getUserEligibleAcademicYears
-} from "./helpers";
+import { parseSchoolId } from "./helpers";
 
 export const lookupUserIdentity = async (req: Request, res: Response): Promise<void> => {
   const schoolId = parseSchoolId(req.query.schoolId);
@@ -44,39 +16,34 @@ export const lookupUserIdentity = async (req: Request, res: Response): Promise<v
   }
 
   try {
-    let query = `
-      SELECT u.id_usuario, u.email,
-             u.nombre,
-             u.apellido,
-             u.documento,
-             u.id_tipodocumento
-      FROM usuario u
-      LEFT JOIN usuario_colegio uc ON uc.id_usuario = u.id_usuario
-      WHERE 1=1
-    `;
-    const params: any[] = [];
+    let query = db
+      .selectFrom("usuario as u")
+      .leftJoin("usuario_colegio as uc", "uc.id_usuario", "u.id_usuario")
+      .select([
+        "u.id_usuario",
+        "u.email",
+        "u.nombre",
+        "u.apellido",
+        "u.documento",
+        "u.id_tipodocumento"
+      ]);
 
     if (documento) {
-      params.push(documento);
-      query += ` AND u.documento = $${params.length}`;
+      query = query.where("u.documento", "=", documento);
     } else if (email) {
-      params.push(email);
-      query += ` AND LOWER(u.email) = $${params.length}`;
+      query = query.where(sql`LOWER(u.email)`, "=", email);
     }
 
     if (schoolId) {
-      params.push(schoolId);
-      query += ` AND uc.id_colegio = $${params.length}`;
+      query = query.where("uc.id_colegio", "=", schoolId);
     }
-    query += ` LIMIT 1`;
 
-    const result = await pool.query(query, params);
-    if (result.rows.length === 0) {
+    const row = await query.limit(1).executeTakeFirst();
+    if (!row) {
       res.json({ found: false });
       return;
     }
 
-    const row = result.rows[0];
     res.json({
       found: true,
       user: {
@@ -127,181 +94,180 @@ export const createExtraordinaryEnrollment = async (req: Request, res: Response)
     return;
   }
 
-  const client = await pool.connect();
   try {
-    await client.query("BEGIN");
+    const tokenSeguimiento = randomUUID();
 
-    // 1. Validar o registrar ticket de soporte
-    if (finalTicketId) {
-      const ticketRes = await client.query(
-        "SELECT * FROM tickets_soporte WHERE id_ticket = $1 AND id_colegio = $2",
-        [finalTicketId, schoolId]
-      );
+    const { newMat } = await db.transaction().execute(async (trx) => {
+      let resolvedTicketId = finalTicketId;
 
-      if (ticketRes.rows.length === 0) {
-        await client.query("ROLLBACK");
-        res.status(404).json({ error: "Ticket de soporte no encontrado en esta institución." });
-        return;
+      // 1. Validar o registrar ticket de soporte
+      if (resolvedTicketId) {
+        const ticket = await trx
+          .selectFrom("tickets_soporte")
+          .selectAll()
+          .where("id_ticket", "=", resolvedTicketId)
+          .where("id_colegio", "=", schoolId)
+          .executeTakeFirst();
+
+        if (!ticket) {
+          throw new Error("TICKET_NOT_FOUND: Ticket de soporte no encontrado en esta institución.");
+        }
+
+        if (ticket.tipo_incidencia !== 'MATRICULA_EXTRAORDINARIA') {
+          throw new Error("INVALID_TICKET_TYPE: El ticket seleccionado debe ser de tipo MATRICULA_EXTRAORDINARIA.");
+        }
+
+        finalSenderName = ticket.nombre_remitente || finalSenderName;
+      } else {
+        // Registrar ticket de trazabilidad originado directamente en secretaría
+        const insertedTicket = await trx
+          .insertInto("tickets_soporte")
+          .values({
+            id_usuario: authReq.user!.id,
+            nombre_remitente: finalSenderName,
+            correo_remitente: finalCorreoPadre,
+            telefono: req.body.telefono || null,
+            tipo_incidencia: 'MATRICULA_EXTRAORDINARIA',
+            asunto: 'Autorización de Matrícula Extraordinaria por Secretaría',
+            descripcion: actualMotivo || 'Autorización directa por directivo en gestión de matrículas',
+            id_colegio: schoolId,
+            estado: 'EN_PROCESO',
+            id_estudiante: id_estudiante ? Number(id_estudiante) : null
+          })
+          .returning("id_ticket")
+          .executeTakeFirstOrThrow();
+
+        resolvedTicketId = insertedTicket.id_ticket;
       }
 
-      const ticket = ticketRes.rows[0];
-      if (ticket.tipo_incidencia !== 'MATRICULA_EXTRAORDINARIA') {
-        await client.query("ROLLBACK");
-        res.status(400).json({ error: "El ticket seleccionado debe ser de tipo MATRICULA_EXTRAORDINARIA." });
-        return;
+      // 2. Obtener el año lectivo abierto o vigente de la institución
+      let activeYear = await trx
+        .selectFrom("anio_lectivo")
+        .select("id_anio")
+        .where("id_colegio", "=", schoolId)
+        .where("estado", "=", "ABIERTO")
+        .orderBy("id_anio", "desc")
+        .limit(1)
+        .executeTakeFirst();
+
+      if (!activeYear) {
+        activeYear = await trx
+          .selectFrom("anio_lectivo")
+          .select("id_anio")
+          .where("id_colegio", "=", schoolId)
+          .orderBy("id_anio", "desc")
+          .limit(1)
+          .executeTakeFirst();
       }
 
-      finalSenderName = ticket.nombre_remitente || finalSenderName;
-    } else {
-      // Registrar ticket de trazabilidad originado directamente en secretaría
-      const ticketInsertRes = await client.query(
-        `INSERT INTO tickets_soporte 
-         (id_usuario, nombre_remitente, correo_remitente, telefono, tipo_incidencia, asunto, descripcion, id_colegio, estado, id_estudiante)
-         VALUES ($1, $2, $3, $4, 'MATRICULA_EXTRAORDINARIA', $5, $6, $7, 'EN_PROCESO', $8)
-         RETURNING id_ticket`,
-        [
-          authReq.user!.id,
-          finalSenderName,
-          finalCorreoPadre,
-          req.body.telefono || null,
-          'Autorización de Matrícula Extraordinaria por Secretaría',
-          actualMotivo || 'Autorización directa por directivo en gestión de matrículas',
-          schoolId,
-          id_estudiante ? Number(id_estudiante) : null
-        ]
-      );
-      finalTicketId = ticketInsertRes.rows[0].id_ticket;
-    }
+      if (!activeYear) {
+        throw new Error("NO_ACADEMIC_YEAR: No hay un año lectivo configurado en la institución.");
+      }
+      const finalAnioId = activeYear.id_anio;
 
-    // 2. Obtener el año lectivo abierto o vigente de la institución
-    let activeYearRes = await client.query(
-      "SELECT id_anio FROM anio_lectivo WHERE id_colegio = $1 AND estado = 'ABIERTO' ORDER BY id_anio DESC LIMIT 1",
-      [schoolId]
-    );
+      // 2.1. Validar que el período de inscripción ordinario NO esté vigente
+      const cfg = await trx
+        .selectFrom("configuracion_inscripcion")
+        .select(["habilitada", "fecha_inicio", "fecha_cierre"])
+        .where("id_colegio", "=", schoolId)
+        .where("id_anio", "=", finalAnioId)
+        .executeTakeFirst();
 
-    if (activeYearRes.rows.length === 0) {
-      activeYearRes = await client.query(
-        "SELECT id_anio FROM anio_lectivo WHERE id_colegio = $1 ORDER BY id_anio DESC LIMIT 1",
-        [schoolId]
-      );
-    }
-
-    if (activeYearRes.rows.length === 0) {
-      await client.query("ROLLBACK");
-      res.status(400).json({ error: "No hay un año lectivo configurado en la institución." });
-      return;
-    }
-    const finalAnioId = activeYearRes.rows[0].id_anio;
-
-    // 2.1. Validar que el período de inscripción ordinario NO esté vigente
-    const configRes = await client.query(
-      `SELECT habilitada, fecha_inicio, fecha_cierre 
-       FROM configuracion_inscripcion 
-       WHERE id_colegio = $1 AND id_anio = $2`,
-      [schoolId, finalAnioId]
-    );
-
-    if (configRes.rows.length > 0) {
-      const cfg = configRes.rows[0];
-      if (cfg.habilitada && cfg.fecha_inicio && cfg.fecha_cierre) {
+      if (cfg && cfg.habilitada && cfg.fecha_inicio && cfg.fecha_cierre) {
         const now = new Date();
         const start = new Date(cfg.fecha_inicio);
         const end = new Date(cfg.fecha_cierre);
         end.setHours(23, 59, 59, 999);
 
         if (now >= start && now <= end) {
-          await client.query("ROLLBACK");
-          res.status(400).json({
-            error: "No es posible registrar matrículas extraordinarias mientras el período de inscripción ordinario se encuentre ABIERTO y vigente."
-          });
-          return;
+          throw new Error("ORDINARY_PERIOD_OPEN: No es posible registrar matrículas extraordinarias mientras el período de inscripción ordinario se encuentre ABIERTO y vigente.");
         }
       }
-    }
 
-    // 3. Validar estado del estudiante si es existente
-    if (id_estudiante) {
-      const studentRes = await client.query(
-        "SELECT estado FROM estudiante WHERE id_estudiante = $1 AND id_colegio = $2",
-        [id_estudiante, schoolId]
-      );
-      if (studentRes.rows.length === 0) {
-        await client.query("ROLLBACK");
-        res.status(400).json({ error: "El estudiante especificado no pertenece a esta institución." });
-        return;
-      }
-      const studentStatus = studentRes.rows[0].estado;
-      if (studentStatus === 'EXPULSADO' || studentStatus === 'GRADUADO') {
-        await client.query("ROLLBACK");
-        res.status(400).json({ error: `El estudiante se encuentra en estado ${studentStatus} y no puede ser matriculado.` });
-        return;
-      }
-    }
+      // 3. Validar estado del estudiante si es existente
+      if (id_estudiante) {
+        const student = await trx
+          .selectFrom("estudiante")
+          .select("estado")
+          .where("id_estudiante", "=", Number(id_estudiante))
+          .where("id_colegio", "=", schoolId)
+          .executeTakeFirst();
 
-    // 4. Crear la matrícula extraordinaria con token único
-    const tokenSeguimiento = randomUUID();
-    const matRes = await client.query(
-      `INSERT INTO matricula 
-         (id_estudiante, id_colegio, id_anio, estado, correo_padre, tiene_discapacidad, es_extranjero, tipo, motivo, observaciones, id_usuario_responsable, id_ticket, token_seguimiento, fecha_creacion)
-       VALUES ($1, $2, $3, 'PENDIENTE', $4, $5, $6, 'EXTRAORDINARIA', $7, $8, $9, $10, $11, NOW())
-       RETURNING *`,
-      [
-        id_estudiante || null,
-        schoolId,
-        finalAnioId,
-        finalCorreoPadre,
-        tiene_discapacidad === true || tiene_discapacidad === 'true',
-        es_extranjero === true || es_extranjero === 'true',
-        actualMotivo || 'Autorización de Matrícula Extraordinaria por Secretaría',
-        actualObservaciones || null,
-        authReq.user!.id,
-        finalTicketId,
-        tokenSeguimiento
-      ]
-    );
-
-    const newMat = matRes.rows[0];
-
-    // 5. Actualizar el estado del ticket a EN_PROCESO con observación en JSON
-    try {
-      const ticketObsRes = await client.query(
-        "SELECT observaciones FROM tickets_soporte WHERE id_ticket = $1",
-        [finalTicketId]
-      );
-      let currentObs: any[] = [];
-      if (ticketObsRes.rows.length > 0 && ticketObsRes.rows[0].observaciones) {
-        try {
-          currentObs = typeof ticketObsRes.rows[0].observaciones === 'string'
-            ? JSON.parse(ticketObsRes.rows[0].observaciones)
-            : ticketObsRes.rows[0].observaciones;
-          if (!Array.isArray(currentObs)) currentObs = [currentObs];
-        } catch {
-          currentObs = [];
+        if (!student) {
+          throw new Error("STUDENT_NOT_FOUND: El estudiante especificado no pertenece a esta institución.");
+        }
+        if (student.estado === 'EXPULSADO' || student.estado === 'GRADUADO') {
+          throw new Error(`STUDENT_INELIGIBLE: El estudiante se encuentra en estado ${student.estado} y no puede ser matriculado.`);
         }
       }
-      currentObs.push({
-        id_usuario: authReq.user!.id,
-        nombre_usuario: 'Secretaría / Directivo',
-        tipo: 'DIRECTIVO',
-        mensaje: 'Matrícula Extraordinaria autorizada y en curso',
-        fecha_creacion: new Date().toISOString()
-      });
 
-      await client.query(
-        `UPDATE tickets_soporte 
-         SET estado = 'EN_PROCESO', observaciones = $1 
-         WHERE id_ticket = $2`,
-        [JSON.stringify(currentObs), finalTicketId]
-      );
-    } catch (ticketErr) {
-      console.warn("Notice updating ticket status:", ticketErr);
-      await client.query(
-        `UPDATE tickets_soporte SET estado = 'EN_PROCESO' WHERE id_ticket = $1`,
-        [finalTicketId]
-      );
-    }
+      // 4. Crear la matrícula extraordinaria con token único
+      const insertedMat = await trx
+        .insertInto("matricula")
+        .values({
+          id_estudiante: id_estudiante ? Number(id_estudiante) : null,
+          id_colegio: schoolId,
+          id_anio: finalAnioId,
+          estado: 'PENDIENTE',
+          correo_padre: finalCorreoPadre,
+          tiene_discapacidad: tiene_discapacidad === true || tiene_discapacidad === 'true',
+          es_extranjero: es_extranjero === true || es_extranjero === 'true',
+          tipo: 'EXTRAORDINARIA',
+          motivo: actualMotivo || 'Autorización de Matrícula Extraordinaria por Secretaría',
+          observaciones: actualObservaciones || null,
+          id_usuario_responsable: authReq.user!.id,
+          id_ticket: resolvedTicketId,
+          token_seguimiento: tokenSeguimiento,
+          fecha_creacion: sql`NOW()`
+        })
+        .returningAll()
+        .executeTakeFirstOrThrow();
 
-    await client.query("COMMIT");
+      // 5. Actualizar el estado del ticket a EN_PROCESO con observación en JSON
+      try {
+        const ticketObsRow = await trx
+          .selectFrom("tickets_soporte")
+          .select("observaciones")
+          .where("id_ticket", "=", resolvedTicketId!)
+          .executeTakeFirst();
+
+        let currentObs: any[] = [];
+        if (ticketObsRow?.observaciones) {
+          try {
+            currentObs = typeof ticketObsRow.observaciones === 'string'
+              ? JSON.parse(ticketObsRow.observaciones)
+              : ticketObsRow.observaciones;
+            if (!Array.isArray(currentObs)) currentObs = [currentObs];
+          } catch {
+            currentObs = [];
+          }
+        }
+        currentObs.push({
+          id_usuario: authReq.user!.id,
+          nombre_usuario: 'Secretaría / Directivo',
+          tipo: 'DIRECTIVO',
+          mensaje: 'Matrícula Extraordinaria autorizada y en curso',
+          fecha_creacion: new Date().toISOString()
+        });
+
+        await trx
+          .updateTable("tickets_soporte")
+          .set({
+            estado: 'EN_PROCESO',
+            observaciones: JSON.stringify(currentObs) as any
+          })
+          .where("id_ticket", "=", resolvedTicketId!)
+          .execute();
+      } catch (ticketErr) {
+        await trx
+          .updateTable("tickets_soporte")
+          .set({ estado: 'EN_PROCESO' })
+          .where("id_ticket", "=", resolvedTicketId!)
+          .execute();
+      }
+
+      return { newMat: insertedMat };
+    });
 
     // 6. Notificar al padre con el token de seguimiento
     await NotificationService.sendExtraordinaryApprovalEmail(
@@ -316,11 +282,23 @@ export const createExtraordinaryEnrollment = async (req: Request, res: Response)
       token: tokenSeguimiento
     });
   } catch (error: any) {
-    await client.query("ROLLBACK");
     console.error("Error en createExtraordinaryEnrollment:", error);
+    const msg = error.message || "";
+    if (msg.includes("TICKET_NOT_FOUND:")) {
+      res.status(404).json({ error: msg.split(": ")[1] });
+      return;
+    }
+    if (
+      msg.includes("INVALID_TICKET_TYPE:") || 
+      msg.includes("NO_ACADEMIC_YEAR:") || 
+      msg.includes("ORDINARY_PERIOD_OPEN:") || 
+      msg.includes("STUDENT_NOT_FOUND:") || 
+      msg.includes("STUDENT_INELIGIBLE:")
+    ) {
+      res.status(400).json({ error: msg.split(": ")[1] });
+      return;
+    }
     res.status(500).json({ error: "Error interno al crear matrícula extraordinaria" });
-  } finally {
-    client.release();
   }
 };
 
@@ -335,73 +313,84 @@ export const approveExtraordinaryEnrollment = async (req: Request, res: Response
     return;
   }
 
-  const client = await pool.connect();
   try {
-    await client.query("BEGIN");
+    const updatedMat = await db.transaction().execute(async (trx) => {
+      const mat = await trx
+        .selectFrom("matricula")
+        .selectAll()
+        .where("id_matricula", "=", Number(id))
+        .where("id_colegio", "=", schoolId)
+        .executeTakeFirst();
 
-    // Fetch the matricula
-    const matRes = await client.query(
-      "SELECT * FROM matricula WHERE id_matricula = $1 AND id_colegio = $2",
-      [id, schoolId]
-    );
-    if (matRes.rows.length === 0) {
-      res.status(404).json({ error: "Matrícula no encontrada" });
-      return;
-    }
+      if (!mat) {
+        throw new Error("NOT_FOUND: Matrícula no encontrada");
+      }
 
-    const mat = matRes.rows[0];
-    if (mat.tipo !== 'EXTRAORDINARIA' || mat.estado !== 'PENDIENTE') {
-      res.status(400).json({ error: "Solo se pueden aprobar excepciones de matrículas extraordinarias en estado PENDIENTE." });
-      return;
-    }
+      if (mat.tipo !== 'EXTRAORDINARIA' || mat.estado !== 'PENDIENTE') {
+        throw new Error("INVALID_STATE: Solo se pueden aprobar excepciones de matrículas extraordinarias en estado PENDIENTE.");
+      }
 
-    // Update state to APROBADA
-    const updatedRes = await client.query(
-      "UPDATE matricula SET estado = 'APROBADA' WHERE id_matricula = $1 RETURNING *",
-      [id]
-    );
-    const updatedMat = updatedRes.rows[0];
+      const updated = await trx
+        .updateTable("matricula")
+        .set({ estado: 'APROBADA' })
+        .where("id_matricula", "=", Number(id))
+        .returningAll()
+        .executeTakeFirstOrThrow();
+
+      // Supervision Logging if admin_general
+      const isSupervised = authReq.user?.roles.includes("admin_general");
+      if (isSupervised) {
+        const audit = await trx
+          .selectFrom("auditoria_supervision")
+          .select("id_auditoria")
+          .where("id_colegio", "=", schoolId)
+          .where("id_admin_general", "=", authReq.user!.id)
+          .where("estado_supervision", "=", "ACTIVA")
+          .limit(1)
+          .executeTakeFirst();
+
+        if (audit) {
+          await trx
+            .insertInto("auditoria_acciones_realizadas")
+            .values({
+              id_auditoria: audit.id_auditoria,
+              modulo: 'MATRICULAS',
+              tipo_accion: 'MODIFICACION',
+              accion: 'Aprobación de Excepción de Matrícula Extraordinaria',
+              recurso_afectado: `Matricula ID: ${id}`,
+              valor_antiguo: JSON.stringify(mat),
+              valor_nuevo: JSON.stringify(updated),
+              motivo_cambio: motivo_cambio || 'Acción bajo supervisión de Admin General'
+            })
+            .execute();
+        }
+      }
+
+      return updated;
+    });
 
     // Notification: send email to parent with tracking token
-    await NotificationService.sendExtraordinaryApprovalEmail(
-      mat.correo_padre,
-      'Acudiente',
-      mat.token_seguimiento
-    );
-
-    // Supervision Logging if admin_general
-    const isSupervised = authReq.user?.roles.includes("admin_general");
-    if (isSupervised) {
-      const auditRes = await client.query(
-        `SELECT id_auditoria FROM auditoria_supervision 
-         WHERE id_colegio = $1 AND id_admin_general = $2 AND estado_supervision = 'ACTIVA' LIMIT 1`,
-        [schoolId, authReq.user!.id]
+    if (updatedMat.correo_padre) {
+      await NotificationService.sendExtraordinaryApprovalEmail(
+        updatedMat.correo_padre,
+        'Acudiente',
+        updatedMat.token_seguimiento
       );
-      if (auditRes.rows.length > 0) {
-        const activeAuditoriaId = auditRes.rows[0].id_auditoria;
-        await client.query(
-          `INSERT INTO auditoria_acciones_realizadas
-           (id_auditoria, modulo, tipo_accion, accion, recurso_afectado, valor_antiguo, valor_nuevo, motivo_cambio)
-           VALUES ($1, 'MATRICULAS', 'MODIFICACION', 'Aprobación de Excepción de Matrícula Extraordinaria', $2, $3, $4, $5)`,
-          [
-            activeAuditoriaId,
-            `Matricula ID: ${id}`,
-            JSON.stringify(mat),
-            JSON.stringify(updatedMat),
-            motivo_cambio || 'Acción bajo supervisión de Admin General'
-          ]
-        );
-      }
     }
 
-    await client.query("COMMIT");
     res.json({ message: "Excepción aprobada exitosamente y notificación enviada al acudiente.", matricula: updatedMat });
   } catch (error: any) {
-    await client.query("ROLLBACK");
     console.error("Error in approveExtraordinaryEnrollment:", error);
+    const msg = error.message || "";
+    if (msg.includes("NOT_FOUND:")) {
+      res.status(404).json({ error: msg.split(": ")[1] });
+      return;
+    }
+    if (msg.includes("INVALID_STATE:")) {
+      res.status(400).json({ error: msg.split(": ")[1] });
+      return;
+    }
     res.status(500).json({ error: "Error en el servidor" });
-  } finally {
-    client.release();
   }
 };
 
@@ -416,76 +405,90 @@ export const rejectExtraordinaryEnrollment = async (req: Request, res: Response)
     return;
   }
 
-  const client = await pool.connect();
+  const finalMotivo = motivo_cambio || req.body.motivo || 'Solicitud de matrícula extraordinaria cancelada por la institución';
+
   try {
-    await client.query("BEGIN");
+    const updatedMat = await db.transaction().execute(async (trx) => {
+      const mat = await trx
+        .selectFrom("matricula")
+        .selectAll()
+        .where("id_matricula", "=", Number(id))
+        .where("id_colegio", "=", schoolId)
+        .executeTakeFirst();
 
-    // Fetch the matricula
-    const matRes = await client.query(
-      "SELECT * FROM matricula WHERE id_matricula = $1 AND id_colegio = $2",
-      [id, schoolId]
-    );
-    if (matRes.rows.length === 0) {
-      res.status(404).json({ error: "Matrícula no encontrada" });
-      return;
-    }
-
-    const mat = matRes.rows[0];
-    if (mat.tipo !== 'EXTRAORDINARIA' || mat.estado !== 'PENDIENTE') {
-      res.status(400).json({ error: "Solo se pueden cancelar excepciones de matrículas extraordinarias en estado PENDIENTE." });
-      return;
-    }
-
-    const finalMotivo = motivo_cambio || req.body.motivo || 'Solicitud de matrícula extraordinaria cancelada por la institución';
-
-    // Update state to CANCELADA
-    const updatedRes = await client.query(
-      "UPDATE matricula SET estado = 'CANCELADA', motivo_cancelacion = $1, detalles_cancelacion = $1 WHERE id_matricula = $2 RETURNING *",
-      [finalMotivo, id]
-    );
-    const updatedMat = updatedRes.rows[0];
-
-    // Notification: Send cancellation email to parent
-    await NotificationService.sendCancellationEmail(
-      mat.correo_padre,
-      'Acudiente',
-      finalMotivo,
-      finalMotivo
-    );
-
-    // Supervision Logging if admin_general
-    const isSupervised = authReq.user?.roles.includes("admin_general");
-    if (isSupervised) {
-      const auditRes = await client.query(
-        `SELECT id_auditoria FROM auditoria_supervision 
-         WHERE id_colegio = $1 AND id_admin_general = $2 AND estado_supervision = 'ACTIVA' LIMIT 1`,
-        [schoolId, authReq.user!.id]
-      );
-      if (auditRes.rows.length > 0) {
-        const activeAuditoriaId = auditRes.rows[0].id_auditoria;
-        await client.query(
-          `INSERT INTO auditoria_acciones_realizadas
-           (id_auditoria, modulo, tipo_accion, accion, recurso_afectado, valor_antiguo, valor_nuevo, motivo_cambio)
-           VALUES ($1, 'MATRICULAS', 'MODIFICACION', 'Cancelación de Excepción de Matrícula Extraordinaria', $2, $3, $4, $5)`,
-          [
-            activeAuditoriaId,
-            `Matricula ID: ${id}`,
-            JSON.stringify(mat),
-            JSON.stringify(updatedMat),
-            motivo_cambio || finalMotivo
-          ]
-        );
+      if (!mat) {
+        throw new Error("NOT_FOUND: Matrícula no encontrada");
       }
+
+      if (mat.tipo !== 'EXTRAORDINARIA' || mat.estado !== 'PENDIENTE') {
+        throw new Error("INVALID_STATE: Solo se pueden cancelar excepciones de matrículas extraordinarias en estado PENDIENTE.");
+      }
+
+      const updated = await trx
+        .updateTable("matricula")
+        .set({
+          estado: 'CANCELADA',
+          motivo_cancelacion: finalMotivo,
+          detalles_cancelacion: finalMotivo
+        })
+        .where("id_matricula", "=", Number(id))
+        .returningAll()
+        .executeTakeFirstOrThrow();
+
+      // Supervision Logging if admin_general
+      const isSupervised = authReq.user?.roles.includes("admin_general");
+      if (isSupervised) {
+        const audit = await trx
+          .selectFrom("auditoria_supervision")
+          .select("id_auditoria")
+          .where("id_colegio", "=", schoolId)
+          .where("id_admin_general", "=", authReq.user!.id)
+          .where("estado_supervision", "=", "ACTIVA")
+          .limit(1)
+          .executeTakeFirst();
+
+        if (audit) {
+          await trx
+            .insertInto("auditoria_acciones_realizadas")
+            .values({
+              id_auditoria: audit.id_auditoria,
+              modulo: 'MATRICULAS',
+              tipo_accion: 'MODIFICACION',
+              accion: 'Cancelación de Excepción de Matrícula Extraordinaria',
+              recurso_afectado: `Matricula ID: ${id}`,
+              valor_antiguo: JSON.stringify(mat),
+              valor_nuevo: JSON.stringify(updated),
+              motivo_cambio: motivo_cambio || finalMotivo
+            })
+            .execute();
+        }
+      }
+
+      return updated;
+    });
+
+    if (updatedMat.correo_padre) {
+      await NotificationService.sendCancellationEmail(
+        updatedMat.correo_padre,
+        'Acudiente',
+        finalMotivo,
+        finalMotivo
+      );
     }
 
-    await client.query("COMMIT");
     res.json({ message: "Excepción cancelada exitosamente.", matricula: updatedMat });
   } catch (error: any) {
-    await client.query("ROLLBACK");
     console.error("Error in rejectExtraordinaryEnrollment:", error);
+    const msg = error.message || "";
+    if (msg.includes("NOT_FOUND:")) {
+      res.status(404).json({ error: msg.split(": ")[1] });
+      return;
+    }
+    if (msg.includes("INVALID_STATE:")) {
+      res.status(400).json({ error: msg.split(": ")[1] });
+      return;
+    }
     res.status(500).json({ error: "Error en el servidor" });
-  } finally {
-    client.release();
   }
 };
 
@@ -515,142 +518,167 @@ export const createReingresoEnrollment = async (req: Request, res: Response): Pr
     return;
   }
 
-  const client = await pool.connect();
   try {
-    await client.query("BEGIN");
+    const newMat = await db.transaction().execute(async (trx) => {
+      // Check student status
+      const student = await trx
+        .selectFrom("estudiante")
+        .select("estado")
+        .where("id_estudiante", "=", Number(id_estudiante))
+        .where("id_colegio", "=", schoolId)
+        .executeTakeFirst();
 
-    // Check student status
-    const studentRes = await client.query(
-      "SELECT estado FROM estudiante WHERE id_estudiante = $1 AND id_colegio = $2",
-      [id_estudiante, schoolId]
-    );
-
-    if (studentRes.rows.length === 0) {
-      res.status(400).json({ error: "El estudiante especificado no pertenece a esta institución." });
-      return;
-    }
-
-    const studentStatus = studentRes.rows[0].estado;
-    if (studentStatus === 'EXPULSADO' || studentStatus === 'GRADUADO' || studentStatus === 'SANCIONADO') {
-      res.status(400).json({ error: `El estudiante se encuentra en estado ${studentStatus} y no es elegible para reingreso.` });
-      return;
-    }
-
-    if (studentStatus !== 'RETIRADO') {
-      res.status(400).json({ error: `Solo estudiantes con estado 'RETIRADO' pueden solicitar reingreso.` });
-      return;
-    }
-
-    // Check if there is already an active or pending enrollment for this student in the current year
-    const existingEnrollmentRes = await client.query(
-      `SELECT id_matricula, estado FROM matricula 
-       WHERE id_estudiante = $1 AND id_colegio = $2 AND id_anio = $3 AND estado IN ('ACTIVA', 'TRASLADADA', 'PENDIENTE', 'CORRECCION')`,
-      [id_estudiante, schoolId, id_anio]
-    );
-    if (existingEnrollmentRes.rows.length > 0) {
-      res.status(400).json({ error: "El estudiante ya cuenta con una matrícula activa, trasladada o pendiente para este año lectivo." });
-      return;
-    }
-
-    // Fetch the parent's email
-    const parentRes = await client.query(
-      `SELECT u.email FROM detalle_padrefamilia dp
-       JOIN padre_familia pf ON dp.id_padrefamilia = pf.id_padrefamilia
-       JOIN usuario u ON pf.id_usuario = u.id_usuario
-       WHERE dp.id_estudiante = $1 AND dp.id_colegio = $2
-       LIMIT 1`,
-      [id_estudiante, schoolId]
-    );
-
-    if (parentRes.rows.length === 0) {
-      res.status(400).json({ error: "No se encontró un acudiente asociado al estudiante para notificar." });
-      return;
-    }
-
-    const correo_padre = parentRes.rows[0].email;
-
-    // Insert matricula
-    const matRes = await client.query(
-      `INSERT INTO matricula 
-         (id_estudiante, id_nivel, id_grupo, id_colegio, id_anio, estado, correo_padre, tiene_discapacidad, es_extranjero, tipo, motivo, observaciones, id_usuario_responsable, fecha_creacion)
-       VALUES ($1, $2, $3, $4, $5, 'PENDIENTE', $6, $7, $8, 'REINGRESO', $9, $10, $11, NOW())
-       RETURNING *`,
-      [
-        id_estudiante,
-        id_nivel,
-        id_grupo,
-        schoolId,
-        id_anio,
-        correo_padre,
-        tiene_discapacidad === true || tiene_discapacidad === 'true',
-        es_extranjero === true || es_extranjero === 'true',
-        motivo,
-        observaciones || null,
-        authReq.user!.id
-      ]
-    );
-
-    const newMat = matRes.rows[0];
-    const idMatricula = newMat.id_matricula;
-
-    // Retrieve level name to determine required documents
-    const levelRes = await client.query('SELECT nombre FROM nivel_escolar WHERE id_nivel = $1', [id_nivel]);
-    if (levelRes.rows.length === 0) throw new Error("Nivel escolar no válido");
-    const levelName = levelRes.rows[0].nombre;
-
-    const ALWAYS_REQUIRED = ['documentoPadre', 'salud', 'foto', 'reciboPublico'];
-    const REQUIRED_FOR_LOWER_LEVELS = ['registroCivil', 'vacunas'];
-    const REQUIRED_NOT_INFANT = ['documentoIdentidad', 'certificadosEscolaridad'];
-
-    const isHigher = levelName === 'SECUNDARIA' || levelName === 'MEDIA';
-    const isPre    = levelName === 'PREESCOLAR';
-
-    const requiredDocs: string[] = [...ALWAYS_REQUIRED];
-    if (!isHigher) requiredDocs.push(...REQUIRED_FOR_LOWER_LEVELS);
-    if (!isPre)    requiredDocs.push(...REQUIRED_NOT_INFANT);
-    if (es_extranjero === true || es_extranjero === 'true') requiredDocs.push('visa');
-    if (tiene_discapacidad === true || tiene_discapacidad === 'true') requiredDocs.push('certificadoDiscapacidad');
-
-    for (const doc of requiredDocs) {
-      await client.query(
-        `INSERT INTO documento_matriculas (id_matricula, tipo_documento, url, estado, fecha, id_colegio)
-         VALUES ($1, $2, 'PENDIENTE', 'PENDIENTE', NOW(), $3)`,
-        [idMatricula, doc, schoolId]
-      );
-    }
-
-    // Supervision Logging if admin_general
-    const isSupervised = authReq.user?.roles.includes("admin_general");
-    if (isSupervised) {
-      const auditRes = await client.query(
-        `SELECT id_auditoria FROM auditoria_supervision 
-         WHERE id_colegio = $1 AND id_admin_general = $2 AND estado_supervision = 'ACTIVA' LIMIT 1`,
-        [schoolId, authReq.user!.id]
-      );
-      if (auditRes.rows.length > 0) {
-        const activeAuditoriaId = auditRes.rows[0].id_auditoria;
-        await client.query(
-          `INSERT INTO auditoria_acciones_realizadas
-           (id_auditoria, modulo, tipo_accion, accion, recurso_afectado, valor_antiguo, valor_nuevo, motivo_cambio)
-           VALUES ($1, 'MATRICULAS', 'CREACION', 'Creación de Solicitud de Reingreso', $2, NULL, $3, $4)`,
-          [
-            activeAuditoriaId,
-            `Matricula ID: ${idMatricula}`,
-            JSON.stringify(newMat),
-            motivo_cambio || 'Acción bajo supervisión de Admin General'
-          ]
-        );
+      if (!student) {
+        throw new Error("NOT_FOUND: El estudiante especificado no pertenece a esta institución.");
       }
-    }
 
-    await client.query("COMMIT");
+      if (student.estado === 'EXPULSADO' || student.estado === 'GRADUADO' || student.estado === 'SANCIONADO') {
+        throw new Error(`INELIGIBLE: El estudiante se encuentra en estado ${student.estado} y no es elegible para reingreso.`);
+      }
+
+      if (student.estado !== 'RETIRADO') {
+        throw new Error("NOT_RETIRADO: Solo estudiantes con estado 'RETIRADO' pueden solicitar reingreso.");
+      }
+
+      // Check existing enrollment
+      const existingEnrollment = await trx
+        .selectFrom("matricula")
+        .select(["id_matricula", "estado"])
+        .where("id_estudiante", "=", Number(id_estudiante))
+        .where("id_colegio", "=", schoolId)
+        .where("id_anio", "=", Number(id_anio))
+        .where("estado", "in", ["ACTIVA", "TRASLADADA", "PENDIENTE", "CORRECCION"])
+        .executeTakeFirst();
+
+      if (existingEnrollment) {
+        throw new Error("ALREADY_EXISTS: El estudiante ya cuenta con una matrícula activa, trasladada o pendiente para este año lectivo.");
+      }
+
+      // Fetch the parent's email
+      const parent = await trx
+        .selectFrom("detalle_padrefamilia as dp")
+        .innerJoin("padre_familia as pf", "dp.id_padrefamilia", "pf.id_padrefamilia")
+        .innerJoin("usuario as u", "pf.id_usuario", "u.id_usuario")
+        .select("u.email")
+        .where("dp.id_estudiante", "=", Number(id_estudiante))
+        .where("dp.id_colegio", "=", schoolId)
+        .limit(1)
+        .executeTakeFirst();
+
+      if (!parent?.email) {
+        throw new Error("NO_PARENT: No se encontró un acudiente asociado al estudiante para notificar.");
+      }
+
+      const correo_padre = parent.email;
+
+      // Insert matricula
+      const insertedMat = await trx
+        .insertInto("matricula")
+        .values({
+          id_estudiante: Number(id_estudiante),
+          id_nivel: Number(id_nivel),
+          id_grupo: Number(id_grupo),
+          id_colegio: schoolId,
+          id_anio: Number(id_anio),
+          estado: 'PENDIENTE',
+          correo_padre,
+          tiene_discapacidad: tiene_discapacidad === true || tiene_discapacidad === 'true',
+          es_extranjero: es_extranjero === true || es_extranjero === 'true',
+          tipo: 'REINGRESO',
+          motivo,
+          observaciones: observaciones || null,
+          id_usuario_responsable: authReq.user!.id,
+          fecha_creacion: sql`NOW()`
+        })
+        .returningAll()
+        .executeTakeFirstOrThrow();
+
+      const idMatricula = insertedMat.id_matricula;
+
+      // Retrieve level name
+      const level = await trx
+        .selectFrom("nivel_escolar")
+        .select("nombre")
+        .where("id_nivel", "=", Number(id_nivel))
+        .executeTakeFirst();
+
+      if (!level) throw new Error("INVALID_LEVEL: Nivel escolar no válido");
+      const levelName = level.nombre;
+
+      const ALWAYS_REQUIRED = ['documentoPadre', 'salud', 'foto', 'reciboPublico'];
+      const REQUIRED_FOR_LOWER_LEVELS = ['registroCivil', 'vacunas'];
+      const REQUIRED_NOT_INFANT = ['documentoIdentidad', 'certificadosEscolaridad'];
+
+      const isHigher = levelName === 'SECUNDARIA' || levelName === 'MEDIA';
+      const isPre    = levelName === 'PREESCOLAR';
+
+      const requiredDocs: string[] = [...ALWAYS_REQUIRED];
+      if (!isHigher) requiredDocs.push(...REQUIRED_FOR_LOWER_LEVELS);
+      if (!isPre)    requiredDocs.push(...REQUIRED_NOT_INFANT);
+      if (es_extranjero === true || es_extranjero === 'true') requiredDocs.push('visa');
+      if (tiene_discapacidad === true || tiene_discapacidad === 'true') requiredDocs.push('certificadoDiscapacidad');
+
+      const docRows = requiredDocs.map(doc => ({
+        id_matricula: idMatricula,
+        tipo_documento: doc,
+        url: 'PENDIENTE',
+        estado: 'PENDIENTE' as const,
+        fecha: new Date(),
+        id_colegio: schoolId
+      }));
+
+      if (docRows.length > 0) {
+        await trx.insertInto("documento_matriculas").values(docRows).execute();
+      }
+
+      // Supervision Logging if admin_general
+      const isSupervised = authReq.user?.roles.includes("admin_general");
+      if (isSupervised) {
+        const audit = await trx
+          .selectFrom("auditoria_supervision")
+          .select("id_auditoria")
+          .where("id_colegio", "=", schoolId)
+          .where("id_admin_general", "=", authReq.user!.id)
+          .where("estado_supervision", "=", "ACTIVA")
+          .limit(1)
+          .executeTakeFirst();
+
+        if (audit) {
+          await trx
+            .insertInto("auditoria_acciones_realizadas")
+            .values({
+              id_auditoria: audit.id_auditoria,
+              modulo: 'MATRICULAS',
+              tipo_accion: 'CREACION',
+              accion: 'Creación de Solicitud de Reingreso',
+              recurso_afectado: `Matricula ID: ${idMatricula}`,
+              valor_antiguo: null,
+              valor_nuevo: JSON.stringify(insertedMat),
+              motivo_cambio: motivo_cambio || 'Acción bajo supervisión de Admin General'
+            })
+            .execute();
+        }
+      }
+
+      return insertedMat;
+    });
+
     res.json({ message: "Solicitud de reingreso creada exitosamente", matricula: newMat });
   } catch (error: any) {
-    await client.query("ROLLBACK");
     console.error("Error in createReingresoEnrollment:", error);
+    const msg = error.message || "";
+    if (
+      msg.includes("NOT_FOUND:") || 
+      msg.includes("INELIGIBLE:") || 
+      msg.includes("NOT_RETIRADO:") || 
+      msg.includes("ALREADY_EXISTS:") || 
+      msg.includes("NO_PARENT:") || 
+      msg.includes("INVALID_LEVEL:")
+    ) {
+      res.status(400).json({ error: msg.split(": ")[1] });
+      return;
+    }
     res.status(500).json({ error: "Error en el servidor" });
-  } finally {
-    client.release();
   }
 };
 
@@ -665,73 +693,83 @@ export const approveReingresoEnrollment = async (req: Request, res: Response): P
     return;
   }
 
-  const client = await pool.connect();
   try {
-    await client.query("BEGIN");
+    const updatedMat = await db.transaction().execute(async (trx) => {
+      const mat = await trx
+        .selectFrom("matricula")
+        .selectAll()
+        .where("id_matricula", "=", Number(id))
+        .where("id_colegio", "=", schoolId)
+        .executeTakeFirst();
 
-    // Fetch the matricula
-    const matRes = await client.query(
-      "SELECT * FROM matricula WHERE id_matricula = $1 AND id_colegio = $2",
-      [id, schoolId]
-    );
-    if (matRes.rows.length === 0) {
-      res.status(404).json({ error: "Matrícula no encontrada" });
-      return;
-    }
-
-    const mat = matRes.rows[0];
-    if (mat.tipo !== 'REINGRESO' || mat.estado !== 'PENDIENTE') {
-      res.status(400).json({ error: "Solo se pueden aprobar solicitudes de reingreso en estado PENDIENTE." });
-      return;
-    }
-
-    // Update state to APROBADA
-    const updatedRes = await client.query(
-      "UPDATE matricula SET estado = 'APROBADA' WHERE id_matricula = $1 RETURNING *",
-      [id]
-    );
-    const updatedMat = updatedRes.rows[0];
-
-    // Notification: send email to parent with tracking token for reingreso
-    await NotificationService.sendReingresoApprovalEmail(
-      mat.correo_padre,
-      'Acudiente',
-      mat.token_seguimiento
-    );
-
-    // Supervision Logging if admin_general
-    const isSupervised = authReq.user?.roles.includes("admin_general");
-    if (isSupervised) {
-      const auditRes = await client.query(
-        `SELECT id_auditoria FROM auditoria_supervision 
-         WHERE id_colegio = $1 AND id_admin_general = $2 AND estado_supervision = 'ACTIVA' LIMIT 1`,
-        [schoolId, authReq.user!.id]
-      );
-      if (auditRes.rows.length > 0) {
-        const activeAuditoriaId = auditRes.rows[0].id_auditoria;
-        await client.query(
-          `INSERT INTO auditoria_acciones_realizadas
-           (id_auditoria, modulo, tipo_accion, accion, recurso_afectado, valor_antiguo, valor_nuevo, motivo_cambio)
-           VALUES ($1, 'MATRICULAS', 'MODIFICACION', 'Aprobación de Solicitud de Reingreso', $2, $3, $4, $5)`,
-          [
-            activeAuditoriaId,
-            `Matricula ID: ${id}`,
-            JSON.stringify(mat),
-            JSON.stringify(updatedMat),
-            motivo_cambio || 'Acción bajo supervisión de Admin General'
-          ]
-        );
+      if (!mat) {
+        throw new Error("NOT_FOUND: Matrícula no encontrada");
       }
+
+      if (mat.tipo !== 'REINGRESO' || mat.estado !== 'PENDIENTE') {
+        throw new Error("INVALID_STATE: Solo se pueden aprobar solicitudes de reingreso en estado PENDIENTE.");
+      }
+
+      const updated = await trx
+        .updateTable("matricula")
+        .set({ estado: 'APROBADA' })
+        .where("id_matricula", "=", Number(id))
+        .returningAll()
+        .executeTakeFirstOrThrow();
+
+      // Supervision Logging if admin_general
+      const isSupervised = authReq.user?.roles.includes("admin_general");
+      if (isSupervised) {
+        const audit = await trx
+          .selectFrom("auditoria_supervision")
+          .select("id_auditoria")
+          .where("id_colegio", "=", schoolId)
+          .where("id_admin_general", "=", authReq.user!.id)
+          .where("estado_supervision", "=", "ACTIVA")
+          .limit(1)
+          .executeTakeFirst();
+
+        if (audit) {
+          await trx
+            .insertInto("auditoria_acciones_realizadas")
+            .values({
+              id_auditoria: audit.id_auditoria,
+              modulo: 'MATRICULAS',
+              tipo_accion: 'MODIFICACION',
+              accion: 'Aprobación de Solicitud de Reingreso',
+              recurso_afectado: `Matricula ID: ${id}`,
+              valor_antiguo: JSON.stringify(mat),
+              valor_nuevo: JSON.stringify(updated),
+              motivo_cambio: motivo_cambio || 'Acción bajo supervisión de Admin General'
+            })
+            .execute();
+        }
+      }
+
+      return updated;
+    });
+
+    if (updatedMat.correo_padre) {
+      await NotificationService.sendReingresoApprovalEmail(
+        updatedMat.correo_padre,
+        'Acudiente',
+        updatedMat.token_seguimiento
+      );
     }
 
-    await client.query("COMMIT");
     res.json({ message: "Solicitud de reingreso aprobada exitosamente y notificación enviada al acudiente.", matricula: updatedMat });
   } catch (error: any) {
-    await client.query("ROLLBACK");
     console.error("Error in approveReingresoEnrollment:", error);
+    const msg = error.message || "";
+    if (msg.includes("NOT_FOUND:")) {
+      res.status(404).json({ error: msg.split(": ")[1] });
+      return;
+    }
+    if (msg.includes("INVALID_STATE:")) {
+      res.status(400).json({ error: msg.split(": ")[1] });
+      return;
+    }
     res.status(500).json({ error: "Error en el servidor" });
-  } finally {
-    client.release();
   }
 };
 
@@ -746,114 +784,136 @@ export const rejectReingresoEnrollment = async (req: Request, res: Response): Pr
     return;
   }
 
-  const client = await pool.connect();
+  const finalMotivo = motivo || observaciones || motivo_cambio || 'Solicitud de reingreso no aprobada';
+
   try {
-    await client.query("BEGIN");
+    const updatedMat = await db.transaction().execute(async (trx) => {
+      const mat = await trx
+        .selectFrom("matricula")
+        .selectAll()
+        .where("id_matricula", "=", Number(id))
+        .where("id_colegio", "=", schoolId)
+        .executeTakeFirst();
 
-    // Fetch the matricula
-    const matRes = await client.query(
-      "SELECT * FROM matricula WHERE id_matricula = $1 AND id_colegio = $2",
-      [id, schoolId]
-    );
-    if (matRes.rows.length === 0) {
-      res.status(404).json({ error: "Matrícula no encontrada" });
-      return;
-    }
+      if (!mat) {
+        throw new Error("NOT_FOUND: Matrícula no encontrada");
+      }
 
-    const mat = matRes.rows[0];
-    if (mat.tipo !== 'REINGRESO' || (mat.estado !== 'PENDIENTE' && mat.estado !== 'CORREGIDA' && mat.estado !== 'CORRECCION')) {
-      res.status(400).json({ error: "Solo se pueden rechazar solicitudes de reingreso en estado PENDIENTE, CORREGIDA o CORRECCION." });
-      return;
-    }
+      if (mat.tipo !== 'REINGRESO' || (mat.estado !== 'PENDIENTE' && mat.estado !== 'CORREGIDA' && mat.estado !== 'CORRECCION')) {
+        throw new Error("INVALID_STATE: Solo se pueden rechazar solicitudes de reingreso en estado PENDIENTE, CORREGIDA o CORRECCION.");
+      }
 
-    const finalMotivo = motivo || observaciones || motivo_cambio || 'Solicitud de reingreso no aprobada';
+      const updated = await trx
+        .updateTable("matricula")
+        .set({
+          estado: 'CANCELADA',
+          observaciones: finalMotivo,
+          motivo_cancelacion: finalMotivo,
+          detalles_cancelacion: finalMotivo
+        })
+        .where("id_matricula", "=", Number(id))
+        .returningAll()
+        .executeTakeFirstOrThrow();
 
-    // Update state to CANCELADA
-    const updatedRes = await client.query(
-      "UPDATE matricula SET estado = 'CANCELADA', observaciones = $1, motivo_cancelacion = $2, detalles_cancelacion = $3 WHERE id_matricula = $4 RETURNING *",
-      [finalMotivo, finalMotivo, finalMotivo, id]
-    );
-    const updatedMat = updatedRes.rows[0];
+      // If linked to a support ticket, mark ticket as RESUELTO
+      if (mat.id_ticket) {
+        try {
+          const ticketObsRow = await trx
+            .selectFrom("tickets_soporte")
+            .select("observaciones")
+            .where("id_ticket", "=", mat.id_ticket)
+            .executeTakeFirst();
 
-    // If linked to a support ticket, mark ticket as RESUELTO
-    if (mat.id_ticket) {
-      try {
-        const ticketObsRes = await client.query(
-          "SELECT observaciones FROM tickets_soporte WHERE id_ticket = $1",
-          [mat.id_ticket]
-        );
-        let currentObs: any[] = [];
-        if (ticketObsRes.rows.length > 0 && ticketObsRes.rows[0].observaciones) {
-          try {
-            currentObs = typeof ticketObsRes.rows[0].observaciones === 'string'
-              ? JSON.parse(ticketObsRes.rows[0].observaciones)
-              : ticketObsRes.rows[0].observaciones;
-            if (!Array.isArray(currentObs)) currentObs = [currentObs];
-          } catch {
-            currentObs = [];
+          let currentObs: any[] = [];
+          if (ticketObsRow?.observaciones) {
+            try {
+              currentObs = typeof ticketObsRow.observaciones === 'string'
+                ? JSON.parse(ticketObsRow.observaciones)
+                : ticketObsRow.observaciones;
+              if (!Array.isArray(currentObs)) currentObs = [currentObs];
+            } catch {
+              currentObs = [];
+            }
           }
+          currentObs.push({
+            id_usuario: authReq.user!.id,
+            nombre_usuario: 'Secretaría / Directivo',
+            tipo: 'DIRECTIVO',
+            mensaje: `Solicitud de matrícula cancelada por directivo: ${finalMotivo}`,
+            fecha_creacion: new Date().toISOString()
+          });
+
+          await trx
+            .updateTable("tickets_soporte")
+            .set({
+              estado: 'RESUELTO',
+              observaciones: JSON.stringify(currentObs) as any
+            })
+            .where("id_ticket", "=", mat.id_ticket)
+            .execute();
+        } catch (ticketErr) {
+          await trx
+            .updateTable("tickets_soporte")
+            .set({ estado: 'RESUELTO' })
+            .where("id_ticket", "=", mat.id_ticket)
+            .execute();
         }
-        currentObs.push({
-          id_usuario: authReq.user!.id,
-          nombre_usuario: 'Secretaría / Directivo',
-          tipo: 'DIRECTIVO',
-          mensaje: `Solicitud de matrícula cancelada por directivo: ${finalMotivo}`,
-          fecha_creacion: new Date().toISOString()
-        });
-
-        await client.query(
-          "UPDATE tickets_soporte SET estado = 'RESUELTO', observaciones = $1 WHERE id_ticket = $2",
-          [JSON.stringify(currentObs), mat.id_ticket]
-        );
-      } catch (ticketErr) {
-        await client.query(
-          "UPDATE tickets_soporte SET estado = 'RESUELTO' WHERE id_ticket = $1",
-          [mat.id_ticket]
-        );
       }
-    }
 
-    // Notification: Send cancellation email to parent
-    await NotificationService.sendCancellationEmail(
-      mat.correo_padre,
-      'Acudiente',
-      finalMotivo,
-      finalMotivo
-    );
+      // Supervision Logging if admin_general
+      const isSupervised = authReq.user?.roles.includes("admin_general");
+      if (isSupervised) {
+        const audit = await trx
+          .selectFrom("auditoria_supervision")
+          .select("id_auditoria")
+          .where("id_colegio", "=", schoolId)
+          .where("id_admin_general", "=", authReq.user!.id)
+          .where("estado_supervision", "=", "ACTIVA")
+          .limit(1)
+          .executeTakeFirst();
 
-    // Supervision Logging if admin_general
-    const isSupervised = authReq.user?.roles.includes("admin_general");
-    if (isSupervised) {
-      const auditRes = await client.query(
-        `SELECT id_auditoria FROM auditoria_supervision 
-         WHERE id_colegio = $1 AND id_admin_general = $2 AND estado_supervision = 'ACTIVA' LIMIT 1`,
-        [schoolId, authReq.user!.id]
+        if (audit) {
+          await trx
+            .insertInto("auditoria_acciones_realizadas")
+            .values({
+              id_auditoria: audit.id_auditoria,
+              modulo: 'MATRICULAS',
+              tipo_accion: 'MODIFICACION',
+              accion: 'Rechazo de Solicitud de Reingreso',
+              recurso_afectado: `Matricula ID: ${id}`,
+              valor_antiguo: JSON.stringify(mat),
+              valor_nuevo: JSON.stringify(updated),
+              motivo_cambio: motivo_cambio || finalMotivo
+            })
+            .execute();
+        }
+      }
+
+      return updated;
+    });
+
+    if (updatedMat.correo_padre) {
+      await NotificationService.sendCancellationEmail(
+        updatedMat.correo_padre,
+        'Acudiente',
+        finalMotivo,
+        finalMotivo
       );
-      if (auditRes.rows.length > 0) {
-        const activeAuditoriaId = auditRes.rows[0].id_auditoria;
-        await client.query(
-          `INSERT INTO auditoria_acciones_realizadas
-           (id_auditoria, modulo, tipo_accion, accion, recurso_afectado, valor_antiguo, valor_nuevo, motivo_cambio)
-           VALUES ($1, 'MATRICULAS', 'MODIFICACION', 'Rechazo de Solicitud de Reingreso', $2, $3, $4, $5)`,
-          [
-            activeAuditoriaId,
-            `Matricula ID: ${id}`,
-            JSON.stringify(mat),
-            JSON.stringify(updatedMat),
-            motivo_cambio || finalMotivo
-          ]
-        );
-      }
     }
 
-    await client.query("COMMIT");
     res.json({ message: "Solicitud de reingreso rechazada exitosamente y correo enviado al acudiente.", matricula: updatedMat });
   } catch (error: any) {
-    await client.query("ROLLBACK");
     console.error("Error in rejectReingresoEnrollment:", error);
+    const msg = error.message || "";
+    if (msg.includes("NOT_FOUND:")) {
+      res.status(404).json({ error: msg.split(": ")[1] });
+      return;
+    }
+    if (msg.includes("INVALID_STATE:")) {
+      res.status(400).json({ error: msg.split(": ")[1] });
+      return;
+    }
     res.status(500).json({ error: "Error en el servidor" });
-  } finally {
-    client.release();
   }
 };
 
@@ -874,52 +934,57 @@ export const correctReingresoEnrollment = async (req: Request, res: Response): P
     return;
   }
 
-  const client = await pool.connect();
   try {
-    await client.query("BEGIN");
+    const updatedMat = await db.transaction().execute(async (trx) => {
+      const mat = await trx
+        .selectFrom("matricula")
+        .selectAll()
+        .where("id_matricula", "=", Number(id))
+        .where("id_colegio", "=", schoolId)
+        .executeTakeFirst();
 
-    const matRes = await client.query(
-      "SELECT * FROM matricula WHERE id_matricula = $1 AND id_colegio = $2",
-      [id, schoolId]
-    );
-    if (matRes.rows.length === 0) {
-      res.status(404).json({ error: "Matrícula no encontrada" });
-      return;
+      if (!mat) {
+        throw new Error("NOT_FOUND: Matrícula no encontrada");
+      }
+
+      if (mat.tipo !== 'REINGRESO') {
+        throw new Error("INVALID_TYPE: Solo aplica a solicitudes de reingreso.");
+      }
+
+      const updated = await trx
+        .updateTable("matricula")
+        .set({
+          estado: 'CORRECCION',
+          observaciones: finalObservaciones
+        })
+        .where("id_matricula", "=", Number(id))
+        .returningAll()
+        .executeTakeFirstOrThrow();
+
+      return updated;
+    });
+
+    if (updatedMat.correo_padre) {
+      await NotificationService.sendRejectionEmail(
+        updatedMat.correo_padre,
+        'Acudiente',
+        finalObservaciones,
+        updatedMat.token_seguimiento
+      );
     }
 
-    const mat = matRes.rows[0];
-    if (mat.tipo !== 'REINGRESO') {
-      res.status(400).json({ error: "Solo aplica a solicitudes de reingreso." });
-      return;
-    }
-
-    // Update state to CORRECCION
-    const updatedRes = await client.query(
-      "UPDATE matricula SET estado = 'CORRECCION', observaciones = $1 WHERE id_matricula = $2 RETURNING *",
-      [finalObservaciones, id]
-    );
-    const updatedMat = updatedRes.rows[0];
-
-    // Notification: Send email to parent with link to correct/upload documents
-    await NotificationService.sendRejectionEmail(
-      mat.correo_padre,
-      'Acudiente',
-      finalObservaciones,
-      mat.token_seguimiento
-    );
-
-    await client.query("COMMIT");
     res.json({ message: "Solicitud enviada a corrección exitosamente y notificación enviada al acudiente.", matricula: updatedMat });
   } catch (error: any) {
-    await client.query("ROLLBACK");
     console.error("Error in correctReingresoEnrollment:", error);
+    const msg = error.message || "";
+    if (msg.includes("NOT_FOUND:")) {
+      res.status(404).json({ error: msg.split(": ")[1] });
+      return;
+    }
+    if (msg.includes("INVALID_TYPE:")) {
+      res.status(400).json({ error: msg.split(": ")[1] });
+      return;
+    }
     res.status(500).json({ error: "Error en el servidor" });
-  } finally {
-    client.release();
   }
 };
-// ─────────────────────────────────────────────────────────────────────────────
-// RENAME SINGLE COURSE
-// PATCH /api/academic-admin/groups/:id/rename
-// ─────────────────────────────────────────────────────────────────────────────
-
