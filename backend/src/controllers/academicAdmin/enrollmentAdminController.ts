@@ -173,15 +173,22 @@ export const createExtraordinaryEnrollment = async (req: Request, res: Response)
       finalTicketId = ticketInsertRes.rows[0].id_ticket;
     }
 
-    // 2. Obtener el año lectivo activo de la institución
-    const activeYearRes = await client.query(
-      "SELECT id_anio FROM anio_lectivo WHERE id_colegio = $1 AND estado = 'ACTIVO' LIMIT 1",
+    // 2. Obtener el año lectivo abierto o vigente de la institución
+    let activeYearRes = await client.query(
+      "SELECT id_anio FROM anio_lectivo WHERE id_colegio = $1 AND estado = 'ABIERTO' ORDER BY id_anio DESC LIMIT 1",
       [schoolId]
     );
 
     if (activeYearRes.rows.length === 0) {
+      activeYearRes = await client.query(
+        "SELECT id_anio FROM anio_lectivo WHERE id_colegio = $1 ORDER BY id_anio DESC LIMIT 1",
+        [schoolId]
+      );
+    }
+
+    if (activeYearRes.rows.length === 0) {
       await client.query("ROLLBACK");
-      res.status(400).json({ error: "No hay un año lectivo ACTIVO configurado en la institución." });
+      res.status(400).json({ error: "No hay un año lectivo configurado en la institución." });
       return;
     }
     const finalAnioId = activeYearRes.rows[0].id_anio;
