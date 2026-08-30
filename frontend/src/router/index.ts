@@ -29,6 +29,11 @@ const router = createRouter({
       component: () => import('../views/public/EnrollmentView.vue')
     },
     {
+      path: '/matricula/extraordinaria/:token',
+      name: 'matricula-extraordinaria',
+      component: () => import('../views/public/EnrollmentView.vue')
+    },
+    {
       path: '/forgot-password',
       name: 'forgot-password',
       component: () => import('../views/auth/ForgotPasswordView.vue')

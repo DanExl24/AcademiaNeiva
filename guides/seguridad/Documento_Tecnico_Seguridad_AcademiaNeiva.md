@@ -250,6 +250,21 @@ Configurado en [app.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend
 
 - Las descargas de registros civiles y documentos de identidad requieren **tokens JWT firmados de 30 minutos** vinculados al `id_documento` específico (`generateDocumentAccessToken`), denegando la manipulación de IDs en la URL.
 
+### 7.4 Enmascaramiento de URLs y Bóveda Efímera de Tokens Públicos (URL Sanitization & Memory Vault)
+
+Para proteger los tokens de seguimiento y autorización extraordinaria frente a vectores de fuga pasiva (*Shoulder Surfing*, historial del navegador, capturas de pantalla y cabeceras `Referer` hacia dominios externos), el sistema aplica el patrón **URL Sanitization & Memory Vault**:
+
+1. **Ingreso y Captura Inmediata:** Cuando el aspirante o acudiente accede a una URL pública con token (`/matricula?token=:token` o `/matricula/extraordinaria/:token`), el componente [`EnrollmentView.vue`](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/public/EnrollmentView.vue) extrae y valida el token con el backend.
+2. **Bóveda Efímera en `sessionStorage`:** El token se traslada a la memoria reactiva del cliente y se almacena en `sessionStorage` (`extraordinary_enrollment_token`). Esto garantiza que el trámite no se pierda si el usuario refresca la página (F5) o navega entre pestañas de su misma sesión de navegación.
+3. **Sanitización Atómica de la Barra de Direcciones:** De forma instantánea en el ciclo `onMounted`, el frontend ejecuta:
+   ```typescript
+   if (window.history && window.history.replaceState) {
+     window.history.replaceState({}, document.title, '/matricula')
+   }
+   ```
+   **Resultado:** El token UUID desaparece inmediatamente de la barra de direcciones del navegador, dejando una URL limpia (`https://academianeiva.adsoproject.dev/matricula`).
+4. **Purga Automática de la Bóveda:** Al confirmar la radicación exitosa del formulario (`POST /api/matriculas/submit`), el sistema purga el token de `sessionStorage` (`sessionStorage.removeItem('extraordinary_enrollment_token')`), cerrando el ciclo de vida del acceso temporal.
+
 ---
 
 ## 8. Auditoría y Modos de Solo Lectura

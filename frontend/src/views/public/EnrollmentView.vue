@@ -80,7 +80,11 @@ const extraordinaryInfo = ref<any>(null)
 onMounted(async () => {
   await fetchInitialData()
   const urlParams = new URLSearchParams(window.location.search)
-  const token = (route.query.token || route.params.token || urlParams.get('token')) as string
+  const tokenFromUrl = (route.query.token || route.params.token || urlParams.get('token')) as string
+  
+  // Buscar token en la URL entrante o en la bóveda de sesión de sessionStorage
+  let token = tokenFromUrl || sessionStorage.getItem('extraordinary_enrollment_token') || ''
+
   if (token) {
     try {
       const res = await enrollmentService.getByToken(token)
@@ -90,6 +94,14 @@ onMounted(async () => {
         extraordinaryInfo.value = res
         isEmailVerified.value = true // Token directivo valida el correo
         
+        // Guardar token en bóveda de sesión segura para soportar recargas (F5)
+        sessionStorage.setItem('extraordinary_enrollment_token', token)
+
+        // Enmascarar y sanitizar inmediatamente la URL en la barra de direcciones del navegador
+        if (window.history && window.history.replaceState) {
+          window.history.replaceState({}, document.title, '/matricula')
+        }
+
         if (res.id_colegio) {
           schoolId.value = String(res.id_colegio)
         }
@@ -108,6 +120,7 @@ onMounted(async () => {
       }
     } catch (e) {
       console.error('Error al consultar token de matrícula:', e)
+      sessionStorage.removeItem('extraordinary_enrollment_token')
     }
   }
 })
@@ -498,6 +511,8 @@ const submitEnrollment = async () => {
     }
 
     await enrollmentService.submitEnrollment(formDataPayload)
+
+    sessionStorage.removeItem('extraordinary_enrollment_token')
 
     notify.addNotification(
       isExtraordinaryToken.value
