@@ -211,13 +211,27 @@ Este documento detalla las reglas de negocio técnicas y funcionales del módulo
 
 ---
 
-### RN-MAT-014: Definición del Estado Final al Cancelar Matrícula
-- **Descripción:** Al cancelar una matrícula (`cancelEnrollment`), el directivo debe definir si el alumno queda en estado `RETIRADO` (elegible para reingreso futuro) o `EXPULSADO` (inhabilitación disciplinaria permanente).
-- **Motivo:** Evita estados genéricos e imprecisos y asegura el cumplimiento del bloqueo de reingresos para alumnos expulsados.
+### RN-MAT-014: Cancelación de Matrículas en Trámite (PENDIENTE, CORRECCION, CORREGIDA) vs. Cancelación de Matrícula Aprobada
+- **Descripción:** Un directivo de la institución puede cancelar una matrícula tanto si se encuentra en trámite activo (`PENDIENTE`, `CORRECCION`, `CORREGIDA`) como si ya fue aprobada y formalizada previamente (`ACTIVA`, `APROBADA`).
+  
+  1. **Casos y Ocasiones Válidas para Cancelar Matrículas en Trámite (No Aprobadas):**
+     - **⏳ Vencimiento de Plazos de Subsanación (Desistimiento Tácito):** La matrícula fue enviada a `CORRECCION` por documentos ilegibles, erróneos o faltantes y el acudiente no subsanó dentro del término reglamentario institucional (ej. 3 a 5 días hábiles o antes del cierre de inscripciones). Se cancela para liberar el cupo retenido.
+     - **🚫 Inconsistencia Insubsanable o Fraude Documental:** Se detectan certificados adulterados, documentos de identidad falsificados o no concordantes con la identidad real del menor.
+     - **📉 Incumplimiento de Requisitos de Promoción o Edad (Normativa MEN):** El aspirante reprobó el grado anterior en su colegio de origen y pretendía matricularse en el grado superior, o no cumple con la edad reglamentaria mínima fijada por el Ministerio de Educación Nacional (ej. 5 años para Transición al corte oficial).
+     - **✍️ Desistimiento Voluntario Solicitado por el Acudiente:** El padre de familia notifica formalmente (vía ticket de soporte, presencial o correo) que la familia se trasladó de ciudad o no continuará el proceso en la institución.
+     - **👥 Solicitud Duplicada o Conflicto de Doble Registro:** El acudiente radicó múltiples solicitudes simultáneas por error con correos distintos o el aspirante ya formalizó matrícula en otra sede del mismo colegio.
+     - **🏛️ Reorganización Institucional o Cierre Administrativo de Oferta:** Cierre de grupo, jornada o especialidad técnica por directriz de la Secretaría de Educación o por fuerza mayor institucional.
+
+  2. **Diferenciación de Impacto en Base de Datos según el Estado del Estudiante:**
+     - **Estudiante Nuevo (Aspirante sin registro previo):** Al cancelarse en trámite, la fila en la tabla `matricula` transiciona a `'CANCELADA'`, se liberan los cupos del aula y se envía notificación por email. **El estudiante no se marca como `RETIRADO` ni `EXPULSADO`**, ya que nunca llegó a ser estudiante activo formal del colegio.
+     - **Estudiante Antiguo en Proceso de Reinscripción:** Permanece en su estado histórico previo (`INACTIVO`), conservando intacto su expediente escolar.
+     - **Cancelación de Matrícula Previamente Aprobada (`ACTIVA`):** Si la matrícula ya fue formalizada y el estudiante se encuentra activo en el curso escolar, el directivo debe seleccionar obligatoriamente si el estudiante pasa a estado **`RETIRADO`** (desvinculación voluntaria/académica con posibilidad de reingreso futuro) o **`EXPULSADO`** (inhabilitación disciplinaria permanente por falta grave en Comité de Convivencia).
+
+- **Motivo:** Brinda a las secretarías académicas la flexibilidad de depurar solicitudes inviables o abandonadas, optimiza la disponibilidad real de cupos, respeta la normativa del MEN y asegura que no se registren desvinculaciones espurias a aspirantes que nunca fueron admitidos formalmente.
 - **Archivos donde se implementa:**
   - [matriculaService.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/services/matriculaService.ts) (`cancelEnrollment`)
   - [matricula.dto.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/dtos/matricula.dto.ts) (`CancelEnrollmentSchema`)
-  - [EnrollmentDetails.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/EnrollmentDetails.vue)
+  - [EnrollmentDetails.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/EnrollmentDetails.vue) (Header superior y botón en el Paso 2 de validación de documentos)
 - **Endpoints relacionados:**
   - `POST /api/matriculas/cancel/:id`
 - **Historias de usuario relacionadas:** HU-MAT-005, HU-MAT-008

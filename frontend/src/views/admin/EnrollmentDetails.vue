@@ -309,15 +309,40 @@ const formatRenewalStateLabel = (state?: string) => {
 <template>
   <div class="max-w-3xl mx-auto space-y-6">
     <!-- Header -->
-    <div class="bg-white dark:bg-slate-900 rounded-[28px] border border-slate-100 dark:border-slate-800 shadow-sm px-8 py-6 flex items-center gap-4">
-      <button @click="router.back()" class="p-2.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors">
-        <ArrowLeft :size="22" class="text-slate-600 dark:text-slate-400" />
-      </button>
-      <div>
-        <h1 class="text-xl font-black text-slate-900 dark:text-white">
-           {{ matricula && ['ACTIVA', 'TRASLADADA'].includes(matricula.estado) ? 'Matrícula Aprobada' : 'Validación de Documentos' }}
-        </h1>
-        <p class="text-slate-400 dark:text-slate-500 text-sm font-medium">Matrícula #{{ route.params.id }}</p>
+    <div class="bg-white dark:bg-slate-900 rounded-[28px] border border-slate-100 dark:border-slate-800 shadow-sm px-8 py-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div class="flex items-center gap-4">
+        <button @click="router.back()" class="p-2.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors">
+          <ArrowLeft :size="22" class="text-slate-600 dark:text-slate-400" />
+        </button>
+        <div>
+          <h1 class="text-xl font-black text-slate-900 dark:text-white">
+             {{ matricula && ['ACTIVA', 'TRASLADADA'].includes(matricula.estado) ? 'Matrícula Aprobada' : 'Validación de Documentos' }}
+          </h1>
+          <div class="flex items-center gap-2 mt-0.5">
+            <p class="text-slate-400 dark:text-slate-500 text-sm font-medium">Matrícula #{{ route.params.id }}</p>
+            <span v-if="matricula" :class="[
+              'px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider',
+              matricula.estado === 'PENDIENTE' ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300' :
+              matricula.estado === 'CORRECCION' ? 'bg-orange-100 text-orange-800 dark:bg-orange-950/50 dark:text-orange-300' :
+              matricula.estado === 'CORREGIDA' ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/50 dark:text-blue-300' :
+              matricula.estado === 'CANCELADA' ? 'bg-rose-100 text-rose-800 dark:bg-rose-950/50 dark:text-rose-300' :
+              'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300'
+            ]">
+              {{ matricula.estado === 'PENDIENTE' ? 'Por Revisar' : matricula.estado === 'CORRECCION' ? 'En Corrección' : matricula.estado === 'CORREGIDA' ? 'Docs Corregidos' : matricula.estado }}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Botón Cancelar Matrícula (Exclusivo para estados no finalizados: PENDIENTE, CORRECCION, CORREGIDA) -->
+      <div v-if="matricula && ['PENDIENTE', 'CORRECCION', 'CORREGIDA'].includes(matricula.estado)" class="flex items-center gap-2">
+        <button 
+          @click="openCancelModal" 
+          class="px-4 py-2.5 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/30 dark:hover:bg-rose-900/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800/60 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 transition-all shadow-xs cursor-pointer"
+        >
+          <XCircle :size="16" />
+          <span>Cancelar Matrícula</span>
+        </button>
       </div>
     </div>
 
@@ -709,8 +734,16 @@ const formatRenewalStateLabel = (state?: string) => {
           <div class="p-5 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3">
             <div v-if="isReadonly" class="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-bold text-sm"><CheckCircle :size="18" />Ya procesada y aprobada.</div>
             <div v-else-if="allValidated" class="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-bold text-sm"><CheckCircle :size="18" />Todos los documentos validados.</div>
-            <div v-else class="text-slate-500 dark:text-slate-400 text-xs font-medium">Valida todos los documentos para continuar.</div>
-            <div class="flex gap-2">
+            <div v-else class="text-slate-500 dark:text-slate-400 text-xs font-medium">Valida todos los documentos para continuar o cancela si no cumple requisitos.</div>
+            <div class="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+              <button 
+                v-if="!isReadonly && ['PENDIENTE', 'CORRECCION', 'CORREGIDA'].includes(matricula.estado)"
+                @click="openCancelModal" 
+                class="px-4 py-2.5 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800/50 rounded-xl font-black text-xs uppercase transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                <XCircle :size="14" />
+                <span>Cancelar</span>
+              </button>
               <button v-if="isReadonly" @click="currentStep = 3" class="px-5 py-2.5 bg-emerald-600 text-white rounded-xl font-black text-xs uppercase tracking-wide hover:bg-emerald-700 transition-all flex items-center gap-1.5">Ver Resumen <ArrowLeft :size="14" class="rotate-180" /></button>
               <button v-else-if="allValidated" @click="currentStep = 3" class="px-5 py-2.5 bg-indigo-600 text-white rounded-xl font-black text-xs uppercase hover:bg-indigo-700 transition-all flex items-center gap-1.5">Siguiente <ArrowLeft :size="14" class="rotate-180" /></button>
               <button v-else @click="handleSave" class="px-5 py-2.5 bg-slate-900 dark:bg-slate-700 text-white rounded-xl font-black text-xs uppercase hover:bg-indigo-600 transition-all flex items-center gap-1.5"><Save :size="14" />Guardar</button>
@@ -774,42 +807,42 @@ const formatRenewalStateLabel = (state?: string) => {
       </div>
     </div>
 
-    <div v-if="showCancelModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-      <div class="bg-white dark:bg-slate-900 w-full max-w-md rounded-[2.5rem] shadow-2xl p-8">
+    <div v-if="showCancelModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150">
+      <div class="bg-white dark:bg-slate-900 w-full max-w-lg rounded-[2.5rem] shadow-2xl p-8 border border-slate-100 dark:border-slate-800">
         <div class="text-center">
-          <div class="w-16 h-16 bg-red-50 dark:bg-red-950/20 text-red-500 rounded-2xl flex items-center justify-center mx-auto mb-5"><XCircle :size="32" /></div>
+          <div class="w-16 h-16 bg-rose-50 dark:bg-rose-950/30 text-rose-500 rounded-2xl flex items-center justify-center mx-auto mb-4"><XCircle :size="32" /></div>
           <h3 class="text-xl font-black text-slate-900 dark:text-white">
-            {{ matricula?.id_estudiante ? 'Cancelar Matrícula' : 'Denegar Solicitud de Matrícula' }}
+            Cancelar Solicitud de Matrícula
           </h3>
-          <p class="text-slate-500 dark:text-slate-400 text-sm mt-2">
-            {{ matricula?.id_estudiante 
-                ? 'Esta acción es irreversible, liberará el cupo asignado y actualizará el estado del estudiante.' 
-                : 'Esta acción rechazará la solicitud de matrícula y enviará una notificación por correo electrónico al acudiente.' }}
+          <p class="text-slate-500 dark:text-slate-400 text-xs mt-2 leading-relaxed">
+            Esta acción anulará la solicitud de matrícula en trámite, liberará el cupo reservado en el salón y enviará una notificación formal por correo electrónico al acudiente con el motivo registrado.
           </p>
         </div>
-        <div class="mt-6 space-y-4">
+        <div class="mt-6 space-y-4 text-left">
           <div>
-            <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5 ml-1">Motivo del Rechazo / Cancelación *</label>
-            <select v-model="cancelMotivo" class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl font-bold text-slate-700 dark:text-white outline-none text-xs">
-              <option value="Inconsistencias Graves en Documentos">Inconsistencias Graves en Documentos</option>
-              <option value="Cupo no Disponible / Agotado">Cupo no Disponible / Agotado</option>
-              <option value="No Cumple Requisitos de Admisión">No Cumple Requisitos de Admisión</option>
-              <option value="Incumplimiento de Plazos">Incumplimiento de Plazos</option>
-              <option value="Retiro / Desistimiento Voluntario">Retiro / Desistimiento Voluntario</option>
-              <option value="Solicitud de Reingreso Rechazada / Cancelada">Solicitud de Reingreso Rechazada / Cancelada</option>
-              <option value="Otro">Otro</option>
+            <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5 ml-1">Motivo de Cancelación *</label>
+            <select v-model="cancelMotivo" class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl font-bold text-slate-700 dark:text-white outline-none text-xs">
+              <option value="Desistimiento tácito por vencimiento de términos de corrección">⏳ Desistimiento tácito por vencimiento de términos de corrección</option>
+              <option value="Documentación apócrifa, no válida o adulterada">🚫 Documentación apócrifa, no válida o adulterada</option>
+              <option value="No cumplimiento de requisitos académicos mínimos o edad reglamentaria">📉 No cumplimiento de requisitos académicos mínimos o edad reglamentaria</option>
+              <option value="Retiro voluntario de la solicitud por parte del acudiente">✍️ Retiro voluntario de la solicitud por parte del acudiente</option>
+              <option value="Registro duplicado de solicitud de matrícula">👥 Registro duplicado de solicitud de matrícula</option>
+              <option value="Reorganización institucional / Cierre administrativo de oferta">🏛️ Reorganización institucional / Cierre administrativo de oferta</option>
+              <option value="Inconsistencias Graves en Documentos">⚠️ Inconsistencias Graves en Documentos</option>
+              <option value="Cupo no Disponible / Agotado">🔒 Cupo no Disponible / Agotado</option>
+              <option value="Otro">Otro motivo...</option>
             </select>
           </div>
           <div>
-            <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5 ml-1">Detalles para el Acudiente (Opcional)</label>
-            <textarea v-model="cancelDetalles" rows="3" placeholder="Explica brevemente los motivos para el correo al padre..." class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-700 dark:text-white outline-none"></textarea>
+            <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5 ml-1">Detalles / Explicación para el Acudiente (Opcional)</label>
+            <textarea v-model="cancelDetalles" rows="3" placeholder="Explica detalladamente la causa de la cancelación que se incluirá en el correo al padre de familia..." class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-700 dark:text-white outline-none"></textarea>
           </div>
         </div>
         <div class="mt-6 flex gap-3">
-          <button @click="showCancelModal = false" :disabled="cancelling" class="flex-1 py-3 rounded-xl font-black text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all text-xs uppercase">Volver</button>
-          <button @click="cancelEnrollment" :disabled="cancelling" class="flex-[2] bg-red-600 text-white py-3 rounded-xl font-black text-xs uppercase flex items-center justify-center gap-2 hover:bg-red-700 transition-all disabled:opacity-50">
+          <button @click="showCancelModal = false" :disabled="cancelling" class="flex-1 py-3 rounded-xl font-black text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all text-xs uppercase cursor-pointer">Volver</button>
+          <button @click="cancelEnrollment" :disabled="cancelling" class="flex-[2] bg-rose-600 text-white py-3 rounded-xl font-black text-xs uppercase flex items-center justify-center gap-2 hover:bg-rose-700 transition-all disabled:opacity-50 shadow-md shadow-rose-600/20 cursor-pointer">
             <span v-if="cancelling" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-            <span v-else>{{ matricula?.id_estudiante ? 'Confirmar Cancelación' : 'Confirmar Rechazo' }}</span>
+            <span v-else>Confirmar Cancelación</span>
           </button>
         </div>
       </div>

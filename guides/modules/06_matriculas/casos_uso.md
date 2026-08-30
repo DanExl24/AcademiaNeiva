@@ -246,3 +246,70 @@ sequenceDiagram
 3. **Ejecución Transaccional Segura:**
    - Al presionar "Finalizar Registro", `finalizeEnrollment` no crea un nuevo usuario para el padre: vincula el rol `padre` en `usuario_rol`, crea la relación institucional en `usuario_colegio` (`estado = 'ACTIVO'`), y conserva intactas sus asignaciones y permisos docentes.
    - Inserta la relación en `detalle_padrefamilia` vinculando al nuevo hijo con el padre existente.
+
+---
+
+## Caso de Uso 5: Cancelación Directiva de Solicitudes de Matrícula en Trámite o Aprobadas
+
+### Actores
+- **Directivo Escolar / Secretaría Académica**
+- **Padre de Familia / Acudiente (Receptor de Notificación)**
+
+### Precondiciones
+- La matrícula se encuentra en cualquier estado no final (`PENDIENTE`, `CORRECCION`, `CORREGIDA`) o en estado `ACTIVA`.
+- El directivo cuenta con permisos de administración académica en el colegio.
+
+### Ocasiones Válidas de Cancelación en Trámite
+1. **Desistimiento Tácito:** Vencimiento del plazo para subsanar documentos en `CORRECCION`.
+2. **Fraude o Inconsistencia Insubsanable:** Documentos adulterados o apócrifos.
+3. **Incompatibilidad Legal / Normativa MEN:** Edad no reglamentaria para el grado o reprobación no superada del año anterior.
+4. **Desistimiento Voluntario:** Notificación formal del acudiente solicitando la anulación antes de la aprobación.
+5. **Doble Registro / Solicitud Duplicada:** Depuración de envíos repetidos del mismo aspirante.
+6. **Cierre Administrativo de Oferta:** Fuerza mayor o reorganización institucional de grupos.
+
+### Diagrama de Secuencia
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Directivo as Directivo / Secretaría
+    actor Padre as Padre de Familia
+    participant UI as EnrollmentDetails.vue
+    participant API as Express Controller
+    participant Srv as MatriculaService
+    participant DB as Base de Datos PostgreSQL
+    participant SMTP as NotificationService
+
+    Directivo->>UI: Accede a Detalles de Matrícula (Paso 1 o Paso 2)
+    Note over UI: Estado en PENDIENTE, CORRECCION o CORREGIDA
+    Directivo->>UI: Presiona "Cancelar Matrícula" (Header o Footer)
+    UI-->>Directivo: Despliega modal de confirmación con 6 motivos estandarizados
+    
+    Directivo->>UI: Selecciona motivo formal e ingresa detalles opcionales
+    Directivo->>UI: Presiona "Confirmar Cancelación"
+    
+    UI->>API: POST /api/matriculas/cancel/:id { motivo, detalles }
+    API->>Srv: cancelEnrollment(idMatricula, data)
+    
+    alt Matrícula en Trámite (Estudiante Nuevo - Sin Aprobación Previa)
+        Srv->>DB: UPDATE matricula SET estado = 'CANCELADA', motivo_cancelacion = ...
+        Srv->>DB: UPDATE tickets_soporte SET estado = 'RESUELTO' (si aplica)
+        Note over DB: No altera estado de estudiante (nunca fue formalizado)
+    else Matrícula Previamente Aprobada (Estudiante Existente)
+        Srv->>DB: UPDATE matricula SET estado = 'CANCELADA'
+        Srv->>DB: UPDATE estudiante SET estado = 'RETIRADO' / 'EXPULSADO'
+    end
+    
+    Srv->>SMTP: sendCancellationEmail(correo_padre, motivo, detalles)
+    SMTP-->>Padre: Despacha correo electrónico formal de cancelación
+    
+    Srv-->>API: { success: true }
+    API-->>UI: 200 OK Cancelación Confirmada
+    UI-->>Directivo: Alerta exitosa y redirección a Gestión de Matrículas
+```
+
+### Paso a Paso Operativo:
+1. **Acceso:** El directivo abre la solicitud de matrícula desde `EnrollmentManagement.vue` hacia `EnrollmentDetails.vue`.
+2. **Activación:** El botón **"Cancelar Matrícula"** se encuentra disponible en el encabezado superior y en la botonera de validación documental del Paso 2.
+3. **Selección del Motivo:** Al abrir el modal, el directivo selecciona la causa formal correspondiente (ej. *Desistimiento tácito por vencimiento de términos*, *Documentación apócrifa*, *Incumplimiento de requisitos académicos/edad*, etc.) y redacta notas explicativas para la familia.
+4. **Ejecución Transaccional:** El sistema marca la matrícula como `CANCELADA`, libera los cupos de inmediato, resuelve tickets vinculados y despacha una notificación por correo electrónico con el soporte de la decisión.
