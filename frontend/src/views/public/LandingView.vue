@@ -80,6 +80,10 @@ const roles = [
           <a href="#beneficios" class="text-sm font-medium text-gray-600 hover:text-indigo-600 transition-colors">Beneficios</a>
           <a href="#roles" class="text-sm font-medium text-gray-600 hover:text-indigo-600 transition-colors">Roles</a>
           <router-link to="/matricula" class="text-sm font-medium text-gray-600 hover:text-indigo-600 transition-colors">Matrículas</router-link>
+          <router-link to="/docs" class="text-sm font-bold text-indigo-600 hover:text-indigo-700 transition-colors flex items-center gap-1">
+            <BookOpen :size="15" />
+            <span>Documentación</span>
+          </router-link>
           <router-link to="/soporte" class="text-sm font-medium text-gray-600 hover:text-indigo-600 transition-colors">Soporte</router-link>
           <router-link to="/login" class="rounded-full bg-indigo-600 px-6 py-2 text-sm font-semibold text-white shadow-md hover:bg-indigo-700 transition-all hover:shadow-indigo-200">
             Ingresar
@@ -147,6 +151,15 @@ const roles = [
           >
             <Search :size="18" class="text-indigo-500" />
             <span>Consultar Estado de Matrícula</span>
+          </router-link>
+
+          <router-link 
+            to="/docs" 
+            @click="closeMobileMenu"
+            class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold text-indigo-700 bg-indigo-50/70 hover:bg-indigo-100 transition-colors"
+          >
+            <BookOpen :size="18" class="text-indigo-600" />
+            <span>Documentación del Sistema (21 Módulos)</span>
           </router-link>
 
           <router-link 

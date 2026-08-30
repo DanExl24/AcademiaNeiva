@@ -16,6 +16,7 @@ import supportRoutes from "./routes/support.routes";
 import reingresoRoutes from "./routes/reingreso.routes";
 import parentRoutes from "./routes/parent.routes";
 import trasladoRoutes from "./routes/traslado.routes";
+import docsRoutes from "./routes/docs.routes";
 import { verifyTokenOptional } from "./middleware/authMiddleware";
 
 const app = express();
@@ -149,6 +150,7 @@ app.use(["/api/support", "/support"], supportRoutes);
 app.use(["/api/reingreso", "/reingreso"], reingresoRoutes);
 app.use(["/api/parents", "/parents"], parentRoutes);
 app.use(["/api/traslados", "/traslados"], trasladoRoutes);
+app.use(["/api/docs", "/docs"], docsRoutes);
 
 app.get(["/", "/api"], (req, res) => {
   res.json({ message: "API TS funcionando segura" });

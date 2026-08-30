@@ -34,6 +34,20 @@ const router = createRouter({
       component: () => import('../views/public/EnrollmentView.vue')
     },
     {
+      path: '/docs',
+      name: 'docs-portal',
+      component: () => import('../views/public/DocsPortalView.vue')
+    },
+    {
+      path: '/docs/:module/:file',
+      name: 'docs-file',
+      component: () => import('../views/public/DocsPortalView.vue')
+    },
+    {
+      path: '/documentacion',
+      redirect: '/docs'
+    },
+    {
       path: '/forgot-password',
       name: 'forgot-password',
       component: () => import('../views/auth/ForgotPasswordView.vue')

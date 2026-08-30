@@ -23,6 +23,7 @@ services:
         required: false
     volumes:
       - uploads_data:/app/uploads
+      - ./guides:/app/guides:ro
     depends_on:
       postgres:
         condition: service_healthy
