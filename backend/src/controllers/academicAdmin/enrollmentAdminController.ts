@@ -196,6 +196,9 @@ export const createExtraordinaryEnrollment = async (req: Request, res: Response)
         if (!student) {
           throw new Error("STUDENT_NOT_FOUND: El estudiante especificado no pertenece a esta institución.");
         }
+        if (student.estado === 'RETIRADO') {
+          throw new Error("STUDENT_IS_RETIRED: El estudiante se encuentra en estado RETIRADO. Su proceso debe gestionarse a través del Módulo de Reingreso de Estudiantes para conservar la matriz documental y trazabilidad.");
+        }
         if (student.estado === 'ACTIVO') {
           throw new Error("STUDENT_ALREADY_ACTIVE: El estudiante ya se encuentra ACTIVO con matrícula vigente en la institución.");
         }

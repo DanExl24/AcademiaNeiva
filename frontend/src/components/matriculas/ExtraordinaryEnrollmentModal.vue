@@ -13,7 +13,8 @@ import {
   GraduationCap,
   Info,
   XCircle,
-  Ban
+  Ban,
+  ArrowRight
 } from 'lucide-vue-next'
 import { supportService } from '../../services/supportService'
 import { studentService } from '../../services/studentService'
@@ -48,15 +49,16 @@ const selectedStudentId = ref<number | null>(null)
 
 const schoolId = computed(() => Number(auth.user?.schoolId || auth.selectedSchoolId || 1))
 
+// Solo registros INACTIVOS son elegibles en extraordinaria. Los RETIRADOS van al Módulo de Reingreso.
 const isStudentEligible = (student: any) => {
   const st = (student.estado || student.estado_vigente || '').toUpperCase()
-  return st === 'RETIRADO' || st === 'INACTIVO'
+  return st === 'INACTIVO'
 }
 
 const getStudentStatusBadge = (student: any) => {
   const st = (student.estado || student.estado_vigente || 'INACTIVO').toUpperCase()
   if (st === 'RETIRADO') {
-    return { label: 'Retirado', class: 'bg-amber-100 text-amber-800 border-amber-300', eligible: true }
+    return { label: 'Retirado (Ir a Reingreso)', class: 'bg-amber-100 text-amber-800 border-amber-300', eligible: false, reason: 'Debe tramitarse en el Módulo de Reingreso' }
   }
   if (st === 'INACTIVO') {
     return { label: 'Inactivo', class: 'bg-slate-100 text-slate-700 border-slate-300', eligible: true }
@@ -129,9 +131,15 @@ watch(() => props.isOpen, (open) => {
 })
 
 const selectStudent = (student: any) => {
+  const st = (student.estado || student.estado_vigente || '').toUpperCase()
+  if (st === 'RETIRADO') {
+    notify.addNotification('Este estudiante está RETIRADO. Para conservar su historial y matriz documental, su cupo debe gestionarse a través del Módulo de Reingreso.', 'warning')
+    return
+  }
+
   if (!isStudentEligible(student)) {
     const badge = getStudentStatusBadge(student)
-    notify.addNotification(`El estudiante se encuentra ${badge.label}. Solo estudiantes RETIRADOS o INACTIVOS pueden tramitar matrícula extraordinaria.`, 'warning')
+    notify.addNotification(`El estudiante se encuentra ${badge.label}. Solo estudiantes en estado INACTIVO (sin matrícula activa) pueden seleccionarse aquí.`, 'warning')
     return
   }
 
@@ -175,7 +183,7 @@ const handleSubmit = async () => {
   }
 
   if (studentMode.value === 'EXISTENTE' && !selectedStudentId.value) {
-    notify.addNotification('Por favor busca y selecciona un estudiante existente en estado Retirado o Inactivo.', 'error')
+    notify.addNotification('Por favor busca y selecciona un estudiante existente en estado Inactivo.', 'error')
     return
   }
 
@@ -275,8 +283,8 @@ const handleSubmit = async () => {
             >
               <GraduationCap :size="18" />
               <div>
-                <p class="font-black">Estudiante Existente</p>
-                <p class="text-[10px] font-normal opacity-80">Retirado o Inactivo</p>
+                <p class="font-black">Estudiante Inactivo</p>
+                <p class="text-[10px] font-normal opacity-80">Sin matrícula activa</p>
               </div>
             </button>
           </div>
@@ -289,12 +297,16 @@ const handleSubmit = async () => {
           <div class="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 space-y-2 text-xs">
             <div class="flex items-center gap-1.5 font-black text-slate-800 dark:text-slate-200">
               <Info :size="14" class="text-indigo-600 dark:text-indigo-400" />
-              <span>Criterios de Elegibilidad de Estudiantes Existentes:</span>
+              <span>Criterios de Elegibilidad:</span>
             </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+            <div class="space-y-1.5 text-[11px]">
               <div class="flex items-start gap-1.5 text-emerald-700 dark:text-emerald-400 font-semibold">
                 <CheckCircle2 :size="13" class="shrink-0 mt-0.5" />
-                <span><strong>Permitidos:</strong> Retirado, Inactivo (sin matrícula vigente en el año).</span>
+                <span><strong>Permitido aquí:</strong> Registro en estado <span class="font-black">INACTIVO</span> (sin matrícula formal previa en el año).</span>
+              </div>
+              <div class="flex items-start gap-1.5 text-amber-700 dark:text-amber-400 font-semibold">
+                <ArrowRight :size="13" class="shrink-0 mt-0.5" />
+                <span><strong>Estudiantes RETIRADOS:</strong> Deben gestionarse en el <router-link to="/dashboard/reingreso" class="underline font-black hover:text-amber-950 dark:hover:text-white">Módulo de Reingreso</router-link> para auditar el motivo de retiro y aplicar su matriz documental.</span>
               </div>
               <div class="flex items-start gap-1.5 text-rose-700 dark:text-rose-400 font-semibold">
                 <XCircle :size="13" class="shrink-0 mt-0.5" />
@@ -304,7 +316,7 @@ const handleSubmit = async () => {
           </div>
 
           <label class="block text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-            Buscar Estudiante Existente *
+            Buscar Estudiante Inactivo *
           </label>
           <div class="relative">
             <Search :size="16" class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -324,7 +336,7 @@ const handleSubmit = async () => {
             <div 
               v-for="s in filteredStudents" 
               :key="s.id_estudiante"
-              @click="isStudentEligible(s) && selectStudent(s)"
+              @click="selectStudent(s)"
               :class="[
                 'p-2.5 flex items-center justify-between text-xs transition-colors',
                 isStudentEligible(s) 
@@ -358,7 +370,7 @@ const handleSubmit = async () => {
               <div>
                 <p class="text-xs font-black">{{ selectedStudent.nombre }} {{ selectedStudent.apellido }}</p>
                 <p class="text-[10px] font-normal text-emerald-700 dark:text-emerald-400">
-                  Estado: <strong class="uppercase">{{ selectedStudent.estado || 'RETIRADO' }}</strong> · Doc: {{ selectedStudent.documento || selectedStudent.numero_documento || 'S/D' }}
+                  Estado: <strong class="uppercase">{{ selectedStudent.estado || 'INACTIVO' }}</strong> · Doc: {{ selectedStudent.documento || selectedStudent.numero_documento || 'S/D' }}
                 </p>
               </div>
             </div>
