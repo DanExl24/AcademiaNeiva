@@ -64,9 +64,9 @@ const searchResults = ref<DocSearchResult[]>([])
 const mobileSidebarOpen = ref(false)
 const copiedLink = ref(false)
 
-// Procesa markdown a HTML enriquecido con soporte para GitHub Alerts
+// Procesa markdown a HTML enriquecido con soporte para GitHub Alerts, tablas con scroll y badges HTTP
 const processMarkdownToHtml = (markdown: string): string => {
-  // Pre-procesar GitHub alerts
+  // 1. Pre-procesar GitHub alerts
   const processedMd = markdown.replace(
     />\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*([\s\S]*?)(?=\n\n|\n[^\s>]|$)/gi,
     (_match, type, content) => {
@@ -86,7 +86,7 @@ const processMarkdownToHtml = (markdown: string): string => {
 
   let html = marked.parse(processedMd, { gfm: true, breaks: true }) as string
 
-  // Asignar IDs a los encabezados para anclas
+  // 2. Asignar IDs a los encabezados para navegación suave
   html = html.replace(/<h([2-3])>(.*?)<\/h\1>/gi, (_match, level, title) => {
     const plainText = title.replace(/<[^>]+>/g, '').trim()
     const id = plainText
@@ -94,6 +94,25 @@ const processMarkdownToHtml = (markdown: string): string => {
       .replace(/[^\w\s-]/g, '')
       .replace(/\s+/g, '-')
     return `<h${level} id="${id}" class="scroll-mt-24 font-black">${title}</h${level}>`
+  })
+
+  // 3. Envolver tablas en un contenedor con scroll horizontal estricto (overflow-x-auto)
+  html = html.replace(/<table[\s\S]*?<\/table>/gi, (tableHtml) => {
+    return `<div class="docs-table-wrapper overflow-x-auto w-full max-w-full my-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs bg-white dark:bg-slate-900/60">${tableHtml}</div>`
+  })
+
+  // 4. Badges para métodos HTTP comunes en tablas
+  html = html.replace(/<code>(GET|POST|PUT|PATCH|DELETE)<\/code>/g, (_match, verb) => {
+    const v = verb.toUpperCase()
+    const colorClasses: Record<string, string> = {
+      GET: 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/30',
+      POST: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30',
+      PUT: 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30',
+      PATCH: 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border-indigo-500/30',
+      DELETE: 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30'
+    }
+    const c = colorClasses[v] || 'bg-slate-500/15 text-slate-400 border-slate-500/30'
+    return `<span class="inline-block font-mono text-[11px] font-black px-2 py-0.5 rounded-lg border ${c}">${v}</span>`
   })
 
   return html
@@ -299,17 +318,17 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans flex flex-col selection:bg-indigo-500 selection:text-white">
+  <div class="min-h-screen bg-slate-950 text-slate-100 font-sans flex flex-col selection:bg-indigo-500 selection:text-white">
     
     <!-- Top Navbar -->
-    <header class="sticky top-0 z-40 w-full backdrop-blur-md bg-white/90 dark:bg-slate-900/90 border-b border-slate-200 dark:border-slate-800 transition-colors">
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+    <header class="sticky top-0 z-40 w-full backdrop-blur-md bg-slate-900/90 border-b border-slate-800 transition-colors">
+      <div class="max-w-[1700px] mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
         
         <!-- Logo y Branding -->
         <div class="flex items-center gap-3">
           <button 
             @click="mobileSidebarOpen = !mobileSidebarOpen" 
-            class="md:hidden p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+            class="md:hidden p-2 rounded-xl text-slate-300 hover:bg-slate-800 cursor-pointer"
           >
             <Menu v-if="!mobileSidebarOpen" :size="20" />
             <X v-else :size="20" />
@@ -320,8 +339,8 @@ onUnmounted(() => {
               <BookOpen :size="20" />
             </div>
             <div>
-              <span class="font-black text-lg tracking-tight text-slate-900 dark:text-white">Academia<span class="text-indigo-600">Neiva</span></span>
-              <span class="ml-2 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800">Docs v2.5</span>
+              <span class="font-black text-lg tracking-tight text-white">Academia<span class="text-indigo-400">Neiva</span></span>
+              <span class="ml-2 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-950/80 text-indigo-300 border border-indigo-700/50">Docs v2.5</span>
             </div>
           </router-link>
         </div>
@@ -330,13 +349,13 @@ onUnmounted(() => {
         <div class="flex-1 max-w-md hidden sm:block">
           <button 
             @click="openSearchModal" 
-            class="w-full px-4 py-2 rounded-2xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200/80 dark:hover:bg-slate-700/80 border border-slate-200 dark:border-slate-700 text-slate-400 text-xs font-medium flex items-center justify-between transition-all cursor-pointer shadow-inner"
+            class="w-full px-4 py-2 rounded-2xl bg-slate-800/90 hover:bg-slate-800 border border-slate-700/80 text-slate-400 text-xs font-medium flex items-center justify-between transition-all cursor-pointer shadow-inner"
           >
             <span class="flex items-center gap-2">
               <Search :size="15" class="text-slate-400" />
               <span>Buscar en los 21 módulos...</span>
             </span>
-            <kbd class="px-2 py-0.5 text-[10px] font-mono bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-500">Ctrl K</kbd>
+            <kbd class="px-2 py-0.5 text-[10px] font-mono bg-slate-900 border border-slate-700 rounded-lg text-slate-400">Ctrl K</kbd>
           </button>
         </div>
 
@@ -344,7 +363,7 @@ onUnmounted(() => {
         <div class="flex items-center gap-3">
           <button 
             @click="openSearchModal" 
-            class="sm:hidden p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+            class="sm:hidden p-2 rounded-xl text-slate-300 hover:bg-slate-800 cursor-pointer"
             title="Buscar"
           >
             <Search :size="18" />
@@ -352,7 +371,7 @@ onUnmounted(() => {
 
           <router-link 
             to="/" 
-            class="text-xs font-bold text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 px-3 py-1.5 rounded-xl transition-colors hidden md:block"
+            class="text-xs font-bold text-slate-300 hover:text-indigo-400 px-3 py-1.5 rounded-xl transition-colors hidden md:block"
           >
             Inicio
           </router-link>
@@ -368,15 +387,15 @@ onUnmounted(() => {
       </div>
     </header>
 
-    <!-- Main Docs Container -->
-    <div class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 flex gap-8 py-8">
+    <!-- Main Docs Container (Layout espacioso y responsive de 3 columnas fluidas) -->
+    <div class="flex-1 max-w-[1700px] w-full mx-auto px-4 sm:px-6 lg:px-8 flex gap-6 lg:gap-8 py-8 items-start">
       
       <!-- Left Sidebar (Desktop & Mobile Drawer) -->
       <aside 
         :class="[
           'w-72 shrink-0 md:block transition-all duration-300',
           mobileSidebarOpen 
-            ? 'fixed inset-y-0 left-0 z-50 bg-white dark:bg-slate-900 p-6 shadow-2xl overflow-y-auto block w-80' 
+            ? 'fixed inset-y-0 left-0 z-50 bg-slate-900 p-6 shadow-2xl overflow-y-auto block w-80' 
             : 'hidden'
         ]"
       >
@@ -389,18 +408,18 @@ onUnmounted(() => {
               v-model="sidebarFilter"
               type="text" 
               placeholder="Filtrar módulos y guías..."
-              class="w-full pl-9 pr-3 py-2 text-xs rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-indigo-500 outline-none"
+              class="w-full pl-9 pr-3 py-2 text-xs rounded-xl bg-slate-800 border border-slate-700 text-white font-medium focus:ring-2 focus:ring-indigo-500 outline-none"
             />
           </div>
 
           <!-- Total Count Badge -->
-          <div class="flex items-center justify-between text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 px-1">
+          <div class="flex items-center justify-between text-[11px] font-black uppercase tracking-wider text-slate-400 px-1">
             <span>Módulos del Sistema</span>
-            <span class="bg-slate-200 dark:bg-slate-800 px-2 py-0.5 rounded-full text-slate-700 dark:text-slate-300">{{ filteredModules.length }}</span>
+            <span class="bg-slate-800 px-2 py-0.5 rounded-full text-slate-300 border border-slate-700">{{ filteredModules.length }}</span>
           </div>
 
           <!-- Modules List Tree -->
-          <div class="space-y-1.5 max-h-[calc(100vh-230px)] overflow-y-auto pr-1">
+          <div class="space-y-1.5 max-h-[calc(100vh-230px)] overflow-y-auto pr-1 docs-scrollbar">
             <div v-if="loadingModules" class="py-6 text-center text-xs text-slate-400 font-medium">
               Cargando guías en tiempo real...
             </div>
@@ -413,10 +432,10 @@ onUnmounted(() => {
               <!-- Folder Header -->
               <button 
                 @click="toggleFolder(mod.id)"
-                class="w-full px-3 py-2 flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors text-left cursor-pointer"
+                class="w-full px-3 py-2 flex items-center justify-between text-xs font-bold text-slate-200 hover:bg-slate-800/80 rounded-xl transition-colors text-left cursor-pointer"
               >
                 <div class="flex items-center gap-2 truncate">
-                  <FolderOpen :size="15" class="text-indigo-500 shrink-0" />
+                  <FolderOpen :size="15" class="text-indigo-400 shrink-0" />
                   <span class="truncate">{{ mod.name }}</span>
                 </div>
                 <ChevronDown 
@@ -426,7 +445,7 @@ onUnmounted(() => {
               </button>
 
               <!-- Files Sub-list -->
-              <div v-show="openFolders[mod.id]" class="pl-4 pr-1 py-1 space-y-0.5 border-l-2 border-slate-200 dark:border-slate-800 ml-4 my-1">
+              <div v-show="openFolders[mod.id]" class="pl-4 pr-1 py-1 space-y-0.5 border-l-2 border-slate-800 ml-4 my-1">
                 <button 
                   v-for="f in mod.files"
                   :key="f.id"
@@ -435,7 +454,7 @@ onUnmounted(() => {
                     'w-full px-3 py-1.5 rounded-xl text-left text-xs transition-all flex items-center gap-2 font-semibold cursor-pointer',
                     selectedModuleId === mod.id && selectedFileName === f.fileName
                       ? 'bg-indigo-600 text-white font-bold shadow-sm shadow-indigo-500/20'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/70 dark:hover:bg-slate-800/50'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
                   ]"
                 >
                   <FileText :size="13" class="shrink-0 opacity-80" />
@@ -447,42 +466,42 @@ onUnmounted(() => {
         </div>
       </aside>
 
-      <!-- Center Documentation Article Area -->
-      <main class="flex-1 min-w-0 max-w-4xl bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-10 border border-slate-200 dark:border-slate-800 shadow-xs relative">
+      <!-- Center Documentation Article Area (min-w-0 estricto para evitar desbordamientos de tablas) -->
+      <main class="flex-1 min-w-0 bg-slate-900 rounded-3xl p-6 sm:p-10 border border-slate-800 shadow-xs relative overflow-hidden">
         
         <!-- Breadcrumbs & Actions -->
-        <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4 mb-6 text-xs text-slate-500">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-4 mb-6 text-xs text-slate-400">
           <div class="flex items-center gap-2 truncate font-medium">
-            <router-link to="/docs" class="hover:text-indigo-600">Docs</router-link>
-            <ChevronRight :size="13" class="text-slate-400" />
-            <span class="text-slate-700 dark:text-slate-300 font-bold truncate">{{ selectedModuleId }}</span>
-            <ChevronRight :size="13" class="text-slate-400" />
-            <span class="text-indigo-600 dark:text-indigo-400 font-bold truncate">{{ docTitle }}</span>
+            <router-link to="/docs" class="hover:text-indigo-400">Docs</router-link>
+            <ChevronRight :size="13" class="text-slate-500" />
+            <span class="text-slate-300 font-bold truncate">{{ selectedModuleId }}</span>
+            <ChevronRight :size="13" class="text-slate-500" />
+            <span class="text-indigo-400 font-bold truncate">{{ docTitle }}</span>
           </div>
 
           <button 
             @click="copyCurrentUrl" 
-            class="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-[11px] transition-colors cursor-pointer"
+            class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-[11px] transition-colors cursor-pointer border border-slate-700"
             title="Copiar enlace a esta guía"
           >
-            <Check v-if="copiedLink" :size="13" class="text-emerald-600" />
+            <Check v-if="copiedLink" :size="13" class="text-emerald-400" />
             <Copy v-else :size="13" />
             <span>{{ copiedLink ? '¡Enlace copiado!' : 'Copiar URL' }}</span>
           </button>
         </div>
 
         <!-- Metadata Bar -->
-        <div v-if="metadata" class="flex flex-wrap items-center gap-4 text-xs text-slate-500 dark:text-slate-400 mb-8 p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
+        <div v-if="metadata" class="flex flex-wrap items-center gap-4 text-xs text-slate-400 mb-8 p-3 rounded-2xl bg-slate-800/60 border border-slate-800">
           <div class="flex items-center gap-1.5 font-medium">
-            <Clock :size="14" class="text-indigo-500" />
+            <Clock :size="14" class="text-indigo-400" />
             <span>{{ metadata.readingTimeMinutes }} min de lectura</span>
           </div>
           <div class="flex items-center gap-1.5 font-medium">
-            <FileCheck :size="14" class="text-emerald-500" />
+            <FileCheck :size="14" class="text-emerald-400" />
             <span>{{ metadata.wordsCount.toLocaleString() }} palabras</span>
           </div>
           <div class="flex items-center gap-1.5 font-medium">
-            <Calendar :size="14" class="text-amber-500" />
+            <Calendar :size="14" class="text-amber-400" />
             <span>Actualizado: {{ new Date(metadata.lastModified).toLocaleDateString('es-CO', { year: 'numeric', month: 'short', day: 'numeric' }) }}</span>
           </div>
         </div>
@@ -493,26 +512,26 @@ onUnmounted(() => {
           <p class="text-xs font-bold text-slate-400">Cargando documentación...</p>
         </div>
 
-        <!-- Markdown Content -->
+        <!-- Markdown Content con contención estricta -->
         <article 
           v-else 
-          class="prose prose-slate dark:prose-invert max-w-none text-slate-700 dark:text-slate-300 leading-relaxed text-sm"
+          class="docs-content prose prose-invert max-w-none text-slate-300 leading-relaxed text-sm w-full min-w-0"
           v-html="renderedHtml"
         >
         </article>
 
         <!-- Pagination Footer (Prev / Next) -->
-        <div class="mt-12 pt-6 border-t border-slate-100 dark:border-slate-800 grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div class="mt-12 pt-6 border-t border-slate-800 grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div v-if="currentNavigation.prev">
             <button 
               @click="loadDocument(currentNavigation.prev.moduleId, currentNavigation.prev.file.fileName)"
-              class="w-full p-4 rounded-2xl border border-slate-200 dark:border-slate-800 hover:border-indigo-500/40 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-all text-left group cursor-pointer"
+              class="w-full p-4 rounded-2xl border border-slate-800 hover:border-indigo-500/40 hover:bg-slate-800/60 transition-all text-left group cursor-pointer"
             >
               <div class="text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1 mb-1">
                 <ArrowLeft :size="12" class="group-hover:-translate-x-1 transition-transform" />
                 <span>Anterior</span>
               </div>
-              <p class="text-xs font-bold text-slate-900 dark:text-white truncate">{{ currentNavigation.prev.file.title }}</p>
+              <p class="text-xs font-bold text-white truncate">{{ currentNavigation.prev.file.title }}</p>
               <p class="text-[10px] text-slate-400 truncate">{{ currentNavigation.prev.moduleName }}</p>
             </button>
           </div>
@@ -521,13 +540,13 @@ onUnmounted(() => {
           <div v-if="currentNavigation.next">
             <button 
               @click="loadDocument(currentNavigation.next.moduleId, currentNavigation.next.file.fileName)"
-              class="w-full p-4 rounded-2xl border border-slate-200 dark:border-slate-800 hover:border-indigo-500/40 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-all text-right group cursor-pointer"
+              class="w-full p-4 rounded-2xl border border-slate-800 hover:border-indigo-500/40 hover:bg-slate-800/60 transition-all text-right group cursor-pointer"
             >
               <div class="text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center justify-end gap-1 mb-1">
                 <span>Siguiente</span>
                 <ArrowRight :size="12" class="group-hover:translate-x-1 transition-transform" />
               </div>
-              <p class="text-xs font-bold text-slate-900 dark:text-white truncate">{{ currentNavigation.next.file.title }}</p>
+              <p class="text-xs font-bold text-white truncate">{{ currentNavigation.next.file.title }}</p>
               <p class="text-[10px] text-slate-400 truncate">{{ currentNavigation.next.moduleName }}</p>
             </button>
           </div>
@@ -536,10 +555,10 @@ onUnmounted(() => {
       </main>
 
       <!-- Right Sidebar (Table of Contents / On this page) -->
-      <aside class="w-64 shrink-0 hidden xl:block">
-        <div class="sticky top-24 space-y-4">
-          <div class="flex items-center gap-2 text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider">
-            <Layers :size="14" class="text-indigo-600" />
+      <aside class="w-64 shrink-0 hidden 2xl:block sticky top-24">
+        <div class="p-4 rounded-3xl bg-slate-900 border border-slate-800 space-y-4">
+          <div class="flex items-center gap-2 text-xs font-black text-white uppercase tracking-wider pb-2 border-b border-slate-800">
+            <Layers :size="14" class="text-indigo-400" />
             <span>En esta página</span>
           </div>
 
@@ -547,16 +566,16 @@ onUnmounted(() => {
             Sin secciones secundarias.
           </div>
 
-          <nav v-else class="space-y-1 max-h-[calc(100vh-200px)] overflow-y-auto text-xs pr-2">
+          <nav v-else class="space-y-1.5 max-h-[calc(100vh-250px)] overflow-y-auto text-xs pr-1 docs-scrollbar">
             <a 
               v-for="item in tableOfContents" 
               :key="item.id"
               :href="`#${item.id}`"
               :class="[
-                'block py-1 transition-colors leading-snug',
-                item.level === 3 ? 'pl-4 text-[11px]' : 'font-semibold',
-                'text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400'
+                'block py-1 transition-colors leading-snug truncate rounded-lg px-2',
+                item.level === 3 ? 'pl-4 text-[11px] text-slate-400 hover:text-indigo-300 hover:bg-slate-800/50' : 'font-bold text-slate-300 hover:text-white hover:bg-slate-800'
               ]"
+              :title="item.text"
             >
               {{ item.text }}
             </a>
@@ -567,26 +586,26 @@ onUnmounted(() => {
     </div>
 
     <!-- Search Modal (Ctrl + K) -->
-    <div v-if="searchModalOpen" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-start justify-center p-4 sm:p-6 md:p-20 overflow-y-auto animate-in fade-in duration-150">
-      <div class="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden text-left">
+    <div v-if="searchModalOpen" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-start justify-center p-4 sm:p-6 md:p-20 overflow-y-auto animate-in fade-in duration-150">
+      <div class="relative w-full max-w-2xl bg-slate-900 rounded-3xl shadow-2xl border border-slate-800 overflow-hidden text-left">
         
         <!-- Search Input -->
-        <div class="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800 flex items-center gap-3">
-          <Search :size="20" class="text-indigo-600 shrink-0" />
+        <div class="p-4 sm:p-5 border-b border-slate-800 flex items-center gap-3">
+          <Search :size="20" class="text-indigo-400 shrink-0" />
           <input 
             v-model="searchQuery"
             type="text" 
             placeholder="Buscar por regla, endpoint, caso de uso, rol..."
-            class="w-full text-sm font-bold bg-transparent text-slate-900 dark:text-white outline-none placeholder:text-slate-400"
+            class="w-full text-sm font-bold bg-transparent text-white outline-none placeholder:text-slate-500"
             autofocus
           />
-          <button @click="closeSearchModal" class="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer">
+          <button @click="closeSearchModal" class="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 cursor-pointer">
             <X :size="18" />
           </button>
         </div>
 
         <!-- Results Container -->
-        <div class="max-h-96 overflow-y-auto p-4 space-y-2 divide-y divide-slate-100 dark:divide-slate-800">
+        <div class="max-h-96 overflow-y-auto p-4 space-y-2 divide-y divide-slate-800 docs-scrollbar">
           <div v-if="searching" class="py-8 text-center text-xs text-slate-400 font-bold">
             Buscando en todos los módulos...
           </div>
@@ -603,21 +622,21 @@ onUnmounted(() => {
             v-for="(res, idx) in searchResults" 
             :key="idx"
             @click="selectSearchResult(res)"
-            class="pt-2 pb-2 px-3 hover:bg-indigo-50 dark:hover:bg-slate-800/60 rounded-2xl cursor-pointer transition-colors space-y-1"
+            class="pt-2 pb-2 px-3 hover:bg-slate-800/70 rounded-2xl cursor-pointer transition-colors space-y-1"
           >
-            <div class="flex items-center justify-between text-xs font-black text-indigo-600 dark:text-indigo-400">
+            <div class="flex items-center justify-between text-xs font-black text-indigo-400">
               <span>{{ res.moduleName }} › {{ res.fileTitle }}</span>
-              <span class="text-[10px] text-slate-400 font-mono">Línea {{ res.lineNumber }}</span>
+              <span class="text-[10px] text-slate-500 font-mono">Línea {{ res.lineNumber }}</span>
             </div>
-            <p class="text-xs text-slate-600 dark:text-slate-300 font-medium line-clamp-2">
+            <p class="text-xs text-slate-300 font-medium line-clamp-2">
               {{ res.snippet }}
             </p>
           </div>
         </div>
 
         <!-- Search Footer -->
-        <div class="px-5 py-3 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-400 flex items-center justify-between">
-          <span>Pulsa <kbd class="px-1.5 py-0.5 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-mono font-bold">ESC</kbd> para cerrar</span>
+        <div class="px-5 py-3 bg-slate-950/60 border-t border-slate-800 text-[11px] text-slate-400 flex items-center justify-between">
+          <span>Pulsa <kbd class="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 font-mono font-bold text-slate-300">ESC</kbd> para cerrar</span>
           <span>{{ searchResults.length }} resultados</span>
         </div>
 
@@ -628,113 +647,116 @@ onUnmounted(() => {
 </template>
 
 <style>
-/* Estilos tipográficos para el renderizador markdown */
-.prose h1 {
+/* Scrollbar sutil */
+.docs-scrollbar::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+.docs-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.docs-scrollbar::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 9999px;
+}
+.docs-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+/* Contenedor wrapper de tablas con scroll horizontal asegurado */
+.docs-table-wrapper {
+  overflow-x: auto !important;
+  max-width: 100% !important;
+  display: block;
+}
+
+/* Estilos tipográficos estrictos para Markdown */
+.docs-content h1 {
   font-size: 1.875rem;
   line-height: 2.25rem;
   font-weight: 900;
   margin-top: 2rem;
   margin-bottom: 1rem;
-  color: #0f172a;
-}
-.dark .prose h1 {
   color: #f8fafc;
 }
-.prose h2 {
+.docs-content h2 {
   font-size: 1.5rem;
   line-height: 2rem;
   font-weight: 900;
   margin-top: 2rem;
   margin-bottom: 0.75rem;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid #1e293b;
   padding-bottom: 0.5rem;
-  color: #0f172a;
-}
-.dark .prose h2 {
   color: #f8fafc;
-  border-color: #1e293b;
 }
-.prose h3 {
+.docs-content h3 {
   font-size: 1.25rem;
   line-height: 1.75rem;
   font-weight: 800;
   margin-top: 1.5rem;
   margin-bottom: 0.5rem;
-  color: #1e293b;
-}
-.dark .prose h3 {
   color: #f1f5f9;
 }
-.prose table {
+.docs-content table {
   width: 100%;
   border-collapse: collapse;
-  margin-top: 1.5rem;
-  margin-bottom: 1.5rem;
+  margin: 0;
   border-radius: 1rem;
-  overflow: hidden;
-  border: 1px solid #e2e8f0;
 }
-.dark .prose table {
-  border-color: #1e293b;
-}
-.prose th {
-  background-color: #f1f5f9;
+.docs-content th {
+  background-color: #1e293b;
   padding: 0.75rem 1rem;
-  font-weight: 800;
+  font-weight: 900;
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   text-align: left;
-  border-bottom: 1px solid #e2e8f0;
-}
-.dark .prose th {
-  background-color: #1e293b;
-  border-color: #334155;
+  border-bottom: 1px solid #334155;
   color: #e2e8f0;
+  white-space: nowrap;
 }
-.prose td {
+.docs-content td {
   padding: 0.75rem 1rem;
   font-size: 0.8125rem;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid #1e293b;
+  color: #cbd5e1;
 }
-.dark .prose td {
-  border-color: #1e293b;
+.docs-content tr:nth-child(even) td {
+  background-color: rgba(30, 41, 59, 0.3);
 }
-.prose tr:nth-child(even) {
-  background-color: #f8fafc;
+.docs-content tr:hover td {
+  background-color: rgba(99, 102, 241, 0.05);
 }
-.dark .prose tr:nth-child(even) {
-  background-color: #0f172a;
-}
-.prose ul {
+.docs-content ul {
   list-style-type: disc;
   padding-left: 1.25rem;
   margin-top: 0.75rem;
   margin-bottom: 0.75rem;
 }
-.prose ol {
+.docs-content ol {
   list-style-type: decimal;
   padding-left: 1.25rem;
   margin-top: 0.75rem;
   margin-bottom: 0.75rem;
 }
-.prose li {
+.docs-content li {
   margin-top: 0.35rem;
   margin-bottom: 0.35rem;
 }
-.prose a {
-  color: #4f46e5;
+.docs-content a {
+  color: #818cf8;
   text-decoration: underline;
   font-weight: 600;
 }
-.prose a:hover {
-  color: #4338ca;
+.docs-content a:hover {
+  color: #a5b4fc;
 }
-.prose strong {
+.docs-content strong {
   font-weight: 800;
+  color: #f8fafc;
 }
-.prose pre {
-  background-color: #0f172a;
+.docs-content pre {
+  background-color: #020617;
   color: #f8fafc;
   padding: 1rem 1.25rem;
   border-radius: 1rem;
@@ -745,13 +767,14 @@ onUnmounted(() => {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 0.8125rem;
 }
-.prose code:not(pre code) {
-  background-color: rgba(99, 102, 241, 0.1);
-  color: #4f46e5;
+.docs-content code:not(pre code) {
+  background-color: rgba(99, 102, 241, 0.15);
+  color: #a5b4fc;
   padding: 0.15rem 0.35rem;
   border-radius: 0.375rem;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 0.85em;
   font-weight: 700;
+  border: 1px solid rgba(99, 102, 241, 0.25);
 }
 </style>
