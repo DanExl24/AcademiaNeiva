@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { academicService } from '../../services/academicService'
-import { BookOpen, Plus, Trash2, Search, Info, Layers, GraduationCap, X, Edit, Calendar, PlusCircle, Lock } from 'lucide-vue-next'
+import { BookOpen, Plus, Trash2, Search, Info, Layers, GraduationCap, X, Edit, Calendar, Lock, Sparkles, ArrowRight } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 import { useAcademicYearStore } from '../../stores/academicYear'
 import { getCourseDisplayName } from '../../utils/courseHelper'
@@ -457,17 +457,6 @@ const fetchSubjectDetails = async () => {
 }
 
 // COMPETENCIES
-const openAddCompetency = () => {
-  if (isReadOnly.value) return
-  competencyForm.value = {
-    id_competencia: null,
-    id_grupo: subjectDetails.value.groups?.[0]?.id_grupo || null,
-    id_periodo: selectedPeriodId.value || subjectDetails.value.periods?.[0]?.id_periodo || null,
-    descripcion: ''
-  }
-  showCompetencyModal.value = true
-}
-
 const openEditCompetency = (comp: any) => {
   if (isReadOnly.value) return
   competencyForm.value = {
@@ -1013,7 +1002,7 @@ const deleteEvidence = async (id: number) => {
                     
                     <!-- TAB 1: Estructura Curricular -->
                     <div v-if="activeTab === 'curriculum'" class="space-y-6">
-                      <!-- Period filter / Quick Actions -->
+                      <!-- Period filter & Link to Centralized Competency Management -->
                       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                         <div class="flex items-center gap-2">
                           <Calendar :size="16" class="text-slate-400 shrink-0" />
@@ -1027,20 +1016,34 @@ const deleteEvidence = async (id: number) => {
                           </select>
                         </div>
 
-                        <button 
-                          v-if="!isSelectedPeriodClosed && !isReadOnly" 
-                          @click="openAddCompetency" 
-                          class="px-4 py-2.5 bg-emerald-600 text-white rounded-xl font-bold text-xs uppercase tracking-wide flex items-center gap-1.5 hover:bg-emerald-700 transition-all shadow-md cursor-pointer"
+                        <!-- Botón enlace a Gestión de Competencias -->
+                        <router-link 
+                          to="/dashboard/configuracion-academica/competencias" 
+                          class="px-4 py-2.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/80 rounded-xl font-bold text-xs uppercase tracking-wide flex items-center gap-2 transition-all shadow-xs cursor-pointer"
+                          title="Ir al módulo centralizado de configuración de competencias"
                         >
-                          <PlusCircle :size="14" />
-                          Agregar Competencia
-                        </button>
-                        <div v-else-if="isReadOnly" class="px-4 py-2 bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-900 rounded-xl text-xs font-black uppercase tracking-wider leading-none flex items-center gap-1">
-                          <Lock :size="14" /> Año Cerrado (Solo Lectura)
+                          <Sparkles :size="14" class="text-indigo-600 dark:text-indigo-400" />
+                          <span>Gestionar Competencias</span>
+                          <ArrowRight :size="13" />
+                        </router-link>
+                      </div>
+
+                      <!-- Alerta Informativa para Directivos -->
+                      <div class="p-3.5 bg-indigo-50/60 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/40 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-indigo-900 dark:text-indigo-200">
+                        <div class="flex items-center gap-2.5">
+                          <Info :size="16" class="text-indigo-600 dark:text-indigo-400 shrink-0" />
+                          <span class="font-medium text-left">
+                            Para crear y asignar competencias a las materias, dirígete a: 
+                            <strong class="font-black text-indigo-700 dark:text-indigo-300">Configuración Académica → Gestión de Competencias</strong>.
+                          </span>
                         </div>
-                        <div v-else class="px-4 py-2 bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-900 rounded-xl text-xs font-black uppercase tracking-wider leading-none flex items-center gap-1">
-                          <Info :size="14" /> Periodo Cerrado (Solo Lectura)
-                        </div>
+                        <router-link 
+                          to="/dashboard/configuracion-academica/competencias" 
+                          class="shrink-0 font-black text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 self-end sm:self-auto"
+                        >
+                          <span>Ir a Competencias</span>
+                          <ArrowRight :size="12" />
+                        </router-link>
                       </div>
 
                       <!-- Curriculum Search & Group Filters -->
@@ -1096,9 +1099,21 @@ const deleteEvidence = async (id: number) => {
 
                       <!-- Competencies list -->
                       <div class="space-y-4">
-                        <div v-if="!filteredCompetencies.length" class="text-center py-16 bg-white dark:bg-slate-800/40 border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl">
-                          <BookOpen :size="32" class="mx-auto text-slate-400 dark:text-slate-600 mb-2" />
-                          <p class="text-sm font-bold text-slate-400">No hay competencias definidas para este periodo.</p>
+                        <div v-if="!filteredCompetencies.length" class="text-center py-14 px-6 bg-white dark:bg-slate-800/40 border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl space-y-3">
+                          <BookOpen :size="36" class="mx-auto text-slate-400 dark:text-slate-600" />
+                          <div>
+                            <p class="text-sm font-bold text-slate-700 dark:text-slate-200">No hay competencias definidas para este periodo.</p>
+                            <p class="text-xs text-slate-400 mt-1 max-w-md mx-auto">
+                              Para asignar competencias a esta materia, utiliza el módulo oficial en <strong>Configuración Académica → Gestión de Competencias</strong>.
+                            </p>
+                          </div>
+                          <router-link 
+                            to="/dashboard/configuracion-academica/competencias" 
+                            class="inline-flex items-center gap-2 px-4 py-2 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded-xl text-xs font-black uppercase tracking-wider hover:bg-emerald-100 transition-colors cursor-pointer"
+                          >
+                            <span>Ir a Gestión de Competencias</span>
+                            <ArrowRight :size="14" />
+                          </router-link>
                         </div>
 
                         <div 
