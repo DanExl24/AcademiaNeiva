@@ -158,6 +158,25 @@ router.post("/finalize/:id", verifyToken, requireDirectivo, validateDto(Finalize
 router.post("/cancel/:id", verifyToken, requireDirectivo, cancelEnrollment);
 router.patch("/transfer-status/:id", verifyToken, requireDirectivo, toggleTransfer);
 
+// Rutas públicas explícitas para consultar por token UUID
+router.get("/public/by-token/:token", async (req, res) => {
+  try {
+    const result = await MatriculaService.getByToken(req.params.token as string);
+    res.json(result);
+  } catch (e: any) {
+    res.status(404).json({ error: e.message });
+  }
+});
+
+router.get("/token/:token", async (req, res) => {
+  try {
+    const result = await MatriculaService.getByToken(req.params.token as string);
+    res.json(result);
+  } catch (e: any) {
+    res.status(404).json({ error: e.message });
+  }
+});
+
 // Generic catch-all /:id route MUST be at the end of the route definitions
 router.get("/:id", protectIfIntegerId, async (req, res) => {
   try {

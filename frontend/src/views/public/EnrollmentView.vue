@@ -79,32 +79,35 @@ const extraordinaryInfo = ref<any>(null)
 
 onMounted(async () => {
   await fetchInitialData()
-  const token = (route.query.token || route.params.token) as string
+  const urlParams = new URLSearchParams(window.location.search)
+  const token = (route.query.token || route.params.token || urlParams.get('token')) as string
   if (token) {
     try {
       const res = await enrollmentService.getByToken(token)
-      if (res && res.tipo === 'EXTRAORDINARIA') {
-        isExtraordinaryToken.value = true
+      if (res && (res.tipo === 'EXTRAORDINARIA' || res.token_seguimiento)) {
+        isExtraordinaryToken.value = res.tipo === 'EXTRAORDINARIA'
         extraordinaryTokenValue.value = token
         extraordinaryInfo.value = res
         isEmailVerified.value = true // Token directivo valida el correo
-        if (res.correo_padre) {
-          formData.value.parentEmail = res.correo_padre
-        }
+        
         if (res.id_colegio) {
           schoolId.value = String(res.id_colegio)
         }
-        if (res.tiene_discapacidad) {
+        if (res.correo_padre) {
+          formData.value.parentEmail = res.correo_padre
+        }
+        if (res.tiene_discapacidad !== undefined && res.tiene_discapacidad !== null) {
           formData.value.hasDisability = Boolean(res.tiene_discapacidad)
         }
-        if (res.es_extranjero) {
+        if (res.es_extranjero !== undefined && res.es_extranjero !== null) {
           formData.value.isForeigner = Boolean(res.es_extranjero)
         }
+        
         await fetchGrados()
         await fetchEnrollmentConfig()
       }
     } catch (e) {
-      console.log('No es un token de inscripción extraordinaria válido', e)
+      console.error('Error al consultar token de matrícula:', e)
     }
   }
 })
@@ -660,24 +663,34 @@ const submitEnrollment = async () => {
             <!-- Form Fields Grid -->
             <div class="grid grid-cols-1 gap-8 md:grid-cols-2">
               <div class="space-y-2">
-                <label class="text-sm font-bold text-slate-700">Institución Educativa</label>
+                <div class="flex items-center justify-between">
+                  <label class="text-sm font-bold text-slate-700">Institución Educativa</label>
+                  <span v-if="isExtraordinaryToken" class="inline-flex items-center gap-1 text-[10px] font-black text-amber-800 bg-amber-100/80 px-2.5 py-0.5 rounded-full border border-amber-300 uppercase">
+                    🔒 Asignada
+                  </span>
+                </div>
                 <select 
                   v-model="schoolId" 
                   :disabled="isExtraordinaryToken"
-                  class="w-full rounded-2xl border-slate-200 bg-slate-50 focus:ring-2 focus:ring-indigo-500 focus:border-transparent p-4 transition-all disabled:opacity-75 disabled:cursor-not-allowed font-medium text-slate-900"
+                  class="w-full rounded-2xl p-4 transition-all font-bold text-slate-900 border"
+                  :class="[
+                    isExtraordinaryToken 
+                      ? 'bg-slate-100/90 border-slate-300 text-slate-600 cursor-not-allowed opacity-90 select-none shadow-inner' 
+                      : 'border-slate-200 bg-slate-50 focus:ring-2 focus:ring-indigo-500 focus:border-transparent'
+                  ]"
                 >
                   <option value="" disabled>Selecciona el colegio</option>
                   <option v-for="s in schools" :key="s.id_colegio" :value="s.id_colegio">{{ s.nombre }}</option>
                 </select>
-                <p v-if="isExtraordinaryToken" class="text-[11px] font-bold text-indigo-600">
-                  Institución fijada por la autorización de matrícula extraordinaria.
+                <p v-if="isExtraordinaryToken" class="text-[11px] font-bold text-amber-800 flex items-center gap-1">
+                  <span>🔒 Institución fijada por la autorización de matrícula extraordinaria.</span>
                 </p>
               </div>
 
               <div class="space-y-2">
                 <div class="flex items-center justify-between">
                   <label class="text-sm font-bold text-slate-700">Correo Electrónico del Acudiente</label>
-                  <span v-if="isExtraordinaryToken" class="inline-flex items-center gap-1 text-[10px] font-black text-emerald-600 uppercase">
+                  <span v-if="isExtraordinaryToken" class="inline-flex items-center gap-1 text-[10px] font-black text-emerald-800 bg-emerald-100/80 px-2.5 py-0.5 rounded-full border border-emerald-300 uppercase">
                     <Check :size="12" /> Autorizado
                   </span>
                 </div>
@@ -685,9 +698,18 @@ const submitEnrollment = async () => {
                   v-model="formData.parentEmail" 
                   type="email" 
                   :disabled="isExtraordinaryToken"
-                  class="w-full rounded-2xl border-slate-200 bg-slate-50 focus:ring-2 focus:ring-indigo-500 focus:border-transparent p-4 transition-all disabled:opacity-75 disabled:cursor-not-allowed font-medium text-slate-900" 
+                  :readonly="isExtraordinaryToken"
+                  class="w-full rounded-2xl p-4 transition-all font-bold text-slate-900 border" 
+                  :class="[
+                    isExtraordinaryToken 
+                      ? 'bg-slate-100/90 border-slate-300 text-slate-600 cursor-not-allowed opacity-90 select-none shadow-inner' 
+                      : 'border-slate-200 bg-slate-50 focus:ring-2 focus:ring-indigo-500 focus:border-transparent'
+                  ]"
                   placeholder="ejemplo@correo.com"
                 >
+                <p v-if="isExtraordinaryToken" class="text-[11px] font-bold text-emerald-800 flex items-center gap-1">
+                  <span>✓ Correo verificado y vinculado a tu cupo de matrícula.</span>
+                </p>
               </div>
 
               <div class="space-y-2">

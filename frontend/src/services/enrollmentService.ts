@@ -91,8 +91,13 @@ export const enrollmentService = {
   },
 
   async getByToken(token: string): Promise<any> {
-    const res = await api.get(`/matriculas/public/by-token/${token}`)
-    return res.data
+    try {
+      const res = await api.get(`/matriculas/public/by-token/${token}`)
+      return res.data?.data || res.data
+    } catch (e) {
+      const res = await api.get(`/matriculas/${token}`)
+      return res.data?.data || res.data
+    }
   },
 
   async getSchoolEnrollmentConfig(schoolId: number | string): Promise<any> {
