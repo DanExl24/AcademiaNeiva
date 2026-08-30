@@ -196,6 +196,12 @@ export const createExtraordinaryEnrollment = async (req: Request, res: Response)
         if (!student) {
           throw new Error("STUDENT_NOT_FOUND: El estudiante especificado no pertenece a esta institución.");
         }
+        if (student.estado === 'ACTIVO') {
+          throw new Error("STUDENT_ALREADY_ACTIVE: El estudiante ya se encuentra ACTIVO con matrícula vigente en la institución.");
+        }
+        if (student.estado === 'SANCIONADO') {
+          throw new Error("STUDENT_SANCTIONED: El estudiante presenta una sanción disciplinaria activa y no puede tramitar matrícula extraordinaria.");
+        }
         if (student.estado === 'EXPULSADO' || student.estado === 'GRADUADO') {
           throw new Error(`STUDENT_INELIGIBLE: El estudiante se encuentra en estado ${student.estado} y no puede ser matriculado.`);
         }
