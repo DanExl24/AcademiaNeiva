@@ -387,20 +387,20 @@ onUnmounted(() => {
       </div>
     </header>
 
-    <!-- Main Docs Container (Layout espacioso y responsive de 3 columnas fluidas) -->
-    <div class="flex-1 max-w-[1700px] w-full mx-auto px-4 sm:px-6 lg:px-8 flex gap-6 lg:gap-8 py-8 items-start">
+    <!-- Main Docs Container (Layout espacioso de 3 columnas fluidas con sidebars fijos) -->
+    <div class="flex-1 max-w-[1700px] w-full mx-auto px-4 sm:px-6 lg:px-8 flex gap-6 lg:gap-8 py-6 items-start">
       
-      <!-- Left Sidebar (Desktop & Mobile Drawer) -->
+      <!-- Left Sidebar (Desktop Fijo & Mobile Drawer) -->
       <aside 
         :class="[
-          'w-72 shrink-0 md:block transition-all duration-300',
+          'w-72 shrink-0 transition-all duration-300',
           mobileSidebarOpen 
             ? 'fixed inset-y-0 left-0 z-50 bg-slate-900 p-6 shadow-2xl overflow-y-auto block w-80' 
-            : 'hidden'
+            : 'hidden md:flex md:flex-col sticky top-20 h-[calc(100vh-6rem)]'
         ]"
       >
-        <div class="sticky top-24 space-y-5">
-          
+        <!-- Sidebar Header Fijo (Buscador y Contador) -->
+        <div class="shrink-0 space-y-3 pb-4 border-b border-slate-800/80 mb-3">
           <!-- Sidebar Search Filter -->
           <div class="relative">
             <Search :size="14" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -417,50 +417,50 @@ onUnmounted(() => {
             <span>Módulos del Sistema</span>
             <span class="bg-slate-800 px-2 py-0.5 rounded-full text-slate-300 border border-slate-700">{{ filteredModules.length }}</span>
           </div>
+        </div>
 
-          <!-- Modules List Tree -->
-          <div class="space-y-1.5 max-h-[calc(100vh-230px)] overflow-y-auto pr-1 docs-scrollbar">
-            <div v-if="loadingModules" class="py-6 text-center text-xs text-slate-400 font-medium">
-              Cargando guías en tiempo real...
-            </div>
+        <!-- Modules List Tree con scroll independiente -->
+        <div class="flex-1 overflow-y-auto pr-1.5 space-y-1.5 docs-scrollbar">
+          <div v-if="loadingModules" class="py-6 text-center text-xs text-slate-400 font-medium">
+            Cargando guías en tiempo real...
+          </div>
 
-            <div 
-              v-for="mod in filteredModules" 
-              :key="mod.id"
-              class="rounded-2xl overflow-hidden border border-transparent transition-colors"
+          <div 
+            v-for="mod in filteredModules" 
+            :key="mod.id"
+            class="rounded-2xl overflow-hidden border border-transparent transition-colors"
+          >
+            <!-- Folder Header -->
+            <button 
+              @click="toggleFolder(mod.id)"
+              class="w-full px-3 py-2 flex items-center justify-between text-xs font-bold text-slate-200 hover:bg-slate-800/80 rounded-xl transition-colors text-left cursor-pointer"
             >
-              <!-- Folder Header -->
-              <button 
-                @click="toggleFolder(mod.id)"
-                class="w-full px-3 py-2 flex items-center justify-between text-xs font-bold text-slate-200 hover:bg-slate-800/80 rounded-xl transition-colors text-left cursor-pointer"
-              >
-                <div class="flex items-center gap-2 truncate">
-                  <FolderOpen :size="15" class="text-indigo-400 shrink-0" />
-                  <span class="truncate">{{ mod.name }}</span>
-                </div>
-                <ChevronDown 
-                  :size="14" 
-                  :class="['text-slate-400 transition-transform duration-200 shrink-0', openFolders[mod.id] ? 'rotate-0' : '-rotate-90']"
-                />
-              </button>
-
-              <!-- Files Sub-list -->
-              <div v-show="openFolders[mod.id]" class="pl-4 pr-1 py-1 space-y-0.5 border-l-2 border-slate-800 ml-4 my-1">
-                <button 
-                  v-for="f in mod.files"
-                  :key="f.id"
-                  @click="loadDocument(mod.id, f.fileName)"
-                  :class="[
-                    'w-full px-3 py-1.5 rounded-xl text-left text-xs transition-all flex items-center gap-2 font-semibold cursor-pointer',
-                    selectedModuleId === mod.id && selectedFileName === f.fileName
-                      ? 'bg-indigo-600 text-white font-bold shadow-sm shadow-indigo-500/20'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-                  ]"
-                >
-                  <FileText :size="13" class="shrink-0 opacity-80" />
-                  <span class="truncate">{{ f.title }}</span>
-                </button>
+              <div class="flex items-center gap-2 truncate">
+                <FolderOpen :size="15" class="text-indigo-400 shrink-0" />
+                <span class="truncate">{{ mod.name }}</span>
               </div>
+              <ChevronDown 
+                :size="14" 
+                :class="['text-slate-400 transition-transform duration-200 shrink-0', openFolders[mod.id] ? 'rotate-0' : '-rotate-90']"
+              />
+            </button>
+
+            <!-- Files Sub-list -->
+            <div v-show="openFolders[mod.id]" class="pl-4 pr-1 py-1 space-y-0.5 border-l-2 border-slate-800 ml-4 my-1">
+              <button 
+                v-for="f in mod.files"
+                :key="f.id"
+                @click="loadDocument(mod.id, f.fileName)"
+                :class="[
+                  'w-full px-3 py-1.5 rounded-xl text-left text-xs transition-all flex items-center gap-2 font-semibold cursor-pointer',
+                  selectedModuleId === mod.id && selectedFileName === f.fileName
+                    ? 'bg-indigo-600 text-white font-bold shadow-sm shadow-indigo-500/20'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                ]"
+              >
+                <FileText :size="13" class="shrink-0 opacity-80" />
+                <span class="truncate">{{ f.title }}</span>
+              </button>
             </div>
           </div>
         </div>
@@ -555,18 +555,18 @@ onUnmounted(() => {
       </main>
 
       <!-- Right Sidebar (Table of Contents / On this page) -->
-      <aside class="w-64 shrink-0 hidden 2xl:block sticky top-24">
-        <div class="p-4 rounded-3xl bg-slate-900 border border-slate-800 space-y-4">
-          <div class="flex items-center gap-2 text-xs font-black text-white uppercase tracking-wider pb-2 border-b border-slate-800">
+      <aside class="w-64 shrink-0 hidden 2xl:flex flex-col sticky top-20 h-[calc(100vh-6rem)]">
+        <div class="p-4 rounded-3xl bg-slate-900 border border-slate-800 flex-1 flex flex-col overflow-hidden">
+          <div class="flex items-center gap-2 text-xs font-black text-white uppercase tracking-wider pb-3 border-b border-slate-800 shrink-0">
             <Layers :size="14" class="text-indigo-400" />
             <span>En esta página</span>
           </div>
 
-          <div v-if="tableOfContents.length === 0" class="text-xs text-slate-400 font-medium italic">
+          <div v-if="tableOfContents.length === 0" class="text-xs text-slate-400 font-medium italic pt-4">
             Sin secciones secundarias.
           </div>
 
-          <nav v-else class="space-y-1.5 max-h-[calc(100vh-250px)] overflow-y-auto text-xs pr-1 docs-scrollbar">
+          <nav v-else class="space-y-1.5 flex-1 overflow-y-auto text-xs pr-1 docs-scrollbar pt-3">
             <a 
               v-for="item in tableOfContents" 
               :key="item.id"
