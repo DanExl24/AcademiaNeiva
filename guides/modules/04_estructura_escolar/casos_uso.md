@@ -156,3 +156,90 @@ sequenceDiagram
     Backend-->>Frontend: Retorna materia restaurada (201 Created)
     Frontend-->>Directivo: Notifica restauración exitosa con su carga docente y competencias intactas
 ```
+
+---
+
+## Caso de Uso 5: Habilitación y Retiro de Jornadas Institucionales
+
+### Actores
+- **Directivo Escolar** (Coordinador / Rector)
+
+### Precondiciones
+- Para la habilitación: La jornada deseada no debe estar habilitada previamente en la institución.
+- Para el retiro: La jornada a eliminar no debe tener ningún curso físico (`grupos`) asociado.
+
+### Diagrama de Secuencia
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Directivo as Directivo Escolar
+    participant Frontend as GradeManagement.vue
+    participant Modal as JornadaManagementModals.vue
+    participant Backend as Express API (gradeGroupController)
+    participant DB as PostgreSQL
+
+    Note over Directivo,DB: Flujo A: Habilitación de Turno
+    Directivo->>Frontend: Clic en "Habilitar Jornada"
+    Frontend->>Modal: Despliega modal con availableJornadasToAdd (ej. 'NOCTURNA')
+    Directivo->>Modal: Confirma selección
+    Modal->>Backend: POST /api/academic-admin/jornadas { schoolId, nombre: 'NOCTURNA' }
+    Backend->>DB: INSERT INTO jornada (id_colegio, nombre) VALUES (:schoolId, 'NOCTURNA') RETURNING *
+    Backend-->>Modal: 201 Created
+    Modal-->>Frontend: Actualiza catálogo de jornadas activas
+
+    Note over Directivo,DB: Flujo B: Retiro Protegido de Turno
+    Directivo->>Frontend: Clic en "Retirar Jornada" sobre 'NOCTURNA'
+    Frontend->>Backend: DELETE /api/academic-admin/jornadas/:id?schoolId=...
+    Backend->>DB: SELECT COUNT(id_grupo) FROM grupos WHERE id_jornada = :id AND id_colegio = :schoolId
+    
+    alt count > 0 (Cursos asociados)
+        Backend-->>Frontend: 409 Conflict ("Tiene N cursos asociados. Reasigna o elimina los cursos antes")
+        Frontend-->>Directivo: Muestra modal de alerta bloqueante
+    else count == 0 (Sin cursos)
+        Backend->>DB: DELETE FROM jornada WHERE id_jornada = :id AND id_colegio = :schoolId
+        Backend-->>Frontend: 200 OK ("Jornada eliminada exitosamente")
+        Frontend-->>Directivo: Notificación de retiro exitoso
+    end
+```
+
+---
+
+## Caso de Uso 6: Reasignación de Cursos entre Jornadas bajo Guarda Institucional
+
+### Actores
+- **Directivo Escolar / Administrador General**
+
+### Precondiciones
+- La política de reasignación institucional está autorizada (`IS_JORNADA_REASSIGNMENT_ENABLED = true`).
+- El curso de origen existe y la jornada de destino pertenece a la misma institución.
+
+### Diagrama de Secuencia
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Directivo as Directivo Escolar
+    participant Frontend as GradeManagement.vue
+    participant Modal as JornadaManagementModals.vue
+    participant Backend as Express API (gradeGroupController)
+    participant DB as PostgreSQL
+
+    Directivo->>Frontend: Clic en "Reasignar Jornada" para el curso "10-A (Mañana)"
+    Frontend->>Modal: Abre diálogo con listado de jornadas disponibles
+    Directivo->>Modal: Selecciona jornada "TARDE" y confirma
+    Modal->>Backend: PATCH /api/academic-admin/groups/:id/jornada { schoolId, id_jornada: :targetId }
+    
+    Backend->>DB: SELECT * FROM grupos WHERE id_grupo = :id
+    Backend->>DB: SELECT * FROM jornada WHERE id_jornada = :targetId AND id_colegio = :schoolId
+    Backend->>DB: Valida colisión: SELECT * FROM grupos WHERE id_tipo_grado = :tg AND id_seccion = :sec AND id_jornada = :targetId
+    
+    alt Existe colisión ("10-A" ya existe en la Tarde)
+        Backend-->>Frontend: 409 Conflict ("Ya existe un curso equivalente en la jornada TARDE")
+        Frontend-->>Directivo: Alerta de colisión de nomenclatura
+    else Sin colisión
+        Backend->>DB: UPDATE grupos SET id_jornada = :targetId WHERE id_grupo = :id
+        Backend-->>Frontend: 200 OK ("Curso reasignado exitosamente")
+        Frontend-->>Directivo: Notificación verde y actualización de la distribución de cursos
+    end
+```

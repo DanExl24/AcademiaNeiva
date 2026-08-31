@@ -20,14 +20,17 @@ El módulo de **Estructura Escolar** organiza y administra la arquitectura acad�
 │ 2. Tipo de Grado (tipo_grado):                              │
 │    TRANSICION, PRIMERO, SEGUNDO, ..., ONCE                  │
 │                                                             │
-│ 3. Sección / Nomenclatura (secciones):                      │
+│ 3. Jornada Institucional (jornada):                         │
+│    MAÑANA, TARDE, UNICA, NOCTURNA                           │
+│                                                             │
+│ 4. Sección / Nomenclatura (secciones):                      │
 │    A, B, C, 10-1, 10-2, UNICA                               │
 │                                                             │
-│ 4. Grupo o Curso Físico (grupos):                           │
+│ 5. Grupo o Curso Físico (grupos):                           │
 │    Primero A (Mañana), 10-1 (Tarde) [Cupos Totales: 35]     │
 │                                                             │
-│ 5. Asignación Académica (detalle_grados):                   │
-│    Docente ──[ Materia ]──> Curso Físico                    │
+│ 6. Asignación Académica (detalle_grados):                   │
+│    Docente ──[ Materia ]──> Curso Físico (Turno Específico) │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -35,7 +38,7 @@ Este módulo proporciona:
 - **Normalización Inteligente de Grados:** Detección algorítmica de duplicados semánticos y variaciones ortográficas (ej. *"1°"*, *"PRIMERO"*, *"Primero de Primaria"*).
 - **Gestión Avanzada de Cursos:** Creación parametrizada por jornada y sección, actualización de aforos con validación de no reducción por debajo de los inscritos activos, y renombramiento inteligente (individual o en bloque) con desvinculación automática de secciones compartidas.
 - **Catálogo Curricular y Papelera con Snapshot JSON:** Creación y actualización de materias institucionales, junto con un sistema de borrado protegido (`force=true`) que emite un respaldo completo en JSON de todas las asignaciones docentes y competencias en `papelera_materias`, permitiendo restauraciones profundas en caliente.
-- **Gestión de Jornadas Institucionales:** Control de turnos de operación escolar (`MAÑANA`, `TARDE`, `UNICA`, `NOCTURNA`) con restricción de eliminación de jornadas con cursos asociados.
+- **Gestión de Jornadas Institucionales ([Ver Submódulo 04.1](submodules/gestion_jornadas.md)):** Control estricto de turnos de operación escolar (`MAÑANA`, `TARDE`, `UNICA`, `NOCTURNA`), segregación de aforos por turno, validación de eliminación protegida sin cursos huérfanos y guarda de política institucional (`IS_JORNADA_REASSIGNMENT_ENABLED`) para preservar las elecciones contractuales de los padres en matrícula.
 
 ---
 
@@ -85,7 +88,11 @@ Este módulo proporciona:
 - **RN-EST-006 (Renombramiento Individual con Desvinculación de Sección):** Al renombrar un curso individual, si la sección actual es compartida por otros grupos (`shared > 1`), el sistema crea una nueva sección independiente en `secciones` para no alterar los demás cursos paralelos.
 - **RN-EST-007 (Renombramiento en Bloque con Series Ordinales):** Permite estandarizar la nomenclatura de todos los cursos de un grado mediante un prefijo, un separador y un tipo ordinal (`LETRA` o `NUMERO`), validando que ningún nombre resultante exceda 10 caracteres.
 - **RN-EST-008 (Papelera de Materias con Respaldo Snapshot JSON):** La eliminación de una materia con asignaciones y competencias exige confirmación forzada (`force=true`). Al ejecutarse, genera un snapshot JSON en `papelera_materias.data_respaldo`. Al crear una materia enviando `trashId`, el sistema restaura de forma profunda todas las asignaciones y competencias respaldadas.
-- **RN-EST-009 (Restricciones de Jornadas Institucionales):** Solo se admiten las jornadas oficiales `MAÑANA`, `TARDE`, `UNICA` y `NOCTURNA`. Una jornada no puede eliminarse si tiene cursos asociados. La reasignación de cursos entre jornadas se rige por la guarda de política institucional (`IS_JORNADA_REASSIGNMENT_ENABLED`).
+- **RN-EST-009 (Restricciones y Administración de Jornadas Institucionales — [Detalle](../04_estructura_escolar/submodules/gestion_jornadas.md)):** 
+  - **Catálogo Oficial:** Solo se admiten las jornadas `MAÑANA`, `TARDE`, `UNICA` y `NOCTURNA`.
+  - **Unicidad:** No se permite habilitar jornadas duplicadas en la misma institución (`409 Conflict`).
+  - **Eliminación Protegida:** Una jornada no puede eliminarse si cuenta con al menos un curso físico asociado en `grupos` (`409 Conflict`).
+  - **Guarda de Reasignación:** La reasignación de cursos entre jornadas se rige por la guarda de política institucional (`IS_JORNADA_REASSIGNMENT_ENABLED`), validando que no colisione con un curso homólogo en el turno destino.
 
 ---
 
@@ -104,10 +111,11 @@ Este módulo proporciona:
 
 | Componente | Archivo Fuente | Funcionalidad Principal |
 |---|---|---|
-| **Gestión de Grados y Cursos** | [GradeManagement.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/GradeManagement.vue) | Interfaz directiva para crear grados, agregar salones, editar cupos, renombrar en bloque, gestionar jornadas e inspeccionar integrantes. |
+| **Gestión de Grados y Cursos** | [GradeManagement.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/GradeManagement.vue) | Interfaz directiva para crear grados, agregar salones, editar cupos, renombrar en bloque, administrar jornadas e inspeccionar integrantes. |
+| **Modales de Gestión de Jornadas** | [JornadaManagementModals.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/components/academico/JornadaManagementModals.vue) | Diálogos de interfaz para habilitar nuevas jornadas institucionales, retirar jornadas libres de cursos y reasignar salones bajo guarda. |
 | **Gestión de Materias y Papelera** | [SubjectManagement.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/SubjectManagement.vue) | Catálogo de materias, panel de papelera con restauración profunda, y modal de impacto académico en eliminaciones. |
-| **Asignación Académica** | [AcademicLoad.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/AcademicLoad.vue) | Matriz de vinculación Docente-Grupo-Materia (`detalle_grados`). |
-| **Helper de Nombres de Cursos** | [courseHelper.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/utils/courseHelper.ts) | Formateo consistente de nombres completos de curso en toda la aplicación. |
+| **Asignación Académica** | [AcademicLoad.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/AcademicLoad.vue) | Matriz de vinculación Docente-Grupo-Materia (`detalle_grados`) clasificada por curso físico y jornada. |
+| **Helper de Nombres de Cursos** | [courseHelper.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/utils/courseHelper.ts) | Formateo consistente de nombres completos de curso (`Grado - Sección (Jornada)`) en toda la aplicación. |
 
 ---
 
@@ -129,6 +137,14 @@ Este módulo proporciona:
 | `nombre` | VARCHAR(50) | Nombre normalizado en mayúsculas (`TRANSICION`, `PRIMERO`, `SEGUNDO`, etc.). |
 | `id_nivel` | INT FK | Nivel escolar al que pertenece. |
 
+### Tabla: `jornada`
+
+| Columna | Tipo | Descripción |
+|---|---|---|
+| `id_jornada` | SERIAL PK | Identificador único de la jornada institucional. |
+| `id_colegio` | INT FK | Colegio donde opera la jornada (`ON DELETE CASCADE`). |
+| `nombre` | `tipo_jornada` | `MAÑANA`, `TARDE`, `UNICA`, `NOCTURNA` (`CHECK` y `UNIQUE (id_colegio, nombre)`). |
+
 ### Tabla: `secciones`
 
 | Columna | Tipo | Descripción |
@@ -143,18 +159,10 @@ Este módulo proporciona:
 | `id_grupo` | SERIAL PK | Identificador único del curso físico. |
 | `id_tipo_grado` | INT FK | Grado al que pertenece. |
 | `id_nivel` | INT FK | Nivel escolar redundante para optimización de queries. |
-| `id_jornada` | INT FK | Jornada escolar asignada. |
+| `id_jornada` | INT FK | Jornada escolar asignada (`FOREIGN KEY -> jornada(id_jornada)`). |
 | `id_seccion` | INT FK | Sección / Nomenclatura del curso. |
 | `id_colegio` | INT FK | Colegio propietario. |
 | `cupos_totales` | INT | Capacidad física máxima de estudiantes. |
-
-### Tabla: `jornada`
-
-| Columna | Tipo | Descripción |
-|---|---|---|
-| `id_jornada` | SERIAL PK | Identificador de la jornada. |
-| `nombre` | `tipo_jornada` | `MAÑANA`, `TARDE`, `UNICA`, `NOCTURNA`. |
-| `id_colegio` | INT FK | Colegio donde opera la jornada. |
 
 ### Tabla: `materias`
 
@@ -179,7 +187,7 @@ Este módulo proporciona:
 | Columna | Tipo | Descripción |
 |---|---|---|
 | `id_detallegrado` | SERIAL PK | Identificador de la asignación. |
-| `id_grupo` | INT FK | Curso físico. |
+| `id_grupo` | INT FK | Curso físico (perteneciente a una jornada específica). |
 | `id_materia` | INT FK | Materia impartida. |
 | `id_docente` | INT FK | Docente responsable. |
 | `id_colegio` | INT FK | Colegio propietario. |
@@ -189,11 +197,12 @@ Este módulo proporciona:
 
 ## 7. Conexiones con Otros Módulos
 
-- **→ Matrículas e Inscripciones:** Los cursos en `grupos` definen la oferta de cupos físicos y el aforo controlado mediante bloqueo `FOR UPDATE`.
-- **→ Docentes y Asignación Académica:** `detalle_grados` es el puente que otorga permisos al docente para calificar y gestionar asistencia en un curso.
-- **→ Competencias Pedagógicas:** Las competencias se configuran para la tupla curso-materia-periodo y se sincronizan entre cursos paralelos (`sync_uuid`).
-- **→ Calificaciones y Asistencia:** Toda actividad evaluativa, nota y registro de inasistencia se referencia obligatoriamente al `id_detallegrado`.
-- **→ Cierre de Periodo y Boletines:** El cierre curricular y el cálculo de puestos se procesan agrupando por `id_grupo`.
+- **→ Matrículas e Inscripciones (Módulo 06):** Los cursos en `grupos` definen la oferta de cupos físicos y el aforo controlado por jornada. Los acudientes seleccionan el turno deseado y el sistema valida en tiempo real la disponibilidad.
+- **→ Docentes y Asignación Académica (Módulo 08):** `detalle_grados` es el puente que otorga permisos al docente para calificar y gestionar asistencia en un curso físico. Permite que diferentes docentes atiendan el mismo grado en turnos distintos (ej. Mañana vs Tarde).
+- **→ Competencias Pedagógicas (Módulo 07):** Las competencias se configuran para la tupla curso-materia-periodo y se sincronizan entre cursos paralelos (`sync_uuid`).
+- **→ Calificaciones y Asistencia (Módulos 09 y 10):** Toda actividad evaluativa, nota y registro de inasistencia se referencia obligatoriamente al `id_detallegrado` y se filtra por la jornada seleccionada en el panel del docente.
+- **→ Cierre de Periodo y Boletines (Módulos 11 y 12):** El cierre curricular, el cálculo de puestos y la generación de boletines oficiales imprimen y agrupan por `id_grupo` y su respectiva `jornada_nombre`.
+- **→ Traslados Estudiantiles (Módulo 14):** Al solicitar un traslado, se registra la `jornada_sugerida`, permitiendo ubicar al alumno en cursos con cupo en la jornada solicitada.
 
 ---
 

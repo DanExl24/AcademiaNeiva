@@ -114,16 +114,41 @@ Este documento detalla las reglas de negocio técnicas y funcionales del módulo
 
 ---
 
-### RN-EST-009: Restricciones y Gestión de Jornadas Institucionales
+## 5. Gestión y Reglas de Jornadas Institucionales
+
+### RN-EST-009: Catálogo Cerrado y Unicidad Nominal de Jornadas Institucionales
 - **Descripción:** 
-  1. Cada colegio solo puede habilitar jornadas del catálogo oficial (`MAÑANA`, `TARDE`, `UNICA`, `NOCTURNA`).
-  2. Una jornada no puede eliminarse (`deleteJornada`) si cuenta con cursos asociados en la tabla `grupos` (`409 Conflict`).
-  3. La reasignación de cursos entre jornadas (`reassignGroupJornada`) está sujeta a la guarda institucional de matrículas (`IS_JORNADA_REASSIGNMENT_ENABLED = false`) para proteger la jornada elegida por los acudientes en su admisión.
-- **Motivo:** Garantiza la integridad de los horarios de operación escolar y protege la elección de turno efectuada en el proceso de matrícula.
+  1. Cada institución educativa solo puede habilitar jornadas correspondientes al catálogo cerrado oficial: `MAÑANA`, `TARDE`, `UNICA` y `NOCTURNA`. Cualquier otro valor es rechazado con `400 Bad Request`.
+  2. No se permite duplicar jornadas dentro del mismo colegio. Si se intenta registrar una jornada ya habilitada, el backend intercepta la solicitud y retorna `409 Conflict` (*"La jornada '{nombre}' ya se encuentra registrada en esta institución"*).
+- **Motivo:** Estandariza la nomenclatura ministerial de turnos escolares y previene colisiones relacionales en la oferta de cupos.
 - **Archivos donde se implementa:**
-  - [gradeGroupController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdmin/gradeGroupController.ts) (`createJornada`, `deleteJornada`, `reassignGroupJornada`)
+  - [gradeGroupController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdmin/gradeGroupController.ts) (`createJornada`)
+  - [JornadaManagementModals.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/components/academico/JornadaManagementModals.vue)
 - **Endpoints relacionados:**
   - `POST /api/academic-admin/jornadas`
-  - `DELETE /api/academic-admin/jornadas/:id`
-  - `PATCH /api/academic-admin/groups/:id/jornada`
 - **Historias de usuario relacionadas:** HU-EST-006
+
+---
+
+### RN-EST-010: Eliminación Protegida de Jornadas sin Dependencias de Cursos
+- **Descripción:** Una jornada no puede eliminarse (`deleteJornada`) si cuenta con al menos un curso físico asociado en la tabla `grupos`.
+- **Comportamiento Técnico:** El backend ejecuta una consulta de agregación sobre `grupos` filtrando por `id_jornada` e `id_colegio`. Si existen cursos vinculados (`count > 0`), se bloquea la eliminación con `409 Conflict`, detallando la cantidad exacta de salones que dependen de dicha jornada.
+- **Motivo:** Evita dejar cursos huérfanos sin turno operativo, lo cual rompería las listas de asistencia, horarios y el generador de boletines oficiales.
+- **Archivos donde se implementa:**
+  - [gradeGroupController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdmin/gradeGroupController.ts) (`deleteJornada`)
+- **Endpoints relacionados:**
+  - `DELETE /api/academic-admin/jornadas/:id`
+- **Historias de usuario relacionadas:** HU-EST-006
+
+---
+
+### RN-EST-011: Guarda Institucional de Reasignación de Cursos y Prevención de Colisiones de Turno
+- **Descripción:** 
+  1. La reasignación de cursos entre diferentes jornadas (`reassignGroupJornada`) está sujeta a la guarda de política institucional (`IS_JORNADA_REASSIGNMENT_ENABLED = false`). Por defecto, devuelve `403 Forbidden` para proteger la elección contractual de turno realizada por las familias durante la matrícula.
+  2. Si la guarda es habilitada por directriz rectoral, el sistema valida que no exista un curso con el mismo grado y sección en la jornada de destino (`409 Conflict`), previniendo colisiones de salones paralelos homónimos en un mismo turno.
+- **Motivo:** Protege la validez jurídica de la jornada elegida por el acudiente y mantiene la unicidad estructural de aulas físicas.
+- **Archivos donde se implementa:**
+  - [gradeGroupController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdmin/gradeGroupController.ts) (`reassignGroupJornada`)
+- **Endpoints relacionados:**
+  - `PATCH /api/academic-admin/groups/:id/jornada`
+- **Historias de usuario relacionadas:** HU-EST-007

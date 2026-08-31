@@ -66,11 +66,23 @@ Este documento detalla las Historias de Usuario del módulo de **Estructura Esco
 
 ---
 
-### HU-EST-006: Habilitación y Gestión de Jornadas Institucionales
-- **Como:** Directivo Escolar.
-- **Quiero:** Habilitar o retirar jornadas de operación en mi colegio.
-- **Para:** Organizar los turnos en que operan los diferentes cursos escolares.
+### HU-EST-006: Habilitación y Retiro Protegido de Jornadas Institucionales
+- **Como:** Directivo Escolar (Coordinador / Rector).
+- **Quiero:** Habilitar nuevos turnos operativos en mi colegio o retirar jornadas en desuso.
+- **Para:** Estructurar los horarios de la institución y habilitar cursos físicos en diferentes franjas horarias.
 - **Criterios de Aceptación:**
-  1. Solo se admiten los nombres oficiales: `MAÑANA`, `TARDE`, `UNICA`, `NOCTURNA`.
-  2. No se permite habilitar jornadas duplicadas en la misma institución.
-  3. Una jornada con cursos vinculados en `grupos` no puede eliminarse (`409 Conflict`).
+  1. El formulario de habilitación solo ofrece los nombres oficiales no activados: `MAÑANA`, `TARDE`, `UNICA` o `NOCTURNA`.
+  2. Si se intenta registrar una jornada duplicada, el sistema bloquea con `409 Conflict`.
+  3. Al intentar retirar una jornada, el backend verifica que no existan cursos vinculados en `grupos`. Si existen, rechaza con `409 Conflict` indicando el total de salones asociados.
+  4. Al eliminarse una jornada libre, se retira inmediatamente del catálogo y de los selectores de matrículas.
+
+---
+
+### HU-EST-007: Reasignación de Cursos entre Jornadas bajo Guarda Institucional
+- **Como:** Directivo Escolar / Administrador General.
+- **Quiero:** Mover un curso físico existente a una jornada institucional diferente.
+- **Para:** Ajustar la distribución física de salones o corregir asignaciones horarias.
+- **Criterios de Aceptación:**
+  1. La operación está protegida por la guarda rectoral (`IS_JORNADA_REASSIGNMENT_ENABLED = false`), respondiendo `403 Forbidden` por defecto para preservar los acuerdos de matrícula con los padres.
+  2. Si se encuentra autorizada, el sistema valida que no exista un curso con el mismo grado y sección en la jornada destino (`409 Conflict`).
+  3. Al confirmarse, actualiza `grupos.id_jornada` y refresca la pertenencia del aula en todas las planillas académicas.
