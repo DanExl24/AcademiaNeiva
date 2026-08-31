@@ -169,9 +169,108 @@ En la interfaz directiva ([`GradeManagement.vue`](file:///c:/Users/alejo/Downloa
 
 ---
 
-## 7. Diagramas de Secuencia Mermaid
+## 7. Reasignación de Cursos a Otras Jornadas (Mecanismo y Guarda Institucional)
 
-### Habilitación de una Nueva Jornada Institucional
+La reasignación de jornada (`reassignGroupJornada`) es una operación estructural de alto impacto que traslada un curso físico (`grupos`) completo de un turno operativo a otro (por ejemplo, de la jornada `MAÑANA` a la jornada `TARDE`).
+
+### 7.1. Casos de Uso y Escenarios Operativos
+1. **Planeación Escolar y Apertura de Jornada Única:** Cuando la institución educativa migra grupos de jornada regular a Jornada Única (`UNICA`) al inicio del año escolar.
+2. **Reorganización Física y Capacidad Instalada:** Cuando por disponibilidad de infraestructura, aulas especializadas o laboratorios, la dirección decide mover un grado de franja horaria.
+3. **Corrección Administrativa Temprana:** Rectificación de un salón creado por error en un turno incorrecto antes de abrir matrículas al público.
+
+---
+
+### 7.2. Mecanismo de Seguridad: La Guarda Institucional (`IS_JORNADA_REASSIGNMENT_ENABLED`)
+En el archivo fuente [gradeGroupController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdmin/gradeGroupController.ts), el endpoint `PATCH /api/academic-admin/groups/:id/jornada` está protegido de forma predeterminada por la guarda:
+
+```typescript
+const IS_JORNADA_REASSIGNMENT_ENABLED = false;
+```
+
+> [!WARNING]
+> **Fundamento Jurídico y Contractual:**  
+> La jornada escolar es un elemento contractual acordado con las familias al momento de formalizar la matrícula. Mover arbitrariamente un curso con alumnos ya inscritos alteraría los compromisos laborales y familiares de los acudientes.  
+> Por tanto, este endpoint responde `403 Forbidden` por defecto, requiriendo autorización rectoral explícita o su uso exclusivo en etapas preliminares de configuración del año escolar.
+
+---
+
+### 7.3. Flujo y Reglas de Validación en Backend
+
+Cuando la guarda está habilitada, el backend ejecuta un pipeline estricto de validaciones antes de modificar la base de datos:
+
+```
+                  ┌──────────────────────────────────────────────┐
+                  │ PATCH /api/academic-admin/groups/:id/jornada │
+                  └──────────────────────┬───────────────────────┘
+                                         │
+                                         ▼
+                     ¿IS_JORNADA_REASSIGNMENT_ENABLED?
+                           │ (No)                 │ (Sí)
+                           ▼                      ▼
+                    403 Forbidden        ¿Existe el id_grupo en
+                                           el colegio del JWT?
+                                                  │ (Sí)
+                                                  ▼
+                                      ¿id_jornada_destino es
+                                       igual a jornada actual?
+                                           │ (No)         │ (Sí)
+                                           │              ▼
+                                           │        400 Bad Request
+                                           ▼
+                                      ¿Existe la jornada destino
+                                        en la misma institución?
+                                           │ (Sí)         │ (No)
+                                           │              ▼
+                                           │        404 Not Found
+                                           ▼
+                                    ¿Existe colisión con curso
+                                     homólogo en jornada destino?
+                                      (mismo grado + seccion)
+                                           │ (No)         │ (Sí)
+                                           │              ▼
+                                           │        409 Conflict
+                                           ▼
+                                   UPDATE grupos SET
+                                   id_jornada = destino
+                                           │
+                                           ▼
+                                        200 OK
+```
+
+1. **Verificación de Pertenencia y Permisos:** El usuario debe poseer rol directivo en el colegio del grupo o contar con rol `admin_general` en modo supervisión.
+2. **Validación de No Redundancia:** Si el `id_jornada` enviado es idéntico a la jornada actual del curso, se rechaza con `400 Bad Request` (*"El curso ya pertenece a la jornada seleccionada"*).
+3. **Existencia de la Jornada Destino:** Se comprueba que la jornada receptora pertenezca al mismo colegio en la tabla `jornada` (`404 Not Found`).
+4. **Prevención de Colisión de Nomenclatura Estructural (`409 Conflict`):**  
+   El sistema consulta si ya existe otro curso en el colegio con la misma combinación:
+   ```sql
+   SELECT id_grupo FROM grupos 
+   WHERE id_colegio = :schoolId 
+     AND id_tipo_grado = :currentGrado 
+     AND id_seccion = :currentSeccion 
+     AND id_jornada = :targetIdJornada
+   ```
+   *Ejemplo de Bloqueo:* Si en la jornada `TARDE` ya existe el salón *"10-A"*, el sistema impedirá reasignar el salón *"10-A"* de la `MAÑANA` a la `TARDE`, para evitar tener dos salones idénticos en el mismo turno.
+5. **Persistencia Transaccional:** Se ejecuta `UPDATE grupos SET id_jornada = :targetIdJornada WHERE id_grupo = :id AND id_colegio = :schoolId`.
+
+---
+
+### 7.4. Efecto Cascada y Preservación de Datos
+
+La reasignación de jornada modifica el atributo `id_jornada` en la fila de `grupos`. Gracias a la arquitectura relacional centrada en `id_grupo`, todos los registros dependientes se conservan íntegros:
+
+| Entidad Relacionada | Impacto tras la Reasignación |
+|---|---|
+| **Matrículas (`matricula`)** | Los estudiantes permanecen matriculados en su `id_grupo`, pasando de forma automática a figurar en el nuevo turno. |
+| **Cargas Académicas (`detalle_grados`)** | Los docentes continúan asignados a sus materias en este curso, pero su carga se reflejará bajo el horario del nuevo turno. |
+| **Calificaciones y Evidencias (`calificaciones`, `actividades`)** | Las notas históricas y ponderaciones permanecen 100% intactas. |
+| **Control de Asistencia (`asistencias`)** | El historial diario se mantiene; el docente ahora registrará la asistencia en el filtro del nuevo turno. |
+| **Boletines Oficiales** | Al generar los boletines del periodo, el encabezado imprimirá el nuevo nombre de jornada (`jornada.nombre`). |
+
+---
+
+## 8. Diagramas de Secuencia Mermaid
+
+### 8.1. Habilitación de una Nueva Jornada Institucional
 
 ```mermaid
 sequenceDiagram
@@ -201,7 +300,9 @@ sequenceDiagram
     end
 ```
 
-### Eliminación Protegida de Jornada con Verificación de Dependencias
+---
+
+### 8.2. Eliminación Protegida de Jornada con Verificación de Dependencias
 
 ```mermaid
 sequenceDiagram
@@ -225,5 +326,42 @@ sequenceDiagram
         DB-->>API: Eliminación exitosa
         API-->>UI: 200 OK ("Jornada eliminada exitosamente")
         UI-->>Directivo: Notificación verde y actualización de la vista
+    end
+```
+
+---
+
+### 8.3. Reasignación Controlada de Curso a Otra Jornada
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Directivo as Directivo Escolar
+    participant UI as GradeManagement.vue
+    participant Modal as JornadaManagementModals.vue
+    participant API as GradeGroupController
+    participant DB as PostgreSQL
+
+    Directivo->>UI: Clic en "Reasignar Jornada" para "Primero B (Mañana)"
+    UI->>Modal: Despliega modal con selector de jornadas destino
+    Directivo->>Modal: Selecciona jornada "TARDE" y confirma
+    Modal->>API: PATCH /api/academic-admin/groups/:id/jornada { schoolId, id_jornada: 2 }
+    
+    alt Guarda Deshabilitada (IS_JORNADA_REASSIGNMENT_ENABLED = false)
+        API-->>Modal: 403 Forbidden ("Reasignación restringida por política institucional de matrículas")
+        Modal-->>Directivo: Alerta informativa de política institucional
+    else Guarda Habilitada (IS_JORNADA_REASSIGNMENT_ENABLED = true)
+        API->>DB: SELECT id_grupo FROM grupos WHERE id_colegio = :schoolId AND id_tipo_grado = :tg AND id_seccion = :sec AND id_jornada = 2
+        alt Existe colisión ("Primero B" ya existe en la Tarde)
+            DB-->>API: Retorna grupo existente
+            API-->>Modal: 409 Conflict ("Ya existe un curso equivalente en la jornada TARDE")
+            Modal-->>Directivo: Alerta de colisión de cursos
+        else Sin colisión
+            DB-->>API: Retorna null
+            API->>DB: UPDATE grupos SET id_jornada = 2 WHERE id_grupo = :id
+            API-->>Modal: 200 OK ("Curso reasignado exitosamente")
+            Modal-->>UI: Refresca distribución de aulas
+            UI-->>Directivo: Notificación de confirmación exitosa
+        end
     end
 ```
