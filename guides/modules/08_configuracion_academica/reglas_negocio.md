@@ -227,3 +227,20 @@ Este documento detalla las reglas de negocio técnicas y funcionales del módulo
   - `DELETE /api/academic-admin/settings/years/:id`
 - **Historias de usuario relacionadas:** HU-CON-001, HU-CON-007
 
+---
+
+### RN-CONF-016: Inmutabilidad del Tipo de Calendario en Años Lectivos Creados
+- **Descripción:** El esquema de calendario escolar (`tipo_calendario`: Calendario A o Calendario B) queda estrictamente definido al momento de crear el año lectivo (`POST /api/academic-admin/settings/years`) y es **inmutable** a partir de ese instante.
+  - En la interfaz de usuario, el tipo de calendario se visualiza como una etiqueta informativa estática (solo lectura).
+  - El endpoint `PATCH /api/academic-admin/settings/years/:id/calendar-type` rechaza cualquier intento de modificación con error `400 Bad Request`.
+  - Si una institución necesita operar bajo otro calendario (por ejemplo, migrar a Calendario B), debe registrar un nuevo año lectivo configurando dicho calendario durante su creación.
+- **Motivo:** Cambiar el tipo de calendario en un año existente desfasaría las vigencias de fechas de periodos, las matrices de evaluación y los cortes de periodos preestablecidos.
+- **Módulos afectados:** Configuración Académica, Periodos Académicos.
+- **Archivos donde se implementa:** 
+  - [academicYearController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdmin/academicYearController.ts) (`updateAcademicYearCalendarType`)
+  - [AcademicPeriodsView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/AcademicPeriodsView.vue)
+- **Endpoints relacionados:** 
+  - `POST /api/academic-admin/settings/years`
+  - `PATCH /api/academic-admin/settings/years/:id/calendar-type`
+- **Historias de usuario relacionadas:** HU-CON-001, HU-CON-007
+

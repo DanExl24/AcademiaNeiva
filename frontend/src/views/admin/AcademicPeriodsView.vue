@@ -531,45 +531,6 @@ const formatYearDates = (year: AcademicYear) => {
   return `${startYear}-01-15 al ${endYear}-11-30`
 }
 
-const changingCalendarYearId = ref<number | null>(null)
-
-const changeYearCalendarType = async (year: AcademicYear, newType: string) => {
-  if (!editorModeActive.value) {
-    alert('Debes activar el Modo Editor para cambiar el tipo de calendario de un año lectivo.')
-    return
-  }
-  if (changingCalendarYearId.value) return
-  if (year.tipo_calendario === newType) return
-
-  const confirmMsg = `¿Desea cambiar el calendario del año lectivo a Calendario ${newType}? Esto actualizará las fechas oficiales de sus periodos.`
-  const ok = await confirm({
-    title: 'Cambiar Calendario',
-    message: confirmMsg,
-    confirmText: 'Cambiar Calendario',
-    type: 'warning'
-  })
-  if (!ok) return
-
-  try {
-    changingCalendarYearId.value = year.id_anio
-    const response = await academicService.updateYearCalendarType(year.id_anio, {
-      schoolId: schoolId.value,
-      tipo_calendario: newType
-    })
-
-    toast.success(response.message || 'Tipo de calendario actualizado correctamente.')
-    if (schoolId.value) {
-      await yearStore.loadYearsForSchool(schoolId.value, auth.token || undefined)
-    }
-    await loadData()
-  } catch (error: any) {
-    toast.error(error.response?.data?.error || 'No fue posible cambiar el tipo de calendario')
-    await loadData()
-  } finally {
-    changingCalendarYearId.value = null
-  }
-}
-
 const standardPeriodPresets = [
   {
     nombre: 'Primer Periodo',
@@ -780,19 +741,12 @@ onMounted(loadData)
                 </div>
                 <div class="flex items-center gap-2 mt-1.5" @click.stop>
                   <span class="text-xs font-bold text-slate-500 dark:text-slate-400">Calendario:</span>
-                  <select 
-                    :value="year.tipo_calendario || 'A'" 
-                    @change="changeYearCalendarType(year, ($event.target as HTMLSelectElement).value)"
-                    :disabled="!editorModeActive || changingCalendarYearId === year.id_anio || year.estado === 'CERRADO'"
-                    :title="year.estado === 'CERRADO' ? 'Año lectivo cerrado (Solo lectura)' : (!editorModeActive ? 'Debes activar el Modo Editor para cambiar el tipo de calendario' : '')"
-                    :class="[
-                      !editorModeActive || year.estado === 'CERRADO' ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer focus:ring-2 focus:ring-sky-500',
-                      'text-xs font-black bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1 outline-none text-slate-700 dark:text-slate-200 transition-all'
-                    ]"
+                  <span
+                    class="text-xs font-black bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1 text-slate-700 dark:text-slate-200 inline-flex items-center gap-1.5"
                   >
-                    <option value="A">Calendario A</option>
-                    <option value="B">Calendario B</option>
-                  </select>
+                    <span>{{ (year.tipo_calendario || 'A') === 'B' ? '🌎' : '📚' }}</span>
+                    <span>{{ (year.tipo_calendario || 'A') === 'B' ? 'Calendario B' : 'Calendario A' }}</span>
+                  </span>
                 </div>
                 <p class="text-xs font-bold text-slate-500 mt-2 dark:text-slate-400 flex items-center gap-1.5">
                   <span class="text-slate-400 dark:text-slate-500 font-semibold">📅 Vigencia:</span>
