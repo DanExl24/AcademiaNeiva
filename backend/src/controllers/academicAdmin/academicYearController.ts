@@ -1264,11 +1264,29 @@ export const updateAcademicPeriodPercentage = async (req: Request, res: Response
 
     const period = periodRes.rows[0];
 
-    // Get school year info for calendar type
+    // Check if period is closed
+    if (period.estado === 'CERRADO') {
+      await client.query("ROLLBACK");
+      res.status(400).json({
+        error: `El periodo académico "${period.nombre}" se encuentra CERRADO institucionalmente. No es posible modificar su porcentaje ni fechas de vigencia sin antes reabrirlo formalmente.`
+      });
+      return;
+    }
+
+    // Get school year info for calendar type and status
     const yearRes = await client.query(
-      `SELECT tipo_calendario FROM anio_lectivo WHERE id_anio = $1 AND id_colegio = $2`,
+      `SELECT tipo_calendario, estado FROM anio_lectivo WHERE id_anio = $1 AND id_colegio = $2`,
       [period.id_anio, schoolId]
     );
+
+    if (yearRes.rows[0]?.estado === 'CERRADO') {
+      await client.query("ROLLBACK");
+      res.status(400).json({
+        error: "El año lectivo se encuentra CERRADO. No es posible modificar la configuración de periodos en un ciclo escolar cerrado."
+      });
+      return;
+    }
+
     const calendarType = yearRes.rows[0]?.tipo_calendario || 'A';
 
     // Validate ranges don't overlap with other periods

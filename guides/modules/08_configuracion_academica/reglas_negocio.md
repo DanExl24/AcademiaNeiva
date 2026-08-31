@@ -188,3 +188,20 @@ Este documento detalla las reglas de negocio técnicas y funcionales del módulo
   - `DELETE /api/academic-admin/settings/periods/:id`
 - **Historias de usuario relacionadas:** HU-CON-001, HU-CON-002
 
+---
+
+### RN-CONF-014: Control de Edición y Actualización de Periodos según su Estado
+- **Descripción:** La modificación de los datos de un periodo académico (ponderación porcentual `%` y vigencia de fechas `mes_inicio`, `dia_inicio`, `mes_fin`, `dia_fin`) mediante `PATCH /api/academic-admin/settings/periods/:id/percentage` está sujeta a controles estrictos basados en su estado operativo:
+  1. **Periodo en estado `PENDIENTE`:** Admite edición libre de ponderaciones y fechas, garantizando que no se solape con otros periodos (`RN-CONF-008`), que la suma anual no supere el 100% (`RN-CONF-005`) y que sus fechas no antecedan al periodo actualmente `ABIERTO`.
+  2. **Periodo en estado `ABIERTO`:** Admite ajuste de porcentajes y ampliación o modificación de fechas límite para responder a contingencias del calendario escolar, sin solaparse con otros periodos y respetando el tope del 100%. No admite retroceder a `PENDIENTE`.
+  3. **Periodo en estado `CERRADO`:** **Bloqueo total de edición.** No se permite modificar porcentajes ni rangos de fechas de periodos cerrados para evitar la alteración retroactiva de promedios consolidados y boletines ya emitidos. Si se requiere realizar ajustes, el directivo debe reabrir formalmente el periodo primero (`POST /api/academic-admin/settings/periods/:id/reopen`). En la UI, el botón de edición se deshabilita automáticamente.
+  4. **Año Lectivo `CERRADO`:** Si el año lectivo se encuentra cerrado, ningún periodo del ciclo admite modificación alguna.
+- **Motivo:** Garantiza la inmutabilidad de la información institucional histórica y protege la consistencia de los boletines de calificaciones y consolidados anuales emitidos.
+- **Módulos afectados:** Configuración Académica, Calificaciones, Cierre y Boletines.
+- **Archivos donde se implementa:** 
+  - [academicYearController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdmin/academicYearController.ts) (`updateAcademicPeriodPercentage`)
+  - [AcademicPeriodsView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/AcademicPeriodsView.vue) (`canEditPeriod`)
+- **Endpoints relacionados:** 
+  - `PATCH /api/academic-admin/settings/periods/:id/percentage`
+- **Historias de usuario relacionadas:** HU-CON-001, HU-CON-002, HU-CON-004
+

@@ -333,6 +333,10 @@ const updatePeriodPercentage = async () => {
     alert(`El año lectivo ${selectedYearObj.value?.calendario || ''} está CERRADO. No es posible modificar periodos en un ciclo escolar cerrado.`)
     return
   }
+  if (periodEditModal.value.estado === 'CERRADO') {
+    alert(`El periodo académico "${periodEditModal.value.nombre}" se encuentra CERRADO institucionalmente. No es posible modificar su configuración.`)
+    return
+  }
   const mesInicio = Number(periodEdit.value.mes_inicio)
   const diaInicio = Number(periodEdit.value.dia_inicio)
   const mesFin = Number(periodEdit.value.mes_fin)
@@ -628,6 +632,12 @@ const canDeletePeriod = (period: AcademicPeriod): boolean => {
   return new Date() < startDate
 }
 
+const canEditPeriod = (period: AcademicPeriod): boolean => {
+  if (currentYear.value?.estado === 'CERRADO') return false
+  if (period.estado === 'CERRADO') return false
+  return true
+}
+
 const deletePeriod = async (period: AcademicPeriod) => {
   if (!canDeletePeriod(period)) {
     toast.error('Solo es posible eliminar periodos en estado Pendiente cuya fecha de inicio aún no haya iniciado.')
@@ -921,9 +931,15 @@ onMounted(loadData)
 
                   <button
                     type="button"
-                    @click="periodEditModal = period; periodEdit.porcentaje = String(period.porcentaje); periodEdit.mes_inicio = String(period.mes_inicio); periodEdit.dia_inicio = String(period.dia_inicio); periodEdit.mes_fin = String(period.mes_fin); periodEdit.dia_fin = String(period.dia_fin)"
-                    class="inline-flex items-center justify-center rounded-2xl bg-slate-100 p-3 text-slate-600 transition-all hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-white"
-                    title="Editar periodo"
+                    :disabled="!canEditPeriod(period)"
+                    @click="canEditPeriod(period) && (periodEditModal = period, periodEdit.porcentaje = String(period.porcentaje), periodEdit.mes_inicio = String(period.mes_inicio), periodEdit.dia_inicio = String(period.dia_inicio), periodEdit.mes_fin = String(period.mes_fin), periodEdit.dia_fin = String(period.dia_fin))"
+                    :class="[
+                      'inline-flex items-center justify-center rounded-2xl p-3 transition-all',
+                      !canEditPeriod(period)
+                        ? 'bg-slate-100/50 text-slate-300 dark:bg-slate-800/30 dark:text-slate-600 cursor-not-allowed opacity-50'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-white cursor-pointer'
+                    ]"
+                    :title="period.estado === 'CERRADO' ? 'No es posible editar un periodo cerrado (debe reabrirlo primero)' : (currentYear?.estado === 'CERRADO' ? 'Año lectivo cerrado' : 'Editar periodo')"
                   >
                     <PenSquare class="h-4 w-4" />
                   </button>
