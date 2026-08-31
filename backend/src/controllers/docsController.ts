@@ -42,9 +42,9 @@ const formatModuleName = (dirName: string): string => {
   return `${num}. ${title}`;
 };
 
-// Formatea nombres de archivos como 'reglas_negocio.md' -> 'Reglas de Negocio'
-const formatDocTitle = (fileName: string): string => {
-  const base = fileName.replace(/\.md$/i, "");
+// Formatea nombres de archivos como 'reglas_negocio.md' -> 'Reglas de Negocio' o 'gestion_jornadas.md' -> 'Submódulo: Gestión de Jornadas'
+const formatDocTitle = (fileName: string, isSubmodule: boolean = false): string => {
+  const base = path.basename(fileName).replace(/\.md$/i, "");
   const titles: Record<string, string> = {
     matriculas: "Documentación Principal",
     casos_uso: "Casos de Uso",
@@ -70,20 +70,23 @@ const formatDocTitle = (fileName: string): string => {
     seguimiento_y_promocion_academica: "Documentación Principal",
     seguimiento_academico_directivo: "Documentación Principal",
     flujo_correos_y_verificaciones: "Documentación Principal",
-    mapa_documentacion: "Mapa General de Documentación"
+    mapa_documentacion: "Mapa General de Documentación",
+    gestion_jornadas: "Submódulo: Gestión de Jornadas"
   };
 
   if (titles[base]) return titles[base];
 
-  return base
+  const formatted = base
     .split("_")
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(" ");
+
+  return isSubmodule ? `Submódulo: ${formatted}` : formatted;
 };
 
 /**
  * GET /api/docs/modules
- * Lista todos los módulos disponibles en guides/modules con sus archivos markdown.
+ * Lista todos los módulos disponibles en guides/modules con sus archivos markdown y submódulos.
  */
 export const getDocsModules = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -105,9 +108,12 @@ export const getDocsModules = async (req: Request, res: Response): Promise<void>
           {
             id: "mapa_documentacion",
             fileName: "mapa_documentacion.md",
-            title: "Mapa General de Documentación"
+            relativePath: "mapa_documentacion.md",
+            title: "Mapa General de Documentación",
+            isSubmodule: false
           }
-        ]
+        ],
+        submodules: []
       });
     }
 
@@ -117,30 +123,56 @@ export const getDocsModules = async (req: Request, res: Response): Promise<void>
 
     for (const dir of dirEntries) {
       const dirPath = path.join(modulesDir, dir.name);
-      const filesInDir = await fs.readdir(dirPath);
-      const mdFiles = filesInDir
-        .filter((f) => f.endsWith(".md"))
+      const dirContents = await fs.readdir(dirPath, { withFileTypes: true });
+
+      // 1. Archivos principales del módulo
+      const mdFiles = dirContents
+        .filter((e) => e.isFile() && e.name.endsWith(".md"))
         .sort((a, b) => {
-          // Orden estándar: principal, reglas, casos, historias
           const order = ["matriculas.md", "reglas_negocio.md", "casos_uso.md", "historias_usuario.md"];
-          const idxA = order.indexOf(a);
-          const idxB = order.indexOf(b);
+          const idxA = order.indexOf(a.name);
+          const idxB = order.indexOf(b.name);
           if (idxA !== -1 && idxB !== -1) return idxA - idxB;
           if (idxA !== -1) return -1;
           if (idxB !== -1) return 1;
-          return a.localeCompare(b);
+          return a.name.localeCompare(b.name);
         })
         .map((f) => ({
-          id: f.replace(/\.md$/i, ""),
-          fileName: f,
-          title: formatDocTitle(f)
+          id: f.name.replace(/\.md$/i, ""),
+          fileName: f.name,
+          relativePath: f.name,
+          title: formatDocTitle(f.name, false),
+          isSubmodule: false
         }));
+
+      // 2. Submódulos si existe carpeta 'submodules'
+      let submodules: any[] = [];
+      const hasSubmodulesDir = dirContents.some((e) => e.isDirectory() && e.name === "submodules");
+      if (hasSubmodulesDir) {
+        const submodulesDirPath = path.join(dirPath, "submodules");
+        try {
+          const subEntries = await fs.readdir(submodulesDirPath, { withFileTypes: true });
+          submodules = subEntries
+            .filter((e) => e.isFile() && e.name.endsWith(".md"))
+            .sort((a, b) => a.name.localeCompare(b.name))
+            .map((f) => ({
+              id: `submodule_${f.name.replace(/\.md$/i, "")}`,
+              fileName: f.name,
+              relativePath: `submodules/${f.name}`,
+              title: formatDocTitle(f.name, true),
+              isSubmodule: true
+            }));
+        } catch {
+          // Ignorar error de lectura en subcarpeta
+        }
+      }
 
       modules.push({
         id: dir.name,
         folderName: dir.name,
         name: formatModuleName(dir.name),
-        files: mdFiles
+        files: mdFiles,
+        submodules
       });
     }
 
@@ -157,22 +189,33 @@ export const getDocsModules = async (req: Request, res: Response): Promise<void>
 
 /**
  * GET /api/docs/content
- * Obtiene el contenido de un archivo markdown específico de guides/modules.
+ * Obtiene el contenido de un archivo markdown específico de guides/modules (incluyendo submódulos).
  * Query params:
- *  - module: nombre de la carpeta (ej. '06_matriculas' o vacío si es archivo raíz de modules)
- *  - file: nombre del archivo (ej. 'matriculas.md' o 'reglas_negocio.md')
+ *  - module: nombre de la carpeta (ej. '04_estructura_escolar' o vacío si es archivo raíz de modules)
+ *  - file: ruta relativa del archivo (ej. 'estructura_escolar.md' o 'submodules/gestion_jornadas.md')
  */
 export const getDocContent = async (req: Request, res: Response): Promise<void> => {
   const moduleName = String(req.query.module || "").trim();
-  const fileName = String(req.query.file || "").trim();
+  let fileName = String(req.query.file || "").trim();
+  const subpath = String(req.query.subpath || "").trim();
 
   if (!fileName) {
     res.status(400).json({ error: "Debe especificar el parámetro 'file'." });
     return;
   }
 
+  // Normalizar ruta si subpath viene explícito
+  let relativeFilePath = fileName;
+  if (subpath && !relativeFilePath.startsWith(subpath)) {
+    relativeFilePath = path.join(subpath, fileName).replace(/\\/g, "/");
+  }
+
   // Prevención de path traversal
-  if (moduleName.includes("..") || fileName.includes("..") || fileName.includes("/") || fileName.includes("\\")) {
+  if (
+    moduleName.includes("..") ||
+    relativeFilePath.includes("..") ||
+    path.isAbsolute(relativeFilePath)
+  ) {
     res.status(400).json({ error: "Ruta de archivo no válida." });
     return;
   }
@@ -180,8 +223,8 @@ export const getDocContent = async (req: Request, res: Response): Promise<void> 
   try {
     const basePath = await getGuidesBasePath();
     const targetPath = moduleName && moduleName !== "general"
-      ? path.join(basePath, "modules", moduleName, fileName)
-      : path.join(basePath, "modules", fileName);
+      ? path.join(basePath, "modules", moduleName, relativeFilePath)
+      : path.join(basePath, "modules", relativeFilePath);
 
     const stat = await fs.stat(targetPath);
     const content = await fs.readFile(targetPath, "utf-8");
@@ -190,12 +233,16 @@ export const getDocContent = async (req: Request, res: Response): Promise<void> 
     const words = content.trim().split(/\s+/).length;
     const readingTimeMinutes = Math.max(1, Math.ceil(words / 200));
 
+    const isSubmodule = relativeFilePath.includes("submodules");
+    const baseFileName = path.basename(relativeFilePath);
+
     res.json({
       success: true,
       module: moduleName,
-      file: fileName,
-      title: formatDocTitle(fileName),
+      file: relativeFilePath,
+      title: formatDocTitle(baseFileName, isSubmodule),
       content,
+      isSubmodule,
       metadata: {
         sizeBytes: stat.size,
         lastModified: stat.mtime,
@@ -211,7 +258,7 @@ export const getDocContent = async (req: Request, res: Response): Promise<void> 
 
 /**
  * GET /api/docs/search?q=...
- * Busca coincidencias en texto dentro de todos los archivos markdown de guides/modules.
+ * Busca coincidencias en texto dentro de todos los archivos markdown de guides/modules y sus submódulos.
  */
 export const searchDocs = async (req: Request, res: Response): Promise<void> => {
   const q = String(req.query.q || "").trim().toLowerCase();
@@ -228,24 +275,30 @@ export const searchDocs = async (req: Request, res: Response): Promise<void> => 
     const results: any[] = [];
 
     // Función auxiliar para escanear un archivo
-    const scanFile = async (filePath: string, modId: string, modName: string, fName: string) => {
+    const scanFile = async (
+      filePath: string, 
+      modId: string, 
+      modName: string, 
+      fRelPath: string, 
+      isSubmodule: boolean = false
+    ) => {
       try {
         const text = await fs.readFile(filePath, "utf-8");
         const lines = text.split("\n");
         for (let i = 0; i < lines.length; i++) {
           const line = lines[i];
           if (line.toLowerCase().includes(q)) {
-            // Obtener contexto de líneas
             const snippet = line.trim();
             results.push({
               module: modId,
               moduleName: modName,
-              file: fName,
-              fileTitle: formatDocTitle(fName),
+              file: fRelPath,
+              fileTitle: formatDocTitle(path.basename(fRelPath), isSubmodule),
+              isSubmodule,
               lineNumber: i + 1,
               snippet: snippet.length > 200 ? snippet.substring(0, 200) + "..." : snippet
             });
-            if (results.length >= 30) break;
+            if (results.length >= 40) break;
           }
         }
       } catch {
@@ -256,18 +309,40 @@ export const searchDocs = async (req: Request, res: Response): Promise<void> => 
     // Escanear archivo raíz mapa_documentacion si existe
     const mapPath = path.join(modulesDir, "mapa_documentacion.md");
     try {
-      await scanFile(mapPath, "general", "00. Visión General", "mapa_documentacion.md");
+      await scanFile(mapPath, "general", "00. Visión General", "mapa_documentacion.md", false);
     } catch {}
 
-    // Escanear cada módulo
+    // Escanear cada módulo y sus submódulos
     for (const dir of entries.filter((e) => e.isDirectory())) {
-      if (results.length >= 30) break;
+      if (results.length >= 40) break;
       const dirPath = path.join(modulesDir, dir.name);
-      const files = await fs.readdir(dirPath);
-      for (const f of files.filter((file) => file.endsWith(".md"))) {
-        if (results.length >= 30) break;
-        const fPath = path.join(dirPath, f);
-        await scanFile(fPath, dir.name, formatModuleName(dir.name), f);
+      const dirContents = await fs.readdir(dirPath, { withFileTypes: true });
+
+      // 1. Archivos directos del módulo
+      for (const f of dirContents.filter((e) => e.isFile() && e.name.endsWith(".md"))) {
+        if (results.length >= 40) break;
+        const fPath = path.join(dirPath, f.name);
+        await scanFile(fPath, dir.name, formatModuleName(dir.name), f.name, false);
+      }
+
+      // 2. Archivos en carpeta 'submodules'
+      const subDir = dirContents.find((e) => e.isDirectory() && e.name === "submodules");
+      if (subDir) {
+        const subDirPath = path.join(dirPath, "submodules");
+        try {
+          const subFiles = await fs.readdir(subDirPath, { withFileTypes: true });
+          for (const sf of subFiles.filter((e) => e.isFile() && e.name.endsWith(".md"))) {
+            if (results.length >= 40) break;
+            const sfPath = path.join(subDirPath, sf.name);
+            await scanFile(
+              sfPath, 
+              dir.name, 
+              `${formatModuleName(dir.name)}`, 
+              `submodules/${sf.name}`, 
+              true
+            );
+          }
+        } catch {}
       }
     }
 

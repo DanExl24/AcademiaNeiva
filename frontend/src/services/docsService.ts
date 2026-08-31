@@ -3,7 +3,9 @@ import api from "./api";
 export interface DocFile {
   id: string;
   fileName: string;
+  relativePath?: string;
   title: string;
+  isSubmodule?: boolean;
 }
 
 export interface DocModule {
@@ -11,6 +13,7 @@ export interface DocModule {
   folderName: string;
   name: string;
   files: DocFile[];
+  submodules?: DocFile[];
 }
 
 export interface DocMetadata {
@@ -26,6 +29,7 @@ export interface DocContentResponse {
   file: string;
   title: string;
   content: string;
+  isSubmodule?: boolean;
   metadata: DocMetadata;
 }
 
@@ -34,6 +38,7 @@ export interface DocSearchResult {
   moduleName: string;
   file: string;
   fileTitle: string;
+  isSubmodule?: boolean;
   lineNumber: number;
   snippet: string;
 }

@@ -148,10 +148,12 @@ const filteredModules = computed(() => {
     .map(m => {
       const matchName = m.name.toLowerCase().includes(q)
       const matchingFiles = m.files.filter(f => f.title.toLowerCase().includes(q) || f.fileName.toLowerCase().includes(q))
-      if (matchName || matchingFiles.length > 0) {
+      const matchingSubmodules = (m.submodules || []).filter(sf => sf.title.toLowerCase().includes(q) || sf.fileName.toLowerCase().includes(q))
+      if (matchName || matchingFiles.length > 0 || matchingSubmodules.length > 0) {
         return {
           ...m,
-          files: matchName ? m.files : matchingFiles
+          files: matchName ? m.files : matchingFiles,
+          submodules: matchName ? (m.submodules || []) : matchingSubmodules
         }
       }
       return null
@@ -181,12 +183,12 @@ const fetchModules = async () => {
 }
 
 // Cargar contenido de un documento específico
-const loadDocument = async (moduleId: string, fileName: string) => {
+const loadDocument = async (moduleId: string, filePath: string) => {
   loadingContent.value = true
   try {
-    const res = await docsService.getContent(moduleId, fileName)
+    const res = await docsService.getContent(moduleId, filePath)
     selectedModuleId.value = moduleId
-    selectedFileName.value = fileName
+    selectedFileName.value = res.file || filePath
     docTitle.value = res.title
     rawMarkdown.value = res.content
     metadata.value = res.metadata
@@ -196,8 +198,12 @@ const loadDocument = async (moduleId: string, fileName: string) => {
     renderedHtml.value = processMarkdownToHtml(res.content)
 
     // Actualizar URL sin reload
+    const cleanPath = (res.file || filePath).startsWith('submodules/')
+      ? `/docs/${moduleId}/${res.file || filePath}`
+      : `/docs/${moduleId}/${res.file || filePath}`
+
     router.replace({
-      path: `/docs/${moduleId}/${fileName}`
+      path: cleanPath
     })
 
     // Scroll to top
@@ -211,20 +217,69 @@ const loadDocument = async (moduleId: string, fileName: string) => {
   }
 }
 
+// Interceptar clics en enlaces internos de los documentos markdown
+const handleArticleClick = (e: MouseEvent) => {
+  const target = (e.target as HTMLElement).closest('a')
+  if (!target) return
+  const href = target.getAttribute('href')
+  if (!href) return
+
+  if (href.startsWith('http://') || href.startsWith('https://') || href.startsWith('mailto:')) {
+    target.setAttribute('target', '_blank')
+    target.setAttribute('rel', 'noopener noreferrer')
+    return
+  }
+
+  if (href.startsWith('#')) {
+    return
+  }
+
+  if (href.endsWith('.md') || href.includes('.md#')) {
+    e.preventDefault()
+    const [fileWithRelativePath, hash] = href.split('#')
+    
+    // Si apunta a otro módulo con ../
+    if (fileWithRelativePath.startsWith('../')) {
+      const parts = fileWithRelativePath.replace(/^\.\.\//, '').split('/')
+      if (parts.length >= 2) {
+        const targetModule = parts[0]
+        const targetFile = parts.slice(1).join('/')
+        loadDocument(targetModule, targetFile)
+      }
+    } else {
+      loadDocument(selectedModuleId.value, fileWithRelativePath)
+    }
+
+    if (hash) {
+      setTimeout(() => {
+        const el = document.getElementById(hash)
+        if (el) el.scrollIntoView({ behavior: 'smooth' })
+      }, 300)
+    }
+  }
+}
+
 // Resolver parámetros de ruta
 const resolveRoute = () => {
   const modParam = route.params.module as string
   const fileParam = route.params.file as string
+  const subfolderParam = (route.params.subfolder || route.params.submodules) as string
 
   if (modParam && fileParam) {
-    loadDocument(modParam, fileParam)
+    let fullFileName = fileParam
+    if (subfolderParam === 'submodules' || route.path.includes('/submodules/')) {
+      if (!fullFileName.startsWith('submodules/')) {
+        fullFileName = `submodules/${fullFileName}`
+      }
+    }
+    loadDocument(modParam, fullFileName)
     return
   }
 
   // Por defecto abrir 06_matriculas o el primer módulo disponible
   const defaultMod = modules.value.find(m => m.id === '06_matriculas') || modules.value[0]
   if (defaultMod && defaultMod.files.length > 0) {
-    loadDocument(defaultMod.id, defaultMod.files[0].fileName)
+    loadDocument(defaultMod.id, defaultMod.files[0].relativePath || defaultMod.files[0].fileName)
   }
 }
 
@@ -240,10 +295,18 @@ const currentNavigation = computed(() => {
     m.files.forEach(f => {
       flatFiles.push({ moduleId: m.id, moduleName: m.name, file: f })
     })
+    if (m.submodules && m.submodules.length > 0) {
+      m.submodules.forEach(sf => {
+        flatFiles.push({ moduleId: m.id, moduleName: `${m.name} (Submódulo)`, file: sf })
+      })
+    }
   })
 
   const currentIndex = flatFiles.findIndex(
-    item => item.moduleId === selectedModuleId.value && item.file.fileName === selectedFileName.value
+    item => item.moduleId === selectedModuleId.value && (
+      (item.file.relativePath && item.file.relativePath === selectedFileName.value) || 
+      item.file.fileName === selectedFileName.value
+    )
   )
 
   return {
@@ -353,7 +416,7 @@ onUnmounted(() => {
           >
             <span class="flex items-center gap-2">
               <Search :size="15" class="text-slate-400" />
-              <span>Buscar en los 21 módulos...</span>
+              <span>Buscar en los 21 módulos y submódulos...</span>
             </span>
             <kbd class="px-2 py-0.5 text-[10px] font-mono bg-slate-900 border border-slate-700 rounded-lg text-slate-400">Ctrl K</kbd>
           </button>
@@ -447,13 +510,14 @@ onUnmounted(() => {
 
             <!-- Files Sub-list -->
             <div v-show="openFolders[mod.id]" class="pl-4 pr-1 py-1 space-y-0.5 border-l-2 border-slate-800 ml-4 my-1">
+              <!-- Archivos Principales -->
               <button 
                 v-for="f in mod.files"
                 :key="f.id"
-                @click="loadDocument(mod.id, f.fileName)"
+                @click="loadDocument(mod.id, f.relativePath || f.fileName)"
                 :class="[
                   'w-full px-3 py-1.5 rounded-xl text-left text-xs transition-all flex items-center gap-2 font-semibold cursor-pointer',
-                  selectedModuleId === mod.id && selectedFileName === f.fileName
+                  selectedModuleId === mod.id && (selectedFileName === f.relativePath || selectedFileName === f.fileName)
                     ? 'bg-indigo-600 text-white font-bold shadow-sm shadow-indigo-500/20'
                     : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
                 ]"
@@ -461,6 +525,29 @@ onUnmounted(() => {
                 <FileText :size="13" class="shrink-0 opacity-80" />
                 <span class="truncate">{{ f.title }}</span>
               </button>
+
+              <!-- Submódulos Anidados si existen -->
+              <div v-if="mod.submodules && mod.submodules.length > 0" class="pt-2 mt-1 space-y-0.5 border-t border-slate-800/60">
+                <div class="px-3 py-1 text-[10px] font-black uppercase tracking-wider text-indigo-400 flex items-center gap-1.5">
+                  <Layers :size="11" />
+                  <span>Submódulos ({{ mod.submodules.length }})</span>
+                </div>
+
+                <button 
+                  v-for="sub in mod.submodules"
+                  :key="sub.id"
+                  @click="loadDocument(mod.id, sub.relativePath || ('submodules/' + sub.fileName))"
+                  :class="[
+                    'w-full px-3 py-1.5 rounded-xl text-left text-xs transition-all flex items-center gap-2 font-semibold cursor-pointer',
+                    selectedModuleId === mod.id && (selectedFileName === sub.relativePath || selectedFileName === ('submodules/' + sub.fileName) || selectedFileName === sub.fileName)
+                      ? 'bg-indigo-600 text-white font-bold shadow-sm shadow-indigo-500/20'
+                      : 'text-indigo-300/80 hover:text-white hover:bg-slate-800/60'
+                  ]"
+                >
+                  <FileText :size="13" class="shrink-0 text-indigo-400 opacity-90" />
+                  <span class="truncate">{{ sub.title }}</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -512,11 +599,12 @@ onUnmounted(() => {
           <p class="text-xs font-bold text-slate-400">Cargando documentación...</p>
         </div>
 
-        <!-- Markdown Content con contención estricta -->
+        <!-- Markdown Content con contención estricta e intercepción de enlaces relativos -->
         <article 
           v-else 
           class="docs-content prose prose-invert max-w-none text-slate-300 leading-relaxed text-sm w-full min-w-0"
           v-html="renderedHtml"
+          @click="handleArticleClick"
         >
         </article>
 
@@ -524,7 +612,7 @@ onUnmounted(() => {
         <div class="mt-12 pt-6 border-t border-slate-800 grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div v-if="currentNavigation.prev">
             <button 
-              @click="loadDocument(currentNavigation.prev.moduleId, currentNavigation.prev.file.fileName)"
+              @click="loadDocument(currentNavigation.prev.moduleId, currentNavigation.prev.file.relativePath || currentNavigation.prev.file.fileName)"
               class="w-full p-4 rounded-2xl border border-slate-800 hover:border-indigo-500/40 hover:bg-slate-800/60 transition-all text-left group cursor-pointer"
             >
               <div class="text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1 mb-1">
@@ -539,7 +627,7 @@ onUnmounted(() => {
 
           <div v-if="currentNavigation.next">
             <button 
-              @click="loadDocument(currentNavigation.next.moduleId, currentNavigation.next.file.fileName)"
+              @click="loadDocument(currentNavigation.next.moduleId, currentNavigation.next.file.relativePath || currentNavigation.next.file.fileName)"
               class="w-full p-4 rounded-2xl border border-slate-800 hover:border-indigo-500/40 hover:bg-slate-800/60 transition-all text-right group cursor-pointer"
             >
               <div class="text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center justify-end gap-1 mb-1">

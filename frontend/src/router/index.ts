@@ -44,6 +44,11 @@ const router = createRouter({
       component: () => import('../views/public/DocsPortalView.vue')
     },
     {
+      path: '/docs/:module/submodules/:file',
+      name: 'docs-submodule-file',
+      component: () => import('../views/public/DocsPortalView.vue')
+    },
+    {
       path: '/documentacion',
       redirect: '/docs'
     },
