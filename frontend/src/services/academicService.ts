@@ -38,7 +38,10 @@ export const academicService = {
   },
 
   async deleteYear(yearId: number | string, schoolId: number | string): Promise<any> {
-    const res = await api.delete(`/academic-admin/settings/years/${yearId}`, { params: { schoolId } })
+    const res = await api.delete(`/academic-admin/settings/years/${yearId}`, { 
+      params: { schoolId },
+      data: { schoolId }
+    })
     return res.data
   },
 

@@ -195,17 +195,24 @@ export const createAcademicYear = async (req: Request, res: Response): Promise<v
 };
 
 export const deleteAcademicYear = async (req: Request, res: Response): Promise<void> => {
-  const schoolId = parseSchoolId(req.body.schoolId);
+  const authReq = req as AuthRequest;
+  const schoolId = parseSchoolId(req.body?.schoolId || req.query?.schoolId || authReq.user?.schoolId);
   const yearId = Number(req.params.id);
 
   if (!schoolId || Number.isNaN(yearId)) {
-    res.status(400).json({ error: "Parámetros inválidos" });
+    res.status(400).json({ error: "Identificador de año lectivo o colegio inválido." });
+    return;
+  }
+
+  const isSupervision = Boolean(authReq.user && authReq.user.roles.includes("admin_general"));
+  if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== schoolId) {
+    res.status(403).json({ error: "No tiene permiso para eliminar años lectivos en esta institución." });
     return;
   }
 
   try {
     const result = await db.transaction().execute(async (trx) => {
-      // 1. Check if target year is CERRADO
+      // 1. Verificar existencia y estado del año lectivo
       const targetYear = await trx
         .selectFrom("anio_lectivo")
         .select(["id_anio", "estado", "calendario"])
@@ -213,11 +220,15 @@ export const deleteAcademicYear = async (req: Request, res: Response): Promise<v
         .where("id_colegio", "=", schoolId)
         .executeTakeFirst();
 
-      if (targetYear?.estado === "CERRADO") {
-        throw new Error("CLOSED_YEAR: El año lectivo se encuentra CERRADO y contiene historial académico consolidado. No puede ser eliminado.");
+      if (!targetYear) {
+        throw new Error("NOT_FOUND: Año lectivo no encontrado en esta institución.");
       }
 
-      // 2. Check if this is the ONLY academic year in the school
+      if (targetYear.estado === "CERRADO") {
+        throw new Error("CLOSED_YEAR: El año lectivo se encuentra CERRADO y contiene historial académico archivado. No puede ser eliminado.");
+      }
+
+      // 2. Verificar que no sea el único año lectivo del colegio
       const totalYears = await trx
         .selectFrom("anio_lectivo")
         .select((eb) => eb.fn.count("id_anio").as("count"))
@@ -225,37 +236,108 @@ export const deleteAcademicYear = async (req: Request, res: Response): Promise<v
         .executeTakeFirst();
 
       if (Number(totalYears?.count || 0) <= 1) {
-        throw new Error("MIN_YEAR_LIMIT: No es posible eliminar este año lectivo porque la institución debe tener al menos un año lectivo registrado.");
+        throw new Error("MIN_YEAR_LIMIT: No es posible eliminar este año lectivo porque la institución debe conservar al menos un año lectivo registrado.");
       }
 
-      // 3. Check if there are any active enrollments (matriculas) for this year
+      // 3. Validar matrículas registradas en este año
       const matriculaCheck = await trx
         .selectFrom("matricula")
-        .select("id_matricula")
+        .select((eb) => eb.fn.count("id_matricula").as("count"))
         .where("id_anio", "=", yearId)
         .where("id_colegio", "=", schoolId)
-        .limit(1)
         .executeTakeFirst();
 
-      if (matriculaCheck) {
-        throw new Error("MATRICULAS_EXIST: No es posible eliminar el año lectivo porque ya tiene matrículas asociadas en el sistema.");
+      if (Number(matriculaCheck?.count || 0) > 0) {
+        throw new Error(`ACADEMIC_RECORDS: No es posible eliminar el año lectivo porque ya cuenta con ${matriculaCheck?.count} matrícula(s) registrada(s).`);
       }
 
-      // 3. Delete associated periods first
-      await trx
-        .deleteFrom("periodo_academico")
+      // 4. Validar asignaciones de carga académica (cursos, docentes y materias)
+      const detalleGradosCheck = await trx
+        .selectFrom("detalle_grados")
+        .select((eb) => eb.fn.count("id_detallegrado").as("count"))
+        .where("id_anio", "=", yearId)
+        .where("id_colegio", "=", schoolId)
+        .executeTakeFirst();
+
+      if (Number(detalleGradosCheck?.count || 0) > 0) {
+        throw new Error(`ACADEMIC_RECORDS: No es posible eliminar el año lectivo porque ya cuenta con ${detalleGradosCheck?.count} asignación(es) de carga académica (materias y docentes) vinculadas.`);
+      }
+
+      // 5. Validar competencias curriculares registradas en este año
+      const competenciasCheck = await trx
+        .selectFrom("competencias")
+        .select((eb) => eb.fn.count("id_competencia").as("count"))
+        .where("id_anio", "=", yearId)
+        .where("id_colegio", "=", schoolId)
+        .executeTakeFirst();
+
+      if (Number(competenciasCheck?.count || 0) > 0) {
+        throw new Error(`ACADEMIC_RECORDS: No es posible eliminar el año lectivo porque ya cuenta con ${competenciasCheck?.count} competencia(s) pedagógica(s) configuradas.`);
+      }
+
+      // 6. Validar periodos académicos asociados y sus registros
+      const periods = await trx
+        .selectFrom("periodo_academico")
+        .select(["id_periodo", "nombre", "estado"])
         .where("id_anio", "=", yearId)
         .where("id_colegio", "=", schoolId)
         .execute();
 
-      // 4. Delete the year
+      const activeOrClosedPeriods = periods.filter((p) => p.estado !== "PENDIENTE");
+      if (activeOrClosedPeriods.length > 0) {
+        const periodNames = activeOrClosedPeriods.map((p) => `"${p.nombre}" (${p.estado})`).join(", ");
+        throw new Error(`ACADEMIC_RECORDS: No es posible eliminar el año lectivo porque contiene periodos en curso o cerrados (${periodNames}).`);
+      }
+
+      const periodIds = periods.map((p) => p.id_periodo);
+      if (periodIds.length > 0) {
+        const [raCheck, actCheck, obsCheck, cierreCheck] = await Promise.all([
+          trx.selectFrom("resultado_academico").select((eb) => eb.fn.count("id_resultado").as("count")).where("id_periodo", "in", periodIds).executeTakeFirst(),
+          trx.selectFrom("actividad_materia").select((eb) => eb.fn.count("id_actividadmateria").as("count")).where("id_periodo", "in", periodIds).executeTakeFirst(),
+          trx.selectFrom("observacion_estudiante").select((eb) => eb.fn.count("id_observacion").as("count")).where("id_periodo", "in", periodIds).executeTakeFirst(),
+          trx.selectFrom("cierre_materia").select((eb) => eb.fn.count("id_cierremateria").as("count")).where("id_periodo", "in", periodIds).executeTakeFirst(),
+        ]);
+
+        const totalRecords = Number(raCheck?.count || 0) + Number(actCheck?.count || 0) + Number(obsCheck?.count || 0) + Number(cierreCheck?.count || 0);
+        if (totalRecords > 0) {
+          throw new Error(`ACADEMIC_RECORDS: No es posible eliminar el año lectivo porque sus periodos contienen ${totalRecords} calificaciones, actividades o registros pedagógicos asociados.`);
+        }
+      }
+
+      // 7. Validar decisiones de promoción o registros de graduados
+      const [promocionCheck, graduadosCheck] = await Promise.all([
+        trx.selectFrom("decision_promocion_directivo").select((eb) => eb.fn.count("id_decision").as("count")).where("id_anio_anterior", "=", yearId).where("id_colegio", "=", schoolId).executeTakeFirst(),
+        trx.selectFrom("registro_graduados").select((eb) => eb.fn.count("id_graduado").as("count")).where("id_anio", "=", yearId).executeTakeFirst(),
+      ]);
+
+      if (Number(promocionCheck?.count || 0) > 0 || Number(graduadosCheck?.count || 0) > 0) {
+        throw new Error("ACADEMIC_RECORDS: No es posible eliminar el año lectivo porque cuenta con registros históricos de graduación o promoción asociados.");
+      }
+
+      // 8. Eliminar configuración de inscripción del año si existe
+      await trx
+        .deleteFrom("configuracion_inscripcion")
+        .where("id_anio", "=", yearId)
+        .where("id_colegio", "=", schoolId)
+        .execute();
+
+      // 9. Eliminar los periodos pendientes del año
+      if (periodIds.length > 0) {
+        await trx
+          .deleteFrom("periodo_academico")
+          .where("id_anio", "=", yearId)
+          .where("id_colegio", "=", schoolId)
+          .execute();
+      }
+
+      // 10. Eliminar el año lectivo
       await trx
         .deleteFrom("anio_lectivo")
         .where("id_anio", "=", yearId)
         .where("id_colegio", "=", schoolId)
         .execute();
 
-      // 5. CRITICAL: Check if there is still at least one ABIERTO year for this school
+      // 11. Verificar que quede al menos un año ABIERTO
       const openYearCheck = await trx
         .selectFrom("anio_lectivo")
         .select("id_anio")
@@ -266,7 +348,6 @@ export const deleteAcademicYear = async (req: Request, res: Response): Promise<v
 
       let reactivatedYearLabel = "";
       if (!openYearCheck) {
-        // Find the most recent remaining year and automatically set it to ABIERTO
         const latestYear = await trx
           .selectFrom("anio_lectivo")
           .select(["id_anio", "calendario"])
@@ -285,15 +366,19 @@ export const deleteAcademicYear = async (req: Request, res: Response): Promise<v
         }
       }
 
-      return { reactivatedYearLabel };
+      return { reactivatedYearLabel, targetYear };
     });
 
     res.json({
       message: result.reactivatedYearLabel
-        ? `Año lectivo eliminado exitosamente. El año lectivo ${result.reactivatedYearLabel} ha sido reactivado automáticamente como año abierto.`
-        : "Año lectivo y sus periodos eliminados exitosamente.",
+        ? `Año lectivo ${result.targetYear.calendario} eliminado exitosamente. El año lectivo ${result.reactivatedYearLabel} ha sido reactivado automáticamente como año abierto.`
+        : `Año lectivo ${result.targetYear.calendario} y sus periodos eliminados exitosamente.`,
     });
   } catch (error: any) {
+    if (error.message?.startsWith("NOT_FOUND:")) {
+      res.status(404).json({ error: error.message.replace("NOT_FOUND: ", "") });
+      return;
+    }
     if (error.message?.startsWith("CLOSED_YEAR:")) {
       res.status(400).json({ error: error.message.replace("CLOSED_YEAR: ", "") });
       return;
@@ -302,12 +387,12 @@ export const deleteAcademicYear = async (req: Request, res: Response): Promise<v
       res.status(400).json({ error: error.message.replace("MIN_YEAR_LIMIT: ", "") });
       return;
     }
-    if (error.message?.startsWith("MATRICULAS_EXIST:")) {
-      res.status(409).json({ error: error.message.replace("MATRICULAS_EXIST: ", "") });
+    if (error.message?.startsWith("ACADEMIC_RECORDS:")) {
+      res.status(409).json({ error: error.message.replace("ACADEMIC_RECORDS: ", "") });
       return;
     }
     console.error("Error deleting academic year:", error);
-    res.status(500).json({ error: error.message || "Error en el servidor" });
+    res.status(500).json({ error: formatFriendlyErrorMessage(error) });
   }
 };
 

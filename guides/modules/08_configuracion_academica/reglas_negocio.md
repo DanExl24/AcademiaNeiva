@@ -205,3 +205,25 @@ Este documento detalla las reglas de negocio técnicas y funcionales del módulo
   - `PATCH /api/academic-admin/settings/periods/:id/percentage`
 - **Historias de usuario relacionadas:** HU-CON-001, HU-CON-002, HU-CON-004
 
+---
+
+### RN-CONF-015: Eliminación Protegida de Años Lectivos e Integridad Académica
+- **Descripción:** La eliminación de un año lectivo (`DELETE /api/academic-admin/settings/years/:id`) exige cumplir estrictamente las siguientes condiciones de seguridad relacional:
+  1. **Estado del Año:** Solo se permite eliminar años lectivos que NO se encuentren en estado `CERRADO`. Un año cerrado contiene historial consolidado y actas de grado archivadas.
+  2. **Límite Mínimo Institucional:** La institución educativa debe conservar al menos un (1) año lectivo registrado. No se puede eliminar el único año existente.
+  3. **Ausencia Absoluta de Relaciones Académicas:**
+     - **Matrículas:** No debe tener alumnos matriculados (`matricula`).
+     - **Carga Académica y Asignaciones:** No debe tener cursos o docentes asignados en `detalle_grados`.
+     - **Malla Curricular:** No debe tener competencias pedagógicas registradas en `competencias`.
+     - **Periodos Operativos o Notas:** Ningún periodo del año puede estar en estado `ABIERTO` o `CERRADO`, ni poseer calificaciones (`resultado_academico`), actividades (`actividad_materia`) u observaciones (`observacion_estudiante`).
+     - **Graduados o Promociones:** No debe poseer registros en `registro_graduados` ni en `decision_promocion_directivo`.
+  4. **Garantía de Año Activo:** Si el año eliminado era el activo y la institución posee otros años disponibles, el sistema promueve y reactiva automáticamente el año más reciente a estado `ABIERTO`.
+- **Motivo:** Evita la destrucción accidental de la base de datos escolar y asegura que ningún curso, matrícula o registro académico quede huérfano.
+- **Módulos afectados:** Configuración Académica, Matrículas, Estructura Escolar, Calificaciones.
+- **Archivos donde se implementa:** 
+  - [academicYearController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdmin/academicYearController.ts) (`deleteAcademicYear`)
+  - [AcademicPeriodsView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/AcademicPeriodsView.vue) (`deleteYear`)
+- **Endpoints relacionados:** 
+  - `DELETE /api/academic-admin/settings/years/:id`
+- **Historias de usuario relacionadas:** HU-CON-001, HU-CON-007
+
