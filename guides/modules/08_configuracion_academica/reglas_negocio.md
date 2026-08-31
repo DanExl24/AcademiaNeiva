@@ -171,16 +171,20 @@ Este documento detalla las reglas de negocio técnicas y funcionales del módulo
 
 ---
 
-### RN-CONF-012: Excepción de Visibilidad de Periodos `PENDIENTE` para Planificación Curricular y Gestión
-- **Descripción:** Los periodos en estado `PENDIENTE` son únicamente visibles y seleccionables en dos vistas administrativas específicas:
-  1. **Configuración de Periodos Académicos** ([AcademicPeriodsView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/AcademicPeriodsView.vue)): Para administrar y aperturar los periodos.
-  2. **Competencias Académicas y Cobertura DBA** ([AcademicCompetenciesView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/AcademicCompetenciesView.vue) y [DbaReportsView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/DbaReportsView.vue)): Para estructurar la malla curricular, asignar DBA e indicadores de desempeño de periodos futuros con anticipación.
-- **Motivo:** Permite a la coordinación académica estructurar la planeación pedagógica del año completo antes del inicio formal de cada trimestre.
-- **Módulos afectados:** Configuración Académica, Competencias y DBA.
+---
+
+### RN-CONF-013: Eliminación Protegida de Periodos Académicos
+- **Descripción:** La eliminación de un periodo académico (`DELETE /api/academic-admin/settings/periods/:id`) está estrictamente condicionada por cuatro barreras de seguridad e integridad del sistema:
+  1. **Estado del Periodo:** Solo se pueden eliminar periodos en estado `PENDIENTE`. Los periodos en estado `ABIERTO` o `CERRADO` no admiten eliminación bajo ninguna circunstancia.
+  2. **Ciclo del Año Lectivo:** No se puede eliminar ningún periodo si el año lectivo se encuentra `CERRADO`.
+  3. **Barrera Cronológica (Vigencia de Fechas):** No es posible eliminar un periodo si la fecha actual del sistema ya alcanzó o superó la fecha de inicio (`mes_inicio`, `dia_inicio`) o fin del periodo (`now >= periodStartDate`).
+  4. **Integridad Relacional (Dependencias Académicas):** El sistema verifica que no existan calificaciones (`resultado_academico`), actividades (`actividad_materia`), observaciones (`observacion_estudiante`), competencias pedagógicas (`competencias`) o cierres (`cierre_materia`) asociados. Si existe alguna dependencia, se bloquea la operación con `400 Bad Request`.
+- **Motivo:** Previene la pérdida irreversible de registros escolares y evita inconsistencias en cálculos ponderados anuales y promedios consolidados.
+- **Módulos afectados:** Configuración Académica, Calificaciones, Cierre y Boletines.
 - **Archivos donde se implementa:** 
-  - [AcademicCompetenciesView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/AcademicCompetenciesView.vue)
-  - [DbaReportsView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/DbaReportsView.vue)
+  - [academicYearController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdmin/academicYearController.ts) (`deleteAcademicPeriod`)
+  - [AcademicPeriodsView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/AcademicPeriodsView.vue) (`canDeletePeriod`)
 - **Endpoints relacionados:** 
-  - `GET /api/academic-admin/settings/:schoolId`
-- **Historias de usuario relacionadas:** HU-CON-001, HU-COM-001
+  - `DELETE /api/academic-admin/settings/periods/:id`
+- **Historias de usuario relacionadas:** HU-CON-001, HU-CON-002
 

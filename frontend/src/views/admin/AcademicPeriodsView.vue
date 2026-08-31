@@ -618,7 +618,21 @@ const onPresetSelected = (presetNombre: string) => {
   }
 }
 
+const canDeletePeriod = (period: AcademicPeriod): boolean => {
+  if (currentYear.value?.estado === 'CERRADO') return false
+  if (period.estado !== 'PENDIENTE') return false
+  if (!period.mes_inicio || !period.dia_inicio) return true
+  const yearStr = currentYear.value?.calendario || String(new Date().getFullYear())
+  const yearNum = parseInt(yearStr, 10) || new Date().getFullYear()
+  const startDate = new Date(yearNum, Number(period.mes_inicio) - 1, Number(period.dia_inicio), 0, 0, 0)
+  return new Date() < startDate
+}
+
 const deletePeriod = async (period: AcademicPeriod) => {
+  if (!canDeletePeriod(period)) {
+    toast.error('Solo es posible eliminar periodos en estado Pendiente cuya fecha de inicio aún no haya iniciado.')
+    return
+  }
   const ok = await confirm({
     title: 'Eliminar Periodo',
     message: `¿Está seguro de eliminar el periodo "${period.nombre}"?`,
@@ -638,7 +652,6 @@ const deletePeriod = async (period: AcademicPeriod) => {
     loading.value = false
   }
 }
-
 
 onMounted(loadData)
 
@@ -916,10 +929,11 @@ onMounted(loadData)
                   </button>
 
                   <button
+                    v-if="canDeletePeriod(period)"
                     type="button"
                     @click="deletePeriod(period)"
                     class="inline-flex items-center justify-center rounded-2xl bg-rose-50 p-3 text-rose-600 transition-all hover:bg-rose-100 dark:bg-rose-950/20 dark:text-rose-400 dark:hover:bg-rose-950/40"
-                    title="Eliminar periodo académico"
+                    title="Eliminar periodo académico (Solo periodos futuros pendientes)"
                   >
                     <Trash2 class="h-4 w-4" />
                   </button>

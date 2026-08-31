@@ -849,45 +849,158 @@ export const deleteAcademicPeriod = async (req: Request, res: Response): Promise
     return;
   }
 
+  const authReq = req as AuthRequest;
+  const isSupervision = Boolean(authReq.user && authReq.user.roles.includes("admin_general"));
+  if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== schoolId) {
+    res.status(403).json({ error: "No tiene permiso para eliminar periodos en este colegio." });
+    return;
+  }
+
   try {
-    const periodRes = await pool.query(
-      `SELECT id_periodo, nombre, id_anio FROM periodo_academico WHERE id_periodo = $1 AND id_colegio = $2`,
-      [periodId, schoolId]
-    );
+    const period = await db
+      .selectFrom("periodo_academico as pa")
+      .innerJoin("anio_lectivo as al", "al.id_anio", "pa.id_anio")
+      .select([
+        "pa.id_periodo",
+        "pa.nombre",
+        "pa.estado",
+        "pa.porcentaje",
+        "pa.trimestre",
+        "pa.mes_inicio",
+        "pa.dia_inicio",
+        "pa.mes_fin",
+        "pa.dia_fin",
+        "pa.id_anio",
+        "pa.id_colegio",
+        "al.calendario",
+        "al.estado as anio_estado",
+        "al.tipo_calendario"
+      ])
+      .where("pa.id_periodo", "=", periodId)
+      .where("pa.id_colegio", "=", schoolId)
+      .executeTakeFirst();
 
-    if (periodRes.rows.length === 0) {
-      res.status(404).json({ error: "Periodo académico no encontrado." });
+    if (!period) {
+      res.status(404).json({ error: "Periodo académico no encontrado para este colegio." });
       return;
     }
 
-    const yearCheck = await pool.query(`SELECT estado, calendario FROM anio_lectivo WHERE id_anio = $1 AND id_colegio = $2`, [periodRes.rows[0].id_anio, schoolId]);
-    if (yearCheck.rows[0]?.estado === 'CERRADO') {
-      res.status(400).json({ error: `El año lectivo ${yearCheck.rows[0]?.calendario || ''} se encuentra CERRADO. No es posible eliminar periodos en un ciclo escolar cerrado.` });
-      return;
-    }
-
-    const [raRes, naRes, obsRes, attRes] = await Promise.all([
-      pool.query(`SELECT COUNT(*)::int as count FROM resultado_academico WHERE id_periodo = $1`, [periodId]),
-      pool.query(`SELECT COUNT(*)::int as count FROM actividad_materia WHERE id_periodo = $1`, [periodId]),
-      pool.query(`SELECT COUNT(*)::int as count FROM observacion_estudiante WHERE id_periodo = $1 AND id_colegio = $2`, [periodId, schoolId]),
-      pool.query(`SELECT COUNT(*)::int as count FROM registro_asistencia WHERE id_periodo = $1 AND id_colegio = $2`, [periodId, schoolId])
-    ]);
-
-    const totalRecords = raRes.rows[0].count + naRes.rows[0].count + obsRes.rows[0].count + attRes.rows[0].count;
-
-    if (totalRecords > 0) {
+    if (period.anio_estado === 'CERRADO') {
       res.status(400).json({ 
-        error: "No es posible eliminar este periodo académico porque ya contiene calificaciones, actividades, asistencias u observaciones registradas." 
+        error: `El año lectivo ${period.calendario || ''} se encuentra CERRADO. No es posible eliminar periodos en un ciclo escolar cerrado.` 
       });
       return;
     }
 
-    await pool.query(`DELETE FROM periodo_academico WHERE id_periodo = $1 AND id_colegio = $2`, [periodId, schoolId]);
+    if (period.estado === 'CERRADO') {
+      res.status(400).json({ 
+        error: `No es posible eliminar el periodo "${period.nombre}" porque ya ha sido CERRADO institucionalmente.` 
+      });
+      return;
+    }
 
-    res.json({ message: "Periodo académico eliminado correctamente." });
+    if (period.estado === 'ABIERTO') {
+      res.status(400).json({ 
+        error: `No es posible eliminar el periodo "${period.nombre}" porque se encuentra actualmente ABIERTO en curso. Debe cerrarse o desestimarse formalmente.` 
+      });
+      return;
+    }
+
+    // Validación temporal: No se puede eliminar si la fecha actual ya alcanzó o sobrepasó el inicio o el fin del periodo
+    let startYear = new Date().getFullYear();
+    if (period.calendario) {
+      const parsedYear = parseInt(period.calendario, 10);
+      if (!isNaN(parsedYear) && parsedYear > 1900) {
+        startYear = parsedYear;
+      }
+    }
+
+    if (period.mes_inicio && period.dia_inicio) {
+      const periodStartDate = new Date(startYear, Number(period.mes_inicio) - 1, Number(period.dia_inicio), 0, 0, 0);
+      let endYear = startYear;
+      if (period.tipo_calendario === 'B' || (period.mes_fin && period.mes_fin < period.mes_inicio)) {
+        endYear = startYear + 1;
+      }
+      const periodEndDate = period.mes_fin && period.dia_fin 
+        ? new Date(endYear, Number(period.mes_fin) - 1, Number(period.dia_fin), 23, 59, 59)
+        : null;
+
+      const now = new Date();
+      if (now >= periodStartDate) {
+        const formattedStart = `${String(period.dia_inicio).padStart(2, '0')}/${String(period.mes_inicio).padStart(2, '0')}/${startYear}`;
+        const formattedEnd = periodEndDate && period.dia_fin && period.mes_fin
+          ? ` al ${String(period.dia_fin).padStart(2, '0')}/${String(period.mes_fin).padStart(2, '0')}/${endYear}`
+          : '';
+        res.status(400).json({
+          error: `No es posible eliminar el periodo académico "${period.nombre}" porque su vigencia programada (${formattedStart}${formattedEnd}) ya ha iniciado o ha sido alcanzada por la fecha actual del sistema.`
+        });
+        return;
+      }
+    }
+
+    // Verificar dependencias académicas reales con Kysely
+    const [raRes, naRes, obsRes, compRes, cierreRes] = await Promise.all([
+      db.selectFrom("resultado_academico").select(db.fn.count("id_resultado").as("count")).where("id_periodo", "=", periodId).executeTakeFirst(),
+      db.selectFrom("actividad_materia").select(db.fn.count("id_actividadmateria").as("count")).where("id_periodo", "=", periodId).where("id_colegio", "=", schoolId).executeTakeFirst(),
+      db.selectFrom("observacion_estudiante").select(db.fn.count("id_observacion").as("count")).where("id_periodo", "=", periodId).where("id_colegio", "=", schoolId).executeTakeFirst(),
+      db.selectFrom("competencias").select(db.fn.count("id_competencia").as("count")).where("id_periodo", "=", periodId).where("id_colegio", "=", schoolId).executeTakeFirst(),
+      db.selectFrom("cierre_materia").select(db.fn.count("id_cierremateria").as("count")).where("id_periodo", "=", periodId).executeTakeFirst(),
+    ]);
+
+    const totalRecords = Number(raRes?.count || 0) + 
+                         Number(naRes?.count || 0) + 
+                         Number(obsRes?.count || 0) + 
+                         Number(compRes?.count || 0) + 
+                         Number(cierreRes?.count || 0);
+
+    if (totalRecords > 0) {
+      res.status(400).json({ 
+        error: `No es posible eliminar el periodo "${period.nombre}" porque ya contiene actividades, notas, competencias o registros académicos asociados (${totalRecords} dependencias encontradas).` 
+      });
+      return;
+    }
+
+    // Registrar en auditoría si aplica modo supervisión
+    let activeAuditoriaId: number | null = null;
+    if (isSupervision && authReq.user) {
+      const auditRes = await db
+        .selectFrom("auditoria_supervision")
+        .select("id_auditoria")
+        .where("id_colegio", "=", schoolId)
+        .where("id_admin_general", "=", authReq.user.id)
+        .where("estado_supervision", "=", "ACTIVA")
+        .executeTakeFirst();
+      if (auditRes) {
+        activeAuditoriaId = auditRes.id_auditoria;
+      }
+    }
+
+    if (activeAuditoriaId) {
+      await db
+        .insertInto("auditoria_acciones_realizadas")
+        .values({
+          id_auditoria: activeAuditoriaId,
+          modulo: "CONFIGURACION",
+          tipo_accion: "ELIMINACION",
+          accion: "Eliminación de periodo académico",
+          recurso_afectado: `Periodo ID: ${periodId} (${period.nombre})`,
+          valor_antiguo: JSON.stringify(period),
+          valor_nuevo: null,
+          motivo_cambio: (req.body?.motivo_cambio as string) || "Eliminación de periodo académico"
+        })
+        .execute();
+    }
+
+    await db
+      .deleteFrom("periodo_academico")
+      .where("id_periodo", "=", periodId)
+      .where("id_colegio", "=", schoolId)
+      .execute();
+
+    res.json({ message: `Periodo académico "${period.nombre}" eliminado correctamente.` });
   } catch (error: any) {
     console.error("Error al eliminar periodo académico:", error);
-    res.status(500).json({ error: "Error interno al eliminar el periodo académico." });
+    res.status(500).json({ error: formatFriendlyErrorMessage(error) });
   }
 };
 
