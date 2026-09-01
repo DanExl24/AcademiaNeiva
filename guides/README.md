@@ -29,6 +29,8 @@ guides/
 
 - 📜 **[Historial de Versiones y Changelog (v1.0.0 a v2.5.0)](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/HISTORIAL_DE_VERSIONES.md)**
   - Trazabilidad cronológica completa desde el génesis hasta la versión actual: hitos, arquitectura, seguridad y roadmap.
+- ⏱️ **[Estimación de Horas Trabajadas y Auditoría Git](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/ESTIMACION_HORAS_TRABAJADAS.md)**
+  - Auditoría forense de esfuerzo temporal sobre 610 commits, 65 días activos, 98 sesiones y distribución por áreas.
 - 🏛️ **[Arquitectura del Portal de Documentación Web](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/ARQUITECTURA_PORTAL_DOCUMENTACION.md)**
   - Guía técnica del visor web `/docs`, parseo de Markdown, grafo SVG Bézier de 6 capas y fichas ejecutivas.
 - 📄 **[Documentación Técnica Integral (v2.5.0)](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/maestros/AcademiaNeiva_Documentacion_Tecnica_Integral.md)**

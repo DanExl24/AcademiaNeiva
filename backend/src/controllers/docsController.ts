@@ -77,7 +77,9 @@ const formatDocTitle = (fileName: string, isSubmodule: boolean = false): string 
     ARQUITECTURA_PORTAL_DOCUMENTACION: "Arquitectura del Portal de Documentación Web",
     arquitectura_portal_documentacion: "Arquitectura del Portal de Documentación Web",
     HISTORIAL_DE_VERSIONES: "Historial de Versiones y Changelog",
-    historial_de_versiones: "Historial de Versiones y Changelog"
+    historial_de_versiones: "Historial de Versiones y Changelog",
+    ESTIMACION_HORAS_TRABAJADAS: "Estimación de Horas y Auditoría Git",
+    estimacion_horas_trabajadas: "Estimación de Horas y Auditoría Git"
   };
 
   if (titles[base]) return titles[base];
@@ -103,7 +105,7 @@ export const getDocsModules = async (req: Request, res: Response): Promise<void>
 
     const modules = [];
 
-    // 0. Documentos Rectores (README, HISTORIAL_DE_VERSIONES.md, MAESTRO_DE_INFORMACION.md, ARQUITECTURA_PORTAL_DOCUMENTACION.md)
+    // 0. Documentos Rectores (README, HISTORIAL_DE_VERSIONES.md, ESTIMACION_HORAS_TRABAJADAS.md, MAESTRO_DE_INFORMACION.md, ARQUITECTURA_PORTAL_DOCUMENTACION.md)
     const masterFiles = [];
 
     // README General del Proyecto
@@ -136,6 +138,18 @@ export const getDocsModules = async (req: Request, res: Response): Promise<void>
         fileName: "HISTORIAL_DE_VERSIONES.md",
         relativePath: "HISTORIAL_DE_VERSIONES.md",
         title: "Historial de Versiones y Changelog",
+        isSubmodule: false
+      });
+    } catch {}
+
+    // Estimación de Horas Trabajadas (Auditoría Git)
+    try {
+      await fs.stat(path.join(basePath, "ESTIMACION_HORAS_TRABAJADAS.md"));
+      masterFiles.push({
+        id: "ESTIMACION_HORAS_TRABAJADAS",
+        fileName: "ESTIMACION_HORAS_TRABAJADAS.md",
+        relativePath: "ESTIMACION_HORAS_TRABAJADAS.md",
+        title: "Estimación de Horas y Auditoría Git",
         isSubmodule: false
       });
     } catch {}
@@ -429,6 +443,12 @@ export const searchDocs = async (req: Request, res: Response): Promise<void> => 
     const historyPath = path.join(basePath, "HISTORIAL_DE_VERSIONES.md");
     try {
       await scanFile(historyPath, "maestro", "🏛️ 00. Documentos Rectores", "HISTORIAL_DE_VERSIONES.md", false);
+    } catch {}
+
+    // Escanear Estimación de Horas Trabajadas si existe
+    const hoursPath = path.join(basePath, "ESTIMACION_HORAS_TRABAJADAS.md");
+    try {
+      await scanFile(hoursPath, "maestro", "🏛️ 00. Documentos Rectores", "ESTIMACION_HORAS_TRABAJADAS.md", false);
     } catch {}
 
     // Escanear archivo maestro de información si existe
