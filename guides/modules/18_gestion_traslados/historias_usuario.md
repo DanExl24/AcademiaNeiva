@@ -50,7 +50,7 @@
 2. **Cuando** se ejecuta la función `ejecutarTrasladoTransaccional` dentro de un bloque `BEGIN ... COMMIT` con `SELECT FOR UPDATE`,  
 3. **Entonces** el sistema desactiva la vinculación en el colegio de origen (`estado = 'INACTIVO'`, `fecha_fin = NOW()`),  
 4. **Y** crea/activa la vinculación en el colegio de destino (`estado = 'ACTIVO'`, `fecha_inicio = NOW()`),  
-5. **Y** actualiza `usuario.id_colegio` e `estudiante.id_colegio` a la nueva institución,  
+5. **Y** actualiza la pertenencia en `usuario_colegio` y la institución en `estudiante.id_colegio` a la nueva sede,  
 6. **Y** si es un `TRASLADO_MATRICULA`, marca la matrícula original como `TRASLADADA`, genera la matrícula en destino asignando `id_grupo_destino` e `id_nivel`, y finaliza la solicitud como `EJECUTADA`,  
 7. **Y** envía automáticamente un correo formal al acudiente mediante `NotificationService.sendInterInstitutionalTransferApprovedEmail` detallando la sede destino, grado y aula asignada.
 

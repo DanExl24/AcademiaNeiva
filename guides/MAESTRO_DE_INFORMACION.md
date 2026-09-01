@@ -1063,11 +1063,10 @@ Como resultado de la inspección exhaustiva de toda la base de conocimiento, có
    - *Beneficio Obtenido:* Cumplimiento total de la norma ministerial sin romper la validación de cierre institucional para boletines ordinarios trimestrales.
 
 2. **Divergencia entre `usuario.id_colegio` y `usuario_colegio`:**
-   - *Documento Origen:* `reglas_negocio_generales.md` (RN-GEN-007: "Un usuario pertenece a una única institución").
-   - *Documento en Conflicto:* `diccionario_datos.md` (Sección 3 y 4), `18_gestion_traslados` (RN-TRA-001) y `20_seguimiento_academico_directivo` (RN-SEG-011).
-   - *Descripción:* La columna física `usuario.id_colegio` sigue existiendo en PostgreSQL, mientras que los módulos más recientes implementaron `usuario_colegio` para permitir docentes y padres multi-institucionales.
-   - *Impacto Potencial:* Posibles fallos si alguna consulta legacy lee `usuario.id_colegio` en lugar de `usuario_colegio`.
-   - *Recomendación:* Mantener `usuario_colegio` como la fuente canónica de vínculos y considerar `usuario.id_colegio` como un atributo de colegio primario/fallback.
+   - *Estado:* 🟢 **RESUELTO / ELIMINADO DEFINITIVAMENTE** (Marzo 2026).
+   - *Documento Origen:* `reglas_negocio_generales.md` (RN-GEN-007) y `diccionario_datos.md`.
+   - *Solución Aplicada:* Se eliminó definitivamente la columna obsoleta `id_colegio` de la tabla `usuario` en la base de datos PostgreSQL, en las migraciones (`050_drop_usuario_id_colegio.sql`), en el script base (`auth.migration.sql`) y en los esquemas SQL (`AcademiaNeivaBD.sql`). Se actualizó la regla de negocio `RN-GEN-007` para ratificar que la identidad de los usuarios es global y sus vinculaciones institucionales son multicolegio a través de la tabla asociativa `usuario_colegio` y `usuario_colegio_email`.
+   - *Beneficio Obtenido:* Aislamiento multi-tenant flexible y soporte nativo completo para docentes que laboran en múltiples colegios y padres con hijos en distintas instituciones.
 
 ---
 

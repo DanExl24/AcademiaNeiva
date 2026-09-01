@@ -26,6 +26,7 @@ pool.on('error', (err: Error) => {
 pool.query(`
   ALTER TABLE public.anio_lectivo ADD COLUMN IF NOT EXISTS fecha_inicio DATE;
   ALTER TABLE public.anio_lectivo ADD COLUMN IF NOT EXISTS fecha_fin DATE;
+  ALTER TABLE public.usuario DROP COLUMN IF EXISTS id_colegio CASCADE;
   ALTER TABLE public.docente DROP CONSTRAINT IF EXISTS docente_id_usuario_key;
   DO $$
   BEGIN
@@ -35,4 +36,4 @@ pool.query(`
       ALTER TABLE public.docente ADD CONSTRAINT docente_id_usuario_id_colegio_key UNIQUE (id_usuario, id_colegio);
     END IF;
   END $$;
-`).catch((err: any) => console.error("Error adding fecha_inicio/fecha_fin or updating docente constraint:", err));
+`).catch((err: any) => console.error("Error running DB bootstrap queries:", err));

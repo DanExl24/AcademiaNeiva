@@ -7,7 +7,7 @@ Este documento detalla las reglas de negocio técnicas y funcionales del módulo
 ## Control de Actividad
 
 ### RN-COL-001: Impacto de Suspensión de Colegio en Usuarios
-- **Descripción:** Cuando el estado de un colegio es modificado a `SUSPENDIDO` o `RECHAZADO` por el Administrador General, todos los usuarios pertenecientes a dicho colegio (`usuario.id_colegio = id_colegio`) ven inhabilitada su capacidad de operar en la plataforma.
+- **Descripción:** Cuando el estado de un colegio es modificado a `SUSPENDIDO` o `RECHAZADO` por el Administrador General, todos los usuarios con vinculación activa a dicho colegio a través de `usuario_colegio` ven inhabilitada su capacidad de operar en el contexto de esa institución.
 - **Motivo:** Garantiza que las instituciones inhabilitadas administrativamente no puedan consumir recursos de servidor ni alterar datos hasta que su estado sea normalizado.
 - **Módulos afectados:** Gestión de Colegios, Autenticación y Sesiones.
 - **Archivos donde se implementa:** 

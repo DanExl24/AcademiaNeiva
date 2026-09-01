@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict JzxnCcDlPgKumvt7RrdbPqsAPe5QLBeACzUBjgzRIUW2Te9DE5RLejKGnXQQsny
+\restrict lkQ9u4THAvAnP29AImDe3qreZ7DEdTTkDYdBbdJgexrxv9bW4IlNnw5rYThtDUr
 
 -- Dumped from database version 18.4
 -- Dumped by pg_dump version 18.4
@@ -2927,7 +2927,6 @@ CREATE TABLE public.usuario (
     password character varying(255) NOT NULL,
     nombre character varying(255) NOT NULL,
     apellido character varying(255),
-    id_colegio integer,
     activo boolean DEFAULT true,
     fecha_creacion timestamp with time zone DEFAULT now(),
     estado public.estado_usuario_sistema DEFAULT 'ACTIVO'::public.estado_usuario_sistema NOT NULL,
@@ -5604,5 +5603,5 @@ REVOKE USAGE ON SCHEMA public FROM PUBLIC;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict JzxnCcDlPgKumvt7RrdbPqsAPe5QLBeACzUBjgzRIUW2Te9DE5RLejKGnXQQsny
+\unrestrict lkQ9u4THAvAnP29AImDe3qreZ7DEdTTkDYdBbdJgexrxv9bW4IlNnw5rYThtDUr
 

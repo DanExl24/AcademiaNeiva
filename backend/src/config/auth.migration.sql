@@ -11,14 +11,13 @@ CREATE TABLE rol (
     nombre VARCHAR(50) UNIQUE NOT NULL
 );
 
--- 2. Tabla de Usuarios Centralizada
+-- 2. Tabla de Usuarios Centralizada (Sin id_colegio - multicolegio desacoplado en usuario_colegio)
 CREATE TABLE usuario (
     id_usuario SERIAL PRIMARY KEY,
-    email VARCHAR(255) UNIQUE NOT NULL,
+    email VARCHAR(255) UNIQUE,
     password VARCHAR(255) NOT NULL,
     nombre VARCHAR(255) NOT NULL,
     apellido VARCHAR(255),
-    id_colegio INTEGER REFERENCES colegio(id_colegio),
     activo BOOLEAN DEFAULT TRUE,
     fecha_creacion TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -32,4 +31,3 @@ CREATE TABLE usuario_rol (
 
 -- 4. Índices para rendimiento
 CREATE INDEX idx_usuario_email ON usuario(email);
-CREATE INDEX idx_usuario_colegio ON usuario(id_colegio);

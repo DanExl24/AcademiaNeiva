@@ -417,42 +417,44 @@ HU-DOC-001, HU-DIR-002, HU-DIR-006.
 
 ### Nombre
 
-Un Usuario Pertenece a una Única Institución
+Modelo de Identidad y Vinculación Multicolegio a través de `usuario_colegio`
 
 ### Descripción
 
-En la implementación actual, un usuario se asocia a un único colegio mediante la columna `usuario.id_colegio`. Esta relación determina el contexto institucional del usuario en toda su operación dentro de la plataforma.
+En AcademiaNeiva, los usuarios poseen una identidad global centralizada (tabla `usuario`, sin columna `id_colegio`) y se vinculan de manera flexible a una o múltiples instituciones educativas a través de la tabla asociativa `usuario_colegio` (y `usuario_colegio_email` para credenciales institucionales por colegio). La columna física `usuario.id_colegio` se encuentra totalmente deprecada y eliminada del esquema.
 
 ### Motivo
 
-Simplifica el modelo de aislamiento multi-tenant al asignar un contexto institucional fijo a cada usuario, que se propaga al JWT y a todas las consultas.
+Permite el soporte nativo multicolegio:
+1. **Docentes Multi-institucionales:** Profesores que dictan asignaturas en dos o más colegios del ecosistema conservando una sola cuenta de acceso.
+2. **Padres con Hijos en Diversos Colegios:** Acudientes con estudiantes en distintas instituciones bajo el mismo perfil.
+3. **Aislamiento Multi-tenant Dinámico:** Al iniciar sesión o alternar de sede, el contexto institucional se resuelve dinámicamente mediante `usuario_colegio.id_colegio` y se propaga en el JWT (`req.user.schoolId`).
 
 ### Alcance
 
-Tabla `usuario`, modelo de autenticación y autorización.
+Tabla `usuario`, tabla `usuario_colegio`, tabla `usuario_colegio_email`, arquitectura de autenticación y autorización.
 
 ### Evidencia
 
-- Columna `id_colegio` en tabla `usuario`: [AcademiaNeivaBD.sql L2735](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/AcademiaNeivaBD.sql#L2735)
-- FK: `usuario_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES colegio(id_colegio)` — [L5130-L5131](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/AcademiaNeivaBD.sql#L5130-L5131)
-- JWT payload: `schoolId: decoded.schoolId || null` — [authMiddleware.ts L79](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/middleware/authMiddleware.ts#L79)
+- Tabla asociativa `usuario_colegio`: [AcademiaNeivaBD.sql](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/AcademiaNeivaBD.sql)
+- Migración de eliminación: `050_drop_usuario_id_colegio.sql`
+- Resolución de correo y sede: `emailResolver.ts` y [authMiddleware.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/middleware/authMiddleware.ts)
 
 ### Implementación
 
-El `id_colegio` del usuario se incluye en el JWT al momento del login. El middleware `verifyToken` lo extrae como `req.user.schoolId` y todas las queries lo usan como filtro.
+El acceso a los recursos institucionales se valida verificando la membresía activa en `usuario_colegio (id_usuario, id_colegio, estado = 'ACTIVO')`. El token JWT contiene el `schoolId` seleccionado o activo en la sesión.
 
 ### Excepciones
 
-- **Administrador General** (`admin_general`): Puede tener `id_colegio = NULL` ya que opera a nivel de plataforma. Durante supervisión, hereda temporalmente el `id_colegio` del colegio supervisado.
-- **Padres de Familia** (`padre`): Aunque tienen `usuario.id_colegio`, también pueden tener hijos en múltiples colegios a través de la tabla `detalle_padrefamilia`. El JWT incluye un array `schoolIds` para padres (ver [authController.ts L84-L98](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/authController.ts#L84-L98)).
+- **Administrador General** (`admin_general`): Opera con alcance global sobre toda la plataforma sin depender de un registro específico en `usuario_colegio` (o asumiendo el rol durante supervisión).
 
 ### Módulos afectados
 
-Todos los módulos del sistema.
+Todos los módulos del sistema (Autenticación, Gestión de Colegios, Docentes, Matrículas, Traslados, Seguimiento).
 
 ### Entidades afectadas
 
-`usuario`.
+`usuario`, `usuario_colegio`, `usuario_colegio_email`, `usuario_rol`.
 
 ### Endpoints relacionados
 
@@ -2218,7 +2220,7 @@ HU-SEG-001, HU-SEG-002, HU-MAT-005.
 | RN-GEN-004 | Identidad Centralizada en la Tabla`usuario`                     | Usuarios e Identidad        |
 | RN-GEN-005 | Unicidad Global del Correo Electrónico                          | Usuarios e Identidad        |
 | RN-GEN-006 | Unicidad Global del Número de Documento de Identidad            | Usuarios e Identidad        |
-| RN-GEN-007 | Un Usuario Pertenece a una Única Institución                    | Usuarios e Identidad        |
+| RN-GEN-007 | Modelo de Identidad y Vinculación Multicolegio (usuario_colegio)| Usuarios e Identidad        |
 | RN-GEN-008 | Modelo de Roles mediante Tabla Pivote                           | Roles y Autorización        |
 | RN-GEN-009 | Jerarquía de Permisos por Rol                                   | Roles y Autorización        |
 | RN-GEN-010 | Verificación de Estado Activo del Usuario en Cada Petición      | Roles y Autorización        |
