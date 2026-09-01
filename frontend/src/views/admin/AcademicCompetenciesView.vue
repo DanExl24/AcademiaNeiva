@@ -141,7 +141,8 @@ const fetchDiagnostic = async () => {
     loadingDiagnostic.value = true
     const dbaList = await academicService.getDbaPlaneacionDisponibles(schoolId.value, {
       id_grupo: sampleAssignment.id_grupo,
-      id_materia: sampleAssignment.id_materia
+      id_materia: sampleAssignment.id_materia,
+      id_anio: yearStore.selectedYearId || undefined
     })
 
     const list: any[] = (dbaList as any).dba || dbaList || []
@@ -428,7 +429,8 @@ const onFormContextChange = async (arg?: number | Event) => {
       id_grupo: target.id_grupo,
       id_materia: target.id_materia,
       id_periodo: competencyForm.value.id_periodo || undefined,
-      id_competencia: competencyId || undefined
+      id_competencia: competencyId || undefined,
+      id_anio: yearStore.selectedYearId || undefined
     })
     availableFormDba.value = resData.dba || []
     formDbaVersion.value = resData.versionCurricular
@@ -522,6 +524,9 @@ const saveCompetency = async () => {
     competencyModal.value = false
     resetForm()
     await loadData()
+    if (selectedGrade.value && selectedSubject.value) {
+      await fetchDiagnostic()
+    }
     notify.addNotification('Competencia guardada correctamente', 'success')
   } catch (error: any) {
     notify.addNotification(error.response?.data?.error || 'No fue posible guardar la competencia', 'error')
@@ -636,7 +641,8 @@ const openDbaModal = async (competencia: CompetencyItem) => {
       id_grupo: competencia.id_grupo,
       id_materia: competencia.id_materia,
       id_periodo: competencia.id_periodo,
-      id_competencia: competencia.id_competencia
+      id_competencia: competencia.id_competencia,
+      id_anio: yearStore.selectedYearId || undefined
     })
     availableDba.value = resData.dba || []
     dbaVersion.value = resData.versionCurricular
