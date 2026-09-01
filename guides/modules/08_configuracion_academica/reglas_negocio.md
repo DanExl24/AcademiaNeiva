@@ -49,15 +49,35 @@ Este documento detalla las reglas de negocio técnicas y funcionales del módulo
 
 ## Escalas de Valoración y Límites
 
-### RN-CONF-004: Restricciones en Configuración de Escalas
-- **Descripción:** Los rangos de nota de las cuatro escalas descriptivas obligatorias (`BAJO`, `BASICO`, `ALTO`, `SUPERIOR`) configurados en `escala_valoracion` deben cumplir:
-  - No deben tener solapamientos (ej. el máximo de Básico debe ser inferior al mínimo de Alto).
-  - El límite inferior del nivel `BAJO` debe ser igual a la `nota_minima` del colegio y el límite superior de `SUPERIOR` debe ser igual a la `nota_maxima`.
-- **Motivo:** Asegura la consistencia en el cálculo automático de los boletines de calificaciones, previniendo que una nota promedio caiga en dos rangos descriptivos diferentes o quede sin clasificar.
-- **Módulos afectados:** Configuración Académica, Cierre y Boletines.
+### RN-CONF-004: Configuración y Detección Automática de Escalas Valorativas (Modo AUTOMATICO vs MANUAL)
+- **Descripción:** La institución educativa puede operar sus escalas valorativas nacionales (`BAJO`, `BASICO`, `ALTO`, `SUPERIOR`) bajo dos modalidades reguladas en `configuracion_colegio.escala_modo`:
+  1. **Modo `AUTOMATICO` (Detección y Partición Algorítmica):**
+     El sistema detecta y calcula los límites numéricos de cada escala automáticamente a partir de 3 parámetros institucionales (`nota_minima`, `nota_maxima` y `nota_aprobacion`):
+     - **Zona Reprobatoria (`BAJO`):**
+       - Límite mínimo: `nota_minima`
+       - Límite máximo: $\text{roundToOne}(\text{nota\_aprobacion} - 0.1)$
+     - **Zona Aprobatoria (Partición Equitativa en 3 Tercios):**
+       - Tramo aprobado: $\text{Span} = \text{nota\_maxima} - \text{nota\_aprobacion}$
+       - **`BASICO`:** Desde `nota_aprobacion` hasta $\text{roundToOne}(\text{nota\_aprobacion} + \frac{\text{Span}}{3})$
+       - **`ALTO`:** Desde $\text{roundToOne}(\text{basic\_max} + 0.1)$ hasta $\text{roundToOne}(\text{nota\_aprobacion} + \frac{2 \times \text{Span}}{3})$
+       - **`SUPERIOR`:** Desde $\text{roundToOne}(\text{alto\_max} + 0.1)$ hasta `nota_maxima`
+     - **Continuidad y Normalización:** Todos los valores se redondean a 1 decimal (`roundToOne`) para asegurar continuidad numérica sin vacíos entre niveles.
+  2. **Modo `MANUAL` (Personalización Institucional con Validación de Cortes):**
+     Permite a la institución ajustar los límites superiores de `BASICO` y `ALTO` mediante `PUT /api/academic-admin/settings/scales/manual`, siempre que:
+     - No existan solapamientos entre niveles.
+     - Se respete que el límite inferior de `BAJO` sea `nota_minima` y el superior de `SUPERIOR` sea `nota_maxima`.
+     - El corte de aprobación inicie estrictamente en `nota_aprobacion`.
+  3. **Rescalado Proporcional Dinámico de Calificaciones:**
+     Al actualizar el rango de notas de la institución (ej. de 0.0–5.0 a 0.0–10.0), el sistema rescala automáticamente todas las notas registradas en `notas_actividad` aplicando la fórmula proporcional para preservar el desempeño histórico de los estudiantes:
+     $$\text{Nota\_Nueva} = \text{Nueva\_Min} + \left(\frac{\text{Nota\_Actual} - \text{Antigua\_Min}}{\text{Antigua\_Max} - \text{Antigua\_Min}}\right) \times (\text{Nueva\_Max} - \text{Nueva\_Min})$$
+- **Motivo:** Garantiza consistencia matemática en el cálculo y visualización de los boletines de calificaciones, evitando que una nota quede sin clasificar o pertenezca a dos descriptores simultáneamente.
+- **Módulos afectados:** Configuración Académica, Calificaciones, Cierre y Boletines.
 - **Archivos donde se implementa:** 
-  - [academicAdminController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdminController.ts) (`updateManualScaleConfiguration`)
+  - [helpers.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdmin/helpers.ts) (`buildAutomaticScales`, `buildManualScales`, `syncSchoolScalesAndGrades`)
+  - [schoolConfigController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdmin/schoolConfigController.ts) (`updateSchoolDefaultSettings`, `updateManualScaleConfiguration`)
+  - [AcademicScalesView.vue](file:///c:/Users/alejo/Downloads/segundoProyecto/frontend/src/views/admin/AcademicScalesView.vue)
 - **Endpoints relacionados:** 
+  - `PUT /api/academic-admin/settings/defaults`
   - `PUT /api/academic-admin/settings/scales/manual`
 - **Historias de usuario relacionadas:** HU-CON-006
 
