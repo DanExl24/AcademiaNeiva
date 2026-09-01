@@ -138,19 +138,15 @@ export const getDocsModules = async (req: Request, res: Response): Promise<void>
     const modules = [];
 
     // 0. Documentos Rectores (README.md [Única Fuente], HISTORIAL_DE_VERSIONES.md, ESTIMACION_HORAS_TRABAJADAS.md, MAESTRO_DE_INFORMACION.md, ARQUITECTURA_PORTAL_DOCUMENTACION.md, guides_index.md)
-    const masterFiles = [];
-
-    // README General del Proyecto (Única Fuente de Verdad: archivo raíz README.md)
-    const rootReadme = await getRootReadmePath();
-    if (rootReadme) {
-      masterFiles.push({
+    const masterFiles = [
+      {
         id: "README",
         fileName: "README.md",
         relativePath: "README.md",
         title: "Visión General del Proyecto (README)",
         isSubmodule: false
-      });
-    }
+      }
+    ];
 
     // Historial de Versiones
     try {
