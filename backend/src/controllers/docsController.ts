@@ -75,7 +75,9 @@ const formatDocTitle = (fileName: string, isSubmodule: boolean = false): string 
     maestro_de_informacion: "Maestro de Información del Sistema",
     MAESTRO_DE_INFORMACION: "Maestro de Información del Sistema",
     ARQUITECTURA_PORTAL_DOCUMENTACION: "Arquitectura del Portal de Documentación Web",
-    arquitectura_portal_documentacion: "Arquitectura del Portal de Documentación Web"
+    arquitectura_portal_documentacion: "Arquitectura del Portal de Documentación Web",
+    HISTORIAL_DE_VERSIONES: "Historial de Versiones y Changelog",
+    historial_de_versiones: "Historial de Versiones y Changelog"
   };
 
   if (titles[base]) return titles[base];
@@ -101,12 +103,11 @@ export const getDocsModules = async (req: Request, res: Response): Promise<void>
 
     const modules = [];
 
-    // 0. Documentos Rectores (README, MAESTRO_DE_INFORMACION.md, ARQUITECTURA_PORTAL_DOCUMENTACION.md)
+    // 0. Documentos Rectores (README, HISTORIAL_DE_VERSIONES.md, MAESTRO_DE_INFORMACION.md, ARQUITECTURA_PORTAL_DOCUMENTACION.md)
     const masterFiles = [];
 
     // README General del Proyecto
     let hasReadme = false;
-    let readmePath = "README.md";
     try {
       await fs.stat(path.resolve(basePath, "../README.md"));
       hasReadme = true;
@@ -126,6 +127,18 @@ export const getDocsModules = async (req: Request, res: Response): Promise<void>
         isSubmodule: false
       });
     }
+
+    // Historial de Versiones
+    try {
+      await fs.stat(path.join(basePath, "HISTORIAL_DE_VERSIONES.md"));
+      masterFiles.push({
+        id: "HISTORIAL_DE_VERSIONES",
+        fileName: "HISTORIAL_DE_VERSIONES.md",
+        relativePath: "HISTORIAL_DE_VERSIONES.md",
+        title: "Historial de Versiones y Changelog",
+        isSubmodule: false
+      });
+    } catch {}
 
     let hasMaster = false;
     let masterRelPath = "MAESTRO_DE_INFORMACION.md";
@@ -411,6 +424,12 @@ export const searchDocs = async (req: Request, res: Response): Promise<void> => 
         await scanFile(path.join(basePath, "README.md"), "maestro", "🏛️ 00. Documentos Rectores", "README.md", false);
       } catch {}
     }
+
+    // Escanear Historial de Versiones si existe
+    const historyPath = path.join(basePath, "HISTORIAL_DE_VERSIONES.md");
+    try {
+      await scanFile(historyPath, "maestro", "🏛️ 00. Documentos Rectores", "HISTORIAL_DE_VERSIONES.md", false);
+    } catch {}
 
     // Escanear archivo maestro de información si existe
     const masterPath = path.join(basePath, "MAESTRO_DE_INFORMACION.md");

@@ -27,8 +27,10 @@ guides/
 
 ## 1. 📚 Documentos Maestros (`guides/maestros/`)
 
-Documentos globales de alto nivel orientados a líderes técnicos, directivos y analistas:
-
+- 📜 **[Historial de Versiones y Changelog (v1.0.0 a v2.5.0)](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/HISTORIAL_DE_VERSIONES.md)**
+  - Trazabilidad cronológica completa desde el génesis hasta la versión actual: hitos, arquitectura, seguridad y roadmap.
+- 🏛️ **[Arquitectura del Portal de Documentación Web](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/ARQUITECTURA_PORTAL_DOCUMENTACION.md)**
+  - Guía técnica del visor web `/docs`, parseo de Markdown, grafo SVG Bézier de 6 capas y fichas ejecutivas.
 - 📄 **[Documentación Técnica Integral (v2.5.0)](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/maestros/AcademiaNeiva_Documentacion_Tecnica_Integral.md)**
   - Visión holística del sistema: arquitectura en 3 capas, resumen ejecutivo de los 21 módulos, stack tecnológico (Kysely/Zod), seguridad y matriz de referencias.
 - 📘 **[Manual Funcional y de Negocio Maestro — Vol. 1](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/maestros/AcademiaNeiva_Documento_Funcional.md)**
