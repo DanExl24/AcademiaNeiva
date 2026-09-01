@@ -101,7 +101,32 @@ export const getDocsModules = async (req: Request, res: Response): Promise<void>
 
     const modules = [];
 
-    // 0. Si existe MAESTRO_DE_INFORMACION.md en la raíz de guides o modules (Documento Rector)
+    // 0. Documentos Rectores (README, MAESTRO_DE_INFORMACION.md, ARQUITECTURA_PORTAL_DOCUMENTACION.md)
+    const masterFiles = [];
+
+    // README General del Proyecto
+    let hasReadme = false;
+    let readmePath = "README.md";
+    try {
+      await fs.stat(path.resolve(basePath, "../README.md"));
+      hasReadme = true;
+    } catch {
+      try {
+        await fs.stat(path.join(basePath, "README.md"));
+        hasReadme = true;
+      } catch {}
+    }
+
+    if (hasReadme) {
+      masterFiles.push({
+        id: "README",
+        fileName: "README.md",
+        relativePath: "README.md",
+        title: "Visión General del Proyecto (README)",
+        isSubmodule: false
+      });
+    }
+
     let hasMaster = false;
     let masterRelPath = "MAESTRO_DE_INFORMACION.md";
     try {
@@ -117,27 +142,27 @@ export const getDocsModules = async (req: Request, res: Response): Promise<void>
     }
 
     if (hasMaster) {
-      const masterFiles = [
-        {
-          id: "MAESTRO_DE_INFORMACION",
-          fileName: "MAESTRO_DE_INFORMACION.md",
-          relativePath: masterRelPath,
-          title: "Maestro de Información del Sistema",
-          isSubmodule: false
-        }
-      ];
+      masterFiles.push({
+        id: "MAESTRO_DE_INFORMACION",
+        fileName: "MAESTRO_DE_INFORMACION.md",
+        relativePath: masterRelPath,
+        title: "Maestro de Información del Sistema",
+        isSubmodule: false
+      });
+    }
 
-      try {
-        await fs.stat(path.join(basePath, "ARQUITECTURA_PORTAL_DOCUMENTACION.md"));
-        masterFiles.push({
-          id: "ARQUITECTURA_PORTAL_DOCUMENTACION",
-          fileName: "ARQUITECTURA_PORTAL_DOCUMENTACION.md",
-          relativePath: "ARQUITECTURA_PORTAL_DOCUMENTACION.md",
-          title: "Arquitectura del Portal de Documentación Web",
-          isSubmodule: false
-        });
-      } catch {}
+    try {
+      await fs.stat(path.join(basePath, "ARQUITECTURA_PORTAL_DOCUMENTACION.md"));
+      masterFiles.push({
+        id: "ARQUITECTURA_PORTAL_DOCUMENTACION",
+        fileName: "ARQUITECTURA_PORTAL_DOCUMENTACION.md",
+        relativePath: "ARQUITECTURA_PORTAL_DOCUMENTACION.md",
+        title: "Arquitectura del Portal de Documentación Web",
+        isSubmodule: false
+      });
+    } catch {}
 
+    if (masterFiles.length > 0) {
       modules.push({
         id: "maestro",
         folderName: "",
@@ -279,7 +304,12 @@ export const getDocContent = async (req: Request, res: Response): Promise<void> 
       try {
         await fs.stat(targetPath);
       } catch {
-        targetPath = path.join(basePath, "modules", relativeFilePath);
+        try {
+          targetPath = path.join(basePath, "modules", relativeFilePath);
+          await fs.stat(targetPath);
+        } catch {
+          targetPath = path.resolve(basePath, "..", relativeFilePath);
+        }
       }
     } else if (!moduleName || moduleName === "general") {
       targetPath = path.join(basePath, "modules", relativeFilePath);
@@ -371,6 +401,16 @@ export const searchDocs = async (req: Request, res: Response): Promise<void> => 
         // Ignorar archivo si no se puede leer
       }
     };
+
+    // Escanear README general del proyecto si existe
+    const rootReadmePath = path.resolve(basePath, "../README.md");
+    try {
+      await scanFile(rootReadmePath, "maestro", "🏛️ 00. Documentos Rectores", "README.md", false);
+    } catch {
+      try {
+        await scanFile(path.join(basePath, "README.md"), "maestro", "🏛️ 00. Documentos Rectores", "README.md", false);
+      } catch {}
+    }
 
     // Escanear archivo maestro de información si existe
     const masterPath = path.join(basePath, "MAESTRO_DE_INFORMACION.md");
