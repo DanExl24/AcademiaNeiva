@@ -79,7 +79,11 @@ const formatDocTitle = (fileName: string, isSubmodule: boolean = false): string 
     HISTORIAL_DE_VERSIONES: "Historial de Versiones y Changelog",
     historial_de_versiones: "Historial de Versiones y Changelog",
     ESTIMACION_HORAS_TRABAJADAS: "Estimación de Horas y Auditoría Git",
-    estimacion_horas_trabajadas: "Estimación de Horas y Auditoría Git"
+    estimacion_horas_trabajadas: "Estimación de Horas y Auditoría Git",
+    README_PROYECTO: "Visión General del Proyecto (README)",
+    readme_proyecto: "Visión General del Proyecto (README)",
+    INDICE_GUIAS: "Índice de Guías Técnicas",
+    indice_guias: "Índice de Guías Técnicas"
   };
 
   if (titles[base]) return titles[base];
@@ -105,26 +109,26 @@ export const getDocsModules = async (req: Request, res: Response): Promise<void>
 
     const modules = [];
 
-    // 0. Documentos Rectores (README, HISTORIAL_DE_VERSIONES.md, ESTIMACION_HORAS_TRABAJADAS.md, MAESTRO_DE_INFORMACION.md, ARQUITECTURA_PORTAL_DOCUMENTACION.md)
+    // 0. Documentos Rectores (README_PROYECTO.md, HISTORIAL_DE_VERSIONES.md, ESTIMACION_HORAS_TRABAJADAS.md, MAESTRO_DE_INFORMACION.md, ARQUITECTURA_PORTAL_DOCUMENTACION.md, INDICE_GUIAS.md)
     const masterFiles = [];
 
-    // README General del Proyecto
+    // README General del Proyecto (Raíz)
     let hasReadme = false;
     try {
       await fs.stat(path.resolve(basePath, "../README.md"));
       hasReadme = true;
     } catch {
       try {
-        await fs.stat(path.join(basePath, "README.md"));
+        await fs.stat(path.join(basePath, "README_PROYECTO.md"));
         hasReadme = true;
       } catch {}
     }
 
     if (hasReadme) {
       masterFiles.push({
-        id: "README",
+        id: "README_PROYECTO",
         fileName: "README.md",
-        relativePath: "README.md",
+        relativePath: "README_PROYECTO.md",
         title: "Visión General del Proyecto (README)",
         isSubmodule: false
       });
@@ -347,14 +351,24 @@ export const getDocContent = async (req: Request, res: Response): Promise<void> 
         try {
           await fs.stat(targetPath);
         } catch {
-          targetPath = path.join(basePath, "README.md");
+          try {
+            targetPath = path.join(basePath, "README_PROYECTO.md");
+            await fs.stat(targetPath);
+          } catch {
+            targetPath = path.join(basePath, "README.md");
+          }
         }
       } else if (
         relativeFilePath === "INDICE_GUIAS.md" ||
         relativeFilePath === "INDICE_GUIAS"
       ) {
-        // Carga del índice de guías en guides/README.md
-        targetPath = path.join(basePath, "README.md");
+        // Carga del índice de guías en guides/INDICE_GUIAS.md o guides/README.md
+        targetPath = path.join(basePath, "INDICE_GUIAS.md");
+        try {
+          await fs.stat(targetPath);
+        } catch {
+          targetPath = path.join(basePath, "README.md");
+        }
       } else {
         targetPath = path.join(basePath, relativeFilePath);
         try {
