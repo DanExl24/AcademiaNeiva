@@ -56,6 +56,27 @@ Este módulo centraliza la planeación y parametrización temporal de cada insti
 - **RN-CONF-002 (Protección Estricta de Datos en Periodo CERRADO):** Para blindar las calificaciones oficiales frente a cambios retroactivos, se aplica una validación backend y de base de datos redundante. Si un periodo está `CERRADO`, se rechaza con error `409 Conflict` o excepción SQL cualquier intento de modificación de notas, actividades o asistencias.
 - **RN-CONF-003 (Activación Automática de Periodos por Scheduler):** El backend corre un servicio programador (`schedulerService.ts`) cada hora. Este servicio promueve automáticamente un periodo de `PENDIENTE` a `ABIERTO` si la fecha actual alcanza la fecha de inicio del periodo y el trimestre anterior ya se encuentra `CERRADO`.
 - **RN-CONF-004 (Configuración y Detección Automática de Escalas Valorativas):** Un colegio puede operar sus escalas en modo `AUTOMATICO` o `MANUAL` (definido en `configuracion_colegio`). En modo `AUTOMATICO`, el sistema detecta y genera los rangos calculando la zona reprobatoria (`BAJO`: nota mínima a nota de aprobación menos 0.1) y particionando equitativamente el tramo de aprobación en 3 tercios (`BASICO`, `ALTO`, `SUPERIOR`) con redondeo normalizado a un decimal (`roundToOne`). Si se cambia la nota máxima o mínima, el sistema ejecuta un rescalado proporcional automático de las notas preexistentes.
+
+#### 💡 Ejemplo Práctico: Detección Automática de Escalas (`AUTOMÁTICO`)
+Si el colegio configura los parámetros estándar en Colombia:
+* **Nota Mínima:** `0.0`
+* **Nota Máxima:** `5.0`
+* **Nota Mínima Aprobatoria:** `3.0`
+
+El sistema calcula automáticamente:
+1. **Zona Reprobatoria (`BAJO`):** Todo lo inferior a la aprobación $\rightarrow$ **`0.0 a 2.9`**.
+2. **Tramo Aprobado ($\text{Span}$):** $5.0 - 3.0 = 2.0$ puntos divididos en 3 tercios iguales ($\approx 0.67$ pts/nivel):
+   * 🟡 **`BÁSICO`:** $3.0 + 0.67 \approx$ **`3.0 a 3.7`**
+   * 🔵 **`ALTO`:** $3.8 + 0.53 \approx$ **`3.8 a 4.3`**
+   * 🟢 **`SUPERIOR`:** $4.4$ hasta la nota máxima $\rightarrow$ **`4.4 a 5.0`**
+
+| Nivel de Desempeño | Rango Automático Calculado | Condición Escolar |
+| :--- | :---: | :---: |
+| 🔴 **Bajo** | `0.0 — 2.9` | Reprobatorio |
+| 🟡 **Básico** | `3.0 — 3.7` | Aprobatorio |
+| 🔵 **Alto** | `3.8 — 4.3` | Aprobatorio |
+| 🟢 **Superior** | `4.4 — 5.0` | Aprobatorio (Sobresaliente) |
+
 - **RN-CONF-005 (Límite del 100% en Suma de Ponderaciones):** La sumatoria de las ponderaciones porcentuales de los periodos asociados a un año lectivo en el mismo colegio no puede superar el 100%.
 - **RN-CONF-006 (Exclusividad del Año Lectivo Activo):** Solo se permite **un (1) año lectivo en estado `ABIERTO`** por colegio a la vez. Al activar un nuevo año, cualquier otro año activo pasa automáticamente a `CERRADO`.
 - **RN-CONF-007 (Coherencia y Rango de Fechas del Año Lectivo):** Todo año lectivo define `fecha_inicio` y `fecha_fin` cumpliendo `fecha_fin > fecha_inicio`.
