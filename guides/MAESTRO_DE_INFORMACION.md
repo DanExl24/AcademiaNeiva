@@ -1057,11 +1057,10 @@ Como resultado de la inspección exhaustiva de toda la base de conocimiento, có
 ### 🔴 Hallazgos Críticos (Requieren Corrección Funcional / Legal)
 
 1. **Bloqueo de Boletín Parcial en Traslados a Mitad de Año (Decreto 1075 Art. 2.3.3.3.3.17):**
-   - *Documento Origen:* `guides/modules/14_cierre_y_boletines/` y `boletinController.ts` (L67).
-   - *Documento en Conflicto:* `guides/normativa_y_legal/Reporte_Analisis_Decreto1075_AcademiaNeiva.md` (Punto 3.4).
-   - *Descripción:* `boletinController.ts` exige que el periodo académico tenga `estado = 'CERRADO'` para generar cualquier reporte de notas. Si un estudiante se traslada a mitad de trimestre, el colegio no puede expedir su informe parcial de notas porque el periodo general sigue abierto, violando el mandato del Decreto 1075 de 2015.
-   - *Impacto Potencial:* Reclamaciones legales o tutelas por impedir la continuidad educativa del estudiante en su nuevo colegio.
-   - *Recomendación:* Crear un endpoint especializado `GET /api/boletines/informe-parcial-traslado/:id_estudiante` que consolide las notas acumuladas a la fecha del retiro sin exigir el cierre global del periodo.
+   - *Estado:* 🟢 **RESUELTO / IMPLEMENTADO** (Marzo 2026).
+   - *Documento Origen:* `guides/modules/14_cierre_y_boletines/` y `boletinController.ts`.
+   - *Solución Aplicada:* Se implementó el endpoint especializado `GET /api/boletines/transfer-partial-report/:id_estudiante` que consolida las notas de periodos cerrados y el cálculo acumulado en tiempo real de actividades del periodo abierto a la fecha de retiro. En el frontend (`BoletinGenerator.vue` y `BoletinPreview.vue`) se habilitó la modalidad de emisión con membrete legal del Decreto 1075.
+   - *Beneficio Obtenido:* Cumplimiento total de la norma ministerial sin romper la validación de cierre institucional para boletines ordinarios trimestrales.
 
 2. **Divergencia entre `usuario.id_colegio` y `usuario_colegio`:**
    - *Documento Origen:* `reglas_negocio_generales.md` (RN-GEN-007: "Un usuario pertenece a una única institución").

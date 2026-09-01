@@ -7,11 +7,37 @@
       </div>
     </div>
 
+    <!-- Selector de Tipo de Reporte -->
+    <div class="flex flex-wrap items-center gap-3 bg-slate-100 dark:bg-slate-800/80 p-1.5 rounded-2xl w-fit border border-slate-200 dark:border-slate-700">
+      <button 
+        @click="reportMode = 'regular'" 
+        :class="[
+          'px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2',
+          reportMode === 'regular' 
+            ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/20' 
+            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+        ]"
+      >
+        <span>📊 Boletín de Periodo Cerrado</span>
+      </button>
+      <button 
+        @click="reportMode = 'transfer'" 
+        :class="[
+          'px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2',
+          reportMode === 'transfer' 
+            ? 'bg-amber-600 text-white shadow-md shadow-amber-500/20' 
+            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+        ]"
+      >
+        <span>📜 Informe Parcial de Traslado / Retiro (Dec. 1075)</span>
+      </button>
+    </div>
+
     <!-- Filters -->
     <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-6">
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <!-- Colegios (si se requiere) o Periodo -->
-        <div>
+        <!-- Periodo Académico (solo requerido en modo regular) -->
+        <div v-if="reportMode === 'regular'">
           <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Periodo Académico</label>
           <select v-model="selectedPeriodo" class="w-full h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:border-indigo-500 focus:ring-indigo-500 shadow-sm transition-shadow">
             <option value="">Seleccione un periodo cerrado</option>
@@ -19,6 +45,13 @@
               {{ periodo.nombre }}
             </option>
           </select>
+        </div>
+
+        <div v-else>
+          <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Corte Temporal</label>
+          <div class="w-full h-11 px-4 flex items-center rounded-xl border border-amber-300 dark:border-amber-700/50 bg-amber-50/50 dark:bg-amber-950/20 text-amber-900 dark:text-amber-300 text-xs font-bold">
+            ⚡ Consolidación a la fecha de hoy
+          </div>
         </div>
 
         <div>
@@ -42,9 +75,11 @@
         </div>
 
         <div>
-          <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Estudiante Opcional</label>
+          <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+            {{ reportMode === 'transfer' ? 'Estudiante Requerido' : 'Estudiante Opcional' }}
+          </label>
           <select v-model="selectedStudent" :disabled="!selectedGroup" class="w-full h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:border-indigo-500 focus:ring-indigo-500 shadow-sm transition-shadow disabled:bg-slate-50 dark:disabled:bg-slate-950/40 disabled:text-slate-400 dark:disabled:text-slate-600">
-            <option value="">Todos los estudiantes (Generación masiva)</option>
+            <option value="">{{ reportMode === 'transfer' ? 'Seleccione un estudiante' : 'Todos los estudiantes (Generación masiva)' }}</option>
             <option v-for="student in students" :key="student.id_estudiante" :value="student.id_estudiante">
               {{ student.nombre }} {{ student.apellido }}
             </option>
@@ -55,14 +90,19 @@
       <div class="mt-6 flex justify-end">
         <button 
           @click="fetchBoletinData" 
-          :disabled="!selectedPeriodo || !selectedGroup || isLoading"
-          class="inline-flex items-center justify-center px-6 py-3 rounded-xl text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:ring-offset-slate-950"
+          :disabled="(reportMode === 'regular' && (!selectedPeriodo || !selectedGroup)) || (reportMode === 'transfer' && !selectedStudent) || isLoading"
+          :class="[
+            'inline-flex items-center justify-center px-6 py-3 rounded-xl text-sm font-bold text-white shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer',
+            reportMode === 'transfer' 
+              ? 'bg-amber-600 hover:bg-amber-700 active:bg-amber-800 focus:ring-amber-500' 
+              : 'bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 focus:ring-indigo-500'
+          ]"
         >
           <svg v-if="isLoading" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
           </svg>
-          {{ isLoading ? 'Cargando datos...' : 'Visualizar Boletines' }}
+          {{ isLoading ? 'Cargando datos...' : (reportMode === 'transfer' ? 'Generar Informe Parcial de Traslado' : 'Visualizar Boletines') }}
         </button>
       </div>
     </div>
@@ -136,6 +176,8 @@ import { getCourseDisplayName } from '../../utils/courseHelper'
 
 const auth = useAuthStore()
 const yearStore = useAcademicYearStore()
+
+const reportMode = ref<'regular' | 'transfer'>('regular')
 
 const periodos = ref<any[]>([])
 const levels = ref<any[]>([])
@@ -214,18 +256,31 @@ watch(() => yearStore.selectedYearId, () => {
   fetchInitialData()
 })
 
+watch(reportMode, () => {
+  boletinesData.value = []
+  error.value = ''
+  if (selectedGroup.value) {
+    fetchStudentsForGroup()
+  }
+})
+
 const fetchStudentsForGroup = async () => {
   if (!selectedGroup.value) {
     students.value = []
     return
   }
-  // Filter from already-loaded students, ensuring only active students in the selected group
-  students.value = allStudents.value.filter(
-    (s: any) =>
-      s.id_grupo === selectedGroup.value &&
-      s.matricula_estado !== 'TRASLADADA' &&
-      (s.matricula_estado === 'ACTIVA' || s.estado_vigente === 'ACTIVO' || s.estado === 'ACTIVO')
-  )
+  // En modo traslado, permitir ver todos los estudiantes del grupo para emitir el certificado
+  if (reportMode.value === 'transfer') {
+    students.value = allStudents.value.filter((s: any) => s.id_grupo === selectedGroup.value)
+  } else {
+    // Filter from already-loaded students, ensuring only active students in the selected group
+    students.value = allStudents.value.filter(
+      (s: any) =>
+        s.id_grupo === selectedGroup.value &&
+        s.matricula_estado !== 'TRASLADADA' &&
+        (s.matricula_estado === 'ACTIVA' || s.estado_vigente === 'ACTIVO' || s.estado === 'ACTIVO')
+    )
+  }
 }
 
 const collectPreviewRefs = (el: any, index: number) => {
@@ -241,20 +296,29 @@ const fetchBoletinData = async () => {
   previewRefs.value = []
 
   try {
-    // Si hay un estudiante específico, trae solo ese.
-    if (selectedStudent.value) {
-      const data = await boletinService.getStudentBoletin(selectedStudent.value, selectedPeriodo.value)
+    if (reportMode.value === 'transfer') {
+      if (!selectedStudent.value) {
+        error.value = 'Debe seleccionar un estudiante para generar el informe parcial de traslado.'
+        return
+      }
+      const data = await boletinService.getStudentTransferPartialReport(selectedStudent.value)
       boletinesData.value.push(data)
     } else {
-      const groupData = await boletinService.getGroupBoletin(selectedGroup.value, selectedPeriodo.value)
-      const ids = groupData.students || []
-      
-      for (const id of ids) {
-        try {
-          const sData = await boletinService.getStudentBoletin(id, selectedPeriodo.value)
-          boletinesData.value.push(sData)
-        } catch (errId) {
-          console.error(`[fetchBoletinData] Failed to load student ${id}:`, errId)
+      // Si hay un estudiante específico, trae solo ese.
+      if (selectedStudent.value) {
+        const data = await boletinService.getStudentBoletin(selectedStudent.value, selectedPeriodo.value)
+        boletinesData.value.push(data)
+      } else {
+        const groupData = await boletinService.getGroupBoletin(selectedGroup.value, selectedPeriodo.value)
+        const ids = groupData.students || []
+        
+        for (const id of ids) {
+          try {
+            const sData = await boletinService.getStudentBoletin(id, selectedPeriodo.value)
+            boletinesData.value.push(sData)
+          } catch (errId) {
+            console.error(`[fetchBoletinData] Failed to load student ${id}:`, errId)
+          }
         }
       }
     }

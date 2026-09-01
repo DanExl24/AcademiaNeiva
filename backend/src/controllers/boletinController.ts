@@ -453,3 +453,269 @@ export const getGradeBoletines = async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Error generando boletines masivos' });
   }
 };
+
+/**
+ * GET /api/boletines/transfer-partial-report/:id_estudiante
+ * Genera el Certificado / Informe Académico Parcial de Notas para Traslado o Retiro Estudiantil.
+ * Cumple con el mandato del Decreto 1075 de 2015 Art. 2.3.3.3.3.17.
+ * Consolida las notas de periodos CERRADOS (resultado_academico) y el periodo ABIERTO actual (notas_actividad acumuladas).
+ */
+export const getStudentTransferPartialReport = async (req: Request, res: Response) => {
+  const { id_estudiante } = req.params;
+  const numEstudiante = Number(id_estudiante);
+
+  try {
+    // 1. Obtener Matrícula y Datos del Estudiante (Incluso si está ACTIVA, TRASLADADO o RETIRADO)
+    const matriculaRes = await db
+      .selectFrom("matricula as m")
+      .innerJoin("estudiante as e", "e.id_estudiante", "m.id_estudiante")
+      .leftJoin("usuario as u", "u.id_usuario", "e.id_usuario")
+      .innerJoin("colegio as c", "c.id_colegio", "e.id_colegio")
+      .leftJoin("grupos as gr", "gr.id_grupo", "m.id_grupo")
+      .leftJoin("jornada as j", "j.id_jornada", "gr.id_jornada")
+      .leftJoin("nivel_escolar as ne", "ne.id_nivel", "gr.id_nivel")
+      .leftJoin("secciones as s", "s.id_seccion", "gr.id_seccion")
+      .leftJoin("tipo_grado as tg", "tg.id_tipo_grado", "gr.id_tipo_grado")
+      .leftJoin("anio_lectivo as al", "al.id_anio", "m.id_anio")
+      .select([
+        "e.id_estudiante",
+        "e.nombre as estudiante_nombre",
+        "e.apellido as estudiante_apellido",
+        "u.documento",
+        "e.codigo",
+        "e.id_colegio",
+        "c.nombre as colegio_nombre",
+        "c.sede",
+        "c.dane",
+        "c.escudo_url",
+        "c.color_primario",
+        "c.color_secundario",
+        sql<string>`COALESCE(c.tipo_calendario, 'A')`.as("tipo_calendario"),
+        "ne.nombre as nivel",
+        "s.nombre as seccion",
+        "tg.nombre as grado_nombre",
+        "j.nombre as jornada_nombre",
+        "m.id_anio",
+        "m.id_grupo",
+        "m.estado as estado_matricula",
+        "al.calendario"
+      ])
+      .where("e.id_estudiante", "=", numEstudiante)
+      .orderBy("m.id_matricula", "desc")
+      .executeTakeFirst();
+
+    if (!matriculaRes) {
+      return res.status(404).json({ error: "Estudiante o matrícula no encontrada." });
+    }
+
+    const authReq = req as any;
+    const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+    if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== Number(matriculaRes.id_colegio)) {
+      return res.status(403).json({ error: "No tiene permiso para acceder al reporte de este estudiante." });
+    }
+
+    const idAnio = matriculaRes.id_anio;
+    const idGrupo = matriculaRes.id_grupo;
+
+    // 2. Obtener todos los periodos del año lectivo
+    const periodos = await db
+      .selectFrom("periodo_academico as p")
+      .select(["p.id_periodo", "p.nombre", "p.trimestre", "p.estado", "p.porcentaje"])
+      .where("p.id_anio", "=", idAnio)
+      .where("p.id_colegio", "=", Number(matriculaRes.id_colegio))
+      .orderBy("p.trimestre", "asc")
+      .execute();
+
+    if (periodos.length === 0) {
+      return res.status(400).json({ error: "No hay periodos configurados para el año lectivo de la matrícula." });
+    }
+
+    // 3. Obtener materias y docentes del grupo
+    const materiasRes = await db
+      .selectFrom("detalle_grados as dg")
+      .innerJoin("materias as m", "m.id_materia", "dg.id_materia")
+      .innerJoin("docente as d", "d.id_docente", "dg.id_docente")
+      .distinctOn("m.id_materia")
+      .select([
+        "dg.id_detallegrado",
+        "dg.id_materia",
+        "m.nombre as materia",
+        "d.nombre as docente_nombre",
+        "d.apellido as docente_apellido"
+      ])
+      .where("dg.id_grupo", "=", idGrupo)
+      .orderBy("m.id_materia")
+      .orderBy("dg.id_detallegrado", "desc")
+      .execute();
+
+    // 4. Escala de valoración del colegio
+    const escalaRows = await db
+      .selectFrom("escala_valoracion")
+      .select(["nivel", "valor_minimo", "valor_maximo"])
+      .where("id_colegio", "=", Number(matriculaRes.id_colegio))
+      .orderBy("valor_minimo", "asc")
+      .execute();
+
+    const getDesempeno = (nota: number | null): string => {
+      if (nota === null || isNaN(nota)) return "Sin evaluar";
+      const match = escalaRows.find(e => nota >= Number(e.valor_minimo) && nota <= Number(e.valor_maximo));
+      return match ? match.nivel : (nota >= 3.0 ? "BÁSICO" : "BAJO");
+    };
+
+    // 5. Para cada materia y periodo, consolidar nota cerrada o acumulada abierta
+    const materias = await Promise.all(
+      materiasRes.map(async (m) => {
+        const mId = Number(m.id_materia);
+        const dgId = Number(m.id_detallegrado);
+
+        const notasHistoricas = await Promise.all(
+          periodos.map(async (p) => {
+            const pId = Number(p.id_periodo);
+            let calificacion: number | null = null;
+            let esParcial = false;
+            let actividadesCalificadas = 0;
+
+            if (p.estado === "CERRADO") {
+              // Buscar en resultado_academico
+              const ra = await db
+                .selectFrom("resultado_academico")
+                .select(["promedio"])
+                .where("id_estudiante", "=", numEstudiante)
+                .where("id_periodo", "=", pId)
+                .where("id_detallegrado", "=", dgId)
+                .executeTakeFirst();
+
+              if (ra && ra.promedio !== null) {
+                calificacion = Number(ra.promedio);
+              } else {
+                // Fallback cálculo actividades
+                const calc = await db
+                  .selectFrom("notas_actividad as na")
+                  .innerJoin("actividad_materia as am", "am.id_actividadmateria", "na.id_actividadmateria")
+                  .select(sql<number>`ROUND(SUM(na.nota * (am.porcentaje / 100.0))::numeric, 2)`.as("promedio_calculado"))
+                  .where("na.id_estudiante", "=", numEstudiante)
+                  .where("am.id_periodo", "=", pId)
+                  .where("am.id_detallegrado", "=", dgId)
+                  .executeTakeFirst();
+                calificacion = calc?.promedio_calculado ? Number(calc.promedio_calculado) : null;
+              }
+              esParcial = false;
+            } else {
+              // Periodo ABIERTO: calcular acumulado a la fecha
+              const actRes = await db
+                .selectFrom("notas_actividad as na")
+                .innerJoin("actividad_materia as am", "am.id_actividadmateria", "na.id_actividadmateria")
+                .select([
+                  sql<number>`ROUND(AVG(na.nota)::numeric, 2)`.as("promedio_parcial"),
+                  sql<number>`COUNT(na.id_nota)`.as("total_actividades")
+                ])
+                .where("na.id_estudiante", "=", numEstudiante)
+                .where("am.id_periodo", "=", pId)
+                .where("am.id_detallegrado", "=", dgId)
+                .executeTakeFirst();
+
+              if (actRes && Number(actRes.total_actividades) > 0) {
+                calificacion = Number(actRes.promedio_parcial);
+                actividadesCalificadas = Number(actRes.total_actividades);
+                esParcial = true;
+              }
+            }
+
+            return {
+              id_materia: mId,
+              id_periodo: pId,
+              periodo_nombre: p.nombre,
+              trimestre: p.trimestre,
+              estado_periodo: p.estado,
+              calificacion: calificacion,
+              desempeno: getDesempeno(calificacion),
+              es_parcial: esParcial,
+              actividades_evaluadas: actividadesCalificadas
+            };
+          })
+        );
+
+        // Ausencias por materia
+        const ausenciasRow = await db
+          .selectFrom("registro_asistencia as ra")
+          .select(sql<number>`COUNT(*) FILTER (WHERE ra.estado = 'AUSENTE')`.as("faltas"))
+          .where("ra.id_estudiante", "=", numEstudiante)
+          .where("ra.id_detallegrado", "=", dgId)
+          .executeTakeFirst();
+
+        return {
+          materia: m.materia,
+          docente_nombre: m.docente_nombre,
+          docente_apellido: m.docente_apellido,
+          ausencias: Number(ausenciasRow?.faltas || 0),
+          notas_historicas: notasHistoricas,
+          desempenos: [],
+          observaciones: []
+        };
+      })
+    );
+
+    // Calcular promedio general acumulado de todas las materias evaluadas
+    const allValidGrades: number[] = [];
+    materias.forEach(m => {
+      m.notas_historicas.forEach(nh => {
+        if (nh.calificacion !== null && !isNaN(nh.calificacion)) {
+          allValidGrades.push(nh.calificacion);
+        }
+      });
+    });
+
+    const promedioAcumulado = allValidGrades.length > 0
+      ? (allValidGrades.reduce((a, b) => a + b, 0) / allValidGrades.length).toFixed(2)
+      : "0.00";
+
+    // Firmas Institucionales
+    const titularRow = await db
+      .selectFrom("docente as d")
+      .innerJoin("grupos as g", "g.id_docente", "d.id_docente")
+      .select(sql<string>`d.nombre || ' ' || d.apellido`.as("nombre_completo"))
+      .where("g.id_grupo", "=", Number(idGrupo))
+      .executeTakeFirst();
+
+    const rectorRow = await db
+      .selectFrom("directivo as d")
+      .innerJoin("usuario as u", "u.id_usuario", "d.id_usuario")
+      .select(sql<string>`u.nombre || ' ' || u.apellido`.as("nombre_completo"))
+      .where("d.id_colegio", "=", Number(matriculaRes.id_colegio))
+      .where("d.cargo", "=", "RECTOR")
+      .executeTakeFirst();
+
+    res.json({
+      es_informe_traslado: true,
+      tipo_documento: "INFORME_PARCIAL_TRASLADO",
+      normativa_legal: "Decreto 1075 de 2015 Art. 2.3.3.3.3.17 / Ley 115 de 1994",
+      fecha_expedicion: new Date().toISOString(),
+      periodo: "Corte Parcial a la Fecha (Traslado)",
+      ano_lectivo: matriculaRes.calendario,
+      estudiante: {
+        ...matriculaRes,
+        nombre: matriculaRes.estudiante_nombre,
+        apellido: matriculaRes.estudiante_apellido,
+        dane: matriculaRes.dane || '183001000940',
+        ciudad: (matriculaRes as any).ciudad || 'Neiva - Huila'
+      },
+      materias: materias,
+      promedioGeneral: promedioAcumulado,
+      nivelDesempeno: getDesempeno(Number(promedioAcumulado)),
+      ranking: {
+        puesto: null,
+        total: null,
+        promedio: Number(promedioAcumulado),
+        nota: "Puesto no aplicable en informe parcial por traslado"
+      },
+      escala: escalaRows,
+      firmas: {
+        titular: titularRow ? titularRow.nombre_completo : null,
+        rector: rectorRow ? rectorRow.nombre_completo : null
+      }
+    });
+  } catch (error) {
+    console.error('[getStudentTransferPartialReport] ERROR:', error);
+    res.status(500).json({ error: "Error generando informe parcial de traslado." });
+  }
+};

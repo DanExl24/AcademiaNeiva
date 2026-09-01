@@ -38,8 +38,16 @@
              </div>
         </div>
       </div>
-
-      <div class="text-center font-bold text-sm tracking-wide border-b border-black pb-1 mb-2 mt-4" style="font-family: 'Quicksand', sans-serif;">
+      <div 
+        v-if="data?.es_informe_traslado" 
+        class="text-center bg-amber-50 border border-amber-300 text-amber-900 rounded-xl py-2 px-4 mb-3 font-black text-xs uppercase tracking-wider shadow-sm mt-4"
+      >
+        📄 INFORME ACADÉMICO PARCIAL DE NOTAS POR TRASLADO / RETIRO
+        <span class="block text-[10px] font-medium text-amber-700 mt-0.5">
+          Expedido en cumplimiento del Decreto 1075 de 2015 Art. 2.3.3.3.3.17 — Corte a la fecha de retiro
+        </span>
+      </div>
+      <div v-else class="text-center font-bold text-sm tracking-wide border-b border-black pb-1 mb-2 mt-4" style="font-family: 'Quicksand', sans-serif;">
         INFORME ACADÉMICO - AÑO LECTIVO {{ data?.ano_lectivo || '2024' }}
       </div>
 
@@ -98,10 +106,10 @@
               <!-- Caja Ausencias -->
               <div class="bg-white border border-indigo-100 rounded-lg px-2 py-1.5 text-center shadow-sm w-20 shrink-0">
                 <span class="block text-[8px] font-bold text-gray-400 uppercase tracking-tight">Ausencias</span>
-                <span class="block text-xs font-black text-slate-800">{{ materia.ausencias }}</span>
+                <span class="text-xs font-black text-gray-900 block mt-0.5">{{ materia.ausencias }}</span>
               </div>
               
-              <!-- Notas Historicas -->
+              <!-- Cajas de Periodos -->
               <template v-for="nota in materia.notas_historicas" :key="nota.id_periodo">
                 <div class="bg-white border border-indigo-100 rounded-lg px-2 py-1.5 text-center shadow-sm w-20 shrink-0"
                      :class="{'ring-1 ring-indigo-400 bg-indigo-50/50 transform scale-105 print:transform-none print:ring-0': nota.periodo_nombre === data?.periodo}">
@@ -109,9 +117,12 @@
                     {{ (nota.periodo_nombre || '').replace(/periodo/i, 'P.') }}
                   </span>
                   <div class="flex items-center justify-center gap-1 mt-0.5">
-                    <span class="text-xs font-black text-gray-900">{{ nota.calificacion }}</span>
+                    <span class="text-xs font-black text-gray-900">{{ nota.calificacion !== null && nota.calificacion !== undefined ? nota.calificacion : '—' }}</span>
                     <span class="text-[7px] font-black px-1 py-0.5 rounded leading-none" :class="getPerformanceBadge(nota.desempeno)">{{ (nota.desempeno || 'SC').substring(0,3) }}</span>
                   </div>
+                  <span v-if="nota.es_parcial" class="block text-[7px] font-bold text-amber-600 uppercase mt-0.5">
+                    *Parcial
+                  </span>
                 </div>
               </template>
             </div>
@@ -244,8 +255,18 @@
         </div>
       </div>
 
+      <!-- Nota legal si es informe de traslado -->
+      <div v-if="data?.es_informe_traslado" class="bg-amber-50/90 border border-amber-300 rounded-xl p-4 text-center my-4">
+        <p class="text-[10px] text-amber-900 font-extrabold uppercase tracking-wider">
+          Certificación de Calificaciones para Continuidad Educativa
+        </p>
+        <p class="text-[9px] text-amber-800 leading-relaxed mt-1">
+          Este documento constituye certificación oficial de notas parciales para efectos de traslado, homologación o retiro estudiantil en cumplimiento del <strong>Decreto 1075 de 2015 (Art. 2.3.3.3.3.17)</strong>. Las calificaciones marcadas con asterisco (*) corresponden al acumulado de actividades evaluadas a la fecha en periodos académicos que continúan abiertos institucionalmente.
+        </p>
+      </div>
+
       <!-- Mensaje Motivacional -->
-      <div class="bg-indigo-50/40 rounded-xl border border-indigo-100/50 p-5 text-center">
+      <div v-else class="bg-indigo-50/40 rounded-xl border border-indigo-100/50 p-5 text-center">
         <p class="text-[10px] italic text-indigo-600/80 leading-relaxed font-medium tracking-wide">
           "El éxito es la suma de pequeños esfuerzos repetidos día tras día.<br>Te animamos a seguir cultivando la excelencia en tu proceso formativo."
         </p>
