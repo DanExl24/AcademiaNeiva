@@ -443,7 +443,7 @@ export const getGradeBoletines = async (req: Request, res: Response) => {
       .selectFrom("matricula")
       .select("id_estudiante")
       .where("id_grupo", "=", Number(id_grupo))
-      .where("estado", "=", 'ACTIVA')
+      .where("estado", "in", ['ACTIVA', 'APROBADA'])
       .execute();
 
     const studentIds = studentsRes.map(r => r.id_estudiante);

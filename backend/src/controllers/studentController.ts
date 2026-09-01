@@ -75,9 +75,9 @@ export const getAllStudents = async (req: Request, res: Response) => {
       FROM estudiante e
       LEFT JOIN usuario u ON e.id_usuario = u.id_usuario
       LEFT JOIN tipo_documento td ON u.id_tipodocumento = td.id_tipodocumento
-      LEFT JOIN nivel_escolar n ON e.id_nivel = n.id_nivel
-      LEFT JOIN matricula m ON e.id_estudiante = m.id_estudiante AND m.id_colegio = $1 AND m.estado IN ('ACTIVA', 'CULMINADA', 'TRASLADADA')${yearCondition}
+      LEFT JOIN matricula m ON e.id_estudiante = m.id_estudiante AND m.id_colegio = $1 AND m.estado IN ('ACTIVA', 'APROBADA', 'CULMINADA', 'TRASLADADA')${yearCondition}
       LEFT JOIN grupos g ON m.id_grupo = g.id_grupo
+      LEFT JOIN nivel_escolar n ON COALESCE(m.id_nivel, g.id_nivel) = n.id_nivel
       LEFT JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
       LEFT JOIN secciones s ON g.id_seccion = s.id_seccion
       LEFT JOIN jornada j ON g.id_jornada = j.id_jornada
@@ -113,7 +113,7 @@ export const getAllStudents = async (req: Request, res: Response) => {
         }
       } else if (estado === 'ACTIVO' && yearId) {
         // ACTIVO with a year filter = student has an active enrollment in this school this year
-        query += ` AND e.estado = 'ACTIVO' AND m.id_matricula IS NOT NULL AND m.estado = 'ACTIVA'`;
+        query += ` AND e.estado = 'ACTIVO' AND m.id_matricula IS NOT NULL AND m.estado IN ('ACTIVA', 'APROBADA')`;
       } else if (estado === 'TRASLADADO') {
         query += ` AND m.id_matricula IS NOT NULL AND m.estado = 'TRASLADADA'`;
       } else {
@@ -126,7 +126,7 @@ export const getAllStudents = async (req: Request, res: Response) => {
     const levelId = id_nivel || grado;
     if (levelId) {
       paramCount++;
-      query += ` AND e.id_nivel = $${paramCount}`;
+      query += ` AND COALESCE(m.id_nivel, g.id_nivel) = $${paramCount}`;
       params.push(levelId);
     }
 
@@ -527,25 +527,19 @@ export const changeStudentGrade = async (req: Request, res: Response) => {
 
     // Fetch old grading level and group
     const oldGradingRes = await client.query(
-      `SELECT e.id_nivel, m.id_grupo, e.id_usuario
+      `SELECT m.id_nivel, m.id_grupo, e.id_usuario
        FROM estudiante e
-       LEFT JOIN matricula m ON e.id_estudiante = m.id_estudiante AND m.id_colegio = e.id_colegio AND m.estado = 'ACTIVA'
+       LEFT JOIN matricula m ON e.id_estudiante = m.id_estudiante AND m.id_colegio = e.id_colegio AND m.estado IN ('ACTIVA', 'APROBADA')
        WHERE e.id_estudiante = $1`,
       [id]
     );
     const oldGrading = oldGradingRes.rows[0];
 
-    // 1. Actualizar el nivel en la ficha del estudiante
-    await client.query(
-      "UPDATE estudiante SET id_nivel = $1 WHERE id_estudiante = $2",
-      [id_nivel, id]
-    );
-
-    // 2. Actualizar la matrícula activa
+    // 1. Actualizar la matrícula activa
     await client.query(
       `UPDATE matricula 
        SET id_grupo = $1, id_nivel = $2 
-       WHERE id_estudiante = $3 AND estado = 'ACTIVA'`,
+       WHERE id_estudiante = $3 AND estado IN ('ACTIVA', 'APROBADA')`,
       [id_grupo, id_nivel, id]
     );
 
@@ -659,11 +653,11 @@ export const getStudentSummary = async (req: Request, res: Response) => {
              m.id_grupo, u.email as student_email, u.fecha_creacion as user_created_at
       FROM estudiante e
       LEFT JOIN usuario u ON e.id_usuario = u.id_usuario
-      LEFT JOIN matricula m ON e.id_estudiante = m.id_estudiante AND m.id_colegio = e.id_colegio AND m.estado IN ('ACTIVA', 'CULMINADA')
+      LEFT JOIN matricula m ON e.id_estudiante = m.id_estudiante AND m.id_colegio = e.id_colegio AND m.estado IN ('ACTIVA', 'APROBADA', 'CULMINADA')
       LEFT JOIN grupos g ON m.id_grupo = g.id_grupo
       LEFT JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
       LEFT JOIN secciones s ON g.id_seccion = s.id_seccion
-      LEFT JOIN nivel_escolar n ON e.id_nivel = n.id_nivel
+      LEFT JOIN nivel_escolar n ON COALESCE(m.id_nivel, g.id_nivel) = n.id_nivel
       WHERE e.id_estudiante = $1
     `, [id]);
 

@@ -205,6 +205,7 @@ const allStudents = ref<any[]>([])
 
 const fetchInitialData = async () => {
   try {
+    error.value = ''
     const schoolId = auth.user?.schoolId || 1
     const yearParams = yearStore.selectedYearId ? { id_anio: yearStore.selectedYearId, yearId: yearStore.selectedYearId } : {}
     
@@ -223,6 +224,9 @@ const fetchInitialData = async () => {
     levels.value = gradesData.niveles || []
     groups.value = gradesData.grupos || []
     allStudents.value = studentsData || []
+    if (selectedGroup.value) {
+      fetchStudentsForGroup()
+    }
   } catch (err) {
     console.error("Error al cargar datos iniciales:", err)
     error.value = "Hubo un problema de conexión para obtener listas."
@@ -247,6 +251,11 @@ watch(selectedLevel, () => {
   students.value = []
 })
 
+watch(selectedGroup, () => {
+  selectedStudent.value = ''
+  fetchStudentsForGroup()
+})
+
 watch(reportMode, () => {
   boletinesData.value = []
   error.value = ''
@@ -255,7 +264,7 @@ watch(reportMode, () => {
   }
 })
 
-const fetchStudentsForGroup = async () => {
+const fetchStudentsForGroup = () => {
   if (!selectedGroup.value) {
     students.value = []
     return
@@ -269,7 +278,7 @@ const fetchStudentsForGroup = async () => {
       (s: any) =>
         String(s.id_grupo) === String(selectedGroup.value) &&
         s.matricula_estado !== 'TRASLADADA' &&
-        (s.matricula_estado === 'ACTIVA' || s.estado_vigente === 'ACTIVO' || s.estado === 'ACTIVO')
+        (s.matricula_estado === 'ACTIVA' || s.matricula_estado === 'APROBADA' || s.estado_vigente === 'ACTIVO' || s.estado === 'ACTIVO')
     )
   }
 }
