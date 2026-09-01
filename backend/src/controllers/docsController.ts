@@ -189,6 +189,18 @@ export const getDocsModules = async (req: Request, res: Response): Promise<void>
       });
     } catch {}
 
+    // Índice de Guías Técnicas
+    try {
+      await fs.stat(path.join(basePath, "README.md"));
+      masterFiles.push({
+        id: "INDICE_GUIAS",
+        fileName: "INDICE_GUIAS.md",
+        relativePath: "INDICE_GUIAS.md",
+        title: "Índice de Guías Técnicas",
+        isSubmodule: false
+      });
+    } catch {}
+
     if (masterFiles.length > 0) {
       modules.push({
         id: "maestro",
@@ -231,70 +243,67 @@ export const getDocsModules = async (req: Request, res: Response): Promise<void>
       const mdFiles = dirContents
         .filter((e) => e.isFile() && e.name.endsWith(".md"))
         .sort((a, b) => {
-          const order = ["matriculas.md", "reglas_negocio.md", "casos_uso.md", "historias_usuario.md"];
-          const idxA = order.indexOf(a.name);
-          const idxB = order.indexOf(b.name);
-          if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-          if (idxA !== -1) return -1;
-          if (idxB !== -1) return 1;
-          return a.name.localeCompare(b.name);
-        })
-        .map((f) => ({
-          id: f.name.replace(/\.md$/i, ""),
-          fileName: f.name,
-          relativePath: f.name,
-          title: formatDocTitle(f.name, false),
-          isSubmodule: false
-        }));
+          const aBase = path.basename(a.name, ".md").toLowerCase();
+          const bBase = path.basename(b.name, ".md").toLowerCase();
+          const dirBase = dir.name.replace(/^\d+_/, "").toLowerCase();
 
-      // 2. Submódulos si existe carpeta 'submodules'
-      let submodules: any[] = [];
-      const hasSubmodulesDir = dirContents.some((e) => e.isDirectory() && e.name === "submodules");
-      if (hasSubmodulesDir) {
-        const submodulesDirPath = path.join(dirPath, "submodules");
-        try {
-          const subEntries = await fs.readdir(submodulesDirPath, { withFileTypes: true });
-          submodules = subEntries
+          if (aBase === dirBase || aBase === "index" || aBase === "modulo") return -1;
+          if (bBase === dirBase || bBase === "index" || bBase === "modulo") return 1;
+          return a.name.localeCompare(b.name, undefined, { numeric: true });
+        });
+
+      const files = mdFiles.map((file) => ({
+        id: path.basename(file.name, ".md"),
+        fileName: file.name,
+        relativePath: file.name,
+        title: formatDocTitle(file.name, false),
+        isSubmodule: false
+      }));
+
+      // 2. Submódulos (en carpeta 'submodules' o carpetas hijas)
+      const submodules = [];
+      const submodulesDir = path.join(dirPath, "submodules");
+      try {
+        const subStat = await fs.stat(submodulesDir);
+        if (subStat.isDirectory()) {
+          const subContents = await fs.readdir(submodulesDir, { withFileTypes: true });
+          const subMdFiles = subContents
             .filter((e) => e.isFile() && e.name.endsWith(".md"))
-            .sort((a, b) => a.name.localeCompare(b.name))
-            .map((f) => ({
-              id: `submodule_${f.name.replace(/\.md$/i, "")}`,
-              fileName: f.name,
-              relativePath: `submodules/${f.name}`,
-              title: formatDocTitle(f.name, true),
+            .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+
+          for (const subFile of subMdFiles) {
+            submodules.push({
+              id: `sub_${path.basename(subFile.name, ".md")}`,
+              fileName: subFile.name,
+              relativePath: `submodules/${subFile.name}`,
+              title: formatDocTitle(subFile.name, true),
               isSubmodule: true
-            }));
-        } catch {
-          // Ignorar error de lectura en subcarpeta
+            });
+          }
         }
+      } catch {
+        // No existe carpeta submodules, ignorar
       }
 
       modules.push({
         id: dir.name,
         folderName: dir.name,
         name: formatModuleName(dir.name),
-        files: mdFiles,
+        files,
         submodules
       });
     }
 
-    res.json({
-      success: true,
-      totalModules: modules.length,
-      modules
-    });
+    res.json({ success: true, modules });
   } catch (error: any) {
-    console.error("Error al obtener lista de módulos de documentación:", error);
-    res.status(500).json({ error: "No se pudo leer la estructura de documentación.", details: error.message });
+    console.error("Error al listar módulos de documentación:", error);
+    res.status(500).json({ error: "Error al listar módulos de documentación." });
   }
 };
 
 /**
  * GET /api/docs/content
  * Obtiene el contenido de un archivo markdown específico de guides/modules (incluyendo submódulos).
- * Query params:
- *  - module: nombre de la carpeta (ej. '04_estructura_escolar' o vacío si es archivo raíz de modules)
- *  - file: ruta relativa del archivo (ej. 'estructura_escolar.md' o 'submodules/gestion_jornadas.md')
  */
 export const getDocContent = async (req: Request, res: Response): Promise<void> => {
   const moduleName = String(req.query.module || "").trim();
@@ -327,15 +336,36 @@ export const getDocContent = async (req: Request, res: Response): Promise<void> 
     let targetPath: string;
 
     if (moduleName === "maestro") {
-      targetPath = path.join(basePath, relativeFilePath);
-      try {
-        await fs.stat(targetPath);
-      } catch {
+      if (
+        relativeFilePath === "README.md" ||
+        relativeFilePath === "README" ||
+        relativeFilePath === "README_PROYECTO.md" ||
+        relativeFilePath === "README_GENERAL.md"
+      ) {
+        // Carga explícita del README raíz del proyecto
+        targetPath = path.resolve(basePath, "../README.md");
         try {
-          targetPath = path.join(basePath, "modules", relativeFilePath);
           await fs.stat(targetPath);
         } catch {
-          targetPath = path.resolve(basePath, "..", relativeFilePath);
+          targetPath = path.join(basePath, "README.md");
+        }
+      } else if (
+        relativeFilePath === "INDICE_GUIAS.md" ||
+        relativeFilePath === "INDICE_GUIAS"
+      ) {
+        // Carga del índice de guías en guides/README.md
+        targetPath = path.join(basePath, "README.md");
+      } else {
+        targetPath = path.join(basePath, relativeFilePath);
+        try {
+          await fs.stat(targetPath);
+        } catch {
+          try {
+            targetPath = path.join(basePath, "modules", relativeFilePath);
+            await fs.stat(targetPath);
+          } catch {
+            targetPath = path.resolve(basePath, "..", relativeFilePath);
+          }
         }
       }
     } else if (!moduleName || moduleName === "general") {
