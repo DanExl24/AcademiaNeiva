@@ -31,6 +31,32 @@ export const getGuidesBasePath = async (): Promise<string> => {
   return path.resolve(process.cwd(), "../guides");
 };
 
+// Localiza de forma determinista y exclusiva el archivo README.md raíz del proyecto (Única Fuente de Verdad)
+export const getRootReadmePath = async (): Promise<string | null> => {
+  const basePath = await getGuidesBasePath();
+  const candidates = [
+    path.resolve(basePath, "../README.md"),
+    path.resolve(process.cwd(), "README.md"),
+    path.resolve(process.cwd(), "../README.md"),
+    path.resolve(__dirname, "../../../README.md"),
+    path.resolve(__dirname, "../../../../README.md"),
+    "/app/README.md"
+  ];
+
+  for (const p of candidates) {
+    try {
+      const stat = await fs.stat(p);
+      if (stat.isFile()) {
+        return p;
+      }
+    } catch {
+      // Sigue intentando
+    }
+  }
+
+  return null;
+};
+
 // Formatea nombres de carpetas de módulos como '06_matriculas' -> '06. Matrículas'
 const formatModuleName = (dirName: string): string => {
   const parts = dirName.split("_");
@@ -80,8 +106,10 @@ const formatDocTitle = (fileName: string, isSubmodule: boolean = false): string 
     historial_de_versiones: "Historial de Versiones y Changelog",
     ESTIMACION_HORAS_TRABAJADAS: "Estimación de Horas y Auditoría Git",
     estimacion_horas_trabajadas: "Estimación de Horas y Auditoría Git",
-    README_PROYECTO: "Visión General del Proyecto (README)",
-    readme_proyecto: "Visión General del Proyecto (README)",
+    README: "Visión General del Proyecto (README)",
+    "README.md": "Visión General del Proyecto (README)",
+    readme: "Visión General del Proyecto (README)",
+    guides_index: "Índice de Guías Técnicas",
     INDICE_GUIAS: "Índice de Guías Técnicas",
     indice_guias: "Índice de Guías Técnicas"
   };
@@ -109,26 +137,16 @@ export const getDocsModules = async (req: Request, res: Response): Promise<void>
 
     const modules = [];
 
-    // 0. Documentos Rectores (README_PROYECTO.md, HISTORIAL_DE_VERSIONES.md, ESTIMACION_HORAS_TRABAJADAS.md, MAESTRO_DE_INFORMACION.md, ARQUITECTURA_PORTAL_DOCUMENTACION.md, INDICE_GUIAS.md)
+    // 0. Documentos Rectores (README.md [Única Fuente], HISTORIAL_DE_VERSIONES.md, ESTIMACION_HORAS_TRABAJADAS.md, MAESTRO_DE_INFORMACION.md, ARQUITECTURA_PORTAL_DOCUMENTACION.md, guides_index.md)
     const masterFiles = [];
 
-    // README General del Proyecto (Raíz)
-    let hasReadme = false;
-    try {
-      await fs.stat(path.resolve(basePath, "../README.md"));
-      hasReadme = true;
-    } catch {
-      try {
-        await fs.stat(path.join(basePath, "README_PROYECTO.md"));
-        hasReadme = true;
-      } catch {}
-    }
-
-    if (hasReadme) {
+    // README General del Proyecto (Única Fuente de Verdad: archivo raíz README.md)
+    const rootReadme = await getRootReadmePath();
+    if (rootReadme) {
       masterFiles.push({
-        id: "README_PROYECTO",
+        id: "README",
         fileName: "README.md",
-        relativePath: "README_PROYECTO.md",
+        relativePath: "README.md",
         title: "Visión General del Proyecto (README)",
         isSubmodule: false
       });
@@ -343,32 +361,22 @@ export const getDocContent = async (req: Request, res: Response): Promise<void> 
       if (
         relativeFilePath === "README.md" ||
         relativeFilePath === "README" ||
-        relativeFilePath === "README_PROYECTO.md" ||
-        relativeFilePath === "README_GENERAL.md"
+        relativeFilePath === "README_ROOT"
       ) {
-        // Carga explícita del README raíz del proyecto
-        targetPath = path.resolve(basePath, "../README.md");
-        try {
-          await fs.stat(targetPath);
-        } catch {
-          try {
-            targetPath = path.join(basePath, "README_PROYECTO.md");
-            await fs.stat(targetPath);
-          } catch {
-            targetPath = path.join(basePath, "README.md");
-          }
+        // Carga explícita y directa de la Única Fuente de Verdad: el README.md de la raíz del proyecto
+        const rootPath = await getRootReadmePath();
+        if (!rootPath) {
+          res.status(404).json({ error: "Archivo README.md raíz no encontrado." });
+          return;
         }
+        targetPath = rootPath;
       } else if (
+        relativeFilePath === "guides_index.md" ||
         relativeFilePath === "INDICE_GUIAS.md" ||
         relativeFilePath === "INDICE_GUIAS"
       ) {
-        // Carga del índice de guías en guides/INDICE_GUIAS.md o guides/README.md
-        targetPath = path.join(basePath, "INDICE_GUIAS.md");
-        try {
-          await fs.stat(targetPath);
-        } catch {
-          targetPath = path.join(basePath, "README.md");
-        }
+        // Carga del índice de guías en guides/README.md
+        targetPath = path.join(basePath, "README.md");
       } else {
         targetPath = path.join(basePath, relativeFilePath);
         try {
@@ -473,14 +481,10 @@ export const searchDocs = async (req: Request, res: Response): Promise<void> => 
       }
     };
 
-    // Escanear README general del proyecto si existe
-    const rootReadmePath = path.resolve(basePath, "../README.md");
-    try {
+    // Escanear Única Fuente de Verdad: README general del proyecto
+    const rootReadmePath = await getRootReadmePath();
+    if (rootReadmePath) {
       await scanFile(rootReadmePath, "maestro", "🏛️ 00. Documentos Rectores", "README.md", false);
-    } catch {
-      try {
-        await scanFile(path.join(basePath, "README.md"), "maestro", "🏛️ 00. Documentos Rectores", "README.md", false);
-      } catch {}
     }
 
     // Escanear Historial de Versiones si existe
