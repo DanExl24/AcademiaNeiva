@@ -47,6 +47,7 @@ import {
 import { marked } from 'marked'
 import { docsService, type DocModule, type DocSearchResult } from '../../services/docsService'
 import { MODULES_METADATA, SYSTEM_METRICS, type ModuleSummary } from '../../services/docsMetadata'
+import DocsRelationshipGraph from '../../components/docs/DocsRelationshipGraph.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -67,8 +68,8 @@ const metadata = ref<{
   readingTimeMinutes: number
 } | null>(null)
 
-// Pestaña de modo de vista: 'reading' (Lectura Completa), 'summary' (Ficha Ejecutiva), 'metrics' (Dashboard Global)
-const activeViewTab = ref<'reading' | 'summary' | 'metrics'>('reading')
+// Pestaña de modo de vista: 'reading' (Lectura Completa), 'summary' (Ficha Ejecutiva), 'graph' (Grafo Interactivo), 'metrics' (Dashboard Global)
+const activeViewTab = ref<'reading' | 'summary' | 'graph' | 'metrics'>('reading')
 
 // Filtro en sidebar
 const sidebarFilter = ref('')
@@ -549,6 +550,14 @@ onUnmounted(() => {
           </button>
 
           <button
+            @click="activeViewTab = 'graph'"
+            class="text-xs font-bold text-slate-300 hover:text-indigo-400 px-3 py-1.5 rounded-xl transition-colors hidden lg:flex items-center gap-1.5 cursor-pointer bg-slate-800/50 border border-slate-700/50 hover:bg-slate-800"
+          >
+            <Network :size="14" class="text-indigo-400" />
+            <span>Grafo de Relaciones</span>
+          </button>
+
+          <button
             @click="activeViewTab = 'metrics'"
             class="text-xs font-bold text-slate-300 hover:text-indigo-400 px-3 py-1.5 rounded-xl transition-colors hidden lg:flex items-center gap-1.5 cursor-pointer bg-slate-800/50 border border-slate-700/50 hover:bg-slate-800"
           >
@@ -719,6 +728,19 @@ onUnmounted(() => {
               >
                 <Brain :size="13" />
                 <span>Ficha Ejecutiva</span>
+              </button>
+
+              <button
+                @click="activeViewTab = 'graph'"
+                :class="[
+                  'px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer',
+                  activeViewTab === 'graph' 
+                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/20' 
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                ]"
+              >
+                <Network :size="13" />
+                <span>Grafo de Relaciones</span>
               </button>
 
               <button
@@ -1061,7 +1083,19 @@ onUnmounted(() => {
         </div>
 
         <!-- ========================================== -->
-        <!-- MODO 3: LECTURA TÉCNICA (MARKDOWN ENRIQUECIDO) -->
+        <!-- MODO 3: GRAFO INTERACTIVO DE RELACIONES   -->
+        <!-- ========================================== -->
+        <div v-else-if="activeViewTab === 'graph'" class="animate-in fade-in duration-200">
+          <DocsRelationshipGraph
+            :initial-selected-module-id="selectedModuleId"
+            @select-module="(id) => { selectedModuleId = id }"
+            @view-doc="(id) => { navigateToModule(id); activeViewTab = 'reading' }"
+            @view-summary="(id) => { selectedModuleId = id; activeViewTab = 'summary' }"
+          />
+        </div>
+
+        <!-- ========================================== -->
+        <!-- MODO 4: LECTURA TÉCNICA (MARKDOWN ENRIQUECIDO) -->
         <!-- ========================================== -->
         <div v-else class="space-y-6 animate-in fade-in duration-200">
           
@@ -1103,13 +1137,22 @@ onUnmounted(() => {
                 <Workflow :size="14" />
                 <span>Trazabilidad y Relaciones del Módulo</span>
               </div>
-              <button 
-                @click="activeViewTab = 'summary'"
-                class="text-[11px] font-bold text-indigo-400 hover:text-indigo-300 flex items-center gap-1 cursor-pointer"
-              >
-                <span>Ver Ficha Rápida</span>
-                <ChevronRight :size="12" />
-              </button>
+              <div class="flex items-center gap-3">
+                <button 
+                  @click="activeViewTab = 'graph'"
+                  class="text-[11px] font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-1 cursor-pointer"
+                >
+                  <Network :size="12" />
+                  <span>Explorar en Grafo</span>
+                </button>
+                <button 
+                  @click="activeViewTab = 'summary'"
+                  class="text-[11px] font-bold text-indigo-400 hover:text-indigo-300 flex items-center gap-1 cursor-pointer"
+                >
+                  <span>Ver Ficha Rápida</span>
+                  <ChevronRight :size="12" />
+                </button>
+              </div>
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
