@@ -73,7 +73,9 @@ const formatDocTitle = (fileName: string, isSubmodule: boolean = false): string 
     mapa_documentacion: "Mapa General de Documentación",
     gestion_jornadas: "Submódulo: Gestión de Jornadas",
     maestro_de_informacion: "Maestro de Información del Sistema",
-    MAESTRO_DE_INFORMACION: "Maestro de Información del Sistema"
+    MAESTRO_DE_INFORMACION: "Maestro de Información del Sistema",
+    ARQUITECTURA_PORTAL_DOCUMENTACION: "Arquitectura del Portal de Documentación Web",
+    arquitectura_portal_documentacion: "Arquitectura del Portal de Documentación Web"
   };
 
   if (titles[base]) return titles[base];
@@ -115,19 +117,32 @@ export const getDocsModules = async (req: Request, res: Response): Promise<void>
     }
 
     if (hasMaster) {
+      const masterFiles = [
+        {
+          id: "MAESTRO_DE_INFORMACION",
+          fileName: "MAESTRO_DE_INFORMACION.md",
+          relativePath: masterRelPath,
+          title: "Maestro de Información del Sistema",
+          isSubmodule: false
+        }
+      ];
+
+      try {
+        await fs.stat(path.join(basePath, "ARQUITECTURA_PORTAL_DOCUMENTACION.md"));
+        masterFiles.push({
+          id: "ARQUITECTURA_PORTAL_DOCUMENTACION",
+          fileName: "ARQUITECTURA_PORTAL_DOCUMENTACION.md",
+          relativePath: "ARQUITECTURA_PORTAL_DOCUMENTACION.md",
+          title: "Arquitectura del Portal de Documentación Web",
+          isSubmodule: false
+        });
+      } catch {}
+
       modules.push({
         id: "maestro",
         folderName: "",
-        name: "🏛️ 00. Maestro de Información",
-        files: [
-          {
-            id: "MAESTRO_DE_INFORMACION",
-            fileName: "MAESTRO_DE_INFORMACION.md",
-            relativePath: masterRelPath,
-            title: "Maestro de Información del Sistema",
-            isSubmodule: false
-          }
-        ],
+        name: "🏛️ 00. Documentos Rectores",
+        files: masterFiles,
         submodules: []
       });
     }
@@ -360,12 +375,18 @@ export const searchDocs = async (req: Request, res: Response): Promise<void> => 
     // Escanear archivo maestro de información si existe
     const masterPath = path.join(basePath, "MAESTRO_DE_INFORMACION.md");
     try {
-      await scanFile(masterPath, "maestro", "🏛️ 00. Maestro de Información", "MAESTRO_DE_INFORMACION.md", false);
+      await scanFile(masterPath, "maestro", "🏛️ 00. Documentos Rectores", "MAESTRO_DE_INFORMACION.md", false);
     } catch {
       try {
-        await scanFile(path.join(modulesDir, "MAESTRO_DE_INFORMACION.md"), "maestro", "🏛️ 00. Maestro de Información", "MAESTRO_DE_INFORMACION.md", false);
+        await scanFile(path.join(modulesDir, "MAESTRO_DE_INFORMACION.md"), "maestro", "🏛️ 00. Documentos Rectores", "MAESTRO_DE_INFORMACION.md", false);
       } catch {}
     }
+
+    // Escanear archivo de arquitectura del portal si existe
+    const archPath = path.join(basePath, "ARQUITECTURA_PORTAL_DOCUMENTACION.md");
+    try {
+      await scanFile(archPath, "maestro", "🏛️ 00. Documentos Rectores", "ARQUITECTURA_PORTAL_DOCUMENTACION.md", false);
+    } catch {}
 
     // Escanear archivo raíz mapa_documentacion si existe
     const mapPath = path.join(modulesDir, "mapa_documentacion.md");
