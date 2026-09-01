@@ -18,10 +18,35 @@ import {
   ExternalLink,
   Menu,
   X,
-  FolderOpen
+  FolderOpen,
+  Brain,
+  BarChart3,
+  Database,
+  ShieldCheck,
+  Sparkles,
+  Workflow,
+  Tag,
+  Users,
+  GraduationCap,
+  Building2,
+  Lock,
+  Landmark,
+  Sliders,
+  RefreshCw,
+  FileSignature,
+  CalendarCheck,
+  ShieldAlert,
+  LifeBuoy,
+  HeartHandshake,
+  ArrowLeftRight,
+  Award,
+  Eye,
+  MailCheck,
+  Network
 } from 'lucide-vue-next'
 import { marked } from 'marked'
 import { docsService, type DocModule, type DocSearchResult } from '../../services/docsService'
+import { MODULES_METADATA, SYSTEM_METRICS, type ModuleSummary } from '../../services/docsMetadata'
 
 const route = useRoute()
 const router = useRouter()
@@ -42,6 +67,9 @@ const metadata = ref<{
   readingTimeMinutes: number
 } | null>(null)
 
+// Pestaña de modo de vista: 'reading' (Lectura Completa), 'summary' (Ficha Ejecutiva), 'metrics' (Dashboard Global)
+const activeViewTab = ref<'reading' | 'summary' | 'metrics'>('reading')
+
 // Filtro en sidebar
 const sidebarFilter = ref('')
 const openFolders = ref<Record<string, boolean>>({})
@@ -54,15 +82,50 @@ interface TocItem {
 }
 const tableOfContents = ref<TocItem[]>([])
 
-// Búsqueda global modal
+// Búsqueda global modal y filtros facetados
 const searchModalOpen = ref(false)
 const searchQuery = ref('')
 const searching = ref(false)
 const searchResults = ref<DocSearchResult[]>([])
+const searchFilterType = ref<'all' | 'rules' | 'hus' | 'database' | 'maestro'>('all')
 
 // Responsive mobile menu
 const mobileSidebarOpen = ref(false)
 const copiedLink = ref(false)
+
+// Obtener metadata ejecutiva del módulo seleccionado
+const currentModuleMeta = computed<ModuleSummary | null>(() => {
+  return MODULES_METADATA[selectedModuleId.value] || null
+})
+
+// Mapeo de iconos dinámicos para la ficha ejecutiva
+const getIconComponent = (iconName: string) => {
+  const iconMap: Record<string, any> = {
+    Landmark,
+    Lock,
+    Building: Building2,
+    Users,
+    Network,
+    GraduationCap,
+    ClipboardList: FileText,
+    UserCheck: Users,
+    Sliders,
+    RefreshCw,
+    BookOpen,
+    BarChart3,
+    FileSignature,
+    CalendarCheck,
+    FileText,
+    ShieldAlert,
+    LifeBuoy,
+    HeartHandshake,
+    ArrowLeftRight,
+    Award,
+    Eye,
+    MailCheck
+  }
+  return iconMap[iconName] || BookOpen
+}
 
 // Procesa markdown a HTML enriquecido con soporte para GitHub Alerts, tablas con scroll y badges HTTP
 const processMarkdownToHtml = (markdown: string): string => {
@@ -259,6 +322,15 @@ const handleArticleClick = (e: MouseEvent) => {
   }
 }
 
+// Navegación directa a otro módulo desde la Ficha Ejecutiva o Contenido Relacionado
+const navigateToModule = (modId: string) => {
+  const targetMod = modules.value.find(m => m.id === modId)
+  if (targetMod && targetMod.files.length > 0) {
+    loadDocument(targetMod.id, targetMod.files[0].relativePath || targetMod.files[0].fileName)
+    activeViewTab.value = 'reading'
+  }
+}
+
 // Resolver parámetros de ruta
 const resolveRoute = () => {
   const modParam = route.params.module as string
@@ -281,6 +353,7 @@ const resolveRoute = () => {
     || modules.value.find(m => m.id === 'general') 
     || modules.value.find(m => m.id === '06_matriculas') 
     || modules.value[0]
+    
   if (defaultMod && defaultMod.files.length > 0) {
     loadDocument(defaultMod.id, defaultMod.files[0].relativePath || defaultMod.files[0].fileName)
   }
@@ -338,10 +411,50 @@ watch(searchQuery, (newQ) => {
   }, 250)
 })
 
+// Resultados filtrados según el chip facetado seleccionado
+const filteredSearchResults = computed(() => {
+  if (searchFilterType.value === 'all') return searchResults.value
+  if (searchFilterType.value === 'rules') {
+    return searchResults.value.filter(r => 
+      r.file.includes('reglas_negocio') || 
+      r.fileTitle.toLowerCase().includes('reglas') || 
+      r.snippet.toLowerCase().includes('rn-') ||
+      r.snippet.toLowerCase().includes('regla')
+    )
+  }
+  if (searchFilterType.value === 'hus') {
+    return searchResults.value.filter(r => 
+      r.file.includes('historias_usuario') || 
+      r.fileTitle.toLowerCase().includes('historias') || 
+      r.snippet.toLowerCase().includes('hu-') ||
+      r.snippet.toLowerCase().includes('historia de usuario')
+    )
+  }
+  if (searchFilterType.value === 'database') {
+    return searchResults.value.filter(r => 
+      r.file.includes('diccionario') || 
+      r.fileTitle.toLowerCase().includes('datos') || 
+      r.snippet.toLowerCase().includes('table') ||
+      r.snippet.toLowerCase().includes('tabla') ||
+      r.snippet.toLowerCase().includes('foreign key') ||
+      r.snippet.toLowerCase().includes('primary key')
+    )
+  }
+  if (searchFilterType.value === 'maestro') {
+    return searchResults.value.filter(r => 
+      r.module === 'maestro' || 
+      r.file.includes('MAESTRO') || 
+      r.fileTitle.toLowerCase().includes('maestro')
+    )
+  }
+  return searchResults.value
+})
+
 const openSearchModal = () => {
   searchModalOpen.value = true
   searchQuery.value = ''
   searchResults.value = []
+  searchFilterType.value = 'all'
 }
 
 const closeSearchModal = () => {
@@ -435,6 +548,14 @@ onUnmounted(() => {
             <Search :size="18" />
           </button>
 
+          <button
+            @click="activeViewTab = 'metrics'"
+            class="text-xs font-bold text-slate-300 hover:text-indigo-400 px-3 py-1.5 rounded-xl transition-colors hidden lg:flex items-center gap-1.5 cursor-pointer bg-slate-800/50 border border-slate-700/50 hover:bg-slate-800"
+          >
+            <BarChart3 :size="14" class="text-indigo-400" />
+            <span>Métricas Globales</span>
+          </button>
+
           <router-link 
             to="/" 
             class="text-xs font-bold text-slate-300 hover:text-indigo-400 px-3 py-1.5 rounded-xl transition-colors hidden md:block"
@@ -453,7 +574,7 @@ onUnmounted(() => {
       </div>
     </header>
 
-    <!-- Main Docs Container (Layout espacioso de 3 columnas fluidas con sidebars fijos) -->
+    <!-- Main Docs Container (Layout de 3 columnas fluidas con sidebars fijos) -->
     <div class="flex-1 max-w-[1700px] w-full mx-auto px-4 sm:px-6 lg:px-8 flex gap-6 lg:gap-8 py-6 items-start">
       
       <!-- Left Sidebar (Desktop Fijo & Mobile Drawer) -->
@@ -480,7 +601,7 @@ onUnmounted(() => {
 
           <!-- Total Count Badge -->
           <div class="flex items-center justify-between text-[11px] font-black uppercase tracking-wider text-slate-400 px-1">
-            <span>Módulos del Sistema</span>
+            <span>Ecosistema de Guías</span>
             <span class="bg-slate-800 px-2 py-0.5 rounded-full text-slate-300 border border-slate-700">{{ filteredModules.length }}</span>
           </div>
         </div>
@@ -556,12 +677,14 @@ onUnmounted(() => {
         </div>
       </aside>
 
-      <!-- Center Documentation Article Area (min-w-0 estricto para evitar desbordamientos de tablas) -->
+      <!-- Center Documentation Article Area -->
       <main class="flex-1 min-w-0 bg-slate-900 rounded-3xl p-6 sm:p-10 border border-slate-800 shadow-xs relative overflow-hidden">
         
-        <!-- Breadcrumbs & Actions -->
-        <div class="flex items-center justify-between border-b border-slate-800 pb-4 mb-6 text-xs text-slate-400">
-          <div class="flex items-center gap-2 truncate font-medium">
+        <!-- Header de Navegación y Modos de Vista -->
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-6 pb-4 border-b border-slate-800">
+          
+          <!-- Breadcrumbs -->
+          <div class="flex items-center gap-2 truncate font-medium text-xs text-slate-400">
             <router-link to="/docs" class="hover:text-indigo-400">Docs</router-link>
             <ChevronRight :size="13" class="text-slate-500" />
             <span class="text-slate-300 font-bold truncate">{{ selectedModuleId === 'maestro' ? 'Documento Rector' : (selectedModuleId === 'general' ? 'Visión General' : selectedModuleId) }}</span>
@@ -569,84 +692,510 @@ onUnmounted(() => {
             <span class="text-indigo-400 font-bold truncate">{{ docTitle }}</span>
           </div>
 
-          <button 
-            @click="copyCurrentUrl" 
-            class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-[11px] transition-colors cursor-pointer border border-slate-700"
-            title="Copiar enlace a esta guía"
+          <!-- Tabs de Modo de Visualización -->
+          <div class="flex items-center gap-2">
+            <div class="p-1 rounded-2xl bg-slate-950/80 border border-slate-800 flex items-center gap-1 shadow-inner">
+              <button
+                @click="activeViewTab = 'reading'"
+                :class="[
+                  'px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer',
+                  activeViewTab === 'reading' 
+                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/20' 
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                ]"
+              >
+                <BookOpen :size="13" />
+                <span>Lectura Técnica</span>
+              </button>
+
+              <button
+                @click="activeViewTab = 'summary'"
+                :class="[
+                  'px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer',
+                  activeViewTab === 'summary' 
+                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/20' 
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                ]"
+              >
+                <Brain :size="13" />
+                <span>Ficha Ejecutiva</span>
+              </button>
+
+              <button
+                @click="activeViewTab = 'metrics'"
+                :class="[
+                  'px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer',
+                  activeViewTab === 'metrics' 
+                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/20' 
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                ]"
+              >
+                <BarChart3 :size="13" />
+                <span>Dashboard</span>
+              </button>
+            </div>
+
+            <!-- Share Button -->
+            <button 
+              @click="copyCurrentUrl" 
+              class="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition-colors cursor-pointer border border-slate-700"
+              title="Copiar enlace a esta guía"
+            >
+              <Check v-if="copiedLink" :size="13" class="text-emerald-400" />
+              <Copy v-else :size="13" />
+              <span class="hidden sm:inline">{{ copiedLink ? '¡Copiado!' : 'URL' }}</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- MODO 1: DASHBOARD GLOBAL Y SALUD DOCS      -->
+        <!-- ========================================== -->
+        <div v-if="activeViewTab === 'metrics'" class="space-y-8 animate-in fade-in duration-200">
+          
+          <!-- Banner Principal de Métricas -->
+          <div class="p-6 sm:p-8 rounded-3xl bg-gradient-to-br from-indigo-950/60 via-slate-900 to-slate-900 border border-indigo-800/40 relative overflow-hidden shadow-xl">
+            <div class="relative z-10 space-y-2 max-w-3xl">
+              <div class="flex items-center gap-2">
+                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-950/80 text-emerald-300 border border-emerald-700/50">100% Cobertura</span>
+                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-950/80 text-indigo-300 border border-indigo-700/50">Arquitectura Viva</span>
+              </div>
+              <h2 class="text-2xl sm:text-3xl font-black text-white tracking-tight">Dashboard de Ingeniería y Conocimiento Escolar</h2>
+              <p class="text-xs sm:text-sm text-slate-300 leading-relaxed font-medium">
+                Métricas consolidadas del sistema AcademiaNeiva: arquitectura de dominio, reglas de negocio transversales, esquema relacional PostgreSQL y cobertura documental.
+              </p>
+            </div>
+          </div>
+
+          <!-- Tarjetas KPI Grid -->
+          <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            <div class="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 text-center space-y-1">
+              <div class="text-2xl font-black text-white">{{ SYSTEM_METRICS.totalModules }}</div>
+              <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Módulos</div>
+            </div>
+            <div class="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 text-center space-y-1">
+              <div class="text-2xl font-black text-indigo-400">{{ SYSTEM_METRICS.totalTables }}</div>
+              <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Tablas SQL</div>
+            </div>
+            <div class="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 text-center space-y-1">
+              <div class="text-2xl font-black text-emerald-400">{{ SYSTEM_METRICS.totalGlobalRules }}</div>
+              <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Reglas Globales</div>
+            </div>
+            <div class="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 text-center space-y-1">
+              <div class="text-2xl font-black text-amber-400">{{ SYSTEM_METRICS.totalAdrs }}</div>
+              <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">ADRs Técnicos</div>
+            </div>
+            <div class="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 text-center space-y-1">
+              <div class="text-2xl font-black text-rose-400">{{ SYSTEM_METRICS.totalDomains }}</div>
+              <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Dominios</div>
+            </div>
+            <div class="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 text-center space-y-1">
+              <div class="text-2xl font-black text-cyan-400">100%</div>
+              <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Trazabilidad</div>
+            </div>
+          </div>
+
+          <!-- Dos Columnas: Distribución de Dominios & Módulos Más Conectados -->
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            
+            <!-- Dominios del Negocio -->
+            <div class="p-6 rounded-3xl bg-slate-950/40 border border-slate-800 space-y-4">
+              <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+                <div class="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-white">
+                  <Workflow :size="15" class="text-indigo-400" />
+                  <span>Distribución por Dominios Funcionales</span>
+                </div>
+                <span class="text-[10px] text-slate-400 font-bold">6 Dominios</span>
+              </div>
+
+              <div class="space-y-3">
+                <div 
+                  v-for="(dom, i) in SYSTEM_METRICS.domainDistribution" 
+                  :key="i"
+                  class="space-y-1.5"
+                >
+                  <div class="flex items-center justify-between text-xs font-bold">
+                    <span class="text-slate-300">{{ dom.domain }}</span>
+                    <span class="text-slate-400">{{ dom.count }} módulos</span>
+                  </div>
+                  <div class="h-2 w-full rounded-full bg-slate-800 overflow-hidden">
+                    <div 
+                      :class="['h-full rounded-full bg-gradient-to-r', dom.color]"
+                      :style="{ width: `${(dom.count / 21) * 100}%` }"
+                    ></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Módulos Más Conectados (Centralidad de Dependencias) -->
+            <div class="p-6 rounded-3xl bg-slate-950/40 border border-slate-800 space-y-4">
+              <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+                <div class="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-white">
+                  <Network :size="15" class="text-emerald-400" />
+                  <span>Centralidad y Acoplamiento Intermodular</span>
+                </div>
+                <span class="text-[10px] text-slate-400 font-bold">Top Conexiones</span>
+              </div>
+
+              <div class="space-y-2">
+                <div 
+                  v-for="item in SYSTEM_METRICS.mostConnectedModules" 
+                  :key="item.id"
+                  @click="navigateToModule(item.id)"
+                  class="p-2.5 rounded-2xl bg-slate-900/80 hover:bg-indigo-950/30 border border-slate-800 hover:border-indigo-700/50 flex items-center justify-between cursor-pointer transition-all group"
+                >
+                  <div class="flex items-center gap-2 truncate">
+                    <div class="w-2 h-2 rounded-full bg-indigo-400 group-hover:scale-125 transition-transform"></div>
+                    <span class="text-xs font-bold text-slate-200 group-hover:text-white truncate">{{ item.name }}</span>
+                  </div>
+                  <div class="flex items-center gap-1.5 shrink-0">
+                    <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-950 text-indigo-300 border border-indigo-800">
+                      {{ item.count }} conexiones
+                    </span>
+                    <ArrowRight :size="12" class="text-slate-500 group-hover:text-indigo-400 group-hover:translate-x-0.5 transition-all" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Botón para volver a la lectura -->
+          <div class="pt-4 text-center">
+            <button
+              @click="activeViewTab = 'reading'"
+              class="px-6 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black shadow-lg shadow-indigo-500/20 transition-all cursor-pointer inline-flex items-center gap-2"
+            >
+              <BookOpen :size="14" />
+              <span>Volver a la Documentación Técnica</span>
+            </button>
+          </div>
+
+        </div>
+
+        <!-- ========================================== -->
+        <!-- MODO 2: FICHA EJECUTIVA "ENTENDER ESTE MÓDULO" -->
+        <!-- ========================================== -->
+        <div v-else-if="activeViewTab === 'summary'" class="space-y-8 animate-in fade-in duration-200">
+          
+          <div v-if="currentModuleMeta" class="space-y-6">
+            
+            <!-- Header de la Ficha -->
+            <div class="p-6 sm:p-8 rounded-3xl bg-gradient-to-br from-indigo-950/40 via-slate-900 to-slate-900 border border-slate-800 relative overflow-hidden">
+              <div class="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-800">
+                <div class="flex items-center gap-3">
+                  <div class="p-3 bg-indigo-600/20 text-indigo-400 rounded-2xl border border-indigo-500/30">
+                    <component :is="getIconComponent(currentModuleMeta.icon)" :size="24" />
+                  </div>
+                  <div>
+                    <div class="text-[11px] font-black uppercase tracking-wider text-indigo-400">{{ currentModuleMeta.domain }}</div>
+                    <h2 class="text-xl sm:text-2xl font-black text-white">{{ currentModuleMeta.name }}</h2>
+                  </div>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="px-3 py-1 rounded-full text-xs font-black bg-emerald-950/80 text-emerald-300 border border-emerald-700/50">
+                    🟢 {{ currentModuleMeta.status }}
+                  </span>
+                  <span class="px-3 py-1 rounded-full text-xs font-black bg-slate-800 text-slate-300 border border-slate-700">
+                    🔗 {{ currentModuleMeta.connectionsCount }} Relaciones
+                  </span>
+                </div>
+              </div>
+
+              <!-- Propósito Principal -->
+              <div class="pt-4 space-y-2">
+                <div class="text-xs font-black text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <Sparkles :size="13" class="text-indigo-400" />
+                  <span>¿Qué problema resuelve este módulo?</span>
+                </div>
+                <p class="text-sm text-slate-200 font-medium leading-relaxed">
+                  {{ currentModuleMeta.purpose }}
+                </p>
+                <p class="text-xs text-slate-400 leading-relaxed pt-1">
+                  {{ currentModuleMeta.description }}
+                </p>
+              </div>
+            </div>
+
+            <!-- Actores del Ecosistema -->
+            <div class="p-6 rounded-3xl bg-slate-950/40 border border-slate-800 space-y-3">
+              <div class="text-xs font-black text-white uppercase tracking-wider flex items-center gap-2">
+                <Users :size="14" class="text-indigo-400" />
+                <span>¿Quiénes utilizan este módulo?</span>
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <span 
+                  v-for="(role, idx) in currentModuleMeta.roles" 
+                  :key="idx"
+                  class="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs font-bold text-indigo-300 shadow-xs flex items-center gap-1.5"
+                >
+                  <span class="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>
+                  <span>{{ role }}</span>
+                </span>
+              </div>
+            </div>
+
+            <!-- Matriz de Dependencias (Entrada / Salida) -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              
+              <!-- Depende de -->
+              <div class="p-5 rounded-3xl bg-slate-950/40 border border-slate-800 space-y-3">
+                <div class="text-xs font-black text-amber-400 uppercase tracking-wider flex items-center gap-2">
+                  <ArrowLeft :size="14" />
+                  <span>Depende de (Requiere antes):</span>
+                </div>
+                <div v-if="currentModuleMeta.dependsOn.length === 0" class="text-xs text-slate-500 italic">
+                  No tiene dependencias directas (Módulo Base).
+                </div>
+                <div v-else class="space-y-1.5">
+                  <div 
+                    v-for="depId in currentModuleMeta.dependsOn" 
+                    :key="depId"
+                    @click="navigateToModule(depId)"
+                    class="p-2 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-800 hover:border-amber-500/40 text-xs font-bold text-slate-300 hover:text-white flex items-center justify-between cursor-pointer transition-all"
+                  >
+                    <span class="truncate">{{ MODULES_METADATA[depId]?.name || depId }}</span>
+                    <ArrowRight :size="12" class="text-slate-500" />
+                  </div>
+                </div>
+              </div>
+
+              <!-- Alimenta a -->
+              <div class="p-5 rounded-3xl bg-slate-950/40 border border-slate-800 space-y-3">
+                <div class="text-xs font-black text-emerald-400 uppercase tracking-wider flex items-center gap-2">
+                  <ArrowRight :size="14" />
+                  <span>Alimenta / Afecta a:</span>
+                </div>
+                <div v-if="currentModuleMeta.affects.length === 0" class="text-xs text-slate-500 italic">
+                  Módulo terminal de consumo.
+                </div>
+                <div v-else class="space-y-1.5">
+                  <div 
+                    v-for="affId in currentModuleMeta.affects" 
+                    :key="affId"
+                    @click="navigateToModule(affId)"
+                    class="p-2 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-800 hover:border-emerald-500/40 text-xs font-bold text-slate-300 hover:text-white flex items-center justify-between cursor-pointer transition-all"
+                  >
+                    <span class="truncate">{{ MODULES_METADATA[affId]?.name || affId }}</span>
+                    <ArrowRight :size="12" class="text-slate-500" />
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- Tablas de Base de Datos Vinculadas -->
+            <div class="p-6 rounded-3xl bg-slate-950/40 border border-slate-800 space-y-3">
+              <div class="text-xs font-black text-white uppercase tracking-wider flex items-center gap-2">
+                <Database :size="14" class="text-cyan-400" />
+                <span>Tablas de Base de Datos Involucradas (PostgreSQL)</span>
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <span 
+                  v-for="(tbl, idx) in currentModuleMeta.tables" 
+                  :key="idx"
+                  class="px-2.5 py-1 rounded-xl bg-slate-900 border border-slate-800 text-[11px] font-mono font-bold text-cyan-300 shadow-xs"
+                >
+                  🗄️ {{ tbl }}
+                </span>
+              </div>
+            </div>
+
+            <!-- Reglas de Negocio & Historias de Usuario -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              
+              <!-- Reglas -->
+              <div class="p-5 rounded-3xl bg-slate-950/40 border border-slate-800 space-y-3">
+                <div class="text-xs font-black text-indigo-400 uppercase tracking-wider flex items-center gap-2">
+                  <ShieldCheck :size="14" />
+                  <span>Reglas de Negocio Clave</span>
+                </div>
+                <div class="flex flex-wrap gap-1.5">
+                  <span 
+                    v-for="(r, idx) in currentModuleMeta.rules" 
+                    :key="idx"
+                    class="px-2 py-0.5 rounded-lg bg-indigo-950/80 border border-indigo-800/60 text-[11px] font-mono font-bold text-indigo-300"
+                  >
+                    {{ r }}
+                  </span>
+                </div>
+              </div>
+
+              <!-- HUs -->
+              <div class="p-5 rounded-3xl bg-slate-950/40 border border-slate-800 space-y-3">
+                <div class="text-xs font-black text-emerald-400 uppercase tracking-wider flex items-center gap-2">
+                  <Tag :size="14" />
+                  <span>Historias de Usuario (HUs)</span>
+                </div>
+                <div class="flex flex-wrap gap-1.5">
+                  <span 
+                    v-for="(h, idx) in currentModuleMeta.hus" 
+                    :key="idx"
+                    class="px-2 py-0.5 rounded-lg bg-emerald-950/80 border border-emerald-800/60 text-[11px] font-mono font-bold text-emerald-300"
+                  >
+                    {{ h }}
+                  </span>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- Botón de acción para leer especificación completa -->
+            <div class="pt-4 text-center">
+              <button
+                @click="activeViewTab = 'reading'"
+                class="px-6 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black shadow-lg shadow-indigo-500/20 transition-all cursor-pointer inline-flex items-center gap-2"
+              >
+                <BookOpen :size="14" />
+                <span>Ver Documentación Técnica Completa de este Módulo</span>
+              </button>
+            </div>
+
+          </div>
+
+          <div v-else class="py-12 text-center text-slate-500 font-bold text-xs">
+            Selecciona un módulo en el menú lateral para ver su ficha ejecutiva.
+          </div>
+
+        </div>
+
+        <!-- ========================================== -->
+        <!-- MODO 3: LECTURA TÉCNICA (MARKDOWN ENRIQUECIDO) -->
+        <!-- ========================================== -->
+        <div v-else class="space-y-6 animate-in fade-in duration-200">
+          
+          <!-- Metadata Bar -->
+          <div v-if="metadata" class="flex flex-wrap items-center gap-4 text-xs text-slate-400 p-3 rounded-2xl bg-slate-800/60 border border-slate-800">
+            <div class="flex items-center gap-1.5 font-medium">
+              <Clock :size="14" class="text-indigo-400" />
+              <span>{{ metadata.readingTimeMinutes }} min de lectura</span>
+            </div>
+            <div class="flex items-center gap-1.5 font-medium">
+              <FileCheck :size="14" class="text-emerald-400" />
+              <span>{{ metadata.wordsCount.toLocaleString() }} palabras</span>
+            </div>
+            <div class="flex items-center gap-1.5 font-medium">
+              <Calendar :size="14" class="text-amber-400" />
+              <span>Actualizado: {{ new Date(metadata.lastModified).toLocaleDateString('es-CO', { year: 'numeric', month: 'short', day: 'numeric' }) }}</span>
+            </div>
+          </div>
+
+          <!-- Loading State -->
+          <div v-if="loadingContent" class="py-24 text-center space-y-3">
+            <div class="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+            <p class="text-xs font-bold text-slate-400">Cargando documentación...</p>
+          </div>
+
+          <!-- Markdown Content con contención estricta e intercepción de enlaces relativos -->
+          <article 
+            v-else 
+            class="docs-content prose prose-invert max-w-none text-slate-300 leading-relaxed text-sm w-full min-w-0"
+            v-html="renderedHtml"
+            @click="handleArticleClick"
           >
-            <Check v-if="copiedLink" :size="13" class="text-emerald-400" />
-            <Copy v-else :size="13" />
-            <span>{{ copiedLink ? '¡Enlace copiado!' : 'Copiar URL' }}</span>
-          </button>
-        </div>
+          </article>
 
-        <!-- Metadata Bar -->
-        <div v-if="metadata" class="flex flex-wrap items-center gap-4 text-xs text-slate-400 mb-8 p-3 rounded-2xl bg-slate-800/60 border border-slate-800">
-          <div class="flex items-center gap-1.5 font-medium">
-            <Clock :size="14" class="text-indigo-400" />
-            <span>{{ metadata.readingTimeMinutes }} min de lectura</span>
-          </div>
-          <div class="flex items-center gap-1.5 font-medium">
-            <FileCheck :size="14" class="text-emerald-400" />
-            <span>{{ metadata.wordsCount.toLocaleString() }} palabras</span>
-          </div>
-          <div class="flex items-center gap-1.5 font-medium">
-            <Calendar :size="14" class="text-amber-400" />
-            <span>Actualizado: {{ new Date(metadata.lastModified).toLocaleDateString('es-CO', { year: 'numeric', month: 'short', day: 'numeric' }) }}</span>
-          </div>
-        </div>
-
-        <!-- Loading State -->
-        <div v-if="loadingContent" class="py-24 text-center space-y-3">
-          <div class="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
-          <p class="text-xs font-bold text-slate-400">Cargando documentación...</p>
-        </div>
-
-        <!-- Markdown Content con contención estricta e intercepción de enlaces relativos -->
-        <article 
-          v-else 
-          class="docs-content prose prose-invert max-w-none text-slate-300 leading-relaxed text-sm w-full min-w-0"
-          v-html="renderedHtml"
-          @click="handleArticleClick"
-        >
-        </article>
-
-        <!-- Pagination Footer (Prev / Next) -->
-        <div class="mt-12 pt-6 border-t border-slate-800 grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div v-if="currentNavigation.prev">
-            <button 
-              @click="loadDocument(currentNavigation.prev.moduleId, currentNavigation.prev.file.relativePath || currentNavigation.prev.file.fileName)"
-              class="w-full p-4 rounded-2xl border border-slate-800 hover:border-indigo-500/40 hover:bg-slate-800/60 transition-all text-left group cursor-pointer"
-            >
-              <div class="text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1 mb-1">
-                <ArrowLeft :size="12" class="group-hover:-translate-x-1 transition-transform" />
-                <span>Anterior</span>
+          <!-- Bloque de Trazabilidad y Recursos Relacionados al pie del documento -->
+          <div v-if="currentModuleMeta && !loadingContent" class="mt-12 p-6 rounded-3xl bg-slate-950/60 border border-slate-800 space-y-4">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div class="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-indigo-400">
+                <Workflow :size="14" />
+                <span>Trazabilidad y Relaciones del Módulo</span>
               </div>
-              <p class="text-xs font-bold text-white truncate">{{ currentNavigation.prev.file.title }}</p>
-              <p class="text-[10px] text-slate-400 truncate">{{ currentNavigation.prev.moduleName }}</p>
-            </button>
-          </div>
-          <div v-else class="hidden sm:block"></div>
+              <button 
+                @click="activeViewTab = 'summary'"
+                class="text-[11px] font-bold text-indigo-400 hover:text-indigo-300 flex items-center gap-1 cursor-pointer"
+              >
+                <span>Ver Ficha Rápida</span>
+                <ChevronRight :size="12" />
+              </button>
+            </div>
 
-          <div v-if="currentNavigation.next">
-            <button 
-              @click="loadDocument(currentNavigation.next.moduleId, currentNavigation.next.file.relativePath || currentNavigation.next.file.fileName)"
-              class="w-full p-4 rounded-2xl border border-slate-800 hover:border-indigo-500/40 hover:bg-slate-800/60 transition-all text-right group cursor-pointer"
-            >
-              <div class="text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center justify-end gap-1 mb-1">
-                <span>Siguiente</span>
-                <ArrowRight :size="12" class="group-hover:translate-x-1 transition-transform" />
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+              <!-- Tablas -->
+              <div class="space-y-1.5">
+                <span class="font-bold text-slate-400 text-[11px] uppercase tracking-wider">🗄️ Tablas SQL:</span>
+                <div class="flex flex-wrap gap-1">
+                  <span 
+                    v-for="(t, i) in currentModuleMeta.tables.slice(0, 4)" 
+                    :key="i"
+                    class="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 font-mono text-[10px] text-cyan-300"
+                  >
+                    {{ t }}
+                  </span>
+                </div>
               </div>
-              <p class="text-xs font-bold text-white truncate">{{ currentNavigation.next.file.title }}</p>
-              <p class="text-[10px] text-slate-400 truncate">{{ currentNavigation.next.moduleName }}</p>
-            </button>
+
+              <!-- Reglas -->
+              <div class="space-y-1.5">
+                <span class="font-bold text-slate-400 text-[11px] uppercase tracking-wider">📜 Reglas Asociadas:</span>
+                <div class="flex flex-wrap gap-1">
+                  <span 
+                    v-for="(r, i) in currentModuleMeta.rules.slice(0, 3)" 
+                    :key="i"
+                    class="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 font-mono text-[10px] text-indigo-300"
+                  >
+                    {{ r }}
+                  </span>
+                </div>
+              </div>
+
+              <!-- Dependencias -->
+              <div class="space-y-1.5">
+                <span class="font-bold text-slate-400 text-[11px] uppercase tracking-wider">🔗 Módulos Conectados:</span>
+                <div class="flex flex-wrap gap-1">
+                  <button 
+                    v-for="(dep, i) in currentModuleMeta.dependsOn.slice(0, 3)" 
+                    :key="i"
+                    @click="navigateToModule(dep)"
+                    class="px-2 py-0.5 rounded bg-slate-900 hover:bg-slate-800 border border-slate-800 text-[10px] font-bold text-slate-300 hover:text-white cursor-pointer"
+                  >
+                    {{ MODULES_METADATA[dep]?.shortName || dep }}
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
+
+          <!-- Pagination Footer (Prev / Next) -->
+          <div class="mt-8 pt-6 border-t border-slate-800 grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div v-if="currentNavigation.prev">
+              <button 
+                @click="loadDocument(currentNavigation.prev.moduleId, currentNavigation.prev.file.relativePath || currentNavigation.prev.file.fileName)"
+                class="w-full p-4 rounded-2xl border border-slate-800 hover:border-indigo-500/40 hover:bg-slate-800/60 transition-all text-left group cursor-pointer"
+              >
+                <div class="text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1 mb-1">
+                  <ArrowLeft :size="12" class="group-hover:-translate-x-1 transition-transform" />
+                  <span>Anterior</span>
+                </div>
+                <p class="text-xs font-bold text-white truncate">{{ currentNavigation.prev.file.title }}</p>
+                <p class="text-[10px] text-slate-400 truncate">{{ currentNavigation.prev.moduleName }}</p>
+              </button>
+            </div>
+            <div v-else class="hidden sm:block"></div>
+
+            <div v-if="currentNavigation.next">
+              <button 
+                @click="loadDocument(currentNavigation.next.moduleId, currentNavigation.next.file.relativePath || currentNavigation.next.file.fileName)"
+                class="w-full p-4 rounded-2xl border border-slate-800 hover:border-indigo-500/40 hover:bg-slate-800/60 transition-all text-right group cursor-pointer"
+              >
+                <div class="text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center justify-end gap-1 mb-1">
+                  <span>Siguiente</span>
+                  <ArrowRight :size="12" class="group-hover:translate-x-1 transition-transform" />
+                </div>
+                <p class="text-xs font-bold text-white truncate">{{ currentNavigation.next.file.title }}</p>
+                <p class="text-[10px] text-slate-400 truncate">{{ currentNavigation.next.moduleName }}</p>
+              </button>
+            </div>
+          </div>
+
         </div>
 
       </main>
 
       <!-- Right Sidebar (Table of Contents / On this page) -->
-      <aside class="w-64 shrink-0 hidden 2xl:flex flex-col sticky top-20 h-[calc(100vh-6rem)]">
+      <aside v-if="activeViewTab === 'reading'" class="w-64 shrink-0 hidden 2xl:flex flex-col sticky top-20 h-[calc(100vh-6rem)]">
         <div class="p-4 rounded-3xl bg-slate-900 border border-slate-800 flex-1 flex flex-col overflow-hidden">
           <div class="flex items-center gap-2 text-xs font-black text-white uppercase tracking-wider pb-3 border-b border-slate-800 shrink-0">
             <Layers :size="14" class="text-indigo-400" />
@@ -676,7 +1225,7 @@ onUnmounted(() => {
 
     </div>
 
-    <!-- Search Modal (Ctrl + K) -->
+    <!-- Search Modal con Filtros Facetados (Ctrl + K) -->
     <div v-if="searchModalOpen" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-start justify-center p-4 sm:p-6 md:p-20 overflow-y-auto animate-in fade-in duration-150">
       <div class="relative w-full max-w-2xl bg-slate-900 rounded-3xl shadow-2xl border border-slate-800 overflow-hidden text-left">
         
@@ -686,7 +1235,7 @@ onUnmounted(() => {
           <input 
             v-model="searchQuery"
             type="text" 
-            placeholder="Buscar por regla, endpoint, caso de uso, rol..."
+            placeholder="Buscar por regla, endpoint, caso de uso, tabla SQL, rol..."
             class="w-full text-sm font-bold bg-transparent text-white outline-none placeholder:text-slate-500"
             autofocus
           />
@@ -695,22 +1244,71 @@ onUnmounted(() => {
           </button>
         </div>
 
+        <!-- Chips de Filtros Facetados -->
+        <div class="px-4 py-2 bg-slate-950/40 border-b border-slate-800/80 flex items-center gap-1.5 overflow-x-auto docs-scrollbar">
+          <button
+            @click="searchFilterType = 'all'"
+            :class="[
+              'px-2.5 py-1 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer',
+              searchFilterType === 'all' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'
+            ]"
+          >
+            Todos
+          </button>
+          <button
+            @click="searchFilterType = 'rules'"
+            :class="[
+              'px-2.5 py-1 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer',
+              searchFilterType === 'rules' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'
+            ]"
+          >
+            📜 Reglas de Negocio
+          </button>
+          <button
+            @click="searchFilterType = 'hus'"
+            :class="[
+              'px-2.5 py-1 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer',
+              searchFilterType === 'hus' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'
+            ]"
+          >
+            👤 Historias (HUs)
+          </button>
+          <button
+            @click="searchFilterType = 'database'"
+            :class="[
+              'px-2.5 py-1 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer',
+              searchFilterType === 'database' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'
+            ]"
+          >
+            🗄️ Base de Datos
+          </button>
+          <button
+            @click="searchFilterType = 'maestro'"
+            :class="[
+              'px-2.5 py-1 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer',
+              searchFilterType === 'maestro' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'
+            ]"
+          >
+            🏛️ Documento Rector
+          </button>
+        </div>
+
         <!-- Results Container -->
         <div class="max-h-96 overflow-y-auto p-4 space-y-2 divide-y divide-slate-800 docs-scrollbar">
           <div v-if="searching" class="py-8 text-center text-xs text-slate-400 font-bold">
-            Buscando en todos los módulos...
+            Buscando en toda la base de conocimiento...
           </div>
 
-          <div v-else-if="searchQuery.trim().length >= 2 && searchResults.length === 0" class="py-8 text-center text-xs text-slate-400 font-bold">
-            No se encontraron coincidencias para "{{ searchQuery }}".
+          <div v-else-if="searchQuery.trim().length >= 2 && filteredSearchResults.length === 0" class="py-8 text-center text-xs text-slate-400 font-bold">
+            No se encontraron coincidencias para "{{ searchQuery }}" con el filtro actual.
           </div>
 
           <div v-else-if="!searchQuery" class="py-8 text-center text-xs text-slate-400">
-            Escribe al menos 2 caracteres para buscar en toda la documentación del sistema.
+            Escribe al menos 2 caracteres para buscar en los 21 módulos, reglas y base de datos.
           </div>
 
           <div 
-            v-for="(res, idx) in searchResults" 
+            v-for="(res, idx) in filteredSearchResults" 
             :key="idx"
             @click="selectSearchResult(res)"
             class="pt-2 pb-2 px-3 hover:bg-slate-800/70 rounded-2xl cursor-pointer transition-colors space-y-1"
@@ -728,7 +1326,7 @@ onUnmounted(() => {
         <!-- Search Footer -->
         <div class="px-5 py-3 bg-slate-950/60 border-t border-slate-800 text-[11px] text-slate-400 flex items-center justify-between">
           <span>Pulsa <kbd class="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 font-mono font-bold text-slate-300">ESC</kbd> para cerrar</span>
-          <span>{{ searchResults.length }} resultados</span>
+          <span>{{ filteredSearchResults.length }} resultados</span>
         </div>
 
       </div>
