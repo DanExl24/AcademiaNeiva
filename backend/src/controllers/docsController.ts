@@ -71,7 +71,9 @@ const formatDocTitle = (fileName: string, isSubmodule: boolean = false): string 
     seguimiento_academico_directivo: "Documentación Principal",
     flujo_correos_y_verificaciones: "Documentación Principal",
     mapa_documentacion: "Mapa General de Documentación",
-    gestion_jornadas: "Submódulo: Gestión de Jornadas"
+    gestion_jornadas: "Submódulo: Gestión de Jornadas",
+    maestro_de_informacion: "Maestro de Información del Sistema",
+    MAESTRO_DE_INFORMACION: "Maestro de Información del Sistema"
   };
 
   if (titles[base]) return titles[base];
@@ -97,13 +99,46 @@ export const getDocsModules = async (req: Request, res: Response): Promise<void>
 
     const modules = [];
 
+    // 0. Si existe MAESTRO_DE_INFORMACION.md en la raíz de guides o modules (Documento Rector)
+    let hasMaster = false;
+    let masterRelPath = "MAESTRO_DE_INFORMACION.md";
+    try {
+      await fs.stat(path.join(basePath, "MAESTRO_DE_INFORMACION.md"));
+      hasMaster = true;
+      masterRelPath = "MAESTRO_DE_INFORMACION.md";
+    } catch {
+      try {
+        await fs.stat(path.join(modulesDir, "MAESTRO_DE_INFORMACION.md"));
+        hasMaster = true;
+        masterRelPath = "MAESTRO_DE_INFORMACION.md";
+      } catch {}
+    }
+
+    if (hasMaster) {
+      modules.push({
+        id: "maestro",
+        folderName: "",
+        name: "🏛️ 00. Maestro de Información",
+        files: [
+          {
+            id: "MAESTRO_DE_INFORMACION",
+            fileName: "MAESTRO_DE_INFORMACION.md",
+            relativePath: masterRelPath,
+            title: "Maestro de Información del Sistema",
+            isSubmodule: false
+          }
+        ],
+        submodules: []
+      });
+    }
+
     // Si existe mapa_documentacion.md en la raíz de modules
     const hasMap = entries.some((e) => e.isFile() && e.name === "mapa_documentacion.md");
     if (hasMap) {
       modules.push({
         id: "general",
         folderName: "",
-        name: "00. Visión General",
+        name: "🗺️ 00. Mapa General",
         files: [
           {
             id: "mapa_documentacion",
@@ -222,9 +257,25 @@ export const getDocContent = async (req: Request, res: Response): Promise<void> 
 
   try {
     const basePath = await getGuidesBasePath();
-    const targetPath = moduleName && moduleName !== "general"
-      ? path.join(basePath, "modules", moduleName, relativeFilePath)
-      : path.join(basePath, "modules", relativeFilePath);
+    let targetPath: string;
+
+    if (moduleName === "maestro") {
+      targetPath = path.join(basePath, relativeFilePath);
+      try {
+        await fs.stat(targetPath);
+      } catch {
+        targetPath = path.join(basePath, "modules", relativeFilePath);
+      }
+    } else if (!moduleName || moduleName === "general") {
+      targetPath = path.join(basePath, "modules", relativeFilePath);
+      try {
+        await fs.stat(targetPath);
+      } catch {
+        targetPath = path.join(basePath, relativeFilePath);
+      }
+    } else {
+      targetPath = path.join(basePath, "modules", moduleName, relativeFilePath);
+    }
 
     const stat = await fs.stat(targetPath);
     const content = await fs.readFile(targetPath, "utf-8");
@@ -306,10 +357,20 @@ export const searchDocs = async (req: Request, res: Response): Promise<void> => 
       }
     };
 
+    // Escanear archivo maestro de información si existe
+    const masterPath = path.join(basePath, "MAESTRO_DE_INFORMACION.md");
+    try {
+      await scanFile(masterPath, "maestro", "🏛️ 00. Maestro de Información", "MAESTRO_DE_INFORMACION.md", false);
+    } catch {
+      try {
+        await scanFile(path.join(modulesDir, "MAESTRO_DE_INFORMACION.md"), "maestro", "🏛️ 00. Maestro de Información", "MAESTRO_DE_INFORMACION.md", false);
+      } catch {}
+    }
+
     // Escanear archivo raíz mapa_documentacion si existe
     const mapPath = path.join(modulesDir, "mapa_documentacion.md");
     try {
-      await scanFile(mapPath, "general", "00. Visión General", "mapa_documentacion.md", false);
+      await scanFile(mapPath, "general", "🗺️ 00. Mapa General", "mapa_documentacion.md", false);
     } catch {}
 
     // Escanear cada módulo y sus submódulos

@@ -276,8 +276,11 @@ const resolveRoute = () => {
     return
   }
 
-  // Por defecto abrir 06_matriculas o el primer módulo disponible
-  const defaultMod = modules.value.find(m => m.id === '06_matriculas') || modules.value[0]
+  // Por defecto abrir Maestro de Información (Documento Rector) o el primer módulo disponible
+  const defaultMod = modules.value.find(m => m.id === 'maestro') 
+    || modules.value.find(m => m.id === 'general') 
+    || modules.value.find(m => m.id === '06_matriculas') 
+    || modules.value[0]
   if (defaultMod && defaultMod.files.length > 0) {
     loadDocument(defaultMod.id, defaultMod.files[0].relativePath || defaultMod.files[0].fileName)
   }
@@ -416,7 +419,7 @@ onUnmounted(() => {
           >
             <span class="flex items-center gap-2">
               <Search :size="15" class="text-slate-400" />
-              <span>Buscar en los 21 módulos y submódulos...</span>
+              <span>Buscar en el Maestro de Información, 21 módulos y guías...</span>
             </span>
             <kbd class="px-2 py-0.5 text-[10px] font-mono bg-slate-900 border border-slate-700 rounded-lg text-slate-400">Ctrl K</kbd>
           </button>
@@ -561,7 +564,7 @@ onUnmounted(() => {
           <div class="flex items-center gap-2 truncate font-medium">
             <router-link to="/docs" class="hover:text-indigo-400">Docs</router-link>
             <ChevronRight :size="13" class="text-slate-500" />
-            <span class="text-slate-300 font-bold truncate">{{ selectedModuleId }}</span>
+            <span class="text-slate-300 font-bold truncate">{{ selectedModuleId === 'maestro' ? 'Documento Rector' : (selectedModuleId === 'general' ? 'Visión General' : selectedModuleId) }}</span>
             <ChevronRight :size="13" class="text-slate-500" />
             <span class="text-indigo-400 font-bold truncate">{{ docTitle }}</span>
           </div>
