@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { 
   BookOpen, 
@@ -45,9 +45,39 @@ import {
   Network
 } from 'lucide-vue-next'
 import { marked } from 'marked'
+import mermaid from 'mermaid'
 import { docsService, type DocModule, type DocSearchResult } from '../../services/docsService'
 import { MODULES_METADATA, SYSTEM_METRICS, type ModuleSummary } from '../../services/docsMetadata'
 import DocsRelationshipGraph from '../../components/docs/DocsRelationshipGraph.vue'
+
+// Configuración de Mermaid con tema oscuro integrado
+mermaid.initialize({
+  startOnLoad: false,
+  theme: 'dark',
+  securityLevel: 'loose',
+  fontFamily: 'ui-sans-serif, system-ui, sans-serif',
+  themeVariables: {
+    darkMode: true,
+    background: '#020617',
+    mainBkg: '#0f172a',
+    primaryColor: '#4338ca',
+    primaryTextColor: '#f8fafc',
+    primaryBorderColor: '#6366f1',
+    lineColor: '#818cf8',
+    secondaryColor: '#1e293b',
+    tertiaryColor: '#0f172a',
+    nodeBorder: '#6366f1',
+    clusterBkg: '#0b0f19',
+    clusterBorder: '#334155',
+    titleColor: '#f8fafc',
+    edgeLabelBackground: '#020617',
+    actorBorder: '#6366f1',
+    actorBkg: '#1e1b4b',
+    actorTextColor: '#e0e7ff',
+    signalColor: '#818cf8',
+    signalTextColor: '#f8fafc'
+  }
+})
 
 const route = useRoute()
 const router = useRouter()
@@ -128,10 +158,52 @@ const getIconComponent = (iconName: string) => {
   return iconMap[iconName] || BookOpen
 }
 
-// Procesa markdown a HTML enriquecido con soporte para GitHub Alerts, tablas con scroll y badges HTTP
+// Renderiza de forma asíncrona todos los contenedores de diagramas Mermaid
+const renderMermaidDiagrams = async () => {
+  await nextTick()
+  const elements = document.querySelectorAll('.mermaid-diagram:not([data-processed="true"])')
+  if (elements.length === 0) return
+
+  for (let i = 0; i < elements.length; i++) {
+    const el = elements[i] as HTMLElement
+    const encoded = el.getAttribute('data-code')
+    const rawCode = encoded ? decodeURIComponent(encoded) : (el.textContent || '')
+    if (!rawCode.trim()) continue
+
+    try {
+      const uniqueId = `mermaid-svg-${Date.now()}-${i}-${Math.random().toString(36).substring(2, 6)}`
+      const { svg } = await mermaid.render(uniqueId, rawCode)
+      el.innerHTML = `<div class="w-full overflow-x-auto flex justify-center py-2 docs-scrollbar">${svg}</div>`
+      el.setAttribute('data-processed', 'true')
+    } catch (err) {
+      console.error('Error renderizando diagrama Mermaid:', err)
+      el.innerHTML = `
+        <div class="w-full space-y-2">
+          <div class="p-3 rounded-2xl bg-amber-950/40 border border-amber-500/40 text-amber-300 text-xs font-bold flex items-center justify-between">
+            <span>⚠️ Diagrama de Flujo (Vista de Código)</span>
+          </div>
+          <pre class="p-4 rounded-2xl bg-slate-900 border border-slate-800 text-xs text-slate-300 font-mono overflow-x-auto">${rawCode}</pre>
+        </div>
+      `
+      el.setAttribute('data-processed', 'true')
+    }
+  }
+}
+
+// Procesa markdown a HTML enriquecido con soporte para Mermaid, GitHub Alerts, tablas con scroll y badges HTTP
 const processMarkdownToHtml = (markdown: string): string => {
+  // 0. Pre-procesar bloques Mermaid
+  const preprocessedMermaid = markdown.replace(
+    /```mermaid\s*([\s\S]*?)```/gi,
+    (_match, code) => {
+      const cleanCode = code.trim()
+      const encoded = encodeURIComponent(cleanCode)
+      return `\n<div class="mermaid-diagram my-8 p-6 rounded-3xl border border-slate-800 bg-slate-950/90 shadow-2xl overflow-x-auto flex flex-col items-center justify-center docs-scrollbar" data-code="${encoded}"><div class="flex items-center gap-2 text-xs font-bold text-indigo-400 py-6"><div class="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div><span>Generando diagrama interactivo...</span></div></div>\n`
+    }
+  )
+
   // 1. Pre-procesar GitHub alerts
-  const processedMd = markdown.replace(
+  const processedMd = preprocessedMermaid.replace(
     />\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*([\s\S]*?)(?=\n\n|\n[^\s>]|$)/gi,
     (_match, type, content) => {
       const t = type.toUpperCase()
@@ -260,6 +332,7 @@ const loadDocument = async (moduleId: string, filePath: string) => {
     // Renderizar Markdown y TOC
     extractToc(res.content)
     renderedHtml.value = processMarkdownToHtml(res.content)
+    renderMermaidDiagrams()
 
     // Actualizar URL sin reload
     const cleanPath = (res.file || filePath).startsWith('submodules/')
@@ -486,6 +559,13 @@ const handleKeydown = (e: KeyboardEvent) => {
     closeSearchModal()
   }
 }
+
+// Re-renderizar diagramas si el usuario regresa a la pestaña de lectura
+watch(activeViewTab, (newTab) => {
+  if (newTab === 'reading') {
+    renderMermaidDiagrams()
+  }
+})
 
 onMounted(() => {
   fetchModules()
@@ -1508,5 +1588,15 @@ onUnmounted(() => {
   font-size: 0.85em;
   font-weight: 700;
   border: 1px solid rgba(99, 102, 241, 0.25);
+}
+
+/* Estilos para diagramas interactivos Mermaid */
+.mermaid-diagram {
+  min-height: 80px;
+}
+.mermaid-diagram svg {
+  max-width: 100% !important;
+  height: auto !important;
+  display: block;
 }
 </style>

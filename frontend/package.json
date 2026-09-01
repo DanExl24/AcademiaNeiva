@@ -16,6 +16,7 @@
     "html2pdf.js": "^0.14.0",
     "lucide-vue-next": "^1.0.0",
     "marked": "^18.0.11",
+    "mermaid": "^11.17.2",
     "pdfjs-dist": "^6.1.200",
     "pinia": "^3.0.4",
     "socket.io-client": "^4.8.3",
