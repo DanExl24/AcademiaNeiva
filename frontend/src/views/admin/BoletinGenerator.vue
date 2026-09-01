@@ -198,11 +198,9 @@ const previewRefs = ref<any[]>([])
 
 const filteredGroups = computed(() => {
   if (!selectedLevel.value) return []
-  return groups.value.filter(g => g.id_nivel === selectedLevel.value && groupsWithStudents.value.has(g.id_grupo))
+  return groups.value.filter(g => String(g.id_nivel) === String(selectedLevel.value))
 })
 
-// Set of group IDs that have at least one enrolled student
-const groupsWithStudents = ref<Set<number>>(new Set())
 const allStudents = ref<any[]>([])
 
 const fetchInitialData = async () => {
@@ -213,7 +211,7 @@ const fetchInitialData = async () => {
     const [settingsData, gradesData, studentsData] = await Promise.all([
       academicService.getSettings(schoolId, { ...yearParams, keys: 'periods,scales' }),
       academicService.getGradesAndGroups(schoolId, yearParams),
-      studentService.getStudentsBySchool(schoolId, { estado: 'ACTIVO', ...yearParams })
+      studentService.getStudentsBySchool(schoolId, yearParams)
     ])
     
     // Use closed periods strictly for selected year
@@ -224,20 +222,7 @@ const fetchInitialData = async () => {
     periodos.value = allP
     levels.value = gradesData.niveles || []
     groups.value = gradesData.grupos || []
-
-    // Build set of groups that have enrolled active students
     allStudents.value = studentsData || []
-    const gSet = new Set<number>()
-    for (const s of allStudents.value) {
-      if (
-        s.id_grupo &&
-        s.matricula_estado !== 'TRASLADADA' &&
-        (s.matricula_estado === 'ACTIVA' || s.estado_vigente === 'ACTIVO' || s.estado === 'ACTIVO')
-      ) {
-        gSet.add(s.id_grupo)
-      }
-    }
-    groupsWithStudents.value = gSet
   } catch (err) {
     console.error("Error al cargar datos iniciales:", err)
     error.value = "Hubo un problema de conexión para obtener listas."
@@ -256,6 +241,12 @@ watch(() => yearStore.selectedYearId, () => {
   fetchInitialData()
 })
 
+watch(selectedLevel, () => {
+  selectedGroup.value = ''
+  selectedStudent.value = ''
+  students.value = []
+})
+
 watch(reportMode, () => {
   boletinesData.value = []
   error.value = ''
@@ -271,12 +262,12 @@ const fetchStudentsForGroup = async () => {
   }
   // En modo traslado, permitir ver todos los estudiantes del grupo para emitir el certificado
   if (reportMode.value === 'transfer') {
-    students.value = allStudents.value.filter((s: any) => s.id_grupo === selectedGroup.value)
+    students.value = allStudents.value.filter((s: any) => String(s.id_grupo) === String(selectedGroup.value))
   } else {
     // Filter from already-loaded students, ensuring only active students in the selected group
     students.value = allStudents.value.filter(
       (s: any) =>
-        s.id_grupo === selectedGroup.value &&
+        String(s.id_grupo) === String(selectedGroup.value) &&
         s.matricula_estado !== 'TRASLADADA' &&
         (s.matricula_estado === 'ACTIVA' || s.estado_vigente === 'ACTIVO' || s.estado === 'ACTIVO')
     )
