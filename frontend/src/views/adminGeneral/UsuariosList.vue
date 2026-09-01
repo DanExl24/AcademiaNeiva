@@ -214,13 +214,12 @@ const verifyTicketAndEnableEdit = async () => {
 
     editableDocumento.value = selectedUser.value.documento || ''
     
-    // Normalizar Roles a mayúsculas
+    // Normalizar Roles a mayúsculas y filtrar exclusivamente roles institucionales permitidos
     editableRoles.value = (selectedUser.value.roles || []).map((r: string) => {
       let normalized = String(r).toUpperCase().trim();
-      if (normalized === 'ADMIN') return 'ADMIN_GENERAL';
       if (normalized === 'PADRE_FAMILIA') return 'PADRE';
       return normalized;
-    })
+    }).filter((r: string) => ['DIRECTIVO', 'DOCENTE', 'PADRE'].includes(r))
     
     editingCredentials.value = true
   } catch (error: any) {
@@ -757,21 +756,21 @@ const handleDelete = async () => {
               <div class="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
                 <label class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1 block">Roles Asignados</label>
                 <div class="flex flex-wrap gap-4 px-1 py-1">
-                  <label v-for="roleKey in ['ADMIN_GENERAL', 'DIRECTIVO', 'DOCENTE', 'PADRE', 'ESTUDIANTE']" :key="roleKey" class="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-350 cursor-pointer">
+                  <label v-for="roleKey in ['DIRECTIVO', 'DOCENTE', 'PADRE']" :key="roleKey" class="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-350 cursor-pointer">
                     <input type="checkbox" :value="roleKey" v-model="editableRoles" class="rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500 w-4 h-4" />
-                    <span>{{ roleKey }}</span>
+                    <span>{{ roleKey === 'PADRE' ? 'PADRE / ACUDIENTE' : roleKey }}</span>
                   </label>
                 </div>
               </div>
             </div>
 
-            <!-- Modificar credentials ticket authorization panel -->
-            <div v-if="!editingCredentials && selectedUser.estado !== 'ELIMINADO' && selectedUser.rol_nombre !== 'admin_general'" class="bg-indigo-50/20 dark:bg-slate-800/20 p-4 rounded-2xl border border-dashed border-indigo-200/50 dark:border-slate-800/80 space-y-3">
+            <!-- Modificar credentials ticket authorization panel (Solo para Directivos, Docentes y Padres) -->
+            <div v-if="!editingCredentials && selectedUser.estado !== 'ELIMINADO' && selectedUser.rol_nombre !== 'admin_general' && selectedUser.rol_nombre !== 'estudiante' && !(selectedUser.roles || []).includes('admin_general') && !(selectedUser.roles || []).includes('estudiante')" class="bg-indigo-50/20 dark:bg-slate-800/20 p-4 rounded-2xl border border-dashed border-indigo-200/50 dark:border-slate-800/80 space-y-3">
               <div class="flex items-center justify-between">
                 <span class="text-xs font-black text-slate-700 dark:text-slate-300">¿Deseas modificar nombres, documentos o roles?</span>
               </div>
               <p class="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed font-semibold">
-                Para desbloquear la edición de credenciales inmutables y la asignación de roles, es obligatorio ingresar el código del ticket de soporte correspondiente.
+                Para desbloquear la edición de credenciales inmutables y la asignación de roles institucionales (Directivo, Docente, Padre), es obligatorio ingresar el código del ticket de soporte correspondiente.
               </p>
               
               <div class="flex flex-col sm:flex-row gap-2 pt-1">
@@ -792,6 +791,16 @@ const handleDelete = async () => {
               </div>
               
               <p v-if="verificationError" class="text-[10px] font-bold text-red-600 mt-1">{{ verificationError }}</p>
+            </div>
+
+            <!-- Aviso exclusivo para Estudiantes -->
+            <div v-else-if="!editingCredentials && (selectedUser.rol_nombre === 'estudiante' || (selectedUser.roles || []).includes('estudiante'))" class="bg-amber-50/40 dark:bg-amber-950/20 p-4 rounded-2xl border border-amber-200/50 dark:border-amber-900/30 text-xs space-y-1">
+              <span class="font-black text-amber-800 dark:text-amber-300 flex items-center gap-1.5 uppercase tracking-wider text-[11px]">
+                🛡️ Gestión Exclusiva por Matrícula
+              </span>
+              <p class="text-[11px] text-amber-700 dark:text-amber-400 font-semibold leading-relaxed">
+                Los datos de identificación y la ficha académica de los estudiantes se gestionan de forma segura a través del módulo de Matrícula Institucional y Secretaría Académica.
+              </p>
             </div>
 
             <!-- Ban / Suspension Logs -->

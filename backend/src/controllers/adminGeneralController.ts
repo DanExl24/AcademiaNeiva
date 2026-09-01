@@ -2684,6 +2684,24 @@ export const validarTicketParaUsuario = async (req: AuthRequest, res: Response):
 
   const client = await pool.connect();
   try {
+    // 1. Verificar que el usuario no sea ADMIN_GENERAL ni ESTUDIANTE
+    const userRolesRes = await client.query(
+      `SELECT r.nombre 
+       FROM usuario_rol ur 
+       JOIN rol r ON ur.id_rol = r.id_rol 
+       WHERE ur.id_usuario = $1`,
+      [id]
+    );
+    const userRoles = userRolesRes.rows.map(r => String(r.nombre).toUpperCase());
+    if (userRoles.includes('ADMIN_GENERAL') || userRoles.includes('ADMIN')) {
+      res.status(403).json({ error: 'No es posible modificar credenciales o roles de cuentas con rol Administrador General.' });
+      return;
+    }
+    if (userRoles.includes('ESTUDIANTE')) {
+      res.status(400).json({ error: 'Las cuentas de Estudiantes no pueden ser editadas mediante este panel. Su gestión de datos y matrícula se realiza en Secretaría Académica / Matrícula.' });
+      return;
+    }
+
     const check = await verificarCorrespondenciaTicketUsuario(client, id, codigo_ticket);
     if (!check.valido) {
       res.status(400).json({ error: check.error });
@@ -2750,6 +2768,41 @@ export const modificarCredencialesConTicket = async (req: AuthRequest, res: Resp
     );
     const oldRoles = oldRolesRes.rows.map(r => String(r.nombre).toUpperCase());
 
+    // Validar que el usuario a modificar NO sea ADMIN_GENERAL ni ESTUDIANTE
+    if (oldRoles.includes('ADMIN_GENERAL') || oldRoles.includes('ADMIN')) {
+      res.status(403).json({ error: 'No es posible modificar credenciales o roles de cuentas con rol Administrador General.' });
+      await client.query('ROLLBACK');
+      return;
+    }
+    if (oldRoles.includes('ESTUDIANTE')) {
+      res.status(400).json({ error: 'Las cuentas de Estudiantes no pueden ser modificadas mediante este panel. Su gestión se realiza exclusivamente a través de Matrícula Institucional.' });
+      await client.query('ROLLBACK');
+      return;
+    }
+
+    // 3. Validar los nuevos roles que se desean asignar
+    const allowedRoles = ['DIRECTIVO', 'DOCENTE', 'PADRE'];
+    const normalizedNewRoles = roles
+      .map(r => String(r).toUpperCase().trim())
+      .map(r => r === 'PADRE_FAMILIA' ? 'PADRE' : r);
+
+    const invalidRoles = normalizedNewRoles.filter(r => !allowedRoles.includes(r));
+    if (invalidRoles.length > 0) {
+      res.status(400).json({
+        error: `Los roles [${invalidRoles.join(', ')}] no pueden ser asignados mediante este panel de edición.`
+      });
+      await client.query('ROLLBACK');
+      return;
+    }
+
+    if (normalizedNewRoles.length === 0) {
+      res.status(400).json({
+        error: 'Debe asignar al menos un rol institucional válido (Directivo, Docente o Padre).'
+      });
+      await client.query('ROLLBACK');
+      return;
+    }
+
     // Consultar documento actual desde la tabla usuario
     let oldDoc = 'No Registrado';
     let oldTipoDoc = 'No Registrado';
@@ -2769,15 +2822,13 @@ export const modificarCredencialesConTicket = async (req: AuthRequest, res: Resp
     // Mapear tipo_documento string a id_tipodocumento entero
     const idTipoDoc = resolveTipoDocumentoId(tipo_documento);
 
-    // 3. Actualizar tabla usuario (nombres, id_tipodocumento, documento)
+    // 4. Actualizar tabla usuario (nombres, id_tipodocumento, documento)
     await client.query(
       "UPDATE usuario SET nombre = $1, apellido = $2, id_tipodocumento = $3, documento = $4 WHERE id_usuario = $5",
       [nombre.trim(), apellido.trim(), idTipoDoc, documento.trim(), id]
     );
 
-    // 4. Sincronizar roles en usuario_rol
-    const normalizedNewRoles = roles.map(r => String(r).toUpperCase());
-    
+    // 5. Sincronizar roles en usuario_rol
     // Obtener catálogo de roles de la BD
     const allRolesDb = await client.query("SELECT id_rol, nombre FROM public.rol");
     const roleMap = new Map<string, number>();
@@ -2786,7 +2837,7 @@ export const modificarCredencialesConTicket = async (req: AuthRequest, res: Resp
     // Eliminar roles anteriores
     await client.query("DELETE FROM usuario_rol WHERE id_usuario = $1", [id]);
 
-    // Insertar nuevos roles
+    // Insertar nuevos roles permitidos
     for (const roleName of normalizedNewRoles) {
       const roleId = roleMap.get(roleName);
       if (roleId) {
@@ -2796,7 +2847,15 @@ export const modificarCredencialesConTicket = async (req: AuthRequest, res: Resp
         );
 
         // Inicializar o actualizar tabla del rol específico para evitar inconsistencias
-        if (roleName === 'DOCENTE') {
+        if (roleName === 'DIRECTIVO') {
+          await client.query(
+            `INSERT INTO public.directivo (id_usuario, id_colegio, cargo, fecha_vinculacion)
+             VALUES ($1, $2, 'Directivo Institucional', NOW())
+             ON CONFLICT (id_usuario) DO UPDATE 
+             SET id_colegio = COALESCE(EXCLUDED.id_colegio, public.directivo.id_colegio)`,
+            [id, oldUser.id_colegio]
+          );
+        } else if (roleName === 'DOCENTE') {
           await client.query(
             `INSERT INTO public.docente (id_usuario, nombre, apellido, id_colegio)
              VALUES ($1, $2, $3, $4)
@@ -2811,14 +2870,6 @@ export const modificarCredencialesConTicket = async (req: AuthRequest, res: Resp
              ON CONFLICT (id_usuario) DO UPDATE 
              SET nombre = EXCLUDED.nombre, apellido = EXCLUDED.apellido`,
             [id, nombre.trim(), apellido.trim(), oldUser.id_colegio]
-          );
-        } else if (roleName === 'ESTUDIANTE') {
-          await client.query(
-            `INSERT INTO public.estudiante (id_usuario, nombre, apellido, id_colegio, codigo)
-             VALUES ($1, $2, $3, $4, $5)
-             ON CONFLICT (id_usuario) DO UPDATE 
-             SET nombre = EXCLUDED.nombre, apellido = EXCLUDED.apellido`,
-            [id, nombre.trim(), apellido.trim(), oldUser.id_colegio || 1, `EST-${id}`]
           );
         }
       }
