@@ -420,7 +420,18 @@ export const verifyTokenOptional = async (req: AuthRequest, res: Response, next:
   next();
 };
 
-function getAuditLogDetails(url: string) {
+/**
+ * Normaliza la URL eliminando el prefijo '/api' si existe.
+ * Esto es necesario porque req.originalUrl puede venir con o sin el prefijo
+ * dependiendo de cómo el frontend envíe la petición (baseURL sin /api).
+ */
+function normalizeUrl(url: string): string {
+  return url.startsWith('/api/') ? url.substring(4) : url;
+}
+
+function getAuditLogDetails(rawUrl: string) {
+  const url = normalizeUrl(rawUrl);
+
   if (url.includes('/supervision/') || url.includes('/notificaciones') || url.includes('/dashboard/stats') || url.includes('/auth/')) {
     return null;
   }
@@ -430,111 +441,111 @@ function getAuditLogDetails(url: string) {
   let accion = '';
   let recurso_afectado = '';
 
-  if (url.startsWith('/api/boletines')) {
+  if (url.startsWith('/boletines')) {
     modulo = 'BOLETINES';
     if (url.includes('/student/')) {
       tipo_accion = 'EXPORTACION';
       const parts = url.split('/');
-      const studentId = parts[4] || 'N/A';
-      const periodId = parts[5] || 'N/A';
+      const studentId = parts[3] || 'N/A';
+      const periodId = parts[4] || 'N/A';
       accion = 'Generación de Boletín de Estudiante';
       recurso_afectado = `Boletín Estudiante ID: ${studentId}, Periodo ID: ${periodId}`;
     } else if (url.includes('/grade/')) {
       tipo_accion = 'EXPORTACION';
       const parts = url.split('/');
-      const grupoId = parts[4] || 'N/A';
-      const periodId = parts[5] || 'N/A';
+      const grupoId = parts[3] || 'N/A';
+      const periodId = parts[4] || 'N/A';
       accion = 'Generación de Boletines por Grado';
       recurso_afectado = `Boletines Grado ID: ${grupoId}, Periodo ID: ${periodId}`;
     } else {
       accion = 'Consulta de Boletines';
       recurso_afectado = `Generador de boletines`;
     }
-  } else if (url.startsWith('/api/student')) {
+  } else if (url.startsWith('/student')) {
     modulo = 'ESTUDIANTES';
     if (url.includes('/summary')) {
       const parts = url.split('/');
-      const id = parts[3] || 'N/A';
+      const id = parts[2] || 'N/A';
       accion = 'Lectura de Ficha de Estudiante';
       recurso_afectado = `Ficha Resumen Estudiante ID: ${id}`;
     } else if (url.includes('/colegio/')) {
       const parts = url.split('/');
-      const colegioId = parts[4] || 'N/A';
+      const colegioId = parts[3] || 'N/A';
       accion = 'Consulta de Listado de Estudiantes';
       recurso_afectado = `Listado Estudiantes Colegio ID: ${colegioId}`;
     } else {
       accion = 'Consulta de Datos de Estudiante';
       recurso_afectado = `Ficha de estudiante`;
     }
-  } else if (url.startsWith('/api/academic-admin/config')) {
+  } else if (url.startsWith('/academic-admin/config')) {
     modulo = 'CONFIGURACION';
     accion = 'Consulta de Malla Curricular y Directrices';
     recurso_afectado = 'Configuración curricular';
-  } else if (url.startsWith('/api/academic-admin/settings')) {
+  } else if (url.startsWith('/academic-admin/settings')) {
     modulo = 'CONFIGURACION';
     accion = 'Consulta de Parámetros Institucionales';
     recurso_afectado = 'Configuración académica';
-  } else if (url.startsWith('/api/academic-admin/tracking')) {
+  } else if (url.startsWith('/academic-admin/tracking')) {
     modulo = 'SEGUIMIENTO';
     accion = 'Consulta de Dashboard y Seguimiento';
     recurso_afectado = 'Dashboard académico';
-  } else if (url.startsWith('/api/academic-admin/periods')) {
+  } else if (url.startsWith('/academic-admin/periods')) {
     modulo = 'PERIODOS';
     accion = 'Consulta de Periodos Académicos';
     recurso_afectado = 'Gestión de periodos';
-  } else if (url.startsWith('/api/academic-admin/scales')) {
+  } else if (url.startsWith('/academic-admin/scales')) {
     modulo = 'ESCALAS';
     accion = 'Consulta de Escalas de Valoración';
     recurso_afectado = 'Escala institucional';
-  } else if (url.startsWith('/api/academic-admin/competencies')) {
+  } else if (url.startsWith('/academic-admin/competencies')) {
     modulo = 'COMPETENCIAS';
     accion = 'Consulta de Competencias Académicas';
     recurso_afectado = 'Competencias institucionales';
-  } else if (url.startsWith('/api/academic-admin/teachers')) {
+  } else if (url.startsWith('/academic-admin/teachers')) {
     modulo = 'DOCENTES';
     accion = 'Consulta de Planta Docente y Asignaciones';
     recurso_afectado = 'Gestión de docentes';
-  } else if (url.startsWith('/api/academic-admin/years')) {
+  } else if (url.startsWith('/academic-admin/years')) {
     modulo = 'AÑOS_LECTIVOS';
     accion = 'Consulta de Años Lectivos';
     recurso_afectado = 'Vigencias académicas';
-  } else if (url.startsWith('/api/academic-admin/subjects')) {
+  } else if (url.startsWith('/academic-admin/subjects')) {
     modulo = 'ASIGNATURAS';
     accion = 'Consulta de Asignaturas';
     recurso_afectado = 'Plan de estudios';
-  } else if (url.startsWith('/api/academic-admin')) {
+  } else if (url.startsWith('/academic-admin')) {
     modulo = 'CONFIGURACION';
     accion = 'Consulta de Configuración Académica';
     recurso_afectado = 'Configuración del colegio';
-  } else if (url.startsWith('/api/matriculas') || url.startsWith('/api/matricula')) {
+  } else if (url.startsWith('/matriculas') || url.startsWith('/matricula')) {
     modulo = 'MATRICULAS';
     accion = 'Consulta de Solicitudes de Matrícula';
     recurso_afectado = 'Gestión de matrículas';
-  } else if (url.startsWith('/api/traslados')) {
+  } else if (url.startsWith('/traslados')) {
     modulo = 'TRASLADOS';
     accion = 'Consulta de Solicitudes de Traslado';
     recurso_afectado = 'Gestión de traslados';
-  } else if (url.startsWith('/api/reingresos')) {
+  } else if (url.startsWith('/reingreso')) {
     modulo = 'REINGRESOS';
     accion = 'Consulta de Solicitudes de Reingreso';
     recurso_afectado = 'Gestión de reingresos';
-  } else if (url.startsWith('/api/parent')) {
+  } else if (url.startsWith('/parent')) {
     modulo = 'PADRES';
     accion = 'Consulta de Padres de Familia';
     recurso_afectado = 'Gestión de acudientes';
-  } else if (url.startsWith('/api/teacher')) {
+  } else if (url.startsWith('/teacher')) {
     modulo = 'DOCENTES';
     accion = 'Consulta de Docentes';
     recurso_afectado = 'Gestión de docentes';
-  } else if (url.startsWith('/api/grados')) {
+  } else if (url.startsWith('/grados')) {
     modulo = 'GRADOS';
     accion = 'Consulta de Grados y Secciones';
     recurso_afectado = 'Gestión de grupos';
-  } else if (url.startsWith('/api/dba')) {
+  } else if (url.startsWith('/dba')) {
     modulo = 'DBA';
     accion = 'Consulta de Derechos Básicos de Aprendizaje';
     recurso_afectado = 'Malla DBA';
-  } else if (url.startsWith('/api/support')) {
+  } else if (url.startsWith('/support')) {
     modulo = 'SOPORTE';
     accion = 'Consulta de Tickets de Soporte';
     recurso_afectado = 'Módulo de soporte';
@@ -543,27 +554,28 @@ function getAuditLogDetails(url: string) {
   return modulo ? { modulo, tipo_accion, accion, recurso_afectado } : null;
 }
 
-function getModuloFromUrl(url: string): string {
-  if (url.startsWith('/api/student')) return 'ESTUDIANTES';
-  if (url.startsWith('/api/boletines')) return 'BOLETINES';
-  if (url.startsWith('/api/academic-admin/config')) return 'CONFIGURACION';
-  if (url.startsWith('/api/academic-admin/settings')) return 'CONFIGURACION';
-  if (url.startsWith('/api/academic-admin/tracking')) return 'SEGUIMIENTO';
-  if (url.startsWith('/api/academic-admin/periods')) return 'PERIODOS';
-  if (url.startsWith('/api/academic-admin/scales')) return 'ESCALAS';
-  if (url.startsWith('/api/academic-admin/competencies')) return 'COMPETENCIAS';
-  if (url.startsWith('/api/academic-admin/teachers')) return 'DOCENTES';
-  if (url.startsWith('/api/academic-admin/years')) return 'AÑOS_LECTIVOS';
-  if (url.startsWith('/api/academic-admin/subjects')) return 'ASIGNATURAS';
-  if (url.startsWith('/api/academic-admin')) return 'CONFIGURACION';
-  if (url.startsWith('/api/matriculas') || url.startsWith('/api/matricula')) return 'MATRICULAS';
-  if (url.startsWith('/api/traslados')) return 'TRASLADOS';
-  if (url.startsWith('/api/reingresos')) return 'REINGRESOS';
-  if (url.startsWith('/api/parent')) return 'PADRES';
-  if (url.startsWith('/api/teacher')) return 'DOCENTES';
-  if (url.startsWith('/api/grados')) return 'GRADOS';
-  if (url.startsWith('/api/dba')) return 'DBA';
-  if (url.startsWith('/api/support')) return 'SOPORTE';
+function getModuloFromUrl(rawUrl: string): string {
+  const url = normalizeUrl(rawUrl);
+  if (url.startsWith('/student')) return 'ESTUDIANTES';
+  if (url.startsWith('/boletines')) return 'BOLETINES';
+  if (url.startsWith('/academic-admin/config')) return 'CONFIGURACION';
+  if (url.startsWith('/academic-admin/settings')) return 'CONFIGURACION';
+  if (url.startsWith('/academic-admin/tracking')) return 'SEGUIMIENTO';
+  if (url.startsWith('/academic-admin/periods')) return 'PERIODOS';
+  if (url.startsWith('/academic-admin/scales')) return 'ESCALAS';
+  if (url.startsWith('/academic-admin/competencies')) return 'COMPETENCIAS';
+  if (url.startsWith('/academic-admin/teachers')) return 'DOCENTES';
+  if (url.startsWith('/academic-admin/years')) return 'AÑOS_LECTIVOS';
+  if (url.startsWith('/academic-admin/subjects')) return 'ASIGNATURAS';
+  if (url.startsWith('/academic-admin')) return 'CONFIGURACION';
+  if (url.startsWith('/matriculas') || url.startsWith('/matricula')) return 'MATRICULAS';
+  if (url.startsWith('/traslados')) return 'TRASLADOS';
+  if (url.startsWith('/reingreso')) return 'REINGRESOS';
+  if (url.startsWith('/parent')) return 'PADRES';
+  if (url.startsWith('/teacher')) return 'DOCENTES';
+  if (url.startsWith('/grados')) return 'GRADOS';
+  if (url.startsWith('/dba')) return 'DBA';
+  if (url.startsWith('/support')) return 'SOPORTE';
   return 'GENERAL';
 }
 
