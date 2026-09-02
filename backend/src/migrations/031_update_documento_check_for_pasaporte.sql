@@ -7,8 +7,7 @@ BEGIN
         SELECT 1 FROM tipo_documento WHERE LOWER(tipo) = 'pasaporte' OR id_tipodocumento = 6
     ) THEN
         INSERT INTO tipo_documento (id_tipodocumento, tipo)
-        VALUES (6, 'Pasaporte')
-        ON CONFLICT (id_tipodocumento) DO UPDATE SET tipo = 'Pasaporte';
+        VALUES (6, 'Pasaporte');
     END IF;
 
     -- 2. Eliminar la constraint numérica antigua si existe
