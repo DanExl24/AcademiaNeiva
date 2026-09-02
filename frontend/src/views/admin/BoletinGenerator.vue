@@ -3,7 +3,7 @@
     <div class="flex items-center justify-between">
       <div>
         <h1 class="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Generador de Boletines</h1>
-        <p class="mt-2 text-slate-500 dark:text-slate-400">Configura y exporta los boletines académicos del periodo cerrado.</p>
+        <p class="mt-2 text-slate-500 dark:text-slate-400">Configura y exporta los boletines académicos del periodo cerrado o informes parciales de traslado.</p>
       </div>
     </div>
 
@@ -34,15 +34,29 @@
     </div>
 
     <!-- Filters -->
-    <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-6">
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+    <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-6 space-y-4">
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        <!-- Año Lectivo Selector -->
+        <div>
+          <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Año Lectivo</label>
+          <select 
+            v-model="selectedYear" 
+            @change="handleYearChange"
+            class="w-full h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:border-indigo-500 focus:ring-indigo-500 shadow-sm transition-shadow font-medium"
+          >
+            <option v-for="year in availableYears" :key="year.id_anio" :value="year.id_anio">
+              {{ year.calendario }} {{ year.estado ? `(${year.estado})` : '' }}
+            </option>
+          </select>
+        </div>
+
         <!-- Periodo Académico (solo requerido en modo regular) -->
         <div v-if="reportMode === 'regular'">
           <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Periodo Académico</label>
           <select v-model="selectedPeriodo" class="w-full h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:border-indigo-500 focus:ring-indigo-500 shadow-sm transition-shadow">
             <option value="">Seleccione un periodo cerrado</option>
             <option v-for="periodo in periodos" :key="periodo.id_periodo" :value="periodo.id_periodo">
-              {{ periodo.nombre }}
+              {{ periodo.nombre }} {{ getPeriodYearLabel(periodo.id_anio) }}
             </option>
           </select>
         </div>
@@ -81,13 +95,27 @@
           <select v-model="selectedStudent" :disabled="!selectedGroup" class="w-full h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:border-indigo-500 focus:ring-indigo-500 shadow-sm transition-shadow disabled:bg-slate-50 dark:disabled:bg-slate-950/40 disabled:text-slate-400 dark:disabled:text-slate-600">
             <option value="">{{ reportMode === 'transfer' ? 'Seleccione un estudiante' : 'Todos los estudiantes (Generación masiva)' }}</option>
             <option v-for="student in students" :key="student.id_estudiante" :value="student.id_estudiante">
-              {{ student.nombre }} {{ student.apellido }}
+              {{ student.nombre }} {{ student.apellido }} {{ student.codigo ? `(${student.codigo})` : '' }}
             </option>
           </select>
         </div>
       </div>
+
+      <!-- Banner de Ayuda si no hay estudiantes en el grupo para el año actual -->
+      <div v-if="selectedGroup && students.length === 0 && !isLoading" class="p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 flex items-start gap-3">
+        <span class="text-lg">ℹ️</span>
+        <div class="text-xs text-amber-800 dark:text-amber-300 space-y-1">
+          <p class="font-bold">No se encontraron estudiantes matriculados en este grupo para el año lectivo seleccionado.</p>
+          <p v-if="hasAlternativeYearWithData">
+            💡 El historial académico con calificaciones y matrículas consolidadas se encuentra en el año lectivo <strong>{{ alternativeYearName }}</strong>.
+            <button @click="switchToAlternativeYear" class="underline font-bold ml-1 cursor-pointer text-amber-900 dark:text-amber-200 hover:text-amber-950">
+              Cambiar al año {{ alternativeYearName }}
+            </button>
+          </p>
+        </div>
+      </div>
       
-      <div class="mt-6 flex justify-end">
+      <div class="mt-4 flex justify-end">
         <button 
           @click="fetchBoletinData" 
           :disabled="(reportMode === 'regular' && (!selectedPeriodo || !selectedGroup)) || (reportMode === 'transfer' && !selectedStudent) || isLoading"
@@ -131,13 +159,13 @@
         </div>
         <div>
           <h3 class="text-lg font-bold text-indigo-900 dark:text-indigo-300">Listos para Generar</h3>
-          <p class="text-sm text-indigo-700 dark:text-indigo-400">{{ boletinesData.length }} boletines cargados exitosamente.</p>
+          <p class="text-sm text-indigo-700 dark:text-indigo-400">{{ boletinesData.length }} {{ boletinesData.length === 1 ? 'boletín cargado' : 'boletines cargados' }} exitosamente.</p>
         </div>
       </div>
       <button 
         @click="exportToPDF"
         :disabled="isExporting"
-        class="w-full sm:w-auto inline-flex items-center justify-center px-6 py-3 border border-transparent text-sm font-bold rounded-xl shadow-md text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+        class="w-full sm:w-auto inline-flex items-center justify-center px-6 py-3 border border-transparent text-sm font-bold rounded-xl shadow-md text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 cursor-pointer"
       >
         <svg v-if="isExporting" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -153,7 +181,6 @@
     <!-- Previews -->
     <div class="space-y-12">
       <div v-for="(b, idx) in boletinesData" :key="idx" class="relative">
-        <!-- Render preview component, we pass the ref to an array -->
         <BoletinPreview :data="b" :ref="el => collectPreviewRefs(el, idx)" />
         <div class="absolute -top-4 -right-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm rounded-full h-8 w-8 flex items-center justify-center font-bold text-slate-500 dark:text-slate-400 text-sm">
           {{ idx + 1 }}
@@ -166,7 +193,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { useAuthStore } from '../../stores/auth'
-import { useAcademicYearStore } from '../../stores/academicYear'
+import { useAcademicYearStore, type AcademicYear } from '../../stores/academicYear'
 import { boletinService } from '../../services/boletinService'
 import { academicService } from '../../services/academicService'
 import { studentService } from '../../services/studentService'
@@ -179,7 +206,11 @@ const yearStore = useAcademicYearStore()
 
 const reportMode = ref<'regular' | 'transfer'>('regular')
 
+const selectedYear = ref<number | null>(yearStore.selectedYearId)
+const availableYears = computed<AcademicYear[]>(() => yearStore.availableYears || [])
+
 const periodos = ref<any[]>([])
+const allPeriodsRaw = ref<any[]>([])
 const levels = ref<any[]>([])
 const groups = ref<any[]>([])
 const students = ref<any[]>([])
@@ -203,11 +234,58 @@ const filteredGroups = computed(() => {
 
 const allStudents = ref<any[]>([])
 
+const getPeriodYearLabel = (id_anio: number) => {
+  const y = availableYears.value.find(a => a.id_anio === id_anio)
+  return y ? `(${y.calendario})` : ''
+}
+
+const hasAlternativeYearWithData = computed(() => {
+  const currentId = selectedYear.value
+  const alt = availableYears.value.find(y => y.id_anio !== currentId)
+  return !!alt
+})
+
+const alternativeYearName = computed(() => {
+  const currentId = selectedYear.value
+  const alt = availableYears.value.find(y => y.id_anio !== currentId)
+  return alt ? `${alt.calendario}` : ''
+})
+
+const switchToAlternativeYear = () => {
+  const currentId = selectedYear.value
+  const alt = availableYears.value.find(y => y.id_anio !== currentId)
+  if (alt) {
+    selectedYear.value = alt.id_anio
+    yearStore.setSelectedYearId(alt.id_anio)
+    fetchInitialData()
+  }
+}
+
+const handleYearChange = () => {
+  if (selectedYear.value) {
+    yearStore.setSelectedYearId(selectedYear.value)
+    selectedPeriodo.value = ''
+    selectedGroup.value = ''
+    selectedStudent.value = ''
+    students.value = []
+    fetchInitialData()
+  }
+}
+
 const fetchInitialData = async () => {
   try {
     error.value = ''
-    const schoolId = auth.user?.schoolId || 1
-    const yearParams = yearStore.selectedYearId ? { id_anio: yearStore.selectedYearId, yearId: yearStore.selectedYearId } : {}
+    const schoolId = Number(auth.user?.schoolId) || 1
+
+    if (availableYears.value.length === 0) {
+      await yearStore.loadYearsForSchool(schoolId)
+    }
+    if (!selectedYear.value && yearStore.selectedYearId) {
+      selectedYear.value = yearStore.selectedYearId
+    }
+
+    const currentYearId = selectedYear.value || yearStore.selectedYearId
+    const yearParams = currentYearId ? { id_anio: currentYearId, yearId: currentYearId } : {}
     
     const [settingsData, gradesData, studentsData] = await Promise.all([
       academicService.getSettings(schoolId, { ...yearParams, keys: 'periods,scales' }),
@@ -215,15 +293,36 @@ const fetchInitialData = async () => {
       studentService.getStudentsBySchool(schoolId, yearParams)
     ])
     
-    // Use closed periods strictly for selected year
-    let allP = (settingsData.periods || []).filter((p: any) => p.estado === 'CERRADO')
-    if (yearStore.selectedYearId) {
-      allP = allP.filter((p: any) => p.id_anio === yearStore.selectedYearId)
+    allPeriodsRaw.value = settingsData.periods || []
+    
+    // Periodos cerrados filtrados por el año seleccionado
+    let closedP = (settingsData.periods || []).filter((p: any) => p.estado === 'CERRADO')
+    if (currentYearId) {
+      const yearSpecific = closedP.filter((p: any) => p.id_anio === currentYearId)
+      if (yearSpecific.length > 0) {
+        closedP = yearSpecific
+      }
     }
-    periodos.value = allP
+    periodos.value = closedP
     levels.value = gradesData.niveles || []
     groups.value = gradesData.grupos || []
-    allStudents.value = studentsData || []
+
+    let finalStudents = studentsData || []
+    // Si el año consultado no tiene estudiantes matriculados en grupos (ej. año recién creado o filtrado vacío),
+    // consultar el listado institucional para enlazar los estudiantes a sus grupos y permitir la emisión
+    const hasEnrolledStudents = finalStudents.some((s: any) => s.id_grupo !== null && s.id_grupo !== undefined)
+    if (!hasEnrolledStudents) {
+      try {
+        const fallbackStudents = await studentService.getStudentsBySchool(schoolId)
+        if (fallbackStudents && fallbackStudents.length > 0) {
+          finalStudents = fallbackStudents
+        }
+      } catch (eFallback) {
+        console.warn('Fallback student fetch error:', eFallback)
+      }
+    }
+
+    allStudents.value = finalStudents
     if (selectedGroup.value) {
       fetchStudentsForGroup()
     }
@@ -237,12 +336,15 @@ onMounted(() => {
   fetchInitialData()
 })
 
-watch(() => yearStore.selectedYearId, () => {
-  selectedPeriodo.value = ''
-  selectedGroup.value = ''
-  selectedStudent.value = ''
-  students.value = []
-  fetchInitialData()
+watch(() => yearStore.selectedYearId, (newYear) => {
+  if (newYear && newYear !== selectedYear.value) {
+    selectedYear.value = newYear
+    selectedPeriodo.value = ''
+    selectedGroup.value = ''
+    selectedStudent.value = ''
+    students.value = []
+    fetchInitialData()
+  }
 })
 
 watch(selectedLevel, () => {
@@ -273,7 +375,7 @@ const fetchStudentsForGroup = () => {
   if (reportMode.value === 'transfer') {
     students.value = allStudents.value.filter((s: any) => String(s.id_grupo) === String(selectedGroup.value))
   } else {
-    // Filter from already-loaded students, ensuring only active students in the selected group
+    // Filtrar de los estudiantes cargados asegurando los que pertenezcan a dicho grupo
     students.value = allStudents.value.filter(
       (s: any) =>
         String(s.id_grupo) === String(selectedGroup.value) &&
@@ -333,7 +435,6 @@ const fetchBoletinData = async () => {
 const exportToPDF = async () => {
   isExporting.value = true
   try {
-    // Generate each PDF, wait for nextTick to ensure they are rendered
     await nextTick()
     
     for (let i = 0; i < previewRefs.value.length; i++) {
@@ -342,13 +443,12 @@ const exportToPDF = async () => {
 
         const opt = {
             margin:       0.5,
-            filename:     `boletin_${boletinesData.value[i]?.estudiante?.codigo}_${boletinesData.value[i]?.periodo}.pdf`,
+            filename:     `boletin_${boletinesData.value[i]?.estudiante?.codigo || 'estudiante'}_${boletinesData.value[i]?.periodo || 'periodo'}.pdf`,
             image:        { type: 'jpeg' as const, quality: 0.98 },
             html2canvas:  { scale: 2, useCORS: true },
             jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' as const }
         }
 
-        // We run a small timeout to allow sequential download if mass generation
         await new Promise(resolve => setTimeout(resolve, 500))
         await html2pdf().set(opt).from(element).save()
     }
@@ -359,5 +459,4 @@ const exportToPDF = async () => {
       isExporting.value = false
   }
 }
-
 </script>
