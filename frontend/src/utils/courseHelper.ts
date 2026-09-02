@@ -4,10 +4,26 @@ export interface CourseGroup {
   seccion_nombre: string;
 }
 
+export function cleanMojibake(text: string | null | undefined): string {
+  if (!text) return '';
+  if (/[\u00C2\u00C3\u00C4\u00C5\u00E2]/.test(text)) {
+    try {
+      const bytes = new Uint8Array([...text].map(c => c.charCodeAt(0) & 0xff));
+      const decoded = new TextDecoder('utf-8').decode(bytes);
+      if (!decoded.includes('\uFFFD')) {
+        return decoded;
+      }
+    } catch {
+      // Fallback: return original
+    }
+  }
+  return text;
+}
+
 export function getCourseDisplayName(group: CourseGroup | null | undefined): string {
   if (!group) return '';
-  const gradeName = (group.tipo_grado_nombre || group.grado_nombre || '').trim();
-  const sec = (group.seccion_nombre || '').trim();
+  const gradeName = cleanMojibake((group.tipo_grado_nombre || group.grado_nombre || '').trim());
+  const sec = cleanMojibake((group.seccion_nombre || '').trim());
   const secLower = sec.toLowerCase();
 
   // A section is default if it is a single letter (a-z) or 'unica'

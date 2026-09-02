@@ -4,7 +4,7 @@ import { db } from "../config/kysely";
 import { sql } from "kysely";
 import { NotificationService } from "../services/notificationService";
 import { validateDocumentUniqueness } from "../utils/documentValidation";
-import { formatFriendlyErrorMessage } from "../utils/errorHelper";
+import { formatFriendlyErrorMessage, cleanMojibake } from "../utils/errorHelper";
 import { generateDocumentAccessToken } from "../middleware/documentSecurity";
 
 export const getAllStudents = async (req: Request, res: Response) => {
@@ -190,7 +190,17 @@ export const getAllStudents = async (req: Request, res: Response) => {
     query = query.orderBy("e.apellido", "asc").orderBy("e.nombre", "asc");
 
     const rows = await query.execute();
-    res.json(rows);
+    const cleanedRows = rows.map((r: any) => ({
+      ...r,
+      nombre: cleanMojibake(r.nombre),
+      apellido: cleanMojibake(r.apellido),
+      grado_nombre: cleanMojibake(r.grado_nombre),
+      grado_seccion: cleanMojibake(r.grado_seccion),
+      acudiente_nombre: cleanMojibake(r.acudiente_nombre),
+      acudiente_apellido: cleanMojibake(r.acudiente_apellido),
+      nombre_acudiente: cleanMojibake(r.nombre_acudiente)
+    }));
+    res.json(cleanedRows);
   } catch (error: any) {
     console.error("Error al obtener estudiantes:", error);
     res.status(500).json({ error: formatFriendlyErrorMessage(error) });

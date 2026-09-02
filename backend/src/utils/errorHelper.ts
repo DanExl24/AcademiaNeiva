@@ -43,3 +43,21 @@ export const formatFriendlyErrorMessage = (
 
   return defaultMsg;
 };
+
+/**
+ * Sanitiza y repara strings con doble codificación o caracteres mojibake UTF-8
+ */
+export const cleanMojibake = (str: string | null | undefined): string => {
+  if (!str || typeof str !== 'string') return '';
+  if (/[\u00C2\u00C3\u00C4\u00C5\u00E2]/.test(str)) {
+    try {
+      const fixed = Buffer.from(str, 'latin1').toString('utf8');
+      if (!fixed.includes('\uFFFD')) {
+        return fixed;
+      }
+    } catch {
+      return str;
+    }
+  }
+  return str;
+};

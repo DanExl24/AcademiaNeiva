@@ -15,16 +15,16 @@
         <!-- Centro Textos Institucionales -->
         <div class="flex-1 text-center font-serif flex flex-col justify-center px-4">
           <h1 class="text-xl font-bold uppercase tracking-wider mb-1" style="font-family: 'Quicksand', sans-serif;">
-            {{ data?.estudiante?.colegio_nombre?.toUpperCase() || 'INSTITUCIÓN EDUCATIVA NORMAL SUPERIOR' }}
+            {{ cleanMojibake(data?.estudiante?.colegio_nombre)?.toUpperCase() || 'INSTITUCIÓN EDUCATIVA NORMAL SUPERIOR' }}
           </h1>
           <p class="text-[13px] font-bold mb-1" style="font-family: 'Quicksand', sans-serif;">
             DANE: {{ data?.estudiante?.dane }}
           </p>
           <div class="text-[12px] font-medium leading-tight" style="font-family: 'Quicksand', sans-serif;">
-            <p>{{ (data?.estudiante?.resolucion || '').split('Expedida')[0] }}</p>
-            <p v-if="(data?.estudiante?.resolucion || '').includes('Expedida')">Expedida {{ (data?.estudiante?.resolucion || '').split('Expedida')[1] }}</p>
+            <p>{{ cleanMojibake((data?.estudiante?.resolucion || '').split('Expedida')[0]) }}</p>
+            <p v-if="(data?.estudiante?.resolucion || '').includes('Expedida')">Expedida {{ cleanMojibake((data?.estudiante?.resolucion || '').split('Expedida')[1]) }}</p>
           </div>
-          <p class="text-[13px] font-bold mt-2" style="font-family: 'Quicksand', sans-serif;">{{ data?.estudiante?.ciudad }}</p>
+          <p class="text-[13px] font-bold mt-2" style="font-family: 'Quicksand', sans-serif;">{{ cleanMojibake(data?.estudiante?.ciudad) }}</p>
         </div>
 
         <!-- Derecha Logo (Toga de estudiante de contorno morado sin fondo) -->
@@ -62,7 +62,7 @@
 
           <div class="col-span-6 bg-white p-4 flex flex-col justify-center">
             <span class="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1">Nombre del Estudiante</span>
-            <span class="text-gray-900 font-black text-base uppercase leading-tight">{{ data?.estudiante?.apellido }} {{ data?.estudiante?.nombre }}</span>
+            <span class="text-gray-900 font-black text-base uppercase leading-tight">{{ cleanMojibake(data?.estudiante?.apellido) }} {{ cleanMojibake(data?.estudiante?.nombre) }}</span>
           </div>
 
           <div class="col-span-3 bg-indigo-50/50 p-4 flex flex-col justify-center relative overflow-hidden">
@@ -77,11 +77,11 @@
         <div class="bg-gray-100 border-t border-gray-200 px-6 py-2 grid grid-cols-3 text-xs">
           <div class="flex items-center gap-2">
             <span class="font-bold text-gray-500 uppercase">Grado:</span>
-            <span class="font-bold text-gray-900 shadow-sm bg-white px-2 py-0.5 rounded-full border border-gray-200">{{ data?.estudiante?.grado_nombre }} {{ data?.estudiante?.seccion }}</span>
+            <span class="font-bold text-gray-900 shadow-sm bg-white px-2 py-0.5 rounded-full border border-gray-200">{{ cleanMojibake(data?.estudiante?.grado_nombre) }} {{ data?.estudiante?.seccion }}</span>
           </div>
           <div class="flex items-center justify-center gap-2">
             <span class="font-bold text-gray-500 uppercase">Jornada:</span>
-            <span class="font-bold text-gray-900">{{ data?.estudiante?.jornada_nombre || 'ÚNICA' }}</span>
+            <span class="font-bold text-gray-900">{{ cleanMojibake(data?.estudiante?.jornada_nombre) || 'ÚNICA' }}</span>
           </div>
           <div class="flex items-center justify-end gap-2">
             <span class="font-bold text-gray-500 uppercase">Calendario:</span>
@@ -99,8 +99,8 @@
           <!-- Cabecera de la Materia (Diseño Fijo Horizontal) -->
           <div class="bg-indigo-50/70 border-b border-indigo-100 px-5 py-3 flex justify-between items-center gap-4 print:bg-gray-100">
             <div class="flex-1">
-              <h3 class="text-sm font-black text-indigo-900 uppercase tracking-widest print:text-black">{{ materia.materia }}</h3>
-              <p class="text-xs font-bold text-indigo-700/80 mt-0.5 uppercase italic print:text-gray-700">{{ materia.docente_nombre }} {{ materia.docente_apellido }}</p>
+              <h3 class="text-sm font-black text-indigo-900 uppercase tracking-widest print:text-black">{{ cleanMojibake(materia.materia) }}</h3>
+              <p class="text-xs font-bold text-indigo-700/80 mt-0.5 uppercase italic print:text-gray-700">{{ cleanMojibake(materia.docente_nombre) }} {{ cleanMojibake(materia.docente_apellido) }}</p>
             </div>
             <div class="flex flex-nowrap items-center gap-1.5 shrink-0 ml-auto">
               <!-- Caja Ausencias -->
@@ -118,7 +118,7 @@
                   </span>
                   <div class="flex items-center justify-center gap-1 mt-0.5">
                     <span class="text-xs font-black text-gray-900">{{ nota.calificacion !== null && nota.calificacion !== undefined ? nota.calificacion : '—' }}</span>
-                    <span class="text-[7px] font-black px-1 py-0.5 rounded leading-none" :class="getPerformanceBadge(nota.desempeno)">{{ (nota.desempeno || 'SC').substring(0,3) }}</span>
+                    <span class="text-[7px] font-black px-1 py-0.5 rounded leading-none" :class="getPerformanceBadge(nota.desempeno)">{{ (cleanMojibake(nota.desempeno) || 'SC').substring(0,3) }}</span>
                   </div>
                   <span v-if="nota.es_parcial" class="block text-[7px] font-bold text-amber-600 uppercase mt-0.5">
                     *Parcial
@@ -140,7 +140,7 @@
                 <li v-for="(desempeno, idx) in materia.desempenos" :key="idx" class="flex justify-between items-start gap-4">
                   <div class="flex items-start gap-2.5 flex-1">
                     <span class="text-indigo-400 font-bold mt-0.5 text-sm leading-none pt-0.5">•</span>
-                    <span class="font-medium">{{ desempeno }}</span>
+                    <span class="font-medium">{{ cleanMojibake(desempeno) }}</span>
                   </div>
                   <span class="font-extrabold text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded-md text-[10px] shrink-0 border border-indigo-100 print:border-gray-300 print:bg-white print:text-black">
                     <template v-if="getCurrentCalificacion(materia) >= 3.0">SI</template>
@@ -160,17 +160,17 @@
                   <!-- Fortalezas -->
                   <li v-for="(fortaleza, fIdx) in obs.fortalezas" :key="'f'+oIdx+fIdx" class="flex items-start gap-2">
                     <span class="text-green-600 font-bold mt-0.5 text-xs leading-none">▲</span>
-                    <span class="font-medium text-gray-700">{{ fortaleza }} <span class="text-[8px] font-black text-gray-400 uppercase ml-1">- {{ getTypeLabel(obs.tipo) }}</span></span>
+                    <span class="font-medium text-gray-700">{{ cleanMojibake(fortaleza) }} <span class="text-[8px] font-black text-gray-400 uppercase ml-1">- {{ getTypeLabel(obs.tipo) }}</span></span>
                   </li>
                   <!-- Debilidades -->
                   <li v-for="(debilidad, dIdx) in obs.debilidades" :key="'d'+oIdx+dIdx" class="flex items-start gap-2">
                     <span class="text-red-500 font-bold mt-0.5 text-xs leading-none">▼</span>
-                    <span class="font-medium text-gray-700">{{ debilidad }} <span class="text-[8px] font-black text-gray-400 uppercase ml-1">- {{ getTypeLabel(obs.tipo) }}</span></span>
+                    <span class="font-medium text-gray-700">{{ cleanMojibake(debilidad) }} <span class="text-[8px] font-black text-gray-400 uppercase ml-1">- {{ getTypeLabel(obs.tipo) }}</span></span>
                   </li>
                   <!-- Recomendaciones -->
                   <li v-if="obs.recomendaciones" :key="'r'+oIdx" class="flex items-start gap-2 italic text-gray-500">
                     <span class="text-indigo-400 font-bold mt-0.5 text-xs leading-none">■</span>
-                    <span class="font-bold">{{ obs.recomendaciones }} <span class="text-[8px] font-black text-gray-400 uppercase not-italic ml-1">- {{ getTypeLabel(obs.tipo) }}</span></span>
+                    <span class="font-bold">{{ cleanMojibake(obs.recomendaciones) }} <span class="text-[8px] font-black text-gray-400 uppercase not-italic ml-1">- {{ getTypeLabel(obs.tipo) }}</span></span>
                   </li>
                 </template>
               </ul>
@@ -202,7 +202,7 @@
         <div class="bg-blue-50/50 p-4 rounded-xl border border-blue-100 flex flex-col items-center">
           <span class="text-[9px] font-black uppercase text-blue-400 tracking-widest mb-1">Nivel Desempeño</span>
           <span class="text-lg font-black text-blue-900 uppercase">
-             {{ data?.nivelDesempeno || '—' }}
+             {{ cleanMojibake(data?.nivelDesempeno) || '—' }}
           </span>
         </div>
         <div class="bg-purple-50/50 p-4 rounded-xl border border-purple-100 flex flex-col items-center">
@@ -229,7 +229,7 @@
                     'bg-green-100 text-green-700': item.nivel?.toLowerCase().includes('alto'),
                     'bg-blue-100 text-blue-700':   item.nivel?.toLowerCase().includes('superior'),
                   }"
-                >{{ item.nivel }}</span>
+                >{{ cleanMojibake(item.nivel) }}</span>
                 <span class="text-[8px] font-bold text-gray-400">({{ item.valor_minimo }} – {{ item.valor_maximo }})</span>
               </div>
             </template>
@@ -280,14 +280,14 @@
         <div class="text-center group">
           <div class="border-t border-gray-300 mb-4"></div>
           <p class="text-xs font-black uppercase text-gray-900 tracking-tight transition-all duration-300 group-hover:tracking-widest" style="font-family: 'Quicksand', sans-serif;">
-            {{ data?.firmas?.rector || 'RECTORÍA' }}
+            {{ cleanMojibake(data?.firmas?.rector) || 'RECTORÍA' }}
           </p>
           <p class="text-[9px] font-bold text-gray-400 uppercase mt-1 tracking-tighter">Rectoría Institucional</p>
         </div>
         <div class="text-center group">
           <div class="border-t border-gray-300 mb-4"></div>
           <p class="text-xs font-black uppercase text-gray-900 tracking-tight transition-all duration-300 group-hover:tracking-widest" style="font-family: 'Quicksand', sans-serif;">
-             {{ data?.firmas?.titular || 'DIRECTOR(A) DE GRUPO' }}
+             {{ cleanMojibake(data?.firmas?.titular) || 'DIRECTOR(A) DE GRUPO' }}
           </p>
           <p class="text-[9px] font-bold text-gray-400 uppercase mt-1 tracking-tighter">Director(a) de Grupo</p>
         </div>
@@ -302,15 +302,13 @@
         <p class="text-[7px] text-gray-300 font-bold uppercase tracking-[0.2em]">Generado por AcademiaNeiva Cloud • {{ new Date().toLocaleDateString() }}</p>
       </div>
     </footer>
-
-
-
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue'
 import { API_BASE_URL } from '../../config/api'
+import { cleanMojibake } from '../../utils/courseHelper'
 
 const getShieldUrl = (url: string) => {
   if (!url || url === 'undefined' || url.includes('undefined')) return ''
@@ -327,8 +325,6 @@ const boletinRef = ref<HTMLElement | null>(null)
 defineExpose({
   boletinRef
 })
-
-
 
 const getPerformanceBadge = (performance: string) => {
   if (!performance) return 'bg-gray-100 text-gray-800'

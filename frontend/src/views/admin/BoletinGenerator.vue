@@ -95,7 +95,7 @@
           <select v-model="selectedStudent" :disabled="!selectedGroup" class="w-full h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:border-indigo-500 focus:ring-indigo-500 shadow-sm transition-shadow disabled:bg-slate-50 dark:disabled:bg-slate-950/40 disabled:text-slate-400 dark:disabled:text-slate-600">
             <option value="">{{ reportMode === 'transfer' ? 'Seleccione un estudiante' : 'Todos los estudiantes (Generación masiva)' }}</option>
             <option v-for="student in students" :key="student.id_estudiante" :value="student.id_estudiante">
-              {{ student.nombre }} {{ student.apellido }} {{ student.codigo ? `(${student.codigo})` : '' }}
+              {{ cleanMojibake(student.nombre) }} {{ cleanMojibake(student.apellido) }} {{ student.codigo ? `(${student.codigo})` : '' }}
             </option>
           </select>
         </div>
@@ -199,7 +199,7 @@ import { academicService } from '../../services/academicService'
 import { studentService } from '../../services/studentService'
 import BoletinPreview from '../../components/boletines/BoletinPreview.vue'
 import html2pdf from 'html2pdf.js'
-import { getCourseDisplayName } from '../../utils/courseHelper'
+import { getCourseDisplayName, cleanMojibake } from '../../utils/courseHelper'
 
 const auth = useAuthStore()
 const yearStore = useAcademicYearStore()
