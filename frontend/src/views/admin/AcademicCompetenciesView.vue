@@ -822,29 +822,29 @@ watch(
 </script>
 
 <template>
-  <div class="space-y-8">
-    <div class="overflow-hidden rounded-[32px] border border-emerald-100 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.22),_transparent_42%),linear-gradient(135deg,#081c15_0%,#0f3d2e_52%,#14532d_100%)] p-8 text-white shadow-sm md:p-10 dark:border-emerald-900/30">
-      <div class="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
+  <div class="space-y-6 sm:space-y-8">
+    <div class="overflow-hidden rounded-2xl sm:rounded-[32px] border border-emerald-100 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.22),_transparent_42%),linear-gradient(135deg,#081c15_0%,#0f3d2e_52%,#14532d_100%)] p-5 sm:p-7 md:p-10 text-white shadow-sm dark:border-emerald-900/30">
+      <div class="flex flex-col gap-5 sm:gap-6 xl:flex-row xl:items-end xl:justify-between">
         <div class="max-w-3xl">
           <router-link
             to="/dashboard/configuracion-academica"
-            class="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-black text-white/90 transition hover:bg-white/15"
+            class="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3.5 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-black text-white/90 transition hover:bg-white/15"
           >
             <ArrowLeft class="h-4 w-4" />
             Volver a configuración académica
           </router-link>
-          <h1 class="mt-5 text-3xl font-black tracking-tight md:text-4xl">Gestión de competencias</h1>
-          <p class="mt-3 max-w-2xl text-sm font-semibold text-emerald-50/90 md:text-base">
+          <h1 class="mt-4 sm:mt-5 text-2xl sm:text-3xl md:text-4xl font-black tracking-tight">Gestión de competencias</h1>
+          <p class="mt-2 sm:mt-3 max-w-2xl text-xs sm:text-sm md:text-base font-semibold text-emerald-50/90 leading-relaxed">
             Define la competencia base por curso, materia y periodo. Esta configuración es la base operativa de la institución.
           </p>
         </div>
 
-        <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+        <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3">
           <button
             type="button"
             @click="harmonizeCompetencies"
             :disabled="harmonizing || loading"
-            class="inline-flex min-h-14 items-center justify-center gap-2.5 rounded-2xl border border-white/20 bg-white/10 px-5 py-4 text-xs font-black text-white shadow-sm transition hover:bg-white/20 disabled:opacity-50 uppercase tracking-widest backdrop-blur-sm"
+            class="w-full sm:w-auto inline-flex min-h-12 sm:min-h-14 items-center justify-center gap-2.5 rounded-xl sm:rounded-2xl border border-white/20 bg-white/10 px-4 sm:px-5 py-3 sm:py-4 text-xs font-black text-white shadow-sm transition hover:bg-white/20 disabled:opacity-50 uppercase tracking-widest backdrop-blur-sm cursor-pointer"
             title="Sincronizar y reparar competencias entre cursos paralelos del mismo grado"
           >
             <RefreshCw class="h-4 w-4" :class="{ 'animate-spin': harmonizing }" />
@@ -854,7 +854,7 @@ watch(
           <button
             type="button"
             @click="openCreateModal"
-            class="inline-flex min-h-14 items-center justify-center gap-3 rounded-2xl bg-white px-6 py-4 text-sm font-black text-emerald-700 shadow-lg shadow-black/10 transition hover:bg-emerald-50 uppercase tracking-widest"
+            class="w-full sm:w-auto inline-flex min-h-12 sm:min-h-14 items-center justify-center gap-2.5 sm:gap-3 rounded-xl sm:rounded-2xl bg-white px-5 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-black text-emerald-700 shadow-lg shadow-black/10 transition hover:bg-emerald-50 uppercase tracking-widest cursor-pointer"
           >
             <Plus class="h-4 w-4" />
             Asignar competencia
@@ -862,26 +862,26 @@ watch(
         </div>
       </div>
 
-      <div class="mt-8 grid grid-cols-1 gap-4 md:grid-cols-5">
-        <div class="rounded-3xl border border-white/10 bg-white/10 p-5 backdrop-blur-sm">
-          <p class="text-[10px] uppercase font-black tracking-widest text-emerald-50/70">Registradas</p>
-          <p class="mt-2 text-3xl font-black">{{ competencyStats.total }}</p>
+      <div class="mt-6 sm:mt-8 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5 sm:gap-4">
+        <div class="rounded-2xl sm:rounded-3xl border border-white/10 bg-white/10 p-3.5 sm:p-5 backdrop-blur-sm">
+          <p class="text-[9px] sm:text-[10px] uppercase font-black tracking-widest text-emerald-50/70">Registradas</p>
+          <p class="mt-1.5 sm:mt-2 text-2xl sm:text-3xl font-black">{{ competencyStats.total }}</p>
         </div>
-        <div class="rounded-3xl border border-white/10 bg-white/10 p-5 backdrop-blur-sm">
-          <p class="text-[10px] uppercase font-black tracking-widest text-emerald-50/70">Materias</p>
-          <p class="mt-2 text-3xl font-black">{{ competencyStats.subjects }}</p>
+        <div class="rounded-2xl sm:rounded-3xl border border-white/10 bg-white/10 p-3.5 sm:p-5 backdrop-blur-sm">
+          <p class="text-[9px] sm:text-[10px] uppercase font-black tracking-widest text-emerald-50/70">Materias</p>
+          <p class="mt-1.5 sm:mt-2 text-2xl sm:text-3xl font-black">{{ competencyStats.subjects }}</p>
         </div>
-        <div class="rounded-3xl border border-white/10 bg-white/10 p-5 backdrop-blur-sm">
-          <p class="text-[10px] uppercase font-black tracking-widest text-emerald-50/70">Contextos</p>
-          <p class="mt-2 text-3xl font-black">{{ competencyStats.contexts }}</p>
+        <div class="rounded-2xl sm:rounded-3xl border border-white/10 bg-white/10 p-3.5 sm:p-5 backdrop-blur-sm">
+          <p class="text-[9px] sm:text-[10px] uppercase font-black tracking-widest text-emerald-50/70">Contextos</p>
+          <p class="mt-1.5 sm:mt-2 text-2xl sm:text-3xl font-black">{{ competencyStats.contexts }}</p>
         </div>
-        <div class="rounded-3xl border border-white/10 bg-white/10 p-5 backdrop-blur-sm">
-          <p class="text-[10px] uppercase font-black tracking-widest text-emerald-50/70">Pendientes</p>
-          <p class="mt-2 text-3xl font-black text-orange-200">{{ competencyStats.pending }}</p>
+        <div class="rounded-2xl sm:rounded-3xl border border-white/10 bg-white/10 p-3.5 sm:p-5 backdrop-blur-sm">
+          <p class="text-[9px] sm:text-[10px] uppercase font-black tracking-widest text-emerald-50/70">Pendientes</p>
+          <p class="mt-1.5 sm:mt-2 text-2xl sm:text-3xl font-black text-orange-200">{{ competencyStats.pending }}</p>
         </div>
-        <div class="rounded-3xl border border-white/10 bg-white/10 p-5 backdrop-blur-sm">
-          <p class="text-[10px] uppercase font-black tracking-widest text-emerald-50/70">Definidas</p>
-          <p class="mt-2 text-3xl font-black text-emerald-300">{{ competencyStats.defined }}</p>
+        <div class="col-span-2 sm:col-span-1 rounded-2xl sm:rounded-3xl border border-white/10 bg-white/10 p-3.5 sm:p-5 backdrop-blur-sm">
+          <p class="text-[9px] sm:text-[10px] uppercase font-black tracking-widest text-emerald-50/70">Definidas</p>
+          <p class="mt-1.5 sm:mt-2 text-2xl sm:text-3xl font-black text-emerald-300">{{ competencyStats.defined }}</p>
         </div>
       </div>
     </div>
@@ -891,49 +891,49 @@ watch(
     </div>
 
     <template v-else>
-      <section class="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm md:p-8 dark:bg-slate-900 dark:border-slate-800">
-        <div class="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
+      <section class="rounded-2xl sm:rounded-3xl border border-slate-100 bg-white p-4 sm:p-6 md:p-8 shadow-sm dark:bg-slate-900 dark:border-slate-800">
+        <div class="flex flex-col gap-4 sm:gap-6 xl:flex-row xl:items-end xl:justify-between">
           <div>
-            <h2 class="text-xl font-black text-slate-900 dark:text-white">Explorar asignaciones</h2>
-            <p class="mt-2 text-sm font-semibold text-slate-500 dark:text-slate-400">Filtra por periodo o contexto para revisar y actualizar competencias.</p>
+            <h2 class="text-lg sm:text-xl font-black text-slate-900 dark:text-white">Explorar asignaciones</h2>
+            <p class="mt-1 sm:mt-2 text-xs sm:text-sm font-semibold text-slate-500 dark:text-slate-400">Filtra por periodo o contexto para revisar y actualizar competencias.</p>
           </div>
-          <div class="grid w-full max-w-5xl grid-cols-1 gap-4 md:grid-cols-3 xl:grid-cols-5">
-            <label class="space-y-2">
-              <span class="text-xs font-black text-slate-700 dark:text-slate-300 ml-1 uppercase tracking-widest">Buscar</span>
-              <div class="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:bg-slate-800 dark:border-slate-700">
-                <Search class="h-4 w-4 text-slate-400" />
-                <input v-model="search" type="text" placeholder="Buscar..." class="w-full bg-transparent text-sm font-semibold text-slate-700 dark:text-white outline-none" />
+          <div class="grid w-full max-w-5xl grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4">
+            <label class="space-y-1.5 sm:space-y-2">
+              <span class="text-[11px] sm:text-xs font-black text-slate-700 dark:text-slate-300 ml-1 uppercase tracking-widest">Buscar</span>
+              <div class="flex items-center gap-2.5 sm:gap-3 rounded-xl sm:rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 sm:px-4 sm:py-3 dark:bg-slate-800 dark:border-slate-700">
+                <Search class="h-4 w-4 text-slate-400 shrink-0" />
+                <input v-model="search" type="text" placeholder="Buscar..." class="w-full bg-transparent text-xs sm:text-sm font-semibold text-slate-700 dark:text-white outline-none" />
               </div>
             </label>
-            <label class="space-y-2">
-              <span class="text-xs font-black text-slate-700 dark:text-slate-300 ml-1 uppercase tracking-widest">Grado</span>
-              <select v-model="selectedGrade" @change="handleGradeFilterChange" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-3 font-semibold text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-white outline-none">
+            <label class="space-y-1.5 sm:space-y-2">
+              <span class="text-[11px] sm:text-xs font-black text-slate-700 dark:text-slate-300 ml-1 uppercase tracking-widest">Grado</span>
+              <select v-model="selectedGrade" @change="handleGradeFilterChange" class="w-full rounded-xl sm:rounded-2xl border border-slate-200 bg-slate-50 p-2.5 sm:p-3 text-xs sm:text-sm font-semibold text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-white outline-none cursor-pointer">
                 <option value="">Todos los grados</option>
                 <option v-for="item in gradeChoices" :key="item.key" :value="item.key">
                   {{ item.label }}
                 </option>
               </select>
             </label>
-            <label class="space-y-2">
-              <span class="text-xs font-black text-slate-700 dark:text-slate-300 ml-1 uppercase tracking-widest">Materia</span>
-              <select v-model="selectedSubject" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-3 font-semibold text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-white outline-none">
+            <label class="space-y-1.5 sm:space-y-2">
+              <span class="text-[11px] sm:text-xs font-black text-slate-700 dark:text-slate-300 ml-1 uppercase tracking-widest">Materia</span>
+              <select v-model="selectedSubject" class="w-full rounded-xl sm:rounded-2xl border border-slate-200 bg-slate-50 p-2.5 sm:p-3 text-xs sm:text-sm font-semibold text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-white outline-none cursor-pointer">
                 <option value="">Todas las materias</option>
                 <option v-for="item in subjectChoices" :key="item.key" :value="item.key">
                   {{ item.label }}
                 </option>
               </select>
             </label>
-            <label class="space-y-2">
-              <span class="text-xs font-black text-slate-700 dark:text-slate-300 ml-1 uppercase tracking-widest">Estado</span>
-              <select v-model="selectedStatus" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-3 font-semibold text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-white outline-none">
+            <label class="space-y-1.5 sm:space-y-2">
+              <span class="text-[11px] sm:text-xs font-black text-slate-700 dark:text-slate-300 ml-1 uppercase tracking-widest">Estado</span>
+              <select v-model="selectedStatus" class="w-full rounded-xl sm:rounded-2xl border border-slate-200 bg-slate-50 p-2.5 sm:p-3 text-xs sm:text-sm font-semibold text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-white outline-none cursor-pointer">
                 <option value="">Todos los estados</option>
                 <option value="PENDIENTE">Pendiente</option>
                 <option value="DEFINIDA">Definida</option>
               </select>
             </label>
-            <label class="space-y-2">
-              <span class="text-xs font-black text-slate-700 dark:text-slate-300 ml-1 uppercase tracking-widest">Periodo</span>
-              <select v-model="selectedPeriod" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-3 font-semibold text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-white outline-none">
+            <label class="space-y-1.5 sm:space-y-2 sm:col-span-2 lg:col-span-1">
+              <span class="text-[11px] sm:text-xs font-black text-slate-700 dark:text-slate-300 ml-1 uppercase tracking-widest">Periodo</span>
+              <select v-model="selectedPeriod" class="w-full rounded-xl sm:rounded-2xl border border-slate-200 bg-slate-50 p-2.5 sm:p-3 text-xs sm:text-sm font-semibold text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-white outline-none cursor-pointer">
                 <option value="">Todos los periodos</option>
                 <option v-for="period in periods" :key="period.id_periodo" :value="String(period.id_periodo)">
                   {{ period.nombre }}
@@ -944,22 +944,22 @@ watch(
         </div>
       </section>
 
-      <section class="rounded-3xl border border-slate-100 bg-white shadow-sm dark:bg-slate-900 dark:border-slate-800">
-        <div class="flex flex-col gap-4 border-b border-slate-100 px-6 py-6 md:flex-row md:items-center md:justify-between dark:border-slate-800">
+      <section class="rounded-2xl sm:rounded-3xl border border-slate-100 bg-white shadow-sm dark:bg-slate-900 dark:border-slate-800">
+        <div class="flex flex-col gap-3.5 sm:gap-4 border-b border-slate-100 px-4 sm:px-6 py-4 sm:py-6 md:flex-row md:items-center md:justify-between dark:border-slate-800">
           <div class="flex items-center gap-3">
-            <div class="rounded-2xl bg-emerald-50 p-3 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400">
-              <BookOpenCheck class="h-6 w-6" />
+            <div class="rounded-2xl bg-emerald-50 p-2.5 sm:p-3 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400 shrink-0">
+              <BookOpenCheck class="h-5 w-5 sm:h-6 sm:w-6" />
             </div>
             <div>
-              <h2 class="text-lg font-black text-slate-900 dark:text-white">Competencias configuradas</h2>
-              <p class="text-sm font-semibold text-slate-500 dark:text-slate-400">{{ filteredCompetencies.length }} resultados visibles</p>
+              <h2 class="text-base sm:text-lg font-black text-slate-900 dark:text-white">Competencias configuradas</h2>
+              <p class="text-xs sm:text-sm font-semibold text-slate-500 dark:text-slate-400">{{ filteredCompetencies.length }} resultados visibles</p>
             </div>
           </div>
 
           <button
             type="button"
             @click="openCreateModal"
-            class="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-6 py-3 text-sm font-black text-white shadow-sm transition hover:bg-emerald-500 uppercase tracking-widest"
+            class="w-full sm:w-auto inline-flex min-h-11 sm:min-h-12 items-center justify-center gap-2 rounded-xl sm:rounded-2xl bg-emerald-600 px-5 sm:px-6 py-2.5 sm:py-3 text-xs sm:text-sm font-black text-white shadow-sm transition hover:bg-emerald-500 uppercase tracking-widest cursor-pointer"
           >
             <Plus class="h-4 w-4" />
             Nueva competencia
@@ -967,14 +967,14 @@ watch(
         </div>
 
         <!-- Diagnostic Banner DBA -->
-        <div v-if="diagnosticData && (diagnosticData.unusedDbaCount > 0 || diagnosticData.freeEvidencesCount > 0)" class="mb-8 rounded-3xl border border-amber-200 bg-amber-50/80 p-6 dark:bg-amber-950/20 dark:border-amber-900/40 shadow-sm animate-in fade-in duration-300">
-          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div class="flex items-start gap-4">
-              <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-500/20 border border-amber-500/30 text-amber-600 dark:text-amber-400 shrink-0">
-                <Sparkles class="h-6 w-6" />
+        <div v-if="diagnosticData && (diagnosticData.unusedDbaCount > 0 || diagnosticData.freeEvidencesCount > 0)" class="m-4 sm:m-6 rounded-2xl sm:rounded-3xl border border-amber-200 bg-amber-50/80 p-4 sm:p-6 dark:bg-amber-950/20 dark:border-amber-900/40 shadow-sm animate-in fade-in duration-300">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-3.5 sm:gap-4">
+            <div class="flex items-start gap-3 sm:gap-4">
+              <div class="flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-xl sm:rounded-2xl bg-amber-500/20 border border-amber-500/30 text-amber-600 dark:text-amber-400 shrink-0">
+                <Sparkles class="h-5 w-5 sm:h-6 sm:w-6" />
               </div>
-              <div class="space-y-1">
-                <h4 class="text-base font-black text-amber-950 dark:text-amber-200">
+              <div class="space-y-1 min-w-0 flex-1">
+                <h4 class="text-sm sm:text-base font-black text-amber-950 dark:text-amber-200">
                   Diagnóstico de Cobertura DBA para el Grado Seleccionado
                 </h4>
                 <div class="text-xs font-semibold text-amber-900/90 dark:text-amber-300/90 space-y-1">
@@ -987,122 +987,124 @@ watch(
                 </div>
               </div>
             </div>
-            <button @click="fetchDiagnostic" class="text-amber-600 hover:text-amber-800 p-2 dark:text-amber-400">
+            <button @click="fetchDiagnostic" class="self-end md:self-auto text-amber-600 hover:text-amber-800 p-2 dark:text-amber-400 cursor-pointer">
               <RefreshCw class="h-5 w-5" />
             </button>
           </div>
         </div>
 
         <!-- Zero state -->
-        <div v-if="filteredCompetencies.length === 0" class="px-6 py-16 text-center">
-          <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-600">
-            <Sparkles class="h-7 w-7" />
+        <div v-if="filteredCompetencies.length === 0" class="px-4 sm:px-6 py-12 sm:py-16 text-center">
+          <div class="mx-auto flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-2xl sm:rounded-3xl bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-600">
+            <Sparkles class="h-6 w-6 sm:h-7 sm:w-7" />
           </div>
-          <p class="mt-5 text-base font-black text-slate-700 dark:text-slate-400">No hay coincidencias con los filtros actuales.</p>
-          <p class="mt-2 text-sm font-semibold text-slate-500 dark:text-slate-500">Ajusta la búsqueda o crea una nueva asignación de competencia.</p>
+          <p class="mt-4 sm:mt-5 text-sm sm:text-base font-black text-slate-700 dark:text-slate-400">No hay coincidencias con los filtros actuales.</p>
+          <p class="mt-1.5 sm:mt-2 text-xs sm:text-sm font-semibold text-slate-500 dark:text-slate-500">Ajusta la búsqueda o crea una nueva asignación de competencia.</p>
         </div>
 
         <div v-else class="divide-y divide-slate-100 dark:divide-slate-800">
-          <article v-for="item in filteredCompetencies" :key="item.id_competencia" class="px-6 py-6 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
-            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-              <div>
-                <div class="flex flex-wrap items-center gap-2">
-                  <span class="rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400">
+          <article v-for="item in filteredCompetencies" :key="item.id_competencia" class="p-4 sm:p-6 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+            <div class="flex flex-col gap-3.5 sm:gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div class="min-w-0 flex-1">
+                <div class="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                  <span class="rounded-full bg-emerald-50 px-2.5 sm:px-3 py-1 text-[9px] sm:text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400">
                     {{ item.periodo_nombre }}
                   </span>
                   <span
                     :class="item.estado === 'DEFINIDA' ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400' : 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400'"
-                    class="rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em]"
+                    class="rounded-full px-2.5 sm:px-3 py-1 text-[9px] sm:text-[10px] font-black uppercase tracking-[0.18em]"
                   >
                     {{ item.estado === 'DEFINIDA' ? 'Definida' : 'Pendiente' }}
                   </span>
-                  <span v-if="item.dimension_nombre" class="rounded-full bg-indigo-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400">
+                  <span v-if="item.dimension_nombre" class="rounded-full bg-indigo-50 px-2.5 sm:px-3 py-1 text-[9px] sm:text-[10px] font-black uppercase tracking-[0.18em] text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400">
                     Dimensión: {{ item.dimension_nombre }}
                   </span>
-                  <span class="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-black text-slate-600 dark:bg-slate-800 dark:text-slate-400 uppercase tracking-widest">
+                  <span class="rounded-full bg-slate-100 px-2.5 sm:px-3 py-1 text-[9px] sm:text-[10px] font-black text-slate-600 dark:bg-slate-800 dark:text-slate-400 uppercase tracking-widest">
                     {{ item.tipo_grado_nombre }}
                   </span>
-                  <span class="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-black text-slate-600 dark:bg-slate-800 dark:text-slate-400 uppercase tracking-widest">
+                  <span class="rounded-full bg-slate-100 px-2.5 sm:px-3 py-1 text-[9px] sm:text-[10px] font-black text-slate-600 dark:bg-slate-800 dark:text-slate-400 uppercase tracking-widest">
                     {{ item.nivel_nombre }}
                   </span>
                 </div>
-                <h3 class="mt-4 text-xl font-black text-slate-900 dark:text-white tracking-tight">{{ item.materia_nombre }}</h3>
-                <p class="mt-2 text-sm font-semibold text-slate-500 dark:text-slate-400 max-w-2xl leading-relaxed">Operativa para todos los cursos de este grado durante el periodo.</p>
+                <h3 class="mt-3 sm:mt-4 text-lg sm:text-xl font-black text-slate-900 dark:text-white tracking-tight">{{ item.materia_nombre }}</h3>
+                <p class="mt-1 sm:mt-2 text-xs sm:text-sm font-semibold text-slate-500 dark:text-slate-400 max-w-2xl leading-relaxed">Operativa para todos los cursos de este grado durante el periodo.</p>
               </div>
 
-              <div class="flex items-center gap-2">
+              <div class="flex items-center gap-2 shrink-0">
                 <button
                   v-if="!isPeriodClosed(item.id_periodo)"
                   type="button"
                   @click="openEditModal(item)"
-                  class="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-slate-200 px-5 py-3 text-xs font-black text-slate-700 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 dark:border-slate-700 dark:text-slate-400 dark:hover:text-emerald-400 dark:hover:bg-emerald-900/30 uppercase tracking-widest"
+                  class="inline-flex min-h-10 sm:min-h-11 items-center justify-center gap-1.5 sm:gap-2 rounded-xl sm:rounded-2xl border border-slate-200 px-4 sm:px-5 py-2.5 sm:py-3 text-xs font-black text-slate-700 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 dark:border-slate-700 dark:text-slate-400 dark:hover:text-emerald-400 dark:hover:bg-emerald-900/30 uppercase tracking-widest cursor-pointer"
                 >
-                  <PenSquare class="h-4 w-4" />
+                  <PenSquare class="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                   Editar
                 </button>
                 <button
                   v-if="!isPeriodClosed(item.id_periodo)"
                   type="button"
                   @click="promptDeleteCompetencia(item)"
-                  class="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-rose-50/50 px-4 py-3 text-xs font-black text-rose-700 transition hover:bg-rose-100 hover:border-rose-300 dark:border-rose-900/40 dark:bg-rose-950/20 dark:text-rose-400 dark:hover:bg-rose-900/40 uppercase tracking-widest"
+                  class="inline-flex min-h-10 sm:min-h-11 items-center justify-center gap-1.5 sm:gap-2 rounded-xl sm:rounded-2xl border border-rose-200 bg-rose-50/50 px-3.5 sm:px-4 py-2.5 sm:py-3 text-xs font-black text-rose-700 transition hover:bg-rose-100 hover:border-rose-300 dark:border-rose-900/40 dark:bg-rose-950/20 dark:text-rose-400 dark:hover:bg-rose-900/40 uppercase tracking-widest cursor-pointer"
                 >
-                  <Trash2 class="h-4 w-4" />
+                  <Trash2 class="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                   Eliminar
                 </button>
-                <span v-else class="inline-flex min-h-11 items-center justify-center rounded-2xl bg-slate-100 px-5 py-3 text-xs font-black uppercase text-slate-400 dark:bg-slate-800 dark:text-slate-500 tracking-wider">
+                <span v-else class="inline-flex min-h-10 sm:min-h-11 items-center justify-center rounded-xl sm:rounded-2xl bg-slate-100 px-4 sm:px-5 py-2.5 sm:py-3 text-xs font-black uppercase text-slate-400 dark:bg-slate-800 dark:text-slate-500 tracking-wider">
                   Periodo Cerrado
                 </span>
               </div>
             </div>
 
-            <div class="mt-6 rounded-3xl border border-slate-100 bg-slate-50 p-6 dark:bg-slate-800 dark:border-slate-700 shadow-inner">
-              <p class="text-sm font-semibold leading-relaxed text-slate-700 dark:text-slate-300 italic">"{{ item.descripcion }}"</p>
+            <div class="mt-4 sm:mt-6 rounded-2xl sm:rounded-3xl border border-slate-100 bg-slate-50 p-4 sm:p-6 dark:bg-slate-800 dark:border-slate-700 shadow-inner">
+              <p class="text-xs sm:text-sm font-semibold leading-relaxed text-slate-700 dark:text-slate-300 italic">"{{ item.descripcion }}"</p>
 
-              <div v-if="item.estado === 'DEFINIDA'" class="mt-6 border-t border-slate-200 pt-6 dark:border-slate-700">
-                <h4 class="text-xs font-black text-slate-900 dark:text-white mb-5 uppercase tracking-widest flex items-center gap-2">
-                  <Sparkles class="h-3.5 w-3.5 text-emerald-500" />
-                  Evidencias de aprendizaje
+              <div v-if="item.estado === 'DEFINIDA'" class="mt-4 sm:mt-6 border-t border-slate-200 pt-4 sm:pt-6 dark:border-slate-700">
+                <h4 class="text-xs font-black text-slate-900 dark:text-white mb-4 sm:mb-5 uppercase tracking-widest flex items-center gap-2 flex-wrap">
+                  <span class="inline-flex items-center gap-1.5">
+                    <Sparkles class="h-3.5 w-3.5 text-emerald-500" />
+                    Evidencias de aprendizaje
+                  </span>
                   <span v-if="item.usa_dba" class="rounded-full bg-emerald-100 px-2 py-0.5 text-[9px] font-black uppercase text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 tracking-wider">Catálogo DBA</span>
                 </h4>
                 
-                <ul v-if="item.evidencias?.length" class="space-y-4 mb-6">
-                  <li v-for="ev in item.evidencias" :key="ev.id_evidencia" class="flex items-start gap-3 group">
+                <ul v-if="item.evidencias?.length" class="space-y-3 sm:space-y-4 mb-4 sm:mb-6">
+                  <li v-for="ev in item.evidencias" :key="ev.id_evidencia" class="flex items-start gap-2.5 sm:gap-3 group">
                     <div class="mt-2 h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
                     <div v-if="editingEvidencia === ev.id_evidencia" class="flex-1 flex gap-2">
-                      <input type="text" v-model="editEvidenciaText" @keyup.enter="saveEditEvidencia(ev)" class="flex-1 rounded-xl border border-emerald-200 px-4 py-2 text-sm outline-none focus:border-emerald-500 bg-white dark:bg-slate-900 dark:border-slate-700 dark:text-white" />
-                      <button @click="saveEditEvidencia(ev)" class="text-emerald-600 hover:text-emerald-700 p-2 dark:text-emerald-400"><Check class="h-5 w-5" /></button>
-                      <button @click="editingEvidencia = null" class="text-slate-400 hover:text-slate-600 p-2"><X class="h-5 w-5" /></button>
+                      <input type="text" v-model="editEvidenciaText" @keyup.enter="saveEditEvidencia(ev)" class="flex-1 rounded-xl border border-emerald-200 px-3 sm:px-4 py-2 text-xs sm:text-sm outline-none focus:border-emerald-500 bg-white dark:bg-slate-900 dark:border-slate-700 dark:text-white" />
+                      <button @click="saveEditEvidencia(ev)" class="text-emerald-600 hover:text-emerald-700 p-1.5 sm:p-2 dark:text-emerald-400 cursor-pointer"><Check class="h-4 w-4 sm:h-5 sm:w-5" /></button>
+                      <button @click="editingEvidencia = null" class="text-slate-400 hover:text-slate-600 p-1.5 sm:p-2 cursor-pointer"><X class="h-4 w-4 sm:h-5 sm:w-5" /></button>
                     </div>
-                    <div v-else class="flex-1 flex justify-between items-start gap-4">
-                      <div class="space-y-1">
-                        <div v-if="ev.id_evidencia_dba || ev.numero_dba" class="flex items-center gap-2">
+                    <div v-else class="flex-1 flex justify-between items-start gap-3 sm:gap-4">
+                      <div class="space-y-1 min-w-0 flex-1">
+                        <div v-if="ev.id_evidencia_dba || ev.numero_dba" class="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                           <span class="inline-flex items-center gap-1 rounded-md bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider border border-indigo-200/60 dark:border-indigo-800/60">
                             <Sparkles class="h-3 w-3 text-indigo-500" />
                             DBA #{{ ev.numero_dba || 'Asignado' }}
                           </span>
-                          <span v-if="ev.dba_enunciado" class="text-[11px] font-bold text-slate-400 dark:text-slate-500 truncate max-w-md" :title="ev.dba_enunciado">
+                          <span v-if="ev.dba_enunciado" class="text-[11px] font-bold text-slate-400 dark:text-slate-500 truncate max-w-[200px] sm:max-w-md" :title="ev.dba_enunciado">
                             - {{ ev.dba_enunciado }}
                           </span>
                         </div>
-                        <span class="text-sm font-semibold text-slate-700 dark:text-slate-300 block leading-relaxed">{{ ev.descripcion }}</span>
+                        <span class="text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 block leading-relaxed">{{ ev.descripcion }}</span>
                       </div>
-                      <div v-if="!ev.id_evidencia_dba && !isPeriodClosed(item.id_periodo)" class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                        <button @click="startEditEvidencia(ev)" class="text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400"><PenSquare class="h-4 w-4" /></button>
-                        <button @click="removeEvidencia(item, ev.id_evidencia)" class="text-slate-400 hover:text-red-500"><Trash2 class="h-4 w-4" /></button>
+                      <div v-if="!ev.id_evidencia_dba && !isPeriodClosed(item.id_periodo)" class="flex gap-1.5 sm:gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity shrink-0">
+                        <button @click="startEditEvidencia(ev)" class="text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 p-1 cursor-pointer" aria-label="Editar"><PenSquare class="h-4 w-4" /></button>
+                        <button @click="removeEvidencia(item, ev.id_evidencia)" class="text-slate-400 hover:text-red-500 p-1 cursor-pointer" aria-label="Eliminar"><Trash2 class="h-4 w-4" /></button>
                       </div>
                     </div>
                   </li>
                 </ul>
-                <div v-else class="text-sm text-slate-500 dark:text-slate-600 italic mb-6">No hay evidencias definidas para esta competencia.</div>
+                <div v-else class="text-xs sm:text-sm text-slate-500 dark:text-slate-600 italic mb-4 sm:mb-6">No hay evidencias definidas para esta competencia.</div>
                 
                 <div v-if="item.usa_dba && !isPeriodClosed(item.id_periodo)" class="flex justify-start">
-                  <button @click="openDbaModal(item)" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-6 py-3 text-xs font-black text-white hover:bg-emerald-500 uppercase tracking-widest transition-all shadow-sm">
+                  <button @click="openDbaModal(item)" class="w-full sm:w-auto inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 sm:px-6 py-2.5 sm:py-3 text-xs font-black text-white hover:bg-emerald-500 uppercase tracking-widest transition-all shadow-sm cursor-pointer">
                     <Sparkles class="h-4 w-4" /> Vincular Evidencias del DBA
                   </button>
                 </div>
-                <div v-else-if="!isPeriodClosed(item.id_periodo)" class="flex gap-3">
-                  <input type="text" v-model="newEvidencia[item.id_competencia]" @keyup.enter="addEvidencia(item)" placeholder="Agregar evidencia..." class="flex-1 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold outline-none transition focus:border-emerald-400 dark:bg-slate-900 dark:border-slate-700 dark:text-white dark:focus:ring-2 dark:focus:ring-emerald-500/20" />
-                  <button @click="addEvidencia(item)" :disabled="!newEvidencia[item.id_competencia]?.trim() || saving" class="inline-flex items-center justify-center rounded-xl bg-slate-100 px-6 py-3 text-xs font-black text-slate-700 transition hover:bg-slate-200 disabled:opacity-50 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700 uppercase tracking-widest">
+                <div v-else-if="!isPeriodClosed(item.id_periodo)" class="flex flex-col sm:flex-row gap-2.5 sm:gap-3">
+                  <input type="text" v-model="newEvidencia[item.id_competencia]" @keyup.enter="addEvidencia(item)" placeholder="Agregar evidencia..." class="flex-1 rounded-xl border border-slate-200 bg-white px-4 sm:px-5 py-2.5 sm:py-3 text-xs sm:text-sm font-semibold outline-none transition focus:border-emerald-400 dark:bg-slate-900 dark:border-slate-700 dark:text-white dark:focus:ring-2 dark:focus:ring-emerald-500/20" />
+                  <button @click="addEvidencia(item)" :disabled="!newEvidencia[item.id_competencia]?.trim() || saving" class="w-full sm:w-auto inline-flex items-center justify-center rounded-xl bg-slate-100 px-5 sm:px-6 py-2.5 sm:py-3 text-xs font-black text-slate-700 transition hover:bg-slate-200 disabled:opacity-50 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700 uppercase tracking-widest cursor-pointer">
                     <Plus class="h-4 w-4 mr-1.5" /> Agregar
                   </button>
                 </div>
@@ -1115,37 +1117,37 @@ watch(
 
     <!-- Modal de Creación/Edición -->
     <div v-if="competencyModal" class="fixed inset-0 z-[100] overflow-y-auto bg-slate-950/80 backdrop-blur-md transition-all">
-      <div class="flex min-h-full items-center justify-center p-4 sm:p-6 md:p-8">
+      <div class="flex min-h-full items-center justify-center p-3 sm:p-6 md:p-8">
         <!-- Backdrop close handler -->
         <div class="fixed inset-0 bg-transparent" @click="competencyModal = false; resetForm()"></div>
 
         <!-- Modal content card -->
-        <div class="relative w-full max-w-3xl rounded-[2.5rem] bg-white shadow-2xl dark:bg-slate-900 border border-slate-100 dark:border-slate-800/80 overflow-hidden animate-in fade-in zoom-in duration-300">
-          <div class="border-b border-slate-100 px-6 py-5 md:px-8 dark:border-slate-800/60">
+        <div class="relative w-full max-w-3xl rounded-2xl sm:rounded-[2.5rem] bg-white shadow-2xl dark:bg-slate-900 border border-slate-100 dark:border-slate-800/80 overflow-hidden animate-in fade-in zoom-in duration-300 max-h-[90dvh] flex flex-col">
+          <div class="border-b border-slate-100 px-4 sm:px-6 py-4 sm:py-5 md:px-8 dark:border-slate-800/60 shrink-0">
             <div class="flex items-center justify-between">
-              <div class="flex items-center gap-4">
-                <div class="h-11 w-11 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400 shadow-inner">
+              <div class="flex items-center gap-3 sm:gap-4">
+                <div class="h-10 w-10 sm:h-11 sm:w-11 rounded-xl sm:rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400 shadow-inner shrink-0">
                    <Plus class="h-5 w-5" v-if="!competencyForm.id_periodo" />
                    <PenSquare class="h-5 w-5" v-else />
                 </div>
                 <div>
-                  <h2 class="text-xl md:text-2xl font-black text-slate-900 dark:text-white tracking-tight uppercase">Asignar competencia</h2>
-                  <p class="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-[0.2em] mt-1">Definición académica base</p>
+                  <h2 class="text-lg sm:text-xl md:text-2xl font-black text-slate-900 dark:text-white tracking-tight uppercase">Asignar competencia</h2>
+                  <p class="text-[9px] sm:text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-[0.2em] mt-0.5 sm:mt-1">Definición académica base</p>
                 </div>
               </div>
               <button
                 type="button"
                 @click="competencyModal = false; resetForm()"
-                class="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300 transition-colors"
+                class="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300 transition-colors cursor-pointer"
               >
                 <X class="h-5 w-5" />
               </button>
             </div>
           </div>
-          <div class="px-6 py-6 md:px-8 md:py-8">
-            <div class="mb-6 rounded-3xl border border-emerald-100 bg-emerald-50 p-5 dark:bg-emerald-950/10 dark:border-emerald-900/30">
+          <div class="px-4 sm:px-6 py-5 sm:py-6 md:px-8 md:py-8 overflow-y-auto custom-scrollbar flex-1">
+            <div class="mb-5 sm:mb-6 rounded-2xl sm:rounded-3xl border border-emerald-100 bg-emerald-50 p-4 sm:p-5 dark:bg-emerald-950/10 dark:border-emerald-900/30">
               <p class="text-xs font-black text-emerald-800 dark:text-emerald-400 uppercase tracking-widest">Consistencia garantizada</p>
-              <p class="mt-2 text-sm font-semibold leading-relaxed text-emerald-900 dark:text-emerald-300/80">
+              <p class="mt-1.5 sm:mt-2 text-xs sm:text-sm font-semibold leading-relaxed text-emerald-900 dark:text-emerald-300/80">
                 La competencia definida se replicará automáticamente a todos los cursos del grado seleccionado para mantener la uniformidad pedagógica.
               </p>
             </div>
@@ -1326,13 +1328,13 @@ watch(
                 </div>
               </div>
             </div>
-            <div class="mt-8 flex flex-col gap-4 sm:flex-row sm:justify-end">
-              <button type="button" @click="competencyModal = false; resetForm()" class="px-8 py-3.5 rounded-2xl border border-slate-200 text-xs font-black text-slate-600 hover:bg-slate-50 transition-all dark:border-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 uppercase tracking-widest">Cancelar</button>
-              <button type="button" @click="saveCompetency" :disabled="saving" class="inline-flex min-h-12 items-center justify-center gap-3 rounded-2xl bg-emerald-600 px-10 py-3.5 text-sm font-black text-white shadow-xl shadow-emerald-200/20 dark:shadow-none hover:bg-emerald-500 transition-all disabled:opacity-50 uppercase tracking-widest">
-                <Plus class="h-4 w-4" />
-                {{ saving ? 'Guardando...' : 'Guardar competencia' }}
-              </button>
-            </div>
+          </div>
+          <div class="border-t border-slate-100 dark:border-slate-800/60 p-4 sm:p-6 bg-slate-50/50 dark:bg-slate-900/50 flex flex-col-reverse sm:flex-row gap-2.5 sm:gap-3 sm:justify-end shrink-0">
+            <button type="button" @click="competencyModal = false; resetForm()" class="w-full sm:w-auto px-6 sm:px-8 py-3 rounded-xl sm:rounded-2xl border border-slate-200 text-xs font-black text-slate-600 hover:bg-slate-100 transition-all dark:border-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 uppercase tracking-widest cursor-pointer">Cancelar</button>
+            <button type="button" @click="saveCompetency" :disabled="saving" class="w-full sm:w-auto inline-flex min-h-12 items-center justify-center gap-2.5 sm:gap-3 rounded-xl sm:rounded-2xl bg-emerald-600 px-8 sm:px-10 py-3 text-xs sm:text-sm font-black text-white shadow-xl shadow-emerald-200/20 dark:shadow-none hover:bg-emerald-500 transition-all disabled:opacity-50 uppercase tracking-widest cursor-pointer">
+              <Plus class="h-4 w-4" />
+              {{ saving ? 'Guardando...' : 'Guardar competencia' }}
+            </button>
           </div>
         </div>
       </div>
@@ -1340,32 +1342,32 @@ watch(
 
     <!-- Modal de Vinculación de Evidencias DBA (Fase 2) -->
     <div v-if="dbaModal" class="fixed inset-0 z-[100] overflow-y-auto bg-slate-950/80 backdrop-blur-md transition-all animate-in fade-in duration-200">
-      <div class="flex min-h-full items-center justify-center p-4 sm:p-6 md:p-8">
+      <div class="flex min-h-full items-center justify-center p-3 sm:p-6 md:p-8">
         <div class="fixed inset-0 bg-transparent" @click="dbaModal = false; selectedCompetenciaForDba = null"></div>
 
-        <div class="relative w-full max-w-4xl rounded-[2.5rem] bg-white shadow-2xl dark:bg-slate-900 border border-slate-100 dark:border-slate-800/80 overflow-hidden animate-in fade-in zoom-in duration-300">
-          <div class="border-b border-slate-100 px-6 py-5 md:px-8 dark:border-slate-800/60">
+        <div class="relative w-full max-w-4xl rounded-2xl sm:rounded-[2.5rem] bg-white shadow-2xl dark:bg-slate-900 border border-slate-100 dark:border-slate-800/80 overflow-hidden animate-in fade-in zoom-in duration-300 max-h-[90dvh] flex flex-col">
+          <div class="border-b border-slate-100 px-4 sm:px-6 py-4 sm:py-5 md:px-8 dark:border-slate-800/60 shrink-0">
             <div class="flex items-center justify-between">
-              <div class="flex items-center gap-4">
-                <div class="h-11 w-11 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400 shadow-inner">
+              <div class="flex items-center gap-3 sm:gap-4">
+                <div class="h-10 w-10 sm:h-11 sm:w-11 rounded-xl sm:rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400 shadow-inner shrink-0">
                    <BookOpenCheck class="h-5 w-5" />
                 </div>
                 <div>
-                  <h2 class="text-xl md:text-2xl font-black text-slate-900 dark:text-white tracking-tight uppercase">Vincular Evidencias DBA</h2>
-                  <p class="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-[0.2em] mt-1">Catálogo Oficial del Ministerio de Educación</p>
+                  <h2 class="text-lg sm:text-xl md:text-2xl font-black text-slate-900 dark:text-white tracking-tight uppercase">Vincular Evidencias DBA</h2>
+                  <p class="text-[9px] sm:text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-[0.2em] mt-0.5 sm:mt-1">Catálogo Oficial del Ministerio de Educación</p>
                 </div>
               </div>
               <button
                 type="button"
                 @click="dbaModal = false; selectedCompetenciaForDba = null"
-                class="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300 transition-colors"
+                class="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300 transition-colors cursor-pointer"
               >
                 <X class="h-5 w-5" />
               </button>
             </div>
           </div>
           
-          <div class="px-6 py-6 md:px-8 md:py-8 max-h-[60vh] overflow-y-auto">
+          <div class="px-4 sm:px-6 py-5 sm:py-6 md:px-8 md:py-8 overflow-y-auto custom-scrollbar flex-1">
             <div v-if="loadingDba" class="py-12 text-center text-sm font-semibold text-slate-500 dark:text-slate-400">
               Cargando evidencias del catálogo oficial DBA...
             </div>
@@ -1375,56 +1377,56 @@ watch(
                 Este grado o materia no tiene una versión curricular del catálogo DBA asociada a la institución académica.
               </p>
             </div>
-            <div v-else class="space-y-6">
-              <div class="rounded-3xl border border-emerald-100 bg-emerald-50 p-5 dark:bg-emerald-950/10 dark:border-emerald-900/30">
+            <div v-else class="space-y-5 sm:space-y-6">
+              <div class="rounded-2xl sm:rounded-3xl border border-emerald-100 bg-emerald-50 p-4 sm:p-5 dark:bg-emerald-950/10 dark:border-emerald-900/30">
                 <span class="rounded-full bg-emerald-600 px-3 py-1 text-[9px] font-black uppercase text-white tracking-widest">
                   Versión Activa: {{ dbaVersion }}
                 </span>
-                <h3 class="mt-3 text-sm font-black text-emerald-900 dark:text-emerald-300 uppercase tracking-wider">
+                <h3 class="mt-3 text-xs sm:text-sm font-black text-emerald-900 dark:text-emerald-300 uppercase tracking-wider">
                   {{ selectedCompetenciaForDba?.materia_nombre }} — Grado {{ selectedCompetenciaForDba?.tipo_grado_nombre }}
                 </h3>
-                <p class="mt-2 text-xs font-semibold text-emerald-800/80 dark:text-emerald-400 leading-relaxed">
+                <p class="mt-1.5 sm:mt-2 text-xs font-semibold text-emerald-800/80 dark:text-emerald-400 leading-relaxed">
                   Selecciona qué evidencias oficiales formarán parte de tu planeación académica. Las evidencias bloqueadas ya fueron asignadas a otra competencia.
                 </p>
               </div>
 
               <!-- Buscador -->
               <div class="relative">
-                <Search class="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <Search class="absolute left-3.5 sm:left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                 <input
                   v-model="dbaSearch"
                   type="text"
                   placeholder="Buscar evidencia por texto o número de DBA..."
-                  class="w-full rounded-2xl border border-slate-200 bg-white pl-11 pr-4 py-3.5 text-sm font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300 dark:bg-slate-800 dark:border-slate-700 dark:text-white"
+                  class="w-full rounded-xl sm:rounded-2xl border border-slate-200 bg-white pl-10 sm:pl-11 pr-4 py-3 sm:py-3.5 text-xs sm:text-sm font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300 dark:bg-slate-800 dark:border-slate-700 dark:text-white"
                 />
               </div>
 
-              <div v-if="filteredAvailableDba.length === 0" class="py-8 text-center text-sm font-semibold text-slate-400">
+              <div v-if="filteredAvailableDba.length === 0" class="py-8 text-center text-xs sm:text-sm font-semibold text-slate-400">
                 No se encontraron evidencias que coincidan con tu búsqueda.
               </div>
 
-              <div class="space-y-6">
-                <div v-for="dbaItem in filteredAvailableDba" :key="dbaItem.id_dba" class="rounded-3xl border border-slate-100 bg-slate-50 p-6 dark:bg-slate-800/50 dark:border-slate-800 shadow-sm">
-                  <div class="flex items-start gap-4">
-                    <span class="rounded-2xl bg-emerald-100 text-emerald-800 px-3 py-2 text-xs font-black dark:bg-emerald-950/40 dark:text-emerald-400 shrink-0">
+              <div class="space-y-4 sm:space-y-6">
+                <div v-for="dbaItem in filteredAvailableDba" :key="dbaItem.id_dba" class="rounded-2xl sm:rounded-3xl border border-slate-100 bg-slate-50 p-4 sm:p-6 dark:bg-slate-800/50 dark:border-slate-800 shadow-sm">
+                  <div class="flex items-start gap-3 sm:gap-4">
+                    <span class="rounded-xl sm:rounded-2xl bg-emerald-100 text-emerald-800 px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs font-black dark:bg-emerald-950/40 dark:text-emerald-400 shrink-0">
                       DBA #{{ dbaItem.numero_dba }}
                     </span>
-                    <p class="text-sm font-bold text-slate-800 dark:text-slate-200 leading-relaxed">
+                    <p class="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-200 leading-relaxed">
                       {{ dbaItem.enunciado }}
                     </p>
                   </div>
 
-                  <div class="mt-6 border-t border-slate-200/60 pt-5 dark:border-slate-700/60 space-y-4">
+                  <div class="mt-4 sm:mt-6 border-t border-slate-200/60 pt-4 sm:pt-5 dark:border-slate-700/60 space-y-3 sm:space-y-4">
                     <h4 class="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
                       Evidencias Oficiales:
                     </h4>
-                    <div class="grid grid-cols-1 gap-3">
+                    <div class="grid grid-cols-1 gap-2.5 sm:gap-3">
                       <!-- Evidencia (seleccionable si es libre o pertenece a esta competencia) -->
                       <label
                         v-for="ev in dbaItem.evidencias"
                         :key="ev.id_evidencia_dba"
                         :class="[
-                          'flex items-start gap-3 rounded-2xl border p-4 transition-colors',
+                          'flex items-start gap-2.5 sm:gap-3 rounded-xl sm:rounded-2xl border p-3 sm:p-4 transition-colors',
                           ev.asignada && !ev.asignada_a_esta_competencia
                             ? 'border-amber-200/60 bg-amber-50/40 cursor-not-allowed dark:bg-amber-950/10 dark:border-amber-900/30'
                             : ev.asignada_a_esta_competencia
@@ -1437,25 +1439,25 @@ watch(
                           type="checkbox"
                           v-model="checkedDbaEvidences"
                           :value="ev.id_evidencia_dba"
-                          class="mt-1 h-4.5 w-4.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                          class="mt-1 h-4 w-4 sm:h-4.5 sm:w-4.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
                         />
-                        <div v-else class="mt-1 h-4.5 w-4.5 rounded border border-amber-300 bg-amber-100 flex items-center justify-center shrink-0 dark:bg-amber-900/30 dark:border-amber-700">
+                        <div v-else class="mt-1 h-4 w-4 sm:h-4.5 sm:w-4.5 rounded border border-amber-300 bg-amber-100 flex items-center justify-center shrink-0 dark:bg-amber-900/30 dark:border-amber-700">
                           <svg class="h-3 w-3 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" /></svg>
                         </div>
                         <div class="flex-1 min-w-0">
                           <span :class="ev.asignada && !ev.asignada_a_esta_competencia ? 'text-amber-800/70 dark:text-amber-400/70' : 'text-slate-700 dark:text-slate-300'" class="text-xs font-semibold leading-relaxed block">
                             {{ ev.descripcion }}
                           </span>
-                          <div v-if="ev.asignada && ev.asignada_a && !ev.asignada_a_esta_competencia" class="mt-2 flex items-center gap-2 flex-wrap">
-                            <span class="rounded-full bg-amber-100 px-2.5 py-0.5 text-[9px] font-black uppercase text-amber-700 tracking-wider dark:bg-amber-900/40 dark:text-amber-400">
+                          <div v-if="ev.asignada && ev.asignada_a && !ev.asignada_a_esta_competencia" class="mt-2 flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                            <span class="rounded-full bg-amber-100 px-2 sm:px-2.5 py-0.5 text-[8px] sm:text-[9px] font-black uppercase text-amber-700 tracking-wider dark:bg-amber-900/40 dark:text-amber-400">
                               Asignada · {{ ev.asignada_a.periodo_nombre }}
                             </span>
-                            <span class="text-[10px] font-semibold text-amber-600/80 dark:text-amber-400/60 truncate max-w-xs" :title="ev.asignada_a.competencia_descripcion">
+                            <span class="text-[9px] sm:text-[10px] font-semibold text-amber-600/80 dark:text-amber-400/60 truncate max-w-xs" :title="ev.asignada_a.competencia_descripcion">
                               {{ ev.asignada_a.competencia_descripcion }}
                             </span>
                           </div>
-                          <div v-else-if="ev.asignada_a_esta_competencia" class="mt-2 flex items-center gap-2 flex-wrap">
-                            <span class="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[9px] font-black uppercase text-emerald-700 tracking-wider dark:bg-emerald-950/60 dark:text-emerald-300">
+                          <div v-else-if="ev.asignada_a_esta_competencia" class="mt-2 flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                            <span class="rounded-full bg-emerald-100 px-2 sm:px-2.5 py-0.5 text-[8px] sm:text-[9px] font-black uppercase text-emerald-700 tracking-wider dark:bg-emerald-950/60 dark:text-emerald-300">
                               Vinculada a esta competencia (Editable)
                             </span>
                           </div>
@@ -1468,11 +1470,11 @@ watch(
             </div>
           </div>
           
-          <div class="border-t border-slate-100 px-6 py-5 md:px-8 dark:border-slate-800/60 flex flex-col gap-4 sm:flex-row sm:justify-end bg-slate-50 dark:bg-slate-900/40">
+          <div class="border-t border-slate-100 px-4 sm:px-6 py-4 sm:py-5 md:px-8 dark:border-slate-800/60 flex flex-col-reverse sm:flex-row gap-2.5 sm:gap-3 sm:justify-end bg-slate-50 dark:bg-slate-900/40 shrink-0">
             <button
               type="button"
               @click="dbaModal = false; selectedCompetenciaForDba = null"
-              class="px-8 py-3.5 rounded-2xl border border-slate-200 text-xs font-black text-slate-600 hover:bg-slate-50 transition-all dark:border-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 uppercase tracking-widest"
+              class="w-full sm:w-auto px-6 sm:px-8 py-3 rounded-xl sm:rounded-2xl border border-slate-200 text-xs font-black text-slate-600 hover:bg-slate-100 transition-all dark:border-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 uppercase tracking-widest cursor-pointer"
             >
               Cancelar
             </button>
@@ -1480,7 +1482,7 @@ watch(
               type="button"
               @click="saveDbaEvidencias"
               :disabled="saving || loadingDba || availableDba.length === 0"
-              class="inline-flex min-h-12 items-center justify-center gap-3 rounded-2xl bg-emerald-600 px-10 py-3.5 text-sm font-black text-white hover:bg-emerald-500 transition-all disabled:opacity-50 uppercase tracking-widest shadow-xl shadow-emerald-600/10 dark:shadow-none"
+              class="w-full sm:w-auto inline-flex min-h-12 items-center justify-center gap-2.5 sm:gap-3 rounded-xl sm:rounded-2xl bg-emerald-600 px-8 sm:px-10 py-3 text-xs sm:text-sm font-black text-white hover:bg-emerald-500 transition-all disabled:opacity-50 uppercase tracking-widest shadow-xl shadow-emerald-600/10 dark:shadow-none cursor-pointer"
             >
               <Check class="h-4 w-4" />
               {{ saving ? 'Guardando...' : 'Guardar Vinculación' }}
@@ -1491,24 +1493,24 @@ watch(
     </div>
 
     <!-- Modal de Confirmación y Advertencia de Eliminación de Competencia -->
-    <div v-if="showDeleteModal" class="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in duration-300">
-      <div class="relative w-full max-w-2xl rounded-[32px] border border-slate-200 bg-white shadow-2xl dark:bg-slate-900 dark:border-slate-800 overflow-hidden">
+    <div v-if="showDeleteModal" class="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-3 sm:p-4 animate-in fade-in duration-300">
+      <div class="relative w-full max-w-2xl rounded-2xl sm:rounded-[32px] border border-slate-200 bg-white shadow-2xl dark:bg-slate-900 dark:border-slate-800 overflow-hidden max-h-[90dvh] flex flex-col">
         <!-- Header -->
-        <div class="flex items-center justify-between border-b border-slate-100 bg-rose-500/10 p-6 md:px-8 dark:border-slate-800">
+        <div class="flex items-center justify-between border-b border-slate-100 bg-rose-500/10 p-4 sm:p-6 md:px-8 dark:border-slate-800 shrink-0">
           <div class="flex items-center gap-3">
-            <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-500 text-white shadow-md">
-              <Trash2 class="h-6 w-6" />
+            <div class="flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-xl sm:rounded-2xl bg-rose-500 text-white shadow-md shrink-0">
+              <Trash2 class="h-5 w-5 sm:h-6 sm:w-6" />
             </div>
             <div>
-              <h3 class="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Confirmar Eliminación de Competencia</h3>
-              <p class="text-xs font-semibold text-rose-600 dark:text-rose-400">Verificación de impacto y docentes involucrados</p>
+              <h3 class="text-base sm:text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Confirmar Eliminación</h3>
+              <p class="text-[11px] sm:text-xs font-semibold text-rose-600 dark:text-rose-400">Verificación de impacto y docentes involucrados</p>
             </div>
           </div>
-          <button @click="showDeleteModal = false" class="rounded-full p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"><X class="h-6 w-6" /></button>
+          <button @click="showDeleteModal = false" class="rounded-full p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"><X class="h-5 w-5 sm:h-6 sm:w-6" /></button>
         </div>
 
         <!-- Body -->
-        <div class="p-6 md:p-8 space-y-6">
+        <div class="p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-6 overflow-y-auto custom-scrollbar flex-1">
           <div v-if="loadingDeleteCheck" class="py-10 text-center space-y-3">
             <RefreshCw class="h-8 w-8 text-rose-500 animate-spin mx-auto" />
             <p class="text-xs font-bold text-slate-500">Verificando uso por docentes y calificaciones registradas...</p>
@@ -1516,16 +1518,16 @@ watch(
 
           <template v-else-if="deleteUsageInfo">
             <!-- Competency Description -->
-            <div class="p-4 rounded-2xl bg-slate-50 border border-slate-100 dark:bg-slate-800/40 dark:border-slate-800">
+            <div class="p-3.5 sm:p-4 rounded-xl sm:rounded-2xl bg-slate-50 border border-slate-100 dark:bg-slate-800/40 dark:border-slate-800">
               <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Competencia a Eliminar:</p>
-              <p class="text-sm font-bold text-slate-900 dark:text-white mt-1 italic">"{{ deleteUsageInfo.descripcion }}"</p>
+              <p class="text-xs sm:text-sm font-bold text-slate-900 dark:text-white mt-1 italic leading-relaxed">"{{ deleteUsageInfo.descripcion }}"</p>
             </div>
 
             <!-- Usage Warning -->
-            <div v-if="deleteUsageInfo.isUsed" class="space-y-4">
-              <div class="p-4 rounded-2xl bg-rose-50 border border-rose-200 dark:bg-rose-950/30 dark:border-rose-900/40 space-y-2">
+            <div v-if="deleteUsageInfo.isUsed" class="space-y-3 sm:space-y-4">
+              <div class="p-3.5 sm:p-4 rounded-xl sm:rounded-2xl bg-rose-50 border border-rose-200 dark:bg-rose-950/30 dark:border-rose-900/40 space-y-1.5 sm:space-y-2">
                 <h4 class="text-xs font-black text-rose-800 dark:text-rose-300 uppercase tracking-widest flex items-center gap-2">
-                  <AlertTriangle class="h-4 w-4 text-rose-600" />
+                  <AlertTriangle class="h-4 w-4 text-rose-600 shrink-0" />
                   ¡ADVERTENCIA CRÍTICA DE DESVINCULACIÓN DE NOTAS!
                 </h4>
                 <p class="text-xs font-semibold text-rose-900/90 dark:text-rose-200 leading-relaxed">
@@ -1536,17 +1538,17 @@ watch(
               <!-- Teachers list -->
               <div class="space-y-2">
                 <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Docentes y Cursos Afectados:</p>
-                <div class="max-h-48 overflow-y-auto space-y-2 custom-scrollbar pr-1">
+                <div class="max-h-44 sm:max-h-48 overflow-y-auto space-y-2 custom-scrollbar pr-1">
                   <div 
                     v-for="(t, idx) in deleteUsageInfo.teachersUsage" 
                     :key="idx"
-                    class="p-3 rounded-xl bg-slate-50 border border-slate-200/80 dark:bg-slate-800/60 dark:border-slate-700/60 flex items-center justify-between text-xs font-bold"
+                    class="p-2.5 sm:p-3 rounded-xl bg-slate-50 border border-slate-200/80 dark:bg-slate-800/60 dark:border-slate-700/60 flex items-center justify-between text-xs font-bold gap-2"
                   >
-                    <div>
-                      <p class="text-slate-900 dark:text-white">{{ t.docente_nombre }}</p>
-                      <p class="text-[10px] font-semibold text-slate-500">{{ t.materia_nombre }} · {{ t.grupo_nombre }}</p>
+                    <div class="min-w-0 flex-1">
+                      <p class="text-slate-900 dark:text-white truncate">{{ t.docente_nombre }}</p>
+                      <p class="text-[10px] font-semibold text-slate-500 truncate">{{ t.materia_nombre }} · {{ t.grupo_nombre }}</p>
                     </div>
-                    <div class="text-right">
+                    <div class="text-right shrink-0">
                       <span class="rounded-lg bg-rose-100 text-rose-700 px-2 py-1 text-[10px] font-black dark:bg-rose-950 dark:text-rose-300">
                         {{ t.total_notas }} {{ t.total_notas === 1 ? 'nota' : 'notas' }} / {{ t.total_actividades }} {{ t.total_actividades === 1 ? 'actividad' : 'actividades' }}
                       </span>
@@ -1556,28 +1558,28 @@ watch(
               </div>
             </div>
 
-            <div v-else class="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-900/30 text-xs font-bold text-emerald-800 dark:text-emerald-300">
+            <div v-else class="p-3.5 sm:p-4 rounded-xl sm:rounded-2xl bg-emerald-50 border border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-900/30 text-xs font-bold text-emerald-800 dark:text-emerald-300">
               ✓ Esta competencia no tiene actividades ni notas registradas. Puede eliminarse limpiamente.
             </div>
           </template>
+        </div>
 
-          <!-- Actions -->
-          <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
-            <button 
-              @click="showDeleteModal = false"
-              class="rounded-xl px-5 py-2.5 text-xs font-black text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 uppercase tracking-wider"
-            >
-              Cancelar
-            </button>
-            <button 
-              @click="confirmDeleteCompetencia"
-              :disabled="saving"
-              class="rounded-xl bg-rose-600 px-6 py-2.5 text-xs font-black text-white hover:bg-rose-500 uppercase tracking-wider shadow-md transition disabled:opacity-50 flex items-center gap-2"
-            >
-              <Trash2 class="h-4 w-4" />
-              {{ deleteUsageInfo?.isUsed ? 'Sí, Eliminar y Desvincular' : 'Sí, Eliminar Competencia' }}
-            </button>
-          </div>
+        <!-- Actions -->
+        <div class="flex flex-col-reverse sm:flex-row items-center justify-end gap-2.5 sm:gap-3 p-4 sm:p-6 border-t border-slate-100 dark:border-slate-800 shrink-0 bg-slate-50/50 dark:bg-slate-900/50">
+          <button 
+            @click="showDeleteModal = false"
+            class="w-full sm:w-auto rounded-xl sm:rounded-2xl border border-slate-200 dark:border-slate-700 px-5 py-3 text-xs font-black text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 uppercase tracking-wider cursor-pointer"
+          >
+            Cancelar
+          </button>
+          <button 
+            @click="confirmDeleteCompetencia"
+            :disabled="saving"
+            class="w-full sm:w-auto rounded-xl sm:rounded-2xl bg-rose-600 px-6 py-3 text-xs font-black text-white hover:bg-rose-500 uppercase tracking-wider shadow-md transition disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <Trash2 class="h-4 w-4" />
+            {{ deleteUsageInfo?.isUsed ? 'Sí, Eliminar y Desvincular' : 'Sí, Eliminar Competencia' }}
+          </button>
         </div>
       </div>
     </div>
