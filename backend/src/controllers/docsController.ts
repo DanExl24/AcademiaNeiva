@@ -99,6 +99,8 @@ const formatDocTitle = (fileName: string, isSubmodule: boolean = false): string 
     seguimiento_academico_directivo: "Documentación Principal",
     flujo_correos_y_verificaciones: "Documentación Principal",
     mapa_documentacion: "Mapa General de Documentación",
+    estados_y_tipos_matricula: "Tipos, Estados y Transiciones de Matrícula",
+    ESTADOS_Y_TIPOS_MATRICULA: "Tipos, Estados y Transiciones de Matrícula",
     gestion_jornadas: "Submódulo: Gestión de Jornadas",
     maestro_de_informacion: "Maestro de Información del Sistema",
     MAESTRO_DE_INFORMACION: "Maestro de Información del Sistema",
@@ -139,7 +141,7 @@ export const getDocsModules = async (req: Request, res: Response): Promise<void>
 
     const modules = [];
 
-    // 0. Documentos Rectores (README.md [Única Fuente], HISTORIAL_DE_VERSIONES.md, ESTIMACION_HORAS_TRABAJADAS.md, MAESTRO_DE_INFORMACION.md, ARQUITECTURA_PORTAL_DOCUMENTACION.md, guides_index.md)
+    // 0. Documentos Rectores (README.md [Única Fuente], HISTORIAL_DE_VERSIONES.md, ESTIMACION_HORAS_TRABAJADAS.md, MAESTRO_DE_INFORMACION.md)
     const masterFiles = [
       {
         id: "README",
@@ -197,29 +199,6 @@ export const getDocsModules = async (req: Request, res: Response): Promise<void>
         isSubmodule: false
       });
     }
-
-    try {
-      await fs.stat(path.join(basePath, "ARQUITECTURA_PORTAL_DOCUMENTACION.md"));
-      masterFiles.push({
-        id: "ARQUITECTURA_PORTAL_DOCUMENTACION",
-        fileName: "ARQUITECTURA_PORTAL_DOCUMENTACION.md",
-        relativePath: "ARQUITECTURA_PORTAL_DOCUMENTACION.md",
-        title: "Arquitectura del Portal de Documentación Web",
-        isSubmodule: false
-      });
-    } catch {}
-
-    // Índice de Guías Técnicas
-    try {
-      await fs.stat(path.join(basePath, "README.md"));
-      masterFiles.push({
-        id: "INDICE_GUIAS",
-        fileName: "INDICE_GUIAS.md",
-        relativePath: "INDICE_GUIAS.md",
-        title: "Índice de Guías Técnicas",
-        isSubmodule: false
-      });
-    } catch {}
 
     if (masterFiles.length > 0) {
       modules.push({

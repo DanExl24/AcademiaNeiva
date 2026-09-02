@@ -144,16 +144,16 @@ export const MODULES_METADATA: Record<string, ModuleSummary> = {
     shortName: "Matrículas",
     domain: "Admisión y Movilidad Estudiantil",
     icon: "ClipboardList",
-    purpose: "Gestionar el proceso de inscripción pública con OTP, validación documental, matrículas extraordinarias y formalización.",
-    description: "Puerta de entrada de nuevos alumnos. Verifica el correo del acudiente con OTP de 6 dígitos, permite seguimiento público con token UUID, provee drawer de revisión documental y crea transaccionalmente perfiles de estudiante y padre.",
-    roles: ["Público / Aspirante", "Padre de Familia", "Directivo"],
-    dependsOn: ["01_autenticacion", "02_gestion_colegios", "04_estructura_escolar", "21_flujo_correos_y_verificaciones"],
-    affects: ["07_estudiantes_y_estados", "11_calificaciones", "13_asistencia", "17_gestion_padres", "18_gestion_traslados", "19_seguimiento_y_promocion_academica"],
+    purpose: "Gestionar el ciclo de vida de matrícula (tipos REGULAR, EXTRAORDINARIA, REINGRESO, RENOVACION, TRASLADO), máquina de estados (PENDIENTE a ACTIVA), verificación OTP, matriz documental y formalización atómica.",
+    description: "Puerta de entrada de alumnos al colegio. Coordina la máquina de estados de matrícula, verificación OTP de acudientes, enlaces UUID con bypass de calendario para matrículas extraordinarias y de reingreso, matriz documental inteligente y alta atómica de estudiantes y familias.",
+    roles: ["Público / Aspirante", "Padre de Familia", "Directivo", "Administrador General"],
+    dependsOn: ["01_autenticacion", "02_gestion_colegios", "04_estructura_escolar", "16_soporte_y_tickets", "21_flujo_correos_y_verificaciones"],
+    affects: ["07_estudiantes_y_estados", "11_calificaciones", "13_asistencia", "15_supervision_y_auditoria", "17_gestion_padres", "18_gestion_traslados", "19_seguimiento_y_promocion_academica"],
     tables: ["matricula", "documento_matriculas", "configuracion_inscripcion", "estudiante", "padre_familia", "detalle_padrefamilia", "codigo_verificacion_email"],
-    rules: ["RN-GLOBAL-001", "RN-GLOBAL-006", "RN-GLOBAL-014", "RN-GLOBAL-023", "RN-GLOBAL-027", "RN-MAT-001 a RN-MAT-008", "RN-MAIL-001"],
+    rules: ["RN-GLOBAL-001", "RN-GLOBAL-006", "RN-GLOBAL-014", "RN-GLOBAL-023", "RN-GLOBAL-027", "RN-MAT-001 a RN-MAT-018", "RN-MAIL-001"],
     hus: ["HU-MAT-001", "HU-MAT-002", "HU-MAT-003", "HU-MAT-004", "HU-MAT-005", "HU-MAT-006", "HU-MAT-007", "HU-MAT-008"],
     status: "CONSOLIDADO",
-    connectionsCount: 16
+    connectionsCount: 17
   },
   "07_estudiantes_y_estados": {
     id: "07_estudiantes_y_estados",
@@ -328,12 +328,12 @@ export const MODULES_METADATA: Record<string, ModuleSummary> = {
     description: "Mesa de ayuda con códigos públicos ofuscados (TKT-XXXX), selector interactivo de estados, regla de alternancia de respuestas para prevenir spam y escalamiento exclusivo al Admin General.",
     roles: ["Todos los Roles", "Público", "Administrador General", "Directivo"],
     dependsOn: ["01_autenticacion", "02_gestion_colegios"],
-    affects: ["03_usuarios_y_directivos"],
+    affects: ["03_usuarios_y_directivos", "06_matriculas", "07_estudiantes_y_estados", "15_supervision_y_auditoria"],
     tables: ["tickets_soporte", "mensajes_ticket"],
     rules: ["RN-GLOBAL-021", "RN-GLOBAL-030", "RN-SOP-001 a RN-SOP-006"],
     hus: ["HU-SOP-001", "HU-SOP-002", "HU-SOP-003", "HU-SOP-004", "HU-SOP-005"],
     status: "CONSOLIDADO",
-    connectionsCount: 8
+    connectionsCount: 9
   },
   "17_gestion_padres": {
     id: "17_gestion_padres",
