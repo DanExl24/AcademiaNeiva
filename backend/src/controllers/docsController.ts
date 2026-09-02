@@ -412,129 +412,33 @@ export const getDocContent = async (req: Request, res: Response): Promise<void> 
  * GET /api/docs/search?q=...
  * Busca coincidencias en texto dentro de todos los archivos markdown de guides/modules y sus submódulos.
  */
+/**
+ * GET /api/docs/search?q=...&category=...&moduleId=...
+ * Búsqueda jerárquica de alto rendimiento en memoria con scoring ponderado y categorización semántica.
+ */
 export const searchDocs = async (req: Request, res: Response): Promise<void> => {
-  const q = String(req.query.q || "").trim().toLowerCase();
+  const q = String(req.query.q || "").trim();
+  const category = String(req.query.category || "").trim().toUpperCase();
+  const moduleId = String(req.query.moduleId || "").trim();
+  const limit = req.query.limit ? parseInt(String(req.query.limit), 10) : 40;
+
   if (!q || q.length < 2) {
-    res.json({ success: true, results: [] });
+    res.json({ success: true, query: q, totalMatches: 0, results: [] });
     return;
   }
 
   try {
-    const basePath = await getGuidesBasePath();
-    const modulesDir = path.join(basePath, "modules");
-
-    const entries = await fs.readdir(modulesDir, { withFileTypes: true });
-    const results: any[] = [];
-
-    // Función auxiliar para escanear un archivo
-    const scanFile = async (
-      filePath: string, 
-      modId: string, 
-      modName: string, 
-      fRelPath: string, 
-      isSubmodule: boolean = false
-    ) => {
-      try {
-        const text = await fs.readFile(filePath, "utf-8");
-        const lines = text.split("\n");
-        for (let i = 0; i < lines.length; i++) {
-          const line = lines[i];
-          if (line.toLowerCase().includes(q)) {
-            const snippet = line.trim();
-            results.push({
-              module: modId,
-              moduleName: modName,
-              file: fRelPath,
-              fileTitle: formatDocTitle(path.basename(fRelPath), isSubmodule),
-              isSubmodule,
-              lineNumber: i + 1,
-              snippet: snippet.length > 200 ? snippet.substring(0, 200) + "..." : snippet
-            });
-            if (results.length >= 40) break;
-          }
-        }
-      } catch {
-        // Ignorar archivo si no se puede leer
-      }
-    };
-
-    // Escanear Única Fuente de Verdad: README general del proyecto
-    const rootReadmePath = await getRootReadmePath();
-    if (rootReadmePath) {
-      await scanFile(rootReadmePath, "maestro", "🏛️ 00. Documentos Rectores", "README.md", false);
-    }
-
-    // Escanear Historial de Versiones si existe
-    const historyPath = path.join(basePath, "HISTORIAL_DE_VERSIONES.md");
-    try {
-      await scanFile(historyPath, "maestro", "🏛️ 00. Documentos Rectores", "HISTORIAL_DE_VERSIONES.md", false);
-    } catch {}
-
-    // Escanear Estimación de Horas Trabajadas si existe
-    const hoursPath = path.join(basePath, "ESTIMACION_HORAS_TRABAJADAS.md");
-    try {
-      await scanFile(hoursPath, "maestro", "🏛️ 00. Documentos Rectores", "ESTIMACION_HORAS_TRABAJADAS.md", false);
-    } catch {}
-
-    // Escanear archivo maestro de información si existe
-    const masterPath = path.join(basePath, "MAESTRO_DE_INFORMACION.md");
-    try {
-      await scanFile(masterPath, "maestro", "🏛️ 00. Documentos Rectores", "MAESTRO_DE_INFORMACION.md", false);
-    } catch {
-      try {
-        await scanFile(path.join(modulesDir, "MAESTRO_DE_INFORMACION.md"), "maestro", "🏛️ 00. Documentos Rectores", "MAESTRO_DE_INFORMACION.md", false);
-      } catch {}
-    }
-
-    // Escanear archivo de arquitectura del portal si existe
-    const archPath = path.join(basePath, "ARQUITECTURA_PORTAL_DOCUMENTACION.md");
-    try {
-      await scanFile(archPath, "maestro", "🏛️ 00. Documentos Rectores", "ARQUITECTURA_PORTAL_DOCUMENTACION.md", false);
-    } catch {}
-
-    // Escanear archivo raíz mapa_documentacion si existe
-    const mapPath = path.join(modulesDir, "mapa_documentacion.md");
-    try {
-      await scanFile(mapPath, "general", "🗺️ 00. Mapa General", "mapa_documentacion.md", false);
-    } catch {}
-
-    // Escanear cada módulo y sus submódulos
-    for (const dir of entries.filter((e) => e.isDirectory())) {
-      if (results.length >= 40) break;
-      const dirPath = path.join(modulesDir, dir.name);
-      const dirContents = await fs.readdir(dirPath, { withFileTypes: true });
-
-      // 1. Archivos directos del módulo
-      for (const f of dirContents.filter((e) => e.isFile() && e.name.endsWith(".md"))) {
-        if (results.length >= 40) break;
-        const fPath = path.join(dirPath, f.name);
-        await scanFile(fPath, dir.name, formatModuleName(dir.name), f.name, false);
-      }
-
-      // 2. Archivos en carpeta 'submodules'
-      const subDir = dirContents.find((e) => e.isDirectory() && e.name === "submodules");
-      if (subDir) {
-        const subDirPath = path.join(dirPath, "submodules");
-        try {
-          const subFiles = await fs.readdir(subDirPath, { withFileTypes: true });
-          for (const sf of subFiles.filter((e) => e.isFile() && e.name.endsWith(".md"))) {
-            if (results.length >= 40) break;
-            const sfPath = path.join(subDirPath, sf.name);
-            await scanFile(
-              sfPath, 
-              dir.name, 
-              `${formatModuleName(dir.name)}`, 
-              `submodules/${sf.name}`, 
-              true
-            );
-          }
-        } catch {}
-      }
-    }
+    const { docsSearchEngine } = await import("../services/docsSearchEngine");
+    const results = await docsSearchEngine.search(q, {
+      category: category || undefined,
+      moduleId: moduleId || undefined,
+      limit
+    });
 
     res.json({
       success: true,
       query: q,
+      category: category || "ALL",
       totalMatches: results.length,
       results
     });

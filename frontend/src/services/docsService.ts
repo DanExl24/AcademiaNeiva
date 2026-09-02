@@ -33,14 +33,31 @@ export interface DocContentResponse {
   metadata: DocMetadata;
 }
 
+export type DocCategory = "RULE" | "HU" | "ENDPOINT" | "TABLE" | "GENERAL";
+
+export interface DocHierarchy {
+  l0: string; // Nombre del Módulo
+  l1: string; // Título del Documento
+  l2?: string; // Sección H2
+  l3?: string; // Subsección H3
+}
+
 export interface DocSearchResult {
-  module: string;
+  id?: string;
+  moduleId?: string;
+  module?: string;
   moduleName: string;
   file: string;
   fileTitle: string;
-  isSubmodule?: boolean;
-  lineNumber: number;
+  hierarchy?: DocHierarchy;
+  heading?: string;
+  anchor?: string;
+  category?: DocCategory;
   snippet: string;
+  highlightedSnippet?: string;
+  score?: number;
+  lineNumber?: number;
+  isSubmodule?: boolean;
 }
 
 export const docsService = {
@@ -56,9 +73,13 @@ export const docsService = {
     return res.data;
   },
 
-  async search(query: string): Promise<DocSearchResult[]> {
+  async search(query: string, category?: string, moduleId?: string): Promise<DocSearchResult[]> {
     const res = await api.get<{ success: boolean; results: DocSearchResult[] }>("/docs/search", {
-      params: { q: query }
+      params: { 
+        q: query,
+        category: category && category !== "ALL" ? category : undefined,
+        moduleId: moduleId || undefined
+      }
     });
     return res.data.results || [];
   }

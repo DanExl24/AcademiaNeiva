@@ -39,10 +39,13 @@ import {
   LifeBuoy,
   HeartHandshake,
   ArrowLeftRight,
-  Award,
   Eye,
   MailCheck,
-  Network
+  Network,
+  Zap,
+  CornerDownLeft,
+  Trash2,
+  History
 } from 'lucide-vue-next'
 import { marked } from 'marked'
 import mermaid from 'mermaid'
@@ -319,7 +322,7 @@ const fetchModules = async () => {
 }
 
 // Cargar contenido de un documento específico
-const loadDocument = async (moduleId: string, filePath: string) => {
+const loadDocument = async (moduleId: string, filePath: string, targetAnchor?: string) => {
   loadingContent.value = true
   try {
     const res = await docsService.getContent(moduleId, filePath)
@@ -343,8 +346,33 @@ const loadDocument = async (moduleId: string, filePath: string) => {
       path: cleanPath
     })
 
-    // Scroll to top
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    // Asegurar vista de lectura activa
+    activeViewTab.value = 'reading'
+
+    // Scroll al ancla específica o al tope
+    if (targetAnchor) {
+      nextTick(() => {
+        setTimeout(() => {
+          const cleanAnchor = targetAnchor.toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-')
+          const el = document.getElementById(targetAnchor) 
+            || document.getElementById(cleanAnchor) 
+            || document.querySelector(`[id*="${cleanAnchor}"]`)
+            || document.querySelector(`h1, h2, h3, h4`)
+          
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+            el.classList.add('doc-pulse-highlight')
+            setTimeout(() => {
+              el.classList.remove('doc-pulse-highlight')
+            }, 3000)
+          } else {
+            window.scrollTo({ top: 0, behavior: 'smooth' })
+          }
+        }, 200)
+      })
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
   } catch (error) {
     console.error('Error cargando contenido del documento:', error)
     renderedHtml.value = '<div class="p-8 text-center text-slate-500 font-bold">No se pudo cargar el documento solicitado.</div>'
@@ -465,10 +493,15 @@ const currentNavigation = computed(() => {
   }
 })
 
-// Búsqueda en tiempo real
+// Búsqueda inteligente de alto rendimiento en tiempo real
+const selectedResultIndex = ref(0)
+const searchCategory = ref<string>('ALL')
+const recentSearches = ref<string[]>(JSON.parse(localStorage.getItem('docs_recent_searches') || '[]'))
+
 let searchTimeout: any = null
-watch(searchQuery, (newQ) => {
+watch([searchQuery, searchCategory], ([newQ, newCat]) => {
   clearTimeout(searchTimeout)
+  selectedResultIndex.value = 0
   if (!newQ.trim() || newQ.length < 2) {
     searchResults.value = []
     return
@@ -476,59 +509,67 @@ watch(searchQuery, (newQ) => {
   searching.value = true
   searchTimeout = setTimeout(async () => {
     try {
-      searchResults.value = await docsService.search(newQ)
+      searchResults.value = await docsService.search(newQ, newCat)
     } catch (e) {
       console.error('Error en búsqueda de docs:', e)
     } finally {
       searching.value = false
     }
-  }, 250)
+  }, 150)
 })
 
-// Resultados filtrados según el chip facetado seleccionado
+// Resultados ordenados y filtrados
 const filteredSearchResults = computed(() => {
-  if (searchFilterType.value === 'all') return searchResults.value
-  if (searchFilterType.value === 'rules') {
-    return searchResults.value.filter(r => 
-      r.file.includes('reglas_negocio') || 
-      r.fileTitle.toLowerCase().includes('reglas') || 
-      r.snippet.toLowerCase().includes('rn-') ||
-      r.snippet.toLowerCase().includes('regla')
-    )
-  }
-  if (searchFilterType.value === 'hus') {
-    return searchResults.value.filter(r => 
-      r.file.includes('historias_usuario') || 
-      r.fileTitle.toLowerCase().includes('historias') || 
-      r.snippet.toLowerCase().includes('hu-') ||
-      r.snippet.toLowerCase().includes('historia de usuario')
-    )
-  }
-  if (searchFilterType.value === 'database') {
-    return searchResults.value.filter(r => 
-      r.file.includes('diccionario') || 
-      r.fileTitle.toLowerCase().includes('datos') || 
-      r.snippet.toLowerCase().includes('table') ||
-      r.snippet.toLowerCase().includes('tabla') ||
-      r.snippet.toLowerCase().includes('foreign key') ||
-      r.snippet.toLowerCase().includes('primary key')
-    )
-  }
-  if (searchFilterType.value === 'maestro') {
-    return searchResults.value.filter(r => 
-      r.module === 'maestro' || 
-      r.file.includes('MAESTRO') || 
-      r.fileTitle.toLowerCase().includes('maestro')
-    )
-  }
   return searchResults.value
 })
+
+const addRecentSearch = (term: string) => {
+  if (!term || term.trim().length < 2) return
+  const clean = term.trim()
+  const list = [clean, ...recentSearches.value.filter(s => s.toLowerCase() !== clean.toLowerCase())].slice(0, 6)
+  recentSearches.value = list
+  localStorage.setItem('docs_recent_searches', JSON.stringify(list))
+}
+
+const clearRecentSearches = () => {
+  recentSearches.value = []
+  localStorage.removeItem('docs_recent_searches')
+}
+
+const selectRecentSearch = (term: string) => {
+  searchQuery.value = term
+}
+
+const handleArrowDown = () => {
+  if (filteredSearchResults.value.length === 0) return
+  selectedResultIndex.value = (selectedResultIndex.value + 1) % filteredSearchResults.value.length
+}
+
+const handleArrowUp = () => {
+  if (filteredSearchResults.value.length === 0) return
+  selectedResultIndex.value = (selectedResultIndex.value - 1 + filteredSearchResults.value.length) % filteredSearchResults.value.length
+}
+
+const handleEnter = () => {
+  if (filteredSearchResults.value.length > 0) {
+    const item = filteredSearchResults.value[selectedResultIndex.value] || filteredSearchResults.value[0]
+    selectSearchResult(item)
+  }
+}
+
+const handleTabKey = (e: KeyboardEvent) => {
+  e.preventDefault()
+  const cats = ['ALL', 'RULE', 'ENDPOINT', 'TABLE', 'HU']
+  const nextIdx = (cats.indexOf(searchCategory.value) + 1) % cats.length
+  searchCategory.value = cats[nextIdx]
+}
 
 const openSearchModal = () => {
   searchModalOpen.value = true
   searchQuery.value = ''
   searchResults.value = []
-  searchFilterType.value = 'all'
+  selectedResultIndex.value = 0
+  searchCategory.value = 'ALL'
 }
 
 const closeSearchModal = () => {
@@ -536,7 +577,12 @@ const closeSearchModal = () => {
 }
 
 const selectSearchResult = (item: DocSearchResult) => {
-  loadDocument(item.module, item.file)
+  if (!item) return
+  const term = item.heading || item.fileTitle || searchQuery.value
+  if (term) addRecentSearch(term)
+  
+  const modId = item.moduleId || item.module || selectedModuleId.value
+  loadDocument(modId, item.file, item.anchor)
   closeSearchModal()
 }
 
@@ -1348,108 +1394,274 @@ onUnmounted(() => {
 
     </div>
 
-    <!-- Search Modal con Filtros Facetados (Ctrl + K) -->
-    <div v-if="searchModalOpen" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-start justify-center p-4 sm:p-6 md:p-20 overflow-y-auto animate-in fade-in duration-150">
-      <div class="relative w-full max-w-2xl bg-slate-900 rounded-3xl shadow-2xl border border-slate-800 overflow-hidden text-left">
+    <!-- Search Modal: Command Palette Inteligente (Ctrl + K / Cmd + K) -->
+    <div v-if="searchModalOpen" class="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-start justify-center p-3 sm:p-6 md:p-16 overflow-y-auto animate-in fade-in duration-200">
+      <div 
+        class="relative w-full max-w-3xl bg-slate-900/95 rounded-3xl shadow-2xl border border-slate-800/90 overflow-hidden text-left flex flex-col max-h-[85vh]"
+        @click.stop
+      >
         
-        <!-- Search Input -->
-        <div class="p-4 sm:p-5 border-b border-slate-800 flex items-center gap-3">
-          <Search :size="20" class="text-indigo-400 shrink-0" />
+        <!-- Search Input Bar -->
+        <div class="p-4 sm:p-5 border-b border-slate-800/80 flex items-center gap-3 bg-slate-950/40">
+          <div class="p-2 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 shrink-0">
+            <Search :size="18" />
+          </div>
           <input 
             v-model="searchQuery"
             type="text" 
-            placeholder="Buscar por regla, endpoint, caso de uso, tabla SQL, rol..."
-            class="w-full text-sm font-bold bg-transparent text-white outline-none placeholder:text-slate-500"
+            placeholder="Buscar por regla (ej. RN-MAT-002), endpoint (POST /api/...), tabla SQL, HU..."
+            class="w-full text-sm sm:text-base font-bold bg-transparent text-white outline-none placeholder:text-slate-500"
             autofocus
+            @keydown.down.prevent="handleArrowDown"
+            @keydown.up.prevent="handleArrowUp"
+            @keydown.enter.prevent="handleEnter"
+            @keydown.tab="handleTabKey"
+            @keydown.esc.prevent="closeSearchModal"
           />
-          <button @click="closeSearchModal" class="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 cursor-pointer">
-            <X :size="18" />
+          <div class="flex items-center gap-1.5 shrink-0">
+            <span v-if="searchQuery" class="text-[10px] font-mono font-bold text-slate-500 bg-slate-800 px-2 py-0.5 rounded-md hidden sm:inline">
+              {{ filteredSearchResults.length }} resultados
+            </span>
+            <button @click="closeSearchModal" class="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/80 transition-all cursor-pointer">
+              <X :size="18" />
+            </button>
+          </div>
+        </div>
+
+        <!-- Chips de Filtros de Categorías Semánticas -->
+        <div class="px-4 py-2.5 bg-slate-950/60 border-b border-slate-800/70 flex items-center gap-1.5 overflow-x-auto docs-scrollbar shrink-0">
+          <button
+            @click="searchCategory = 'ALL'"
+            :class="[
+              'px-3 py-1 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5',
+              searchCategory === 'ALL' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-slate-800/70 text-slate-400 hover:text-white hover:bg-slate-800'
+            ]"
+          >
+            <Layers :size="12" />
+            <span>Todos</span>
+          </button>
+          <button
+            @click="searchCategory = 'RULE'"
+            :class="[
+              'px-3 py-1 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5',
+              searchCategory === 'RULE' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-slate-800/70 text-slate-400 hover:text-white hover:bg-slate-800'
+            ]"
+          >
+            <ShieldCheck :size="12" class="text-indigo-400" />
+            <span>📜 Reglas (RN)</span>
+          </button>
+          <button
+            @click="searchCategory = 'ENDPOINT'"
+            :class="[
+              'px-3 py-1 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5',
+              searchCategory === 'ENDPOINT' ? 'bg-emerald-600 text-white shadow-sm' : 'bg-slate-800/70 text-slate-400 hover:text-white hover:bg-slate-800'
+            ]"
+          >
+            <Zap :size="12" class="text-emerald-400" />
+            <span>⚡ Endpoints API</span>
+          </button>
+          <button
+            @click="searchCategory = 'TABLE'"
+            :class="[
+              'px-3 py-1 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5',
+              searchCategory === 'TABLE' ? 'bg-amber-600 text-white shadow-sm' : 'bg-slate-800/70 text-slate-400 hover:text-white hover:bg-slate-800'
+            ]"
+          >
+            <Database :size="12" class="text-amber-400" />
+            <span>🗄️ Tablas SQL</span>
+          </button>
+          <button
+            @click="searchCategory = 'HU'"
+            :class="[
+              'px-3 py-1 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5',
+              searchCategory === 'HU' ? 'bg-purple-600 text-white shadow-sm' : 'bg-slate-800/70 text-slate-400 hover:text-white hover:bg-slate-800'
+            ]"
+          >
+            <Tag :size="12" class="text-purple-400" />
+            <span>👤 Historias (HU)</span>
           </button>
         </div>
 
-        <!-- Chips de Filtros Facetados -->
-        <div class="px-4 py-2 bg-slate-950/40 border-b border-slate-800/80 flex items-center gap-1.5 overflow-x-auto docs-scrollbar">
-          <button
-            @click="searchFilterType = 'all'"
-            :class="[
-              'px-2.5 py-1 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer',
-              searchFilterType === 'all' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'
-            ]"
-          >
-            Todos
-          </button>
-          <button
-            @click="searchFilterType = 'rules'"
-            :class="[
-              'px-2.5 py-1 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer',
-              searchFilterType === 'rules' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'
-            ]"
-          >
-            📜 Reglas de Negocio
-          </button>
-          <button
-            @click="searchFilterType = 'hus'"
-            :class="[
-              'px-2.5 py-1 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer',
-              searchFilterType === 'hus' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'
-            ]"
-          >
-            👤 Historias (HUs)
-          </button>
-          <button
-            @click="searchFilterType = 'database'"
-            :class="[
-              'px-2.5 py-1 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer',
-              searchFilterType === 'database' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'
-            ]"
-          >
-            🗄️ Base de Datos
-          </button>
-          <button
-            @click="searchFilterType = 'maestro'"
-            :class="[
-              'px-2.5 py-1 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer',
-              searchFilterType === 'maestro' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'
-            ]"
-          >
-            🏛️ Documento Rector
-          </button>
-        </div>
-
-        <!-- Results Container -->
-        <div class="max-h-96 overflow-y-auto p-4 space-y-2 divide-y divide-slate-800 docs-scrollbar">
-          <div v-if="searching" class="py-8 text-center text-xs text-slate-400 font-bold">
-            Buscando en toda la base de conocimiento...
+        <!-- Results / Recent Searches Container -->
+        <div class="flex-1 overflow-y-auto p-3 sm:p-4 space-y-2 docs-scrollbar">
+          
+          <!-- Estado: Buscando -->
+          <div v-if="searching" class="py-12 text-center text-xs text-slate-400 font-bold flex flex-col items-center gap-2">
+            <div class="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+            <span>Búsqueda jerárquica en memoria...</span>
           </div>
 
-          <div v-else-if="searchQuery.trim().length >= 2 && filteredSearchResults.length === 0" class="py-8 text-center text-xs text-slate-400 font-bold">
-            No se encontraron coincidencias para "{{ searchQuery }}" con el filtro actual.
+          <!-- Estado: Sin coincidencias -->
+          <div v-else-if="searchQuery.trim().length >= 2 && filteredSearchResults.length === 0" class="py-12 text-center text-xs text-slate-400 font-bold space-y-2">
+            <p>No se encontraron secciones ni reglas para <span class="text-indigo-400 font-mono">"{{ searchQuery }}"</span> en la categoría seleccionada.</p>
+            <p class="text-[11px] text-slate-500 font-medium">Prueba buscando por código (ej. <code class="text-indigo-300">RN-MAT-002</code>), tabla (ej. <code class="text-indigo-300">matricula</code>) o término general.</p>
           </div>
 
-          <div v-else-if="!searchQuery" class="py-8 text-center text-xs text-slate-400">
-            Escribe al menos 2 caracteres para buscar en los 21 módulos, reglas y base de datos.
-          </div>
-
-          <div 
-            v-for="(res, idx) in filteredSearchResults" 
-            :key="idx"
-            @click="selectSearchResult(res)"
-            class="pt-2 pb-2 px-3 hover:bg-slate-800/70 rounded-2xl cursor-pointer transition-colors space-y-1"
-          >
-            <div class="flex items-center justify-between text-xs font-black text-indigo-400">
-              <span>{{ res.moduleName }} › {{ res.fileTitle }}</span>
-              <span class="text-[10px] text-slate-500 font-mono">Línea {{ res.lineNumber }}</span>
+          <!-- Estado: Vacío (Historial Reciente y Sugerencias) -->
+          <div v-else-if="!searchQuery" class="py-4 space-y-4">
+            
+            <!-- Historial Reciente -->
+            <div v-if="recentSearches.length > 0" class="space-y-2">
+              <div class="flex items-center justify-between px-2 text-[10px] font-black uppercase tracking-wider text-slate-500">
+                <span class="flex items-center gap-1.5">
+                  <History :size="12" />
+                  <span>Búsquedas Recientes</span>
+                </span>
+                <button @click="clearRecentSearches" class="hover:text-rose-400 transition-colors cursor-pointer flex items-center gap-1">
+                  <Trash2 :size="11" />
+                  <span>Borrar Historial</span>
+                </button>
+              </div>
+              <div class="flex flex-wrap gap-1.5 px-2">
+                <button 
+                  v-for="(rec, rIdx) in recentSearches" 
+                  :key="rIdx"
+                  @click="selectRecentSearch(rec)"
+                  class="px-2.5 py-1 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-xs font-semibold text-slate-300 hover:text-white border border-slate-700/60 transition-all cursor-pointer flex items-center gap-1.5"
+                >
+                  <span>{{ rec }}</span>
+                  <ArrowRight :size="11" class="text-slate-500" />
+                </button>
+              </div>
             </div>
-            <p class="text-xs text-slate-300 font-medium line-clamp-2">
-              {{ res.snippet }}
-            </p>
+
+            <!-- Sugerencias de Inicio Rápido -->
+            <div class="space-y-2 pt-2 border-t border-slate-800/50">
+              <div class="px-2 text-[10px] font-black uppercase tracking-wider text-slate-500">
+                <span>Atajos y Búsquedas Frecuentes</span>
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 px-1">
+                <button 
+                  @click="selectRecentSearch('RN-MAT-002')"
+                  class="p-2.5 rounded-2xl bg-slate-950/40 hover:bg-slate-800/70 border border-slate-800 text-left transition-all cursor-pointer flex items-center gap-2.5"
+                >
+                  <span class="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 text-xs">📜</span>
+                  <div>
+                    <p class="text-xs font-bold text-white leading-tight">RN-MAT-002 (Matrícula Extraordinaria)</p>
+                    <p class="text-[10px] text-slate-400">Bypass de fechas y enlace UUID</p>
+                  </div>
+                </button>
+
+                <button 
+                  @click="selectRecentSearch('estados y tipos de matricula')"
+                  class="p-2.5 rounded-2xl bg-slate-950/40 hover:bg-slate-800/70 border border-slate-800 text-left transition-all cursor-pointer flex items-center gap-2.5"
+                >
+                  <span class="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs">🏷️</span>
+                  <div>
+                    <p class="text-xs font-bold text-white leading-tight">Tipos y Estados de Matrícula</p>
+                    <p class="text-[10px] text-slate-400">Máquina de estados y transiciones</p>
+                  </div>
+                </button>
+
+                <button 
+                  @click="selectRecentSearch('POST /api/matriculas/finalize')"
+                  class="p-2.5 rounded-2xl bg-slate-950/40 hover:bg-slate-800/70 border border-slate-800 text-left transition-all cursor-pointer flex items-center gap-2.5"
+                >
+                  <span class="p-1.5 rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 text-xs">⚡</span>
+                  <div>
+                    <p class="text-xs font-bold text-white leading-tight">POST /api/matriculas/finalize</p>
+                    <p class="text-[10px] text-slate-400">Oficialización atómica en 6 pasos</p>
+                  </div>
+                </button>
+
+                <button 
+                  @click="selectRecentSearch('auditoria_supervision')"
+                  class="p-2.5 rounded-2xl bg-slate-950/40 hover:bg-slate-800/70 border border-slate-800 text-left transition-all cursor-pointer flex items-center gap-2.5"
+                >
+                  <span class="p-1.5 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20 text-xs">🗄️</span>
+                  <div>
+                    <p class="text-xs font-bold text-white leading-tight">Tabla auditoria_supervision</p>
+                    <p class="text-[10px] text-slate-400">Bitácora inmutable de supervisión</p>
+                  </div>
+                </button>
+              </div>
+            </div>
+
           </div>
+
+          <!-- Lista de Resultados Jerárquicos -->
+          <div v-else class="space-y-1.5">
+            <div 
+              v-for="(res, idx) in filteredSearchResults" 
+              :key="res.id || idx"
+              @click="selectSearchResult(res)"
+              :class="[
+                'p-3 sm:p-3.5 rounded-2xl cursor-pointer transition-all border flex flex-col gap-1.5',
+                selectedResultIndex === idx 
+                  ? 'bg-indigo-950/50 border-indigo-500/60 shadow-lg shadow-indigo-950/30 ring-1 ring-indigo-500/30' 
+                  : 'bg-slate-950/40 hover:bg-slate-800/60 border-slate-800/80 hover:border-slate-700'
+              ]"
+            >
+              <!-- Top bar del resultado: Categoría + Breadcrumbs -->
+              <div class="flex items-center justify-between gap-2 text-xs">
+                <div class="flex items-center gap-2 min-w-0">
+                  <span 
+                    :class="[
+                      res.category === 'RULE' ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30' : '',
+                      res.category === 'ENDPOINT' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : '',
+                      res.category === 'TABLE' ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' : '',
+                      res.category === 'HU' ? 'bg-purple-500/20 text-purple-300 border-purple-500/30' : '',
+                      res.category === 'GENERAL' || !res.category ? 'bg-slate-800 text-slate-300 border-slate-700' : '',
+                      'px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider border font-mono shrink-0'
+                    ]"
+                  >
+                    {{ res.category === 'RULE' ? '📜 Regla' : res.category === 'ENDPOINT' ? '⚡ Endpoint' : res.category === 'TABLE' ? '🗄️ Tabla' : res.category === 'HU' ? '👤 HU' : '📄 Sección' }}
+                  </span>
+                  
+                  <!-- Breadcrumbs: L0 > L1 > L2 -->
+                  <div class="text-[11px] font-bold text-slate-400 truncate flex items-center gap-1 font-mono">
+                    <span class="text-indigo-400 truncate">{{ res.hierarchy?.l0 || res.moduleName }}</span>
+                    <span class="text-slate-600">›</span>
+                    <span class="truncate">{{ res.hierarchy?.l1 || res.fileTitle }}</span>
+                    <span v-if="res.hierarchy?.l2" class="text-slate-600 hidden sm:inline">›</span>
+                    <span v-if="res.hierarchy?.l2" class="text-slate-500 truncate hidden sm:inline">{{ res.hierarchy.l2 }}</span>
+                  </div>
+                </div>
+
+                <div class="flex items-center gap-1.5 shrink-0">
+                  <span v-if="selectedResultIndex === idx" class="px-1.5 py-0.5 rounded bg-indigo-600 text-[10px] font-mono font-bold text-white flex items-center gap-1">
+                    <span>↵</span>
+                  </span>
+                </div>
+              </div>
+
+              <!-- Título de la sección / encabezado -->
+              <h4 class="text-xs sm:text-sm font-black text-white leading-tight break-words flex items-center gap-1.5">
+                <span>{{ res.heading || res.fileTitle }}</span>
+              </h4>
+
+              <!-- Snippet contextual con <mark> -->
+              <p 
+                class="text-xs text-slate-300 font-medium leading-relaxed line-clamp-2"
+                v-html="res.highlightedSnippet || res.snippet"
+              ></p>
+            </div>
+          </div>
+
         </div>
 
-        <!-- Search Footer -->
-        <div class="px-5 py-3 bg-slate-950/60 border-t border-slate-800 text-[11px] text-slate-400 flex items-center justify-between">
-          <span>Pulsa <kbd class="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 font-mono font-bold text-slate-300">ESC</kbd> para cerrar</span>
-          <span>{{ filteredSearchResults.length }} resultados</span>
+        <!-- Search Footer con Atajos de Teclado -->
+        <div class="px-5 py-3 bg-slate-950/90 border-t border-slate-800 text-[11px] text-slate-400 flex flex-wrap items-center justify-between gap-2 shrink-0">
+          <div class="flex items-center gap-3">
+            <span class="flex items-center gap-1">
+              <kbd class="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 font-mono font-bold text-slate-300 text-[10px]">↑</kbd>
+              <kbd class="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 font-mono font-bold text-slate-300 text-[10px]">↓</kbd>
+              <span class="text-slate-500">Navegar</span>
+            </span>
+            <span class="flex items-center gap-1">
+              <kbd class="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 font-mono font-bold text-slate-300 text-[10px]">↵ Enter</kbd>
+              <span class="text-slate-500">Ir a Sección</span>
+            </span>
+            <span class="flex items-center gap-1 hidden sm:flex">
+              <kbd class="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 font-mono font-bold text-slate-300 text-[10px]">Tab</kbd>
+              <span class="text-slate-500">Filtrar</span>
+            </span>
+            <span class="flex items-center gap-1">
+              <kbd class="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 font-mono font-bold text-slate-300 text-[10px]">ESC</kbd>
+              <span class="text-slate-500">Cerrar</span>
+            </span>
+          </div>
+          <span class="font-mono text-indigo-400 font-bold">Docs Search v2</span>
         </div>
 
       </div>
@@ -1459,6 +1671,27 @@ onUnmounted(() => {
 </template>
 
 <style>
+/* Animación de destello suave al navegar a una sección (#anchor) */
+@keyframes docPulseHighlight {
+  0% {
+    background-color: rgba(99, 102, 241, 0.35);
+    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.35);
+    border-radius: 0.75rem;
+  }
+  50% {
+    background-color: rgba(99, 102, 241, 0.15);
+    box-shadow: 0 0 0 8px rgba(99, 102, 241, 0.1);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: none;
+  }
+}
+
+.doc-pulse-highlight {
+  animation: docPulseHighlight 2.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  transition: all 0.5s ease;
+}
 /* Scrollbar sutil */
 .docs-scrollbar::-webkit-scrollbar {
   width: 5px;
