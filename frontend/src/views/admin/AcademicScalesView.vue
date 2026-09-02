@@ -227,7 +227,7 @@ const saveManualScales = async () => {
 </script>
 
 <template>
-  <div class="space-y-8 animate-fade-in pb-12">
+  <div class="space-y-6 sm:space-y-8 animate-fade-in pb-12">
     <!-- Header -->
     <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
       <div>
@@ -237,66 +237,66 @@ const saveManualScales = async () => {
             Volver a Configuración
           </RouterLink>
         </div>
-        <h1 class="text-3xl font-black text-slate-900 dark:text-white">Escalas y Rango de Notas</h1>
-        <p class="mt-1 text-slate-500 dark:text-slate-400">Configura el rango global de la institución, las escalas valorativas y el criterio de promoción S.I.E.E.</p>
+        <h1 class="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">Escalas y Rango de Notas</h1>
+        <p class="mt-1 text-xs sm:text-sm text-slate-500 dark:text-slate-400">Configura el rango global de la institución, las escalas valorativas y el criterio de promoción S.I.E.E.</p>
       </div>
     </div>
 
     <!-- Alerta Informativa: Año Lectivo Cerrado (Modo Solo Lectura) -->
-    <div v-if="isYearClosed" class="p-5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/50 rounded-3xl flex items-start gap-3.5 text-xs text-amber-900 dark:text-amber-300 shadow-sm">
+    <div v-if="isYearClosed" class="p-4 sm:p-5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/50 rounded-2xl sm:rounded-3xl flex items-start gap-3 sm:gap-3.5 text-xs text-amber-900 dark:text-amber-300 shadow-sm">
       <Lock class="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
       <div class="space-y-1">
-        <p class="font-bold text-amber-950 dark:text-amber-200 text-sm">🔒 Año Lectivo {{ yearStore.selectedYear?.calendario || '' }} (Modo Solo Lectura)</p>
-        <p>
+        <p class="font-bold text-amber-950 dark:text-amber-200 text-xs sm:text-sm">🔒 Año Lectivo {{ yearStore.selectedYear?.calendario || '' }} (Modo Solo Lectura)</p>
+        <p class="text-[11px] sm:text-xs leading-relaxed">
           El año lectivo seleccionado se encuentra <strong>CERRADO</strong>. Los parámetros institucionales y las escalas de valoración de este ciclo escolar permanecen bloqueados y no pueden ser modificados.
         </p>
       </div>
     </div>
 
-    <div v-if="loading" class="rounded-3xl border border-slate-100 bg-white p-16 text-center font-bold text-slate-400 shadow-sm dark:bg-slate-900 dark:border-slate-800 dark:text-slate-500">
+    <div v-if="loading" class="rounded-2xl sm:rounded-3xl border border-slate-100 bg-white p-10 sm:p-16 text-center font-bold text-xs sm:text-sm text-slate-400 shadow-sm dark:bg-slate-900 dark:border-slate-800 dark:text-slate-500">
       Cargando configuración...
     </div>
 
-    <div v-else class="grid grid-cols-1 gap-8 xl:grid-cols-2">
+    <div v-else class="grid grid-cols-1 gap-5 sm:gap-8 xl:grid-cols-2">
       <!-- Columna Izquierda: Rango de Notas y Criterio de Promoción -->
-      <div class="space-y-8">
+      <div class="space-y-5 sm:space-y-8">
         <!-- Tarjeta 1: Rango de Calificación y Escalas -->
-        <section class="overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-sm dark:bg-slate-900 dark:border-slate-800">
-          <div class="border-b border-slate-100 p-6 dark:border-slate-800">
+        <section class="overflow-hidden rounded-2xl sm:rounded-3xl border border-slate-100 bg-white shadow-sm dark:bg-slate-900 dark:border-slate-800">
+          <div class="border-b border-slate-100 p-4 sm:p-6 dark:border-slate-800">
             <div class="flex items-center gap-3">
-              <div class="rounded-2xl bg-amber-50 p-3 text-amber-600 dark:bg-amber-950/30 dark:text-amber-400">
-                <SlidersHorizontal class="h-6 w-6" />
+              <div class="rounded-xl sm:rounded-2xl bg-amber-50 p-2.5 sm:p-3 text-amber-600 dark:bg-amber-950/30 dark:text-amber-400 shrink-0">
+                <SlidersHorizontal class="h-5 w-5 sm:h-6 sm:w-6" />
               </div>
               <div>
-                <h2 class="text-lg font-black text-slate-900 dark:text-white">Rango Institucional de Calificación</h2>
-                <p class="text-sm text-slate-500 dark:text-slate-400">Define el espectro numérico y la nota mínima de aprobación.</p>
+                <h2 class="text-base sm:text-lg font-black text-slate-900 dark:text-white">Rango Institucional de Calificación</h2>
+                <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400">Define el espectro numérico y la nota mínima de aprobación.</p>
               </div>
             </div>
           </div>
 
-          <div class="grid grid-cols-1 gap-5 p-6 sm:grid-cols-3">
-            <label class="flex flex-col justify-between space-y-2">
-              <span class="block text-xs font-black uppercase tracking-wider text-slate-600 dark:text-slate-300 ml-1">Nota mínima</span>
-              <input v-model="defaultsForm.nota_minima" :disabled="isYearClosed" type="number" step="0.1" :class="[isYearClosed ? 'opacity-60 cursor-not-allowed bg-slate-100 dark:bg-slate-800/80' : 'bg-slate-50 dark:bg-slate-800']" class="w-full rounded-2xl border border-slate-200 p-3.5 font-semibold outline-none dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-amber-500/20" />
+          <div class="grid grid-cols-1 gap-4 p-4 sm:p-6 sm:grid-cols-3">
+            <label class="flex flex-col justify-between space-y-1.5 sm:space-y-2">
+              <span class="block text-[11px] sm:text-xs font-black uppercase tracking-wider text-slate-600 dark:text-slate-300 ml-1">Nota mínima</span>
+              <input v-model="defaultsForm.nota_minima" :disabled="isYearClosed" type="number" step="0.1" :class="[isYearClosed ? 'opacity-60 cursor-not-allowed bg-slate-100 dark:bg-slate-800/80' : 'bg-slate-50 dark:bg-slate-800']" class="w-full rounded-xl sm:rounded-2xl border border-slate-200 p-3 sm:p-3.5 text-xs sm:text-sm font-semibold outline-none dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-amber-500/20" />
             </label>
-            <label class="flex flex-col justify-between space-y-2">
-              <span class="block text-xs font-black uppercase tracking-wider text-slate-600 dark:text-slate-300 ml-1">Nota máxima</span>
-              <input v-model="defaultsForm.nota_maxima" :disabled="isYearClosed" type="number" step="0.1" :class="[isYearClosed ? 'opacity-60 cursor-not-allowed bg-slate-100 dark:bg-slate-800/80' : 'bg-slate-50 dark:bg-slate-800']" class="w-full rounded-2xl border border-slate-200 p-3.5 font-semibold outline-none dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-amber-500/20" />
+            <label class="flex flex-col justify-between space-y-1.5 sm:space-y-2">
+              <span class="block text-[11px] sm:text-xs font-black uppercase tracking-wider text-slate-600 dark:text-slate-300 ml-1">Nota máxima</span>
+              <input v-model="defaultsForm.nota_maxima" :disabled="isYearClosed" type="number" step="0.1" :class="[isYearClosed ? 'opacity-60 cursor-not-allowed bg-slate-100 dark:bg-slate-800/80' : 'bg-slate-50 dark:bg-slate-800']" class="w-full rounded-xl sm:rounded-2xl border border-slate-200 p-3 sm:p-3.5 text-xs sm:text-sm font-semibold outline-none dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-amber-500/20" />
             </label>
-            <label class="flex flex-col justify-between space-y-2">
-              <span class="block text-xs font-black uppercase tracking-wider text-slate-600 dark:text-slate-300 ml-1">Nota aprobatoria</span>
-              <input v-model="defaultsForm.nota_aprobacion" :disabled="isYearClosed" type="number" step="0.1" :class="[isYearClosed ? 'opacity-60 cursor-not-allowed bg-slate-100 dark:bg-slate-800/80' : 'bg-slate-50 dark:bg-slate-800']" class="w-full rounded-2xl border border-slate-200 p-3.5 font-semibold outline-none dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-amber-500/20" />
+            <label class="flex flex-col justify-between space-y-1.5 sm:space-y-2">
+              <span class="block text-[11px] sm:text-xs font-black uppercase tracking-wider text-slate-600 dark:text-slate-300 ml-1">Nota aprobatoria</span>
+              <input v-model="defaultsForm.nota_aprobacion" :disabled="isYearClosed" type="number" step="0.1" :class="[isYearClosed ? 'opacity-60 cursor-not-allowed bg-slate-100 dark:bg-slate-800/80' : 'bg-slate-50 dark:bg-slate-800']" class="w-full rounded-xl sm:rounded-2xl border border-slate-200 p-3 sm:p-3.5 text-xs sm:text-sm font-semibold outline-none dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-amber-500/20" />
             </label>
           </div>
 
-          <div class="border-t border-slate-100 px-6 py-6 dark:border-slate-800">
-            <span class="block text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Modo de cálculo de escalas</span>
-            <div class="mt-4 flex flex-col gap-3 md:flex-row">
+          <div class="border-t border-slate-100 px-4 sm:px-6 py-5 sm:py-6 dark:border-slate-800">
+            <span class="block text-xs sm:text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Modo de cálculo de escalas</span>
+            <div class="mt-3 sm:mt-4 flex flex-col gap-2.5 sm:gap-3 md:flex-row">
               <button
                 type="button"
                 :disabled="isYearClosed"
                 @click="defaultsForm.escala_modo = 'AUTOMATICO'"
-                :class="[defaultsForm.escala_modo === 'AUTOMATICO' ? 'border-sky-200 bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-400 dark:border-sky-900/50' : 'border-slate-200 bg-white text-slate-600 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400', isYearClosed ? 'opacity-60 cursor-not-allowed pointer-events-none' : '', 'rounded-2xl border px-5 py-4 text-left text-sm font-black transition flex-1 cursor-pointer']"
+                :class="[defaultsForm.escala_modo === 'AUTOMATICO' ? 'border-sky-200 bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-400 dark:border-sky-900/50' : 'border-slate-200 bg-white text-slate-600 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400', isYearClosed ? 'opacity-60 cursor-not-allowed pointer-events-none' : '', 'rounded-xl sm:rounded-2xl border p-3.5 sm:px-5 sm:py-4 text-left text-xs sm:text-sm font-black transition flex-1 cursor-pointer']"
               >
                 Automático por sistema
               </button>
@@ -304,19 +304,19 @@ const saveManualScales = async () => {
                 type="button"
                 :disabled="isYearClosed"
                 @click="defaultsForm.escala_modo = 'MANUAL'"
-                :class="[defaultsForm.escala_modo === 'MANUAL' ? 'border-amber-200 bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-900/50' : 'border-slate-200 bg-white text-slate-600 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400', isYearClosed ? 'opacity-60 cursor-not-allowed pointer-events-none' : '', 'rounded-2xl border px-5 py-4 text-left text-sm font-black transition flex-1 cursor-pointer']"
+                :class="[defaultsForm.escala_modo === 'MANUAL' ? 'border-amber-200 bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-900/50' : 'border-slate-200 bg-white text-slate-600 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400', isYearClosed ? 'opacity-60 cursor-not-allowed pointer-events-none' : '', 'rounded-xl sm:rounded-2xl border p-3.5 sm:px-5 sm:py-4 text-left text-xs sm:text-sm font-black transition flex-1 cursor-pointer']"
               >
                 Manual por directivo
               </button>
             </div>
-            <p class="mt-3 text-xs font-semibold text-slate-500 dark:text-slate-400">
+            <p class="mt-2.5 sm:mt-3 text-[11px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400 leading-relaxed">
               El modo automático distribuye las escalas de forma equitativa con base en el rango institucional. El modo manual te permite ajustar los cortes internos.
             </p>
           </div>
 
-          <div class="border-t border-slate-100 px-6 py-5 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
-            <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-              <p class="text-xs font-semibold text-slate-500 dark:text-slate-400 italic">
+          <div class="border-t border-slate-100 px-4 sm:px-6 py-4 sm:py-5 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+            <div class="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-center md:justify-between">
+              <p class="text-[11px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400 italic">
                 Afecta directamente la ponderación y cálculo de notas en el sistema.
               </p>
               <button 
@@ -324,7 +324,7 @@ const saveManualScales = async () => {
                 @click="() => saveDefaultSettings()" 
                 :disabled="defaultsSaving || isYearClosed" 
                 :class="[isYearClosed ? 'bg-slate-400 dark:bg-slate-700 cursor-not-allowed opacity-60' : 'bg-amber-500 hover:bg-amber-400 dark:bg-amber-600 dark:hover:bg-amber-500 cursor-pointer']"
-                class="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl px-6 py-3 text-xs font-black text-white shadow-sm transition disabled:opacity-50 uppercase tracking-widest shrink-0"
+                class="w-full sm:w-auto inline-flex min-h-11 sm:min-h-12 items-center justify-center gap-2 rounded-xl sm:rounded-2xl px-5 sm:px-6 py-2.5 sm:py-3 text-xs font-black text-white shadow-sm transition disabled:opacity-50 uppercase tracking-wider shrink-0"
               >
                 <Lock v-if="isYearClosed" class="h-4 w-4" />
                 <PenSquare v-else class="h-4 w-4" />
@@ -335,27 +335,27 @@ const saveManualScales = async () => {
         </section>
 
         <!-- Tarjeta 2: Criterio de Promoción Escolar (S.I.E.E. - Decreto 1290) -->
-        <section class="overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-sm dark:bg-slate-900 dark:border-slate-800">
-          <div class="border-b border-slate-100 p-6 dark:border-slate-800">
+        <section class="overflow-hidden rounded-2xl sm:rounded-3xl border border-slate-100 bg-white shadow-sm dark:bg-slate-900 dark:border-slate-800">
+          <div class="border-b border-slate-100 p-4 sm:p-6 dark:border-slate-800">
             <div class="flex items-center gap-3">
-              <div class="rounded-2xl bg-emerald-50 p-3 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400">
-                <GraduationCap class="h-6 w-6" />
+              <div class="rounded-xl sm:rounded-2xl bg-emerald-50 p-2.5 sm:p-3 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400 shrink-0">
+                <GraduationCap class="h-5 w-5 sm:h-6 sm:w-6" />
               </div>
               <div>
-                <h2 class="text-lg font-black text-slate-900 dark:text-white">Criterio de Promoción Anual (S.I.E.E.)</h2>
-                <p class="text-sm text-slate-500 dark:text-slate-400">Directrices del Sistema Institucional de Evaluación de los Estudiantes (Decreto 1290).</p>
+                <h2 class="text-base sm:text-lg font-black text-slate-900 dark:text-white">Criterio de Promoción Anual (S.I.E.E.)</h2>
+                <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400">Directrices del Sistema Institucional de Evaluación de los Estudiantes (Decreto 1290).</p>
               </div>
             </div>
           </div>
 
-          <div class="p-6 space-y-5">
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-2xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/40">
+          <div class="p-4 sm:p-6 space-y-4 sm:space-y-5">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 p-3.5 sm:p-4 rounded-xl sm:rounded-2xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/40">
               <div class="space-y-1">
                 <div class="flex items-center gap-2">
                   <span class="text-xs font-black uppercase tracking-wider text-emerald-900 dark:text-emerald-300">Materias reprobatorias para no promoción</span>
                   <HelpCircle class="h-4 w-4 text-emerald-600 dark:text-emerald-400 cursor-help" title="Número mínimo de asignaturas con desempeño BAJO que ocasionan la no promoción del estudiante al grado siguiente." />
                 </div>
-                <p class="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                <p class="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 font-medium leading-relaxed">
                   Si un alumno reprueba este número o más de asignaturas al cierre del año, su estado de promoción será <strong>REPROBADO</strong>.
                 </p>
               </div>
@@ -369,16 +369,16 @@ const saveManualScales = async () => {
                   max="10" 
                   step="1" 
                   :class="[isYearClosed ? 'opacity-60 cursor-not-allowed bg-slate-100 dark:bg-slate-800/80' : 'bg-white dark:bg-slate-800']" 
-                  class="w-full rounded-2xl border border-emerald-200 dark:border-emerald-800 p-3.5 text-center font-black text-lg outline-none dark:text-white focus:ring-2 focus:ring-emerald-500/30" 
+                  class="w-full rounded-xl sm:rounded-2xl border border-emerald-200 dark:border-emerald-800 p-2.5 sm:p-3.5 text-center font-black text-base sm:text-lg outline-none dark:text-white focus:ring-2 focus:ring-emerald-500/30" 
                   placeholder="3" 
                 />
               </div>
             </div>
           </div>
 
-          <div class="border-t border-slate-100 px-6 py-5 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
-            <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-              <p class="text-xs font-semibold text-slate-500 dark:text-slate-400 italic">
+          <div class="border-t border-slate-100 px-4 sm:px-6 py-4 sm:py-5 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+            <div class="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-center md:justify-between">
+              <p class="text-[11px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400 italic">
                 Utilizado exclusivamente en el Seguimiento Académico y actas de promoción.
               </p>
               <button 
@@ -386,7 +386,7 @@ const saveManualScales = async () => {
                 @click="savePromotionPolicy" 
                 :disabled="promotionSaving || isYearClosed" 
                 :class="[isYearClosed ? 'bg-slate-400 dark:bg-slate-700 cursor-not-allowed opacity-60' : 'bg-emerald-600 hover:bg-emerald-500 dark:bg-emerald-600 dark:hover:bg-emerald-500 cursor-pointer']"
-                class="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl px-6 py-3 text-xs font-black text-white shadow-sm transition disabled:opacity-50 uppercase tracking-widest shrink-0"
+                class="w-full sm:w-auto inline-flex min-h-11 sm:min-h-12 items-center justify-center gap-2 rounded-xl sm:rounded-2xl px-5 sm:px-6 py-2.5 sm:py-3 text-xs font-black text-white shadow-sm transition disabled:opacity-50 uppercase tracking-wider shrink-0"
               >
                 <Lock v-if="isYearClosed" class="h-4 w-4" />
                 <CheckCircle2 v-else class="h-4 w-4" />
@@ -398,42 +398,42 @@ const saveManualScales = async () => {
       </div>
 
       <!-- Columna Derecha: Escalas de Valoración (Automático / Manual) -->
-      <section class="overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-sm dark:bg-slate-900 dark:border-slate-800">
-        <div class="border-b border-slate-100 p-6 dark:border-slate-800">
-          <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+      <section class="overflow-hidden rounded-2xl sm:rounded-3xl border border-slate-100 bg-white shadow-sm dark:bg-slate-900 dark:border-slate-800">
+        <div class="border-b border-slate-100 p-4 sm:p-6 dark:border-slate-800">
+          <div class="flex flex-col gap-3 sm:gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div class="flex items-center gap-3">
-              <div class="rounded-2xl bg-indigo-50 p-3 text-indigo-600 dark:bg-indigo-950/30 dark:text-indigo-400">
-                <Scale class="h-6 w-6" />
+              <div class="rounded-xl sm:rounded-2xl bg-indigo-50 p-2.5 sm:p-3 text-indigo-600 dark:bg-indigo-950/30 dark:text-indigo-400 shrink-0">
+                <Scale class="h-5 w-5 sm:h-6 sm:w-6" />
               </div>
               <div>
-                <h2 class="text-lg font-black text-slate-900 dark:text-white">Escalas de Valoración Vigentes</h2>
-                <p class="text-sm text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed">
+                <h2 class="text-base sm:text-lg font-black text-slate-900 dark:text-white">Escalas de Valoración Vigentes</h2>
+                <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed">
                   {{ defaultsForm.escala_modo === 'MANUAL' ? 'Ajusta los cortes internos. El sistema protege continuidad y cobertura total.' : 'Generadas automáticamente para el rango institucional.' }}
                 </p>
               </div>
             </div>
-            <div :class="[defaultsForm.escala_modo === 'MANUAL' ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400' : 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400', 'rounded-2xl px-4 py-3 text-[10px] uppercase font-black tracking-widest shrink-0']">
+            <div :class="[defaultsForm.escala_modo === 'MANUAL' ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400' : 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400', 'rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2 sm:py-3 text-[10px] uppercase font-black tracking-widest shrink-0 w-fit']">
               {{ defaultsForm.escala_modo === 'MANUAL' ? 'Modo manual' : 'Modo automático' }}
             </div>
           </div>
         </div>
 
-        <div v-if="defaultsForm.escala_modo === 'MANUAL'" class="border-b border-slate-100 bg-amber-50/60 px-6 py-5 dark:bg-amber-950/10 dark:border-slate-800">
-          <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
-            <label class="space-y-2">
-              <span class="block text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Máximo de BASICO</span>
-              <input v-model="manualScaleForm.basico_max" :disabled="isYearClosed" type="number" step="0.1" :class="[isYearClosed ? 'opacity-60 cursor-not-allowed bg-slate-100 dark:bg-slate-800/80' : 'bg-white dark:bg-slate-800']" class="w-full rounded-2xl border border-amber-200 p-4 font-semibold outline-none dark:border-amber-900/30 dark:text-white focus:ring-2 focus:ring-amber-500/20" />
+        <div v-if="defaultsForm.escala_modo === 'MANUAL'" class="border-b border-slate-100 bg-amber-50/60 p-4 sm:px-6 sm:py-5 dark:bg-amber-950/10 dark:border-slate-800">
+          <div class="grid grid-cols-1 gap-4 sm:gap-5 md:grid-cols-2">
+            <label class="space-y-1.5 sm:space-y-2">
+              <span class="block text-xs sm:text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Máximo de BASICO</span>
+              <input v-model="manualScaleForm.basico_max" :disabled="isYearClosed" type="number" step="0.1" :class="[isYearClosed ? 'opacity-60 cursor-not-allowed bg-slate-100 dark:bg-slate-800/80' : 'bg-white dark:bg-slate-800']" class="w-full rounded-xl sm:rounded-2xl border border-amber-200 p-3 sm:p-4 text-xs sm:text-sm font-semibold outline-none dark:border-amber-900/30 dark:text-white focus:ring-2 focus:ring-amber-500/20" />
             </label>
-            <label class="space-y-2">
-              <span class="block text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Máximo de ALTO</span>
-              <input v-model="manualScaleForm.alto_max" :disabled="isYearClosed" type="number" step="0.1" :class="[isYearClosed ? 'opacity-60 cursor-not-allowed bg-slate-100 dark:bg-slate-800/80' : 'bg-white dark:bg-slate-800']" class="w-full rounded-2xl border border-amber-200 p-4 font-semibold outline-none dark:border-amber-900/30 dark:text-white focus:ring-2 focus:ring-amber-500/20" />
+            <label class="space-y-1.5 sm:space-y-2">
+              <span class="block text-xs sm:text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Máximo de ALTO</span>
+              <input v-model="manualScaleForm.alto_max" :disabled="isYearClosed" type="number" step="0.1" :class="[isYearClosed ? 'opacity-60 cursor-not-allowed bg-slate-100 dark:bg-slate-800/80' : 'bg-white dark:bg-slate-800']" class="w-full rounded-xl sm:rounded-2xl border border-amber-200 p-3 sm:p-4 text-xs sm:text-sm font-semibold outline-none dark:border-amber-900/30 dark:text-white focus:ring-2 focus:ring-amber-500/20" />
             </label>
           </div>
-          <div class="mt-5 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <p class="text-xs font-semibold text-slate-600 dark:text-slate-400 italic max-w-xs">
+          <div class="mt-4 sm:mt-5 flex flex-col gap-3 sm:gap-4 md:flex-row md:items-center md:justify-between">
+            <p class="text-[11px] sm:text-xs font-semibold text-slate-600 dark:text-slate-400 italic max-w-xs">
               BAJO y SUPERIOR se recalibran para cubrir todo el espectro institucional.
             </p>
-            <button type="button" @click="saveManualScales" :disabled="defaultsSaving || isYearClosed" :class="[isYearClosed ? 'bg-slate-400 dark:bg-slate-700 cursor-not-allowed opacity-60' : 'bg-amber-600 hover:bg-amber-500 cursor-pointer']" class="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl px-6 py-3 text-sm font-black text-white shadow-sm transition disabled:opacity-50 uppercase tracking-widest">
+            <button type="button" @click="saveManualScales" :disabled="defaultsSaving || isYearClosed" :class="[isYearClosed ? 'bg-slate-400 dark:bg-slate-700 cursor-not-allowed opacity-60' : 'bg-amber-600 hover:bg-amber-500 cursor-pointer']" class="w-full sm:w-auto inline-flex min-h-11 sm:min-h-12 items-center justify-center gap-2 rounded-xl sm:rounded-2xl px-5 sm:px-6 py-2.5 sm:py-3 text-xs sm:text-sm font-black text-white shadow-sm transition disabled:opacity-50 uppercase tracking-wider">
               <Lock v-if="isYearClosed" class="h-4 w-4" />
               <PenSquare v-else class="h-4 w-4" />
               {{ isYearClosed ? 'Año Cerrado' : (defaultsSaving ? 'Guardando...' : 'Aplicar cortes') }}
@@ -441,18 +441,18 @@ const saveManualScales = async () => {
           </div>
         </div>
 
-        <div v-if="scales.length === 0" class="p-12 text-center text-sm font-semibold text-slate-400 dark:text-slate-600">
+        <div v-if="scales.length === 0" class="p-8 sm:p-12 text-center text-xs sm:text-sm font-semibold text-slate-400 dark:text-slate-600">
           No hay escalas de valoración configuradas.
         </div>
 
         <div v-else class="divide-y divide-slate-100 dark:divide-slate-800">
-          <div v-for="scale in scales" :key="scale.id_escalavaloracion" class="flex flex-col gap-4 px-6 py-5 md:flex-row md:items-center md:justify-between hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+          <div v-for="scale in scales" :key="scale.id_escalavaloracion" class="flex flex-col gap-2.5 sm:gap-4 px-4 sm:px-6 py-4 sm:py-5 md:flex-row md:items-center md:justify-between hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
             <div>
-              <p class="text-base font-black text-slate-900 dark:text-white">{{ scale.nivel }}</p>
-              <p class="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-400">Rango: <span class="text-slate-900 dark:text-white font-black">{{ Number(scale.valor_minimo).toFixed(1) }}</span> - <span class="text-slate-900 dark:text-white font-black">{{ Number(scale.valor_maximo).toFixed(1) }}</span></p>
-              <p class="mt-1 text-[10px] font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">{{ scale.notas_count }} relaciones académicas</p>
+              <p class="text-sm sm:text-base font-black text-slate-900 dark:text-white">{{ scale.nivel }}</p>
+              <p class="mt-1 text-xs sm:text-sm font-semibold text-slate-500 dark:text-slate-400">Rango: <span class="text-slate-900 dark:text-white font-black">{{ Number(scale.valor_minimo).toFixed(1) }}</span> - <span class="text-slate-900 dark:text-white font-black">{{ Number(scale.valor_maximo).toFixed(1) }}</span></p>
+              <p class="mt-0.5 sm:mt-1 text-[9px] sm:text-[10px] font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">{{ scale.notas_count }} relaciones académicas</p>
             </div>
-            <div :class="[defaultsForm.escala_modo === 'MANUAL' ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400', 'rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest']">
+            <div :class="[defaultsForm.escala_modo === 'MANUAL' ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400', 'rounded-full px-2.5 sm:px-3 py-1 text-[9px] sm:text-[10px] font-black uppercase tracking-widest w-fit']">
               {{ defaultsForm.escala_modo === 'MANUAL' ? 'Corte manual' : 'Automático' }}
             </div>
           </div>
@@ -461,37 +461,41 @@ const saveManualScales = async () => {
     </div>
 
     <!-- Modal de Confirmación de Rescalado -->
-    <div v-if="showConfirmModal" class="fixed inset-0 z-[200] flex items-center justify-center bg-slate-950/90 backdrop-blur-md p-4 transition-all">
-      <div class="w-full max-w-lg rounded-[2.5rem] bg-white p-8 shadow-2xl border border-slate-100 animate-in fade-in zoom-in duration-300 dark:bg-slate-900 dark:border-slate-800">
-        <div class="flex items-center gap-5 mb-8">
-          <div class="h-16 w-16 rounded-[2rem] bg-amber-50 flex items-center justify-center text-amber-500 dark:bg-amber-950/30 dark:text-amber-400 shadow-inner">
-            <Scale class="h-8 w-8" />
-          </div>
+    <div v-if="showConfirmModal" class="fixed inset-0 z-[200] flex items-center justify-center bg-slate-950/90 backdrop-blur-md p-3 sm:p-4 transition-all">
+      <div class="w-full max-w-lg rounded-2xl sm:rounded-[2.5rem] bg-white p-5 sm:p-8 shadow-2xl border border-slate-100 animate-in fade-in zoom-in duration-300 dark:bg-slate-900 dark:border-slate-800 max-h-[90dvh] flex flex-col">
+        <div class="overflow-y-auto custom-scrollbar flex-1 flex flex-col justify-between">
           <div>
-            <h3 class="text-2xl font-black text-slate-900 dark:text-white tracking-tight uppercase">Aviso de Rescalado</h3>
-            <p class="text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest mt-1">Acción crítica detectada</p>
+            <div class="flex items-center gap-3.5 sm:gap-5 mb-5 sm:mb-8">
+              <div class="h-12 w-12 sm:h-16 sm:w-16 rounded-2xl sm:rounded-[2rem] bg-amber-50 flex items-center justify-center text-amber-500 dark:bg-amber-950/30 dark:text-amber-400 shadow-inner shrink-0">
+                <Scale class="h-6 w-6 sm:h-8 sm:w-8" />
+              </div>
+              <div class="min-w-0 flex-1">
+                <h3 class="text-lg sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight uppercase truncate">Aviso de Rescalado</h3>
+                <p class="text-[9px] sm:text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest mt-0.5 sm:mt-1">Acción crítica detectada</p>
+              </div>
+            </div>
+            
+            <p class="text-slate-600 dark:text-slate-400 leading-relaxed font-semibold text-sm sm:text-base">
+              {{ confirmMessage }}
+            </p>
           </div>
-        </div>
-        
-        <p class="text-slate-600 dark:text-slate-400 leading-relaxed font-semibold text-lg">
-          {{ confirmMessage }}
-        </p>
 
-        <div class="mt-10 flex flex-col gap-4 sm:flex-row sm:justify-end">
-          <button 
-            type="button" 
-            @click="showConfirmModal = false; pendingSettings = null"
-            class="px-8 py-4 rounded-2xl border border-slate-200 text-sm font-black text-slate-600 hover:bg-slate-50 transition-all dark:border-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 uppercase tracking-widest cursor-pointer"
-          >
-            Cancelar
-          </button>
-          <button 
-            type="button" 
-            @click="saveDefaultSettings(true)"
-            class="px-10 py-4 rounded-2xl bg-slate-900 text-sm font-black text-white shadow-xl hover:bg-slate-800 transition-all dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200 uppercase tracking-widest cursor-pointer"
-          >
-            Confirmar y Rescalar
-          </button>
+          <div class="mt-6 sm:mt-10 flex flex-col-reverse gap-2.5 sm:gap-4 sm:flex-row sm:justify-end pt-4 border-t border-slate-100 dark:border-slate-800 shrink-0">
+            <button 
+              type="button" 
+              @click="showConfirmModal = false; pendingSettings = null"
+              class="w-full sm:w-auto px-6 sm:px-8 py-3 sm:py-4 rounded-xl sm:rounded-2xl border border-slate-200 text-xs sm:text-sm font-black text-slate-600 hover:bg-slate-50 transition-all dark:border-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 uppercase tracking-wider cursor-pointer"
+            >
+              Cancelar
+            </button>
+            <button 
+              type="button" 
+              @click="saveDefaultSettings(true)"
+              class="w-full sm:w-auto px-6 sm:px-10 py-3 sm:py-4 rounded-xl sm:rounded-2xl bg-slate-900 text-xs sm:text-sm font-black text-white shadow-xl hover:bg-slate-800 transition-all dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200 uppercase tracking-wider cursor-pointer"
+            >
+              Confirmar y Rescalar
+            </button>
+          </div>
         </div>
       </div>
     </div>

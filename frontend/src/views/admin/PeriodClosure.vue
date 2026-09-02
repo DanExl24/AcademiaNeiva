@@ -450,37 +450,37 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+  <div class="space-y-6 sm:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
     
     <!-- Header -->
-    <div class="flex items-center gap-4">
-      <router-link to="/dashboard/configuracion-academica" class="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 shadow-sm transition hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200 border border-slate-100 dark:border-slate-800">
-        <ArrowLeft class="h-5 w-5" />
+    <div class="flex items-center gap-3 sm:gap-4">
+      <router-link to="/dashboard/configuracion-academica" class="inline-flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-xl sm:rounded-2xl bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 shadow-sm transition hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200 border border-slate-100 dark:border-slate-800 shrink-0">
+        <ArrowLeft class="h-4 w-4 sm:h-5 sm:w-5" />
       </router-link>
       <div>
-        <h1 class="text-3xl font-black text-slate-900 dark:text-white">Control de Cierre de Periodo</h1>
-        <p class="mt-1 text-slate-500 dark:text-slate-400">Supervisa qué docentes han finalizado la carga académica y ejecuta cierres formales de notas.</p>
+        <h1 class="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">Control de Cierre de Periodo</h1>
+        <p class="mt-0.5 sm:mt-1 text-xs sm:text-sm text-slate-500 dark:text-slate-400">Supervisa qué docentes han finalizado la carga académica y ejecuta cierres formales de notas.</p>
       </div>
     </div>
 
     <SkeletonTable v-if="loading" :rows="5" :cols="4" />
 
     <template v-else>
-      <div class="rounded-3xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
+      <div class="rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
         <!-- Selector Header -->
-        <div class="border-b border-slate-100 dark:border-slate-800 p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div class="border-b border-slate-100 dark:border-slate-800 p-4 sm:p-6 flex flex-col md:flex-row md:items-center justify-between gap-3.5 sm:gap-4">
           <div class="flex items-center gap-3">
-            <div class="rounded-2xl bg-rose-50 dark:bg-rose-950/30 p-3 text-rose-600 dark:text-rose-400">
-              <Lock class="h-6 w-6" />
+            <div class="rounded-xl sm:rounded-2xl bg-rose-50 dark:bg-rose-950/30 p-2.5 sm:p-3 text-rose-600 dark:text-rose-400 shrink-0">
+              <Lock class="h-5 w-5 sm:h-6 sm:w-6" />
             </div>
             <div>
-              <h2 class="text-lg font-black text-slate-900 dark:text-white">Seleccionar periodo</h2>
-              <p class="text-sm text-slate-500 dark:text-slate-400">Puedes ver estados y forzar el cierre del periodo en curso.</p>
+              <h2 class="text-base sm:text-lg font-black text-slate-900 dark:text-white">Seleccionar periodo</h2>
+              <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400">Puedes ver estados y forzar el cierre del periodo en curso.</p>
             </div>
           </div>
           <select 
             v-model="selectedPeriodId"
-            class="min-w-[200px] rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-4 font-black text-slate-900 dark:text-slate-100 outline-none focus:border-rose-300 dark:focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10 transition-shadow"
+            class="w-full md:w-auto md:min-w-[220px] rounded-xl sm:rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-3 sm:p-4 text-xs sm:text-sm font-black text-slate-900 dark:text-slate-100 outline-none focus:border-rose-300 dark:focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10 transition-shadow cursor-pointer"
           >
             <option :value="null">Selecciona un periodo</option>
             <option v-for="p in periods" :key="p.id_periodo" :value="p.id_periodo">
@@ -489,63 +489,63 @@ onMounted(() => {
           </select>
         </div>
 
-        <div v-if="selectedPeriodId && !detailsLoading" class="p-6 md:p-8 bg-slate-50/50 dark:bg-slate-900/50 space-y-6">
+        <div v-if="selectedPeriodId && !detailsLoading" class="p-4 sm:p-6 md:p-8 bg-slate-50/50 dark:bg-slate-900/50 space-y-4 sm:space-y-6">
           
           <!-- Top Interactive KPI Stat Cards & Status Actions -->
-          <div v-if="periodDetails" class="flex flex-col lg:flex-row gap-6 justify-between items-start lg:items-center">
+          <div v-if="periodDetails" class="flex flex-col lg:flex-row gap-4 sm:gap-6 justify-between items-start lg:items-center">
             <!-- Interactive KPI Cards -->
-            <div class="grid grid-cols-3 gap-3 w-full lg:w-auto">
+            <div class="grid grid-cols-3 gap-2 sm:gap-3 w-full lg:w-auto">
               <!-- Total Card -->
               <button 
                 @click="selectStatusFromCard('TODOS')"
-                class="flex flex-col text-left rounded-2xl border px-4 py-3 shadow-sm transition-all cursor-pointer hover:scale-[1.02]"
+                class="flex flex-col text-left rounded-xl sm:rounded-2xl border px-3 sm:px-4 py-2.5 sm:py-3 shadow-sm transition-all cursor-pointer hover:scale-[1.02]"
                 :class="[
                   filterStatus === 'TODOS' && !presetIncompleteOnly && !presetCompleteOnly
                     ? 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-900 ring-2 ring-slate-900/20'
                     : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white hover:border-slate-300'
                 ]"
               >
-                <span class="text-[10px] font-black uppercase tracking-widest opacity-60">Total</span>
-                <span class="text-2xl font-black mt-1">{{ totalAssignmentsCount }}</span>
+                <span class="text-[9px] sm:text-[10px] font-black uppercase tracking-widest opacity-60">Total</span>
+                <span class="text-lg sm:text-2xl font-black mt-0.5 sm:mt-1">{{ totalAssignmentsCount }}</span>
               </button>
 
               <!-- Cerrados Card -->
               <button 
                 @click="selectStatusFromCard('CERRADO')"
-                class="flex flex-col text-left rounded-2xl border px-4 py-3 shadow-sm transition-all cursor-pointer hover:scale-[1.02]"
+                class="flex flex-col text-left rounded-xl sm:rounded-2xl border px-3 sm:px-4 py-2.5 sm:py-3 shadow-sm transition-all cursor-pointer hover:scale-[1.02]"
                 :class="[
                   filterStatus === 'CERRADO' 
                     ? 'border-emerald-600 bg-emerald-600 text-white ring-2 ring-emerald-500/20'
                     : 'border-emerald-200 dark:border-emerald-900 bg-emerald-50/80 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-200 hover:border-emerald-300'
                 ]"
               >
-                <span class="text-[10px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-300" :class="filterStatus === 'CERRADO' ? 'text-white' : ''">Cerrados</span>
-                <span class="text-2xl font-black mt-1 text-emerald-700 dark:text-emerald-300" :class="filterStatus === 'CERRADO' ? 'text-white' : ''">{{ totalClosed }}</span>
+                <span class="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-300" :class="filterStatus === 'CERRADO' ? 'text-white' : ''">Cerrados</span>
+                <span class="text-lg sm:text-2xl font-black mt-0.5 sm:mt-1 text-emerald-700 dark:text-emerald-300" :class="filterStatus === 'CERRADO' ? 'text-white' : ''">{{ totalClosed }}</span>
               </button>
 
               <!-- Faltantes Card -->
               <button 
                 @click="selectStatusFromCard('PENDIENTE')"
-                class="flex flex-col text-left rounded-2xl border px-4 py-3 shadow-sm transition-all cursor-pointer hover:scale-[1.02]"
+                class="flex flex-col text-left rounded-xl sm:rounded-2xl border px-3 sm:px-4 py-2.5 sm:py-3 shadow-sm transition-all cursor-pointer hover:scale-[1.02]"
                 :class="[
                   filterStatus === 'PENDIENTE' 
                     ? 'border-amber-600 bg-amber-600 text-white ring-2 ring-amber-500/20'
                     : 'border-amber-200 dark:border-amber-900 bg-amber-50/80 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 hover:border-amber-300'
                 ]"
               >
-                <span class="text-[10px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-300" :class="filterStatus === 'PENDIENTE' ? 'text-white' : ''">Faltantes</span>
-                <span class="text-2xl font-black mt-1 text-amber-700 dark:text-amber-300" :class="filterStatus === 'PENDIENTE' ? 'text-white' : ''">{{ totalPending }}</span>
+                <span class="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-300" :class="filterStatus === 'PENDIENTE' ? 'text-white' : ''">Faltantes</span>
+                <span class="text-lg sm:text-2xl font-black mt-0.5 sm:mt-1 text-amber-700 dark:text-amber-300" :class="filterStatus === 'PENDIENTE' ? 'text-white' : ''">{{ totalPending }}</span>
               </button>
             </div>
 
             <!-- Status Badge and Period Actions -->
-            <div class="flex items-center gap-4">
-              <div class="flex items-center gap-2 mr-2">
-                <span class="h-3 w-3 rounded-full bg-emerald-500" v-if="periodDetails.estado === 'ABIERTO'"></span>
-                <span class="h-3 w-3 rounded-full bg-amber-500" v-else-if="periodDetails.estado === 'PENDIENTE'"></span>
-                <span class="h-3 w-3 rounded-full bg-slate-400 dark:bg-slate-500" v-else></span>
+            <div class="flex flex-wrap items-center gap-3 sm:gap-4 w-full lg:w-auto">
+              <div class="flex items-center gap-2 mr-1 sm:mr-2">
+                <span class="h-2.5 w-2.5 sm:h-3 sm:w-3 rounded-full bg-emerald-500" v-if="periodDetails.estado === 'ABIERTO'"></span>
+                <span class="h-2.5 w-2.5 sm:h-3 sm:w-3 rounded-full bg-amber-500" v-else-if="periodDetails.estado === 'PENDIENTE'"></span>
+                <span class="h-2.5 w-2.5 sm:h-3 sm:w-3 rounded-full bg-slate-400 dark:bg-slate-500" v-else></span>
                 <span 
-                  class="text-sm font-black tracking-wide" 
+                  class="text-xs sm:text-sm font-black tracking-wide" 
                   :class="[
                     periodDetails.estado === 'ABIERTO' ? 'text-emerald-700 dark:text-emerald-400' : 
                     periodDetails.estado === 'PENDIENTE' ? 'text-amber-700 dark:text-amber-400' : 
@@ -561,36 +561,36 @@ onMounted(() => {
                   type="button"
                   @click="attemptClosePeriod(false)"
                   :disabled="closingPeriod"
-                  class="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-rose-600 px-6 py-3 text-sm font-black text-white shadow-md transition-all hover:bg-rose-500 disabled:opacity-50 hover:shadow-rose-600/20"
+                  class="w-full sm:w-auto inline-flex min-h-11 sm:min-h-12 items-center justify-center gap-2 rounded-xl sm:rounded-2xl bg-rose-600 px-5 sm:px-6 py-2.5 sm:py-3 text-xs sm:text-sm font-black text-white shadow-md transition-all hover:bg-rose-500 disabled:opacity-50 hover:shadow-rose-600/20 cursor-pointer"
                 >
                   <Lock class="h-4 w-4" />
                   {{ closingPeriod ? 'Procesando...' : 'Proceder con Cierre' }}
                 </button>
               </template>
               <template v-else-if="periodDetails.estado === 'PENDIENTE'">
-                <div class="flex flex-col sm:flex-row items-center gap-4">
-                  <div class="px-4 py-3 bg-amber-50 dark:bg-amber-950/20 rounded-2xl text-amber-700 dark:text-amber-400 font-bold text-xs flex gap-2 items-center border border-amber-200 dark:border-amber-900/40">
-                    <AlertCircle class="w-5 h-5 shrink-0" />
+                <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 w-full sm:w-auto">
+                  <div class="px-3.5 py-2.5 sm:px-4 sm:py-3 bg-amber-50 dark:bg-amber-950/20 rounded-xl sm:rounded-2xl text-amber-700 dark:text-amber-400 font-bold text-xs flex gap-2 items-center border border-amber-200 dark:border-amber-900/40">
+                    <AlertCircle class="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
                     <span>Periodo pendiente de aprobación. No se pueden gestionar cierres.</span>
                   </div>
                   <router-link
                     to="/dashboard/configuracion-academica/periodos"
-                    class="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-amber-500 px-6 py-3 text-sm font-black text-white hover:bg-amber-600 transition-all shadow-md shadow-amber-200/50 dark:shadow-none"
+                    class="inline-flex min-h-11 sm:min-h-12 items-center justify-center gap-2 rounded-xl sm:rounded-2xl bg-amber-500 px-5 sm:px-6 py-2.5 sm:py-3 text-xs sm:text-sm font-black text-white hover:bg-amber-600 transition-all shadow-md shadow-amber-200/50 dark:shadow-none shrink-0"
                   >
                     <span>Configurar y Aprobar</span>
                   </router-link>
                 </div>
               </template>
               <template v-else>
-                <div class="px-5 py-3 bg-slate-100 dark:bg-slate-800 rounded-2xl text-slate-500 dark:text-slate-400 font-bold text-sm flex gap-2 items-center border border-slate-200 dark:border-slate-700">
-                  <CheckCircle2 class="w-5 h-5" />
+                <div class="px-4 py-2.5 sm:px-5 sm:py-3 bg-slate-100 dark:bg-slate-800 rounded-xl sm:rounded-2xl text-slate-500 dark:text-slate-400 font-bold text-xs sm:text-sm flex gap-2 items-center border border-slate-200 dark:border-slate-700">
+                  <CheckCircle2 class="w-4 h-4 sm:w-5 sm:h-5" />
                   Cierre Completado
                 </div>
                 <button
                   type="button"
                   @click="attemptReopenPeriod"
                   :disabled="reopeningPeriod"
-                  class="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-slate-100 text-slate-700 px-6 py-3 text-sm font-black transition-all hover:bg-amber-100 hover:text-amber-700 disabled:opacity-50 ring-1 ring-inset ring-slate-200 hover:ring-amber-200"
+                  class="w-full sm:w-auto inline-flex min-h-11 sm:min-h-12 items-center justify-center gap-2 rounded-xl sm:rounded-2xl bg-slate-100 text-slate-700 px-5 sm:px-6 py-2.5 sm:py-3 text-xs sm:text-sm font-black transition-all hover:bg-amber-100 hover:text-amber-700 disabled:opacity-50 ring-1 ring-inset ring-slate-200 hover:ring-amber-200 cursor-pointer"
                   title="Permite volver a recibir correcciones temporalmente"
                 >
                   <Unlock class="h-4 w-4" />
@@ -1056,41 +1056,42 @@ onMounted(() => {
     </template>
 
     <!-- Force Close Modal -->
-    <div v-if="forceCloseModal" class="fixed inset-0 z-[100] flex min-h-screen w-screen items-center justify-center bg-slate-950/88 p-4 backdrop-blur-md">
-      <div class="w-full max-w-2xl rounded-[28px] bg-white dark:bg-slate-900 shadow-2xl">
-        <div class="border-b border-slate-100 dark:border-slate-800 px-6 py-5 md:px-8">
-          <div class="flex gap-3 items-center text-rose-600 dark:text-rose-500 mb-2">
-            <AlertCircle class="w-8 h-8" />
-            <h2 class="text-2xl font-black text-slate-900 dark:text-white">Cierre Forzado Requerido</h2>
+    <div v-if="forceCloseModal" class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/88 p-3 sm:p-4 backdrop-blur-md transition-all">
+      <div class="w-full max-w-2xl rounded-2xl sm:rounded-[28px] bg-white dark:bg-slate-900 shadow-2xl border border-slate-100 dark:border-slate-800 max-h-[90dvh] flex flex-col animate-in fade-in zoom-in duration-200">
+        <div class="border-b border-slate-100 dark:border-slate-800 px-5 sm:px-8 py-4 sm:py-5 shrink-0">
+          <div class="flex gap-2.5 sm:gap-3 items-center text-rose-600 dark:text-rose-500 mb-1.5 sm:mb-2">
+            <AlertCircle class="w-6 h-6 sm:w-8 sm:h-8 shrink-0" />
+            <h2 class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">Cierre Forzado Requerido</h2>
           </div>
-          <p class="text-sm font-semibold text-slate-500 dark:text-slate-400">
+          <p class="text-xs sm:text-sm font-semibold text-slate-500 dark:text-slate-400 leading-relaxed">
             Aún existen {{ closePeriodPending.length }} asignaciones que los docentes no han marcado como completadas.
           </p>
         </div>
-        <div class="px-6 py-6 md:px-8 md:py-8">
-          
-          <div class="rounded-3xl border border-rose-100 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/30 p-5 mb-6">
-            <p class="text-sm font-black text-rose-800 dark:text-rose-300">
-              Si procedes, el sistema insertará registros de cierre forzoso en cada una de las materias listadas. Esto bloqueará la posibilidad de que los docentes implicados suban notas o modifiquen su registro posteriormente.
-            </p>
-          </div>
+        <div class="px-5 sm:px-8 py-4 sm:py-6 overflow-y-auto custom-scrollbar flex-1 flex flex-col justify-between">
+          <div>
+            <div class="rounded-xl sm:rounded-2xl border border-rose-100 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/30 p-3.5 sm:p-5 mb-4 sm:mb-6">
+              <p class="text-xs sm:text-sm font-black text-rose-800 dark:text-rose-300 leading-relaxed">
+                Si procedes, el sistema insertará registros de cierre forzoso en cada una de las materias listadas. Esto bloqueará la posibilidad de que los docentes implicados suban notas o modifiquen su registro posteriormente.
+              </p>
+            </div>
 
-          <div class="max-h-60 overflow-y-auto pr-2 space-y-3">
-            <div v-for="item in closePeriodPending" :key="item.id_detallegrado" class="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm flex flex-col md:flex-row md:items-center justify-between gap-2 shadow-sm">
-              <div>
-                <p class="font-black text-slate-700 dark:text-slate-200">{{ item.materia_nombre }}</p>
-                <p class="text-xs text-slate-500 dark:text-slate-400 font-semibold">{{ getCourseDisplayName({ tipo_grado_nombre: item.tipo_grado_nombre, seccion_nombre: item.seccion_nombre }) }} · {{ item.jornada_nombre }}</p>
+            <div class="max-h-56 overflow-y-auto pr-1 sm:pr-2 space-y-2.5 sm:space-y-3 custom-scrollbar">
+              <div v-for="item in closePeriodPending" :key="item.id_detallegrado" class="rounded-xl sm:rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3.5 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-sm">
+                <div>
+                  <p class="font-black text-slate-700 dark:text-slate-200">{{ item.materia_nombre }}</p>
+                  <p class="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 font-semibold mt-0.5">{{ getCourseDisplayName({ tipo_grado_nombre: item.tipo_grado_nombre, seccion_nombre: item.seccion_nombre }) }} · {{ item.jornada_nombre }}</p>
+                </div>
+                <span class="inline-flex bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-400 rounded-lg px-2 py-0.5 text-[10px] sm:text-[11px] font-black uppercase tracking-wider w-fit">Pendiente</span>
               </div>
-              <span class="inline-flex bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-400 rounded-lg px-2 py-1 text-[11px] font-black uppercase tracking-wider">Pendiente</span>
             </div>
           </div>
 
-          <div class="mt-8 flex flex-col gap-3 md:flex-row md:justify-end">
-            <button type="button" @click="forceCloseModal = false" class="rounded-2xl border border-slate-200 dark:border-slate-700 px-6 py-4 text-sm font-black text-slate-700 dark:text-slate-300 transition hover:bg-slate-50 dark:hover:bg-slate-800">
+          <div class="mt-6 sm:mt-8 flex flex-col-reverse sm:flex-row gap-2.5 sm:gap-3 sm:justify-end pt-4 border-t border-slate-100 dark:border-slate-800 shrink-0">
+            <button type="button" @click="forceCloseModal = false" class="w-full sm:w-auto rounded-xl sm:rounded-2xl border border-slate-200 dark:border-slate-700 px-5 sm:px-6 py-3 sm:py-3.5 text-xs sm:text-sm font-black text-slate-700 dark:text-slate-300 transition hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer">
               Cancelar
             </button>
-            <button type="button" @click="attemptClosePeriod(true)" :disabled="closingPeriod" class="inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-rose-600 px-8 py-4 text-base font-black text-white shadow-md transition hover:bg-rose-500 disabled:opacity-50">
-              <Lock class="w-5 h-5" />
+            <button type="button" @click="attemptClosePeriod(true)" :disabled="closingPeriod" class="w-full sm:w-auto inline-flex min-h-12 sm:min-h-14 items-center justify-center gap-2 rounded-xl sm:rounded-2xl bg-rose-600 px-6 sm:px-8 py-3 sm:py-3.5 text-xs sm:text-sm font-black text-white shadow-md transition hover:bg-rose-500 disabled:opacity-50 cursor-pointer">
+              <Lock class="w-4 h-4 sm:w-5 sm:h-5" />
               {{ closingPeriod ? 'Procesando...' : 'Confirmar Cierre Forzado' }}
             </button>
           </div>

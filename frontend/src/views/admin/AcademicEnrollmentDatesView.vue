@@ -214,29 +214,29 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="space-y-8 pb-20 animate-in fade-in slide-in-from-bottom-4 duration-700">
+  <div class="space-y-6 sm:space-y-8 pb-20 animate-in fade-in slide-in-from-bottom-4 duration-700">
     <!-- Header visual -->
-    <div class="rounded-3xl border border-slate-100 bg-white p-8 shadow-sm md:p-10 dark:bg-slate-900 dark:border-slate-800 transition-colors">
-      <div class="flex flex-col gap-6 md:flex-row md:items-center justify-between">
+    <div class="rounded-2xl sm:rounded-3xl border border-slate-100 bg-white p-5 sm:p-8 md:p-10 shadow-sm dark:bg-slate-900 dark:border-slate-800 transition-colors">
+      <div class="flex flex-col gap-5 md:flex-row md:items-center justify-between">
         <div class="space-y-2">
-          <router-link to="/dashboard/configuracion-academica" class="flex items-center gap-2 text-slate-500 hover:text-indigo-600 font-bold transition-colors">
-            <ArrowLeft :size="18" />
+          <router-link to="/dashboard/configuracion-academica" class="flex items-center gap-2 text-xs sm:text-sm text-slate-500 hover:text-indigo-600 font-bold transition-colors">
+            <ArrowLeft :size="16" />
             <span>Volver a Configuración</span>
           </router-link>
-          <h1 class="text-3xl font-black text-slate-900 dark:text-white flex items-center gap-3">
-            <CalendarDays class="text-violet-600" :size="32" />
-            Gestión de Fechas de Inscripción
+          <h1 class="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white flex items-center gap-2.5 sm:gap-3">
+            <CalendarDays class="text-violet-600 shrink-0 h-7 w-7 sm:h-8 sm:w-8" />
+            <span>Gestión de Fechas de Inscripción</span>
           </h1>
-          <p class="text-slate-500 dark:text-slate-400">
+          <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
             Configura el rango de fechas en el que los acudientes podrán reservar cupos para matrículas públicas.
           </p>
         </div>
 
-        <div v-if="academicYears.length > 0" class="flex flex-col gap-2 min-w-[200px]">
-          <label class="text-xs font-black text-slate-400 uppercase tracking-widest">Seleccionar Año Lectivo</label>
+        <div v-if="academicYears.length > 0" class="flex flex-col gap-1.5 w-full md:w-auto md:min-w-[220px]">
+          <label class="text-[11px] sm:text-xs font-black text-slate-400 uppercase tracking-wider">Seleccionar Año Lectivo</label>
           <select 
             v-model="selectedYearId" 
-            class="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-violet-500 transition-all cursor-pointer"
+            class="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl sm:rounded-2xl p-3 sm:p-4 text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-violet-500 transition-all cursor-pointer w-full"
           >
             <option v-for="y in academicYears" :key="y.id_anio || y.id_año" :value="y.id_anio || y.id_año">
               Año: {{ y.calendario || (y.id_anio || y.id_año) }}
@@ -252,91 +252,91 @@ onMounted(() => {
         message.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-950/20 dark:border-emerald-900/50 dark:text-emerald-400' :
         message.type === 'warning' ? 'bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-950/20 dark:border-amber-900/50 dark:text-amber-400' :
         'bg-rose-50 border-rose-200 text-rose-800 dark:bg-rose-950/20 dark:border-rose-900/50 dark:text-rose-400',
-        'p-5 border rounded-2xl flex items-start gap-3 shadow-sm'
+        'p-4 sm:p-5 border rounded-xl sm:rounded-2xl flex items-start gap-3 shadow-sm'
       ]"
     >
       <component 
         :is="message.type === 'success' ? CheckCircle2 : AlertTriangle" 
         class="h-5 w-5 shrink-0 mt-0.5" 
       />
-      <span class="text-sm font-semibold">{{ message.text }}</span>
+      <span class="text-xs sm:text-sm font-semibold">{{ message.text }}</span>
     </div>
 
     <!-- Main Config Card -->
-    <div class="rounded-3xl border border-slate-100 bg-white shadow-sm dark:bg-slate-900 dark:border-slate-800 transition-colors overflow-hidden">
-      <div class="p-8 sm:p-10 space-y-8">
+    <div class="rounded-2xl sm:rounded-3xl border border-slate-100 bg-white shadow-sm dark:bg-slate-900 dark:border-slate-800 transition-colors overflow-hidden">
+      <div class="p-5 sm:p-8 md:p-10 space-y-6 sm:space-y-8">
         
-        <div v-if="loadingConfig" class="text-center py-12 text-slate-400 font-bold dark:text-slate-500">
+        <div v-if="loadingConfig" class="text-center py-10 sm:py-12 text-slate-400 text-xs sm:text-sm font-bold dark:text-slate-500">
           Cargando configuración...
         </div>
 
-        <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-8">
           <!-- Fecha Inicio -->
-          <div class="space-y-3">
-            <label class="text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
-              <Calendar :size="16" class="text-violet-500" />
-              Fecha de Inicio de Inscripciones
+          <div class="space-y-2 sm:space-y-3">
+            <label class="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+              <Calendar :size="16" class="text-violet-500 shrink-0" />
+              <span>Fecha de Inicio de Inscripciones</span>
             </label>
             <div class="relative">
               <input 
                 type="datetime-local" 
                 v-model="localFechaInicio"
-                class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-violet-500 transition-all"
+                class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl sm:rounded-2xl p-3 sm:p-4 text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-violet-500 transition-all"
               />
             </div>
-            <p class="text-xs text-slate-400 dark:text-slate-500 leading-normal">
+            <p class="text-[11px] sm:text-xs text-slate-400 dark:text-slate-500 leading-normal">
               A partir de este día y hora, los acudientes podrán acceder al formulario público y registrarse.
             </p>
           </div>
 
           <!-- Fecha Cierre -->
-          <div class="space-y-3">
-            <label class="text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
-              <Calendar :size="16" class="text-violet-500" />
-              Fecha de Cierre de Inscripciones
+          <div class="space-y-2 sm:space-y-3">
+            <label class="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+              <Calendar :size="16" class="text-violet-500 shrink-0" />
+              <span>Fecha de Cierre de Inscripciones</span>
             </label>
             <div class="relative">
               <input 
                 type="datetime-local" 
                 v-model="localFechaCierre"
-                class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-violet-500 transition-all"
+                class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl sm:rounded-2xl p-3 sm:p-4 text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-violet-500 transition-all"
               />
             </div>
-            <p class="text-xs text-slate-400 dark:text-slate-500 leading-normal">
+            <p class="text-[11px] sm:text-xs text-slate-400 dark:text-slate-500 leading-normal">
               Una vez alcanzada esta fecha, el formulario público se cerrará automáticamente bloqueando nuevas solicitudes.
             </p>
           </div>
 
           <!-- Manual Toggle Habilitada -->
-          <div v-if="!(config.fecha_cierre && isPastCloseDate)" class="md:col-span-2 bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800/80 p-6 rounded-3xl flex items-center justify-between">
+          <div v-if="!(config.fecha_cierre && isPastCloseDate)" class="md:col-span-2 bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800/80 p-4 sm:p-6 rounded-2xl sm:rounded-3xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div class="space-y-1">
-              <h3 class="text-base font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                <component :is="localHabilitada ? Unlock : Lock" :size="18" :class="localHabilitada ? 'text-emerald-500' : 'text-rose-500'" />
-                Estado Manual de las Inscripciones
+              <h3 class="text-sm sm:text-base font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                <component :is="localHabilitada ? Unlock : Lock" :size="18" :class="localHabilitada ? 'text-emerald-500' : 'text-rose-500'" class="shrink-0" />
+                <span>Estado Manual de las Inscripciones</span>
               </h3>
-              <p class="text-xs text-slate-400 dark:text-slate-500 max-w-xl leading-normal">
+              <p class="text-[11px] sm:text-xs text-slate-400 dark:text-slate-500 max-w-xl leading-normal">
                 Permite habilitar o deshabilitar el formulario de matrícula en cualquier momento. Si se deshabilita, se impedirá la creación de nuevas solicitudes independientemente de las fechas configuradas.
               </p>
             </div>
-            <label class="relative inline-flex items-center cursor-pointer">
+            <label class="relative inline-flex items-center cursor-pointer shrink-0 self-end sm:self-center">
               <input type="checkbox" v-model="localHabilitada" class="sr-only peer">
               <div class="w-12 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
             </label>
           </div>
 
           <!-- Justificación Auditoría (Supervisión) -->
-          <div v-if="isSupervision" class="md:col-span-2 space-y-3 bg-amber-50/50 dark:bg-amber-950/10 p-6 border border-amber-200/50 dark:border-amber-900/30 rounded-3xl">
-            <h3 class="text-sm font-black text-amber-800 dark:text-amber-400 flex items-center gap-2">
-              <ShieldAlert :size="18" />
-              Justificación de Modificación (Auditoría de Supervisión)
+          <div v-if="isSupervision" class="md:col-span-2 space-y-3 bg-amber-50/50 dark:bg-amber-950/10 p-4 sm:p-6 border border-amber-200/50 dark:border-amber-900/30 rounded-2xl sm:rounded-3xl">
+            <h3 class="text-xs sm:text-sm font-black text-amber-800 dark:text-amber-400 flex items-center gap-2">
+              <ShieldAlert :size="18" class="shrink-0" />
+              <span>Justificación de Modificación (Auditoría de Supervisión)</span>
             </h3>
-            <p class="text-xs text-amber-700 dark:text-amber-500 font-medium">
+            <p class="text-[11px] sm:text-xs text-amber-700 dark:text-amber-500 font-medium leading-relaxed">
               Te encuentras en modo de supervisión como Administrador General. Debes justificar el motivo de este cambio para registrarlo en el log de auditoría.
             </p>
             <textarea 
               v-model="justification" 
               rows="3" 
-              class="w-full bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-900 rounded-2xl p-4 font-semibold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-amber-500 transition-all"
+              class="w-full bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-900 rounded-xl sm:rounded-2xl p-3 sm:p-4 text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-amber-500 transition-all"
               placeholder="Explica por qué estás modificando la configuración de inscripciones..."
             ></textarea>
           </div>
@@ -346,7 +346,7 @@ onMounted(() => {
             <button 
               @click="handleSave"
               :disabled="saving"
-              class="bg-violet-600 hover:bg-violet-700 text-white font-bold py-4 px-8 rounded-2xl flex items-center gap-2 shadow-lg shadow-violet-500/10 active:scale-95 disabled:opacity-50 transition-all"
+              class="w-full sm:w-auto bg-violet-600 hover:bg-violet-700 text-white font-bold py-3.5 sm:py-4 px-6 sm:px-8 rounded-xl sm:rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-violet-500/10 active:scale-95 disabled:opacity-50 transition-all text-xs sm:text-sm cursor-pointer"
             >
               <Save :size="18" />
               <span>{{ saving ? 'Guardando...' : 'Guardar Configuración' }}</span>

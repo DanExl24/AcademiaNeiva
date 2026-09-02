@@ -629,48 +629,48 @@ onMounted(loadData)
 </script>
 
 <template>
-  <div class="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-    <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-      <div class="flex items-center gap-4">
-        <router-link to="/dashboard/configuracion-academica" class="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-slate-500 shadow-sm transition hover:bg-slate-50 hover:text-slate-900 border border-slate-100 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800">
-          <ArrowLeft class="h-5 w-5" />
+  <div class="space-y-6 sm:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+    <div class="flex flex-col gap-4 sm:gap-5 lg:flex-row lg:items-end lg:justify-between">
+      <div class="flex items-center gap-3 sm:gap-4">
+        <router-link to="/dashboard/configuracion-academica" class="inline-flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-xl sm:rounded-2xl bg-white text-slate-500 shadow-sm transition hover:bg-slate-50 hover:text-slate-900 border border-slate-100 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800 shrink-0">
+          <ArrowLeft class="h-4 w-4 sm:h-5 sm:w-5" />
         </router-link>
         <div>
-          <h1 class="text-3xl font-black text-slate-900 dark:text-white">Años y Periodos</h1>
-          <p class="mt-1 text-slate-500 dark:text-slate-400">Administra los años lectivos y sus distribuciones por periodos.</p>
+          <h1 class="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">Años y Periodos</h1>
+          <p class="mt-1 text-xs sm:text-sm text-slate-500 dark:text-slate-400">Administra los años lectivos y sus distribuciones por periodos.</p>
         </div>
       </div>
-      <div class="rounded-2xl bg-orange-50 px-5 py-4 text-sm font-black text-orange-700 dark:bg-orange-950/30 dark:text-orange-400">
+      <div class="rounded-xl sm:rounded-2xl bg-orange-50 px-4 py-2.5 sm:px-5 sm:py-3 text-xs sm:text-sm font-black text-orange-700 dark:bg-orange-950/30 dark:text-orange-400 w-fit">
         Año lectivo activo: {{ currentYear ? currentYear.calendario : 'No configurado' }}
       </div>
     </div>
 
-    <div v-if="loading" class="rounded-3xl border border-slate-100 bg-white p-16 text-center font-bold text-slate-400 shadow-sm dark:bg-slate-900 dark:border-slate-800 dark:text-slate-500">
+    <div v-if="loading" class="rounded-2xl sm:rounded-3xl border border-slate-100 bg-white p-10 sm:p-16 text-center font-bold text-xs sm:text-sm text-slate-400 shadow-sm dark:bg-slate-900 dark:border-slate-800 dark:text-slate-500">
       Cargando configuración de tiempos académicos...
     </div>
 
     <template v-else>
       <!-- Alerta Informativa: Año Lectivo Seleccionado Cerrado (Modo Solo Lectura) -->
-      <div v-if="isYearClosed" class="p-5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/50 rounded-3xl flex items-start gap-3.5 text-xs text-amber-900 dark:text-amber-300 shadow-sm mb-2">
+      <div v-if="isYearClosed" class="p-4 sm:p-5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/50 rounded-2xl sm:rounded-3xl flex items-start gap-3 sm:gap-3.5 text-xs text-amber-900 dark:text-amber-300 shadow-sm mb-2">
         <Lock class="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
         <div class="space-y-1">
-          <p class="font-bold text-amber-950 dark:text-amber-200 text-sm">🔒 Año Lectivo {{ selectedYearObj?.calendario || '' }} (Modo Solo Lectura)</p>
-          <p>
+          <p class="font-bold text-amber-950 dark:text-amber-200 text-xs sm:text-sm">🔒 Año Lectivo {{ selectedYearObj?.calendario || '' }} (Modo Solo Lectura)</p>
+          <p class="text-[11px] sm:text-xs leading-relaxed">
             El año lectivo seleccionado se encuentra <strong>CERRADO</strong>. Los periodos académicos de este ciclo escolar permanecen bloqueados y no pueden ser modificados, creados ni eliminados. Para realizar ajustes, debes reabrir el año lectivo desde el Modo Editor.
           </p>
         </div>
       </div>
 
-      <div class="grid grid-cols-1 gap-8 xl:grid-cols-2">
-        <section class="overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-sm flex flex-col dark:bg-slate-900 dark:border-slate-800">
-          <div class="border-b border-slate-100 p-6 dark:border-slate-800 flex flex-col gap-4 2xl:flex-row 2xl:items-center 2xl:justify-between">
+      <div class="grid grid-cols-1 gap-5 sm:gap-8 xl:grid-cols-2">
+        <section class="overflow-hidden rounded-2xl sm:rounded-3xl border border-slate-100 bg-white shadow-sm flex flex-col dark:bg-slate-900 dark:border-slate-800">
+          <div class="border-b border-slate-100 p-4 sm:p-6 dark:border-slate-800 flex flex-col gap-3.5 sm:gap-4 2xl:flex-row 2xl:items-center 2xl:justify-between">
             <div class="flex items-center gap-3 min-w-0">
-              <div class="rounded-2xl bg-sky-50 p-3 text-sky-600 dark:bg-sky-950/30 dark:text-sky-400 shrink-0">
-                <BookMarked class="h-6 w-6" />
+              <div class="rounded-xl sm:rounded-2xl bg-sky-50 p-2.5 sm:p-3 text-sky-600 dark:bg-sky-950/30 dark:text-sky-400 shrink-0">
+                <BookMarked class="h-5 w-5 sm:h-6 sm:w-6" />
               </div>
               <div class="min-w-0">
-                <h2 class="text-lg font-black text-slate-900 dark:text-white">Años lectivos del colegio</h2>
-                <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 leading-relaxed">Registra los años lectivos configurados. El más reciente queda como referencia activa.</p>
+                <h2 class="text-base sm:text-lg font-black text-slate-900 dark:text-white truncate">Años lectivos del colegio</h2>
+                <p class="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 leading-relaxed truncate">Registra los años lectivos configurados. El más reciente queda como referencia activa.</p>
               </div>
             </div>
             <div class="flex flex-wrap items-center gap-2 shrink-0">
@@ -999,80 +999,82 @@ onMounted(loadData)
     </template>
 
     <!-- Modal Create Academic Year -->
-    <div v-if="yearModal" class="fixed inset-0 z-[100] flex min-h-screen w-screen items-center justify-center bg-slate-950/80 p-4 backdrop-blur-md transition-all">
-      <div class="w-full max-w-xl rounded-[32px] bg-white shadow-2xl overflow-hidden dark:bg-slate-900 border dark:border-slate-800">
-        <div class="border-b border-slate-100 px-8 py-7 dark:border-slate-800">
-          <h2 class="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Agregar Año Lectivo</h2>
-          <p class="mt-2 text-sm font-semibold text-slate-500 dark:text-slate-400 leading-relaxed">
+    <div v-if="yearModal" class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 p-3 sm:p-4 backdrop-blur-md transition-all">
+      <div class="w-full max-w-xl rounded-2xl sm:rounded-[32px] bg-white shadow-2xl overflow-hidden dark:bg-slate-900 border dark:border-slate-800 max-h-[90dvh] flex flex-col animate-in fade-in zoom-in duration-200">
+        <div class="border-b border-slate-100 px-5 sm:px-8 py-5 sm:py-7 dark:border-slate-800 shrink-0">
+          <h2 class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Agregar Año Lectivo</h2>
+          <p class="mt-1.5 sm:mt-2 text-xs sm:text-sm font-semibold text-slate-500 dark:text-slate-400 leading-relaxed">
             Ingresa el año lectivo en formato numérico (ej. 2026). Si seleccionas Calendario B, el sistema configurará automáticamente la etiqueta de rango de años (ej. 2025-2026).
           </p>
         </div>
-        <div class="px-8 py-8 space-y-6">
-          <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
-            <label class="space-y-2">
-              <span class="block text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Año Lectivo (Número)</span>
-              <input 
-                v-model="academicYearForm.year_number" 
-                type="number" 
-                min="2000" 
-                max="2100" 
-                placeholder="Ej. 2026" 
-                class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-black outline-none text-lg dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-sky-500/20" 
-              />
-            </label>
-            
-            <label class="space-y-2">
-              <span class="block text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Tipo de Calendario</span>
-              <select 
-                v-model="academicYearForm.tipo_calendario" 
-                class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-extrabold outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-sky-500/20"
-              >
-                <option value="A">Calendario A</option>
-                <option value="B">Calendario B</option>
-              </select>
-            </label>
-          </div>
+        <div class="px-5 sm:px-8 py-5 sm:py-8 space-y-4 sm:space-y-6 overflow-y-auto custom-scrollbar flex-1 flex flex-col justify-between">
+          <div class="space-y-4 sm:space-y-6">
+            <div class="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2">
+              <label class="space-y-1.5 sm:space-y-2">
+                <span class="block text-xs sm:text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Año Lectivo (Número)</span>
+                <input 
+                  v-model="academicYearForm.year_number" 
+                  type="number" 
+                  min="2000" 
+                  max="2100" 
+                  placeholder="Ej. 2026" 
+                  class="w-full rounded-xl sm:rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:p-4 font-black outline-none text-base sm:text-lg dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-sky-500/20" 
+                />
+              </label>
+              
+              <label class="space-y-1.5 sm:space-y-2">
+                <span class="block text-xs sm:text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Tipo de Calendario</span>
+                <select 
+                  v-model="academicYearForm.tipo_calendario" 
+                  class="w-full rounded-xl sm:rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:p-4 font-extrabold outline-none text-xs sm:text-sm dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-sky-500/20 cursor-pointer"
+                >
+                  <option value="A">Calendario A</option>
+                  <option value="B">Calendario B</option>
+                </select>
+              </label>
+            </div>
 
-          <div class="rounded-2xl bg-sky-50/80 p-4 border border-sky-100 flex items-center justify-between dark:bg-sky-950/20 dark:border-sky-900/30">
-            <span class="text-xs font-black text-sky-800 dark:text-sky-300 uppercase tracking-wider">Etiqueta Resultante:</span>
-            <span class="px-3.5 py-1.5 rounded-xl bg-sky-600 text-white font-black text-sm shadow-sm dark:bg-sky-500">
-              {{ computedCalendarioLabel }}
-            </span>
-          </div>
+            <div class="rounded-xl sm:rounded-2xl bg-sky-50/80 p-3.5 sm:p-4 border border-sky-100 flex items-center justify-between dark:bg-sky-950/20 dark:border-sky-900/30">
+              <span class="text-[11px] sm:text-xs font-black text-sky-800 dark:text-sky-300 uppercase tracking-wider">Etiqueta Resultante:</span>
+              <span class="px-3 sm:px-3.5 py-1 sm:py-1.5 rounded-lg sm:rounded-xl bg-sky-600 text-white font-black text-xs sm:text-sm shadow-sm dark:bg-sky-500">
+                {{ computedCalendarioLabel }}
+              </span>
+            </div>
 
-          <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
-            <label class="space-y-2">
-              <span class="block text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Fecha de Inicio</span>
-              <input 
-                v-model="academicYearForm.fecha_inicio" 
-                type="date" 
-                class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-semibold outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-sky-500/20" 
-              />
-            </label>
+            <div class="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2">
+              <label class="space-y-1.5 sm:space-y-2">
+                <span class="block text-xs sm:text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Fecha de Inicio</span>
+                <input 
+                  v-model="academicYearForm.fecha_inicio" 
+                  type="date" 
+                  class="w-full rounded-xl sm:rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:p-4 text-xs sm:text-sm font-semibold outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-sky-500/20" 
+                />
+              </label>
 
-            <label class="space-y-2">
-              <span class="block text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Fecha de Fin</span>
-              <input 
-                v-model="academicYearForm.fecha_fin" 
-                type="date" 
-                class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-semibold outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-sky-500/20" 
-              />
-            </label>
-          </div>
+              <label class="space-y-1.5 sm:space-y-2">
+                <span class="block text-xs sm:text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Fecha de Fin</span>
+                <input 
+                  v-model="academicYearForm.fecha_fin" 
+                  type="date" 
+                  class="w-full rounded-xl sm:rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:p-4 text-xs sm:text-sm font-semibold outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-sky-500/20" 
+                />
+              </label>
+            </div>
 
-          <div v-if="dateOverlapWarning" class="rounded-2xl bg-rose-50 p-4 border border-rose-200 flex items-start gap-3 dark:bg-rose-950/30 dark:border-rose-900/40">
-            <ShieldAlert class="h-5 w-5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
-            <div class="text-xs font-bold text-rose-800 dark:text-rose-300">
-              <span class="block font-black text-rose-900 dark:text-rose-200 uppercase tracking-wider mb-0.5">⚠️ Solapamiento de Fechas Detectado</span>
-              {{ dateOverlapWarning }}
+            <div v-if="dateOverlapWarning" class="rounded-xl sm:rounded-2xl bg-rose-50 p-3.5 sm:p-4 border border-rose-200 flex items-start gap-3 dark:bg-rose-950/30 dark:border-rose-900/40">
+              <ShieldAlert class="h-5 w-5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+              <div class="text-xs font-bold text-rose-800 dark:text-rose-300">
+                <span class="block font-black text-rose-900 dark:text-rose-200 uppercase tracking-wider mb-0.5">⚠️ Solapamiento de Fechas Detectado</span>
+                {{ dateOverlapWarning }}
+              </div>
             </div>
           </div>
 
-          <div class="mt-10 flex flex-col gap-4 sm:flex-row sm:justify-end">
-            <button type="button" @click="yearModal = false" class="rounded-2xl border border-slate-200 px-8 py-4 text-sm font-black text-slate-700 hover:bg-slate-50 transition-all dark:border-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 uppercase tracking-widest">
+          <div class="mt-6 sm:mt-8 flex flex-col-reverse sm:flex-row gap-2.5 sm:gap-4 sm:justify-end pt-4 border-t border-slate-100 dark:border-slate-800 shrink-0">
+            <button type="button" @click="yearModal = false" class="w-full sm:w-auto rounded-xl sm:rounded-2xl border border-slate-200 px-6 sm:px-8 py-3 sm:py-4 text-xs sm:text-sm font-black text-slate-700 hover:bg-slate-50 transition-all dark:border-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 uppercase tracking-wider cursor-pointer">
               Cancelar
             </button>
-            <button type="button" @click="createAcademicYear" :disabled="yearSaving || !!dateOverlapWarning" class="inline-flex min-h-14 items-center justify-center gap-3 rounded-2xl bg-sky-600 px-10 py-4 text-sm font-black text-white shadow-lg shadow-sky-200/50 dark:shadow-none hover:bg-sky-500 transition-all disabled:opacity-50 uppercase tracking-widest dark:bg-sky-500 dark:hover:bg-sky-400">
+            <button type="button" @click="createAcademicYear" :disabled="yearSaving || !!dateOverlapWarning" class="w-full sm:w-auto inline-flex min-h-12 sm:min-h-14 items-center justify-center gap-2 sm:gap-3 rounded-xl sm:rounded-2xl bg-sky-600 px-6 sm:px-10 py-3 sm:py-4 text-xs sm:text-sm font-black text-white shadow-lg shadow-sky-200/50 dark:shadow-none hover:bg-sky-500 transition-all disabled:opacity-50 uppercase tracking-wider dark:bg-sky-500 dark:hover:bg-sky-400 cursor-pointer">
               <Plus class="h-4 w-4" />
               {{ yearSaving ? 'Creando...' : 'Crear año lectivo' }}
             </button>
@@ -1082,70 +1084,72 @@ onMounted(loadData)
     </div>
 
     <!-- Modal Create Period -->
-    <div v-if="periodModal" class="fixed inset-0 z-[100] flex min-h-screen w-screen items-center justify-center bg-slate-950/80 p-4 backdrop-blur-md transition-all">
-      <div class="w-full max-w-2xl rounded-[32px] bg-white shadow-2xl overflow-hidden dark:bg-slate-900 border dark:border-slate-800">
-        <div class="border-b border-slate-100 px-8 py-7 dark:border-slate-800">
-          <h2 class="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Crear periodo académico</h2>
-          <p class="mt-2 text-sm font-semibold text-slate-500 dark:text-slate-400 leading-relaxed">El porcentaje agregado no puede romper el total global del año.</p>
+    <div v-if="periodModal" class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 p-3 sm:p-4 backdrop-blur-md transition-all">
+      <div class="w-full max-w-2xl rounded-2xl sm:rounded-[32px] bg-white shadow-2xl overflow-hidden dark:bg-slate-900 border dark:border-slate-800 max-h-[90dvh] flex flex-col animate-in fade-in zoom-in duration-200">
+        <div class="border-b border-slate-100 px-5 sm:px-8 py-5 sm:py-7 dark:border-slate-800 shrink-0">
+          <h2 class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Crear periodo académico</h2>
+          <p class="mt-1.5 sm:mt-2 text-xs sm:text-sm font-semibold text-slate-500 dark:text-slate-400 leading-relaxed">El porcentaje agregado no puede romper el total global del año.</p>
         </div>
-        <div class="px-8 py-8">
-          <div v-if="availablePresets.length > 0" class="mb-6 rounded-2xl bg-orange-50/70 p-4 border border-orange-100 dark:bg-orange-950/20 dark:border-orange-900/30">
-            <label class="space-y-1.5 block">
-              <span class="block text-xs font-black text-orange-800 dark:text-orange-300 uppercase tracking-wider">⚡ Cargar periodo predefinido</span>
-              <select 
-                @change="onPresetSelected(($event.target as HTMLSelectElement).value)"
-                class="w-full rounded-xl border border-orange-200 bg-white p-3 text-sm font-black text-slate-800 outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-orange-500/20"
-              >
-                <option value="">-- Seleccionar periodo disponible --</option>
-                <option v-for="preset in availablePresets" :key="preset.trimestre" :value="preset.nombre">
-                  {{ preset.nombre }} ({{ selectedYearObj?.tipo_calendario === 'B' ? 'Calendario B' : 'Calendario A' }})
-                </option>
-              </select>
-            </label>
-          </div>
+        <div class="px-5 sm:px-8 py-5 sm:py-8 overflow-y-auto custom-scrollbar flex-1 flex flex-col justify-between">
+          <div>
+            <div v-if="availablePresets.length > 0" class="mb-4 sm:mb-6 rounded-xl sm:rounded-2xl bg-orange-50/70 p-3.5 sm:p-4 border border-orange-100 dark:bg-orange-950/20 dark:border-orange-900/30">
+              <label class="space-y-1.5 block">
+                <span class="block text-xs font-black text-orange-800 dark:text-orange-300 uppercase tracking-wider">⚡ Cargar periodo predefinido</span>
+                <select 
+                  @change="onPresetSelected(($event.target as HTMLSelectElement).value)"
+                  class="w-full rounded-lg sm:rounded-xl border border-orange-200 bg-white p-2.5 sm:p-3 text-xs sm:text-sm font-black text-slate-800 outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-orange-500/20 cursor-pointer"
+                >
+                  <option value="">-- Seleccionar periodo disponible --</option>
+                  <option v-for="preset in availablePresets" :key="preset.trimestre" :value="preset.nombre">
+                    {{ preset.nombre }} ({{ selectedYearObj?.tipo_calendario === 'B' ? 'Calendario B' : 'Calendario A' }})
+                  </option>
+                </select>
+              </label>
+            </div>
 
-          <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
-            <label class="space-y-2">
-              <span class="block text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Nombre del periodo</span>
-              <input v-model="newPeriod.nombre" type="text" placeholder="Ej. Primer Periodo" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-semibold outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-orange-500/20" />
-            </label>
-            <label class="space-y-2">
-              <span class="block text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Porcentaje (%)</span>
-              <input v-model="newPeriod.porcentaje" type="number" min="0" step="0.01" placeholder="Ej. 25" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-semibold outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-orange-500/20" />
-            </label>
-          </div>
+            <div class="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2">
+              <label class="space-y-1.5 sm:space-y-2">
+                <span class="block text-xs sm:text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Nombre del periodo</span>
+                <input v-model="newPeriod.nombre" type="text" placeholder="Ej. Primer Periodo" class="w-full rounded-xl sm:rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:p-4 text-xs sm:text-sm font-semibold outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-orange-500/20" />
+              </label>
+              <label class="space-y-1.5 sm:space-y-2">
+                <span class="block text-xs sm:text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Porcentaje (%)</span>
+                <input v-model="newPeriod.porcentaje" type="number" min="0" step="0.01" placeholder="Ej. 25" class="w-full rounded-xl sm:rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:p-4 text-xs sm:text-sm font-semibold outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-orange-500/20" />
+              </label>
+            </div>
 
-          <div class="mt-8 space-y-6 rounded-3xl border border-orange-100 bg-orange-50/50 p-7 dark:bg-orange-950/10 dark:border-orange-900/40">
-            <h3 class="text-sm font-black text-orange-700 dark:text-orange-400 uppercase tracking-widest">Vigencia del periodo</h3>
-            
-            <div class="grid grid-cols-1 gap-8 md:grid-cols-2">
-              <div class="space-y-4">
-                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest h-4">Inicio del periodo</p>
-                <div class="flex gap-3">
-                  <select v-model="newPeriod.mes_inicio" class="flex-1 rounded-2xl border border-slate-200 bg-white p-4 font-semibold outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-orange-500/20">
-                    <option value="">Mes</option>
-                    <option v-for="m in months" :key="m.id" :value="m.id">{{ m.name }}</option>
-                  </select>
-                  <input v-model="newPeriod.dia_inicio" type="number" min="1" max="31" placeholder="Día" class="w-24 rounded-2xl border border-slate-200 bg-white p-4 font-semibold outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-orange-500/20" />
+            <div class="mt-5 sm:mt-8 space-y-4 sm:space-y-6 rounded-2xl sm:rounded-3xl border border-orange-100 bg-orange-50/50 p-4 sm:p-7 dark:bg-orange-950/10 dark:border-orange-900/40">
+              <h3 class="text-xs sm:text-sm font-black text-orange-700 dark:text-orange-400 uppercase tracking-widest">Vigencia del periodo</h3>
+              
+              <div class="grid grid-cols-1 gap-4 sm:gap-8 md:grid-cols-2">
+                <div class="space-y-2 sm:space-y-4">
+                  <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Inicio del periodo</p>
+                  <div class="flex gap-2 sm:gap-3">
+                    <select v-model="newPeriod.mes_inicio" class="flex-1 rounded-xl sm:rounded-2xl border border-slate-200 bg-white p-3 sm:p-4 text-xs sm:text-sm font-semibold outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-orange-500/20 cursor-pointer">
+                      <option value="">Mes</option>
+                      <option v-for="m in months" :key="m.id" :value="m.id">{{ m.name }}</option>
+                    </select>
+                    <input v-model="newPeriod.dia_inicio" type="number" min="1" max="31" placeholder="Día" class="w-20 sm:w-24 rounded-xl sm:rounded-2xl border border-slate-200 bg-white p-3 sm:p-4 text-xs sm:text-sm font-semibold outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-orange-500/20" />
+                  </div>
                 </div>
-              </div>
 
-              <div class="space-y-4">
-                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest h-4">Fin del periodo</p>
-                <div class="flex gap-3">
-                  <select v-model="newPeriod.mes_fin" class="flex-1 rounded-2xl border border-slate-200 bg-white p-4 font-semibold outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-orange-500/20">
-                    <option value="">Mes</option>
-                    <option v-for="m in months" :key="m.id" :value="m.id">{{ m.name }}</option>
-                  </select>
-                  <input v-model="newPeriod.dia_fin" type="number" min="1" max="31" placeholder="Día" class="w-24 rounded-2xl border border-slate-200 bg-white p-4 font-semibold outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-orange-500/20" />
+                <div class="space-y-2 sm:space-y-4">
+                  <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Fin del periodo</p>
+                  <div class="flex gap-2 sm:gap-3">
+                    <select v-model="newPeriod.mes_fin" class="flex-1 rounded-xl sm:rounded-2xl border border-slate-200 bg-white p-3 sm:p-4 text-xs sm:text-sm font-semibold outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-orange-500/20 cursor-pointer">
+                      <option value="">Mes</option>
+                      <option v-for="m in months" :key="m.id" :value="m.id">{{ m.name }}</option>
+                    </select>
+                    <input v-model="newPeriod.dia_fin" type="number" min="1" max="31" placeholder="Día" class="w-20 sm:w-24 rounded-xl sm:rounded-2xl border border-slate-200 bg-white p-3 sm:p-4 text-xs sm:text-sm font-semibold outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-orange-500/20" />
+                  </div>
                 </div>
               </div>
             </div>
           </div>
 
-          <div class="mt-10 flex flex-col gap-4 sm:flex-row sm:justify-end">
-            <button type="button" @click="periodModal = false" class="rounded-2xl border border-slate-200 px-8 py-4 text-sm font-black text-slate-700 hover:bg-slate-50 transition-all dark:border-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 uppercase tracking-widest">Cancelar</button>
-            <button type="button" @click="createPeriod" :disabled="savingPeriod" class="inline-flex min-h-14 items-center justify-center gap-3 rounded-2xl bg-orange-500 px-10 py-4 text-sm font-black text-white shadow-lg shadow-orange-200/50 dark:shadow-none hover:bg-orange-600 transition-all disabled:opacity-50 uppercase tracking-widest">
+          <div class="mt-6 sm:mt-10 flex flex-col-reverse sm:flex-row gap-2.5 sm:gap-4 sm:justify-end pt-4 border-t border-slate-100 dark:border-slate-800 shrink-0">
+            <button type="button" @click="periodModal = false" class="w-full sm:w-auto rounded-xl sm:rounded-2xl border border-slate-200 px-6 sm:px-8 py-3 sm:py-4 text-xs sm:text-sm font-black text-slate-700 hover:bg-slate-50 transition-all dark:border-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 uppercase tracking-wider cursor-pointer">Cancelar</button>
+            <button type="button" @click="createPeriod" :disabled="savingPeriod" class="w-full sm:w-auto inline-flex min-h-12 sm:min-h-14 items-center justify-center gap-2 sm:gap-3 rounded-xl sm:rounded-2xl bg-orange-500 px-6 sm:px-10 py-3 sm:py-4 text-xs sm:text-sm font-black text-white shadow-lg shadow-orange-200/50 dark:shadow-none hover:bg-orange-600 transition-all disabled:opacity-50 uppercase tracking-wider cursor-pointer">
               <Plus class="h-4 w-4" />
               {{ savingPeriod ? 'Creando...' : 'Crear periodo' }}
             </button>
@@ -1155,49 +1159,51 @@ onMounted(loadData)
     </div>
 
     <!-- Modal Edit Period -->
-    <div v-if="periodEditModal" class="fixed inset-0 z-[100] flex min-h-screen w-screen items-center justify-center bg-slate-950/80 p-4 backdrop-blur-md transition-all">
-      <div class="w-full max-w-2xl rounded-[32px] bg-white shadow-2xl overflow-hidden dark:bg-slate-900 border dark:border-slate-800">
-        <div class="border-b border-slate-100 px-8 py-7 dark:border-slate-800">
-          <h2 class="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Actualizar periodo</h2>
-          <p class="mt-2 text-sm font-black text-orange-600 dark:text-orange-400">{{ periodEditModal.nombre }}</p>
+    <div v-if="periodEditModal" class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 p-3 sm:p-4 backdrop-blur-md transition-all">
+      <div class="w-full max-w-2xl rounded-2xl sm:rounded-[32px] bg-white shadow-2xl overflow-hidden dark:bg-slate-900 border dark:border-slate-800 max-h-[90dvh] flex flex-col animate-in fade-in zoom-in duration-200">
+        <div class="border-b border-slate-100 px-5 sm:px-8 py-5 sm:py-7 dark:border-slate-800 shrink-0">
+          <h2 class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Actualizar periodo</h2>
+          <p class="mt-1.5 sm:mt-2 text-xs sm:text-sm font-black text-orange-600 dark:text-orange-400">{{ periodEditModal.nombre }}</p>
         </div>
-        <div class="px-8 py-8">
-          <label class="space-y-2">
-            <span class="block text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Porcentaje (%)</span>
-            <input v-model="periodEdit.porcentaje" type="number" min="0" step="0.01" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-semibold outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-orange-500/20" />
-          </label>
+        <div class="px-5 sm:px-8 py-5 sm:py-8 overflow-y-auto custom-scrollbar flex-1 flex flex-col justify-between">
+          <div>
+            <label class="space-y-1.5 sm:space-y-2 block">
+              <span class="block text-xs sm:text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Porcentaje (%)</span>
+              <input v-model="periodEdit.porcentaje" type="number" min="0" step="0.01" class="w-full rounded-xl sm:rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:p-4 text-xs sm:text-sm font-semibold outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-orange-500/20" />
+            </label>
 
-          <div class="mt-8 space-y-6 rounded-3xl border border-orange-100 bg-orange-50/50 p-7 dark:bg-orange-950/10 dark:border-orange-900/40">
-            <h3 class="text-sm font-black text-orange-700 dark:text-orange-400 uppercase tracking-widest">Actualizar vigencia</h3>
-            
-            <div class="grid grid-cols-1 gap-8 md:grid-cols-2">
-              <div class="space-y-4">
-                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest h-4">Inicio</p>
-                <div class="flex gap-3">
-                  <select v-model="periodEdit.mes_inicio" class="flex-1 rounded-2xl border border-slate-200 bg-white p-4 font-semibold outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-orange-500/20">
-                    <option value="">Mes</option>
-                    <option v-for="m in months" :key="m.id" :value="m.id">{{ m.name }}</option>
-                  </select>
-                  <input v-model="periodEdit.dia_inicio" type="number" min="1" max="31" class="w-24 rounded-2xl border border-slate-200 bg-white p-4 font-semibold outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-orange-500/20" />
+            <div class="mt-5 sm:mt-8 space-y-4 sm:space-y-6 rounded-2xl sm:rounded-3xl border border-orange-100 bg-orange-50/50 p-4 sm:p-7 dark:bg-orange-950/10 dark:border-orange-900/40">
+              <h3 class="text-xs sm:text-sm font-black text-orange-700 dark:text-orange-400 uppercase tracking-widest">Actualizar vigencia</h3>
+              
+              <div class="grid grid-cols-1 gap-4 sm:gap-8 md:grid-cols-2">
+                <div class="space-y-2 sm:space-y-4">
+                  <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Inicio</p>
+                  <div class="flex gap-2 sm:gap-3">
+                    <select v-model="periodEdit.mes_inicio" class="flex-1 rounded-xl sm:rounded-2xl border border-slate-200 bg-white p-3 sm:p-4 text-xs sm:text-sm font-semibold outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-orange-500/20 cursor-pointer">
+                      <option value="">Mes</option>
+                      <option v-for="m in months" :key="m.id" :value="m.id">{{ m.name }}</option>
+                    </select>
+                    <input v-model="periodEdit.dia_inicio" type="number" min="1" max="31" class="w-20 sm:w-24 rounded-xl sm:rounded-2xl border border-slate-200 bg-white p-3 sm:p-4 text-xs sm:text-sm font-semibold outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-orange-500/20" />
+                  </div>
                 </div>
-              </div>
 
-              <div class="space-y-4">
-                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest h-4">Fin</p>
-                <div class="flex gap-3">
-                  <select v-model="periodEdit.mes_fin" class="flex-1 rounded-2xl border border-slate-200 bg-white p-4 font-semibold outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-orange-500/20">
-                    <option value="">Mes</option>
-                    <option v-for="m in months" :key="m.id" :value="m.id">{{ m.name }}</option>
-                  </select>
-                  <input v-model="periodEdit.dia_fin" type="number" min="1" max="31" class="w-24 rounded-2xl border border-slate-200 bg-white p-4 font-semibold outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-orange-500/20" />
+                <div class="space-y-2 sm:space-y-4">
+                  <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Fin</p>
+                  <div class="flex gap-2 sm:gap-3">
+                    <select v-model="periodEdit.mes_fin" class="flex-1 rounded-xl sm:rounded-2xl border border-slate-200 bg-white p-3 sm:p-4 text-xs sm:text-sm font-semibold outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-orange-500/20 cursor-pointer">
+                      <option value="">Mes</option>
+                      <option v-for="m in months" :key="m.id" :value="m.id">{{ m.name }}</option>
+                    </select>
+                    <input v-model="periodEdit.dia_fin" type="number" min="1" max="31" class="w-20 sm:w-24 rounded-xl sm:rounded-2xl border border-slate-200 bg-white p-3 sm:p-4 text-xs sm:text-sm font-semibold outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-orange-500/20" />
+                  </div>
                 </div>
               </div>
             </div>
           </div>
 
-          <div class="mt-10 flex flex-col gap-4 sm:flex-row sm:justify-end">
-            <button type="button" @click="periodEditModal = null" class="rounded-2xl border border-slate-200 px-8 py-4 text-sm font-black text-slate-700 hover:bg-slate-50 transition-all dark:border-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 uppercase tracking-widest">Cancelar</button>
-            <button type="button" @click="updatePeriodPercentage" :disabled="savingPeriod" class="inline-flex min-h-14 items-center justify-center gap-3 rounded-2xl bg-orange-600 px-10 py-4 text-sm font-black text-white shadow-lg shadow-orange-200/50 dark:shadow-none hover:bg-orange-700 transition-all disabled:opacity-50 uppercase tracking-widest">
+          <div class="mt-6 sm:mt-10 flex flex-col-reverse sm:flex-row gap-2.5 sm:gap-4 sm:justify-end pt-4 border-t border-slate-100 dark:border-slate-800 shrink-0">
+            <button type="button" @click="periodEditModal = null" class="w-full sm:w-auto rounded-xl sm:rounded-2xl border border-slate-200 px-6 sm:px-8 py-3 sm:py-4 text-xs sm:text-sm font-black text-slate-700 hover:bg-slate-50 transition-all dark:border-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 uppercase tracking-wider cursor-pointer">Cancelar</button>
+            <button type="button" @click="updatePeriodPercentage" :disabled="savingPeriod" class="w-full sm:w-auto inline-flex min-h-12 sm:min-h-14 items-center justify-center gap-2 sm:gap-3 rounded-xl sm:rounded-2xl bg-orange-600 px-6 sm:px-10 py-3 sm:py-4 text-xs sm:text-sm font-black text-white shadow-lg shadow-orange-200/50 dark:shadow-none hover:bg-orange-700 transition-all disabled:opacity-50 uppercase tracking-wider cursor-pointer">
               <PenSquare class="h-4 w-4" />
               {{ savingPeriod ? 'Guardando...' : 'Actualizar periodo' }}
             </button>
@@ -1207,73 +1213,81 @@ onMounted(loadData)
     </div>
 
     <!-- Modal Success Year Creation -->
-    <div v-if="showYearSuccessAlert" class="fixed inset-0 z-[120] flex min-h-screen w-screen items-center justify-center bg-slate-950/80 p-4 backdrop-blur-md transition-all">
-      <div class="w-full max-w-lg rounded-[32px] bg-white shadow-2xl overflow-hidden dark:bg-slate-900 border dark:border-slate-800 p-8">
-        <div class="text-center">
-          <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400 mb-4">
-            <BookMarked class="h-6 w-6" />
-          </div>
-          <h2 class="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">¡Año Lectivo Creado!</h2>
-          <p class="mt-3 text-sm font-semibold text-slate-600 dark:text-slate-300 leading-relaxed">{{ yearSuccessMessage }}</p>
-        </div>
+    <div v-if="showYearSuccessAlert" class="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/80 p-3 sm:p-4 backdrop-blur-md transition-all">
+      <div class="w-full max-w-lg rounded-2xl sm:rounded-[32px] bg-white shadow-2xl overflow-hidden dark:bg-slate-900 border dark:border-slate-800 p-5 sm:p-8 max-h-[90dvh] flex flex-col animate-in fade-in zoom-in duration-200">
+        <div class="overflow-y-auto custom-scrollbar flex-1 flex flex-col justify-between">
+          <div>
+            <div class="text-center">
+              <div class="mx-auto flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-xl sm:rounded-2xl bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400 mb-3 sm:mb-4">
+                <BookMarked class="h-5 w-5 sm:h-6 sm:w-6" />
+              </div>
+              <h2 class="text-lg sm:text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">¡Año Lectivo Creado!</h2>
+              <p class="mt-2 sm:mt-3 text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-300 leading-relaxed">{{ yearSuccessMessage }}</p>
+            </div>
 
-        <div class="mt-6 space-y-3 bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-100 dark:border-slate-700/50">
-          <p class="text-xs font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2">Periodos autogenerados:</p>
-          <div v-for="p in yearSuccessPeriods" :key="p.id_periodo" class="flex items-center justify-between text-xs py-1.5 border-b border-dashed border-slate-200 dark:border-slate-700 last:border-b-0">
-            <span class="font-bold text-slate-800 dark:text-slate-200">{{ p.nombre }}</span>
-            <span class="text-slate-500 dark:text-slate-400">
-              📅 {{ months[p.mes_inicio - 1].name }} {{ p.dia_inicio }} - {{ months[p.mes_fin - 1].name }} {{ p.dia_fin }}
-            </span>
+            <div class="mt-4 sm:mt-6 space-y-2.5 sm:space-y-3 bg-slate-50 dark:bg-slate-800/50 p-4 sm:p-5 rounded-xl sm:rounded-2xl border border-slate-100 dark:border-slate-700/50">
+              <p class="text-[10px] sm:text-xs font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-1.5 sm:mb-2">Periodos autogenerados:</p>
+              <div v-for="p in yearSuccessPeriods" :key="p.id_periodo" class="flex items-center justify-between text-xs py-1.5 border-b border-dashed border-slate-200 dark:border-slate-700 last:border-b-0">
+                <span class="font-bold text-slate-800 dark:text-slate-200 text-[11px] sm:text-xs">{{ p.nombre }}</span>
+                <span class="text-slate-500 dark:text-slate-400 text-[10px] sm:text-xs">
+                  📅 {{ months[p.mes_inicio - 1].name }} {{ p.dia_inicio }} - {{ months[p.mes_fin - 1].name }} {{ p.dia_fin }}
+                </span>
+              </div>
+            </div>
           </div>
-        </div>
 
-        <div class="mt-8 flex justify-center">
-          <button type="button" @click="showYearSuccessAlert = false" class="w-full rounded-2xl bg-sky-600 py-4 text-sm font-black text-white hover:bg-sky-500 transition-all dark:bg-sky-500 dark:hover:bg-sky-400 uppercase tracking-widest">
-            Entendido
-          </button>
+          <div class="mt-6 sm:mt-8 flex justify-center pt-4 border-t border-slate-100 dark:border-slate-800 shrink-0">
+            <button type="button" @click="showYearSuccessAlert = false" class="w-full rounded-xl sm:rounded-2xl bg-sky-600 py-3 sm:py-4 text-xs sm:text-sm font-black text-white hover:bg-sky-500 transition-all dark:bg-sky-500 dark:hover:bg-sky-400 uppercase tracking-wider cursor-pointer">
+              Entendido
+            </button>
+          </div>
         </div>
       </div>
     </div>
 
     <!-- Modal Warning Editor Mode -->
-    <div v-if="showEditorWarningModal" class="fixed inset-0 z-[120] flex min-h-screen w-screen items-center justify-center bg-slate-950/80 p-4 backdrop-blur-md transition-all">
-      <div class="w-full max-w-lg rounded-[32px] bg-white shadow-2xl overflow-hidden dark:bg-slate-900 border dark:border-slate-800 p-8">
-        <div class="text-center">
-          <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-50 text-rose-600 dark:bg-rose-950/30 dark:text-rose-400 mb-4">
-            <ShieldAlert class="h-6 w-6" />
+    <div v-if="showEditorWarningModal" class="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/80 p-3 sm:p-4 backdrop-blur-md transition-all">
+      <div class="w-full max-w-lg rounded-2xl sm:rounded-[32px] bg-white shadow-2xl overflow-hidden dark:bg-slate-900 border dark:border-slate-800 p-5 sm:p-8 max-h-[90dvh] flex flex-col animate-in fade-in zoom-in duration-200">
+        <div class="overflow-y-auto custom-scrollbar flex-1 flex flex-col justify-between">
+          <div>
+            <div class="text-center">
+              <div class="mx-auto flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-xl sm:rounded-2xl bg-rose-50 text-rose-600 dark:bg-rose-950/30 dark:text-rose-400 mb-3 sm:mb-4">
+                <ShieldAlert class="h-5 w-5 sm:h-6 sm:w-6" />
+              </div>
+              <h2 class="text-lg sm:text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">¡Atención - Zona de Riesgo!</h2>
+              <p class="mt-2.5 sm:mt-4 text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-300 leading-relaxed">
+                El modo editor es una herramienta delicada. Le permitirá <strong>eliminar, abrir o cerrar</strong> años lectivos completos.
+              </p>
+              <div class="mt-3.5 sm:mt-4 p-3.5 sm:p-4 rounded-xl sm:rounded-2xl bg-rose-50/50 border border-rose-100 text-left text-xs font-semibold text-rose-700 dark:bg-rose-950/10 dark:border-rose-900/30 dark:text-rose-400 leading-relaxed">
+                ⚠️ <strong>Riesgos asociados:</strong>
+                <ul class="list-disc list-inside mt-1.5 sm:mt-2 space-y-1 text-[11px] sm:text-xs">
+                  <li>Cerrar un año evitará que se realicen modificaciones académicas.</li>
+                  <li>Eliminar un año borrará todos los periodos y estructuras asociadas de forma irreversible.</li>
+                  <li>Si hay matrículas o notas activas, el borrado será bloqueado para proteger la consistencia de datos.</li>
+                </ul>
+              </div>
+              <p class="mt-3.5 sm:mt-4 text-xs font-bold text-slate-400 dark:text-slate-500">
+                ¿Desea ingresar bajo su propia responsabilidad?
+              </p>
+            </div>
           </div>
-          <h2 class="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">¡Atención - Zona de Riesgo!</h2>
-          <p class="mt-4 text-sm font-semibold text-slate-600 dark:text-slate-300 leading-relaxed">
-            El modo editor es una herramienta delicada. Le permitirá <strong>eliminar, abrir o cerrar</strong> años lectivos completos.
-          </p>
-          <div class="mt-4 p-4 rounded-2xl bg-rose-50/50 border border-rose-100 text-left text-xs font-semibold text-rose-700 dark:bg-rose-950/10 dark:border-rose-900/30 dark:text-rose-400 leading-relaxed">
-            ⚠️ <strong>Riesgos asociados:</strong>
-            <ul class="list-disc list-inside mt-2 space-y-1">
-              <li>Cerrar un año evitará que se realicen modificaciones académicas.</li>
-              <li>Eliminar un año borrará todos los periodos y estructuras asociadas de forma irreversible.</li>
-              <li>Si hay matrículas o notas activas, el borrado será bloqueado para proteger la consistencia de datos.</li>
-            </ul>
-          </div>
-          <p class="mt-4 text-xs font-bold text-slate-400 dark:text-slate-500">
-            ¿Desea ingresar bajo su propia responsabilidad?
-          </p>
-        </div>
 
-        <div class="mt-6 flex flex-col gap-3 sm:flex-row">
-          <button 
-            type="button" 
-            @click="showEditorWarningModal = false" 
-            class="flex-1 rounded-2xl border border-slate-200 py-3.5 text-xs font-black text-slate-700 hover:bg-slate-50 transition-all dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800 uppercase tracking-widest"
-          >
-            Cancelar
-          </button>
-          <button 
-            type="button" 
-            @click="editorModeActive = true; showEditorWarningModal = false" 
-            class="flex-1 rounded-2xl bg-rose-600 py-3.5 text-xs font-black text-white hover:bg-rose-500 transition-all dark:bg-rose-500 dark:hover:bg-rose-400 uppercase tracking-widest shadow-lg shadow-rose-200/50 dark:shadow-none"
-          >
-            Entendido, activar
-          </button>
+          <div class="mt-5 sm:mt-6 flex flex-col-reverse sm:flex-row gap-2.5 sm:gap-3 pt-4 border-t border-slate-100 dark:border-slate-800 shrink-0">
+            <button 
+              type="button" 
+              @click="showEditorWarningModal = false" 
+              class="w-full sm:w-auto flex-1 rounded-xl sm:rounded-2xl border border-slate-200 py-3 sm:py-3.5 text-xs font-black text-slate-700 hover:bg-slate-50 transition-all dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800 uppercase tracking-wider cursor-pointer"
+            >
+              Cancelar
+            </button>
+            <button 
+              type="button" 
+              @click="editorModeActive = true; showEditorWarningModal = false" 
+              class="w-full sm:w-auto flex-1 rounded-xl sm:rounded-2xl bg-rose-600 py-3 sm:py-3.5 text-xs font-black text-white hover:bg-rose-500 transition-all dark:bg-rose-500 dark:hover:bg-rose-400 uppercase tracking-wider shadow-lg shadow-rose-200/50 dark:shadow-none cursor-pointer"
+            >
+              Entendido, activar
+            </button>
+          </div>
         </div>
       </div>
     </div>
