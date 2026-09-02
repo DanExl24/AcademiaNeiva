@@ -54,18 +54,18 @@ const handleResetPassword = async () => {
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-12 sm:px-6 lg:px-8">
-    <div class="max-w-md w-full space-y-8 bg-white p-10 rounded-3xl shadow-xl border border-gray-100">
+  <div class="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-8 sm:py-12 sm:px-6 lg:px-8">
+    <div class="max-w-md w-full space-y-6 sm:space-y-8 bg-white p-6 sm:p-10 rounded-2xl sm:rounded-3xl shadow-xl border border-gray-100">
       <div class="text-center">
-        <router-link to="/login" class="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-indigo-600 mb-8 transition-colors">
+        <router-link to="/login" class="inline-flex items-center gap-2 text-xs sm:text-sm text-gray-500 hover:text-indigo-600 mb-6 sm:mb-8 transition-colors">
           <ArrowLeft :size="16" />
           Volver al inicio de sesión
         </router-link>
         <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-600 text-white mx-auto shadow-lg shadow-indigo-100 mb-4">
           <KeyRound :size="24" />
         </div>
-        <h2 class="text-3xl font-extrabold text-gray-900">Nueva Contraseña</h2>
-        <p class="mt-2 text-sm text-gray-600">Ingresa tu nueva contraseña para ingresar al sistema</p>
+        <h2 class="text-2xl sm:text-3xl font-extrabold text-gray-900">Nueva Contraseña</h2>
+        <p class="mt-1.5 sm:mt-2 text-xs sm:text-sm text-gray-600">Ingresa tu nueva contraseña para ingresar al sistema</p>
       </div>
 
       <div v-if="error" class="p-4 bg-red-50 border border-red-100 rounded-xl">

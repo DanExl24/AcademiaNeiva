@@ -138,61 +138,61 @@ const getRenewalStatusClass = (state?: string) => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+  <div class="min-h-screen bg-gray-50 py-6 sm:py-12 px-3.5 sm:px-6 lg:px-8">
     <div class="max-w-4xl mx-auto">
       <!-- Header -->
-      <div class="mb-12 flex items-center justify-between">
-        <button @click="router.push('/')" class="flex items-center gap-2 text-gray-500 hover:text-indigo-600 transition-all font-medium">
-          <ArrowLeft :size="20" />
+      <div class="mb-8 sm:mb-12 flex items-center justify-between">
+        <button @click="router.push('/')" class="flex items-center gap-2 text-xs sm:text-sm text-gray-500 hover:text-indigo-600 transition-all font-medium cursor-pointer">
+          <ArrowLeft :size="18" />
           <span>Volver al inicio</span>
         </button>
-        <div class="flex items-center gap-3">
-          <div class="p-2 bg-indigo-600 rounded-lg text-white">
-            <School :size="24" />
+        <div class="flex items-center gap-2.5 sm:gap-3">
+          <div class="p-1.5 sm:p-2 bg-indigo-600 rounded-lg text-white">
+            <School :size="20" class="sm:w-6 sm:h-6" />
           </div>
-          <span class="text-xl font-bold tracking-tight text-gray-900">Corrección de Documentos</span>
+          <span class="text-base sm:text-xl font-bold tracking-tight text-gray-900">Corrección de Documentos</span>
         </div>
       </div>
 
-      <div v-if="loading" class="text-center py-20">
-        <div class="animate-spin inline-block w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full mb-4"></div>
-        <p class="text-gray-500 font-bold">Cargando tu solicitud...</p>
+      <div v-if="loading" class="text-center py-16 sm:py-20">
+        <div class="animate-spin inline-block w-8 h-8 sm:w-10 sm:h-10 border-4 border-indigo-600 border-t-transparent rounded-full mb-3 sm:mb-4"></div>
+        <p class="text-gray-500 text-xs sm:text-sm font-bold">Cargando tu solicitud...</p>
       </div>
 
-      <div v-else-if="matricula" class="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div v-else-if="matricula" class="space-y-6 sm:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
         <!-- Info Card -->
-        <div class="bg-white rounded-3xl p-8 border border-gray-200 shadow-sm">
-          <h2 class="text-2xl font-bold text-gray-900 mb-2">Estado de tu Solicitud</h2>
-          <p class="text-gray-500">Revisa los documentos marcados como rechazados y sube la versión corregida.</p>
+        <div class="bg-white rounded-2xl sm:rounded-3xl p-5 sm:p-8 border border-gray-200 shadow-sm">
+          <h2 class="text-xl sm:text-2xl font-bold text-gray-900 mb-1.5 sm:mb-2">Estado de tu Solicitud</h2>
+          <p class="text-xs sm:text-sm text-gray-500">Revisa los documentos marcados como rechazados y sube la versión corregida.</p>
           
-          <div class="mt-6 flex items-center gap-4 p-4 bg-amber-50 rounded-2xl border border-amber-100" v-if="matricula.documentos.some((d: any) => d.estado === 'RECHAZADO')">
-            <AlertCircle class="text-amber-600" :size="24" />
-            <p class="text-sm text-amber-800 font-medium">
+          <div class="mt-4 sm:mt-6 flex items-start sm:items-center gap-3 sm:gap-4 p-3.5 sm:p-4 bg-amber-50 rounded-xl sm:rounded-2xl border border-amber-100" v-if="matricula.documentos.some((d: any) => d.estado === 'RECHAZADO')">
+            <AlertCircle class="text-amber-600 shrink-0 mt-0.5 sm:mt-0" :size="20" />
+            <p class="text-xs sm:text-sm text-amber-800 font-medium leading-relaxed">
               Tienes documentos con observaciones. Por favor actualízalos para continuar con el proceso.
             </p>
           </div>
         </div>
 
         <!-- Document List -->
-        <div class="grid grid-cols-1 gap-4">
+        <div class="grid grid-cols-1 gap-3.5 sm:gap-4">
           <div v-for="doc in matricula.documentos" :key="doc.id_documento" 
-            class="bg-white rounded-2xl p-6 border border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-6 transition-all hover:shadow-md"
+            class="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6 transition-all hover:shadow-md"
             :class="{'ring-2 ring-red-500 ring-offset-2': doc.estado === 'RECHAZADO'}"
           >
-            <div class="flex items-center gap-4">
-              <div class="p-3 bg-gray-50 rounded-xl">
-                <FileText :size="24" :class="doc.estado === 'RECHAZADO' ? 'text-red-500' : 'text-indigo-600'" />
+            <div class="flex items-start sm:items-center gap-3 sm:gap-4 min-w-0">
+              <div class="p-2.5 sm:p-3 bg-gray-50 rounded-xl shrink-0 mt-0.5 sm:mt-0">
+                <FileText :size="22" :class="doc.estado === 'RECHAZADO' ? 'text-red-500' : 'text-indigo-600'" />
               </div>
-              <div>
-                <h3 class="font-bold text-gray-900">{{ docLabels[doc.tipo_documento] || doc.tipo_documento }}</h3>
-                <div class="flex flex-wrap items-center gap-2 mt-1.5">
-                  <span :class="[getStatusClass(doc.estado), 'px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase border']">
+              <div class="min-w-0">
+                <h3 class="font-bold text-sm sm:text-base text-gray-900 truncate">{{ docLabels[doc.tipo_documento] || doc.tipo_documento }}</h3>
+                <div class="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-1.5">
+                  <span :class="[getStatusClass(doc.estado), 'px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border']">
                     {{ doc.estado === 'VALIDADO' ? '✅ VALIDADO' : doc.estado === 'RECHAZADO' ? '❌ RECHAZADO' : '⏳ PENDIENTE' }}
                   </span>
 
                   <span 
                     v-if="(matricula?.tipo === 'REINGRESO' || matricula?.tipo === 'RENOVACION') && doc.estado_renovacion"
-                    :class="[getRenewalStatusClass(doc.estado_renovacion), 'px-2.5 py-0.5 rounded-full text-[10px] font-bold border']"
+                    :class="[getRenewalStatusClass(doc.estado_renovacion), 'px-2 py-0.5 rounded-full text-[10px] font-bold border']"
                   >
                     {{ getRenewalStatusLabel(doc.estado_renovacion) }}
                   </span>
@@ -204,40 +204,40 @@ const getRenewalStatusClass = (state?: string) => {
               </div>
             </div>
 
-            <div class="flex items-center gap-4">
-              <label class="flex-1 md:flex-none">
+            <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+              <label class="w-full sm:w-auto">
                 <input type="file" class="hidden" @change="e => handleFileUpload(e, doc.tipo_documento)" accept=".pdf,image/*">
-                <div class="flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-sm font-bold transition-all cursor-pointer shadow-sm"
+                <div class="w-full sm:w-auto flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer shadow-sm"
                   :class="newFiles[doc.tipo_documento] ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-indigo-600 text-white hover:bg-indigo-700'"
                 >
-                  <Upload :size="18" v-if="!newFiles[doc.tipo_documento]" />
-                  <CheckCircle2 :size="18" v-else />
-                  {{ newFiles[doc.tipo_documento] ? 'Cambiar archivo' : (doc.estado === 'RECHAZADO' ? 'Subir Corrección' : 'Actualizar Documento') }}
+                  <Upload :size="16" v-if="!newFiles[doc.tipo_documento]" />
+                  <CheckCircle2 :size="16" v-else />
+                  <span>{{ newFiles[doc.tipo_documento] ? 'Cambiar archivo' : (doc.estado === 'RECHAZADO' ? 'Subir Corrección' : 'Actualizar Documento') }}</span>
                 </div>
               </label>
               
-              <div v-if="newFiles[doc.tipo_documento]" class="text-xs text-emerald-600 font-bold hidden md:block">
-                {{ newFiles[doc.tipo_documento]?.name }}
+              <div v-if="newFiles[doc.tipo_documento]" class="text-[11px] sm:text-xs text-emerald-600 font-bold truncate max-w-xs">
+                📄 {{ newFiles[doc.tipo_documento]?.name }}
               </div>
             </div>
           </div>
         </div>
 
         <!-- Footer Actions -->
-        <div class="flex flex-col sm:flex-row items-center justify-between bg-white p-8 rounded-3xl border border-gray-100 shadow-sm gap-6">
-          <div class="text-gray-500 text-sm">
-            <p v-if="Object.values(newFiles).filter(f => f !== null).length === 0">No has realizado cambios.</p>
+        <div class="flex flex-col sm:flex-row items-center justify-between bg-white p-5 sm:p-8 rounded-2xl sm:rounded-3xl border border-gray-100 shadow-sm gap-4 sm:gap-6">
+          <div class="text-gray-500 text-xs sm:text-sm text-center sm:text-left">
+            <p v-if="Object.values(newFiles).filter(f => f !== null).length === 0">No has realizado cambios aún.</p>
             <p v-else class="text-indigo-600 font-bold">Has cargado {{ Object.values(newFiles).filter(f => f !== null).length }} documento(s) para corregir.</p>
           </div>
           <button 
             @click="submitCorrections"
             :disabled="submittng || Object.values(newFiles).filter(f => f !== null).length === 0"
-            class="w-full sm:w-auto bg-gray-900 text-white px-12 py-4 rounded-2xl font-bold hover:bg-indigo-600 transition-all shadow-xl disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            class="w-full sm:w-auto bg-gray-900 text-white px-8 sm:px-12 py-3 sm:py-4 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-bold hover:bg-indigo-600 transition-all shadow-xl disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
           >
             <div v-if="submittng" class="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
             <template v-else>
-              Enviar Correcciones
-              <CheckCircle :size="20" />
+              <span>Enviar Correcciones</span>
+              <CheckCircle :size="18" />
             </template>
           </button>
         </div>

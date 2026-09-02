@@ -81,63 +81,63 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-slate-900 px-4 py-12 sm:px-6 lg:px-8 relative overflow-hidden font-sans">
+  <div class="min-h-screen flex items-center justify-center bg-slate-900 px-4 py-8 sm:py-12 sm:px-6 lg:px-8 relative overflow-hidden font-sans">
     <!-- Fondo decorativo -->
     <div class="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-indigo-950/50 via-slate-900 to-slate-950 -z-10"></div>
     <div class="absolute -top-40 -left-40 w-96 h-96 bg-indigo-600/10 rounded-full filter blur-[80px] -z-10 animate-pulse"></div>
     <div class="absolute -bottom-40 -right-40 w-96 h-96 bg-emerald-600/10 rounded-full filter blur-[80px] -z-10 animate-pulse"></div>
 
-    <div class="max-w-2xl w-full space-y-8 bg-slate-950/60 backdrop-blur-2xl p-8 sm:p-10 rounded-3xl shadow-2xl border border-slate-800/80">
+    <div class="max-w-2xl w-full space-y-6 sm:space-y-8 bg-slate-950/60 backdrop-blur-2xl p-5 sm:p-10 rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-800/80">
       
       <!-- Encabezado -->
       <div class="text-center">
-        <div class="flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-600 text-white mx-auto shadow-xl shadow-indigo-500/20 mb-5 border border-indigo-400/20">
-          <GraduationCap :size="36" />
+        <div class="flex h-13 w-13 sm:h-16 sm:w-16 items-center justify-center rounded-xl sm:rounded-2xl bg-indigo-600 text-white mx-auto shadow-xl shadow-indigo-500/20 mb-3.5 sm:mb-5 border border-indigo-400/20">
+          <GraduationCap :size="32" class="sm:w-9 sm:h-9" />
         </div>
         
-        <h2 class="text-3xl font-extrabold text-white tracking-tight">
+        <h2 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
           ¡Hola, {{ auth.user?.name || 'Docente' }}!
         </h2>
-        <p class="mt-2 text-sm text-slate-400 max-w-md mx-auto">
+        <p class="mt-1.5 sm:mt-2 text-xs sm:text-sm text-slate-400 max-w-md mx-auto">
           Selecciona la institución educativa en la que deseas trabajar en esta sesión.
         </p>
       </div>
 
       <!-- Estado de carga -->
-      <div v-if="loading" class="py-12 flex flex-col items-center justify-center space-y-4">
+      <div v-if="loading" class="py-8 sm:py-12 flex flex-col items-center justify-center space-y-4">
         <div class="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-        <p class="text-sm text-slate-400 font-medium">Cargando tus instituciones asociadas...</p>
+        <p class="text-xs sm:text-sm text-slate-400 font-medium">Cargando tus instituciones asociadas...</p>
       </div>
 
       <!-- Lista de Colegios -->
-      <div v-else class="space-y-4">
+      <div v-else class="space-y-3 sm:space-y-4">
         <div 
           v-for="school in schools" 
           :key="school.id_colegio"
           @click="selectSchool(school.id_colegio)"
           :class="[
-            'group relative p-6 rounded-2xl border transition-all cursor-pointer flex items-center justify-between',
+            'group relative p-4 sm:p-6 rounded-xl sm:rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3',
             auth.selectedSchoolId === school.id_colegio 
               ? 'bg-indigo-950/40 border-indigo-500 shadow-lg shadow-indigo-500/10' 
               : 'bg-slate-900/60 border-slate-800 hover:border-indigo-500/50 hover:bg-slate-900/90'
           ]"
         >
-          <div class="flex items-center space-x-4">
-            <div class="h-14 w-14 rounded-xl bg-slate-800 border border-slate-700/80 flex items-center justify-center text-indigo-400 group-hover:scale-105 transition-transform overflow-hidden p-2">
+          <div class="flex items-center space-x-3 sm:space-x-4 min-w-0">
+            <div class="h-11 w-11 sm:h-14 sm:w-14 rounded-xl bg-slate-800 border border-slate-700/80 flex items-center justify-center text-indigo-400 group-hover:scale-105 transition-transform overflow-hidden p-1.5 sm:p-2 shrink-0">
               <img v-if="school.escudo_url" :src="school.escudo_url" alt="Escudo" class="h-full w-full object-contain" />
-              <Building2 v-else :size="28" />
+              <Building2 v-else :size="22" class="sm:w-7 sm:h-7" />
             </div>
 
-            <div>
-              <div class="flex items-center gap-2">
-                <h3 class="text-lg font-bold text-white group-hover:text-indigo-300 transition-colors">
+            <div class="min-w-0">
+              <div class="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                <h3 class="text-sm sm:text-lg font-bold text-white group-hover:text-indigo-300 transition-colors truncate">
                   {{ school.colegio_nombre }}
                 </h3>
-                <span v-if="auth.selectedSchoolId === school.id_colegio" class="inline-flex items-center gap-1 text-[11px] font-semibold bg-indigo-500/20 text-indigo-300 px-2.5 py-0.5 rounded-full border border-indigo-500/30">
-                  <CheckCircle2 :size="12" /> Actual
+                <span v-if="auth.selectedSchoolId === school.id_colegio" class="inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-semibold bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded-full border border-indigo-500/30">
+                  <CheckCircle2 :size="11" /> Actual
                 </span>
               </div>
-              <p class="text-xs text-slate-400 mt-1 flex items-center gap-2">
+              <p class="text-[11px] sm:text-xs text-slate-400 mt-1 flex flex-wrap items-center gap-1.5 sm:gap-2">
                 <span class="capitalize bg-slate-800 text-slate-300 px-2 py-0.5 rounded-md font-medium">
                   {{ school.rol_nombre || 'Docente' }}
                 </span>

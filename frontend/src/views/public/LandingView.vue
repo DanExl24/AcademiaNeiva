@@ -186,30 +186,30 @@ const roles = [
     </nav>
 
     <!-- Hero Section -->
-    <section class="relative overflow-hidden pt-32 pb-20 lg:pt-48 lg:pb-32">
+    <section class="relative overflow-hidden pt-28 pb-16 sm:pt-32 sm:pb-20 lg:pt-48 lg:pb-32">
       <!-- Background elements -->
-      <div class="absolute top-0 left-1/2 -z-10 h-[1000px] w-[1000px] -translate-x-1/2 rounded-full bg-indigo-50/50 blur-3xl"></div>
+      <div class="absolute top-0 left-1/2 -z-10 h-[600px] sm:h-[1000px] w-[600px] sm:w-[1000px] -translate-x-1/2 rounded-full bg-indigo-50/50 blur-3xl"></div>
       
       <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div class="text-center">
-          <h1 class="mx-auto max-w-4xl text-5xl font-extrabold tracking-tight text-gray-900 sm:text-7xl">
+          <h1 class="mx-auto max-w-4xl text-3xl font-extrabold tracking-tight text-gray-900 sm:text-6xl lg:text-7xl leading-tight">
             Gestión Académica de <span class="bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent text-shadow-sm">Vanguardia</span> para Neiva
           </h1>
-          <p class="mx-auto mt-8 max-w-2xl text-lg leading-8 text-gray-600">
+          <p class="mx-auto mt-5 sm:mt-8 max-w-2xl text-base sm:text-lg leading-relaxed text-gray-600">
             La solución integral multi-colegio para simplificar la matrícula, controlar el rendimiento estudiantil y generar boletines automáticos en segundos.
           </p>
-          <div class="mt-10 flex flex-wrap items-center justify-center gap-x-6 gap-y-4">
-            <router-link to="/login" class="group flex items-center gap-2 rounded-full bg-gray-900 px-8 py-4 text-lg font-semibold text-white shadow-xl hover:bg-gray-800 transition-all">
-              Entrar al Sistema
-              <ArrowRight :size="20" class="group-hover:translate-x-1 transition-transform" />
+          <div class="mt-8 sm:mt-10 flex flex-col sm:flex-row flex-wrap items-center justify-center gap-3 sm:gap-x-6 sm:gap-y-4">
+            <router-link to="/login" class="w-full sm:w-auto group flex items-center justify-center gap-2 rounded-full bg-gray-900 px-7 sm:px-8 py-3.5 sm:py-4 text-base sm:text-lg font-semibold text-white shadow-xl hover:bg-gray-800 transition-all">
+              <span>Entrar al Sistema</span>
+              <ArrowRight :size="18" class="group-hover:translate-x-1 transition-transform" />
             </router-link>
-            <router-link to="/matricula" class="text-lg font-semibold leading-6 text-gray-900 hover:text-indigo-600 transition-colors">
+            <router-link to="/matricula" class="text-sm sm:text-lg font-semibold text-gray-900 hover:text-indigo-600 transition-colors py-1">
               Iniciar Matrícula <span aria-hidden="true">→</span>
             </router-link>
-            <router-link to="/matricula/seguimiento" class="text-lg font-semibold leading-6 text-indigo-600 hover:text-indigo-700 transition-colors">
+            <router-link to="/matricula/seguimiento" class="text-sm sm:text-lg font-semibold text-indigo-600 hover:text-indigo-700 transition-colors py-1">
               Consultar Estado <span aria-hidden="true">→</span>
             </router-link>
-            <router-link to="/soporte" class="text-lg font-semibold leading-6 text-emerald-600 hover:text-emerald-700 transition-colors">
+            <router-link to="/soporte" class="text-sm sm:text-lg font-semibold text-emerald-600 hover:text-emerald-700 transition-colors py-1">
               Soporte Técnico <span aria-hidden="true">→</span>
             </router-link>
           </div>
@@ -218,24 +218,24 @@ const roles = [
     </section>
 
     <!-- Beneficios Section -->
-    <section id="beneficios" class="bg-gray-50 py-24 sm:py-32">
+    <section id="beneficios" class="bg-gray-50 py-16 sm:py-24 lg:py-32">
       <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div class="mx-auto max-w-2xl lg:text-center">
-          <h2 class="text-base font-semibold leading-7 text-indigo-600 uppercase tracking-widest">Capacidades</h2>
-          <p class="mt-2 text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">Todo lo que tu colegio necesita</p>
-          <p class="mt-6 text-lg leading-8 text-gray-600">
+          <h2 class="text-xs sm:text-base font-semibold leading-7 text-indigo-600 uppercase tracking-widest">Capacidades</h2>
+          <p class="mt-1.5 sm:mt-2 text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight text-gray-900">Todo lo que tu colegio necesita</p>
+          <p class="mt-4 sm:mt-6 text-sm sm:text-lg leading-relaxed text-gray-600">
             Nuestra arquitectura modular permite a cada institución gestionar sus procesos de manera independiente pero centralizada.
           </p>
         </div>
         
-        <div class="mx-auto mt-16 max-w-2xl sm:mt-20 lg:mt-24 lg:max-w-none">
-          <dl class="grid max-w-xl grid-cols-1 gap-x-8 gap-y-16 lg:max-w-none lg:grid-cols-4">
-            <div v-for="benefit in benefits" :key="benefit.title" class="flex flex-col items-start bg-white p-8 rounded-3xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-              <div :class="[benefit.bg, 'p-3 rounded-2xl mb-6']">
-                <component :is="benefit.icon" :class="[benefit.color, 'h-6 w-6']" />
+        <div class="mx-auto mt-12 sm:mt-16 lg:mt-24 max-w-2xl lg:max-w-none">
+          <dl class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 lg:gap-8">
+            <div v-for="benefit in benefits" :key="benefit.title" class="flex flex-col items-start bg-white p-5 sm:p-8 rounded-2xl sm:rounded-3xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+              <div :class="[benefit.bg, 'p-2.5 sm:p-3 rounded-xl sm:rounded-2xl mb-4 sm:mb-6']">
+                <component :is="benefit.icon" :class="[benefit.color, 'h-5 w-5 sm:h-6 sm:w-6']" />
               </div>
-              <dt class="text-xl font-bold leading-7 text-gray-900">{{ benefit.title }}</dt>
-              <dd class="mt-4 flex flex-auto flex-col text-base leading-7 text-gray-600">
+              <dt class="text-base sm:text-xl font-bold text-gray-900">{{ benefit.title }}</dt>
+              <dd class="mt-2 sm:mt-4 flex flex-auto flex-col text-xs sm:text-base leading-relaxed text-gray-600">
                 <p class="flex-auto">{{ benefit.description }}</p>
               </dd>
             </div>
@@ -245,41 +245,41 @@ const roles = [
     </section>
 
     <!-- Roles Section -->
-    <section id="roles" class="py-24 sm:py-32">
+    <section id="roles" class="py-16 sm:py-24 lg:py-32">
       <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div class="grid grid-cols-1 gap-12 lg:grid-cols-2 lg:items-center">
+        <div class="grid grid-cols-1 gap-8 lg:gap-12 lg:grid-cols-2 lg:items-center">
           <div>
-            <h2 class="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">Roles y Responsabilidades</h2>
-            <p class="mt-6 text-lg leading-8 text-gray-600">
+            <h2 class="text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight text-gray-900">Roles y Responsabilidades</h2>
+            <p class="mt-3 sm:mt-6 text-sm sm:text-lg leading-relaxed text-gray-600">
               Seguridad basada en roles (RBAC) que garantiza que cada usuario acceda únicamente a la información que le compete, respetando siempre la privacidad del colegio.
             </p>
-            <div class="mt-10 space-y-4">
-              <div v-for="role in roles" :key="role.name" class="flex items-center gap-4 p-4 rounded-2xl hover:bg-indigo-50 transition-colors">
-                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-100 text-indigo-600">
-                  <component :is="role.icon" :size="24" />
+            <div class="mt-6 sm:mt-10 space-y-3 sm:space-y-4">
+              <div v-for="role in roles" :key="role.name" class="flex items-center gap-3 sm:gap-4 p-3 sm:p-4 rounded-xl sm:rounded-2xl hover:bg-indigo-50 transition-colors">
+                <div class="flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-xl bg-indigo-100 text-indigo-600 shrink-0">
+                  <component :is="role.icon" :size="22" />
                 </div>
                 <div>
-                  <h3 class="font-bold text-gray-900">{{ role.name }}</h3>
-                  <p class="text-sm text-gray-600">{{ role.desc }}</p>
+                  <h3 class="font-bold text-sm sm:text-base text-gray-900">{{ role.name }}</h3>
+                  <p class="text-xs sm:text-sm text-gray-600">{{ role.desc }}</p>
                 </div>
               </div>
             </div>
           </div>
-          <div class="relative">
-            <div class="aspect-square rounded-3xl bg-indigo-600/5 p-8 flex items-center justify-center">
+          <div class="relative mt-4 lg:mt-0">
+            <div class="aspect-square rounded-2xl sm:rounded-3xl bg-indigo-600/5 p-4 sm:p-8 flex items-center justify-center max-w-sm sm:max-w-md mx-auto">
               <!-- Illustration/Icon Cloud -->
-              <div class="grid grid-cols-2 gap-8">
-                <div class="animate-bounce" style="animation-duration: 3s">
-                   <Users :size="120" class="text-indigo-200" />
+              <div class="grid grid-cols-2 gap-4 sm:gap-8">
+                <div class="animate-bounce flex items-center justify-center" style="animation-duration: 3s">
+                   <Users class="w-16 h-16 sm:w-28 sm:h-28 text-indigo-200" />
                 </div>
-                <div class="animate-pulse" style="animation-duration: 4s">
-                   <ShieldCheck :size="100" class="text-indigo-300" />
+                <div class="animate-pulse flex items-center justify-center" style="animation-duration: 4s">
+                   <ShieldCheck class="w-14 h-14 sm:w-24 sm:h-24 text-indigo-300" />
                 </div>
-                <div class="animate-pulse" style="animation-duration: 2s">
-                   <Zap :size="80" class="text-indigo-400" />
+                <div class="animate-pulse flex items-center justify-center" style="animation-duration: 2s">
+                   <Zap class="w-12 h-12 sm:w-20 sm:h-20 text-indigo-400" />
                 </div>
-                <div class="animate-bounce" style="animation-duration: 5s">
-                   <BarChart3 :size="140" class="text-indigo-100" />
+                <div class="animate-bounce flex items-center justify-center" style="animation-duration: 5s">
+                   <BarChart3 class="w-16 h-16 sm:w-32 sm:h-32 text-indigo-100" />
                 </div>
               </div>
             </div>
@@ -289,27 +289,27 @@ const roles = [
     </section>
 
     <!-- Soporte Section -->
-    <section id="soporte" class="bg-gray-900 py-24 sm:py-32 relative overflow-hidden">
+    <section id="soporte" class="bg-gray-900 py-16 sm:py-24 lg:py-32 relative overflow-hidden">
       <!-- Decoración -->
-      <div class="absolute -top-24 -right-24 h-96 w-96 rounded-full bg-indigo-600/20 blur-3xl"></div>
+      <div class="absolute -top-24 -right-24 h-64 w-64 sm:h-96 sm:w-96 rounded-full bg-indigo-600/20 blur-3xl"></div>
       
       <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div class="mx-auto max-w-2xl text-center">
-          <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-600/20 mb-6">
-            <LifeBuoy :size="32" class="text-indigo-400" />
+          <div class="mx-auto flex h-12 w-12 sm:h-16 sm:w-16 items-center justify-center rounded-xl sm:rounded-2xl bg-indigo-600/20 mb-4 sm:mb-6">
+            <LifeBuoy :size="28" class="text-indigo-400" />
           </div>
-          <h2 class="text-3xl font-bold tracking-tight text-white sm:text-4xl">¿Necesitas ayuda?</h2>
-          <p class="mt-4 text-lg leading-8 text-gray-400">
+          <h2 class="text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight text-white">¿Necesitas ayuda?</h2>
+          <p class="mt-3 sm:mt-4 text-sm sm:text-lg leading-relaxed text-gray-400">
             Si tienes problemas con la plataforma, inconvenientes de inicio de sesión, dudas sobre calificaciones o cualquier otra incidencia, nuestro equipo de soporte está disponible para ti.
           </p>
-          <div class="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-            <router-link to="/soporte" class="group flex items-center gap-2 rounded-full bg-indigo-500 px-8 py-4 text-lg font-semibold text-white shadow-xl hover:bg-indigo-400 transition-all">
+          <div class="mt-6 sm:mt-10 flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
+            <router-link to="/soporte" class="w-full sm:w-auto group flex items-center justify-center gap-2 rounded-full bg-indigo-500 px-6 sm:px-8 py-3.5 sm:py-4 text-base sm:text-lg font-semibold text-white shadow-xl hover:bg-indigo-400 transition-all">
               <HelpCircle :size="20" />
-              Ir a Soporte Técnico
-              <ArrowRight :size="20" class="group-hover:translate-x-1 transition-transform" />
+              <span>Ir a Soporte Técnico</span>
+              <ArrowRight :size="18" class="group-hover:translate-x-1 transition-transform" />
             </router-link>
           </div>
-          <p class="mt-6 text-sm text-gray-500">
+          <p class="mt-4 sm:mt-6 text-xs sm:text-sm text-gray-500">
             También puedes consultar el estado de tu ticket con tu código de seguimiento.
           </p>
         </div>
@@ -318,18 +318,18 @@ const roles = [
 
     <!-- Footer -->
     <footer class="bg-white border-t border-gray-100">
-      <div class="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
-        <div class="flex flex-col items-center justify-between gap-6 md:flex-row">
+      <div class="mx-auto max-w-7xl px-4 py-8 sm:py-12 sm:px-6 lg:px-8">
+        <div class="flex flex-col items-center justify-between gap-4 sm:gap-6 md:flex-row text-center md:text-left">
           <div class="flex items-center gap-2">
-            <School :size="24" class="text-indigo-600" />
-            <span class="text-lg font-bold text-gray-900">Academia Neiva</span>
+            <School :size="22" class="text-indigo-600" />
+            <span class="text-base sm:text-lg font-bold text-gray-900">Academia Neiva</span>
           </div>
-          <div class="flex gap-6 text-sm text-gray-500">
+          <div class="flex flex-wrap justify-center gap-4 sm:gap-6 text-xs sm:text-sm text-gray-500">
             <a href="#" class="hover:text-indigo-600 transition-colors">Términos</a>
             <a href="#" class="hover:text-indigo-600 transition-colors">Privacidad</a>
             <router-link to="/soporte" class="hover:text-indigo-600 transition-colors">Soporte</router-link>
           </div>
-          <p class="text-sm text-gray-400">
+          <p class="text-xs sm:text-sm text-gray-400">
             &copy; 2026 Academia Neiva. Todos los derechos reservados.
           </p>
         </div>

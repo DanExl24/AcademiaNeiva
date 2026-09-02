@@ -536,67 +536,67 @@ const submitEnrollment = async () => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-slate-50/50 py-12 px-4 sm:px-6 lg:px-8 font-sans">
+  <div class="min-h-screen bg-slate-50/50 py-6 sm:py-12 px-3.5 sm:px-6 lg:px-8 font-sans">
     <div class="max-w-5xl mx-auto">
       <!-- Navbar -->
-      <div class="mb-12 flex items-center justify-between">
-        <router-link to="/" class="flex items-center gap-2 text-slate-500 hover:text-indigo-600 transition-all font-medium">
-          <ArrowLeft :size="20" />
+      <div class="mb-8 sm:mb-12 flex items-center justify-between">
+        <router-link to="/" class="flex items-center gap-2 text-xs sm:text-sm text-slate-500 hover:text-indigo-600 transition-all font-medium">
+          <ArrowLeft :size="18" />
           <span>Volver al Inicio</span>
         </router-link>
-        <div class="flex items-center gap-3">
-          <div class="p-2 bg-indigo-600 rounded-xl text-white shadow-md shadow-indigo-100">
-            <School :size="24" />
+        <div class="flex items-center gap-2.5 sm:gap-3">
+          <div class="p-1.5 sm:p-2 bg-indigo-600 rounded-xl text-white shadow-md shadow-indigo-100">
+            <School :size="20" class="sm:w-6 sm:h-6" />
           </div>
-          <span class="text-xl font-black tracking-tight text-slate-900">Academia<span class="text-indigo-600">Neiva</span></span>
+          <span class="text-base sm:text-xl font-black tracking-tight text-slate-900">Academia<span class="text-indigo-600">Neiva</span></span>
         </div>
       </div>
 
       <!-- Stepper -->
-      <div class="mb-12">
-        <div class="flex items-center justify-between max-w-2xl mx-auto relative">
+      <div class="mb-10 sm:mb-12">
+        <div class="flex items-center justify-between max-w-xl mx-auto relative px-4 sm:px-0">
           <div class="absolute top-1/2 left-0 w-full h-0.5 bg-slate-200 -z-10"></div>
           <div v-for="i in 3" :key="i" 
             :class="[
               step >= i ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 ring-4 ring-indigo-50' : 'bg-white text-slate-400 border border-slate-200',
-              'h-11 w-11 rounded-2xl flex items-center justify-center font-black transition-all duration-500 relative z-10'
+              'h-9 w-9 sm:h-11 sm:w-11 rounded-xl sm:rounded-2xl flex items-center justify-center text-xs sm:text-sm font-black transition-all duration-500 relative z-10'
             ]"
           >
             {{ i }}
-            <span :class="[step >= i ? 'text-indigo-600 font-black' : 'text-slate-400 font-bold', 'absolute -bottom-8 left-1/2 -translate-x-1/2 text-xs whitespace-nowrap']">
-              {{ i === 1 ? 'Institución y Grado' : i === 2 ? 'Documentos' : 'Finalizar' }}
+            <span :class="[step >= i ? 'text-indigo-600 font-black' : 'text-slate-400 font-bold', 'absolute -bottom-6 sm:-bottom-8 left-1/2 -translate-x-1/2 text-[10px] sm:text-xs whitespace-nowrap text-center']">
+              {{ i === 1 ? 'Institución' : i === 2 ? 'Documentos' : 'Finalizar' }}
             </span>
           </div>
         </div>
       </div>
 
-      <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-2xl shadow-slate-200/50 overflow-hidden mt-16 text-left">
-        <div class="p-8 sm:p-12">
+      <div class="bg-white rounded-2xl sm:rounded-[2.5rem] border border-slate-100 shadow-xl sm:shadow-2xl shadow-slate-200/50 overflow-hidden mt-10 sm:mt-16 text-left">
+        <div class="p-4 sm:p-8 md:p-12">
           
           <!-- PASO 1: Selección de Cupo -->
-          <div v-if="step === 1" class="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div class="border-b border-slate-100 pb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div v-if="step === 1" class="space-y-6 sm:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div class="border-b border-slate-100 pb-5 sm:pb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
               <div>
-                <h3 class="text-3xl font-black text-slate-900 tracking-tight">Solicitud de Matrícula</h3>
-                <p class="text-slate-500 text-sm mt-1">Carga inicial de documentos y reserva de cupo escolar.</p>
+                <h3 class="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">Solicitud de Matrícula</h3>
+                <p class="text-slate-500 text-xs sm:text-sm mt-1">Carga inicial de documentos y reserva de cupo escolar.</p>
               </div>
-              <span v-if="isExtraordinaryToken" class="inline-flex items-center gap-1.5 px-4 py-2 bg-amber-50 text-amber-800 border border-amber-300 rounded-2xl text-xs font-black uppercase tracking-wider self-start">
-                <Sparkles :size="15" class="text-amber-600" />
+              <span v-if="isExtraordinaryToken" class="inline-flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 bg-amber-50 text-amber-800 border border-amber-300 rounded-xl sm:rounded-2xl text-[11px] sm:text-xs font-black uppercase tracking-wider self-start">
+                <Sparkles :size="14" class="text-amber-600" />
                 <span>Matrícula Extraordinaria</span>
               </span>
             </div>
 
             <!-- BANNER ESPECIAL DE MATRÍCULA EXTRAORDINARIA -->
-            <div v-if="isExtraordinaryToken" class="rounded-3xl border border-amber-300/80 bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-orange-500/10 p-6 sm:p-8 space-y-4 shadow-sm">
-              <div class="flex items-start gap-4">
-                <div class="p-3 bg-amber-500/20 text-amber-700 rounded-2xl border border-amber-500/30 shrink-0 mt-0.5">
-                  <Sparkles :size="24" />
+            <div v-if="isExtraordinaryToken" class="rounded-2xl sm:rounded-3xl border border-amber-300/80 bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-orange-500/10 p-4 sm:p-8 space-y-3 sm:space-y-4 shadow-sm">
+              <div class="flex items-start gap-3 sm:gap-4">
+                <div class="p-2 sm:p-3 bg-amber-500/20 text-amber-700 rounded-xl sm:rounded-2xl border border-amber-500/30 shrink-0 mt-0.5">
+                  <Sparkles :size="20" class="sm:w-6 sm:h-6" />
                 </div>
-                <div class="space-y-1.5 flex-1">
-                  <div class="flex items-center gap-2 flex-wrap">
-                    <span class="text-[10px] font-black uppercase tracking-widest text-amber-700">Autorización Especial Vigente</span>
-                    <span class="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 text-[10px] font-black border border-amber-300">
-                      Bypass de Calendario Habilitado
+                <div class="space-y-1 sm:space-y-1.5 flex-1 min-w-0">
+                  <div class="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                    <span class="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-amber-700">Autorización Especial Vigente</span>
+                    <span class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 text-[9px] sm:text-[10px] font-black border border-amber-300">
+                      Bypass de Calendario
                     </span>
                   </div>
                   <h4 class="text-lg font-black text-slate-900">
@@ -772,33 +772,33 @@ const submitEnrollment = async () => {
               </div>
             </div>
 
-            <div class="flex justify-end pt-4">
+            <div class="flex flex-col sm:flex-row sm:justify-end pt-4">
               <button 
                 type="button" 
                 @click="nextStep"
                 :disabled="!isEnrollmentOpen"
-                class="bg-indigo-600 hover:bg-indigo-700 text-white font-black py-4 px-8 rounded-2xl shadow-xl shadow-indigo-100 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                class="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3.5 sm:py-4 px-6 sm:px-8 rounded-xl sm:rounded-2xl text-xs sm:text-sm shadow-xl shadow-indigo-100 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               >
                 <span>Siguiente: Cargar Documentos</span>
-                <ArrowLeft :size="18" class="rotate-180" />
+                <ArrowLeft :size="16" class="rotate-180" />
               </button>
             </div>
           </div>
 
           <!-- PASO 2: Documentación Requerida -->
-          <div v-else-if="step === 2" class="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div class="border-b border-slate-100 pb-6 flex items-center justify-between">
+          <div v-else-if="step === 2" class="space-y-6 sm:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div class="border-b border-slate-100 pb-5 sm:pb-6 flex items-center justify-between">
               <div>
-                <h3 class="text-3xl font-black text-slate-900 tracking-tight">Documentación Requerida</h3>
-                <p class="text-slate-500 text-sm mt-1">Adjunta archivos claros en formato PDF o imagen (máximo 5MB por archivo).</p>
+                <h3 class="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">Documentación Requerida</h3>
+                <p class="text-slate-500 text-xs sm:text-sm mt-1">Adjunta archivos claros en formato PDF o imagen (máximo 5MB por archivo).</p>
               </div>
             </div>
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
               <template v-for="(label, key) in docLabels" :key="key">
-                <div v-if="showDoc(key as string)" class="p-6 rounded-3xl border border-slate-200 bg-slate-50/50 space-y-3 hover:border-indigo-200 transition-all">
+                <div v-if="showDoc(key as string)" class="p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-slate-200 bg-slate-50/50 space-y-2.5 sm:space-y-3 hover:border-indigo-200 transition-all">
                   <div class="flex items-center justify-between">
-                    <span class="text-xs font-black uppercase tracking-wider text-slate-700">{{ label }}</span>
+                    <span class="text-[11px] sm:text-xs font-black uppercase tracking-wider text-slate-700">{{ label }}</span>
                     <span v-if="files[key]" class="text-emerald-600 text-xs font-bold flex items-center gap-1">
                       <CheckCircle2 :size="14" /> Listo
                     </span>
@@ -809,56 +809,56 @@ const submitEnrollment = async () => {
                       type="file" 
                       @change="(e) => handleFileUpload(e, key as string)"
                       accept=".pdf,.png,.jpg,.jpeg"
-                      class="block w-full text-xs text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"
+                      class="block w-full text-xs text-slate-500 file:mr-3 sm:file:mr-4 file:py-2 sm:file:py-2.5 file:px-3 sm:file:px-4 file:rounded-xl file:border-0 file:text-[11px] sm:file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"
                     >
                   </div>
                 </div>
               </template>
             </div>
 
-            <div class="flex items-center justify-between pt-6 border-t border-slate-100">
+            <div class="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-6 border-t border-slate-100">
               <button 
                 type="button" 
                 @click="prevStep"
-                class="px-6 py-3.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-sm hover:bg-slate-50 transition-all cursor-pointer"
+                class="w-full sm:w-auto px-5 sm:px-6 py-3 sm:py-3.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs sm:text-sm hover:bg-slate-50 transition-all cursor-pointer text-center"
               >
                 ← Volver al Paso 1
               </button>
               <button 
                 type="button" 
                 @click="nextStep"
-                class="bg-indigo-600 hover:bg-indigo-700 text-white font-black py-4 px-8 rounded-2xl shadow-xl shadow-indigo-100 transition-all flex items-center gap-2 cursor-pointer"
+                class="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3.5 sm:py-4 px-6 sm:px-8 rounded-xl sm:rounded-2xl text-xs sm:text-sm shadow-xl shadow-indigo-100 transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
                 <span>Siguiente: Finalizar Solicitud</span>
-                <ArrowLeft :size="18" class="rotate-180" />
+                <ArrowLeft :size="16" class="rotate-180" />
               </button>
             </div>
           </div>
 
           <!-- PASO 3: Finalización y Confirmación -->
-          <div v-else-if="step === 3" class="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div v-else-if="step === 3" class="space-y-6 sm:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             
             <!-- SUB-PASO: Formulario de Verificación OTP o Teléfono Directo -->
-            <div v-if="isVerifyingScreen" class="py-4 max-w-md mx-auto text-center space-y-6">
+            <div v-if="isVerifyingScreen" class="py-4 max-w-md mx-auto text-center space-y-5 sm:space-y-6">
               
               <!-- Si NO es extraordinaria y aún no ha validado OTP -->
-              <div v-if="!isPhoneStep" class="space-y-6">
-                <div class="relative mx-auto w-20 h-20 mb-6">
+              <div v-if="!isPhoneStep" class="space-y-5 sm:space-y-6">
+                <div class="relative mx-auto w-16 h-16 sm:w-20 sm:h-20 mb-4 sm:mb-6">
                   <div class="absolute inset-0 bg-indigo-100 rounded-3xl animate-ping opacity-30"></div>
-                  <div class="relative h-20 w-20 bg-gradient-to-tr from-indigo-600 to-blue-600 text-white rounded-3xl flex items-center justify-center shadow-xl shadow-indigo-200">
-                    <ShieldCheck :size="40" />
+                  <div class="relative h-16 w-16 sm:h-20 sm:w-20 bg-gradient-to-tr from-indigo-600 to-blue-600 text-white rounded-2xl sm:rounded-3xl flex items-center justify-center shadow-xl shadow-indigo-200">
+                    <ShieldCheck :size="32" class="sm:w-10 sm:h-10" />
                   </div>
                 </div>
 
-                <h3 class="text-2xl font-black text-slate-900 tracking-tight">Verificación de Correo</h3>
-                <p class="text-slate-500 text-sm">
+                <h3 class="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">Verificación de Correo</h3>
+                <p class="text-slate-500 text-xs sm:text-sm">
                   Ingresa el código de 6 dígitos enviado a:
                 </p>
-                <div class="inline-block px-4 py-1.5 bg-indigo-50 border border-indigo-100 text-indigo-700 font-mono font-black rounded-full text-xs">
+                <div class="inline-block px-3.5 py-1 bg-indigo-50 border border-indigo-100 text-indigo-700 font-mono font-black rounded-full text-xs truncate max-w-xs">
                   {{ formData.parentEmail }}
                 </div>
 
-                <div class="space-y-6 pt-2 text-left">
+                <div class="space-y-5 sm:space-y-6 pt-2 text-left">
                   <div class="space-y-2">
                     <div class="flex items-center justify-between text-xs font-bold text-slate-500 px-1">
                       <span>Código de 6 dígitos</span>
@@ -872,7 +872,7 @@ const submitEnrollment = async () => {
                       type="text" 
                       maxlength="6"
                       placeholder="000000" 
-                      class="w-full text-center font-mono text-3xl font-black tracking-[0.35em] rounded-2xl border-2 border-indigo-200 bg-slate-50 focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-100 p-4 transition-all shadow-inner outline-none text-slate-900"
+                      class="w-full text-center font-mono text-2xl sm:text-3xl font-black tracking-[0.2em] sm:tracking-[0.35em] rounded-xl sm:rounded-2xl border-2 border-indigo-200 bg-slate-50 focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-100 p-3 sm:p-4 transition-all shadow-inner outline-none text-slate-900"
                       @keyup.enter="verifyAndSubmit"
                     >
                   </div>
