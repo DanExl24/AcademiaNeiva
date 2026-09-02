@@ -307,19 +307,19 @@ const formatRenewalStateLabel = (state?: string) => {
 </script>
 
 <template>
-  <div class="max-w-3xl mx-auto space-y-6">
+  <div class="max-w-3xl mx-auto space-y-4 sm:space-y-6">
     <!-- Header -->
-    <div class="bg-white dark:bg-slate-900 rounded-[28px] border border-slate-100 dark:border-slate-800 shadow-sm px-8 py-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-      <div class="flex items-center gap-4">
-        <button @click="router.back()" class="p-2.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors">
-          <ArrowLeft :size="22" class="text-slate-600 dark:text-slate-400" />
+    <div class="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-[28px] border border-slate-100 dark:border-slate-800 shadow-sm px-4 sm:px-8 py-4 sm:py-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+      <div class="flex items-center gap-3 sm:gap-4">
+        <button @click="router.back()" class="p-2 sm:p-2.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors shrink-0 cursor-pointer">
+          <ArrowLeft :size="20" class="text-slate-600 dark:text-slate-400" />
         </button>
         <div>
-          <h1 class="text-xl font-black text-slate-900 dark:text-white">
+          <h1 class="text-lg sm:text-xl font-black text-slate-900 dark:text-white">
              {{ matricula && ['ACTIVA', 'TRASLADADA'].includes(matricula.estado) ? 'Matrícula Aprobada' : 'Validación de Documentos' }}
           </h1>
-          <div class="flex items-center gap-2 mt-0.5">
-            <p class="text-slate-400 dark:text-slate-500 text-sm font-medium">Matrícula #{{ route.params.id }}</p>
+          <div class="flex flex-wrap items-center gap-2 mt-0.5">
+            <p class="text-slate-400 dark:text-slate-500 text-xs sm:text-sm font-medium">Matrícula #{{ route.params.id }}</p>
             <span v-if="matricula" :class="[
               'px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider',
               matricula.estado === 'PENDIENTE' ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300' :
@@ -338,7 +338,7 @@ const formatRenewalStateLabel = (state?: string) => {
       <div v-if="matricula && ['PENDIENTE', 'CORRECCION', 'CORREGIDA'].includes(matricula.estado)" class="flex items-center gap-2">
         <button 
           @click="openCancelModal" 
-          class="px-4 py-2.5 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/30 dark:hover:bg-rose-900/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800/60 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 transition-all shadow-xs cursor-pointer"
+          class="w-full sm:w-auto px-4 py-2 sm:py-2.5 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/30 dark:hover:bg-rose-900/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800/60 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-xs cursor-pointer"
         >
           <XCircle :size="16" />
           <span>Cancelar Matrícula</span>
@@ -347,7 +347,7 @@ const formatRenewalStateLabel = (state?: string) => {
     </div>
 
     <!-- Stepper (Only for non-finalized) -->
-    <div v-if="matricula && !['ACTIVA', 'TRASLADADA', 'CANCELADA'].includes(matricula.estado)" class="bg-white dark:bg-slate-900 rounded-[24px] border border-slate-100 dark:border-slate-800 shadow-sm p-6">
+    <div v-if="matricula && !['ACTIVA', 'TRASLADADA', 'CANCELADA'].includes(matricula.estado)" class="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-[24px] border border-slate-100 dark:border-slate-800 shadow-sm p-4 sm:p-6">
       <div class="flex items-center gap-0">
         <div
           v-for="s in [{ n: 1, label: 'Salón' }, { n: 2, label: 'Documentos' }, { n: 3, label: 'Registro' }]"
@@ -357,14 +357,14 @@ const formatRenewalStateLabel = (state?: string) => {
           <div class="flex flex-col items-center gap-1">
             <div :class="[
               currentStep >= s.n ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white dark:bg-slate-900 text-slate-400 border-slate-200 dark:border-slate-700',
-              'h-10 w-10 rounded-full border-2 flex items-center justify-center font-black transition-all'
+              'h-8 w-8 sm:h-10 sm:w-10 rounded-full border-2 flex items-center justify-center font-black text-xs sm:text-sm transition-all'
             ]">
-              <CheckCircle v-if="currentStep > s.n" :size="18" />
+              <CheckCircle v-if="currentStep > s.n" :size="16" />
               <span v-else>{{ s.n }}</span>
             </div>
-            <span :class="[currentStep >= s.n ? 'text-indigo-600 font-black' : 'text-slate-400 font-bold', 'text-xs uppercase tracking-wider transition-colors']">{{ s.label }}</span>
+            <span :class="[currentStep >= s.n ? 'text-indigo-600 font-black' : 'text-slate-400 font-bold', 'text-[10px] sm:text-xs uppercase tracking-wider transition-colors']">{{ s.label }}</span>
           </div>
-          <div v-if="s.n < 3" :class="[currentStep > s.n ? 'bg-indigo-600' : 'bg-slate-200 dark:bg-slate-700', 'h-0.5 flex-1 mb-5 transition-colors duration-500']"></div>
+          <div v-if="s.n < 3" :class="[currentStep > s.n ? 'bg-indigo-600' : 'bg-slate-200 dark:bg-slate-700', 'h-0.5 flex-1 mb-4 sm:mb-5 transition-colors duration-500']"></div>
         </div>
       </div>
     </div>

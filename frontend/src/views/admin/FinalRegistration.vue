@@ -370,17 +370,17 @@ const getStatusColor = (estado: string) => {
     <div class="animate-spin rounded-full h-12 w-12 border-4 border-indigo-600 border-t-transparent"></div>
   </div>
 
-  <div v-else-if="matricula" class="min-h-screen bg-gray-50 flex">
-    <!-- LEFT: Form Side (60%) -->
-    <div class="w-7/12 p-12 overflow-y-auto">
+  <div v-else-if="matricula" class="min-h-screen bg-gray-50 flex flex-col lg:flex-row">
+    <!-- LEFT: Form Side -->
+    <div class="w-full lg:w-7/12 p-4 sm:p-8 lg:p-12 overflow-y-auto">
       <div class="max-w-2xl mx-auto">
-        <button @click="router.back()" class="flex items-center gap-2 text-gray-500 hover:text-gray-800 transition-all font-bold mb-8">
-          <ArrowLeft :size="20" />
+        <button @click="router.back()" class="flex items-center gap-2 text-gray-500 hover:text-gray-800 transition-all font-bold mb-6 sm:mb-8 text-xs sm:text-sm cursor-pointer">
+          <ArrowLeft :size="18" />
           Volver a Gestión
         </button>
 
-        <h1 class="text-3xl font-black text-gray-900 mb-2">Registro Final</h1>
-        <p class="text-gray-500 mb-8 font-medium">Completa los datos personales para activar la matrícula.</p>
+        <h1 class="text-2xl sm:text-3xl font-black text-gray-900 mb-2">Registro Final</h1>
+        <p class="text-gray-500 mb-6 sm:mb-8 text-xs sm:text-sm font-medium">Completa los datos personales para activar la matrícula.</p>
 
         <!-- BANNER DE EXPULSIÓN DE MATRÍCULA -->
         <div v-if="matricula.expulsion" class="mb-8 font-sans">
@@ -608,36 +608,36 @@ const getStatusColor = (estado: string) => {
         </div>
 
         <!-- Stepper -->
-        <div class="flex items-center gap-8 mb-12">
-          <div :class="[step === 1 ? 'text-indigo-600' : 'text-gray-400', 'flex items-center gap-2 font-bold transition-all']">
-            <div :class="[step === 1 ? 'bg-indigo-600 text-white' : 'bg-gray-100', 'h-8 w-8 rounded-lg flex items-center justify-center text-sm']">1</div>
+        <div class="flex items-center gap-4 sm:gap-8 mb-6 sm:mb-12">
+          <div :class="[step === 1 ? 'text-indigo-600' : 'text-gray-400', 'flex items-center gap-2 font-bold transition-all text-xs sm:text-sm']">
+            <div :class="[step === 1 ? 'bg-indigo-600 text-white' : 'bg-gray-100', 'h-7 w-7 sm:h-8 sm:w-8 rounded-lg flex items-center justify-center text-xs sm:text-sm font-black']">1</div>
             Estudiante
           </div>
-          <div class="h-px w-12 bg-gray-100"></div>
-          <div :class="[step === 2 ? 'text-indigo-600' : 'text-gray-400', 'flex items-center gap-2 font-bold transition-all']">
-            <div :class="[step === 2 ? 'bg-indigo-600 text-white' : 'bg-gray-100', 'h-8 w-8 rounded-lg flex items-center justify-center text-sm']">2</div>
+          <div class="h-px w-8 sm:w-12 bg-gray-200"></div>
+          <div :class="[step === 2 ? 'text-indigo-600' : 'text-gray-400', 'flex items-center gap-2 font-bold transition-all text-xs sm:text-sm']">
+            <div :class="[step === 2 ? 'bg-indigo-600 text-white' : 'bg-gray-100', 'h-7 w-7 sm:h-8 sm:w-8 rounded-lg flex items-center justify-center text-xs sm:text-sm font-black']">2</div>
             Padre / Acudiente
           </div>
         </div>
 
         <!-- FORM STEP 1: Student -->
-        <div v-if="step === 1" class="space-y-6 animate-in slide-in-from-left duration-500">
-          <div class="grid grid-cols-2 gap-6">
+        <div v-if="step === 1" class="space-y-6 animate-in slide-in-from-left duration-500 text-left">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
             <div class="space-y-2">
-              <label class="text-sm font-bold text-gray-700">Nombres</label>
+              <label class="text-xs sm:text-sm font-bold text-gray-700">Nombres</label>
               <input v-model="studentData.nombre" @input="studentData.nombre = sanitizeLettersOnly(studentData.nombre)" type="text" placeholder="Ej: Juan Andrés" :disabled="isStudentInputsDisabled"
-                class="w-full rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-4 transition-all disabled:opacity-60 disabled:cursor-not-allowed">
+                class="w-full rounded-xl sm:rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-3.5 sm:p-4 text-xs sm:text-sm transition-all disabled:opacity-60 disabled:cursor-not-allowed">
             </div>
             <div class="space-y-2">
-              <label class="text-sm font-bold text-gray-700">Apellidos</label>
+              <label class="text-xs sm:text-sm font-bold text-gray-700">Apellidos</label>
               <input v-model="studentData.apellido" @input="studentData.apellido = sanitizeLettersOnly(studentData.apellido)" type="text" placeholder="Ej: Pérez García" :disabled="isStudentInputsDisabled"
-                class="w-full rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-4 transition-all disabled:opacity-60 disabled:cursor-not-allowed">
+                class="w-full rounded-xl sm:rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-3.5 sm:p-4 text-xs sm:text-sm transition-all disabled:opacity-60 disabled:cursor-not-allowed">
             </div>
           </div>
-          <div class="grid grid-cols-2 gap-6">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
             <div class="space-y-2">
-              <label class="text-sm font-bold text-gray-700">Tipo de Documento</label>
-              <select v-model="studentData.id_tipodocumento" :disabled="isStudentInputsDisabled" class="w-full rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-4 transition-all disabled:opacity-60 disabled:cursor-not-allowed">
+              <label class="text-xs sm:text-sm font-bold text-gray-700">Tipo de Documento</label>
+              <select v-model="studentData.id_tipodocumento" :disabled="isStudentInputsDisabled" class="w-full rounded-xl sm:rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-3.5 sm:p-4 text-xs sm:text-sm transition-all disabled:opacity-60 disabled:cursor-not-allowed">
                 <option :value="2">Tarjeta de Identidad</option>
                 <option :value="1">Registro Civil</option>
                 <option :value="3">Cédula de Ciudadanía</option>
@@ -647,32 +647,32 @@ const getStatusColor = (estado: string) => {
               </select>
             </div>
             <div class="space-y-2">
-              <label class="text-sm font-bold text-gray-700">Número de Documento</label>
+              <label class="text-xs sm:text-sm font-bold text-gray-700">Número de Documento</label>
               <input v-model="studentData.documento" @input="studentData.documento = sanitizeDocumentNumber(studentData.documento)" type="text" placeholder="Ej: 1075..." :disabled="isStudentInputsDisabled"
-                class="w-full rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-4 transition-all disabled:opacity-60 disabled:cursor-not-allowed">
+                class="w-full rounded-xl sm:rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-3.5 sm:p-4 text-xs sm:text-sm transition-all disabled:opacity-60 disabled:cursor-not-allowed">
             </div>
           </div>
-          <div class="pt-8 flex justify-end">
-            <button @click="step = 2" :disabled="selectedCandidate && !selectedCandidate.eligible" class="bg-gray-900 text-white px-10 py-4 rounded-2xl font-bold hover:bg-indigo-600 transition-all flex items-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed">
-              Siguiente: Datos del Padre
-              <ChevronRight :size="20" />
+          <div class="pt-6 sm:pt-8 flex flex-col sm:flex-row sm:justify-end">
+            <button @click="step = 2" :disabled="selectedCandidate && !selectedCandidate.eligible" class="w-full sm:w-auto bg-gray-900 text-white px-8 sm:px-10 py-3.5 sm:py-4 rounded-xl sm:rounded-2xl font-bold hover:bg-indigo-600 transition-all flex items-center justify-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed text-xs sm:text-sm cursor-pointer">
+              <span>Siguiente: Datos del Padre</span>
+              <ChevronRight :size="18" />
             </button>
           </div>
         </div>
 
         <!-- FORM STEP 2: Parent -->
-        <div v-if="step === 2" class="space-y-6 animate-in slide-in-from-right duration-500">
+        <div v-if="step === 2" class="space-y-6 animate-in slide-in-from-right duration-500 text-left">
 
           <!-- Banner: Existing Staff Parent -->
           <div
             v-if="matricula?.existing_parent_user"
-            class="p-5 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-4"
+            class="p-4 sm:p-5 bg-amber-50 border border-amber-200 rounded-xl sm:rounded-2xl flex items-start gap-3 sm:gap-4"
           >
-            <div class="p-2.5 bg-amber-500 text-white rounded-xl shrink-0">
-              <GraduationCap :size="20" />
+            <div class="p-2 sm:p-2.5 bg-amber-500 text-white rounded-xl shrink-0">
+              <GraduationCap :size="18" class="sm:w-5 sm:h-5" />
             </div>
             <div>
-              <p class="font-black text-amber-900 text-sm">
+              <p class="font-black text-amber-900 text-xs sm:text-sm">
                 Persona registrada en la plataforma como
                 <span class="uppercase font-extrabold text-amber-950">{{ matricula.existing_parent_user.display_role }}</span>
               </p>
@@ -686,24 +686,24 @@ const getStatusColor = (estado: string) => {
             </div>
           </div>
 
-          <div class="grid grid-cols-2 gap-6">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
             <div class="space-y-2">
-              <label class="text-sm font-bold text-gray-700">Nombres del Padre</label>
+              <label class="text-xs sm:text-sm font-bold text-gray-700">Nombres del Padre</label>
               <input v-model="parentData.nombre" @input="parentData.nombre = sanitizeLettersOnly(parentData.nombre)" type="text" placeholder="Ej: Carlos Mario"
                 :disabled="isParentInputsDisabled"
-                class="w-full rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-4 transition-all disabled:opacity-60 disabled:cursor-not-allowed">
+                class="w-full rounded-xl sm:rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-3.5 sm:p-4 text-xs sm:text-sm transition-all disabled:opacity-60 disabled:cursor-not-allowed">
             </div>
             <div class="space-y-2">
-              <label class="text-sm font-bold text-gray-700">Apellidos del Padre</label>
+              <label class="text-xs sm:text-sm font-bold text-gray-700">Apellidos del Padre</label>
               <input v-model="parentData.apellido" @input="parentData.apellido = sanitizeLettersOnly(parentData.apellido)" type="text" placeholder="Ej: Pérez Motta"
                 :disabled="isParentInputsDisabled"
-                class="w-full rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-4 transition-all disabled:opacity-60 disabled:cursor-not-allowed">
+                class="w-full rounded-xl sm:rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-3.5 sm:p-4 text-xs sm:text-sm transition-all disabled:opacity-60 disabled:cursor-not-allowed">
             </div>
           </div>
-          <div class="grid grid-cols-2 gap-6">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
             <div class="space-y-2">
-              <label class="text-sm font-bold text-gray-700">Tipo de Documento</label>
-              <select v-model="parentData.id_tipodocumento" :disabled="isParentInputsDisabled" class="w-full rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-4 transition-all disabled:opacity-60 disabled:cursor-not-allowed">
+              <label class="text-xs sm:text-sm font-bold text-gray-700">Tipo de Documento</label>
+              <select v-model="parentData.id_tipodocumento" :disabled="isParentInputsDisabled" class="w-full rounded-xl sm:rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-3.5 sm:p-4 text-xs sm:text-sm transition-all disabled:opacity-60 disabled:cursor-not-allowed">
                 <option :value="3">Cédula de Ciudadanía</option>
                 <option :value="4">Cédula de Extranjería</option>
                 <option :value="5">PEP / PPT</option>
@@ -713,53 +713,53 @@ const getStatusColor = (estado: string) => {
               </select>
             </div>
             <div class="space-y-2">
-              <label class="text-sm font-bold text-gray-700">Número de Documento</label>
+              <label class="text-xs sm:text-sm font-bold text-gray-700">Número de Documento</label>
               <div class="relative">
                 <input v-model="parentData.documento" @input="onParentDocumentInput" type="text" placeholder="Ej: 1214..." @blur="verifyDocument"
-                  class="w-full rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-4 transition-all"
+                  class="w-full rounded-xl sm:rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-3.5 sm:p-4 text-xs sm:text-sm transition-all"
                   :class="{'border-indigo-300 bg-indigo-50': docMatchInfo}">
-                <div v-if="checkingDocument" class="absolute right-4 top-4">
+                <div v-if="checkingDocument" class="absolute right-3.5 top-3.5 sm:right-4 sm:top-4">
                   <div class="animate-spin rounded-full h-5 w-5 border-2 border-indigo-600 border-t-transparent"></div>
                 </div>
-                <CheckCircle v-if="docMatchInfo" class="absolute right-4 top-4 text-indigo-600" :size="20" />
+                <CheckCircle v-if="docMatchInfo" class="absolute right-3.5 top-3.5 sm:right-4 sm:top-4 text-indigo-600" :size="20" />
               </div>
               <p v-if="docMatchInfo" class="text-xs text-indigo-600 font-bold">
                 Usuario detectado: {{ docMatchInfo.user.nombre }} {{ docMatchInfo.user.apellido }} ({{ docMatchInfo.role }})
               </p>
             </div>
-            <div class="space-y-2 col-span-2">
-              <label class="text-sm font-bold text-gray-700">Teléfono / Celular de Contacto del Acudiente</label>
+            <div class="space-y-2 sm:col-span-2">
+              <label class="text-xs sm:text-sm font-bold text-gray-700">Teléfono / Celular de Contacto del Acudiente</label>
               <input v-model="parentData.telefono" type="text" placeholder="Ej: 3001234567"
-                class="w-full rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-4 transition-all">
+                class="w-full rounded-xl sm:rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-3.5 sm:p-4 text-xs sm:text-sm transition-all">
               <p class="text-[11px] text-gray-500 font-medium">
                 Precargado automáticamente desde la radicación de la matrícula realizada por el acudiente.
               </p>
             </div>
           </div>
-          <div class="bg-indigo-50 p-6 rounded-2xl border border-indigo-100">
+          <div class="bg-indigo-50 p-4 sm:p-6 rounded-xl sm:rounded-2xl border border-indigo-100">
             <div class="flex gap-3">
-              <CheckCircle :size="20" class="text-indigo-600 mt-0.5" />
-              <p class="text-sm text-indigo-700 font-medium">
+              <CheckCircle :size="20" class="text-indigo-600 mt-0.5 shrink-0" />
+              <p class="text-xs sm:text-sm text-indigo-700 font-medium">
                 Al guardar, se enviará automáticamente un correo a <strong>{{ matricula?.correo_padre }}</strong> con sus credenciales de acceso.
               </p>
             </div>
           </div>
-          <div class="pt-8 flex justify-between">
-            <button @click="step = 1" class="text-gray-500 font-bold px-4 py-2 flex items-center gap-2">
-              <ChevronLeft :size="20" />
+          <div class="pt-6 sm:pt-8 flex flex-col-reverse sm:flex-row justify-between items-stretch sm:items-center gap-3">
+            <button @click="step = 1" class="text-gray-500 font-bold px-4 py-3 rounded-xl hover:bg-gray-100 flex items-center justify-center gap-2 text-xs sm:text-sm cursor-pointer">
+              <ChevronLeft :size="18" />
               Atrás
             </button>
-            <button @click="handleFinalize" class="bg-indigo-600 text-white px-10 py-4 rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 flex items-center gap-2">
-              Finalizar y Activar Matrícula
-              <Save :size="20" />
+            <button @click="handleFinalize" class="w-full sm:w-auto bg-indigo-600 text-white px-8 sm:px-10 py-3.5 sm:py-4 rounded-xl sm:rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 flex items-center justify-center gap-2 text-xs sm:text-sm cursor-pointer">
+              <span>Finalizar y Activar Matrícula</span>
+              <Save :size="18" />
             </button>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- RIGHT: Document Viewer (40%) -->
-    <div class="w-5/12 bg-gray-900 relative flex flex-col">
+    <!-- RIGHT: Document Viewer -->
+    <div class="w-full lg:w-5/12 min-h-[480px] lg:min-h-0 bg-gray-900 relative flex flex-col">
       <div class="p-6 bg-gray-800 border-b border-gray-700 flex items-center justify-between">
         <div class="flex items-center gap-3 text-white">
           <div class="p-2 bg-indigo-600 rounded-lg">

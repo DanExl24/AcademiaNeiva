@@ -669,21 +669,21 @@ onMounted(() => {
   <div class="space-y-6">
 
     <!-- Header Section -->
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
       <div>
-        <h1 class="text-2xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-3">
-          <ArrowLeftRight class="text-indigo-600 dark:text-indigo-400" :size="28" />
-          <span>Gestión de Traslados Interinstitucionales</span>
+        <h1 class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-2.5 sm:gap-3">
+          <ArrowLeftRight class="text-indigo-600 dark:text-indigo-400 shrink-0" :size="24" />
+          <span>Gestión de Traslados</span>
         </h1>
         <p class="text-xs font-semibold text-slate-500 dark:text-slate-400 mt-1">
           Administración de solicitudes de traslado, consenso de aprobaciones y trazabilidad de vinculaciones
         </p>
       </div>
 
-      <div class="flex items-center gap-3">
+      <div class="flex items-center gap-2 sm:gap-3 self-start sm:self-auto">
         <button 
           @click="fetchSolicitudes"
-          class="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all active:scale-95"
+          class="p-2 sm:p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all active:scale-95 cursor-pointer"
           title="Recargar solicitudes"
         >
           <RefreshCw :size="16" :class="{ 'animate-spin': loading }" />
@@ -691,7 +691,7 @@ onMounted(() => {
 
         <button 
           @click="openCreateModal"
-          class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-indigo-500/20 transition-all active:scale-95"
+          class="bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-indigo-500/20 transition-all active:scale-95 cursor-pointer"
         >
           <Plus :size="16" />
           <span>Nueva Solicitud</span>
@@ -711,50 +711,50 @@ onMounted(() => {
     </div>
 
     <!-- Stats Counter Bar -->
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-      <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl flex items-center justify-between">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+      <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 sm:p-4 rounded-2xl flex items-center justify-between">
         <div>
-          <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Solicitudes</p>
-          <p class="text-2xl font-black text-slate-900 dark:text-white mt-1">{{ stats.total }}</p>
+          <p class="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider">Total Solicitudes</p>
+          <p class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white mt-1">{{ stats.total }}</p>
         </div>
-        <div class="p-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-xl">
-          <ArrowLeftRight :size="20" />
+        <div class="p-2.5 sm:p-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-xl">
+          <ArrowLeftRight :size="18" />
         </div>
       </div>
 
-      <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl flex items-center justify-between">
+      <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 sm:p-4 rounded-2xl flex items-center justify-between">
         <div>
-          <p class="text-xs font-bold text-amber-500 uppercase tracking-wider">En Trámite</p>
-          <p class="text-2xl font-black text-amber-600 dark:text-amber-400 mt-1">{{ stats.pendientes }}</p>
+          <p class="text-[10px] sm:text-xs font-bold text-amber-500 uppercase tracking-wider">En Trámite</p>
+          <p class="text-xl sm:text-2xl font-black text-amber-600 dark:text-amber-400 mt-1">{{ stats.pendientes }}</p>
         </div>
-        <div class="p-3 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 rounded-xl">
-          <Clock :size="20" />
+        <div class="p-2.5 sm:p-3 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 rounded-xl">
+          <Clock :size="18" />
         </div>
       </div>
 
-      <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl flex items-center justify-between">
+      <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 sm:p-4 rounded-2xl flex items-center justify-between">
         <div>
-          <p class="text-xs font-bold text-emerald-500 uppercase tracking-wider">Aprobadas</p>
-          <p class="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1">{{ stats.aprobados }}</p>
+          <p class="text-[10px] sm:text-xs font-bold text-emerald-500 uppercase tracking-wider">Aprobadas</p>
+          <p class="text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1">{{ stats.aprobados }}</p>
         </div>
-        <div class="p-3 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 rounded-xl">
-          <CheckCircle2 :size="20" />
+        <div class="p-2.5 sm:p-3 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 rounded-xl">
+          <CheckCircle2 :size="18" />
         </div>
       </div>
 
-      <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl flex items-center justify-between">
+      <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 sm:p-4 rounded-2xl flex items-center justify-between">
         <div>
-          <p class="text-xs font-bold text-rose-500 uppercase tracking-wider">Rechazadas</p>
-          <p class="text-2xl font-black text-rose-600 dark:text-rose-400 mt-1">{{ stats.rechazados }}</p>
+          <p class="text-[10px] sm:text-xs font-bold text-rose-500 uppercase tracking-wider">Rechazadas</p>
+          <p class="text-xl sm:text-2xl font-black text-rose-600 dark:text-rose-400 mt-1">{{ stats.rechazados }}</p>
         </div>
-        <div class="p-3 bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 rounded-xl">
-          <XCircle :size="20" />
+        <div class="p-2.5 sm:p-3 bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 rounded-xl">
+          <XCircle :size="18" />
         </div>
       </div>
     </div>
 
     <!-- Filters & Search Toolbar -->
-    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4">
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 sm:p-4 rounded-2xl flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 sm:gap-4">
       <div class="relative w-full md:w-80">
         <Search class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" :size="16" />
         <input 
@@ -765,7 +765,7 @@ onMounted(() => {
         />
       </div>
 
-      <div class="flex items-center gap-3 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
+      <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full md:w-auto">
         <!-- Status Filter -->
         <select 
           v-model="selectedStatusFilter"
@@ -800,41 +800,45 @@ onMounted(() => {
         description="No hay registros que coincidan con los filtros seleccionados o el año escolar activo."
       >
         <template #icon>
-          <ArrowLeftRight class="w-8 h-8 text-indigo-500" />
+          <ArrowLeftRight :size="48" class="text-slate-400" />
         </template>
       </EmptyState>
 
       <DataTable v-else>
         <template #header>
           <tr>
-            <th class="py-4 px-6">Usuario / Estudiante</th>
             <th class="py-4 px-6">Tipo</th>
-            <th class="py-4 px-6">Origen → Destino</th>
-            <th class="py-4 px-6">Consenso de Votos</th>
+            <th class="py-4 px-6">Beneficiario / Documento</th>
+            <th class="py-4 px-6">Ruta de Traslado</th>
+            <th class="py-4 px-6">Consenso Votación</th>
             <th class="py-4 px-6">Estado</th>
-            <th class="py-4 px-6 text-right">Acción</th>
+            <th class="py-4 px-6 text-right">Acciones</th>
           </tr>
         </template>
         <tr
           v-for="s in filteredSolicitudes"
           :key="s.id_solicitud"
-          class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors"
+          class="group hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors"
         >
           <td class="py-4 px-6">
-            <div class="space-y-0.5">
-              <p class="font-bold text-slate-900 dark:text-white text-sm leading-tight">{{ s.usuario_nombre }} {{ s.usuario_apellido }}</p>
+            <span :class="[getTypeBadge(s.tipo).class, 'px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border inline-block']">{{ getTypeBadge(s.tipo).label }}</span>
+          </td>
+          <td class="py-4 px-6">
+            <div>
+              <p class="font-bold text-slate-900 dark:text-white text-sm">
+                {{ s.usuario_nombre }} {{ s.usuario_apellido }}
+              </p>
               <p class="text-xs text-slate-400 font-mono">Doc: {{ s.usuario_documento }}</p>
-              <p class="text-[10px] text-slate-400">{{ s.usuario_email }}</p>
+              <span v-if="s.tipo === 'TRASLADO_MATRICULA' && s.datos_origen?.grado" class="inline-block mt-0.5 text-[10px] font-bold text-indigo-600 dark:text-indigo-400">
+                Grado Origen: {{ s.datos_origen.grado }} <template v-if="s.datos_origen?.seccion">({{ s.datos_origen.seccion }})</template>
+              </span>
             </div>
           </td>
           <td class="py-4 px-6">
-            <span :class="[getTypeBadge(s.tipo).class, 'px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider border']">{{ getTypeBadge(s.tipo).label }}</span>
-          </td>
-          <td class="py-4 px-6">
-            <div class="space-y-1">
-              <div class="flex items-center gap-1.5 text-slate-600 dark:text-slate-400">
-                <Building :size="12" class="shrink-0 text-slate-400" />
-                <span class="font-semibold truncate max-w-[180px]" :title="s.colegio_origen_nombre">{{ s.colegio_origen_nombre }}</span>
+            <div class="space-y-1 text-xs">
+              <div class="flex items-center gap-1.5 text-slate-600 dark:text-slate-300 font-medium">
+                <Building2 :size="12" class="shrink-0 text-slate-400" />
+                <span class="truncate max-w-[180px]" :title="s.colegio_origen_nombre">{{ s.colegio_origen_nombre }}</span>
               </div>
               <div class="flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400 font-bold">
                 <span class="text-xs">→</span>
@@ -861,10 +865,10 @@ onMounted(() => {
           </td>
           <td class="py-4 px-6 text-right">
             <div class="flex items-center justify-end gap-2">
-              <button v-if="s.tipo === 'TRASLADO_MATRICULA'" @click.stop="openAcademicDataModal(s.id_solicitud)" class="p-2 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300 rounded-xl text-xs font-bold transition-all" title="Ver/Exportar Datos Académicos">
+              <button v-if="s.tipo === 'TRASLADO_MATRICULA'" @click.stop="openAcademicDataModal(s.id_solicitud)" class="p-2 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300 rounded-xl text-xs font-bold transition-all cursor-pointer" title="Ver/Exportar Datos Académicos">
                 <ClipboardList :size="15" />
               </button>
-              <button @click="openDetailModal(s)" class="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-white rounded-xl font-bold text-xs transition-all active:scale-95">Ver Detalle</button>
+              <button @click="openDetailModal(s)" class="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-white rounded-xl font-bold text-xs transition-all active:scale-95 cursor-pointer">Ver Detalle</button>
             </div>
           </td>
         </tr>
@@ -872,8 +876,8 @@ onMounted(() => {
     </div>
 
     <!-- MODAL: DETALLE Y APROBACIÓN DE SOLICITUD -->
-    <div v-if="showDetailModal && selectedSolicitud" class="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4">
-      <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-2xl w-full p-6 md:p-8 space-y-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+    <div v-if="showDetailModal && selectedSolicitud" class="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+      <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl sm:rounded-3xl max-w-2xl w-full p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-6 shadow-2xl max-h-[90dvh] overflow-y-auto">
         
         <!-- Header Modal -->
         <div class="flex items-start justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
@@ -1213,25 +1217,25 @@ onMounted(() => {
     </div>
 
     <!-- MODAL: CREAR SOLICITUD DE TRASLADO -->
-    <div v-if="showCreateModal" class="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4">
-      <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+    <div v-if="showCreateModal" class="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+      <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl sm:rounded-3xl max-w-xl w-full max-h-[90dvh] flex flex-col shadow-2xl overflow-hidden">
         
         <!-- Header -->
-        <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 p-6 md:p-7 shrink-0">
-          <div class="flex items-center gap-3">
-            <div class="p-2.5 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-xl">
-              <Plus :size="20" />
+        <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 p-4 sm:p-6 md:p-7 shrink-0">
+          <div class="flex items-center gap-2.5 sm:gap-3">
+            <div class="p-2 sm:p-2.5 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-xl">
+              <Plus :size="18" class="sm:w-5 sm:h-5" />
             </div>
             <div>
-              <h2 class="text-lg font-black text-slate-900 dark:text-white">Nueva Solicitud de Traslado</h2>
-              <p class="text-xs text-slate-400">Registrar traslado interinstitucional de estudiante o usuario</p>
+              <h2 class="text-base sm:text-lg font-black text-slate-900 dark:text-white">Nueva Solicitud de Traslado</h2>
+              <p class="text-[11px] sm:text-xs text-slate-400">Registrar traslado interinstitucional de estudiante o usuario</p>
             </div>
           </div>
           <button 
             @click="showCreateModal = false"
-            class="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-white rounded-xl"
+            class="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-white rounded-xl cursor-pointer"
           >
-            <X :size="20" />
+            <X :size="18" />
           </button>
         </div>
 

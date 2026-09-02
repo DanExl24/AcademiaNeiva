@@ -394,14 +394,14 @@ const formatDate = (dateStr?: string | null) => {
   <div class="space-y-6 p-4 md:p-8 max-w-full mx-auto">
 
     <!-- ══════ HEADER ══════ -->
-    <div class="bg-white dark:bg-slate-900 p-6 md:p-8 rounded-3xl border border-slate-200/80 dark:border-slate-800/80 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-      <div class="flex items-center gap-4">
-        <div class="p-3.5 bg-gradient-to-br from-violet-600 to-indigo-600 rounded-2xl text-white shadow-lg shadow-violet-500/25">
-          <ArrowLeftRight :size="24" />
+    <div class="bg-white dark:bg-slate-900 p-4 sm:p-6 md:p-8 rounded-2xl sm:rounded-3xl border border-slate-200/80 dark:border-slate-800/80 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div class="flex items-center gap-3 sm:gap-4">
+        <div class="p-2.5 sm:p-3.5 bg-gradient-to-br from-violet-600 to-indigo-600 rounded-2xl text-white shadow-lg shadow-violet-500/25 shrink-0">
+          <ArrowLeftRight :size="20" class="sm:w-6 sm:h-6" />
         </div>
         <div>
-          <div class="flex items-center gap-2">
-            <h1 class="text-2xl font-black text-slate-800 dark:text-white tracking-tight">Gestión de Traslados</h1>
+          <div class="flex items-center gap-2 flex-wrap">
+            <h1 class="text-xl sm:text-2xl font-black text-slate-800 dark:text-white tracking-tight">Gestión de Traslados</h1>
             <span class="px-2.5 py-0.5 bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300 rounded-full text-[10px] font-black uppercase tracking-wider">Admin General</span>
           </div>
           <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Supervisión global de traslados interinstitucionales. Historial, auditoría e intervención excepcional.</p>
@@ -409,10 +409,10 @@ const formatDate = (dateStr?: string | null) => {
       </div>
       <button
         @click="() => { fetchSolicitudes(); fetchEstadisticas() }"
-        class="p-3 rounded-2xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all"
+        class="p-2.5 sm:p-3 rounded-2xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all cursor-pointer self-end md:self-auto"
         title="Actualizar datos"
       >
-        <RefreshCw :size="18" :class="{ 'animate-spin': loading }" />
+        <RefreshCw :size="16" class="sm:w-4.5 sm:h-4.5" :class="{ 'animate-spin': loading }" />
       </button>
     </div>
 
@@ -425,19 +425,19 @@ const formatDate = (dateStr?: string | null) => {
     </div>
 
     <!-- ══════ SECTION TABS ══════ -->
-    <div class="flex items-center gap-2">
+    <div class="flex items-center gap-2 overflow-x-auto pb-1">
       <button
         v-for="tab in [{ key: 'listado', label: 'Listado de Traslados', icon: ArrowLeftRight }, { key: 'estadisticas', label: 'Panel de Métricas', icon: BarChart3 }]"
         :key="tab.key"
         @click="activeSection = tab.key as any"
         :class="[
-          'flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition-all',
+          'flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer',
           activeSection === tab.key
             ? 'bg-violet-600 text-white shadow-md shadow-violet-500/25'
             : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
         ]"
       >
-        <component :is="tab.icon" :size="16" />
+        <component :is="tab.icon" :size="15" />
         <span>{{ tab.label }}</span>
       </button>
     </div>
@@ -685,24 +685,24 @@ const formatDate = (dateStr?: string | null) => {
     <!-- ══════════════════════════════════════════════ -->
     <!-- MODAL: DETALLE Y AUDITORÍA                    -->
     <!-- ══════════════════════════════════════════════ -->
-    <div v-if="showDetailModal" class="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
-      <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-2xl w-full shadow-2xl max-h-[92vh] overflow-y-auto">
+    <div v-if="showDetailModal" class="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+      <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl sm:rounded-3xl max-w-2xl w-full shadow-2xl max-h-[90dvh] overflow-y-auto">
 
         <!-- Header -->
-        <div class="flex items-center justify-between p-6 border-b border-slate-100 dark:border-slate-800 sticky top-0 bg-white dark:bg-slate-900 z-10 rounded-t-3xl">
-          <div class="flex items-center gap-3">
+        <div class="flex items-center justify-between p-4 sm:p-6 border-b border-slate-100 dark:border-slate-800 sticky top-0 bg-white dark:bg-slate-900 z-10 rounded-t-2xl sm:rounded-t-3xl">
+          <div class="flex items-center gap-2.5 sm:gap-3">
             <div class="p-2 bg-violet-500/10 text-violet-600 dark:text-violet-400 rounded-xl">
               <History :size="18" />
             </div>
             <div>
-              <h2 class="text-base font-black text-slate-900 dark:text-white">
+              <h2 class="text-sm sm:text-base font-black text-slate-900 dark:text-white">
                 Detalle de Solicitud #{{ selectedSolicitud?.id_solicitud }}
               </h2>
-              <p class="text-[11px] text-slate-400">Historial completo de auditoría</p>
+              <p class="text-[10px] sm:text-[11px] text-slate-400">Historial completo de auditoría</p>
             </div>
           </div>
-          <button @click="showDetailModal = false" class="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors">
-            <X :size="20" />
+          <button @click="showDetailModal = false" class="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer">
+            <X :size="18" />
           </button>
         </div>
 
@@ -711,10 +711,10 @@ const formatDate = (dateStr?: string | null) => {
           <p class="text-xs text-slate-400">Cargando información...</p>
         </div>
 
-        <div v-else-if="selectedSolicitud" class="p-6 space-y-5">
+        <div v-else-if="selectedSolicitud" class="p-4 sm:p-6 space-y-4 sm:space-y-5">
 
           <!-- Info grid -->
-          <div class="grid grid-cols-2 gap-3 text-xs bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-200/60 dark:border-slate-800/60">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-slate-50 dark:bg-slate-800/40 p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-200/60 dark:border-slate-800/60">
             <div>
               <p class="text-[10px] font-black uppercase text-slate-400 mb-0.5">Persona Afectada</p>
               <p class="font-bold text-slate-900 dark:text-white">{{ selectedSolicitud.usuario_nombre }} {{ selectedSolicitud.usuario_apellido }}</p>

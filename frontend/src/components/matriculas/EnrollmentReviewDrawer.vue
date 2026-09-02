@@ -193,8 +193,8 @@ const formatDateTime = (date: string | null | undefined) => {
         <Transition name="drawer-slide">
           <div v-if="isOpen" class="fixed right-0 top-0 h-full w-full max-w-[760px] bg-white dark:bg-slate-900 shadow-2xl flex flex-col overflow-hidden">
             <!-- Drawer Header -->
-            <div class="px-8 py-6 bg-gradient-to-r from-indigo-600 to-violet-700 dark:from-indigo-900 dark:to-violet-900 shrink-0 text-left">
-              <div class="flex items-start justify-between gap-4">
+            <div class="px-4 sm:px-8 py-4 sm:py-6 bg-gradient-to-r from-indigo-600 to-violet-700 dark:from-indigo-900 dark:to-violet-900 shrink-0 text-left">
+              <div class="flex items-start justify-between gap-3 sm:gap-4">
                 <div>
                   <div class="flex items-center gap-2 mb-1">
                     <span class="text-indigo-200 dark:text-indigo-300 text-[10px] font-black uppercase tracking-widest">
@@ -204,20 +204,20 @@ const formatDateTime = (date: string | null | undefined) => {
                       Extraordinaria
                     </span>
                   </div>
-                  <h2 class="text-xl font-black text-white">
+                  <h2 class="text-lg sm:text-xl font-black text-white">
                     {{ isReadonly ? 'Detalle de Matrícula' : (isExtraordinary ? 'Expediente de Matrícula Extraordinaria' : 'Validación de Documentos') }}
                   </h2>
-                  <p v-if="matricula" class="text-indigo-200 text-sm mt-1">
+                  <p v-if="matricula" class="text-indigo-200 text-xs sm:text-sm mt-0.5 sm:mt-1 truncate max-w-xs sm:max-w-md">
                     {{ isReadonly ? (matricula.student_firstname ? (matricula.student_firstname + ' ' + matricula.student_lastname) : matricula.correo_padre) : matricula.correo_padre }}
                   </p>
                 </div>
-                <button @click="emit('close')" class="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all shrink-0 mt-1 cursor-pointer">
+                <button @click="emit('close')" class="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all shrink-0 mt-0.5 cursor-pointer">
                   <X :size="20" />
                 </button>
               </div>
 
               <!-- Stepper inside header (Only for non-approved/non-finished) -->
-              <div v-if="matricula && !isReadonly" class="mt-6 flex items-center gap-0">
+              <div v-if="matricula && !isReadonly" class="mt-4 sm:mt-6 flex items-center gap-0">
                 <div
                   v-for="s in [{ n: 1, label: 'Salón' }, { n: 2, label: 'Documentos' }, { n: 3, label: 'Registro' }]"
                   :key="s.n"
@@ -226,14 +226,14 @@ const formatDateTime = (date: string | null | undefined) => {
                   <div class="flex flex-col items-center gap-1 cursor-pointer" @click="emit('update:currentStep', s.n)">
                     <div :class="[
                       currentStep >= s.n ? 'bg-white text-indigo-700' : 'bg-white/20 text-white/60',
-                      'h-8 w-8 rounded-full flex items-center justify-center font-black text-sm transition-all shrink-0'
+                      'h-7 w-7 sm:h-8 sm:w-8 rounded-full flex items-center justify-center font-black text-xs sm:text-sm transition-all shrink-0'
                     ]">
-                      <CheckCircle v-if="currentStep > s.n" :size="16" />
+                      <CheckCircle v-if="currentStep > s.n" :size="15" />
                       <span v-else>{{ s.n }}</span>
                     </div>
-                    <span :class="[currentStep >= s.n ? 'text-white' : 'text-white/50', 'text-[9px] font-black uppercase tracking-widest']">{{ s.label }}</span>
+                    <span :class="[currentStep >= s.n ? 'text-white' : 'text-white/50', 'text-[8px] sm:text-[9px] font-black uppercase tracking-widest']">{{ s.label }}</span>
                   </div>
-                  <div v-if="s.n < 3" :class="[currentStep > s.n ? 'bg-white' : 'bg-white/20', 'h-0.5 flex-1 mb-4 transition-colors duration-500']"></div>
+                  <div v-if="s.n < 3" :class="[currentStep > s.n ? 'bg-white' : 'bg-white/20', 'h-0.5 flex-1 mb-3.5 sm:mb-4 transition-colors duration-500']"></div>
                 </div>
               </div>
             </div>
@@ -247,7 +247,7 @@ const formatDateTime = (date: string | null | undefined) => {
             <div v-else-if="matricula" class="flex-1 overflow-y-auto custom-scrollbar text-left">
 
               <!-- ── READONLY / SUMMARY VIEW ── -->
-              <div v-if="isReadonly" class="p-8 space-y-8">
+              <div v-if="isReadonly" class="p-4 sm:p-8 space-y-6 sm:space-y-8">
                 <!-- Banner de Matrícula Extraordinaria (En vista detalle) -->
                 <div v-if="isExtraordinary" class="bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-orange-500/10 border border-amber-500/30 rounded-3xl p-6 space-y-4 shadow-xs">
                   <div class="flex items-center gap-3">
@@ -464,7 +464,7 @@ const formatDateTime = (date: string | null | undefined) => {
               </div>
 
               <!-- ── PROCESO DE REVISIÓN ACTIVA (STEPS) ── -->
-              <div v-else class="p-8 space-y-6">
+              <div v-else class="p-4 sm:p-8 space-y-5 sm:space-y-6">
 
                 <!-- BANNER DE MATRÍCULA EXTRAORDINARIA CON MOTIVO, OBSERVACIONES Y ESTADO DE DOCUMENTACIÓN -->
                 <div v-if="isExtraordinary" class="bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-orange-500/10 border border-amber-500/30 rounded-3xl p-6 space-y-4 shadow-xs">
