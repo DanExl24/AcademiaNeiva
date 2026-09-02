@@ -403,7 +403,7 @@ const fetchBoletinData = async () => {
         error.value = 'Debe seleccionar un estudiante para generar el informe parcial de traslado.'
         return
       }
-      const data = await boletinService.getStudentTransferPartialReport(selectedStudent.value)
+      const data = await boletinService.getStudentTransferPartialReport(selectedStudent.value, selectedYear.value)
       boletinesData.value.push(data)
     } else {
       // Si hay un estudiante específico, trae solo ese.

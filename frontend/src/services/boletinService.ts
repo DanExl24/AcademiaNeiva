@@ -11,8 +11,9 @@ export const boletinService = {
     return res.data
   },
 
-  async getStudentTransferPartialReport(studentId: number | string): Promise<any> {
-    const res = await api.get(`/boletines/transfer-partial-report/${studentId}`)
+  async getStudentTransferPartialReport(studentId: number | string, yearId?: number | string | null): Promise<any> {
+    const params = yearId ? { id_anio: yearId } : {}
+    const res = await api.get(`/boletines/transfer-partial-report/${studentId}`, { params })
     return res.data
   }
 }

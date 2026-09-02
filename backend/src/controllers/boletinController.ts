@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { db } from '../config/kysely';
 import { sql } from 'kysely';
+import { cleanMojibake } from '../utils/errorHelper';
 
 /**
  * Validates if a period is closed for the entire school
@@ -463,10 +464,11 @@ export const getGradeBoletines = async (req: Request, res: Response) => {
 export const getStudentTransferPartialReport = async (req: Request, res: Response) => {
   const { id_estudiante } = req.params;
   const numEstudiante = Number(id_estudiante);
+  const reqYearId = req.query.id_anio || req.query.yearId;
 
   try {
     // 1. Obtener Matrícula y Datos del Estudiante (Incluso si está ACTIVA, TRASLADADO o RETIRADO)
-    const matriculaRes = await db
+    let matriculaQuery = db
       .selectFrom("matricula as m")
       .innerJoin("estudiante as e", "e.id_estudiante", "m.id_estudiante")
       .leftJoin("usuario as u", "u.id_usuario", "e.id_usuario")
@@ -500,9 +502,54 @@ export const getStudentTransferPartialReport = async (req: Request, res: Respons
         "m.estado as estado_matricula",
         "al.calendario"
       ])
-      .where("e.id_estudiante", "=", numEstudiante)
-      .orderBy("m.id_matricula", "desc")
-      .executeTakeFirst();
+      .where("e.id_estudiante", "=", numEstudiante);
+
+    if (reqYearId) {
+      matriculaQuery = matriculaQuery.where("m.id_anio", "=", Number(reqYearId));
+    }
+
+    let matriculaRes = await matriculaQuery.orderBy("m.id_matricula", "desc").executeTakeFirst();
+
+    // Si no encontró matrícula en el año solicitado, buscar la matrícula más reciente
+    if (!matriculaRes && reqYearId) {
+      matriculaRes = await db
+        .selectFrom("matricula as m")
+        .innerJoin("estudiante as e", "e.id_estudiante", "m.id_estudiante")
+        .leftJoin("usuario as u", "u.id_usuario", "e.id_usuario")
+        .innerJoin("colegio as c", "c.id_colegio", "e.id_colegio")
+        .leftJoin("grupos as gr", "gr.id_grupo", "m.id_grupo")
+        .leftJoin("jornada as j", "j.id_jornada", "gr.id_jornada")
+        .leftJoin("nivel_escolar as ne", "ne.id_nivel", "gr.id_nivel")
+        .leftJoin("secciones as s", "s.id_seccion", "gr.id_seccion")
+        .leftJoin("tipo_grado as tg", "tg.id_tipo_grado", "gr.id_tipo_grado")
+        .leftJoin("anio_lectivo as al", "al.id_anio", "m.id_anio")
+        .select([
+          "e.id_estudiante",
+          "e.nombre as estudiante_nombre",
+          "e.apellido as estudiante_apellido",
+          "u.documento",
+          "e.codigo",
+          "e.id_colegio",
+          "c.nombre as colegio_nombre",
+          "c.sede",
+          "c.dane",
+          "c.escudo_url",
+          "c.color_primario",
+          "c.color_secundario",
+          sql<string>`COALESCE(c.tipo_calendario, 'A')`.as("tipo_calendario"),
+          "ne.nombre as nivel",
+          "s.nombre as seccion",
+          "tg.nombre as grado_nombre",
+          "j.nombre as jornada_nombre",
+          "m.id_anio",
+          "m.id_grupo",
+          "m.estado as estado_matricula",
+          "al.calendario"
+        ])
+        .where("e.id_estudiante", "=", numEstudiante)
+        .orderBy("m.id_matricula", "desc")
+        .executeTakeFirst();
+    }
 
     if (!matriculaRes) {
       return res.status(404).json({ error: "Estudiante o matrícula no encontrada." });
@@ -530,8 +577,8 @@ export const getStudentTransferPartialReport = async (req: Request, res: Respons
       return res.status(400).json({ error: "No hay periodos configurados para el año lectivo de la matrícula." });
     }
 
-    // 3. Obtener materias y docentes del grupo
-    const materiasRes = await db
+    // 3. Obtener materias y docentes del grupo correspondientes a ese AÑO LECTIVO
+    let materiasRes = await db
       .selectFrom("detalle_grados as dg")
       .innerJoin("materias as m", "m.id_materia", "dg.id_materia")
       .innerJoin("docente as d", "d.id_docente", "dg.id_docente")
@@ -544,9 +591,30 @@ export const getStudentTransferPartialReport = async (req: Request, res: Respons
         "d.apellido as docente_apellido"
       ])
       .where("dg.id_grupo", "=", idGrupo)
+      .where("dg.id_anio", "=", idAnio)
       .orderBy("m.id_materia")
       .orderBy("dg.id_detallegrado", "desc")
       .execute();
+
+    // Si no encontró materias con filtro de año en detalle_grados, consultar por grupo general
+    if (materiasRes.length === 0) {
+      materiasRes = await db
+        .selectFrom("detalle_grados as dg")
+        .innerJoin("materias as m", "m.id_materia", "dg.id_materia")
+        .innerJoin("docente as d", "d.id_docente", "dg.id_docente")
+        .distinctOn("m.id_materia")
+        .select([
+          "dg.id_detallegrado",
+          "dg.id_materia",
+          "m.nombre as materia",
+          "d.nombre as docente_nombre",
+          "d.apellido as docente_apellido"
+        ])
+        .where("dg.id_grupo", "=", idGrupo)
+        .orderBy("m.id_materia")
+        .orderBy("dg.id_detallegrado", "desc")
+        .execute();
+    }
 
     // 4. Escala de valoración del colegio
     const escalaRows = await db
@@ -559,7 +627,7 @@ export const getStudentTransferPartialReport = async (req: Request, res: Respons
     const getDesempeno = (nota: number | null): string => {
       if (nota === null || isNaN(nota)) return "Sin evaluar";
       const match = escalaRows.find(e => nota >= Number(e.valor_minimo) && nota <= Number(e.valor_maximo));
-      return match ? match.nivel : (nota >= 3.0 ? "BÁSICO" : "BAJO");
+      return match ? cleanMojibake(match.nivel) : (nota >= 3.0 ? "BÁSICO" : "BAJO");
     };
 
     // 5. Para cada materia y periodo, consolidar nota cerrada o acumulada abierta
@@ -576,28 +644,43 @@ export const getStudentTransferPartialReport = async (req: Request, res: Respons
             let actividadesCalificadas = 0;
 
             if (p.estado === "CERRADO") {
-              // Buscar en resultado_academico
+              // Buscar en resultado_academico cruzando por id_materia e id_periodo
               const ra = await db
-                .selectFrom("resultado_academico")
-                .select(["promedio"])
-                .where("id_estudiante", "=", numEstudiante)
-                .where("id_periodo", "=", pId)
-                .where("id_detallegrado", "=", dgId)
+                .selectFrom("resultado_academico as ra")
+                .innerJoin("detalle_grados as dg_ra", "dg_ra.id_detallegrado", "ra.id_detallegrado")
+                .select(["ra.promedio"])
+                .where("ra.id_estudiante", "=", numEstudiante)
+                .where("ra.id_periodo", "=", pId)
+                .where("dg_ra.id_materia", "=", mId)
                 .executeTakeFirst();
 
               if (ra && ra.promedio !== null) {
                 calificacion = Number(ra.promedio);
               } else {
-                // Fallback cálculo actividades
-                const calc = await db
-                  .selectFrom("notas_actividad as na")
-                  .innerJoin("actividad_materia as am", "am.id_actividadmateria", "na.id_actividadmateria")
-                  .select(sql<number>`ROUND(SUM(na.nota * (am.porcentaje / 100.0))::numeric, 2)`.as("promedio_calculado"))
-                  .where("na.id_estudiante", "=", numEstudiante)
-                  .where("am.id_periodo", "=", pId)
-                  .where("am.id_detallegrado", "=", dgId)
+                // Fallback directo por id_detallegrado
+                const raDirect = await db
+                  .selectFrom("resultado_academico")
+                  .select(["promedio"])
+                  .where("id_estudiante", "=", numEstudiante)
+                  .where("id_periodo", "=", pId)
+                  .where("id_detallegrado", "=", dgId)
                   .executeTakeFirst();
-                calificacion = calc?.promedio_calculado ? Number(calc.promedio_calculado) : null;
+
+                if (raDirect && raDirect.promedio !== null) {
+                  calificacion = Number(raDirect.promedio);
+                } else {
+                  // Fallback cálculo actividades
+                  const calc = await db
+                    .selectFrom("notas_actividad as na")
+                    .innerJoin("actividad_materia as am", "am.id_actividadmateria", "na.id_actividadmateria")
+                    .innerJoin("detalle_grados as dg_am", "dg_am.id_detallegrado", "am.id_detallegrado")
+                    .select(sql<number>`ROUND(SUM(na.nota * (am.porcentaje / 100.0))::numeric, 2)`.as("promedio_calculado"))
+                    .where("na.id_estudiante", "=", numEstudiante)
+                    .where("am.id_periodo", "=", pId)
+                    .where("dg_am.id_materia", "=", mId)
+                    .executeTakeFirst();
+                  calificacion = calc?.promedio_calculado ? Number(calc.promedio_calculado) : null;
+                }
               }
               esParcial = false;
             } else {
@@ -605,13 +688,14 @@ export const getStudentTransferPartialReport = async (req: Request, res: Respons
               const actRes = await db
                 .selectFrom("notas_actividad as na")
                 .innerJoin("actividad_materia as am", "am.id_actividadmateria", "na.id_actividadmateria")
+                .innerJoin("detalle_grados as dg_am", "dg_am.id_detallegrado", "am.id_detallegrado")
                 .select([
                   sql<number>`ROUND(AVG(na.nota)::numeric, 2)`.as("promedio_parcial"),
                   sql<number>`COUNT(na.id_nota)`.as("total_actividades")
                 ])
                 .where("na.id_estudiante", "=", numEstudiante)
                 .where("am.id_periodo", "=", pId)
-                .where("am.id_detallegrado", "=", dgId)
+                .where("dg_am.id_materia", "=", mId)
                 .executeTakeFirst();
 
               if (actRes && Number(actRes.total_actividades) > 0) {
@@ -624,7 +708,7 @@ export const getStudentTransferPartialReport = async (req: Request, res: Respons
             return {
               id_materia: mId,
               id_periodo: pId,
-              periodo_nombre: p.nombre,
+              periodo_nombre: cleanMojibake(p.nombre),
               trimestre: p.trimestre,
               estado_periodo: p.estado,
               calificacion: calificacion,
@@ -638,19 +722,49 @@ export const getStudentTransferPartialReport = async (req: Request, res: Respons
         // Ausencias por materia
         const ausenciasRow = await db
           .selectFrom("registro_asistencia as ra")
+          .innerJoin("detalle_grados as dg_ra", "dg_ra.id_detallegrado", "ra.id_detallegrado")
           .select(sql<number>`COUNT(*) FILTER (WHERE ra.estado = 'AUSENTE')`.as("faltas"))
           .where("ra.id_estudiante", "=", numEstudiante)
-          .where("ra.id_detallegrado", "=", dgId)
+          .where("dg_ra.id_materia", "=", mId)
           .executeTakeFirst();
 
+        // Observaciones cualitativas para la materia
+        const obsMateria = await db
+          .selectFrom("observacion_estudiante as oe")
+          .innerJoin("detalle_grados as dg_oe", "dg_oe.id_detallegrado", "oe.id_detallegrado")
+          .select(["oe.fortalezas", "oe.debilidades", "oe.recomendaciones", "oe.tipo"])
+          .where("oe.id_estudiante", "=", numEstudiante)
+          .where("dg_oe.id_materia", "=", mId)
+          .execute();
+
+        // Desempeños y competencias para la materia
+        const compMateria = await db
+          .selectFrom("competencias as comp")
+          .innerJoin("evidencia_aprendizaje as ea", "ea.id_competencia", "comp.id_competencia")
+          .select(["ea.descripcion"])
+          .where("comp.id_grupo", "=", Number(idGrupo))
+          .where("comp.id_materia", "=", mId)
+          .execute();
+
+        const formattedObs = obsMateria.map(o => ({
+          tipo: o.tipo,
+          fortalezas: (Array.isArray(o.fortalezas) ? o.fortalezas : (o.fortalezas ? [o.fortalezas] : [])).map(f => cleanMojibake(String(f))),
+          debilidades: (Array.isArray(o.debilidades) ? o.debilidades : (o.debilidades ? [o.debilidades] : [])).map(d => cleanMojibake(String(d))),
+          recomendaciones: cleanMojibake(o.recomendaciones || '')
+        }));
+
+        const formattedDesempenos = compMateria
+          .map(c => cleanMojibake(c.descripcion))
+          .filter(Boolean);
+
         return {
-          materia: m.materia,
-          docente_nombre: m.docente_nombre,
-          docente_apellido: m.docente_apellido,
+          materia: cleanMojibake(m.materia),
+          docente_nombre: cleanMojibake(m.docente_nombre),
+          docente_apellido: cleanMojibake(m.docente_apellido),
           ausencias: Number(ausenciasRow?.faltas || 0),
           notas_historicas: notasHistoricas,
-          desempenos: [],
-          observaciones: []
+          desempenos: formattedDesempenos,
+          observaciones: formattedObs
         };
       })
     );
@@ -694,10 +808,10 @@ export const getStudentTransferPartialReport = async (req: Request, res: Respons
       ano_lectivo: matriculaRes.calendario,
       estudiante: {
         ...matriculaRes,
-        nombre: matriculaRes.estudiante_nombre,
-        apellido: matriculaRes.estudiante_apellido,
+        nombre: cleanMojibake(matriculaRes.estudiante_nombre),
+        apellido: cleanMojibake(matriculaRes.estudiante_apellido),
         dane: matriculaRes.dane || '183001000940',
-        ciudad: (matriculaRes as any).ciudad || 'Neiva - Huila'
+        ciudad: cleanMojibake((matriculaRes as any).ciudad) || 'Neiva - Huila'
       },
       materias: materias,
       promedioGeneral: promedioAcumulado,
@@ -710,8 +824,8 @@ export const getStudentTransferPartialReport = async (req: Request, res: Respons
       },
       escala: escalaRows,
       firmas: {
-        titular: titularRow ? titularRow.nombre_completo : null,
-        rector: rectorRow ? rectorRow.nombre_completo : null
+        titular: titularRow ? cleanMojibake(titularRow.nombre_completo) : null,
+        rector: rectorRow ? cleanMojibake(rectorRow.nombre_completo) : null
       }
     });
   } catch (error) {
