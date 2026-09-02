@@ -32,7 +32,8 @@ import {
   Award,
   FolderCheck,
   Menu,
-  RotateCcw
+  RotateCcw,
+  X
 } from 'lucide-vue-next'
 import { useAuthStore } from '../stores/auth'
 import { useThemeStore } from '../stores/theme'
@@ -781,12 +782,62 @@ onUnmounted(() => {
       ]"
     >
       <!-- Logo Area -->
-      <div class="h-16 flex items-center px-5 border-b border-gray-100 dark:border-slate-800 gap-3">
-        <div class="w-8 h-8 rounded-lg overflow-hidden shrink-0 flex items-center justify-center bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-800">
-          <img v-if="schoolEscudo" :src="schoolEscudo" class="w-full h-full object-contain" alt="Escudo" @error="schoolEscudo = null" />
-          <School v-else class="text-indigo-600 flex-shrink-0" :size="20" />
+      <div class="h-16 flex items-center justify-between px-4 sm:px-5 border-b border-gray-100 dark:border-slate-800">
+        <div class="flex items-center gap-3 min-w-0 flex-1">
+          <div class="w-8 h-8 rounded-lg overflow-hidden shrink-0 flex items-center justify-center bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-800">
+            <img v-if="schoolEscudo" :src="schoolEscudo" class="w-full h-full object-contain" alt="Escudo" @error="schoolEscudo = null" />
+            <School v-else class="text-indigo-600 flex-shrink-0" :size="20" />
+          </div>
+          <span v-if="!isCollapsed" class="font-bold text-gray-900 dark:text-white truncate text-xs leading-tight max-w-[140px] sm:max-w-[150px]">{{ schoolName }}</span>
         </div>
-        <span v-if="!isCollapsed" class="font-bold text-gray-900 dark:text-white truncate text-xs leading-tight max-w-[150px]">{{ schoolName }}</span>
+        <!-- Close button on mobile sidebar -->
+        <button 
+          type="button" 
+          @click="isMobileOpen = false"
+          class="md:hidden p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors shrink-0 cursor-pointer"
+          aria-label="Cerrar menú"
+        >
+          <X :size="18" />
+        </button>
+      </div>
+
+      <!-- Mobile Controls: Year selector, school switcher, and role switcher (md:hidden) -->
+      <div v-if="!isCollapsed" class="md:hidden px-3 pt-3 pb-2 border-b border-gray-100 dark:border-slate-800 space-y-2 shrink-0">
+        <!-- Year Selector on Mobile -->
+        <div v-if="showYearSelector" class="flex items-center justify-between p-2 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80">
+          <div class="flex items-center gap-1.5 text-xs font-bold text-slate-600 dark:text-slate-300">
+            <Calendar :size="15" class="text-indigo-600 dark:text-indigo-400 shrink-0" />
+            <span>Año Lectivo:</span>
+          </div>
+          <select 
+            v-if="yearStore.availableYears.length > 0"
+            :value="yearStore.selectedYearId"
+            @change="onHeaderYearChange"
+            class="font-black text-xs text-white bg-indigo-600 dark:bg-indigo-700 px-2.5 py-1 rounded-lg border border-indigo-500 shadow-xs outline-none cursor-pointer"
+          >
+            <option v-for="y in yearStore.availableYears" :key="y.id_anio" :value="y.id_anio" class="bg-slate-900 text-white font-bold">
+              {{ y.calendario }}{{ y.estado === 'CERRADO' ? ' 🔒' : ' ✨' }}
+            </option>
+          </select>
+        </div>
+
+        <!-- Role Switcher on Mobile -->
+        <div v-if="hasMultipleRoles && !auth.isMonitoring" class="flex items-center justify-between p-2 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/40 text-xs">
+          <span class="text-indigo-700 dark:text-indigo-300 font-medium">Rol: <strong>{{ auth.activeRole }}</strong></span>
+          <button @click="switchRole(otherRole!)" class="bg-indigo-600 text-white px-2.5 py-1 rounded-lg font-black text-[11px] shadow-xs active:scale-95 transition-all cursor-pointer">
+            Cambiar a {{ otherRole }}
+          </button>
+        </div>
+
+        <!-- School Changer on Mobile -->
+        <router-link 
+          v-if="hasMultipleSchools" 
+          to="/select-school" 
+          class="flex items-center justify-center gap-1.5 text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 p-2 rounded-xl transition-all"
+        >
+          <Building2 :size="14" />
+          <span>Cambiar de Colegio</span>
+        </router-link>
       </div>
 
 
@@ -970,23 +1021,34 @@ onUnmounted(() => {
       </div>
 
       <!-- Navbar -->
-      <header class="h-16 bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 flex items-center justify-between px-4 sm:px-6 md:px-8 z-30 transition-colors duration-300">
-        <div class="flex items-center gap-2.5 sm:gap-3 min-w-0">
+      <header class="h-16 bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 flex items-center justify-between px-3.5 sm:px-6 md:px-8 z-30 transition-colors duration-300 gap-2">
+        <div class="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
           <button
             type="button"
             @click="isMobileOpen = !isMobileOpen"
-            class="md:hidden p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+            class="md:hidden p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
             aria-label="Abrir menú lateral"
           >
             <Menu :size="20" />
           </button>
-          <h2 class="text-sm sm:text-base md:text-xl font-bold text-gray-800 dark:text-white truncate max-w-[180px] sm:max-w-xs md:max-w-md lg:max-w-none">
+          <h2 class="text-xs sm:text-base md:text-xl font-bold text-gray-800 dark:text-white truncate max-w-[150px] sm:max-w-xs md:max-w-md lg:max-w-none">
             {{ auth.isMonitoring ? `Seguimiento: ${auth.monitoringUser?.nombre} ${auth.monitoringUser?.apellido}` : (auth.isSupervising ? `Supervisando: ${auth.supervision?.colegio_nombre}` : ($route.name || 'Panel de Gestión')) }}
           </h2>
         </div>
         
-        <div class="flex items-center gap-3 sm:gap-6">
-          <!-- Selector Prominente de Año Lectivo, Colegio y Hora -->
+        <div class="flex items-center gap-2 sm:gap-4 md:gap-6 shrink-0">
+          <!-- Mobile Year Indicator (md:hidden) -->
+          <span 
+            v-if="showYearSelector && yearStore.selectedYear" 
+            class="md:hidden inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 text-[11px] font-black border border-indigo-200/60 dark:border-indigo-800/60 shrink-0"
+            :title="`Año Lectivo ${yearStore.selectedYear.calendario} (${yearStore.selectedYear.estado})`"
+          >
+            <Calendar :size="12" class="text-indigo-500 shrink-0" />
+            <span>{{ yearStore.selectedYear.calendario }}</span>
+            <span v-if="yearStore.isClosedYear" class="text-[9px]">🔒</span>
+          </span>
+
+          <!-- Selector Prominente de Año Lectivo, Colegio y Hora (Desktop) -->
           <div class="hidden md:flex items-center gap-2.5">
             <!-- Botón Cambiar Colegio para usuarios multi-colegio -->
             <router-link 
@@ -1038,7 +1100,7 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <div class="flex items-center gap-3">
+          <div class="flex items-center gap-2 sm:gap-3">
             <div class="text-right hidden sm:block">
               <p class="text-sm font-bold text-gray-900 dark:text-white truncate max-w-[160px]">
                 {{ auth.isMonitoring && auth.monitoringUser ? `${auth.monitoringUser.nombre} ${auth.monitoringUser.apellido || ''}`.trim() : (auth.user?.name || 'Usuario') }}
@@ -1059,14 +1121,14 @@ onUnmounted(() => {
       </header>
 
       <!-- Page Content -->
-      <main :class="['flex-1 overflow-y-auto p-8 bg-gray-50 dark:bg-slate-950 transition-colors duration-300', isReadOnlySupervision ? 'supervision-readonly-mode' : '']">
+      <main :class="['flex-1 overflow-y-auto p-3.5 sm:p-6 md:p-8 bg-gray-50 dark:bg-slate-950 transition-colors duration-300', isReadOnlySupervision ? 'supervision-readonly-mode' : '']">
         <div class="max-w-7xl mx-auto">
           <!-- Active Sanction Banner for Students -->
-          <div v-if="studentSanction" class="mb-6 p-5 rounded-3xl bg-gradient-to-r from-amber-50 to-orange-50/50 dark:from-amber-950/20 dark:to-orange-950/10 border border-amber-200/60 dark:border-amber-900/40 shadow-sm flex items-start gap-4 relative overflow-hidden transition-all duration-300 animate-pulse-slow">
+          <div v-if="studentSanction" class="mb-6 p-4 sm:p-5 rounded-2xl sm:rounded-3xl bg-gradient-to-r from-amber-50 to-orange-50/50 dark:from-amber-950/20 dark:to-orange-950/10 border border-amber-200/60 dark:border-amber-900/40 shadow-xs flex items-start gap-3 sm:gap-4 relative overflow-hidden transition-all duration-300 animate-pulse-slow">
             <div class="h-10 w-10 shrink-0 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
               <ShieldAlert :size="20" />
             </div>
-            <div class="space-y-1">
+            <div class="space-y-1 min-w-0 flex-1">
               <h4 class="text-xs font-black text-amber-700 dark:text-amber-400 uppercase tracking-wider leading-none flex items-center gap-2">
                 Sanción Académica / Disciplinaria Activa
               </h4>
@@ -1085,7 +1147,7 @@ onUnmounted(() => {
     </div>
 
     <!-- Real-time Toast Notifications Container -->
-    <div class="fixed bottom-6 right-6 z-[9999] space-y-3 pointer-events-none w-full max-w-sm">
+    <div class="fixed bottom-4 right-4 left-4 sm:left-auto sm:bottom-6 sm:right-6 z-[9999] space-y-3 pointer-events-none w-auto sm:w-full sm:max-w-sm">
       <TransitionGroup
         enter-active-class="transition duration-300 ease-out"
         enter-from-class="transform translate-y-4 opacity-0"
@@ -1126,29 +1188,29 @@ onUnmounted(() => {
         leave-from-class="opacity-100 scale-100"
         leave-to-class="opacity-0 scale-95"
       >
-        <div v-if="showRevocationModal" class="fixed inset-0 z-[99999] flex items-center justify-center p-4">
+        <div v-if="showRevocationModal" class="fixed inset-0 z-[99999] flex items-center justify-center p-3 sm:p-4">
           <!-- Backdrop -->
           <div class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm"></div>
 
           <!-- Modal Body -->
-          <div class="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] shadow-2xl p-8 max-w-lg w-full text-center space-y-6">
-            <div class="w-20 h-20 bg-rose-50 dark:bg-rose-950/30 rounded-full flex items-center justify-center mx-auto text-rose-600 dark:text-rose-400">
-              <ShieldAlert :size="48" class="animate-pulse" />
+          <div class="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl sm:rounded-[32px] shadow-2xl p-5 sm:p-8 max-w-lg w-full text-center space-y-4 sm:space-y-6 max-h-[90dvh] overflow-y-auto custom-scrollbar">
+            <div class="w-16 h-16 sm:w-20 sm:h-20 bg-rose-50 dark:bg-rose-950/30 rounded-full flex items-center justify-center mx-auto text-rose-600 dark:text-rose-400">
+              <ShieldAlert :size="36" class="animate-pulse sm:size-12" />
             </div>
 
             <div class="space-y-2">
-              <h2 class="text-2xl font-black text-slate-900 dark:text-white leading-tight">
+              <h2 class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white leading-tight">
                 ¡Supervisión Revocada!
               </h2>
-              <p class="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
+              <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
                 Un directivo del colegio ha decidido revocar tu sesión de supervisión activa.
               </p>
             </div>
 
-            <div class="bg-rose-50/50 dark:bg-rose-950/10 border border-rose-100 dark:border-rose-900/50 rounded-2xl p-5 text-left space-y-3">
+            <div class="bg-rose-50/50 dark:bg-rose-950/10 border border-rose-100 dark:border-rose-900/50 rounded-xl sm:rounded-2xl p-4 sm:p-5 text-left space-y-2 sm:space-y-3">
               <div>
                 <span class="text-[10px] font-bold text-rose-500 uppercase tracking-wider block">Revocado por</span>
-                <span class="text-sm font-bold text-slate-800 dark:text-slate-200">{{ revocationDetails.revocador }}</span>
+                <span class="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-200">{{ revocationDetails.revocador }}</span>
               </div>
               <div class="pt-2 border-t border-rose-100/50 dark:border-rose-900/30">
                 <span class="text-[10px] font-bold text-rose-500 uppercase tracking-wider block">Motivo de revocación</span>
@@ -1160,7 +1222,7 @@ onUnmounted(() => {
 
             <button
               @click="handleCloseRevocationModal"
-              class="w-full bg-rose-600 hover:bg-rose-700 text-white py-4 px-6 rounded-2xl font-bold shadow-lg shadow-rose-250 dark:shadow-none hover:scale-[1.01] active:scale-[0.99] transition-all allow-supervision-action"
+              class="w-full bg-rose-600 hover:bg-rose-700 text-white py-3 sm:py-4 px-5 sm:px-6 rounded-xl sm:rounded-2xl font-bold text-xs sm:text-sm shadow-lg shadow-rose-250 dark:shadow-none hover:scale-[1.01] active:scale-[0.99] transition-all allow-supervision-action cursor-pointer"
             >
               Entendido y Salir
             </button>

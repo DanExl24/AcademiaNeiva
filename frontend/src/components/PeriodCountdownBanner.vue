@@ -163,9 +163,9 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div v-if="shouldShow && period" class="mb-6 animate-in fade-in slide-in-from-top-3 duration-500">
+  <div v-if="shouldShow && period" class="mb-4 sm:mb-6 animate-in fade-in slide-in-from-top-3 duration-500">
     <div :class="[
-      'rounded-2xl p-5 md:p-6 text-white shadow-lg relative overflow-hidden transition-all border',
+      'rounded-xl sm:rounded-2xl p-4 sm:p-5 md:p-6 text-white shadow-lg relative overflow-hidden transition-all border',
       timeLeft.days <= 5 
         ? 'bg-gradient-to-r from-amber-600 via-rose-600 to-red-600 border-amber-400/30' 
         : 'bg-gradient-to-r from-indigo-700 via-purple-700 to-sky-700 border-indigo-400/30'
@@ -176,63 +176,63 @@ onUnmounted(() => {
         <Clock :size="160" />
       </div>
 
-      <div class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 relative z-10">
+      <div class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3.5 sm:gap-4 relative z-10">
         
         <!-- Información del Período -->
-        <div class="flex items-center gap-3.5">
+        <div class="flex items-center gap-3 sm:gap-3.5 min-w-0">
           <div :class="[
-            'w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 shadow-inner',
+            'w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center shrink-0 shadow-inner',
             timeLeft.days <= 5 ? 'bg-white/20 text-amber-100 animate-pulse' : 'bg-white/15 text-indigo-100'
           ]">
-            <Clock :size="24" />
+            <Clock :size="20" class="sm:size-6" />
           </div>
-          <div>
-            <div class="flex items-center gap-2">
-              <span class="text-xs font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-white/20 text-white backdrop-blur-xs">
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+              <span class="text-[10px] sm:text-xs font-black uppercase tracking-widest px-2 sm:px-2.5 py-0.5 rounded-full bg-white/20 text-white backdrop-blur-xs">
                 Período {{ period.nombre }}
               </span>
-              <span v-if="timeLeft.days <= 5 && !timeLeft.isExpired" class="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-300 text-amber-950 flex items-center gap-1 animate-bounce">
+              <span v-if="timeLeft.days <= 5 && !timeLeft.isExpired" class="text-[9px] sm:text-[10px] font-black uppercase tracking-wider px-1.5 sm:px-2 py-0.5 rounded-full bg-amber-300 text-amber-950 flex items-center gap-1 animate-bounce">
                 <AlertTriangle :size="10" /> Cierre Próximo
               </span>
             </div>
-            <h4 class="text-lg font-black text-white mt-1 tracking-tight flex items-center gap-1.5">
-              Cierre del Período Académico
-              <Sparkles :size="16" class="text-amber-300" />
+            <h4 class="text-base sm:text-lg font-black text-white mt-1 tracking-tight flex items-center gap-1.5 truncate">
+              <span>Cierre del Período Académico</span>
+              <Sparkles :size="15" class="text-amber-300 shrink-0" />
             </h4>
 
-            <p class="text-xs text-white/80 font-medium">
+            <p class="text-xs text-white/80 font-medium leading-relaxed">
               <span v-if="timeLeft.isExpired">El período ha alcanzado su fecha límite de registro y calificaciones.</span>
-              <span v-else>Tiempo restante para el cierre oficial del registro de actividades y notas.</span>
+              <span v-else class="line-clamp-1 sm:line-clamp-none">Tiempo restante para el cierre oficial del registro de actividades y notas.</span>
             </p>
           </div>
         </div>
 
         <!-- Contador Regresivo -->
-        <div v-if="!timeLeft.isExpired" class="flex items-center gap-2 sm:gap-3 self-stretch lg:self-auto justify-center">
-          <div class="flex flex-col items-center bg-black/25 backdrop-blur-md px-3.5 py-2 rounded-xl border border-white/10 min-w-[62px]">
-            <span class="text-2xl font-black font-mono tracking-tight text-white leading-none">{{ timeLeft.days }}</span>
-            <span class="text-[9px] font-extrabold uppercase tracking-wider text-white/75 mt-1">Días</span>
+        <div v-if="!timeLeft.isExpired" class="flex items-center gap-1.5 sm:gap-2 md:gap-3 self-stretch lg:self-auto justify-center">
+          <div class="flex flex-col items-center bg-black/25 backdrop-blur-md px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl border border-white/10 min-w-[50px] sm:min-w-[62px]">
+            <span class="text-xl sm:text-2xl font-black font-mono tracking-tight text-white leading-none">{{ timeLeft.days }}</span>
+            <span class="text-[8px] sm:text-[9px] font-extrabold uppercase tracking-wider text-white/75 mt-1">Días</span>
           </div>
 
-          <span class="text-xl font-black text-white/40 pb-2">:</span>
+          <span class="text-base sm:text-xl font-black text-white/40 pb-1 sm:pb-2">:</span>
 
-          <div class="flex flex-col items-center bg-black/25 backdrop-blur-md px-3.5 py-2 rounded-xl border border-white/10 min-w-[62px]">
-            <span class="text-2xl font-black font-mono tracking-tight text-white leading-none">{{ String(timeLeft.hours).padStart(2, '0') }}</span>
-            <span class="text-[9px] font-extrabold uppercase tracking-wider text-white/75 mt-1">Horas</span>
+          <div class="flex flex-col items-center bg-black/25 backdrop-blur-md px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl border border-white/10 min-w-[50px] sm:min-w-[62px]">
+            <span class="text-xl sm:text-2xl font-black font-mono tracking-tight text-white leading-none">{{ String(timeLeft.hours).padStart(2, '0') }}</span>
+            <span class="text-[8px] sm:text-[9px] font-extrabold uppercase tracking-wider text-white/75 mt-1">Horas</span>
           </div>
 
-          <span class="text-xl font-black text-white/40 pb-2">:</span>
+          <span class="text-base sm:text-xl font-black text-white/40 pb-1 sm:pb-2">:</span>
 
-          <div class="flex flex-col items-center bg-black/25 backdrop-blur-md px-3.5 py-2 rounded-xl border border-white/10 min-w-[62px]">
-            <span class="text-2xl font-black font-mono tracking-tight text-white leading-none">{{ String(timeLeft.minutes).padStart(2, '0') }}</span>
-            <span class="text-[9px] font-extrabold uppercase tracking-wider text-white/75 mt-1">Min</span>
+          <div class="flex flex-col items-center bg-black/25 backdrop-blur-md px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl border border-white/10 min-w-[50px] sm:min-w-[62px]">
+            <span class="text-xl sm:text-2xl font-black font-mono tracking-tight text-white leading-none">{{ String(timeLeft.minutes).padStart(2, '0') }}</span>
+            <span class="text-[8px] sm:text-[9px] font-extrabold uppercase tracking-wider text-white/75 mt-1">Min</span>
           </div>
 
-          <span class="text-xl font-black text-white/40 pb-2">:</span>
+          <span class="text-base sm:text-xl font-black text-white/40 pb-1 sm:pb-2">:</span>
 
-          <div class="flex flex-col items-center bg-black/25 backdrop-blur-md px-3.5 py-2 rounded-xl border border-white/10 min-w-[62px]">
-            <span class="text-2xl font-black font-mono tracking-tight text-amber-300 leading-none">{{ String(timeLeft.seconds).padStart(2, '0') }}</span>
-            <span class="text-[9px] font-extrabold uppercase tracking-wider text-white/75 mt-1">Seg</span>
+          <div class="flex flex-col items-center bg-black/25 backdrop-blur-md px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl border border-white/10 min-w-[50px] sm:min-w-[62px]">
+            <span class="text-xl sm:text-2xl font-black font-mono tracking-tight text-amber-300 leading-none">{{ String(timeLeft.seconds).padStart(2, '0') }}</span>
+            <span class="text-[8px] sm:text-[9px] font-extrabold uppercase tracking-wider text-white/75 mt-1">Seg</span>
           </div>
         </div>
 
