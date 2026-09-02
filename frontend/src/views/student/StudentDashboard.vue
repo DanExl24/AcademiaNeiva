@@ -291,32 +291,32 @@ const hasObservations = computed(() => {
     <PeriodCountdownBanner />
 
     <!-- Welcome Hero Banner -->
-    <div class="relative overflow-hidden bg-gradient-to-br from-indigo-600 via-violet-700 to-purple-800 rounded-3xl p-8 md:p-10 text-white shadow-2xl">
+    <div class="relative overflow-hidden bg-gradient-to-br from-indigo-600 via-violet-700 to-purple-800 rounded-2xl sm:rounded-3xl p-5 sm:p-8 md:p-10 text-white shadow-2xl">
       <!-- Background Accents -->
       <div class="absolute -right-24 -top-20 h-72 w-72 bg-white/10 rounded-full blur-3xl pointer-events-none"></div>
       <div class="absolute left-1/2 -bottom-16 h-56 w-56 bg-indigo-400/20 rounded-full blur-2xl pointer-events-none"></div>
       <div class="absolute right-1/4 top-6 h-24 w-24 bg-violet-400/30 rounded-full blur-xl animate-pulse pointer-events-none"></div>
 
-      <div class="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-8">
+      <div class="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6 sm:gap-8">
         <div>
-          <div class="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl px-4 py-2 mb-5">
-            <Sparkles :size="16" class="text-yellow-300" />
-            <span class="text-sm font-bold text-white/90">Portal Estudiantil</span>
+          <div class="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl sm:rounded-2xl px-3.5 sm:px-4 py-1.5 sm:py-2 mb-3 sm:mb-5">
+            <Sparkles :size="15" class="text-yellow-300" />
+            <span class="text-xs sm:text-sm font-bold text-white/90">Portal Estudiantil</span>
           </div>
-          <h1 class="text-3xl md:text-5xl font-black tracking-tight leading-tight">
+          <h1 class="text-2xl sm:text-3xl md:text-5xl font-black tracking-tight leading-tight">
             ¡Hola, <span class="bg-gradient-to-r from-yellow-300 to-yellow-100 bg-clip-text text-transparent">{{ studentName }}</span>! 🎓
           </h1>
-          <p class="mt-4 text-indigo-100 text-lg font-medium max-w-lg leading-relaxed">
+          <p class="mt-2.5 sm:mt-4 text-indigo-100 text-sm sm:text-base md:text-lg font-medium max-w-lg leading-relaxed">
             Bienvenido a tu portal académico. Aquí podrás consultar tus notas, asistencias, observaciones y tu historial académico.
           </p>
 
           <!-- Year & Period Selectors -->
-          <div v-if="displayYears.length > 0" class="mt-6 flex flex-wrap items-center gap-3">
-            <div class="inline-flex items-center gap-3 bg-white/10 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/20">
-              <CalendarDays :size="18" class="text-indigo-200" />
+          <div v-if="displayYears.length > 0" class="mt-4 sm:mt-6 flex flex-wrap items-center gap-2.5 sm:gap-3">
+            <div class="inline-flex items-center gap-2.5 sm:gap-3 bg-white/10 backdrop-blur-md px-3.5 sm:px-4 py-2 rounded-xl sm:rounded-2xl border border-white/20">
+              <CalendarDays :size="16" class="text-indigo-200 sm:w-4.5 sm:h-4.5" />
               <select 
                 v-model="selectedYearId"
-                class="bg-transparent text-white text-sm font-bold outline-none cursor-pointer appearance-none pr-6"
+                class="bg-transparent text-white text-xs sm:text-sm font-bold outline-none cursor-pointer appearance-none pr-6"
                 style="background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22white%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C/polyline%3E%3C/svg%3E'); background-repeat: no-repeat; background-position: right center; background-size: 1.2em;"
               >
                 <option v-for="y in displayYears" :key="y['id_anio']" :value="y['id_anio']" class="text-slate-900">
@@ -325,11 +325,11 @@ const hasObservations = computed(() => {
               </select>
             </div>
 
-            <div v-if="periods.length > 0" class="inline-flex items-center gap-3 bg-white/10 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/20">
-              <Clock :size="18" class="text-indigo-200" />
+            <div v-if="periods.length > 0" class="inline-flex items-center gap-2.5 sm:gap-3 bg-white/10 backdrop-blur-md px-3.5 sm:px-4 py-2 rounded-xl sm:rounded-2xl border border-white/20">
+              <Clock :size="16" class="text-indigo-200 sm:w-4.5 sm:h-4.5" />
               <select 
                 v-model="selectedPeriodId"
-                class="bg-transparent text-white text-sm font-bold outline-none cursor-pointer appearance-none pr-6"
+                class="bg-transparent text-white text-xs sm:text-sm font-bold outline-none cursor-pointer appearance-none pr-6"
                 style="background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22white%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C/polyline%3E%3C/svg%3E'); background-repeat: no-repeat; background-position: right center; background-size: 1.2em;"
               >
                 <option v-for="p in periods" :key="p.id_periodo" :value="p.id_periodo" class="text-slate-900">
@@ -341,9 +341,9 @@ const hasObservations = computed(() => {
         </div>
         
         <!-- Student Card Avatar -->
-        <div class="shrink-0 flex flex-col items-center gap-3">
-          <div class="h-24 w-24 rounded-3xl bg-gradient-to-br from-white/20 to-white/5 backdrop-blur-sm border-2 border-white/30 flex items-center justify-center shadow-xl">
-            <GraduationCap :size="48" class="text-white" />
+        <div class="shrink-0 flex sm:flex-col items-center gap-3 self-start sm:self-center md:self-auto">
+          <div class="h-16 w-16 sm:h-24 sm:w-24 rounded-2xl sm:rounded-3xl bg-gradient-to-br from-white/20 to-white/5 backdrop-blur-sm border-2 border-white/30 flex items-center justify-center shadow-xl">
+            <GraduationCap :size="32" class="text-white sm:w-12 sm:h-12" />
           </div>
           <div class="flex items-center gap-1.5 bg-emerald-400/20 border border-emerald-400/30 rounded-full px-3 py-1">
             <div class="h-2 w-2 bg-emerald-400 rounded-full animate-pulse"></div>
@@ -358,97 +358,97 @@ const hasObservations = computed(() => {
 
     <template v-else>
       <!-- Quick Stats Banner (KPIs Vivos con protección opcional) -->
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-6">
       <!-- Card Promedio -->
-      <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 p-6 flex items-center gap-4 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 shadow-sm">
-        <div class="bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 p-4 rounded-2xl">
-          <ClipboardList :size="24" stroke-width="2.5" />
+      <div class="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 p-4 sm:p-6 flex items-center gap-3 sm:gap-4 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 shadow-sm">
+        <div class="bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 p-2.5 sm:p-4 rounded-xl sm:rounded-2xl shrink-0">
+          <ClipboardList :size="20" stroke-width="2.5" class="sm:w-6 sm:h-6" />
         </div>
         <div class="flex-1 min-w-0">
-          <p class="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Promedio General</p>
+          <p class="text-[9px] sm:text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest truncate">Promedio General</p>
           <div v-if="statsLoading" class="h-6 w-16 bg-slate-100 dark:bg-slate-800 animate-pulse rounded mt-1"></div>
-          <p v-else-if="dashboardStats?.promedio_general !== null" class="text-2xl font-black text-slate-800 dark:text-white mt-0.5 font-mono">
+          <p v-else-if="dashboardStats?.promedio_general !== null" class="text-xl sm:text-2xl font-black text-slate-800 dark:text-white mt-0.5 font-mono">
             {{ dashboardStats.promedio_general }}
           </p>
-          <p v-else class="text-[10px] font-bold text-slate-400 dark:text-slate-500 mt-1.5 italic leading-tight">
-            Faltan datos para cubrir este registro
+          <p v-else class="text-[10px] font-bold text-slate-400 dark:text-slate-500 mt-1 italic leading-tight">
+            Faltan datos
           </p>
         </div>
       </div>
 
       <!-- Card Materias -->
-      <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 p-6 flex items-center gap-4 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 shadow-sm">
-        <div class="bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 p-4 rounded-2xl">
-          <BookOpen :size="24" stroke-width="2.5" />
+      <div class="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 p-4 sm:p-6 flex items-center gap-3 sm:gap-4 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 shadow-sm">
+        <div class="bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 p-2.5 sm:p-4 rounded-xl sm:rounded-2xl shrink-0">
+          <BookOpen :size="20" stroke-width="2.5" class="sm:w-6 sm:h-6" />
         </div>
         <div class="flex-1 min-w-0">
-          <p class="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Materias (A/R)</p>
+          <p class="text-[9px] sm:text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest truncate">Materias (A/R)</p>
           <div v-if="statsLoading" class="h-6 w-16 bg-slate-100 dark:bg-slate-800 animate-pulse rounded mt-1"></div>
           <div v-else-if="dashboardStats?.materias_aprobadas !== null" class="flex items-baseline gap-1.5 mt-0.5">
-            <span class="text-2xl font-black text-emerald-600 dark:text-emerald-400">
+            <span class="text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400">
               {{ dashboardStats.materias_aprobadas }}
             </span>
             <span class="text-[10px] text-slate-400 font-bold uppercase">A</span>
-            <span v-if="dashboardStats?.materias_reprobadas > 0" class="text-2xl font-black text-rose-500 dark:text-rose-400 ml-1.5">
+            <span v-if="dashboardStats?.materias_reprobadas > 0" class="text-xl sm:text-2xl font-black text-rose-500 dark:text-rose-400 ml-1.5">
               {{ dashboardStats.materias_reprobadas }}
             </span>
             <span v-if="dashboardStats?.materias_reprobadas > 0" class="text-[10px] text-slate-400 font-bold uppercase">R</span>
           </div>
-          <div v-else class="text-[10px] font-bold text-slate-400 dark:text-slate-500 mt-1.5 italic leading-tight">
-            Sin datos suficientes
+          <div v-else class="text-[10px] font-bold text-slate-400 dark:text-slate-500 mt-1 italic leading-tight">
+            Sin datos
           </div>
         </div>
       </div>
 
       <!-- Card Asistencia -->
-      <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 p-6 flex items-center gap-4 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 shadow-sm">
-        <div class="bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 p-4 rounded-2xl">
-          <CalendarCheck :size="24" stroke-width="2.5" />
+      <div class="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 p-4 sm:p-6 flex items-center gap-3 sm:gap-4 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 shadow-sm">
+        <div class="bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 p-2.5 sm:p-4 rounded-xl sm:rounded-2xl shrink-0">
+          <CalendarCheck :size="20" stroke-width="2.5" class="sm:w-6 sm:h-6" />
         </div>
         <div class="flex-1 min-w-0">
-          <p class="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Asistencia</p>
+          <p class="text-[9px] sm:text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest truncate">Asistencia</p>
           <div v-if="statsLoading" class="h-6 w-16 bg-slate-100 dark:bg-slate-800 animate-pulse rounded mt-1"></div>
           <div v-else-if="dashboardStats?.asistencia_porcentaje !== null" class="mt-0.5">
-            <p class="text-2xl font-black text-slate-800 dark:text-white font-mono leading-none">
+            <p class="text-xl sm:text-2xl font-black text-slate-800 dark:text-white font-mono leading-none">
               {{ dashboardStats.asistencia_porcentaje }}%
             </p>
             <p class="text-[9px] text-slate-400 dark:text-slate-500 font-black uppercase tracking-wider mt-1">
               {{ dashboardStats?.inasistencias_total ?? 0 }} fallas
             </p>
           </div>
-          <div v-else class="text-[10px] font-bold text-slate-400 dark:text-slate-500 mt-1.5 italic leading-tight">
-            Sin datos suficientes
+          <div v-else class="text-[10px] font-bold text-slate-400 dark:text-slate-500 mt-1 italic leading-tight">
+            Sin datos
           </div>
         </div>
       </div>
 
       <!-- Card Puesto Académico -->
-      <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 p-6 flex items-center gap-4 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 shadow-sm">
-        <div class="bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 p-4 rounded-2xl">
-          <Star :size="24" stroke-width="2.5" />
+      <div class="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 p-4 sm:p-6 flex items-center gap-3 sm:gap-4 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 shadow-sm">
+        <div class="bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 p-2.5 sm:p-4 rounded-xl sm:rounded-2xl shrink-0">
+          <Star :size="20" stroke-width="2.5" class="sm:w-6 sm:h-6" />
         </div>
         <div class="flex-1 min-w-0">
-          <p class="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Puesto en Grupo</p>
+          <p class="text-[9px] sm:text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest truncate">Puesto Grupo</p>
           <div v-if="statsLoading" class="h-6 w-20 bg-slate-100 dark:bg-slate-800 animate-pulse rounded mt-1"></div>
-          <p v-else-if="dashboardStats?.puesto_academico" class="text-2xl font-black text-slate-800 dark:text-white mt-0.5">
+          <p v-else-if="dashboardStats?.puesto_academico" class="text-xl sm:text-2xl font-black text-slate-800 dark:text-white mt-0.5">
             {{ dashboardStats.puesto_academico.puesto }}° <span class="text-xs font-bold text-slate-400">de {{ dashboardStats.puesto_academico.total_estudiantes }}</span>
           </p>
-          <p v-else class="text-[10px] font-bold text-slate-400 dark:text-slate-500 mt-1.5 italic leading-tight">
-            Sin datos suficientes
+          <p v-else class="text-[10px] font-bold text-slate-400 dark:text-slate-500 mt-1 italic leading-tight">
+            Sin datos
           </p>
         </div>
       </div>
     </div>
 
     <!-- Charts Section (Gráficos interactivos de rendimiento) -->
-    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
       
       <!-- Chart Mejores / Peores Materias (Bar) -->
-      <div class="lg:col-span-7 bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-100 dark:border-slate-800 p-6 shadow-sm flex flex-col min-h-[350px]">
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+      <div class="lg:col-span-7 bg-white dark:bg-slate-900 rounded-2xl sm:rounded-[2rem] border border-slate-100 dark:border-slate-800 p-4 sm:p-6 shadow-sm flex flex-col min-h-[320px] sm:min-h-[350px]">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 mb-4 sm:mb-6">
           <div>
-            <h3 class="text-lg font-black text-slate-800 dark:text-white">Rendimiento por Materias</h3>
-            <p class="text-xs text-slate-400 font-bold uppercase tracking-wider mt-0.5">Top 5 del periodo seleccionado</p>
+            <h3 class="text-base sm:text-lg font-black text-slate-800 dark:text-white">Rendimiento por Materias</h3>
+            <p class="text-[11px] sm:text-xs text-slate-400 font-bold uppercase tracking-wider mt-0.5">Top 5 del periodo seleccionado</p>
           </div>
           
           <!-- Tabs switch -->
@@ -456,7 +456,7 @@ const hasObservations = computed(() => {
             <button
               @click="activeChartTab = 'best'"
               :class="[
-                'px-4 py-1.5 text-xs font-bold rounded-lg transition-all',
+                'px-3 sm:px-4 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer',
                 activeChartTab === 'best'
                   ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-sm'
                   : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
@@ -467,7 +467,7 @@ const hasObservations = computed(() => {
             <button
               @click="activeChartTab = 'worst'"
               :class="[
-                'px-4 py-1.5 text-xs font-bold rounded-lg transition-all',
+                'px-3 sm:px-4 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer',
                 activeChartTab === 'worst'
                   ? 'bg-white dark:bg-slate-700 text-rose-600 dark:text-rose-300 shadow-sm'
                   : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
@@ -478,7 +478,7 @@ const hasObservations = computed(() => {
           </div>
         </div>
 
-        <div class="flex-1 relative min-h-[200px] flex items-center justify-center">
+        <div class="flex-1 relative min-h-[180px] sm:min-h-[200px] flex items-center justify-center">
           <div v-if="statsLoading" class="absolute inset-0 flex items-center justify-center">
             <div class="w-8 h-8 border-4 border-indigo-600/20 border-t-indigo-600 rounded-full animate-spin"></div>
           </div>
@@ -494,27 +494,27 @@ const hasObservations = computed(() => {
       </div>
 
       <!-- Chart Observaciones / Reportes (Doughnut) -->
-      <div class="lg:col-span-5 bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-100 dark:border-slate-800 p-6 shadow-sm flex flex-col min-h-[350px]">
-        <div class="mb-6">
-          <h3 class="text-lg font-black text-slate-800 dark:text-white">Observaciones y Reportes</h3>
-          <p class="text-xs text-slate-400 font-bold uppercase tracking-wider mt-0.5">Distribución de registros de convivencia</p>
+      <div class="lg:col-span-5 bg-white dark:bg-slate-900 rounded-2xl sm:rounded-[2rem] border border-slate-100 dark:border-slate-800 p-4 sm:p-6 shadow-sm flex flex-col min-h-[320px] sm:min-h-[350px]">
+        <div class="mb-4 sm:mb-6">
+          <h3 class="text-base sm:text-lg font-black text-slate-800 dark:text-white">Observaciones y Reportes</h3>
+          <p class="text-[11px] sm:text-xs text-slate-400 font-bold uppercase tracking-wider mt-0.5">Distribución de convivencia</p>
         </div>
 
-        <div class="flex-1 relative flex items-center justify-center min-h-[200px]">
+        <div class="flex-1 relative flex items-center justify-center min-h-[180px] sm:min-h-[200px]">
           <div v-if="statsLoading" class="absolute inset-0 flex items-center justify-center">
             <div class="w-8 h-8 border-4 border-indigo-600/20 border-t-indigo-600 rounded-full animate-spin"></div>
           </div>
           <div v-else-if="!hasObservations" class="flex flex-col items-center justify-center text-center p-6 text-slate-400">
-            <div class="h-16 w-16 bg-slate-50 dark:bg-slate-800/50 rounded-2xl flex items-center justify-center text-slate-300 dark:text-slate-700 mb-4 border border-dashed border-slate-200 dark:border-slate-800">
-              <MessageSquare :size="28" />
+            <div class="h-14 w-14 sm:h-16 sm:w-16 bg-slate-50 dark:bg-slate-800/50 rounded-2xl flex items-center justify-center text-slate-300 dark:text-slate-700 mb-3 sm:mb-4 border border-dashed border-slate-200 dark:border-slate-800">
+              <MessageSquare :size="24" class="sm:w-7 sm:h-7" />
             </div>
-            <p class="text-sm font-black uppercase tracking-wider text-slate-500">Excelente Conducta</p>
+            <p class="text-xs sm:text-sm font-black uppercase tracking-wider text-slate-500">Excelente Conducta</p>
             <p class="text-xs mt-1 max-w-[200px] leading-relaxed">No tienes reportes disciplinarios ni convivenciales este periodo.</p>
           </div>
-          <div v-else class="w-full h-full min-h-[200px] relative">
+          <div v-else class="w-full h-full min-h-[180px] sm:min-h-[200px] relative">
             <Doughnut :data="doughnutChartData" :options="doughnutChartOptions" />
             <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none mt-[-15px]">
-              <span class="text-3xl font-black text-slate-700 dark:text-white leading-none">
+              <span class="text-2xl sm:text-3xl font-black text-slate-700 dark:text-white leading-none">
                 {{ (dashboardStats?.reportes_conteo?.ACADEMICA || 0) + (dashboardStats?.reportes_conteo?.DISCIPLINARIA || 0) + (dashboardStats?.reportes_conteo?.CONVIVENCIAL || 0) }}
               </span>
               <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">Registros</span>
@@ -525,26 +525,26 @@ const hasObservations = computed(() => {
     </div>
 
     <!-- Actividades Recientes & Boletín Oficial -->
-    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
       
       <!-- Actividades Recientes (Timeline) - Ocupa 8 columnas para mayor holgura -->
-      <div class="lg:col-span-8 bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-100 dark:border-slate-800 p-6 shadow-sm flex flex-col">
-        <div class="mb-6">
-          <h3 class="text-lg font-black text-slate-800 dark:text-white">Últimas Actividades Evaluadas</h3>
-          <p class="text-xs text-slate-400 font-bold uppercase tracking-wider mt-0.5">Actividades de materias activas del periodo</p>
+      <div class="lg:col-span-8 bg-white dark:bg-slate-900 rounded-2xl sm:rounded-[2rem] border border-slate-100 dark:border-slate-800 p-4 sm:p-6 shadow-sm flex flex-col">
+        <div class="mb-4 sm:mb-6">
+          <h3 class="text-base sm:text-lg font-black text-slate-800 dark:text-white">Últimas Actividades Evaluadas</h3>
+          <p class="text-[11px] sm:text-xs text-slate-400 font-bold uppercase tracking-wider mt-0.5">Actividades de materias activas del periodo</p>
         </div>
 
-        <div class="flex-1 relative min-h-[220px]">
+        <div class="flex-1 relative min-h-[200px] sm:min-h-[220px]">
           <!-- No Active Enrollment Warning -->
-          <div v-if="!statsLoading && (!dashboardStats || periods.length === 0)" class="text-center py-20 px-6 bg-white dark:bg-slate-900 rounded-[3rem] border-2 border-dashed border-indigo-200 dark:border-slate-800 shadow-sm max-w-2xl mx-auto">
-             <div class="w-16 h-16 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-sm">
-               <GraduationCap :size="36" />
+          <div v-if="!statsLoading && (!dashboardStats || periods.length === 0)" class="text-center py-12 sm:py-20 px-4 sm:px-6 bg-white dark:bg-slate-900 rounded-2xl sm:rounded-[3rem] border-2 border-dashed border-indigo-200 dark:border-slate-800 shadow-sm max-w-2xl mx-auto">
+             <div class="w-12 h-12 sm:w-16 sm:h-16 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 rounded-2xl flex items-center justify-center mx-auto mb-4 sm:mb-5 shadow-sm">
+               <GraduationCap :size="28" class="sm:w-9 sm:h-9" />
              </div>
-             <h2 class="text-2xl font-black text-slate-800 dark:text-slate-100 tracking-tight">¡Hola {{ (studentName || '').split(' ')[0] }}! Aviso de Matrícula</h2>
-             <p class="text-slate-600 dark:text-slate-300 max-w-md mx-auto mt-3 font-medium text-sm leading-relaxed">
+             <h2 class="text-xl sm:text-2xl font-black text-slate-800 dark:text-slate-100 tracking-tight">¡Hola {{ (studentName || '').split(' ')[0] }}! Aviso de Matrícula</h2>
+             <p class="text-slate-600 dark:text-slate-300 max-w-md mx-auto mt-2 sm:mt-3 font-medium text-xs sm:text-sm leading-relaxed">
                Aún no tienes una matrícula activa para el año lectivo <span class="font-black text-indigo-600 dark:text-indigo-400">{{ yearStore.selectedYear?.calendario || 'seleccionado' }}</span>.
              </p>
-             <p class="text-xs text-slate-400 dark:text-slate-500 mt-2">
+             <p class="text-[11px] sm:text-xs text-slate-400 dark:text-slate-500 mt-2">
                Si crees que se trata de un error o deseas consultar el estado de tu proceso de matrícula, comunícate con la administración de tu colegio.
              </p>
           </div>
@@ -553,13 +553,13 @@ const hasObservations = computed(() => {
           </div>
           <div v-else-if="!dashboardStats || dashboardStats?.actividades_recientes?.length === 0" class="absolute inset-0 flex flex-col items-center justify-center text-center text-slate-400 p-6">
             <Calendar :size="32" class="text-slate-300 mb-2" />
-            <p class="text-sm italic">No hay actividades publicadas para tu grupo este periodo.</p>
+            <p class="text-xs sm:text-sm italic">No hay actividades publicadas para tu grupo este periodo.</p>
           </div>
-          <div v-else class="space-y-5">
+          <div v-else class="space-y-4 sm:space-y-5">
             <div 
               v-for="(act, idx) in dashboardStats?.actividades_recientes" 
               :key="idx" 
-              class="relative pl-6 border-l-2 border-slate-100 dark:border-slate-800 pb-1 last:pb-0"
+              class="relative pl-5 sm:pl-6 border-l-2 border-slate-100 dark:border-slate-800 pb-1 last:pb-0"
             >
               <!-- Timeline Dot -->
               <div 
@@ -569,13 +569,13 @@ const hasObservations = computed(() => {
                 ]"
               ></div>
 
-              <div class="flex items-start justify-between gap-4">
-                <div>
-                  <h4 class="text-sm font-black text-slate-700 dark:text-slate-200 leading-snug">
+              <div class="flex items-start justify-between gap-3 sm:gap-4">
+                <div class="min-w-0">
+                  <h4 class="text-xs sm:text-sm font-black text-slate-700 dark:text-slate-200 leading-snug truncate">
                     {{ act.actividad }}
                     <span class="text-[9px] font-black uppercase text-slate-400 ml-1.5">({{ act.porcentaje }}%)</span>
                   </h4>
-                  <p class="text-xs font-bold text-slate-400 dark:text-slate-500 mt-0.5 uppercase tracking-wide">
+                  <p class="text-[10px] sm:text-xs font-bold text-slate-400 dark:text-slate-500 mt-0.5 uppercase tracking-wide truncate">
                     {{ act.materia }}
                   </p>
                 </div>
@@ -584,7 +584,7 @@ const hasObservations = computed(() => {
                   <span 
                     v-if="act.calificada && act.nota !== null" 
                     :class="[
-                      'px-3 py-1 rounded-xl text-xs font-black font-mono',
+                      'px-2.5 sm:px-3 py-1 rounded-xl text-xs font-black font-mono',
                       act.nota >= 3.0 
                         ? 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/30' 
                         : 'bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-900/30'
@@ -594,7 +594,7 @@ const hasObservations = computed(() => {
                   </span>
                   <span 
                     v-else 
-                    class="bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider border border-slate-100 dark:border-slate-800"
+                    class="bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 px-2.5 sm:px-3 py-1 rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-wider border border-slate-100 dark:border-slate-800"
                   >
                     Pendiente
                   </span>
@@ -609,18 +609,18 @@ const hasObservations = computed(() => {
       <div class="lg:col-span-4 flex flex-col justify-stretch">
         <div 
           v-if="studentId && selectedPeriodId"
-          class="group relative bg-indigo-900/5 dark:bg-indigo-900/10 rounded-3xl border-2 border-indigo-100 dark:border-indigo-900/40 p-6 transition-all duration-300 hover:shadow-xl overflow-hidden flex-1 flex flex-col justify-between"
+          class="group relative bg-indigo-900/5 dark:bg-indigo-900/10 rounded-2xl sm:rounded-3xl border-2 border-indigo-100 dark:border-indigo-900/40 p-4 sm:p-6 transition-all duration-300 hover:shadow-xl overflow-hidden flex-1 flex flex-col justify-between"
         >
           <div class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-500 to-purple-600"></div>
           <div>
-            <div class="bg-indigo-100 dark:bg-indigo-900/55 text-indigo-600 dark:text-indigo-400 p-4 rounded-2xl w-fit group-hover:scale-110 transition-transform duration-300 mb-6">
-              <FileDown :size="28" stroke-width="2.5" />
+            <div class="bg-indigo-100 dark:bg-indigo-900/55 text-indigo-600 dark:text-indigo-400 p-3 sm:p-4 rounded-xl sm:rounded-2xl w-fit group-hover:scale-110 transition-transform duration-300 mb-4 sm:mb-6">
+              <FileDown :size="24" stroke-width="2.5" class="sm:w-7 sm:h-7" />
             </div>
-            <h3 class="text-lg font-black text-slate-800 dark:text-white mb-2 flex items-center gap-2">
-              Boletín Oficial
-              <span class="text-[10px] bg-indigo-600 text-white px-2 py-0.5 rounded-full uppercase tracking-wider font-bold">PDF</span>
+            <h3 class="text-base sm:text-lg font-black text-slate-800 dark:text-white mb-1.5 sm:mb-2 flex items-center gap-2">
+              <span>Boletín Oficial</span>
+              <span class="text-[9px] sm:text-[10px] bg-indigo-600 text-white px-2 py-0.5 rounded-full uppercase tracking-wider font-bold">PDF</span>
             </h3>
-            <p class="text-sm text-slate-500 dark:text-slate-400 leading-relaxed mb-6">
+            <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 leading-relaxed mb-4 sm:mb-6">
               Descarga tu reporte oficial consolidado de calificaciones correspondientes al periodo seleccionado.
             </p>
           </div>

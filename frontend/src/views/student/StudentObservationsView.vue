@@ -185,42 +185,42 @@ const getTypeLabel = (type: string) => {
 </script>
 
 <template>
-  <div class="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20">
+  <div class="space-y-6 sm:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20">
     
     <!-- Top Header & Filters -->
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-6">
       <div>
-        <h1 class="text-3xl font-black text-slate-800 dark:text-white flex items-center gap-3">
-          <MessageSquare :size="32" class="text-indigo-600 dark:text-indigo-400" />
-          Mis Observaciones
+        <h1 class="text-2xl sm:text-3xl font-black text-slate-800 dark:text-white flex items-center gap-2.5 sm:gap-3">
+          <MessageSquare :size="26" class="text-indigo-600 dark:text-indigo-400 sm:w-8 sm:h-8" />
+          <span>Mis Observaciones</span>
         </h1>
-        <p class="text-slate-500 dark:text-slate-400 mt-1 font-medium">
-          Retroalimentación académica y de convivencia
+        <p class="text-slate-500 dark:text-slate-400 text-xs sm:text-sm mt-0.5 sm:mt-1 font-medium">
+          Retroalimentación académica y formativa del periodo
         </p>
       </div>
 
-      <div class="flex flex-wrap items-center gap-3">
+      <div class="flex flex-wrap items-center gap-2.5 sm:gap-3">
         <!-- Year Filter -->
-        <div class="flex items-center gap-2 bg-white dark:bg-slate-900 px-4 py-2 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-          <Calendar :size="18" class="text-slate-400" />
-          <select v-model="selectedYear" class="bg-transparent border-none text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-0 outline-none cursor-pointer">
+        <div class="flex items-center gap-2 bg-white dark:bg-slate-900 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl sm:rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+          <Calendar :size="16" class="text-slate-400" />
+          <select v-model="selectedYear" class="bg-transparent border-none text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-0 outline-none cursor-pointer">
             <option v-for="y in displayYears" :key="y.id_anio" :value="y.id_anio">Año {{ y.calendario }}</option>
           </select>
         </div>
 
         <!-- Period Filter -->
-        <div class="flex items-center gap-2 bg-white dark:bg-slate-900 px-4 py-2 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-          <Filter :size="18" class="text-slate-400" />
-          <select v-model="selectedPeriod" class="bg-transparent border-none text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-0 outline-none cursor-pointer" :disabled="periods.length === 0">
+        <div class="flex items-center gap-2 bg-white dark:bg-slate-900 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl sm:rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+          <Filter :size="16" class="text-slate-400" />
+          <select v-model="selectedPeriod" class="bg-transparent border-none text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-0 outline-none cursor-pointer" :disabled="periods.length === 0">
             <option v-if="periods.length === 0" disabled value="">No hay periodos disponibles</option>
             <option v-for="p in periods" :key="p.id_periodo" :value="p.id_periodo">{{ p.nombre }}{{ p.estado === 'ABIERTO' ? ' - En Curso' : '' }}</option>
           </select>
         </div>
 
         <!-- Type Filter -->
-        <div class="flex items-center gap-2 bg-white dark:bg-slate-900 px-4 py-2 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-          <HelpCircle :size="18" class="text-slate-400" />
-          <select v-model="selectedType" class="bg-transparent border-none text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-0 outline-none cursor-pointer">
+        <div class="flex items-center gap-2 bg-white dark:bg-slate-900 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl sm:rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+          <HelpCircle :size="16" class="text-slate-400" />
+          <select v-model="selectedType" class="bg-transparent border-none text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-0 outline-none cursor-pointer">
             <option value="all">Cualquier tipo</option>
             <option value="ACADEMICA">Académica</option>
             <option value="DISCIPLINARIA">Disciplinaria</option>
@@ -229,9 +229,9 @@ const getTypeLabel = (type: string) => {
         </div>
 
         <!-- Hallazgos Filter -->
-        <div class="flex items-center gap-2 bg-white dark:bg-slate-900 px-4 py-2 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-          <Target :size="18" class="text-slate-400" />
-          <select v-model="selectedFinding" class="bg-transparent border-none text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-0 outline-none cursor-pointer">
+        <div class="flex items-center gap-2 bg-white dark:bg-slate-900 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl sm:rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+          <Target :size="16" class="text-slate-400" />
+          <select v-model="selectedFinding" class="bg-transparent border-none text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-0 outline-none cursor-pointer">
             <option value="all">Todos los hallazgos</option>
             <option value="fortalezas">Fortalezas</option>
             <option value="debilidades">Debilidades</option>
@@ -242,30 +242,30 @@ const getTypeLabel = (type: string) => {
     </div>
 
     <!-- Observations List -->
-    <div v-if="loading" class="grid grid-cols-1 gap-6">
-      <div v-for="i in 2" :key="i" class="h-64 bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 animate-pulse"></div>
+    <div v-if="loading" class="grid grid-cols-1 gap-4 sm:gap-6">
+      <div v-for="i in 2" :key="i" class="h-64 bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 animate-pulse"></div>
     </div>
 
     <NoAcademicRecordsBanner v-else-if="!periods || periods.length === 0 || observations.length === 0" :year-label="selectedYearCalendar" />
 
-    <div v-else class="grid grid-cols-1 gap-8">
+    <div v-else class="grid grid-cols-1 gap-4 sm:gap-6">
       <div 
         v-for="obs in filteredObservations" 
         :key="obs.id_observacion"
-        class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden hover:shadow-xl hover:border-indigo-100 dark:hover:border-indigo-900/30 transition-all duration-300"
+        class="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden hover:shadow-xl hover:border-indigo-100 dark:hover:border-indigo-900/30 transition-all duration-300"
       >
         <!-- Card Header -->
-        <div class="bg-slate-50/50 dark:bg-slate-800/40 px-8 py-5 border-b border-slate-100 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div class="flex items-center gap-4">
-            <div class="p-3 bg-indigo-600 rounded-2xl text-white shadow-lg shadow-indigo-200 dark:shadow-none">
-              <BookOpen :size="20" />
+        <div class="bg-slate-50/50 dark:bg-slate-800/40 px-4 sm:px-8 py-3.5 sm:py-5 border-b border-slate-100 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-2.5 sm:gap-4">
+          <div class="flex items-center gap-3 sm:gap-4">
+            <div class="p-2.5 sm:p-3 bg-indigo-600 rounded-xl sm:rounded-2xl text-white shadow-lg shadow-indigo-200 dark:shadow-none shrink-0">
+              <BookOpen :size="18" class="sm:w-5 sm:h-5" />
             </div>
             <div>
-              <h3 class="text-lg font-black text-slate-800 dark:text-white leading-none">{{ obs.materia }}</h3>
-              <div class="flex items-center gap-3 mt-2">
-                <div class="flex items-center gap-2 text-slate-500 dark:text-slate-400 text-xs font-medium">
-                  <User :size="14" class="text-indigo-500" />
-                  {{ obs.docente }}
+              <h3 class="text-base sm:text-lg font-black text-slate-800 dark:text-white leading-none">{{ obs.materia }}</h3>
+              <div class="flex items-center gap-2 sm:gap-3 mt-1.5 sm:mt-2">
+                <div class="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 text-xs font-medium">
+                  <User :size="13" class="text-indigo-500" />
+                  <span>{{ obs.docente }}</span>
                 </div>
                 <span :class="getTypeBadgeClass(obs.tipo)" class="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest">
                   {{ getTypeLabel(obs.tipo) }}
@@ -273,7 +273,7 @@ const getTypeLabel = (type: string) => {
               </div>
             </div>
           </div>
-          <div class="text-xs font-bold text-slate-400 dark:text-slate-500 bg-white dark:bg-slate-800 px-3 py-1 rounded-full border border-slate-100 dark:border-slate-700">
+          <div class="text-[11px] sm:text-xs font-bold text-slate-400 dark:text-slate-500 bg-white dark:bg-slate-800 px-3 py-1 rounded-full border border-slate-100 dark:border-slate-700 self-start md:self-auto">
             Registrado el {{ formatDate(obs.fecha) }}
           </div>
         </div>
@@ -282,37 +282,37 @@ const getTypeLabel = (type: string) => {
         <div class="grid grid-cols-1 md:grid-cols-3 gap-0 divide-y md:divide-y-0 md:divide-x divide-slate-100 dark:divide-slate-800">
           
           <!-- Fortalezas -->
-          <div class="p-8 space-y-4 group">
+          <div class="p-4 sm:p-8 space-y-2.5 sm:space-y-4 group">
             <div class="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
-              <Target :size="18" />
+              <Target :size="16" class="sm:w-4.5 sm:h-4.5" />
               <span class="text-[10px] font-black uppercase tracking-widest">Fortalezas</span>
             </div>
-            <p class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed font-medium">
+            <p class="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed font-medium">
               {{ obs.fortalezas || 'No se registraron fortalezas específicas.' }}
             </p>
           </div>
 
           <!-- Debilidades -->
-          <div class="p-8 space-y-4 bg-slate-50/20 dark:bg-slate-900/20">
+          <div class="p-4 sm:p-8 space-y-2.5 sm:space-y-4 bg-slate-50/20 dark:bg-slate-900/20">
             <div class="flex items-center gap-2 text-rose-600 dark:text-rose-400">
-              <AlertTriangle :size="18" />
+              <AlertTriangle :size="16" class="sm:w-4.5 sm:h-4.5" />
               <span class="text-[10px] font-black uppercase tracking-widest">Debilidades</span>
             </div>
-            <p class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed font-medium">
+            <p class="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed font-medium">
               {{ obs.debilidades || 'No se registraron debilidades específicas.' }}
             </p>
           </div>
 
           <!-- Recomendaciones -->
-          <div class="p-8 space-y-4">
+          <div class="p-4 sm:p-8 space-y-2.5 sm:space-y-4">
             <div class="flex items-center gap-2 text-indigo-600 dark:text-indigo-400">
-              <Lightbulb :size="18" />
+              <Lightbulb :size="16" class="sm:w-4.5 sm:h-4.5" />
               <span class="text-[10px] font-black uppercase tracking-widest">Recomendaciones</span>
             </div>
-            <p v-if="obs.recomendaciones" class="text-sm text-slate-700 dark:text-slate-200 leading-relaxed font-bold italic">
+            <p v-if="obs.recomendaciones" class="text-xs sm:text-sm text-slate-700 dark:text-slate-200 leading-relaxed font-bold italic">
               "{{ obs.recomendaciones }}"
             </p>
-            <p v-else class="text-sm text-slate-500 dark:text-slate-400 leading-relaxed font-medium">
+            <p v-else class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 leading-relaxed font-medium">
               No se registraron recomendaciones específicas.
             </p>
           </div>

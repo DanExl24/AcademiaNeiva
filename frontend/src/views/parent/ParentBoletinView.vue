@@ -118,16 +118,16 @@ watch(selectedYear, async (newVal) => {
     <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6">
       <div>
         <h1 class="text-2xl sm:text-3xl font-black text-slate-800 dark:text-white flex items-center gap-2.5 sm:gap-3">
-          <FileDown :size="28" class="text-indigo-600 dark:text-indigo-400 sm:w-8 sm:h-8" />
+          <FileDown :size="26" class="text-indigo-600 dark:text-indigo-400 sm:w-8 sm:h-8" />
           <span>Boletines de Hijos</span>
         </h1>
-        <p class="text-slate-500 dark:text-slate-400 mt-1 text-xs sm:text-sm font-medium italic">
+        <p class="text-slate-500 dark:text-slate-400 mt-0.5 sm:mt-1 text-xs sm:text-sm font-medium italic">
           Genera y descarga los reportes académicos de tu familia
         </p>
       </div>
 
       <!-- Child Selector -->
-      <div v-if="children.length > 0" class="w-full sm:w-auto flex items-center gap-2.5 sm:gap-3 bg-white dark:bg-slate-900 px-4 sm:px-6 py-2.5 sm:py-3 rounded-2xl border border-indigo-100 dark:border-indigo-900/50 shadow-sm transition-all focus-within:ring-4 focus-within:ring-indigo-500/10">
+      <div v-if="children.length > 0" class="w-full sm:w-auto flex items-center gap-2 sm:gap-3 bg-white dark:bg-slate-900 px-3.5 sm:px-6 py-2 sm:py-3 rounded-xl sm:rounded-2xl border border-indigo-100 dark:border-indigo-900/50 shadow-sm transition-all focus-within:ring-4 focus-within:ring-indigo-500/10">
         <GraduationCap :size="18" class="text-indigo-500 shrink-0" />
         <select 
           v-model="selectedChildId" 
@@ -141,14 +141,14 @@ watch(selectedYear, async (newVal) => {
     </div>
 
     <!-- Main Configuration Card -->
-    <div class="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-[2.5rem] p-5 sm:p-8 lg:p-10 border border-slate-100 dark:border-slate-800 shadow-sm relative overflow-hidden">
+    <div class="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-[2.5rem] p-4 sm:p-8 lg:p-10 border border-slate-100 dark:border-slate-800 shadow-sm relative overflow-hidden">
       <!-- Background Accent -->
       <div class="absolute -right-20 -top-20 h-64 w-64 bg-indigo-50 dark:bg-indigo-950/20 rounded-full blur-3xl opacity-50"></div>
       
-      <div class="relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-8 sm:gap-12 items-center">
-        <div class="space-y-6 sm:space-y-8">
+      <div class="relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-12 items-center">
+        <div class="space-y-4 sm:space-y-8">
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-            <div class="space-y-2">
+            <div class="space-y-1.5 sm:space-y-2">
               <label class="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-2">
                 <Calendar :size="14" />
                 Año Lectivo
@@ -162,7 +162,7 @@ watch(selectedYear, async (newVal) => {
               </select>
             </div>
 
-            <div class="space-y-2">
+            <div class="space-y-1.5 sm:space-y-2">
               <label class="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-2">
                 <Clock :size="14" />
                 Periodo
@@ -171,30 +171,30 @@ watch(selectedYear, async (newVal) => {
                 v-model="selectedPeriodId"
                 class="w-full h-11 sm:h-12 bg-slate-50 dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-xl px-3 sm:px-4 font-bold text-xs sm:text-sm text-slate-700 dark:text-slate-200 focus:border-indigo-500 transition-all cursor-pointer outline-none"
               >
-                <option v-if="periods.length === 0" disabled value="">No hay periodos cerrados disponibles</option>
+                <option v-if="periods.length === 0" disabled value="">No hay periodos cerrados</option>
                 <option v-for="p in periods" :key="p.id_periodo" :value="p.id_periodo">{{ p.nombre }}</option>
               </select>
             </div>
           </div>
 
-          <div v-if="selectedChildId && selectedPeriodId" class="pt-4 scale-in-center">
+          <div v-if="selectedChildId && selectedPeriodId" class="pt-2 sm:pt-4 scale-in-center">
             <BoletinExportModule 
               :student-id="selectedChildId" 
-              :period-id="selectedPeriodId"
+              :period-id="selectedPeriodId" 
               :student-name="selectedChildName"
             />
           </div>
         </div>
 
-        <div class="flex flex-col items-center justify-center p-10 bg-gradient-to-br from-indigo-50 to-violet-50 dark:from-indigo-950/20 dark:to-violet-950/20 rounded-[3rem] border border-indigo-100 dark:border-indigo-900/50 text-center">
-            <div class="relative mb-6">
-              <div class="h-24 w-24 rounded-[2rem] bg-white dark:bg-slate-800 flex items-center justify-center shadow-xl animate-bounce duration-[3000ms]">
-                <FileDown :size="48" class="text-indigo-600" />
+        <div class="flex flex-col items-center justify-center p-6 sm:p-10 bg-gradient-to-br from-indigo-50 to-violet-50 dark:from-indigo-950/20 dark:to-violet-950/20 rounded-2xl sm:rounded-[3rem] border border-indigo-100 dark:border-indigo-900/50 text-center">
+            <div class="relative mb-4 sm:mb-6">
+              <div class="h-16 w-16 sm:h-24 sm:w-24 rounded-2xl sm:rounded-[2rem] bg-white dark:bg-slate-800 flex items-center justify-center shadow-xl animate-bounce duration-[3000ms]">
+                <FileDown :size="32" class="text-indigo-600 sm:w-12 sm:h-12" />
               </div>
-              <Sparkles :size="24" class="absolute -top-2 -right-2 text-yellow-400 animate-pulse" />
+              <Sparkles :size="20" class="absolute -top-2 -right-2 text-yellow-400 animate-pulse sm:w-6 sm:h-6" />
             </div>
-            <h3 class="text-xl font-black text-slate-800 dark:text-white">Exportación Rápida</h3>
-            <p class="text-sm text-slate-500 dark:text-slate-400 mt-3 leading-relaxed">
+            <h3 class="text-lg sm:text-xl font-black text-slate-800 dark:text-white">Exportación Rápida</h3>
+            <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-2 sm:mt-3 leading-relaxed">
               Descarga el boletín oficial en un clic. El archivo incluye el promedio general, ranking y observaciones del docente.
             </p>
         </div>
@@ -202,22 +202,22 @@ watch(selectedYear, async (newVal) => {
     </div>
 
     <!-- Help Info -->
-    <div class="bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/50 p-6 rounded-3xl flex gap-4">
-      <div class="h-10 w-10 rounded-xl bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
-        <Info :size="20" />
+    <div class="bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/50 p-4 sm:p-6 rounded-2xl sm:rounded-3xl flex gap-3 sm:gap-4 items-start">
+      <div class="h-9 w-9 sm:h-10 sm:w-10 rounded-xl bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 mt-0.5">
+        <Info :size="18" class="sm:w-5 sm:h-5" />
       </div>
       <div>
-        <h4 class="text-sm font-black text-indigo-800 dark:text-indigo-400 uppercase tracking-widest mb-1">Requisito de Cierre</h4>
-        <p class="text-[11px] text-indigo-700 dark:text-indigo-500 leading-relaxed font-semibold italic">
+        <h4 class="text-xs sm:text-sm font-black text-indigo-800 dark:text-indigo-400 uppercase tracking-widest mb-0.5 sm:mb-1">Requisito de Cierre</h4>
+        <p class="text-xs text-indigo-700 dark:text-indigo-500 leading-relaxed font-semibold italic">
           Los boletines solo pueden generarse una vez que el periodo académico ha sido **cerrado por la institución**. Si el periodo deseado no aparece o muestra error, es posible que aún esté en proceso de calificación.
         </p>
       </div>
     </div>
 
     <!-- Loading State -->
-    <div v-if="loading" class="flex flex-col items-center justify-center py-40">
-       <div class="w-16 h-16 border-4 border-indigo-600/20 border-t-indigo-600 rounded-full animate-spin"></div>
-       <p class="mt-6 text-slate-500 font-black uppercase tracking-widest text-xs animate-pulse">Obteniendo perfiles familiares...</p>
+    <div v-if="loading" class="flex flex-col items-center justify-center py-24 sm:py-40">
+       <div class="w-12 h-12 sm:w-16 sm:h-16 border-4 border-indigo-600/20 border-t-indigo-600 rounded-full animate-spin"></div>
+       <p class="mt-4 sm:mt-6 text-slate-500 font-black uppercase tracking-widest text-xs animate-pulse">Obteniendo perfiles familiares...</p>
     </div>
 
   </div>

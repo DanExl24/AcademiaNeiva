@@ -68,42 +68,42 @@ const getNotaColor = (nota: number) => {
 </script>
 
 <template>
-  <div class="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20">
+  <div class="space-y-6 sm:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20">
     
     <!-- Header -->
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
-      <div class="flex items-center gap-4">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-6">
+      <div class="flex items-center gap-3 sm:gap-4">
         <button 
           @click="goBack"
-          class="p-3 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-indigo-600 hover:border-indigo-100 transition-all shadow-sm active:scale-95"
+          class="p-2.5 sm:p-3 bg-white dark:bg-slate-900 rounded-xl sm:rounded-2xl border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-indigo-600 hover:border-indigo-100 transition-all shadow-sm active:scale-95 shrink-0 cursor-pointer"
         >
-          <ArrowLeft :size="24" />
+          <ArrowLeft :size="20" class="sm:w-6 sm:h-6" />
         </button>
-        <div v-if="subjectInfo">
-          <h1 class="text-3xl font-black text-slate-800 dark:text-white flex items-center gap-3">
-            {{ subjectInfo.nombre }}
+        <div v-if="subjectInfo" class="min-w-0">
+          <h1 class="text-xl sm:text-3xl font-black text-slate-800 dark:text-white flex items-center gap-2 sm:gap-3 truncate">
+            <span>{{ subjectInfo.nombre }}</span>
           </h1>
-          <p class="text-slate-500 dark:text-slate-400 mt-1 font-medium flex items-center gap-2">
-            <User :size="16" class="text-indigo-500" />
-            {{ subjectInfo.docente }}
+          <p class="text-slate-500 dark:text-slate-400 text-xs sm:text-sm mt-0.5 sm:mt-1 font-medium flex items-center gap-1.5 truncate">
+            <User :size="14" class="text-indigo-500 shrink-0" />
+            <span>{{ subjectInfo.docente }}</span>
           </p>
         </div>
-        <div v-else>
-          <h1 class="text-3xl font-black text-slate-800 dark:text-white flex items-center gap-3">
+        <div v-else class="min-w-0">
+          <h1 class="text-xl sm:text-3xl font-black text-slate-800 dark:text-white flex items-center gap-2 sm:gap-3">
             Detalle de Calificaciones
           </h1>
-          <p class="text-slate-500 dark:text-slate-400 mt-1 font-medium flex items-center gap-2">
-            <BookOpenCheck :size="16" class="text-indigo-500" />
-            Cargando información de la materia...
+          <p class="text-slate-500 dark:text-slate-400 text-xs sm:text-sm mt-0.5 sm:mt-1 font-medium flex items-center gap-1.5">
+            <BookOpenCheck :size="14" class="text-indigo-500 shrink-0" />
+            Cargando información...
           </p>
         </div>
       </div>
     </div>
 
     <!-- Loading State -->
-    <div v-if="loading" class="flex flex-col items-center justify-center py-24 bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-sm">
-      <div class="w-12 h-12 border-4 border-indigo-600/20 border-t-indigo-600 rounded-full animate-spin"></div>
-      <p class="mt-4 text-slate-500 dark:text-slate-400 font-medium italic">Obteniendo detalles de la materia...</p>
+    <div v-if="loading" class="flex flex-col items-center justify-center py-16 sm:py-24 bg-white dark:bg-slate-900 rounded-2xl sm:rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-sm">
+      <div class="w-10 h-10 sm:w-12 sm:h-12 border-4 border-indigo-600/20 border-t-indigo-600 rounded-full animate-spin"></div>
+      <p class="mt-3 sm:mt-4 text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-medium italic">Obteniendo detalles de la materia...</p>
     </div>
 
     <!-- Empty State -->
@@ -111,52 +111,52 @@ const getNotaColor = (nota: number) => {
 
     <template v-else>
       <!-- Activity List -->
-      <div class="grid grid-cols-1 gap-6">
+      <div class="grid grid-cols-1 gap-4 sm:gap-6">
         <div v-for="(act, idx) in subjectDetails" :key="idx" 
-             class="group bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-xl hover:border-indigo-100 dark:hover:border-indigo-900/50 transition-all duration-500 relative overflow-hidden">
+             class="group bg-white dark:bg-slate-900 p-4 sm:p-8 rounded-2xl sm:rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-xl hover:border-indigo-100 dark:hover:border-indigo-900/50 transition-all duration-500 relative overflow-hidden">
           
-          <div class="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity">
+          <div class="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity hidden sm:block">
             <CheckCircle2 :size="120" class="text-indigo-600" />
           </div>
 
-          <div class="flex flex-col md:flex-row md:items-start justify-between gap-8 relative z-10">
-            <div class="flex-1 space-y-4">
-              <div class="flex items-center gap-3 flex-wrap">
-                <span class="px-4 py-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 text-[11px] font-black uppercase tracking-widest rounded-full border border-indigo-100 dark:border-indigo-900/50">
+          <div class="flex flex-col md:flex-row md:items-start justify-between gap-4 sm:gap-8 relative z-10">
+            <div class="flex-1 space-y-3 sm:space-y-4">
+              <div class="flex items-center gap-2 sm:gap-3 flex-wrap">
+                <span class="px-3 sm:px-4 py-1 sm:py-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 text-[10px] sm:text-[11px] font-black uppercase tracking-widest rounded-full border border-indigo-100 dark:border-indigo-900/50">
                   {{ act.porcentaje }}% de la materia
                 </span>
-                <span class="flex items-center gap-1.5 text-slate-400 dark:text-slate-500 text-xs font-bold">
-                  <Calendar :size="14" />
+                <span class="flex items-center gap-1.5 text-slate-400 dark:text-slate-500 text-[11px] sm:text-xs font-bold">
+                  <Calendar :size="13" />
                   Actividad de Periodo
                 </span>
                 <!-- Docente creador (si es diferente al actual) -->
                 <span
                   v-if="act.docente_creador && act.docente_creador !== act.docente"
-                  class="flex items-center gap-1.5 text-violet-500 dark:text-violet-400 text-xs font-bold"
+                  class="flex items-center gap-1.5 text-violet-500 dark:text-violet-400 text-[11px] sm:text-xs font-bold"
                 >
                   <User :size="13" />
                   Creado por: {{ act.docente_creador }}
                 </span>
               </div>
 
-              <h2 class="text-2xl font-black text-slate-800 dark:text-white capitalize">
+              <h2 class="text-xl sm:text-2xl font-black text-slate-800 dark:text-white capitalize leading-tight">
                 {{ act.actividad }}
               </h2>
 
               <!-- Criterios individuales con nota por criterio -->
-              <div v-if="act.criterios && act.criterios.length > 0" class="space-y-3">
-                <p class="text-[11px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Criterios de Evaluación</p>
+              <div v-if="act.criterios && act.criterios.length > 0" class="space-y-2.5 sm:space-y-3">
+                <p class="text-[10px] sm:text-[11px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Criterios de Evaluación</p>
                 <div
                   v-for="criterio in act.criterios"
                   :key="criterio.id_criterio"
-                  class="flex items-center justify-between bg-slate-50 dark:bg-slate-800/50 px-5 py-4 rounded-2xl border border-slate-100 dark:border-slate-800/50"
+                  class="flex items-center justify-between bg-slate-50 dark:bg-slate-800/50 px-3.5 sm:px-5 py-3 sm:py-4 rounded-xl sm:rounded-2xl border border-slate-100 dark:border-slate-800/50 gap-2"
                 >
-                  <div class="flex-1 min-w-0 mr-4">
-                    <p class="text-slate-600 dark:text-slate-300 font-medium leading-snug">{{ criterio.descripcion }}</p>
-                    <p class="text-[11px] text-slate-400 mt-0.5 font-semibold">Peso: {{ criterio.porcentaje }}%</p>
+                  <div class="flex-1 min-w-0 mr-2 sm:mr-4">
+                    <p class="text-xs sm:text-sm text-slate-600 dark:text-slate-300 font-medium leading-snug">{{ criterio.descripcion }}</p>
+                    <p class="text-[10px] sm:text-[11px] text-slate-400 mt-0.5 font-semibold">Peso: {{ criterio.porcentaje }}%</p>
                   </div>
                   <div
-                    class="h-12 w-12 rounded-xl flex flex-col items-center justify-center border-2 shrink-0 text-sm font-black transition-all"
+                    class="h-10 w-10 sm:h-12 sm:w-12 rounded-xl flex flex-col items-center justify-center border-2 shrink-0 text-xs sm:text-sm font-black transition-all"
                     :class="criterio.nota_criterio != null ? getNotaColor(criterio.nota_criterio) : 'text-slate-400 bg-slate-50 border-slate-200 dark:bg-slate-800 dark:border-slate-700'"
                   >
                     {{ criterio.nota_criterio != null ? criterio.nota_criterio : '—' }}
@@ -165,23 +165,23 @@ const getNotaColor = (nota: number) => {
               </div>
 
               <!-- Criterio único (actividades sin criterios múltiples) -->
-              <div v-else class="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-3xl border border-slate-100 dark:border-slate-800/50">
-                <p class="text-[11px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-3 block">Criterio de Evaluación</p>
-                <p class="text-slate-600 dark:text-slate-300 leading-relaxed font-medium italic">
+              <div v-else class="bg-slate-50 dark:bg-slate-800/50 p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800/50">
+                <p class="text-[10px] sm:text-[11px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-2 sm:mb-3 block">Criterio de Evaluación</p>
+                <p class="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed font-medium italic">
                   "{{ act.criterio || 'No se ha registrado una descripción detallada para este criterio.' }}"
                 </p>
               </div>
             </div>
 
             <!-- Nota final de la actividad -->
-            <div class="flex md:flex-col items-center justify-between md:justify-center gap-4 min-w-[140px]">
+            <div class="flex md:flex-col items-center justify-between md:justify-center gap-3 sm:gap-4 min-w-[120px] sm:min-w-[140px] pt-2 md:pt-0 border-t md:border-t-0 border-slate-100 dark:border-slate-800">
                <p class="text-[10px] font-black uppercase tracking-widest text-slate-400 md:hidden">Calificación</p>
                <div 
-                class="h-24 w-24 rounded-[2rem] flex flex-col items-center justify-center border-2 transition-all duration-500 group-hover:scale-110 shadow-lg"
+                class="h-16 w-16 sm:h-24 sm:w-24 rounded-2xl sm:rounded-[2rem] flex flex-col items-center justify-center border-2 transition-all duration-500 group-hover:scale-110 shadow-lg shrink-0"
                 :class="act.nota != null ? getNotaColor(act.nota) : 'text-slate-300 bg-slate-50 border-slate-200 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-600'"
                >
-                 <span class="text-4xl font-black">{{ act.nota != null ? act.nota : '---' }}</span>
-                 <span class="text-[9px] font-black uppercase opacity-60 mt-1">Puntos</span>
+                 <span class="text-2xl sm:text-4xl font-black">{{ act.nota != null ? act.nota : '---' }}</span>
+                 <span class="text-[8px] sm:text-[9px] font-black uppercase opacity-60 mt-0.5 sm:mt-1">Puntos</span>
                </div>
             </div>
           </div>
@@ -189,13 +189,13 @@ const getNotaColor = (nota: number) => {
       </div>
 
       <!-- General Info Alert -->
-      <div class="bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 p-8 rounded-[2.5rem] border border-indigo-100 dark:border-indigo-900/50 flex flex-col md:flex-row items-center gap-6">
-        <div class="h-16 w-16 bg-white dark:bg-slate-900 rounded-2xl flex items-center justify-center shadow-sm shrink-0">
-          <Award :size="32" class="text-indigo-600" />
+      <div class="bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 p-4 sm:p-8 rounded-2xl sm:rounded-[2.5rem] border border-indigo-100 dark:border-indigo-900/50 flex flex-col md:flex-row items-center gap-4 sm:gap-6">
+        <div class="h-12 w-12 sm:h-16 sm:w-16 bg-white dark:bg-slate-900 rounded-xl sm:rounded-2xl flex items-center justify-center shadow-sm shrink-0">
+          <Award :size="24" class="text-indigo-600 sm:w-8 sm:h-8" />
         </div>
         <div class="text-center md:text-left">
-          <h4 class="text-lg font-black uppercase tracking-tight mb-1">Sobre tus calificaciones</h4>
-          <p class="font-medium opacity-80 leading-relaxed">
+          <h4 class="text-base sm:text-lg font-black uppercase tracking-tight mb-0.5 sm:mb-1">Sobre tus calificaciones</h4>
+          <p class="text-xs sm:text-sm font-medium opacity-80 leading-relaxed">
             Cada actividad tiene un peso en la nota final. Cuando una actividad tiene criterios, tu nota refleja el promedio ponderado de cada uno. Consulta con tu docente si tienes dudas.
           </p>
         </div>
@@ -203,15 +203,15 @@ const getNotaColor = (nota: number) => {
     </template>
 
     <!-- Empty State -->
-    <div v-if="!loading && subjectDetails.length === 0" class="flex flex-col items-center justify-center py-32 bg-white dark:bg-slate-900 rounded-[2.5rem] border border-dashed border-slate-200 dark:border-slate-800">
-      <div class="bg-slate-50 dark:bg-slate-800 p-8 rounded-full mb-8">
-        <TrendingUp :size="64" class="text-slate-300 dark:text-slate-600" />
+    <div v-if="!loading && subjectDetails.length === 0" class="flex flex-col items-center justify-center py-20 sm:py-32 bg-white dark:bg-slate-900 rounded-2xl sm:rounded-[2.5rem] border border-dashed border-slate-200 dark:border-slate-800">
+      <div class="bg-slate-50 dark:bg-slate-800 p-5 sm:p-8 rounded-full mb-5 sm:mb-8">
+        <TrendingUp :size="48" class="text-slate-300 dark:text-slate-600 sm:w-16 sm:h-16" />
       </div>
-      <h3 class="text-2xl font-black text-slate-800 dark:text-white">Sin detalles registrados</h3>
-      <p class="text-slate-500 dark:text-slate-400 mt-3 max-w-sm text-center px-6 leading-relaxed font-bold italic">
+      <h3 class="text-xl sm:text-2xl font-black text-slate-800 dark:text-white">Sin detalles registrados</h3>
+      <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-2 sm:mt-3 max-w-sm text-center px-4 sm:px-6 leading-relaxed font-bold italic">
         Aún no se han cargado las actividades detalladas para esta materia en este periodo.
       </p>
-      <button @click="goBack" class="mt-8 bg-slate-800 text-white px-8 py-3 rounded-2xl font-black hover:bg-slate-900 transition-all active:scale-95 shadow-lg">
+      <button @click="goBack" class="mt-6 sm:mt-8 bg-slate-800 text-white px-6 sm:px-8 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl font-black text-xs sm:text-sm hover:bg-slate-900 transition-all active:scale-95 shadow-lg cursor-pointer">
         Regresar al Panel
       </button>
     </div>

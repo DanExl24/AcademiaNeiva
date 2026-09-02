@@ -162,17 +162,17 @@ const getPerformanceColor = (level: string | null | undefined) => {
     <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6">
       <div>
         <h1 class="text-2xl sm:text-3xl font-black text-slate-800 dark:text-white flex items-center gap-2.5 sm:gap-3">
-          <Users :size="28" class="text-indigo-600 dark:text-indigo-400 sm:w-8 sm:h-8" />
+          <Users :size="26" class="text-indigo-600 dark:text-indigo-400 sm:w-8 sm:h-8" />
           <span>Calificaciones de Hijos</span>
         </h1>
-        <p class="text-slate-500 dark:text-slate-400 mt-1 text-xs sm:text-sm font-medium italic">
+        <p class="text-slate-500 dark:text-slate-400 mt-0.5 sm:mt-1 text-xs sm:text-sm font-medium italic">
           Seleccione un estudiante para ver su reporte académico
         </p>
       </div>
 
       <!-- Child Selector & Export -->
-      <div class="flex flex-wrap items-center gap-3 sm:gap-4">
-        <div v-if="children.length > 0" class="w-full sm:w-auto flex items-center gap-2.5 sm:gap-3 bg-white dark:bg-slate-900 px-4 sm:px-6 py-2.5 sm:py-3 rounded-2xl border border-indigo-100 dark:border-indigo-900/50 shadow-sm transition-all focus-within:ring-4 focus-within:ring-indigo-500/10">
+      <div class="flex flex-wrap items-center gap-2.5 sm:gap-4">
+        <div v-if="children.length > 0" class="w-full sm:w-auto flex items-center gap-2 sm:gap-3 bg-white dark:bg-slate-900 px-3.5 sm:px-6 py-2 sm:py-3 rounded-xl sm:rounded-2xl border border-indigo-100 dark:border-indigo-900/50 shadow-sm transition-all focus-within:ring-4 focus-within:ring-indigo-500/10">
           <GraduationCap :size="18" class="text-indigo-500 shrink-0" />
           <select 
             v-model="selectedChildId" 
@@ -194,31 +194,31 @@ const getPerformanceColor = (level: string | null | undefined) => {
     </div>
 
     <!-- Context & Period Filters -->
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 sm:p-6 bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4 p-3.5 sm:p-6 bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm">
       <div v-if="studentInfo">
-        <div class="flex items-center gap-2 mb-1 flex-wrap">
-          <span class="text-[10px] font-black uppercase tracking-widest text-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded-md">Grado Actual</span>
+        <div class="flex items-center gap-1.5 sm:gap-2 mb-1 flex-wrap">
+          <span class="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded-md">Grado Actual</span>
           <span class="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-200">{{ studentInfo.grado }} - Grupo {{ studentInfo.grupo }}</span>
-          <span v-if="children.find(c => c.id_estudiante === selectedChildId)?.colegio_nombre" class="text-[10px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md">
+          <span v-if="children.find(c => c.id_estudiante === selectedChildId)?.colegio_nombre" class="text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md">
             {{ children.find(c => c.id_estudiante === selectedChildId)?.colegio_nombre }}
           </span>
         </div>
-        <p class="text-xs text-slate-400 dark:text-slate-500 flex items-center gap-2">
-          <CreditCard :size="14" />
+        <p class="text-[11px] sm:text-xs text-slate-400 dark:text-slate-500 flex items-center gap-1.5 sm:gap-2">
+          <CreditCard :size="13" />
           <span>Código Estudiantil: <span class="font-bold">{{ studentInfo.codigo }}</span></span>
         </p>
       </div>
 
-      <div class="flex flex-wrap sm:flex-nowrap items-center gap-2.5 sm:gap-3 w-full sm:w-auto">
-        <div class="flex-1 sm:flex-initial flex items-center gap-2 bg-slate-50 dark:bg-slate-800 px-3 sm:px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700">
-          <Calendar :size="16" class="text-slate-400 shrink-0" />
+      <div class="flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-3 w-full sm:w-auto">
+        <div class="flex-1 sm:flex-initial flex items-center gap-1.5 sm:gap-2 bg-slate-50 dark:bg-slate-800 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl border border-slate-200 dark:border-slate-700">
+          <Calendar :size="15" class="text-slate-400 shrink-0" />
           <select v-model="selectedYear" class="w-full bg-transparent border-none text-xs font-bold text-slate-700 dark:text-slate-200 focus:ring-0 outline-none cursor-pointer">
             <option v-for="y in years" :key="y.id_anio" :value="y.id_anio">Año {{ y.calendario }}</option>
           </select>
         </div>
 
-        <div class="flex-1 sm:flex-initial flex items-center gap-2 bg-slate-50 dark:bg-slate-800 px-3 sm:px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700">
-          <TrendingUp :size="16" class="text-slate-400 shrink-0" />
+        <div class="flex-1 sm:flex-initial flex items-center gap-1.5 sm:gap-2 bg-slate-50 dark:bg-slate-800 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl border border-slate-200 dark:border-slate-700">
+          <TrendingUp :size="15" class="text-slate-400 shrink-0" />
           <select v-model="selectedPeriod" class="w-full bg-transparent border-none text-xs font-bold text-slate-700 dark:text-slate-200 focus:ring-0 outline-none cursor-pointer" :disabled="periods.length === 0">
             <option v-if="periods.length === 0" disabled value="">No hay periodos disponibles</option>
             <option v-for="p in periods" :key="p.id_periodo" :value="p.id_periodo">{{ p.nombre }}{{ p.estado === 'ABIERTO' ? ' - En Curso' : '' }}</option>
@@ -228,36 +228,36 @@ const getPerformanceColor = (level: string | null | undefined) => {
     </div>
 
     <!-- Summary Stats -->
-    <div v-if="academicData && !fetchingGrades" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in duration-500">
-      <div class="bg-indigo-600 p-6 rounded-3xl text-white shadow-xl flex items-center justify-between group overflow-hidden relative">
+    <div v-if="academicData && !fetchingGrades" class="grid grid-cols-1 sm:grid-cols-3 gap-3.5 sm:gap-6 animate-in fade-in duration-500">
+      <div class="bg-indigo-600 p-4 sm:p-6 rounded-2xl sm:rounded-3xl text-white shadow-xl flex items-center justify-between group overflow-hidden relative">
         <div class="relative z-10">
-          <p class="text-xs font-bold uppercase tracking-widest text-indigo-100 opacity-80">Promedio del Estudiante</p>
-          <p class="text-4xl font-black mt-1">{{ academicData.promedio_general !== null && academicData.promedio_general !== undefined ? academicData.promedio_general : 'N/A' }}</p>
+          <p class="text-[10px] sm:text-xs font-bold uppercase tracking-widest text-indigo-100 opacity-80">Promedio General</p>
+          <p class="text-3xl sm:text-4xl font-black mt-0.5 sm:mt-1">{{ academicData.promedio_general !== null && academicData.promedio_general !== undefined ? academicData.promedio_general : 'N/A' }}</p>
         </div>
-        <div class="bg-white/20 p-4 rounded-2xl relative z-10 group-hover:scale-110 transition-transform duration-300">
-          <TrendingUp :size="32" stroke-width="2.5" />
-        </div>
-      </div>
-
-      <div class="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center justify-between group hover:shadow-lg transition-all duration-300">
-        <div>
-          <p class="text-xs font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Nivel de Desempeño</p>
-          <p class="text-2xl font-black mt-1 text-slate-800 dark:text-white">{{ academicData.nivel_desempeno || 'N/A' }}</p>
-        </div>
-        <div class="p-4 rounded-2xl group-hover:scale-110 transition-transform duration-300" :class="getPerformanceColor(academicData.nivel_desempeno)">
-          <Award :size="32" stroke-width="2.5" />
+        <div class="bg-white/20 p-3 sm:p-4 rounded-xl sm:rounded-2xl relative z-10 group-hover:scale-110 transition-transform duration-300">
+          <TrendingUp :size="26" stroke-width="2.5" class="sm:w-8 sm:h-8" />
         </div>
       </div>
 
-      <div class="hidden lg:flex bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm items-center justify-between group hover:shadow-lg transition-all duration-300">
+      <div class="bg-white dark:bg-slate-900 p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center justify-between group hover:shadow-lg transition-all duration-300">
         <div>
-          <p class="text-xs font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Materias Evaluadas</p>
-          <p class="text-2xl font-black mt-1 text-slate-800 dark:text-white">
+          <p class="text-[10px] sm:text-xs font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Nivel de Desempeño</p>
+          <p class="text-xl sm:text-2xl font-black mt-0.5 sm:mt-1 text-slate-800 dark:text-white">{{ academicData.nivel_desempeno || 'N/A' }}</p>
+        </div>
+        <div class="p-3 sm:p-4 rounded-xl sm:rounded-2xl group-hover:scale-110 transition-transform duration-300" :class="getPerformanceColor(academicData.nivel_desempeno)">
+          <Award :size="26" stroke-width="2.5" class="sm:w-8 sm:h-8" />
+        </div>
+      </div>
+
+      <div class="bg-white dark:bg-slate-900 p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center justify-between group hover:shadow-lg transition-all duration-300">
+        <div>
+          <p class="text-[10px] sm:text-xs font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Materias Evaluadas</p>
+          <p class="text-xl sm:text-2xl font-black mt-0.5 sm:mt-1 text-slate-800 dark:text-white">
             {{ academicData.grades.filter((g: any) => g.calificacion !== null && g.calificacion !== undefined).length }} / {{ academicData.grades.length }}
           </p>
         </div>
-        <div class="bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 p-4 rounded-2xl group-hover:scale-110 transition-transform duration-300">
-          <AlertCircle :size="32" stroke-width="2.5" />
+        <div class="bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 p-3 sm:p-4 rounded-xl sm:rounded-2xl group-hover:scale-110 transition-transform duration-300">
+          <AlertCircle :size="26" stroke-width="2.5" class="sm:w-8 sm:h-8" />
         </div>
       </div>
     </div>
@@ -266,12 +266,12 @@ const getPerformanceColor = (level: string | null | undefined) => {
     <SkeletonTable v-if="loading || fetchingGrades" :rows="5" :cols="4" />
 
     <!-- Empty State -->
-    <div v-else-if="!academicData" class="flex flex-col items-center justify-center py-24 bg-white dark:bg-slate-900 rounded-3xl border border-dashed border-slate-200 dark:border-slate-800 transition-all">
-      <div class="bg-slate-50 dark:bg-slate-800 p-6 rounded-full mb-6">
-        <SearchX :size="48" class="text-slate-300 dark:text-slate-600" />
+    <div v-else-if="!academicData" class="flex flex-col items-center justify-center py-16 sm:py-24 bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-dashed border-slate-200 dark:border-slate-800 transition-all">
+      <div class="bg-slate-50 dark:bg-slate-800 p-5 sm:p-6 rounded-full mb-4 sm:mb-6">
+        <SearchX :size="40" class="text-slate-300 dark:text-slate-600 sm:w-12 sm:h-12" />
       </div>
-      <h3 class="text-xl font-bold text-slate-800 dark:text-white">Sin información disponible</h3>
-      <p class="text-slate-500 dark:text-slate-400 mt-2 max-w-sm text-center px-4 leading-relaxed italic">
+      <h3 class="text-lg sm:text-xl font-bold text-slate-800 dark:text-white">Sin información disponible</h3>
+      <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1.5 sm:mt-2 max-w-sm text-center px-4 leading-relaxed italic">
         Selecciona un hijo y un periodo académico para visualizar las calificaciones.
       </p>
     </div>
@@ -280,11 +280,11 @@ const getPerformanceColor = (level: string | null | undefined) => {
     <DataTable v-else>
       <template #header>
         <tr>
-          <th class="py-4 px-6">Asignatura</th>
-          <th class="py-4 px-6">Docente Responsable</th>
-          <th class="py-4 px-6 text-center">Nota</th>
-          <th class="py-4 px-6">Evaluación</th>
-          <th class="py-4 px-6"></th>
+          <th class="py-3 sm:py-4 px-3 sm:px-6">Asignatura</th>
+          <th class="py-3 sm:py-4 px-3 sm:px-6 hidden sm:table-cell">Docente</th>
+          <th class="py-3 sm:py-4 px-3 sm:px-6 text-center">Nota</th>
+          <th class="py-3 sm:py-4 px-3 sm:px-6">Evaluación</th>
+          <th class="py-3 sm:py-4 px-2 sm:px-6"></th>
         </tr>
       </template>
       <tr 
@@ -293,21 +293,24 @@ const getPerformanceColor = (level: string | null | undefined) => {
         @click="openDetails(item)"
         class="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors cursor-pointer group"
       >
-        <td class="py-5 px-6">
-          <div class="flex items-center gap-3">
-            <div class="h-10 w-10 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-400 flex items-center justify-center font-black group-hover:bg-indigo-600 group-hover:text-white transition-all duration-300">
+        <td class="py-3 sm:py-5 px-3 sm:px-6">
+          <div class="flex items-center gap-2 sm:gap-3">
+            <div class="h-8 w-8 sm:h-10 sm:w-10 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-400 flex items-center justify-center font-black text-xs sm:text-sm group-hover:bg-indigo-600 group-hover:text-white transition-all duration-300 shrink-0">
               {{ item.materia.charAt(0) }}
             </div>
-            <span class="font-bold text-slate-800 dark:text-slate-200">{{ item.materia }}</span>
+            <div class="min-w-0">
+              <span class="font-bold text-xs sm:text-sm text-slate-800 dark:text-slate-200 block truncate">{{ item.materia }}</span>
+              <span class="text-[10px] text-slate-400 block sm:hidden truncate">Profe {{ item.docente }}</span>
+            </div>
           </div>
         </td>
-        <td class="py-5 px-6">
-          <span class="text-sm font-medium text-slate-500 dark:text-slate-400 italic">Profe {{ item.docente }}</span>
+        <td class="py-3 sm:py-5 px-3 sm:px-6 hidden sm:table-cell">
+          <span class="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400 italic">Profe {{ item.docente }}</span>
         </td>
-        <td class="py-5 px-6">
+        <td class="py-3 sm:py-5 px-3 sm:px-6">
           <div class="flex justify-center">
             <div 
-              class="h-10 w-10 rounded-xl flex items-center justify-center text-xs font-black shadow-sm"
+              class="h-8 w-8 sm:h-10 sm:w-10 rounded-xl flex items-center justify-center text-xs font-black shadow-sm"
               :class="item.calificacion === null || item.calificacion === undefined
                 ? 'bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500'
                 : (item.calificacion < 3.0 ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400' : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400')"
@@ -316,27 +319,27 @@ const getPerformanceColor = (level: string | null | undefined) => {
             </div>
           </div>
         </td>
-        <td class="py-5 px-6">
+        <td class="py-3 sm:py-5 px-3 sm:px-6">
           <span 
-            class="inline-flex items-center px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider border shadow-sm"
+            class="inline-flex items-center px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-wider border shadow-sm"
             :class="getPerformanceColor(item.desempeno)"
           >
-            {{ item.desempeno || 'SIN NOTAS AÚN' }}
+            {{ item.desempeno || 'SIN NOTAS' }}
           </span>
         </td>
-        <td class="py-5 px-6 text-right">
-          <ChevronRight :size="18" class="inline-block text-slate-300 group-hover:text-indigo-500 group-hover:translate-x-1 transition-all" />
+        <td class="py-3 sm:py-5 px-2 sm:px-6 text-right">
+          <ChevronRight :size="16" class="inline-block text-slate-300 group-hover:text-indigo-500 group-hover:translate-x-1 transition-all sm:w-4.5 sm:h-4.5" />
         </td>
       </tr>
     </DataTable>
 
     <!-- Help Info -->
-    <div class="p-6 bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 flex gap-4">
-      <div class="h-10 w-10 rounded-xl bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
-        <AlertCircle :size="24" />
+    <div class="p-4 sm:p-6 bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 flex gap-3 sm:gap-4 items-start">
+      <div class="h-9 w-9 sm:h-10 sm:w-10 rounded-xl bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 mt-0.5">
+        <AlertCircle :size="20" class="sm:w-6 sm:h-6" />
       </div>
       <div>
-        <h4 class="text-sm font-black text-slate-800 dark:text-white uppercase tracking-widest mb-1">Información de Consulta</h4>
+        <h4 class="text-xs sm:text-sm font-black text-slate-800 dark:text-white uppercase tracking-widest mb-0.5 sm:mb-1">Información de Consulta</h4>
         <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed font-medium">
           Este panel muestra las notas definitivas reportadas por los docentes tras el cierre de cada periodo académico. Haga clic en una materia para ver el detalle de actividades y criterios.
         </p>

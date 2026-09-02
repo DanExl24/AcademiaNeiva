@@ -235,14 +235,14 @@ onMounted(async () => {
     <div v-else class="space-y-4">
       
       <!-- School / Enrollment Switcher (Pills) When Multiple Enrollments Exist -->
-      <div v-if="allEnrollments.length > 1" class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3">
-        <div class="flex items-center gap-3">
-          <div class="w-9 h-9 rounded-2xl bg-indigo-50 dark:bg-indigo-950/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0">
-            <History :size="18" />
+      <div v-if="allEnrollments.length > 1" class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl sm:rounded-3xl p-3 sm:p-4 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div class="flex items-center gap-2.5 sm:gap-3">
+          <div class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl sm:rounded-2xl bg-indigo-50 dark:bg-indigo-950/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0">
+            <History :size="16" class="sm:w-4.5 sm:h-4.5" />
           </div>
           <div>
             <h4 class="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider">Historial de Matrículas / Traslados</h4>
-            <p class="text-[11px] text-slate-500 dark:text-slate-400">Selecciona el colegio para ver los documentos y datos correspondientes a cada matrícula:</p>
+            <p class="text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400">Selecciona el colegio para ver los documentos y datos correspondientes a cada matrícula:</p>
           </div>
         </div>
 
@@ -255,15 +255,15 @@ onMounted(async () => {
               selectedMatriculaId === mat.id_matricula
                 ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200 dark:shadow-none ring-2 ring-indigo-300 dark:ring-indigo-600'
                 : 'bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 hover:bg-slate-100 border border-slate-200 dark:border-slate-700',
-              'px-3.5 py-2 rounded-2xl text-xs font-bold transition-all flex items-center gap-2.5 shrink-0'
+              'px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl sm:rounded-2xl text-[11px] sm:text-xs font-bold transition-all flex items-center gap-2 shrink-0 cursor-pointer'
             ]"
           >
-            <School :size="15" />
-            <span>{{ mat.school_name || 'Colegio' }} ({{ mat.year_label || 'Año' }})</span>
-            <span :class="[getStatusBadge(mat.estado).class, 'px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider']">
+            <School :size="14" class="sm:w-4 sm:h-4" />
+            <span class="truncate max-w-[140px] sm:max-w-none">{{ mat.school_name || 'Colegio' }} ({{ mat.year_label || 'Año' }})</span>
+            <span :class="[getStatusBadge(mat.estado).class, 'px-1.5 sm:px-2 py-0.5 rounded-full text-[8px] sm:text-[9px] font-black uppercase tracking-wider']">
               {{ getStatusBadge(mat.estado).label }}
             </span>
-            <span v-if="mat.es_traslado || mat.tipo === 'TRASLADO'" class="px-1.5 py-0.5 bg-purple-200/60 dark:bg-purple-950/80 text-purple-800 dark:text-purple-200 rounded-md text-[9px] font-black">
+            <span v-if="mat.es_traslado || mat.tipo === 'TRASLADO'" class="px-1.5 py-0.5 bg-purple-200/60 dark:bg-purple-950/80 text-purple-800 dark:text-purple-200 rounded-md text-[8px] sm:text-[9px] font-black">
               Traslado
             </span>
           </button>

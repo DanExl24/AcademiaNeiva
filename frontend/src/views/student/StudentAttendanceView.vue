@@ -189,51 +189,51 @@ const formatDate = (dateString: string) => {
 </script>
 
 <template>
-  <div class="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20">
+  <div class="space-y-6 sm:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20">
     
     <!-- Top Header & Filters -->
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-6">
       <div>
-        <h1 class="text-3xl font-black text-slate-800 dark:text-white flex items-center gap-3">
-          <CalendarCheck :size="32" class="text-indigo-600 dark:text-indigo-400" />
-          Mi Asistencia
+        <h1 class="text-2xl sm:text-3xl font-black text-slate-800 dark:text-white flex items-center gap-2.5 sm:gap-3">
+          <CalendarCheck :size="26" class="text-indigo-600 dark:text-indigo-400 sm:w-8 sm:h-8" />
+          <span>Mi Asistencia</span>
         </h1>
-        <p class="text-slate-500 dark:text-slate-400 mt-1 font-medium">
+        <p class="text-slate-500 dark:text-slate-400 text-xs sm:text-sm mt-0.5 sm:mt-1 font-medium">
           {{ studentInfo?.grado }} - Grupo {{ studentInfo?.grupo }}
         </p>
       </div>
 
-      <div class="flex flex-wrap items-center gap-3">
+      <div class="flex flex-wrap items-center gap-2.5 sm:gap-3">
         <!-- Year Filter -->
-        <div class="flex items-center gap-2 bg-white dark:bg-slate-900 px-4 py-2 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm transition-all focus-within:ring-2 focus-within:ring-indigo-500/20">
-          <Calendar :size="18" class="text-slate-400" />
-          <select v-model="selectedYear" class="bg-transparent border-none text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-0 outline-none cursor-pointer">
+        <div class="flex items-center gap-2 bg-white dark:bg-slate-900 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl sm:rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm transition-all focus-within:ring-2 focus-within:ring-indigo-500/20">
+          <Calendar :size="16" class="text-slate-400" />
+          <select v-model="selectedYear" class="bg-transparent border-none text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-0 outline-none cursor-pointer">
             <option v-for="y in displayYears" :key="y.id_anio" :value="y.id_anio">Año {{ y.calendario }}</option>
           </select>
         </div>
 
         <!-- Period Filter -->
-        <div class="flex items-center gap-2 bg-white dark:bg-slate-900 px-4 py-2 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm transition-all focus-within:ring-2 focus-within:ring-indigo-500/20">
-          <Filter :size="18" class="text-slate-400" />
-          <select v-model="selectedPeriod" class="bg-transparent border-none text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-0 outline-none cursor-pointer" :disabled="periods.length === 0">
+        <div class="flex items-center gap-2 bg-white dark:bg-slate-900 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl sm:rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm transition-all focus-within:ring-2 focus-within:ring-indigo-500/20">
+          <Filter :size="16" class="text-slate-400" />
+          <select v-model="selectedPeriod" class="bg-transparent border-none text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-0 outline-none cursor-pointer" :disabled="periods.length === 0">
             <option v-if="periods.length === 0" disabled value="">No hay periodos disponibles</option>
             <option v-for="p in periods" :key="p.id_periodo" :value="p.id_periodo">{{ p.nombre }}{{ p.estado === 'ABIERTO' ? ' - En Curso' : '' }}</option>
           </select>
         </div>
 
         <!-- Subject Filter -->
-        <div class="flex items-center gap-2 bg-white dark:bg-slate-900 px-4 py-2 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm transition-all focus-within:ring-2 focus-within:ring-indigo-500/20">
-          <BookOpen :size="18" class="text-slate-400" />
-          <select v-model="selectedSubject" class="bg-transparent border-none text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-0 outline-none cursor-pointer" :disabled="subjects.length === 0">
+        <div class="flex items-center gap-2 bg-white dark:bg-slate-900 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl sm:rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm transition-all focus-within:ring-2 focus-within:ring-indigo-500/20">
+          <BookOpen :size="16" class="text-slate-400" />
+          <select v-model="selectedSubject" class="bg-transparent border-none text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-0 outline-none cursor-pointer" :disabled="subjects.length === 0">
             <option value="all">Todas las materias</option>
             <option v-for="s in subjects" :key="s.id_materia" :value="s.id_materia">{{ s.nombre }}</option>
           </select>
         </div>
 
         <!-- Status Filter -->
-        <div class="flex items-center gap-2 bg-white dark:bg-slate-900 px-4 py-2 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm transition-all focus-within:ring-2 focus-within:ring-indigo-500/20">
-          <HelpCircle :size="18" class="text-slate-400" />
-          <select v-model="selectedStatus" class="bg-transparent border-none text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-0 outline-none cursor-pointer">
+        <div class="flex items-center gap-2 bg-white dark:bg-slate-900 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl sm:rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm transition-all focus-within:ring-2 focus-within:ring-indigo-500/20">
+          <HelpCircle :size="16" class="text-slate-400" />
+          <select v-model="selectedStatus" class="bg-transparent border-none text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-0 outline-none cursor-pointer">
             <option value="all">Cualquier estado</option>
             <option value="PRESENTE">Presente</option>
             <option value="AUSENTE">Ausente</option>
@@ -243,14 +243,14 @@ const formatDate = (dateString: string) => {
         </div>
 
         <!-- Date Filter -->
-        <div class="flex items-center gap-2 bg-white dark:bg-slate-900 px-4 py-2 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm transition-all focus-within:ring-2 focus-within:ring-indigo-500/20">
-          <Calendar :size="18" class="text-slate-400" />
+        <div class="flex items-center gap-2 bg-white dark:bg-slate-900 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl sm:rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm transition-all focus-within:ring-2 focus-within:ring-indigo-500/20">
+          <Calendar :size="16" class="text-slate-400" />
           <input 
             type="date" 
             v-model="selectedDate" 
-            class="bg-transparent border-none text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-0 outline-none cursor-pointer"
+            class="bg-transparent border-none text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-0 outline-none cursor-pointer"
           />
-          <button v-if="selectedDate" @click="selectedDate = ''" class="text-slate-400 hover:text-rose-500 transition-colors">
+          <button v-if="selectedDate" @click="selectedDate = ''" class="text-slate-400 hover:text-rose-500 transition-colors cursor-pointer">
             <XCircle :size="14" />
           </button>
         </div>
@@ -258,19 +258,19 @@ const formatDate = (dateString: string) => {
     </div>
 
     <!-- Summary Stats -->
-    <div v-if="attendanceData && !loading" class="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+    <div v-if="attendanceData && !loading" class="grid grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-6">
       <div 
         v-for="state in states" 
         :key="state.key"
-        class="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm group hover:shadow-lg transition-all duration-300"
+        class="bg-white dark:bg-slate-900 p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm group hover:shadow-lg transition-all duration-300"
       >
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">{{ state.label }}</p>
-            <p class="text-3xl font-black mt-1 text-slate-800 dark:text-white">{{ attendanceData.stats[state.key] || 0 }}</p>
+            <p class="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">{{ state.label }}</p>
+            <p class="text-2xl sm:text-3xl font-black mt-0.5 sm:mt-1 text-slate-800 dark:text-white">{{ attendanceData.stats[state.key] || 0 }}</p>
           </div>
-          <div class="p-3 rounded-2xl group-hover:scale-110 transition-transform duration-300" :class="state.color">
-            <component :is="state.icon" :size="24" stroke-width="2.5" />
+          <div class="p-2.5 sm:p-3 rounded-xl sm:rounded-2xl group-hover:scale-110 transition-transform duration-300 shrink-0" :class="state.color">
+            <component :is="state.icon" :size="20" stroke-width="2.5" class="sm:w-6 sm:h-6" />
           </div>
         </div>
       </div>
@@ -286,12 +286,12 @@ const formatDate = (dateString: string) => {
     <DataTable v-else>
       <template #header>
         <tr>
-          <th class="py-4 px-6">Fecha</th>
-          <th class="py-4 px-6 text-center">Estado</th>
-          <th class="py-4 px-6 text-center">Hora de Llegada</th>
-          <th class="py-4 px-6">Materia</th>
-          <th class="py-4 px-6">Docente</th>
-          <th class="py-4 px-6">Justificación</th>
+          <th class="py-3 sm:py-4 px-3 sm:px-6">Fecha</th>
+          <th class="py-3 sm:py-4 px-3 sm:px-6 text-center">Estado</th>
+          <th class="py-3 sm:py-4 px-3 sm:px-6 text-center hidden sm:table-cell">Hora Llegada</th>
+          <th class="py-3 sm:py-4 px-3 sm:px-6">Materia</th>
+          <th class="py-3 sm:py-4 px-3 sm:px-6 hidden sm:table-cell">Docente</th>
+          <th class="py-3 sm:py-4 px-3 sm:px-6 hidden md:table-cell">Justificación</th>
         </tr>
       </template>
       <tr 
@@ -299,39 +299,40 @@ const formatDate = (dateString: string) => {
         :key="idx"
         class="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors"
       >
-        <td class="py-4 px-6">
-          <span class="font-bold text-slate-800 dark:text-slate-200 capitalize text-sm">{{ formatDate(item.fecha) }}</span>
+        <td class="py-3 sm:py-4 px-3 sm:px-6">
+          <span class="font-bold text-slate-800 dark:text-slate-200 capitalize text-xs sm:text-sm block">{{ formatDate(item.fecha) }}</span>
+          <span class="text-[10px] text-slate-400 block sm:hidden">{{ item.docente }}</span>
         </td>
-        <td class="py-4 px-6 text-center">
+        <td class="py-3 sm:py-4 px-3 sm:px-6 text-center">
           <span 
-            class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider inline-block"
+            class="px-2.5 sm:px-3 py-1 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-wider inline-block"
             :class="getStatusColor(item.estado)"
           >
             {{ item.estado }}
           </span>
         </td>
-        <td class="py-4 px-6 text-center font-bold text-sm text-slate-700 dark:text-slate-300 font-mono">
+        <td class="py-3 sm:py-4 px-3 sm:px-6 text-center font-bold text-xs sm:text-sm text-slate-700 dark:text-slate-300 font-mono hidden sm:table-cell">
           {{ item.hora_llegada || '—' }}
         </td>
-        <td class="py-4 px-6">
-          <span class="text-sm font-bold text-slate-700 dark:text-slate-300">{{ item.materia }}</span>
+        <td class="py-3 sm:py-4 px-3 sm:px-6">
+          <span class="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-300">{{ item.materia }}</span>
         </td>
-        <td class="py-4 px-6">
+        <td class="py-3 sm:py-4 px-3 sm:px-6 hidden sm:table-cell">
           <span class="text-xs font-medium text-slate-500 dark:text-slate-400">{{ item.docente }}</span>
         </td>
-        <td class="py-4 px-6">
+        <td class="py-3 sm:py-4 px-3 sm:px-6 hidden md:table-cell">
           <span class="text-xs text-slate-400 dark:text-slate-500 italic">{{ item.justificacion || 'Sin observaciones' }}</span>
         </td>
       </tr>
     </DataTable>
 
     <!-- Help Alert -->
-    <div class="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-900/50 p-6 rounded-3xl flex gap-4">
-      <AlertCircle :size="24" class="text-indigo-500 shrink-0" />
+    <div class="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-900/50 p-4 sm:p-6 rounded-2xl sm:rounded-3xl flex gap-3 sm:gap-4 items-start">
+      <AlertCircle :size="22" class="text-indigo-500 shrink-0 mt-0.5" />
       <div>
-        <h4 class="text-sm font-black text-indigo-800 dark:text-indigo-400 uppercase tracking-widest mb-1">Sobre tu asistencia</h4>
-        <p class="text-sm text-indigo-700 dark:text-indigo-500 leading-relaxed font-medium">
-          El registro de asistencia es realizado diariamente por cada docente. Si encuentras alguna inconsistencia o necesitas justificar una inasistencia, por favor contacta directamente con el docente de la materia o la coordinación académica.
+        <h4 class="text-xs sm:text-sm font-black text-indigo-800 dark:text-indigo-400 uppercase tracking-widest mb-0.5 sm:mb-1">Control de asistencia</h4>
+        <p class="text-xs sm:text-sm text-indigo-700 dark:text-indigo-500 leading-relaxed font-medium">
+          El porcentaje de asistencia se calcula automáticamente por cada periodo escolar. Si tienes inasistencias injustificadas, acércate a la coordinación de convivencia con el soporte correspondiente.
         </p>
       </div>
     </div>

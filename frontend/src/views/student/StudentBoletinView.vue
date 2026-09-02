@@ -108,16 +108,16 @@ watch(selectedYear, (newYear) => {
 </script>
 
 <template>
-  <div class="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20">
+  <div class="max-w-4xl mx-auto space-y-6 sm:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20">
     
     <!-- Header -->
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-6">
       <div>
-        <h1 class="text-3xl font-black text-slate-800 dark:text-white flex items-center gap-3">
-          <FileDown :size="32" class="text-indigo-600 dark:text-indigo-400" />
-          Mi Boletín Académico
+        <h1 class="text-2xl sm:text-3xl font-black text-slate-800 dark:text-white flex items-center gap-2.5 sm:gap-3">
+          <FileDown :size="26" class="text-indigo-600 dark:text-indigo-400 sm:w-8 sm:h-8" />
+          <span>Mi Boletín Académico</span>
         </h1>
-        <p class="text-slate-500 dark:text-slate-400 mt-1 font-medium italic">
+        <p class="text-slate-500 dark:text-slate-400 text-xs sm:text-sm mt-0.5 sm:mt-1 font-medium italic">
           Descarga tu reporte oficial de calificaciones por periodo
         </p>
       </div>
@@ -127,40 +127,40 @@ watch(selectedYear, (newYear) => {
     <NoAcademicRecordsBanner v-if="!loading && (!periods || periods.length === 0)" :year-label="selectedYearCalendar" />
 
     <!-- Period Selection Card -->
-    <div v-else class="bg-white dark:bg-slate-900 rounded-[2.5rem] p-8 border border-slate-100 dark:border-slate-800 shadow-sm">
-      <div class="flex flex-col md:flex-row items-center gap-8">
-        <div class="w-full md:w-1/2 space-y-6">
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div class="space-y-2">
+    <div v-else class="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-[2.5rem] p-4 sm:p-8 border border-slate-100 dark:border-slate-800 shadow-sm">
+      <div class="flex flex-col md:flex-row items-center gap-6 sm:gap-8">
+        <div class="w-full md:w-1/2 space-y-4 sm:space-y-6">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+            <div class="space-y-1.5 sm:space-y-2">
               <label class="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-2">
                 <Calendar :size="14" />
                 Año Lectivo
               </label>
               <select 
                 v-model="selectedYear"
-                class="w-full h-12 bg-slate-50 dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-xl px-4 font-bold text-sm text-slate-700 dark:text-slate-200 focus:border-indigo-500 transition-all cursor-pointer outline-none"
+                class="w-full h-11 sm:h-12 bg-slate-50 dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-xl px-3.5 sm:px-4 font-bold text-xs sm:text-sm text-slate-700 dark:text-slate-200 focus:border-indigo-500 transition-all cursor-pointer outline-none"
               >
                 <option v-if="displayYears.length === 0" disabled value="">Sin años</option>
                 <option v-for="y in displayYears" :key="y.id_anio" :value="y.id_anio">Año {{ y.calendario }}</option>
               </select>
             </div>
 
-            <div class="space-y-2">
+            <div class="space-y-1.5 sm:space-y-2">
               <label class="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-2">
                 <Clock :size="14" />
                 Periodo
               </label>
               <select 
                 v-model="selectedPeriodId"
-                class="w-full h-12 bg-slate-50 dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-xl px-4 font-bold text-sm text-slate-700 dark:text-slate-200 focus:border-indigo-500 transition-all cursor-pointer outline-none"
+                class="w-full h-11 sm:h-12 bg-slate-50 dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-xl px-3.5 sm:px-4 font-bold text-xs sm:text-sm text-slate-700 dark:text-slate-200 focus:border-indigo-500 transition-all cursor-pointer outline-none"
               >
-                <option v-if="periods.length === 0" disabled value="">No hay periodos cerrados disponibles</option>
+                <option v-if="periods.length === 0" disabled value="">No hay periodos cerrados</option>
                 <option v-for="p in periods" :key="p.id_periodo" :value="p.id_periodo">{{ p.nombre }}</option>
               </select>
             </div>
           </div>
 
-          <div v-if="studentId && selectedPeriodId" class="pt-4">
+          <div v-if="studentId && selectedPeriodId" class="pt-2 sm:pt-4">
             <BoletinExportModule 
               :student-id="studentId" 
               :period-id="selectedPeriodId" 
@@ -168,13 +168,13 @@ watch(selectedYear, (newYear) => {
           </div>
         </div>
 
-        <div class="w-full md:w-1/2 flex flex-col items-center justify-center p-8 bg-indigo-50 dark:bg-indigo-900/20 rounded-[2rem] border border-indigo-100 dark:border-indigo-900/50 text-center space-y-4">
-          <div class="h-20 w-20 rounded-3xl bg-white dark:bg-slate-800 flex items-center justify-center shadow-lg text-indigo-600">
-            <Sparkles :size="40" />
+        <div class="w-full md:w-1/2 flex flex-col items-center justify-center p-5 sm:p-8 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl sm:rounded-[2rem] border border-indigo-100 dark:border-indigo-900/50 text-center space-y-3 sm:space-y-4">
+          <div class="h-16 w-16 sm:h-20 sm:w-20 rounded-2xl sm:rounded-3xl bg-white dark:bg-slate-800 flex items-center justify-center shadow-lg text-indigo-600">
+            <Sparkles :size="32" class="sm:w-10 sm:h-10" />
           </div>
           <div>
-            <h3 class="text-lg font-black text-slate-800 dark:text-white">Documento Oficial</h3>
-            <p class="text-sm text-slate-500 dark:text-slate-400 mt-2">
+            <h3 class="text-base sm:text-lg font-black text-slate-800 dark:text-white">Documento Oficial</h3>
+            <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1.5 sm:mt-2">
               Este PDF contiene tu rendimiento académico, asistencia y observaciones del periodo seleccionado.
             </p>
           </div>
@@ -183,13 +183,13 @@ watch(selectedYear, (newYear) => {
     </div>
 
     <!-- Important Notice -->
-    <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-900/50 p-6 rounded-3xl flex gap-4">
-      <div class="h-10 w-10 rounded-xl bg-amber-100 dark:bg-amber-900/50 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
-        <Info :size="20" />
+    <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-900/50 p-4 sm:p-6 rounded-2xl sm:rounded-3xl flex gap-3 sm:gap-4 items-start">
+      <div class="h-9 w-9 sm:h-10 sm:w-10 rounded-xl bg-amber-100 dark:bg-amber-900/50 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 mt-0.5">
+        <Info :size="18" class="sm:w-5 sm:h-5" />
       </div>
       <div>
-        <h4 class="text-sm font-black text-amber-800 dark:text-amber-400 uppercase tracking-widest mb-1">Nota Importante</h4>
-        <p class="text-xs text-amber-700 dark:text-amber-500 leading-relaxed font-medium">
+        <h4 class="text-xs sm:text-sm font-black text-amber-800 dark:text-amber-400 uppercase tracking-widest mb-0.5 sm:mb-1">Nota Importante</h4>
+        <p class="text-xs sm:text-sm text-amber-700 dark:text-amber-500 leading-relaxed font-medium">
           La generación de boletines solo está permitida para periodos académicos que han sido **cerrados oficialmente** por la institución. Si no puedes ver tu boletín, verifica con tu director de grupo.
         </p>
       </div>
