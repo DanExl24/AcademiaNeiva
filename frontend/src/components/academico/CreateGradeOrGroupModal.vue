@@ -88,86 +88,86 @@ const handleCreateGroup = () => {
 
 <template>
   <Teleport to="body">
-    <div v-if="show" class="fixed inset-0 z-[100] flex items-center justify-center p-4">
+    <div v-if="show" class="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4">
       <div class="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" @click="emit('close')"></div>
-      <div class="relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-[32px] shadow-2xl shadow-indigo-500/10 overflow-hidden border border-white/20">
-        <div class="px-8 pt-8 pb-6 bg-slate-50/50 dark:bg-slate-800/30 border-b border-slate-100 dark:border-slate-800">
-          <h2 class="text-2xl font-black text-slate-900 dark:text-white flex items-center gap-3">
-            <Plus :size="24" class="text-indigo-600" />
-            {{ show === 'grade' ? 'Configurar Nuevo Grado' : 'Configurar Nuevo Curso' }}
+      <div class="relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-2xl sm:rounded-[32px] shadow-2xl shadow-indigo-500/10 overflow-hidden border border-white/20 max-h-[90dvh] flex flex-col animate-in fade-in zoom-in duration-200">
+        <div class="px-5 sm:px-8 pt-6 sm:pt-8 pb-4 sm:pb-6 bg-slate-50/50 dark:bg-slate-800/30 border-b border-slate-100 dark:border-slate-800 shrink-0">
+          <h2 class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white flex items-center gap-2.5 sm:gap-3">
+            <Plus :size="24" class="text-indigo-600 shrink-0" />
+            <span>{{ show === 'grade' ? 'Configurar Nuevo Grado' : 'Configurar Nuevo Curso' }}</span>
           </h2>
-          <p class="text-slate-500 dark:text-slate-400 text-sm font-medium mt-1">Completa la información necesaria para el registro.</p>
+          <p class="text-slate-500 dark:text-slate-400 text-xs sm:text-sm font-medium mt-1">Completa la información necesaria para el registro.</p>
         </div>
 
         <!-- Grade Form -->
-        <div v-if="show === 'grade'" class="p-8 space-y-6">
-          <div class="space-y-4">
-            <div class="space-y-2">
-              <label class="text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Nivel Académico</label>
-              <select v-model="newGradeType.id_nivel" class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 rounded-2xl p-4 font-bold outline-none text-slate-900 dark:text-white transition-all appearance-none cursor-pointer">
+        <div v-if="show === 'grade'" class="p-5 sm:p-8 space-y-4 sm:space-y-6 overflow-y-auto custom-scrollbar flex-1 flex flex-col justify-between">
+          <div class="space-y-3.5 sm:space-y-4">
+            <div class="space-y-1.5 sm:space-y-2">
+              <label class="text-xs sm:text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Nivel Académico</label>
+              <select v-model="newGradeType.id_nivel" class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 rounded-xl sm:rounded-2xl p-3 sm:p-4 text-xs sm:text-sm font-bold outline-none text-slate-900 dark:text-white transition-all appearance-none cursor-pointer">
                 <option value="">Selecciona un nivel</option>
                 <option v-for="nivel in niveles" :key="nivel.id_nivel" :value="nivel.id_nivel">{{ nivel.nombre }}</option>
               </select>
             </div>
-            <div class="space-y-2">
-              <label class="text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Nombre Descriptivo</label>
-              <input v-model="newGradeType.nombre" type="text" placeholder="Ej. Grado Sexto" class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 rounded-2xl p-4 font-bold outline-none text-slate-900 dark:text-white placeholder:text-slate-400" />
+            <div class="space-y-1.5 sm:space-y-2">
+              <label class="text-xs sm:text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Nombre Descriptivo</label>
+              <input v-model="newGradeType.nombre" type="text" placeholder="Ej. Grado Sexto" class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 rounded-xl sm:rounded-2xl p-3 sm:p-4 text-xs sm:text-sm font-bold outline-none text-slate-900 dark:text-white placeholder:text-slate-400" />
               <div v-if="gradeNameValidationError" class="text-xs font-bold text-amber-600 dark:text-amber-400 ml-1 mt-1">
                 {{ gradeNameValidationError }}
               </div>
             </div>
           </div>
 
-          <div class="flex gap-3 pt-2">
-            <button @click="emit('close')" class="flex-1 px-6 py-4 rounded-2xl font-black text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all">Cancelar</button>
-            <button @click="handleCreateGrade" :disabled="savingGrade || !!gradeNameValidationError || !newGradeType.id_nivel || !newGradeType.nombre.trim()" class="flex-[2] bg-slate-900 dark:bg-white dark:text-slate-900 text-white px-6 py-4 rounded-2xl font-black shadow-xl shadow-slate-200 dark:shadow-none hover:translate-y-[-2px] active:translate-y-0 transition-all disabled:opacity-50">
+          <div class="flex flex-col-reverse sm:flex-row gap-2.5 sm:gap-3 pt-4 border-t border-slate-100 dark:border-slate-800 shrink-0">
+            <button @click="emit('close')" class="w-full sm:w-auto flex-1 px-5 sm:px-6 py-3 sm:py-4 rounded-xl sm:rounded-2xl font-black text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all cursor-pointer">Cancelar</button>
+            <button @click="handleCreateGrade" :disabled="savingGrade || !!gradeNameValidationError || !newGradeType.id_nivel || !newGradeType.nombre.trim()" class="w-full sm:w-auto flex-[2] bg-slate-900 dark:bg-white dark:text-slate-900 text-white px-5 sm:px-6 py-3 sm:py-4 rounded-xl sm:rounded-2xl font-black text-xs uppercase tracking-wider shadow-xl shadow-slate-200 dark:shadow-none hover:translate-y-[-2px] active:translate-y-0 transition-all disabled:opacity-50 cursor-pointer">
               {{ savingGrade ? 'Registrando...' : 'Confirmar Registro' }}
             </button>
           </div>
         </div>
 
         <!-- Course (Group) Form -->
-        <div v-else class="p-8 space-y-5">
-          <div class="grid grid-cols-2 gap-4">
-            <div class="col-span-2 space-y-2">
-              <label class="text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Nivel Académico</label>
-              <select v-model="newGroup.id_nivel" class="w-full bg-slate-50 dark:bg-slate-800 rounded-2xl p-3.5 font-bold outline-none text-sm text-slate-900 dark:text-white border-2 border-transparent focus:border-indigo-500/20">
+        <div v-else class="p-5 sm:p-8 space-y-4 sm:space-y-5 overflow-y-auto custom-scrollbar flex-1 flex flex-col justify-between">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
+            <div class="sm:col-span-2 space-y-1.5 sm:space-y-2">
+              <label class="text-xs sm:text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Nivel Académico</label>
+              <select v-model="newGroup.id_nivel" class="w-full bg-slate-50 dark:bg-slate-800 rounded-xl sm:rounded-2xl p-3 sm:p-3.5 font-bold outline-none text-xs sm:text-sm text-slate-900 dark:text-white border-2 border-transparent focus:border-indigo-500/20 cursor-pointer">
                 <option value="">Seleccionar Nivel</option>
                 <option v-for="nivel in niveles" :key="nivel.id_nivel" :value="nivel.id_nivel">{{ nivel.nombre }}</option>
               </select>
             </div>
-            <div class="space-y-2">
-              <label class="text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Grado Relacionado</label>
-              <select v-model="newGroup.id_tipo_grado" class="w-full bg-slate-50 dark:bg-slate-800 rounded-2xl p-3.5 font-bold outline-none text-sm text-slate-900 dark:text-white border-2 border-transparent focus:border-indigo-500/20">
+            <div class="space-y-1.5 sm:space-y-2">
+              <label class="text-xs sm:text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Grado Relacionado</label>
+              <select v-model="newGroup.id_tipo_grado" class="w-full bg-slate-50 dark:bg-slate-800 rounded-xl sm:rounded-2xl p-3 sm:p-3.5 font-bold outline-none text-xs sm:text-sm text-slate-900 dark:text-white border-2 border-transparent focus:border-indigo-500/20 cursor-pointer">
                 <option value="">Seleccionar Grado</option>
                 <option v-for="tipo in filteredGradeTypes" :key="tipo.id_tipo_grado" :value="tipo.id_tipo_grado">{{ tipo.nombre }}</option>
               </select>
             </div>
-            <div class="space-y-2">
-              <label class="text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Jornada</label>
-              <select v-model="newGroup.id_jornada" class="w-full bg-slate-50 dark:bg-slate-800 rounded-2xl p-3.5 font-bold outline-none text-sm text-slate-900 dark:text-white border-2 border-transparent focus:border-indigo-500/20">
+            <div class="space-y-1.5 sm:space-y-2">
+              <label class="text-xs sm:text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Jornada</label>
+              <select v-model="newGroup.id_jornada" class="w-full bg-slate-50 dark:bg-slate-800 rounded-xl sm:rounded-2xl p-3 sm:p-3.5 font-bold outline-none text-xs sm:text-sm text-slate-900 dark:text-white border-2 border-transparent focus:border-indigo-500/20 cursor-pointer">
                 <option value="">Seleccionar Jornada</option>
                 <option v-for="jornada in jornadas" :key="jornada.id_jornada" :value="jornada.id_jornada">{{ jornada.nombre }}</option>
               </select>
             </div>
-            <div class="space-y-2">
-              <label class="text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Sección Auto-Generada</label>
+            <div class="space-y-1.5 sm:space-y-2">
+              <label class="text-xs sm:text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Sección Auto-Generada</label>
               <input 
                 :value="computedNextSectionName || 'Selecciona un Grado primero'" 
                 type="text" 
                 disabled
-                class="w-full bg-slate-100 dark:bg-slate-800 border-2 border-transparent rounded-2xl p-3.5 font-bold outline-none text-sm text-slate-500 dark:text-slate-400 cursor-not-allowed" 
+                class="w-full bg-slate-100 dark:bg-slate-800 border-2 border-transparent rounded-xl sm:rounded-2xl p-3 sm:p-3.5 font-bold outline-none text-xs sm:text-sm text-slate-500 dark:text-slate-400 cursor-not-allowed" 
               />
             </div>
-            <div class="space-y-2">
-              <label class="text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Capacidad (Cupos)</label>
-              <input v-model.number="newGroup.cupos_totales" type="number" min="0" class="w-full bg-slate-50 dark:bg-slate-800 rounded-2xl p-3.5 font-bold outline-none text-sm text-slate-900 dark:text-white border-2 border-transparent focus:border-indigo-500/20" />
+            <div class="space-y-1.5 sm:space-y-2">
+              <label class="text-xs sm:text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Capacidad (Cupos)</label>
+              <input v-model.number="newGroup.cupos_totales" type="number" min="0" class="w-full bg-slate-50 dark:bg-slate-800 rounded-xl sm:rounded-2xl p-3 sm:p-3.5 font-bold outline-none text-xs sm:text-sm text-slate-900 dark:text-white border-2 border-transparent focus:border-indigo-500/20" />
             </div>
           </div>
 
-          <div class="flex gap-3 pt-5 border-t border-slate-100 dark:border-slate-800">
-            <button @click="emit('close')" class="flex-1 px-4 py-4 rounded-2xl font-black text-slate-500 dark:text-slate-400 hover:bg-slate-50 transition-all">Cancelar</button>
-            <button @click="handleCreateGroup" :disabled="savingGroup || !newGroup.id_nivel || !newGroup.id_tipo_grado || !newGroup.id_jornada" class="flex-[2] bg-indigo-600 text-white px-6 py-4 rounded-2xl font-black shadow-xl shadow-indigo-100 dark:shadow-none hover:translate-y-[-2px] transition-all disabled:opacity-50">
+          <div class="flex flex-col-reverse sm:flex-row gap-2.5 sm:gap-3 pt-4 border-t border-slate-100 dark:border-slate-800 shrink-0">
+            <button @click="emit('close')" class="w-full sm:w-auto flex-1 px-4 py-3 sm:py-4 rounded-xl sm:rounded-2xl font-black text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 hover:bg-slate-100 transition-all cursor-pointer">Cancelar</button>
+            <button @click="handleCreateGroup" :disabled="savingGroup || !newGroup.id_nivel || !newGroup.id_tipo_grado || !newGroup.id_jornada" class="w-full sm:w-auto flex-[2] bg-indigo-600 text-white px-5 sm:px-6 py-3 sm:py-4 rounded-xl sm:rounded-2xl font-black text-xs uppercase tracking-wider shadow-xl shadow-indigo-100 dark:shadow-none hover:translate-y-[-2px] transition-all disabled:opacity-50 cursor-pointer">
               {{ savingGroup ? 'Creando...' : 'Registrar Curso' }}
             </button>
           </div>

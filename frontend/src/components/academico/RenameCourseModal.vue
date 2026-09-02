@@ -33,40 +33,42 @@ const handleSave = () => {
 
 <template>
   <Teleport to="body">
-    <div v-if="show && targetGroup" class="fixed inset-0 z-[110] flex items-center justify-center p-4">
+    <div v-if="show && targetGroup" class="fixed inset-0 z-[110] flex items-center justify-center p-3 sm:p-4">
       <div class="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" @click="emit('close')"></div>
-      <div class="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-[32px] shadow-2xl overflow-hidden border border-white/20">
-        <div class="p-8">
-          <div class="flex items-center gap-4 mb-6">
-            <div class="p-3 bg-indigo-50 dark:bg-indigo-950/30 rounded-2xl text-indigo-600 dark:text-indigo-400">
-              <Tag :size="24" />
+      <div class="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl sm:rounded-[32px] shadow-2xl overflow-hidden border border-white/20 max-h-[90dvh] flex flex-col animate-in fade-in zoom-in duration-200">
+        <div class="p-5 sm:p-8 overflow-y-auto custom-scrollbar flex-1 flex flex-col justify-between">
+          <div>
+            <div class="flex items-center gap-3.5 sm:gap-4 mb-5 sm:mb-6">
+              <div class="p-2.5 sm:p-3 bg-indigo-50 dark:bg-indigo-950/30 rounded-xl sm:rounded-2xl text-indigo-600 dark:text-indigo-400 shrink-0">
+                <Tag :size="22" />
+              </div>
+              <div class="min-w-0 flex-1">
+                <h3 class="text-lg sm:text-xl font-black text-slate-900 dark:text-white truncate">Renombrar Curso</h3>
+                <p class="text-xs sm:text-sm font-medium text-slate-500 truncate">{{ getCourseDisplayName(targetGroup) }}</p>
+              </div>
             </div>
-            <div>
-              <h3 class="text-xl font-black text-slate-900 dark:text-white">Renombrar Curso</h3>
-              <p class="text-sm font-medium text-slate-500">{{ getCourseDisplayName(targetGroup) }}</p>
+
+            <div class="space-y-3.5 sm:space-y-4">
+              <div class="space-y-1.5 sm:space-y-2">
+                <label class="text-xs sm:text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Nuevo Nombre del Curso</label>
+                <input 
+                  v-model="renameName" 
+                  type="text"
+                  maxlength="10"
+                  placeholder="Ej. A o 601"
+                  class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 rounded-xl sm:rounded-2xl p-3 sm:p-4 text-xs sm:text-sm font-bold outline-none text-slate-900 dark:text-white uppercase transition-all"
+                />
+                <p class="text-[10px] font-bold text-slate-400 ml-1 uppercase">Máximo 10 caracteres. Se guardará en mayúsculas.</p>
+              </div>
             </div>
           </div>
 
-          <div class="space-y-4">
-            <div class="space-y-2">
-              <label class="text-sm font-black text-slate-700 dark:text-slate-300 ml-1">Nuevo Nombre del Curso</label>
-              <input 
-                v-model="renameName" 
-                type="text"
-                maxlength="10"
-                placeholder="Ej. A o 601"
-                class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 rounded-2xl p-4 font-bold outline-none text-slate-900 dark:text-white uppercase transition-all"
-              />
-              <p class="text-[10px] font-bold text-slate-400 ml-1 uppercase">Máximo 10 caracteres. Se guardará en mayúsculas.</p>
-            </div>
-          </div>
-
-          <div class="flex gap-3 mt-8">
-            <button @click="emit('close')" class="flex-1 px-6 py-4 rounded-2xl font-black text-slate-500 dark:text-slate-400 hover:bg-slate-50 transition-all">Cancelar</button>
+          <div class="flex flex-col-reverse sm:flex-row gap-2.5 sm:gap-3 mt-6 sm:mt-8 pt-4 border-t border-slate-100 dark:border-slate-800 shrink-0">
+            <button @click="emit('close')" class="w-full sm:w-auto flex-1 px-5 sm:px-6 py-2.5 sm:py-3.5 rounded-xl sm:rounded-2xl font-black text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 hover:bg-slate-100 transition-all cursor-pointer">Cancelar</button>
             <button 
               @click="handleSave"
               :disabled="renaming || !renameName.trim()"
-              class="flex-[2] bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-4 rounded-2xl font-black shadow-xl shadow-indigo-100 dark:shadow-none hover:translate-y-[-1px] transition-all disabled:opacity-50"
+              class="w-full sm:w-auto flex-[2] bg-indigo-600 hover:bg-indigo-700 text-white px-5 sm:px-6 py-2.5 sm:py-3.5 rounded-xl sm:rounded-2xl font-black text-xs uppercase tracking-wider shadow-xl shadow-indigo-100 dark:shadow-none hover:translate-y-[-1px] transition-all disabled:opacity-50 cursor-pointer"
             >
               {{ renaming ? 'Renombrando...' : 'Confirmar' }}
             </button>

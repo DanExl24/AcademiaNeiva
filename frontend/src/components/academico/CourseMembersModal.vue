@@ -80,32 +80,32 @@ const filteredTeachers = computed(() => {
 
 <template>
   <Teleport to="body">
-    <div v-if="show" class="fixed inset-0 z-[300] flex items-center justify-center p-4">
+    <div v-if="show" class="fixed inset-0 z-[300] flex items-center justify-center p-3 sm:p-4">
       <div class="absolute inset-0 bg-slate-950/50 backdrop-blur-sm" @click="emit('close')"></div>
-      <div class="relative w-full max-w-3xl bg-white dark:bg-slate-900 rounded-[32px] shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+      <div class="relative w-full max-w-3xl bg-white dark:bg-slate-900 rounded-2xl sm:rounded-[32px] shadow-2xl overflow-hidden flex flex-col max-h-[90dvh] animate-in fade-in zoom-in duration-200">
         
         <!-- Modal Header -->
-        <div class="px-8 py-6 border-b border-slate-100 dark:border-slate-800 bg-gradient-to-r from-indigo-600 to-blue-700 dark:from-indigo-950 dark:to-slate-900 flex items-center justify-between text-white">
-          <div>
+        <div class="px-4 sm:px-8 py-4 sm:py-6 border-b border-slate-100 dark:border-slate-800 bg-gradient-to-r from-indigo-600 to-blue-700 dark:from-indigo-950 dark:to-slate-900 flex items-center justify-between text-white shrink-0 gap-3">
+          <div class="min-w-0 flex-1">
             <div class="flex items-center gap-2 flex-wrap">
-              <h2 class="text-xl font-black uppercase tracking-tight">
+              <h2 class="text-base sm:text-xl font-black uppercase tracking-tight truncate">
                 {{ membersData ? getCourseDisplayName(membersData.group) : 'Cargando...' }}
               </h2>
-              <span v-if="membersData" class="px-3 py-0.5 bg-white/20 dark:bg-white/10 rounded-full text-[10px] font-black uppercase tracking-wider">
+              <span v-if="membersData" class="px-2.5 sm:px-3 py-0.5 bg-white/20 dark:bg-white/10 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-wider">
                 {{ membersData.group.jornada_nombre }} | {{ membersData.group.nivel_nombre }}
               </span>
             </div>
-            <p class="text-xs text-indigo-100 dark:text-slate-400 font-medium mt-1">
-              Integrantes registrados en el curso para el Año Lectivo {{ yearStore.selectedYear?.calendario }}
+            <p class="text-[11px] sm:text-xs text-indigo-100 dark:text-slate-400 font-medium mt-1 truncate">
+              Integrantes del curso • Año Lectivo {{ yearStore.selectedYear?.calendario }}
             </p>
           </div>
-          <button @click="emit('close')" class="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all">
+          <button @click="emit('close')" class="p-2 sm:p-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all shrink-0 cursor-pointer" aria-label="Cerrar">
             <X :size="20" />
           </button>
         </div>
 
         <!-- Modal Body -->
-        <div class="p-6 flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-5">
+        <div class="p-3.5 sm:p-6 flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-4 sm:gap-5">
           
           <!-- Loading State -->
           <div v-if="loading" class="py-16 flex flex-col items-center justify-center text-slate-400 font-bold">
@@ -115,37 +115,37 @@ const filteredTeachers = computed(() => {
 
           <template v-else-if="membersData">
             <!-- Tab Controls & Search -->
-            <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div class="flex items-center gap-2 bg-slate-100 dark:bg-slate-800/80 p-1.5 rounded-2xl w-full sm:w-auto">
+            <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4">
+              <div class="flex items-center gap-1.5 sm:gap-2 bg-slate-100 dark:bg-slate-800/80 p-1 sm:p-1.5 rounded-xl sm:rounded-2xl w-full sm:w-auto">
                 <button
                   @click="activeTab = 'students'"
                   :class="[
-                    activeTab === 'students' ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-md' : 'text-slate-500 hover:text-slate-900 dark:hover:text-white',
-                    'flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black transition-all uppercase tracking-wide'
+                    activeTab === 'students' ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm sm:shadow-md' : 'text-slate-500 hover:text-slate-900 dark:hover:text-white',
+                    'flex-1 sm:flex-none flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-black transition-all uppercase tracking-wide cursor-pointer'
                   ]"
                 >
-                  <GraduationCap :size="16" />
-                  Estudiantes ({{ membersData.students.length }})
+                  <GraduationCap :size="15" />
+                  <span>Estudiantes ({{ membersData.students.length }})</span>
                 </button>
                 <button
                   @click="activeTab = 'teachers'"
                   :class="[
-                    activeTab === 'teachers' ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-md' : 'text-slate-500 hover:text-slate-900 dark:hover:text-white',
-                    'flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black transition-all uppercase tracking-wide'
+                    activeTab === 'teachers' ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm sm:shadow-md' : 'text-slate-500 hover:text-slate-900 dark:hover:text-white',
+                    'flex-1 sm:flex-none flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-black transition-all uppercase tracking-wide cursor-pointer'
                   ]"
                 >
-                  <Users :size="16" />
-                  Docentes & Materias ({{ membersData.teachers.length }})
+                  <Users :size="15" />
+                  <span>Docentes ({{ membersData.teachers.length }})</span>
                 </button>
               </div>
 
               <div class="relative w-full sm:w-64">
-                <Search class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" :size="16" />
+                <Search class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" :size="15" />
                 <input
                   v-model="searchTerm"
                   type="text"
                   :placeholder="activeTab === 'students' ? 'Buscar estudiante...' : 'Buscar materia o docente...'"
-                  class="w-full bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl py-2.5 pl-10 pr-4 text-xs font-semibold outline-none text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                  class="w-full bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl py-2 sm:py-2.5 pl-10 pr-4 text-xs font-semibold outline-none text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 transition-all"
                 />
               </div>
             </div>
